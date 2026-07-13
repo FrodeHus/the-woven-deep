@@ -52,6 +52,19 @@ export interface RandomStep {
   readonly state: Uint32State;
 }
 
+export function rollDie(state: Uint32State, sides: number): RandomStep {
+  if (!Number.isSafeInteger(sides) || sides <= 0 || sides > 0x1_0000_0000) {
+    throw new RangeError('die sides must be a positive safe integer no greater than 2^32');
+  }
+  const limit = Math.floor(0x1_0000_0000 / sides) * sides;
+  let cursor = state;
+  for (;;) {
+    const step = nextUint32(cursor);
+    cursor = step.state;
+    if (step.value < limit) return { value: step.value % sides + 1, state: cursor };
+  }
+}
+
 export function isNonZeroState(state: Uint32State): boolean {
   return state.some((word) => word !== 0);
 }

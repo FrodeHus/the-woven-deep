@@ -1,0 +1,20 @@
+schemaVersion: 2
+entries:
+  - kind: item
+    id: item.wooden-shield
+    name: Wooden shield
+    glyph: "]"
+    color: "#ad8455"
+    tags: [defense, shield]
+    minDepth: 1
+    maxDepth: 20
+    category: shield
+    stackLimit: 1
+    price: 14
+    rarity: common
+    actionCost: 100
+    equipment: { slots: [off-hand], handedness: one-handed, reservedSlots: [] }
+    combat: { accuracy: 0, defense: 2, armor: 0, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []

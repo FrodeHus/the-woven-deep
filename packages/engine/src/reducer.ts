@@ -1,30 +1,36 @@
 import type {
-  ActiveRun, CommandResolution, Direction, DomainEvent, GameCommand,
+  ActiveRun, CommandResolution, DomainEvent, GameCommand,
   ProcessedCommandResult, RecordedCommand,
 } from './model.js';
-import { tileIndex } from './model.js';
-import { refreshKnowledge } from './perception.js';
-import { movementBlockReason } from './terrain.js';
 import { RECENT_COMMAND_LIMIT } from './versions.js';
-
-const DELTAS: Readonly<Record<Direction, Readonly<{ x: number; y: number }>>> = {
-  north: { x: 0, y: -1 }, south: { x: 0, y: 1 }, east: { x: 1, y: 0 }, west: { x: -1, y: 0 },
-};
+import { stableJson } from './stable-json.js';
+import { validatePlayerAction, type ResolutionContext } from './actions.js';
+import { resolveWorldStep } from './world-step.js';
+import { resolveRest } from './rest.js';
+import { validateContentBoundRun } from './content-bound-validation.js';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
-  return left.type === right.type
-    && left.commandId === right.commandId
-    && left.expectedRevision === right.expectedRevision
-    && (left.type !== 'move' || (right.type === 'move' && left.direction === right.direction));
+  return stableJson(left) === stableJson(right);
 }
 
 function rejected(state: ActiveRun, command: GameCommand, reason: 'stale_revision' | 'command_id_conflict'): CommandResolution {
   return { state, result: { status: 'rejected', commandId: command.commandId, revision: state.revision, turn: state.turn, reason }, events: [] };
 }
 
-function record(state: ActiveRun, command: GameCommand, result: ProcessedCommandResult, events: readonly DomainEvent[], hero = state.hero): ActiveRun {
-  const next: RecordedCommand = { command, result, events };
-  return { ...state, hero, revision: result.revision, turn: result.turn, recentCommands: [...state.recentCommands, next].slice(-RECENT_COMMAND_LIMIT) };
+function record(
+  state: ActiveRun,
+  command: GameCommand,
+  result: ProcessedCommandResult,
+  events: readonly DomainEvent[],
+  publicEvents: readonly DomainEvent[] = events,
+): ActiveRun {
+  const next: RecordedCommand = { command, result, events, publicEvents };
+  return {
+    ...state,
+    revision: result.revision,
+    turn: result.turn,
+    recentCommands: [...state.recentCommands, next].slice(-RECENT_COMMAND_LIMIT),
+  };
 }
 
 function assertCountersCanAdvance(state: ActiveRun): void {
@@ -33,44 +39,38 @@ function assertCountersCanAdvance(state: ActiveRun): void {
   }
 }
 
-export function resolveCommand(state: ActiveRun, command: GameCommand): CommandResolution {
+export function resolveCommand(state: ActiveRun, command: GameCommand, context: ResolutionContext): CommandResolution {
   const previous = state.recentCommands.find((entry) => entry.command.commandId === command.commandId);
   if (previous) {
     return sameCommand(previous.command, command)
-      ? { state, result: previous.result, events: previous.events }
+      ? { state, result: previous.result, events: previous.publicEvents }
       : rejected(state, command, 'command_id_conflict');
   }
   if (command.expectedRevision !== state.revision) return rejected(state, command, 'stale_revision');
-
-  if (command.type === 'wait') {
-    assertCountersCanAdvance(state);
-    const result = { status: 'applied', commandId: command.commandId, revision: state.revision + 1, turn: state.turn + 1 } as const;
-    const events = [{ type: 'hero.waited', eventId: command.commandId, heroId: state.hero.heroId, x: state.hero.x, y: state.hero.y }] as const;
-    return { state: record(state, command, result, events), result, events };
+  if (context.content.hash !== state.contentHash) {
+    throw new Error(`internal invariant: content hash ${context.content.hash} does not match run ${state.contentHash}`);
   }
+  validateContentBoundRun(state, context.content);
 
-  const floor = state.floors.find((candidate) => candidate.floorId === state.hero.floorId);
-  if (!floor) throw new Error(`active floor ${state.hero.floorId} is missing`);
-  const delta = DELTAS[command.direction];
-  const target = { x: state.hero.x + delta.x, y: state.hero.y + delta.y };
-  const index = tileIndex(floor, target.x, target.y);
-  const reason = index === undefined ? 'blocked.bounds' : movementBlockReason(floor.tiles[index]!);
-  if (reason) {
-    const result = { status: 'invalid', commandId: command.commandId, revision: state.revision, turn: state.turn, reason } as const;
-    const events = [{ type: 'action.invalid', eventId: command.commandId, commandId: command.commandId, reason }] as const;
+  const validation = validatePlayerAction({ state, command, context });
+  if ('status' in validation && validation.status === 'decision_required') {
+    return { state, result: validation, events: [] };
+  }
+  if ('status' in validation) {
+    const result = { status: 'invalid', commandId: command.commandId, revision: state.revision, turn: state.turn, reason: validation.reason } as const;
+    const events = [{ type: 'action.invalid', eventId: command.commandId, commandId: command.commandId, reason: validation.reason }] as const;
     return { state: record(state, command, result, events), result, events };
   }
 
   assertCountersCanAdvance(state);
   const result = { status: 'applied', commandId: command.commandId, revision: state.revision + 1, turn: state.turn + 1 } as const;
-  const events = [{ type: 'hero.moved', eventId: command.commandId, heroId: state.hero.heroId, from: { x: state.hero.x, y: state.hero.y }, to: target }] as const;
-  const hero = { ...state.hero, ...target };
-  const moved = record(state, command, result, events, hero);
-  const actors = new Map<string, Readonly<{ x: number; y: number }>>(
-    floor.entities.map((entity) => [entity.entityId, entity] as const),
-  );
-  actors.set(hero.heroId, hero);
-  const knowledge = refreshKnowledge({ floor, hero, actors }).knowledge;
-  const floors = state.floors.map((candidate) => candidate === floor ? { ...candidate, knowledge } : candidate);
-  return { state: { ...moved, floors }, result, events };
+  const world = validation.type === 'rest'
+    ? resolveRest({ state, content: context.content, eventId: command.commandId,
+      until: validation.until, maximumDuration: validation.maximumDuration })
+    : resolveWorldStep({ state, content: context.content, action: validation, eventId: command.commandId });
+  return {
+    state: record(world.state, command, result, world.events, world.publicEvents),
+    result,
+    events: world.publicEvents,
+  };
 }

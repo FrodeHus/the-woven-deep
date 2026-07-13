@@ -1,5 +1,7 @@
 # Content and storage operations
 
+For the complete YAML field, registry, reference, and example guide, see [Server content configuration](../server-admin/content-configuration.md).
+
 ## Start and verify
 
 ```bash

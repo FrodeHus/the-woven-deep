@@ -18,7 +18,6 @@ let vaults: VaultContentEntry[];
 beforeAll(async () => {
   const pack = await compileContentDirectory({
     rootDir: resolve(import.meta.dirname, '../../../content'),
-    registries: { ai: new Set(['ai.skittish']), effects: new Set(['effect.light-source']) },
   });
   vaults = pack.entries.filter((entry): entry is VaultContentEntry => entry.kind === 'vault');
 });

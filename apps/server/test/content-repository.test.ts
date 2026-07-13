@@ -8,23 +8,28 @@ describe('ContentPackRepository', () => {
     const database = new Database(':memory:');
     migrateDatabase(database);
     const repository = new ContentPackRepository(database);
-    const pack = { schemaVersion: 1 as const, hash: 'a'.repeat(64), entries: [] };
+    const pack = {
+      schemaVersion: 2 as const,
+      hash: 'a'.repeat(64),
+      entries: [],
+      generationReport: { foundationalCategories: [] },
+    };
     const conflictingPack = {
       ...pack,
-      entries: [{
-        id: 'item.changed',
-        kind: 'item' as const,
-        name: 'Changed item',
-        glyph: '!',
-        color: '#ffffff',
-        tags: [],
-        effect: 'effect.changed',
-        price: 1,
-      }],
+      generationReport: { foundationalCategories: ['changed'] },
     };
     repository.put(pack);
     repository.put(conflictingPack);
     expect(repository.get(pack.hash)).toEqual(pack);
     expect(database.prepare('select count(*) as count from content_packs').get()).toEqual({ count: 1 });
+  });
+
+  it('rejects unsupported stored packs before returning entries', () => {
+    const database = new Database(':memory:');
+    migrateDatabase(database);
+    database.prepare('insert into content_packs(hash, schema_version, content_json, created_at) values (?, ?, ?, ?)')
+      .run('d'.repeat(64), 1, JSON.stringify({ schemaVersion: 1, hash: 'd'.repeat(64), entries: [] }), new Date().toISOString());
+    const repository = new ContentPackRepository(database);
+    expect(() => repository.get('d'.repeat(64))).toThrow(/unsupported content schema version 1/i);
   });
 });

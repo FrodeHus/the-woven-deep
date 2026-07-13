@@ -1,0 +1,26 @@
+schemaVersion: 2
+entries:
+  - kind: item
+    id: item.hunting-bow
+    name: Hunting bow
+    glyph: ")"
+    color: "#a67b4f"
+    tags: [bow, offense, ranged, weapon]
+    minDepth: 1
+    maxDepth: 20
+    category: weapon
+    stackLimit: 1
+    price: 22
+    rarity: common
+    actionCost: 100
+    equipment: { slots: [main-hand], handedness: two-handed, reservedSlots: [off-hand] }
+    combat:
+      accuracy: 0
+      defense: 0
+      armor: 0
+      damage: { count: 1, sides: 5, bonus: 0 }
+      range: 7
+      ammunitionTag: arrow
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []

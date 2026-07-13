@@ -1,8 +1,18 @@
+import type { CompiledContentPack } from '@woven-deep/content';
+import { heroActor, heroPerception } from './actor-model.js';
+import { deriveActorStats } from './attributes.js';
+import { balanceEntry } from './actions.js';
+import { conditionDefinition, conditionModifiers } from './conditions.js';
+import { equipmentModifiers, itemLightSources } from './equipment.js';
+import { featureTiles, projectFeature } from './features.js';
+import { projectItem } from './identification.js';
 import { isExplored, rememberedTile, validateKnowledgePacking } from './knowledge.js';
 import type { IlluminationField, RgbColor } from './light-model.js';
 import { computeIllumination } from './lighting.js';
-import { assertOpaqueId, type OpaqueId, type TileId } from './model.js';
-import type { PerceptionFloor, PerceptionHero } from './perception.js';
+import { assertOpaqueId, tileIndex, type ActiveRun, type OpaqueId, type PublicDecision, type TileId } from './model.js';
+import { refreshKnowledge, type PerceptionFloor, type PerceptionHero } from './perception.js';
+import { relationshipBetween } from './reactions.js';
+import { hungerModifiers } from './survival.js';
 import { tileDefinition } from './terrain.js';
 import { computeFieldOfView, isVisible } from './visibility.js';
 
@@ -263,4 +273,127 @@ export function projectFloor(input: ProjectFloorInput): ObservableFloorProjectio
   }
 
   return { floorId: input.floor.floorId, width: input.floor.width, height: input.floor.height, cells };
+}
+
+export interface GameplayProjection {
+  readonly floor: ObservableFloorProjection;
+  readonly hero: Readonly<Record<string, unknown>>;
+  readonly actors: readonly Readonly<Record<string, unknown>>[];
+  readonly features: readonly Readonly<Record<string, unknown>>[];
+  readonly groundItems: readonly Readonly<Record<string, unknown>>[];
+  readonly actions: readonly Readonly<{ type: string; cost: number }>[];
+}
+
+function projectionPerception(state: ActiveRun, content: CompiledContentPack) {
+  const hero = heroActor(state);
+  const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
+  if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
+  const effectiveFloor = { ...floor, tiles: featureTiles(state, floor.floorId) };
+  const positions = new Map<string, Readonly<{ x: number; y: number }>>(
+    floor.entities.map((entity) => [entity.entityId, entity] as const),
+  );
+  for (const actor of state.actors) if (actor.floorId === floor.floorId) positions.set(actor.actorId, actor);
+  const perception = refreshKnowledge({
+    floor: effectiveFloor, hero: heroPerception(state.hero, hero), actors: positions,
+    additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }),
+  });
+  return { hero, floor: { ...effectiveFloor, knowledge: perception.knowledge }, ...perception };
+}
+
+function visiblyOccupied(input: ReturnType<typeof projectionPerception>, x: number, y: number): boolean {
+  const index = tileIndex(input.floor, x, y);
+  return index !== undefined && isVisible(input.visibilityWords, index)
+    && input.illumination.intensity[index]! > 0;
+}
+
+function projectedOwnedItem(state: ActiveRun, content: CompiledContentPack, itemId: OpaqueId) {
+  const item = state.items.find((candidate) => candidate.itemId === itemId)!;
+  const projected = projectItem({ run: state, content, itemId });
+  return { ...projected, condition: item.condition,
+    ...('contentId' in projected ? { charges: item.charges } : {}), fuel: item.fuel, enabled: item.enabled };
+}
+
+export function projectGameplayState(input: Readonly<{
+  state: ActiveRun;
+  content: CompiledContentPack;
+}>): GameplayProjection {
+  const observed = projectionPerception(input.state, input.content);
+  const { hero } = observed;
+  const rules = balanceEntry(input.content);
+  const derived = deriveActorStats({
+    attributes: hero.attributes, formulas: rules.formulas,
+    equipmentModifiers: equipmentModifiers({ run: input.state, content: input.content, actorId: hero.actorId })
+      .map((source) => source.modifiers),
+    conditionModifiers: [
+      ...conditionModifiers(hero, input.content),
+      hungerModifiers({ stage: input.state.survival.hungerStage, balance: rules }),
+    ],
+  });
+  const backpack = input.state.items
+    .filter((item) => item.location.type === 'backpack' && item.location.actorId === hero.actorId)
+    .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)
+    .map((item) => projectedOwnedItem(input.state, input.content, item.itemId));
+  const equipment = Object.fromEntries(Object.entries(hero.equipment).map(([slot, itemId]) => [
+    slot, itemId === null ? null : projectedOwnedItem(input.state, input.content, itemId),
+  ]));
+  const conditions = hero.conditions.map((condition) => {
+    const definition = conditionDefinition(input.content, condition.conditionId);
+    return { conditionId: definition.id, name: definition.name, color: definition.color,
+      stacks: condition.stacks, expiresAt: condition.expiresAt };
+  });
+  const actors = input.state.actors.filter((actor) => actor.actorId !== hero.actorId
+    && actor.floorId === hero.floorId && actor.health > 0 && visiblyOccupied(observed, actor.x, actor.y))
+    .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0)
+    .map((actor) => {
+      const definition = input.content.entries.find((entry) => entry.id === actor.contentId);
+      const presentation = definition?.kind === 'monster'
+        ? { name: definition.name, glyph: definition.glyph, color: definition.color } : {};
+      return { actorId: actor.actorId, contentId: actor.contentId, ...presentation,
+        x: actor.x, y: actor.y, health: actor.health, maxHealth: actor.maxHealth,
+        disposition: relationshipBetween(input.state, hero.actorId, actor.actorId) };
+    });
+  const features = input.state.features.filter((feature) => feature.floorId === hero.floorId
+    && visiblyOccupied(observed, feature.x, feature.y))
+    .sort((left, right) => left.featureId < right.featureId ? -1 : left.featureId > right.featureId ? 1 : 0)
+    .map((feature) => projectFeature(feature, hero.actorId)).filter((feature) => feature !== undefined);
+  const groundItems = input.state.items.filter((item) => item.location.type === 'floor'
+    && item.location.floorId === hero.floorId && visiblyOccupied(observed, item.location.x, item.location.y))
+    .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)
+    .map((item) => ({ ...projectItem({ run: input.state, content: input.content, itemId: item.itemId }),
+      x: item.location.type === 'floor' ? item.location.x : 0,
+      y: item.location.type === 'floor' ? item.location.y : 0 }));
+  return {
+    floor: projectFloor({ floor: observed.floor, hero: heroPerception(input.state.hero, hero),
+      visibilityWords: observed.visibilityWords, illumination: observed.illumination }),
+    hero: {
+      actorId: hero.actorId, name: input.state.hero.name, x: hero.x, y: hero.y,
+      attributes: { ...hero.attributes },
+      derived: Object.fromEntries(Object.entries(derived).map(([name, value]) => [name, {
+        value, formula: { ...(rules.formulas[name] ?? {}) },
+      }])),
+      health: hero.health, maxHealth: hero.maxHealth,
+      hungerStage: input.state.survival.hungerStage, conditions, equipment, backpack,
+      backpackCapacity: input.state.hero.backpackCapacity,
+      knownAppearanceIds: [...input.state.identification.knownAppearanceIds],
+    },
+    actors, features, groundItems,
+    actions: ['move', 'wait', 'attack', 'pickup', 'use-item', 'equip', 'rest'].map((type) => ({
+      type, cost: type === 'rest' ? rules.actionCosts['action.wait'] ?? rules.normalActionCost
+        : rules.actionCosts[`action.${type}`] ?? rules.normalActionCost,
+    })),
+  };
+}
+
+export function projectDecision(input: Readonly<{
+  state: ActiveRun;
+  content: CompiledContentPack;
+  decision: PublicDecision;
+}>): PublicDecision | undefined {
+  if (input.decision.type === 'confirm-aggression') {
+    const observed = projectionPerception(input.state, input.content);
+    const target = input.state.actors.find((actor) => actor.actorId === input.decision.targetActorId);
+    if (!target || target.floorId !== observed.hero.floorId || !visiblyOccupied(observed, target.x, target.y)) return undefined;
+    return { type: 'confirm-aggression', targetActorId: target.actorId };
+  }
+  return undefined;
 }

@@ -1,4 +1,4 @@
-export type SaveLoadErrorKind = 'malformed_json' | 'invalid_save' | 'unsupported_version' | 'migration_failed';
+export type SaveLoadErrorKind = 'malformed_json' | 'invalid_save' | 'unsupported_version';
 
 export class SaveLoadError extends Error {
   constructor(

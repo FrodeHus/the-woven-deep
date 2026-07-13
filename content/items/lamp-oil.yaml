@@ -1,0 +1,20 @@
+schemaVersion: 2
+entries:
+  - kind: item
+    id: item.lamp-oil
+    name: Lamp oil
+    glyph: ";"
+    color: "#d2b45f"
+    tags: [fuel, lamp-oil]
+    minDepth: 1
+    maxDepth: 20
+    category: fuel
+    stackLimit: 8
+    price: 3
+    rarity: common
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []

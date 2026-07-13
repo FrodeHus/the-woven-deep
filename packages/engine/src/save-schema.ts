@@ -13,19 +13,159 @@ const uint32 = z.number().int().min(0).max(0xffff_ffff);
 const uint32Tuple = z.tuple([uint32, uint32, uint32, uint32]);
 const uint32State = uint32Tuple.refine((state) => state.some((word) => word !== 0), 'state must not be all zero');
 const point = z.strictObject({ x: safeNonNegative, y: safeNonNegative });
-const direction = z.enum(['north', 'south', 'east', 'west']);
+const direction = z.enum(['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest']);
+const equipmentSlot = z.enum(['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring']);
+const positiveQuantity = z.number().int().safe().positive();
 const moveCommand = z.strictObject({ type: z.literal('move'), commandId: identifier, expectedRevision: safeNonNegative, direction });
 const waitCommand = z.strictObject({ type: z.literal('wait'), commandId: identifier, expectedRevision: safeNonNegative });
-const command = z.discriminatedUnion('type', [moveCommand, waitCommand]);
+const commandBase = { commandId: identifier, expectedRevision: safeNonNegative } as const;
+const command = z.discriminatedUnion('type', [
+  moveCommand, waitCommand,
+  z.strictObject({ ...commandBase, type: z.literal('attack'), targetActorId: identifier }),
+  z.strictObject({ ...commandBase, type: z.literal('fire'), itemId: identifier, target: point }),
+  z.strictObject({ ...commandBase, type: z.literal('cast'), spellId: identifier, target: point.nullable() }),
+  z.strictObject({ ...commandBase, type: z.literal('throw-item'), itemId: identifier, quantity: positiveQuantity, target: point }),
+  z.strictObject({ ...commandBase, type: z.literal('use-item'), itemId: identifier, target: point.nullable() }),
+  z.strictObject({ ...commandBase, type: z.literal('equip'), itemId: identifier, slot: equipmentSlot }),
+  z.strictObject({ ...commandBase, type: z.literal('unequip'), slot: equipmentSlot }),
+  z.strictObject({ ...commandBase, type: z.literal('pickup'), itemId: identifier, quantity: positiveQuantity }),
+  z.strictObject({ ...commandBase, type: z.literal('drop'), itemId: identifier, quantity: positiveQuantity }),
+  z.strictObject({ ...commandBase, type: z.literal('split-stack'), itemId: identifier, quantity: positiveQuantity, newItemId: identifier }),
+  z.strictObject({ ...commandBase, type: z.literal('refuel'), itemId: identifier, fuelItemId: identifier, quantity: positiveQuantity }),
+  z.strictObject({ ...commandBase, type: z.literal('toggle-light'), itemId: identifier, enabled: z.boolean() }),
+  z.strictObject({ ...commandBase, type: z.literal('open-door'), featureId: identifier }),
+  z.strictObject({ ...commandBase, type: z.literal('close-door'), featureId: identifier }),
+  z.strictObject({ ...commandBase, type: z.literal('search') }),
+  z.strictObject({ ...commandBase, type: z.literal('disarm'), featureId: identifier }),
+  z.strictObject({ ...commandBase, type: z.literal('rest'), until: z.enum(['healed', 'interrupted']),
+    maximumDuration: positiveQuantity }),
+]);
 const movedEvent = z.strictObject({ type: z.literal('hero.moved'), eventId: identifier, heroId: identifier, from: point, to: point });
 const waitedEvent = z.strictObject({ type: z.literal('hero.waited'), eventId: identifier, heroId: identifier, x: safeNonNegative, y: safeNonNegative });
-const blockReason = z.enum(['blocked.bounds', 'blocked.wall', 'blocked.door', 'blocked.pillar', 'blocked.void']);
+const blockReason = z.enum([
+  'blocked.bounds', 'blocked.wall', 'blocked.door', 'blocked.pillar', 'blocked.void',
+  'blocked.corner', 'blocked.actor', 'action.unavailable', 'inventory.full', 'item.missing',
+  'item.unavailable', 'item.quantity', 'item.incompatible', 'item.id-conflict',
+  'target.not_visible', 'target.out_of_range', 'target.blocked', 'target.invalid',
+]);
 const invalidEvent = z.strictObject({ type: z.literal('action.invalid'), eventId: identifier, commandId: identifier, reason: blockReason });
-const event = z.discriminatedUnion('type', [movedEvent, waitedEvent, invalidEvent]);
+const attackBase = { eventId: identifier, actorId: identifier, targetActorId: identifier,
+  naturalRoll: z.number().int().min(1).max(20), total: z.number().int().safe(), defense: z.number().int().safe() } as const;
+const attackMissedEvent = z.strictObject({ ...attackBase, type: z.literal('attack.missed') });
+const attackHitEvent = z.strictObject({
+  ...attackBase, type: z.literal('attack.hit'), critical: z.boolean(), rolledDice: positiveQuantity,
+  rolledDamage: safeNonNegative, effectiveDamage: safeNonNegative,
+  damageType: z.enum(['physical', 'fire', 'cold', 'lightning', 'poison', 'arcane']),
+});
+const actorDamagedEvent = z.strictObject({ type: z.literal('actor.damaged'), eventId: identifier,
+  actorId: identifier, sourceActorId: identifier, amount: safeNonNegative, health: safeNonNegative });
+const actorDiedEvent = z.strictObject({ type: z.literal('actor.died'), eventId: identifier,
+  actorId: identifier, contentId: identifier, killerActorId: identifier });
+const actorHealedEvent = z.strictObject({ type: z.literal('actor.healed'), eventId: identifier,
+  actorId: identifier, sourceActorId: identifier, amount: safeNonNegative, health: safeNonNegative });
+const conditionAppliedEvent = z.strictObject({ type: z.literal('condition.applied'), eventId: identifier,
+  actorId: identifier, sourceActorId: identifier, conditionId: identifier, stacks: positiveQuantity, expiresAt: safeNonNegative.nullable() });
+const conditionRemovedEvent = z.strictObject({ type: z.enum(['condition.removed', 'condition.expired']),
+  eventId: identifier, actorId: identifier, conditionId: identifier });
+const actorForcedMoveEvent = z.strictObject({ type: z.literal('actor.forced-move'), eventId: identifier,
+  actorId: identifier, from: point, to: point });
+const reactionTriggeredEvent = z.strictObject({ type: z.literal('reaction.triggered'), eventId: identifier,
+  actorId: identifier, targetActorId: identifier });
+const relationshipChangedEvent = z.strictObject({ type: z.literal('relationship.changed'), eventId: identifier,
+  actorId: identifier, targetActorId: identifier, relationship: z.enum(['friendly', 'neutral', 'hostile']) });
+const actorTurnStartedEvent = z.strictObject({ type: z.literal('actor.turn.started'), eventId: identifier,
+  actorId: identifier });
+const actorTurnCompletedEvent = z.strictObject({ type: z.literal('actor.turn.completed'), eventId: identifier,
+  actorId: identifier, actionType: z.enum([
+    'move', 'wait', 'bump-attack', 'pickup', 'drop', 'split-stack', 'fire', 'throw-item', 'use-item', 'equip', 'unequip',
+    'toggle-light', 'refuel',
+  ]) });
+const actorMovedEvent = z.strictObject({ type: z.literal('actor.moved'), eventId: identifier,
+  actorId: identifier, from: point, to: point });
+const itemPickedUpEvent = z.strictObject({ type: z.literal('item.picked-up'), eventId: identifier,
+  actorId: identifier, itemId: identifier, quantity: positiveQuantity });
+const itemDroppedEvent = z.strictObject({ type: z.literal('item.dropped'), eventId: identifier,
+  actorId: identifier, itemId: identifier, quantity: positiveQuantity });
+const itemStackSplitEvent = z.strictObject({ type: z.literal('item.stack-split'), eventId: identifier,
+  actorId: identifier, itemId: identifier, newItemId: identifier, quantity: positiveQuantity });
+const itemConsumedEvent = z.strictObject({ type: z.literal('item.consumed'), eventId: identifier,
+  actorId: identifier, itemId: identifier, quantity: positiveQuantity });
+const itemThrownEvent = z.strictObject({ type: z.literal('item.thrown'), eventId: identifier,
+  actorId: identifier, itemId: identifier, quantity: positiveQuantity, to: point });
+const itemUsedEvent = z.strictObject({ type: z.literal('item.used'), eventId: identifier,
+  actorId: identifier, itemId: identifier, targetActorId: identifier });
+const itemEquippedEvent = z.strictObject({ type: z.literal('item.equipped'), eventId: identifier,
+  actorId: identifier, itemId: identifier, slot: equipmentSlot });
+const itemUnequippedEvent = z.strictObject({ type: z.literal('item.unequipped'), eventId: identifier,
+  actorId: identifier, itemId: identifier, slot: equipmentSlot });
+const itemLightToggledEvent = z.strictObject({ type: z.literal('item.light-toggled'), eventId: identifier,
+  actorId: identifier, itemId: identifier, enabled: z.boolean() });
+const itemRefueledEvent = z.strictObject({ type: z.literal('item.refueled'), eventId: identifier,
+  actorId: identifier, itemId: identifier, fuelItemId: identifier, quantity: positiveQuantity, fuel: safeNonNegative });
+const identificationAppearanceRevealedEvent = z.strictObject({ type: z.literal('identification.appearance-revealed'),
+  eventId: identifier, appearanceId: identifier, contentId: identifier });
+const itemIdentifiedEvent = z.strictObject({ type: z.literal('item.identified'), eventId: identifier, itemId: identifier });
+const hungerStageChangedEvent = z.strictObject({ type: z.literal('hunger.stage-changed'), eventId: identifier,
+  actorId: identifier, previousStage: z.enum(['sated', 'hungry', 'weak', 'starving']),
+  stage: z.enum(['sated', 'hungry', 'weak', 'starving']), reserve: safeNonNegative });
+const hungerRestoredEvent = z.strictObject({ type: z.literal('hunger.restored'), eventId: identifier,
+  actorId: identifier, amount: safeNonNegative, reserve: safeNonNegative });
+const fuelWarningEvent = z.strictObject({ type: z.literal('fuel.warning'), eventId: identifier,
+  itemId: identifier, threshold: safeNonNegative, fuel: safeNonNegative });
+const itemLightExtinguishedEvent = z.strictObject({ type: z.literal('item.light-extinguished'),
+  eventId: identifier, itemId: identifier });
+const doorOpenedEvent = z.strictObject({ type: z.literal('door.opened'), eventId: identifier,
+  actorId: identifier, featureId: identifier });
+const doorClosedEvent = z.strictObject({ type: z.literal('door.closed'), eventId: identifier,
+  actorId: identifier, featureId: identifier });
+const featureRevealedEvent = z.strictObject({ type: z.literal('feature.revealed'), eventId: identifier,
+  actorId: identifier, featureId: identifier });
+const featureSearchedEvent = z.strictObject({ type: z.literal('feature.searched'), eventId: identifier,
+  actorId: identifier });
+const trapTriggeredEvent = z.strictObject({ type: z.literal('trap.triggered'), eventId: identifier,
+  actorId: identifier, featureId: identifier });
+const trapDisarmedEvent = z.strictObject({ type: z.literal('trap.disarmed'), eventId: identifier,
+  actorId: identifier, featureId: identifier });
+const trapDisarmFailedEvent = z.strictObject({ type: z.literal('trap.disarm-failed'), eventId: identifier,
+  actorId: identifier, featureId: identifier });
+const itemDamagedEvent = z.strictObject({ type: z.literal('item.damaged'), eventId: identifier,
+  actorId: identifier, itemId: identifier, amount: safeNonNegative, condition: safeNonNegative });
+const soundHeardEvent = z.strictObject({ type: z.literal('sound.heard'),
+  category: z.enum(['combat', 'movement', 'mechanism']),
+  direction: z.enum(['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'here']),
+  distanceBand: z.enum(['near', 'medium', 'far']) });
+const heroDamagedPublicEvent = z.strictObject({ type: z.literal('hero.damaged'), amount: safeNonNegative,
+  damageType: z.enum(['physical', 'fire', 'cold', 'lightning', 'poison', 'arcane']) });
+const restCompletedEvent = z.strictObject({ type: z.literal('rest.completed'), eventId: identifier,
+  stopReason: z.enum(['full-health', 'maximum-duration', 'visible-danger', 'aware-hostile', 'damage',
+    'meaningful-sound', 'hunger-warning', 'fuel-warning', 'condition-change', 'decision-required', 'hero-death']),
+  elapsed: safeNonNegative, effectiveHealing: safeNonNegative });
+const event = z.discriminatedUnion('type', [
+  movedEvent, waitedEvent, invalidEvent, attackMissedEvent, attackHitEvent, actorDamagedEvent,
+  actorDiedEvent, actorHealedEvent, conditionAppliedEvent, conditionRemovedEvent, actorForcedMoveEvent,
+  reactionTriggeredEvent, relationshipChangedEvent, actorTurnStartedEvent, actorTurnCompletedEvent, actorMovedEvent,
+  itemPickedUpEvent, itemDroppedEvent, itemStackSplitEvent,
+  itemConsumedEvent,
+  itemThrownEvent,
+  itemUsedEvent,
+  itemEquippedEvent, itemUnequippedEvent,
+  itemLightToggledEvent, itemRefueledEvent,
+  identificationAppearanceRevealedEvent, itemIdentifiedEvent,
+  hungerStageChangedEvent, hungerRestoredEvent, fuelWarningEvent, itemLightExtinguishedEvent,
+  doorOpenedEvent, doorClosedEvent,
+  featureRevealedEvent, featureSearchedEvent, trapTriggeredEvent, trapDisarmedEvent, trapDisarmFailedEvent,
+  itemDamagedEvent,
+  soundHeardEvent, heroDamagedPublicEvent, restCompletedEvent,
+]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
 const invalidResult = z.strictObject({ status: z.literal('invalid'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative, reason: blockReason });
 const processedResult = z.discriminatedUnion('status', [appliedResult, invalidResult]);
-const recorded = z.strictObject({ command, result: processedResult, events: z.array(event).readonly() });
+const recorded = z.strictObject({
+  command,
+  result: processedResult,
+  events: z.array(event).readonly(),
+  publicEvents: z.array(event).readonly(),
+});
 const entity = z.strictObject({ entityId: identifier, x: safeNonNegative, y: safeNonNegative });
 const color = z.tuple([uint8, uint8, uint8]);
 const ambient = z.strictObject({ color, strength: uint8 });
@@ -66,17 +206,124 @@ const floor = z.strictObject({
   themeId: identifier, ambient, knowledge, lights: z.array(light).readonly(), stairUp: point.nullable(), stairDown: point.nullable(),
   vaults: z.array(vault).readonly(), placementSlots: z.array(slot).readonly(),
 });
-const hero = z.strictObject({ heroId: identifier, name: heroName, floorId: identifier, x: safeNonNegative, y: safeNonNegative, sightRadius: safeNonNegative });
+const nullableIdentifier = identifier.nullable();
+const attributes = z.strictObject({
+  might: safeNonNegative,
+  agility: safeNonNegative,
+  vitality: safeNonNegative,
+  wits: safeNonNegative,
+  resolve: safeNonNegative,
+});
+const condition = z.strictObject({
+  conditionId: identifier,
+  sourceActorId: nullableIdentifier,
+  appliedAt: safeNonNegative,
+  expiresAt: safeNonNegative.nullable(),
+  stacks: z.number().int().safe().positive(),
+});
+const equipment = z.strictObject({
+  'main-hand': nullableIdentifier,
+  'off-hand': nullableIdentifier,
+  body: nullableIdentifier,
+  head: nullableIdentifier,
+  hands: nullableIdentifier,
+  feet: nullableIdentifier,
+  neck: nullableIdentifier,
+  'left-ring': nullableIdentifier,
+  'right-ring': nullableIdentifier,
+});
+const behaviorValue = z.union([z.string(), z.number().int().safe(), z.boolean(), z.null()]);
+const actor = z.strictObject({
+  actorId: identifier,
+  contentId: identifier,
+  playerControlled: z.boolean(),
+  floorId: identifier,
+  x: safeNonNegative,
+  y: safeNonNegative,
+  attributes,
+  health: safeNonNegative,
+  maxHealth: safeNonNegative,
+  energy: z.number().int().safe(),
+  speed: z.number().int().safe().positive(),
+  reactionReady: z.boolean(),
+  disposition: z.enum(['friendly', 'neutral', 'hostile']),
+  awareActorIds: z.array(identifier).readonly(),
+  conditions: z.array(condition).readonly(),
+  equipment,
+  behaviorId: nullableIdentifier,
+  behaviorState: z.record(z.string(), behaviorValue).readonly(),
+});
+const itemLocation = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('backpack'), actorId: identifier }),
+  z.strictObject({ type: z.literal('equipped'), actorId: identifier, slot: z.enum(['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring']) }),
+  z.strictObject({ type: z.literal('floor'), floorId: identifier, x: safeNonNegative, y: safeNonNegative }),
+]);
+const enchantment = z.strictObject({
+  enchantmentId: identifier,
+  modifiers: z.record(z.string(), z.number().int().safe()).readonly(),
+});
+const item = z.strictObject({
+  itemId: identifier,
+  contentId: identifier,
+  quantity: z.number().int().safe().positive(),
+  condition: safeNonNegative,
+  enchantment: enchantment.nullable(),
+  identified: z.boolean(),
+  charges: safeNonNegative.nullable(),
+  fuel: safeNonNegative.nullable(),
+  enabled: z.boolean().nullable(),
+  location: itemLocation,
+});
+const discovery = z.strictObject({
+  discoveredByActorIds: z.array(identifier).readonly(),
+  progressByActorId: z.record(identifier, safeNonNegative).readonly(),
+  attemptedContextKeys: z.array(z.string().min(1).max(256)).readonly(),
+});
+const featureBase = {
+  featureId: identifier,
+  floorId: identifier,
+  x: safeNonNegative,
+  y: safeNonNegative,
+  contentId: nullableIdentifier,
+  coverTileId: tile,
+} as const;
+const feature = z.discriminatedUnion('type', [
+  z.strictObject({ ...featureBase, type: z.literal('door'), state: z.enum(['open', 'closed', 'locked']) }),
+  z.strictObject({ ...featureBase, type: z.literal('trap'), state: z.enum(['armed', 'disabled', 'spent']), discoveryDifficulty: safeNonNegative, discovery }),
+  z.strictObject({ ...featureBase, type: z.literal('secret'), state: z.enum(['hidden', 'revealed']), discoveryDifficulty: safeNonNegative, discovery }),
+]);
+const relationship = z.strictObject({
+  leftActorId: identifier,
+  rightActorId: identifier,
+  relationship: z.enum(['friendly', 'neutral', 'hostile']),
+});
+const survival = z.strictObject({
+  hungerReserve: safeNonNegative,
+  hungerStage: z.enum(['sated', 'hungry', 'weak', 'starving']),
+  nextStarvationAt: safeNonNegative.nullable(),
+  emittedHungerWarnings: z.array(z.enum(['sated', 'hungry', 'weak', 'starving'])).readonly(),
+  emittedFuelWarnings: z.array(identifier).readonly(),
+});
+const identification = z.strictObject({
+  appearanceByContentId: z.record(identifier, identifier).readonly(),
+  knownAppearanceIds: z.array(identifier).readonly(),
+});
+const hero = z.strictObject({ actorId: identifier, name: heroName, sightRadius: safeNonNegative, backpackCapacity: safeNonNegative });
 const rngEntries = Object.fromEntries(RNG_STREAM_NAMES.map((name) => [name, uint32State]));
 const directionOffsets: Readonly<Record<Direction, Readonly<{ x: number; y: number }>>> = {
-  north: { x: 0, y: -1 }, south: { x: 0, y: 1 }, east: { x: 1, y: 0 }, west: { x: -1, y: 0 },
+  northwest: { x: -1, y: -1 }, north: { x: 0, y: -1 }, northeast: { x: 1, y: -1 },
+  west: { x: -1, y: 0 }, east: { x: 1, y: 0 },
+  southwest: { x: -1, y: 1 }, south: { x: 0, y: 1 }, southeast: { x: 1, y: 1 },
 };
 
 const activeRunSchema = z.strictObject({
   schemaVersion: z.literal(SAVE_SCHEMA_VERSION), gameVersion: z.literal(ENGINE_GAME_VERSION),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/), runId: identifier, runSeed: uint32Tuple,
   rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
-  revision: safeNonNegative, turn: safeNonNegative, hero, activeFloorId: identifier,
+  revision: safeNonNegative, turn: safeNonNegative, worldTime: safeNonNegative,
+  hero, actors: z.array(actor).min(1).readonly(), items: z.array(item).readonly(), features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(), survival, identification,
+  activeFloorId: identifier,
   floors: z.array(floor).min(1).readonly(), recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
 });
 
@@ -95,6 +342,22 @@ function cell(floorValue: SavedFloor, x: number, y: number, path: string): numbe
 function ensureWalkable(floorValue: SavedFloor, x: number, y: number, path: string): void {
   const index = cell(floorValue, x, y, path);
   if (!tileDefinition(floorValue.tiles[index]!).walkable) fail(path, 'position is not on walkable terrain');
+}
+
+function ensureActorWalkable(
+  floorValue: SavedFloor,
+  features: readonly z.infer<typeof feature>[],
+  x: number,
+  y: number,
+  path: string,
+): void {
+  const index = cell(floorValue, x, y, path);
+  if (tileDefinition(floorValue.tiles[index]!).walkable) return;
+  const walkableFeature = features.some((candidate) => (
+    (candidate.type === 'door' && candidate.state === 'open')
+    || (candidate.type === 'secret' && candidate.state === 'revealed')
+  ) && candidate.floorId === floorValue.floorId && candidate.x === x && candidate.y === y);
+  if (!walkableFeature) fail(path, 'position is not on walkable terrain');
 }
 
 function validateOrderedIds(values: readonly string[], path: string, noun: string, idField?: string): void {
@@ -223,19 +486,123 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   }
   const activeFloor = run.floors.find((candidate) => candidate.floorId === run.activeFloorId);
   if (!activeFloor) fail('activeFloorId', 'active floor does not exist');
-  if (run.hero.floorId !== run.activeFloorId) fail('hero.floorId', 'hero must occupy the active floor');
-  ensureWalkable(activeFloor, run.hero.x, run.hero.y, 'hero');
-  if (globalIds.entities.has(run.hero.heroId)) fail('hero.heroId', 'hero identifier conflicts with a saved entity');
+
+  validateOrderedIds(run.actors.map((entry) => entry.actorId), 'actors', 'actor', 'actorId');
+  const actors = new Map(run.actors.map((entry) => [entry.actorId, entry]));
+  const occupiedCells = new Set<string>();
+  for (const [actorIndex, actorValue] of run.actors.entries()) {
+    const path = `actors.${actorIndex}`;
+    const actorFloor = run.floors.find((candidate) => candidate.floorId === actorValue.floorId);
+    if (!actorFloor) fail(`${path}.floorId`, 'actor floor does not exist');
+    ensureActorWalkable(actorFloor, run.features, actorValue.x, actorValue.y, path);
+    if (actorValue.health > actorValue.maxHealth) fail(`${path}.health`, 'health exceeds maximum health');
+    validateOrderedIds(actorValue.awareActorIds, `${path}.awareActorIds`, 'aware actor');
+    for (const [awareIndex, awareActorId] of actorValue.awareActorIds.entries()) {
+      if (awareActorId === actorValue.actorId) fail(`${path}.awareActorIds.${awareIndex}`, 'actor cannot be aware of itself');
+      if (!actors.has(awareActorId)) fail(`${path}.awareActorIds.${awareIndex}`, 'aware actor does not exist');
+    }
+    validateOrderedIds(actorValue.conditions.map((entry) => entry.conditionId), `${path}.conditions`, 'condition', 'conditionId');
+    for (const [conditionIndex, conditionValue] of actorValue.conditions.entries()) {
+      if (conditionValue.sourceActorId !== null && !actors.has(conditionValue.sourceActorId)) {
+        fail(`${path}.conditions.${conditionIndex}.sourceActorId`, 'condition source actor does not exist');
+      }
+      if (conditionValue.expiresAt !== null && conditionValue.expiresAt < conditionValue.appliedAt) {
+        fail(`${path}.conditions.${conditionIndex}.expiresAt`, 'condition cannot expire before it was applied');
+      }
+    }
+    if (actorValue.health > 0) {
+      const occupiedKey = `${actorValue.floorId}:${actorValue.x}:${actorValue.y}`;
+      if (occupiedCells.has(occupiedKey)) fail(path, 'living actors cannot share a cell');
+      occupiedCells.add(occupiedKey);
+    }
+  }
+
+  const savedHeroActor = actors.get(run.hero.actorId);
+  if (!savedHeroActor || !savedHeroActor.playerControlled) fail('hero.actorId', 'hero must reference one player-controlled actor');
+  if (savedHeroActor.floorId !== run.activeFloorId) fail('hero.actorId', 'hero actor must occupy the active floor');
+
+  validateOrderedIds(run.items.map((entry) => entry.itemId), 'items', 'item', 'itemId');
+  const items = new Map(run.items.map((entry) => [entry.itemId, entry]));
+  for (const [itemIndex, itemValue] of run.items.entries()) {
+    const path = `items.${itemIndex}`;
+    const location = itemValue.location;
+    if (location.type === 'floor') {
+      const itemFloor = run.floors.find((candidate) => candidate.floorId === location.floorId);
+      if (!itemFloor) fail(`${path}.location.floorId`, 'item floor does not exist');
+      ensureWalkable(itemFloor, location.x, location.y, `${path}.location`);
+      continue;
+    }
+    const owner = actors.get(location.actorId);
+    if (!owner) fail(`${path}.location.actorId`, 'item owner does not exist');
+    if (location.type === 'equipped' && owner.equipment[location.slot] !== itemValue.itemId) {
+      fail(`${path}.location.slot`, 'equipped item is not referenced by its actor slot');
+    }
+  }
+  for (const [actorIndex, actorValue] of run.actors.entries()) {
+    for (const [slotName, itemId] of Object.entries(actorValue.equipment)) {
+      if (itemId === null) continue;
+      const itemValue = items.get(itemId);
+      if (!itemValue) fail(`actors.${actorIndex}.equipment.${slotName}`, 'equipped item does not exist');
+      if (itemValue.location.type !== 'equipped' || itemValue.location.actorId !== actorValue.actorId || itemValue.location.slot !== slotName) {
+        fail(`actors.${actorIndex}.equipment.${slotName}`, 'equipment reference disagrees with item location');
+      }
+    }
+  }
+
+  validateOrderedIds(run.features.map((entry) => entry.featureId), 'features', 'feature', 'featureId');
+  for (const [featureIndex, featureValue] of run.features.entries()) {
+    const path = `features.${featureIndex}`;
+    const featureFloor = run.floors.find((candidate) => candidate.floorId === featureValue.floorId);
+    if (!featureFloor) fail(`${path}.floorId`, 'feature floor does not exist');
+    const featureCell = cell(featureFloor, featureValue.x, featureValue.y, path);
+    if (featureValue.type === 'door' && featureFloor.tiles[featureCell] !== featureValue.coverTileId) {
+      fail(`${path}.coverTileId`, 'door cover tile does not match its floor terrain');
+    }
+    if (featureValue.type !== 'door') {
+      validateOrderedIds(featureValue.discovery.discoveredByActorIds, `${path}.discovery.discoveredByActorIds`, 'discovering actor');
+      validateOrderedIds(featureValue.discovery.attemptedContextKeys, `${path}.discovery.attemptedContextKeys`, 'discovery context');
+      for (const actorId of featureValue.discovery.discoveredByActorIds) {
+        if (!actors.has(actorId)) fail(`${path}.discovery.discoveredByActorIds`, 'discovering actor does not exist');
+      }
+      for (const actorId of Object.keys(featureValue.discovery.progressByActorId)) {
+        if (!actors.has(actorId)) fail(`${path}.discovery.progressByActorId.${actorId}`, 'progress actor does not exist');
+      }
+    }
+  }
+
+  let previousRelationshipKey = '';
+  for (const [relationshipIndex, relationshipValue] of run.relationships.entries()) {
+    const path = `relationships.${relationshipIndex}`;
+    if (relationshipValue.leftActorId >= relationshipValue.rightActorId) fail(`${path}.rightActorId`, 'relationship actor identifiers must be a strictly increasing pair');
+    if (!actors.has(relationshipValue.leftActorId) || !actors.has(relationshipValue.rightActorId)) fail(path, 'relationship actor does not exist');
+    const key = `${relationshipValue.leftActorId}\u0000${relationshipValue.rightActorId}`;
+    if (key <= previousRelationshipKey) fail(path, 'relationship pairs must be unique and strictly increasing');
+    previousRelationshipKey = key;
+  }
+
+  validateOrderedIds(Object.keys(run.identification.appearanceByContentId), 'identification.appearanceByContentId', 'content');
+  validateOrderedIds(run.identification.knownAppearanceIds, 'identification.knownAppearanceIds', 'appearance');
+  const hungerStageOrder = ['hungry', 'weak', 'starving'] as const;
+  let previousHungerWarning = -1;
+  for (const [index, warning] of run.survival.emittedHungerWarnings.entries()) {
+    const position = hungerStageOrder.indexOf(warning as (typeof hungerStageOrder)[number]);
+    if (position <= previousHungerWarning) {
+      fail(`survival.emittedHungerWarnings.${index}`, 'hunger warnings must be unique and in deterioration order');
+    }
+    previousHungerWarning = position;
+  }
+  validateOrderedIds(run.survival.emittedFuelWarnings, 'survival.emittedFuelWarnings', 'fuel warning');
   for (const [floorIndex, floorValue] of run.floors.entries()) {
     for (const [lightIndex, source] of floorValue.lights.entries()) {
-      if (source.location.type === 'actor' && source.location.actorId === run.hero.heroId && floorValue.floorId === run.hero.floorId) continue;
       const actorId = source.location.type === 'actor' ? source.location.actorId : undefined;
+      const attachedActor = actorId === undefined ? undefined : actors.get(actorId);
+      if (attachedActor && attachedActor.floorId === floorValue.floorId) continue;
       if (actorId !== undefined && !floorValue.entities.some((entry) => entry.entityId === actorId)) {
         fail(`floors.${floorIndex}.lights.${lightIndex}.location.actorId`, 'attached actor does not exist on this floor');
       }
     }
   }
-  if (run.turn !== run.revision) fail('turn', 'turn and revision must match in schema v2');
+  if (run.turn !== run.revision) fail('turn', 'turn and revision must match in schema v3');
 
   const commandIds = new Set<string>();
   let previousRevision = 0;
@@ -244,22 +611,144 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     if (commandIds.has(recordValue.command.commandId)) fail(`${path}.command.commandId`, 'command identifier is duplicated');
     commandIds.add(recordValue.command.commandId);
     if (recordValue.command.commandId !== recordValue.result.commandId) fail(`${path}.result.commandId`, 'result does not match command');
-    if (recordValue.events.length !== 1) fail(`${path}.events`, 'processed commands require exactly one event');
-    if (recordValue.events.some((entry) => entry.eventId !== recordValue.command.commandId)) fail(`${path}.events`, 'event identifier does not match command');
-    const eventValue = recordValue.events[0]!;
+    if (recordValue.events.length === 0) fail(`${path}.events`, 'processed commands require at least one event');
+    if (recordValue.events.some((entry) => !('eventId' in entry) || entry.eventId !== recordValue.command.commandId)) fail(`${path}.events`, 'event identifier does not match command');
+    if (recordValue.publicEvents.some((entry) => 'eventId' in entry && entry.eventId !== recordValue.command.commandId)) fail(`${path}.publicEvents`, 'public event identifier does not match command');
+    const attackTargetActorId = recordValue.command.type === 'attack' ? recordValue.command.targetActorId : undefined;
+    const commandItemId = 'itemId' in recordValue.command ? recordValue.command.itemId : undefined;
+    const splitNewItemId = recordValue.command.type === 'split-stack' ? recordValue.command.newItemId : undefined;
+    const commandQuantity = 'quantity' in recordValue.command ? recordValue.command.quantity : undefined;
+    const commandSlot = 'slot' in recordValue.command ? recordValue.command.slot : undefined;
+    const commandEnabled = recordValue.command.type === 'toggle-light' ? recordValue.command.enabled : undefined;
+    const commandFuelItemId = recordValue.command.type === 'refuel' ? recordValue.command.fuelItemId : undefined;
+    const commandFeatureId = 'featureId' in recordValue.command ? recordValue.command.featureId : undefined;
+    const eventValue = recordValue.result.status === 'invalid'
+      ? recordValue.events.find((entry) => entry.type === 'action.invalid')
+      : recordValue.command.type === 'wait'
+        ? recordValue.events.find((entry) => entry.type === 'hero.waited')
+      : recordValue.command.type === 'move'
+          ? recordValue.events.find((entry) => entry.type === 'hero.moved')
+            ?? recordValue.events.find((entry) => (entry.type === 'attack.hit' || entry.type === 'attack.missed')
+              && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => entry.type === 'reaction.triggered' && entry.targetActorId === run.hero.actorId)
+          : recordValue.command.type === 'attack'
+            ? recordValue.events.find((entry) => (entry.type === 'attack.hit' || entry.type === 'attack.missed')
+              && entry.actorId === run.hero.actorId && entry.targetActorId === attackTargetActorId)
+            : recordValue.command.type === 'pickup'
+              ? recordValue.events.find((entry) => entry.type === 'item.picked-up'
+                && entry.actorId === run.hero.actorId && entry.itemId === commandItemId)
+              : recordValue.command.type === 'drop'
+                ? recordValue.events.find((entry) => entry.type === 'item.dropped'
+                  && entry.actorId === run.hero.actorId && entry.itemId === commandItemId)
+                : recordValue.command.type === 'split-stack'
+                  ? recordValue.events.find((entry) => entry.type === 'item.stack-split'
+                    && entry.actorId === run.hero.actorId && entry.itemId === commandItemId
+                    && entry.newItemId === splitNewItemId)
+                  : recordValue.command.type === 'fire'
+                    ? recordValue.events.find((entry) => (entry.type === 'attack.hit' || entry.type === 'attack.missed')
+                      && entry.actorId === run.hero.actorId)
+                    : recordValue.command.type === 'throw-item'
+                      ? recordValue.events.find((entry) => entry.type === 'item.thrown'
+                        && entry.actorId === run.hero.actorId && entry.quantity === commandQuantity)
+                      : recordValue.command.type === 'use-item'
+                        ? recordValue.events.find((entry) => entry.type === 'item.used'
+                          && entry.actorId === run.hero.actorId && entry.itemId === commandItemId)
+                        : recordValue.command.type === 'equip'
+                          ? recordValue.events.find((entry) => entry.type === 'item.equipped'
+                            && entry.actorId === run.hero.actorId && entry.itemId === commandItemId
+                            && entry.slot === commandSlot)
+                          : recordValue.command.type === 'unequip'
+                            ? recordValue.events.find((entry) => entry.type === 'item.unequipped'
+                              && entry.actorId === run.hero.actorId && entry.slot === commandSlot)
+                            : recordValue.command.type === 'toggle-light'
+                              ? recordValue.events.find((entry) => entry.type === 'item.light-toggled'
+                                && entry.actorId === run.hero.actorId && entry.itemId === commandItemId
+                                && entry.enabled === commandEnabled)
+                              : recordValue.command.type === 'refuel'
+                                ? recordValue.events.find((entry) => entry.type === 'item.refueled'
+                                  && entry.actorId === run.hero.actorId && entry.itemId === commandItemId
+                                  && entry.fuelItemId === commandFuelItemId)
+                                : recordValue.command.type === 'open-door'
+                                  ? recordValue.events.find((entry) => entry.type === 'door.opened'
+                                    && entry.actorId === run.hero.actorId && entry.featureId === commandFeatureId)
+                                  : recordValue.command.type === 'close-door'
+                                    ? recordValue.events.find((entry) => entry.type === 'door.closed'
+                                      && entry.actorId === run.hero.actorId && entry.featureId === commandFeatureId)
+                                    : recordValue.command.type === 'search'
+                                      ? recordValue.events.find((entry) => entry.type === 'feature.searched'
+                                        && entry.actorId === run.hero.actorId)
+                                      : recordValue.command.type === 'disarm'
+                                        ? recordValue.events.find((entry) => (entry.type === 'trap.disarmed'
+                                          || entry.type === 'trap.triggered' || entry.type === 'trap.disarm-failed')
+                                          && entry.actorId === run.hero.actorId && entry.featureId === commandFeatureId)
+                                        : recordValue.command.type === 'rest'
+                                          ? recordValue.events.find((entry) => entry.type === 'rest.completed')
+          : undefined;
+    if (!eventValue) fail(`${path}.events`, 'processed result has no matching event');
     if (recordValue.result.status === 'invalid') {
       if (eventValue.type !== 'action.invalid' || eventValue.commandId !== recordValue.command.commandId || eventValue.reason !== recordValue.result.reason) fail(`${path}.events.0`, 'invalid result and event are inconsistent');
     } else if (recordValue.command.type === 'wait') {
-      if (eventValue.type !== 'hero.waited' || eventValue.heroId !== run.hero.heroId) fail(`${path}.events.0`, 'wait result and event are inconsistent');
-      ensureWalkable(activeFloor, eventValue.x, eventValue.y, `${path}.events.0`);
-    } else if (eventValue.type !== 'hero.moved' || eventValue.heroId !== run.hero.heroId) fail(`${path}.events.0`, 'move result and event are inconsistent');
-    else {
-      ensureWalkable(activeFloor, eventValue.from.x, eventValue.from.y, `${path}.events.0.from`);
-      ensureWalkable(activeFloor, eventValue.to.x, eventValue.to.y, `${path}.events.0.to`);
-    }
+      if (eventValue.type !== 'hero.waited' || eventValue.heroId !== run.hero.actorId) fail(`${path}.events.0`, 'wait result and event are inconsistent');
+      ensureActorWalkable(activeFloor, run.features, eventValue.x, eventValue.y, `${path}.events.0`);
+    } else if (recordValue.command.type === 'move' && eventValue.type === 'hero.moved' && eventValue.heroId === run.hero.actorId) {
+      ensureActorWalkable(activeFloor, run.features, eventValue.from.x, eventValue.from.y, `${path}.events.0.from`);
+      ensureActorWalkable(activeFloor, run.features, eventValue.to.x, eventValue.to.y, `${path}.events.0.to`);
+    } else if (recordValue.command.type === 'move' && eventValue.type === 'reaction.triggered'
+      && eventValue.targetActorId === run.hero.actorId) {
+      // A reaction may kill or immobilize the hero before the attempted move completes.
+    } else if ((recordValue.command.type === 'move' || recordValue.command.type === 'attack')
+      && (eventValue.type === 'attack.hit' || eventValue.type === 'attack.missed')
+      && eventValue.actorId === run.hero.actorId) {
+      if (recordValue.command.type === 'attack' && eventValue.targetActorId !== recordValue.command.targetActorId) {
+        fail(`${path}.events`, 'attack target and event are inconsistent');
+      }
+    } else if ((recordValue.command.type === 'pickup' && eventValue.type === 'item.picked-up')
+      || (recordValue.command.type === 'drop' && eventValue.type === 'item.dropped')
+      || (recordValue.command.type === 'split-stack' && eventValue.type === 'item.stack-split')) {
+      if (eventValue.quantity !== recordValue.command.quantity) fail(`${path}.events`, 'item quantity and event are inconsistent');
+    } else if (recordValue.command.type === 'fire'
+      && (eventValue.type === 'attack.hit' || eventValue.type === 'attack.missed')
+      && eventValue.actorId === run.hero.actorId) {
+      // Ammunition consumption is separately recorded before the attack event.
+    } else if (recordValue.command.type === 'throw-item' && eventValue.type === 'item.thrown'
+      && eventValue.actorId === run.hero.actorId && eventValue.quantity === recordValue.command.quantity) {
+      ensureActorWalkable(activeFloor, run.features, eventValue.to.x, eventValue.to.y, `${path}.events.0.to`);
+    } else if (recordValue.command.type === 'use-item' && eventValue.type === 'item.used'
+      && eventValue.actorId === run.hero.actorId && eventValue.itemId === recordValue.command.itemId) {
+      // The item's authored effects determine whether and how much quantity is consumed.
+    } else if ((recordValue.command.type === 'equip' && eventValue.type === 'item.equipped')
+      || (recordValue.command.type === 'unequip' && eventValue.type === 'item.unequipped')) {
+      if (eventValue.actorId !== run.hero.actorId || eventValue.slot !== recordValue.command.slot) {
+        fail(`${path}.events`, 'equipment command and event are inconsistent');
+      }
+    } else if (recordValue.command.type === 'toggle-light' && eventValue.type === 'item.light-toggled'
+      && eventValue.actorId === run.hero.actorId && eventValue.itemId === recordValue.command.itemId
+      && eventValue.enabled === recordValue.command.enabled) {
+      // Item state carries the resulting enabled flag.
+    } else if (recordValue.command.type === 'refuel' && eventValue.type === 'item.refueled'
+      && eventValue.actorId === run.hero.actorId && eventValue.itemId === recordValue.command.itemId
+      && eventValue.fuelItemId === recordValue.command.fuelItemId) {
+      if (eventValue.quantity > recordValue.command.quantity) fail(`${path}.events`, 'refuel event exceeds requested quantity');
+    } else if (((recordValue.command.type === 'open-door' && eventValue.type === 'door.opened')
+      || (recordValue.command.type === 'close-door' && eventValue.type === 'door.closed'))
+      && eventValue.actorId === run.hero.actorId && eventValue.featureId === recordValue.command.featureId) {
+      // Feature state carries the resulting door geometry.
+    } else if (recordValue.command.type === 'search' && eventValue.type === 'feature.searched'
+      && eventValue.actorId === run.hero.actorId) {
+      // Discovery progress is stored on affected features.
+    } else if (recordValue.command.type === 'disarm'
+      && (eventValue.type === 'trap.disarmed' || eventValue.type === 'trap.triggered'
+        || eventValue.type === 'trap.disarm-failed')
+      && eventValue.actorId === run.hero.actorId && eventValue.featureId === recordValue.command.featureId) {
+      // Trap state and the effects random stream store the outcome.
+    } else if (recordValue.command.type === 'rest' && eventValue.type === 'rest.completed') {
+      if (eventValue.elapsed > recordValue.command.maximumDuration) {
+        fail(`${path}.events`, 'rest event exceeds requested maximum duration');
+      }
+    } else fail(`${path}.events`, 'applied command and event are inconsistent');
     if (recordValue.result.revision < previousRevision || recordValue.result.revision > run.revision) fail(`${path}.result.revision`, 'record revisions are not monotonic');
     if (recordValue.result.turn > run.turn) fail(`${path}.result.turn`, 'record turn exceeds current turn');
-    if (recordValue.result.turn !== recordValue.result.revision) fail(`${path}.result.turn`, 'result turn and revision must match in schema v2');
+    if (recordValue.result.turn !== recordValue.result.revision) fail(`${path}.result.turn`, 'result turn and revision must match in schema v3');
     if (recordValue.result.status === 'applied' && recordValue.result.revision !== recordValue.command.expectedRevision + 1) fail(`${path}.result.revision`, 'applied revision is inconsistent');
     if (recordValue.result.status === 'invalid' && recordValue.result.revision !== recordValue.command.expectedRevision) fail(`${path}.result.revision`, 'invalid revision is inconsistent');
     const previousRecord = run.recentCommands[index - 1];
@@ -272,25 +761,81 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     if (finalRecord.result.revision !== run.revision) fail(`recentCommands.${finalIndex}.result.revision`, 'final result does not match current revision');
     if (finalRecord.result.turn !== run.turn) fail(`recentCommands.${finalIndex}.result.turn`, 'final result does not match current turn');
   }
-  let knownPosition = { x: run.hero.x, y: run.hero.y };
+  let knownPosition = { x: savedHeroActor.x, y: savedHeroActor.y };
   for (let index = run.recentCommands.length - 1; index >= 0; index -= 1) {
     const recordValue = run.recentCommands[index]!;
-    const eventValue = recordValue.events[0]!;
+    const eventValue = recordValue.result.status === 'invalid'
+      ? recordValue.events.find((entry) => entry.type === 'action.invalid')!
+      : recordValue.command.type === 'wait'
+        ? recordValue.events.find((entry) => entry.type === 'hero.waited')!
+        : recordValue.command.type === 'move'
+          ? recordValue.events.find((entry) => entry.type === 'hero.moved')
+            ?? recordValue.events.find((entry) => (entry.type === 'attack.hit' || entry.type === 'attack.missed')
+              && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => entry.type === 'reaction.triggered' && entry.targetActorId === run.hero.actorId)!
+          : recordValue.events.find((entry) => (entry.type === 'attack.hit' || entry.type === 'attack.missed')
+            && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => (entry.type === 'item.picked-up' || entry.type === 'item.dropped'
+              || entry.type === 'item.stack-split' || entry.type === 'item.thrown' || entry.type === 'item.used')
+              && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => (entry.type === 'item.equipped' || entry.type === 'item.unequipped')
+              && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => (entry.type === 'item.light-toggled' || entry.type === 'item.refueled')
+              && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => (entry.type === 'door.opened' || entry.type === 'door.closed')
+              && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => entry.type === 'feature.searched' && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => (entry.type === 'trap.disarmed' || entry.type === 'trap.triggered'
+              || entry.type === 'trap.disarm-failed') && entry.actorId === run.hero.actorId)!;
     const path = `recentCommands.${index}`;
     if (recordValue.result.status === 'invalid') {
-      if (recordValue.command.type !== 'move') fail(`${path}.command.type`, 'only movement can produce an invalid result');
-      const offset = directionOffsets[recordValue.command.direction];
-      const attempted = { x: knownPosition.x + offset.x, y: knownPosition.y + offset.y };
-      const attemptedIndex = tileIndex(activeFloor, attempted.x, attempted.y);
-      const actualReason = attemptedIndex === undefined ? 'blocked.bounds' : movementBlockReason(activeFloor.tiles[attemptedIndex]!);
-      if (recordValue.result.reason !== actualReason) fail(`${path}.result.reason`, 'invalid reason does not match the active floor');
+      if (recordValue.command.type !== 'move') {
+        const inventoryCommand = recordValue.command.type === 'pickup' || recordValue.command.type === 'drop'
+          || recordValue.command.type === 'split-stack' || recordValue.command.type === 'equip'
+          || recordValue.command.type === 'unequip' || recordValue.command.type === 'refuel'
+          || recordValue.command.type === 'toggle-light';
+        const inventoryReason = recordValue.result.reason === 'inventory.full'
+          || recordValue.result.reason.startsWith('item.');
+        const targetReason = recordValue.result.reason.startsWith('target.');
+        const targetingCommand = recordValue.command.type === 'fire' || recordValue.command.type === 'cast'
+          || recordValue.command.type === 'throw-item' || recordValue.command.type === 'use-item';
+        if (inventoryReason && !inventoryCommand) {
+          if (!inventoryCommand && recordValue.command.type !== 'fire' && recordValue.command.type !== 'throw-item'
+            && recordValue.command.type !== 'use-item') {
+            fail(`${path}.result.reason`, 'inventory reasons require an item command');
+          }
+        }
+        if (targetReason && !targetingCommand) fail(`${path}.result.reason`, 'target reason requires a targeting command');
+        if (!inventoryReason && !targetReason && recordValue.result.reason !== 'action.unavailable') {
+          fail(`${path}.result.reason`, 'non-movement command reason is inconsistent');
+        }
+        continue;
+      }
+      if (recordValue.result.reason === 'action.unavailable') continue;
+      if (['blocked.bounds', 'blocked.wall', 'blocked.door', 'blocked.pillar', 'blocked.void'].includes(recordValue.result.reason)) {
+        const offset = directionOffsets[recordValue.command.direction];
+        const attempted = { x: knownPosition.x + offset.x, y: knownPosition.y + offset.y };
+        const attemptedIndex = tileIndex(activeFloor, attempted.x, attempted.y);
+        const actualReason = attemptedIndex === undefined ? 'blocked.bounds' : movementBlockReason(activeFloor.tiles[attemptedIndex]!);
+        if (recordValue.result.reason !== actualReason) fail(`${path}.result.reason`, 'invalid reason does not match the active floor');
+      }
       continue;
     }
     if (recordValue.command.type === 'wait') {
       if (eventValue.type !== 'hero.waited' || eventValue.x !== knownPosition.x || eventValue.y !== knownPosition.y) fail(`${path}.events.0`, 'wait position does not match the retained position chain');
       continue;
     }
-    if (eventValue.type !== 'hero.moved') fail(`${path}.events.0`, 'move result and event are inconsistent');
+    if (recordValue.command.type === 'attack' || recordValue.command.type === 'pickup'
+      || recordValue.command.type === 'drop' || recordValue.command.type === 'split-stack'
+      || recordValue.command.type === 'fire' || recordValue.command.type === 'throw-item'
+      || recordValue.command.type === 'use-item' || recordValue.command.type === 'equip'
+      || recordValue.command.type === 'unequip' || recordValue.command.type === 'toggle-light'
+      || recordValue.command.type === 'refuel' || recordValue.command.type === 'open-door'
+      || recordValue.command.type === 'close-door' || recordValue.command.type === 'search'
+      || recordValue.command.type === 'disarm' || recordValue.command.type === 'rest') continue;
+    if (recordValue.command.type !== 'move') fail(`${path}.events`, 'move result and event are inconsistent');
+    if (eventValue.type === 'attack.hit' || eventValue.type === 'attack.missed' || eventValue.type === 'reaction.triggered') continue;
+    if (eventValue.type !== 'hero.moved') fail(`${path}.events`, 'move result and event are inconsistent');
     if (eventValue.to.x !== knownPosition.x || eventValue.to.y !== knownPosition.y) fail(`${path}.events.0.to`, 'move destination does not match the retained position chain');
     const offset = directionOffsets[recordValue.command.direction];
     if (eventValue.to.x !== eventValue.from.x + offset.x || eventValue.to.y !== eventValue.from.y + offset.y) fail(`${path}.events.0.to`, 'move does not match its command direction');

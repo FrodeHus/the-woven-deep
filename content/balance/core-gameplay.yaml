@@ -1,0 +1,54 @@
+schemaVersion: 2
+entries:
+  - kind: balance
+    id: balance.core-gameplay
+    name: Core gameplay
+    tags: [core, survival]
+    readinessThreshold: 100
+    normalActionCost: 100
+    speedMinimum: 25
+    speedMaximum: 400
+    energyMinimum: -10000
+    energyMaximum: 10000
+    attributeMinimum: 0
+    attributeMaximum: 30
+    hungerMaximum: 10000
+    hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 }
+    starvationInterval: 500
+    starvationDamage: 1
+    recoveryInterval: 500
+    recoveryAmount: 1
+    restMaximumDuration: 5000
+    recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }
+    hungerStageModifiers:
+      sated: {}
+      hungry: {}
+      weak: { meleeAccuracy: -1, meleeDamageBonus: -1, defense: -1 }
+      starving: { meleeAccuracy: -2, meleeDamageBonus: -2, defense: -2 }
+    formulas:
+      maxHealth: { base: 8, vitality: 2 }
+      meleeAccuracy: { might: 1 }
+      meleeDamageBonus: { might: 1 }
+      rangedAccuracy: { agility: 1 }
+      defense: { base: 8, agility: 1 }
+      search: { wits: 1 }
+      disarm: { agility: 1, wits: 1 }
+    actionCosts:
+      action.move: 100
+      action.attack: 100
+      action.cast: 100
+      action.close-door: 100
+      action.disarm: 100
+      action.drop: 100
+      action.equip: 100
+      action.fire: 100
+      action.open-door: 100
+      action.pickup: 100
+      action.refuel: 100
+      action.search: 100
+      action.split-stack: 100
+      action.throw-item: 100
+      action.toggle-light: 100
+      action.unequip: 100
+      action.use-item: 100
+      action.wait: 100

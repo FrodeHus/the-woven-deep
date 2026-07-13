@@ -1,0 +1,15 @@
+schemaVersion: 2
+entries:
+  - kind: trap
+    id: trap.rusty-dart
+    name: Rusty dart trap
+    glyph: "^"
+    color: "#9a7658"
+    tags: [mechanical, offense]
+    targetingId: target.actor
+    discoveryDifficulty: 7
+    disarmDifficulty: 9
+    disarmOutcomes: { failure: safe, criticalFailure: trigger, toolDamage: 10 }
+    resetMode: once
+    effects:
+      - { effectId: effect.damage, parameters: { damageType: physical, dice: { count: 1, sides: 4, bonus: 0 } }, requiresLivingTarget: true }

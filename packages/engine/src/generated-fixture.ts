@@ -7,6 +7,8 @@ import type { FloorSeedAllocation } from './generation-model.js';
 import { allocateFloorSeed } from './generation-random.js';
 import type { LightSource } from './light-model.js';
 import type { ActiveRun, FloorSnapshot } from './model.js';
+import { heroActor } from './actor-model.js';
+import { allocateIdentificationMap } from './identification.js';
 
 export interface GeneratedDemoRun {
   readonly run: ActiveRun;
@@ -19,7 +21,9 @@ const HEIGHT = 25;
 
 export function createGeneratedDemoRun(pack: CompiledContentPack): GeneratedDemoRun {
   const base = createDemoRun();
-  const allocation = allocateFloorSeed(base.rng.generation);
+  const identified = allocateIdentificationMap({ content: pack, rng: base.rng });
+  const initialized = { ...base, identification: identified.identification, rng: identified.rng };
+  const allocation = allocateFloorSeed(initialized.rng.generation);
   const vaults = pack.entries.filter((entry): entry is VaultContentEntry => entry.kind === 'vault');
   const generated = generateFloor({
     floorId: 'floor.generated-01',
@@ -36,10 +40,11 @@ export function createGeneratedDemoRun(pack: CompiledContentPack): GeneratedDemo
   const stairUp = generated.floor.stairUp;
   if (stairUp === null) throw new Error('generated demo floor must have a stair-up');
 
-  const hero = { ...base.hero, floorId: generated.floor.floorId, ...stairUp };
+  const baseHeroActor = heroActor(initialized);
+  const movedHeroActor = { ...baseHeroActor, floorId: generated.floor.floorId, ...stairUp };
   const carriedLight: LightSource = {
     lightId: 'light.hero-demo',
-    location: { type: 'actor', actorId: hero.heroId },
+    location: { type: 'actor', actorId: movedHeroActor.actorId },
     color: [255, 179, 71],
     radius: 7,
     strength: 180,
@@ -54,10 +59,10 @@ export function createGeneratedDemoRun(pack: CompiledContentPack): GeneratedDemo
       .sort((left, right) => left.lightId < right.lightId ? -1 : left.lightId > right.lightId ? 1 : 0),
   };
   const transitional: ActiveRun = {
-    ...base,
+    ...initialized,
     contentHash: pack.hash,
     runId: 'run.generated-demo',
-    hero,
+    actors: initialized.actors.map((actor) => actor.actorId === movedHeroActor.actorId ? movedHeroActor : actor),
     activeFloorId: generated.floor.floorId,
   };
   const run = addGeneratedFloor(transitional, { ...generated, floor }, allocation);

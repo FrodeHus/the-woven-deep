@@ -1,5 +1,6 @@
 import type { ActiveRun, CommandResult, DomainEvent, GameCommand } from './model.js';
 import { resolveCommand } from './reducer.js';
+import type { ResolutionContext } from './actions.js';
 
 export interface ReplayStep {
   readonly command: GameCommand;
@@ -15,12 +16,13 @@ export interface ReplayResult {
 export function replayCommands(
   initial: ActiveRun,
   commands: readonly GameCommand[],
+  context: ResolutionContext,
 ): ReplayResult {
   let state = initial;
   const steps: ReplayStep[] = [];
 
   for (const command of commands) {
-    const resolution = resolveCommand(state, command);
+    const resolution = resolveCommand(state, command, context);
     state = resolution.state;
     steps.push({ command, result: resolution.result, events: resolution.events });
   }

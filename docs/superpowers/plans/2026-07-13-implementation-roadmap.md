@@ -36,6 +36,15 @@ Implement rooms and corridors, connectivity validation, derived floor seeds, aut
 
 Implement attributes, combat, equipment, inventory, identification, hunger, fuel, traps, doors, secrets, enemy intent, individual/group/swarm/boss populations, discovery protection, achievements, dungeon merchants, reputation, metrics, and scoring.
 
+Deliver this milestone through two independently reviewable slices:
+
+- **4A — core gameplay and survival:** actors, integer-energy scheduling, combat, reactions, inventory, equipment, identification, hunger, fuel, doors, traps, secrets, and rest.
+- **4B — populations, NPCs, and run records:** individual/group/swarm/boss behavior, dungeon merchants, discovery protection, reputation, achievements, metrics, scoring, and deterministic run finalization.
+
+**4A design:** `docs/superpowers/specs/2026-07-13-core-gameplay-survival-design.md`
+
+**4A detailed plan:** `docs/superpowers/plans/2026-07-13-core-gameplay-survival.md`
+
 **Exit demonstration:** an automated simulation can fight a leader group, contain or flee a growing swarm, encounter a rare boss, trade with or attack a travelling merchant, and finalize a deterministic run record.
 
 ### 5. Guest game and complete player interface

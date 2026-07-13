@@ -9,6 +9,8 @@ import {
   createUnknownKnowledge,
   decodeActiveRun,
   encodeActiveRun,
+  heroActor,
+  heroPerception,
   isVisible,
   projectFloor,
   refreshKnowledge,
@@ -22,10 +24,6 @@ const reviewedHashesPath = fileURLToPath(
   new URL('../packages/engine/test/fixtures/dungeon-demo-hashes.json', import.meta.url),
 );
 const candidateHashesPath = '/tmp/dungeon-demo-hashes.json';
-const registries = {
-  ai: new Set(['ai.skittish']),
-  effects: new Set(['effect.light-source']),
-};
 
 function parseArguments(arguments_) {
   let verify = false;
@@ -69,14 +67,17 @@ function activeFloor(run) {
   return floor;
 }
 
-function actorsFor(floor, hero) {
+function actorsFor(floor, run) {
   const actors = new Map(floor.entities.map((entity) => [entity.entityId, entity]));
-  actors.set(hero.heroId, hero);
+  for (const actor of run.actors) {
+    if (actor.floorId === floor.floorId) actors.set(actor.actorId, actor);
+  }
   return actors;
 }
 
-function perceive(floor, hero, preview) {
-  const perception = refreshKnowledge({ floor, hero, actors: actorsFor(floor, hero) });
+function perceive(floor, run, preview) {
+  const hero = heroPerception(run.hero, heroActor(run));
+  const perception = refreshKnowledge({ floor, hero, actors: actorsFor(floor, run) });
   const refreshedFloor = { ...floor, knowledge: perception.knowledge };
   return projectFloor({
     floor: refreshedFloor,
@@ -115,7 +116,7 @@ function generatedViews(run) {
     lights: [
       {
         lightId: 'light.demo-blue-carried',
-        location: { type: 'actor', actorId: run.hero.heroId },
+        location: { type: 'actor', actorId: run.hero.actorId },
         color: [0, 0, 255], radius: 7, strength: 255, enabled: true,
         falloff: 'linear', vaultPlacementId: null, presentation: null,
       },
@@ -127,12 +128,12 @@ function generatedViews(run) {
       },
     ],
   };
-  const absoluteDarkness = perceive(absoluteFloor, run.hero);
-  const lowAmbient = perceive(lowAmbientFloor, run.hero);
-  const overlappingColor = perceive(overlappingFloor, run.hero);
+  const absoluteDarkness = perceive(absoluteFloor, run);
+  const lowAmbient = perceive(lowAmbientFloor, run);
+  const overlappingColor = perceive(overlappingFloor, run);
   const torch = { color: [255, 179, 71], strength: 180, falloff: 'linear' };
-  const preview3 = perceive(lowAmbientFloor, run.hero, { ...torch, radius: 3 });
-  const preview7 = perceive(lowAmbientFloor, run.hero, { ...torch, radius: 7 });
+  const preview3 = perceive(lowAmbientFloor, run, { ...torch, radius: 3 });
+  const preview7 = perceive(lowAmbientFloor, run, { ...torch, radius: 7 });
 
   assert(absoluteDarkness.cells.every((cell) => cell.knowledge === 'unknown'),
     'absolute darkness exposed terrain without an enabled source');
@@ -194,7 +195,7 @@ function direction(from, to) {
   throw new Error('generated route contains non-adjacent points');
 }
 
-function rememberedView(initialRun) {
+function rememberedView(initialRun, content) {
   const floor = activeFloor(initialRun);
   const route = analyzeConnectivity({
     width: floor.width,
@@ -215,12 +216,12 @@ function rememberedView(initialRun) {
       commandId: `command.dungeon-demo-${index}`,
       expectedRevision: run.revision,
       direction: direction(steps[index - 1], destination),
-    });
+    }, { content });
     assert(resolution.result.status === 'applied', 'valid remembered route movement was not applied');
     run = resolution.state;
   }
   const movedFloor = activeFloor(run);
-  const projection = perceive(movedFloor, run.hero);
+  const projection = perceive(movedFloor, run);
   assert(projection.cells.some((cell) => cell.knowledge === 'remembered'),
     'valid hero movement did not leave remembered terrain');
   return { run, projection };
@@ -277,7 +278,7 @@ async function verifyReviewedHashes(hashes) {
 
 async function main() {
   const options = parseArguments(process.argv.slice(2));
-  const pack = await compileContentDirectory({ rootDir: options.contentDirectory, registries });
+  const pack = await compileContentDirectory({ rootDir: options.contentDirectory });
   const first = createGeneratedDemoRun(pack);
   const second = createGeneratedDemoRun(pack);
   assert(stableJson(first.generated.floor) === stableJson(second.generated.floor),
@@ -288,12 +289,12 @@ async function main() {
   const floor = activeFloor(first.run);
   const views = generatedViews(first.run);
   const sealedCorner = sealedCornerView();
-  const remembered = rememberedView(first.run);
+  const remembered = rememberedView(first.run, pack);
   const restoredRun = decodeActiveRun(encodeActiveRun(first.run));
   assert(encodeActiveRun(restoredRun) === encodeActiveRun(first.run), 'decoded generated run bytes diverged');
   assert(sameProjectionSet(views, generatedViews(restoredRun)), 'decoded generated projections diverged');
   const restoredRemembered = decodeActiveRun(encodeActiveRun(remembered.run));
-  assert(stableJson(remembered.projection) === stableJson(perceive(activeFloor(restoredRemembered), restoredRemembered.hero)),
+  assert(stableJson(remembered.projection) === stableJson(perceive(activeFloor(restoredRemembered), restoredRemembered)),
     'decoded remembered projection diverged');
 
   const hashes = {
@@ -319,19 +320,19 @@ async function main() {
   console.log(`rooms ${report.roomCount} corridors ${report.corridorCount} vault ${vault.vaultId}`);
   console.log(`stairs ${report.stairUp.x},${report.stairUp.y} -> ${report.stairDown.x},${report.stairDown.y} distance ${report.stairDistance}`);
   console.log('view absolute-darkness');
-  console.log(renderProjection(views.absoluteDarkness, first.run.hero));
+  console.log(renderProjection(views.absoluteDarkness, heroActor(first.run)));
   console.log('view low-ambient');
-  console.log(renderProjection(views.lowAmbient, first.run.hero));
+  console.log(renderProjection(views.lowAmbient, heroActor(first.run)));
   console.log('preview torch radius 3');
-  console.log(renderProjection(views.preview3, first.run.hero, 'preview'));
+  console.log(renderProjection(views.preview3, heroActor(first.run), 'preview'));
   console.log('preview torch radius 7');
-  console.log(renderProjection(views.preview7, first.run.hero, 'preview'));
+  console.log(renderProjection(views.preview7, heroActor(first.run), 'preview'));
   console.log('view overlapping-color');
-  console.log(renderProjection(views.overlappingColor, first.run.hero, 'color'));
+  console.log(renderProjection(views.overlappingColor, heroActor(first.run), 'color'));
   console.log('view sealed-corner');
   console.log(renderProjection(sealedCorner, { x: 1, y: 1 }));
   console.log('view remembered');
-  console.log(renderProjection(remembered.projection, remembered.run.hero));
+  console.log(renderProjection(remembered.projection, heroActor(remembered.run)));
   for (const [label, value] of Object.entries(hashes)) console.log(`${label} ${value}`);
   if (options.verify) console.log('deterministic dungeon, visibility, and light verified');
   else console.log(`candidate hashes written ${candidateHashesPath}`);

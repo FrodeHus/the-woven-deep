@@ -1,4 +1,4 @@
-import type { CompiledContentPack, ContentKind } from '@woven-deep/content';
+import { CONTENT_KIND_IDS, validateCompiledContentPack, type ContentKind } from '@woven-deep/content';
 
 export interface ContentSummary {
   readonly hash: string;
@@ -13,9 +13,11 @@ export async function loadContentSummary(fetcher: typeof fetch = fetch): Promise
   ]);
   if (!healthResponse.ok || !packResponse.ok) throw new Error('The content service is unavailable.');
   const health = await healthResponse.json() as { contentHash: string; entries: number };
-  const pack = await packResponse.json() as CompiledContentPack;
+  const pack = validateCompiledContentPack(await packResponse.json());
   if (pack.hash !== health.contentHash) throw new Error('The content service returned mismatched versions.');
-  const counts = { monster: 0, item: 0, vault: 0 } satisfies Record<ContentKind, number>;
+  const counts = Object.fromEntries(
+    CONTENT_KIND_IDS.map((kind) => [kind, 0]),
+  ) as Record<ContentKind, number>;
   for (const entry of pack.entries) counts[entry.kind] += 1;
   return { hash: pack.hash, entries: health.entries, counts };
 }

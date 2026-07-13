@@ -1,0 +1,20 @@
+schemaVersion: 2
+entries:
+  - kind: item
+    id: item.leather-armor
+    name: Leather armor
+    glyph: "["
+    color: "#9f7655"
+    tags: [armor, defense]
+    minDepth: 1
+    maxDepth: 20
+    category: armor
+    stackLimit: 1
+    price: 20
+    rarity: common
+    actionCost: 100
+    equipment: { slots: [body], handedness: none, reservedSlots: [] }
+    combat: { accuracy: 0, defense: 1, armor: 1, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []

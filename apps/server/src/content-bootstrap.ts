@@ -19,9 +19,5 @@ export async function compileStartupContent(
   return compileContentDirectory({
     rootDir: contentDir,
     ...(signal ? { signal } : {}),
-    registries: {
-      ai: new Set(['ai.skittish']),
-      effects: new Set(['effect.light-source']),
-    },
   });
 }

@@ -1,0 +1,14 @@
+schemaVersion: 2
+entries:
+  - kind: loot-table
+    id: loot-table.early-provisions
+    name: Early provisions
+    tags: [defense, food, healing, light, offense, provision]
+    rolls: 3
+    choices:
+      - { contentId: item.travel-ration, lootTableId: null, weight: 6, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.crimson-potion, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.pitch-torch, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.iron-sword, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.leather-armor, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.wooden-shield, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }

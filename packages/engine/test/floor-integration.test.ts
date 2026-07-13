@@ -4,6 +4,8 @@ import {
   addGeneratedFloor,
   allocateFloorSeed,
   createDemoRun,
+  heroActor,
+  heroPerception,
   refreshKnowledge,
   stableJson,
   type ActiveRun,
@@ -52,14 +54,15 @@ describe('addGeneratedFloor', () => {
     const transitional: ActiveRun = {
       ...run,
       activeFloorId: generated.floor.floorId,
-      hero: { ...run.hero, floorId: generated.floor.floorId, ...stair },
+      actors: [{ ...run.actors[0]!, floorId: generated.floor.floorId, ...stair }],
     };
     const result = addGeneratedFloor(transitional, generated, allocation());
     const inserted = result.floors[1]!;
+    const actor = heroActor(transitional);
     const expected = refreshKnowledge({
       floor: generated.floor,
-      hero: transitional.hero,
-      actors: new Map([[transitional.hero.heroId, transitional.hero]]),
+      hero: heroPerception(transitional.hero, actor),
+      actors: new Map([[actor.actorId, actor]]),
     }).knowledge;
 
     expect(inserted.knowledge).toEqual(expected);

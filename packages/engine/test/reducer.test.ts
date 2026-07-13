@@ -1,15 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDemoRun,
+  createDemoContentPack,
   createUnknownKnowledge,
+  heroActor,
+  heroPerception,
   isExplored,
   refreshKnowledge,
-  resolveCommand,
+  resolveCommand as resolveCommandWithContext,
   stableJson,
   type GameCommand,
   type LightSource,
   type TileId,
 } from '../src/index.js';
+
+const context = { content: createDemoContentPack() };
+const resolveCommand = (
+  state: Parameters<typeof resolveCommandWithContext>[0],
+  command: Parameters<typeof resolveCommandWithContext>[1],
+) => resolveCommandWithContext(state, command, context);
 
 const move = (commandId: string, expectedRevision: number, direction: 'north' | 'south' | 'east' | 'west'): GameCommand => ({
   type: 'move', commandId, expectedRevision, direction,
@@ -20,9 +29,9 @@ describe('resolveCommand', () => {
     const initial = createDemoRun();
     const resolution = resolveCommand(initial, move('command.1', 0, 'east'));
     expect(resolution.result).toMatchObject({ status: 'applied', revision: 1, turn: 1 });
-    expect(resolution.state.hero).toMatchObject({ x: 2, y: 1 });
+    expect(heroActor(resolution.state)).toMatchObject({ x: 2, y: 1 });
     expect(resolution.events).toEqual([{ type: 'hero.moved', eventId: 'command.1', heroId: 'hero.demo', from: { x: 1, y: 1 }, to: { x: 2, y: 1 } }]);
-    expect(initial.hero).toMatchObject({ x: 1, y: 1 });
+    expect(heroActor(initial)).toMatchObject({ x: 1, y: 1 });
     expect(initial.recentCommands).toHaveLength(0);
   });
 
@@ -62,7 +71,7 @@ describe('resolveCommand', () => {
     const resolution = resolveCommand(initial, move(`command.walk.${tile}`, 0, 'east'));
 
     expect(resolution.result).toMatchObject({ status: 'applied', revision: 1, turn: 1 });
-    expect(resolution.state.hero).toMatchObject({ floorId: floor.floorId, x: 2, y: 1 });
+    expect(heroActor(resolution.state)).toMatchObject({ floorId: floor.floorId, x: 2, y: 1 });
     expect(resolution.state.activeFloorId).toBe(floor.floorId);
   });
 
@@ -71,7 +80,7 @@ describe('resolveCommand', () => {
     const floor = demo.floors[0]!;
     const initial = {
       ...demo,
-      hero: { ...demo.hero, x: 0, y: 0 },
+      actors: [{ ...demo.actors[0]!, x: 0, y: 0 }],
       floors: [{ ...floor, tiles: floor.tiles.map((tile, index) => index === 0 ? 1 : tile) }],
     };
     expect(resolveCommand(initial, move('command.bounds', 0, 'west')).result).toMatchObject({ status: 'invalid', reason: 'blocked.bounds' });
@@ -100,19 +109,21 @@ describe('resolveCommand', () => {
   it('refreshes only applied movement knowledge with the moved carried light', () => {
     const width = 9;
     const tiles = Array.from({ length: width }, () => 1 as TileId);
-    const hero = { heroId: 'hero.corridor', name: 'Ada', floorId: 'floor.corridor', x: 2, y: 0, sightRadius: 8 } as const;
+    const demo = createDemoRun();
+    const hero = { ...demo.hero, actorId: 'hero.corridor', sightRadius: 8 } as const;
+    const actor = { ...demo.actors[0]!, actorId: hero.actorId, floorId: 'floor.corridor', x: 2, y: 0 };
+    const perceivedHero = heroPerception(hero, actor);
     const carriedLight: LightSource = {
-      lightId: 'light.carried', location: { type: 'actor', actorId: hero.heroId }, color: [255, 255, 255],
+      lightId: 'light.carried', location: { type: 'actor', actorId: actor.actorId }, color: [255, 255, 255],
       radius: 2, strength: 255, enabled: true, falloff: 'linear', vaultPlacementId: null, presentation: null,
     };
     const entityLight: LightSource = {
       ...carriedLight, lightId: 'light.entity', location: { type: 'actor', actorId: 'entity.sentry' }, radius: 1,
     };
-    const demo = createDemoRun();
     const template = demo.floors[0]!;
     const corridor = {
       ...template,
-      floorId: hero.floorId,
+      floorId: actor.floorId,
       width,
       height: 1,
       tiles,
@@ -125,14 +136,15 @@ describe('resolveCommand', () => {
     };
     const initialKnowledge = refreshKnowledge({
       floor: corridor,
-      hero,
-      actors: new Map([[hero.heroId, hero], ['entity.sentry', corridor.entities[0]!]]),
+      hero: perceivedHero,
+      actors: new Map([[actor.actorId, actor], ['entity.sentry', corridor.entities[0]!]]),
     }).knowledge;
     const inactiveFloor = { ...template, floorId: 'floor.inactive' };
     const initial = {
       ...demo,
       hero,
-      activeFloorId: hero.floorId,
+      actors: [actor],
+      activeFloorId: actor.floorId,
       floors: [{ ...corridor, knowledge: initialKnowledge }, inactiveFloor],
     };
     const before = stableJson(initial);
@@ -141,10 +153,10 @@ describe('resolveCommand', () => {
     const first = resolveCommand(initial, command);
     const activeKnowledge = first.state.floors[0]!.knowledge;
 
-    expect(first.state.hero).toMatchObject({ x: 3, y: 0 });
+    expect(heroActor(first.state)).toMatchObject({ x: 3, y: 0 });
     expect(first.state.floors.map((floor) => floor.floorId)).toEqual(['floor.corridor', 'floor.inactive']);
     expect(first.state.floors[1]).toBe(inactiveFloor);
-    expect(first.state.floors[0]!.lights[0]!.location).toEqual({ type: 'actor', actorId: hero.heroId });
+    expect(first.state.floors[0]!.lights[0]!.location).toEqual({ type: 'actor', actorId: actor.actorId });
     expect(isExplored(initialKnowledge, 5)).toBe(false);
     expect(isExplored(activeKnowledge, 5)).toBe(true);
     expect(isExplored(initialKnowledge, 0)).toBe(true);
@@ -167,7 +179,7 @@ describe('resolveCommand', () => {
     expect(stale.state.floors[0]!.knowledge).toBe(unchangedKnowledge);
     expect(conflict.state.floors[0]!.knowledge).toBe(unchangedKnowledge);
     expect(invalid.state.floors[0]!.knowledge).toBe(unchangedKnowledge);
-    expect(waited.state.floors[0]!.knowledge).toBe(unchangedKnowledge);
+    expect(waited.state.floors[0]!.knowledge).toStrictEqual(unchangedKnowledge);
   });
 
   it('evicts only the oldest processed result after 128 records', () => {

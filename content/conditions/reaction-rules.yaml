@@ -1,0 +1,34 @@
+schemaVersion: 2
+entries:
+  - kind: condition
+    id: condition.disengaged
+    name: Disengaged
+    description: Can leave hostile melee reach without provoking opportunity attacks.
+    tags: [beneficial, movement]
+    color: "#78c8dc"
+    duration: { mode: timed, default: 100, maximum: 1000 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: {}
+    traits: [condition-trait.avoids-opportunity-attacks]
+
+  - kind: condition
+    id: condition.reaction-suppressed
+    name: Reaction suppressed
+    description: Cannot make opportunity attacks or other reactions.
+    tags: [control, harmful]
+    color: "#b88870"
+    duration: { mode: timed, default: 100, maximum: 1000 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: {}
+    traits: [condition-trait.suppresses-reactions]
+
+  - kind: condition
+    id: condition.restless
+    name: Restless
+    description: Prevents uninterrupted rest while active.
+    tags: [harmful, survival]
+    color: "#c89070"
+    duration: { mode: timed, default: 100, maximum: 1000 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: {}
+    traits: [condition-trait.interrupts-rest]

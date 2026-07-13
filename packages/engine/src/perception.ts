@@ -26,6 +26,7 @@ export interface RefreshKnowledgeInput {
   readonly floor: PerceptionFloor;
   readonly hero: PerceptionHero;
   readonly actors: ReadonlyMap<OpaqueId, Readonly<{ x: number; y: number }>>;
+  readonly additionalLights?: readonly LightSource[];
 }
 
 export interface RefreshedPerception {
@@ -46,7 +47,7 @@ export function refreshKnowledge(input: RefreshKnowledgeInput): RefreshedPercept
     height: input.floor.height,
     tiles: input.floor.tiles,
     ambient: input.floor.ambient,
-    lights: input.floor.lights,
+    lights: [...input.floor.lights, ...(input.additionalLights ?? [])],
     actors: input.actors,
   });
   const cellCount = input.floor.width * input.floor.height;

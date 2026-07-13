@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createDemoContentPack,
   createDemoRun,
   decodeActiveRun,
   encodeActiveRun,
-  replayCommands,
-  resolveCommand,
+  replayCommands as replayCommandsWithContext,
+  resolveCommand as resolveCommandWithContext,
   stableJson,
   type ActiveRun,
   type Direction,
   type GameCommand,
   type ReplayStep,
 } from '../src/index.js';
+
+const context = { content: createDemoContentPack() };
+const replayCommands = (initial: ActiveRun, input: readonly GameCommand[]) => replayCommandsWithContext(initial, input, context);
+const resolveCommand = (initial: ActiveRun, command: GameCommand) => resolveCommandWithContext(initial, command, context);
 
 const commands: readonly GameCommand[] = [
   { type: 'move', commandId: 'command.1', expectedRevision: 0, direction: 'east' },
