@@ -45,7 +45,7 @@ Each persistent profile owns:
 
 Guest mode applies the same progression rules and begins with the same locked content as a new persistent profile. Its profile-shaped state, active run, and unverified Hall entries live in `sessionStorage`. Closing the browser session removes them. Guest records never enter the server-backed Hall of Records, and guest state cannot be imported into a persistent profile.
 
-Persistent profile state is stored in a SQLite database on the server. The active run is saved transactionally after every resolved turn and after non-turn state changes. The save loader validates records, applies ordered schema migrations, and retains a last-known-good run snapshot. The server never accepts a complete run state, score, Hall entry, or unlock list from the browser.
+Persistent profile state is stored in a SQLite database on the server. The complete active run is saved transactionally after every resolved turn and after non-turn state changes. The save loader validates records, applies ordered schema migrations, and retains a last-known-good run snapshot. The server never accepts a complete run state, score, Hall entry, or unlock list from the browser.
 
 A signed-in player can export a portable JSON copy of completed records, discoveries, and unlocks for personal backup. Exports exclude the active run's hidden state and all authentication material. Imports are not accepted because client-supplied progression cannot be trusted. Profile deletion requires authentication within the previous ten minutes and confirmation naming the email address; it removes identity, progression, active runs, sessions, and Hall records.
 
@@ -130,6 +130,23 @@ Core play includes:
 - Enemies with readable behavioral families: hunters, ambushers, guards, light-averse creatures, and roaming threats.
 
 The dungeon generation pipeline places topology, validates connectivity, assigns a theme, places stairs and required objectives, populates encounters and items, then performs a final reachability check. A rejected floor is regenerated deterministically from a derived sub-seed.
+
+## Generated-floor storage
+
+A floor seed and generator version reproduce the floor's initial topology and population, but loading a saved run does not regenerate visited floors. Every generated floor is stored as a complete authoritative snapshot inside the active-run document. This avoids delta replay and preserves all mutations exactly across application updates.
+
+Each floor snapshot contains:
+
+- Floor seed, generator version, dimensions, depth, and theme identifier.
+- Compact tile and terrain-state arrays using numeric identifiers.
+- Explored and remembered-cell bitsets.
+- Doors, traps, secrets, fixtures, stairs, and other mutable features.
+- Current creatures, inventories, positions, conditions, and behavior state.
+- Ground items, reinforcements, artifact-return hazards, and floor-local counters.
+
+The current hero, town, global run counters, random-generator states, and all generated floor snapshots form one versioned active-run document. SQLite stores the current document and one previous last-known-good document. The server replaces the current document in the same transaction that commits each accepted command. Guest mode uses the identical serialized format in `sessionStorage`.
+
+Seeds remain part of saves and Hall records for reproducibility, debugging, and replay under the recorded game version. They are not a substitute for mutable floor state. Compact arrays and bitsets control size; the design favors simple complete snapshots over a smaller but more fragile seed-and-delta format.
 
 ## Visibility and lighting
 
