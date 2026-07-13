@@ -12,7 +12,7 @@ interface StartupServer extends ShutdownServer {
 
 export async function runServerStartup(input: {
   database: ShutdownDatabase;
-  compilePack(): Promise<CompiledContentPack>;
+  compilePack(signal: AbortSignal): Promise<CompiledContentPack>;
   persistPack(pack: CompiledContentPack): void;
   buildServer(pack: CompiledContentPack): StartupServer;
   listenOptions: { host: string; port: number };
@@ -26,7 +26,7 @@ export async function runServerStartup(input: {
   });
 
   try {
-    const pack = await input.compilePack();
+    const pack = await input.compilePack(lifecycle.signal);
     if (lifecycle.isShuttingDown()) return;
 
     input.persistPack(pack);
@@ -34,7 +34,28 @@ export async function runServerStartup(input: {
     lifecycle.attachServer(server);
     await server.listen(input.listenOptions);
   } catch (error) {
-    await lifecycle.shutdown();
+    if (lifecycle.signal.aborted && isAbortError(error)) {
+      try {
+        await lifecycle.shutdown();
+      } catch {
+        // The lifecycle has already reported cleanup failure to onShutdownError.
+      }
+      return;
+    }
+
+    try {
+      await lifecycle.shutdown();
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        'Server startup and cleanup both failed',
+        { cause: error },
+      );
+    }
     throw error;
   }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
 }

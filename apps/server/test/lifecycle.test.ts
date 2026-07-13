@@ -62,10 +62,12 @@ describe('registerShutdownHandlers', () => {
       onError: vi.fn(),
     });
 
+    expect(lifecycle.signal.aborted).toBe(false);
     const terminate = listeners.get('SIGTERM')!;
     await Promise.all([terminate(), lifecycle.shutdown()]);
 
     expect(lifecycle.isShuttingDown()).toBe(true);
+    expect(lifecycle.signal.aborted).toBe(true);
     expect(database.pragma).toHaveBeenCalledOnce();
     expect(database.close).toHaveBeenCalledOnce();
     expect(listeners.size).toBe(0);

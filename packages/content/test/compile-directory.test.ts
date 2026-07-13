@@ -131,4 +131,24 @@ describe('compileContentDirectory', () => {
       }],
     );
   });
+
+  it('aborts between content discovery and file processing boundaries', async () => {
+    const root = await fixture({
+      'a.yaml': 'schemaVersion: 1\nentries: [{kind: monster, id: monster.rat, name: Rat, glyph: r, color: "#aaaaaa", ai: ai.skittish, stats: {health: 4, attack: 2, defense: 0}}]\n',
+      'b.yaml': 'schemaVersion: 1\nentries: [{kind: item, id: item.lantern, name: Lantern, glyph: "¤", color: "#eeeeaa", effect: effect.light-source, price: 4}]\n',
+    });
+    const controller = new AbortController();
+    const nativeThrow = controller.signal.throwIfAborted.bind(controller.signal);
+    let boundaries = 0;
+    controller.signal.throwIfAborted = () => {
+      boundaries += 1;
+      if (boundaries === 10) controller.abort();
+      nativeThrow();
+    };
+
+    await expect(
+      compileContentDirectory({ rootDir: root, registries, signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(boundaries).toBe(10);
+  });
 });

@@ -35,31 +35,50 @@ function registryIssues(rootDir: string, registries: ContentRegistries): Content
   return issues;
 }
 
-async function yamlPaths(root: string, current = root): Promise<string[]> {
+function throwIfAborted(signal?: AbortSignal): void {
+  signal?.throwIfAborted();
+}
+
+async function yamlPaths(root: string, current = root, signal?: AbortSignal): Promise<string[]> {
+  throwIfAborted(signal);
   const entries = await readdir(current, { withFileTypes: true });
+  throwIfAborted(signal);
   const found: string[] = [];
   for (const entry of entries) {
+    throwIfAborted(signal);
     const path = join(current, entry.name);
-    if (entry.isDirectory()) found.push(...await yamlPaths(root, path));
+    if (entry.isDirectory()) found.push(...await yamlPaths(root, path, signal));
     if (entry.isFile() && /\.ya?ml$/i.test(entry.name)) found.push(path);
   }
-  return found.sort((a, b) => compareCodeUnits(relative(root, a), relative(root, b)));
+  throwIfAborted(signal);
+  found.sort((a, b) => compareCodeUnits(relative(root, a), relative(root, b)));
+  throwIfAborted(signal);
+  return found;
 }
 
 export async function compileContentDirectory(input: {
   rootDir: string;
   registries: ContentRegistries;
+  signal?: AbortSignal;
 }): Promise<CompiledContentPack> {
+  throwIfAborted(input.signal);
   const startupIssues = registryIssues(input.rootDir, input.registries);
+  throwIfAborted(input.signal);
   if (startupIssues.length > 0) throw new ContentCompileError(startupIssues);
 
   const entries: ContentEntry[] = [];
   const issues: ContentCompileIssue[] = [];
   const seen = new Map<string, string>();
 
-  for (const absolutePath of await yamlPaths(input.rootDir)) {
+  for (const absolutePath of await yamlPaths(input.rootDir, input.rootDir, input.signal)) {
+    throwIfAborted(input.signal);
     const file = relative(input.rootDir, absolutePath);
-    for (const entry of parseContentFile({ path: file, source: await readFile(absolutePath, 'utf8') })) {
+    const source = await readFile(absolutePath, { encoding: 'utf8', signal: input.signal });
+    throwIfAborted(input.signal);
+    const parsedEntries = parseContentFile({ path: file, source });
+    throwIfAborted(input.signal);
+    for (const entry of parsedEntries) {
+      throwIfAborted(input.signal);
       const firstFile = seen.get(entry.id);
       if (firstFile) issues.push({ file, path: '$.entries.id', message: `duplicate ${entry.id}; first declared in ${firstFile}` });
       else seen.set(entry.id, file);
@@ -73,14 +92,18 @@ export async function compileContentDirectory(input: {
     }
   }
 
+  throwIfAborted(input.signal);
   if (entries.length === 0) issues.push({ file: input.rootDir, path: '$', message: 'content directory contains no YAML entries' });
   for (const requiredKind of ['monster', 'item'] as const) {
+    throwIfAborted(input.signal);
     if (!entries.some((entry) => entry.kind === requiredKind)) {
       issues.push({ file: input.rootDir, path: '$.entries', message: `missing foundational ${requiredKind} content` });
     }
   }
+  throwIfAborted(input.signal);
   if (issues.length > 0) throw new ContentCompileError(issues);
   entries.sort((left, right) => compareCodeUnits(left.id, right.id));
+  throwIfAborted(input.signal);
   const hashInput = { schemaVersion: CONTENT_SCHEMA_VERSION, entries };
   return { ...hashInput, hash: canonicalHash(hashInput) };
 }

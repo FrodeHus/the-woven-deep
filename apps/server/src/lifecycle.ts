@@ -15,6 +15,7 @@ export interface SignalRegistrar {
 }
 
 export interface ShutdownLifecycle {
+  readonly signal: AbortSignal;
   attachServer(server: ShutdownServer): void;
   isShuttingDown(): boolean;
   shutdown(): Promise<void>;
@@ -25,6 +26,7 @@ export function registerShutdownHandlers(input: {
   signals: SignalRegistrar;
   onError(error: unknown): void;
 }): ShutdownLifecycle {
+  const shutdownController = new AbortController();
   let server: ShutdownServer | undefined;
   let shutdownPromise: Promise<void> | undefined;
 
@@ -34,6 +36,7 @@ export function registerShutdownHandlers(input: {
   };
   const shutdown = (): Promise<void> => {
     shutdownPromise ??= (async () => {
+      shutdownController.abort();
       removeSignalListeners();
       try {
         await server?.close();
@@ -44,14 +47,17 @@ export function registerShutdownHandlers(input: {
           input.database.close();
         }
       }
-    })();
+    })().catch((error: unknown) => {
+      input.onError(error);
+      throw error;
+    });
     return shutdownPromise;
   };
   async function handleSignal(): Promise<void> {
     try {
       await shutdown();
-    } catch (error) {
-      input.onError(error);
+    } catch {
+      // shutdown reports its failure exactly once before rejecting callers
     }
   }
 
@@ -59,6 +65,7 @@ export function registerShutdownHandlers(input: {
   input.signals.once('SIGINT', handleSignal);
 
   return {
+    signal: shutdownController.signal,
     attachServer(value) {
       server = value;
     },

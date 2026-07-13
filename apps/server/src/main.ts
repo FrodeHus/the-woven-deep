@@ -13,7 +13,7 @@ const database = openDatabase(config.databasePath);
 const repository = new ContentPackRepository(database);
 await runServerStartup({
   database,
-  compilePack: () => compileStartupContent(config.contentDir),
+  compilePack: (signal) => compileStartupContent(config.contentDir, signal),
   persistPack: (pack) => repository.put(pack),
   buildServer: (pack) => buildApp({ pack, webDistDir: config.webDistDir }),
   listenOptions: { host: config.host, port: config.port },
