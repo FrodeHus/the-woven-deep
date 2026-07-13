@@ -42,6 +42,7 @@ Startup offers three context-dependent actions: continue the signed-in profile, 
 Each persistent profile owns:
 
 - Unlocked classes, items, spells, traits, backgrounds, and lore.
+- Boss achievements and rare-population discovery-protection counters.
 - Item, spell, enemy, and location discoveries.
 - Its personal Hall of Records.
 - Lifetime statistics aggregated from completed heroes.
@@ -82,6 +83,9 @@ Balance telemetry adds a seventh table, `telemetry_runs`, containing privacy-red
 Game content and balance data are defined in strict YAML files rather than hard-coded TypeScript objects. The repository organizes entries by type, including:
 
 - `content/monsters/*.yaml`
+- `content/encounters/*.yaml`
+- `content/npcs/*.yaml`
+- `content/achievements/*.yaml`
 - `content/items/*.yaml`
 - `content/spells/*.yaml`
 - `content/classes/*.yaml`
@@ -93,7 +97,7 @@ Game content and balance data are defined in strict YAML files rather than hard-
 - `content/unlocks/*.yaml`
 - `content/balance/*.yaml`
 
-Each file can contain one or more entries with globally stable identifiers. Adding a file adds entries without TypeScript changes when those entries compose existing engine behaviors and effects. YAML controls glyphs, presentation, statistics, tags, rarity, depth eligibility, prices, resistances, ability parameters, loot references, synergy weights, unlock criteria, and other declarative values.
+Each file can contain one or more entries with globally stable identifiers. Adding a file adds entries without TypeScript changes when those entries compose existing engine behaviors and effects. YAML controls glyphs, presentation, statistics, tags, rarity, run-appearance chance, depth eligibility, prices, resistances, ability parameters, loot references, synergy weights, unlock criteria, achievements, and other declarative values.
 
 YAML never contains executable scripts, embedded expressions, custom tags, or new algorithms. AI models, targeting rules, procedural algorithms, and effect implementations remain registered and tested in TypeScript. YAML references them by stable identifiers such as `ai: light_hunter` or `effect: cone_fire` and supplies schema-validated parameters.
 
@@ -171,7 +175,7 @@ Core play includes:
 - Weapons, armor, light sources, utility items, consumables, and limited backpack capacity.
 - Unidentified potions, scrolls, and enchanted equipment whose properties are learned through use or identification.
 - Procedural rooms and corridors grouped into themed depth bands.
-- Handcrafted milestone floors and bosses embedded within procedural progression.
+- Handcrafted milestone encounters and optional bosses embedded within procedural progression.
 - Enemies with readable behavioral families: hunters, ambushers, guards, light-averse creatures, and roaming threats.
 
 The dungeon generation pipeline places topology, validates connectivity, assigns a theme, places stairs and required objectives, populates encounters and items, then performs a final reachability check. A rejected floor is regenerated deterministically from a derived sub-seed.
@@ -191,6 +195,52 @@ Items, traits, classes, and spells prioritize new tactical verbs and synergies o
 Unlocking content does not append everything to one unbounded random pool. Each depth band and reward source uses rarity budgets, category minimums, and synergy weighting. Unlocks expand eligible options while preserving access to essential provisions, light, offense, and defense. Automated generation reports detect when a new unlock makes foundational item categories too rare.
 
 Procedural floors embed authored room templates called vaults. Vaults include shrines, puzzles, environmental stories, unusual traders, monster lairs, light-based challenges, and explicit risk/reward rooms. The generator controls their depth eligibility, rarity, entrances, required surrounding space, and reward budget, then validates that they cannot block the main route.
+
+## Monster populations and dungeon NPCs
+
+Monster definitions describe statistics, abilities, perception, presentation, and reusable behavior identifiers. Encounter definitions compose monsters into one of four population models:
+
+### Individual
+
+An individual spawns independently and owns its perception, memory, goals, and behavior state. It does not receive group communication or coordination bonuses unless an effect explicitly grants them.
+
+### Group
+
+A group encounter creates members with one shared group identifier. Members communicate detected sounds and the hero's last-known position only within a configurable range. Shared information records where and when the hero was detected; it does not reveal the hero's current hidden position or future movement.
+
+Group YAML defines composition, roles, formation preferences, communication radius, and a chance to include a leader. A leader has a distinct glyph treatment as well as an accent color. While the leader lives, members can receive configured coordination bonuses. Leader death invokes one declared response: weaken, panic, disband, surrender, frenzy, or collapse. `collapse` is permitted only for explicitly telegraphed supernatural bonds and destroys or disables the linked members immediately.
+
+Members removed by a leader-collapse response count as a group broken rather than individual kills and grant no individual kill rewards unless that encounter explicitly overrides the default. This prevents leader targeting from multiplying loot or experience accidentally.
+
+### Swarm
+
+A swarm encounter contains a visible source such as a nest, queen, portal, or corpse mass. The source—not each spawned creature—owns the spawn timer. YAML defines the creature mix, interval, placement rules, source and local caps, floor-wide population cap, off-floor growth rate, and source-destruction response.
+
+While the hero is away, the engine does not simulate every swarm turn. Re-entering the floor deterministically calculates elapsed growth from global dungeon turns, available cells, and configured caps. The result is saved in the complete floor snapshot. Destroying the visible source stops spawning or applies its configured shutdown transition.
+
+### Boss
+
+A boss is a unique individual population. Several distinct bosses can occur in one run, but each boss identifier has `maxInstancesPerRun: 1`. A boss has one guaranteed unique reward, an enhanced additional loot table, authored phases, and a first-defeat profile achievement. Achievements may unlock classes, items, spells, traits, or lore but never direct permanent statistics. Guest achievements and their unlocks last only for the browser session.
+
+A boss left alive recovers health from elapsed dungeon turns up to its configured recovery cap. Completed phase transitions, destroyed encounter features, and other permanent arena mutations remain in the floor snapshot. This prevents unlimited retreat-and-heal attrition without fully resetting the encounter.
+
+### Run-level appearance
+
+Every population has a `runAppearanceChance` evaluated once from a dedicated deterministic random stream when a run begins. A failed roll excludes that population for the entire run. A successful roll only makes it eligible for its declared depth bands, environments, vaults, encounter weights, and instance limits. This gate is separate from per-floor encounter selection, so repeated floor rolls do not make rare content inevitable.
+
+Foundational populations use a chance of `1.0`. Boss schemas default to a low `0.08` chance and one instance. All values remain YAML-configurable.
+
+Rare populations can declare `discoveryProtectionIncrement` and `discoveryProtectionCap`. When a hero reaches the start of an eligible depth band and completes the run without encountering that population, the profile's next-run chance increases by the configured increment up to the cap. Encountering the population resets its bonus, whether or not it is defeated. Defaults for bosses are an increment of `0.03` and a cap of `0.35`. Guest mode keeps these counters only for the current browser session; persistent-profile counters are server-authoritative.
+
+The run stores every appearance decision and effective probability in hidden authoritative state. The admin dashboard can aggregate effective appearance, encounter, defeat, and avoidance rates without exposing an active run's population rolls to the player.
+
+### Dungeon NPCs
+
+Neutral NPCs are YAML-authored random encounters. They use the same run-level appearance gate, eligibility rules, and instance limits as monster populations, with discovery protection disabled unless explicitly configured. Initial types include travelling merchants, with the model open to later healers, explorers, prisoners, and lore encounters using registered behaviors. A travelling merchant carries limited depth-appropriate food, healing, light supplies, identification services, and curios at less favorable prices than town. It does not replace planned town preparation.
+
+Dungeon NPCs are mortal and use self-preservation behavior. Hostile creatures normally ignore them unless provoked, affected by faction rules, or drawn into danger. An NPC threatened by monsters or collateral effects attempts to flee. The player may deliberately attack a neutral NPC; doing so ends trade, causes flight or self-defense, drops only a configured fraction of stock, and reduces the current hero's reputation with related merchants. Reputation and its consequences end with the hero.
+
+Travelling NPCs have a configured departure turn. Their interface and event log communicate the remaining time at meaningful thresholds, and departure never occurs while a transaction dialog is open. Their state, inventory, disposition, and departure time are stored in the floor snapshot.
 
 ## Pacing and onboarding
 
@@ -263,7 +313,7 @@ The application contains these screens and overlays:
 6. **Merchant:** buy, sell, compare, identify, and inspect stock.
 7. **Hero's house:** transfer items between backpack and limited current-hero storage.
 8. **Map and journal:** explored floor map, objective, clues, history, and known landmarks.
-9. **Unlock codex:** discovered and locked classes, items, spells, enemies, and lore.
+9. **Unlock codex:** discovered and locked classes, items, spells, enemies, boss achievements, and lore.
 10. **Hall of Records:** filterable and sortable completed-run history with record details, seeds, run statistics, and lifetime profile totals; guest records are marked unverified and session-only.
 11. **Run conclusion:** death or victory, causal final-turn recap, score breakdown, newly applied unlocks, notable statistics, codex links, and confirmation that the run was recorded automatically.
 12. **Help and controls:** keyboard reference, glyph legend, and mechanics explanations.
@@ -295,12 +345,13 @@ Engine domain events update a typed statistic registry. Metrics are counters and
 The initial registry includes:
 
 - Total kills and kills grouped by monster type.
+- Population appearances, leaders defeated, groups broken, swarm sources destroyed, swarm peak size, bosses encountered and defeated, and neutral NPC outcomes.
 - Attacks, hits, misses, critical hits, damage dealt, hit points lost, and hit points healed.
 - Potions drunk grouped by potion type, scrolls read, spells cast, food eaten, and items identified.
 - Items collected, dropped, bought, sold, equipped, and stored; currency earned and spent.
 - Grid cells moved, displayed as meters traveled using one traversed cell as one meter.
 - Turns survived, turns spent in darkness, light sources exhausted, rests taken, and trips back to town.
-- Doors opened, traps triggered and disarmed, secrets discovered, floors visited, deepest floor, and bosses defeated.
+- Doors opened, traps triggered and disarmed, secrets discovered, floors visited, deepest floor, and milestone events completed.
 - Highest single hit, lowest surviving hit-point total, longest darkness streak, and largest carried fortune.
 
 Metric identifiers and display metadata live in a configuration registry so new counters can be added without changing save structure. Monster- and item-grouped metrics use stable content identifiers internally and human-readable labels for display. Damage, loss, and healing counters record effective values after mitigation and health caps rather than attempted values. Metrics never affect combat or unlock eligibility unless an unlock rule explicitly references one. Persistent-profile clients receive only statistics earned through server-validated events.
@@ -346,7 +397,7 @@ Glyph meaning is not communicated by color alone. The game supports scalable int
 Automated verification includes:
 
 - Unit tests for commands, combat, inventory, equipment, economy, scoring, statistics, unlocks, field of view, lighting, save validation, and migrations.
-- Content tests for synergy weighting, essential-category availability, vault placement, encounter intent, and light-reactive creature rules.
+- Content tests for synergy weighting, essential-category availability, vault placement, run-appearance gating, discovery protection, group communication, leader outcomes, capped swarm growth, boss uniqueness and recovery, NPC departure and reputation, encounter intent, and light-reactive creature rules.
 - Content-compiler tests for deterministic ordering and hashing, strict schemas, duplicate identifiers, invalid references, dependency cycles, unsafe YAML features, semantic validation, mounted content, and old-pack run resumption.
 - Seeded property tests that require every generated floor, objective, and exit to remain reachable.
 - Simulation tests covering thousands of automated turns to detect impossible states and balance outliers.
