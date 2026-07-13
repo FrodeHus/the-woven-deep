@@ -2,6 +2,7 @@ import { analyzeConnectivity } from './connectivity.js';
 import { createFallbackTopology } from './fallback-floor.js';
 import {
   GenerationError,
+  type CorridorRecord,
   type GenerateTopologyRequest,
   type GenerationRejectionCode,
   type GenerationReport,
@@ -120,15 +121,69 @@ function placeStairs(
 function finalRejection(
   request: GenerateTopologyRequest,
   tiles: readonly TileId[],
+  rooms: readonly RoomBounds[],
+  corridors: readonly CorridorRecord[],
   stairUp: Readonly<{ x: number; y: number }>,
   stairDown: Readonly<{ x: number; y: number }>,
   expectedDistance: number,
 ): GenerationRejectionCode | null {
-  if (tiles.length !== request.width * request.height || tiles.some((tile, index) =>
-    !(index in tiles) || !Number.isInteger(tile) || tile < 0 || tile > 6
-      || (tileDefinition(tile).potentiallyTraversable
-        && !maskHas(request.theme.maskWords, request.width, index % request.width, Math.floor(index / request.width))))) {
-    return 'topology.outside-mask';
+  if (tiles.length !== request.width * request.height) return 'topology.outside-mask';
+  for (let index = 0; index < tiles.length; index += 1) {
+    if (!(index in tiles) || !Number.isInteger(tiles[index]) || tiles[index]! < 0 || tiles[index]! > 6
+      || (tileDefinition(tiles[index]!).potentiallyTraversable
+        && !maskHas(request.theme.maskWords, request.width, index % request.width, Math.floor(index / request.width)))) {
+      return 'topology.outside-mask';
+    }
+  }
+  if (rooms.length === 0 || corridors.length === 0) return 'topology.invalid-geometry';
+  const roomIds = new Set<string>();
+  const fallbackRoomIds = rooms[0]?.roomId === 'room.fallback.0';
+  let previousRoom: RoomBounds | undefined;
+  for (let index = 0; index < rooms.length; index += 1) {
+    if (!(index in rooms)) return 'topology.invalid-geometry';
+    const room = rooms[index]!;
+    const expectedRoomId = fallbackRoomIds ? `room.fallback.${index}` : `room.${index}`;
+    if (room.roomId !== expectedRoomId || roomIds.has(room.roomId)
+      || ![room.left, room.top, room.right, room.bottom].every(Number.isSafeInteger)
+      || room.left < 0 || room.top < 0 || room.right >= request.width || room.bottom >= request.height
+      || room.left > room.right || room.top > room.bottom) return 'topology.invalid-geometry';
+    roomIds.add(room.roomId);
+    if (previousRoom && (previousRoom.top > room.top
+      || (previousRoom.top === room.top && previousRoom.left > room.left)
+      || (previousRoom.top === room.top && previousRoom.left === room.left && previousRoom.bottom > room.bottom)
+      || (previousRoom.top === room.top && previousRoom.left === room.left && previousRoom.bottom === room.bottom
+        && previousRoom.right > room.right))) return 'topology.invalid-geometry';
+    let potentialCells = 0;
+    for (let y = room.top; y <= room.bottom; y += 1) for (let x = room.left; x <= room.right; x += 1) {
+      if (!maskHas(request.theme.maskWords, request.width, x, y)) return 'topology.invalid-geometry';
+      if (tileDefinition(tiles[y * request.width + x]!).potentiallyTraversable) potentialCells += 1;
+    }
+    if (potentialCells === 0) return 'topology.invalid-geometry';
+    previousRoom = room;
+  }
+  const corridorIds = new Set<string>();
+  const fallbackCorridorIds = corridors[0]?.corridorId === 'corridor.fallback.0';
+  let previousCorridor: CorridorRecord | undefined;
+  for (let index = 0; index < corridors.length; index += 1) {
+    if (!(index in corridors)) return 'topology.invalid-geometry';
+    const corridor = corridors[index]!;
+    const expectedCorridorId = fallbackCorridorIds ? `corridor.fallback.${index}` : `corridor.${index}`;
+    if (corridor.corridorId !== expectedCorridorId || corridorIds.has(corridor.corridorId)) return 'topology.invalid-geometry';
+    corridorIds.add(corridor.corridorId);
+    for (const endpoint of [corridor.start, corridor.end]) {
+      if (!Number.isSafeInteger(endpoint.x) || !Number.isSafeInteger(endpoint.y)
+        || endpoint.x < 0 || endpoint.y < 0 || endpoint.x >= request.width || endpoint.y >= request.height
+        || !maskHas(request.theme.maskWords, request.width, endpoint.x, endpoint.y)) return 'topology.invalid-geometry';
+    }
+    if (previousCorridor && (previousCorridor.start.y > corridor.start.y
+      || (previousCorridor.start.y === corridor.start.y && previousCorridor.start.x > corridor.start.x)
+      || (previousCorridor.start.y === corridor.start.y && previousCorridor.start.x === corridor.start.x
+        && previousCorridor.end.y > corridor.end.y)
+      || (previousCorridor.start.y === corridor.start.y && previousCorridor.start.x === corridor.start.x
+        && previousCorridor.end.y === corridor.end.y && previousCorridor.end.x > corridor.end.x))) {
+      return 'topology.invalid-geometry';
+    }
+    previousCorridor = corridor;
   }
   let upCount = 0; let downCount = 0;
   for (const tile of tiles) { if (tile === 4) upCount += 1; if (tile === 5) downCount += 1; }
@@ -183,7 +238,7 @@ export function generateTopologyAttempt(request: GenerateTopologyRequest, attemp
   const tiles = [...sourceTiles];
   tiles[stairs.stairUp.y * request.width + stairs.stairUp.x] = 4;
   tiles[stairs.stairDown.y * request.width + stairs.stairDown.x] = 5;
-  const rejection = finalRejection(request, tiles, stairs.stairUp, stairs.stairDown, stairs.stairDistance);
+  const rejection = finalRejection(request, tiles, rooms, corridors, stairs.stairUp, stairs.stairDown, stairs.stairDistance);
   if (rejection) return { ok: false, code: rejection };
   const traversable = analyzeConnectivity({ width: request.width, height: request.height, tiles }).traversableCellCount;
   const draft: TopologyDraft = {
@@ -221,7 +276,15 @@ export function generateTopology(request: GenerateTopologyRequest): TopologyDraf
   );
   const fallbackSeed = deriveAttemptSeed(request.floorSeed, attemptLimit);
   const vaultState = nextUint32(nextUint32(fallbackSeed).state).state;
-  const rejection = finalRejection(request, fallback.tiles, fallback.stairUp, fallback.stairDown, fallback.stairDistance);
+  const rejection = finalRejection(
+    request,
+    fallback.tiles,
+    fallback.rooms,
+    fallback.corridors,
+    fallback.stairUp,
+    fallback.stairDown,
+    fallback.stairDistance,
+  );
   if (rejection) throw new GenerationError('generation.fallback-invariant', `deterministic fallback failed: ${rejection}`);
   const traversable = analyzeConnectivity({ width: request.width, height: request.height, tiles: fallback.tiles }).traversableCellCount;
   return {

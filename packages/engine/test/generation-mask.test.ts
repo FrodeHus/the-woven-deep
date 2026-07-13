@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classicMask, maskHas, validateThemeMask } from '../src/index.js';
+import { classicMask, createClassicTheme, maskHas, validateThemeMask } from '../src/index.js';
 
 function words(width: number, height: number, cells: readonly (readonly [number, number])[]): number[] {
   const result = Array(Math.ceil(width * height / 32)).fill(0) as number[];
@@ -36,5 +36,23 @@ describe('generation masks', () => {
     expect(() => validateThemeMask(20, 12, words(20, 12, [[0, 1], [1, 1], [2, 1]]), 1, 1)).toThrow();
     expect(() => validateThemeMask(20, 12, words(20, 12, [[1, 1], [2, 1], [17, 10], [18, 10]]), 1, 1)).toThrow();
     expect(() => validateThemeMask(20, 12, words(20, 12, [[1, 1], [2, 1]]), 6, 20)).toThrow();
+  });
+
+  it.each([
+    null,
+    {},
+    { ambient: null },
+    { ambient: {} },
+    { ambient: { color: null, strength: 1 } },
+    { ambient: { color: '000', strength: 1 } },
+    { ambient: { color: [0, 0, 0], strength: 1 } },
+  ])('rejects malformed classic settings with a safe generation error', (settings) => {
+    if (settings && typeof settings === 'object' && 'ambient' in settings) {
+      const ambient = (settings as { ambient?: { color?: unknown[] } }).ambient;
+      if (ambient?.color && Array.isArray(ambient.color)) delete ambient.color[1];
+    }
+    expect(() => createClassicTheme(20, 12, settings as never)).toThrowError(
+      expect.objectContaining({ code: 'generation.invalid-theme' }),
+    );
   });
 });

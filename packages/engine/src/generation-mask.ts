@@ -113,11 +113,18 @@ export function createClassicTheme(width: number, height: number, settings: Clas
   if (!Number.isSafeInteger(width) || width < 20 || width > 160 || !Number.isSafeInteger(height) || height < 12 || height > 100) {
     throw new GenerationError('generation.invalid-theme', 'classic theme dimensions are outside the supported range');
   }
+  if (typeof settings !== 'object' || settings === null) {
+    throw new GenerationError('generation.invalid-theme', 'classic theme settings must be an object');
+  }
   const minimumRooms = settings.minimumRooms ?? 6;
   const minimumStairDistance = settings.minimumStairDistance ?? 20;
+  if (typeof settings.ambient !== 'object' || settings.ambient === null || !Array.isArray(settings.ambient.color)) {
+    throw new GenerationError('generation.invalid-theme', 'classic theme ambient light is invalid');
+  }
   const { color, strength } = settings.ambient;
   if (!Number.isSafeInteger(minimumRooms) || minimumRooms < 1 || !Number.isSafeInteger(minimumStairDistance) || minimumStairDistance < 1
-    || color.length !== 3 || color.some((channel) => !Number.isInteger(channel) || channel < 0 || channel > 255)
+    || color.length !== 3 || [0, 1, 2].some((index) => !(index in color)
+      || !Number.isInteger(color[index]) || color[index]! < 0 || color[index]! > 255)
     || !Number.isInteger(strength) || strength < 0 || strength > 255) {
     throw new GenerationError('generation.invalid-theme', 'classic theme settings are invalid');
   }

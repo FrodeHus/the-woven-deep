@@ -11,6 +11,8 @@ export interface FallbackTopology {
   readonly stairDistance: number;
 }
 
+type Rectangle = Omit<RoomBounds, 'roomId'>;
+
 function neighbors(index: number, width: number, height: number): readonly number[] {
   const x = index % width;
   const y = Math.floor(index / width);
@@ -60,6 +62,36 @@ function tileRouteDistance(tiles: readonly TileId[], width: number, height: numb
   return -1;
 }
 
+function clippedRoomCandidates(
+  center: number,
+  width: number,
+  height: number,
+  maskWords: readonly number[],
+): Rectangle[] {
+  const cx = center % width;
+  const cy = Math.floor(center / width);
+  const minimumX = Math.max(1, cx - 1);
+  const maximumX = Math.min(width - 2, cx + 1);
+  const minimumY = Math.max(1, cy - 1);
+  const maximumY = Math.min(height - 2, cy + 1);
+  const candidates: Rectangle[] = [];
+  for (let top = minimumY; top <= cy; top += 1) for (let left = minimumX; left <= cx; left += 1) {
+    for (let bottom = cy; bottom <= maximumY; bottom += 1) for (let right = cx; right <= maximumX; right += 1) {
+      let insideMask = true;
+      for (let y = top; y <= bottom; y += 1) for (let x = left; x <= right; x += 1) {
+        insideMask &&= maskHas(maskWords, width, x, y);
+      }
+      if (insideMask) candidates.push({ left, top, right, bottom });
+    }
+  }
+  return candidates.sort((left, right) => {
+    const leftArea = (left.right - left.left + 1) * (left.bottom - left.top + 1);
+    const rightArea = (right.right - right.left + 1) * (right.bottom - right.top + 1);
+    return rightArea - leftArea || left.top - right.top || left.left - right.left
+      || left.bottom - right.bottom || left.right - right.right;
+  });
+}
+
 export function createFallbackTopology(
   width: number,
   height: number,
@@ -82,15 +114,10 @@ export function createFallbackTopology(
   for (const index of path) tiles[index] = 1;
 
   const roomCenters = [first, path[Math.floor(path.length / 2)]!, second];
-  const roomShapes: Omit<RoomBounds, 'roomId'>[] = [];
+  const roomShapes: Rectangle[] = [];
   for (const center of roomCenters) {
-    const cx = center % width;
-    const cy = Math.floor(center / width);
-    const left = Math.max(1, cx - 1); const right = Math.min(width - 2, cx + 1);
-    const top = Math.max(1, cy - 1); const bottom = Math.min(height - 2, cy + 1);
-    let complete = true;
-    for (let y = top; y <= bottom; y += 1) for (let x = left; x <= right; x += 1) complete &&= maskHas(maskWords, width, x, y);
-    if (complete) {
+    for (const candidate of clippedRoomCandidates(center, width, height, maskWords)) {
+      const { left, top, right, bottom } = candidate;
       const carved: number[] = [];
       for (let y = top; y <= bottom; y += 1) for (let x = left; x <= right; x += 1) {
         const index = y * width + x;
@@ -99,9 +126,12 @@ export function createFallbackTopology(
       const distance = tileRouteDistance(tiles, width, height, first, second);
       if (distance < minimumStairDistance) {
         for (const index of carved) tiles[index] = 0;
-      } else if (!roomShapes.some((room) => room.left === left && room.top === top && room.right === right && room.bottom === bottom)) {
-        roomShapes.push({ left, top, right, bottom });
+        continue;
       }
+      if (!roomShapes.some((room) => room.left === left && room.top === top && room.right === right && room.bottom === bottom)) {
+        roomShapes.push(candidate);
+      }
+      break;
     }
   }
   roomShapes.sort((left, right) => left.top - right.top || left.left - right.left || left.bottom - right.bottom || left.right - right.right);

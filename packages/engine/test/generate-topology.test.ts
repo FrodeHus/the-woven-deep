@@ -9,6 +9,7 @@ import {
   maskHas,
   stableJson,
   type GenerateTopologyRequest,
+  type GenerationTheme,
 } from '../src/index.js';
 
 const ambient = { color: [32, 40, 48] as const, strength: 3 };
@@ -16,6 +17,27 @@ const request = (seed = [1, 2, 3, 4] as const, width = 80, height = 25): Generat
   floorId: 'floor.test', floorSeed: seed, depth: 1, width, height,
   theme: createClassicTheme(width, height, { ambient }),
 });
+
+function serpentineTheme(): GenerationTheme {
+  const width = 20;
+  const height = 12;
+  const maskWords = Array(Math.ceil(width * height / 32)).fill(0) as number[];
+  const set = (x: number, y: number): void => {
+    const index = y * width + x;
+    maskWords[index >>> 5] = (maskWords[index >>> 5]! | ((1 << (index & 31)) >>> 0)) >>> 0;
+  };
+  for (let y = 1; y <= 9; y += 2) {
+    for (let x = 1; x <= 18; x += 1) set(x, y);
+    if (y < 9) set(y % 4 === 1 ? 18 : 1, y + 1);
+  }
+  return {
+    themeId: 'theme.test.serpentine',
+    maskWords,
+    ambient,
+    minimumRooms: 1,
+    minimumStairDistance: 20,
+  };
+}
 
 function assertValid(draft: ReturnType<typeof generateTopology>): void {
   expect(draft.tiles).toHaveLength(draft.width * draft.height);
@@ -74,6 +96,30 @@ describe('classic topology generation', () => {
     expect(left.report.vaults).toEqual([]);
     expect(left.report.rejectionCounts).toEqual({ 'topology.empty': 1 });
     expect(stableJson(left)).toBe(stableJson(right));
+  });
+
+  it('builds stable clipped rooms in a one-cell-wide serpentine fallback', () => {
+    const input: GenerateTopologyRequest = {
+      floorId: 'floor.serpentine', floorSeed: [7, 11, 13, 17], depth: 2,
+      width: 20, height: 12, theme: serpentineTheme(), attemptLimit: 1,
+      topologyFactory: () => ({ ok: false, code: 'topology.empty' }),
+    };
+    const first = generateTopology(input);
+    const second = generateTopology(input);
+    assertValid(first);
+    expect(first.report.fallback).toBe(true);
+    expect(first.rooms.length).toBeGreaterThan(0);
+    expect(first.corridors.length).toBeGreaterThan(0);
+    expect(first.report.stairDistance).toBeGreaterThanOrEqual(20);
+    for (const room of first.rooms) {
+      let potentialCells = 0;
+      for (let y = room.top; y <= room.bottom; y += 1) for (let x = room.left; x <= room.right; x += 1) {
+        expect(maskHas(input.theme.maskWords, input.width, x, y)).toBe(true);
+        if ([1, 2, 4, 5].includes(first.tiles[y * input.width + x]!)) potentialCells += 1;
+      }
+      expect(potentialCells).toBeGreaterThan(0);
+    }
+    expect(stableJson(first)).toBe(stableJson(second));
   });
 
   it('does not let the clock select ROT topology', () => {
