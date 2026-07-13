@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import {
   TILE_DEFINITIONS,
+  isTileId,
   movementBlockReason,
   tileDefinition,
   type TileId,
@@ -27,6 +28,14 @@ describe('terrain registry', () => {
   ] as const)('defines tile %s', (id, walkable, potentiallyTraversable, opaque, glyph, reason) => {
     expect(tileDefinition(id as TileId)).toMatchObject({ walkable, potentiallyTraversable, opaque, glyph });
     expect(movementBlockReason(id as TileId)).toBe(reason);
+  });
+
+  it('derives tile ID validity from every registered definition', () => {
+    for (const definition of TILE_DEFINITIONS) expect(isTileId(definition.id)).toBe(true);
+    expect(isTileId(-1)).toBe(false);
+    expect(isTileId(Math.max(...TILE_DEFINITIONS.map((definition) => definition.id)) + 1)).toBe(false);
+    expect(isTileId(1.5)).toBe(false);
+    expect(isTileId(undefined)).toBe(false);
   });
 
   it('pins the reviewed ROT.js release exactly', async () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { TILE_DEFINITIONS } from '../src/terrain.js';
 import { computeFieldOfView, isVisible } from '../src/visibility.js';
 import type { TileId } from '../src/model.js';
 
@@ -106,10 +107,18 @@ describe('field of view', () => {
 
   it('rejects an invalid tile ID', () => {
     const tiles = openFloor(2, 2);
-    tiles[2] = 9 as TileId;
+    tiles[2] = (Math.max(...TILE_DEFINITIONS.map((definition) => definition.id)) + 1) as TileId;
 
     expect(() => computeFieldOfView({ width: 2, height: 2, tiles, origin: { x: 0, y: 0 }, radius: 1 }))
       .toThrow(new TypeError('tile 2 must be a valid tile ID'));
+  });
+
+  it('accepts every tile ID published by the terrain registry', () => {
+    const tiles = TILE_DEFINITIONS.map((definition) => definition.id);
+
+    expect(() => computeFieldOfView({
+      width: tiles.length, height: 1, tiles, origin: { x: 0, y: 0 }, radius: tiles.length,
+    })).not.toThrow();
   });
 
   it('rejects sparse tile input', () => {

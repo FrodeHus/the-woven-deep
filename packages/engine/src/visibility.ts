@@ -1,7 +1,7 @@
 import { FOV } from 'rot-js';
 
 import type { TileId } from './model.js';
-import { tileDefinition } from './terrain.js';
+import { isTileId, tileDefinition } from './terrain.js';
 
 export interface FieldOfViewInput {
   readonly width: number;
@@ -12,7 +12,6 @@ export interface FieldOfViewInput {
 }
 
 const UNSIGNED_32_BIT_MAX = 0xffff_ffff;
-const TILE_ID_MAX = 6;
 
 function assertPositiveDimension(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
@@ -20,8 +19,8 @@ function assertPositiveDimension(value: number, label: string): void {
   }
 }
 
-function assertTileId(tile: number, tileIndex: number): asserts tile is TileId {
-  if (!Number.isInteger(tile) || tile < 0 || tile > TILE_ID_MAX) {
+function assertTileId(tile: unknown, tileIndex: number): asserts tile is TileId {
+  if (!isTileId(tile)) {
     throw new TypeError(`tile ${tileIndex} must be a valid tile ID`);
   }
 }

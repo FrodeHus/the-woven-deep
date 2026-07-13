@@ -23,6 +23,11 @@ export const TILE_DEFINITIONS: readonly TileDefinition[] = [
   { id: 6, name: 'void', glyph: ' ', walkable: false, potentiallyTraversable: false, opaque: true, token: 'terrain.void' },
 ] as const;
 
+export function isTileId(value: unknown): value is TileId {
+  return typeof value === 'number'
+    && TILE_DEFINITIONS.some((definition) => definition.id === value);
+}
+
 export function tileDefinition(tileId: TileId): TileDefinition {
   const definition = TILE_DEFINITIONS[tileId];
   if (!definition || definition.id !== tileId) throw new Error(`internal invariant: unknown tile ${tileId}`);
