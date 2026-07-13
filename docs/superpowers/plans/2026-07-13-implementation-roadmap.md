@@ -22,6 +22,8 @@ Implement seeded random streams, immutable commands and domain events, entity id
 
 **Exit demonstration:** a command-line hero walks a fixed test floor, saves, reloads, and produces byte-equivalent canonical state and event output.
 
+**Detailed plan:** `docs/superpowers/plans/2026-07-13-deterministic-engine-kernel.md`
+
 ### 3. Dungeon generation, visibility, and light
 
 Implement rooms and corridors, connectivity validation, derived floor seeds, authored vault placement, knowledge bitsets, line of sight, occlusion, colored illumination, multiple light sources, remembered terrain, and DOM-ready observable projections.
