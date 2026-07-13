@@ -5,6 +5,7 @@ import type {
 } from './model.js';
 import { tileIndex } from './model.js';
 import { movementBlockReason } from './terrain.js';
+import { featureBlocksMovement } from './features.js';
 
 const DIRECTION_DELTAS: Readonly<Record<Direction, Point>> = {
   northwest: { x: -1, y: -1 }, north: { x: 0, y: -1 }, northeast: { x: 1, y: -1 },
@@ -35,10 +36,10 @@ export function directionDelta(direction: Direction): Point {
 function blockReasonAt(input: MovementActionInput, point: Point): MovementInvalidReason | undefined {
   const index = tileIndex(input.floor, point.x, point.y);
   if (index === undefined) return 'blocked.bounds';
-  const door = input.features.find((feature) => feature.type === 'door'
-    && feature.floorId === input.floor.floorId && feature.x === point.x && feature.y === point.y);
-  if (door?.state === 'open') return undefined;
-  if (door) return 'blocked.door';
+  const feature = input.features.find((candidate) => (candidate.type === 'door' || candidate.type === 'secret')
+    && candidate.floorId === input.floor.floorId && candidate.x === point.x && candidate.y === point.y);
+  if (feature && !featureBlocksMovement(feature)) return undefined;
+  if (feature?.type === 'door') return 'blocked.door';
   return movementBlockReason(input.floor.tiles[index]!);
 }
 

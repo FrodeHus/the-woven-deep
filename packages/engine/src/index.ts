@@ -37,6 +37,7 @@ export * from './content-bound-validation.js';
 export * from './equipment.js';
 export * from './identification.js';
 export * from './feature-model.js';
+export * from './features.js';
 export * from './survival-model.js';
 export * from './survival.js';
 export * from './model.js';

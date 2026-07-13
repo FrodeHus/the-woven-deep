@@ -185,7 +185,8 @@ export interface ActorTurnStartedEvent {
 export interface ActorTurnCompletedEvent {
   readonly type: 'actor.turn.completed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
   readonly actionType: 'move' | 'wait' | 'bump-attack' | 'pickup' | 'drop' | 'split-stack'
-    | 'fire' | 'throw-item' | 'use-item' | 'equip' | 'unequip' | 'toggle-light' | 'refuel';
+    | 'fire' | 'throw-item' | 'use-item' | 'equip' | 'unequip' | 'toggle-light' | 'refuel'
+    | 'open-door' | 'close-door' | 'search' | 'disarm';
 }
 export interface ActorMovedEvent {
   readonly type: 'actor.moved'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
@@ -253,6 +254,25 @@ export interface FuelWarningEvent {
 export interface ItemLightExtinguishedEvent {
   readonly type: 'item.light-extinguished'; readonly eventId: OpaqueId; readonly itemId: OpaqueId;
 }
+export interface ItemDamagedEvent {
+  readonly type: 'item.damaged'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId; readonly amount: number; readonly condition: number;
+}
+export interface DoorStateChangedEvent {
+  readonly type: 'door.opened' | 'door.closed'; readonly eventId: OpaqueId;
+  readonly actorId: OpaqueId; readonly featureId: OpaqueId;
+}
+export interface FeatureRevealedEvent {
+  readonly type: 'feature.revealed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly featureId: OpaqueId;
+}
+export interface FeatureSearchEvent {
+  readonly type: 'feature.searched'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+}
+export interface TrapStateEvent {
+  readonly type: 'trap.triggered' | 'trap.disarmed' | 'trap.disarm-failed'; readonly eventId: OpaqueId;
+  readonly actorId: OpaqueId; readonly featureId: OpaqueId;
+}
 
 export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent | AttackMissedEvent
   | AttackHitEvent | ActorDamagedEvent | ActorDiedEvent | ActorHealedEvent | ConditionAppliedEvent
@@ -261,7 +281,8 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | ItemStackSplitEvent | ItemConsumedEvent | ItemThrownEvent | ItemUsedEvent | ItemEquippedEvent
   | ItemUnequippedEvent | ItemLightToggledEvent | ItemRefueledEvent
   | IdentificationAppearanceRevealedEvent | ItemIdentifiedEvent
-  | HungerStageChangedEvent | HungerRestoredEvent | FuelWarningEvent | ItemLightExtinguishedEvent;
+  | HungerStageChangedEvent | HungerRestoredEvent | FuelWarningEvent | ItemLightExtinguishedEvent
+  | ItemDamagedEvent | DoorStateChangedEvent | FeatureRevealedEvent | FeatureSearchEvent | TrapStateEvent;
 
 export interface AppliedCommandResult {
   readonly status: 'applied';

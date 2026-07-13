@@ -7,6 +7,7 @@ import { refreshKnowledge } from './perception.js';
 import { validateTarget } from './targeting.js';
 import { resolveEffectSequence } from './effects.js';
 import { equipItem, itemLightSources, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
+import { closeDoor, featureTiles, openDoor } from './features.js';
 import type {
   ActiveRun, DecisionRequiredResult, GameCommand, InvalidActionReason, OpaqueId, Point,
 } from './model.js';
@@ -74,14 +75,21 @@ export interface RefuelAction {
   readonly type: 'refuel'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
   readonly fuelItemId: OpaqueId; readonly quantity: number; readonly cost: number;
 }
+export type DoorAction = Readonly<{ type: 'open-door'; actorId: OpaqueId; featureId: OpaqueId; cost: number }>
+  | Readonly<{ type: 'close-door'; actorId: OpaqueId; featureId: OpaqueId; cost: number }>;
+export interface SearchAction { readonly type: 'search'; readonly actorId: OpaqueId; readonly cost: number }
+export interface DisarmAction {
+  readonly type: 'disarm'; readonly actorId: OpaqueId; readonly featureId: OpaqueId; readonly cost: number;
+}
 
 export type GameAction = MoveAction | WaitAction | BumpAttackAction | PickupAction | DropAction | SplitStackAction
-  | FireAction | ThrowItemAction | UseItemAction | EquipAction | UnequipAction | ToggleLightAction | RefuelAction;
+  | FireAction | ThrowItemAction | UseItemAction | EquipAction | UnequipAction | ToggleLightAction | RefuelAction
+  | DoorAction | SearchAction | DisarmAction;
 export type ActionResolverRegistry = Readonly<Partial<Record<GameAction['type'], true>>>;
 export const ACTION_RESOLVER_REGISTRY: ActionResolverRegistry = Object.freeze({
   move: true, wait: true, 'bump-attack': true, pickup: true, drop: true, 'split-stack': true,
   fire: true, 'throw-item': true, 'use-item': true, equip: true, unequip: true,
-  'toggle-light': true, refuel: true,
+  'toggle-light': true, refuel: true, 'open-door': true, 'close-door': true, search: true, disarm: true,
 });
 
 export interface InvalidActionValidation {
@@ -115,11 +123,12 @@ function targetContext(state: ActiveRun, actor: ReturnType<typeof heroActor>, co
     floor.entities.map((entity) => [entity.entityId, entity] as const),
   );
   for (const candidate of state.actors) if (candidate.floorId === floor.floorId) positions.set(candidate.actorId, candidate);
+  const effectiveFloor = { ...floor, tiles: featureTiles(state, floor.floorId) };
   const perception = refreshKnowledge({
-    floor, hero: heroPerception(state.hero, actor), actors: positions,
+    floor: effectiveFloor, hero: heroPerception(state.hero, actor), actors: positions,
     additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }),
   });
-  return { floor, ...perception };
+  return { floor: effectiveFloor, ...perception };
 }
 
 export function validatePlayerAction(input: Readonly<{
@@ -380,6 +389,29 @@ export function validatePlayerAction(input: Readonly<{
       input.state.items.find((item) => item.itemId === command.itemId)!.contentId)!;
     return { type: 'refuel', actorId: actor.actorId, itemId: command.itemId,
       fuelItemId: command.fuelItemId, quantity: transition.quantity, cost: definition.actionCost };
+  }
+  if (input.command.type === 'open-door' || input.command.type === 'close-door') {
+    const transition = input.command.type === 'open-door'
+      ? openDoor({ run: input.state, actorId: actor.actorId, featureId: input.command.featureId })
+      : closeDoor({ run: input.state, actorId: actor.actorId, featureId: input.command.featureId });
+    if (!transition.ok) return { status: 'invalid', reason: 'action.unavailable' };
+    return { type: input.command.type, actorId: actor.actorId, featureId: input.command.featureId,
+      cost: actionCostFor(rules, `action.${input.command.type}`) };
+  }
+  if (input.command.type === 'search') {
+    return { type: 'search', actorId: actor.actorId, cost: actionCostFor(rules, 'action.search') };
+  }
+  if (input.command.type === 'disarm') {
+    const featureId = input.command.featureId;
+    const feature = input.state.features.find((candidate) => candidate.featureId === featureId);
+    if (!feature || feature.type !== 'trap' || feature.state !== 'armed'
+      || !feature.discovery.discoveredByActorIds.includes(actor.actorId)
+      || feature.floorId !== actor.floorId
+      || Math.max(Math.abs(feature.x - actor.x), Math.abs(feature.y - actor.y)) !== 1) {
+      return { status: 'invalid', reason: 'action.unavailable' };
+    }
+    return { type: 'disarm', actorId: actor.actorId, featureId: feature.featureId,
+      cost: actionCostFor(rules, 'action.disarm') };
   }
   return { status: 'invalid', reason: 'action.unavailable' };
 }

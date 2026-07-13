@@ -277,6 +277,7 @@ entries:
 | `glyph`, `color` | glyph and `#RRGGBB` | Yes | Revealed presentation. |
 | `targetingId` | registered ID | Yes | Trigger target rule. |
 | `discoveryDifficulty`, `disarmDifficulty` | non-negative safe integers | Yes | Search and disarm thresholds. |
+| `disarmOutcomes` | object | Yes | `failure` and `criticalFailure` are `safe`, `tool-damage`, or `trigger`; positive `toolDamage` is removed from an equipped item tagged `disarm-tool`. |
 | `resetMode` | enum | Yes | `once`, `reset`, or `disabled`. |
 | `effects` | non-empty effect array | Yes | Ordered trigger effects. |
 
@@ -292,6 +293,7 @@ entries:
     targetingId: target.actor
     discoveryDifficulty: 8
     disarmDifficulty: 10
+    disarmOutcomes: { failure: safe, criticalFailure: trigger, toolDamage: 10 }
     resetMode: once
     effects:
       - effectId: effect.damage

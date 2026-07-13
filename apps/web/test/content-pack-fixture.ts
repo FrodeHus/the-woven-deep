@@ -44,7 +44,8 @@ const entries: readonly ContentEntry[] = [
   },
   {
     kind: 'trap', id: 'trap.sparks', name: 'Spark trap', tags: [], glyph: '^', color: '#ffff00',
-    targetingId: 'target.actor', discoveryDifficulty: 5, disarmDifficulty: 5, resetMode: 'once',
+    targetingId: 'target.actor', discoveryDifficulty: 5, disarmDifficulty: 5,
+    disarmOutcomes: { failure: 'safe', criticalFailure: 'trigger', toolDamage: 10 }, resetMode: 'once',
     effects: [{ effectId: 'effect.damage', parameters: { damageType: 'lightning', dice }, requiresLivingTarget: true }],
   },
   {

@@ -12,6 +12,7 @@ import {
 } from './equipment.js';
 import { identifyAppearance } from './identification.js';
 import { advanceSurvival, hungerModifiers } from './survival.js';
+import { applyPassiveDiscovery, closeDoor, disarmTrap, featureTiles, openDoor, searchFeatures, triggerTrap } from './features.js';
 import { tileIndex, type ActiveRun, type DomainEvent, type OpaqueId, type Point, type Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { isVisible } from './visibility.js';
@@ -142,7 +143,30 @@ function applyAction(input: Readonly<{
   const actor = actorById(state, action.actorId);
   if (!actor) throw new Error(`internal invariant: actor ${action.actorId} does not exist`);
   const events: DomainEvent[] = [];
-  if (action.type === 'toggle-light') {
+  if (action.type === 'search') {
+    const floor = state.floors.find((candidate) => candidate.floorId === actor.floorId)!;
+    const positions = new Map(state.actors.filter((candidate) => candidate.floorId === floor.floorId)
+      .map((candidate) => [candidate.actorId, candidate] as const));
+    const perception = refreshKnowledge({ floor: { ...floor, tiles: featureTiles(state, floor.floorId) },
+      hero: heroPerception(state.hero, actor), actors: positions,
+      additionalLights: itemLightSources({ run: state, content: input.content, floorId: floor.floorId }) });
+    const index = tileIndex(floor, actor.x, actor.y)!;
+    const result = searchFeatures({ run: state, actorId: actor.actorId,
+      illumination: perception.illumination.intensity[index]!, eventId: input.eventId });
+    state = result.run; events.push(...result.events);
+  } else if (action.type === 'disarm') {
+    const result = disarmTrap({ run: state, content: input.content, actorId: actor.actorId,
+      featureId: action.featureId, eventId: input.eventId });
+    state = result.run; events.push(...result.events);
+  } else if (action.type === 'open-door' || action.type === 'close-door') {
+    const transition = action.type === 'open-door'
+      ? openDoor({ run: state, actorId: actor.actorId, featureId: action.featureId })
+      : closeDoor({ run: state, actorId: actor.actorId, featureId: action.featureId });
+    if (!transition.ok) throw new Error(`internal invariant: validated door action failed with ${transition.reason}`);
+    state = transition.run;
+    events.push({ type: action.type === 'open-door' ? 'door.opened' : 'door.closed',
+      eventId: input.eventId, actorId: actor.actorId, featureId: action.featureId });
+  } else if (action.type === 'toggle-light') {
     const transition = toggleItemLight({ run: state, content: input.content,
       actorId: actor.actorId, itemId: action.itemId, enabled: action.enabled });
     if (!transition.ok) throw new Error(`internal invariant: validated light toggle failed with ${transition.reason}`);
@@ -309,6 +333,13 @@ function applyAction(input: Readonly<{
       events.push(actor.playerControlled
         ? { type: 'hero.moved', eventId: input.eventId, heroId: actor.actorId, from: { x: actor.x, y: actor.y }, to: action.to }
         : { type: 'actor.moved', eventId: input.eventId, actorId: actor.actorId, from: { x: actor.x, y: actor.y }, to: action.to });
+      const trap = state.features.find((feature) => feature.type === 'trap' && feature.state === 'armed'
+        && feature.floorId === actor.floorId && feature.x === action.to.x && feature.y === action.to.y);
+      if (trap) {
+        const triggered = triggerTrap({ run: state, content: input.content, actorId: actor.actorId,
+          featureId: trap.featureId, eventId: input.eventId });
+        state = triggered.run; events.push(...triggered.events);
+      }
     }
   } else if (action.type === 'wait') {
     if (actor.playerControlled) events.push({
@@ -364,7 +395,8 @@ function eventIsPublic(event: DomainEvent, state: ActiveRun, heroId: OpaqueId, c
     floor.entities.map((entity) => [entity.entityId, entity] as const),
   );
   for (const actor of state.actors) if (actor.floorId === floor.floorId) positions.set(actor.actorId, actor);
-  const perception = refreshKnowledge({ floor, hero: heroPerception(state.hero, hero), actors: positions,
+  const effectiveFloor = { ...floor, tiles: featureTiles(state, floor.floorId) };
+  const perception = refreshKnowledge({ floor: effectiveFloor, hero: heroPerception(state.hero, hero), actors: positions,
     additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }) });
   return participants.some((actorId) => {
     const actor = actorById(state, actorId);
@@ -392,7 +424,8 @@ function refreshHeroKnowledge(state: ActiveRun, content: CompiledContentPack): A
   );
   for (const actor of state.actors) if (actor.floorId === floor.floorId) positions.set(actor.actorId, actor);
   const knowledge = refreshKnowledge({
-    floor, hero: heroPerception(state.hero, hero), actors: positions,
+    floor: { ...floor, tiles: featureTiles(state, floor.floorId) },
+    hero: heroPerception(state.hero, hero), actors: positions,
     additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }),
   }).knowledge;
   return { ...state, floors: state.floors.map((candidate) => candidate === floor ? { ...candidate, knowledge } : candidate) };
@@ -450,5 +483,23 @@ export function resolveWorldStep(input: Readonly<{
     }], state, heroId, input.content);
   }
   state = refreshHeroKnowledge(state, input.content);
+  const passiveHero = heroActor(state);
+  if (passiveHero.health === 0) return { state, events, publicEvents };
+  const passiveFloor = state.floors.find((candidate) => candidate.floorId === passiveHero.floorId)!;
+  const passivePositions = new Map<string, Readonly<{ x: number; y: number }>>(
+    passiveFloor.entities.map((entity) => [entity.entityId, entity] as const),
+  );
+  for (const actor of state.actors) if (actor.floorId === passiveFloor.floorId) passivePositions.set(actor.actorId, actor);
+  const passivePerception = refreshKnowledge({
+    floor: { ...passiveFloor, tiles: featureTiles(state, passiveFloor.floorId) },
+    hero: heroPerception(state.hero, passiveHero), actors: passivePositions,
+    additionalLights: itemLightSources({ run: state, content: input.content, floorId: passiveFloor.floorId }),
+  });
+  const passiveIndex = tileIndex(passiveFloor, passiveHero.x, passiveHero.y)!;
+  const passive = applyPassiveDiscovery({ run: state, actorId: passiveHero.actorId,
+    illumination: passivePerception.illumination.intensity[passiveIndex]!, eventId: input.eventId });
+  state = passive.run;
+  appendEvents(events, publicEvents, passive.events, state, heroId, input.content);
+  if (passive.events.length > 0) state = refreshHeroKnowledge(state, input.content);
   return { state, events, publicEvents };
 }

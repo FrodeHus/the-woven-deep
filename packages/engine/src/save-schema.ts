@@ -113,6 +113,22 @@ const fuelWarningEvent = z.strictObject({ type: z.literal('fuel.warning'), event
   itemId: identifier, threshold: safeNonNegative, fuel: safeNonNegative });
 const itemLightExtinguishedEvent = z.strictObject({ type: z.literal('item.light-extinguished'),
   eventId: identifier, itemId: identifier });
+const doorOpenedEvent = z.strictObject({ type: z.literal('door.opened'), eventId: identifier,
+  actorId: identifier, featureId: identifier });
+const doorClosedEvent = z.strictObject({ type: z.literal('door.closed'), eventId: identifier,
+  actorId: identifier, featureId: identifier });
+const featureRevealedEvent = z.strictObject({ type: z.literal('feature.revealed'), eventId: identifier,
+  actorId: identifier, featureId: identifier });
+const featureSearchedEvent = z.strictObject({ type: z.literal('feature.searched'), eventId: identifier,
+  actorId: identifier });
+const trapTriggeredEvent = z.strictObject({ type: z.literal('trap.triggered'), eventId: identifier,
+  actorId: identifier, featureId: identifier });
+const trapDisarmedEvent = z.strictObject({ type: z.literal('trap.disarmed'), eventId: identifier,
+  actorId: identifier, featureId: identifier });
+const trapDisarmFailedEvent = z.strictObject({ type: z.literal('trap.disarm-failed'), eventId: identifier,
+  actorId: identifier, featureId: identifier });
+const itemDamagedEvent = z.strictObject({ type: z.literal('item.damaged'), eventId: identifier,
+  actorId: identifier, itemId: identifier, amount: safeNonNegative, condition: safeNonNegative });
 const event = z.discriminatedUnion('type', [
   movedEvent, waitedEvent, invalidEvent, attackMissedEvent, attackHitEvent, actorDamagedEvent,
   actorDiedEvent, actorHealedEvent, conditionAppliedEvent, conditionRemovedEvent, actorForcedMoveEvent,
@@ -125,6 +141,9 @@ const event = z.discriminatedUnion('type', [
   itemLightToggledEvent, itemRefueledEvent,
   identificationAppearanceRevealedEvent, itemIdentifiedEvent,
   hungerStageChangedEvent, hungerRestoredEvent, fuelWarningEvent, itemLightExtinguishedEvent,
+  doorOpenedEvent, doorClosedEvent,
+  featureRevealedEvent, featureSearchedEvent, trapTriggeredEvent, trapDisarmedEvent, trapDisarmFailedEvent,
+  itemDamagedEvent,
 ]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
 const invalidResult = z.strictObject({ status: z.literal('invalid'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative, reason: blockReason });
@@ -588,6 +607,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     const commandSlot = 'slot' in recordValue.command ? recordValue.command.slot : undefined;
     const commandEnabled = recordValue.command.type === 'toggle-light' ? recordValue.command.enabled : undefined;
     const commandFuelItemId = recordValue.command.type === 'refuel' ? recordValue.command.fuelItemId : undefined;
+    const commandFeatureId = 'featureId' in recordValue.command ? recordValue.command.featureId : undefined;
     const eventValue = recordValue.result.status === 'invalid'
       ? recordValue.events.find((entry) => entry.type === 'action.invalid')
       : recordValue.command.type === 'wait'
@@ -634,6 +654,19 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                                 ? recordValue.events.find((entry) => entry.type === 'item.refueled'
                                   && entry.actorId === run.hero.actorId && entry.itemId === commandItemId
                                   && entry.fuelItemId === commandFuelItemId)
+                                : recordValue.command.type === 'open-door'
+                                  ? recordValue.events.find((entry) => entry.type === 'door.opened'
+                                    && entry.actorId === run.hero.actorId && entry.featureId === commandFeatureId)
+                                  : recordValue.command.type === 'close-door'
+                                    ? recordValue.events.find((entry) => entry.type === 'door.closed'
+                                      && entry.actorId === run.hero.actorId && entry.featureId === commandFeatureId)
+                                    : recordValue.command.type === 'search'
+                                      ? recordValue.events.find((entry) => entry.type === 'feature.searched'
+                                        && entry.actorId === run.hero.actorId)
+                                      : recordValue.command.type === 'disarm'
+                                        ? recordValue.events.find((entry) => (entry.type === 'trap.disarmed'
+                                          || entry.type === 'trap.triggered' || entry.type === 'trap.disarm-failed')
+                                          && entry.actorId === run.hero.actorId && entry.featureId === commandFeatureId)
           : undefined;
     if (!eventValue) fail(`${path}.events`, 'processed result has no matching event');
     if (recordValue.result.status === 'invalid') {
@@ -680,6 +713,18 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       && eventValue.actorId === run.hero.actorId && eventValue.itemId === recordValue.command.itemId
       && eventValue.fuelItemId === recordValue.command.fuelItemId) {
       if (eventValue.quantity > recordValue.command.quantity) fail(`${path}.events`, 'refuel event exceeds requested quantity');
+    } else if (((recordValue.command.type === 'open-door' && eventValue.type === 'door.opened')
+      || (recordValue.command.type === 'close-door' && eventValue.type === 'door.closed'))
+      && eventValue.actorId === run.hero.actorId && eventValue.featureId === recordValue.command.featureId) {
+      // Feature state carries the resulting door geometry.
+    } else if (recordValue.command.type === 'search' && eventValue.type === 'feature.searched'
+      && eventValue.actorId === run.hero.actorId) {
+      // Discovery progress is stored on affected features.
+    } else if (recordValue.command.type === 'disarm'
+      && (eventValue.type === 'trap.disarmed' || eventValue.type === 'trap.triggered'
+        || eventValue.type === 'trap.disarm-failed')
+      && eventValue.actorId === run.hero.actorId && eventValue.featureId === recordValue.command.featureId) {
+      // Trap state and the effects random stream store the outcome.
     } else fail(`${path}.events`, 'applied command and event are inconsistent');
     if (recordValue.result.revision < previousRevision || recordValue.result.revision > run.revision) fail(`${path}.result.revision`, 'record revisions are not monotonic');
     if (recordValue.result.turn > run.turn) fail(`${path}.result.turn`, 'record turn exceeds current turn');
@@ -716,7 +761,12 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
             ?? recordValue.events.find((entry) => (entry.type === 'item.equipped' || entry.type === 'item.unequipped')
               && entry.actorId === run.hero.actorId)
             ?? recordValue.events.find((entry) => (entry.type === 'item.light-toggled' || entry.type === 'item.refueled')
-              && entry.actorId === run.hero.actorId)!;
+              && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => (entry.type === 'door.opened' || entry.type === 'door.closed')
+              && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => entry.type === 'feature.searched' && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => (entry.type === 'trap.disarmed' || entry.type === 'trap.triggered'
+              || entry.type === 'trap.disarm-failed') && entry.actorId === run.hero.actorId)!;
     const path = `recentCommands.${index}`;
     if (recordValue.result.status === 'invalid') {
       if (recordValue.command.type !== 'move') {
@@ -760,7 +810,9 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       || recordValue.command.type === 'fire' || recordValue.command.type === 'throw-item'
       || recordValue.command.type === 'use-item' || recordValue.command.type === 'equip'
       || recordValue.command.type === 'unequip' || recordValue.command.type === 'toggle-light'
-      || recordValue.command.type === 'refuel') continue;
+      || recordValue.command.type === 'refuel' || recordValue.command.type === 'open-door'
+      || recordValue.command.type === 'close-door' || recordValue.command.type === 'search'
+      || recordValue.command.type === 'disarm') continue;
     if (recordValue.command.type !== 'move') fail(`${path}.events`, 'move result and event are inconsistent');
     if (eventValue.type === 'attack.hit' || eventValue.type === 'attack.missed' || eventValue.type === 'reaction.triggered') continue;
     if (eventValue.type !== 'hero.moved') fail(`${path}.events`, 'move result and event are inconsistent');

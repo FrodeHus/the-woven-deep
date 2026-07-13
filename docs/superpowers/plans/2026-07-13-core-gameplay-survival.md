@@ -1277,7 +1277,7 @@ git commit -m "feat: advance dungeon survival clocks"
 - Consumes: schema-v3 door features, tile/visibility/light rules, Wits-derived search stat, effects RNG, trap content, complete feature commands, and projection knowledge.
 - Produces: `featureAt(input)`, `openDoor(input)`, `closeDoor(input)`, `applyPassiveDiscovery(input)`, `searchFeatures(input)`, `disarmTrap(input)`, `triggerTrap(input)`, and `projectFeature(input)`.
 
-- [ ] **Step 1: Write failing mutable-door geometry tests**
+- [x] **Step 1: Write failing mutable-door geometry tests**
 
 ```ts
 it('changes movement, sight, and light when a door opens', () => {
@@ -1297,11 +1297,11 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/features.test.ts tes
 
 Expected: FAIL because mutable door operations are absent.
 
-- [ ] **Step 2: Implement door state and geometry integration**
+- [x] **Step 2: Implement door state and geometry integration**
 
 Closed and locked doors block movement, sight, and light; open doors permit them. Validate adjacency, feature state, registered lock behavior, and occupancy before applying. Refresh perception immediately after geometry changes. Schema-v3 fixtures represent every mutable door directly as a stable feature and retain its terrain tile as cover presentation.
 
-- [ ] **Step 3: Write failing passive discovery and reload-safety tests**
+- [x] **Step 3: Write failing passive discovery and reload-safety tests**
 
 ```ts
 it('grants one passive contribution for a newly illuminated context', () => {
@@ -1321,11 +1321,11 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/features.test.ts tes
 
 Expected: FAIL because discovery contexts are not saved.
 
-- [ ] **Step 4: Implement passive and active discovery progress**
+- [x] **Step 4: Implement passive and active discovery progress**
 
 Use hidden safe-integer difficulty. Derive a context key from hero position, illumination band, tools, and relevant conditions. A new nearby context adds Wits/light contribution once and records the sorted key. Search costs time, visits eligible nearby features by feature ID, applies reduced repeated-context progress with minimum one, and reveals any feature reaching difficulty. Reveal events precede geometry refresh.
 
-- [ ] **Step 5: Write failing disarm, trigger, and secret projection tests**
+- [x] **Step 5: Write failing disarm, trigger, and secret projection tests**
 
 ```ts
 it('reveals a hidden trap before its triggered effects', () => {
@@ -1344,11 +1344,11 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/features.test.ts tes
 
 Expected: FAIL on trap/secret behavior.
 
-- [ ] **Step 6: Implement disarm, trigger, and secret reveal**
+- [x] **Step 6: Implement disarm, trigger, and secret reveal**
 
 Disarm uses one effects-stream skill roll and configured outcomes: success, safe failure, tool damage, or trigger. Trigger reveals first, invokes the trap's validated effect sequence, and applies reset/disable state. An undiscovered secret projects its cover terrain and no feature ID; discovery changes public knowledge and refreshes geometry.
 
-- [ ] **Step 7: Run GREEN and commit**
+- [x] **Step 7: Run GREEN and commit**
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/features.test.ts test/movement.test.ts test/perception.test.ts test/projection.test.ts test/save-codec.test.ts`
 
