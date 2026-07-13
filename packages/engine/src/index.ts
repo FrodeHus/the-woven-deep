@@ -10,6 +10,8 @@ export * from './generate-topology.js';
 export * from './vault-transform.js';
 export * from './vault-placement.js';
 export * from './generate-floor.js';
+export * from './floor-integration.js';
+export * from './generated-fixture.js';
 export * from './terrain.js';
 export * from './visibility.js';
 export * from './light-model.js';
