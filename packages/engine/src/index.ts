@@ -1,3 +1,4 @@
+export * from './stable-json.js';
 export * from './fixture.js';
 export * from './model.js';
 export * from './random.js';
