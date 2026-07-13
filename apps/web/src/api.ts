@@ -15,7 +15,7 @@ export async function loadContentSummary(fetcher: typeof fetch = fetch): Promise
   const health = await healthResponse.json() as { contentHash: string; entries: number };
   const pack = await packResponse.json() as CompiledContentPack;
   if (pack.hash !== health.contentHash) throw new Error('The content service returned mismatched versions.');
-  const counts = { monster: 0, item: 0 } satisfies Record<ContentKind, number>;
+  const counts = { monster: 0, item: 0, vault: 0 } satisfies Record<ContentKind, number>;
   for (const entry of pack.entries) counts[entry.kind] += 1;
   return { hash: pack.hash, entries: health.entries, counts };
 }

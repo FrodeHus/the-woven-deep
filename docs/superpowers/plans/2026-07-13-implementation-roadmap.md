@@ -30,6 +30,8 @@ Implement rooms and corridors, connectivity validation, derived floor seeds, aut
 
 **Exit demonstration:** seeded generated floors render in a terminal fixture with dynamic torch radius, occluded light, remembered cells, and reproducible snapshots.
 
+**Detailed plan:** `docs/superpowers/plans/2026-07-13-dungeon-visibility-light.md`
+
 ### 4. Core gameplay, populations, and NPCs
 
 Implement attributes, combat, equipment, inventory, identification, hunger, fuel, traps, doors, secrets, enemy intent, individual/group/swarm/boss populations, discovery protection, achievements, dungeon merchants, reputation, metrics, and scoring.

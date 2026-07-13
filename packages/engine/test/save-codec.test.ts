@@ -1,7 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import { createDemoRun, decodeActiveRun, encodeActiveRun, resolveCommand, SaveLoadError } from '../src/index.js';
+import {
+  createDemoRun, createUnknownKnowledge, decodeActiveRun, encodeActiveRun,
+  refreshKnowledge, resolveCommand, SaveLoadError,
+} from '../src/index.js';
 
 describe('active-run save codec', () => {
+  function richRun(): ReturnType<typeof createDemoRun> {
+    const base = createDemoRun();
+    const tiles = [
+      0, 0, 0, 0, 0,
+      0, 4, 1, 2, 0,
+      0, 1, 3, 1, 0,
+      0, 1, 5, 1, 0,
+      0, 0, 0, 0, 0,
+    ] as const;
+    const hero = { ...base.hero, floorId: 'floor.rich', x: 1, y: 2, sightRadius: 12 };
+    const floor = {
+      ...base.floors[0]!, floorId: 'floor.rich', width: 5, height: 5, tiles,
+      themeId: 'theme.rich', ambient: { color: [255, 240, 224] as const, strength: 64 },
+      knowledge: createUnknownKnowledge(25),
+      lights: [
+        { lightId: 'light.a', location: { type: 'fixed' as const, x: 2, y: 1 }, color: [255, 128, 64] as const, radius: 4, strength: 200, enabled: true, falloff: 'linear' as const, vaultPlacementId: 'placement.a', presentation: { glyph: '*', token: 'fixture.torch' } },
+        { lightId: 'light.b', location: { type: 'actor' as const, actorId: hero.heroId }, color: [64, 128, 255] as const, radius: 3, strength: 100, enabled: true, falloff: 'linear' as const, vaultPlacementId: null, presentation: null },
+      ],
+      stairUp: { x: 1, y: 1 }, stairDown: { x: 2, y: 3 },
+      vaults: [{ placementId: 'placement.a', vaultId: 'vault.a', x: 1, y: 1, width: 2, height: 2, rotation: 90 as const, reflected: true, entrances: [{ x: 1, y: 2 }] }],
+      placementSlots: [{ slotId: 'slot.a', vaultPlacementId: 'placement.a', kind: 'fixture' as const, required: true, tags: ['lit'], x: 2, y: 1 }],
+      entities: [{ entityId: 'entity.a', x: 3, y: 2 }],
+    };
+    const knowledge = refreshKnowledge({ floor, hero, actors: new Map([[hero.heroId, hero], ['entity.a', floor.entities[0]!]]) }).knowledge;
+    return { ...base, hero, activeFloorId: floor.floorId, floors: [{ ...floor, knowledge }] } as ReturnType<typeof createDemoRun>;
+  }
+
   function expectInvalidSave(state: ReturnType<typeof createDemoRun>, path: string): void {
     try {
       encodeActiveRun(state);
@@ -18,6 +48,100 @@ describe('active-run save codec', () => {
     const encoded = encodeActiveRun(state);
     expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
     expect(encoded.startsWith('{"activeFloorId"')).toBe(true);
+  });
+
+  it('round-trips all schema v2 source state without storing derived fields', () => {
+    const state = richRun();
+    const encoded = encodeActiveRun(state);
+    expect(decodeActiveRun(encoded)).toEqual(state);
+    expect(encoded).not.toMatch(/visibilityWords|illumination|projection|generationReport/);
+  });
+
+  it.each([
+    ['tile outside 0-6', (run: any) => { run.floors[0].tiles[6] = 7; }],
+    ['knowledge word length', (run: any) => { run.floors[0].knowledge.exploredWords = []; }],
+    ['knowledge padding', (run: any) => { run.floors[0].knowledge.exploredWords[0] = 0xffff_ffff; }],
+    ['knowledge disagreement', (run: any) => { run.floors[0].knowledge.rememberedTerrainWords[0] = 0xffff_ffff; }],
+    ['ambient color', (run: any) => { run.floors[0].ambient.color[0] = 256; }],
+    ['ambient strength', (run: any) => { run.floors[0].ambient.strength = -1; }],
+    ['invalid light identifier', (run: any) => { run.floors[0].lights[0].lightId = 'Bad'; }],
+    ['duplicate light identifier', (run: any) => { run.floors[0].lights[1].lightId = 'light.a'; }],
+    ['unordered light identifiers', (run: any) => { run.floors[0].lights.reverse(); }],
+    ['malformed presentation', (run: any) => { run.floors[0].lights[0].presentation.glyph = '**'; }],
+    ['missing vault ownership', (run: any) => { run.floors[0].lights[0].vaultPlacementId = 'placement.missing'; }],
+    ['unresolved actor', (run: any) => { run.floors[0].lights[1].location.actorId = 'actor.missing'; }],
+    ['fixed light on void', (run: any) => { run.floors[0].tiles[7] = 6; }],
+    ['fixed light out of bounds', (run: any) => { run.floors[0].lights[0].location.x = 99; }],
+    ['vault-owned light outside placement', (run: any) => { run.floors[0].lights[0].location.x = 3; }],
+    ['negative hero sight radius', (run: any) => { run.hero.sightRadius = -1; }],
+    ['unsafe hero sight radius', (run: any) => { run.hero.sightRadius = Number.MAX_SAFE_INTEGER + 1; }],
+    ['stair tile mismatch', (run: any) => { run.floors[0].stairUp = { x: 2, y: 1 }; }],
+    ['duplicate stair positions', (run: any) => { run.floors[0].stairDown = { x: 1, y: 1 }; }],
+    ['unreferenced stair-up tile', (run: any) => { run.floors[0].stairUp = null; }],
+    ['unreferenced stair-down tile', (run: any) => { run.floors[0].stairDown = null; }],
+    ['additional stair-up tile', (run: any) => { run.floors[0].tiles[8] = 4; }],
+    ['additional stair-down tile', (run: any) => { run.floors[0].tiles[16] = 5; }],
+    ['duplicate vault identifier', (run: any) => { run.floors[0].vaults.push({ ...run.floors[0].vaults[0] }); }],
+    ['unordered vault identifiers', (run: any) => { run.floors[0].vaults.unshift({ ...run.floors[0].vaults[0], placementId: 'placement.z', vaultId: 'vault.z', x: 3, y: 1, width: 1, height: 1, entrances: [] }); }],
+    ['duplicate slot identifier', (run: any) => { run.floors[0].placementSlots.push({ ...run.floors[0].placementSlots[0] }); }],
+    ['unordered slot identifiers', (run: any) => { run.floors[0].placementSlots.unshift({ ...run.floors[0].placementSlots[0], slotId: 'slot.z' }); }],
+    ['overlapping vaults', (run: any) => { run.floors[0].vaults.push({ ...run.floors[0].vaults[0], placementId: 'placement.b', vaultId: 'vault.b' }); }],
+    ['out-of-bounds vault', (run: any) => { run.floors[0].vaults[0].width = 9; }],
+    ['unowned slot', (run: any) => { run.floors[0].placementSlots[0].vaultPlacementId = 'placement.missing'; }],
+  ])('rejects v2 corruption: %s', (_label, corrupt) => {
+    const input = structuredClone(richRun()) as any;
+    corrupt(input);
+    expect(() => encodeActiveRun(input)).toThrow(SaveLoadError);
+  });
+
+  it('rejects sparse saved arrays and unordered entity identifiers', () => {
+    const sparse = structuredClone(richRun()) as any;
+    delete sparse.floors[0].tiles[1];
+    expect(() => encodeActiveRun(sparse)).toThrow(SaveLoadError);
+
+    const unordered = structuredClone(richRun()) as any;
+    unordered.floors[0].entities = [
+      { entityId: 'entity.z', x: 3, y: 1 },
+      { entityId: 'entity.a', x: 3, y: 2 },
+    ];
+    expect(() => encodeActiveRun(unordered)).toThrow(SaveLoadError);
+  });
+
+  it.each(['visibilityWords', 'illumination', 'projection', 'generationReport'])('rejects derived floor field %s', (field) => {
+    const input = structuredClone(richRun()) as any;
+    input.floors[0][field] = [];
+    expect(() => encodeActiveRun(input)).toThrow(SaveLoadError);
+  });
+
+  it('rejects colliding presented fixed fixtures', () => {
+    const input = structuredClone(richRun()) as any;
+    input.floors[0].lights.splice(1, 0, { ...input.floors[0].lights[0], lightId: 'light.aa' });
+    expect(() => encodeActiveRun(input)).toThrow(SaveLoadError);
+  });
+
+  it('accepts a presented fixed fixture without vault ownership', () => {
+    const input = structuredClone(richRun()) as any;
+    input.floors[0].lights[0].vaultPlacementId = null;
+    expect(() => encodeActiveRun(input)).not.toThrow();
+  });
+
+  it.each(['light', 'vault placement', 'slot'])('rejects a duplicate %s identifier across floors', (kind) => {
+    const input = structuredClone(richRun()) as any;
+    const first = input.floors[0];
+    const second = {
+      ...structuredClone(first), floorId: 'floor.z', entities: [], lights: [], vaults: [], placementSlots: [],
+    };
+    if (kind === 'light') {
+      second.vaults = [{ ...first.vaults[0], placementId: 'placement.z', vaultId: 'vault.z' }];
+      second.lights = [{ ...first.lights[0], vaultPlacementId: 'placement.z' }];
+    } else if (kind === 'vault placement') {
+      second.vaults = [structuredClone(first.vaults[0])];
+    } else {
+      second.vaults = [{ ...first.vaults[0], placementId: 'placement.z', vaultId: 'vault.z' }];
+      second.placementSlots = [{ ...first.placementSlots[0], vaultPlacementId: 'placement.z' }];
+    }
+    input.floors.push(second);
+    expect(() => encodeActiveRun(input)).toThrow(SaveLoadError);
   });
 
   it.each([
@@ -152,9 +276,25 @@ describe('active-run save codec', () => {
     }, 'recentCommands.0.command.type');
   });
 
-  it('rejects an invalid movement reason that disagrees with the active floor', () => {
-    const invalid = resolveCommand(createDemoRun(), { type: 'move', commandId: 'command.wall', expectedRevision: 0, direction: 'north' }).state;
+  it.each([
+    [0, 'blocked.wall'],
+    [2, 'blocked.door'],
+    [3, 'blocked.pillar'],
+    [6, 'blocked.void'],
+  ] as const)('validates retained terrain %i as %s', (tile, reason) => {
+    const demo = createDemoRun();
+    const floor = demo.floors[0]!;
+    const initial = { ...demo, floors: [{
+      ...floor,
+      tiles: floor.tiles.map((current, index) => index === 1 ? tile : current),
+    }] };
+    const invalid = resolveCommand(initial, {
+      type: 'move', commandId: `command.${reason}`, expectedRevision: 0, direction: 'north',
+    }).state;
     const record = invalid.recentCommands[0]!;
+
+    expect(record.result).toMatchObject({ status: 'invalid', reason });
+    expect(() => encodeActiveRun(invalid)).not.toThrow();
     expectInvalidSave({
       ...invalid,
       recentCommands: [{

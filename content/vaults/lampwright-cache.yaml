@@ -1,0 +1,54 @@
+schemaVersion: 1
+entries:
+  - kind: vault
+    id: vault.lampwright-cache
+    name: Lampwright cache
+    tags: [cache, lamplight, shrine]
+    minDepth: 1
+    maxDepth: 20
+    rarity: uncommon
+    weight: 8
+    maxPerFloor: 1
+    margin: 1
+    transforms:
+      rotations: [0, 180]
+      reflectHorizontal: true
+    layout:
+      - "#######"
+      - "#m.n.i#"
+      - "+t.O.f#"
+      - "#*..q.#"
+      - "#.....#"
+      - "#######"
+    legend:
+      "#": { terrain: wall }
+      ".": { terrain: floor }
+      "+": { terrain: closed-door, entrance: true }
+      "O": { terrain: pillar }
+      "*":
+        terrain: floor
+        light:
+          idSuffix: amber-lamp
+          glyph: "*"
+          presentationToken: fixture.lamp
+          color: [255, 179, 71]
+          radius: 7
+          strength: 180
+      "m":
+        terrain: floor
+        slot: { id: monster-guard, kind: monster, required: true, tags: [guard, lamplight] }
+      "i":
+        terrain: floor
+        slot: { id: item-cache, kind: item, required: true, tags: [cache, utility] }
+      "t":
+        terrain: floor
+        slot: { id: trap-threshold, kind: trap, required: false, tags: [threshold, warning] }
+      "n":
+        terrain: floor
+        slot: { id: npc-visitor, kind: npc, required: false, tags: [visitor, lampwright] }
+      "f":
+        terrain: floor
+        slot: { id: fixture-focus, kind: fixture, required: false, tags: [workbench, focus] }
+      "q":
+        terrain: floor
+        slot: { id: objective-shrine, kind: objective, required: true, tags: [shrine, lamplight] }

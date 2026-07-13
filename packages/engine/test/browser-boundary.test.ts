@@ -48,6 +48,10 @@ describe('browser-safe production graph', () => {
     expect(findForbiddenModuleSpecifiers("async function load() { await import('node:fs'); }", 'synthetic.ts')).toEqual(['node:fs']);
   });
 
+  it('allows the reviewed ROT.js browser import', () => {
+    expect(findForbiddenModuleSpecifiers("import { FOV, Map, RNG } from 'rot-js';", 'synthetic.ts')).toEqual([]);
+  });
+
   it('contains no platform framework, Node, storage, clock, or ambient-random dependency', async () => {
     const files = await sourceFiles(sourceRoot);
     expect(files.length).toBeGreaterThan(0);

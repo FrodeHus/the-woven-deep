@@ -1,9 +1,28 @@
 import { parseDocument } from 'yaml';
 import type { ContentEntry } from '../model.js';
 import { ContentCompileError } from './error.js';
-import { contentFileSchema } from './schema.js';
+import { contentFileSchema, stableIdSchema } from './schema.js';
 
 const MAX_FILE_BYTES = 256 * 1024;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function structuralIssuePath(path: readonly PropertyKey[], value: unknown): string {
+  const segments = [...path];
+  if (segments[0] === 'entries' && typeof segments[1] === 'number' && isRecord(value)) {
+    const entries = value.entries;
+    const entry = Array.isArray(entries) ? entries[segments[1]] : undefined;
+    const parsedId = isRecord(entry) && entry.kind === 'vault'
+      ? stableIdSchema.safeParse(entry.id)
+      : null;
+    if (parsedId?.success) {
+      segments[1] = parsedId.data;
+    }
+  }
+  return segments.length === 0 ? '$' : `$.${segments.map(String).join('.')}`;
+}
 
 export function parseContentFile(input: { path: string; source: string }): readonly ContentEntry[] {
   if (Buffer.byteLength(input.source, 'utf8') > MAX_FILE_BYTES) {
@@ -41,7 +60,7 @@ export function parseContentFile(input: { path: string; source: string }): reado
   if (!result.success) {
     throw new ContentCompileError(result.error.issues.map((issue) => ({
       file: input.path,
-      path: issue.path.length === 0 ? '$' : `$.${issue.path.join('.')}`,
+      path: structuralIssuePath(issue.path, value),
       message: issue.message,
     })));
   }

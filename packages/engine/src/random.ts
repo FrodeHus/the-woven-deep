@@ -17,11 +17,34 @@ function rotateLeft(value: number, bits: number): number {
   return ((value << bits) | (value >>> (32 - bits))) >>> 0;
 }
 
-function splitMixWord(value: number): number {
+export function splitMixWord(value: number): number {
   let mixed = value >>> 0;
   mixed = Math.imul(mixed ^ (mixed >>> 16), 0x21f0aaad) >>> 0;
   mixed = Math.imul(mixed ^ (mixed >>> 15), 0x735a2d97) >>> 0;
   return (mixed ^ (mixed >>> 15)) >>> 0;
+}
+
+export function deriveSeed(seed: Uint32State, discriminator: number): Uint32State {
+  if (!isNonZeroState(seed)) throw new RangeError('source seed must not be all zero');
+  if (!Number.isSafeInteger(discriminator) || discriminator <= 0 || discriminator > 0xffff_ffff) {
+    throw new RangeError('seed discriminator must be a nonzero unsigned 32-bit integer');
+  }
+  let cursor = discriminator >>> 0;
+  const words: number[] = [];
+  for (let index = 0; index < seed.length; index += 1) {
+    cursor = splitMixWord(
+      (cursor ^ seed[index]! ^ Math.imul(index + 1, GOLDEN_GAMMA)) >>> 0,
+    );
+    words.push(cursor);
+  }
+  const state = words as unknown as Uint32State;
+  return isNonZeroState(state) ? state : [0, 0, 0, NON_ZERO_FALLBACK];
+}
+
+export function foldSeed(seed: Uint32State): number {
+  if (!isNonZeroState(seed)) throw new RangeError('source seed must not be all zero');
+  const folded = splitMixWord((seed[0] ^ seed[1] ^ seed[2] ^ seed[3]) >>> 0);
+  return folded === 0 ? NON_ZERO_FALLBACK : folded;
 }
 
 export interface RandomStep {

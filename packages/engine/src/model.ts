@@ -1,9 +1,11 @@
 import type { RngStreamName } from './versions.js';
+import type { FloorKnowledge } from './knowledge.js';
+import type { AmbientLight, LightSource } from './light-model.js';
 
 export type OpaqueId = string;
 export type Uint32State = readonly [number, number, number, number];
 export type RngStreams = Readonly<Record<RngStreamName, Uint32State>>;
-export type TileId = 0 | 1;
+export type TileId = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export type Direction = 'north' | 'south' | 'east' | 'west';
 
 export interface FloorEntityPosition {
@@ -15,12 +17,42 @@ export interface FloorEntityPosition {
 export interface FloorSnapshot {
   readonly floorId: OpaqueId;
   readonly seed: Uint32State;
-  readonly generatorVersion: 1;
+  readonly generatorVersion: 1 | 2;
   readonly width: number;
   readonly height: number;
   readonly depth: number;
   readonly tiles: readonly TileId[];
   readonly entities: readonly FloorEntityPosition[];
+  readonly themeId: OpaqueId;
+  readonly ambient: AmbientLight;
+  readonly knowledge: FloorKnowledge;
+  readonly lights: readonly LightSource[];
+  readonly stairUp: Readonly<{ x: number; y: number }> | null;
+  readonly stairDown: Readonly<{ x: number; y: number }> | null;
+  readonly vaults: readonly VaultPlacement[];
+  readonly placementSlots: readonly FloorPlacementSlot[];
+}
+
+export interface VaultPlacement {
+  readonly placementId: OpaqueId;
+  readonly vaultId: OpaqueId;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly rotation: 0 | 90 | 180 | 270;
+  readonly reflected: boolean;
+  readonly entrances: readonly Readonly<{ x: number; y: number }>[];
+}
+
+export interface FloorPlacementSlot {
+  readonly slotId: OpaqueId;
+  readonly vaultPlacementId: OpaqueId;
+  readonly kind: 'monster' | 'item' | 'trap' | 'npc' | 'fixture' | 'objective';
+  readonly required: boolean;
+  readonly tags: readonly string[];
+  readonly x: number;
+  readonly y: number;
 }
 
 export interface HeroState {
@@ -29,6 +61,7 @@ export interface HeroState {
   readonly floorId: OpaqueId;
   readonly x: number;
   readonly y: number;
+  readonly sightRadius: number;
 }
 
 export interface CommandEnvelope {
@@ -67,7 +100,7 @@ export interface InvalidActionEvent {
   readonly type: 'action.invalid';
   readonly eventId: OpaqueId;
   readonly commandId: OpaqueId;
-  readonly reason: 'blocked.bounds' | 'blocked.wall';
+  readonly reason: 'blocked.bounds' | 'blocked.wall' | 'blocked.door' | 'blocked.pillar' | 'blocked.void';
 }
 
 export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent;
@@ -105,7 +138,7 @@ export interface RecordedCommand {
 }
 
 export interface ActiveRun {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly runId: OpaqueId;
