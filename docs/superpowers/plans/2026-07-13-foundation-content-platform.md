@@ -275,7 +275,7 @@ entries:
     name: Cave rat
     glyph: r
     color: '#a89b82'
-    ai: skittish
+    ai: ai.skittish
     stats: { health: 4, attack: 2, defense: 0 }
 `,
     });
@@ -297,7 +297,7 @@ entries:
     name: Bad
     glyph: b
     color: '#ffffff'
-    ai: skittish
+    ai: ai.skittish
     stats: { health: 1, attack: 1, defense: 0 }
     surpriseProperty: true
 `,
@@ -451,16 +451,7 @@ export * from './error.js';
 export * from './parse-file.js';
 ```
 
-Keep `packages/content/src/index.ts` browser-safe. Replace `packages/content/src/compiler/index.ts` with:
-
-```ts
-export * from './canonicalize.js';
-export * from './compile-directory.js';
-export * from './error.js';
-export * from './parse-file.js';
-```
-
-Server code imports compiler functions from `@woven-deep/content/compiler`; browser code imports models from `@woven-deep/content`.
+Keep `packages/content/src/index.ts` browser-safe. Server code imports compiler functions from `@woven-deep/content/compiler`; browser code imports models from `@woven-deep/content`.
 
 - [ ] **Step 5: Run parser tests and commit**
 
@@ -635,7 +626,14 @@ export async function compileContentDirectory(input: {
 }
 ```
 
-Export the compiler and canonicalization functions from `packages/content/src/compiler/index.ts`.
+Replace `packages/content/src/compiler/index.ts` with:
+
+```ts
+export * from './canonicalize.js';
+export * from './compile-directory.js';
+export * from './error.js';
+export * from './parse-file.js';
+```
 
 - [ ] **Step 5: Run all content tests and commit**
 
