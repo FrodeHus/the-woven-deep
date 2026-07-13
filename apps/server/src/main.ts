@@ -10,5 +10,5 @@ const config = readConfig();
 await mkdir(dirname(config.databasePath), { recursive: true });
 const database = openDatabase(config.databasePath);
 const pack = await bootstrapContent(config.contentDir, new ContentPackRepository(database));
-const app = buildApp({ pack });
+const app = buildApp({ pack, webDistDir: config.webDistDir });
 await app.listen({ host: config.host, port: config.port });
