@@ -5,6 +5,7 @@ import type { ActorState, EquipmentSlot, RelationshipOverride } from './actor-mo
 import type { DungeonFeature } from './feature-model.js';
 import type { IdentificationState, ItemInstance } from './item-model.js';
 import type { SurvivalState } from './survival-model.js';
+import type { DamageType } from '@woven-deep/content';
 
 export type OpaqueId = string;
 export type Uint32State = readonly [number, number, number, number];
@@ -130,7 +131,44 @@ export interface InvalidActionEvent {
   readonly reason: InvalidActionReason;
 }
 
-export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent;
+export interface AttackMissedEvent {
+  readonly type: 'attack.missed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly targetActorId: OpaqueId; readonly naturalRoll: number; readonly total: number; readonly defense: number;
+}
+export interface AttackHitEvent {
+  readonly type: 'attack.hit'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly targetActorId: OpaqueId; readonly naturalRoll: number; readonly total: number; readonly defense: number;
+  readonly critical: boolean; readonly rolledDice: number; readonly rolledDamage: number;
+  readonly effectiveDamage: number; readonly damageType: DamageType;
+}
+export interface ActorDamagedEvent {
+  readonly type: 'actor.damaged'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly sourceActorId: OpaqueId; readonly amount: number; readonly health: number;
+}
+export interface ActorDiedEvent {
+  readonly type: 'actor.died'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly contentId: OpaqueId; readonly killerActorId: OpaqueId;
+}
+export interface ActorHealedEvent {
+  readonly type: 'actor.healed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly sourceActorId: OpaqueId; readonly amount: number; readonly health: number;
+}
+export interface ConditionAppliedEvent {
+  readonly type: 'condition.applied'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly sourceActorId: OpaqueId; readonly conditionId: OpaqueId; readonly stacks: number; readonly expiresAt: number | null;
+}
+export interface ConditionRemovedEvent {
+  readonly type: 'condition.removed' | 'condition.expired'; readonly eventId: OpaqueId;
+  readonly actorId: OpaqueId; readonly conditionId: OpaqueId;
+}
+export interface ActorForcedMoveEvent {
+  readonly type: 'actor.forced-move'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly from: Point; readonly to: Point;
+}
+
+export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent | AttackMissedEvent
+  | AttackHitEvent | ActorDamagedEvent | ActorDiedEvent | ActorHealedEvent | ConditionAppliedEvent
+  | ConditionRemovedEvent | ActorForcedMoveEvent;
 
 export interface AppliedCommandResult {
   readonly status: 'applied';

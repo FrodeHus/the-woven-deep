@@ -46,7 +46,30 @@ const blockReason = z.enum([
   'blocked.corner', 'blocked.actor', 'action.unavailable',
 ]);
 const invalidEvent = z.strictObject({ type: z.literal('action.invalid'), eventId: identifier, commandId: identifier, reason: blockReason });
-const event = z.discriminatedUnion('type', [movedEvent, waitedEvent, invalidEvent]);
+const attackBase = { eventId: identifier, actorId: identifier, targetActorId: identifier,
+  naturalRoll: z.number().int().min(1).max(20), total: z.number().int().safe(), defense: z.number().int().safe() } as const;
+const attackMissedEvent = z.strictObject({ ...attackBase, type: z.literal('attack.missed') });
+const attackHitEvent = z.strictObject({
+  ...attackBase, type: z.literal('attack.hit'), critical: z.boolean(), rolledDice: positiveQuantity,
+  rolledDamage: safeNonNegative, effectiveDamage: safeNonNegative,
+  damageType: z.enum(['physical', 'fire', 'cold', 'lightning', 'poison', 'arcane']),
+});
+const actorDamagedEvent = z.strictObject({ type: z.literal('actor.damaged'), eventId: identifier,
+  actorId: identifier, sourceActorId: identifier, amount: safeNonNegative, health: safeNonNegative });
+const actorDiedEvent = z.strictObject({ type: z.literal('actor.died'), eventId: identifier,
+  actorId: identifier, contentId: identifier, killerActorId: identifier });
+const actorHealedEvent = z.strictObject({ type: z.literal('actor.healed'), eventId: identifier,
+  actorId: identifier, sourceActorId: identifier, amount: safeNonNegative, health: safeNonNegative });
+const conditionAppliedEvent = z.strictObject({ type: z.literal('condition.applied'), eventId: identifier,
+  actorId: identifier, sourceActorId: identifier, conditionId: identifier, stacks: positiveQuantity, expiresAt: safeNonNegative.nullable() });
+const conditionRemovedEvent = z.strictObject({ type: z.enum(['condition.removed', 'condition.expired']),
+  eventId: identifier, actorId: identifier, conditionId: identifier });
+const actorForcedMoveEvent = z.strictObject({ type: z.literal('actor.forced-move'), eventId: identifier,
+  actorId: identifier, from: point, to: point });
+const event = z.discriminatedUnion('type', [
+  movedEvent, waitedEvent, invalidEvent, attackMissedEvent, attackHitEvent, actorDamagedEvent,
+  actorDiedEvent, actorHealedEvent, conditionAppliedEvent, conditionRemovedEvent, actorForcedMoveEvent,
+]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
 const invalidResult = z.strictObject({ status: z.literal('invalid'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative, reason: blockReason });
 const processedResult = z.discriminatedUnion('status', [appliedResult, invalidResult]);

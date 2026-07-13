@@ -92,7 +92,12 @@ describe('active-run save codec', () => {
     const record = processed.recentCommands[0]!;
     const withMultipleEvents = {
       ...processed,
-      recentCommands: [{ ...record, events: [...record.events, { ...record.events[0]! }], publicEvents: [] }],
+      recentCommands: [{ ...record, events: [...record.events,
+        { type: 'actor.damaged' as const, eventId: 'command.saved-attack', actorId: 'hero.demo',
+          sourceActorId: 'hero.demo', amount: 0, health: 20 },
+        { type: 'condition.expired' as const, eventId: 'command.saved-attack', actorId: 'hero.demo',
+          conditionId: 'condition.saved' },
+      ], publicEvents: [] }],
     };
     expect(decodeActiveRun(encodeActiveRun(withMultipleEvents))).toEqual(withMultipleEvents);
   });

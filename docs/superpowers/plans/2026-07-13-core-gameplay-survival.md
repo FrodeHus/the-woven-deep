@@ -616,7 +616,7 @@ git commit -m "feat: validate tactical player actions"
 - Consumes: compiled monster/item/spell/effect content, `DerivedActorStats`, `rng.combat`, actor state, light/terrain occlusion, and typed actions.
 - Produces: `rollDie(state, sides)`, `validateTarget(input)`, `resolveAttack(input)`, `applyHealing(input)`, `resolveEffectSequence(input)`, `advanceConditions(input)`, and combat/effect domain events.
 
-- [ ] **Step 1: Write failing die, attack, critical, and mitigation tests**
+- [x] **Step 1: Write failing die, attack, critical, and mitigation tests**
 
 Use fixed combat states rather than mocking randomness:
 
@@ -637,7 +637,7 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/combat.test.ts`
 
 Expected: FAIL because combat functions and events do not exist.
 
-- [ ] **Step 2: Implement deterministic structured dice and combat**
+- [x] **Step 2: Implement deterministic structured dice and combat**
 
 Add `rollDie` using rejection sampling over `nextUint32` so every face is unbiased and all consumed states are returned. `resolveAttack` consumes only `rng.combat`, applies d20 accuracy versus defense, natural rules, twice-rolled critical dice, flat modifiers once, armor, integer percentage resistance, vulnerability, immunity, minimum effective hit damage, health reduction, and immediate death.
 
@@ -654,7 +654,7 @@ export interface CombatResolution {
 
 Every event includes effective values and stable actor/content identifiers but no future random state.
 
-- [ ] **Step 3: Write failing targeting and hidden-state tests**
+- [x] **Step 3: Write failing targeting and hidden-state tests**
 
 ```ts
 it('accepts a visible unobstructed line target', () => {
@@ -671,11 +671,11 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/targeting.test.ts`
 
 Expected: FAIL because target validation is absent.
 
-- [ ] **Step 4: Implement range, trajectory, and public target validation**
+- [x] **Step 4: Implement range, trajectory, and public target validation**
 
 Support `target.self`, `target.actor`, `target.line`, and `target.cell`. Validate Chebyshev range, floor ownership, line obstruction, actor visibility, and target relationship using existing field-of-view and terrain adapters. Return authoritative details only on success; failure reasons use public categories such as `target.not_visible`, `target.out_of_range`, and `target.blocked`.
 
-- [ ] **Step 5: Write failing effect and condition tests**
+- [x] **Step 5: Write failing effect and condition tests**
 
 ```ts
 it('applies an ordered damage then condition sequence', () => {
@@ -693,11 +693,11 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/effects.test.ts test
 
 Expected: FAIL because the registry resolver is absent.
 
-- [ ] **Step 6: Implement the closed effect registry and conditions**
+- [x] **Step 6: Implement the closed effect registry and conditions**
 
 Map every compiler-published effect ID to a browser-safe pure resolver with the same strict parameter schema. Prevalidate the full sequence and target contract before applying its first effect. Apply effects in authored order, explicitly skip a `requiresLivingTarget` step after target death, and return updated state, named random stream states, and ordered events. Implement damage, healing, condition add/remove, and forced movement directly. Define an injected `EffectOperations` contract for reveal, fuel transfer, light toggle, item consumption, and feature mutation; the closed registry delegates those operations through the contract. The reducer initially supplies rejecting operations that return `action.unavailable` before publication, and Tasks 7, 8, and 11 register their atomic implementations with focused transition tests.
 
-- [ ] **Step 7: Run combat/effect GREEN and package gate**
+- [x] **Step 7: Run combat/effect GREEN and package gate**
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/combat.test.ts test/targeting.test.ts test/effects.test.ts test/conditions.test.ts test/save-codec.test.ts`
 
@@ -707,7 +707,7 @@ Run: `npm test --workspace @woven-deep/engine && npm run typecheck --workspace @
 
 Expected: engine suite and typecheck pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/engine
