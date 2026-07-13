@@ -1,0 +1,14 @@
+schemaVersion: 1
+entries:
+  - kind: monster
+    id: monster.cave-rat
+    name: Cave rat
+    glyph: r
+    color: "#9e927c"
+    tags: [animal, darkness]
+    ai: ai.skittish
+    runAppearanceChance: 1
+    stats:
+      health: 4
+      attack: 2
+      defense: 0
