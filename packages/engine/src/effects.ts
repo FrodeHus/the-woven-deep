@@ -9,9 +9,12 @@ import type { DomainEvent, OpaqueId, Point, Uint32State } from './model.js';
 import { rollDie } from './random.js';
 import { resolveDamage } from './combat.js';
 import { applyCondition, conditionDefinition } from './conditions.js';
+import type { ItemInstance } from './item-model.js';
+import { consumeItemQuantityFromItems } from './inventory.js';
 
 export interface EffectSequenceResult {
   readonly actors: readonly ActorState[];
+  readonly items: readonly ItemInstance[];
   readonly effectsState: Uint32State;
   readonly events: readonly DomainEvent[];
 }
@@ -41,11 +44,14 @@ export interface EffectSequenceInput {
   readonly eventId: OpaqueId;
   readonly forceMoveDirection: Point;
   readonly operations: EffectOperations;
+  readonly items?: readonly ItemInstance[];
+  readonly sourceItemId?: OpaqueId;
   readonly mitigationByActorId?: Readonly<Record<OpaqueId, Readonly<{ armor: number; resistance: number; immune: boolean }>>>;
 }
 
 const DIRECT_EFFECTS = new Set([
   'effect.damage', 'effect.heal', 'effect.condition.apply', 'effect.condition.remove', 'effect.force-move',
+  'effect.item.consume',
 ]);
 
 function checkedSafeInteger(label: string, value: number): number {
@@ -116,6 +122,7 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
     }
   }
   let actors = [...input.actors]; let state = input.effectsState; const events: DomainEvent[] = [];
+  let items = [...(input.items ?? [])];
   for (const effect of input.effects) {
     const target = actorById(actors, input.targetActorId);
     if (effect.requiresLivingTarget && target.health === 0) continue;
@@ -164,13 +171,23 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
       };
       actors = [...replaceActor(actors, { ...target, ...to })];
       events.push({ type: 'actor.forced-move', eventId: input.eventId, actorId: target.actorId, from, to });
+    } else if (effect.effectId === 'effect.item.consume') {
+      if (!input.sourceItemId) throw new TypeError('effect.item.consume requires sourceItemId');
+      const quantity = (effect.parameters as { quantity: number }).quantity;
+      const consumed = consumeItemQuantityFromItems({ items, itemId: input.sourceItemId, quantity });
+      if (!consumed.ok) throw new RangeError(`effect.item.consume failed: ${consumed.reason}`);
+      items = [...consumed.items];
+      events.push({
+        type: 'item.consumed', eventId: input.eventId, actorId: input.sourceActorId,
+        itemId: input.sourceItemId, quantity,
+      });
     } else {
       const operation = input.operations[effect.effectId as EffectId]!;
       const result = operation({ effect, actors, sourceActorId: input.sourceActorId, targetActorId: target.actorId, eventId: input.eventId });
       actors = [...result.actors]; events.push(...result.events);
     }
   }
-  return { actors, effectsState: state, events };
+  return { actors, items, effectsState: state, events };
 }
 
 export function advanceConditions(input: Readonly<{

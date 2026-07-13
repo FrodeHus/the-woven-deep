@@ -1,7 +1,11 @@
-import type { BalanceContentEntry, CompiledContentPack } from '@woven-deep/content';
-import { heroActor } from './actor-model.js';
+import type { BalanceContentEntry, CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
+import { heroActor, heroPerception } from './actor-model.js';
 import { movementAction } from './movement.js';
 import { actorHasConditionTrait } from './conditions.js';
+import { dropItem, pickupItem, splitStack } from './inventory.js';
+import { refreshKnowledge } from './perception.js';
+import { validateTarget } from './targeting.js';
+import { resolveEffectSequence } from './effects.js';
 import type {
   ActiveRun, DecisionRequiredResult, GameCommand, InvalidActionReason, OpaqueId, Point,
 } from './model.js';
@@ -29,11 +33,37 @@ export interface BumpAttackAction {
   readonly targetActorId: OpaqueId;
   readonly cost: number;
 }
+export interface PickupAction {
+  readonly type: 'pickup'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
+  readonly quantity: number; readonly newItemId: OpaqueId; readonly cost: number;
+}
+export interface DropAction {
+  readonly type: 'drop'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
+  readonly quantity: number; readonly newItemId: OpaqueId; readonly cost: number;
+}
+export interface SplitStackAction {
+  readonly type: 'split-stack'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
+  readonly quantity: number; readonly newItemId: OpaqueId; readonly cost: number;
+}
+export interface FireAction {
+  readonly type: 'fire'; readonly actorId: OpaqueId; readonly weaponItemId: OpaqueId;
+  readonly ammunitionItemId: OpaqueId; readonly targetActorId: OpaqueId; readonly cost: number;
+}
+export interface ThrowItemAction {
+  readonly type: 'throw-item'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
+  readonly quantity: number; readonly newItemId: OpaqueId; readonly target: Point; readonly cost: number;
+}
+export interface UseItemAction {
+  readonly type: 'use-item'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
+  readonly targetActorId: OpaqueId; readonly cost: number;
+}
 
-export type GameAction = MoveAction | WaitAction | BumpAttackAction;
+export type GameAction = MoveAction | WaitAction | BumpAttackAction | PickupAction | DropAction | SplitStackAction
+  | FireAction | ThrowItemAction | UseItemAction;
 export type ActionResolverRegistry = Readonly<Partial<Record<GameAction['type'], true>>>;
 export const ACTION_RESOLVER_REGISTRY: ActionResolverRegistry = Object.freeze({
-  move: true, wait: true, 'bump-attack': true,
+  move: true, wait: true, 'bump-attack': true, pickup: true, drop: true, 'split-stack': true,
+  fire: true, 'throw-item': true, 'use-item': true,
 });
 
 export interface InvalidActionValidation {
@@ -53,6 +83,22 @@ export function actionCostFor(entry: BalanceContentEntry, actionId: string): num
   const cost = entry.actionCosts[actionId] ?? entry.normalActionCost;
   if (!Number.isSafeInteger(cost) || cost < 0) throw new Error(`internal invariant: invalid action cost ${actionId}`);
   return cost;
+}
+
+function itemEntry(content: CompiledContentPack, contentId: OpaqueId): ItemContentEntry | undefined {
+  const entry = content.entries.find((candidate) => candidate.id === contentId);
+  return entry?.kind === 'item' ? entry : undefined;
+}
+
+function targetContext(state: ActiveRun, actor: ReturnType<typeof heroActor>) {
+  const floor = state.floors.find((candidate) => candidate.floorId === actor.floorId);
+  if (!floor) throw new Error(`internal invariant: active floor ${actor.floorId} is missing`);
+  const positions = new Map<string, Readonly<{ x: number; y: number }>>(
+    floor.entities.map((entity) => [entity.entityId, entity] as const),
+  );
+  for (const candidate of state.actors) if (candidate.floorId === floor.floorId) positions.set(candidate.actorId, candidate);
+  const perception = refreshKnowledge({ floor, hero: heroPerception(state.hero, actor), actors: positions });
+  return { floor, ...perception };
 }
 
 export function validatePlayerAction(input: Readonly<{
@@ -104,6 +150,166 @@ export function validatePlayerAction(input: Readonly<{
     return {
       type: 'bump-attack', actorId: actor.actorId, targetActorId: target.actorId,
       cost: actionCostFor(rules, 'action.attack'),
+    };
+  }
+  if (input.command.type === 'pickup') {
+    const transition = pickupItem({
+      run: input.state, content: input.context.content, actorId: actor.actorId,
+      itemId: input.command.itemId, quantity: input.command.quantity, newItemId: input.command.commandId,
+    });
+    if (!transition.ok) return { status: 'invalid', reason: transition.reason };
+    return {
+      type: 'pickup', actorId: actor.actorId, itemId: input.command.itemId,
+      quantity: input.command.quantity, newItemId: input.command.commandId,
+      cost: actionCostFor(rules, 'action.pickup'),
+    };
+  }
+  if (input.command.type === 'drop') {
+    const transition = dropItem({
+      run: input.state, actorId: actor.actorId, itemId: input.command.itemId,
+      quantity: input.command.quantity, newItemId: input.command.commandId,
+    });
+    if (!transition.ok) return { status: 'invalid', reason: transition.reason };
+    return {
+      type: 'drop', actorId: actor.actorId, itemId: input.command.itemId,
+      quantity: input.command.quantity, newItemId: input.command.commandId,
+      cost: actionCostFor(rules, 'action.drop'),
+    };
+  }
+  if (input.command.type === 'split-stack') {
+    const transition = splitStack({
+      run: input.state, content: input.context.content, actorId: actor.actorId,
+      itemId: input.command.itemId, quantity: input.command.quantity, newItemId: input.command.newItemId,
+    });
+    if (!transition.ok) return { status: 'invalid', reason: transition.reason };
+    return {
+      type: 'split-stack', actorId: actor.actorId, itemId: input.command.itemId,
+      quantity: input.command.quantity, newItemId: input.command.newItemId,
+      cost: actionCostFor(rules, 'action.split-stack'),
+    };
+  }
+  if (input.command.type === 'fire') {
+    const command = input.command;
+    const weapon = input.state.items.find((item) => item.itemId === command.itemId);
+    const definition = weapon ? itemEntry(input.context.content, weapon.contentId) : undefined;
+    if (!weapon || weapon.location.type !== 'equipped' || weapon.location.actorId !== actor.actorId
+      || !definition?.combat?.damage || !definition.combat.ammunitionTag) {
+      return { status: 'invalid', reason: 'item.unavailable' };
+    }
+    const ammoTag = definition.combat.ammunitionTag;
+    const ammunition = input.state.items.filter((item) => item.location.type === 'backpack'
+      && item.location.actorId === actor.actorId)
+      .filter((item) => {
+        const candidate = itemEntry(input.context.content, item.contentId);
+        return candidate?.category === 'ammunition' && candidate.tags.includes(ammoTag);
+      }).sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)[0];
+    if (!ammunition) return { status: 'invalid', reason: 'item.missing' };
+    const targetActor = input.state.actors.find((candidate) => candidate.floorId === actor.floorId
+      && candidate.health > 0 && candidate.x === command.target.x && candidate.y === command.target.y);
+    if (!targetActor) return { status: 'invalid', reason: 'target.invalid' };
+    const perception = targetContext(input.state, actor);
+    const target = validateTarget({
+      targetingId: 'target.line', sourceActor: actor, targetActorId: targetActor.actorId,
+      target: command.target, floor: perception.floor, actors: input.state.actors,
+      visibilityWords: perception.visibilityWords, illumination: perception.illumination, range: definition.combat.range,
+    });
+    if (!target.ok) return { status: 'invalid', reason: target.reason };
+    return {
+      type: 'fire', actorId: actor.actorId, weaponItemId: weapon.itemId,
+      ammunitionItemId: ammunition.itemId, targetActorId: targetActor.actorId, cost: definition.actionCost,
+    };
+  }
+  if (input.command.type === 'throw-item') {
+    const command = input.command;
+    const source = input.state.items.find((item) => item.itemId === command.itemId);
+    if (!source || source.location.type !== 'backpack' || source.location.actorId !== actor.actorId) {
+      return { status: 'invalid', reason: 'item.unavailable' };
+    }
+    const transition = dropItem({
+      run: input.state, actorId: actor.actorId, itemId: source.itemId,
+      quantity: command.quantity, newItemId: command.commandId,
+    });
+    if (!transition.ok) return { status: 'invalid', reason: transition.reason };
+    const definition = itemEntry(input.context.content, source.contentId);
+    if (!definition) return { status: 'invalid', reason: 'item.missing' };
+    const perception = targetContext(input.state, actor);
+    const target = validateTarget({
+      targetingId: 'target.cell', sourceActor: actor, targetActorId: null, target: command.target,
+      floor: perception.floor, actors: input.state.actors, visibilityWords: perception.visibilityWords,
+      illumination: perception.illumination, range: definition.combat?.range ?? 5,
+    });
+    if (!target.ok) return { status: 'invalid', reason: target.reason };
+    const consumes = definition.effects.filter((effect) => effect.effectId === 'effect.item.consume');
+    if (consumes.length > 0) {
+      if (consumes.length !== 1 || (consumes[0]!.parameters as { quantity?: unknown }).quantity !== command.quantity) {
+        return { status: 'invalid', reason: 'item.quantity' };
+      }
+      const targetActor = input.state.actors.find((candidate) => candidate.floorId === actor.floorId
+        && candidate.health > 0 && candidate.x === command.target.x && candidate.y === command.target.y);
+      if (!targetActor) return { status: 'invalid', reason: 'target.invalid' };
+      try {
+        resolveEffectSequence({
+          effects: definition.effects, actors: input.state.actors, items: input.state.items,
+          content: input.context.content, sourceActorId: actor.actorId, sourceItemId: source.itemId,
+          targetActorId: targetActor.actorId, effectsState: input.state.rng.effects,
+          worldTime: input.state.worldTime, eventId: command.commandId,
+          forceMoveDirection: { x: Math.sign(targetActor.x - actor.x), y: Math.sign(targetActor.y - actor.y) },
+          operations: {},
+        });
+      } catch {
+        return { status: 'invalid', reason: 'action.unavailable' };
+      }
+    }
+    return {
+      type: 'throw-item', actorId: actor.actorId, itemId: source.itemId,
+      quantity: command.quantity, newItemId: command.commandId,
+      target: command.target, cost: definition.actionCost,
+    };
+  }
+  if (input.command.type === 'use-item') {
+    const command = input.command;
+    const source = input.state.items.find((item) => item.itemId === command.itemId);
+    const definition = source ? itemEntry(input.context.content, source.contentId) : undefined;
+    if (!source || source.location.type !== 'backpack' || source.location.actorId !== actor.actorId
+      || !definition || definition.effects.length === 0) {
+      return { status: 'invalid', reason: 'item.unavailable' };
+    }
+    const consumption = definition.effects.filter((effect) => effect.effectId === 'effect.item.consume')
+      .reduce((total, effect) => total + ((effect.parameters as { quantity: number }).quantity), 0);
+    if (!Number.isSafeInteger(consumption) || consumption > source.quantity) {
+      return { status: 'invalid', reason: 'item.quantity' };
+    }
+    let targetActor = actor;
+    if (command.target !== null) {
+      const candidate = input.state.actors.find((entry) => entry.floorId === actor.floorId
+        && entry.health > 0 && entry.x === command.target!.x && entry.y === command.target!.y);
+      if (!candidate) return { status: 'invalid', reason: 'target.invalid' };
+      const perception = targetContext(input.state, actor);
+      const target = validateTarget({
+        targetingId: 'target.actor', sourceActor: actor, targetActorId: candidate.actorId, target: command.target,
+        floor: perception.floor, actors: input.state.actors, visibilityWords: perception.visibilityWords,
+        illumination: perception.illumination, range: definition.combat?.range ?? 5,
+      });
+      if (!target.ok) return { status: 'invalid', reason: target.reason };
+      targetActor = candidate;
+    }
+    try {
+      resolveEffectSequence({
+        effects: definition.effects, actors: input.state.actors, items: input.state.items,
+        content: input.context.content, sourceActorId: actor.actorId, sourceItemId: source.itemId,
+        targetActorId: targetActor.actorId, effectsState: input.state.rng.effects,
+        worldTime: input.state.worldTime, eventId: command.commandId,
+        forceMoveDirection: targetActor.actorId === actor.actorId ? { x: 1, y: 0 } : {
+          x: Math.sign(targetActor.x - actor.x), y: Math.sign(targetActor.y - actor.y),
+        },
+        operations: {},
+      });
+    } catch {
+      return { status: 'invalid', reason: 'action.unavailable' };
+    }
+    return {
+      type: 'use-item', actorId: actor.actorId, itemId: source.itemId,
+      targetActorId: targetActor.actorId, cost: definition.actionCost,
     };
   }
   return { status: 'invalid', reason: 'action.unavailable' };

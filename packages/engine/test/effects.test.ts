@@ -94,14 +94,12 @@ describe('ordered effects', () => {
     'effect.reveal',
     'effect.fuel.transfer',
     'effect.light.toggle',
-    'effect.item.consume',
     'effect.feature.mutate',
   ] as const)('delegates %s only after validating the full sequence', (effectId) => {
     const parameters = {
       'effect.reveal': { radius: 2 },
       'effect.fuel.transfer': { maximum: 10 },
       'effect.light.toggle': { enabled: true },
-      'effect.item.consume': { quantity: 1 },
       'effect.feature.mutate': { state: 'door.open' },
     }[effectId];
     let calls = 0;
@@ -116,6 +114,22 @@ describe('ordered effects', () => {
     });
     expect(calls).toBe(1);
     expect(result.actors).toEqual(actors());
+  });
+
+  it('consumes item quantities through the shared inventory transition', () => {
+    const item = {
+      itemId: 'item.potion.1', contentId: 'item.potion', quantity: 2, condition: 100,
+      enchantment: null, identified: true, charges: null, fuel: null, enabled: null,
+      location: { type: 'backpack' as const, actorId: 'hero.demo' },
+    };
+    const result = resolveEffectSequence({
+      ...fixture([{ effectId: 'effect.item.consume', parameters: { quantity: 2 }, requiresLivingTarget: false }]),
+      items: [item], sourceItemId: item.itemId,
+    });
+    expect(result.items).toEqual([]);
+    expect(result.events).toContainEqual({
+      type: 'item.consumed', eventId: 'command.effect', actorId: 'hero.demo', itemId: item.itemId, quantity: 2,
+    });
   });
 
   it('rejects invalid forced movement direction before changing state', () => {

@@ -5,7 +5,8 @@ import { deriveActorStats } from './attributes.js';
 import { chooseBehaviorAction } from './behavior.js';
 import { resolveAttack } from './combat.js';
 import { conditionModifiers } from './conditions.js';
-import { advanceConditions } from './effects.js';
+import { advanceConditions, resolveEffectSequence } from './effects.js';
+import { consumeItemQuantity, dropItem, pickupItem, splitStack } from './inventory.js';
 import { tileIndex, type ActiveRun, type DomainEvent, type OpaqueId, type Point, type Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { isVisible } from './visibility.js';
@@ -33,6 +34,12 @@ interface CombatProfile {
 function monsterDefinition(content: CompiledContentPack, actor: ActorState): MonsterContentEntry | undefined {
   const entry = content.entries.find((candidate) => candidate.id === actor.contentId);
   return entry?.kind === 'monster' ? entry : undefined;
+}
+
+function requiredItemDefinition(content: CompiledContentPack, contentId: OpaqueId) {
+  const entry = content.entries.find((candidate) => candidate.id === contentId);
+  if (!entry || entry.kind !== 'item') throw new Error(`internal invariant: item definition ${contentId} does not exist`);
+  return entry;
 }
 
 function profile(actor: ActorState, content: CompiledContentPack): CombatProfile {
@@ -104,45 +111,156 @@ function applyAction(input: Readonly<{
   eventId: OpaqueId;
 }>): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
   let state = input.state;
-  const actor = actorById(state, input.action.actorId);
-  if (!actor) throw new Error(`internal invariant: actor ${input.action.actorId} does not exist`);
+  const action = input.action;
+  const actor = actorById(state, action.actorId);
+  if (!actor) throw new Error(`internal invariant: actor ${action.actorId} does not exist`);
   const events: DomainEvent[] = [];
-  if (input.action.type === 'move') {
+  if (action.type === 'use-item') {
+    const source = state.items.find((item) => item.itemId === action.itemId);
+    if (!source) throw new Error(`internal invariant: used item ${action.itemId} disappeared`);
+    const definition = requiredItemDefinition(input.content, source.contentId);
+    const target = actorById(state, action.targetActorId);
+    if (!target) throw new Error(`internal invariant: effect target ${action.targetActorId} disappeared`);
+    events.push({ type: 'item.used', eventId: input.eventId, actorId: actor.actorId,
+      itemId: source.itemId, targetActorId: target.actorId });
+    const resolved = resolveEffectSequence({
+      effects: definition.effects, actors: state.actors, items: state.items, content: input.content,
+      sourceActorId: actor.actorId, sourceItemId: source.itemId, targetActorId: target.actorId,
+      effectsState: state.rng.effects, worldTime: state.worldTime, eventId: input.eventId,
+      forceMoveDirection: target.actorId === actor.actorId ? { x: 1, y: 0 } : {
+        x: Math.sign(target.x - actor.x), y: Math.sign(target.y - actor.y),
+      },
+      operations: {},
+    });
+    state = { ...state, actors: resolved.actors, items: resolved.items,
+      rng: { ...state.rng, effects: resolved.effectsState } };
+    events.push(...resolved.events);
+  } else if (action.type === 'fire') {
+    const weapon = state.items.find((item) => item.itemId === action.weaponItemId);
+    if (!weapon) throw new Error(`internal invariant: weapon ${action.weaponItemId} disappeared`);
+    const definition = requiredItemDefinition(input.content, weapon.contentId);
+    if (!definition.combat?.damage) throw new Error(`internal invariant: weapon ${weapon.itemId} cannot fire`);
+    const consumed = consumeItemQuantity({ run: state, itemId: action.ammunitionItemId, quantity: 1 });
+    if (!consumed.ok) throw new Error(`internal invariant: validated ammunition failed with ${consumed.reason}`);
+    state = consumed.run;
+    events.push({ type: 'item.consumed', eventId: input.eventId, actorId: actor.actorId,
+      itemId: action.ammunitionItemId, quantity: 1 });
+    const attackerStats = deriveActorStats({
+      attributes: actor.attributes, formulas: balanceEntry(input.content).formulas,
+      equipmentModifiers: [], conditionModifiers: conditionModifiers(actor, input.content),
+    });
+    const target = actorById(state, action.targetActorId);
+    if (!target) throw new Error(`internal invariant: target ${action.targetActorId} disappeared`);
+    const defense = profile(target, input.content);
+    const shot = resolveAttack({
+      eventId: input.eventId, attackerId: actor.actorId, targetActorId: target.actorId,
+      actors: state.actors, combatState: state.rng.combat,
+      accuracy: attackerStats.rangedAccuracy + definition.combat.accuracy,
+      defense: defense.defense, damage: definition.combat.damage, armor: defense.armor,
+      resistance: defense.resistance, immune: defense.immune, damageType: 'physical',
+    });
+    state = { ...state, actors: shot.actors, rng: { ...state.rng, combat: shot.combatState } };
+    events.push(...shot.events);
+  } else if (action.type === 'throw-item') {
+    const source = state.items.find((item) => item.itemId === action.itemId);
+    if (!source) throw new Error(`internal invariant: thrown item ${action.itemId} disappeared`);
+    const definition = requiredItemDefinition(input.content, source.contentId);
+    if (definition.effects.some((effect) => effect.effectId === 'effect.item.consume')) {
+      const target = state.actors.find((candidate) => candidate.floorId === actor.floorId && candidate.health > 0
+        && candidate.x === action.target.x && candidate.y === action.target.y);
+      if (!target) throw new Error('internal invariant: thrown effect target disappeared');
+      events.push({ type: 'item.thrown', eventId: input.eventId, actorId: actor.actorId,
+        itemId: source.itemId, quantity: action.quantity, to: action.target });
+      const resolved = resolveEffectSequence({
+        effects: definition.effects, actors: state.actors, items: state.items, content: input.content,
+        sourceActorId: actor.actorId, sourceItemId: source.itemId, targetActorId: target.actorId,
+        effectsState: state.rng.effects, worldTime: state.worldTime, eventId: input.eventId,
+        forceMoveDirection: { x: Math.sign(target.x - actor.x), y: Math.sign(target.y - actor.y) },
+        operations: {},
+      });
+      state = { ...state, actors: resolved.actors, items: resolved.items,
+        rng: { ...state.rng, effects: resolved.effectsState } };
+      events.push(...resolved.events);
+    } else {
+      const partial = action.quantity < source.quantity;
+      const transition = dropItem({
+        run: state, actorId: actor.actorId, itemId: source.itemId,
+        quantity: action.quantity, newItemId: action.newItemId,
+      });
+      if (!transition.ok) throw new Error(`internal invariant: validated throw failed with ${transition.reason}`);
+      const thrownItemId = partial ? action.newItemId : source.itemId;
+      state = {
+        ...transition.run,
+        items: transition.items.map((item) => item.itemId === thrownItemId
+          ? { ...item, location: { type: 'floor' as const, floorId: actor.floorId, ...action.target } }
+          : item),
+      };
+      events.push({ type: 'item.thrown', eventId: input.eventId, actorId: actor.actorId,
+        itemId: thrownItemId, quantity: action.quantity, to: action.target });
+    }
+  } else if (action.type === 'pickup') {
+    const transition = pickupItem({
+      run: state, content: input.content, actorId: actor.actorId, itemId: action.itemId,
+      quantity: action.quantity, newItemId: action.newItemId,
+    });
+    if (!transition.ok) throw new Error(`internal invariant: validated pickup failed with ${transition.reason}`);
+    state = transition.run;
+    events.push({ type: 'item.picked-up', eventId: input.eventId, actorId: actor.actorId,
+      itemId: action.itemId, quantity: action.quantity });
+  } else if (action.type === 'drop') {
+    const transition = dropItem({
+      run: state, actorId: actor.actorId, itemId: action.itemId,
+      quantity: action.quantity, newItemId: action.newItemId,
+    });
+    if (!transition.ok) throw new Error(`internal invariant: validated drop failed with ${transition.reason}`);
+    state = transition.run;
+    events.push({ type: 'item.dropped', eventId: input.eventId, actorId: actor.actorId,
+      itemId: action.itemId, quantity: action.quantity });
+  } else if (action.type === 'split-stack') {
+    const transition = splitStack({
+      run: state, content: input.content, actorId: actor.actorId, itemId: action.itemId,
+      quantity: action.quantity, newItemId: action.newItemId,
+    });
+    if (!transition.ok) throw new Error(`internal invariant: validated split failed with ${transition.reason}`);
+    state = transition.run;
+    events.push({ type: 'item.stack-split', eventId: input.eventId, actorId: actor.actorId,
+      itemId: action.itemId, newItemId: action.newItemId, quantity: action.quantity });
+  } else if (action.type === 'move') {
     const reactions = resolveOpportunityAttacks({
       run: state, content: input.content, moverActorId: actor.actorId,
-      from: { x: actor.x, y: actor.y }, to: input.action.to, eventId: input.eventId,
+      from: { x: actor.x, y: actor.y }, to: action.to, eventId: input.eventId,
       resolveAttack: (attack) => combat({ ...attack, content: input.content }),
     });
     state = reactions.state;
     events.push(...reactions.events);
     if (reactions.movementAllowed) {
-      state = moveActor(state, actor.actorId, input.action.to);
+      state = moveActor(state, actor.actorId, action.to);
       events.push(actor.playerControlled
-        ? { type: 'hero.moved', eventId: input.eventId, heroId: actor.actorId, from: { x: actor.x, y: actor.y }, to: input.action.to }
-        : { type: 'actor.moved', eventId: input.eventId, actorId: actor.actorId, from: { x: actor.x, y: actor.y }, to: input.action.to });
+        ? { type: 'hero.moved', eventId: input.eventId, heroId: actor.actorId, from: { x: actor.x, y: actor.y }, to: action.to }
+        : { type: 'actor.moved', eventId: input.eventId, actorId: actor.actorId, from: { x: actor.x, y: actor.y }, to: action.to });
     }
-  } else if (input.action.type === 'wait') {
+  } else if (action.type === 'wait') {
     if (actor.playerControlled) events.push({
       type: 'hero.waited', eventId: input.eventId, heroId: actor.actorId, x: actor.x, y: actor.y,
     });
   } else {
-    if (relationshipBetween(state, actor.actorId, input.action.targetActorId) !== 'hostile') {
-      state = setRelationship(state, actor.actorId, input.action.targetActorId, 'hostile');
+    if (relationshipBetween(state, actor.actorId, action.targetActorId) !== 'hostile') {
+      state = setRelationship(state, actor.actorId, action.targetActorId, 'hostile');
       events.push({
         type: 'relationship.changed', eventId: input.eventId, actorId: actor.actorId,
-        targetActorId: input.action.targetActorId, relationship: 'hostile',
+        targetActorId: action.targetActorId, relationship: 'hostile',
       });
     }
     const resolved = combat({
       actors: state.actors, combatState: state.rng.combat, attackerId: actor.actorId,
-      targetActorId: input.action.targetActorId, eventId: input.eventId, content: input.content,
+      targetActorId: action.targetActorId, eventId: input.eventId, content: input.content,
     });
     state = { ...state, actors: resolved.actors, rng: { ...state.rng, combat: resolved.combatState } };
     events.push(...resolved.events);
   }
   const acted = actorById(state, actor.actorId);
   if (!acted) throw new Error(`internal invariant: acting actor ${actor.actorId} disappeared`);
-  state = withActor(state, chargeActionEnergy(acted, input.action.cost));
+  state = withActor(state, chargeActionEnergy(acted, action.cost));
   return { state, events };
 }
 

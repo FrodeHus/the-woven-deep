@@ -6,6 +6,7 @@ import { RECENT_COMMAND_LIMIT } from './versions.js';
 import { stableJson } from './stable-json.js';
 import { validatePlayerAction, type ResolutionContext } from './actions.js';
 import { resolveWorldStep } from './world-step.js';
+import { validateContentBoundRun } from './content-bound-validation.js';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
   return stableJson(left) === stableJson(right);
@@ -48,6 +49,7 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
   if (context.content.hash !== state.contentHash) {
     throw new Error(`internal invariant: content hash ${context.content.hash} does not match run ${state.contentHash}`);
   }
+  validateContentBoundRun(state, context.content);
 
   const validation = validatePlayerAction({ state, command, context });
   if ('status' in validation && validation.status === 'decision_required') {

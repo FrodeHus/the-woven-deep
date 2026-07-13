@@ -85,13 +85,17 @@ export interface WaitCommand extends CommandEnvelope {
 export interface AttackCommand extends CommandEnvelope { readonly type: 'attack'; readonly targetActorId: OpaqueId }
 export interface FireCommand extends CommandEnvelope { readonly type: 'fire'; readonly itemId: OpaqueId; readonly target: Point }
 export interface CastCommand extends CommandEnvelope { readonly type: 'cast'; readonly spellId: OpaqueId; readonly target: Point | null }
-export interface ThrowItemCommand extends CommandEnvelope { readonly type: 'throw-item'; readonly itemId: OpaqueId; readonly target: Point }
+export interface ThrowItemCommand extends CommandEnvelope {
+  readonly type: 'throw-item'; readonly itemId: OpaqueId; readonly quantity: number; readonly target: Point;
+}
 export interface UseItemCommand extends CommandEnvelope { readonly type: 'use-item'; readonly itemId: OpaqueId; readonly target: Point | null }
 export interface EquipCommand extends CommandEnvelope { readonly type: 'equip'; readonly itemId: OpaqueId; readonly slot: EquipmentSlot }
 export interface UnequipCommand extends CommandEnvelope { readonly type: 'unequip'; readonly slot: EquipmentSlot }
 export interface PickupCommand extends CommandEnvelope { readonly type: 'pickup'; readonly itemId: OpaqueId; readonly quantity: number }
 export interface DropCommand extends CommandEnvelope { readonly type: 'drop'; readonly itemId: OpaqueId; readonly quantity: number }
-export interface SplitStackCommand extends CommandEnvelope { readonly type: 'split-stack'; readonly itemId: OpaqueId; readonly quantity: number }
+export interface SplitStackCommand extends CommandEnvelope {
+  readonly type: 'split-stack'; readonly itemId: OpaqueId; readonly quantity: number; readonly newItemId: OpaqueId;
+}
 export interface RefuelCommand extends CommandEnvelope { readonly type: 'refuel'; readonly itemId: OpaqueId; readonly fuelItemId: OpaqueId; readonly quantity: number }
 export interface ToggleLightCommand extends CommandEnvelope { readonly type: 'toggle-light'; readonly itemId: OpaqueId; readonly enabled: boolean }
 export interface OpenDoorCommand extends CommandEnvelope { readonly type: 'open-door'; readonly featureId: OpaqueId }
@@ -106,7 +110,9 @@ export type GameCommand = MoveCommand | WaitCommand | AttackCommand | FireComman
 
 export type MovementInvalidReason = 'blocked.bounds' | 'blocked.wall' | 'blocked.door' | 'blocked.pillar'
   | 'blocked.void' | 'blocked.corner' | 'blocked.actor';
-export type InvalidActionReason = MovementInvalidReason | 'action.unavailable';
+export type InvalidActionReason = MovementInvalidReason | 'action.unavailable' | 'inventory.full'
+  | 'item.missing' | 'item.unavailable' | 'item.quantity' | 'item.incompatible' | 'item.id-conflict'
+  | 'target.not_visible' | 'target.out_of_range' | 'target.blocked' | 'target.invalid';
 
 export interface HeroMovedEvent {
   readonly type: 'hero.moved';
@@ -178,17 +184,43 @@ export interface ActorTurnStartedEvent {
 }
 export interface ActorTurnCompletedEvent {
   readonly type: 'actor.turn.completed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
-  readonly actionType: 'move' | 'wait' | 'bump-attack';
+  readonly actionType: 'move' | 'wait' | 'bump-attack' | 'pickup' | 'drop' | 'split-stack'
+    | 'fire' | 'throw-item' | 'use-item';
 }
 export interface ActorMovedEvent {
   readonly type: 'actor.moved'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
   readonly from: Point; readonly to: Point;
 }
+export interface ItemPickedUpEvent {
+  readonly type: 'item.picked-up'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId; readonly quantity: number;
+}
+export interface ItemDroppedEvent {
+  readonly type: 'item.dropped'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId; readonly quantity: number;
+}
+export interface ItemStackSplitEvent {
+  readonly type: 'item.stack-split'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId; readonly newItemId: OpaqueId; readonly quantity: number;
+}
+export interface ItemConsumedEvent {
+  readonly type: 'item.consumed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId; readonly quantity: number;
+}
+export interface ItemThrownEvent {
+  readonly type: 'item.thrown'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId; readonly quantity: number; readonly to: Point;
+}
+export interface ItemUsedEvent {
+  readonly type: 'item.used'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId; readonly targetActorId: OpaqueId;
+}
 
 export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent | AttackMissedEvent
   | AttackHitEvent | ActorDamagedEvent | ActorDiedEvent | ActorHealedEvent | ConditionAppliedEvent
   | ConditionRemovedEvent | ActorForcedMoveEvent | ReactionTriggeredEvent | RelationshipChangedEvent
-  | ActorTurnStartedEvent | ActorTurnCompletedEvent | ActorMovedEvent;
+  | ActorTurnStartedEvent | ActorTurnCompletedEvent | ActorMovedEvent | ItemPickedUpEvent | ItemDroppedEvent
+  | ItemStackSplitEvent | ItemConsumedEvent | ItemThrownEvent | ItemUsedEvent;
 
 export interface AppliedCommandResult {
   readonly status: 'applied';

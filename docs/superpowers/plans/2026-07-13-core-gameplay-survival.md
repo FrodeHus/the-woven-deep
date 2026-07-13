@@ -862,7 +862,7 @@ git commit -m "feat: resolve atomic combat world steps"
 - Consumes: schema-v3 item instances and locations, compiled item definitions, complete item commands, actor/floor positions, and effect item-consumption dispatch.
 - Produces: `validateContentBoundRun(run, pack)`, `inventorySlotCount(input)`, `canStack(left, right)`, `pickupItem(input)`, `dropItem(input)`, `splitStack(input)`, `mergeStacks(input)`, and `consumeItemQuantity(input)`.
 
-- [ ] **Step 1: Write failing stack compatibility and capacity tests**
+- [x] **Step 1: Write failing stack compatibility and capacity tests**
 
 ```ts
 it('merges only gameplay-identical stack instances', () => {
@@ -880,7 +880,7 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/inventory.test.ts`
 
 Expected: FAIL because inventory functions do not exist.
 
-- [ ] **Step 2: Implement exact item-location and stack invariants**
+- [x] **Step 2: Implement exact item-location and stack invariants**
 
 Use a discriminated location union:
 
@@ -893,7 +893,7 @@ export type ItemLocation =
 
 `canStack` compares content ID, public/hidden identity state, charges, fuel, enchantment, and condition. Structural save validation requires positive safe quantity and exactly one valid location. `validateContentBoundRun` then checks content existence, definition stack limits, actor templates, equipment compatibility, feature definitions, balance reference, and exact content-hash equality against the compiled pack.
 
-- [ ] **Step 3: Write failing pickup, drop, split, merge, and conservation tests**
+- [x] **Step 3: Write failing pickup, drop, split, merge, and conservation tests**
 
 ```ts
 it('fails atomically when pickup would exceed slot capacity', () => {
@@ -913,21 +913,21 @@ Run: same focused command.
 
 Expected: FAIL on transitions.
 
-- [ ] **Step 4: Implement immutable inventory transitions**
+- [x] **Step 4: Implement immutable inventory transitions**
 
 Sort compatible ground items by item ID. Pickup merges before allocating a new slot. Split requires caller-supplied stable new item ID and rejects collisions. Drop preserves quantity and places at the actor cell. Merge retains the lexically smaller item ID and removes only the emptied instance. Consumption removes an item at zero quantity in the unpublished transition and emits effective quantity events.
 
-- [ ] **Step 5: Wire complete commands and effect consumption**
+- [x] **Step 5: Wire complete commands and effect consumption**
 
 Validate item ownership, visibility, floor/cell, quantity, capacity, and new ID before the world step. Call `validateContentBoundRun` at the public resolution boundary before resolving an action against content. Applied pickup/drop/split actions cost their balance-defined energy. Browsing is not a command. `effect.item.consume` calls the same quantity transition rather than duplicating logic.
 
 Register the complete item-backed action transactions. `Fire` validates a compatible weapon and ammunition stack before the world step, then consumes exactly one ammunition unit only after targeting succeeds and the shot begins. `Throw` removes the declared quantity and either consumes or places the thrown instance according to its registered effect. `Use` consumes only the quantity declared by its effect. Invalid or decision-required actions leave every quantity unchanged. Add focused tests for empty ammunition, incompatible ammunition, last-unit removal, thrown-item placement, and rollback before publication.
 
-- [ ] **Step 6: Add property-based conservation tests**
+- [x] **Step 6: Add property-based conservation tests**
 
 Generate valid stack lists and legal split/merge/transfer sequences. Assert total quantity is conserved except for explicit consumption, every live item has one location, capacity never exceeds its bound, input is unchanged, and stable JSON output repeats for the same sequence and property seed.
 
-- [ ] **Step 7: Run GREEN and commit**
+- [x] **Step 7: Run GREEN and commit**
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/inventory.test.ts test/actions.test.ts test/effects.test.ts test/combat.test.ts test/save-codec.test.ts test/gameplay-properties.test.ts`
 

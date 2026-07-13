@@ -24,13 +24,13 @@ const command = z.discriminatedUnion('type', [
   z.strictObject({ ...commandBase, type: z.literal('attack'), targetActorId: identifier }),
   z.strictObject({ ...commandBase, type: z.literal('fire'), itemId: identifier, target: point }),
   z.strictObject({ ...commandBase, type: z.literal('cast'), spellId: identifier, target: point.nullable() }),
-  z.strictObject({ ...commandBase, type: z.literal('throw-item'), itemId: identifier, target: point }),
+  z.strictObject({ ...commandBase, type: z.literal('throw-item'), itemId: identifier, quantity: positiveQuantity, target: point }),
   z.strictObject({ ...commandBase, type: z.literal('use-item'), itemId: identifier, target: point.nullable() }),
   z.strictObject({ ...commandBase, type: z.literal('equip'), itemId: identifier, slot: equipmentSlot }),
   z.strictObject({ ...commandBase, type: z.literal('unequip'), slot: equipmentSlot }),
   z.strictObject({ ...commandBase, type: z.literal('pickup'), itemId: identifier, quantity: positiveQuantity }),
   z.strictObject({ ...commandBase, type: z.literal('drop'), itemId: identifier, quantity: positiveQuantity }),
-  z.strictObject({ ...commandBase, type: z.literal('split-stack'), itemId: identifier, quantity: positiveQuantity }),
+  z.strictObject({ ...commandBase, type: z.literal('split-stack'), itemId: identifier, quantity: positiveQuantity, newItemId: identifier }),
   z.strictObject({ ...commandBase, type: z.literal('refuel'), itemId: identifier, fuelItemId: identifier, quantity: positiveQuantity }),
   z.strictObject({ ...commandBase, type: z.literal('toggle-light'), itemId: identifier, enabled: z.boolean() }),
   z.strictObject({ ...commandBase, type: z.literal('open-door'), featureId: identifier }),
@@ -43,7 +43,9 @@ const movedEvent = z.strictObject({ type: z.literal('hero.moved'), eventId: iden
 const waitedEvent = z.strictObject({ type: z.literal('hero.waited'), eventId: identifier, heroId: identifier, x: safeNonNegative, y: safeNonNegative });
 const blockReason = z.enum([
   'blocked.bounds', 'blocked.wall', 'blocked.door', 'blocked.pillar', 'blocked.void',
-  'blocked.corner', 'blocked.actor', 'action.unavailable',
+  'blocked.corner', 'blocked.actor', 'action.unavailable', 'inventory.full', 'item.missing',
+  'item.unavailable', 'item.quantity', 'item.incompatible', 'item.id-conflict',
+  'target.not_visible', 'target.out_of_range', 'target.blocked', 'target.invalid',
 ]);
 const invalidEvent = z.strictObject({ type: z.literal('action.invalid'), eventId: identifier, commandId: identifier, reason: blockReason });
 const attackBase = { eventId: identifier, actorId: identifier, targetActorId: identifier,
@@ -73,13 +75,31 @@ const relationshipChangedEvent = z.strictObject({ type: z.literal('relationship.
 const actorTurnStartedEvent = z.strictObject({ type: z.literal('actor.turn.started'), eventId: identifier,
   actorId: identifier });
 const actorTurnCompletedEvent = z.strictObject({ type: z.literal('actor.turn.completed'), eventId: identifier,
-  actorId: identifier, actionType: z.enum(['move', 'wait', 'bump-attack']) });
+  actorId: identifier, actionType: z.enum([
+    'move', 'wait', 'bump-attack', 'pickup', 'drop', 'split-stack', 'fire', 'throw-item', 'use-item',
+  ]) });
 const actorMovedEvent = z.strictObject({ type: z.literal('actor.moved'), eventId: identifier,
   actorId: identifier, from: point, to: point });
+const itemPickedUpEvent = z.strictObject({ type: z.literal('item.picked-up'), eventId: identifier,
+  actorId: identifier, itemId: identifier, quantity: positiveQuantity });
+const itemDroppedEvent = z.strictObject({ type: z.literal('item.dropped'), eventId: identifier,
+  actorId: identifier, itemId: identifier, quantity: positiveQuantity });
+const itemStackSplitEvent = z.strictObject({ type: z.literal('item.stack-split'), eventId: identifier,
+  actorId: identifier, itemId: identifier, newItemId: identifier, quantity: positiveQuantity });
+const itemConsumedEvent = z.strictObject({ type: z.literal('item.consumed'), eventId: identifier,
+  actorId: identifier, itemId: identifier, quantity: positiveQuantity });
+const itemThrownEvent = z.strictObject({ type: z.literal('item.thrown'), eventId: identifier,
+  actorId: identifier, itemId: identifier, quantity: positiveQuantity, to: point });
+const itemUsedEvent = z.strictObject({ type: z.literal('item.used'), eventId: identifier,
+  actorId: identifier, itemId: identifier, targetActorId: identifier });
 const event = z.discriminatedUnion('type', [
   movedEvent, waitedEvent, invalidEvent, attackMissedEvent, attackHitEvent, actorDamagedEvent,
   actorDiedEvent, actorHealedEvent, conditionAppliedEvent, conditionRemovedEvent, actorForcedMoveEvent,
   reactionTriggeredEvent, relationshipChangedEvent, actorTurnStartedEvent, actorTurnCompletedEvent, actorMovedEvent,
+  itemPickedUpEvent, itemDroppedEvent, itemStackSplitEvent,
+  itemConsumedEvent,
+  itemThrownEvent,
+  itemUsedEvent,
 ]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
 const invalidResult = z.strictObject({ status: z.literal('invalid'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative, reason: blockReason });
@@ -527,6 +547,9 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     if (recordValue.events.some((entry) => entry.eventId !== recordValue.command.commandId)) fail(`${path}.events`, 'event identifier does not match command');
     if (recordValue.publicEvents.some((entry) => entry.eventId !== recordValue.command.commandId)) fail(`${path}.publicEvents`, 'public event identifier does not match command');
     const attackTargetActorId = recordValue.command.type === 'attack' ? recordValue.command.targetActorId : undefined;
+    const commandItemId = 'itemId' in recordValue.command ? recordValue.command.itemId : undefined;
+    const splitNewItemId = recordValue.command.type === 'split-stack' ? recordValue.command.newItemId : undefined;
+    const commandQuantity = 'quantity' in recordValue.command ? recordValue.command.quantity : undefined;
     const eventValue = recordValue.result.status === 'invalid'
       ? recordValue.events.find((entry) => entry.type === 'action.invalid')
       : recordValue.command.type === 'wait'
@@ -539,6 +562,25 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           : recordValue.command.type === 'attack'
             ? recordValue.events.find((entry) => (entry.type === 'attack.hit' || entry.type === 'attack.missed')
               && entry.actorId === run.hero.actorId && entry.targetActorId === attackTargetActorId)
+            : recordValue.command.type === 'pickup'
+              ? recordValue.events.find((entry) => entry.type === 'item.picked-up'
+                && entry.actorId === run.hero.actorId && entry.itemId === commandItemId)
+              : recordValue.command.type === 'drop'
+                ? recordValue.events.find((entry) => entry.type === 'item.dropped'
+                  && entry.actorId === run.hero.actorId && entry.itemId === commandItemId)
+                : recordValue.command.type === 'split-stack'
+                  ? recordValue.events.find((entry) => entry.type === 'item.stack-split'
+                    && entry.actorId === run.hero.actorId && entry.itemId === commandItemId
+                    && entry.newItemId === splitNewItemId)
+                  : recordValue.command.type === 'fire'
+                    ? recordValue.events.find((entry) => (entry.type === 'attack.hit' || entry.type === 'attack.missed')
+                      && entry.actorId === run.hero.actorId)
+                    : recordValue.command.type === 'throw-item'
+                      ? recordValue.events.find((entry) => entry.type === 'item.thrown'
+                        && entry.actorId === run.hero.actorId && entry.quantity === commandQuantity)
+                      : recordValue.command.type === 'use-item'
+                        ? recordValue.events.find((entry) => entry.type === 'item.used'
+                          && entry.actorId === run.hero.actorId && entry.itemId === commandItemId)
           : undefined;
     if (!eventValue) fail(`${path}.events`, 'processed result has no matching event');
     if (recordValue.result.status === 'invalid') {
@@ -558,6 +600,20 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       if (recordValue.command.type === 'attack' && eventValue.targetActorId !== recordValue.command.targetActorId) {
         fail(`${path}.events`, 'attack target and event are inconsistent');
       }
+    } else if ((recordValue.command.type === 'pickup' && eventValue.type === 'item.picked-up')
+      || (recordValue.command.type === 'drop' && eventValue.type === 'item.dropped')
+      || (recordValue.command.type === 'split-stack' && eventValue.type === 'item.stack-split')) {
+      if (eventValue.quantity !== recordValue.command.quantity) fail(`${path}.events`, 'item quantity and event are inconsistent');
+    } else if (recordValue.command.type === 'fire'
+      && (eventValue.type === 'attack.hit' || eventValue.type === 'attack.missed')
+      && eventValue.actorId === run.hero.actorId) {
+      // Ammunition consumption is separately recorded before the attack event.
+    } else if (recordValue.command.type === 'throw-item' && eventValue.type === 'item.thrown'
+      && eventValue.actorId === run.hero.actorId && eventValue.quantity === recordValue.command.quantity) {
+      ensureActorWalkable(activeFloor, run.features, eventValue.to.x, eventValue.to.y, `${path}.events.0.to`);
+    } else if (recordValue.command.type === 'use-item' && eventValue.type === 'item.used'
+      && eventValue.actorId === run.hero.actorId && eventValue.itemId === recordValue.command.itemId) {
+      // The item's authored effects determine whether and how much quantity is consumed.
     } else fail(`${path}.events`, 'applied command and event are inconsistent');
     if (recordValue.result.revision < previousRevision || recordValue.result.revision > run.revision) fail(`${path}.result.revision`, 'record revisions are not monotonic');
     if (recordValue.result.turn > run.turn) fail(`${path}.result.turn`, 'record turn exceeds current turn');
@@ -587,11 +643,30 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
               && entry.actorId === run.hero.actorId)
             ?? recordValue.events.find((entry) => entry.type === 'reaction.triggered' && entry.targetActorId === run.hero.actorId)!
           : recordValue.events.find((entry) => (entry.type === 'attack.hit' || entry.type === 'attack.missed')
-            && entry.actorId === run.hero.actorId)!;
+            && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => (entry.type === 'item.picked-up' || entry.type === 'item.dropped'
+              || entry.type === 'item.stack-split' || entry.type === 'item.thrown' || entry.type === 'item.used')
+              && entry.actorId === run.hero.actorId)!;
     const path = `recentCommands.${index}`;
     if (recordValue.result.status === 'invalid') {
       if (recordValue.command.type !== 'move') {
-        if (recordValue.result.reason !== 'action.unavailable') fail(`${path}.result.reason`, 'unregistered actions must use action.unavailable');
+        const inventoryCommand = recordValue.command.type === 'pickup' || recordValue.command.type === 'drop'
+          || recordValue.command.type === 'split-stack';
+        const inventoryReason = recordValue.result.reason === 'inventory.full'
+          || recordValue.result.reason.startsWith('item.');
+        const targetReason = recordValue.result.reason.startsWith('target.');
+        const targetingCommand = recordValue.command.type === 'fire' || recordValue.command.type === 'cast'
+          || recordValue.command.type === 'throw-item' || recordValue.command.type === 'use-item';
+        if (inventoryReason && !inventoryCommand) {
+          if (recordValue.command.type !== 'fire' && recordValue.command.type !== 'throw-item'
+            && recordValue.command.type !== 'use-item') {
+            fail(`${path}.result.reason`, 'inventory reasons require an item command');
+          }
+        }
+        if (targetReason && !targetingCommand) fail(`${path}.result.reason`, 'target reason requires a targeting command');
+        if (!inventoryReason && !targetReason && recordValue.result.reason !== 'action.unavailable') {
+          fail(`${path}.result.reason`, 'non-movement command reason is inconsistent');
+        }
         continue;
       }
       if (recordValue.result.reason === 'action.unavailable') continue;
@@ -608,7 +683,10 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       if (eventValue.type !== 'hero.waited' || eventValue.x !== knownPosition.x || eventValue.y !== knownPosition.y) fail(`${path}.events.0`, 'wait position does not match the retained position chain');
       continue;
     }
-    if (recordValue.command.type === 'attack') continue;
+    if (recordValue.command.type === 'attack' || recordValue.command.type === 'pickup'
+      || recordValue.command.type === 'drop' || recordValue.command.type === 'split-stack'
+      || recordValue.command.type === 'fire' || recordValue.command.type === 'throw-item'
+      || recordValue.command.type === 'use-item') continue;
     if (recordValue.command.type !== 'move') fail(`${path}.events`, 'move result and event are inconsistent');
     if (eventValue.type === 'attack.hit' || eventValue.type === 'attack.missed' || eventValue.type === 'reaction.triggered') continue;
     if (eventValue.type !== 'hero.moved') fail(`${path}.events`, 'move result and event are inconsistent');
