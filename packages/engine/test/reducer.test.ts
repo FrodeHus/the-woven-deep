@@ -179,7 +179,7 @@ describe('resolveCommand', () => {
     expect(stale.state.floors[0]!.knowledge).toBe(unchangedKnowledge);
     expect(conflict.state.floors[0]!.knowledge).toBe(unchangedKnowledge);
     expect(invalid.state.floors[0]!.knowledge).toBe(unchangedKnowledge);
-    expect(waited.state.floors[0]!.knowledge).toBe(unchangedKnowledge);
+    expect(waited.state.floors[0]!.knowledge).toStrictEqual(unchangedKnowledge);
   });
 
   it('evicts only the oldest processed result after 128 records', () => {

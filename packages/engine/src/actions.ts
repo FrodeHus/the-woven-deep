@@ -1,6 +1,7 @@
 import type { BalanceContentEntry, CompiledContentPack } from '@woven-deep/content';
 import { heroActor } from './actor-model.js';
 import { movementAction } from './movement.js';
+import { actorHasConditionTrait } from './conditions.js';
 import type {
   ActiveRun, DecisionRequiredResult, GameCommand, InvalidActionReason, OpaqueId, Point,
 } from './model.js';
@@ -31,7 +32,9 @@ export interface BumpAttackAction {
 
 export type GameAction = MoveAction | WaitAction | BumpAttackAction;
 export type ActionResolverRegistry = Readonly<Partial<Record<GameAction['type'], true>>>;
-export const ACTION_RESOLVER_REGISTRY: ActionResolverRegistry = Object.freeze({ move: true, wait: true });
+export const ACTION_RESOLVER_REGISTRY: ActionResolverRegistry = Object.freeze({
+  move: true, wait: true, 'bump-attack': true,
+});
 
 export interface InvalidActionValidation {
   readonly status: 'invalid';
@@ -40,13 +43,13 @@ export interface InvalidActionValidation {
 
 export type PlayerActionValidation = GameAction | InvalidActionValidation | DecisionRequiredResult;
 
-function balance(content: CompiledContentPack): BalanceContentEntry {
+export function balanceEntry(content: CompiledContentPack): BalanceContentEntry {
   const entries = content.entries.filter((entry): entry is BalanceContentEntry => entry.kind === 'balance');
   if (entries.length !== 1) throw new Error(`internal invariant: expected one balance entry; found ${entries.length}`);
   return entries[0]!;
 }
 
-function actionCost(entry: BalanceContentEntry, actionId: string): number {
+export function actionCostFor(entry: BalanceContentEntry, actionId: string): number {
   const cost = entry.actionCosts[actionId] ?? entry.normalActionCost;
   if (!Number.isSafeInteger(cost) || cost < 0) throw new Error(`internal invariant: invalid action cost ${actionId}`);
   return cost;
@@ -61,17 +64,23 @@ export function validatePlayerAction(input: Readonly<{
     throw new Error(`internal invariant: content hash ${input.context.content.hash} does not match run ${input.state.contentHash}`);
   }
   const actor = heroActor(input.state);
-  const rules = balance(input.context.content);
+  const rules = balanceEntry(input.context.content);
+  if (actorHasConditionTrait(actor, 'condition-trait.incapacitated', input.context.content)) {
+    return { status: 'invalid', reason: 'action.unavailable' };
+  }
   if (input.command.type === 'wait') {
-    return { type: 'wait', actorId: actor.actorId, cost: actionCost(rules, 'action.wait') };
+    return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };
   }
   if (input.command.type === 'move') {
+    if (actorHasConditionTrait(actor, 'condition-trait.prevents-movement', input.context.content)) {
+      return { status: 'invalid', reason: 'action.unavailable' };
+    }
     const floor = input.state.floors.find((candidate) => candidate.floorId === actor.floorId);
     if (!floor) throw new Error(`internal invariant: active floor ${actor.floorId} is missing`);
     const movement = movementAction({
       actor, floor, actors: input.state.actors, features: input.state.features,
       relationships: input.state.relationships, direction: input.command.direction,
-      cost: actionCost(rules, 'action.move'),
+      cost: actionCostFor(rules, 'action.move'),
     });
     if (movement.status === 'invalid') return movement;
     if (movement.status === 'decision_required') {
@@ -84,6 +93,18 @@ export function validatePlayerAction(input: Readonly<{
       ? { type: 'move', actorId: actor.actorId, to: movement.to, cost: movement.cost }
       : { type: 'bump-attack', actorId: actor.actorId, targetActorId: movement.targetActorId, cost: movement.cost };
     return ACTION_RESOLVER_REGISTRY[action.type] ? action : { status: 'invalid', reason: 'action.unavailable' };
+  }
+  if (input.command.type === 'attack') {
+    const targetActorId = input.command.targetActorId;
+    const target = input.state.actors.find((candidate) => candidate.actorId === targetActorId);
+    if (!target || target.health === 0 || target.floorId !== actor.floorId
+      || Math.max(Math.abs(target.x - actor.x), Math.abs(target.y - actor.y)) !== 1) {
+      return { status: 'invalid', reason: 'action.unavailable' };
+    }
+    return {
+      type: 'bump-attack', actorId: actor.actorId, targetActorId: target.actorId,
+      cost: actionCostFor(rules, 'action.attack'),
+    };
   }
   return { status: 'invalid', reason: 'action.unavailable' };
 }

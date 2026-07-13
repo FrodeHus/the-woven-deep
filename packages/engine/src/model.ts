@@ -165,10 +165,30 @@ export interface ActorForcedMoveEvent {
   readonly type: 'actor.forced-move'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
   readonly from: Point; readonly to: Point;
 }
+export interface ReactionTriggeredEvent {
+  readonly type: 'reaction.triggered'; readonly eventId: OpaqueId;
+  readonly actorId: OpaqueId; readonly targetActorId: OpaqueId;
+}
+export interface RelationshipChangedEvent {
+  readonly type: 'relationship.changed'; readonly eventId: OpaqueId;
+  readonly actorId: OpaqueId; readonly targetActorId: OpaqueId; readonly relationship: 'friendly' | 'neutral' | 'hostile';
+}
+export interface ActorTurnStartedEvent {
+  readonly type: 'actor.turn.started'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+}
+export interface ActorTurnCompletedEvent {
+  readonly type: 'actor.turn.completed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly actionType: 'move' | 'wait' | 'bump-attack';
+}
+export interface ActorMovedEvent {
+  readonly type: 'actor.moved'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly from: Point; readonly to: Point;
+}
 
 export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent | AttackMissedEvent
   | AttackHitEvent | ActorDamagedEvent | ActorDiedEvent | ActorHealedEvent | ConditionAppliedEvent
-  | ConditionRemovedEvent | ActorForcedMoveEvent;
+  | ConditionRemovedEvent | ActorForcedMoveEvent | ReactionTriggeredEvent | RelationshipChangedEvent
+  | ActorTurnStartedEvent | ActorTurnCompletedEvent | ActorMovedEvent;
 
 export interface AppliedCommandResult {
   readonly status: 'applied';

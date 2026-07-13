@@ -2,11 +2,10 @@ import type {
   ActiveRun, CommandResolution, DomainEvent, GameCommand,
   ProcessedCommandResult, RecordedCommand,
 } from './model.js';
-import { refreshKnowledge } from './perception.js';
 import { RECENT_COMMAND_LIMIT } from './versions.js';
-import { heroActor, heroPerception } from './actor-model.js';
 import { stableJson } from './stable-json.js';
 import { validatePlayerAction, type ResolutionContext } from './actions.js';
+import { resolveWorldStep } from './world-step.js';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
   return stableJson(left) === stableJson(right);
@@ -21,12 +20,11 @@ function record(
   command: GameCommand,
   result: ProcessedCommandResult,
   events: readonly DomainEvent[],
-  actors = state.actors,
+  publicEvents: readonly DomainEvent[] = events,
 ): ActiveRun {
-  const next: RecordedCommand = { command, result, events, publicEvents: events };
+  const next: RecordedCommand = { command, result, events, publicEvents };
   return {
     ...state,
-    actors,
     revision: result.revision,
     turn: result.turn,
     recentCommands: [...state.recentCommands, next].slice(-RECENT_COMMAND_LIMIT),
@@ -61,27 +59,14 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
     return { state: record(state, command, result, events), result, events };
   }
 
-  const actor = heroActor(state);
   assertCountersCanAdvance(state);
   const result = { status: 'applied', commandId: command.commandId, revision: state.revision + 1, turn: state.turn + 1 } as const;
-  if (validation.type === 'wait') {
-    const events = [{ type: 'hero.waited', eventId: command.commandId, heroId: actor.actorId, x: actor.x, y: actor.y }] as const;
-    return { state: record(state, command, result, events), result, events };
-  }
-  if (validation.type !== 'move') throw new Error(`internal invariant: no resolver for action ${validation.type}`);
-  const floor = state.floors.find((candidate) => candidate.floorId === actor.floorId);
-  if (!floor) throw new Error(`internal invariant: active floor ${actor.floorId} is missing`);
-  const events = [{ type: 'hero.moved', eventId: command.commandId, heroId: actor.actorId, from: { x: actor.x, y: actor.y }, to: validation.to }] as const;
-  const movedActor = { ...actor, ...validation.to };
-  const nextActors = state.actors.map((candidate) => candidate.actorId === movedActor.actorId ? movedActor : candidate);
-  const moved = record(state, command, result, events, nextActors);
-  const actors = new Map<string, Readonly<{ x: number; y: number }>>(
-    floor.entities.map((entity) => [entity.entityId, entity] as const),
-  );
-  for (const candidate of nextActors) {
-    if (candidate.floorId === floor.floorId) actors.set(candidate.actorId, candidate);
-  }
-  const knowledge = refreshKnowledge({ floor, hero: heroPerception(state.hero, movedActor), actors }).knowledge;
-  const floors = state.floors.map((candidate) => candidate === floor ? { ...candidate, knowledge } : candidate);
-  return { state: { ...moved, floors }, result, events };
+  const world = resolveWorldStep({
+    state, content: context.content, action: validation, eventId: command.commandId,
+  });
+  return {
+    state: record(world.state, command, result, world.events, world.publicEvents),
+    result,
+    events: world.publicEvents,
+  };
 }

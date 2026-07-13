@@ -745,7 +745,7 @@ git commit -m "feat: resolve deterministic combat effects"
 - Consumes: scheduler, actions, movement attempt, combat, conditions, schema-v3 relationship/awareness state, and perception refresh.
 - Produces: `relationshipBetween(run, leftId, rightId)`, `eligibleOpportunityAttackers(input)`, `resolveOpportunityAttacks(input)`, `chooseBehaviorAction(input)`, and `resolveWorldStep(input)`.
 
-- [ ] **Step 1: Write failing hostility and neutral-aggression tests**
+- [x] **Step 1: Write failing hostility and neutral-aggression tests**
 
 ```ts
 it('makes confirmed aggression hostile before the attack roll and saves it', () => {
@@ -763,11 +763,11 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/reactions.test.ts`
 
 Expected: FAIL because relationship and reaction functions do not exist.
 
-- [ ] **Step 2: Implement saved symmetric relationship lookup**
+- [x] **Step 2: Implement saved symmetric relationship lookup**
 
 Store sorted relationship overrides by normalized actor pair. Default to hostile if either actor's declared disposition is hostile toward the other, neutral when either is neutral, and friendly otherwise. An explicit aggression confirmation writes a hostile override before attack resolution, even when the attack misses.
 
-- [ ] **Step 3: Write failing opportunity eligibility, ordering, and recovery tests**
+- [x] **Step 3: Write failing opportunity eligibility, ordering, and recovery tests**
 
 ```ts
 it('resolves aware hostile reactions by stable actor id before movement', () => {
@@ -792,11 +792,11 @@ Run: same focused command.
 
 Expected: FAIL on opportunity rules.
 
-- [ ] **Step 4: Implement symmetric reaction resolution**
+- [x] **Step 4: Implement symmetric reaction resolution**
 
 Capture eligible attackers at movement attempt time. Require alive, hostile, aware, capable, in reach, and `reactionReady`. Consume each reaction before its attack. Resolve by stable ID. Stop after mover death; retain remaining reactions when they never trigger. Root, stun, or another movement blocker cancels movement while already-triggered living attackers continue. Use the compiled condition traits `condition-trait.suppresses-reactions` and `condition-trait.avoids-opportunity-attacks`; descriptive tags never activate rules.
 
-- [ ] **Step 5: Write failing complete world-step tests**
+- [x] **Step 5: Write failing complete world-step tests**
 
 ```ts
 it('applies the hero action then actors until the hero is selected again', () => {
@@ -813,17 +813,17 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/world-step.test.ts t
 
 Expected: FAIL because atomic orchestration is absent.
 
-- [ ] **Step 6: Implement the minimal 4A behavior and world-step loop**
+- [x] **Step 6: Implement the minimal 4A behavior and world-step loop**
 
 Register `behavior.approach-and-attack`: attack an adjacent hostile, otherwise take one legal eight-way step that reduces Chebyshev distance using fixed direction ordering, otherwise wait. It sees only its own authoritative perception input and consumes no random stream.
 
 `resolveWorldStep` applies the hero action, charges energy, repeatedly selects or advances actors, applies time transitions through a callback, resolves non-player actions, restores a completed actor's reaction, stops at hero selection/death/decision, then refreshes perception. It returns authoritative events and a conservative public sequence captured at each event's resolution point: hero-authored or hero-targeted events and events whose participants are visible at that point. Unseen sound conversion is added in Task 12; until then unseen events are omitted, never exposed. Enforce a tested maximum internal-action safety bound that throws before publication on a non-progressing loop.
 
-- [ ] **Step 7: Delegate applied reducer commands to world steps**
+- [x] **Step 7: Delegate applied reducer commands to world steps**
 
 Keep protocol, decision, and invalid handling in `reducer.ts`. Applied actions call `resolveWorldStep`, increment player `turn` once, increment `revision` once, record ordered authoritative `events` and event-time `publicEvents` in one `RecordedCommand`, and update the appropriate random streams returned by the world step. Duplicate command IDs return the stored result and stored `publicEvents` byte-for-byte.
 
-- [ ] **Step 8: Run replay GREEN and commit**
+- [x] **Step 8: Run replay GREEN and commit**
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/reactions.test.ts test/behavior.test.ts test/world-step.test.ts test/reducer.test.ts test/replay.test.ts test/generated-replay.test.ts`
 

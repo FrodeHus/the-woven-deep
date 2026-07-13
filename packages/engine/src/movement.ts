@@ -48,7 +48,10 @@ function relationship(input: MovementActionInput, target: ActorState): ActorStat
   ) || (
     candidate.leftActorId === target.actorId && candidate.rightActorId === input.actor.actorId
   ));
-  return override?.relationship ?? target.disposition;
+  if (override) return override.relationship;
+  if (input.actor.disposition === 'hostile' || target.disposition === 'hostile') return 'hostile';
+  if (input.actor.disposition === 'neutral' || target.disposition === 'neutral') return 'neutral';
+  return 'friendly';
 }
 
 export function movementAction(input: MovementActionInput): MovementActionResult {
@@ -59,7 +62,7 @@ export function movementAction(input: MovementActionInput): MovementActionResult
   if (delta.x !== 0 && delta.y !== 0) {
     const horizontal = blockReasonAt(input, { x: input.actor.x + delta.x, y: input.actor.y });
     const vertical = blockReasonAt(input, { x: input.actor.x, y: input.actor.y + delta.y });
-    if (horizontal || vertical) return { status: 'invalid', reason: 'blocked.corner' };
+    if (horizontal && vertical) return { status: 'invalid', reason: 'blocked.corner' };
   }
   const occupant = input.actors.find((candidate) => candidate.actorId !== input.actor.actorId
     && candidate.floorId === input.floor.floorId && candidate.health > 0 && candidate.x === to.x && candidate.y === to.y);

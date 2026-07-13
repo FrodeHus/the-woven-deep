@@ -346,13 +346,13 @@ describe('active-run save codec', () => {
     expectInvalidSave({ ...waited, actors: [{ ...waited.actors[0]!, x: 2 }] }, 'recentCommands.0.events.0');
   });
 
-  it('rejects an invalid wait record', () => {
+  it('rejects an invalid wait record with a terrain-only reason', () => {
     const invalid = resolveCommand(createDemoRun(), { type: 'move', commandId: 'command.wall', expectedRevision: 0, direction: 'north' }).state;
     const record = invalid.recentCommands[0]!;
     expectInvalidSave({
       ...invalid,
       recentCommands: [{ ...record, command: { type: 'wait', commandId: record.command.commandId, expectedRevision: 0 } }],
-    }, 'recentCommands.0.command.type');
+    }, 'recentCommands.0.result.reason');
   });
 
   it.each([

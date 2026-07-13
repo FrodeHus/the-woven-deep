@@ -15,7 +15,7 @@ function withAdjacentActor(disposition: ActorState['disposition']) {
   const run = createDemoRun();
   const target = {
     ...run.actors[0]!, actorId: 'npc.traveler', contentId: 'npc.traveler', playerControlled: false,
-    x: 2, y: 1, disposition,
+    x: 2, y: 1, disposition, energy: 0,
   };
   return { ...run, actors: [...run.actors, target].sort((left, right) => left.actorId < right.actorId ? -1 : 1) };
 }
@@ -37,6 +37,28 @@ describe('player action validation', () => {
       command: { type: 'attack', commandId: 'command.attack', expectedRevision: 0, targetActorId: 'monster.absent' },
       context,
     })).toEqual({ status: 'invalid', reason: 'action.unavailable' });
+  });
+
+  it('rejects actions while the hero is incapacitated', () => {
+    const state = createDemoRun();
+    const hero = state.actors[0]!;
+    const incapacitated = {
+      ...state,
+      actors: [{ ...hero, conditions: [{
+        conditionId: 'condition.incapacitated', sourceActorId: null,
+        appliedAt: 0, expiresAt: null, stacks: 1,
+      }] }],
+    };
+    expect(validatePlayerAction({
+      state: incapacitated,
+      command: { type: 'wait', commandId: 'command.stunned', expectedRevision: 0 }, context,
+    })).toEqual({ status: 'invalid', reason: 'action.unavailable' });
+    const resolution = resolveCommand(
+      incapacitated,
+      { type: 'wait', commandId: 'command.stunned', expectedRevision: 0 },
+      context,
+    );
+    expect(() => encodeActiveRun(resolution.state)).not.toThrow();
   });
 
   it('deduplicates unavailable commands and rejects conflicting reuse before content lookup', () => {
@@ -71,15 +93,31 @@ describe('player action validation', () => {
     expect(resolution.state.recentCommands).toEqual([]);
   });
 
-  it('turns hostile bump movement into unavailable combat without moving', () => {
+  it('treats an explicit adjacent attack as confirmed aggression and saves it', () => {
+    const run = withAdjacentActor('neutral');
+    const resolution = resolveCommand(
+      run,
+      { type: 'attack', commandId: 'command.attack-neutral', expectedRevision: 0, targetActorId: 'npc.traveler' },
+      context,
+    );
+    expect(resolution.result).toMatchObject({ status: 'applied' });
+    expect(resolution.events[0]).toMatchObject({
+      type: 'relationship.changed', actorId: 'hero.demo', targetActorId: 'npc.traveler', relationship: 'hostile',
+    });
+    expect(() => encodeActiveRun(resolution.state)).not.toThrow();
+  });
+
+  it('turns hostile bump movement into an attack without moving', () => {
     const run = withAdjacentActor('hostile');
     const resolution = resolveCommand(
       run,
       { type: 'move', commandId: 'command.hostile', expectedRevision: 0, direction: 'east' },
       context,
     );
-    expect(resolution.result).toMatchObject({ status: 'invalid', reason: 'action.unavailable' });
-    expect(resolution.state.actors).toEqual(run.actors);
+    expect(resolution.result).toMatchObject({ status: 'applied' });
+    expect(resolution.events.some((event) => event.type === 'attack.hit' || event.type === 'attack.missed')).toBe(true);
+    expect(resolution.state.actors.find((actor) => actor.actorId === run.hero.actorId)).toMatchObject({ x: 1, y: 1 });
+    expect(() => encodeActiveRun(resolution.state)).not.toThrow();
   });
 
   it('moves through an open door cover cell and remains saveable', () => {

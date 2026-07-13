@@ -66,9 +66,20 @@ const conditionRemovedEvent = z.strictObject({ type: z.enum(['condition.removed'
   eventId: identifier, actorId: identifier, conditionId: identifier });
 const actorForcedMoveEvent = z.strictObject({ type: z.literal('actor.forced-move'), eventId: identifier,
   actorId: identifier, from: point, to: point });
+const reactionTriggeredEvent = z.strictObject({ type: z.literal('reaction.triggered'), eventId: identifier,
+  actorId: identifier, targetActorId: identifier });
+const relationshipChangedEvent = z.strictObject({ type: z.literal('relationship.changed'), eventId: identifier,
+  actorId: identifier, targetActorId: identifier, relationship: z.enum(['friendly', 'neutral', 'hostile']) });
+const actorTurnStartedEvent = z.strictObject({ type: z.literal('actor.turn.started'), eventId: identifier,
+  actorId: identifier });
+const actorTurnCompletedEvent = z.strictObject({ type: z.literal('actor.turn.completed'), eventId: identifier,
+  actorId: identifier, actionType: z.enum(['move', 'wait', 'bump-attack']) });
+const actorMovedEvent = z.strictObject({ type: z.literal('actor.moved'), eventId: identifier,
+  actorId: identifier, from: point, to: point });
 const event = z.discriminatedUnion('type', [
   movedEvent, waitedEvent, invalidEvent, attackMissedEvent, attackHitEvent, actorDamagedEvent,
   actorDiedEvent, actorHealedEvent, conditionAppliedEvent, conditionRemovedEvent, actorForcedMoveEvent,
+  reactionTriggeredEvent, relationshipChangedEvent, actorTurnStartedEvent, actorTurnCompletedEvent, actorMovedEvent,
 ]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
 const invalidResult = z.strictObject({ status: z.literal('invalid'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative, reason: blockReason });
@@ -515,12 +526,19 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     if (recordValue.events.length === 0) fail(`${path}.events`, 'processed commands require at least one event');
     if (recordValue.events.some((entry) => entry.eventId !== recordValue.command.commandId)) fail(`${path}.events`, 'event identifier does not match command');
     if (recordValue.publicEvents.some((entry) => entry.eventId !== recordValue.command.commandId)) fail(`${path}.publicEvents`, 'public event identifier does not match command');
+    const attackTargetActorId = recordValue.command.type === 'attack' ? recordValue.command.targetActorId : undefined;
     const eventValue = recordValue.result.status === 'invalid'
       ? recordValue.events.find((entry) => entry.type === 'action.invalid')
       : recordValue.command.type === 'wait'
         ? recordValue.events.find((entry) => entry.type === 'hero.waited')
-        : recordValue.command.type === 'move'
+      : recordValue.command.type === 'move'
           ? recordValue.events.find((entry) => entry.type === 'hero.moved')
+            ?? recordValue.events.find((entry) => (entry.type === 'attack.hit' || entry.type === 'attack.missed')
+              && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => entry.type === 'reaction.triggered' && entry.targetActorId === run.hero.actorId)
+          : recordValue.command.type === 'attack'
+            ? recordValue.events.find((entry) => (entry.type === 'attack.hit' || entry.type === 'attack.missed')
+              && entry.actorId === run.hero.actorId && entry.targetActorId === attackTargetActorId)
           : undefined;
     if (!eventValue) fail(`${path}.events`, 'processed result has no matching event');
     if (recordValue.result.status === 'invalid') {
@@ -528,11 +546,19 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     } else if (recordValue.command.type === 'wait') {
       if (eventValue.type !== 'hero.waited' || eventValue.heroId !== run.hero.actorId) fail(`${path}.events.0`, 'wait result and event are inconsistent');
       ensureActorWalkable(activeFloor, run.features, eventValue.x, eventValue.y, `${path}.events.0`);
-    } else if (recordValue.command.type !== 'move' || eventValue.type !== 'hero.moved' || eventValue.heroId !== run.hero.actorId) fail(`${path}.events`, 'applied command and event are inconsistent');
-    else {
+    } else if (recordValue.command.type === 'move' && eventValue.type === 'hero.moved' && eventValue.heroId === run.hero.actorId) {
       ensureActorWalkable(activeFloor, run.features, eventValue.from.x, eventValue.from.y, `${path}.events.0.from`);
       ensureActorWalkable(activeFloor, run.features, eventValue.to.x, eventValue.to.y, `${path}.events.0.to`);
-    }
+    } else if (recordValue.command.type === 'move' && eventValue.type === 'reaction.triggered'
+      && eventValue.targetActorId === run.hero.actorId) {
+      // A reaction may kill or immobilize the hero before the attempted move completes.
+    } else if ((recordValue.command.type === 'move' || recordValue.command.type === 'attack')
+      && (eventValue.type === 'attack.hit' || eventValue.type === 'attack.missed')
+      && eventValue.actorId === run.hero.actorId) {
+      if (recordValue.command.type === 'attack' && eventValue.targetActorId !== recordValue.command.targetActorId) {
+        fail(`${path}.events`, 'attack target and event are inconsistent');
+      }
+    } else fail(`${path}.events`, 'applied command and event are inconsistent');
     if (recordValue.result.revision < previousRevision || recordValue.result.revision > run.revision) fail(`${path}.result.revision`, 'record revisions are not monotonic');
     if (recordValue.result.turn > run.turn) fail(`${path}.result.turn`, 'record turn exceeds current turn');
     if (recordValue.result.turn !== recordValue.result.revision) fail(`${path}.result.turn`, 'result turn and revision must match in schema v3');
@@ -555,14 +581,20 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       ? recordValue.events.find((entry) => entry.type === 'action.invalid')!
       : recordValue.command.type === 'wait'
         ? recordValue.events.find((entry) => entry.type === 'hero.waited')!
-        : recordValue.events.find((entry) => entry.type === 'hero.moved')!;
+        : recordValue.command.type === 'move'
+          ? recordValue.events.find((entry) => entry.type === 'hero.moved')
+            ?? recordValue.events.find((entry) => (entry.type === 'attack.hit' || entry.type === 'attack.missed')
+              && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => entry.type === 'reaction.triggered' && entry.targetActorId === run.hero.actorId)!
+          : recordValue.events.find((entry) => (entry.type === 'attack.hit' || entry.type === 'attack.missed')
+            && entry.actorId === run.hero.actorId)!;
     const path = `recentCommands.${index}`;
     if (recordValue.result.status === 'invalid') {
-      if (recordValue.command.type === 'wait') fail(`${path}.command.type`, 'wait cannot produce an invalid result');
       if (recordValue.command.type !== 'move') {
         if (recordValue.result.reason !== 'action.unavailable') fail(`${path}.result.reason`, 'unregistered actions must use action.unavailable');
         continue;
       }
+      if (recordValue.result.reason === 'action.unavailable') continue;
       if (['blocked.bounds', 'blocked.wall', 'blocked.door', 'blocked.pillar', 'blocked.void'].includes(recordValue.result.reason)) {
         const offset = directionOffsets[recordValue.command.direction];
         const attempted = { x: knownPosition.x + offset.x, y: knownPosition.y + offset.y };
@@ -576,7 +608,10 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       if (eventValue.type !== 'hero.waited' || eventValue.x !== knownPosition.x || eventValue.y !== knownPosition.y) fail(`${path}.events.0`, 'wait position does not match the retained position chain');
       continue;
     }
-    if (recordValue.command.type !== 'move' || eventValue.type !== 'hero.moved') fail(`${path}.events`, 'move result and event are inconsistent');
+    if (recordValue.command.type === 'attack') continue;
+    if (recordValue.command.type !== 'move') fail(`${path}.events`, 'move result and event are inconsistent');
+    if (eventValue.type === 'attack.hit' || eventValue.type === 'attack.missed' || eventValue.type === 'reaction.triggered') continue;
+    if (eventValue.type !== 'hero.moved') fail(`${path}.events`, 'move result and event are inconsistent');
     if (eventValue.to.x !== knownPosition.x || eventValue.to.y !== knownPosition.y) fail(`${path}.events.0.to`, 'move destination does not match the retained position chain');
     const offset = directionOffsets[recordValue.command.direction];
     if (eventValue.to.x !== eventValue.from.x + offset.x || eventValue.to.y !== eventValue.from.y + offset.y) fail(`${path}.events.0.to`, 'move does not match its command direction');

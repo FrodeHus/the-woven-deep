@@ -14,6 +14,7 @@ export const CONDITION_TRAIT_IDS = [
   'condition-trait.avoids-opportunity-attacks',
   'condition-trait.incapacitated',
   'condition-trait.interrupts-rest',
+  'condition-trait.prevents-movement',
   'condition-trait.suppresses-reactions',
 ] as const;
 export type ConditionTraitId = typeof CONDITION_TRAIT_IDS[number];

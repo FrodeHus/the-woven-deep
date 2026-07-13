@@ -73,6 +73,7 @@ The initial trait registry contains:
 - `condition-trait.suppresses-reactions`: the actor cannot make opportunity attacks or other reactions.
 - `condition-trait.avoids-opportunity-attacks`: leaving hostile melee reach does not provoke opportunity attacks.
 - `condition-trait.interrupts-rest`: applying or retaining the condition interrupts rest.
+- `condition-trait.prevents-movement`: voluntary movement is unavailable while the condition remains active.
 
 Tags remain descriptive and never activate engine rules. This prevents a spelling mistake or innocent taxonomy change from altering simulation behavior.
 

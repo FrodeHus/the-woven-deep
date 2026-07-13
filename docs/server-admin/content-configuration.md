@@ -419,6 +419,7 @@ Damage types are `physical`, `fire`, `cold`, `lightning`, `poison`, and `arcane`
 - `condition-trait.suppresses-reactions`: prevents the actor from making reactions.
 - `condition-trait.avoids-opportunity-attacks`: prevents hostile opportunity attacks when the affected actor leaves reach.
 - `condition-trait.interrupts-rest`: interrupts rest while active.
+- `condition-trait.prevents-movement`: prevents voluntary movement while allowing other actions unless another trait forbids them.
 
 Traits may be combined. Descriptive tags never substitute for traits.
 
