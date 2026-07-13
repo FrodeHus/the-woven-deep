@@ -1,0 +1,10 @@
+schemaVersion: 1
+entries:
+  - kind: item
+    id: item.brass-lantern
+    name: Brass lantern
+    glyph: "¤"
+    color: "#e8c879"
+    tags: [light, utility]
+    effect: effect.light-source
+    price: 24
