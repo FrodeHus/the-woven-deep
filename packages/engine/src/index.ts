@@ -2,6 +2,8 @@ export * from './stable-json.js';
 export * from './rot-adapter.js';
 export * from './terrain.js';
 export * from './visibility.js';
+export * from './light-model.js';
+export * from './lighting.js';
 export * from './fixture.js';
 export * from './migration.js';
 export * from './model.js';
