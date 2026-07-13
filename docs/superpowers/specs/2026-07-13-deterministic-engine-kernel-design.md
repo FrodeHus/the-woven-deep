@@ -8,7 +8,7 @@
 
 ## Goal
 
-Build the browser-safe engine contract on which guest and server-authoritative play will share identical rules. The milestone proves that a hero can execute a narrow movement-only command sequence on a fixed floor, save and reload, and produce byte-identical canonical state and event output.
+Build the browser-safe engine contract on which guest and server-authoritative play will share identical rules. The milestone proves that a hero can execute a narrow movement-only command sequence on a fixed floor, save and reload, and produce byte-identical serialized state and event output.
 
 ## Scope
 
@@ -22,7 +22,7 @@ This milestone includes:
 - A bounded recent-command result ring for idempotency.
 - Explicit named seeded-random streams with serializable state.
 - A complete versioned active-run snapshot.
-- Strict save validation, canonical JSON encoding, and typed load failures.
+- Strict save validation, stable JSON serialization, and typed load failures.
 - A real checked-in legacy save and deterministic `v0` to `v1` migration.
 - Deterministic replay verification from an initial snapshot and external command sequence.
 - A command-line demonstration of continuous execution versus save/reload execution.
@@ -33,7 +33,7 @@ Combat, inventory, equipment, hunger, field of view, procedural generation, Reac
 
 ## Package boundary
 
-Create `packages/engine` as an ESM TypeScript workspace named `@woven-deep/engine`. Production code in this package must not import React, Fastify, SQLite, browser storage, Node filesystem APIs, or Node cryptography. It may consume browser-safe exported content model types, but engine state binds to content through the canonical content hash rather than retaining compiler or filesystem objects.
+Create `packages/engine` as an ESM TypeScript workspace named `@woven-deep/engine`. Production code in this package must not import React, Fastify, SQLite, browser storage, Node filesystem APIs, or Node cryptography. It may consume browser-safe exported content model types, but engine state binds to content through the content hash rather than retaining compiler or filesystem objects.
 
 The package exposes focused modules for:
 
@@ -41,7 +41,7 @@ The package exposes focused modules for:
 - Active-run, floor, hero, command, event, and result types.
 - Seeded random streams.
 - Command resolution.
-- Save validation, migration, and canonical encoding.
+- Save validation, migration, and stable serialization.
 - Replay verification.
 - Fixed CLI fixtures through a separate Node-only package entry or script that does not enter the browser engine bundle.
 
@@ -113,7 +113,7 @@ Domain events also use stable discriminated unions. The initial event set record
 Resolution order is fixed:
 
 1. Search the recent-command ring for `commandId`.
-2. If an identical canonical command was processed recently, return its recorded result and events with the current state unchanged.
+2. If an identical command was processed recently, return its recorded result and events with the current state unchanged.
 3. If the identifier exists with different command content, return a typed command-identifier conflict with state unchanged.
 4. Validate `expectedRevision` against the current revision. A mismatch returns a typed stale-revision rejection with state unchanged.
 5. Validate the requested player action.
@@ -142,7 +142,7 @@ export function decodeActiveRun(json: string): ActiveRun;
 export function migrateActiveRun(input: unknown): ActiveRun;
 ```
 
-`encodeActiveRun` first validates invariants and then emits canonical UTF-8-compatible JSON text. Object keys are sorted by Unicode code-unit order. Array order is semantic and retained. Values must be JSON-compatible; numbers must be finite safe integers, and unsupported or ambiguous values such as `undefined`, `NaN`, infinities, sparse arrays, class instances, maps, and sets are rejected. No insignificant whitespace or trailing newline is added.
+`encodeActiveRun` first validates invariants and then emits stable UTF-8-compatible JSON text. Object keys are sorted by Unicode code-unit order. Array order is semantic and retained. Values must be JSON-compatible; numbers must be finite safe integers, and unsupported or ambiguous values such as `undefined`, `NaN`, infinities, sparse arrays, class instances, maps, and sets are rejected. No insignificant whitespace or trailing newline is added.
 
 `decodeActiveRun` parses input as untrusted data, migrates supported legacy versions, validates the complete result, and returns detached immutable engine data. Validation covers:
 
@@ -160,7 +160,7 @@ Malformed JSON, invalid current data, unsupported future versions, and migration
 
 ## Legacy migration
 
-The repository includes a checked-in canonical `v0` fixture and its expected canonical `v1` output. The legacy envelope uses a single unsigned 32-bit seed, one flat `floor`, and no recent-command ring. It already contains the run identifier, game version, content hash, hero, revision, and turn.
+The repository includes a checked-in authoritative `v0` fixture and its expected byte-stable `v1` output. The legacy envelope uses a single unsigned 32-bit seed, one flat `floor`, and no recent-command ring. It already contains the run identifier, game version, content hash, hero, revision, and turn.
 
 The `v0` to `v1` migration:
 
@@ -171,7 +171,7 @@ The `v0` to `v1` migration:
 - Initializes `recentCommands` as an empty array.
 - Preserves all semantically equivalent identifiers, coordinates, tiles, turn, and revision.
 
-Migration never guesses absent security- or content-binding data. Unknown future versions are rejected. Supplying a valid `v1` document to the migration entry point is idempotent, and canonical encoding after migration must match the checked-in expected bytes.
+Migration never guesses absent security- or content-binding data. Unknown future versions are rejected. Supplying a valid `v1` document to the migration entry point is idempotent, and stable serialization after migration must match the checked-in expected bytes.
 
 ## Replay verification
 
@@ -184,9 +184,9 @@ export function replayCommands(
 ): ReplayResult;
 ```
 
-It resolves commands in order and returns the final state plus per-command canonical results and events. The facility never reads a complete command history from a normal save. Production snapshots contain complete mutable state and only the bounded recent-command ring.
+It resolves commands in order and returns the final state plus byte-stable per-command results and events. The facility never reads a complete command history from a normal save. Production snapshots contain complete mutable state and only the bounded recent-command ring.
 
-Replay tests compare canonical bytes, not merely object equality. Given the same initial state, command sequence, game version, and content hash, continuous execution and execution split by encode/decode must produce identical final-state bytes and identical event/result bytes.
+Replay tests compare stable bytes, not merely object equality. Given the same initial state, command sequence, game version, and content hash, continuous execution and execution split by encode/decode must produce identical final-state bytes and identical event/result bytes.
 
 ## Command-line exit demonstration
 
@@ -202,7 +202,7 @@ reload
 west
 ```
 
-The CLI prints the hero position, turn, revision, domain events, and final canonical-state hash. Verification mode executes an equivalent command sequence continuously and across the requested save/reload boundary. It exits non-zero unless final state, command results, and events are byte-identical.
+The CLI prints the hero position, turn, revision, domain events, and final state hash. Verification mode executes an equivalent command sequence continuously and across the requested save/reload boundary. It exits non-zero unless final state, command results, and events are byte-identical.
 
 The demonstration includes a wall collision, a valid move, a wait, save/reload, a duplicate command, and a stale-revision rejection. File access and argument parsing stay outside the engine package's browser-safe production boundary.
 
@@ -226,7 +226,7 @@ Test-driven implementation covers:
 - Pure movement and wait transitions without input mutation.
 - Wall and boundary invalid actions that consume no turn.
 - Revision advancement, stale revisions, duplicate replay, conflicting command IDs, invalid-action deduplication, and 128-entry eviction.
-- Canonical object-key ordering, semantic array order, safe-number rejection, and byte stability.
+- Stable object-key ordering, semantic array order, safe-number rejection, and byte stability.
 - Strict save validation for corrupt hashes, dimensions, tiles, coordinates, references, PRNG state, and recent-command data.
 - The real `v0` fixture, exact expected `v1` bytes, current-version idempotence, and future-version rejection.
 - Continuous versus save/reload replay equivalence.
@@ -237,6 +237,6 @@ The milestone verification runs all repository tests, type checks, and builds in
 
 ## Compatibility commitments
 
-After this milestone publishes them, command names, event names, identifier fields, schema-version semantics, PRNG algorithm, stream discriminators, canonical encoding rules, and migration behavior are stable interfaces. Incompatible changes require an explicit save migration and game-version decision.
+After this milestone publishes them, command names, event names, identifier fields, schema-version semantics, PRNG algorithm, stream discriminators, stable serialization rules, and migration behavior are stable interfaces. Incompatible changes require an explicit save migration and game-version decision.
 
 Later milestones may add discriminated-union variants and versioned state fields. They must preserve the pure reducer boundary, complete-snapshot persistence, browser/server engine equivalence, content-hash binding, hidden-state ownership rules, and deterministic output established here.

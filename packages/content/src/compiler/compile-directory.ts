@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import type { CompiledContentPack, ContentEntry } from '../model.js';
 import { CONTENT_SCHEMA_VERSION } from '../model.js';
-import { canonicalHash, compareCodeUnits } from './canonicalize.js';
+import { compareCodeUnits, stableJsonHash } from './stable-json.js';
 import { ContentCompileError, type ContentCompileIssue } from './error.js';
 import { parseContentFile } from './parse-file.js';
 import { stableIdSchema } from './schema.js';
@@ -105,5 +105,5 @@ export async function compileContentDirectory(input: {
   entries.sort((left, right) => compareCodeUnits(left.id, right.id));
   throwIfAborted(input.signal);
   const hashInput = { schemaVersion: CONTENT_SCHEMA_VERSION, entries };
-  return { ...hashInput, hash: canonicalHash(hashInput) };
+  return { ...hashInput, hash: stableJsonHash(hashInput) };
 }

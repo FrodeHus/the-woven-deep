@@ -64,6 +64,27 @@ describe('stableJson', () => {
     expect(() => stableJson(extra)).toThrow(/properties/);
   });
 
+  it('rejects array subclasses', () => {
+    class ArraySubclass extends Array<number> {}
+    expect(() => stableJson(new ArraySubclass(1))).toThrow(/plain/);
+  });
+
+  it('rejects array symbol properties', () => {
+    const array = [1] as number[] & { [key: symbol]: number };
+    array[Symbol('hidden')] = 2;
+    expect(() => stableJson(array)).toThrow(/symbol/);
+  });
+
+  it('rejects non-enumerable extra array properties', () => {
+    const array = Object.defineProperty([1], 'hidden', { value: 2 });
+    expect(() => stableJson(array)).toThrow(/enumerable data properties/);
+  });
+
+  it('accepts null-prototype plain objects', () => {
+    const value = Object.assign(Object.create(null) as Record<string, number>, { b: 2, a: 1 });
+    expect(stableJson(value)).toBe('{"a":1,"b":2}');
+  });
+
   it('serializes shared non-cyclic references normally', () => {
     const shared = { b: 2, a: 1 };
     expect(stableJson([shared, shared])).toBe('[{"a":1,"b":2},{"a":1,"b":2}]');

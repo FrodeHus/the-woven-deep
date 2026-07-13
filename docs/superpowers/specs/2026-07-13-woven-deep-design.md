@@ -27,13 +27,13 @@ The application uses React and TypeScript, built with Vite, with a Node.js and F
 
 The engine accepts a validated command and returns a new immutable world state plus a list of domain events. Commands include movement, attacks, item actions, equipment changes, merchant transactions, storage transfers, resting, and stair traversal. Invalid commands do not advance time and produce an explanatory event. Guest mode runs this package in the browser. Persistent-profile mode runs it only on the server; the browser sends sequenced commands over one authenticated WebSocket and receives observable-state patches plus events.
 
-Every persistent-profile command is validated in order by the server, including movement. The WebSocket removes per-command HTTP setup cost, and the client can coalesce rapid directional inputs into a small ordered batch. Each command carries a unique identifier and expected server revision. The server stops a batch when a command is invalid or requires a new player decision, then returns the canonical revision and results for every processed command.
+Every persistent-profile command is validated in order by the server, including movement. The WebSocket removes per-command HTTP setup cost, and the client can coalesce rapid directional inputs into a small ordered batch. Each command carries a unique identifier and expected server revision. The server stops a batch when a command is invalid or requires a new player decision, then returns the authoritative revision and results for every processed command.
 
 The browser may predict animation for movement into a currently visible, known-empty, walkable cell, but prediction never changes trusted state. Server patches reconcile glyphs, cell visibility, actors, statistics, and log events. A mismatch replaces the predicted presentation with the authoritative result.
 
 The renderer uses DOM cells rather than canvas. Each visible map cell receives glyph, foreground color, background color, visibility state, and computed light intensity. CSS custom properties visualize brightness, tint, and restrained transitions while preserving selectable text and accessible markup.
 
-Randomness is supplied by a seeded pseudo-random number generator owned by the engine. A run seed reproduces procedural layouts and random outcomes when paired with the same command sequence, game version, and canonical content hash. In persistent-profile mode, seeds, hidden map cells, unseen actors, future random state, scoring inputs, and unlock evaluation remain server-side.
+Randomness is supplied by a seeded pseudo-random number generator owned by the engine. A run seed reproduces procedural layouts and random outcomes when paired with the same command sequence, game version, and content hash. In persistent-profile mode, seeds, hidden map cells, unseen actors, future random state, scoring inputs, and unlock evaluation remain server-side.
 
 ## Player profiles and persistence
 
@@ -74,7 +74,7 @@ The core database has six responsibilities:
 - `hall_records`: immutable completed-run summaries associated with one profile.
 - `login_tokens`: hashed, single-use, expiring magic-link tokens.
 - `sessions`: hashed, expiring, revocable authenticated sessions.
-- `content_packs`: immutable compiled content indexed by canonical content hash.
+- `content_packs`: immutable compiled content indexed by content hash.
 
 Balance telemetry adds a seventh table, `telemetry_runs`, containing privacy-reduced run summaries for players who opted in. Administrative access does not require a separate password system: administrators sign in through the same Mailgun magic-link flow, and the server grants read-only dashboard access only to normalized emails listed in the `ADMIN_EMAILS` deployment setting. Every admin request is authorized server-side.
 
@@ -110,9 +110,9 @@ At startup, the server reads the complete directory specified by `CONTENT_DIR`, 
 
 Any error prevents the server from accepting traffic and reports the filename, entry identifier, field path, and corrective message. Development tooling can run the same compiler independently for fast content-author feedback.
 
-Successful validation compiles YAML to canonical JSON and calculates a hash from the canonical representation, not raw YAML formatting. Startup inserts a previously unseen compiled pack into `content_packs` and marks it current. Every active run stores the exact content hash it uses. Existing runs continue with their original immutable pack after a restart, while new heroes use the current pack. Compiled packs are retained so Hall seeds remain replayable under their original content; they are small, immutable, and deduplicated by hash.
+Successful validation compiles YAML to stable JSON and calculates a hash from the stable JSON representation, not raw YAML formatting. Startup inserts a previously unseen compiled pack into `content_packs` and marks it current. Every active run stores the exact content hash it uses. Existing runs continue with their original immutable pack after a restart, while new heroes use the current pack. Compiled packs are retained so Hall seeds remain replayable under their original content; they are small, immutable, and deduplicated by hash.
 
-Persistent-profile simulation uses the authoritative server pack. Its browser receives only presentation data and the observable definitions required by the current state. Guest mode receives the complete compiled pack because its engine runs locally; guest content is inspectable and is not a security boundary. Both modes record the same canonical content hash.
+Persistent-profile simulation uses the authoritative server pack. Its browser receives only presentation data and the observable definitions required by the current state. Guest mode receives the complete compiled pack because its engine runs locally; guest content is inspectable and is not a security boundary. Both modes record the same content hash.
 
 Mounted content is trusted operator input and is never uploaded or edited through the player or admin web interfaces. Applying balance changes consists of editing or adding YAML files and restarting the container. The read-only admin dashboard groups results by content hash and game version so incompatible balance sets are never combined silently.
 
@@ -269,7 +269,7 @@ Each floor snapshot contains:
 - Current creatures, inventories, positions, conditions, and behavior state.
 - Ground items, reinforcements, artifact-return hazards, and floor-local counters.
 
-The current hero, town, global run counters, random-generator states, canonical content hash, a bounded ring of recently processed command identifiers and results, and all generated floor snapshots form one versioned active-run document. SQLite stores the current document and one previous last-known-good document. The server replaces the current document at the immediate and periodic checkpoint boundaries defined above. Guest mode uses the identical serialized format in `sessionStorage`.
+The current hero, town, global run counters, random-generator states, content hash, a bounded ring of recently processed command identifiers and results, and all generated floor snapshots form one versioned active-run document. SQLite stores the current document and one previous last-known-good document. The server replaces the current document at the immediate and periodic checkpoint boundaries defined above. Guest mode uses the identical serialized format in `sessionStorage`.
 
 Seeds remain part of saves and Hall records for reproducibility, debugging, and replay under the recorded game version. They are not a substitute for mutable floor state. Compact arrays and bitsets control size; the design favors simple complete snapshots over a smaller but more fragile seed-and-delta format.
 
@@ -332,7 +332,7 @@ Every dead or victorious hero produces an immutable record containing:
 - Artifact recovery and escape status.
 - Final score and its itemized breakdown.
 - Enemies defeated and discoveries made.
-- Turns survived, completion date, game version, canonical content hash, and run seed.
+- Turns survived, completion date, game version, content hash, and run seed.
 
 Records sort first by outcome tier—escaped with the Heart, recovered the Heart but died, then all other deaths—and then by score. Within the active persistent profile or guest session, filters cover outcome, class, and date. Character names may repeat because records use unique run identifiers. Server-backed records are authoritative; guest records are visibly unverified and disappear with the session.
 
@@ -382,7 +382,7 @@ The dashboard never displays player emails or hero names. Admin authorization is
 
 Invalid game actions show a concrete event-log explanation and consume no turn. Unexpected engine errors pause input and retain the last-known-good state. Guest save failures explain whether session storage is unavailable or full. Server failures distinguish unauthenticated, forbidden, conflicting, unavailable, and incompatible-version states without leaking hidden game data.
 
-If the server is unavailable, a player can start a separate guest run. A persistent run never falls back to editable browser state, and a guest run never merges into a persistent run. Reconnecting reloads the last durable checkpoint, establishes a new WebSocket, and returns its canonical revision. Persistent commands are idempotent: the server rejects stale revisions and returns the recorded result for a duplicate command identifier that remains in its bounded deduplication window.
+If the server is unavailable, a player can start a separate guest run. A persistent run never falls back to editable browser state, and a guest run never merges into a persistent run. Reconnecting reloads the last durable checkpoint, establishes a new WebSocket, and returns its authoritative revision. Persistent commands are idempotent: the server rejects stale revisions and returns the recorded result for a duplicate command identifier that remains in its bounded deduplication window.
 
 Procedural generation has bounded retries and a deterministic fallback floor template. A generation failure never produces an unreachable objective or a partially initialized run.
 

@@ -4,9 +4,9 @@
 
 **Goal:** Build a browser-safe pure game-engine kernel whose fixed-floor movement commands, seeded random state, saves, migrations, and replay output remain byte-deterministic across save/reload boundaries.
 
-**Architecture:** Add a framework-independent `@woven-deep/engine` workspace centered on `resolveCommand(state, command)`. Complete versioned snapshots carry compact floor data, named xoshiro128** stream state, revisions, and a 128-entry idempotency ring; strict canonical JSON and a real `v0` to `v1` migration protect the save boundary. A Node-only repository script drives the engine CLI without entering the browser package graph.
+**Architecture:** Add a framework-independent `@woven-deep/engine` workspace centered on `resolveCommand(state, command)`. Complete versioned snapshots carry compact floor data, named xoshiro128** stream state, revisions, and a 128-entry idempotency ring; strict stable JSON serialization and a real `v0` to `v1` migration protect the save boundary. A Node-only repository script drives the engine CLI without entering the browser package graph.
 
-**Tech Stack:** Node.js `>=22.12.0`, TypeScript 5.8 strict ESM, Vitest 3.2, Zod 4, npm workspaces, canonical JSON, xoshiro128**/SplitMix32.
+**Tech Stack:** Node.js `>=22.12.0`, TypeScript 5.8 strict ESM, Vitest 3.2, Zod 4, npm workspaces, stable JSON, xoshiro128**/SplitMix32.
 
 ## Global Constraints
 
@@ -17,7 +17,7 @@
 - Runtime state contains only finite safe integers; PRNG words are unsigned 32-bit integers and each four-word stream state is non-zero.
 - Valid movement and waiting advance turn and revision; invalid player actions advance neither; stale/conflicting protocol rejections do not change state.
 - Processed valid and invalid actions enter a 128-record ring; protocol rejections do not.
-- Canonical JSON sorts object keys by Unicode code unit, retains semantic array order, rejects unsupported values, and emits no insignificant whitespace or trailing newline.
+- Stable JSON sorts object keys by Unicode code unit, retains semantic array order, rejects unsupported values, and emits no insignificant whitespace or trailing newline.
 - `v0` migration is real, fixture-backed, deterministic, and idempotent after reaching `v1`; unknown future versions are rejected.
 - Every task follows RED → GREEN → refactor, runs `git diff --check`, and ends in a focused commit only after its independent review gate passes.
 - The user requested normal branches, not worktrees. Implement on `feat/deterministic-engine-kernel`.
@@ -740,53 +740,53 @@ git commit -m "feat: resolve deterministic movement commands"
 
 ---
 
-### Task 4: Encode strict canonical JSON
+### Task 4: Encode strict stable JSON output
 
 **Files:**
-- Create: `packages/engine/src/canonical-json.ts`
+- Create: `packages/engine/src/stable-json.ts`
 - Modify: `packages/engine/src/index.ts`
-- Test: `packages/engine/test/canonical-json.test.ts`
+- Test: `packages/engine/test/stable-json.test.ts`
 
 **Interfaces:**
-- Produces: `canonicalJson(value: unknown): string`
+- Produces: `stableJson(value: unknown): string`
 - Produces: `compareCodeUnits(left, right): number`
 
-- [ ] **Step 1: Write failing canonicalization tests**
+- [ ] **Step 1: Write failing stable serialization tests**
 
 ```ts
-// packages/engine/test/canonical-json.test.ts
+// packages/engine/test/stable-json.test.ts
 import { describe, expect, it } from 'vitest';
-import { canonicalJson } from '../src/index.js';
+import { stableJson } from '../src/index.js';
 
-describe('canonicalJson', () => {
+describe('stableJson', () => {
   it('sorts object keys recursively and retains array order', () => {
-    expect(canonicalJson({ z: 1, a: { beta: 2, alpha: 1 }, list: [3, 2, 1] }))
+    expect(stableJson({ z: 1, a: { beta: 2, alpha: 1 }, list: [3, 2, 1] }))
       .toBe('{"a":{"alpha":1,"beta":2},"list":[3,2,1],"z":1}');
   });
 
   it.each([NaN, Infinity, -Infinity, -0, 1.5, Number.MAX_SAFE_INTEGER + 1, undefined, new Map()])(
     'rejects unsupported value %s',
-    (value) => expect(() => canonicalJson({ value })).toThrow(),
+    (value) => expect(() => stableJson({ value })).toThrow(),
   );
 
   it('rejects sparse arrays, cycles, non-plain objects, and undefined children', () => {
     const sparse = Array(2); sparse[1] = 1;
     const cyclic: Record<string, unknown> = {}; cyclic.self = cyclic;
-    expect(() => canonicalJson(sparse)).toThrow(/sparse/);
-    expect(() => canonicalJson(cyclic)).toThrow(/cycle/);
-    expect(() => canonicalJson(new (class Value {})())).toThrow(/plain/);
-    expect(() => canonicalJson({ missing: undefined })).toThrow(/unsupported/);
+    expect(() => stableJson(sparse)).toThrow(/sparse/);
+    expect(() => stableJson(cyclic)).toThrow(/cycle/);
+    expect(() => stableJson(new (class Value {})())).toThrow(/plain/);
+    expect(() => stableJson({ missing: undefined })).toThrow(/unsupported/);
   });
 
   it('rejects symbol keys and accessor properties instead of silently dropping or invoking them', () => {
-    expect(() => canonicalJson({ [Symbol('hidden')]: 1 })).toThrow(/symbol/);
+    expect(() => stableJson({ [Symbol('hidden')]: 1 })).toThrow(/symbol/);
     const accessed = Object.defineProperty({}, 'value', { enumerable: true, get: () => 1 });
-    expect(() => canonicalJson(accessed)).toThrow(/data properties/);
+    expect(() => stableJson(accessed)).toThrow(/data properties/);
   });
 
   it('emits byte-stable compact text without a trailing newline', () => {
-    const first = canonicalJson({ b: 2, a: 1 });
-    expect(canonicalJson(JSON.parse(first))).toBe(first);
+    const first = stableJson({ b: 2, a: 1 });
+    expect(stableJson(JSON.parse(first))).toBe(first);
     expect(first.endsWith('\n')).toBe(false);
   });
 });
@@ -794,14 +794,14 @@ describe('canonicalJson', () => {
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
-Run: `npm test --workspace @woven-deep/engine -- --run test/canonical-json.test.ts`
+Run: `npm test --workspace @woven-deep/engine -- --run test/stable-json.test.ts`
 
-Expected: FAIL because `canonicalJson` is missing.
+Expected: FAIL because `stableJson` is missing.
 
 - [ ] **Step 3: Implement strict normalization without Node APIs**
 
 ```ts
-// packages/engine/src/canonical-json.ts
+// packages/engine/src/stable-json.ts
 export function compareCodeUnits(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -809,26 +809,26 @@ export function compareCodeUnits(left: string, right: string): number {
 function normalize(value: unknown, ancestors: Set<object>): unknown {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
   if (typeof value === 'number') {
-    if (!Number.isSafeInteger(value) || Object.is(value, -0)) throw new TypeError('canonical numbers must be unambiguous finite safe integers');
+    if (!Number.isSafeInteger(value) || Object.is(value, -0)) throw new TypeError('stable JSON numbers must be unambiguous finite safe integers');
     return value;
   }
   if (Array.isArray(value)) {
-    if (ancestors.has(value)) throw new TypeError('canonical JSON cannot contain a cycle');
+    if (ancestors.has(value)) throw new TypeError('stable JSON cannot contain a cycle');
     for (let index = 0; index < value.length; index += 1) {
-      if (!(index in value)) throw new TypeError('canonical JSON cannot contain a sparse array');
+      if (!(index in value)) throw new TypeError('stable JSON cannot contain a sparse array');
     }
     const nested = new Set(ancestors).add(value);
     return value.map((entry) => normalize(entry, nested));
   }
   if (typeof value === 'object') {
     const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) throw new TypeError('canonical objects must be plain');
-    if (ancestors.has(value)) throw new TypeError('canonical JSON cannot contain a cycle');
+    if (prototype !== Object.prototype && prototype !== null) throw new TypeError('stable JSON objects must be plain');
+    if (ancestors.has(value)) throw new TypeError('stable JSON cannot contain a cycle');
     const keys = Reflect.ownKeys(value);
-    if (keys.some((key) => typeof key === 'symbol')) throw new TypeError('canonical JSON cannot contain symbol keys');
+    if (keys.some((key) => typeof key === 'symbol')) throw new TypeError('stable JSON cannot contain symbol keys');
     for (const key of keys as string[]) {
       const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
-      if (!descriptor.enumerable || !('value' in descriptor)) throw new TypeError('canonical objects require enumerable data properties');
+      if (!descriptor.enumerable || !('value' in descriptor)) throw new TypeError('stable JSON objects require enumerable data properties');
     }
     const nested = new Set(ancestors).add(value);
     return Object.fromEntries(
@@ -837,10 +837,10 @@ function normalize(value: unknown, ancestors: Set<object>): unknown {
         .map(([key, child]) => [key, normalize(child, nested)]),
     );
   }
-  throw new TypeError(`unsupported canonical value: ${typeof value}`);
+  throw new TypeError(`unsupported stable JSON value: ${typeof value}`);
 }
 
-export function canonicalJson(value: unknown): string {
+export function stableJson(value: unknown): string {
   return JSON.stringify(normalize(value, new Set()));
 }
 ```
@@ -851,13 +851,13 @@ Export it from `src/index.ts`.
 
 Run: `npm test --workspace @woven-deep/engine && npm run typecheck --workspace @woven-deep/engine`
 
-Expected: all model, random, reducer, and canonical tests pass.
+Expected: all model, random, reducer, and stable serialization tests pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/engine/src packages/engine/test/canonical-json.test.ts
-git commit -m "feat: encode strict canonical engine JSON"
+git add packages/engine/src packages/engine/test/stable-json.test.ts
+git commit -m "feat: encode strict stable engine JSON"
 ```
 
 ---
@@ -872,7 +872,7 @@ git commit -m "feat: encode strict canonical engine JSON"
 - Test: `packages/engine/test/save-codec.test.ts`
 
 **Interfaces:**
-- Consumes: `ActiveRun`, `canonicalJson`, version constants
+- Consumes: `ActiveRun`, `stableJson`, version constants
 - Produces: `SaveLoadError` with `kind`, `path`, and safe message
 - Produces: `validateActiveRun(input): ActiveRun`
 - Produces: `encodeActiveRun(state): string`
@@ -886,7 +886,7 @@ import { describe, expect, it } from 'vitest';
 import { createDemoRun, decodeActiveRun, encodeActiveRun, resolveCommand, SaveLoadError } from '../src/index.js';
 
 describe('active-run save codec', () => {
-  it('round-trips current state to identical canonical bytes', () => {
+  it('round-trips current state to identical stable bytes', () => {
     const state = createDemoRun();
     const encoded = encodeActiveRun(state);
     expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
@@ -1096,12 +1096,12 @@ export function validateActiveRun(input: unknown): ActiveRun {
 ```ts
 // packages/engine/src/save-codec.ts
 import type { ActiveRun } from './model.js';
-import { canonicalJson } from './canonical-json.js';
+import { stableJson } from './stable-json.js';
 import { SaveLoadError } from './save-error.js';
 import { validateActiveRun } from './save-schema.js';
 
 export function encodeActiveRun(state: ActiveRun): string {
-  return canonicalJson(validateActiveRun(state));
+  return stableJson(validateActiveRun(state));
 }
 
 export function decodeActiveRun(json: string): ActiveRun {
@@ -1150,7 +1150,7 @@ Run: `npm run typecheck --workspace @woven-deep/engine && git diff --check`
 
 ```bash
 git add packages/engine/src packages/engine/test/save-codec.test.ts
-git commit -m "feat: validate canonical active-run saves"
+git commit -m "feat: validate byte-stable active-run saves"
 ```
 
 ---
@@ -1166,7 +1166,7 @@ git commit -m "feat: validate canonical active-run saves"
 - Test: `packages/engine/test/migration.test.ts`
 
 **Interfaces:**
-- Consumes: `expandLegacySeed`, `deriveRngStreams`, `validateActiveRun`, `canonicalJson`
+- Consumes: `expandLegacySeed`, `deriveRngStreams`, `validateActiveRun`, `stableJson`
 - Produces: `migrateActiveRun(input): ActiveRun`
 - Changes: `decodeActiveRun` migrates parsed input before current validation
 
@@ -1240,7 +1240,7 @@ describe('active-run migrations', () => {
 });
 ```
 
-Create `v1-migrated-save.json` as this independently calculated canonical line:
+Create `v1-migrated-save.json` as this independently calculated stable JSON line:
 
 ```json
 {"activeFloorId":"floor.legacy","contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","floors":[{"depth":1,"entities":[],"floorId":"floor.legacy","generatorVersion":1,"height":4,"seed":[2986037511,744488920,2204577711,2810942300],"tiles":[0,0,0,0,0,0,1,1,1,0,0,1,1,1,0,0,0,0,0,0],"width":5}],"gameVersion":"0.1.0","hero":{"floorId":"floor.legacy","heroId":"hero.legacy","name":"Ada","x":2,"y":1},"recentCommands":[],"revision":2,"rng":{"combat":[4182890240,742980537,371130335,2272854415],"effects":[394922053,782429746,791961853,2027658551],"encounters":[2875054216,1500702155,3695425183,1362299020],"generation":[1772974510,3623323994,1180398686,4289890046],"loot":[3083088985,2714152083,3489508821,2100808531],"narrative":[2974878737,3168120939,2699360125,2544098397]},"runId":"run.legacy","runSeed":[2986037511,744488920,2204577711,2810942300],"schemaVersion":1,"turn":2}
@@ -1336,11 +1336,11 @@ return migrateActiveRun(input);
 
 Export migration from `src/index.ts`.
 
-- [ ] **Step 4: Independently verify the expected canonical v1 fixture**
+- [ ] **Step 4: Independently verify the expected byte-stable v1 fixture**
 
 Run a one-off Node reference command that copies the design's SplitMix32 formulas without importing engine production code. Require it to reproduce the checked-in run/floor seed `[2986037511,744488920,2204577711,2810942300]` and all six checked-in RNG states. Manually verify the active floor, one floor, empty recent ring, and preserved identifiers and coordinates. Do not make the test generate or overwrite its own expected fixture.
 
-The committed `v1-migrated-save.json` must contain the single-line canonical JSON plus one source-file newline; the test's `trimEnd()` removes only that source newline.
+The committed `v1-migrated-save.json` must contain the single-line stable JSON plus one source-file newline; the test's `trimEnd()` removes only that source newline.
 
 - [ ] **Step 5: Run migration GREEN and all save tests**
 
@@ -1367,7 +1367,7 @@ git commit -m "feat: migrate legacy active-run saves"
 - Test: `packages/engine/test/replay.test.ts`
 
 **Interfaces:**
-- Consumes: `ActiveRun`, `GameCommand`, `resolveCommand`, `encodeActiveRun`, `decodeActiveRun`, `canonicalJson`
+- Consumes: `ActiveRun`, `GameCommand`, `resolveCommand`, `encodeActiveRun`, `decodeActiveRun`, `stableJson`
 - Produces: `ReplayStep`, `ReplayResult`
 - Produces: `replayCommands(initial, commands): ReplayResult`
 
@@ -1377,7 +1377,7 @@ git commit -m "feat: migrate legacy active-run saves"
 // packages/engine/test/replay.test.ts
 import { describe, expect, it } from 'vitest';
 import {
-  canonicalJson, createDemoRun, decodeActiveRun, encodeActiveRun, replayCommands, resolveCommand,
+  stableJson, createDemoRun, decodeActiveRun, encodeActiveRun, replayCommands, resolveCommand,
   type GameCommand,
 } from '../src/index.js';
 
@@ -1398,7 +1398,7 @@ describe('replayCommands', () => {
     const reloaded = decodeActiveRun(encodeActiveRun(before.state));
     const after = replayCommands(reloaded, commands.slice(4));
     expect(encodeActiveRun(after.state)).toBe(encodeActiveRun(continuous.state));
-    expect(canonicalJson([...before.steps, ...after.steps])).toBe(canonicalJson(continuous.steps));
+    expect(stableJson([...before.steps, ...after.steps])).toBe(stableJson(continuous.steps));
   });
 
   it('does not mutate the initial state or command sequence', () => {
@@ -1429,7 +1429,7 @@ describe('replayCommands', () => {
       const before = replayCommands(createDemoRun(), generated.slice(0, 12));
       const after = replayCommands(decodeActiveRun(encodeActiveRun(before.state)), generated.slice(12));
       expect(encodeActiveRun(after.state)).toBe(encodeActiveRun(continuous.state));
-      expect(canonicalJson([...before.steps, ...after.steps])).toBe(canonicalJson(continuous.steps));
+      expect(stableJson([...before.steps, ...after.steps])).toBe(stableJson(continuous.steps));
     }
   });
 });
@@ -1564,7 +1564,7 @@ Expected: FAIL because `scripts/engine-demo.mjs` is missing.
 - Ignore blank lines.
 - `move <id> <expectedRevision> <direction>` creates a move command.
 - `wait <id> <expectedRevision>` creates a wait command.
-- `save` records the split point and current canonical save.
+- `save` records the split point and current byte-stable save.
 - `reload` replaces current state with `decodeActiveRun(saved)`; fail if no preceding save exists.
 - `repeat <id>` reuses the exact previously parsed command; fail if unknown.
 - Unknown directives, extra/missing fields, unsafe revisions, and invalid directions fail with a line number.
@@ -1576,7 +1576,7 @@ Use this coordinator shape:
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import {
-  assertOpaqueId, canonicalJson, createDemoRun, decodeActiveRun, encodeActiveRun, resolveCommand,
+  assertOpaqueId, stableJson, createDemoRun, decodeActiveRun, encodeActiveRun, resolveCommand,
 } from '../packages/engine/dist/index.js';
 
 function stateHash(state) {
@@ -1629,13 +1629,13 @@ try {
   for (const step of split.steps) {
     const detail = step.result.status === 'invalid' || step.result.status === 'rejected' ? ` ${step.result.reason}` : '';
     process.stdout.write(`${step.result.status}${detail}\n`);
-    for (const event of step.events) process.stdout.write(`event ${event.type} ${canonicalJson(event)}\n`);
+    for (const event of step.events) process.stdout.write(`event ${event.type} ${stableJson(event)}\n`);
   }
   process.stdout.write(`hero (${hero.x},${hero.y}) turn ${split.state.turn} revision ${split.state.revision}\n`);
   process.stdout.write(`state ${stateHash(split.state)}\n`);
   if (verify) {
     const continuous = await runProgram(path, false);
-    if (encodeActiveRun(continuous.state) !== encodeActiveRun(split.state) || canonicalJson(continuous.steps) !== canonicalJson(split.steps)) {
+    if (encodeActiveRun(continuous.state) !== encodeActiveRun(split.state) || stableJson(continuous.steps) !== stableJson(split.steps)) {
       throw new Error('continuous and save/reload execution diverged');
     }
     process.stdout.write('deterministic replay verified\n');
