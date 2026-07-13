@@ -131,9 +131,18 @@ function validateFloor(floorValue: SavedFloor, floorIndex: number, globalIds: Gl
 
   const stairs = [[floorValue.stairUp, 4, 'stairUp'], [floorValue.stairDown, 5, 'stairDown']] as const;
   for (const [position, expectedTile, name] of stairs) {
-    if (position && floorValue.tiles[cell(floorValue, position.x, position.y, `${base}.${name}`)] !== expectedTile) {
+    const matchingTiles = floorValue.tiles.reduce<number[]>((indexes, tileValue, index) => {
+      if (tileValue === expectedTile) indexes.push(index);
+      return indexes;
+    }, []);
+    if (position === null) {
+      if (matchingTiles.length !== 0) fail(`${base}.${name}`, `${name} metadata is required for its terrain tile`);
+      continue;
+    }
+    if (floorValue.tiles[cell(floorValue, position.x, position.y, `${base}.${name}`)] !== expectedTile) {
       fail(`${base}.${name}`, `${name} must match its terrain tile`);
     }
+    if (matchingTiles.length !== 1) fail(`${base}.${name}`, `${name} must identify the only matching terrain tile`);
   }
   if (floorValue.stairUp && floorValue.stairDown && floorValue.stairUp.x === floorValue.stairDown.x && floorValue.stairUp.y === floorValue.stairDown.y) {
     fail(`${base}.stairDown`, 'stair positions must be distinct');
