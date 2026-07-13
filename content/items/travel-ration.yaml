@@ -16,7 +16,7 @@ entries:
     equipment: null
     combat: null
     light: null
-    identification: { mode: known, groupId: null, appearances: [] }
+    identification: { mode: known, poolId: null }
     effects:
       - { effectId: effect.hunger.restore, parameters: { amount: 1800 }, requiresLivingTarget: true }
       - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

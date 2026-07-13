@@ -313,7 +313,7 @@ Using, throwing, reading, drinking, refueling, extinguishing, and relighting are
 
 ## Identification
 
-At run creation, the `effects` random stream deterministically shuffles appearances within schema-compatible potion and scroll identification groups. The complete mapping is saved in hidden run state and never regenerated.
+At run creation, the `effects` random stream deterministically assigns each unidentified item definition a unique verb–noun name and a visual from its referenced YAML identification pool. Item definitions contain only their real identified names. The complete mapping is saved in hidden run state and never regenerated.
 
 Unknown consumables expose only their appearance, category, quantity, and other legitimately observable facts. Using an unknown potion or scroll applies its effect and then identifies the appearance for the current hero. Identifying one appearance reveals all current and future matching instances in that run.
 

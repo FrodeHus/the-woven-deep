@@ -1,5 +1,6 @@
-import { DERIVED_STAT_NAMES, type CompiledContentPack, type ContentEntry, type ItemContentEntry } from '@woven-deep/content';
+import { DERIVED_STAT_NAMES, type CompiledContentPack, type ContentEntry, type IdentificationPoolContentEntry, type ItemContentEntry } from '@woven-deep/content';
 import type { ActiveRun } from './model.js';
+import { unidentifiedPresentation } from './identification.js';
 import { hungerStage } from './survival.js';
 
 function entryMap(pack: CompiledContentPack): ReadonlyMap<string, ContentEntry> {
@@ -19,27 +20,34 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
     throw new Error(`content-bound validation: content hash ${pack.hash} does not match run ${run.contentHash}`);
   }
   const entries = entryMap(pack);
-  const shuffledItems = pack.entries.filter((entry): entry is ItemContentEntry =>
-    entry.kind === 'item' && entry.identification.mode === 'shuffled');
+  const unidentifiedItems = pack.entries.filter((entry): entry is ItemContentEntry =>
+    entry.kind === 'item' && entry.identification.mode !== 'known');
   const mappedContentIds = Object.keys(run.identification.appearanceByContentId).sort();
-  const expectedContentIds = shuffledItems.map((entry) => entry.id).sort();
+  const expectedContentIds = unidentifiedItems.map((entry) => entry.id).sort();
   if (mappedContentIds.length !== expectedContentIds.length
     || mappedContentIds.some((contentId, index) => contentId !== expectedContentIds[index])) {
-    throw new Error('content-bound validation: identification map does not match shuffled item definitions');
+    throw new Error('content-bound validation: identification map does not match unidentified item definitions');
   }
   const assignedAppearances = new Set<string>();
-  for (const item of shuffledItems) {
+  for (const item of unidentifiedItems) {
     const appearanceId = run.identification.appearanceByContentId[item.id];
-    if (!appearanceId || !item.identification.appearances.includes(appearanceId)) {
+    const pool = pack.entries.find((entry): entry is IdentificationPoolContentEntry =>
+      entry.kind === 'identification-pool' && entry.id === item.identification.poolId);
+    if (!appearanceId || !pool) {
       throw new Error(`content-bound validation: identification map appearance for ${item.id} is invalid`);
     }
-    const groupKey = `${item.identification.groupId}:${appearanceId}`;
+    try { unidentifiedPresentation({ content: pack, appearanceId }); } catch {
+      throw new Error(`content-bound validation: identification map appearance for ${item.id} is invalid`);
+    }
+    const groupKey = `${pool.id}:${appearanceId}`;
     if (assignedAppearances.has(groupKey)) {
-      throw new Error(`content-bound validation: identification map for ${item.identification.groupId} is not one-to-one`);
+      throw new Error(`content-bound validation: identification map for ${pool.id} does not use unique names`);
     }
     assignedAppearances.add(groupKey);
   }
-  const allocatedAppearances = new Set(Object.values(run.identification.appearanceByContentId));
+  const allocatedAppearances = new Set(unidentifiedItems
+    .filter((item) => item.identification.mode === 'shuffled')
+    .map((item) => run.identification.appearanceByContentId[item.id]!));
   for (const appearanceId of run.identification.knownAppearanceIds) {
     if (!allocatedAppearances.has(appearanceId)) {
       throw new Error(`content-bound validation: known appearance ${appearanceId} was not allocated`);

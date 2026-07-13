@@ -16,5 +16,5 @@ entries:
     equipment: { slots: [body], handedness: none, reservedSlots: [] }
     combat: { accuracy: 0, defense: 1, armor: 1, damage: null, range: 0, ammunitionTag: null }
     light: null
-    identification: { mode: known, groupId: null, appearances: [] }
+    identification: { mode: known, poolId: null }
     effects: []

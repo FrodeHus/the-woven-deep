@@ -124,7 +124,7 @@ describe('atomic world steps', () => {
       equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] }, combat: null,
       light: { color: [255, 180, 100], radius: 3, strength: 100, fuelCapacity: 2,
         fuelPerTime: 1, warningThresholds: [1], fuelTags: ['oil'] },
-      identification: { mode: 'known', groupId: null, appearances: [] }, effects: [],
+      identification: { mode: 'known', poolId: null }, effects: [],
     };
     const item: ItemInstance = { itemId: 'item.step-torch.1', contentId: definition.id, quantity: 1,
       condition: 100, enchantment: null, identified: true, charges: null, fuel: 2, enabled: true,

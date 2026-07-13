@@ -118,8 +118,20 @@ const itemLight = z.strictObject({
 
 const identification = z.strictObject({
   mode: z.enum(['known', 'shuffled', 'instance']),
-  groupId: stableIdSchema.nullable(),
-  appearances: z.array(stableIdSchema),
+  poolId: stableIdSchema.nullable(),
+});
+
+const identificationPoolEntry = z.strictObject({
+  ...base,
+  kind: z.literal('identification-pool'),
+  category: z.enum(['weapon', 'ammunition', 'armor', 'shield', 'light', 'fuel', 'food', 'potion', 'scroll', 'ring', 'misc']),
+  verbs: z.array(z.string().trim().min(1).max(40)).min(1),
+  nouns: z.array(z.string().trim().min(1).max(40)).min(1),
+  visuals: z.array(z.strictObject({
+    id: stableIdSchema,
+    glyph,
+    color,
+  })).min(1),
 });
 
 const itemEntry = z.strictObject({
@@ -311,6 +323,7 @@ const rawContentEntrySchema = z.discriminatedUnion('kind', [
   balanceEntry,
   vaultEntry,
   conditionEntry,
+  identificationPoolEntry,
 ]);
 
 export const contentEntrySchema = rawContentEntrySchema.transform((entry) => {

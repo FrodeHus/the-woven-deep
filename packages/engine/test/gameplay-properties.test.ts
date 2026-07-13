@@ -1,12 +1,92 @@
 import fc from 'fast-check';
-import { describe, expect, it } from 'vitest';
+import { resolve } from 'node:path';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   advanceToNextReady, createDemoContentPack, createDemoRun, mergeStacks, selectReadyActor,
   splitStack, stableJson, type ItemInstance, itemLightSources, advanceSurvival, hungerStage, refuelItem,
-  projectGameplayState,
+  projectGameplayState, createGameplayDemoRun, resolveCommand, validateActiveRun, validateContentBoundRun,
+  type ActiveRun, type Direction, type GameCommand,
 } from '../src/index.js';
-import type { ItemContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
 import { actor, schedulerStateArbitrary } from './arbitraries.js';
+
+let gameplayPack: CompiledContentPack;
+let gameplayRun: ActiveRun;
+
+beforeAll(async () => {
+  gameplayPack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  gameplayRun = createGameplayDemoRun(gameplayPack).run;
+});
+
+const directions: readonly Direction[] = [
+  'north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest',
+];
+
+function assertEquipmentConsistent(state: ActiveRun): void {
+  const items = new Map(state.items.map((item) => [item.itemId, item]));
+  for (const actorState of state.actors) {
+    for (const [slot, itemId] of Object.entries(actorState.equipment)) {
+      if (itemId === null) continue;
+      expect(items.get(itemId)?.location).toEqual({ type: 'equipped', actorId: actorState.actorId, slot });
+    }
+  }
+  for (const item of state.items) {
+    expect(item.quantity).toBeGreaterThan(0);
+    if (item.location.type !== 'equipped') continue;
+    const owner = state.actors.find((candidate) => candidate.actorId === item.location.actorId);
+    expect(owner?.equipment[item.location.slot]).toBe(item.itemId);
+  }
+}
+
+describe('cross-system gameplay sequence properties', () => {
+  it('keeps the shrunk revealed-passage sequence saveable', () => {
+    let state = structuredClone(gameplayRun);
+    for (const [index, actionName] of ['wait', 'wait', 'north', 'wait', 'wait'].entries()) {
+      const command = {
+        ...(actionName === 'north' ? { type: 'move', direction: 'north' } : { type: 'wait' }),
+        commandId: `command.revealed-passage-${index}`,
+        expectedRevision: state.revision,
+      } as GameCommand;
+      state = resolveCommand(state, command, { content: gameplayPack }).state;
+    }
+    expect(validateActiveRun(state)).toEqual(state);
+  });
+
+  it('preserves saves, content bounds, resources, equipment, reactions, and hidden state', () => {
+    const action = fc.oneof(
+      fc.constant('wait' as const),
+      fc.constant('search' as const),
+      fc.constantFrom(...directions),
+    );
+    fc.assert(fc.property(fc.array(action, { minLength: 1, maxLength: 10 }), (actions) => {
+      let state = structuredClone(gameplayRun);
+      for (const [index, actionName] of actions.entries()) {
+        const previousWorldTime = state.worldTime;
+        const command = {
+          ...(actionName === 'wait' || actionName === 'search'
+            ? { type: actionName }
+            : { type: 'move', direction: actionName }),
+          commandId: `command.property-${index}`,
+          expectedRevision: state.revision,
+        } as GameCommand;
+        const resolution = resolveCommand(state, command, { content: gameplayPack });
+        state = resolution.state;
+        expect(validateActiveRun(state)).toEqual(state);
+        expect(() => validateContentBoundRun(state, gameplayPack)).not.toThrow();
+        expect(state.worldTime).toBeGreaterThanOrEqual(previousWorldTime);
+        assertEquipmentConsistent(state);
+        for (const reaction of resolution.events.filter((event) => event.type === 'reaction.triggered')) {
+          const reactor = state.actors.find((candidate) => candidate.actorId === reaction.actorId);
+          expect(reactor?.disposition).toBe('hostile');
+        }
+        const projection = stableJson(projectGameplayState({ state, content: gameplayPack }));
+        expect(projection).not.toContain('appearanceByContentId');
+        expect(projection).not.toContain('rng');
+      }
+    }), { seed: 0x4a09, numRuns: 500 });
+  }, 30_000);
+});
 
 describe('gameplay scheduler properties', () => {
   it('always selects a living actor with safe integer state without mutating its input', () => {
@@ -75,7 +155,7 @@ describe('inventory conservation properties', () => {
     kind: 'item', id: 'item.property', name: 'Property item', glyph: '*', color: '#ffffff', tags: [],
     category: 'misc', stackLimit: 100, price: 1, rarity: 'common', minDepth: 0, maxDepth: 20,
     actionCost: 100, equipment: null, combat: null, light: null,
-    identification: { mode: 'known', groupId: null, appearances: [] }, effects: [],
+    identification: { mode: 'known', poolId: null }, effects: [],
   };
   const content = (() => {
     const base = createDemoContentPack();
@@ -130,7 +210,7 @@ describe('item light properties', () => {
           equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] }, combat: null,
           light: { color: [255, 255, 255], radius: 3, strength: 100, fuelCapacity: 100,
             fuelPerTime: 1, warningThresholds: [10], fuelTags: ['oil'] },
-          identification: { mode: 'known', groupId: null, appearances: [] }, effects: [],
+          identification: { mode: 'known', poolId: null }, effects: [],
         };
         const base = createDemoRun();
         const location = locationType === 'backpack' ? { type: 'backpack' as const, actorId: 'hero.demo' }
@@ -153,7 +233,7 @@ describe('survival resource properties', () => {
     equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] }, combat: null,
     light: { color: [255, 255, 255], radius: 3, strength: 100, fuelCapacity: 100,
       fuelPerTime: 2, warningThresholds: [50, 10], fuelTags: ['oil'] },
-    identification: { mode: 'known', groupId: null, appearances: [] }, effects: [],
+    identification: { mode: 'known', poolId: null }, effects: [],
   };
   const fuelDefinition: ItemContentEntry = { ...lightDefinition, id: 'item.oil', name: 'Oil', category: 'fuel',
     stackLimit: 100, tags: ['oil'], equipment: null, light: null };

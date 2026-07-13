@@ -65,6 +65,16 @@ describe('mutable dungeon features', () => {
     expect(() => encodeActiveRun(result.state)).not.toThrow();
   });
 
+  it('saves an actor standing in a revealed secret passage', () => {
+    const base = createDemoRun();
+    const feature = { featureId: 'secret.passage', type: 'secret' as const, floorId: 'floor.demo', x: 3, y: 2,
+      contentId: null, coverTileId: 0 as const, state: 'revealed' as const, discoveryDifficulty: 1,
+      discovery: { discoveredByActorIds: ['hero.demo'], progressByActorId: { 'hero.demo': 1 },
+        attemptedContextKeys: ['context.test'] } };
+    const run = { ...base, actors: [{ ...base.actors[0]!, x: 3, y: 2 }], features: [feature] };
+    expect(() => encodeActiveRun(run)).not.toThrow();
+  });
+
   it('records one passive contribution per saved illumination context', () => {
     const base = createDemoRun();
     const feature = { featureId: 'secret.1', type: 'secret' as const, floorId: 'floor.demo', x: 2, y: 2,

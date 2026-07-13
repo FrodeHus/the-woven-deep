@@ -1,0 +1,30 @@
+schemaVersion: 2
+entries:
+  - kind: identification-pool
+    id: identification-pool.potions
+    name: Potion unidentified names
+    tags: [identification, potion]
+    category: potion
+    verbs:
+      - Bubbling
+      - Crawling
+      - Dancing
+      - Flickering
+      - Murmuring
+      - Smoking
+      - Weeping
+      - Whispering
+    nouns:
+      - draught
+      - elixir
+      - flask
+      - phial
+      - tincture
+      - tonic
+      - vial
+      - vessel
+    visuals:
+      - { id: visual.amber-glass, glyph: "!", color: "#c58745" }
+      - { id: visual.cobalt-glass, glyph: "¡", color: "#5277b8" }
+      - { id: visual.jade-glass, glyph: "!", color: "#4f9d75" }
+      - { id: visual.violet-glass, glyph: "ǃ", color: "#8765aa" }

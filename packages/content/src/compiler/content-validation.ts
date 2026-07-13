@@ -1,6 +1,6 @@
 import type {
   BalanceContentEntry, ContentEntry, EffectDefinition, ItemContentEntry, LootTableContentEntry,
-  MonsterContentEntry,
+  MonsterContentEntry, IdentificationPoolContentEntry,
 } from '../model.js';
 import type { ContentCompileIssue } from './error.js';
 import { ACTION_COST_IDS, BEHAVIOR_PARAMETER_SCHEMAS, EFFECT_PARAMETER_SCHEMAS } from './registries.js';
@@ -145,45 +145,63 @@ function itemCompatibilityIssues(
   return issues;
 }
 
-function identificationIssues(items: readonly LocatedContentEntry[]): ContentCompileIssue[] {
+function identificationIssues(
+  items: readonly LocatedContentEntry[],
+  pools: readonly LocatedContentEntry[],
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
-  const groups = new Map<string, Array<{ item: ItemContentEntry; file: string }>>();
+  const usersByPool = new Map<string, Array<{ item: ItemContentEntry; file: string }>>();
+  for (const located of pools) {
+    const pool = located.entry as IdentificationPoolContentEntry;
+    const path = `$.entries.${pool.id}`;
+    if (new Set(pool.verbs).size !== pool.verbs.length) {
+      issues.push(issue(located.file, `${path}.verbs`, 'identification pool verbs must be unique'));
+    }
+    if (new Set(pool.nouns).size !== pool.nouns.length) {
+      issues.push(issue(located.file, `${path}.nouns`, 'identification pool nouns must be unique'));
+    }
+    if (new Set(pool.visuals.map((visual) => visual.id)).size !== pool.visuals.length) {
+      issues.push(issue(located.file, `${path}.visuals`, 'identification pool visual IDs must be unique'));
+    }
+  }
   for (const located of items) {
     const item = located.entry as ItemContentEntry;
     const path = `$.entries.${item.id}.identification`;
     if (item.identification.mode === 'known') {
-      if (item.identification.groupId !== null || item.identification.appearances.length > 0) {
-        issues.push(issue(located.file, path, 'known items cannot declare an identification group or appearances'));
+      if (item.identification.poolId !== null) {
+        issues.push(issue(located.file, `${path}.poolId`, 'known items cannot declare an identification pool'));
       }
       continue;
     }
-    if (item.identification.mode === 'shuffled' && item.identification.groupId === null) {
-      issues.push(issue(located.file, `${path}.groupId`, 'shuffled identification requires a group ID'));
+    if (item.identification.poolId === null) {
+      issues.push(issue(located.file, `${path}.poolId`, 'unidentified items require an identification pool'));
       continue;
     }
-    if (item.identification.mode === 'instance' && item.identification.groupId !== null) {
-      issues.push(issue(located.file, `${path}.groupId`, 'instance identification cannot declare a group ID'));
+    const pool = byId.get(item.identification.poolId);
+    if (!pool) {
+      issues.push(issue(located.file, `${path}.poolId`, `unknown identification pool ${item.identification.poolId}`));
+      continue;
     }
-    if (item.identification.appearances.length === 0) {
-      issues.push(issue(located.file, `${path}.appearances`, 'unidentified items require at least one appearance'));
+    if (pool.kind !== 'identification-pool') {
+      issues.push(issue(located.file, `${path}.poolId`,
+        `identification pool reference ${item.identification.poolId} resolves to ${pool.kind}`));
+      continue;
     }
-    if (item.identification.groupId) {
-      const group = groups.get(item.identification.groupId) ?? [];
-      group.push({ item, file: located.file });
-      groups.set(item.identification.groupId, group);
+    if (pool.category !== item.category) {
+      issues.push(issue(located.file, `${path}.poolId`,
+        `identification pool ${pool.id} is for ${pool.category}, not ${item.category}`));
     }
+    const users = usersByPool.get(pool.id) ?? [];
+    users.push({ item, file: located.file });
+    usersByPool.set(pool.id, users);
   }
-  for (const [groupId, members] of groups) {
-    const categories = new Set(members.map(({ item }) => item.category));
-    const pools = new Set(members.map(({ item }) => JSON.stringify(item.identification.appearances)));
-    const appearances = members[0]?.item.identification.appearances ?? [];
-    const bijective = new Set(appearances).size === appearances.length && appearances.length === members.length;
-    if (categories.size === 1 && pools.size === 1 && bijective) continue;
-    for (const { item, file } of members) {
-      const message = categories.size !== 1 || pools.size !== 1
-        ? `identification group ${groupId} must use one category and the same ordered appearance pool`
-        : `identification group ${groupId} must form a bijection between ${members.length} items and appearances`;
-      issues.push(issue(file, `$.entries.${item.id}.identification`, message));
+  for (const [poolId, users] of usersByPool) {
+    const pool = byId.get(poolId) as IdentificationPoolContentEntry;
+    if (pool.verbs.length * pool.nouns.length >= users.length) continue;
+    for (const { item, file } of users) {
+      issues.push(issue(file, `$.entries.${item.id}.identification.poolId`,
+        `identification pool ${poolId} can create ${pool.verbs.length * pool.nouns.length} unique names for ${users.length} items`));
     }
   }
   return issues;
@@ -292,7 +310,8 @@ export function validateContentEntries(locatedEntries: readonly LocatedContentEn
     if (entry.kind === 'spell' || entry.kind === 'trap') issues.push(...effectIssues(file, entry.id, entry.effects, byId));
   }
   const itemEntries = locatedEntries.filter(({ entry }) => entry.kind === 'item');
-  issues.push(...identificationIssues(itemEntries));
+  const poolEntries = locatedEntries.filter(({ entry }) => entry.kind === 'identification-pool');
+  issues.push(...identificationIssues(itemEntries, poolEntries, byId));
   issues.push(...lootIssues(locatedEntries, byId));
   const balanceEntries = locatedEntries.filter(({ entry }) => entry.kind === 'balance');
   if (balanceEntries.length > 1) {

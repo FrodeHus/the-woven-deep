@@ -26,7 +26,12 @@ const entries: readonly ContentEntry[] = [
     actionCost: 100, equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
     combat: null, light: { color: [255, 200, 100], radius: 6, strength: 180, fuelCapacity: 1000,
       fuelPerTime: 1, warningThresholds: [100], fuelTags: ['lamp-oil'] },
-    identification: { mode: 'known', groupId: null, appearances: [] }, effects: [],
+    identification: { mode: 'known', poolId: null }, effects: [],
+  },
+  {
+    kind: 'identification-pool', id: 'identification-pool.potions', name: 'Potion names', tags: [],
+    category: 'potion', verbs: ['Bubbling'], nouns: ['vial'],
+    visuals: [{ id: 'visual.blue-glass', glyph: '!', color: '#4466aa' }],
   },
   {
     kind: 'loot-table', id: 'loot-table.basic', name: 'Basic loot', tags: [], rolls: 1,
@@ -61,7 +66,8 @@ export function contentPack(hash: string, kinds: readonly ContentKind[]): Compil
   return {
     schemaVersion: 2,
     hash,
-    entries: entries.filter((entry) => kinds.includes(entry.kind)),
+    entries: entries.filter((entry) => kinds.includes(entry.kind))
+      .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
     generationReport: { foundationalCategories: [] },
   };
 }

@@ -3,6 +3,7 @@ export const CONTENT_SCHEMA_VERSION = 2 as const;
 export type ContentId = string;
 export const CONTENT_KIND_IDS = [
   'monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault', 'condition',
+  'identification-pool',
 ] as const;
 export type ContentKind = typeof CONTENT_KIND_IDS[number];
 export const DERIVED_STAT_NAMES = [
@@ -109,8 +110,21 @@ export interface LightItemDefinition {
 
 export interface IdentificationDefinition {
   readonly mode: 'known' | 'shuffled' | 'instance';
-  readonly groupId: string | null;
-  readonly appearances: readonly string[];
+  readonly poolId: string | null;
+}
+
+export interface ItemAppearanceVisualDefinition {
+  readonly id: ContentId;
+  readonly glyph: string;
+  readonly color: string;
+}
+
+export interface IdentificationPoolContentEntry extends BaseContentEntry {
+  readonly kind: 'identification-pool';
+  readonly category: ItemCategory;
+  readonly verbs: readonly string[];
+  readonly nouns: readonly string[];
+  readonly visuals: readonly ItemAppearanceVisualDefinition[];
 }
 
 export interface ItemContentEntry extends PresentedContentEntry {
@@ -246,7 +260,8 @@ export interface VaultContentEntry extends BaseContentEntry {
 }
 
 export type ContentEntry = MonsterContentEntry | ItemContentEntry | SpellContentEntry | TrapContentEntry
-  | LootTableContentEntry | BalanceContentEntry | VaultContentEntry | ConditionContentEntry;
+  | LootTableContentEntry | BalanceContentEntry | VaultContentEntry | ConditionContentEntry
+  | IdentificationPoolContentEntry;
 
 export interface ContentGenerationReport {
   readonly foundationalCategories: readonly string[];

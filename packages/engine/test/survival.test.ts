@@ -23,7 +23,7 @@ function light(): ItemContentEntry {
     actionCost: 100, equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
     combat: null, light: { color: [255, 180, 100], radius: 4, strength: 120, fuelCapacity: 20,
       fuelPerTime: 1, warningThresholds: [10, 5], fuelTags: ['oil'] },
-    identification: { mode: 'known', groupId: null, appearances: [] }, effects: [],
+    identification: { mode: 'known', poolId: null }, effects: [],
   };
 }
 

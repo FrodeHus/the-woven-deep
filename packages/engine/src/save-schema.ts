@@ -353,9 +353,11 @@ function ensureActorWalkable(
 ): void {
   const index = cell(floorValue, x, y, path);
   if (tileDefinition(floorValue.tiles[index]!).walkable) return;
-  const openDoor = features.some((candidate) => candidate.type === 'door' && candidate.state === 'open'
-    && candidate.floorId === floorValue.floorId && candidate.x === x && candidate.y === y);
-  if (!openDoor) fail(path, 'position is not on walkable terrain');
+  const walkableFeature = features.some((candidate) => (
+    (candidate.type === 'door' && candidate.state === 'open')
+    || (candidate.type === 'secret' && candidate.state === 'revealed')
+  ) && candidate.floorId === floorValue.floorId && candidate.x === x && candidate.y === y);
+  if (!walkableFeature) fail(path, 'position is not on walkable terrain');
 }
 
 function validateOrderedIds(values: readonly string[], path: string, noun: string, idField?: string): void {

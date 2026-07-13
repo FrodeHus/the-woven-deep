@@ -1,6 +1,6 @@
 # Server content configuration
 
-The Woven Deep loads gameplay content from YAML when the server starts. Administrators can add and balance monsters, items, spells, traps, loot tables, vaults, conditions, and global balance values without rebuilding the application, provided they use the engine's supported behaviors, effects, targets, and condition traits.
+The Woven Deep loads gameplay content from YAML when the server starts. Administrators can add and balance monsters, items, identification pools, spells, traps, loot tables, vaults, conditions, and global balance values without rebuilding the application, provided they use the engine's supported behaviors, effects, targets, and condition traits.
 
 YAML is configuration, not a scripting language. A new combination of supported rules needs only YAML. A fundamentally new rule requires a code change, a strict schema, tests, and an update to this guide.
 
@@ -78,7 +78,7 @@ Unknown fields are errors, including plausible misspellings.
 |---|---|---|---|
 | `schemaVersion` | integer | Required | Must be exactly `2`. |
 | `entries` | array | Required, at least one | May contain any supported content kind. |
-| `kind` | enum | Required | One of `monster`, `item`, `spell`, `trap`, `loot-table`, `balance`, `vault`, or `condition`. |
+| `kind` | enum | Required | One of `monster`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, or `condition`. |
 | `id` | string | Required | Globally unique stable ID such as `monster.cave-rat`. |
 | `name` | string | Required | Trimmed display name, 1–80 characters. |
 | `tags` | slug array | Defaults to `[]` | Descriptive taxonomy. Tags never activate engine rules. |
@@ -215,7 +215,7 @@ entries:
 | `equipment` | object or null | Yes | Slots, handedness, and reserved slots. |
 | `combat` | object or null | Yes | Accuracy, defense, armor, optional damage dice, non-negative range, and optional ammunition tag. A non-null ammunition tag must match a tag on an ammunition item. |
 | `light` | object or null | Yes | RGB color, radius 1–32, strength 1–255, positive fuel capacity/use, descending unique warning thresholds no greater than capacity, and accepted fuel tags. |
-| `identification` | object | Yes | Mode `known`, `shuffled`, or `instance`, optional group ID, and appearance IDs under the rules below. |
+| `identification` | object | Yes | Mode `known`, `shuffled`, or `instance`, plus a separate identification-pool reference under the rules below. The item `name` is always its real, identified name. |
 | `effects` | effect array | Yes | Ordered primitive effects, possibly empty. |
 
 Equipment `slots` use `main-hand`, `off-hand`, `body`, `head`, `hands`, `feet`, `neck`, `left-ring`, or `right-ring`. Handedness is `one-handed`, `two-handed`, or `none`. Two-handed items use `main-hand` and reserve `off-hand`; a slot cannot also be reserved.
@@ -224,9 +224,11 @@ Category compatibility is strict: weapons require equipment plus damage; armor a
 
 Identification modes have distinct contracts:
 
-- `known` uses `groupId: null` and no appearances.
-- `shuffled` requires a group ID. Every member has the same item category and the same ordered appearance pool. The number of unique appearances must exactly equal the number of items in the group, giving every item one different appearance in a run.
-- `instance` uses `groupId: null` and at least one appearance. Its properties are learned for that individual item rather than every item sharing an appearance.
+- `known` uses `poolId: null` and always presents the item's real name, glyph, and color.
+- `shuffled` references an `identification-pool`. At run creation, the engine assigns each item definition a unique random verb–noun name and a random visual from that pool. Learning one shuffled appearance identifies every matching instance during that run.
+- `instance` also references an `identification-pool`, but learning an item's properties applies only to that physical item. Its unidentified name still comes from the run mapping.
+
+Items never contain their unidentified names. The generated mapping is saved with the run, so save/reload cannot reroll it, and a later run receives a new mapping. Items using the same pool must have the pool's category. The compiler requires at least as many unique verb–noun combinations as item definitions using the pool.
 
 ```yaml
 schemaVersion: 2
@@ -254,8 +256,35 @@ entries:
       fuelPerTime: 1
       warningThresholds: [600, 300, 100]
       fuelTags: [lamp-oil]
-    identification: { mode: known, groupId: null, appearances: [] }
+    identification: { mode: known, poolId: null }
     effects: []
+```
+
+## Identification-pool entries
+
+Identification pools are normal content-pack entries and may be placed in any `.yaml` or `.yml` file. `verbs` and `nouns` are non-empty word lists. Their Cartesian product supplies unique run-local names in `Verb noun` form. `visuals` supplies one or more random glyph/color combinations; visual IDs must be unique within the pool. Duplicate verbs or nouns are rejected because they could produce duplicate names.
+
+The pool's `name` is an administrator-facing label. It is not shown as an unidentified item name.
+
+```yaml
+schemaVersion: 2
+entries:
+  - kind: identification-pool
+    id: identification-pool.potions
+    name: Potion unidentified names
+    tags: [identification, potion]
+    category: potion
+    verbs: [Bubbling, Dancing, Smoking, Whispering]
+    nouns: [draught, flask, phial, vial]
+    visuals:
+      - { id: visual.amber-glass, glyph: "!", color: "#c58745" }
+      - { id: visual.cobalt-glass, glyph: "¡", color: "#5277b8" }
+```
+
+An item references the pool but declares only its real name:
+
+```yaml
+identification: { mode: shuffled, poolId: identification-pool.potions }
 ```
 
 ## Spell entries

@@ -11,7 +11,7 @@ import {
 const compactVault = '{kind: vault, id: vault.test-room, name: Test room, tags: [test], minDepth: 1, maxDepth: 5, rarity: common, weight: 10, maxPerFloor: 1, margin: 1, transforms: {rotations: [0, 180], reflectHorizontal: true}, layout: ["#####", "#+m.#", "#####"], legend: {"#": {terrain: wall}, ".": {terrain: floor}, "+": {terrain: floor, entrance: true}, m: {terrain: floor, slot: {id: monster-main, kind: monster, required: true, tags: [guard]}}}}';
 
 const compactMonster = '{kind: monster, id: monster.rat, name: Rat, glyph: r, color: "#aaaaaa", tags: [defense, food, healing, identification, light, offense], minDepth: 1, maxDepth: 5, attributes: {might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2}, health: 4, speed: 110, accuracy: 1, defense: 10, perception: 6, damage: {count: 1, sides: 3, bonus: 0}, armor: 0, resistances: {physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0}, disposition: hostile, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, runAppearanceChance: 1, rarity: common}';
-const compactItem = '{kind: item, id: item.lantern, name: Lantern, glyph: "¤", color: "#eeeeaa", tags: [defense, food, healing, identification, light, offense], minDepth: 1, maxDepth: 20, category: light, stackLimit: 1, price: 4, rarity: common, actionCost: 100, equipment: {slots: [off-hand], handedness: one-handed, reservedSlots: []}, combat: null, light: {color: [255, 200, 100], radius: 6, strength: 180, fuelCapacity: 1000, fuelPerTime: 1, warningThresholds: [100], fuelTags: [lamp-oil]}, identification: {mode: known, groupId: null, appearances: []}, effects: []}';
+const compactItem = '{kind: item, id: item.lantern, name: Lantern, glyph: "¤", color: "#eeeeaa", tags: [defense, food, healing, identification, light, offense], minDepth: 1, maxDepth: 20, category: light, stackLimit: 1, price: 4, rarity: common, actionCost: 100, equipment: {slots: [off-hand], handedness: one-handed, reservedSlots: []}, combat: null, light: {color: [255, 200, 100], radius: 6, strength: 180, fuelCapacity: 1000, fuelPerTime: 1, warningThresholds: [100], fuelTags: [lamp-oil]}, identification: {mode: known, poolId: null}, effects: []}';
 const compactBalance = '{kind: balance, id: balance.core, name: Core, tags: [core], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000, hungerThresholds: {hungry: 3000, weak: 1000, starving: 0}, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, restMaximumDuration: 5000, recoveryByHungerStage: {sated: 100, hungry: 50, weak: 0, starving: 0}, hungerStageModifiers: {sated: {}, hungry: {}, weak: {}, starving: {}}, formulas: {health: {base: 8, vitality: 2}}, actionCosts: {action.move: 100}}';
 const compactTimedCondition = '{kind: condition, id: condition.stunned, name: Stunned, description: Cannot act, tags: [control], color: "#d8c46a", duration: {mode: timed, default: 100, maximum: 500}, stacking: {mode: refresh, maximumStacks: 1}, modifiersPerStack: {defense: -2}, traits: [condition-trait.incapacitated]}';
 const compactPermanentCondition = '{kind: condition, id: condition.warded, name: Warded, description: Remains until removed, tags: [beneficial], color: "#80b8ff", duration: {mode: permanent, default: null, maximum: null}, stacking: {mode: refresh, maximumStacks: 1}, modifiersPerStack: {}, traits: []}';
@@ -177,16 +177,38 @@ describe('compileContentDirectory', () => {
     await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/missing foundational category identification/i);
   });
 
-  it('requires shuffled identification pools to be a bijection', async () => {
+  it('loads unidentified presentation from a separate pool instead of item definitions', async () => {
     const potion = (id: string) => compactItem.replace('item.lantern', id)
       .replace('category: light', 'category: potion')
       .replace('equipment: {slots: [off-hand], handedness: one-handed, reservedSlots: []}', 'equipment: null')
       .replace(/light: \{[^}]+\}/, 'light: null')
-      .replace('identification: {mode: known, groupId: null, appearances: []}',
-        'identification: {mode: shuffled, groupId: identification.potions, appearances: [appearance.one, appearance.two, appearance.three]}');
-    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactVault,
+      .replace('identification: {mode: known, poolId: null}',
+        'identification: {mode: shuffled, poolId: identification-pool.potions}');
+    const pool = '{kind: identification-pool, id: identification-pool.potions, name: Potion appearances, tags: [], category: potion, verbs: [Clouded, Smoking, Whispering], nouns: [vial, flask, phial], visuals: [{id: visual.teal-glass, glyph: "!", color: "#4faaa2"}, {id: visual.amber-glass, glyph: "¡", color: "#c58745"}]}';
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactVault, pool,
       potion('item.potion-one'), potion('item.potion-two')) });
-    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/identification group identification\.potions.*bijection/i);
+    const compiled = await compileContentDirectory({ rootDir: root });
+    const item = compiled.entries.find((entry) => entry.id === 'item.potion-one');
+    expect(item).toMatchObject({
+      name: 'Lantern',
+      identification: { mode: 'shuffled', poolId: 'identification-pool.potions' },
+    });
+    expect(item).not.toHaveProperty('identification.appearances');
+  });
+
+  it('requires enough unique verb-noun names for every item using a pool', async () => {
+    const potion = (id: string) => compactItem.replace('item.lantern', id)
+      .replace('category: light', 'category: potion')
+      .replace('equipment: {slots: [off-hand], handedness: one-handed, reservedSlots: []}', 'equipment: null')
+      .replace(/light: \{[^}]+\}/, 'light: null')
+      .replace('identification: {mode: known, poolId: null}',
+        'identification: {mode: shuffled, poolId: identification-pool.potions}');
+    const pool = '{kind: identification-pool, id: identification-pool.potions, name: Potion names, tags: [], category: potion, verbs: [Bubbling], nouns: [vial], visuals: [{id: visual.blue-glass, glyph: "!", color: "#4466aa"}]}';
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactVault, pool,
+      potion('item.potion-one'), potion('item.potion-two')) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /identification pool identification-pool\.potions can create 1 unique names for 2 items/i,
+    );
   });
 
   it('requires direct loot choices to reference items', async () => {

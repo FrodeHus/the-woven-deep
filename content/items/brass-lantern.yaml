@@ -26,5 +26,5 @@ entries:
       fuelPerTime: 1
       warningThresholds: [600, 300, 100]
       fuelTags: [lamp-oil]
-    identification: { mode: known, groupId: null, appearances: [] }
+    identification: { mode: known, poolId: null }
     effects: []

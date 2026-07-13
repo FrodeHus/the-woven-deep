@@ -22,5 +22,5 @@ entries:
       range: 7
       ammunitionTag: arrow
     light: null
-    identification: { mode: known, groupId: null, appearances: [] }
+    identification: { mode: known, poolId: null }
     effects: []

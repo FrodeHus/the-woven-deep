@@ -1,4 +1,6 @@
-import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
+import type {
+  CompiledContentPack, IdentificationPoolContentEntry, ItemContentEntry,
+} from '@woven-deep/content';
 import type { IdentificationState } from './item-model.js';
 import type { ActiveRun, DomainEvent, OpaqueId, RngStreams } from './model.js';
 import { rollDie } from './random.js';
@@ -9,31 +11,55 @@ export function allocateIdentificationMap(input: Readonly<{
 }>): Readonly<{ identification: IdentificationState; rng: RngStreams }> {
   const groups = new Map<string, ItemContentEntry[]>();
   for (const entry of input.content.entries) {
-    if (entry.kind !== 'item' || entry.identification.mode !== 'shuffled' || !entry.identification.groupId) continue;
-    const values = groups.get(entry.identification.groupId) ?? [];
+    if (entry.kind !== 'item' || entry.identification.mode === 'known' || !entry.identification.poolId) continue;
+    const values = groups.get(entry.identification.poolId) ?? [];
     values.push(entry);
-    groups.set(entry.identification.groupId, values);
+    groups.set(entry.identification.poolId, values);
   }
   let cursor = input.rng.effects;
   const pairs: Array<readonly [string, string]> = [];
-  for (const groupId of [...groups.keys()].sort()) {
-    const items = groups.get(groupId)!.sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
-    const appearances = [...new Set(items.flatMap((item) => item.identification.appearances))].sort();
-    if (appearances.length !== items.length) {
-      throw new Error(`identification group ${groupId} requires one appearance per item`);
+  for (const poolId of [...groups.keys()].sort()) {
+    const pool = input.content.entries.find((entry): entry is IdentificationPoolContentEntry =>
+      entry.kind === 'identification-pool' && entry.id === poolId);
+    if (!pool) throw new Error(`identification pool ${poolId} does not exist`);
+    const items = groups.get(poolId)!.sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+    const combinations = pool.verbs.flatMap((_verb, verbIndex) =>
+      pool.nouns.map((_noun, nounIndex) => ({ verbIndex, nounIndex })));
+    if (combinations.length < items.length) {
+      throw new Error(`identification pool ${poolId} cannot create enough unique names`);
     }
-    for (let index = appearances.length - 1; index > 0; index -= 1) {
+    for (let index = combinations.length - 1; index > 0; index -= 1) {
       const rolled = rollDie(cursor, index + 1); cursor = rolled.state;
       const swap = rolled.value - 1;
-      [appearances[index], appearances[swap]] = [appearances[swap]!, appearances[index]!];
+      [combinations[index], combinations[swap]] = [combinations[swap]!, combinations[index]!];
     }
-    items.forEach((item, index) => pairs.push([item.id, appearances[index]!]));
+    for (const [index, item] of items.entries()) {
+      const visualRoll = rollDie(cursor, pool.visuals.length); cursor = visualRoll.state;
+      const combination = combinations[index]!;
+      pairs.push([item.id,
+        `${pool.id}.v${combination.verbIndex}-n${combination.nounIndex}-x${visualRoll.value - 1}`]);
+    }
   }
   pairs.sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
   return {
     identification: { appearanceByContentId: Object.fromEntries(pairs), knownAppearanceIds: [] },
     rng: { ...input.rng, effects: cursor },
   };
+}
+
+export function unidentifiedPresentation(input: Readonly<{
+  content: CompiledContentPack;
+  appearanceId: string;
+}>): Readonly<{ appearanceId: string; name: string; glyph: string; color: string }> {
+  const match = /^(.*)\.v(\d+)-n(\d+)-x(\d+)$/.exec(input.appearanceId);
+  if (!match) throw new Error(`invalid generated appearance ${input.appearanceId}`);
+  const pool = input.content.entries.find((entry): entry is IdentificationPoolContentEntry =>
+    entry.kind === 'identification-pool' && entry.id === match[1]);
+  const verb = pool?.verbs[Number(match[2])];
+  const noun = pool?.nouns[Number(match[3])];
+  const visual = pool?.visuals[Number(match[4])];
+  if (!pool || !verb || !noun || !visual) throw new Error(`invalid generated appearance ${input.appearanceId}`);
+  return { appearanceId: input.appearanceId, name: `${verb} ${noun}`, glyph: visual.glyph, color: visual.color };
 }
 
 export function identifyAppearance(input: Readonly<{
@@ -70,8 +96,12 @@ export function projectItem(input: Readonly<{
   if (!entry || entry.kind !== 'item') throw new Error(`internal invariant: item definition ${item.contentId} does not exist`);
   const appearanceId = input.run.identification.appearanceByContentId[item.contentId];
   const appearanceKnown = appearanceId && input.run.identification.knownAppearanceIds.includes(appearanceId);
-  if (entry.identification.mode === 'shuffled' && !appearanceKnown) {
-    return { itemId: item.itemId, appearanceId, category: entry.category, quantity: item.quantity, identified: false };
+  const appearanceHidden = entry.identification.mode === 'shuffled'
+    ? !appearanceKnown
+    : entry.identification.mode === 'instance' && !item.identified;
+  if (appearanceId && appearanceHidden) {
+    return { itemId: item.itemId, ...unidentifiedPresentation({ content: input.content, appearanceId }),
+      category: entry.category, quantity: item.quantity, identified: false };
   }
   const projected: Record<string, unknown> = {
     itemId: item.itemId, contentId: entry.id, name: entry.name, category: entry.category,

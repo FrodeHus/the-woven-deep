@@ -16,10 +16,7 @@ entries:
     equipment: null
     combat: null
     light: null
-    identification:
-      mode: shuffled
-      groupId: identification.potions
-      appearances: [appearance.ashen-vial, appearance.crimson-vial]
+    identification: { mode: shuffled, poolId: identification-pool.potions }
     effects:
       - { effectId: effect.heal, parameters: { dice: { count: 1, sides: 4, bonus: 1 } }, requiresLivingTarget: true }
       - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

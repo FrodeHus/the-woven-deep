@@ -12,7 +12,7 @@ function definition(id: string, overrides: Partial<ItemContentEntry>): ItemConte
     kind: 'item', id, name: id, glyph: '/', color: '#ffffff', tags: [], category: 'weapon',
     stackLimit: 1, price: 1, rarity: 'common', minDepth: 0, maxDepth: 20, actionCost: 100,
     equipment: null, combat: null, light: null,
-    identification: { mode: 'known', groupId: null, appearances: [] }, effects: [], ...overrides,
+    identification: { mode: 'known', poolId: null }, effects: [], ...overrides,
   };
 }
 

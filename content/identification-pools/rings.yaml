@@ -1,0 +1,30 @@
+schemaVersion: 2
+entries:
+  - kind: identification-pool
+    id: identification-pool.rings
+    name: Ring unidentified names
+    tags: [identification, ring]
+    category: ring
+    verbs:
+      - Binding
+      - Gleaming
+      - Humming
+      - Laughing
+      - Sleeping
+      - Turning
+      - Watching
+      - Weeping
+    nouns:
+      - band
+      - circlet
+      - coil
+      - hoop
+      - loop
+      - ring
+      - seal
+      - signet
+    visuals:
+      - { id: visual.blackened-metal, glyph: "=", color: "#77736c" }
+      - { id: visual.burnished-copper, glyph: "=", color: "#b8734f" }
+      - { id: visual.pale-silver, glyph: "=", color: "#c5cbd3" }
+      - { id: visual.verdigris-bronze, glyph: "=", color: "#65a080" }

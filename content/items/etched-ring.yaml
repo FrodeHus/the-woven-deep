@@ -16,5 +16,5 @@ entries:
     equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
     combat: { accuracy: 0, defense: 1, armor: 0, damage: null, range: 0, ammunitionTag: null }
     light: null
-    identification: { mode: instance, groupId: null, appearances: [appearance.etched-ring] }
+    identification: { mode: instance, poolId: identification-pool.rings }
     effects: []

@@ -24,8 +24,9 @@ describe('content model', () => {
   it('exposes every schema-v2 content kind', () => {
     const kinds: ContentKind[] = [...CONTENT_KIND_IDS];
 
-    expect(kinds).toHaveLength(8);
+    expect(kinds).toHaveLength(9);
     expect(kinds).toContain('condition');
+    expect(kinds).toContain('identification-pool');
   });
 
   it('rejects a stored schema-v1 pack before exposing entries', async () => {

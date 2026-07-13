@@ -16,7 +16,7 @@ entries:
     equipment: null
     combat: { accuracy: 0, defense: 0, armor: 0, damage: null, range: 6, ammunitionTag: null }
     light: null
-    identification: { mode: known, groupId: null, appearances: [] }
+    identification: { mode: known, poolId: null }
     effects:
       - { effectId: effect.damage, parameters: { damageType: fire, dice: { count: 1, sides: 6, bonus: 1 } }, requiresLivingTarget: true }
       - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

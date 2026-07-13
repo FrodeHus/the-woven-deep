@@ -8,10 +8,11 @@ describe('bundled content', () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
-    const kinds = ['monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault'] as const;
+    const kinds = ['monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault', 'identification-pool'] as const;
     expect(Object.fromEntries(kinds.map((kind) => [kind,
       pack.entries.filter((entry) => entry.kind === kind).length]))).toEqual({
       monster: 2, item: 13, spell: 1, trap: 1, 'loot-table': 1, balance: 1, vault: 1,
+      'identification-pool': 2,
     });
     expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(4);
     expect(pack.entries.map((entry) => entry.id)).toEqual([...pack.entries.map((entry) => entry.id)].sort());
@@ -40,9 +41,12 @@ describe('bundled content', () => {
 
     const potions = ['item.ashen-potion', 'item.crimson-potion'].map((id) => entries.get(id));
     expect(potions.map((entry) => entry?.kind === 'item' ? entry.identification : null)).toEqual([
-      { mode: 'shuffled', groupId: 'identification.potions', appearances: ['appearance.ashen-vial', 'appearance.crimson-vial'] },
-      { mode: 'shuffled', groupId: 'identification.potions', appearances: ['appearance.ashen-vial', 'appearance.crimson-vial'] },
+      { mode: 'shuffled', poolId: 'identification-pool.potions' },
+      { mode: 'shuffled', poolId: 'identification-pool.potions' },
     ]);
+    const potionPool = entries.get('identification-pool.potions');
+    expect(potionPool?.kind === 'identification-pool'
+      ? potionPool.verbs.length * potionPool.nouns.length : 0).toBeGreaterThan(2);
     const ring = entries.get('item.etched-ring');
     expect(ring?.kind === 'item' ? ring.identification.mode : null).toBe('instance');
     const lantern = entries.get('item.brass-lantern');

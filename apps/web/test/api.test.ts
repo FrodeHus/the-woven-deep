@@ -19,6 +19,7 @@ describe('content summary counts', () => {
 
     expect(summary.counts).toEqual({
       monster: 1, item: 1, spell: 1, trap: 1, 'loot-table': 1, balance: 1, vault: 1, condition: 1,
+      'identification-pool': 1,
     });
   });
 
