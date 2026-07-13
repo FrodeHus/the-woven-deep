@@ -3,7 +3,7 @@
 ## Start and verify
 
 ```bash
-docker compose up --build -d
+docker compose up --build -d --wait --wait-timeout 60
 node scripts/smoke.mjs http://localhost:3000
 ```
 
@@ -26,7 +26,7 @@ volumes:
 Restart and verify that the reported content hash is the expected new hash:
 
 ```bash
-docker compose up -d --force-recreate
+docker compose up -d --force-recreate --wait --wait-timeout 60
 node scripts/smoke.mjs http://localhost:3000
 ```
 
