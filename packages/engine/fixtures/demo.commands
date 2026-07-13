@@ -1,0 +1,9 @@
+move command.1 0 east
+move command.2 1 east
+move command.3 2 south
+wait command.4 2
+save
+reload
+move command.5 3 west
+repeat command.4
+move command.6 0 east

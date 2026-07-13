@@ -6,7 +6,7 @@ export class ContentPackRepository {
 
   put(pack: CompiledContentPack): void {
     this.database.prepare(`
-      insert into content_packs(hash, schema_version, canonical_json, created_at)
+      insert into content_packs(hash, schema_version, content_json, created_at)
       values (?, ?, ?, ?)
       on conflict(hash) do nothing
     `).run(pack.hash, pack.schemaVersion, JSON.stringify(pack), new Date().toISOString());
@@ -14,8 +14,8 @@ export class ContentPackRepository {
 
   get(hash: string): CompiledContentPack | undefined {
     const row = this.database
-      .prepare('select canonical_json from content_packs where hash = ?')
-      .get(hash) as { canonical_json: string } | undefined;
-    return row ? JSON.parse(row.canonical_json) as CompiledContentPack : undefined;
+      .prepare('select content_json from content_packs where hash = ?')
+      .get(hash) as { content_json: string } | undefined;
+    return row ? JSON.parse(row.content_json) as CompiledContentPack : undefined;
   }
 }

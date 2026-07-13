@@ -10,7 +10,7 @@ The approved design contains several independently reviewable systems: determini
 
 ### 1. Foundation and YAML content platform
 
-Create the TypeScript workspace, strict YAML content compiler, canonical content hashing, immutable SQLite content-pack storage, Fastify startup path, diagnostic React client, and production Docker image.
+Create the TypeScript workspace, strict YAML content compiler, content hashing, immutable SQLite content-pack storage, Fastify startup path, diagnostic React client, and production Docker image.
 
 **Exit demonstration:** editing or adding a YAML monster, restarting the container, and observing a new validated content hash and entry in the browser without changing TypeScript.
 
@@ -20,7 +20,9 @@ Create the TypeScript workspace, strict YAML content compiler, canonical content
 
 Implement seeded random streams, immutable commands and domain events, entity identifiers, turn sequencing, content-pack binding, compact grid storage, complete active-run snapshots, migrations, recent-command deduplication, and deterministic replay tests.
 
-**Exit demonstration:** a command-line hero walks a fixed test floor, saves, reloads, and produces byte-equivalent canonical state and event output.
+**Exit demonstration:** a command-line hero walks a fixed test floor, saves, reloads, and produces byte-equivalent serialized state and event output.
+
+**Detailed plan:** `docs/superpowers/plans/2026-07-13-deterministic-engine-kernel.md`
 
 ### 3. Dungeon generation, visibility, and light
 

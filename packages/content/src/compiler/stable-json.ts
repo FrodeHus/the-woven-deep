@@ -18,10 +18,10 @@ function normalize(value: unknown): unknown {
   return value;
 }
 
-export function canonicalJson(value: unknown): string {
+export function stableJson(value: unknown): string {
   return JSON.stringify(normalize(value));
 }
 
-export function canonicalHash(value: unknown): string {
-  return createHash('sha256').update(canonicalJson(value)).digest('hex');
+export function stableJsonHash(value: unknown): string {
+  return createHash('sha256').update(stableJson(value)).digest('hex');
 }

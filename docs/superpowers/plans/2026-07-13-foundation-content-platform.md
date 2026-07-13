@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Produce a runnable Dockerized TypeScript vertical slice that validates YAML game content, stores immutable canonical content packs in SQLite, serves the active pack through Fastify, and displays it in React.
+**Goal:** Produce a runnable Dockerized TypeScript vertical slice that validates YAML game content, stores immutable compiled content packs in SQLite, serves the active pack through Fastify, and displays it in React.
 
-**Architecture:** An npm workspace separates the browser-safe content model from the Node-only YAML compiler, the Fastify/SQLite server, and the React client. Server startup compiles the configured content directory before accepting traffic, persists the canonical pack by SHA-256 hash, then serves both the client and content diagnostics. YAML is declarative data only; registered behavior identifiers remain TypeScript-owned.
+**Architecture:** An npm workspace separates the browser-safe content model from the Node-only YAML compiler, the Fastify/SQLite server, and the React client. Server startup compiles the configured content directory before accepting traffic, persists the compiled pack by SHA-256 content hash, then serves both the client and content diagnostics. YAML is declarative data only; registered behavior identifiers remain TypeScript-owned.
 
 **Tech Stack:** Node.js 22, npm workspaces, TypeScript 5, React 19, Vite 7, Fastify 5, `yaml`, Zod 4, `better-sqlite3`, Vitest 3, Testing Library, Docker with `node:22-bookworm-slim`.
 
@@ -14,7 +14,7 @@
 - YAML contains no executable scripts, embedded expressions, or custom tags.
 - Content paths are loaded in deterministic lexical order from `CONTENT_DIR`.
 - Unknown YAML properties, duplicate IDs, unsafe aliases, invalid references, invalid registry keys, and semantic errors fail startup.
-- Canonical hashes are based on normalized content, not YAML formatting or file order.
+- Content hashes are based on normalized content, not YAML formatting or file order.
 - Compiled packs are immutable and retained by hash in SQLite.
 - The production container reads SQLite from `DATABASE_PATH`, defaulting to `/data/rogue.sqlite`.
 - The server does not accept content uploads or content writes over HTTP.
@@ -51,7 +51,7 @@
 │       │   ├── compiler/               # Node-only parsing and compilation
 │       │   ├── model.ts                # Browser-safe pack and entry types
 │       │   └── index.ts                # Public browser-safe exports
-│       └── test/                        # Compiler and canonicalization tests
+│       └── test/                        # Compiler and stable serialization tests
 ├── scripts/smoke.mjs                   # Production-container smoke test
 ├── Dockerfile
 ├── compose.yaml
@@ -469,7 +469,7 @@ git commit -m "feat: parse strict YAML content"
 ### Task 3: Compile, validate, and hash a content directory
 
 **Files:**
-- Create: `packages/content/src/compiler/canonicalize.ts`
+- Create: `packages/content/src/compiler/stable-json.ts`
 - Create: `packages/content/src/compiler/compile-directory.ts`
 - Modify: `packages/content/src/compiler/index.ts`
 - Test: `packages/content/test/compile-directory.test.ts`
@@ -477,7 +477,7 @@ git commit -m "feat: parse strict YAML content"
 **Interfaces:**
 - Produces: `ContentRegistries { ai: ReadonlySet<string>; effects: ReadonlySet<string> }`
 - Produces: `compileContentDirectory(input: { rootDir: string; registries: ContentRegistries }): Promise<CompiledContentPack>`
-- Produces: canonical lowercase SHA-256 hashes
+- Produces: lowercase SHA-256 content hashes
 
 - [ ] **Step 1: Write deterministic compilation tests**
 
@@ -534,10 +534,10 @@ Run: `npm test --workspace @woven-deep/content -- compile-directory.test.ts`
 
 Expected: FAIL because `compileContentDirectory` is not exported.
 
-- [ ] **Step 3: Implement canonicalization**
+- [ ] **Step 3: Implement stable serialization**
 
 ```ts
-// packages/content/src/compiler/canonicalize.ts
+// packages/content/src/compiler/stable-json.ts
 import { createHash } from 'node:crypto';
 
 function normalize(value: unknown): unknown {
@@ -552,12 +552,12 @@ function normalize(value: unknown): unknown {
   return value;
 }
 
-export function canonicalJson(value: unknown): string {
+export function stableJson(value: unknown): string {
   return JSON.stringify(normalize(value));
 }
 
-export function canonicalHash(value: unknown): string {
-  return createHash('sha256').update(canonicalJson(value)).digest('hex');
+export function stableJsonHash(value: unknown): string {
+  return createHash('sha256').update(stableJson(value)).digest('hex');
 }
 ```
 
@@ -569,7 +569,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import type { CompiledContentPack, ContentEntry } from '../model.js';
 import { CONTENT_SCHEMA_VERSION } from '../model.js';
-import { canonicalHash } from './canonicalize.js';
+import { stableJsonHash } from './stable-json.js';
 import { ContentCompileError, type ContentCompileIssue } from './error.js';
 import { parseContentFile } from './parse-file.js';
 
@@ -622,14 +622,14 @@ export async function compileContentDirectory(input: {
   if (issues.length > 0) throw new ContentCompileError(issues);
   entries.sort((left, right) => left.id.localeCompare(right.id));
   const hashInput = { schemaVersion: CONTENT_SCHEMA_VERSION, entries };
-  return { ...hashInput, hash: canonicalHash(hashInput) };
+  return { ...hashInput, hash: stableJsonHash(hashInput) };
 }
 ```
 
 Replace `packages/content/src/compiler/index.ts` with:
 
 ```ts
-export * from './canonicalize.js';
+export * from './stable-json.js';
 export * from './compile-directory.js';
 export * from './error.js';
 export * from './parse-file.js';
@@ -916,7 +916,7 @@ export function migrateDatabase(database: Database.Database): void {
     create table if not exists content_packs (
       hash text primary key check(length(hash) = 64),
       schema_version integer not null,
-      canonical_json text not null,
+      content_json text not null,
       created_at text not null
     ) strict;
   `);
@@ -941,16 +941,16 @@ export class ContentPackRepository {
 
   put(pack: CompiledContentPack): void {
     this.database.prepare(`
-      insert into content_packs(hash, schema_version, canonical_json, created_at)
+      insert into content_packs(hash, schema_version, content_json, created_at)
       values (?, ?, ?, ?)
       on conflict(hash) do nothing
     `).run(pack.hash, pack.schemaVersion, JSON.stringify(pack), new Date().toISOString());
   }
 
   get(hash: string): CompiledContentPack | undefined {
-    const row = this.database.prepare('select canonical_json from content_packs where hash = ?')
-      .get(hash) as { canonical_json: string } | undefined;
-    return row ? JSON.parse(row.canonical_json) as CompiledContentPack : undefined;
+    const row = this.database.prepare('select content_json from content_packs where hash = ?')
+      .get(hash) as { content_json: string } | undefined;
+    return row ? JSON.parse(row.content_json) as CompiledContentPack : undefined;
   }
 }
 ```
