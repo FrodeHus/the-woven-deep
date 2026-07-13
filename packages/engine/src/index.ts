@@ -4,6 +4,7 @@ export * from './migration.js';
 export * from './model.js';
 export * from './random.js';
 export * from './reducer.js';
+export * from './replay.js';
 export * from './save-codec.js';
 export * from './save-error.js';
 export * from './save-schema.js';
