@@ -14,13 +14,12 @@ entries:
       rotations: [0, 180]
       reflectHorizontal: true
     layout:
-      - "###########"
-      - "#....n....#"
-      - "#.m.....i.#"
-      - "+.t..O..f.#"
-      - "#....*..q.#"
-      - "#.........#"
-      - "###########"
+      - "#######"
+      - "#m.n.i#"
+      - "+t.O.f#"
+      - "#*..q.#"
+      - "#.....#"
+      - "#######"
     legend:
       "#": { terrain: wall }
       ".": { terrain: floor }

@@ -30,7 +30,7 @@ function invalidRequest(message: string): never {
   throw new GenerationError('generation.invalid-request', message);
 }
 
-function validateRequest(request: GenerateTopologyRequest): number {
+export function validateTopologyRequest(request: GenerateTopologyRequest): number {
   if (typeof request !== 'object' || request === null) invalidRequest('generation request must be an object');
   try {
     assertOpaqueId(request.floorId, 'floorId');
@@ -225,7 +225,7 @@ function report(
 }
 
 export function generateTopologyAttempt(request: GenerateTopologyRequest, attempt: number): TopologyAttemptResult {
-  validateRequest(request);
+  validateTopologyRequest(request);
   if (!Number.isSafeInteger(attempt) || attempt < 0 || attempt >= 32) invalidRequest('attempt must be from 0 through 31');
   const attemptState = deriveAttemptSeed(request.floorSeed, attempt);
   const generated = createRotTopology(request.width, request.height, request.theme.maskWords, attemptState);
@@ -260,7 +260,7 @@ export function generateTopologyAttempt(request: GenerateTopologyRequest, attemp
 }
 
 export function generateTopology(request: GenerateTopologyRequest): TopologyDraft {
-  const attemptLimit = validateRequest(request);
+  const attemptLimit = validateTopologyRequest(request);
   const rejectionCounts: Partial<Record<GenerationRejectionCode, number>> = {};
   const factory = request.topologyFactory ?? generateTopologyAttempt;
   for (let attempt = 0; attempt < attemptLimit; attempt += 1) {
