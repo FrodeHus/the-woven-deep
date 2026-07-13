@@ -123,6 +123,20 @@ Lookups are pure and contain no I/O, ambient time, or mutable caches. Callers ma
 
 The initial content includes at least `condition.incapacitated`, because current scheduling tests exercise that rule. Task 6 fixtures add conditions for suppressing reactions and avoiding opportunity attacks as needed. More conditions remain ordinary balance content and do not require engine changes when they only use existing modifiers and traits.
 
+## Server-admin documentation
+
+All operator-editable YAML is documented under `docs/server-admin/`; source schemas alone are not considered sufficient documentation. Add a server-admin index and a content-configuration reference covering every supported content kind, not only conditions. The reference includes:
+
+- Directory layout, file discovery, the `schemaVersion` envelope, globally unique IDs, naming rules, and the fact that filenames do not affect content identity.
+- A field-by-field table for balance, monster, item, spell, trap, loot-table, vault, and condition entries, including type, required/default status, bounds, and meaning.
+- Complete copyable examples for each content kind and focused examples for condition stacking, duration, modifiers, and traits.
+- The closed behavior, targeting, primitive-effect, damage-type, equipment-slot, vault-slot, and condition-trait registries with their permitted parameters.
+- Cross-file reference rules, cycle restrictions, strict unknown-field rejection, content hashing, run-to-content binding, and expected startup failures.
+- A safe operator workflow: copy the bundled directory, edit or add YAML, run `npm run content:validate -- /absolute/path`, mount the complete replacement directory read-only, restart the container, and verify the new hash before admitting play.
+- Rollback guidance explaining that a run remains bound to its original content hash and must not silently continue under changed definitions.
+
+`docs/operations/content-and-storage.md` links to this server-admin reference instead of duplicating the schema. A focused documentation-consistency test reads the reference and requires every compiler-published content kind and closed registry ID to appear, so adding YAML surface area without updating admin documentation fails the content package gate.
+
 ## Schema and development data
 
 The project is still greenfield with no supported external content packs. The current compiled-content schema v2 is replaced in place and all bundled fixtures are updated together. No compatibility branch or migration is added. Invalid older development packs fail normal startup validation, and a local development database may be rebuilt.
@@ -139,6 +153,7 @@ Tests cover:
 - Linear checked derived-stat modifiers by stack count.
 - Save/load and continuous-versus-split replay equivalence with active conditions.
 - Browser-boundary verification showing that condition lookup and resolution introduce no Node-only dependency.
+- Documentation consistency for every content kind and closed registry identifier exposed to YAML authors.
 
 ## Deferred reusable effects
 
