@@ -1,8 +1,14 @@
-import { EFFECT_PARAMETER_SCHEMAS, type EffectDefinition, type EffectId } from '@woven-deep/content';
-import type { ActorState, ConditionState } from './actor-model.js';
+import {
+  EFFECT_PARAMETER_SCHEMAS,
+  type CompiledContentPack,
+  type EffectDefinition,
+  type EffectId,
+} from '@woven-deep/content';
+import type { ActorState } from './actor-model.js';
 import type { DomainEvent, OpaqueId, Point, Uint32State } from './model.js';
 import { rollDie } from './random.js';
 import { resolveDamage } from './combat.js';
+import { applyCondition, conditionDefinition } from './conditions.js';
 
 export interface EffectSequenceResult {
   readonly actors: readonly ActorState[];
@@ -27,6 +33,7 @@ export type EffectOperations = Readonly<Partial<Record<EffectId, EffectOperation
 export interface EffectSequenceInput {
   readonly effects: readonly EffectDefinition[];
   readonly actors: readonly ActorState[];
+  readonly content: CompiledContentPack;
   readonly sourceActorId: OpaqueId;
   readonly targetActorId: OpaqueId;
   readonly effectsState: Uint32State;
@@ -133,21 +140,17 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
       const result = applyHealing({ actors, targetActorId: target.actorId, sourceActorId: input.sourceActorId, amount: rolled.value, eventId: input.eventId });
       actors = [...result.actors]; events.push(...result.events);
     } else if (effect.effectId === 'effect.condition.apply') {
-      const parameters = effect.parameters as { conditionId: OpaqueId; duration: number };
-      const existing = target.conditions.find((condition) => condition.conditionId === parameters.conditionId);
-      const expiresAt = input.worldTime + parameters.duration;
-      if (!Number.isSafeInteger(expiresAt)) throw new RangeError('condition expiry must be a safe integer');
-      const condition: ConditionState = {
-        conditionId: parameters.conditionId, sourceActorId: input.sourceActorId, appliedAt: input.worldTime,
-        expiresAt, stacks: checkedSafeInteger('condition stacks', (existing?.stacks ?? 0) + 1),
-      };
-      const conditions = [...target.conditions.filter((candidate) => candidate.conditionId !== condition.conditionId), condition]
-        .sort((left, right) => left.conditionId < right.conditionId ? -1 : left.conditionId > right.conditionId ? 1 : 0);
-      actors = [...replaceActor(actors, { ...target, conditions })];
-      events.push({ type: 'condition.applied', eventId: input.eventId, actorId: target.actorId,
-        sourceActorId: input.sourceActorId, conditionId: condition.conditionId, stacks: condition.stacks, expiresAt });
+      const parameters = effect.parameters as { conditionId: OpaqueId; duration?: number };
+      const result = applyCondition({
+        actors, content: input.content, targetActorId: target.actorId,
+        sourceActorId: input.sourceActorId, conditionId: parameters.conditionId,
+        ...(parameters.duration === undefined ? {} : { duration: parameters.duration }),
+        worldTime: input.worldTime, eventId: input.eventId,
+      });
+      actors = [...result.actors]; events.push(...result.events);
     } else if (effect.effectId === 'effect.condition.remove') {
       const conditionId = (effect.parameters as { conditionId: OpaqueId }).conditionId;
+      conditionDefinition(input.content, conditionId);
       if (target.conditions.some((condition) => condition.conditionId === conditionId)) {
         actors = [...replaceActor(actors, { ...target, conditions: target.conditions.filter((condition) => condition.conditionId !== conditionId) })];
         events.push({ type: 'condition.removed', eventId: input.eventId, actorId: target.actorId, conditionId });

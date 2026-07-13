@@ -22,6 +22,30 @@ export function createDemoContentPack(): CompiledContentPack {
         disarm: { agility: 1, wits: 1 },
       },
       actionCosts: { 'action.move': 100, 'action.wait': 100 },
+    }, {
+      kind: 'condition', id: 'condition.disengaged', name: 'Disengaged',
+      description: 'Avoids opportunity attacks', tags: ['beneficial'], color: '#78c8dc',
+      duration: { mode: 'timed', default: 100, maximum: 1000 },
+      stacking: { mode: 'refresh', maximumStacks: 1 }, modifiersPerStack: {},
+      traits: ['condition-trait.avoids-opportunity-attacks'],
+    }, {
+      kind: 'condition', id: 'condition.incapacitated', name: 'Incapacitated',
+      description: 'Cannot act', tags: ['control'], color: '#c8b86a',
+      duration: { mode: 'permanent', default: null, maximum: null },
+      stacking: { mode: 'refresh', maximumStacks: 1 }, modifiersPerStack: {},
+      traits: ['condition-trait.incapacitated'],
+    }, {
+      kind: 'condition', id: 'condition.reaction-suppressed', name: 'Reaction suppressed',
+      description: 'Cannot react', tags: ['control'], color: '#b88870',
+      duration: { mode: 'timed', default: 100, maximum: 1000 },
+      stacking: { mode: 'refresh', maximumStacks: 1 }, modifiersPerStack: {},
+      traits: ['condition-trait.suppresses-reactions'],
+    }, {
+      kind: 'condition', id: 'condition.restless', name: 'Restless',
+      description: 'Interrupts rest', tags: ['survival'], color: '#c89070',
+      duration: { mode: 'timed', default: 100, maximum: 1000 },
+      stacking: { mode: 'refresh', maximumStacks: 1 }, modifiersPerStack: {},
+      traits: ['condition-trait.interrupts-rest'],
     }],
     generationReport: { foundationalCategories: [] },
   };

@@ -27,6 +27,7 @@ export * from './actions.js';
 export * from './combat.js';
 export * from './targeting.js';
 export * from './effects.js';
+export * from './conditions.js';
 export * from './item-model.js';
 export * from './feature-model.js';
 export * from './survival-model.js';

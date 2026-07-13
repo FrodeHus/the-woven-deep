@@ -1,17 +1,11 @@
+import {
+  DERIVED_STAT_NAMES,
+  type BalanceContentEntry,
+  type DerivedStatName,
+} from '@woven-deep/content';
 import type { AttributeName, BaseAttributes } from './actor-model.js';
-import type { BalanceContentEntry } from '@woven-deep/content';
 
-export const DERIVED_STAT_NAMES = [
-  'maxHealth',
-  'meleeAccuracy',
-  'meleeDamageBonus',
-  'rangedAccuracy',
-  'defense',
-  'search',
-  'disarm',
-] as const;
-
-export type DerivedStatName = typeof DERIVED_STAT_NAMES[number];
+export { DERIVED_STAT_NAMES, type DerivedStatName } from '@woven-deep/content';
 export type DerivedStatModifier = Readonly<Partial<Record<DerivedStatName, number>>>;
 export type DerivedStatFormula = Readonly<Partial<Record<'base' | AttributeName, number>>>;
 

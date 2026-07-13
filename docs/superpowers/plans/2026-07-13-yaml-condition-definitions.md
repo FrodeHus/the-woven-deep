@@ -307,7 +307,7 @@ git commit -m "feat: validate condition content references"
 - Consumes: `CompiledContentPack`, `ConditionContentEntry`, compact `ConditionState`, actor arrays, authored optional duration, and absolute world time.
 - Produces: `conditionDefinition`, `validateActiveConditions`, `actorHasConditionTrait`, `conditionModifiers`, `applyCondition`, and definition-driven `resolveEffectSequence` behavior.
 
-- [ ] **Step 1: Write failing lookup, trait, and modifier tests**
+- [x] **Step 1: Write failing lookup, trait, and modifier tests**
 
 Create fixtures whose condition IDs deliberately do not imply their behavior:
 
@@ -325,17 +325,17 @@ it('resolves traits and linear modifiers by content rather than condition ID', (
 
 Add rejection tests for a missing definition and unsafe multiplication.
 
-- [ ] **Step 2: Write failing stacking tests**
+- [x] **Step 2: Write failing stacking tests**
 
 Cover replace, refresh, intensify, intensify-at-cap, permanent deadline, authored duration, default duration, and input immutability. Use exact resulting `sourceActorId`, `appliedAt`, `expiresAt`, `stacks`, and `condition.applied` event values.
 
-- [ ] **Step 3: Run the engine tests to verify RED**
+- [x] **Step 3: Run the engine tests to verify RED**
 
 Run: `npm run build --workspace @woven-deep/content && npm test --workspace @woven-deep/engine -- --run test/conditions.test.ts test/effects.test.ts test/attributes.test.ts`
 
 Expected: FAIL because the content-backed condition helpers do not exist.
 
-- [ ] **Step 4: Implement the pure condition module**
+- [x] **Step 4: Implement the pure condition module**
 
 Create `conditions.ts` with these public contracts:
 
@@ -377,21 +377,21 @@ Use checked safe-integer helpers for stack increments, modifier multiplication, 
 
 `validateActiveConditions` checks every actor condition, including actors not currently eligible for scheduling. It rejects an unresolved definition, stacks above `maximumStacks`, a permanent definition with a non-null deadline, or a timed definition with a null deadline. This is the content-bound half of save validation; the structural save codec remains independent of content I/O.
 
-- [ ] **Step 5: Route condition effects through the new module**
+- [x] **Step 5: Route condition effects through the new module**
 
 Add `content: CompiledContentPack` to `EffectSequenceInput`. Replace inline condition-apply logic with `applyCondition`; keep removal and expiration state transitions pure. Update every effect fixture and `createDemoContentPack()` with the required condition definitions.
 
-- [ ] **Step 6: Share derived-stat vocabulary without duplication**
+- [x] **Step 6: Share derived-stat vocabulary without duplication**
 
 In `attributes.ts`, import and re-export `DERIVED_STAT_NAMES` and `DerivedStatName` from `@woven-deep/content`. Keep `deriveActorStats`'s existing `conditionModifiers` input and feed it the output of the new helper at higher-level callers. Do not make `deriveActorStats` search a content pack itself.
 
-- [ ] **Step 7: Run focused GREEN**
+- [x] **Step 7: Run focused GREEN**
 
 Run: `npm run build --workspace @woven-deep/content && npm test --workspace @woven-deep/engine -- --run test/conditions.test.ts test/effects.test.ts test/attributes.test.ts && npm run typecheck --workspace @woven-deep/engine`
 
 Expected: all focused tests pass with exact event and stack assertions.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/engine

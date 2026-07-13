@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { deriveActorStats, type ActorDerivationInput } from '../src/index.js';
+import type { ConditionContentEntry } from '@woven-deep/content';
+import {
+  conditionModifiers, createDemoContentPack, createDemoRun, deriveActorStats, type ActorDerivationInput,
+} from '../src/index.js';
 
 function fixture(): ActorDerivationInput {
   return {
@@ -45,5 +48,19 @@ describe('deriveActorStats', () => {
       attributes: { ...fixture().attributes, might: Number.MAX_SAFE_INTEGER },
       formulas: { ...fixture().formulas, meleeAccuracy: { might: 2 } },
     })).toThrow(/meleeAccuracy.*safe integer/i);
+  });
+
+  it('accepts modifiers derived from YAML condition definitions', () => {
+    const condition: ConditionContentEntry = {
+      kind: 'condition', id: 'condition.clumsy', name: 'Clumsy', description: 'Less defensive',
+      tags: [], color: '#ffffff', duration: { mode: 'timed', default: 10, maximum: 10 },
+      stacking: { mode: 'intensify', maximumStacks: 3 }, modifiersPerStack: { defense: -2 }, traits: [],
+    };
+    const content = { ...createDemoContentPack(), entries: [...createDemoContentPack().entries, condition] };
+    const actor = {
+      ...createDemoRun().actors[0]!,
+      conditions: [{ conditionId: condition.id, sourceActorId: null, appliedAt: 0, expiresAt: 10, stacks: 2 }],
+    };
+    expect(deriveActorStats({ ...fixture(), conditionModifiers: conditionModifiers(actor, content) }).defense).toBe(8);
   });
 });

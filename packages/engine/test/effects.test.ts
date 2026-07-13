@@ -1,10 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createDemoContentPack,
   createDemoRun,
   expandLegacySeed,
   resolveEffectSequence,
   type ActorState,
 } from '../src/index.js';
+import type { ConditionContentEntry } from '@woven-deep/content';
+
+function effectContent() {
+  const base = createDemoContentPack();
+  const conditions: ConditionContentEntry[] = ['condition.burning', 'condition.slow'].map((id) => ({
+    kind: 'condition', id, name: id, description: id, tags: [], color: '#ffffff',
+    duration: { mode: 'timed', default: 3, maximum: 30 },
+    stacking: { mode: 'intensify', maximumStacks: 5 }, modifiersPerStack: {}, traits: [],
+  }));
+  return { ...base, entries: [...base.entries, ...conditions] };
+}
 
 function actors(health = 10): readonly ActorState[] {
   const hero = createDemoRun().actors[0]!;
@@ -18,6 +30,7 @@ function fixture(effects: readonly any[], health = 10) {
   return {
     effects,
     actors: actors(health),
+    content: effectContent(),
     sourceActorId: 'hero.demo',
     targetActorId: 'monster.target',
     effectsState: expandLegacySeed(42),
