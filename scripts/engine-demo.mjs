@@ -130,14 +130,14 @@ async function main() {
   const args = process.argv.slice(2);
   const verify = args[0] === '--verify';
   const path = verify ? args[1] : args[0];
-  if (path === undefined || args.length !== (verify ? 2 : 1)) {
-    throw new Error('usage: engine-demo [--verify] <commands>');
+  if (path === undefined || (verify ? args.length < 2 || args.length > 3 : args.length !== 1)) {
+    throw new Error('usage: engine-demo <commands> | engine-demo --verify <split-commands> [continuous-comparison-commands]');
   }
 
   const run = await runProgram(path, true);
   printRun(run);
   if (verify) {
-    const continuous = await runProgram(path, false);
+    const continuous = await runProgram(args[2] ?? path, false);
     if (encodeActiveRun(run.state) !== encodeActiveRun(continuous.state)
       || stableJson(run.steps) !== stableJson(continuous.steps)) {
       throw new Error('deterministic replay diverged');

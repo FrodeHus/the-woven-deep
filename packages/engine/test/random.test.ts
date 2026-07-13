@@ -7,6 +7,10 @@ import {
 } from '../src/index.js';
 
 describe('xoshiro128**', () => {
+  it('rejects the forbidden all-zero state at the public step boundary', () => {
+    expect(() => nextUint32([0, 0, 0, 0])).toThrow(/invariant/i);
+  });
+
   it('matches the published project vector without mutating input', () => {
     const initial = [1, 2, 3, 4] as const;
     const first = nextUint32(initial);

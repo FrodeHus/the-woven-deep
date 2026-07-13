@@ -25,6 +25,12 @@ function record(state: ActiveRun, command: GameCommand, result: ProcessedCommand
   return { ...state, hero, revision: result.revision, turn: result.turn, recentCommands: [...state.recentCommands, next].slice(-RECENT_COMMAND_LIMIT) };
 }
 
+function assertCountersCanAdvance(state: ActiveRun): void {
+  if (!Number.isSafeInteger(state.revision + 1) || !Number.isSafeInteger(state.turn + 1)) {
+    throw new Error('internal invariant: applied transition would overflow counters');
+  }
+}
+
 export function resolveCommand(state: ActiveRun, command: GameCommand): CommandResolution {
   const previous = state.recentCommands.find((entry) => entry.command.commandId === command.commandId);
   if (previous) {
@@ -35,6 +41,7 @@ export function resolveCommand(state: ActiveRun, command: GameCommand): CommandR
   if (command.expectedRevision !== state.revision) return rejected(state, command, 'stale_revision');
 
   if (command.type === 'wait') {
+    assertCountersCanAdvance(state);
     const result = { status: 'applied', commandId: command.commandId, revision: state.revision + 1, turn: state.turn + 1 } as const;
     const events = [{ type: 'hero.waited', eventId: command.commandId, heroId: state.hero.heroId, x: state.hero.x, y: state.hero.y }] as const;
     return { state: record(state, command, result, events), result, events };
@@ -52,6 +59,7 @@ export function resolveCommand(state: ActiveRun, command: GameCommand): CommandR
     return { state: record(state, command, result, events), result, events };
   }
 
+  assertCountersCanAdvance(state);
   const result = { status: 'applied', commandId: command.commandId, revision: state.revision + 1, turn: state.turn + 1 } as const;
   const events = [{ type: 'hero.moved', eventId: command.commandId, heroId: state.hero.heroId, from: { x: state.hero.x, y: state.hero.y }, to: target }] as const;
   return { state: record(state, command, result, events, { ...state.hero, ...target }), result, events };

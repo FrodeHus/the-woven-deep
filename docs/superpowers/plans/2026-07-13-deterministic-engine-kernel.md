@@ -1122,6 +1122,8 @@ Expected: all round-trip, strict-structure, corruption, and semantic-reference c
 
 Add focused assertions for a hero on a wall, a non-NFC/control-character hero name, a recent-command result whose command ID differs, a non-monotonic record ring, and a stream word above `0xffff_ffff`; run again and require all cases to pass.
 
+Also require failing corruption cases for descending distinct floor IDs; adjacent expected-revision gaps; moves whose direction, distance, destination, or adjacent position chain is impossible; final retained results or positions that do not match current state; invalid wait records; and invalid movement reasons that disagree with active-floor bounds or terrain. Require precise safe `SaveLoadError` paths for every case. After implementation, confirm the retained suffix can begin after eviction while still chaining through every retained record and terminating at the current hero, revision, and turn.
+
 ```ts
 it('rejects remaining semantic and numeric corruption boundaries', () => {
   const state = createDemoRun();
@@ -1495,6 +1497,7 @@ git commit -m "feat: replay deterministic command sequences"
 **Files:**
 - Create: `scripts/engine-demo.mjs`
 - Create: `packages/engine/fixtures/demo.commands`
+- Create: `packages/engine/fixtures/demo.divergent.commands`
 - Test: `packages/engine/test/cli.test.ts`
 - Modify: `package.json`
 - Modify: `Dockerfile`
@@ -1551,6 +1554,8 @@ describe('engine demonstration CLI', () => {
 });
 ```
 
+Extend the RED integration coverage with a valid but deliberately different comparison fixture passed as `engine-demo --verify <split-commands> <continuous-comparison-commands>`. Require nonzero exit and the safe divergence summary. Add temporary malformed scripts for an unknown directive and an unsafe or non-integer revision, and require the correct source line number in each safe error. Keep the missing-file case as separate I/O failure coverage.
+
 - [ ] **Step 2: Build engine and verify CLI RED**
 
 Run: `npm run build --workspace @woven-deep/engine && npm test --workspace @woven-deep/engine -- --run test/cli.test.ts`
@@ -1568,6 +1573,7 @@ Expected: FAIL because `scripts/engine-demo.mjs` is missing.
 - `reload` replaces current state with `decodeActiveRun(saved)`; fail if no preceding save exists.
 - `repeat <id>` reuses the exact previously parsed command; fail if unknown.
 - Unknown directives, extra/missing fields, unsafe revisions, and invalid directions fail with a line number.
+- Verification accepts an optional second command-file path used only by the uninterrupted comparison run; a differing state or step stream fails with `deterministic replay diverged`.
 
 Use this coordinator shape:
 
@@ -1707,6 +1713,8 @@ Expected:
 - All engine, content, server, and web tests pass.
 - Every workspace type-checks and builds.
 - The CLI reports byte-equivalent state and events across save/reload.
+- The deliberately different comparison fixture exits nonzero with the safe divergence summary.
+- Unknown directives and unsafe revisions report their exact source line; the missing-file failure remains covered separately.
 - The production image runs the engine demonstration during its build and finishes successfully.
 - Before the final commit, `git status --short` lists only the intended Task 8 files.
 

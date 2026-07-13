@@ -34,6 +34,7 @@ export function isNonZeroState(state: Uint32State): boolean {
 }
 
 export function nextUint32(state: Uint32State): RandomStep {
+  if (!isNonZeroState(state)) throw new Error('internal invariant: random state must not be all zero');
   const [initial0, initial1, initial2, initial3] = state;
   const value = Math.imul(rotateLeft(Math.imul(initial1, 5) >>> 0, 7), 9) >>> 0;
   const shifted = (initial1 << 9) >>> 0;

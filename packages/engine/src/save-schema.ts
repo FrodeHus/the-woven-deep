@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ActiveRun } from './model.js';
+import { tileIndex, type ActiveRun, type Direction } from './model.js';
 import { SaveLoadError } from './save-error.js';
 import { ENGINE_GAME_VERSION, RECENT_COMMAND_LIMIT, RNG_STREAM_NAMES, SAVE_SCHEMA_VERSION } from './versions.js';
 
@@ -35,6 +35,12 @@ const floor = z.strictObject({
 });
 const hero = z.strictObject({ heroId: identifier, name: heroName, floorId: identifier, x: safeNonNegative, y: safeNonNegative });
 const rngEntries = Object.fromEntries(RNG_STREAM_NAMES.map((name) => [name, uint32State]));
+const directionOffsets: Readonly<Record<Direction, Readonly<{ x: number; y: number }>>> = {
+  north: { x: 0, y: -1 },
+  south: { x: 0, y: 1 },
+  east: { x: 1, y: 0 },
+  west: { x: -1, y: 0 },
+};
 
 const activeRunSchema = z.strictObject({
   schemaVersion: z.literal(SAVE_SCHEMA_VERSION),
@@ -64,6 +70,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   const floorIds = new Set<string>();
   const entityIds = new Set<string>();
   for (const [floorIndex, floorValue] of run.floors.entries()) {
+    const previousFloor = run.floors[floorIndex - 1];
+    if (previousFloor && previousFloor.floorId >= floorValue.floorId) fail(`floors.${floorIndex}.floorId`, 'floor identifiers must be strictly increasing');
     if (floorIds.has(floorValue.floorId)) fail(`floors.${floorIndex}.floorId`, 'floor identifier is duplicated');
     floorIds.add(floorValue.floorId);
     if (floorValue.tiles.length !== floorValue.width * floorValue.height) fail(`floors.${floorIndex}.tiles`, 'tile length does not match dimensions');
@@ -107,7 +115,49 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     if (recordValue.result.turn !== recordValue.result.revision) fail(`${path}.result.turn`, 'result turn and revision must match in schema v1');
     if (recordValue.result.status === 'applied' && recordValue.result.revision !== recordValue.command.expectedRevision + 1) fail(`${path}.result.revision`, 'applied revision is inconsistent');
     if (recordValue.result.status === 'invalid' && recordValue.result.revision !== recordValue.command.expectedRevision) fail(`${path}.result.revision`, 'invalid revision is inconsistent');
+    const previousRecord = run.recentCommands[index - 1];
+    if (previousRecord && recordValue.command.expectedRevision !== previousRecord.result.revision) {
+      fail(`${path}.command.expectedRevision`, 'command revision does not follow the preceding result');
+    }
     previousRevision = recordValue.result.revision;
+  }
+
+  const finalRecord = run.recentCommands.at(-1);
+  if (finalRecord) {
+    const finalIndex = run.recentCommands.length - 1;
+    if (finalRecord.result.revision !== run.revision) fail(`recentCommands.${finalIndex}.result.revision`, 'final result does not match current revision');
+    if (finalRecord.result.turn !== run.turn) fail(`recentCommands.${finalIndex}.result.turn`, 'final result does not match current turn');
+  }
+
+  let knownPosition = { x: run.hero.x, y: run.hero.y };
+  for (let index = run.recentCommands.length - 1; index >= 0; index -= 1) {
+    const recordValue = run.recentCommands[index]!;
+    const eventValue = recordValue.events[0]!;
+    const path = `recentCommands.${index}`;
+    if (recordValue.result.status === 'invalid') {
+      if (recordValue.command.type !== 'move') fail(`${path}.command.type`, 'only movement can produce an invalid result');
+      const offset = directionOffsets[recordValue.command.direction];
+      const attempted = { x: knownPosition.x + offset.x, y: knownPosition.y + offset.y };
+      const attemptedIndex = tileIndex(activeFloor, attempted.x, attempted.y);
+      const actualReason = attemptedIndex === undefined ? 'blocked.bounds' : activeFloor.tiles[attemptedIndex] === 0 ? 'blocked.wall' : undefined;
+      if (recordValue.result.reason !== actualReason) fail(`${path}.result.reason`, 'invalid reason does not match the active floor');
+      continue;
+    }
+    if (recordValue.command.type === 'wait') {
+      if (eventValue.type !== 'hero.waited' || eventValue.x !== knownPosition.x || eventValue.y !== knownPosition.y) {
+        fail(`${path}.events.0`, 'wait position does not match the retained position chain');
+      }
+      continue;
+    }
+    if (eventValue.type !== 'hero.moved') fail(`${path}.events.0`, 'move result and event are inconsistent');
+    if (eventValue.to.x !== knownPosition.x || eventValue.to.y !== knownPosition.y) {
+      fail(`${path}.events.0.to`, 'move destination does not match the retained position chain');
+    }
+    const offset = directionOffsets[recordValue.command.direction];
+    if (eventValue.to.x !== eventValue.from.x + offset.x || eventValue.to.y !== eventValue.from.y + offset.y) {
+      fail(`${path}.events.0.to`, 'move does not match its command direction');
+    }
+    knownPosition = eventValue.from;
   }
   return run as ActiveRun;
 }

@@ -84,7 +84,7 @@ The `v1` active-run document contains:
 - `turn`: a non-negative safe integer.
 - `hero`: stable hero identifier, display name, and current floor and coordinates.
 - `activeFloorId`: the floor occupied by the hero.
-- `floors`: complete generated-floor snapshots ordered by floor identifier.
+- `floors`: complete generated-floor snapshots in strictly increasing floor-identifier order using JavaScript UTF-16 relational comparison.
 - `recentCommands`: up to 128 processed command records ordered oldest to newest.
 
 The initial `gameVersion` is the exact string `0.1.0`. Opaque run, floor, entity, command, and event identifiers match `^[a-z0-9][a-z0-9._:-]{0,127}$`; generation of those identifiers belongs to callers, while the engine validates and compares them. Hero display names are separate presentation data: they contain 1–40 Unicode code points, are normalized to NFC before entering state, and contain no control characters.
@@ -152,11 +152,14 @@ export function migrateActiveRun(input: unknown): ActiveRun;
 - Identifier and content-hash syntax.
 - Safe integer ranges and unsigned 32-bit PRNG words.
 - Non-zero PRNG states.
-- Unique and consistently referenced floor and entity identifiers.
+- Unique and consistently referenced floor and entity identifiers, with floor snapshots strictly ordered by floor identifier.
 - Floor dimensions, tile values, and tile-array lengths.
 - In-bounds hero and entity positions on walkable cells.
 - Active-floor consistency.
-- Monotonic recent-command revisions, maximum ring length, unique command IDs, and valid recorded results.
+- A maximum ring length, unique command IDs, and adjacent command revisions chained from each preceding result.
+- A reducer-reachable retained command suffix: wait positions remain unchanged, moves are exactly one cell in their requested direction, and adjacent event positions form one continuous chain.
+- Invalid records only for movement, with a boundary or wall reason that matches the attempted target on the active floor.
+- A nonempty retained suffix whose final position, revision, and turn terminate at the current hero and run counters. The first retained revision may be nonzero after older records are evicted.
 
 Malformed JSON, invalid current data, unsupported future versions, and migration failures return typed load errors with a machine-readable safe path and reason. Error messages must not contain the entire save document.
 
@@ -204,7 +207,7 @@ reload
 west
 ```
 
-The CLI prints the hero position, turn, revision, domain events, and final state hash. Verification mode executes an equivalent command sequence continuously and across the requested save/reload boundary. It exits non-zero unless final state, command results, and events are byte-identical.
+The CLI prints the hero position, turn, revision, domain events, and final state hash. Verification mode executes an equivalent command sequence continuously and across the requested save/reload boundary. It optionally accepts a second valid command file for the uninterrupted comparison run, allowing tests and diagnostics to prove the divergence failure path. It exits non-zero unless final state, command results, and events are byte-identical. Parser failures identify the malformed source line without echoing the complete script.
 
 The demonstration includes a wall collision, a valid move, a wait, save/reload, a duplicate command, and a stale-revision rejection. File access and argument parsing stay outside the engine package's browser-safe production boundary.
 
@@ -229,10 +232,10 @@ Test-driven implementation covers:
 - Wall and boundary invalid actions that consume no turn.
 - Revision advancement, stale revisions, duplicate replay, conflicting command IDs, invalid-action deduplication, and 128-entry eviction.
 - Stable object-key ordering, semantic array order, safe-number rejection, and byte stability.
-- Strict save validation for corrupt hashes, dimensions, tiles, coordinates, references, PRNG state, and recent-command data.
+- Strict save validation for corrupt hashes, dimensions, tiles, coordinates, references, PRNG state, ordered floor IDs, and reducer-reachable recent-command suffixes.
 - The real `v0` fixture, exact expected `v1` bytes, current-version idempotence, and future-version rejection.
 - Continuous versus save/reload replay equivalence.
-- CLI exit status and output for both matching and deliberately divergent fixtures.
+- CLI exit status and output for matching and deliberately divergent fixtures, line-numbered unknown directives and unsafe revisions, plus missing-file safe-I/O coverage.
 - Browser-safety enforcement that prevents Node-only modules from entering the engine production graph.
 
 The milestone verification runs all repository tests, type checks, and builds in addition to the engine-specific CLI demonstration. The existing server and Docker image continue to build without importing engine internals prematurely.

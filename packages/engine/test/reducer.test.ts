@@ -64,4 +64,14 @@ describe('resolveCommand', () => {
     expect(state.recentCommands[0]?.command.commandId).toBe('command.1');
     expect(state.recentCommands.at(-1)?.command.commandId).toBe('command.128');
   });
+
+  it.each([
+    { type: 'wait', commandId: 'command.overflow.wait', expectedRevision: Number.MAX_SAFE_INTEGER } as const,
+    move('command.overflow.move', Number.MAX_SAFE_INTEGER, 'east'),
+  ])('throws an invariant error before an applied $type can overflow counters', (command) => {
+    const initial = { ...createDemoRun(), revision: Number.MAX_SAFE_INTEGER, turn: Number.MAX_SAFE_INTEGER };
+    const before = structuredClone(initial);
+    expect(() => resolveCommand(initial, command)).toThrow(/invariant/i);
+    expect(initial).toEqual(before);
+  });
 });
