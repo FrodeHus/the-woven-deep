@@ -1,5 +1,6 @@
 import type { FloorSeedAllocation } from './generation-model.js';
 import type { GeneratedFloor } from './generate-floor.js';
+import { allocateFloorSeed } from './generation-random.js';
 import type { ActiveRun, Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { isNonZeroState } from './random.js';
@@ -27,6 +28,11 @@ export function addGeneratedFloor(
   assertState(allocation.nextGenerationState, 'next generation state');
   if (!isNonZeroState(allocation.nextGenerationState)) {
     throw new RangeError('next generation state must not be all zero');
+  }
+  const expectedAllocation = allocateFloorSeed(run.rng.generation);
+  if (!sameState(allocation.floorSeed, expectedAllocation.floorSeed)
+    || !sameState(allocation.nextGenerationState, expectedAllocation.nextGenerationState)) {
+    throw new RangeError('floor seed allocation must match the current generation stream');
   }
   if (!sameState(generated.floor.seed, allocation.floorSeed)) {
     throw new RangeError('generated floor seed must equal the allocated floor seed');
