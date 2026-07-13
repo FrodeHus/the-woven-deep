@@ -52,6 +52,16 @@ describe('floor knowledge packing', () => {
     },
   );
 
+  it('rejects a sparse explored word array with the correct length', () => {
+    const exploredWords = Array<number>(1);
+    expect(() => validateKnowledgePacking({ exploredWords, rememberedTerrainWords: [0xffff_ffff] }, 8)).toThrow(/unsigned 32-bit/);
+  });
+
+  it('rejects a sparse remembered terrain word array with the correct length', () => {
+    const rememberedTerrainWords = Array<number>(1);
+    expect(() => validateKnowledgePacking({ exploredWords: [0xff], rememberedTerrainWords }, 8)).toThrow(/unsigned 32-bit/);
+  });
+
   it('rejects nonzero remembered terrain padding and both disagreement directions', () => {
     expect(() => validateKnowledgePacking({ exploredWords: [0], rememberedTerrainWords: [0xffff_ffff, 0x0000_001f] }, 9)).toThrow(/padding/);
     expect(() => validateKnowledgePacking({ exploredWords: [1], rememberedTerrainWords: [0xffff_ffff] }, 8)).toThrow(/disagree/);

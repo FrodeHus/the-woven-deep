@@ -133,8 +133,12 @@ export function validateKnowledgePacking(knowledge: FloorKnowledge, cellCount: n
     throw new RangeError(`remembered terrain word length must be ${expectedRememberedWords}`);
   }
 
-  knowledge.exploredWords.forEach((word, index) => assertUnsignedWord(word, `explored word ${index}`));
-  knowledge.rememberedTerrainWords.forEach((word, index) => assertUnsignedWord(word, `remembered terrain word ${index}`));
+  for (let index = 0; index < expectedExploredWords; index += 1) {
+    assertUnsignedWord(knowledge.exploredWords[index]!, `explored word ${index}`);
+  }
+  for (let index = 0; index < expectedRememberedWords; index += 1) {
+    assertUnsignedWord(knowledge.rememberedTerrainWords[index]!, `remembered terrain word ${index}`);
+  }
 
   const exploredBitsInLastWord = cellCount % 32;
   if (exploredBitsInLastWord !== 0) {
