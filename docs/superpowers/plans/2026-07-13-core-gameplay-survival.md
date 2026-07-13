@@ -718,8 +718,8 @@ git commit -m "feat: resolve deterministic combat effects"
 
 ### Task 5A: Move condition definitions into YAML
 
-- [ ] Execute `docs/superpowers/plans/2026-07-13-yaml-condition-definitions.md` completely before Task 6.
-- [ ] Require every operator-editable YAML kind and closed registry ID to remain documented under `docs/server-admin/`.
+- [x] Execute `docs/superpowers/plans/2026-07-13-yaml-condition-definitions.md` completely before Task 6.
+- [x] Require every operator-editable YAML kind and closed registry ID to remain documented under `docs/server-admin/`.
 
 ---
 

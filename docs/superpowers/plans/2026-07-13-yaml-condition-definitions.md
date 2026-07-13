@@ -612,7 +612,7 @@ git commit -m "docs: publish server YAML reference"
 - Consumes: all prior task gates and commits.
 - Produces: a checked-off prerequisite and a clean boundary for core-gameplay Task 6.
 
-- [ ] **Step 1: Review the complete diff against the design**
+- [x] **Step 1: Review the complete diff against the design**
 
 Verify there is no hard-coded condition ID in engine rule logic:
 
@@ -630,7 +630,7 @@ rg -n "eval\(|new Function|script|expression" packages/content/src packages/engi
 
 Expected: no executable content mechanism.
 
-- [ ] **Step 2: Re-run the final gate from clean package outputs**
+- [x] **Step 2: Re-run the final gate from clean package outputs**
 
 Run:
 
@@ -644,7 +644,7 @@ git status --short
 
 Expected: every command passes and only the two plan checkbox updates remain.
 
-- [ ] **Step 3: Mark both plans complete and commit tracking**
+- [x] **Step 3: Mark both plans complete and commit tracking**
 
 Check every completed step in this plan and mark core-gameplay Task 5A complete. Commit only those tracking changes:
 
@@ -653,6 +653,6 @@ git add docs/superpowers/plans/2026-07-13-yaml-condition-definitions.md docs/sup
 git commit -m "docs: complete YAML condition prerequisite"
 ```
 
-- [ ] **Step 4: Resume Task 6**
+- [x] **Step 4: Resume Task 6**
 
 Continue at `### Task 6: Add relationships, opportunity reactions, and atomic world steps` in `docs/superpowers/plans/2026-07-13-core-gameplay-survival.md`. Use the condition-trait helpers already established; do not recreate suppression tags or special condition IDs.
