@@ -7,6 +7,7 @@
   "scripts": {
     "build": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && npm run build --workspace @woven-deep/web && npm run build --workspace @woven-deep/server",
     "content:validate": "npm run build --workspace @woven-deep/content && node packages/content/dist/cli.js",
+    "engine:demo": "npm run build --workspace @woven-deep/engine && node scripts/engine-demo.mjs --verify packages/engine/fixtures/demo.commands",
     "smoke": "node scripts/smoke.mjs",
     "test": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && npm run test --workspaces --if-present",
     "typecheck": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && npm run typecheck --workspaces --if-present"
