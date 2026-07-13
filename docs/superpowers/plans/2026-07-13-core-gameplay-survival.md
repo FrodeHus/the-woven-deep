@@ -256,7 +256,7 @@ git commit -m "feat: replace active runs with gameplay state"
 - Consumes: deterministic compiler ordering, stable JSON hashing, and current monster/item/vault definitions.
 - Produces: schema-v2 `CompiledContentPack`, `validateCompiledContentPack(input)`, strict source-v2 parsing, `TARGETING_REGISTRY`, `EFFECT_PARAMETER_SCHEMAS`, cross-reference validation, validated SQLite reads, and seven-kind web summaries with typed unsupported-version failures.
 
-- [ ] **Step 1: Write failing public-model and version-rejection tests**
+- [x] **Step 1: Write failing public-model and version-rejection tests**
 
 ```ts
 it('exposes every schema-v2 content kind', () => {
@@ -275,13 +275,13 @@ it('rejects a stored schema-v1 pack before exposing entries', () => {
 });
 ```
 
-- [ ] **Step 2: Run content tests to verify RED**
+- [x] **Step 2: Run content tests to verify RED**
 
 Run: `npm test --workspace @woven-deep/content -- --run test/model.test.ts test/parse-file.test.ts`
 
 Expected: FAIL because schema-v2 kinds and strict version rejection are absent.
 
-- [ ] **Step 3: Define structured schema-v2 content contracts**
+- [x] **Step 3: Define structured schema-v2 content contracts**
 
 Set `CONTENT_SCHEMA_VERSION = 2` and define shared structures such as:
 
@@ -308,11 +308,11 @@ export interface MonsterContentEntry extends BaseContentEntry {
 
 Add explicit item, spell, trap, loot-table, balance, and existing vault interfaces. Keep content data readonly and JSON-compatible. Implement `validateCompiledContentPack` with a strict discriminated Zod union and an early typed version check so stored content never reaches runtime resolution unvalidated.
 
-- [ ] **Step 4: Convert current bundled content and compiled output directly**
+- [x] **Step 4: Convert current bundled content and compiled output directly**
 
 Convert the cave rat, brass lantern, Lampwright Cache, and a baseline core-gameplay balance file to `schemaVersion: 2` with complete strict fields. `compileContentDirectory` emits only `CompiledContentPack { schemaVersion: 2, hash, entries, generationReport }`. Any source or stored pack with another version is rejected; no adapter or compatibility defaults exist. Update every typed web and server pack fixture directly to schema v2.
 
-- [ ] **Step 5: Write failing strict schema-v2 parser tests**
+- [x] **Step 5: Write failing strict schema-v2 parser tests**
 
 Cover one valid source file per new kind and exact invalid cases:
 
@@ -331,7 +331,7 @@ Run: `npm test --workspace @woven-deep/content -- --run test/parse-file.test.ts 
 
 Expected: FAIL because source schema v2 and registry validation do not exist.
 
-- [ ] **Step 6: Implement strict parsing and first-pass semantic checks**
+- [x] **Step 6: Implement strict parsing and first-pass semantic checks**
 
 Accept source file `schemaVersion: 2` only. Use strict Zod objects with safe integer bounds. Add registries containing the initial stable identifiers and parameter schemas:
 
@@ -353,7 +353,7 @@ export const EFFECT_PARAMETER_SCHEMAS = {
 
 Validate effect parameters, references, equipment/handedness combinations, identification group compatibility, strictly positive loot weights, acyclic nested loot tables, one balance entry, and deterministic sorted diagnostics. Make `ContentPackRepository.get` parse stored JSON through `validateCompiledContentPack` rather than a type assertion. Make the browser-safe API parser do the same before counting all seven content kinds, including zero counts.
 
-- [ ] **Step 7: Run content GREEN and commit**
+- [x] **Step 7: Run content GREEN and commit**
 
 Run: `npm test --workspace @woven-deep/content && npm run build --workspace @woven-deep/content && npm test --workspace @woven-deep/server && npm test --workspace @woven-deep/web && npm run typecheck && npm run build`
 

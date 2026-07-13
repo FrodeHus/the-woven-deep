@@ -1,4 +1,4 @@
-schemaVersion: 1
+schemaVersion: 2
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -6,9 +6,19 @@ entries:
     glyph: r
     color: "#9e927c"
     tags: [animal, darkness]
-    ai: ai.skittish
+    minDepth: 1
+    maxDepth: 6
+    attributes: { might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2 }
+    health: 4
+    speed: 110
+    accuracy: 1
+    defense: 10
+    perception: 6
+    damage: { count: 1, sides: 3, bonus: 0 }
+    armor: 0
+    resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 10, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
     runAppearanceChance: 1
-    stats:
-      health: 4
-      attack: 2
-      defense: 0
+    rarity: common

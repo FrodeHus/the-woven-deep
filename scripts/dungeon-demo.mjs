@@ -24,10 +24,6 @@ const reviewedHashesPath = fileURLToPath(
   new URL('../packages/engine/test/fixtures/dungeon-demo-hashes.json', import.meta.url),
 );
 const candidateHashesPath = '/tmp/dungeon-demo-hashes.json';
-const registries = {
-  ai: new Set(['ai.skittish']),
-  effects: new Set(['effect.light-source']),
-};
 
 function parseArguments(arguments_) {
   let verify = false;
@@ -282,7 +278,7 @@ async function verifyReviewedHashes(hashes) {
 
 async function main() {
   const options = parseArguments(process.argv.slice(2));
-  const pack = await compileContentDirectory({ rootDir: options.contentDirectory, registries });
+  const pack = await compileContentDirectory({ rootDir: options.contentDirectory });
   const first = createGeneratedDemoRun(pack);
   const second = createGeneratedDemoRun(pack);
   assert(stableJson(first.generated.floor) === stableJson(second.generated.floor),

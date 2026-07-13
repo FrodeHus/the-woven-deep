@@ -8,23 +8,20 @@ import {
   type ContentCompileIssue,
 } from '../src/compiler/index.js';
 
-const registries = {
-  ai: new Set(['ai.skittish']),
-  effects: new Set(['effect.light-source']),
-};
-
 const compactVault = '{kind: vault, id: vault.test-room, name: Test room, tags: [test], minDepth: 1, maxDepth: 5, rarity: common, weight: 10, maxPerFloor: 1, margin: 1, transforms: {rotations: [0, 180], reflectHorizontal: true}, layout: ["#####", "#+m.#", "#####"], legend: {"#": {terrain: wall}, ".": {terrain: floor}, "+": {terrain: floor, entrance: true}, m: {terrain: floor, slot: {id: monster-main, kind: monster, required: true, tags: [guard]}}}}';
 
-const compactMonster = '{kind: monster, id: monster.rat, name: Rat, glyph: r, color: "#aaaaaa", ai: ai.skittish, stats: {health: 4, attack: 2, defense: 0}}';
-const compactItem = '{kind: item, id: item.lantern, name: Lantern, glyph: "¤", color: "#eeeeaa", effect: effect.light-source, price: 4}';
+const compactMonster = '{kind: monster, id: monster.rat, name: Rat, glyph: r, color: "#aaaaaa", tags: [], minDepth: 1, maxDepth: 5, attributes: {might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2}, health: 4, speed: 110, accuracy: 1, defense: 10, perception: 6, damage: {count: 1, sides: 3, bonus: 0}, armor: 0, resistances: {physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0}, disposition: hostile, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, runAppearanceChance: 1, rarity: common}';
+const compactItem = '{kind: item, id: item.lantern, name: Lantern, glyph: "¤", color: "#eeeeaa", tags: [light], minDepth: 1, maxDepth: 20, category: light, stackLimit: 1, price: 4, rarity: common, actionCost: 100, equipment: {slots: [off-hand], handedness: one-handed, reservedSlots: []}, combat: null, light: {color: [255, 200, 100], radius: 6, strength: 180, fuelCapacity: 1000, fuelPerTime: 1, warningThresholds: [100], fuelTags: [lamp-oil]}, identification: {mode: known, groupId: null, appearances: []}, effects: []}';
+const compactBalance = '{kind: balance, id: balance.core, name: Core, tags: [core], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000, hungerThresholds: {hungry: 7000, weak: 8500, starving: 9500}, starvationInterval: 500, starvationDamage: 1, formulas: {health: {base: 8, vitality: 2}}, actionCosts: {action.move: 100}}';
 
 function contentFile(...entries: readonly string[]): string {
-  return `schemaVersion: 1\nentries: [${entries.join(', ')}]\n`;
+  return `schemaVersion: 2\nentries: [${entries.join(', ')}]\n`;
 }
 
 async function fixture(files: Record<string, string>): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'woven-content-'));
-  for (const [path, source] of Object.entries(files)) {
+  const completeFiles = { 'balance.yaml': contentFile(compactBalance), ...files };
+  for (const [path, source] of Object.entries(completeFiles)) {
     const target = join(root, path);
     await mkdir(join(target, '..'), { recursive: true });
     await writeFile(target, source);
@@ -52,12 +49,12 @@ describe('compileContentDirectory', () => {
       'z.yaml': contentFile(compactMonster, compactItem, compactVault),
     });
     const expanded = await fixture({
-      'nested/a.yml': 'schemaVersion: 1\nentries:\n  - kind: monster\n    id: monster.rat\n    name: Rat\n    glyph: r\n    color: "#aaaaaa"\n    ai: ai.skittish\n    stats:\n      health: 4\n      attack: 2\n      defense: 0\n  - kind: item\n    id: item.lantern\n    name: Lantern\n    glyph: "¤"\n    color: "#eeeeaa"\n    effect: effect.light-source\n    price: 4\n',
+      'nested/a.yml': contentFile(compactMonster, compactItem),
       'vaults/test.yaml': contentFile(compactVault),
     });
 
-    const left = await compileContentDirectory({ rootDir: compact, registries });
-    const right = await compileContentDirectory({ rootDir: expanded, registries });
+    const left = await compileContentDirectory({ rootDir: compact });
+    const right = await compileContentDirectory({ rootDir: expanded });
     expect(left.hash).toBe(right.hash);
     expect(left.hash).toMatch(/^[0-9a-f]{64}$/);
   });
@@ -65,11 +62,11 @@ describe('compileContentDirectory', () => {
   it('rejects duplicate IDs in code-unit path order', async () => {
     const root = await fixture({
       'z.yaml': contentFile(compactMonster, compactItem, compactVault),
-      'ä.yaml': 'schemaVersion: 1\nentries: [{kind: monster, id: monster.rat, name: Rat Two, glyph: R, color: "#bbbbbb", ai: ai.skittish, stats: {health: 5, attack: 2, defense: 0}}]\n',
+      'ä.yaml': contentFile(compactMonster.replace('name: Rat', 'name: Rat Two').replace('health: 4', 'health: 5')),
     });
 
     await expectCompileIssues(
-      compileContentDirectory({ rootDir: root, registries }),
+      compileContentDirectory({ rootDir: root }),
       [{
         file: 'ä.yaml',
         path: '$.entries.id',
@@ -81,54 +78,55 @@ describe('compileContentDirectory', () => {
   it('rejects an unregistered behavior reference', async () => {
     const root = await fixture({
       'content.yaml': contentFile(
-        '{kind: monster, id: monster.rat, name: Rat, glyph: r, color: "#aaaaaa", ai: ai.unknown, stats: {health: 4, attack: 2, defense: 0}}',
+        compactMonster.replace('behavior.approach-and-attack', 'behavior.unknown'),
         compactItem,
         compactVault,
       ),
     });
 
     await expectCompileIssues(
-      compileContentDirectory({ rootDir: root, registries }),
+      compileContentDirectory({ rootDir: root }),
       [{
         file: 'content.yaml',
-        path: '$.entries.monster.rat.ai',
-        message: 'unregistered AI ai.unknown',
+        path: '$.entries.monster.rat.behavior',
+        message: 'unregistered behavior behavior.unknown',
       }],
     );
   });
 
-  it('rejects every invalid registry key before compiling files', async () => {
-    const root = await fixture({ 'invalid.yaml': ': invalid YAML' });
-    const invalidRegistries = {
-      ai: new Set(['skittish', 'effect.wrong']),
-      effects: new Set(['light-source', 'ai.wrong']),
-    };
+  it('rejects inconsistent equipment handedness', async () => {
+    const invalidItem = compactItem
+      .replace('slots: [off-hand]', 'slots: [head]')
+      .replace('handedness: one-handed', 'handedness: two-handed');
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, invalidItem, compactVault) });
 
-    await expectCompileIssues(
-      compileContentDirectory({ rootDir: root, registries: invalidRegistries }),
-      [
-        {
-          file: root,
-          path: '$.registries.ai',
-          message: 'invalid AI registry key effect.wrong; expected ai.* namespaced ID',
-        },
-        {
-          file: root,
-          path: '$.registries.ai',
-          message: 'invalid AI registry key skittish; expected ai.* namespaced ID',
-        },
-        {
-          file: root,
-          path: '$.registries.effects',
-          message: 'invalid effect registry key ai.wrong; expected effect.* namespaced ID',
-        },
-        {
-          file: root,
-          path: '$.registries.effects',
-          message: 'invalid effect registry key light-source; expected effect.* namespaced ID',
-        },
-      ],
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/two-handed equipment must use the main-hand slot/i);
+  });
+
+  it('rejects unregistered effects and invalid registered effect parameters', async () => {
+    const unknownEffect = compactItem.replace(
+      'effects: []',
+      'effects: [{effectId: effect.unknown, parameters: {}, requiresLivingTarget: false}, {effectId: effect.heal, parameters: {dice: {count: 0, sides: 4, bonus: 0}}, requiresLivingTarget: false}]',
     );
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, unknownEffect, compactVault) });
+
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/unregistered effect effect\.unknown|expected number to be >0/i);
+  });
+
+  it('rejects nested loot-table cycles', async () => {
+    const first = '{kind: loot-table, id: loot-table.first, name: First, tags: [], rolls: 1, choices: [{contentId: null, lootTableId: loot-table.second, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const second = '{kind: loot-table, id: loot-table.second, name: Second, tags: [], rolls: 1, choices: [{contentId: null, lootTableId: loot-table.first, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, first, second) });
+
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/loot-table cycle detected/i);
+  });
+
+  it('requires exactly one balance entry', async () => {
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, compactItem, compactVault, compactBalance.replace('balance.core', 'balance.alternate')),
+    });
+
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/expected exactly one balance entry; found 2/i);
   });
 
   it('rejects content missing foundational item content', async () => {
@@ -137,7 +135,7 @@ describe('compileContentDirectory', () => {
     });
 
     await expectCompileIssues(
-      compileContentDirectory({ rootDir: root, registries }),
+      compileContentDirectory({ rootDir: root }),
       [{
         file: root,
         path: '$.entries',
@@ -149,7 +147,7 @@ describe('compileContentDirectory', () => {
   it('rejects content missing foundational monster content', async () => {
     const root = await fixture({ 'content.yaml': contentFile(compactItem, compactVault) });
 
-    await expectCompileIssues(compileContentDirectory({ rootDir: root, registries }), [{
+    await expectCompileIssues(compileContentDirectory({ rootDir: root }), [{
       file: root,
       path: '$.entries',
       message: 'missing foundational monster content',
@@ -159,7 +157,7 @@ describe('compileContentDirectory', () => {
   it('rejects content missing foundational vault content', async () => {
     const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem) });
 
-    await expectCompileIssues(compileContentDirectory({ rootDir: root, registries }), [{
+    await expectCompileIssues(compileContentDirectory({ rootDir: root }), [{
       file: root,
       path: '$.entries',
       message: 'missing foundational vault content',
@@ -198,7 +196,7 @@ describe('compileContentDirectory', () => {
       .replace(', m: {terrain: floor, slot: {id: monster-main, kind: monster, required: true, tags: [guard]}}', '')],
   ])('rejects invalid vault %s', async (_name, invalidVault) => {
     const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, invalidVault) });
-    await expect(compileContentDirectory({ rootDir: root, registries })).rejects.toBeInstanceOf(ContentCompileError);
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toBeInstanceOf(ContentCompileError);
   });
 
   it.each([
@@ -222,7 +220,7 @@ describe('compileContentDirectory', () => {
   ] as const)('strict compilation rejects %s', async (_name, invalidVault, path, message) => {
     const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, invalidVault) });
 
-    await expectCompileIssues(compileContentDirectory({ rootDir: root, registries }), [{
+    await expectCompileIssues(compileContentDirectory({ rootDir: root }), [{
       file: 'content.yaml', path, message,
     }]);
   });
@@ -232,22 +230,22 @@ describe('compileContentDirectory', () => {
       'a.yaml': contentFile(compactMonster, compactItem, compactVault),
       'b.yaml': contentFile(compactVault),
     });
-    await expect(compileContentDirectory({ rootDir: duplicateRoot, registries })).rejects.toThrow(/duplicate vault\.test-room/);
+    await expect(compileContentDirectory({ rootDir: duplicateRoot })).rejects.toThrow(/duplicate vault\.test-room/);
 
     const changedRoot = await fixture({
       'content.yaml': contentFile(compactMonster, compactItem, compactVault.replace('weight: 10', 'weight: 11')),
     });
     const originalRoot = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault) });
     const [changed, original] = await Promise.all([
-      compileContentDirectory({ rootDir: changedRoot, registries }),
-      compileContentDirectory({ rootDir: originalRoot, registries }),
+      compileContentDirectory({ rootDir: changedRoot }),
+      compileContentDirectory({ rootDir: originalRoot }),
     ]);
     expect(changed.hash).not.toBe(original.hash);
   });
 
   it('aborts between content discovery and file processing boundaries', async () => {
     const root = await fixture({
-      'a.yaml': 'schemaVersion: 1\nentries: [{kind: monster, id: monster.rat, name: Rat, glyph: r, color: "#aaaaaa", ai: ai.skittish, stats: {health: 4, attack: 2, defense: 0}}]\n',
+      'a.yaml': contentFile(compactMonster),
       'b.yaml': contentFile(compactItem, compactVault),
     });
     const controller = new AbortController();
@@ -260,7 +258,7 @@ describe('compileContentDirectory', () => {
     };
 
     await expect(
-      compileContentDirectory({ rootDir: root, registries, signal: controller.signal }),
+      compileContentDirectory({ rootDir: root, signal: controller.signal }),
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(boundaries).toBe(10);
   });

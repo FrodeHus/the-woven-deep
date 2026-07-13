@@ -2,6 +2,7 @@ import { parseDocument } from 'yaml';
 import type { ContentEntry } from '../model.js';
 import { ContentCompileError } from './error.js';
 import { contentFileSchema, stableIdSchema } from './schema.js';
+import { CONTENT_SCHEMA_VERSION } from '../model.js';
 
 const MAX_FILE_BYTES = 256 * 1024;
 
@@ -14,7 +15,7 @@ function structuralIssuePath(path: readonly PropertyKey[], value: unknown): stri
   if (segments[0] === 'entries' && typeof segments[1] === 'number' && isRecord(value)) {
     const entries = value.entries;
     const entry = Array.isArray(entries) ? entries[segments[1]] : undefined;
-    const parsedId = isRecord(entry) && entry.kind === 'vault'
+    const parsedId = isRecord(entry)
       ? stableIdSchema.safeParse(entry.id)
       : null;
     if (parsedId?.success) {
@@ -54,6 +55,14 @@ export function parseContentFile(input: { path: string; source: string }): reado
       file: input.path,
       path: '$',
       message: error instanceof Error ? error.message : 'unsafe YAML alias',
+    }]);
+  }
+  const suppliedVersion = isRecord(value) ? value.schemaVersion : undefined;
+  if (suppliedVersion !== CONTENT_SCHEMA_VERSION) {
+    throw new ContentCompileError([{
+      file: input.path,
+      path: '$.schemaVersion',
+      message: `unsupported schemaVersion ${String(suppliedVersion)}; expected ${CONTENT_SCHEMA_VERSION}`,
     }]);
   }
   const result = contentFileSchema.safeParse(value);

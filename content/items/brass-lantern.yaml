@@ -1,4 +1,4 @@
-schemaVersion: 1
+schemaVersion: 2
 entries:
   - kind: item
     id: item.brass-lantern
@@ -6,5 +6,25 @@ entries:
     glyph: "¤"
     color: "#e8c879"
     tags: [light, utility]
-    effect: effect.light-source
+    minDepth: 1
+    maxDepth: 20
+    category: light
+    stackLimit: 1
     price: 24
+    rarity: common
+    actionCost: 100
+    equipment:
+      slots: [off-hand]
+      handedness: one-handed
+      reservedSlots: []
+    combat: null
+    light:
+      color: [255, 198, 92]
+      radius: 7
+      strength: 180
+      fuelCapacity: 2400
+      fuelPerTime: 1
+      warningThresholds: [600, 300, 100]
+      fuelTags: [lamp-oil]
+    identification: { mode: known, groupId: null, appearances: [] }
+    effects: []

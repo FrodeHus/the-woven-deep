@@ -1,0 +1,26 @@
+schemaVersion: 2
+entries:
+  - kind: balance
+    id: balance.core-gameplay
+    name: Core gameplay
+    tags: [core, survival]
+    readinessThreshold: 100
+    normalActionCost: 100
+    speedMinimum: 25
+    speedMaximum: 400
+    energyMinimum: -10000
+    energyMaximum: 10000
+    attributeMinimum: 0
+    attributeMaximum: 30
+    hungerMaximum: 10000
+    hungerThresholds: { hungry: 7000, weak: 8500, starving: 9500 }
+    starvationInterval: 500
+    starvationDamage: 1
+    formulas:
+      health: { base: 8, vitality: 2 }
+      accuracy: { base: 0, agility: 1 }
+      defense: { base: 8, agility: 1 }
+    actionCosts:
+      action.move: 100
+      action.melee: 100
+      action.wait: 100

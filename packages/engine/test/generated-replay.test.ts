@@ -24,7 +24,6 @@ let pack: CompiledContentPack;
 beforeAll(async () => {
   pack = await compileContentDirectory({
     rootDir: resolve(import.meta.dirname, '../../../content'),
-    registries: { ai: new Set(['ai.skittish']), effects: new Set(['effect.light-source']) },
   });
 });
 

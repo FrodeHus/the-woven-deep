@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 
-const pack = { schemaVersion: 1 as const, hash: 'b'.repeat(64), entries: [] };
+const pack = {
+  schemaVersion: 2 as const,
+  hash: 'b'.repeat(64),
+  entries: [],
+  generationReport: { foundationalCategories: [] },
+};
 
 describe('content API', () => {
   it('reports readiness and serves the guest pack', async () => {

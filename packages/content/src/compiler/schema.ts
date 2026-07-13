@@ -1,27 +1,207 @@
 import { z } from 'zod';
 
 export const stableIdSchema = z.string().regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/);
-const slug = z.string().regex(/^[a-z][a-z0-9-]*$/);
+export const slugSchema = z.string().regex(/^[a-z][a-z0-9-]*$/);
 const glyph = z.string().refine((value) => [...value].length === 1, 'must be one Unicode glyph');
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+const safeInteger = z.number().int().safe();
+const safeNonNegative = safeInteger.nonnegative();
+const safePositive = safeInteger.positive();
+const probability = z.number().finite().min(0).max(1);
+const jsonObject = z.record(z.string(), z.json());
+const tags = z.array(slugSchema).default([]);
+
+export const damageTypes = ['physical', 'fire', 'cold', 'lightning', 'poison', 'arcane'] as const;
+export const targetingIds = ['target.self', 'target.actor', 'target.line', 'target.cell'] as const;
+export const equipmentSlots = ['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring'] as const;
+
+export const diceSchema = z.strictObject({
+  count: safePositive.max(100),
+  sides: safePositive.max(10_000),
+  bonus: safeInteger,
+});
+
+const attributes = z.strictObject({
+  might: safeNonNegative,
+  agility: safeNonNegative,
+  vitality: safeNonNegative,
+  wits: safeNonNegative,
+  resolve: safeNonNegative,
+});
+
+const resistances = z.strictObject({
+  physical: safeInteger.min(-100).max(100),
+  fire: safeInteger.min(-100).max(100),
+  cold: safeInteger.min(-100).max(100),
+  lightning: safeInteger.min(-100).max(100),
+  poison: safeInteger.min(-100).max(100),
+  arcane: safeInteger.min(-100).max(100),
+});
+
+const effect = z.strictObject({
+  effectId: stableIdSchema,
+  parameters: jsonObject.default({}),
+  requiresLivingTarget: z.boolean().default(false),
+});
+
+const base = {
+  id: stableIdSchema,
+  name: z.string().trim().min(1).max(80),
+  tags,
+} as const;
+
+const presented = {
+  ...base,
+  glyph,
+  color,
+} as const;
+
+const depthRange = {
+  minDepth: safePositive,
+  maxDepth: safePositive,
+} as const;
+
+const monsterEntry = z.strictObject({
+  ...presented,
+  ...depthRange,
+  kind: z.literal('monster'),
+  attributes,
+  health: safePositive,
+  speed: safePositive,
+  accuracy: safeInteger,
+  defense: safeInteger,
+  perception: safeNonNegative,
+  damage: diceSchema,
+  armor: safeNonNegative,
+  resistances,
+  disposition: z.enum(['friendly', 'neutral', 'hostile']),
+  behaviorId: stableIdSchema,
+  behaviorParameters: jsonObject.default({}),
+  runAppearanceChance: probability,
+  rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
+}).superRefine((entry, context) => {
+  if (entry.maxDepth < entry.minDepth) context.addIssue({ code: 'custom', path: ['maxDepth'], message: 'maximum depth must be greater than or equal to minimum depth' });
+});
+
+const equipment = z.strictObject({
+  slots: z.array(z.enum(equipmentSlots)).min(1),
+  handedness: z.enum(['one-handed', 'two-handed', 'none']),
+  reservedSlots: z.array(z.enum(equipmentSlots)),
+});
+
+const combat = z.strictObject({
+  accuracy: safeInteger,
+  defense: safeInteger,
+  armor: safeNonNegative,
+  damage: diceSchema.nullable(),
+  range: safeNonNegative,
+  ammunitionTag: slugSchema.nullable(),
+});
+
 const rgb = z.tuple([
   z.number().int().min(0).max(255),
   z.number().int().min(0).max(255),
   z.number().int().min(0).max(255),
 ]);
+
+const itemLight = z.strictObject({
+  color: rgb,
+  radius: safePositive.max(32),
+  strength: safePositive.max(255),
+  fuelCapacity: safePositive,
+  fuelPerTime: safePositive,
+  warningThresholds: z.array(safeNonNegative),
+  fuelTags: z.array(slugSchema),
+});
+
+const identification = z.strictObject({
+  mode: z.enum(['known', 'shuffled', 'instance']),
+  groupId: stableIdSchema.nullable(),
+  appearances: z.array(stableIdSchema),
+});
+
+const itemEntry = z.strictObject({
+  ...presented,
+  ...depthRange,
+  kind: z.literal('item'),
+  category: z.enum(['weapon', 'ammunition', 'armor', 'shield', 'light', 'fuel', 'food', 'potion', 'scroll', 'ring', 'misc']),
+  stackLimit: safePositive,
+  price: safeNonNegative,
+  rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
+  actionCost: safeNonNegative,
+  equipment: equipment.nullable(),
+  combat: combat.nullable(),
+  light: itemLight.nullable(),
+  identification,
+  effects: z.array(effect),
+});
+
+const spellEntry = z.strictObject({
+  ...base,
+  kind: z.literal('spell'),
+  targetingId: z.enum(targetingIds),
+  range: safeNonNegative,
+  actionCost: safePositive,
+  effects: z.array(effect).min(1),
+});
+
+const trapEntry = z.strictObject({
+  ...presented,
+  kind: z.literal('trap'),
+  targetingId: z.enum(targetingIds),
+  discoveryDifficulty: safeNonNegative,
+  disarmDifficulty: safeNonNegative,
+  resetMode: z.enum(['once', 'reset', 'disabled']),
+  effects: z.array(effect).min(1),
+});
+
+const lootChoice = z.strictObject({
+  contentId: stableIdSchema.nullable(),
+  lootTableId: stableIdSchema.nullable(),
+  weight: safePositive,
+  minimumQuantity: safePositive,
+  maximumQuantity: safePositive,
+});
+
+const lootTableEntry = z.strictObject({
+  ...base,
+  kind: z.literal('loot-table'),
+  rolls: safePositive,
+  choices: z.array(lootChoice).min(1),
+});
+
+const balanceEntry = z.strictObject({
+  ...base,
+  kind: z.literal('balance'),
+  readinessThreshold: safePositive,
+  normalActionCost: safePositive,
+  speedMinimum: safePositive,
+  speedMaximum: safePositive,
+  energyMinimum: safeInteger,
+  energyMaximum: safeInteger,
+  attributeMinimum: safeNonNegative,
+  attributeMaximum: safeNonNegative,
+  hungerMaximum: safePositive,
+  hungerThresholds: z.strictObject({ hungry: safeNonNegative, weak: safeNonNegative, starving: safeNonNegative }),
+  starvationInterval: safePositive,
+  starvationDamage: safePositive,
+  formulas: z.record(z.string(), z.record(z.string(), safeInteger)),
+  actionCosts: z.record(stableIdSchema, safeNonNegative),
+});
+
 const slot = z.strictObject({
-  id: slug,
+  id: slugSchema,
   kind: z.enum(['monster', 'item', 'trap', 'npc', 'fixture', 'objective']),
   required: z.boolean().default(false),
-  tags: z.array(slug).default([]),
+  tags,
 });
 const light = z.strictObject({
-  idSuffix: slug,
+  idSuffix: slugSchema,
   glyph,
   presentationToken: stableIdSchema,
   color: rgb,
-  radius: z.number().int().min(1).max(32),
-  strength: z.number().int().min(1).max(255),
+  radius: safePositive.max(32),
+  strength: safePositive.max(255),
   enabled: z.boolean().default(true),
 });
 const legendEntry = z.strictObject({
@@ -31,86 +211,40 @@ const legendEntry = z.strictObject({
   slot: slot.nullable().default(null),
 }).superRefine((entry, context) => {
   const actionCount = Number(entry.entrance) + Number(entry.light !== null) + Number(entry.slot !== null);
-  if (actionCount > 1) {
-    context.addIssue({
-      code: 'custom',
-      path: [],
-      message: 'legend entry may declare at most one entrance, light, or slot action',
-    });
-  }
+  if (actionCount > 1) context.addIssue({ code: 'custom', path: [], message: 'legend entry may declare at most one entrance, light, or slot action' });
 });
-const common = {
-  id: stableIdSchema,
-  name: z.string().trim().min(1).max(80),
-  glyph,
-  color,
-  tags: z.array(slug).default([]),
-};
-
-const rotations = z.array(z.union([
-  z.literal(0), z.literal(90), z.literal(180), z.literal(270),
-])).min(1).max(4).superRefine((values, context) => {
-  for (let index = 1; index < values.length; index += 1) {
-    if (values[index - 1]! >= values[index]!) {
-      context.addIssue({
-        code: 'custom',
-        path: [index],
-        message: 'rotations must be unique and sorted in numeric order',
-      });
-      return;
+const rotations = z.array(z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]))
+  .min(1).max(4).superRefine((values, context) => {
+    for (let index = 1; index < values.length; index += 1) {
+      if (values[index - 1]! >= values[index]!) {
+        context.addIssue({ code: 'custom', path: [index], message: 'rotations must be unique and sorted in numeric order' });
+        return;
+      }
     }
-  }
-});
-
-const layoutRow = z.string()
-  .min(1)
-  .refine((value) => [...value].length <= 160, 'layout row exceeds 160 code points');
-
+  });
+const layoutRow = z.string().min(1).refine((value) => [...value].length <= 160, 'layout row exceeds 160 code points');
 const vaultEntry = z.strictObject({
+  ...base,
+  ...depthRange,
   kind: z.literal('vault'),
-  id: stableIdSchema,
-  name: z.string().trim().min(1).max(80),
-  tags: z.array(slug).default([]),
-  minDepth: z.number().int().safe().positive(),
-  maxDepth: z.number().int().safe().positive(),
   rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
-  weight: z.number().int().safe().positive(),
-  maxPerFloor: z.number().int().safe().positive(),
-  margin: z.number().int().safe().nonnegative(),
-  transforms: z.strictObject({
-    rotations,
-    reflectHorizontal: z.boolean().default(false),
-  }),
+  weight: safePositive,
+  maxPerFloor: safePositive,
+  margin: safeNonNegative,
+  transforms: z.strictObject({ rotations, reflectHorizontal: z.boolean().default(false) }),
   layout: z.array(layoutRow).min(1).max(100),
   legend: z.record(z.string(), legendEntry),
 }).superRefine((entry, context) => {
-  if (entry.maxDepth < entry.minDepth) {
-    context.addIssue({
-      code: 'custom',
-      path: ['maxDepth'],
-      message: 'maximum depth must be greater than or equal to minimum depth',
-    });
-  }
+  if (entry.maxDepth < entry.minDepth) context.addIssue({ code: 'custom', path: ['maxDepth'], message: 'maximum depth must be greater than or equal to minimum depth' });
 });
 
 const rawContentEntrySchema = z.discriminatedUnion('kind', [
-  z.object({
-    ...common,
-    kind: z.literal('monster'),
-    ai: stableIdSchema,
-    runAppearanceChance: z.number().min(0).max(1).default(1),
-    stats: z.object({
-      health: z.number().int().positive(),
-      attack: z.number().int().nonnegative(),
-      defense: z.number().int().nonnegative(),
-    }).strict(),
-  }).strict(),
-  z.object({
-    ...common,
-    kind: z.literal('item'),
-    effect: stableIdSchema,
-    price: z.number().int().nonnegative(),
-  }).strict(),
+  monsterEntry,
+  itemEntry,
+  spellEntry,
+  trapEntry,
+  lootTableEntry,
+  balanceEntry,
   vaultEntry,
 ]);
 
@@ -132,7 +266,7 @@ export const contentEntrySchema = rawContentEntrySchema.transform((entry) => {
   };
 });
 
-export const contentFileSchema = z.object({
-  schemaVersion: z.literal(1),
+export const contentFileSchema = z.strictObject({
+  schemaVersion: z.literal(2),
   entries: z.array(contentEntrySchema).min(1),
-}).strict();
+});
