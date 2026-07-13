@@ -2,13 +2,37 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import type { CompiledContentPack, ContentEntry } from '../model.js';
 import { CONTENT_SCHEMA_VERSION } from '../model.js';
-import { canonicalHash } from './canonicalize.js';
+import { canonicalHash, compareCodeUnits } from './canonicalize.js';
 import { ContentCompileError, type ContentCompileIssue } from './error.js';
 import { parseContentFile } from './parse-file.js';
+import { stableIdSchema } from './schema.js';
 
 export interface ContentRegistries {
   readonly ai: ReadonlySet<string>;
   readonly effects: ReadonlySet<string>;
+}
+
+function registryIssues(rootDir: string, registries: ContentRegistries): ContentCompileIssue[] {
+  const issues: ContentCompileIssue[] = [];
+  for (const key of [...registries.ai].sort(compareCodeUnits)) {
+    if (!stableIdSchema.safeParse(key).success || !key.startsWith('ai.')) {
+      issues.push({
+        file: rootDir,
+        path: '$.registries.ai',
+        message: `invalid AI registry key ${key}; expected ai.* namespaced ID`,
+      });
+    }
+  }
+  for (const key of [...registries.effects].sort(compareCodeUnits)) {
+    if (!stableIdSchema.safeParse(key).success || !key.startsWith('effect.')) {
+      issues.push({
+        file: rootDir,
+        path: '$.registries.effects',
+        message: `invalid effect registry key ${key}; expected effect.* namespaced ID`,
+      });
+    }
+  }
+  return issues;
 }
 
 async function yamlPaths(root: string, current = root): Promise<string[]> {
@@ -19,13 +43,16 @@ async function yamlPaths(root: string, current = root): Promise<string[]> {
     if (entry.isDirectory()) found.push(...await yamlPaths(root, path));
     if (entry.isFile() && /\.ya?ml$/i.test(entry.name)) found.push(path);
   }
-  return found.sort((a, b) => relative(root, a).localeCompare(relative(root, b)));
+  return found.sort((a, b) => compareCodeUnits(relative(root, a), relative(root, b)));
 }
 
 export async function compileContentDirectory(input: {
   rootDir: string;
   registries: ContentRegistries;
 }): Promise<CompiledContentPack> {
+  const startupIssues = registryIssues(input.rootDir, input.registries);
+  if (startupIssues.length > 0) throw new ContentCompileError(startupIssues);
+
   const entries: ContentEntry[] = [];
   const issues: ContentCompileIssue[] = [];
   const seen = new Map<string, string>();
@@ -53,7 +80,7 @@ export async function compileContentDirectory(input: {
     }
   }
   if (issues.length > 0) throw new ContentCompileError(issues);
-  entries.sort((left, right) => left.id.localeCompare(right.id));
+  entries.sort((left, right) => compareCodeUnits(left.id, right.id));
   const hashInput = { schemaVersion: CONTENT_SCHEMA_VERSION, entries };
   return { ...hashInput, hash: canonicalHash(hashInput) };
 }

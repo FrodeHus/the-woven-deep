@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
-const id = z.string().regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/);
+export const stableIdSchema = z.string().regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/);
 const slug = z.string().regex(/^[a-z][a-z0-9-]*$/);
 const glyph = z.string().refine((value) => [...value].length === 1, 'must be one Unicode glyph');
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const common = {
-  id,
+  id: stableIdSchema,
   name: z.string().trim().min(1).max(80),
   glyph,
   color,
@@ -16,7 +16,7 @@ export const contentEntrySchema = z.discriminatedUnion('kind', [
   z.object({
     ...common,
     kind: z.literal('monster'),
-    ai: id,
+    ai: stableIdSchema,
     runAppearanceChance: z.number().min(0).max(1).default(1),
     stats: z.object({
       health: z.number().int().positive(),
@@ -27,7 +27,7 @@ export const contentEntrySchema = z.discriminatedUnion('kind', [
   z.object({
     ...common,
     kind: z.literal('item'),
-    effect: id,
+    effect: stableIdSchema,
     price: z.number().int().nonnegative(),
   }).strict(),
 ]);
