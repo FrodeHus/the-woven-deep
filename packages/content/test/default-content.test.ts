@@ -22,4 +22,18 @@ describe('bundled content', () => {
     expect(validateCompiledContentPack(JSON.parse(JSON.stringify(pack)))).toEqual(pack);
     expect(pack.hash).toMatch(/^[0-9a-f]{64}$/);
   });
+
+  it('revalidates condition references in a stored compiled pack', async () => {
+    const pack = await compileContentDirectory({
+      rootDir: resolve(import.meta.dirname, '../../../content'),
+    });
+    const corrupted = structuredClone(pack) as any;
+    const lantern = corrupted.entries.find((entry: any) => entry.id === 'item.brass-lantern');
+    lantern.effects = [{
+      effectId: 'effect.condition.apply',
+      parameters: { conditionId: 'condition.missing' },
+      requiresLivingTarget: true,
+    }];
+    expect(() => validateCompiledContentPack(corrupted)).toThrow(/unknown condition reference condition\.missing/i);
+  });
 });

@@ -13,6 +13,8 @@ const compactVault = '{kind: vault, id: vault.test-room, name: Test room, tags: 
 const compactMonster = '{kind: monster, id: monster.rat, name: Rat, glyph: r, color: "#aaaaaa", tags: [], minDepth: 1, maxDepth: 5, attributes: {might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2}, health: 4, speed: 110, accuracy: 1, defense: 10, perception: 6, damage: {count: 1, sides: 3, bonus: 0}, armor: 0, resistances: {physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0}, disposition: hostile, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, runAppearanceChance: 1, rarity: common}';
 const compactItem = '{kind: item, id: item.lantern, name: Lantern, glyph: "¤", color: "#eeeeaa", tags: [light], minDepth: 1, maxDepth: 20, category: light, stackLimit: 1, price: 4, rarity: common, actionCost: 100, equipment: {slots: [off-hand], handedness: one-handed, reservedSlots: []}, combat: null, light: {color: [255, 200, 100], radius: 6, strength: 180, fuelCapacity: 1000, fuelPerTime: 1, warningThresholds: [100], fuelTags: [lamp-oil]}, identification: {mode: known, groupId: null, appearances: []}, effects: []}';
 const compactBalance = '{kind: balance, id: balance.core, name: Core, tags: [core], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000, hungerThresholds: {hungry: 7000, weak: 8500, starving: 9500}, starvationInterval: 500, starvationDamage: 1, formulas: {health: {base: 8, vitality: 2}}, actionCosts: {action.move: 100}}';
+const compactTimedCondition = '{kind: condition, id: condition.stunned, name: Stunned, description: Cannot act, tags: [control], color: "#d8c46a", duration: {mode: timed, default: 100, maximum: 500}, stacking: {mode: refresh, maximumStacks: 1}, modifiersPerStack: {defense: -2}, traits: [condition-trait.incapacitated]}';
+const compactPermanentCondition = '{kind: condition, id: condition.warded, name: Warded, description: Remains until removed, tags: [beneficial], color: "#80b8ff", duration: {mode: permanent, default: null, maximum: null}, stacking: {mode: refresh, maximumStacks: 1}, modifiersPerStack: {}, traits: []}';
 
 function contentFile(...entries: readonly string[]): string {
   return `schemaVersion: 2\nentries: [${entries.join(', ')}]\n`;
@@ -111,6 +113,37 @@ describe('compileContentDirectory', () => {
     const root = await fixture({ 'content.yaml': contentFile(compactMonster, unknownEffect, compactVault) });
 
     await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/unregistered effect effect\.unknown|expected number to be >0/i);
+  });
+
+  it.each([
+    ['missing condition', 'condition.missing', '', /unknown condition reference condition\.missing/],
+    ['wrong content kind', 'item.lantern', '', /condition reference item\.lantern resolves to item/],
+    ['duration above maximum', 'condition.stunned', ', duration: 501', /duration 501 exceeds maximum 500/],
+  ])('rejects %s', async (_label, conditionId, duration, message) => {
+    const effect = `[{effectId: effect.condition.apply, parameters: {conditionId: ${conditionId}${duration}}, requiresLivingTarget: true}]`;
+    const item = compactItem.replace('effects: []', `effects: ${effect}`);
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, item, compactVault, compactTimedCondition),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(message);
+  });
+
+  it('accepts omitted timed and permanent durations but rejects a permanent override with an exact path', async () => {
+    const omitted = compactItem.replace('effects: []', 'effects: [{effectId: effect.condition.apply, parameters: {conditionId: condition.warded}, requiresLivingTarget: true}]');
+    const validRoot = await fixture({
+      'content.yaml': contentFile(compactMonster, omitted, compactVault, compactPermanentCondition),
+    });
+    await expect(compileContentDirectory({ rootDir: validRoot })).resolves.toBeDefined();
+
+    const overridden = omitted.replace('condition.warded}', 'condition.warded, duration: 1}');
+    const invalidRoot = await fixture({
+      'content.yaml': contentFile(compactMonster, overridden, compactVault, compactPermanentCondition),
+    });
+    await expectCompileIssues(compileContentDirectory({ rootDir: invalidRoot }), [{
+      file: 'content.yaml',
+      path: '$.entries.item.lantern.effects.0.parameters.duration',
+      message: 'permanent condition rejects a duration override',
+    }]);
   });
 
   it('rejects nested loot-table cycles', async () => {

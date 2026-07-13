@@ -204,7 +204,7 @@ git commit -m "feat: define conditions in YAML"
 - Consumes: compiled content map, `ConditionContentEntry`, and inline item/spell/trap `EffectDefinition` arrays.
 - Produces: optional authored condition duration plus deterministic source-path diagnostics for missing, wrong-kind, permanent, and over-maximum references.
 
-- [ ] **Step 1: Write failing semantic-reference tests**
+- [x] **Step 1: Write failing semantic-reference tests**
 
 Extend the compile-directory fixture with a condition definition and add these cases:
 
@@ -222,13 +222,13 @@ it.each([
 
 Add a permanent-condition case that rejects any authored duration and accepts an omitted duration. Assert the exact issue file and path includes `effects.<index>.parameters.duration`.
 
-- [ ] **Step 2: Run the compiler test to verify RED**
+- [x] **Step 2: Run the compiler test to verify RED**
 
 Run: `npm test --workspace @woven-deep/content -- --run test/compile-directory.test.ts`
 
 Expected: FAIL because duration is required and condition IDs are not resolved semantically.
 
-- [ ] **Step 3: Make authored duration optional and validate against definitions**
+- [x] **Step 3: Make authored duration optional and validate against definitions**
 
 Change only the primitive parameter schema:
 
@@ -272,17 +272,17 @@ function conditionReferenceIssues(
 
 Run this after registry parameter validation for item, spell, and trap effects. Preserve deterministic issue sorting.
 
-- [ ] **Step 4: Prove compiled-pack validation repeats semantic checks**
+- [x] **Step 4: Prove compiled-pack validation repeats semantic checks**
 
 Add a test that serializes a valid pack, mutates an effect condition reference, and verifies `validateCompiledContentPack` rejects it. This ensures downloaded or stored compiled packs cannot bypass source compilation.
 
-- [ ] **Step 5: Run content package GREEN**
+- [x] **Step 5: Run content package GREEN**
 
 Run: `npm test --workspace @woven-deep/content && npm run typecheck --workspace @woven-deep/content`
 
 Expected: all content tests and type checking pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/content

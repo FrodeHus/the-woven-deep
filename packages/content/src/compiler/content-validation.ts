@@ -36,15 +36,45 @@ function validateParameters(
   ));
 }
 
-function effectIssues(file: string, entryId: string, effects: readonly EffectDefinition[]): ContentCompileIssue[] {
-  return effects.flatMap((effect, index) => validateParameters(
-    file,
-    `$.entries.${entryId}.effects.${index}`,
-    effect.effectId,
-    effect.parameters,
-    EFFECT_PARAMETER_SCHEMAS,
-    'effect',
-  ));
+function conditionReferenceIssues(
+  file: string,
+  path: string,
+  effect: EffectDefinition,
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  if (effect.effectId !== 'effect.condition.apply' && effect.effectId !== 'effect.condition.remove') return [];
+  const conditionId = effect.parameters.conditionId;
+  const target = typeof conditionId === 'string' ? byId.get(conditionId) : undefined;
+  if (!target) return [issue(file, `${path}.parameters.conditionId`, `unknown condition reference ${String(conditionId)}`)];
+  if (target.kind !== 'condition') {
+    return [issue(file, `${path}.parameters.conditionId`, `condition reference ${conditionId} resolves to ${target.kind}`)];
+  }
+  if (effect.effectId !== 'effect.condition.apply') return [];
+  const duration = effect.parameters.duration;
+  if (target.duration.mode === 'permanent' && duration !== undefined) {
+    return [issue(file, `${path}.parameters.duration`, 'permanent condition rejects a duration override')];
+  }
+  if (target.duration.mode === 'timed' && typeof duration === 'number' && duration > target.duration.maximum) {
+    return [issue(file, `${path}.parameters.duration`, `duration ${duration} exceeds maximum ${target.duration.maximum}`)];
+  }
+  return [];
+}
+
+function effectIssues(
+  file: string,
+  entryId: string,
+  effects: readonly EffectDefinition[],
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  return effects.flatMap((effect, index) => {
+    const path = `$.entries.${entryId}.effects.${index}`;
+    const parameterIssues = validateParameters(
+      file, path, effect.effectId, effect.parameters, EFFECT_PARAMETER_SCHEMAS, 'effect',
+    );
+    return parameterIssues.length > 0
+      ? parameterIssues
+      : conditionReferenceIssues(file, path, effect, byId);
+  });
 }
 
 function equipmentIssues(file: string, item: ItemContentEntry): ContentCompileIssue[] {
@@ -161,9 +191,9 @@ export function validateContentEntries(locatedEntries: readonly LocatedContentEn
       issues.push(...validateParameters(file, `$.entries.${entry.id}.behavior`, entry.behaviorId, entry.behaviorParameters, BEHAVIOR_PARAMETER_SCHEMAS, 'behavior'));
     }
     if (entry.kind === 'item') {
-      issues.push(...equipmentIssues(file, entry), ...effectIssues(file, entry.id, entry.effects));
+      issues.push(...equipmentIssues(file, entry), ...effectIssues(file, entry.id, entry.effects, byId));
     }
-    if (entry.kind === 'spell' || entry.kind === 'trap') issues.push(...effectIssues(file, entry.id, entry.effects));
+    if (entry.kind === 'spell' || entry.kind === 'trap') issues.push(...effectIssues(file, entry.id, entry.effects, byId));
   }
   const itemEntries = locatedEntries.filter(({ entry }) => entry.kind === 'item');
   issues.push(...identificationIssues(itemEntries));

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CONTENT_SCHEMA_VERSION,
+  CONTENT_KIND_IDS,
   type ContentKind,
   type CompiledContentPack,
   type ContentEntry,
@@ -21,9 +22,10 @@ describe('content model', () => {
   });
 
   it('exposes every schema-v2 content kind', () => {
-    const kinds: ContentKind[] = ['monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault'];
+    const kinds: ContentKind[] = [...CONTENT_KIND_IDS];
 
-    expect(kinds).toHaveLength(7);
+    expect(kinds).toHaveLength(8);
+    expect(kinds).toContain('condition');
   });
 
   it('rejects a stored schema-v1 pack before exposing entries', async () => {
