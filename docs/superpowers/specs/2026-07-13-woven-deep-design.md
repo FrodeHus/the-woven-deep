@@ -17,7 +17,7 @@ The initial product is a single-player web game designed primarily for a desktop
 - **Guest:** no account or network-backed persistence. The complete run loop and normal locked starting set are available, but the active hero, records, and unlocks last only for the browser session.
 - **Persistent profile:** email-only magic-link authentication. Progress, the active run, unlocks, and records are stored authoritatively by the server.
 
-The product has no online leaderboard, password authentication, or multiplayer. One verified email address maps to exactly one progression profile. Guest progress cannot be promoted or imported into a persistent profile.
+The product has no online leaderboard, password authentication, or multiplayer. One verified email address maps to exactly one progression profile. Guest progress cannot be promoted or imported into a persistent profile. Optional balance telemetry is disabled until the player explicitly enables it and can be disabled at any time.
 
 Touch controls may support basic navigation later, but feature-complete mobile play is outside the initial scope.
 
@@ -73,6 +73,8 @@ The minimal database has five responsibilities:
 - `hall_records`: immutable completed-run summaries associated with one profile.
 - `login_tokens`: hashed, single-use, expiring magic-link tokens.
 - `sessions`: hashed, expiring, revocable authenticated sessions.
+
+Balance telemetry adds a sixth table, `telemetry_runs`, containing privacy-reduced run summaries for players who opted in. Administrative access does not require a separate password system: administrators sign in through the same Mailgun magic-link flow, and the server grants read-only dashboard access only to normalized emails listed in the `ADMIN_EMAILS` deployment setting. Every admin request is authorized server-side.
 
 ## Metaprogression
 
@@ -138,6 +140,36 @@ Core play includes:
 
 The dungeon generation pipeline places topology, validates connectivity, assigns a theme, places stairs and required objectives, populates encounters and items, then performs a final reachability check. A rejected floor is regenerated deterministically from a derived sub-seed.
 
+## Tactical identity: light and darkness
+
+Light is the game's defining tactical system rather than only a visibility radius. Brightness lets the hero read terrain and threats but makes the hero easier to detect. Darkness conceals the hero and enables ambushes while reducing reliable information. Noise, line of sight, and illumination together drive creature awareness.
+
+The player can equip, place, throw, refuel, extinguish, and relight supported light sources. Spells and environmental interactions can change light color, radius, duration, and behavior. Creature families react differently: some hunt light, some flee it, some become stronger in darkness, and some are revealed or transformed only under particular illumination. Item and class abilities can weaponize these relationships.
+
+Visible hostile creatures expose a concise intent when their next behavior is sufficiently determined: attack, pursue, guard, flee, investigate, cast, or recover. Intent uses glyph treatment and text, never color alone. Uncertain or hidden behavior remains uncertain; intent communicates readable rules without exposing future random rolls.
+
+## Builds, content, and procedural variety
+
+Items, traits, classes, and spells prioritize new tactical verbs and synergies over flat numerical upgrades. Content definitions declare synergy tags such as light, darkness, fire, identification, hunger, movement, defense, and control. Generation budgets intentionally offer compatible pieces without guaranteeing a complete build.
+
+Unlocking content does not append everything to one unbounded random pool. Each depth band and reward source uses rarity budgets, category minimums, and synergy weighting. Unlocks expand eligible options while preserving access to essential provisions, light, offense, and defense. Automated generation reports detect when a new unlock makes foundational item categories too rare.
+
+Procedural floors embed authored room templates called vaults. Vaults include shrines, puzzles, environmental stories, unusual traders, monster lairs, light-based challenges, and explicit risk/reward rooms. The generator controls their depth eligibility, rarity, entrances, required surrounding space, and reward budget, then validates that they cannot block the main route.
+
+## Pacing and onboarding
+
+A successful standard run targets 90 to 150 minutes, with each floor forming a natural stopping point. Meaningful tactical choices or rewards should occur several times per floor. The five-floor depth bands establish distinct visual, enemy, item, and environmental identities. Milestone floors at depths 5, 10, 15, and 20 create authored difficulty and narrative beats.
+
+Town returns are useful but not mandatory after every floor. Shop refresh milestones, traversal costs, reinforcement checks, and limited storage prevent repetitive town shuttling from becoming the dominant strategy. Balance tests track run duration, town-return frequency, and time between meaningful upgrades.
+
+The first town visit teaches movement, inspection, inventory, light, commerce, and dungeon entry through optional contextual interactions. Hints appear only when their action is relevant, dismiss permanently after demonstrated mastery, and remain available in Help and the journal. Experienced players can disable all onboarding prompts before creating a hero.
+
+## Feedback, sound, and fair failure
+
+ASCII remains the primary visual language, supported by restrained positional audio, distinct monster and environmental cues, impact timing, and focused light transitions. Sounds outside sight communicate direction and character without revealing an exact hidden cell. Important audio information also appears in the event log. Volume controls separately cover master, ambience, effects, and interface sound.
+
+Dangerous mechanics provide readable warning states before they can cause extreme or instant consequences. The game avoids untelegraphed instant-kill effects. The run-conclusion screen reconstructs the final causal sequence from recent domain events, identifies visible warnings and effects, and links newly learned creatures or items to their codex entries. It explains what happened without claiming that only one response was correct.
+
 ## Generated-floor storage
 
 A floor seed and generator version reproduce the floor's initial topology and population, but loading a saved run does not regenerate visited floors. Every generated floor is stored as a complete authoritative snapshot inside the active-run document. This avoids delta replay and preserves all mutations exactly across application updates.
@@ -197,9 +229,10 @@ The application contains these screens and overlays:
 8. **Map and journal:** explored floor map, objective, clues, history, and known landmarks.
 9. **Unlock codex:** discovered and locked classes, items, spells, enemies, and lore.
 10. **Hall of Records:** filterable and sortable completed-run history with record details, seeds, run statistics, and lifetime profile totals; guest records are marked unverified and session-only.
-11. **Run conclusion:** death or victory, score breakdown, newly applied unlocks, notable events, and confirmation that the run was recorded automatically.
+11. **Run conclusion:** death or victory, causal final-turn recap, score breakdown, newly applied unlocks, notable statistics, codex links, and confirmation that the run was recorded automatically.
 12. **Help and controls:** keyboard reference, glyph legend, and mechanics explanations.
 13. **Settings and account:** display, motion, audio, bindings, progress export, sign-out, profile deletion, and guest-session clearing.
+14. **Admin balance dashboard:** a separately authorized, read-only route for aggregated opt-in telemetry and CSV export.
 
 Inventory, character sheet, map, and journal open as full-screen overlays without destroying the underlying play state. Merchants and house storage are entered from their physical town locations. Input routing prevents movement commands while an overlay, form field, or dialog has focus.
 
@@ -238,6 +271,26 @@ Metric identifiers and display metadata live in a configuration registry so new 
 
 Current-run highlights appear on the character sheet. The run-conclusion screen selects several notable metrics in addition to showing the complete categorized list. Hall record details preserve every metric for that hero, while the Hall overview can switch between individual records and lifetime profile totals.
 
+## Opt-in balance telemetry and administration
+
+Balance telemetry is opt-in for both guest and persistent-profile play. The consent screen names the collected categories and states that telemetry is used to balance the game. The choice is stored with a persistent profile or, for a guest, only for the current session. Settings show the current choice and allow future collection to be disabled immediately. Gameplay and progression are identical when telemetry is disabled.
+
+The server stores one privacy-reduced telemetry summary per opted-in run that ends in death, victory, or explicit abandonment. It includes game and content versions, trusted-profile or unverified-guest classification, class and build tags, outcome, depth, duration, turn count, cause of death, town-return cadence, unlock timing, and the statistic registry described above. It excludes email addresses, hero names, authentication data, IP addresses, free-form text, complete command histories, and run seeds. Persistent-profile rows retain an internal owner key solely so profile deletion can remove them; that key and the random telemetry identifier are never exposed by the dashboard.
+
+Persistent-profile telemetry is derived from authoritative server events and marked trusted. Guest telemetry is client-supplied, marked unverified, and excluded from trusted balance aggregates by default. Rate limits and schema validation apply to guest submissions.
+
+The read-only admin dashboard provides:
+
+- Completion and abandonment rates by version, class, depth band, and time range.
+- Common causes of death and the turns immediately associated with them as categorized data, not raw command logs.
+- Monster kill and player-death rates by monster type.
+- Item pickup, use, equip, sell, drop, and win-correlation rates.
+- Potion, spell, light, economy, healing, damage, movement, and town-return distributions.
+- Run-duration, floor-duration, unlock timing, and progression funnels.
+- Trusted-only default views, an explicit guest-data filter, warnings for samples below 20 runs, and CSV export of the currently aggregated view.
+
+The dashboard never displays player emails or hero names. Admin authorization is checked on every dashboard API route. `TELEMETRY_RETENTION_DAYS` controls retention and defaults to 365 days. A daily cleanup removes expired rows. Deleting a persistent profile also deletes its linked telemetry rows. Dashboard aggregates are recalculated from retained rows so deletion is reflected.
+
 ## Failure handling
 
 Invalid game actions show a concrete event-log explanation and consume no turn. Unexpected engine errors pause input and retain the last-known-good state. Guest save failures explain whether session storage is unavailable or full. Server failures distinguish unauthenticated, forbidden, conflicting, unavailable, and incompatible-version states without leaking hidden game data.
@@ -257,16 +310,18 @@ Glyph meaning is not communicated by color alone. The game supports scalable int
 Automated verification includes:
 
 - Unit tests for commands, combat, inventory, equipment, economy, scoring, statistics, unlocks, field of view, lighting, save validation, and migrations.
+- Content tests for synergy weighting, essential-category availability, vault placement, encounter intent, and light-reactive creature rules.
 - Seeded property tests that require every generated floor, objective, and exit to remain reachable.
 - Simulation tests covering thousands of automated turns to detect impossible states and balance outliers.
 - React component tests for profiles, character generation, locked classes, inventory, merchants, house storage, codex, records, and statistics views.
 - API and WebSocket protocol tests for magic-link issuance and consumption, session revocation, authorization, ordered command batches, idempotency, reconnection, prediction correction, hidden-state projection, immediate consequential saves, bounded movement checkpoints, profile deletion, and rate limiting.
+- Telemetry tests for consent defaults, trusted and guest separation, field minimization, deletion, aggregation thresholds, CSV authorization, and admin-route access control.
 - Browser tests for guest play, session-only cleanup, email sign-in, signed-in save and resume, hero creation with both attribute methods, dungeon actions, death cleanup, victory, unlock application, and Hall of Records insertion.
 - Equivalence tests that run the same seed and command sequence through browser guest mode and server profile mode and require identical engine results.
 - Accessibility checks for keyboard traversal, focus management, reduced motion, scaling, and non-color glyph distinctions.
 
 ## Initial delivery target
 
-The first complete release implements the full 20-floor artifact-and-escape loop, the town and three merchants, the current-hero house, four classes with three unlock paths, guest and persistent-profile progression, Mailgun magic-link authentication, server-authoritative profile runs, dynamic lighting, all listed screens, deterministic saves, and the Hall of Records. It ships as one Docker image and stores SQLite on a mounted volume.
+The first complete release implements the full 20-floor artifact-and-escape loop, the town and three merchants, the current-hero house, four classes with three unlock paths, light-centered tactics, readable enemy intent, synergy-aware content pools, authored vaults, contextual onboarding, fair-death recaps, restrained positional audio, guest and persistent-profile progression, Mailgun magic-link authentication, server-authoritative profile runs, dynamic lighting, all listed screens, deterministic saves, the Hall of Records, opt-in telemetry, and the read-only admin balance dashboard. It ships as one Docker image and stores SQLite on a mounted volume.
 
 Content quantities—enemy count, item count, spell count, room templates, and balance coefficients—are configuration-driven and may be tuned during implementation without changing this design. The release is complete only when a hero can be created, prepare in town, descend, recover the Heart, return or die, create a correct record, clear run-scoped storage, and apply profile unlocks.
