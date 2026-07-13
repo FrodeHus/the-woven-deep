@@ -331,7 +331,9 @@ The snapshot contains the Hall record ID, hero name, portrait glyph, class/build
 
 ### Heirloom selection
 
-At the original hero's death, 4B3 will select the heirloom once using deterministic run randomness from ordinary backpack and equipped item instances. Selection is uniform by eligible item instance. Objective artifacts, quest tokens, currency, and explicitly non-transferable items are excluded.
+At the original hero's death, 4B3 will select the heirloom once using deterministic run randomness from ordinary backpack and equipped item instances. Selection is weighted toward higher-quality items, but every eligible instance retains a positive weight so mundane, depleted, or damaged possessions remain possible. Objective artifacts, quest tokens, currency, and explicitly non-transferable items are excluded.
+
+The single `fallen-champion-template` entry owns the selection weights. It declares a positive weight for each item rarity, a non-negative bonus per supported positive enchantment or quality rank, and a non-negative bonus for equipped items. Bundled defaults increase substantially from common through legendary while leaving the common weight above zero. The compiler rejects zero/negative rarity weights and decreasing rarity weights. Selection uses one weighted roll over eligible item instances; it never guarantees a minimum rarity, rerolls an undesirable result, or weights a stack by its quantity.
 
 One unit is recorded from a stack. The snapshot preserves content ID, enchantment, condition, charges, fuel, identification-safe display metadata, and the originating Hall record ID. The selection is stored in the Hall record and never rerolled when a later run starts or reaches the champion.
 
@@ -446,7 +448,7 @@ The automated server-admin documentation test includes all new content kinds and
 - Probability, depth, quantity, cap, placement, formation, and phase ordering.
 - Required supernatural declaration for collapse.
 - Boss uniqueness and reward requirements.
-- Champion-template fallback and transferability rules.
+- Champion-template fallback, transferability, and positive quality-weight rules.
 - Deterministic ordering, hashing, mounted content, and documentation coverage.
 
 ### Engine examples
