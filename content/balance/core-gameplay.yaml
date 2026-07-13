@@ -35,5 +35,20 @@ entries:
       disarm: { agility: 1, wits: 1 }
     actionCosts:
       action.move: 100
-      action.melee: 100
+      action.attack: 100
+      action.cast: 100
+      action.close-door: 100
+      action.disarm: 100
+      action.drop: 100
+      action.equip: 100
+      action.fire: 100
+      action.open-door: 100
+      action.pickup: 100
+      action.refuel: 100
+      action.search: 100
+      action.split-stack: 100
+      action.throw-item: 100
+      action.toggle-light: 100
+      action.unequip: 100
+      action.use-item: 100
       action.wait: 100

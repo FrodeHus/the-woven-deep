@@ -5,7 +5,7 @@ entries:
     name: Cave rat
     glyph: r
     color: "#9e927c"
-    tags: [animal, darkness]
+    tags: [animal, darkness, offense]
     minDepth: 1
     maxDepth: 6
     attributes: { might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2 }
@@ -20,5 +20,5 @@ entries:
     disposition: hostile
     behaviorId: behavior.approach-and-attack
     behaviorParameters: {}
-    runAppearanceChance: 1
+    runAppearanceChance: 0.85
     rarity: common

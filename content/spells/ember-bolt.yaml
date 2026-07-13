@@ -1,0 +1,11 @@
+schemaVersion: 2
+entries:
+  - kind: spell
+    id: spell.ember-bolt
+    name: Ember bolt
+    tags: [fire, offense]
+    targetingId: target.actor
+    range: 6
+    actionCost: 100
+    effects:
+      - { effectId: effect.damage, parameters: { damageType: fire, dice: { count: 1, sides: 6, bonus: 1 } }, requiresLivingTarget: true }

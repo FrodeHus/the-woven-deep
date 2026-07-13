@@ -1,6 +1,9 @@
-import type { ContentEntry, EffectDefinition, ItemContentEntry, LootTableContentEntry } from '../model.js';
+import type {
+  BalanceContentEntry, ContentEntry, EffectDefinition, ItemContentEntry, LootTableContentEntry,
+  MonsterContentEntry,
+} from '../model.js';
 import type { ContentCompileIssue } from './error.js';
-import { BEHAVIOR_PARAMETER_SCHEMAS, EFFECT_PARAMETER_SCHEMAS } from './registries.js';
+import { ACTION_COST_IDS, BEHAVIOR_PARAMETER_SCHEMAS, EFFECT_PARAMETER_SCHEMAS } from './registries.js';
 
 function compareCodeUnits(left: string, right: string): number {
   if (left < right) return -1;
@@ -103,6 +106,45 @@ function equipmentIssues(file: string, item: ItemContentEntry): ContentCompileIs
   return issues;
 }
 
+function itemCompatibilityIssues(
+  file: string,
+  item: ItemContentEntry,
+  allItems: readonly ItemContentEntry[],
+): ContentCompileIssue[] {
+  const path = `$.entries.${item.id}`;
+  const issues: ContentCompileIssue[] = [];
+  if (item.category === 'weapon' && (!item.equipment || !item.combat?.damage)) {
+    issues.push(issue(file, `${path}.category`, 'weapon items require equipment and combat damage'));
+  }
+  if ((item.category === 'armor' || item.category === 'shield')
+    && (!item.equipment || !item.combat || item.combat.damage !== null)) {
+    issues.push(issue(file, `${path}.category`, `${item.category} items require equipment and non-damaging combat values`));
+  }
+  if (item.category === 'light' && item.light === null) {
+    issues.push(issue(file, `${path}.category`, 'light items require light values'));
+  }
+  if (item.category === 'ammunition' && (item.equipment !== null || item.light !== null)) {
+    issues.push(issue(file, `${path}.category`, 'ammunition cannot be equipped or emit light'));
+  }
+  const ammunitionTag = item.combat?.ammunitionTag;
+  if (ammunitionTag && !allItems.some((candidate) => candidate.category === 'ammunition'
+    && candidate.tags.includes(ammunitionTag))) {
+    issues.push(issue(file, `${path}.combat.ammunitionTag`,
+      `ammunition tag ${ammunitionTag} has no matching ammunition item`));
+  }
+  if (item.light) {
+    let previous = item.light.fuelCapacity + 1;
+    item.light.warningThresholds.forEach((threshold, index) => {
+      if (threshold >= previous || threshold > item.light!.fuelCapacity) {
+        issues.push(issue(file, `${path}.light.warningThresholds.${index}`,
+          'light warning thresholds must be unique, descending, and no greater than fuelCapacity'));
+      }
+      previous = threshold;
+    });
+  }
+  return issues;
+}
+
 function identificationIssues(items: readonly LocatedContentEntry[]): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
   const groups = new Map<string, Array<{ item: ItemContentEntry; file: string }>>();
@@ -134,9 +176,14 @@ function identificationIssues(items: readonly LocatedContentEntry[]): ContentCom
   for (const [groupId, members] of groups) {
     const categories = new Set(members.map(({ item }) => item.category));
     const pools = new Set(members.map(({ item }) => JSON.stringify(item.identification.appearances)));
-    if (categories.size === 1 && pools.size === 1) continue;
+    const appearances = members[0]?.item.identification.appearances ?? [];
+    const bijective = new Set(appearances).size === appearances.length && appearances.length === members.length;
+    if (categories.size === 1 && pools.size === 1 && bijective) continue;
     for (const { item, file } of members) {
-      issues.push(issue(file, `$.entries.${item.id}.identification`, `identification group ${groupId} must use one category and the same ordered appearance pool`));
+      const message = categories.size !== 1 || pools.size !== 1
+        ? `identification group ${groupId} must use one category and the same ordered appearance pool`
+        : `identification group ${groupId} must form a bijection between ${members.length} items and appearances`;
+      issues.push(issue(file, `$.entries.${item.id}.identification`, message));
     }
   }
   return issues;
@@ -158,6 +205,9 @@ function lootIssues(locatedEntries: readonly LocatedContentEntry[], byId: Readon
       }
       if (choice.contentId !== null && !byId.has(choice.contentId)) {
         issues.push(issue(file, `${path}.contentId`, `unknown content reference ${choice.contentId}`));
+      } else if (choice.contentId !== null && byId.get(choice.contentId)?.kind !== 'item') {
+        issues.push(issue(file, `${path}.contentId`,
+          `content reference ${choice.contentId} resolves to ${byId.get(choice.contentId)!.kind}; expected item`));
       }
       if (choice.lootTableId !== null) {
         edges.push(choice.lootTableId);
@@ -186,15 +236,58 @@ function lootIssues(locatedEntries: readonly LocatedContentEntry[], byId: Readon
   return issues;
 }
 
+function balanceIssues(
+  located: LocatedContentEntry & { entry: BalanceContentEntry },
+  monsters: readonly (LocatedContentEntry & { entry: MonsterContentEntry })[],
+): ContentCompileIssue[] {
+  const { entry: balance, file } = located;
+  const path = `$.entries.${balance.id}`;
+  const issues: ContentCompileIssue[] = [];
+  if (balance.speedMinimum > balance.speedMaximum) {
+    issues.push(issue(file, `${path}.speedMinimum`, 'speedMinimum must not exceed speedMaximum'));
+  }
+  if (balance.energyMinimum > balance.energyMaximum) {
+    issues.push(issue(file, `${path}.energyMinimum`, 'energyMinimum must not exceed energyMaximum'));
+  }
+  if (balance.attributeMinimum > balance.attributeMaximum) {
+    issues.push(issue(file, `${path}.attributeMinimum`, 'attributeMinimum must not exceed attributeMaximum'));
+  }
+  if (balance.readinessThreshold < balance.energyMinimum || balance.readinessThreshold > balance.energyMaximum) {
+    issues.push(issue(file, `${path}.readinessThreshold`, 'readinessThreshold must be within the energy bounds'));
+  }
+  const registeredCosts = new Set<string>(ACTION_COST_IDS);
+  for (const actionId of Object.keys(balance.actionCosts).sort(compareCodeUnits)) {
+    if (!registeredCosts.has(actionId)) {
+      issues.push(issue(file, `${path}.actionCosts.${actionId}`, `unregistered action cost ${actionId}`));
+    }
+  }
+  for (const monster of monsters) {
+    if (monster.entry.speed < balance.speedMinimum || monster.entry.speed > balance.speedMaximum) {
+      issues.push(issue(monster.file, `$.entries.${monster.entry.id}.speed`,
+        `speed ${monster.entry.speed} is outside balance bounds ${balance.speedMinimum} through ${balance.speedMaximum}`));
+    }
+    for (const [name, value] of Object.entries(monster.entry.attributes).sort(([left], [right]) => compareCodeUnits(left, right))) {
+      if (value < balance.attributeMinimum || value > balance.attributeMaximum) {
+        issues.push(issue(monster.file, `$.entries.${monster.entry.id}.attributes.${name}`,
+          `attribute ${value} is outside balance bounds ${balance.attributeMinimum} through ${balance.attributeMaximum}`));
+      }
+    }
+  }
+  return issues;
+}
+
 export function validateContentEntries(locatedEntries: readonly LocatedContentEntry[]): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
   const byId = new Map(locatedEntries.map(({ entry }) => [entry.id, entry]));
+  const allItems = locatedEntries.filter(({ entry }) => entry.kind === 'item')
+    .map(({ entry }) => entry as ItemContentEntry);
   for (const { entry, file } of locatedEntries) {
     if (entry.kind === 'monster') {
       issues.push(...validateParameters(file, `$.entries.${entry.id}.behavior`, entry.behaviorId, entry.behaviorParameters, BEHAVIOR_PARAMETER_SCHEMAS, 'behavior'));
     }
     if (entry.kind === 'item') {
-      issues.push(...equipmentIssues(file, entry), ...effectIssues(file, entry.id, entry.effects, byId));
+      issues.push(...equipmentIssues(file, entry), ...itemCompatibilityIssues(file, entry, allItems),
+        ...effectIssues(file, entry.id, entry.effects, byId));
     }
     if (entry.kind === 'spell' || entry.kind === 'trap') issues.push(...effectIssues(file, entry.id, entry.effects, byId));
   }
@@ -204,6 +297,11 @@ export function validateContentEntries(locatedEntries: readonly LocatedContentEn
   const balanceEntries = locatedEntries.filter(({ entry }) => entry.kind === 'balance');
   if (balanceEntries.length > 1) {
     issues.push(issue(balanceEntries[1]!.file, '$.entries', `expected exactly one balance entry; found ${balanceEntries.length}`));
+  }
+  if (balanceEntries.length === 1) {
+    const monsters = locatedEntries.filter((located): located is LocatedContentEntry & { entry: MonsterContentEntry } =>
+      located.entry.kind === 'monster');
+    issues.push(...balanceIssues(balanceEntries[0] as LocatedContentEntry & { entry: BalanceContentEntry }, monsters));
   }
   return issues.sort((left, right) => compareCodeUnits(left.file, right.file)
     || compareCodeUnits(left.path, right.path)

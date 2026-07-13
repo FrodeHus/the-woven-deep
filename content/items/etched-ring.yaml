@@ -1,0 +1,20 @@
+schemaVersion: 2
+entries:
+  - kind: item
+    id: item.etched-ring
+    name: Etched ring
+    glyph: "="
+    color: "#b8c6cc"
+    tags: [identification, ring]
+    minDepth: 1
+    maxDepth: 20
+    category: ring
+    stackLimit: 1
+    price: 25
+    rarity: uncommon
+    actionCost: 100
+    equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
+    combat: { accuracy: 0, defense: 1, armor: 0, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    identification: { mode: instance, groupId: null, appearances: [appearance.etched-ring] }
+    effects: []

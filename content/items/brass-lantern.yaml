@@ -5,7 +5,7 @@ entries:
     name: Brass lantern
     glyph: "¤"
     color: "#e8c879"
-    tags: [light, utility]
+    tags: [lamp-oil, light, utility]
     minDepth: 1
     maxDepth: 20
     category: light

@@ -1,0 +1,24 @@
+schemaVersion: 2
+entries:
+  - kind: monster
+    id: monster.training-beetle
+    name: Training beetle
+    glyph: b
+    color: "#6f8f5b"
+    tags: [insect, training]
+    minDepth: 1
+    maxDepth: 3
+    attributes: { might: 4, agility: 3, vitality: 6, wits: 1, resolve: 3 }
+    health: 7
+    speed: 75
+    accuracy: 0
+    defense: 8
+    perception: 4
+    damage: { count: 1, sides: 2, bonus: 0 }
+    armor: 1
+    resistances: { physical: 0, fire: -10, cold: 0, lightning: 0, poison: 20, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    runAppearanceChance: 0.7
+    rarity: common

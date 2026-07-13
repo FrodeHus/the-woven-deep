@@ -1,0 +1,22 @@
+schemaVersion: 2
+entries:
+  - kind: item
+    id: item.ember-scroll
+    name: Scroll of ember bolt
+    glyph: "?"
+    color: "#e37b46"
+    tags: [magic, offense, scroll]
+    minDepth: 1
+    maxDepth: 20
+    category: scroll
+    stackLimit: 3
+    price: 15
+    rarity: uncommon
+    actionCost: 100
+    equipment: null
+    combat: { accuracy: 0, defense: 0, armor: 0, damage: null, range: 6, ammunitionTag: null }
+    light: null
+    identification: { mode: known, groupId: null, appearances: [] }
+    effects:
+      - { effectId: effect.damage, parameters: { damageType: fire, dice: { count: 1, sides: 6, bonus: 1 } }, requiresLivingTarget: true }
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

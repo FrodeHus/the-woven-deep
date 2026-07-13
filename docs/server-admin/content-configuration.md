@@ -42,6 +42,7 @@ Any parse, schema, reference, or semantic error rejects the entire pack at start
 - Formatting, comments, and file ordering do not affect the hash. Material values and IDs do.
 - YAML aliases and custom tags are rejected. Each file is limited to 262,144 UTF-8 bytes.
 - A complete pack requires at least one `monster`, `item`, `vault`, and `balance` entry. Exactly one balance entry is permitted.
+- Across the complete pack, entry tags must cover the foundational generation categories `defense`, `food`, `healing`, `identification`, `light`, and `offense`. These are compile-time coverage markers for pool reporting. They do not implement an item's mechanics; the kind-specific fields and registered effects do that.
 
 A conventional layout is:
 
@@ -88,7 +89,7 @@ Stable IDs start with a lowercase letter and contain at least two dot-separated 
 
 Slug values such as tags and vault-local slot IDs contain lowercase letters, digits, and hyphens without dots. All content IDs are globally unique, even when their kinds differ or they live in different files.
 
-Cross-file references resolve after every file is parsed, so declaration order is irrelevant. References must resolve to the required kind. Loot-table reference cycles are rejected. Condition application and removal must reference a `condition`, and authored duration overrides must satisfy that condition's definition.
+Cross-file references resolve after every file is parsed, so declaration order is irrelevant. References must resolve to the required kind. Direct loot choices must reference an `item`; nested choices must reference a `loot-table`, and loot-table cycles are rejected. A weapon's ammunition tag must match a tag on at least one ammunition item. Condition application and removal must reference a `condition`, and authored duration overrides must satisfy that condition's definition.
 
 ## Balance entries
 
@@ -98,9 +99,9 @@ A pack contains exactly one `balance` entry.
 |---|---|---|---|
 | `readinessThreshold` | positive safe integer | Yes | Energy required to become ready. |
 | `normalActionCost` | positive safe integer | Yes | Default energy cost. |
-| `speedMinimum`, `speedMaximum` | positive safe integers | Yes | Supported actor-speed bounds. |
-| `energyMinimum`, `energyMaximum` | safe integers | Yes | Supported saved-energy bounds. |
-| `attributeMinimum`, `attributeMaximum` | non-negative safe integers | Yes | Base attribute bounds. |
+| `speedMinimum`, `speedMaximum` | positive safe integers | Yes | Supported actor-speed bounds; minimum cannot exceed maximum, and every monster speed must fall within them. |
+| `energyMinimum`, `energyMaximum` | safe integers | Yes | Supported saved-energy bounds; minimum cannot exceed maximum, and readiness must fall within them. |
+| `attributeMinimum`, `attributeMaximum` | non-negative safe integers | Yes | Base attribute bounds; minimum cannot exceed maximum, and every monster attribute must fall within them. |
 | `hungerMaximum` | positive safe integer | Yes | Maximum hunger reserve. |
 | `hungerThresholds` | object | Yes | Remaining-reserve boundaries satisfying `starving <= weak <= hungry < hungerMaximum`. A stage begins when reserve reaches or falls below its boundary. |
 | `starvationInterval` | positive safe integer | Yes | Time between starvation damage events. |
@@ -111,7 +112,7 @@ A pack contains exactly one `balance` entry.
 | `recoveryByHungerStage` | object | Yes | Integer percentages from 0 through 100 for `sated`, `hungry`, `weak`, and `starving` recovery. |
 | `hungerStageModifiers` | object | Yes | Derived-stat modifiers for each hunger stage. Each stage accepts the same closed stat names used by condition modifiers. |
 | `formulas` | map of integer maps | Yes | Derived-stat coefficients; unknown operands fail engine validation. |
-| `actionCosts` | stable-ID-to-integer map | Yes | Non-negative cost overrides such as `action.move`. |
+| `actionCosts` | registered-action-ID-to-integer map | Yes | Non-negative cost overrides. Unknown action IDs fail compilation. |
 
 ```yaml
 schemaVersion: 2
@@ -152,6 +153,8 @@ entries:
     actionCosts: { action.move: 100, action.wait: 100 }
 ```
 
+The closed action-cost IDs are `action.attack`, `action.cast`, `action.close-door`, `action.disarm`, `action.drop`, `action.equip`, `action.fire`, `action.move`, `action.open-door`, `action.pickup`, `action.refuel`, `action.search`, `action.split-stack`, `action.throw-item`, `action.toggle-light`, `action.unequip`, `action.use-item`, and `action.wait`. A pack may override any subset; `normalActionCost` supplies the normal fallback.
+
 ## Monster entries
 
 | Field | Type | Required | Rules and meaning |
@@ -159,8 +162,8 @@ entries:
 | `glyph` | one Unicode glyph | Yes | Map character. |
 | `color` | `#RRGGBB` | Yes | Presentation color. |
 | `minDepth`, `maxDepth` | positive safe integers | Yes | Inclusive appearance range; maximum must not be lower than minimum. |
-| `attributes` | object | Yes | Non-negative `might`, `agility`, `vitality`, `wits`, and `resolve`. |
-| `health`, `speed` | positive safe integers | Yes | Base hit points and scheduler speed. |
+| `attributes` | object | Yes | Non-negative `might`, `agility`, `vitality`, `wits`, and `resolve`, all within the balance attribute bounds. |
+| `health`, `speed` | positive safe integers | Yes | Base hit points and scheduler speed; speed must be within the balance speed bounds. |
 | `accuracy`, `defense` | safe integers | Yes | Base attack and defense values. |
 | `perception`, `armor` | non-negative safe integers | Yes | Sight capability and flat mitigation. |
 | `damage` | dice object | Yes | Positive `count` up to 100, positive `sides` up to 10,000, and safe-integer `bonus`. |
@@ -210,12 +213,20 @@ entries:
 | `rarity` | enum | Yes | `common`, `uncommon`, `rare`, or `legendary`. |
 | `actionCost` | non-negative safe integer | Yes | Use/equip action cost. |
 | `equipment` | object or null | Yes | Slots, handedness, and reserved slots. |
-| `combat` | object or null | Yes | Accuracy, defense, armor, optional damage dice, non-negative range, and optional ammunition tag. |
-| `light` | object or null | Yes | RGB color, radius 1–32, strength 1–255, positive fuel capacity/use, warning thresholds, and accepted fuel tags. |
-| `identification` | object | Yes | Mode `known`, `shuffled`, or `instance`, optional group ID, and appearance IDs. |
+| `combat` | object or null | Yes | Accuracy, defense, armor, optional damage dice, non-negative range, and optional ammunition tag. A non-null ammunition tag must match a tag on an ammunition item. |
+| `light` | object or null | Yes | RGB color, radius 1–32, strength 1–255, positive fuel capacity/use, descending unique warning thresholds no greater than capacity, and accepted fuel tags. |
+| `identification` | object | Yes | Mode `known`, `shuffled`, or `instance`, optional group ID, and appearance IDs under the rules below. |
 | `effects` | effect array | Yes | Ordered primitive effects, possibly empty. |
 
 Equipment `slots` use `main-hand`, `off-hand`, `body`, `head`, `hands`, `feet`, `neck`, `left-ring`, or `right-ring`. Handedness is `one-handed`, `two-handed`, or `none`. Two-handed items use `main-hand` and reserve `off-hand`; a slot cannot also be reserved.
+
+Category compatibility is strict: weapons require equipment plus damage; armor and shields require equipment plus non-damaging combat values; light items require a `light` object; and ammunition cannot be equipped or emit light. `fuelTags` are matched against tags on fuel item definitions. An empty `fuelTags` list describes a non-refillable light.
+
+Identification modes have distinct contracts:
+
+- `known` uses `groupId: null` and no appearances.
+- `shuffled` requires a group ID. Every member has the same item category and the same ordered appearance pool. The number of unique appearances must exactly equal the number of items in the group, giving every item one different appearance in a run.
+- `instance` uses `groupId: null` and at least one appearance. Its properties are learned for that individual item rather than every item sharing an appearance.
 
 ```yaml
 schemaVersion: 2
@@ -309,7 +320,7 @@ entries:
 |---|---|---|---|
 | `rolls` | positive safe integer | Yes | Independent selections. |
 | `choices` | non-empty array | Yes | Weighted choices. |
-| `choices[].contentId` | content ID or null | Yes | Direct result; exactly one reference field is non-null. |
+| `choices[].contentId` | item content ID or null | Yes | Direct result; it must resolve to an `item`, and exactly one reference field is non-null. |
 | `choices[].lootTableId` | loot-table ID or null | Yes | Nested result; cycles are rejected. |
 | `choices[].weight` | positive safe integer | Yes | Relative selection weight. |
 | `minimumQuantity`, `maximumQuantity` | positive safe integers | Yes | Inclusive quantity range; maximum cannot be smaller. |

@@ -9,6 +9,7 @@ import {
   vaultPlacementKinds,
 } from '../src/compiler/schema.js';
 import {
+  ACTION_COST_IDS,
   BEHAVIOR_PARAMETER_SCHEMAS,
   EFFECT_PARAMETER_SCHEMAS,
 } from '../src/compiler/registries.js';
@@ -25,6 +26,7 @@ describe('server-admin content documentation', () => {
       ...targetingIds,
       ...equipmentSlots,
       ...vaultPlacementKinds,
+      ...ACTION_COST_IDS,
       ...Object.keys(BEHAVIOR_PARAMETER_SCHEMAS),
       ...Object.keys(EFFECT_PARAMETER_SCHEMAS),
       ...CONDITION_TRAIT_IDS,
@@ -32,6 +34,10 @@ describe('server-admin content documentation', () => {
     for (const identifier of required) {
       expect(reference, `missing admin documentation for ${identifier}`)
         .toContain(`\`${identifier}\``);
+    }
+    for (const category of ['defense', 'food', 'healing', 'identification', 'light', 'offense']) {
+      expect(reference, `missing foundational category documentation for ${category}`)
+        .toContain(`\`${category}\``);
     }
   });
 });

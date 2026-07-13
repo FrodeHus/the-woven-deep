@@ -8,7 +8,7 @@ import { validateContentEntries, type LocatedContentEntry } from './content-vali
 import { parseContentFile } from './parse-file.js';
 import { validateVaultEntry } from './vault-validation.js';
 
-const FOUNDATIONAL_CATEGORIES = new Set(['defense', 'food', 'healing', 'light', 'offense']);
+const FOUNDATIONAL_CATEGORIES = new Set(['defense', 'food', 'healing', 'identification', 'light', 'offense']);
 
 function throwIfAborted(signal?: AbortSignal): void {
   signal?.throwIfAborted();
@@ -74,6 +74,13 @@ export async function compileContentDirectory(input: {
       issues.push({ file: input.rootDir, path: '$.entries', message: `missing foundational ${requiredKind} content` });
     }
   }
+  const presentCategories = new Set(entries.flatMap((entry) => entry.tags)
+    .filter((tag) => FOUNDATIONAL_CATEGORIES.has(tag)));
+  for (const category of [...FOUNDATIONAL_CATEGORIES].sort(compareCodeUnits)) {
+    if (!presentCategories.has(category)) {
+      issues.push({ file: input.rootDir, path: '$.entries', message: `missing foundational category ${category}` });
+    }
+  }
   throwIfAborted(input.signal);
   if (issues.length > 0) {
     issues.sort((left, right) => compareCodeUnits(left.file, right.file)
@@ -84,8 +91,7 @@ export async function compileContentDirectory(input: {
   entries.sort((left, right) => compareCodeUnits(left.id, right.id));
   throwIfAborted(input.signal);
   const generationReport = {
-    foundationalCategories: [...new Set(entries.flatMap((entry) => entry.tags)
-      .filter((tag) => FOUNDATIONAL_CATEGORIES.has(tag)))].sort(compareCodeUnits),
+    foundationalCategories: [...presentCategories].sort(compareCodeUnits),
   };
   const hashInput = { schemaVersion: CONTENT_SCHEMA_VERSION, entries, generationReport };
   return { ...hashInput, hash: stableJsonHash(hashInput) };

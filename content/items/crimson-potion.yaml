@@ -1,0 +1,25 @@
+schemaVersion: 2
+entries:
+  - kind: item
+    id: item.crimson-potion
+    name: Mending draught
+    glyph: "!"
+    color: "#c3484f"
+    tags: [healing, identification, potion]
+    minDepth: 1
+    maxDepth: 20
+    category: potion
+    stackLimit: 4
+    price: 12
+    rarity: common
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    identification:
+      mode: shuffled
+      groupId: identification.potions
+      appearances: [appearance.ashen-vial, appearance.crimson-vial]
+    effects:
+      - { effectId: effect.heal, parameters: { dice: { count: 1, sides: 6, bonus: 2 } }, requiresLivingTarget: true }
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }
