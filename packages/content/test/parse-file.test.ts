@@ -44,6 +44,72 @@ entries:
     });
   });
 
+  it('parses strict timed and permanent condition definitions', () => {
+    const entries = parseContentFile({
+      path: 'conditions/control.yaml',
+      source: `schemaVersion: 2
+entries:
+  - kind: condition
+    id: condition.stunned
+    name: Stunned
+    description: Cannot take normal actions or reactions.
+    tags: [control, harmful]
+    color: "#d8c46a"
+    duration: { mode: timed, default: 100, maximum: 500 }
+    stacking: { mode: intensify, maximumStacks: 3 }
+    modifiersPerStack: { defense: -2 }
+    traits: [condition-trait.incapacitated, condition-trait.suppresses-reactions]
+  - kind: condition
+    id: condition.warded
+    name: Warded
+    description: Protected until explicitly removed.
+    tags: [beneficial]
+    color: "#80b8ff"
+    duration: { mode: permanent, default: null, maximum: null }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: { defense: 1 }
+    traits: []
+`,
+    });
+
+    expect(entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'condition', id: 'condition.stunned' }),
+      expect.objectContaining({ kind: 'condition', id: 'condition.warded' }),
+    ]));
+  });
+
+  it.each([
+    ['unknown modifier', 'modifiersPerStack: { luck: 1 }', /modifiersPerStack\.luck/i],
+    ['unknown trait', 'traits: [condition-trait.unknown]', /traits\.0/i],
+    ['duplicate traits', 'traits: [condition-trait.incapacitated, condition-trait.incapacitated]', /unique and sorted/i],
+    ['unsorted traits', 'traits: [condition-trait.suppresses-reactions, condition-trait.incapacitated]', /unique and sorted/i],
+    ['default above maximum', 'duration: { mode: timed, default: 501, maximum: 500 }', /default duration/i],
+    ['permanent numeric duration', 'duration: { mode: permanent, default: 100, maximum: 100 }', /duration\.default/i],
+    ['refresh with multiple stacks', 'stacking: { mode: refresh, maximumStacks: 2 }', /maximumStacks/i],
+  ])('rejects condition with %s', (_label, replacement, message) => {
+    const base = `schemaVersion: 2
+entries:
+  - kind: condition
+    id: condition.stunned
+    name: Stunned
+    description: Cannot act.
+    tags: [control]
+    color: "#d8c46a"
+    duration: { mode: timed, default: 100, maximum: 500 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: { defense: -2 }
+    traits: [condition-trait.incapacitated]
+`;
+    const source = replacement.startsWith('modifiersPerStack:')
+      ? base.replace('modifiersPerStack: { defense: -2 }', replacement)
+      : replacement.startsWith('traits:')
+        ? base.replace('traits: [condition-trait.incapacitated]', replacement)
+        : replacement.startsWith('duration:')
+          ? base.replace('duration: { mode: timed, default: 100, maximum: 500 }', replacement)
+          : base.replace('stacking: { mode: refresh, maximumStacks: 1 }', replacement);
+    expect(() => parseContentFile({ path: 'conditions/invalid.yaml', source })).toThrow(message);
+  });
+
   it('parses strict item, spell, trap, loot-table, and balance entries', () => {
     const entries = parseContentFile({
       path: 'gameplay.yaml',

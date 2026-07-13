@@ -37,7 +37,7 @@
 - Consumes: existing `ContentEntry`, stable IDs, safe-integer schemas, compiled-pack hashing, and global content ordering.
 - Produces: `CONTENT_KIND_IDS`, `DERIVED_STAT_NAMES`, `CONDITION_TRAIT_IDS`, `ConditionContentEntry`, `ConditionTraitId`, and strict parsed condition entries.
 
-- [ ] **Step 1: Write failing structural schema tests**
+- [x] **Step 1: Write failing structural schema tests**
 
 Add a complete timed/intensifying condition and a permanent condition to `parse-file.test.ts`:
 
@@ -76,13 +76,13 @@ entries:
 
 Add table-driven rejection cases for an unknown modifier, unknown trait, duplicate/unsorted traits, timed `default > maximum`, permanent numeric duration, and `refresh` with `maximumStacks > 1`.
 
-- [ ] **Step 2: Run the parser test to verify RED**
+- [x] **Step 2: Run the parser test to verify RED**
 
 Run: `npm test --workspace @woven-deep/content -- --run test/parse-file.test.ts`
 
 Expected: FAIL because `condition` is not a content kind.
 
-- [ ] **Step 3: Add shared content vocabulary and model types**
+- [x] **Step 3: Add shared content vocabulary and model types**
 
 In `packages/content/src/model.ts`, make the compiler-published vocabulary the single source used by model types and engine imports:
 
@@ -124,7 +124,7 @@ export interface ConditionContentEntry extends BaseContentEntry {
 
 Append `ConditionContentEntry` to `ContentEntry`. Export the constants and types through the browser-safe root `packages/content/src/index.ts`.
 
-- [ ] **Step 4: Add the strict Zod condition schema**
+- [x] **Step 4: Add the strict Zod condition schema**
 
 In `packages/content/src/compiler/schema.ts`, import the published arrays and define discriminated duration variants plus cross-field refinement:
 
@@ -166,7 +166,7 @@ const conditionEntry = z.strictObject({
 
 Add `conditionEntry` to the content discriminated union. Keep `CONTENT_SCHEMA_VERSION` at `2` under the approved pre-release replacement policy.
 
-- [ ] **Step 5: Add bundled rule definitions and update stable expectations**
+- [x] **Step 5: Add bundled rule definitions and update stable expectations**
 
 Create YAML definitions for:
 
@@ -177,13 +177,13 @@ Create YAML definitions for:
 
 Use sorted traits and ordinary presentation metadata. Update `default-content.test.ts` to expect the four condition IDs in global code-unit order and to validate the JSON-round-tripped pack.
 
-- [ ] **Step 6: Run content GREEN**
+- [x] **Step 6: Run content GREEN**
 
 Run: `npm test --workspace @woven-deep/content -- --run test/parse-file.test.ts test/default-content.test.ts`
 
 Expected: PASS with the new strict definitions and unchanged deterministic hashing behavior.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/content content/conditions

@@ -10,6 +10,10 @@ describe('bundled content', () => {
     });
     expect(pack.entries.map((entry) => entry.id)).toEqual([
       'balance.core-gameplay',
+      'condition.disengaged',
+      'condition.incapacitated',
+      'condition.reaction-suppressed',
+      'condition.restless',
       'item.brass-lantern',
       'monster.cave-rat',
       'vault.lampwright-cache',

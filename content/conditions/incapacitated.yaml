@@ -1,0 +1,12 @@
+schemaVersion: 2
+entries:
+  - kind: condition
+    id: condition.incapacitated
+    name: Incapacitated
+    description: Cannot take normal actions while this condition remains active.
+    tags: [control, harmful]
+    color: "#c8b86a"
+    duration: { mode: permanent, default: null, maximum: null }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: {}
+    traits: [condition-trait.incapacitated]
