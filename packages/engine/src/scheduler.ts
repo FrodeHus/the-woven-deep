@@ -1,15 +1,19 @@
+import type { CompiledContentPack } from '@woven-deep/content';
 import type { ActorState } from './actor-model.js';
+import { actorHasConditionTrait, validateActiveConditions } from './conditions.js';
 import type { OpaqueId } from './model.js';
 
 export const READINESS_THRESHOLD = 100;
-export const INCAPACITATED_CONDITION_ID = 'condition.incapacitated';
 
 export interface SchedulerState {
   readonly worldTime: number;
   readonly actors: readonly ActorState[];
+  readonly content: CompiledContentPack;
 }
 
-export interface SchedulerResult extends SchedulerState {
+export interface SchedulerResult {
+  readonly worldTime: number;
+  readonly actors: readonly ActorState[];
   readonly selectedActorId: OpaqueId | null;
 }
 
@@ -18,8 +22,9 @@ function safeInteger(label: string, value: number): number {
   return value;
 }
 
-function scheduled(actor: ActorState): boolean {
-  return actor.health > 0 && !actor.conditions.some(({ conditionId }) => conditionId === INCAPACITATED_CONDITION_ID);
+function scheduled(actor: ActorState, content: CompiledContentPack): boolean {
+  return actor.health > 0
+    && !actorHasConditionTrait(actor, 'condition-trait.incapacitated', content);
 }
 
 function compareReadyActors(left: ActorState, right: ActorState): number {
@@ -38,10 +43,14 @@ function validateScheduledActor(actor: ActorState): void {
   }
 }
 
-export function selectReadyActor(actors: readonly ActorState[]): ActorState | undefined {
+export function selectReadyActor(
+  actors: readonly ActorState[],
+  content: CompiledContentPack,
+): ActorState | undefined {
+  validateActiveConditions(actors, content);
   const ready: ActorState[] = [];
   for (const actor of actors) {
-    if (!scheduled(actor)) continue;
+    if (!scheduled(actor, content)) continue;
     validateScheduledActor(actor);
     if (actor.energy >= READINESS_THRESHOLD) ready.push(actor);
   }
@@ -57,10 +66,10 @@ export function chargeActionEnergy(actor: ActorState, cost: number): ActorState 
 
 export function advanceToNextReady(input: SchedulerState): SchedulerResult {
   if (safeInteger('worldTime', input.worldTime) < 0) throw new RangeError('worldTime must be non-negative');
-  const immediatelyReady = selectReadyActor(input.actors);
+  const immediatelyReady = selectReadyActor(input.actors, input.content);
   if (immediatelyReady) return { worldTime: input.worldTime, actors: [...input.actors], selectedActorId: immediatelyReady.actorId };
 
-  const eligible = input.actors.filter(scheduled);
+  const eligible = input.actors.filter((actor) => scheduled(actor, input.content));
   if (eligible.length === 0) return { worldTime: input.worldTime, actors: [...input.actors], selectedActorId: null };
   for (const actor of eligible) validateScheduledActor(actor);
   const elapsed = Math.min(...eligible.map((actor) => {
@@ -75,5 +84,5 @@ export function advanceToNextReady(input: SchedulerState): SchedulerResult {
     const gained = safeInteger(`${actor.actorId}.energy gain`, actor.speed * elapsed);
     return { ...actor, energy: safeInteger(`${actor.actorId}.energy after scheduler advance`, actor.energy + gained) };
   });
-  return { worldTime, actors, selectedActorId: selectReadyActor(actors)?.actorId ?? null };
+  return { worldTime, actors, selectedActorId: selectReadyActor(actors, input.content)?.actorId ?? null };
 }

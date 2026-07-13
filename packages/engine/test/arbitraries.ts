@@ -1,5 +1,5 @@
 import fc from 'fast-check';
-import { emptyEquipment, type ActorState } from '../src/index.js';
+import { createDemoContentPack, emptyEquipment, type ActorState } from '../src/index.js';
 
 const identifierPart = fc.stringMatching(/^[a-z][a-z0-9-]{0,15}$/);
 
@@ -55,6 +55,7 @@ export const schedulerStateArbitrary = fc.record({
   }), { selector: ({ suffix }) => suffix, maxLength: 12 }),
 }).map(({ worldTime, hero, enemies }) => ({
   worldTime,
+  content: createDemoContentPack(),
   actors: [
     actor({ actorId: 'hero.test', playerControlled: true, ...hero }),
     ...enemies.map(({ suffix, ...enemy }) => actor({ actorId: `monster.${suffix}`, playerControlled: false, ...enemy })),

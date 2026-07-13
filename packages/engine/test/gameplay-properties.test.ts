@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { advanceToNextReady, selectReadyActor } from '../src/index.js';
+import { advanceToNextReady, createDemoContentPack, selectReadyActor } from '../src/index.js';
 import { actor, schedulerStateArbitrary } from './arbitraries.js';
 
 describe('gameplay scheduler properties', () => {
@@ -19,7 +19,8 @@ describe('gameplay scheduler properties', () => {
     fc.assert(fc.property(schedulerStateArbitrary, fc.integer(), (state, offset) => {
       const pivot = Math.abs(offset) % state.actors.length;
       const permuted = [...state.actors.slice(pivot), ...state.actors.slice(0, pivot)].reverse();
-      expect(selectReadyActor(permuted)?.actorId).toBe(selectReadyActor(state.actors)?.actorId);
+      expect(selectReadyActor(permuted, state.content)?.actorId)
+        .toBe(selectReadyActor(state.actors, state.content)?.actorId);
       expect(advanceToNextReady({ ...state, actors: permuted }).selectedActorId)
         .toBe(advanceToNextReady(state).selectedActorId);
     }), { seed: 0x4a02, numRuns: 500 });
@@ -32,6 +33,7 @@ describe('gameplay scheduler properties', () => {
       (energy, speed) => {
         const state = {
           worldTime: Number.MAX_SAFE_INTEGER,
+          content: createDemoContentPack(),
           actors: [actor({ actorId: 'hero.test', playerControlled: true, health: 10, energy, speed })],
         };
         expect(() => advanceToNextReady(state)).toThrow(/worldTime.*safe integer/i);

@@ -412,7 +412,7 @@ git commit -m "feat: resolve YAML condition rules"
 - Consumes: `actorHasConditionTrait`, compiled content, scheduler actor state, and the exact run content hash.
 - Produces: content-aware `selectReadyActor` and `advanceToNextReady`; Task 6 consumes the same trait helper for reactions and Task 12 consumes it for rest.
 
-- [ ] **Step 1: Write a failing scheduler test using an unrelated condition ID**
+- [x] **Step 1: Write a failing scheduler test using an unrelated condition ID**
 
 ```ts
 it('excludes actors by the incapacitated trait rather than a special ID', () => {
@@ -428,13 +428,13 @@ it('excludes actors by the incapacitated trait rather than a special ID', () => 
 
 Add the inverse assertion: an actor carrying `condition.incapacitated` without the trait remains eligible. This proves names and tags have no hidden behavior.
 
-- [ ] **Step 2: Run scheduler RED**
+- [x] **Step 2: Run scheduler RED**
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/scheduler.test.ts`
 
 Expected: FAIL because scheduler selection has no content argument and still compares a special ID.
 
-- [ ] **Step 3: Make scheduler selection content-aware**
+- [x] **Step 3: Make scheduler selection content-aware**
 
 Remove `INCAPACITATED_CONDITION_ID`. Change signatures consistently:
 
@@ -453,7 +453,7 @@ export interface SchedulerState {
 
 The private eligibility check becomes `actor.health > 0 && !actorHasConditionTrait(actor, 'condition-trait.incapacitated', content)`. Call `validateActiveConditions` once at the command/content attachment boundary before scheduling so every saved actor condition is checked, not only conditions consulted during selection. Update all scheduler callers and fixtures explicitly; do not install a global content singleton or infer content from IDs.
 
-- [ ] **Step 4: Preserve save/replay behavior**
+- [x] **Step 4: Preserve save/replay behavior**
 
 Run save-codec and replay tests with actors carrying defined conditions. Verify the definition remains absent from encoded active-run bytes while the exact `contentHash` remains present.
 
@@ -461,7 +461,7 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/scheduler.test.ts te
 
 Expected: PASS.
 
-- [ ] **Step 5: Amend downstream roadmap contracts**
+- [x] **Step 5: Amend downstream roadmap contracts**
 
 Ensure Task 6 explicitly checks:
 
@@ -472,7 +472,7 @@ actorHasConditionTrait(mover, 'condition-trait.avoids-opportunity-attacks', cont
 
 Ensure Task 12 explicitly uses `condition-trait.interrupts-rest`, including the ordinary-condition negative test. Do not implement reactions or rest in this prerequisite.
 
-- [ ] **Step 6: Run engine GREEN and commit**
+- [x] **Step 6: Run engine GREEN and commit**
 
 Run: `npm test --workspace @woven-deep/engine && npm run typecheck --workspace @woven-deep/engine`
 
