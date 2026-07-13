@@ -4,8 +4,10 @@ import type { VaultContentEntry } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   analyzeConnectivity,
+  nextUint32,
   placeVaults,
   stableJson,
+  type RoomBounds,
   type TileId,
   type TopologyDraft,
   type VaultPlacementResult,
@@ -52,6 +54,49 @@ function success(result: VaultPlacementResult): Extract<VaultPlacementResult, { 
   expect(result.ok).toBe(true);
   if (!result.ok) throw new Error(result.code);
   return result;
+}
+
+const floorLegend = {
+  terrain: 'floor' as const, entrance: false, light: null, slot: null,
+};
+
+function tinyVault(
+  id: string,
+  layout: readonly string[],
+  legend: VaultContentEntry['legend'],
+  overrides: Partial<VaultContentEntry> = {},
+): VaultContentEntry {
+  return {
+    kind: 'vault', id, name: id, tags: [], minDepth: 1, maxDepth: 10,
+    rarity: 'common', weight: 1, maxPerFloor: 1, margin: 0,
+    transforms: { rotations: [0], reflectHorizontal: false },
+    layout, legend, entranceCount: 1, requiredSlotIds: [], ...overrides,
+  };
+}
+
+function openTopology(
+  rooms: readonly RoomBounds[],
+  vaultState = [1, 2, 3, 4] as const,
+): TopologyDraft {
+  const width = 20; const height = 12;
+  const tiles = Array<TileId>(width * height).fill(0);
+  for (let y = 1; y < height - 1; y += 1) for (let x = 1; x < width - 1; x += 1) {
+    tiles[y * width + x] = 1;
+  }
+  const stairUp = { x: 1, y: 1 }; const stairDown = { x: width - 2, y: height - 2 };
+  tiles[stairUp.y * width + stairUp.x] = 4; tiles[stairDown.y * width + stairDown.x] = 5;
+  const connectivity = analyzeConnectivity({ width, height, tiles, start: stairUp, target: stairDown });
+  return {
+    floorId: 'floor.handcrafted', floorSeed: [9, 8, 7, 6], depth: 3, themeId: 'theme.test',
+    width, height, tiles, rooms,
+    corridors: [{ corridorId: 'corridor.0', start: stairUp, end: stairDown }],
+    stairUp, stairDown, vaultState,
+    report: {
+      generatorVersion: 2, attempt: 0, fallback: false, roomCount: rooms.length, corridorCount: 1,
+      vaults: [], stairUp, stairDown, stairDistance: connectivity.distance!,
+      traversableCellCount: connectivity.traversableCellCount, connected: true, rejectionCounts: {},
+    },
+  };
 }
 
 describe('vault placement', () => {
@@ -130,5 +175,127 @@ describe('vault placement', () => {
     expect(placeVaults(input, [impossible])).toEqual({
       ok: true, tiles: input.tiles, vaults: [], lights: [], placementSlots: [],
     });
+  });
+
+  it('chooses the exact stable room, transform, reflection, and origin after reordering every input', () => {
+    const roomA = { roomId: 'room.a', left: 5, top: 4, right: 5, bottom: 4 };
+    const roomZ = { roomId: 'room.z', left: 10, top: 4, right: 10, bottom: 4 };
+    const entrance = { ...floorLegend, entrance: true };
+    const vaultA = tinyVault('vault.a', ['+'], { '+': entrance }, {
+      transforms: { rotations: [180, 0], reflectHorizontal: true },
+    });
+    const vaultB = tinyVault('vault.b', ['+'], { '+': entrance }, {
+      transforms: { rotations: [180, 0], reflectHorizontal: true },
+    });
+    const reorderedA = { ...vaultA, transforms: { rotations: [0, 180] as const, reflectHorizontal: true } };
+    const reorderedB = { ...vaultB, transforms: { rotations: [0, 180] as const, reflectHorizontal: true } };
+
+    const first = success(placeVaults(openTopology([roomZ, roomA]), [vaultB, vaultA]));
+    const second = success(placeVaults(openTopology([roomA, roomZ]), [reorderedA, reorderedB]));
+
+    expect(first.vaults[0]).toMatchObject({
+      vaultId: 'vault.a', x: 5, y: 4, width: 1, height: 1, rotation: 0, reflected: false,
+    });
+    expect(stableJson(first)).toBe(stableJson(second));
+  });
+
+  it('skips an exact earliest rectangle containing void and chooses the next stable room', () => {
+    const roomA = { roomId: 'room.a', left: 5, top: 4, right: 5, bottom: 4 };
+    const roomB = { roomId: 'room.b', left: 10, top: 4, right: 10, bottom: 4 };
+    const input = openTopology([roomB, roomA]);
+    const masked = { ...input, tiles: [...input.tiles] };
+    masked.tiles[4 * masked.width + 5] = 6;
+    const vault = tinyVault('vault.mask', ['+'], { '+': { ...floorLegend, entrance: true } });
+
+    const placed = success(placeVaults(masked, [vault]));
+
+    expect(placed.vaults).toEqual([expect.objectContaining({ x: 10, y: 4, rotation: 0, reflected: false })]);
+    expect(placed.tiles[4 * masked.width + 5]).toBe(6);
+  });
+
+  it('places repeated templates into exact non-overlapping rectangles without overwriting earlier vaults', () => {
+    const rooms = [
+      { roomId: 'room.c', left: 14, top: 5, right: 15, bottom: 5 },
+      { roomId: 'room.a', left: 4, top: 5, right: 5, bottom: 5 },
+      { roomId: 'room.b', left: 9, top: 5, right: 10, bottom: 5 },
+    ];
+    const vault = tinyVault('vault.repeat', ['+O'], {
+      '+': { ...floorLegend, terrain: 'closed-door', entrance: true },
+      O: { ...floorLegend, terrain: 'pillar' },
+    }, { maxPerFloor: 3 });
+
+    const placed = success(placeVaults(openTopology(rooms), [vault], { requiredVaultId: vault.id }));
+
+    expect(placed.vaults.map(({ x, y, width, height }) => ({ x, y, width, height }))).toEqual([
+      { x: 4, y: 5, width: 2, height: 1 },
+      { x: 9, y: 5, width: 2, height: 1 },
+      { x: 14, y: 5, width: 2, height: 1 },
+    ]);
+    for (let left = 0; left < placed.vaults.length; left += 1) for (let right = left + 1; right < placed.vaults.length; right += 1) {
+      const a = placed.vaults[left]!; const b = placed.vaults[right]!;
+      expect(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y).toBe(true);
+    }
+    expect([5, 10, 15].map((x) => placed.tiles[5 * 20 + x])).toEqual([3, 3, 3]);
+  });
+
+  it('weights templates before candidates when authored weights and candidate counts differ', () => {
+    const state = [1, 300_010, 3, 4] as const;
+    const room = { roomId: 'room.a', left: 4, top: 3, right: 10, bottom: 7 };
+    const entrance = { ...floorLegend, entrance: true };
+    const heavy = tinyVault('vault.heavy', ['+..'], { '+': entrance, '.': floorLegend }, {
+      weight: 3, margin: 2,
+    });
+    const manyCandidates = tinyVault('vault.many', ['+'], { '+': entrance }, { weight: 1 });
+    const fraction = nextUint32(state).value / 0x1_0000_0000;
+    expect(Math.floor(fraction * (3 + 1))).toBeLessThan(3);
+    expect(Math.floor(fraction * (3 * 1 + 1 * 35))).toBeGreaterThanOrEqual(3);
+
+    const placed = success(placeVaults(openTopology([room], state), [manyCandidates, heavy]));
+
+    expect(placed.vaults[0]).toMatchObject({ vaultId: 'vault.heavy', x: 6, y: 5 });
+  });
+
+  it('rolls back a disconnecting draft before committing the next exact candidate', () => {
+    const width = 20; const height = 10;
+    const tiles = Array<TileId>(width * height).fill(0);
+    for (let x = 1; x <= 18; x += 1) tiles[5 * width + x] = 1;
+    for (let y = 3; y <= 5; y += 1) for (let x = 9; x <= 13; x += 1) tiles[y * width + x] = 1;
+    const stairUp = { x: 1, y: 5 }; const stairDown = { x: 18, y: 5 };
+    tiles[stairUp.y * width + stairUp.x] = 4; tiles[stairDown.y * width + stairDown.x] = 5;
+    const base = openTopology([], [1, 2, 3, 4]);
+    const input: TopologyDraft = {
+      ...base, width, height, tiles, stairUp, stairDown,
+      rooms: [
+        { roomId: 'room.b', left: 10, top: 3, right: 12, bottom: 3 },
+        { roomId: 'room.a', left: 4, top: 5, right: 6, bottom: 5 },
+      ],
+      report: {
+        ...base.report, roomCount: 2, stairUp, stairDown,
+        stairDistance: analyzeConnectivity({ width, height, tiles, start: stairUp, target: stairDown }).distance!,
+      },
+    };
+    const vault = tinyVault('vault.rollback', ['+ls'], {
+      '+': { ...floorLegend, terrain: 'closed-door', entrance: true },
+      l: { ...floorLegend, terrain: 'wall', light: {
+        idSuffix: 'draft-lamp', glyph: '*', presentationToken: 'fixture.test', color: [1, 2, 3],
+        radius: 2, strength: 3, enabled: true,
+      } },
+      s: { ...floorLegend, slot: { id: 'draft-slot', kind: 'objective', required: true, tags: ['test'] } },
+    }, { requiredSlotIds: ['draft-slot'] });
+
+    const placed = success(placeVaults(input, [vault], { requiredVaultId: vault.id }));
+
+    expect(placed.vaults).toEqual([expect.objectContaining({
+      placementId: 'vault-placement.handcrafted.0', x: 10, y: 3, width: 3, height: 1,
+    })]);
+    expect([4, 5, 6].map((x) => placed.tiles[5 * width + x])).toEqual([1, 1, 1]);
+    expect(placed.lights).toEqual([expect.objectContaining({
+      lightId: 'light.handcrafted.0.draft-lamp', location: { type: 'fixed', x: 11, y: 3 },
+    })]);
+    expect(placed.placementSlots).toEqual([expect.objectContaining({
+      slotId: 'slot.handcrafted.0.draft-slot', x: 12, y: 3,
+    })]);
+    expect(placed.lights.some((light) => light.location.type === 'fixed' && light.location.y === 5)).toBe(false);
+    expect(placed.placementSlots.some((slot) => slot.y === 5)).toBe(false);
   });
 });
