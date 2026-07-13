@@ -10,5 +10,5 @@ it('compiles and stores the configured content directory', async () => {
   migrateDatabase(database);
   const repository = new ContentPackRepository(database);
   const pack = await bootstrapContent(resolve(import.meta.dirname, '../../../content'), repository);
-  expect(repository.get(pack.hash)?.entries).toHaveLength(2);
+  expect(repository.get(pack.hash)).toEqual(pack);
 });
