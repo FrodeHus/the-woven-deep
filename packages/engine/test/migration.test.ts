@@ -4,20 +4,25 @@ import {
   createDemoRun,
   decodeActiveRun,
   encodeActiveRun,
+  migrateV0ToV1,
+  migrateV1ToV2,
   migrateActiveRun,
   SaveLoadError,
+  stableJson,
 } from '../src/index.js';
 
 const fixtureUrl = (name: string): URL => new URL(`./fixtures/${name}`, import.meta.url);
 
 describe('active-run migration', () => {
-  it('migrates the checked-in v0 save to the checked-in stable v1 document', async () => {
-    const [legacyJson, expectedJson] = await Promise.all([
-      readFile(fixtureUrl('v0-save.json'), 'utf8'),
-      readFile(fixtureUrl('v1-migrated-save.json'), 'utf8'),
-    ]);
+  it('migrates through the checked-in stable v1 and v2 documents in order', async () => {
+    const v0 = JSON.parse(await readFile(fixtureUrl('v0-save.json'), 'utf8')) as unknown;
+    const v1Expected = (await readFile(fixtureUrl('v1-migrated-save.json'), 'utf8')).trimEnd();
+    expect(stableJson(migrateV0ToV1(v0))).toBe(v1Expected);
 
-    expect(encodeActiveRun(decodeActiveRun(legacyJson))).toBe(expectedJson.trimEnd());
+    const v1 = JSON.parse(v1Expected) as unknown;
+    const v2Expected = (await readFile(fixtureUrl('v2-migrated-save.json'), 'utf8')).trimEnd();
+    expect(encodeActiveRun(migrateV1ToV2(v1))).toBe(v2Expected);
+    expect(encodeActiveRun(decodeActiveRun(JSON.stringify(v0)))).toBe(v2Expected);
   });
 
   it('returns an already-current document idempotently', () => {
@@ -26,7 +31,20 @@ describe('active-run migration', () => {
     expect(migrateActiveRun(current)).toEqual(current);
   });
 
-  it.each([-1, 2, 999])('rejects unsupported schema version %s safely', (schemaVersion) => {
+  it('stabilizes legacy entity order without changing entity values', async () => {
+    const legacy = JSON.parse(await readFile(fixtureUrl('v1-migrated-save.json'), 'utf8')) as any;
+    legacy.floors[0].entities = [
+      { entityId: 'entity.z', x: 3, y: 1 },
+      { entityId: 'entity.a', x: 1, y: 2 },
+    ];
+
+    expect(migrateV1ToV2(legacy).floors[0]?.entities).toEqual([
+      { entityId: 'entity.a', x: 1, y: 2 },
+      { entityId: 'entity.z', x: 3, y: 1 },
+    ]);
+  });
+
+  it.each([-1, 3, 999])('rejects unsupported schema version %s safely', (schemaVersion) => {
     try {
       migrateActiveRun({ schemaVersion });
       expect.fail('expected migration to reject the schema version');

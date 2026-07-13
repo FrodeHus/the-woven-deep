@@ -10,7 +10,7 @@ import {
 
 describe('engine model boundary', () => {
   it('publishes the initial compatibility constants', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(1);
+    expect(SAVE_SCHEMA_VERSION).toBe(2);
     expect(ENGINE_GAME_VERSION).toBe('0.1.0');
     expect(RECENT_COMMAND_LIMIT).toBe(128);
   });
