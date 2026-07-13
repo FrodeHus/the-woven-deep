@@ -35,6 +35,8 @@ Combat, inventory, equipment, hunger, field of view, procedural generation, Reac
 
 Create `packages/engine` as an ESM TypeScript workspace named `@woven-deep/engine`. Production code in this package must not import React, Fastify, SQLite, browser storage, Node filesystem APIs, or Node cryptography. It may consume browser-safe exported content model types, but engine state binds to content through the content hash rather than retaining compiler or filesystem objects.
 
+The project-wide dependency policy applies to this package. Zod supplies maintained runtime schema validation. The random-state and stable-JSON modules stay deliberately small and local because their exact behavior is part of the versioned replay/save contract; substituting a package with different state or permissive serialization behavior would change persisted data. Re-evaluate maintained libraries before adding broader algorithms in later milestones.
+
 The package exposes focused modules for:
 
 - Domain identifiers and version constants.

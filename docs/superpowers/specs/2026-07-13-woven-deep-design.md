@@ -25,6 +25,12 @@ Touch controls may support basic navigation later, but feature-complete mobile p
 
 The application uses React and TypeScript, built with Vite, with a Node.js and Fastify HTTP and WebSocket server in the same repository. A framework-independent game-engine package owns all rules and state transitions. React owns screen composition, input routing, dialogs, animation, and presentation.
 
+### Dependency policy
+
+Before implementing a general-purpose capability, check current open-source packages and frameworks for a well-supported, production-suitable option. Prefer an established dependency when it meets the game's browser, deterministic-replay, security, licensing, bundle-size, and maintenance requirements. Record why a local implementation is preferable when no candidate fits; small local algorithms are appropriate when they define the save/replay contract or when a dependency would add incompatible behavior or disproportionate weight.
+
+Reassess package health at the time a feature is implemented rather than relying on this design's date. In particular, evaluate ROT.js before implementing field of view, lighting, pathfinding, and dungeon generation. Keep Zod for runtime boundary validation. The engine's compact random-state algorithm and strict stable-JSON encoder remain local because their exact state layout and rejection rules are part of the versioned replay and save formats.
+
 The engine accepts a validated command and returns a new immutable world state plus a list of domain events. Commands include movement, attacks, item actions, equipment changes, merchant transactions, storage transfers, resting, and stair traversal. Invalid commands do not advance time and produce an explanatory event. Guest mode runs this package in the browser. Persistent-profile mode runs it only on the server; the browser sends sequenced commands over one authenticated WebSocket and receives observable-state patches plus events.
 
 Every persistent-profile command is validated in order by the server, including movement. The WebSocket removes per-command HTTP setup cost, and the client can coalesce rapid directional inputs into a small ordered batch. Each command carries a unique identifier and expected server revision. The server stops a batch when a command is invalid or requires a new player decision, then returns the authoritative revision and results for every processed command.
