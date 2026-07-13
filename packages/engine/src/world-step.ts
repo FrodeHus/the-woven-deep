@@ -10,6 +10,7 @@ import { consumeItemQuantity, dropItem, pickupItem, splitStack } from './invento
 import {
   equipItem, equipmentModifiers, itemLightSources, refuelItem, toggleItemLight, unequipItem,
 } from './equipment.js';
+import { identifyAppearance } from './identification.js';
 import { tileIndex, type ActiveRun, type DomainEvent, type OpaqueId, type Point, type Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { isVisible } from './visibility.js';
@@ -182,7 +183,14 @@ function applyAction(input: Readonly<{
     });
     state = { ...state, actors: resolved.actors, items: resolved.items,
       rng: { ...state.rng, effects: resolved.effectsState } };
-    events.push(...resolved.events);
+    const consumedEvents = resolved.events.filter((event) => event.type === 'item.consumed');
+    events.push(...resolved.events.filter((event) => event.type !== 'item.consumed'));
+    if (definition.identification.mode === 'shuffled') {
+      const identified = identifyAppearance({ run: state, contentId: definition.id, eventId: input.eventId });
+      state = identified.state;
+      events.push(...identified.events);
+    }
+    events.push(...consumedEvents);
   } else if (action.type === 'fire') {
     const weapon = state.items.find((item) => item.itemId === action.weaponItemId);
     if (!weapon) throw new Error(`internal invariant: weapon ${action.weaponItemId} disappeared`);
@@ -326,6 +334,7 @@ function eventParticipants(event: DomainEvent): readonly OpaqueId[] {
 
 function eventIsPublic(event: DomainEvent, state: ActiveRun, heroId: OpaqueId, content: CompiledContentPack): boolean {
   if (event.type === 'action.invalid') return true;
+  if (event.type === 'identification.appearance-revealed' || event.type === 'item.identified') return true;
   const participants = eventParticipants(event);
   if (participants.includes(heroId)) return true;
   const hero = actorById(state, heroId);

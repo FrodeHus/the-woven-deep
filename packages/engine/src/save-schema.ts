@@ -101,6 +101,9 @@ const itemLightToggledEvent = z.strictObject({ type: z.literal('item.light-toggl
   actorId: identifier, itemId: identifier, enabled: z.boolean() });
 const itemRefueledEvent = z.strictObject({ type: z.literal('item.refueled'), eventId: identifier,
   actorId: identifier, itemId: identifier, fuelItemId: identifier, quantity: positiveQuantity, fuel: safeNonNegative });
+const identificationAppearanceRevealedEvent = z.strictObject({ type: z.literal('identification.appearance-revealed'),
+  eventId: identifier, appearanceId: identifier, contentId: identifier });
+const itemIdentifiedEvent = z.strictObject({ type: z.literal('item.identified'), eventId: identifier, itemId: identifier });
 const event = z.discriminatedUnion('type', [
   movedEvent, waitedEvent, invalidEvent, attackMissedEvent, attackHitEvent, actorDamagedEvent,
   actorDiedEvent, actorHealedEvent, conditionAppliedEvent, conditionRemovedEvent, actorForcedMoveEvent,
@@ -111,6 +114,7 @@ const event = z.discriminatedUnion('type', [
   itemUsedEvent,
   itemEquippedEvent, itemUnequippedEvent,
   itemLightToggledEvent, itemRefueledEvent,
+  identificationAppearanceRevealedEvent, itemIdentifiedEvent,
 ]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
 const invalidResult = z.strictObject({ status: z.literal('invalid'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative, reason: blockReason });

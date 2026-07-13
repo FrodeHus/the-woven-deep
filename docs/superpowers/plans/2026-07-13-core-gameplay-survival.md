@@ -1077,7 +1077,7 @@ git commit -m "feat: equip gear and carried lights"
 - Consumes: compiled identification groups, `rng.effects`, item effect use, item projection, and schema-v3 identification state.
 - Produces: `allocateIdentificationMap(input)`, `identifyAppearance(input)`, `identifyItem(input)`, and `projectItem(input)`.
 
-- [ ] **Step 1: Write failing deterministic shuffle and stream-isolation tests**
+- [x] **Step 1: Write failing deterministic shuffle and stream-isolation tests**
 
 ```ts
 it('allocates a stable bijection and advances only effects rng', () => {
@@ -1095,11 +1095,11 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/identification.test.
 
 Expected: FAIL because identification allocation does not exist.
 
-- [ ] **Step 2: Implement unbiased saved appearance allocation**
+- [x] **Step 2: Implement unbiased saved appearance allocation**
 
 Sort compatible content and appearance IDs, then perform Fisher-Yates using unbiased bounded draws from `rng.effects`. Validate equal pool sizes and one-to-one assignment. Save `appearanceByContentId` sorted by content ID and known appearance IDs sorted by ID. Assert every other named random stream remains byte-identical.
 
-- [ ] **Step 3: Write failing use-then-reveal and equipment-identity tests**
+- [x] **Step 3: Write failing use-then-reveal and equipment-identity tests**
 
 ```ts
 it('applies an unknown consumable before identifying its appearance', () => {
@@ -1120,11 +1120,11 @@ Run: same focused command.
 
 Expected: FAIL because knowledge transitions are absent.
 
-- [ ] **Step 4: Implement appearance and per-instance knowledge transitions**
+- [x] **Step 4: Implement appearance and per-instance knowledge transitions**
 
 After a consumable's effects resolve, add its appearance ID to known appearances before the final projection. Explicit identify effects can reveal an appearance or one item instance. Keep mechanical knowledge hero-scoped and saved. Consumption uses inventory logic and preserves event order.
 
-- [ ] **Step 5: Write failing hidden-item projection tests**
+- [x] **Step 5: Write failing hidden-item projection tests**
 
 ```ts
 it('projects shuffled appearance without hidden content or enchantment', () => {
@@ -1139,11 +1139,11 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/identification.test.
 
 Expected: FAIL on redaction.
 
-- [ ] **Step 6: Project only current item knowledge**
+- [x] **Step 6: Project only current item knowledge**
 
 Known consumables expose content ID, name, effects, and exact known modifiers. Unknown consumables expose appearance ID, category, quantity, and visible state. Unidentified equipment exposes base public definition and an explicit unknown-property marker, while authoritative derived stats remain correct.
 
-- [ ] **Step 7: Run replay GREEN and commit**
+- [x] **Step 7: Run replay GREEN and commit**
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/identification.test.ts test/projection.test.ts test/replay.test.ts test/save-codec.test.ts`
 

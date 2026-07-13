@@ -231,13 +231,21 @@ export interface ItemRefueledEvent {
   readonly type: 'item.refueled'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
   readonly itemId: OpaqueId; readonly fuelItemId: OpaqueId; readonly quantity: number; readonly fuel: number;
 }
+export interface IdentificationAppearanceRevealedEvent {
+  readonly type: 'identification.appearance-revealed'; readonly eventId: OpaqueId;
+  readonly appearanceId: OpaqueId; readonly contentId: OpaqueId;
+}
+export interface ItemIdentifiedEvent {
+  readonly type: 'item.identified'; readonly eventId: OpaqueId; readonly itemId: OpaqueId;
+}
 
 export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent | AttackMissedEvent
   | AttackHitEvent | ActorDamagedEvent | ActorDiedEvent | ActorHealedEvent | ConditionAppliedEvent
   | ConditionRemovedEvent | ActorForcedMoveEvent | ReactionTriggeredEvent | RelationshipChangedEvent
   | ActorTurnStartedEvent | ActorTurnCompletedEvent | ActorMovedEvent | ItemPickedUpEvent | ItemDroppedEvent
   | ItemStackSplitEvent | ItemConsumedEvent | ItemThrownEvent | ItemUsedEvent | ItemEquippedEvent
-  | ItemUnequippedEvent | ItemLightToggledEvent | ItemRefueledEvent;
+  | ItemUnequippedEvent | ItemLightToggledEvent | ItemRefueledEvent
+  | IdentificationAppearanceRevealedEvent | ItemIdentifiedEvent;
 
 export interface AppliedCommandResult {
   readonly status: 'applied';

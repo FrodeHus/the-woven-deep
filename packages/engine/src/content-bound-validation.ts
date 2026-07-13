@@ -18,6 +18,32 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
     throw new Error(`content-bound validation: content hash ${pack.hash} does not match run ${run.contentHash}`);
   }
   const entries = entryMap(pack);
+  const shuffledItems = pack.entries.filter((entry): entry is ItemContentEntry =>
+    entry.kind === 'item' && entry.identification.mode === 'shuffled');
+  const mappedContentIds = Object.keys(run.identification.appearanceByContentId).sort();
+  const expectedContentIds = shuffledItems.map((entry) => entry.id).sort();
+  if (mappedContentIds.length !== expectedContentIds.length
+    || mappedContentIds.some((contentId, index) => contentId !== expectedContentIds[index])) {
+    throw new Error('content-bound validation: identification map does not match shuffled item definitions');
+  }
+  const assignedAppearances = new Set<string>();
+  for (const item of shuffledItems) {
+    const appearanceId = run.identification.appearanceByContentId[item.id];
+    if (!appearanceId || !item.identification.appearances.includes(appearanceId)) {
+      throw new Error(`content-bound validation: identification map appearance for ${item.id} is invalid`);
+    }
+    const groupKey = `${item.identification.groupId}:${appearanceId}`;
+    if (assignedAppearances.has(groupKey)) {
+      throw new Error(`content-bound validation: identification map for ${item.identification.groupId} is not one-to-one`);
+    }
+    assignedAppearances.add(groupKey);
+  }
+  const allocatedAppearances = new Set(Object.values(run.identification.appearanceByContentId));
+  for (const appearanceId of run.identification.knownAppearanceIds) {
+    if (!allocatedAppearances.has(appearanceId)) {
+      throw new Error(`content-bound validation: known appearance ${appearanceId} was not allocated`);
+    }
+  }
   const balanceCount = pack.entries.filter((entry) => entry.kind === 'balance').length;
   if (balanceCount !== 1) throw new Error(`content-bound validation: expected one balance definition; found ${balanceCount}`);
   for (const item of run.items) {
