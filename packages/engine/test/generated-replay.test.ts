@@ -11,7 +11,7 @@ import {
   heroPerception,
   projectFloor,
   refreshKnowledge,
-  replayCommands,
+  replayCommands as replayCommandsWithContext,
   stableJson,
   tileDefinition,
   type ActiveRun,
@@ -88,10 +88,11 @@ describe('generated save and replay continuity', () => {
   it('preserves exact generated terrain, light, knowledge, projection, and replay across save/reload', () => {
     const fixture = createGeneratedDemoRun(pack);
     const commands = commandsFor(fixture.run);
-    const continuous = replayCommands(fixture.run, commands);
-    const before = replayCommands(fixture.run, commands.slice(0, 4));
+    const context = { content: pack };
+    const continuous = replayCommandsWithContext(fixture.run, commands, context);
+    const before = replayCommandsWithContext(fixture.run, commands.slice(0, 4), context);
     const restored = decodeActiveRun(encodeActiveRun(before.state));
-    const after = replayCommands(restored, commands.slice(4));
+    const after = replayCommandsWithContext(restored, commands.slice(4), context);
     const splitSteps = [...before.steps, ...after.steps];
 
     expect(encodeActiveRun(after.state)).toBe(encodeActiveRun(continuous.state));

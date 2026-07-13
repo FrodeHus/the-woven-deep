@@ -1,4 +1,4 @@
-import type { InvalidActionEvent, TileId } from './model.js';
+import type { MovementInvalidReason, TileId } from './model.js';
 
 export type TerrainName = 'wall' | 'floor' | 'closed-door' | 'pillar' | 'stair-up' | 'stair-down' | 'void';
 export type TerrainToken = 'terrain.wall' | 'terrain.floor' | 'terrain.door' | 'terrain.pillar' | 'terrain.stair' | 'terrain.void';
@@ -34,7 +34,7 @@ export function tileDefinition(tileId: TileId): TileDefinition {
   return definition;
 }
 
-export function movementBlockReason(tileId: TileId): InvalidActionEvent['reason'] | undefined {
+export function movementBlockReason(tileId: TileId): MovementInvalidReason | undefined {
   if (tileDefinition(tileId).walkable) return undefined;
   if (tileId === 2) return 'blocked.door';
   if (tileId === 3) return 'blocked.pillar';

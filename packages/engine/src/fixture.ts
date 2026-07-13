@@ -4,6 +4,28 @@ import { createUnknownKnowledge } from './knowledge.js';
 import { refreshKnowledge } from './perception.js';
 import { ENGINE_GAME_VERSION, SAVE_SCHEMA_VERSION } from './versions.js';
 import { emptyEquipment, heroPerception, type ActorState } from './actor-model.js';
+import type { CompiledContentPack } from '@woven-deep/content';
+
+export function createDemoContentPack(): CompiledContentPack {
+  return {
+    schemaVersion: 2,
+    hash: 'a'.repeat(64),
+    entries: [{
+      kind: 'balance', id: 'balance.core-gameplay', name: 'Core gameplay', tags: ['core'],
+      readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400,
+      energyMinimum: -10_000, energyMaximum: 10_000, attributeMinimum: 0, attributeMaximum: 30,
+      hungerMaximum: 10_000, hungerThresholds: { hungry: 7000, weak: 8500, starving: 9500 },
+      starvationInterval: 500, starvationDamage: 1,
+      formulas: {
+        maxHealth: { base: 8, vitality: 2 }, meleeAccuracy: { might: 1 }, meleeDamageBonus: { might: 1 },
+        rangedAccuracy: { agility: 1 }, defense: { base: 8, agility: 1 }, search: { wits: 1 },
+        disarm: { agility: 1, wits: 1 },
+      },
+      actionCosts: { 'action.move': 100, 'action.wait': 100 },
+    }],
+    generationReport: { foundationalCategories: [] },
+  };
+}
 
 const FLOOR_LINES = [
   '#######',

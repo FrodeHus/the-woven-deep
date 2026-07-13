@@ -195,7 +195,7 @@ function direction(from, to) {
   throw new Error('generated route contains non-adjacent points');
 }
 
-function rememberedView(initialRun) {
+function rememberedView(initialRun, content) {
   const floor = activeFloor(initialRun);
   const route = analyzeConnectivity({
     width: floor.width,
@@ -216,7 +216,7 @@ function rememberedView(initialRun) {
       commandId: `command.dungeon-demo-${index}`,
       expectedRevision: run.revision,
       direction: direction(steps[index - 1], destination),
-    });
+    }, { content });
     assert(resolution.result.status === 'applied', 'valid remembered route movement was not applied');
     run = resolution.state;
   }
@@ -289,7 +289,7 @@ async function main() {
   const floor = activeFloor(first.run);
   const views = generatedViews(first.run);
   const sealedCorner = sealedCornerView();
-  const remembered = rememberedView(first.run);
+  const remembered = rememberedView(first.run, pack);
   const restoredRun = decodeActiveRun(encodeActiveRun(first.run));
   assert(encodeActiveRun(restoredRun) === encodeActiveRun(first.run), 'decoded generated run bytes diverged');
   assert(sameProjectionSet(views, generatedViews(restoredRun)), 'decoded generated projections diverged');

@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createDemoRun, createUnknownKnowledge, decodeActiveRun, encodeActiveRun,
-  heroPerception, refreshKnowledge, resolveCommand, SaveLoadError,
+  createDemoContentPack, createDemoRun, createUnknownKnowledge, decodeActiveRun, encodeActiveRun,
+  heroPerception, refreshKnowledge, resolveCommand as resolveCommandWithContext, SaveLoadError,
+  type GameCommand,
 } from '../src/index.js';
+
+const context = { content: createDemoContentPack() };
+const resolveCommand = (
+  state: Parameters<typeof resolveCommandWithContext>[0],
+  command: Parameters<typeof resolveCommandWithContext>[1],
+) => resolveCommandWithContext(state, command, context);
 
 describe('active-run save codec', () => {
   function richRun(): ReturnType<typeof createDemoRun> {
@@ -76,6 +83,42 @@ describe('active-run save codec', () => {
     const encoded = encodeActiveRun(state);
     expect(decodeActiveRun(encoded)).toEqual(state);
     expect(encoded).not.toMatch(/visibilityWords|illumination|projection|generationReport/);
+  });
+
+  it('round-trips expanded unavailable commands and ordered event arrays', () => {
+    const processed = resolveCommand(createDemoRun(), {
+      type: 'attack', commandId: 'command.saved-attack', expectedRevision: 0, targetActorId: 'monster.missing',
+    }).state;
+    const record = processed.recentCommands[0]!;
+    const withMultipleEvents = {
+      ...processed,
+      recentCommands: [{ ...record, events: [...record.events, { ...record.events[0]! }], publicEvents: [] }],
+    };
+    expect(decodeActiveRun(encodeActiveRun(withMultipleEvents))).toEqual(withMultipleEvents);
+  });
+
+  it.each([
+    { type: 'attack', targetActorId: 'monster.target' },
+    { type: 'fire', itemId: 'item.bow', target: { x: 2, y: 2 } },
+    { type: 'cast', spellId: 'spell.spark', target: null },
+    { type: 'throw-item', itemId: 'item.rock', target: { x: 2, y: 2 } },
+    { type: 'use-item', itemId: 'item.potion', target: null },
+    { type: 'equip', itemId: 'item.sword', slot: 'main-hand' },
+    { type: 'unequip', slot: 'main-hand' },
+    { type: 'pickup', itemId: 'item.coin', quantity: 1 },
+    { type: 'drop', itemId: 'item.coin', quantity: 1 },
+    { type: 'split-stack', itemId: 'item.coin', quantity: 1 },
+    { type: 'refuel', itemId: 'item.lantern', fuelItemId: 'item.oil', quantity: 1 },
+    { type: 'toggle-light', itemId: 'item.lantern', enabled: true },
+    { type: 'open-door', featureId: 'door.one' },
+    { type: 'close-door', featureId: 'door.one' },
+    { type: 'search' },
+    { type: 'disarm', featureId: 'trap.one' },
+    { type: 'rest', until: 'interrupted' },
+  ] as const)('round-trips a processed $type command', (body) => {
+    const command = { ...body, commandId: `command.${body.type}`, expectedRevision: 0 } as GameCommand;
+    const state = resolveCommand(createDemoRun(), command).state;
+    expect(decodeActiveRun(encodeActiveRun(state))).toEqual(state);
   });
 
   it.each([

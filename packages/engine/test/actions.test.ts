@@ -1,0 +1,115 @@
+import { describe, expect, it } from 'vitest';
+import {
+  createDemoContentPack,
+  createDemoRun,
+  encodeActiveRun,
+  resolveCommand,
+  validatePlayerAction,
+  type ActorState,
+  type ResolutionContext,
+} from '../src/index.js';
+
+const context: ResolutionContext = { content: createDemoContentPack() };
+
+function withAdjacentActor(disposition: ActorState['disposition']) {
+  const run = createDemoRun();
+  const target = {
+    ...run.actors[0]!, actorId: 'npc.traveler', contentId: 'npc.traveler', playerControlled: false,
+    x: 2, y: 1, disposition,
+  };
+  return { ...run, actors: [...run.actors, target].sort((left, right) => left.actorId < right.actorId ? -1 : 1) };
+}
+
+describe('player action validation', () => {
+  it('returns complete authoritative movement and wait actions', () => {
+    const state = createDemoRun();
+    expect(validatePlayerAction({
+      state, command: { type: 'move', commandId: 'command.move', expectedRevision: 0, direction: 'southeast' }, context,
+    })).toEqual({ type: 'move', actorId: 'hero.demo', to: { x: 2, y: 2 }, cost: 100 });
+    expect(validatePlayerAction({
+      state, command: { type: 'wait', commandId: 'command.wait', expectedRevision: 0 }, context,
+    })).toEqual({ type: 'wait', actorId: 'hero.demo', cost: 100 });
+  });
+
+  it('returns action.unavailable for commands whose subsystem is not registered', () => {
+    expect(validatePlayerAction({
+      state: createDemoRun(),
+      command: { type: 'attack', commandId: 'command.attack', expectedRevision: 0, targetActorId: 'monster.absent' },
+      context,
+    })).toEqual({ status: 'invalid', reason: 'action.unavailable' });
+  });
+
+  it('deduplicates unavailable commands and rejects conflicting reuse before content lookup', () => {
+    const command = { type: 'attack', commandId: 'command.repeat-attack', expectedRevision: 0, targetActorId: 'monster.a' } as const;
+    const first = resolveCommand(createDemoRun(), command, context);
+    const mismatched = { content: { ...createDemoContentPack(), hash: 'b'.repeat(64) } };
+    const duplicate = resolveCommand(first.state, command, mismatched);
+    expect(duplicate.result).toBe(first.result);
+    expect(duplicate.events).toBe(first.events);
+    const conflict = resolveCommand(first.state, { ...command, targetActorId: 'monster.b' }, mismatched);
+    expect(conflict.result).toMatchObject({ status: 'rejected', reason: 'command_id_conflict' });
+    const stale = resolveCommand(first.state, {
+      type: 'wait', commandId: 'command.stale-before-pack', expectedRevision: 99,
+    }, mismatched);
+    expect(stale.result).toMatchObject({ status: 'rejected', reason: 'stale_revision' });
+  });
+
+  it('does not record or mutate a decision-required command', () => {
+    const run = withAdjacentActor('neutral');
+    const before = encodeActiveRun(run);
+    const resolution = resolveCommand(
+      run,
+      { type: 'move', commandId: 'command.neutral', expectedRevision: run.revision, direction: 'east' },
+      context,
+    );
+    expect(resolution.result).toEqual({
+      status: 'decision_required', commandId: 'command.neutral', revision: 0, turn: 0,
+      decision: { type: 'confirm-aggression', targetActorId: 'npc.traveler' },
+    });
+    expect(encodeActiveRun(resolution.state)).toBe(before);
+    expect(resolution.events).toEqual([]);
+    expect(resolution.state.recentCommands).toEqual([]);
+  });
+
+  it('turns hostile bump movement into unavailable combat without moving', () => {
+    const run = withAdjacentActor('hostile');
+    const resolution = resolveCommand(
+      run,
+      { type: 'move', commandId: 'command.hostile', expectedRevision: 0, direction: 'east' },
+      context,
+    );
+    expect(resolution.result).toMatchObject({ status: 'invalid', reason: 'action.unavailable' });
+    expect(resolution.state.actors).toEqual(run.actors);
+  });
+
+  it('moves through an open door cover cell and remains saveable', () => {
+    const run = createDemoRun();
+    const floor = run.floors[0]!;
+    const throughDoor = {
+      ...run,
+      floors: [{ ...floor, tiles: floor.tiles.map((tile, index) => index === 9 ? 2 : tile) }],
+      features: [{
+        featureId: 'door.open', type: 'door' as const, floorId: floor.floorId, x: 2, y: 1,
+        contentId: null, coverTileId: 2 as const, state: 'open' as const,
+      }],
+    };
+    const resolution = resolveCommand(
+      throughDoor,
+      { type: 'move', commandId: 'command.open-door', expectedRevision: 0, direction: 'east' },
+      context,
+    );
+    expect(resolution.result.status).toBe('applied');
+    expect(() => encodeActiveRun(resolution.state)).not.toThrow();
+  });
+
+  it('rejects a mismatched content pack without publishing or mutation', () => {
+    const run = createDemoRun();
+    const mismatched = { content: { ...createDemoContentPack(), hash: 'b'.repeat(64) } };
+    expect(() => resolveCommand(
+      run,
+      { type: 'wait', commandId: 'command.bad-pack', expectedRevision: 0 },
+      mismatched,
+    )).toThrow(/invariant.*content hash/i);
+    expect(run.recentCommands).toEqual([]);
+  });
+});

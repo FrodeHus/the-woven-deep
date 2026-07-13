@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import {
   assertOpaqueId,
+  createDemoContentPack,
   createDemoRun,
   decodeActiveRun,
   encodeActiveRun,
@@ -10,7 +11,8 @@ import {
   stableJson,
 } from '../packages/engine/dist/index.js';
 
-const directions = new Set(['north', 'south', 'east', 'west']);
+const directions = new Set(['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest']);
+const context = { content: createDemoContentPack() };
 
 function lineError(lineNumber, message) {
   return new Error(`line ${lineNumber}: ${message}`);
@@ -77,7 +79,7 @@ export async function runProgram(path, reloadSaves) {
 
     if (parsed) {
       commands.set(parsed.commandId, parsed);
-      const resolution = resolveCommand(state, parsed);
+      const resolution = resolveCommand(state, parsed, context);
       state = resolution.state;
       steps.push({ command: parsed, result: resolution.result, events: resolution.events });
       continue;
@@ -101,7 +103,7 @@ export async function runProgram(path, reloadSaves) {
       const id = commandId(fields[1], lineNumber);
       const repeated = commands.get(id);
       if (repeated === undefined) throw lineError(lineNumber, `unknown repeated command ID ${id}`);
-      const resolution = resolveCommand(state, repeated);
+      const resolution = resolveCommand(state, repeated, context);
       state = resolution.state;
       steps.push({ command: repeated, result: resolution.result, events: resolution.events });
       continue;

@@ -1,17 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDemoRun,
+  createDemoContentPack,
   createUnknownKnowledge,
   heroActor,
   heroPerception,
   isExplored,
   refreshKnowledge,
-  resolveCommand,
+  resolveCommand as resolveCommandWithContext,
   stableJson,
   type GameCommand,
   type LightSource,
   type TileId,
 } from '../src/index.js';
+
+const context = { content: createDemoContentPack() };
+const resolveCommand = (
+  state: Parameters<typeof resolveCommandWithContext>[0],
+  command: Parameters<typeof resolveCommandWithContext>[1],
+) => resolveCommandWithContext(state, command, context);
 
 const move = (commandId: string, expectedRevision: number, direction: 'north' | 'south' | 'east' | 'west'): GameCommand => ({
   type: 'move', commandId, expectedRevision, direction,

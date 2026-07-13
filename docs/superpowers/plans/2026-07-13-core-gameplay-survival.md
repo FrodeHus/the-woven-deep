@@ -492,7 +492,7 @@ git commit -m "feat: schedule deterministic actor turns"
 - Consumes: schema-v3 actors/floors, derived stats, terrain definitions, command deduplication, and current movement reducer behavior.
 - Produces: eight-way `Direction`, expanded `GameCommand`, `DecisionRequiredResult`, `GameAction`, `ActionResolverRegistry`, `validatePlayerAction(input)`, `movementDestination(input)`, and `movementAction(input)`.
 
-- [ ] **Step 1: Write failing eight-way movement and corner tests**
+- [x] **Step 1: Write failing eight-way movement and corner tests**
 
 ```ts
 it.each([
@@ -514,7 +514,7 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/movement.test.ts`
 
 Expected: FAIL because diagonal directions and `blocked.corner` do not exist.
 
-- [ ] **Step 2: Add command, action, and decision unions**
+- [x] **Step 2: Add command, action, and decision unions**
 
 Extend public types with complete choices only:
 
@@ -535,7 +535,7 @@ export interface DecisionRequiredResult {
 
 Define `GameAction` separately from `GameCommand`; it contains authoritative action cost and resolved actor/item/feature references but never enters an external request or save.
 
-- [ ] **Step 3: Implement movement classification without combat resolution**
+- [x] **Step 3: Implement movement classification without combat resolution**
 
 `movementAction` validates bounds, terrain, mutable door state, both orthogonal side cells for diagonals, and actor occupancy. It returns one of:
 
@@ -549,7 +549,7 @@ type MovementActionResult =
 
 Hostile occupancy becomes `bump-attack`. Friendly occupancy is `blocked.actor`. Neutral occupancy returns a public aggression confirmation and does not change state.
 
-- [ ] **Step 4: Write failing decision immutability and deduplication tests**
+- [x] **Step 4: Write failing decision immutability and deduplication tests**
 
 ```ts
 it('does not record or mutate a decision-required command', () => {
@@ -566,7 +566,7 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/actions.test.ts test
 
 Expected: FAIL because `decision_required` is not handled.
 
-- [ ] **Step 5: Implement the command-validation shell**
+- [x] **Step 5: Implement the command-validation shell**
 
 Change the public entry point to `resolveCommand(state, command, context: ResolutionContext)`. Require `context.content.hash === state.contentHash` before command processing; a mismatch is an internal invariant error and publishes nothing. Update every fixture, replay helper, CLI, and test call site to pass its exact compiled pack.
 
@@ -574,13 +574,13 @@ Change the public entry point to `resolveCommand(state, command, context: Resolu
 
 Update save schemas for expanded recorded command/event unions while permitting a processed command to contain an ordered event array rather than exactly one event.
 
-- [ ] **Step 6: Run movement and reducer GREEN**
+- [x] **Step 6: Run movement and reducer GREEN**
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/movement.test.ts test/actions.test.ts test/reducer.test.ts test/save-codec.test.ts test/perception.test.ts`
 
 Expected: all focused tests pass, including sealed corners, neutral decisions, and cardinal-direction regression fixtures.
 
-- [ ] **Step 7: Run package gate and commit**
+- [x] **Step 7: Run package gate and commit**
 
 Run: `npm test --workspace @woven-deep/engine && npm run typecheck --workspace @woven-deep/engine`
 

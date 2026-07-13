@@ -1,7 +1,7 @@
 import type { RngStreamName } from './versions.js';
 import type { FloorKnowledge } from './knowledge.js';
 import type { AmbientLight, LightSource } from './light-model.js';
-import type { ActorState, RelationshipOverride } from './actor-model.js';
+import type { ActorState, EquipmentSlot, RelationshipOverride } from './actor-model.js';
 import type { DungeonFeature } from './feature-model.js';
 import type { IdentificationState, ItemInstance } from './item-model.js';
 import type { SurvivalState } from './survival-model.js';
@@ -10,7 +10,8 @@ export type OpaqueId = string;
 export type Uint32State = readonly [number, number, number, number];
 export type RngStreams = Readonly<Record<RngStreamName, Uint32State>>;
 export type TileId = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-export type Direction = 'north' | 'south' | 'east' | 'west';
+export type Direction = 'north' | 'northeast' | 'east' | 'southeast' | 'south' | 'southwest' | 'west' | 'northwest';
+export interface Point { readonly x: number; readonly y: number }
 
 export interface FloorEntityPosition {
   readonly entityId: OpaqueId;
@@ -80,7 +81,31 @@ export interface WaitCommand extends CommandEnvelope {
   readonly type: 'wait';
 }
 
-export type GameCommand = MoveCommand | WaitCommand;
+export interface AttackCommand extends CommandEnvelope { readonly type: 'attack'; readonly targetActorId: OpaqueId }
+export interface FireCommand extends CommandEnvelope { readonly type: 'fire'; readonly itemId: OpaqueId; readonly target: Point }
+export interface CastCommand extends CommandEnvelope { readonly type: 'cast'; readonly spellId: OpaqueId; readonly target: Point | null }
+export interface ThrowItemCommand extends CommandEnvelope { readonly type: 'throw-item'; readonly itemId: OpaqueId; readonly target: Point }
+export interface UseItemCommand extends CommandEnvelope { readonly type: 'use-item'; readonly itemId: OpaqueId; readonly target: Point | null }
+export interface EquipCommand extends CommandEnvelope { readonly type: 'equip'; readonly itemId: OpaqueId; readonly slot: EquipmentSlot }
+export interface UnequipCommand extends CommandEnvelope { readonly type: 'unequip'; readonly slot: EquipmentSlot }
+export interface PickupCommand extends CommandEnvelope { readonly type: 'pickup'; readonly itemId: OpaqueId; readonly quantity: number }
+export interface DropCommand extends CommandEnvelope { readonly type: 'drop'; readonly itemId: OpaqueId; readonly quantity: number }
+export interface SplitStackCommand extends CommandEnvelope { readonly type: 'split-stack'; readonly itemId: OpaqueId; readonly quantity: number }
+export interface RefuelCommand extends CommandEnvelope { readonly type: 'refuel'; readonly itemId: OpaqueId; readonly fuelItemId: OpaqueId; readonly quantity: number }
+export interface ToggleLightCommand extends CommandEnvelope { readonly type: 'toggle-light'; readonly itemId: OpaqueId; readonly enabled: boolean }
+export interface OpenDoorCommand extends CommandEnvelope { readonly type: 'open-door'; readonly featureId: OpaqueId }
+export interface CloseDoorCommand extends CommandEnvelope { readonly type: 'close-door'; readonly featureId: OpaqueId }
+export interface SearchCommand extends CommandEnvelope { readonly type: 'search' }
+export interface DisarmCommand extends CommandEnvelope { readonly type: 'disarm'; readonly featureId: OpaqueId }
+export interface RestCommand extends CommandEnvelope { readonly type: 'rest'; readonly until: 'healed' | 'interrupted' }
+
+export type GameCommand = MoveCommand | WaitCommand | AttackCommand | FireCommand | CastCommand | ThrowItemCommand
+  | UseItemCommand | EquipCommand | UnequipCommand | PickupCommand | DropCommand | SplitStackCommand | RefuelCommand
+  | ToggleLightCommand | OpenDoorCommand | CloseDoorCommand | SearchCommand | DisarmCommand | RestCommand;
+
+export type MovementInvalidReason = 'blocked.bounds' | 'blocked.wall' | 'blocked.door' | 'blocked.pillar'
+  | 'blocked.void' | 'blocked.corner' | 'blocked.actor';
+export type InvalidActionReason = MovementInvalidReason | 'action.unavailable';
 
 export interface HeroMovedEvent {
   readonly type: 'hero.moved';
@@ -102,7 +127,7 @@ export interface InvalidActionEvent {
   readonly type: 'action.invalid';
   readonly eventId: OpaqueId;
   readonly commandId: OpaqueId;
-  readonly reason: 'blocked.bounds' | 'blocked.wall' | 'blocked.door' | 'blocked.pillar' | 'blocked.void';
+  readonly reason: InvalidActionReason;
 }
 
 export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent;
@@ -122,6 +147,21 @@ export interface InvalidCommandResult {
   readonly reason: InvalidActionEvent['reason'];
 }
 
+export interface ConfirmAggressionDecision {
+  readonly type: 'confirm-aggression';
+  readonly targetActorId: OpaqueId;
+}
+
+export type PublicDecision = ConfirmAggressionDecision;
+
+export interface DecisionRequiredResult {
+  readonly status: 'decision_required';
+  readonly commandId: OpaqueId;
+  readonly revision: number;
+  readonly turn: number;
+  readonly decision: PublicDecision;
+}
+
 export interface RejectedCommandResult {
   readonly status: 'rejected';
   readonly commandId: OpaqueId;
@@ -131,7 +171,7 @@ export interface RejectedCommandResult {
 }
 
 export type ProcessedCommandResult = AppliedCommandResult | InvalidCommandResult;
-export type CommandResult = ProcessedCommandResult | RejectedCommandResult;
+export type CommandResult = ProcessedCommandResult | RejectedCommandResult | DecisionRequiredResult;
 
 export interface RecordedCommand {
   readonly command: GameCommand;

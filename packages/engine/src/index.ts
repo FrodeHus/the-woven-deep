@@ -22,6 +22,8 @@ export * from './fixture.js';
 export * from './actor-model.js';
 export * from './attributes.js';
 export * from './scheduler.js';
+export * from './movement.js';
+export * from './actions.js';
 export * from './item-model.js';
 export * from './feature-model.js';
 export * from './survival-model.js';

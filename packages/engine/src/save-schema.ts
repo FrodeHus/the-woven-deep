@@ -13,13 +13,38 @@ const uint32 = z.number().int().min(0).max(0xffff_ffff);
 const uint32Tuple = z.tuple([uint32, uint32, uint32, uint32]);
 const uint32State = uint32Tuple.refine((state) => state.some((word) => word !== 0), 'state must not be all zero');
 const point = z.strictObject({ x: safeNonNegative, y: safeNonNegative });
-const direction = z.enum(['north', 'south', 'east', 'west']);
+const direction = z.enum(['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest']);
+const equipmentSlot = z.enum(['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring']);
+const positiveQuantity = z.number().int().safe().positive();
 const moveCommand = z.strictObject({ type: z.literal('move'), commandId: identifier, expectedRevision: safeNonNegative, direction });
 const waitCommand = z.strictObject({ type: z.literal('wait'), commandId: identifier, expectedRevision: safeNonNegative });
-const command = z.discriminatedUnion('type', [moveCommand, waitCommand]);
+const commandBase = { commandId: identifier, expectedRevision: safeNonNegative } as const;
+const command = z.discriminatedUnion('type', [
+  moveCommand, waitCommand,
+  z.strictObject({ ...commandBase, type: z.literal('attack'), targetActorId: identifier }),
+  z.strictObject({ ...commandBase, type: z.literal('fire'), itemId: identifier, target: point }),
+  z.strictObject({ ...commandBase, type: z.literal('cast'), spellId: identifier, target: point.nullable() }),
+  z.strictObject({ ...commandBase, type: z.literal('throw-item'), itemId: identifier, target: point }),
+  z.strictObject({ ...commandBase, type: z.literal('use-item'), itemId: identifier, target: point.nullable() }),
+  z.strictObject({ ...commandBase, type: z.literal('equip'), itemId: identifier, slot: equipmentSlot }),
+  z.strictObject({ ...commandBase, type: z.literal('unequip'), slot: equipmentSlot }),
+  z.strictObject({ ...commandBase, type: z.literal('pickup'), itemId: identifier, quantity: positiveQuantity }),
+  z.strictObject({ ...commandBase, type: z.literal('drop'), itemId: identifier, quantity: positiveQuantity }),
+  z.strictObject({ ...commandBase, type: z.literal('split-stack'), itemId: identifier, quantity: positiveQuantity }),
+  z.strictObject({ ...commandBase, type: z.literal('refuel'), itemId: identifier, fuelItemId: identifier, quantity: positiveQuantity }),
+  z.strictObject({ ...commandBase, type: z.literal('toggle-light'), itemId: identifier, enabled: z.boolean() }),
+  z.strictObject({ ...commandBase, type: z.literal('open-door'), featureId: identifier }),
+  z.strictObject({ ...commandBase, type: z.literal('close-door'), featureId: identifier }),
+  z.strictObject({ ...commandBase, type: z.literal('search') }),
+  z.strictObject({ ...commandBase, type: z.literal('disarm'), featureId: identifier }),
+  z.strictObject({ ...commandBase, type: z.literal('rest'), until: z.enum(['healed', 'interrupted']) }),
+]);
 const movedEvent = z.strictObject({ type: z.literal('hero.moved'), eventId: identifier, heroId: identifier, from: point, to: point });
 const waitedEvent = z.strictObject({ type: z.literal('hero.waited'), eventId: identifier, heroId: identifier, x: safeNonNegative, y: safeNonNegative });
-const blockReason = z.enum(['blocked.bounds', 'blocked.wall', 'blocked.door', 'blocked.pillar', 'blocked.void']);
+const blockReason = z.enum([
+  'blocked.bounds', 'blocked.wall', 'blocked.door', 'blocked.pillar', 'blocked.void',
+  'blocked.corner', 'blocked.actor', 'action.unavailable',
+]);
 const invalidEvent = z.strictObject({ type: z.literal('action.invalid'), eventId: identifier, commandId: identifier, reason: blockReason });
 const event = z.discriminatedUnion('type', [movedEvent, waitedEvent, invalidEvent]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
@@ -176,7 +201,9 @@ const identification = z.strictObject({
 const hero = z.strictObject({ actorId: identifier, name: heroName, sightRadius: safeNonNegative, backpackCapacity: safeNonNegative });
 const rngEntries = Object.fromEntries(RNG_STREAM_NAMES.map((name) => [name, uint32State]));
 const directionOffsets: Readonly<Record<Direction, Readonly<{ x: number; y: number }>>> = {
-  north: { x: 0, y: -1 }, south: { x: 0, y: 1 }, east: { x: 1, y: 0 }, west: { x: -1, y: 0 },
+  northwest: { x: -1, y: -1 }, north: { x: 0, y: -1 }, northeast: { x: 1, y: -1 },
+  west: { x: -1, y: 0 }, east: { x: 1, y: 0 },
+  southwest: { x: -1, y: 1 }, south: { x: 0, y: 1 }, southeast: { x: 1, y: 1 },
 };
 
 const activeRunSchema = z.strictObject({
@@ -205,6 +232,20 @@ function cell(floorValue: SavedFloor, x: number, y: number, path: string): numbe
 function ensureWalkable(floorValue: SavedFloor, x: number, y: number, path: string): void {
   const index = cell(floorValue, x, y, path);
   if (!tileDefinition(floorValue.tiles[index]!).walkable) fail(path, 'position is not on walkable terrain');
+}
+
+function ensureActorWalkable(
+  floorValue: SavedFloor,
+  features: readonly z.infer<typeof feature>[],
+  x: number,
+  y: number,
+  path: string,
+): void {
+  const index = cell(floorValue, x, y, path);
+  if (tileDefinition(floorValue.tiles[index]!).walkable) return;
+  const openDoor = features.some((candidate) => candidate.type === 'door' && candidate.state === 'open'
+    && candidate.floorId === floorValue.floorId && candidate.x === x && candidate.y === y);
+  if (!openDoor) fail(path, 'position is not on walkable terrain');
 }
 
 function validateOrderedIds(values: readonly string[], path: string, noun: string, idField?: string): void {
@@ -341,7 +382,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     const path = `actors.${actorIndex}`;
     const actorFloor = run.floors.find((candidate) => candidate.floorId === actorValue.floorId);
     if (!actorFloor) fail(`${path}.floorId`, 'actor floor does not exist');
-    ensureWalkable(actorFloor, actorValue.x, actorValue.y, path);
+    ensureActorWalkable(actorFloor, run.features, actorValue.x, actorValue.y, path);
     if (actorValue.health > actorValue.maxHealth) fail(`${path}.health`, 'health exceeds maximum health');
     validateOrderedIds(actorValue.awareActorIds, `${path}.awareActorIds`, 'aware actor');
     for (const [awareIndex, awareActorId] of actorValue.awareActorIds.entries()) {
@@ -401,7 +442,10 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     const path = `features.${featureIndex}`;
     const featureFloor = run.floors.find((candidate) => candidate.floorId === featureValue.floorId);
     if (!featureFloor) fail(`${path}.floorId`, 'feature floor does not exist');
-    cell(featureFloor, featureValue.x, featureValue.y, path);
+    const featureCell = cell(featureFloor, featureValue.x, featureValue.y, path);
+    if (featureValue.type === 'door' && featureFloor.tiles[featureCell] !== featureValue.coverTileId) {
+      fail(`${path}.coverTileId`, 'door cover tile does not match its floor terrain');
+    }
     if (featureValue.type !== 'door') {
       validateOrderedIds(featureValue.discovery.discoveredByActorIds, `${path}.discovery.discoveredByActorIds`, 'discovering actor');
       validateOrderedIds(featureValue.discovery.attemptedContextKeys, `${path}.discovery.attemptedContextKeys`, 'discovery context');
@@ -445,20 +489,26 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     if (commandIds.has(recordValue.command.commandId)) fail(`${path}.command.commandId`, 'command identifier is duplicated');
     commandIds.add(recordValue.command.commandId);
     if (recordValue.command.commandId !== recordValue.result.commandId) fail(`${path}.result.commandId`, 'result does not match command');
-    if (recordValue.events.length !== 1) fail(`${path}.events`, 'processed commands require exactly one event');
-    if (recordValue.publicEvents.length !== 1) fail(`${path}.publicEvents`, 'processed commands require exactly one public event');
+    if (recordValue.events.length === 0) fail(`${path}.events`, 'processed commands require at least one event');
     if (recordValue.events.some((entry) => entry.eventId !== recordValue.command.commandId)) fail(`${path}.events`, 'event identifier does not match command');
     if (recordValue.publicEvents.some((entry) => entry.eventId !== recordValue.command.commandId)) fail(`${path}.publicEvents`, 'public event identifier does not match command');
-    const eventValue = recordValue.events[0]!;
+    const eventValue = recordValue.result.status === 'invalid'
+      ? recordValue.events.find((entry) => entry.type === 'action.invalid')
+      : recordValue.command.type === 'wait'
+        ? recordValue.events.find((entry) => entry.type === 'hero.waited')
+        : recordValue.command.type === 'move'
+          ? recordValue.events.find((entry) => entry.type === 'hero.moved')
+          : undefined;
+    if (!eventValue) fail(`${path}.events`, 'processed result has no matching event');
     if (recordValue.result.status === 'invalid') {
       if (eventValue.type !== 'action.invalid' || eventValue.commandId !== recordValue.command.commandId || eventValue.reason !== recordValue.result.reason) fail(`${path}.events.0`, 'invalid result and event are inconsistent');
     } else if (recordValue.command.type === 'wait') {
       if (eventValue.type !== 'hero.waited' || eventValue.heroId !== run.hero.actorId) fail(`${path}.events.0`, 'wait result and event are inconsistent');
-      ensureWalkable(activeFloor, eventValue.x, eventValue.y, `${path}.events.0`);
-    } else if (eventValue.type !== 'hero.moved' || eventValue.heroId !== run.hero.actorId) fail(`${path}.events.0`, 'move result and event are inconsistent');
+      ensureActorWalkable(activeFloor, run.features, eventValue.x, eventValue.y, `${path}.events.0`);
+    } else if (recordValue.command.type !== 'move' || eventValue.type !== 'hero.moved' || eventValue.heroId !== run.hero.actorId) fail(`${path}.events`, 'applied command and event are inconsistent');
     else {
-      ensureWalkable(activeFloor, eventValue.from.x, eventValue.from.y, `${path}.events.0.from`);
-      ensureWalkable(activeFloor, eventValue.to.x, eventValue.to.y, `${path}.events.0.to`);
+      ensureActorWalkable(activeFloor, run.features, eventValue.from.x, eventValue.from.y, `${path}.events.0.from`);
+      ensureActorWalkable(activeFloor, run.features, eventValue.to.x, eventValue.to.y, `${path}.events.0.to`);
     }
     if (recordValue.result.revision < previousRevision || recordValue.result.revision > run.revision) fail(`${path}.result.revision`, 'record revisions are not monotonic');
     if (recordValue.result.turn > run.turn) fail(`${path}.result.turn`, 'record turn exceeds current turn');
@@ -478,22 +528,32 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   let knownPosition = { x: savedHeroActor.x, y: savedHeroActor.y };
   for (let index = run.recentCommands.length - 1; index >= 0; index -= 1) {
     const recordValue = run.recentCommands[index]!;
-    const eventValue = recordValue.events[0]!;
+    const eventValue = recordValue.result.status === 'invalid'
+      ? recordValue.events.find((entry) => entry.type === 'action.invalid')!
+      : recordValue.command.type === 'wait'
+        ? recordValue.events.find((entry) => entry.type === 'hero.waited')!
+        : recordValue.events.find((entry) => entry.type === 'hero.moved')!;
     const path = `recentCommands.${index}`;
     if (recordValue.result.status === 'invalid') {
-      if (recordValue.command.type !== 'move') fail(`${path}.command.type`, 'only movement can produce an invalid result');
-      const offset = directionOffsets[recordValue.command.direction];
-      const attempted = { x: knownPosition.x + offset.x, y: knownPosition.y + offset.y };
-      const attemptedIndex = tileIndex(activeFloor, attempted.x, attempted.y);
-      const actualReason = attemptedIndex === undefined ? 'blocked.bounds' : movementBlockReason(activeFloor.tiles[attemptedIndex]!);
-      if (recordValue.result.reason !== actualReason) fail(`${path}.result.reason`, 'invalid reason does not match the active floor');
+      if (recordValue.command.type === 'wait') fail(`${path}.command.type`, 'wait cannot produce an invalid result');
+      if (recordValue.command.type !== 'move') {
+        if (recordValue.result.reason !== 'action.unavailable') fail(`${path}.result.reason`, 'unregistered actions must use action.unavailable');
+        continue;
+      }
+      if (['blocked.bounds', 'blocked.wall', 'blocked.door', 'blocked.pillar', 'blocked.void'].includes(recordValue.result.reason)) {
+        const offset = directionOffsets[recordValue.command.direction];
+        const attempted = { x: knownPosition.x + offset.x, y: knownPosition.y + offset.y };
+        const attemptedIndex = tileIndex(activeFloor, attempted.x, attempted.y);
+        const actualReason = attemptedIndex === undefined ? 'blocked.bounds' : movementBlockReason(activeFloor.tiles[attemptedIndex]!);
+        if (recordValue.result.reason !== actualReason) fail(`${path}.result.reason`, 'invalid reason does not match the active floor');
+      }
       continue;
     }
     if (recordValue.command.type === 'wait') {
       if (eventValue.type !== 'hero.waited' || eventValue.x !== knownPosition.x || eventValue.y !== knownPosition.y) fail(`${path}.events.0`, 'wait position does not match the retained position chain');
       continue;
     }
-    if (eventValue.type !== 'hero.moved') fail(`${path}.events.0`, 'move result and event are inconsistent');
+    if (recordValue.command.type !== 'move' || eventValue.type !== 'hero.moved') fail(`${path}.events`, 'move result and event are inconsistent');
     if (eventValue.to.x !== knownPosition.x || eventValue.to.y !== knownPosition.y) fail(`${path}.events.0.to`, 'move destination does not match the retained position chain');
     const offset = directionOffsets[recordValue.command.direction];
     if (eventValue.to.x !== eventValue.from.x + offset.x || eventValue.to.y !== eventValue.from.y + offset.y) fail(`${path}.events.0.to`, 'move does not match its command direction');

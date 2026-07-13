@@ -1,22 +1,15 @@
 import type {
-  ActiveRun, CommandResolution, Direction, DomainEvent, GameCommand,
+  ActiveRun, CommandResolution, DomainEvent, GameCommand,
   ProcessedCommandResult, RecordedCommand,
 } from './model.js';
-import { tileIndex } from './model.js';
 import { refreshKnowledge } from './perception.js';
-import { movementBlockReason } from './terrain.js';
 import { RECENT_COMMAND_LIMIT } from './versions.js';
 import { heroActor, heroPerception } from './actor-model.js';
-
-const DELTAS: Readonly<Record<Direction, Readonly<{ x: number; y: number }>>> = {
-  north: { x: 0, y: -1 }, south: { x: 0, y: 1 }, east: { x: 1, y: 0 }, west: { x: -1, y: 0 },
-};
+import { stableJson } from './stable-json.js';
+import { validatePlayerAction, type ResolutionContext } from './actions.js';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
-  return left.type === right.type
-    && left.commandId === right.commandId
-    && left.expectedRevision === right.expectedRevision
-    && (left.type !== 'move' || (right.type === 'move' && left.direction === right.direction));
+  return stableJson(left) === stableJson(right);
 }
 
 function rejected(state: ActiveRun, command: GameCommand, reason: 'stale_revision' | 'command_id_conflict'): CommandResolution {
@@ -46,40 +39,40 @@ function assertCountersCanAdvance(state: ActiveRun): void {
   }
 }
 
-export function resolveCommand(state: ActiveRun, command: GameCommand): CommandResolution {
+export function resolveCommand(state: ActiveRun, command: GameCommand, context: ResolutionContext): CommandResolution {
   const previous = state.recentCommands.find((entry) => entry.command.commandId === command.commandId);
   if (previous) {
     return sameCommand(previous.command, command)
-      ? { state, result: previous.result, events: previous.events }
+      ? { state, result: previous.result, events: previous.publicEvents }
       : rejected(state, command, 'command_id_conflict');
   }
   if (command.expectedRevision !== state.revision) return rejected(state, command, 'stale_revision');
+  if (context.content.hash !== state.contentHash) {
+    throw new Error(`internal invariant: content hash ${context.content.hash} does not match run ${state.contentHash}`);
+  }
 
-  if (command.type === 'wait') {
-    const actor = heroActor(state);
-    assertCountersCanAdvance(state);
-    const result = { status: 'applied', commandId: command.commandId, revision: state.revision + 1, turn: state.turn + 1 } as const;
-    const events = [{ type: 'hero.waited', eventId: command.commandId, heroId: actor.actorId, x: actor.x, y: actor.y }] as const;
+  const validation = validatePlayerAction({ state, command, context });
+  if ('status' in validation && validation.status === 'decision_required') {
+    return { state, result: validation, events: [] };
+  }
+  if ('status' in validation) {
+    const result = { status: 'invalid', commandId: command.commandId, revision: state.revision, turn: state.turn, reason: validation.reason } as const;
+    const events = [{ type: 'action.invalid', eventId: command.commandId, commandId: command.commandId, reason: validation.reason }] as const;
     return { state: record(state, command, result, events), result, events };
   }
 
   const actor = heroActor(state);
-  const floor = state.floors.find((candidate) => candidate.floorId === actor.floorId);
-  if (!floor) throw new Error(`active floor ${actor.floorId} is missing`);
-  const delta = DELTAS[command.direction];
-  const target = { x: actor.x + delta.x, y: actor.y + delta.y };
-  const index = tileIndex(floor, target.x, target.y);
-  const reason = index === undefined ? 'blocked.bounds' : movementBlockReason(floor.tiles[index]!);
-  if (reason) {
-    const result = { status: 'invalid', commandId: command.commandId, revision: state.revision, turn: state.turn, reason } as const;
-    const events = [{ type: 'action.invalid', eventId: command.commandId, commandId: command.commandId, reason }] as const;
-    return { state: record(state, command, result, events), result, events };
-  }
-
   assertCountersCanAdvance(state);
   const result = { status: 'applied', commandId: command.commandId, revision: state.revision + 1, turn: state.turn + 1 } as const;
-  const events = [{ type: 'hero.moved', eventId: command.commandId, heroId: actor.actorId, from: { x: actor.x, y: actor.y }, to: target }] as const;
-  const movedActor = { ...actor, ...target };
+  if (validation.type === 'wait') {
+    const events = [{ type: 'hero.waited', eventId: command.commandId, heroId: actor.actorId, x: actor.x, y: actor.y }] as const;
+    return { state: record(state, command, result, events), result, events };
+  }
+  if (validation.type !== 'move') throw new Error(`internal invariant: no resolver for action ${validation.type}`);
+  const floor = state.floors.find((candidate) => candidate.floorId === actor.floorId);
+  if (!floor) throw new Error(`internal invariant: active floor ${actor.floorId} is missing`);
+  const events = [{ type: 'hero.moved', eventId: command.commandId, heroId: actor.actorId, from: { x: actor.x, y: actor.y }, to: validation.to }] as const;
+  const movedActor = { ...actor, ...validation.to };
   const nextActors = state.actors.map((candidate) => candidate.actorId === movedActor.actorId ? movedActor : candidate);
   const moved = record(state, command, result, events, nextActors);
   const actors = new Map<string, Readonly<{ x: number; y: number }>>(
