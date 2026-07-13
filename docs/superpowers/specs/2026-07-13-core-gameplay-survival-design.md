@@ -37,8 +37,8 @@ The continuous and split executions must produce identical stable state, domain-
 ### Included
 
 - Versioned actor, item, feature, survival, scheduler, and identification state.
-- An explicit active-run schema v2 to v3 migration.
-- A compatibility normalizer for existing compiled content schema v1 packs.
+- A clean pre-release replacement of active-run schema v2 with schema v3.
+- A clean pre-release replacement of compiled content schema v1 with schema v2.
 - Five base attributes and pure derived-stat calculation.
 - Integer-energy action scheduling and complete atomic world steps.
 - Eight-direction movement and corner rules.
@@ -54,7 +54,7 @@ The continuous and split executions must produce identical stable state, domain-
 - Expanded YAML schemas for monsters, items, spells, traps, loot tables, and balance data.
 - A closed registry of schema-validated engine behaviors and effects.
 - Hidden-state-safe player projections and typed decision requests.
-- Example-based, migration, replay, browser-boundary, property-based, and CLI verification.
+- Example-based, schema-rejection, replay, browser-boundary, property-based, and CLI verification.
 
 ### Deferred to 4B
 
@@ -75,15 +75,15 @@ The continuous and split executions must produce identical stable state, domain-
 
 ## Established contracts
 
-This milestone preserves the existing rules for immutable reducer input, named random streams, stable JSON, complete floor snapshots, recent-command deduplication, content-hash binding, deterministic floor generation, knowledge packing, field of view, lighting, remembered terrain, player projection, and old-save migration.
+This milestone preserves the existing rules for immutable reducer input, named random streams, stable JSON, complete floor snapshots, recent-command deduplication, content-hash binding, deterministic floor generation, knowledge packing, field of view, lighting, remembered terrain, and player projection.
 
-Changes to existing stable command, event, content, save, tile, generator, projection, and random-state fields use explicit union additions or migrations. Player-facing state never contains hidden geometry, identities, actor state, feature state, random streams, or future decisions.
+The project is still pre-release and has no player saves or operator content packs requiring continuation. This milestone may therefore replace the current save and content shapes outright. It retains explicit version fields and rejects older versions clearly. Once schema v3 saves or schema v2 content are used outside development, incompatible changes require migrations. Player-facing state never contains hidden geometry, identities, actor state, feature state, random streams, or future decisions.
 
 ## Dependency decisions
 
 The engine remains browser-safe and does not import React, Fastify, SQLite, browser storage, or Node-only APIs.
 
-The architecture remains a staged functional simulation over immutable plain data. A data-oriented ECS or actor runtime would introduce a second state representation while leaving deterministic scheduling, combat, migrations, and event projection project-specific. Neither bitECS nor XState is added.
+The architecture remains a staged functional simulation over immutable plain data. A data-oriented ECS or actor runtime would introduce a second state representation while leaving deterministic scheduling, combat, schema validation, and event projection project-specific. Neither bitECS nor XState is added.
 
 The project already uses ROT.js for owned adapters around dungeon generation and sight. ROT.js also offers action and speed schedulers, but its public interface does not define the serialized scheduler representation required by saved authoritative state. The milestone therefore implements a small pure integer-energy scheduler whose data is part of the versioned save contract. Later 4B pathfinding may reuse ROT.js behind an adapter that copies results into project-owned data.
 
@@ -93,7 +93,9 @@ Dice are structured integer data rather than parsed notation. A local determinis
 
 ## Architecture
 
-`resolveCommand` remains the only public command-resolution entry point. It becomes a thin orchestrator over focused pure modules:
+`resolveCommand(state, command, { content })` remains the only public command-resolution entry point. The supplied compiled pack must match the run's saved content hash exactly; a mismatch is an internal invariant failure before command processing. Structural save decoding validates the self-contained schema-v3 document. A separate content-bound validator checks content references, stack limits, equipment compatibility, feature definitions, and balance references whenever a decoded run is attached to its compiled pack.
+
+The reducer becomes a thin orchestrator over focused pure modules:
 
 1. Apply recent-command deduplication and expected-revision checks.
 2. Validate the command against authoritative state and compiled content.
@@ -105,13 +107,13 @@ Dice are structured integer data rather than parsed notation. A local determinis
 8. Select ready actors and advance elapsed dungeon time until the hero is selected for input again.
 9. On every clock advance, update hunger, fuel, conditions, recovery, and mutable features before selecting an actor made ready by that advance.
 10. Refresh light, sight, knowledge, and observable projections when their inputs changed.
-11. Record the complete ordered domain-event sequence and processed command result.
+11. Record the complete ordered domain-event sequence, its event-time redacted public sequence, and the processed command result.
 
-Modules have narrow public inputs and outputs: actor lookup, scheduler, targeting, combat, effects, inventory, equipment, identification, survival, features, rest, projection, and schema migration. No module reads ambient time, ambient randomness, global mutable state, or I/O.
+Modules have narrow public inputs and outputs: actor lookup, scheduler, targeting, combat, effects, inventory, equipment, identification, survival, features, rest, projection, and schema validation. No module reads ambient time, ambient randomness, global mutable state, or I/O.
 
 ## Active-run schema v3
 
-The active-run document advances to `schemaVersion: 3`. It retains the existing run envelope and adds the following concepts.
+The active-run document becomes `schemaVersion: 3`. It retains useful run-envelope concepts and adds the following gameplay state.
 
 ### World clock and scheduler
 
@@ -122,6 +124,8 @@ The active-run document advances to `schemaVersion: 3`. It retains the existing 
 - Saved condition and feature timers use absolute `worldTime` deadlines. Resource reserves such as hunger and fuel remain bounded integer quantities rather than timers.
 
 The command `turn` counter remains the count of applied player actions. `revision` remains the count of published authoritative changes. Neither substitutes for elapsed world time.
+
+Each processed-command record stores both authoritative events and the public events projected at their original resolution points. A duplicate command ID returns those stored public events rather than projecting old authoritative events against newer knowledge.
 
 ### Actors
 
@@ -139,7 +143,7 @@ Each actor record contains:
 - Active conditions and their deterministic timing state.
 - Minimal registered behavior state for non-player actors.
 
-The hero becomes an actor referenced by `hero.actorId`; existing hero name, identity, floor, sight, and position semantics remain available through the hero record or a versioned compatibility projection. A floor contains actor IDs and positions without duplicating mutable actor statistics.
+The hero becomes an actor referenced by `hero.actorId`; hero name, identity, sight, and position remain available through the new hero and actor records. A floor contains actor IDs and positions without duplicating mutable actor statistics.
 
 ### Items and locations
 
@@ -162,20 +166,11 @@ Doors, traps, secrets, and placed light sources are saved as typed floor-feature
 
 The hero stores hunger reserve and stage, backpack capacity, discovery progress, and current-run identification knowledge. The run stores deterministic appearance maps for compatible potion and scroll groups. Enchanted equipment knowledge remains per item instance.
 
-## Migration and old content packs
+## Pre-release schema replacement
 
-The v2 to v3 migration is deterministic and consumes no random stream. It:
+Only active-run schema v3 is accepted after this milestone. Existing v0, v1, and v2 validators, migration code, and old-save fixtures are removed. Every engine and demonstration fixture is rewritten directly as valid v3 state. Decoding another version returns the existing typed `unsupported_version` failure without attempting conversion.
 
-- Converts the existing hero and positioned fixture actors into v3 actor records.
-- Assigns documented baseline attributes, health, energy, speed, disposition, and reaction state.
-- Preserves identifiers, positions, floor state, light, knowledge, vaults, random streams, revision, turn, and command history.
-- Adds empty item, condition, feature, identification, and relationship collections where no legacy equivalent exists.
-- Sets `worldTime` to the existing `turn`, because every pre-v3 applied action represents one baseline time unit.
-- Gives the hero and migrated active-floor creatures the normal readiness threshold so the hero is the selected actor at the first v3 decision boundary.
-- Derives any identification mapping later required by a migrated run from a domain-separated combination of its saved run seed and content hash, without advancing an existing random stream.
-- Converts existing closed-door tiles to mutable closed-door feature records without changing observable geometry.
-
-Existing immutable compiled content schema v1 packs are not rewritten or rehashed. A pure normalizer supplies documented compatibility defaults and produces the current runtime content view. New YAML compilation emits schema v2 packs. Tests load old active runs with old packs and prove deterministic continuation.
+Only compiled content schema v2 is accepted by the runtime and compiler after this milestone. All bundled YAML moves to source schema v2 in the same implementation slice. Old development rows may remain inert in a local SQLite volume, but they are never selected for a new run or adapted into the new runtime shape. A clean development volume may be used when testing startup. Future incompatible changes begin migration support from active-run v3 and compiled-content v2.
 
 ## Attributes and derived statistics
 
@@ -318,7 +313,7 @@ Using, throwing, reading, drinking, refueling, extinguishing, and relighting are
 
 ## Identification
 
-At run creation, the `effects` random stream deterministically shuffles appearances within schema-compatible potion and scroll identification groups. The complete mapping is saved in hidden run state and never regenerated. A migrated run uses the migration derivation described above if it later loads compatible unknown-item content.
+At run creation, the `effects` random stream deterministically shuffles appearances within schema-compatible potion and scroll identification groups. The complete mapping is saved in hidden run state and never regenerated.
 
 Unknown consumables expose only their appearance, category, quantity, and other legitimately observable facts. Using an unknown potion or scroll applies its effect and then identifies the appearance for the current hero. Identifying one appearance reveals all current and future matching instances in that run.
 
@@ -451,7 +446,7 @@ Failure classes remain explicit:
 - Applied action: at least one consequential transition occurred; full world step is published even if the intended movement or effect was interrupted.
 - Internal invariant failure: throw before publication; caller retains the previous state.
 
-All arithmetic uses checked safe integers. Published state passes runtime schema validation in development, tests, migrations, save encoding, and external boundaries. Engine exceptions never include hidden state in public responses.
+All arithmetic uses checked safe integers. Published state passes runtime schema validation in development, tests, save encoding, and external boundaries. Engine exceptions never include hidden state in public responses.
 
 ## Testing strategy
 
@@ -470,8 +465,8 @@ Every implementation task follows RED/GREEN test-driven development.
 - Door geometry, passive discovery, Search progress, disarm outcomes, secret cover, and reload safety.
 - Rest interruption for every declared condition.
 - Effect registry parameter validation and deterministic stream isolation.
-- Content parsing, semantic validation, old-pack normalization, hashing, and diagnostics.
-- v2 to v3 migration and old fixture preservation.
+- Content parsing, semantic validation, hashing, and diagnostics.
+- Clear rejection of unsupported save and content schema versions.
 - Player projection and event non-disclosure.
 
 ### Property-based invariants
@@ -485,15 +480,15 @@ Use seeded `fast-check` properties with failure seed and shrink path printed by 
 - Quantity and fuel transfers conserve totals except for declared consumption.
 - Reactions occur only between aware hostiles and at most once before recovery.
 - Invalid, rejected, and decision-required results preserve state and random streams.
-- Save/load continuation equals uninterrupted execution.
+- Save/load continuation equals uninterrupted execution, including stored public events.
 - Hidden identities, features, actors, and geometry never enter projections.
 
 Property generators create only schema-valid starting snapshots unless the property tests validation itself. Randomness used by the test generator is separate from engine random streams.
 
 ### Replay and boundary tests
 
-- Checked-in v2 fixtures migrate to byte-stable v3 output.
-- Existing v0 and v1 migration chains still terminate at valid v3 state.
+- Unsupported v0, v1, and v2 save fixtures fail with the typed version error and no partial state.
+- Schema-v1 source and compiled content fail with deterministic version diagnostics.
 - Continuous and split combat scenarios produce identical state, results, events, and projections.
 - Separate Node processes produce the same demonstration hashes.
 - Browser-boundary tests reject Node-only imports and ambient nondeterminism.
@@ -509,7 +504,7 @@ After publication, these become stable, versioned interfaces:
 - Command, result, decision, action, reaction, combat, inventory, survival, feature, and event discriminators.
 - Attack, critical, damage, mitigation, reaction, and death ordering.
 - Registered targeting, behavior, and effect identifiers shipped by the milestone.
-- Compiled content schema v2 fields and old-pack normalization rules.
+- Compiled content schema v2 fields and rejection of unsupported versions.
 - Player projection fields and hidden-state exclusions.
 
-Milestone 4B may add actor behaviors, population state, NPC inventories, achievements, metrics, scores, rewards, and run records. It must preserve deterministic world steps, immutable publication, complete snapshots, old save and content continuation, stream isolation, and hidden-state-safe projection.
+Milestone 4B may add actor behaviors, population state, NPC inventories, achievements, metrics, scores, rewards, and run records. It must preserve deterministic world steps, immutable publication, complete snapshots, schema-v3 save and schema-v2 content continuation, stream isolation, and hidden-state-safe projection.
