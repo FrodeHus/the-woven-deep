@@ -185,7 +185,7 @@ export interface ActorTurnStartedEvent {
 export interface ActorTurnCompletedEvent {
   readonly type: 'actor.turn.completed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
   readonly actionType: 'move' | 'wait' | 'bump-attack' | 'pickup' | 'drop' | 'split-stack'
-    | 'fire' | 'throw-item' | 'use-item';
+    | 'fire' | 'throw-item' | 'use-item' | 'equip' | 'unequip' | 'toggle-light' | 'refuel';
 }
 export interface ActorMovedEvent {
   readonly type: 'actor.moved'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
@@ -215,12 +215,29 @@ export interface ItemUsedEvent {
   readonly type: 'item.used'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
   readonly itemId: OpaqueId; readonly targetActorId: OpaqueId;
 }
+export interface ItemEquippedEvent {
+  readonly type: 'item.equipped'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId; readonly slot: EquipmentSlot;
+}
+export interface ItemUnequippedEvent {
+  readonly type: 'item.unequipped'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId; readonly slot: EquipmentSlot;
+}
+export interface ItemLightToggledEvent {
+  readonly type: 'item.light-toggled'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId; readonly enabled: boolean;
+}
+export interface ItemRefueledEvent {
+  readonly type: 'item.refueled'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId; readonly fuelItemId: OpaqueId; readonly quantity: number; readonly fuel: number;
+}
 
 export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent | AttackMissedEvent
   | AttackHitEvent | ActorDamagedEvent | ActorDiedEvent | ActorHealedEvent | ConditionAppliedEvent
   | ConditionRemovedEvent | ActorForcedMoveEvent | ReactionTriggeredEvent | RelationshipChangedEvent
   | ActorTurnStartedEvent | ActorTurnCompletedEvent | ActorMovedEvent | ItemPickedUpEvent | ItemDroppedEvent
-  | ItemStackSplitEvent | ItemConsumedEvent | ItemThrownEvent | ItemUsedEvent;
+  | ItemStackSplitEvent | ItemConsumedEvent | ItemThrownEvent | ItemUsedEvent | ItemEquippedEvent
+  | ItemUnequippedEvent | ItemLightToggledEvent | ItemRefueledEvent;
 
 export interface AppliedCommandResult {
   readonly status: 'applied';

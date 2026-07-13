@@ -967,7 +967,7 @@ git commit -m "feat: manage immutable backpack items"
 - Consumes: inventory transitions, item equipment definitions, actor equipment references, derived-stat calculator, light-source calculation, and equip/toggle/refuel actions.
 - Produces: `equipmentPlan(input)`, `equipItem(input)`, `unequipItem(input)`, `equipmentModifiers(input)`, and `itemLightSources(input)`.
 
-- [ ] **Step 1: Write failing handedness and displacement tests**
+- [x] **Step 1: Write failing handedness and displacement tests**
 
 ```ts
 it('reserves both hands for two-handed equipment', () => {
@@ -993,11 +993,11 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/equipment.test.ts`
 
 Expected: FAIL because equipment planning does not exist.
 
-- [ ] **Step 2: Implement explicit slots and atomic equipment planning**
+- [x] **Step 2: Implement explicit slots and atomic equipment planning**
 
 Support `main-hand`, `off-hand`, `body`, `head`, `hands`, `feet`, `neck`, `left-ring`, and `right-ring`. Validate item compatibility and handedness from compiled content. Plan all displacements first, prove backpack capacity, then publish every location change together. Never silently drop an item. Equipping and unequipping consume time only after a valid plan is applied.
 
-- [ ] **Step 3: Write failing equipment-derived-stat tests**
+- [x] **Step 3: Write failing equipment-derived-stat tests**
 
 ```ts
 it('changes derived stats only through equipped definitions', () => {
@@ -1012,11 +1012,11 @@ Run: same focused command.
 
 Expected: FAIL because equipment modifiers are not connected.
 
-- [ ] **Step 4: Implement pure equipment modifiers**
+- [x] **Step 4: Implement pure equipment modifiers**
 
 Fold equipped item definitions in equipment-slot order. Apply integer modifiers once, expose an itemized explanation for projection, and pass the result to `deriveActorStats`. Item instance hidden enchantments contribute only to authoritative totals; their explanation is redacted until identified.
 
-- [ ] **Step 5: Write failing item-backed light tests**
+- [x] **Step 5: Write failing item-backed light tests**
 
 ```ts
 it('emits light only from an enabled equipped or placed fueled item', () => {
@@ -1030,11 +1030,11 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/equipment.test.ts te
 
 Expected: FAIL because light is not derived from item instances.
 
-- [ ] **Step 6: Bind item lights to existing illumination**
+- [x] **Step 6: Bind item lights to existing illumination**
 
 Generate transient `LightSource` records from equipped or floor-placed light items with positive fuel and enabled state. Keep fixed environmental lights unchanged. Use stable light IDs derived from item IDs, refresh perception after equip/unequip/toggle/refuel, and ensure previews use known item properties without revealing unknown terrain.
 
-- [ ] **Step 7: Add equipment properties and run GREEN**
+- [x] **Step 7: Add equipment properties and run GREEN**
 
 Generate legal inventory/equipment states and action sequences. Assert no slot overlap, two-handed reservations, one location per item, capacity after displacement, and no light from backpack/empty/disabled items.
 
@@ -1042,7 +1042,7 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/equipment.test.ts te
 
 Expected: focused suites and properties pass.
 
-- [ ] **Step 8: Run package gate and commit**
+- [x] **Step 8: Run package gate and commit**
 
 Run: `npm test --workspace @woven-deep/engine && npm run typecheck --workspace @woven-deep/engine`
 

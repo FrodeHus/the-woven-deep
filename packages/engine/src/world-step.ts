@@ -7,6 +7,9 @@ import { resolveAttack } from './combat.js';
 import { conditionModifiers } from './conditions.js';
 import { advanceConditions, resolveEffectSequence } from './effects.js';
 import { consumeItemQuantity, dropItem, pickupItem, splitStack } from './inventory.js';
+import {
+  equipItem, equipmentModifiers, itemLightSources, refuelItem, toggleItemLight, unequipItem,
+} from './equipment.js';
 import { tileIndex, type ActiveRun, type DomainEvent, type OpaqueId, type Point, type Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { isVisible } from './visibility.js';
@@ -42,7 +45,12 @@ function requiredItemDefinition(content: CompiledContentPack, contentId: OpaqueI
   return entry;
 }
 
-function profile(actor: ActorState, content: CompiledContentPack): CombatProfile {
+function profile(
+  actor: ActorState,
+  content: CompiledContentPack,
+  items: ActiveRun['items'] = [],
+  actors: ActiveRun['actors'] = [actor],
+): CombatProfile {
   const monster = monsterDefinition(content, actor);
   if (monster) return {
     accuracy: monster.accuracy,
@@ -55,14 +63,25 @@ function profile(actor: ActorState, content: CompiledContentPack): CombatProfile
   const stats = deriveActorStats({
     attributes: actor.attributes,
     formulas: balanceEntry(content).formulas,
-    equipmentModifiers: [],
+    equipmentModifiers: equipmentModifiers({ run: { actors, items }, content, actorId: actor.actorId })
+      .map((source) => source.modifiers),
     conditionModifiers: conditionModifiers(actor, content),
   });
+  const equipped = items.filter((item) => item.location.type === 'equipped'
+    && item.location.actorId === actor.actorId);
+  const mainHandId = actor.equipment['main-hand'];
+  const mainHand = mainHandId ? equipped.find((item) => item.itemId === mainHandId) : undefined;
+  const weapon = mainHand ? requiredItemDefinition(content, mainHand.contentId).combat : undefined;
+  const damage = weapon?.damage && weapon.ammunitionTag === null
+    ? { ...weapon.damage, bonus: weapon.damage.bonus + stats.meleeDamageBonus }
+    : { count: 1, sides: 4, bonus: stats.meleeDamageBonus };
+  const armor = equipped.reduce((total, item) => total
+    + (requiredItemDefinition(content, item.contentId).combat?.armor ?? 0), 0);
   return {
     accuracy: stats.meleeAccuracy,
     defense: stats.defense,
-    damage: { count: 1, sides: 4, bonus: stats.meleeDamageBonus },
-    armor: 0,
+    damage,
+    armor,
     resistance: 0,
     immune: false,
   };
@@ -75,12 +94,13 @@ function combat(input: Readonly<{
   targetActorId: OpaqueId;
   eventId: OpaqueId;
   content: CompiledContentPack;
+  items: ActiveRun['items'];
 }>): ReactionAttackResult {
   const attacker = input.actors.find((candidate) => candidate.actorId === input.attackerId);
   const target = input.actors.find((candidate) => candidate.actorId === input.targetActorId);
   if (!attacker || !target) throw new Error('internal invariant: combat actors must exist');
-  const attack = profile(attacker, input.content);
-  const defense = profile(target, input.content);
+  const attack = profile(attacker, input.content, input.items, input.actors);
+  const defense = profile(target, input.content, input.items, input.actors);
   return resolveAttack({
     ...input,
     accuracy: attack.accuracy,
@@ -115,7 +135,35 @@ function applyAction(input: Readonly<{
   const actor = actorById(state, action.actorId);
   if (!actor) throw new Error(`internal invariant: actor ${action.actorId} does not exist`);
   const events: DomainEvent[] = [];
-  if (action.type === 'use-item') {
+  if (action.type === 'toggle-light') {
+    const transition = toggleItemLight({ run: state, content: input.content,
+      actorId: actor.actorId, itemId: action.itemId, enabled: action.enabled });
+    if (!transition.ok) throw new Error(`internal invariant: validated light toggle failed with ${transition.reason}`);
+    state = transition.run;
+    events.push({ type: 'item.light-toggled', eventId: input.eventId, actorId: actor.actorId,
+      itemId: action.itemId, enabled: action.enabled });
+  } else if (action.type === 'refuel') {
+    const transition = refuelItem({ run: state, content: input.content, actorId: actor.actorId,
+      itemId: action.itemId, fuelItemId: action.fuelItemId, quantity: action.quantity });
+    if (!transition.ok) throw new Error(`internal invariant: validated refuel failed with ${transition.reason}`);
+    state = transition.run;
+    const target = state.items.find((item) => item.itemId === action.itemId)!;
+    events.push({ type: 'item.refueled', eventId: input.eventId, actorId: actor.actorId,
+      itemId: action.itemId, fuelItemId: action.fuelItemId, quantity: action.quantity, fuel: target.fuel! });
+  } else if (action.type === 'equip') {
+    const transition = equipItem({ run: state, content: input.content, actorId: actor.actorId,
+      itemId: action.itemId, slot: action.slot });
+    if (!transition.ok) throw new Error(`internal invariant: validated equip failed with ${transition.reason}`);
+    state = transition.run;
+    events.push({ type: 'item.equipped', eventId: input.eventId, actorId: actor.actorId,
+      itemId: action.itemId, slot: action.slot });
+  } else if (action.type === 'unequip') {
+    const transition = unequipItem({ run: state, actorId: actor.actorId, slot: action.slot });
+    if (!transition.ok) throw new Error(`internal invariant: validated unequip failed with ${transition.reason}`);
+    state = transition.run;
+    events.push({ type: 'item.unequipped', eventId: input.eventId, actorId: actor.actorId,
+      itemId: action.itemId, slot: action.slot });
+  } else if (action.type === 'use-item') {
     const source = state.items.find((item) => item.itemId === action.itemId);
     if (!source) throw new Error(`internal invariant: used item ${action.itemId} disappeared`);
     const definition = requiredItemDefinition(input.content, source.contentId);
@@ -147,15 +195,17 @@ function applyAction(input: Readonly<{
       itemId: action.ammunitionItemId, quantity: 1 });
     const attackerStats = deriveActorStats({
       attributes: actor.attributes, formulas: balanceEntry(input.content).formulas,
-      equipmentModifiers: [], conditionModifiers: conditionModifiers(actor, input.content),
+      equipmentModifiers: equipmentModifiers({ run: state, content: input.content, actorId: actor.actorId })
+        .map((source) => source.modifiers),
+      conditionModifiers: conditionModifiers(actor, input.content),
     });
     const target = actorById(state, action.targetActorId);
     if (!target) throw new Error(`internal invariant: target ${action.targetActorId} disappeared`);
-    const defense = profile(target, input.content);
+    const defense = profile(target, input.content, state.items, state.actors);
     const shot = resolveAttack({
       eventId: input.eventId, attackerId: actor.actorId, targetActorId: target.actorId,
       actors: state.actors, combatState: state.rng.combat,
-      accuracy: attackerStats.rangedAccuracy + definition.combat.accuracy,
+      accuracy: attackerStats.rangedAccuracy,
       defense: defense.defense, damage: definition.combat.damage, armor: defense.armor,
       resistance: defense.resistance, immune: defense.immune, damageType: 'physical',
     });
@@ -229,7 +279,7 @@ function applyAction(input: Readonly<{
     const reactions = resolveOpportunityAttacks({
       run: state, content: input.content, moverActorId: actor.actorId,
       from: { x: actor.x, y: actor.y }, to: action.to, eventId: input.eventId,
-      resolveAttack: (attack) => combat({ ...attack, content: input.content }),
+      resolveAttack: (attack) => combat({ ...attack, content: input.content, items: state.items }),
     });
     state = reactions.state;
     events.push(...reactions.events);
@@ -253,7 +303,7 @@ function applyAction(input: Readonly<{
     }
     const resolved = combat({
       actors: state.actors, combatState: state.rng.combat, attackerId: actor.actorId,
-      targetActorId: action.targetActorId, eventId: input.eventId, content: input.content,
+      targetActorId: action.targetActorId, eventId: input.eventId, content: input.content, items: state.items,
     });
     state = { ...state, actors: resolved.actors, rng: { ...state.rng, combat: resolved.combatState } };
     events.push(...resolved.events);
@@ -274,7 +324,7 @@ function eventParticipants(event: DomainEvent): readonly OpaqueId[] {
   return ids;
 }
 
-function eventIsPublic(event: DomainEvent, state: ActiveRun, heroId: OpaqueId): boolean {
+function eventIsPublic(event: DomainEvent, state: ActiveRun, heroId: OpaqueId, content: CompiledContentPack): boolean {
   if (event.type === 'action.invalid') return true;
   const participants = eventParticipants(event);
   if (participants.includes(heroId)) return true;
@@ -286,7 +336,8 @@ function eventIsPublic(event: DomainEvent, state: ActiveRun, heroId: OpaqueId): 
     floor.entities.map((entity) => [entity.entityId, entity] as const),
   );
   for (const actor of state.actors) if (actor.floorId === floor.floorId) positions.set(actor.actorId, actor);
-  const perception = refreshKnowledge({ floor, hero: heroPerception(state.hero, hero), actors: positions });
+  const perception = refreshKnowledge({ floor, hero: heroPerception(state.hero, hero), actors: positions,
+    additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }) });
   return participants.some((actorId) => {
     const actor = actorById(state, actorId);
     if (!actor || actor.floorId !== floor.floorId) return false;
@@ -298,12 +349,13 @@ function eventIsPublic(event: DomainEvent, state: ActiveRun, heroId: OpaqueId): 
 
 function appendEvents(
   authoritative: DomainEvent[], publicEvents: DomainEvent[], emitted: readonly DomainEvent[], state: ActiveRun, heroId: OpaqueId,
+  content: CompiledContentPack,
 ): void {
   authoritative.push(...emitted);
-  publicEvents.push(...emitted.filter((event) => eventIsPublic(event, state, heroId)));
+  publicEvents.push(...emitted.filter((event) => eventIsPublic(event, state, heroId, content)));
 }
 
-function refreshHeroKnowledge(state: ActiveRun): ActiveRun {
+function refreshHeroKnowledge(state: ActiveRun, content: CompiledContentPack): ActiveRun {
   const hero = heroActor(state);
   const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
   if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
@@ -311,7 +363,10 @@ function refreshHeroKnowledge(state: ActiveRun): ActiveRun {
     floor.entities.map((entity) => [entity.entityId, entity] as const),
   );
   for (const actor of state.actors) if (actor.floorId === floor.floorId) positions.set(actor.actorId, actor);
-  const knowledge = refreshKnowledge({ floor, hero: heroPerception(state.hero, hero), actors: positions }).knowledge;
+  const knowledge = refreshKnowledge({
+    floor, hero: heroPerception(state.hero, hero), actors: positions,
+    additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }),
+  }).knowledge;
   return { ...state, floors: state.floors.map((candidate) => candidate === floor ? { ...candidate, knowledge } : candidate) };
 }
 
@@ -330,7 +385,7 @@ export function resolveWorldStep(input: Readonly<{
   let state = resolved.state;
   const events: DomainEvent[] = [];
   const publicEvents: DomainEvent[] = [];
-  appendEvents(events, publicEvents, resolved.events, state, heroId);
+  appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
   const actedHero = actorById(state, heroId);
   if (actedHero) state = withActor(state, completeNormalActorTurn(actedHero));
   const limit = input.maxInternalActions ?? 10_000;
@@ -342,7 +397,7 @@ export function resolveWorldStep(input: Readonly<{
       state = { ...state, worldTime: advanced.worldTime, actors: advanced.actors };
       const conditions = advanceConditions({ actors: state.actors, worldTime: state.worldTime, eventId: input.eventId });
       state = { ...state, actors: conditions.actors };
-      appendEvents(events, publicEvents, conditions.events, state, heroId);
+      appendEvents(events, publicEvents, conditions.events, state, heroId, input.content);
       selected = selectReadyActor(state.actors, input.content);
       if (!selected) break;
     }
@@ -351,17 +406,17 @@ export function resolveWorldStep(input: Readonly<{
     internalActions += 1;
     appendEvents(events, publicEvents, [{
       type: 'actor.turn.started', eventId: input.eventId, actorId: selected.actorId,
-    }], state, heroId);
+    }], state, heroId, input.content);
     const action = chooseBehaviorAction({ state, actorId: selected.actorId, content: input.content });
     resolved = applyAction({ state, action, content: input.content, eventId: input.eventId });
     state = resolved.state;
-    appendEvents(events, publicEvents, resolved.events, state, heroId);
+    appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
     const completed = actorById(state, selected.actorId);
     if (completed) state = withActor(state, completeNormalActorTurn(completed));
     appendEvents(events, publicEvents, [{
       type: 'actor.turn.completed', eventId: input.eventId, actorId: selected.actorId, actionType: action.type,
-    }], state, heroId);
+    }], state, heroId, input.content);
   }
-  state = refreshHeroKnowledge(state);
+  state = refreshHeroKnowledge(state, input.content);
   return { state, events, publicEvents };
 }

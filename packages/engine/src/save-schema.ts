@@ -76,7 +76,8 @@ const actorTurnStartedEvent = z.strictObject({ type: z.literal('actor.turn.start
   actorId: identifier });
 const actorTurnCompletedEvent = z.strictObject({ type: z.literal('actor.turn.completed'), eventId: identifier,
   actorId: identifier, actionType: z.enum([
-    'move', 'wait', 'bump-attack', 'pickup', 'drop', 'split-stack', 'fire', 'throw-item', 'use-item',
+    'move', 'wait', 'bump-attack', 'pickup', 'drop', 'split-stack', 'fire', 'throw-item', 'use-item', 'equip', 'unequip',
+    'toggle-light', 'refuel',
   ]) });
 const actorMovedEvent = z.strictObject({ type: z.literal('actor.moved'), eventId: identifier,
   actorId: identifier, from: point, to: point });
@@ -92,6 +93,14 @@ const itemThrownEvent = z.strictObject({ type: z.literal('item.thrown'), eventId
   actorId: identifier, itemId: identifier, quantity: positiveQuantity, to: point });
 const itemUsedEvent = z.strictObject({ type: z.literal('item.used'), eventId: identifier,
   actorId: identifier, itemId: identifier, targetActorId: identifier });
+const itemEquippedEvent = z.strictObject({ type: z.literal('item.equipped'), eventId: identifier,
+  actorId: identifier, itemId: identifier, slot: equipmentSlot });
+const itemUnequippedEvent = z.strictObject({ type: z.literal('item.unequipped'), eventId: identifier,
+  actorId: identifier, itemId: identifier, slot: equipmentSlot });
+const itemLightToggledEvent = z.strictObject({ type: z.literal('item.light-toggled'), eventId: identifier,
+  actorId: identifier, itemId: identifier, enabled: z.boolean() });
+const itemRefueledEvent = z.strictObject({ type: z.literal('item.refueled'), eventId: identifier,
+  actorId: identifier, itemId: identifier, fuelItemId: identifier, quantity: positiveQuantity, fuel: safeNonNegative });
 const event = z.discriminatedUnion('type', [
   movedEvent, waitedEvent, invalidEvent, attackMissedEvent, attackHitEvent, actorDamagedEvent,
   actorDiedEvent, actorHealedEvent, conditionAppliedEvent, conditionRemovedEvent, actorForcedMoveEvent,
@@ -100,6 +109,8 @@ const event = z.discriminatedUnion('type', [
   itemConsumedEvent,
   itemThrownEvent,
   itemUsedEvent,
+  itemEquippedEvent, itemUnequippedEvent,
+  itemLightToggledEvent, itemRefueledEvent,
 ]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
 const invalidResult = z.strictObject({ status: z.literal('invalid'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative, reason: blockReason });
@@ -550,6 +561,9 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     const commandItemId = 'itemId' in recordValue.command ? recordValue.command.itemId : undefined;
     const splitNewItemId = recordValue.command.type === 'split-stack' ? recordValue.command.newItemId : undefined;
     const commandQuantity = 'quantity' in recordValue.command ? recordValue.command.quantity : undefined;
+    const commandSlot = 'slot' in recordValue.command ? recordValue.command.slot : undefined;
+    const commandEnabled = recordValue.command.type === 'toggle-light' ? recordValue.command.enabled : undefined;
+    const commandFuelItemId = recordValue.command.type === 'refuel' ? recordValue.command.fuelItemId : undefined;
     const eventValue = recordValue.result.status === 'invalid'
       ? recordValue.events.find((entry) => entry.type === 'action.invalid')
       : recordValue.command.type === 'wait'
@@ -581,6 +595,21 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                       : recordValue.command.type === 'use-item'
                         ? recordValue.events.find((entry) => entry.type === 'item.used'
                           && entry.actorId === run.hero.actorId && entry.itemId === commandItemId)
+                        : recordValue.command.type === 'equip'
+                          ? recordValue.events.find((entry) => entry.type === 'item.equipped'
+                            && entry.actorId === run.hero.actorId && entry.itemId === commandItemId
+                            && entry.slot === commandSlot)
+                          : recordValue.command.type === 'unequip'
+                            ? recordValue.events.find((entry) => entry.type === 'item.unequipped'
+                              && entry.actorId === run.hero.actorId && entry.slot === commandSlot)
+                            : recordValue.command.type === 'toggle-light'
+                              ? recordValue.events.find((entry) => entry.type === 'item.light-toggled'
+                                && entry.actorId === run.hero.actorId && entry.itemId === commandItemId
+                                && entry.enabled === commandEnabled)
+                              : recordValue.command.type === 'refuel'
+                                ? recordValue.events.find((entry) => entry.type === 'item.refueled'
+                                  && entry.actorId === run.hero.actorId && entry.itemId === commandItemId
+                                  && entry.fuelItemId === commandFuelItemId)
           : undefined;
     if (!eventValue) fail(`${path}.events`, 'processed result has no matching event');
     if (recordValue.result.status === 'invalid') {
@@ -614,6 +643,19 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     } else if (recordValue.command.type === 'use-item' && eventValue.type === 'item.used'
       && eventValue.actorId === run.hero.actorId && eventValue.itemId === recordValue.command.itemId) {
       // The item's authored effects determine whether and how much quantity is consumed.
+    } else if ((recordValue.command.type === 'equip' && eventValue.type === 'item.equipped')
+      || (recordValue.command.type === 'unequip' && eventValue.type === 'item.unequipped')) {
+      if (eventValue.actorId !== run.hero.actorId || eventValue.slot !== recordValue.command.slot) {
+        fail(`${path}.events`, 'equipment command and event are inconsistent');
+      }
+    } else if (recordValue.command.type === 'toggle-light' && eventValue.type === 'item.light-toggled'
+      && eventValue.actorId === run.hero.actorId && eventValue.itemId === recordValue.command.itemId
+      && eventValue.enabled === recordValue.command.enabled) {
+      // Item state carries the resulting enabled flag.
+    } else if (recordValue.command.type === 'refuel' && eventValue.type === 'item.refueled'
+      && eventValue.actorId === run.hero.actorId && eventValue.itemId === recordValue.command.itemId
+      && eventValue.fuelItemId === recordValue.command.fuelItemId) {
+      if (eventValue.quantity > recordValue.command.quantity) fail(`${path}.events`, 'refuel event exceeds requested quantity');
     } else fail(`${path}.events`, 'applied command and event are inconsistent');
     if (recordValue.result.revision < previousRevision || recordValue.result.revision > run.revision) fail(`${path}.result.revision`, 'record revisions are not monotonic');
     if (recordValue.result.turn > run.turn) fail(`${path}.result.turn`, 'record turn exceeds current turn');
@@ -646,19 +688,25 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
             && entry.actorId === run.hero.actorId)
             ?? recordValue.events.find((entry) => (entry.type === 'item.picked-up' || entry.type === 'item.dropped'
               || entry.type === 'item.stack-split' || entry.type === 'item.thrown' || entry.type === 'item.used')
+              && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => (entry.type === 'item.equipped' || entry.type === 'item.unequipped')
+              && entry.actorId === run.hero.actorId)
+            ?? recordValue.events.find((entry) => (entry.type === 'item.light-toggled' || entry.type === 'item.refueled')
               && entry.actorId === run.hero.actorId)!;
     const path = `recentCommands.${index}`;
     if (recordValue.result.status === 'invalid') {
       if (recordValue.command.type !== 'move') {
         const inventoryCommand = recordValue.command.type === 'pickup' || recordValue.command.type === 'drop'
-          || recordValue.command.type === 'split-stack';
+          || recordValue.command.type === 'split-stack' || recordValue.command.type === 'equip'
+          || recordValue.command.type === 'unequip' || recordValue.command.type === 'refuel'
+          || recordValue.command.type === 'toggle-light';
         const inventoryReason = recordValue.result.reason === 'inventory.full'
           || recordValue.result.reason.startsWith('item.');
         const targetReason = recordValue.result.reason.startsWith('target.');
         const targetingCommand = recordValue.command.type === 'fire' || recordValue.command.type === 'cast'
           || recordValue.command.type === 'throw-item' || recordValue.command.type === 'use-item';
         if (inventoryReason && !inventoryCommand) {
-          if (recordValue.command.type !== 'fire' && recordValue.command.type !== 'throw-item'
+          if (!inventoryCommand && recordValue.command.type !== 'fire' && recordValue.command.type !== 'throw-item'
             && recordValue.command.type !== 'use-item') {
             fail(`${path}.result.reason`, 'inventory reasons require an item command');
           }
@@ -686,7 +734,9 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     if (recordValue.command.type === 'attack' || recordValue.command.type === 'pickup'
       || recordValue.command.type === 'drop' || recordValue.command.type === 'split-stack'
       || recordValue.command.type === 'fire' || recordValue.command.type === 'throw-item'
-      || recordValue.command.type === 'use-item') continue;
+      || recordValue.command.type === 'use-item' || recordValue.command.type === 'equip'
+      || recordValue.command.type === 'unequip' || recordValue.command.type === 'toggle-light'
+      || recordValue.command.type === 'refuel') continue;
     if (recordValue.command.type !== 'move') fail(`${path}.events`, 'move result and event are inconsistent');
     if (eventValue.type === 'attack.hit' || eventValue.type === 'attack.missed' || eventValue.type === 'reaction.triggered') continue;
     if (eventValue.type !== 'hero.moved') fail(`${path}.events`, 'move result and event are inconsistent');

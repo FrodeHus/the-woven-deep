@@ -87,6 +87,9 @@ function equipmentIssues(file: string, item: ItemContentEntry): ContentCompileIs
   if (equipment.handedness === 'one-handed' && !slots.has('main-hand') && !slots.has('off-hand')) {
     issues.push(issue(file, `${path}.handedness`, 'one-handed equipment must fit a hand slot'));
   }
+  if (equipment.handedness === 'one-handed' && reserved.size > 0) {
+    issues.push(issue(file, `${path}.reservedSlots`, 'one-handed equipment cannot reserve another slot'));
+  }
   if (equipment.handedness === 'two-handed') {
     if (!slots.has('main-hand')) issues.push(issue(file, `${path}.slots`, 'two-handed equipment must use the main-hand slot'));
     if (!reserved.has('off-hand')) issues.push(issue(file, `${path}.reservedSlots`, 'two-handed equipment must reserve the off-hand slot'));

@@ -1,4 +1,4 @@
-import type { CompiledContentPack, ContentEntry, ItemContentEntry } from '@woven-deep/content';
+import { DERIVED_STAT_NAMES, type CompiledContentPack, type ContentEntry, type ItemContentEntry } from '@woven-deep/content';
 import type { ActiveRun } from './model.js';
 
 function entryMap(pack: CompiledContentPack): ReadonlyMap<string, ContentEntry> {
@@ -37,8 +37,44 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
       || item.fuel > definition.light.fuelCapacity)) {
       throw new Error(`content-bound validation: light item ${item.itemId} has invalid fuel state`);
     }
+    for (const name of Object.keys(item.enchantment?.modifiers ?? {})) {
+      if (!(DERIVED_STAT_NAMES as readonly string[]).includes(name)) {
+        throw new Error(`content-bound validation: item ${item.itemId} enchantment modifier ${name} is unknown`);
+      }
+    }
+  }
+  for (const entry of pack.entries) {
+    if (entry.kind !== 'item' || !entry.equipment) continue;
+    const equipment = entry.equipment;
+    if (equipment.handedness === 'one-handed' && equipment.reservedSlots.length > 0) {
+      throw new Error(`content-bound validation: item ${entry.id} one-handed handedness cannot reserve slots`);
+    }
+    if (equipment.handedness === 'two-handed'
+      && (!equipment.slots.includes('main-hand') || !equipment.reservedSlots.includes('off-hand'))) {
+      throw new Error(`content-bound validation: item ${entry.id} two-handed handedness requires main-hand and off-hand reserved slots`);
+    }
+    if (equipment.handedness === 'none'
+      && (equipment.slots.some((slot) => slot === 'main-hand' || slot === 'off-hand')
+        || equipment.reservedSlots.length > 0)) {
+      throw new Error(`content-bound validation: item ${entry.id} non-handed equipment cannot use reserved slots`);
+    }
   }
   for (const actor of run.actors) {
+    const claimed = new Map<string, string>();
+    for (const [slot, itemId] of Object.entries(actor.equipment)) {
+      if (itemId === null) continue;
+      const item = run.items.find((candidate) => candidate.itemId === itemId);
+      if (!item) throw new Error(`content-bound validation: equipped item ${itemId} does not exist`);
+      const equipment = itemDefinition(entries, item.contentId).equipment;
+      if (!equipment) throw new Error(`content-bound validation: item ${itemId} is not equipment`);
+      for (const occupied of [slot, ...equipment.reservedSlots]) {
+        const existing = claimed.get(occupied);
+        if (existing && existing !== item.itemId) {
+          throw new Error(`content-bound validation: equipment items ${existing} and ${item.itemId} overlap slot ${occupied}`);
+        }
+        claimed.set(occupied, item.itemId);
+      }
+    }
     if (actor.playerControlled || actor.behaviorId === null) continue;
     const definition = entries.get(actor.contentId);
     if (!definition || definition.kind !== 'monster') {

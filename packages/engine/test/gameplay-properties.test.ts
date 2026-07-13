@@ -2,7 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
   advanceToNextReady, createDemoContentPack, createDemoRun, mergeStacks, selectReadyActor,
-  splitStack, stableJson, type ItemInstance,
+  splitStack, stableJson, type ItemInstance, itemLightSources,
 } from '../src/index.js';
 import type { ItemContentEntry } from '@woven-deep/content';
 import { actor, schedulerStateArbitrary } from './arbitraries.js';
@@ -92,5 +92,32 @@ describe('inventory conservation properties', () => {
         }))).toBe(stableJson(first));
       },
     ), { seed: 0x4a04, numRuns: 500 });
+  });
+});
+
+describe('item light properties', () => {
+  it('never emits light from a backpack, empty fuel, or a disabled item', () => {
+    fc.assert(fc.property(
+      fc.boolean(), fc.integer({ min: 0, max: 100 }), fc.constantFrom('backpack', 'equipped', 'floor'),
+      (enabled, fuel, locationType) => {
+        const definition: ItemContentEntry = {
+          kind: 'item', id: 'item.light-property', name: 'Property light', glyph: 'i', color: '#ffffff', tags: [],
+          category: 'light', stackLimit: 1, price: 1, rarity: 'common', minDepth: 0, maxDepth: 20, actionCost: 100,
+          equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] }, combat: null,
+          light: { color: [255, 255, 255], radius: 3, strength: 100, fuelCapacity: 100,
+            fuelPerTime: 1, warningThresholds: [10], fuelTags: ['oil'] },
+          identification: { mode: 'known', groupId: null, appearances: [] }, effects: [],
+        };
+        const base = createDemoRun();
+        const location = locationType === 'backpack' ? { type: 'backpack' as const, actorId: 'hero.demo' }
+          : locationType === 'equipped' ? { type: 'equipped' as const, actorId: 'hero.demo', slot: 'off-hand' as const }
+            : { type: 'floor' as const, floorId: 'floor.demo', x: 1, y: 1 };
+        const instance: ItemInstance = { itemId: 'item.light-property.1', contentId: definition.id,
+          quantity: 1, condition: 100, enchantment: null, identified: true, charges: null, fuel, enabled, location };
+        const content = { ...createDemoContentPack(), entries: [...createDemoContentPack().entries, definition] };
+        const emitted = itemLightSources({ run: { ...base, items: [instance] }, content, floorId: 'floor.demo' });
+        expect(emitted.length).toBe(enabled && fuel > 0 && locationType !== 'backpack' ? 1 : 0);
+      },
+    ), { seed: 0x4a05, numRuns: 500 });
   });
 });

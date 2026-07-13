@@ -1,11 +1,12 @@
 import type { BalanceContentEntry, CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
-import { heroActor, heroPerception } from './actor-model.js';
+import { heroActor, heroPerception, type EquipmentSlot } from './actor-model.js';
 import { movementAction } from './movement.js';
 import { actorHasConditionTrait } from './conditions.js';
 import { dropItem, pickupItem, splitStack } from './inventory.js';
 import { refreshKnowledge } from './perception.js';
 import { validateTarget } from './targeting.js';
 import { resolveEffectSequence } from './effects.js';
+import { equipItem, itemLightSources, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
 import type {
   ActiveRun, DecisionRequiredResult, GameCommand, InvalidActionReason, OpaqueId, Point,
 } from './model.js';
@@ -57,13 +58,30 @@ export interface UseItemAction {
   readonly type: 'use-item'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
   readonly targetActorId: OpaqueId; readonly cost: number;
 }
+export interface EquipAction {
+  readonly type: 'equip'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
+  readonly slot: EquipmentSlot; readonly cost: number;
+}
+export interface UnequipAction {
+  readonly type: 'unequip'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
+  readonly slot: EquipmentSlot; readonly cost: number;
+}
+export interface ToggleLightAction {
+  readonly type: 'toggle-light'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
+  readonly enabled: boolean; readonly cost: number;
+}
+export interface RefuelAction {
+  readonly type: 'refuel'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
+  readonly fuelItemId: OpaqueId; readonly quantity: number; readonly cost: number;
+}
 
 export type GameAction = MoveAction | WaitAction | BumpAttackAction | PickupAction | DropAction | SplitStackAction
-  | FireAction | ThrowItemAction | UseItemAction;
+  | FireAction | ThrowItemAction | UseItemAction | EquipAction | UnequipAction | ToggleLightAction | RefuelAction;
 export type ActionResolverRegistry = Readonly<Partial<Record<GameAction['type'], true>>>;
 export const ACTION_RESOLVER_REGISTRY: ActionResolverRegistry = Object.freeze({
   move: true, wait: true, 'bump-attack': true, pickup: true, drop: true, 'split-stack': true,
-  fire: true, 'throw-item': true, 'use-item': true,
+  fire: true, 'throw-item': true, 'use-item': true, equip: true, unequip: true,
+  'toggle-light': true, refuel: true,
 });
 
 export interface InvalidActionValidation {
@@ -90,14 +108,17 @@ function itemEntry(content: CompiledContentPack, contentId: OpaqueId): ItemConte
   return entry?.kind === 'item' ? entry : undefined;
 }
 
-function targetContext(state: ActiveRun, actor: ReturnType<typeof heroActor>) {
+function targetContext(state: ActiveRun, actor: ReturnType<typeof heroActor>, content: CompiledContentPack) {
   const floor = state.floors.find((candidate) => candidate.floorId === actor.floorId);
   if (!floor) throw new Error(`internal invariant: active floor ${actor.floorId} is missing`);
   const positions = new Map<string, Readonly<{ x: number; y: number }>>(
     floor.entities.map((entity) => [entity.entityId, entity] as const),
   );
   for (const candidate of state.actors) if (candidate.floorId === floor.floorId) positions.set(candidate.actorId, candidate);
-  const perception = refreshKnowledge({ floor, hero: heroPerception(state.hero, actor), actors: positions });
+  const perception = refreshKnowledge({
+    floor, hero: heroPerception(state.hero, actor), actors: positions,
+    additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }),
+  });
   return { floor, ...perception };
 }
 
@@ -207,7 +228,7 @@ export function validatePlayerAction(input: Readonly<{
     const targetActor = input.state.actors.find((candidate) => candidate.floorId === actor.floorId
       && candidate.health > 0 && candidate.x === command.target.x && candidate.y === command.target.y);
     if (!targetActor) return { status: 'invalid', reason: 'target.invalid' };
-    const perception = targetContext(input.state, actor);
+    const perception = targetContext(input.state, actor, input.context.content);
     const target = validateTarget({
       targetingId: 'target.line', sourceActor: actor, targetActorId: targetActor.actorId,
       target: command.target, floor: perception.floor, actors: input.state.actors,
@@ -232,7 +253,7 @@ export function validatePlayerAction(input: Readonly<{
     if (!transition.ok) return { status: 'invalid', reason: transition.reason };
     const definition = itemEntry(input.context.content, source.contentId);
     if (!definition) return { status: 'invalid', reason: 'item.missing' };
-    const perception = targetContext(input.state, actor);
+    const perception = targetContext(input.state, actor, input.context.content);
     const target = validateTarget({
       targetingId: 'target.cell', sourceActor: actor, targetActorId: null, target: command.target,
       floor: perception.floor, actors: input.state.actors, visibilityWords: perception.visibilityWords,
@@ -284,7 +305,7 @@ export function validatePlayerAction(input: Readonly<{
       const candidate = input.state.actors.find((entry) => entry.floorId === actor.floorId
         && entry.health > 0 && entry.x === command.target!.x && entry.y === command.target!.y);
       if (!candidate) return { status: 'invalid', reason: 'target.invalid' };
-      const perception = targetContext(input.state, actor);
+      const perception = targetContext(input.state, actor, input.context.content);
       const target = validateTarget({
         targetingId: 'target.actor', sourceActor: actor, targetActorId: candidate.actorId, target: command.target,
         floor: perception.floor, actors: input.state.actors, visibilityWords: perception.visibilityWords,
@@ -311,6 +332,50 @@ export function validatePlayerAction(input: Readonly<{
       type: 'use-item', actorId: actor.actorId, itemId: source.itemId,
       targetActorId: targetActor.actorId, cost: definition.actionCost,
     };
+  }
+  if (input.command.type === 'equip') {
+    const command = input.command;
+    const transition = equipItem({
+      run: input.state, content: input.context.content, actorId: actor.actorId,
+      itemId: command.itemId, slot: command.slot,
+    });
+    if (!transition.ok) return { status: 'invalid', reason: transition.reason };
+    const definition = itemEntry(input.context.content,
+      input.state.items.find((item) => item.itemId === command.itemId)!.contentId)!;
+    return { type: 'equip', actorId: actor.actorId, itemId: command.itemId,
+      slot: command.slot, cost: definition.actionCost };
+  }
+  if (input.command.type === 'unequip') {
+    const itemId = actor.equipment[input.command.slot];
+    const transition = unequipItem({ run: input.state, actorId: actor.actorId, slot: input.command.slot });
+    if (!transition.ok || !itemId) return { status: 'invalid', reason: transition.ok ? 'item.unavailable' : transition.reason };
+    const definition = itemEntry(input.context.content,
+      input.state.items.find((item) => item.itemId === itemId)!.contentId)!;
+    return { type: 'unequip', actorId: actor.actorId, itemId,
+      slot: input.command.slot, cost: definition.actionCost };
+  }
+  if (input.command.type === 'toggle-light') {
+    const command = input.command;
+    const transition = toggleItemLight({ run: input.state, content: input.context.content,
+      actorId: actor.actorId, itemId: command.itemId, enabled: command.enabled });
+    if (!transition.ok) return { status: 'invalid', reason: transition.reason };
+    const definition = itemEntry(input.context.content,
+      input.state.items.find((item) => item.itemId === command.itemId)!.contentId)!;
+    return { type: 'toggle-light', actorId: actor.actorId, itemId: command.itemId,
+      enabled: command.enabled, cost: definition.actionCost };
+  }
+  if (input.command.type === 'refuel') {
+    const command = input.command;
+    const transition = refuelItem({ run: input.state, content: input.context.content,
+      actorId: actor.actorId, itemId: command.itemId, fuelItemId: command.fuelItemId,
+      quantity: command.quantity });
+    if (!transition.ok || transition.quantity === undefined) {
+      return { status: 'invalid', reason: transition.ok ? 'item.unavailable' : transition.reason };
+    }
+    const definition = itemEntry(input.context.content,
+      input.state.items.find((item) => item.itemId === command.itemId)!.contentId)!;
+    return { type: 'refuel', actorId: actor.actorId, itemId: command.itemId,
+      fuelItemId: command.fuelItemId, quantity: transition.quantity, cost: definition.actionCost };
   }
   return { status: 'invalid', reason: 'action.unavailable' };
 }

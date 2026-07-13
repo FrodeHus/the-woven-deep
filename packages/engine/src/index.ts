@@ -34,6 +34,7 @@ export * from './world-step.js';
 export * from './item-model.js';
 export * from './inventory.js';
 export * from './content-bound-validation.js';
+export * from './equipment.js';
 export * from './feature-model.js';
 export * from './survival-model.js';
 export * from './model.js';
