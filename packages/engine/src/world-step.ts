@@ -5,12 +5,13 @@ import { deriveActorStats } from './attributes.js';
 import { chooseBehaviorAction } from './behavior.js';
 import { resolveAttack } from './combat.js';
 import { conditionModifiers } from './conditions.js';
-import { advanceConditions, resolveEffectSequence } from './effects.js';
+import { resolveEffectSequence } from './effects.js';
 import { consumeItemQuantity, dropItem, pickupItem, splitStack } from './inventory.js';
 import {
   equipItem, equipmentModifiers, itemLightSources, refuelItem, toggleItemLight, unequipItem,
 } from './equipment.js';
 import { identifyAppearance } from './identification.js';
+import { advanceSurvival, hungerModifiers } from './survival.js';
 import { tileIndex, type ActiveRun, type DomainEvent, type OpaqueId, type Point, type Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { isVisible } from './visibility.js';
@@ -51,6 +52,7 @@ function profile(
   content: CompiledContentPack,
   items: ActiveRun['items'] = [],
   actors: ActiveRun['actors'] = [actor],
+  survival: ActiveRun['survival'] | undefined = undefined,
 ): CombatProfile {
   const monster = monsterDefinition(content, actor);
   if (monster) return {
@@ -66,7 +68,10 @@ function profile(
     formulas: balanceEntry(content).formulas,
     equipmentModifiers: equipmentModifiers({ run: { actors, items }, content, actorId: actor.actorId })
       .map((source) => source.modifiers),
-    conditionModifiers: conditionModifiers(actor, content),
+    conditionModifiers: [
+      ...conditionModifiers(actor, content),
+      hungerModifiers({ stage: survival?.hungerStage ?? 'sated', balance: balanceEntry(content) }),
+    ],
   });
   const equipped = items.filter((item) => item.location.type === 'equipped'
     && item.location.actorId === actor.actorId);
@@ -96,12 +101,13 @@ function combat(input: Readonly<{
   eventId: OpaqueId;
   content: CompiledContentPack;
   items: ActiveRun['items'];
+  survival: ActiveRun['survival'];
 }>): ReactionAttackResult {
   const attacker = input.actors.find((candidate) => candidate.actorId === input.attackerId);
   const target = input.actors.find((candidate) => candidate.actorId === input.targetActorId);
   if (!attacker || !target) throw new Error('internal invariant: combat actors must exist');
-  const attack = profile(attacker, input.content, input.items, input.actors);
-  const defense = profile(target, input.content, input.items, input.actors);
+  const attack = profile(attacker, input.content, input.items, input.actors, input.survival);
+  const defense = profile(target, input.content, input.items, input.actors, input.survival);
   return resolveAttack({
     ...input,
     accuracy: attack.accuracy,
@@ -150,7 +156,7 @@ function applyAction(input: Readonly<{
     state = transition.run;
     const target = state.items.find((item) => item.itemId === action.itemId)!;
     events.push({ type: 'item.refueled', eventId: input.eventId, actorId: actor.actorId,
-      itemId: action.itemId, fuelItemId: action.fuelItemId, quantity: action.quantity, fuel: target.fuel! });
+      itemId: action.itemId, fuelItemId: action.fuelItemId, quantity: transition.quantity!, fuel: target.fuel! });
   } else if (action.type === 'equip') {
     const transition = equipItem({ run: state, content: input.content, actorId: actor.actorId,
       itemId: action.itemId, slot: action.slot });
@@ -176,12 +182,14 @@ function applyAction(input: Readonly<{
       effects: definition.effects, actors: state.actors, items: state.items, content: input.content,
       sourceActorId: actor.actorId, sourceItemId: source.itemId, targetActorId: target.actorId,
       effectsState: state.rng.effects, worldTime: state.worldTime, eventId: input.eventId,
+      survival: state.survival,
+      survivalActorId: state.hero.actorId,
       forceMoveDirection: target.actorId === actor.actorId ? { x: 1, y: 0 } : {
         x: Math.sign(target.x - actor.x), y: Math.sign(target.y - actor.y),
       },
       operations: {},
     });
-    state = { ...state, actors: resolved.actors, items: resolved.items,
+    state = { ...state, actors: resolved.actors, items: resolved.items, survival: resolved.survival,
       rng: { ...state.rng, effects: resolved.effectsState } };
     const consumedEvents = resolved.events.filter((event) => event.type === 'item.consumed');
     events.push(...resolved.events.filter((event) => event.type !== 'item.consumed'));
@@ -205,11 +213,14 @@ function applyAction(input: Readonly<{
       attributes: actor.attributes, formulas: balanceEntry(input.content).formulas,
       equipmentModifiers: equipmentModifiers({ run: state, content: input.content, actorId: actor.actorId })
         .map((source) => source.modifiers),
-      conditionModifiers: conditionModifiers(actor, input.content),
+      conditionModifiers: [
+        ...conditionModifiers(actor, input.content),
+        hungerModifiers({ stage: state.survival.hungerStage, balance: balanceEntry(input.content) }),
+      ],
     });
     const target = actorById(state, action.targetActorId);
     if (!target) throw new Error(`internal invariant: target ${action.targetActorId} disappeared`);
-    const defense = profile(target, input.content, state.items, state.actors);
+    const defense = profile(target, input.content, state.items, state.actors, state.survival);
     const shot = resolveAttack({
       eventId: input.eventId, attackerId: actor.actorId, targetActorId: target.actorId,
       actors: state.actors, combatState: state.rng.combat,
@@ -233,10 +244,12 @@ function applyAction(input: Readonly<{
         effects: definition.effects, actors: state.actors, items: state.items, content: input.content,
         sourceActorId: actor.actorId, sourceItemId: source.itemId, targetActorId: target.actorId,
         effectsState: state.rng.effects, worldTime: state.worldTime, eventId: input.eventId,
+        survival: state.survival,
+        survivalActorId: state.hero.actorId,
         forceMoveDirection: { x: Math.sign(target.x - actor.x), y: Math.sign(target.y - actor.y) },
         operations: {},
       });
-      state = { ...state, actors: resolved.actors, items: resolved.items,
+      state = { ...state, actors: resolved.actors, items: resolved.items, survival: resolved.survival,
         rng: { ...state.rng, effects: resolved.effectsState } };
       events.push(...resolved.events);
     } else {
@@ -287,7 +300,7 @@ function applyAction(input: Readonly<{
     const reactions = resolveOpportunityAttacks({
       run: state, content: input.content, moverActorId: actor.actorId,
       from: { x: actor.x, y: actor.y }, to: action.to, eventId: input.eventId,
-      resolveAttack: (attack) => combat({ ...attack, content: input.content, items: state.items }),
+      resolveAttack: (attack) => combat({ ...attack, content: input.content, items: state.items, survival: state.survival }),
     });
     state = reactions.state;
     events.push(...reactions.events);
@@ -311,7 +324,8 @@ function applyAction(input: Readonly<{
     }
     const resolved = combat({
       actors: state.actors, combatState: state.rng.combat, attackerId: actor.actorId,
-      targetActorId: action.targetActorId, eventId: input.eventId, content: input.content, items: state.items,
+      targetActorId: action.targetActorId, eventId: input.eventId, content: input.content,
+      items: state.items, survival: state.survival,
     });
     state = { ...state, actors: resolved.actors, rng: { ...state.rng, combat: resolved.combatState } };
     events.push(...resolved.events);
@@ -335,6 +349,11 @@ function eventParticipants(event: DomainEvent): readonly OpaqueId[] {
 function eventIsPublic(event: DomainEvent, state: ActiveRun, heroId: OpaqueId, content: CompiledContentPack): boolean {
   if (event.type === 'action.invalid') return true;
   if (event.type === 'identification.appearance-revealed' || event.type === 'item.identified') return true;
+  if (event.type === 'fuel.warning' || event.type === 'item.light-extinguished') {
+    const item = state.items.find((candidate) => candidate.itemId === event.itemId);
+    if (item && (item.location.type === 'backpack' || item.location.type === 'equipped')
+      && item.location.actorId === heroId) return true;
+  }
   const participants = eventParticipants(event);
   if (participants.includes(heroId)) return true;
   const hero = actorById(state, heroId);
@@ -402,11 +421,15 @@ export function resolveWorldStep(input: Readonly<{
   while ((actorById(state, heroId)?.health ?? 0) > 0) {
     let selected = selectReadyActor(state.actors, input.content);
     if (!selected) {
+      const previousWorldTime = state.worldTime;
       const advanced = advanceToNextReady({ worldTime: state.worldTime, actors: state.actors, content: input.content });
       state = { ...state, worldTime: advanced.worldTime, actors: advanced.actors };
-      const conditions = advanceConditions({ actors: state.actors, worldTime: state.worldTime, eventId: input.eventId });
-      state = { ...state, actors: conditions.actors };
-      appendEvents(events, publicEvents, conditions.events, state, heroId, input.content);
+      const danger = state.actors.some((actor) => actor.actorId !== heroId && actor.health > 0
+        && actor.awareActorIds.includes(heroId) && relationshipBetween(state, heroId, actor.actorId) === 'hostile');
+      const survival = advanceSurvival({ state, content: input.content,
+        elapsed: state.worldTime - previousWorldTime, eventId: input.eventId, danger });
+      state = survival.state;
+      appendEvents(events, publicEvents, survival.events, state, heroId, input.content);
       selected = selectReadyActor(state.actors, input.content);
       if (!selected) break;
     }

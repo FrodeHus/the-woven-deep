@@ -13,9 +13,17 @@ entries:
     attributeMinimum: 0
     attributeMaximum: 30
     hungerMaximum: 10000
-    hungerThresholds: { hungry: 7000, weak: 8500, starving: 9500 }
+    hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 }
     starvationInterval: 500
     starvationDamage: 1
+    recoveryInterval: 500
+    recoveryAmount: 1
+    recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }
+    hungerStageModifiers:
+      sated: {}
+      hungry: {}
+      weak: { meleeAccuracy: -1, meleeDamageBonus: -1, defense: -1 }
+      starving: { meleeAccuracy: -2, meleeDamageBonus: -2, defense: -2 }
     formulas:
       maxHealth: { base: 8, vitality: 2 }
       meleeAccuracy: { might: 1 }

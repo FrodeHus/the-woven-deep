@@ -30,6 +30,8 @@ function fixture(effects: readonly any[], health = 10) {
   return {
     effects,
     actors: actors(health),
+    survival: createDemoRun().survival,
+    survivalActorId: 'hero.demo',
     content: effectContent(),
     sourceActorId: 'hero.demo',
     targetActorId: 'monster.target',

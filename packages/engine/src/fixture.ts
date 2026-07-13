@@ -14,8 +14,11 @@ export function createDemoContentPack(): CompiledContentPack {
       kind: 'balance', id: 'balance.core-gameplay', name: 'Core gameplay', tags: ['core'],
       readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400,
       energyMinimum: -10_000, energyMaximum: 10_000, attributeMinimum: 0, attributeMaximum: 30,
-      hungerMaximum: 10_000, hungerThresholds: { hungry: 7000, weak: 8500, starving: 9500 },
+      hungerMaximum: 10_000, hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 },
       starvationInterval: 500, starvationDamage: 1,
+      recoveryInterval: 500, recoveryAmount: 1,
+      recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 },
+      hungerStageModifiers: { sated: {}, hungry: {}, weak: {}, starving: {} },
       formulas: {
         maxHealth: { base: 8, vitality: 2 }, meleeAccuracy: { might: 1 }, meleeDamageBonus: { might: 1 },
         rangedAccuracy: { agility: 1 }, defense: { base: 8, agility: 1 }, search: { wits: 1 },
@@ -110,7 +113,7 @@ export function createDemoRun(): ActiveRun {
     features: [],
     relationships: [],
     survival: {
-      hungerReserve: 100,
+      hungerReserve: 10_000,
       hungerStage: 'sated',
       nextStarvationAt: null,
       emittedHungerWarnings: [],

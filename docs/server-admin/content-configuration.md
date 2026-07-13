@@ -102,9 +102,13 @@ A pack contains exactly one `balance` entry.
 | `energyMinimum`, `energyMaximum` | safe integers | Yes | Supported saved-energy bounds. |
 | `attributeMinimum`, `attributeMaximum` | non-negative safe integers | Yes | Base attribute bounds. |
 | `hungerMaximum` | positive safe integer | Yes | Maximum hunger reserve. |
-| `hungerThresholds` | object | Yes | Non-negative `hungry`, `weak`, and `starving` thresholds. |
+| `hungerThresholds` | object | Yes | Remaining-reserve boundaries satisfying `starving <= weak <= hungry < hungerMaximum`. A stage begins when reserve reaches or falls below its boundary. |
 | `starvationInterval` | positive safe integer | Yes | Time between starvation damage events. |
 | `starvationDamage` | positive safe integer | Yes | Damage per starvation event. |
+| `recoveryInterval` | positive safe integer | Yes | World-time interval between natural recovery attempts. |
+| `recoveryAmount` | non-negative safe integer | Yes | Base health restored at each recovery interval before hunger scaling. Zero disables natural recovery. |
+| `recoveryByHungerStage` | object | Yes | Integer percentages from 0 through 100 for `sated`, `hungry`, `weak`, and `starving` recovery. |
+| `hungerStageModifiers` | object | Yes | Derived-stat modifiers for each hunger stage. Each stage accepts the same closed stat names used by condition modifiers. |
 | `formulas` | map of integer maps | Yes | Derived-stat coefficients; unknown operands fail engine validation. |
 | `actionCosts` | stable-ID-to-integer map | Yes | Non-negative cost overrides such as `action.move`. |
 
@@ -124,9 +128,17 @@ entries:
     attributeMinimum: 0
     attributeMaximum: 30
     hungerMaximum: 10000
-    hungerThresholds: { hungry: 7000, weak: 8500, starving: 9500 }
+    hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 }
     starvationInterval: 500
     starvationDamage: 1
+    recoveryInterval: 500
+    recoveryAmount: 1
+    recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }
+    hungerStageModifiers:
+      sated: {}
+      hungry: {}
+      weak: { meleeAccuracy: -1, meleeDamageBonus: -1, defense: -1 }
+      starving: { meleeAccuracy: -2, meleeDamageBonus: -2, defense: -2 }
     formulas:
       maxHealth: { base: 8, vitality: 2 }
       meleeAccuracy: { might: 1 }
@@ -402,6 +414,7 @@ Each effect has `effectId`, strict `parameters`, and optional `requiresLivingTar
 |---|---|
 | `effect.damage` | `damageType` and `dice` |
 | `effect.heal` | `dice` |
+| `effect.hunger.restore` | positive integer `amount`; restoration is capped at `hungerMaximum` and reports only the effective amount |
 | `effect.condition.apply` | `conditionId`; optional positive `duration` |
 | `effect.condition.remove` | `conditionId` |
 | `effect.force-move` | positive `distance`, maximum 8 |
@@ -419,6 +432,7 @@ Damage types are `physical`, `fire`, `cold`, `lightning`, `poison`, and `arcane`
 - `condition-trait.suppresses-reactions`: prevents the actor from making reactions.
 - `condition-trait.avoids-opportunity-attacks`: prevents hostile opportunity attacks when the affected actor leaves reach.
 - `condition-trait.interrupts-rest`: interrupts rest while active.
+- `condition-trait.blocks-recovery`: prevents natural recovery while active.
 - `condition-trait.prevents-movement`: prevents voluntary movement while allowing other actions unless another trait forbids them.
 
 Traits may be combined. Descriptive tags never substitute for traits.

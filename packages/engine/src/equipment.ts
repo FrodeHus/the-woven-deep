@@ -190,6 +190,7 @@ export function toggleItemLight(input: Readonly<{
   if (!ownedBy(item, input.actorId) || !itemDefinition(input.content, item.contentId).light) {
     return { ok: false, reason: 'item.unavailable' };
   }
+  if (input.enabled && (item.fuel ?? 0) <= 0) return { ok: false, reason: 'item.unavailable' };
   return { ok: true, run: { ...input.run,
     items: input.run.items.map((candidate) => candidate.itemId === item.itemId
       ? { ...candidate, enabled: input.enabled } : candidate) } };

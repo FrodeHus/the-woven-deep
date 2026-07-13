@@ -1182,7 +1182,7 @@ git commit -m "feat: identify shuffled run items"
 - Consumes: exact scheduler elapsed time, balance hunger/fuel/recovery settings, item-backed light, conditions, healing/damage effects, and perception refresh.
 - Produces: `advanceSurvival(input)`, `hungerStage(input)`, `consumeFuel(input)`, and ordered survival/resource events.
 
-- [ ] **Step 1: Write failing hunger-stage and elapsed-time tests**
+- [x] **Step 1: Write failing hunger-stage and elapsed-time tests**
 
 ```ts
 it.each([
@@ -1202,11 +1202,11 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/survival.test.ts`
 
 Expected: FAIL because survival advancement does not exist.
 
-- [ ] **Step 2: Implement staged hunger and exact fuel consumption**
+- [x] **Step 2: Implement staged hunger and exact fuel consumption**
 
 Clamp hunger at zero, emit each crossed threshold once in chronological order, apply weak-stage modifiers through conditions/derived stats, and apply starvation damage at absolute configured deadlines. Drain fuel only from enabled equipped or floor-placed sources. Emit threshold warnings once and disable at zero. Recompute light/perception after any source disables.
 
-- [ ] **Step 3: Write failing food, refuel, and conservation tests**
+- [x] **Step 3: Write failing food, refuel, and conservation tests**
 
 ```ts
 it('records effective food restoration at the cap', () => {
@@ -1225,15 +1225,15 @@ Run: same focused command.
 
 Expected: FAIL on resource effects.
 
-- [ ] **Step 4: Implement food, refuel, toggle, and recovery**
+- [x] **Step 4: Implement food, refuel, toggle, and recovery**
 
 Food applies bounded effective restoration then its additional effect sequence. Refuel validates compatibility, ownership, positive transfer, and capacity before applying. Extinguish and relight toggle enabled state with exact events. Recovery uses elapsed time, current hunger stage, conditions, danger flag, and balance coefficients; healing is capped and reports effective values.
 
-- [ ] **Step 5: Integrate survival into every scheduler clock advance**
+- [x] **Step 5: Integrate survival into every scheduler clock advance**
 
 In `resolveWorldStep`, call `advanceSurvival` immediately after adding scheduler elapsed time and before selecting an actor made ready by that advance. If starvation or a timed condition kills the hero, stop without granting input. If it kills another actor, remove that actor from readiness. Keep survival stream consumption isolated to the effect stream only when a declared effect requires randomness.
 
-- [ ] **Step 6: Add property tests and run GREEN**
+- [x] **Step 6: Add property tests and run GREEN**
 
 Generate safe reserves, fuel stacks, elapsed values, and legal transfers. Assert bounds, conservation, monotonic world time, warning uniqueness, deterministic output, and no fuel drain from backpack/disabled/empty items.
 
@@ -1241,7 +1241,7 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/survival.test.ts tes
 
 Expected: focused examples and properties pass.
 
-- [ ] **Step 7: Run package gate and commit**
+- [x] **Step 7: Run package gate and commit**
 
 Run: `npm test --workspace @woven-deep/engine && npm run typecheck --workspace @woven-deep/engine`
 

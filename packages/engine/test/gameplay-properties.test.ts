@@ -2,7 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
   advanceToNextReady, createDemoContentPack, createDemoRun, mergeStacks, selectReadyActor,
-  splitStack, stableJson, type ItemInstance, itemLightSources,
+  splitStack, stableJson, type ItemInstance, itemLightSources, advanceSurvival, hungerStage, refuelItem,
 } from '../src/index.js';
 import type { ItemContentEntry } from '@woven-deep/content';
 import { actor, schedulerStateArbitrary } from './arbitraries.js';
@@ -119,5 +119,71 @@ describe('item light properties', () => {
         expect(emitted.length).toBe(enabled && fuel > 0 && locationType !== 'backpack' ? 1 : 0);
       },
     ), { seed: 0x4a05, numRuns: 500 });
+  });
+});
+
+describe('survival resource properties', () => {
+  const lightDefinition: ItemContentEntry = {
+    kind: 'item', id: 'item.survival-light', name: 'Survival light', glyph: 'i', color: '#ffffff', tags: [],
+    category: 'light', stackLimit: 1, price: 1, rarity: 'common', minDepth: 0, maxDepth: 20, actionCost: 100,
+    equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] }, combat: null,
+    light: { color: [255, 255, 255], radius: 3, strength: 100, fuelCapacity: 100,
+      fuelPerTime: 2, warningThresholds: [50, 10], fuelTags: ['oil'] },
+    identification: { mode: 'known', groupId: null, appearances: [] }, effects: [],
+  };
+  const fuelDefinition: ItemContentEntry = { ...lightDefinition, id: 'item.oil', name: 'Oil', category: 'fuel',
+    stackLimit: 100, tags: ['oil'], equipment: null, light: null };
+  const baseContent = createDemoContentPack();
+  const balance = baseContent.entries.find((entry) => entry.kind === 'balance')!;
+  const propertyBalance = { ...balance, hungerMaximum: 100,
+    hungerThresholds: { hungry: 70, weak: 30, starving: 0 } };
+  const content = { ...baseContent, entries: [propertyBalance,
+    ...baseContent.entries.filter((entry) => entry.kind !== 'balance'), lightDefinition, fuelDefinition] };
+
+  it('keeps hunger and fuel bounded with stable deterministic output', () => {
+    fc.assert(fc.property(
+      fc.integer({ min: 0, max: 100 }), fc.integer({ min: 0, max: 100 }),
+      fc.integer({ min: 0, max: 100 }), fc.boolean(), fc.constantFrom('backpack', 'equipped', 'floor'),
+      (reserve, fuel, elapsed, enabled, locationType) => {
+        const base = createDemoRun();
+        const location = locationType === 'backpack' ? { type: 'backpack' as const, actorId: 'hero.demo' }
+          : locationType === 'equipped' ? { type: 'equipped' as const, actorId: 'hero.demo', slot: 'off-hand' as const }
+            : { type: 'floor' as const, floorId: 'floor.demo', x: 1, y: 1 };
+        const item: ItemInstance = { itemId: 'item.survival-light.1', contentId: lightDefinition.id,
+          quantity: 1, condition: 100, enchantment: null, identified: true, charges: null,
+          fuel, enabled, location };
+        const input = { state: { ...base, worldTime: elapsed, items: [item], survival: { ...base.survival,
+          hungerReserve: reserve, hungerStage: hungerStage({ reserve, thresholds: propertyBalance.hungerThresholds }) } },
+        content, elapsed, eventId: 'event.property', danger: true };
+        const result = advanceSurvival(input);
+        expect(result.state.survival.hungerReserve).toBeGreaterThanOrEqual(0);
+        expect(result.state.survival.hungerReserve).toBeLessThanOrEqual(reserve);
+        expect(result.state.items[0]!.fuel).toBeGreaterThanOrEqual(0);
+        const shouldDrain = enabled && fuel > 0 && locationType !== 'backpack';
+        expect(result.state.items[0]!.fuel).toBe(shouldDrain ? Math.max(0, fuel - elapsed * 2) : fuel);
+        expect(stableJson(advanceSurvival(input))).toBe(stableJson(result));
+      },
+    ), { seed: 0x4a06, numRuns: 500 });
+  });
+
+  it('conserves units when refueling into limited capacity', () => {
+    fc.assert(fc.property(
+      fc.integer({ min: 0, max: 99 }), fc.integer({ min: 1, max: 100 }),
+      (targetFuel, sourceQuantity) => {
+        const base = createDemoRun();
+        const target: ItemInstance = { itemId: 'light.1', contentId: lightDefinition.id, quantity: 1,
+          condition: 100, enchantment: null, identified: true, charges: null, fuel: targetFuel, enabled: false,
+          location: { type: 'backpack', actorId: 'hero.demo' } };
+        const source: ItemInstance = { ...target, itemId: 'oil.1', contentId: fuelDefinition.id,
+          quantity: sourceQuantity, fuel: null, enabled: null };
+        const result = refuelItem({ run: { ...base, items: [target, source] }, content,
+          actorId: 'hero.demo', itemId: target.itemId, fuelItemId: source.itemId, quantity: sourceQuantity });
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const remaining = result.run.items.find((item) => item.itemId === source.itemId)?.quantity ?? 0;
+        const filled = result.run.items.find((item) => item.itemId === target.itemId)!.fuel!;
+        expect(remaining + filled).toBe(sourceQuantity + targetFuel);
+      },
+    ), { seed: 0x4a07, numRuns: 500 });
   });
 });

@@ -1,5 +1,6 @@
 import { DERIVED_STAT_NAMES, type CompiledContentPack, type ContentEntry, type ItemContentEntry } from '@woven-deep/content';
 import type { ActiveRun } from './model.js';
+import { hungerStage } from './survival.js';
 
 function entryMap(pack: CompiledContentPack): ReadonlyMap<string, ContentEntry> {
   return new Map(pack.entries.map((entry) => [entry.id, entry]));
@@ -44,8 +45,19 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
       throw new Error(`content-bound validation: known appearance ${appearanceId} was not allocated`);
     }
   }
-  const balanceCount = pack.entries.filter((entry) => entry.kind === 'balance').length;
-  if (balanceCount !== 1) throw new Error(`content-bound validation: expected one balance definition; found ${balanceCount}`);
+  const balances = pack.entries.filter((entry) => entry.kind === 'balance');
+  if (balances.length !== 1) throw new Error(`content-bound validation: expected one balance definition; found ${balances.length}`);
+  const balance = balances[0]!;
+  if (run.survival.hungerReserve > balance.hungerMaximum) {
+    throw new Error(`content-bound validation: hunger reserve exceeds maximum ${balance.hungerMaximum}`);
+  }
+  const expectedStage = hungerStage({ reserve: run.survival.hungerReserve, thresholds: balance.hungerThresholds });
+  if (run.survival.hungerStage !== expectedStage) {
+    throw new Error(`content-bound validation: hunger stage ${run.survival.hungerStage} does not match ${expectedStage}`);
+  }
+  if ((expectedStage === 'starving') !== (run.survival.nextStarvationAt !== null)) {
+    throw new Error('content-bound validation: starvation deadline must exist exactly while starving');
+  }
   for (const item of run.items) {
     const definition = itemDefinition(entries, item.contentId);
     if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0 || item.quantity > definition.stackLimit) {

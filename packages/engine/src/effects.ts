@@ -11,10 +11,13 @@ import { resolveDamage } from './combat.js';
 import { applyCondition, conditionDefinition } from './conditions.js';
 import type { ItemInstance } from './item-model.js';
 import { consumeItemQuantityFromItems } from './inventory.js';
+import type { SurvivalState } from './survival-model.js';
+import { restoreHunger } from './survival.js';
 
 export interface EffectSequenceResult {
   readonly actors: readonly ActorState[];
   readonly items: readonly ItemInstance[];
+  readonly survival: SurvivalState;
   readonly effectsState: Uint32State;
   readonly events: readonly DomainEvent[];
 }
@@ -46,12 +49,14 @@ export interface EffectSequenceInput {
   readonly operations: EffectOperations;
   readonly items?: readonly ItemInstance[];
   readonly sourceItemId?: OpaqueId;
+  readonly survival: SurvivalState;
+  readonly survivalActorId: OpaqueId;
   readonly mitigationByActorId?: Readonly<Record<OpaqueId, Readonly<{ armor: number; resistance: number; immune: boolean }>>>;
 }
 
 const DIRECT_EFFECTS = new Set([
   'effect.damage', 'effect.heal', 'effect.condition.apply', 'effect.condition.remove', 'effect.force-move',
-  'effect.item.consume',
+  'effect.item.consume', 'effect.hunger.restore',
 ]);
 
 function checkedSafeInteger(label: string, value: number): number {
@@ -123,6 +128,9 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
   }
   let actors = [...input.actors]; let state = input.effectsState; const events: DomainEvent[] = [];
   let items = [...(input.items ?? [])];
+  const balance = input.content.entries.find((entry) => entry.kind === 'balance');
+  if (!balance) throw new Error('internal invariant: balance definition does not exist');
+  let survival = input.survival;
   for (const effect of input.effects) {
     const target = actorById(actors, input.targetActorId);
     if (effect.requiresLivingTarget && target.health === 0) continue;
@@ -146,6 +154,15 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
       const rolled = rollDice(state, (effect.parameters as { dice: { count: number; sides: number; bonus: number } }).dice); state = rolled.state;
       const result = applyHealing({ actors, targetActorId: target.actorId, sourceActorId: input.sourceActorId, amount: rolled.value, eventId: input.eventId });
       actors = [...result.actors]; events.push(...result.events);
+    } else if (effect.effectId === 'effect.hunger.restore') {
+      if (target.actorId !== input.survivalActorId) {
+        throw new TypeError('effect.hunger.restore requires the survival actor as its target');
+      }
+      const result = restoreHunger({ survival,
+        amount: (effect.parameters as { amount: number }).amount,
+        maximum: balance.hungerMaximum, thresholds: balance.hungerThresholds,
+        actorId: target.actorId, eventId: input.eventId });
+      survival = result.survival; events.push(...result.events);
     } else if (effect.effectId === 'effect.condition.apply') {
       const parameters = effect.parameters as { conditionId: OpaqueId; duration?: number };
       const result = applyCondition({
@@ -187,23 +204,5 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
       actors = [...result.actors]; events.push(...result.events);
     }
   }
-  return { actors, items, effectsState: state, events };
-}
-
-export function advanceConditions(input: Readonly<{
-  actors: readonly ActorState[]; worldTime: number; eventId: OpaqueId;
-}>): Readonly<{ actors: readonly ActorState[]; events: readonly DomainEvent[] }> {
-  if (!Number.isSafeInteger(input.worldTime) || input.worldTime < 0) throw new RangeError('worldTime must be a non-negative safe integer');
-  const events: DomainEvent[] = [];
-  const actors = input.actors.map((actor) => {
-    const expired = actor.conditions.filter((condition) => condition.expiresAt !== null && condition.expiresAt <= input.worldTime);
-    for (const condition of expired) events.push({
-      type: 'condition.expired', eventId: input.eventId, actorId: actor.actorId, conditionId: condition.conditionId,
-    });
-    return expired.length === 0 ? actor : {
-      ...actor,
-      conditions: actor.conditions.filter((condition) => condition.expiresAt === null || condition.expiresAt > input.worldTime),
-    };
-  });
-  return { actors, events };
+  return { actors, items, survival, effectsState: state, events };
 }

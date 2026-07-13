@@ -187,8 +187,26 @@ const balanceEntry = z.strictObject({
   hungerThresholds: z.strictObject({ hungry: safeNonNegative, weak: safeNonNegative, starving: safeNonNegative }),
   starvationInterval: safePositive,
   starvationDamage: safePositive,
+  recoveryInterval: safePositive,
+  recoveryAmount: safeNonNegative,
+  recoveryByHungerStage: z.strictObject({
+    sated: safeNonNegative.max(100), hungry: safeNonNegative.max(100),
+    weak: safeNonNegative.max(100), starving: safeNonNegative.max(100),
+  }),
+  hungerStageModifiers: z.strictObject({
+    sated: z.partialRecord(z.enum(DERIVED_STAT_NAMES), safeInteger),
+    hungry: z.partialRecord(z.enum(DERIVED_STAT_NAMES), safeInteger),
+    weak: z.partialRecord(z.enum(DERIVED_STAT_NAMES), safeInteger),
+    starving: z.partialRecord(z.enum(DERIVED_STAT_NAMES), safeInteger),
+  }),
   formulas: z.record(z.string(), z.record(z.string(), safeInteger)),
   actionCosts: z.record(stableIdSchema, safeNonNegative),
+}).superRefine((entry, context) => {
+  const { starving, weak, hungry } = entry.hungerThresholds;
+  if (!(starving <= weak && weak <= hungry && hungry < entry.hungerMaximum)) {
+    context.addIssue({ code: 'custom', path: ['hungerThresholds'],
+      message: 'hunger thresholds must satisfy starving <= weak <= hungry < hungerMaximum' });
+  }
 });
 
 const conditionDuration = z.discriminatedUnion('mode', [

@@ -4,7 +4,7 @@ import type { AmbientLight, LightSource } from './light-model.js';
 import type { ActorState, EquipmentSlot, RelationshipOverride } from './actor-model.js';
 import type { DungeonFeature } from './feature-model.js';
 import type { IdentificationState, ItemInstance } from './item-model.js';
-import type { SurvivalState } from './survival-model.js';
+import type { HungerStage, SurvivalState } from './survival-model.js';
 import type { DamageType } from '@woven-deep/content';
 
 export type OpaqueId = string;
@@ -238,6 +238,21 @@ export interface IdentificationAppearanceRevealedEvent {
 export interface ItemIdentifiedEvent {
   readonly type: 'item.identified'; readonly eventId: OpaqueId; readonly itemId: OpaqueId;
 }
+export interface HungerStageChangedEvent {
+  readonly type: 'hunger.stage-changed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly previousStage: HungerStage; readonly stage: HungerStage; readonly reserve: number;
+}
+export interface HungerRestoredEvent {
+  readonly type: 'hunger.restored'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly amount: number; readonly reserve: number;
+}
+export interface FuelWarningEvent {
+  readonly type: 'fuel.warning'; readonly eventId: OpaqueId; readonly itemId: OpaqueId;
+  readonly threshold: number; readonly fuel: number;
+}
+export interface ItemLightExtinguishedEvent {
+  readonly type: 'item.light-extinguished'; readonly eventId: OpaqueId; readonly itemId: OpaqueId;
+}
 
 export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent | AttackMissedEvent
   | AttackHitEvent | ActorDamagedEvent | ActorDiedEvent | ActorHealedEvent | ConditionAppliedEvent
@@ -245,7 +260,8 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | ActorTurnStartedEvent | ActorTurnCompletedEvent | ActorMovedEvent | ItemPickedUpEvent | ItemDroppedEvent
   | ItemStackSplitEvent | ItemConsumedEvent | ItemThrownEvent | ItemUsedEvent | ItemEquippedEvent
   | ItemUnequippedEvent | ItemLightToggledEvent | ItemRefueledEvent
-  | IdentificationAppearanceRevealedEvent | ItemIdentifiedEvent;
+  | IdentificationAppearanceRevealedEvent | ItemIdentifiedEvent
+  | HungerStageChangedEvent | HungerRestoredEvent | FuelWarningEvent | ItemLightExtinguishedEvent;
 
 export interface AppliedCommandResult {
   readonly status: 'applied';

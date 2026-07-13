@@ -97,6 +97,13 @@ describe('active-run save codec', () => {
           sourceActorId: 'hero.demo', amount: 0, health: 20 },
         { type: 'condition.expired' as const, eventId: 'command.saved-attack', actorId: 'hero.demo',
           conditionId: 'condition.saved' },
+        { type: 'hunger.stage-changed' as const, eventId: 'command.saved-attack', actorId: 'hero.demo',
+          previousStage: 'sated' as const, stage: 'hungry' as const, reserve: 3000 },
+        { type: 'hunger.restored' as const, eventId: 'command.saved-attack', actorId: 'hero.demo',
+          amount: 5, reserve: 3005 },
+        { type: 'fuel.warning' as const, eventId: 'command.saved-attack', itemId: 'item.lantern',
+          threshold: 100, fuel: 90 },
+        { type: 'item.light-extinguished' as const, eventId: 'command.saved-attack', itemId: 'item.lantern' },
       ], publicEvents: [] }],
     };
     expect(decodeActiveRun(encodeActiveRun(withMultipleEvents))).toEqual(withMultipleEvents);

@@ -12,6 +12,7 @@ export const BEHAVIOR_PARAMETER_SCHEMAS = {
 export const EFFECT_PARAMETER_SCHEMAS = {
   'effect.damage': z.strictObject({ damageType: z.enum(damageTypes), dice: diceSchema }),
   'effect.heal': z.strictObject({ dice: diceSchema }),
+  'effect.hunger.restore': z.strictObject({ amount: safePositive }),
   'effect.condition.apply': z.strictObject({ conditionId: stableIdSchema, duration: safePositive.optional() }),
   'effect.condition.remove': z.strictObject({ conditionId: stableIdSchema }),
   'effect.force-move': z.strictObject({ distance: safePositive.max(8) }),

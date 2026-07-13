@@ -38,6 +38,7 @@ export * from './equipment.js';
 export * from './identification.js';
 export * from './feature-model.js';
 export * from './survival-model.js';
+export * from './survival.js';
 export * from './model.js';
 export * from './knowledge.js';
 export * from './random.js';

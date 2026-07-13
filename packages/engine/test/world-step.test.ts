@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CompiledContentPack, MonsterContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, ItemContentEntry, MonsterContentEntry } from '@woven-deep/content';
 import {
   createDemoContentPack,
   createDemoRun,
@@ -7,6 +7,7 @@ import {
   resolveWorldStep,
   selectReadyActor,
   type ActorState,
+  type ItemInstance,
 } from '../src/index.js';
 
 function monsterDefinition(id: string): MonsterContentEntry {
@@ -96,5 +97,39 @@ describe('atomic world steps', () => {
       'hero.waited', 'actor.turn.started', 'actor.moved', 'actor.turn.completed',
     ]);
     expect(result.publicEvents.map((event) => event.type)).toEqual(['hero.waited']);
+  });
+
+  it('advances hunger and equipped light fuel by scheduler elapsed time', () => {
+    const state = createDemoRun();
+    const definition: ItemContentEntry = {
+      kind: 'item', id: 'item.step-torch', name: 'Step torch', glyph: 'i', color: '#ffffff', tags: [],
+      category: 'light', stackLimit: 1, price: 1, rarity: 'common', minDepth: 0, maxDepth: 20, actionCost: 100,
+      equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] }, combat: null,
+      light: { color: [255, 180, 100], radius: 3, strength: 100, fuelCapacity: 2,
+        fuelPerTime: 1, warningThresholds: [1], fuelTags: ['oil'] },
+      identification: { mode: 'known', groupId: null, appearances: [] }, effects: [],
+    };
+    const item: ItemInstance = { itemId: 'item.step-torch.1', contentId: definition.id, quantity: 1,
+      condition: 100, enchantment: null, identified: true, charges: null, fuel: 2, enabled: true,
+      location: { type: 'equipped', actorId: 'hero.demo', slot: 'off-hand' } };
+    const content = { ...createDemoContentPack(), entries: [...createDemoContentPack().entries, definition] };
+    const result = resolveWorldStep({ state: { ...state, items: [item] }, content,
+      eventId: 'command.survival-step', action: { type: 'wait', actorId: 'hero.demo', cost: 100 } });
+    expect(result.state.worldTime).toBe(1);
+    expect(result.state.survival.hungerReserve).toBe(9_999);
+    expect(result.state.items[0]).toMatchObject({ fuel: 1, enabled: true });
+    expect(result.events.some((event) => event.type === 'fuel.warning')).toBe(true);
+  });
+
+  it('stops before granting input when starvation kills the hero during clock advance', () => {
+    const state = createDemoRun();
+    const hero = { ...state.actors[0]!, health: 1 };
+    const result = resolveWorldStep({ state: { ...state, actors: [hero], survival: {
+      ...state.survival, hungerReserve: 0, hungerStage: 'starving', nextStarvationAt: 1,
+    } }, content: createDemoContentPack(), eventId: 'command.starve',
+    action: { type: 'wait', actorId: hero.actorId, cost: 100 } });
+    expect(result.state.actors[0]?.health).toBe(0);
+    expect(result.events.map((event) => event.type)).toEqual(['hero.waited', 'actor.damaged', 'actor.died']);
+    expect(selectReadyActor(result.state.actors, createDemoContentPack())).toBeUndefined();
   });
 });

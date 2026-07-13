@@ -74,6 +74,26 @@ export function conditionModifiers(
   });
 }
 
+export function advanceConditions(input: Readonly<{
+  actors: readonly ActorState[]; worldTime: number; eventId: OpaqueId;
+}>): Readonly<{ actors: readonly ActorState[]; events: readonly DomainEvent[] }> {
+  if (!Number.isSafeInteger(input.worldTime) || input.worldTime < 0) {
+    throw new RangeError('worldTime must be a non-negative safe integer');
+  }
+  const events: DomainEvent[] = [];
+  const actors = input.actors.map((actor) => {
+    const expired = actor.conditions.filter((condition) => condition.expiresAt !== null && condition.expiresAt <= input.worldTime);
+    for (const condition of expired) events.push({
+      type: 'condition.expired', eventId: input.eventId, actorId: actor.actorId, conditionId: condition.conditionId,
+    });
+    return expired.length === 0 ? actor : {
+      ...actor,
+      conditions: actor.conditions.filter((condition) => condition.expiresAt === null || condition.expiresAt > input.worldTime),
+    };
+  });
+  return { actors, events };
+}
+
 function deadline(
   definition: ConditionContentEntry,
   duration: number | undefined,

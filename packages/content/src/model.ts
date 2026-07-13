@@ -14,6 +14,7 @@ export const CONDITION_TRAIT_IDS = [
   'condition-trait.avoids-opportunity-attacks',
   'condition-trait.incapacitated',
   'condition-trait.interrupts-rest',
+  'condition-trait.blocks-recovery',
   'condition-trait.prevents-movement',
   'condition-trait.suppresses-reactions',
 ] as const;
@@ -173,6 +174,10 @@ export interface BalanceContentEntry extends BaseContentEntry {
   readonly hungerThresholds: Readonly<{ hungry: number; weak: number; starving: number }>;
   readonly starvationInterval: number;
   readonly starvationDamage: number;
+  readonly recoveryInterval: number;
+  readonly recoveryAmount: number;
+  readonly recoveryByHungerStage: Readonly<Record<'sated' | 'hungry' | 'weak' | 'starving', number>>;
+  readonly hungerStageModifiers: Readonly<Record<'sated' | 'hungry' | 'weak' | 'starving', Readonly<Partial<Record<DerivedStatName, number>>>>>;
   readonly formulas: Readonly<Record<string, Readonly<Record<string, number>>>>;
   readonly actionCosts: Readonly<Record<string, number>>;
 }

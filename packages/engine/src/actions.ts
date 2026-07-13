@@ -273,6 +273,8 @@ export function validatePlayerAction(input: Readonly<{
           effects: definition.effects, actors: input.state.actors, items: input.state.items,
           content: input.context.content, sourceActorId: actor.actorId, sourceItemId: source.itemId,
           targetActorId: targetActor.actorId, effectsState: input.state.rng.effects,
+          survival: input.state.survival,
+          survivalActorId: input.state.hero.actorId,
           worldTime: input.state.worldTime, eventId: command.commandId,
           forceMoveDirection: { x: Math.sign(targetActor.x - actor.x), y: Math.sign(targetActor.y - actor.y) },
           operations: {},
@@ -319,6 +321,8 @@ export function validatePlayerAction(input: Readonly<{
         effects: definition.effects, actors: input.state.actors, items: input.state.items,
         content: input.context.content, sourceActorId: actor.actorId, sourceItemId: source.itemId,
         targetActorId: targetActor.actorId, effectsState: input.state.rng.effects,
+        survival: input.state.survival,
+        survivalActorId: input.state.hero.actorId,
         worldTime: input.state.worldTime, eventId: command.commandId,
         forceMoveDirection: targetActor.actorId === actor.actorId ? { x: 1, y: 0 } : {
           x: Math.sign(targetActor.x - actor.x), y: Math.sign(targetActor.y - actor.y),

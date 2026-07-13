@@ -104,6 +104,15 @@ const itemRefueledEvent = z.strictObject({ type: z.literal('item.refueled'), eve
 const identificationAppearanceRevealedEvent = z.strictObject({ type: z.literal('identification.appearance-revealed'),
   eventId: identifier, appearanceId: identifier, contentId: identifier });
 const itemIdentifiedEvent = z.strictObject({ type: z.literal('item.identified'), eventId: identifier, itemId: identifier });
+const hungerStageChangedEvent = z.strictObject({ type: z.literal('hunger.stage-changed'), eventId: identifier,
+  actorId: identifier, previousStage: z.enum(['sated', 'hungry', 'weak', 'starving']),
+  stage: z.enum(['sated', 'hungry', 'weak', 'starving']), reserve: safeNonNegative });
+const hungerRestoredEvent = z.strictObject({ type: z.literal('hunger.restored'), eventId: identifier,
+  actorId: identifier, amount: safeNonNegative, reserve: safeNonNegative });
+const fuelWarningEvent = z.strictObject({ type: z.literal('fuel.warning'), eventId: identifier,
+  itemId: identifier, threshold: safeNonNegative, fuel: safeNonNegative });
+const itemLightExtinguishedEvent = z.strictObject({ type: z.literal('item.light-extinguished'),
+  eventId: identifier, itemId: identifier });
 const event = z.discriminatedUnion('type', [
   movedEvent, waitedEvent, invalidEvent, attackMissedEvent, attackHitEvent, actorDamagedEvent,
   actorDiedEvent, actorHealedEvent, conditionAppliedEvent, conditionRemovedEvent, actorForcedMoveEvent,
@@ -115,6 +124,7 @@ const event = z.discriminatedUnion('type', [
   itemEquippedEvent, itemUnequippedEvent,
   itemLightToggledEvent, itemRefueledEvent,
   identificationAppearanceRevealedEvent, itemIdentifiedEvent,
+  hungerStageChangedEvent, hungerRestoredEvent, fuelWarningEvent, itemLightExtinguishedEvent,
 ]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
 const invalidResult = z.strictObject({ status: z.literal('invalid'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative, reason: blockReason });
@@ -539,6 +549,16 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
 
   validateOrderedIds(Object.keys(run.identification.appearanceByContentId), 'identification.appearanceByContentId', 'content');
   validateOrderedIds(run.identification.knownAppearanceIds, 'identification.knownAppearanceIds', 'appearance');
+  const hungerStageOrder = ['hungry', 'weak', 'starving'] as const;
+  let previousHungerWarning = -1;
+  for (const [index, warning] of run.survival.emittedHungerWarnings.entries()) {
+    const position = hungerStageOrder.indexOf(warning as (typeof hungerStageOrder)[number]);
+    if (position <= previousHungerWarning) {
+      fail(`survival.emittedHungerWarnings.${index}`, 'hunger warnings must be unique and in deterioration order');
+    }
+    previousHungerWarning = position;
+  }
+  validateOrderedIds(run.survival.emittedFuelWarnings, 'survival.emittedFuelWarnings', 'fuel warning');
   for (const [floorIndex, floorValue] of run.floors.entries()) {
     for (const [lightIndex, source] of floorValue.lights.entries()) {
       const actorId = source.location.type === 'actor' ? source.location.actorId : undefined;
