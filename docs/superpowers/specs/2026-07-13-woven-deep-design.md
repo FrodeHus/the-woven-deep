@@ -33,7 +33,7 @@ The browser may predict animation for movement into a currently visible, known-e
 
 The renderer uses DOM cells rather than canvas. Each visible map cell receives glyph, foreground color, background color, visibility state, and computed light intensity. CSS custom properties visualize brightness, tint, and restrained transitions while preserving selectable text and accessible markup.
 
-Randomness is supplied by a seeded pseudo-random number generator owned by the engine. A run seed reproduces procedural layouts and random outcomes when paired with the same command sequence and game version. In persistent-profile mode, seeds, hidden map cells, unseen actors, future random state, scoring inputs, and unlock evaluation remain server-side.
+Randomness is supplied by a seeded pseudo-random number generator owned by the engine. A run seed reproduces procedural layouts and random outcomes when paired with the same command sequence, game version, and canonical content hash. In persistent-profile mode, seeds, hidden map cells, unseen actors, future random state, scoring inputs, and unlock evaluation remain server-side.
 
 ## Player profiles and persistence
 
@@ -66,15 +66,51 @@ Mailgun credentials, the public application URL, cookie settings, and deployment
 
 The application is deployed as one conventional long-running Docker container. A mounted persistent volume stores a SQLite database configured in WAL mode. The container exposes a health endpoint and performs database migrations before accepting traffic. The operator backs up the database file through the mounted volume using a SQLite-safe backup procedure.
 
-The minimal database has five responsibilities:
+The core database has six responsibilities:
 
 - `profiles`: normalized email, versioned progression JSON, settings, and timestamps.
 - `active_runs`: authoritative run-state JSON and a last-known-good snapshot.
 - `hall_records`: immutable completed-run summaries associated with one profile.
 - `login_tokens`: hashed, single-use, expiring magic-link tokens.
 - `sessions`: hashed, expiring, revocable authenticated sessions.
+- `content_packs`: immutable compiled content indexed by canonical content hash.
 
-Balance telemetry adds a sixth table, `telemetry_runs`, containing privacy-reduced run summaries for players who opted in. Administrative access does not require a separate password system: administrators sign in through the same Mailgun magic-link flow, and the server grants read-only dashboard access only to normalized emails listed in the `ADMIN_EMAILS` deployment setting. Every admin request is authorized server-side.
+Balance telemetry adds a seventh table, `telemetry_runs`, containing privacy-reduced run summaries for players who opted in. Administrative access does not require a separate password system: administrators sign in through the same Mailgun magic-link flow, and the server grants read-only dashboard access only to normalized emails listed in the `ADMIN_EMAILS` deployment setting. Every admin request is authorized server-side.
+
+## YAML content packs
+
+Game content and balance data are defined in strict YAML files rather than hard-coded TypeScript objects. The repository organizes entries by type, including:
+
+- `content/monsters/*.yaml`
+- `content/items/*.yaml`
+- `content/spells/*.yaml`
+- `content/classes/*.yaml`
+- `content/backgrounds/*.yaml`
+- `content/traits/*.yaml`
+- `content/shops/*.yaml`
+- `content/loot-tables/*.yaml`
+- `content/vaults/*.yaml`
+- `content/unlocks/*.yaml`
+- `content/balance/*.yaml`
+
+Each file can contain one or more entries with globally stable identifiers. Adding a file adds entries without TypeScript changes when those entries compose existing engine behaviors and effects. YAML controls glyphs, presentation, statistics, tags, rarity, depth eligibility, prices, resistances, ability parameters, loot references, synergy weights, unlock criteria, and other declarative values.
+
+YAML never contains executable scripts, embedded expressions, custom tags, or new algorithms. AI models, targeting rules, procedural algorithms, and effect implementations remain registered and tested in TypeScript. YAML references them by stable identifiers such as `ai: light_hunter` or `effect: cone_fire` and supplies schema-validated parameters.
+
+At startup, the server reads the complete directory specified by `CONTENT_DIR`, falling back to the content bundled in the image. It sorts paths deterministically, parses files with custom tags disabled and bounded aliases and file sizes, then performs four validation stages:
+
+1. File and entry shape validation against versioned strict schemas, including rejection of unknown properties.
+2. Global uniqueness and stable-identifier validation.
+3. Cross-reference, dependency-cycle, range, weight, and parameter validation.
+4. Semantic checks for required foundational content, compatible effect parameters, reachable unlock rules, and valid generation pools.
+
+Any error prevents the server from accepting traffic and reports the filename, entry identifier, field path, and corrective message. Development tooling can run the same compiler independently for fast content-author feedback.
+
+Successful validation compiles YAML to canonical JSON and calculates a hash from the canonical representation, not raw YAML formatting. Startup inserts a previously unseen compiled pack into `content_packs` and marks it current. Every active run stores the exact content hash it uses. Existing runs continue with their original immutable pack after a restart, while new heroes use the current pack. Compiled packs are retained so Hall seeds remain replayable under their original content; they are small, immutable, and deduplicated by hash.
+
+Persistent-profile simulation uses the authoritative server pack. Its browser receives only presentation data and the observable definitions required by the current state. Guest mode receives the complete compiled pack because its engine runs locally; guest content is inspectable and is not a security boundary. Both modes record the same canonical content hash.
+
+Mounted content is trusted operator input and is never uploaded or edited through the player or admin web interfaces. Applying balance changes consists of editing or adding YAML files and restarting the container. The read-only admin dashboard groups results by content hash and game version so incompatible balance sets are never combined silently.
 
 ## Metaprogression
 
@@ -183,7 +219,7 @@ Each floor snapshot contains:
 - Current creatures, inventories, positions, conditions, and behavior state.
 - Ground items, reinforcements, artifact-return hazards, and floor-local counters.
 
-The current hero, town, global run counters, random-generator states, a bounded ring of recently processed command identifiers and results, and all generated floor snapshots form one versioned active-run document. SQLite stores the current document and one previous last-known-good document. The server replaces the current document at the immediate and periodic checkpoint boundaries defined above. Guest mode uses the identical serialized format in `sessionStorage`.
+The current hero, town, global run counters, random-generator states, canonical content hash, a bounded ring of recently processed command identifiers and results, and all generated floor snapshots form one versioned active-run document. SQLite stores the current document and one previous last-known-good document. The server replaces the current document at the immediate and periodic checkpoint boundaries defined above. Guest mode uses the identical serialized format in `sessionStorage`.
 
 Seeds remain part of saves and Hall records for reproducibility, debugging, and replay under the recorded game version. They are not a substitute for mutable floor state. Compact arrays and bitsets control size; the design favors simple complete snapshots over a smaller but more fragile seed-and-delta format.
 
@@ -246,11 +282,11 @@ Every dead or victorious hero produces an immutable record containing:
 - Artifact recovery and escape status.
 - Final score and its itemized breakdown.
 - Enemies defeated and discoveries made.
-- Turns survived, completion date, game version, and run seed.
+- Turns survived, completion date, game version, canonical content hash, and run seed.
 
 Records sort first by outcome tier—escaped with the Heart, recovered the Heart but died, then all other deaths—and then by score. Within the active persistent profile or guest session, filters cover outcome, class, and date. Character names may repeat because records use unique run identifiers. Server-backed records are authoritative; guest records are visibly unverified and disappear with the session.
 
-Score rewards deepest floor, milestone bosses, enemy threat values, discoveries, artifact recovery, and successful escape. A bounded turn-efficiency bonus rewards decisive play without making careful play nonviable. The run-conclusion screen itemizes every score source; balance coefficients live in tested configuration data.
+Score rewards deepest floor, milestone bosses, enemy threat values, discoveries, artifact recovery, and successful escape. A bounded turn-efficiency bonus rewards decisive play without making careful play nonviable. The run-conclusion screen itemizes every score source; balance coefficients live in validated YAML configuration.
 
 ## Statistics and memorable metrics
 
@@ -311,6 +347,7 @@ Automated verification includes:
 
 - Unit tests for commands, combat, inventory, equipment, economy, scoring, statistics, unlocks, field of view, lighting, save validation, and migrations.
 - Content tests for synergy weighting, essential-category availability, vault placement, encounter intent, and light-reactive creature rules.
+- Content-compiler tests for deterministic ordering and hashing, strict schemas, duplicate identifiers, invalid references, dependency cycles, unsafe YAML features, semantic validation, mounted content, and old-pack run resumption.
 - Seeded property tests that require every generated floor, objective, and exit to remain reachable.
 - Simulation tests covering thousands of automated turns to detect impossible states and balance outliers.
 - React component tests for profiles, character generation, locked classes, inventory, merchants, house storage, codex, records, and statistics views.
@@ -322,6 +359,6 @@ Automated verification includes:
 
 ## Initial delivery target
 
-The first complete release implements the full 20-floor artifact-and-escape loop, the town and three merchants, the current-hero house, four classes with three unlock paths, light-centered tactics, readable enemy intent, synergy-aware content pools, authored vaults, contextual onboarding, fair-death recaps, restrained positional audio, guest and persistent-profile progression, Mailgun magic-link authentication, server-authoritative profile runs, dynamic lighting, all listed screens, deterministic saves, the Hall of Records, opt-in telemetry, and the read-only admin balance dashboard. It ships as one Docker image and stores SQLite on a mounted volume.
+The first complete release implements the full 20-floor artifact-and-escape loop, the town and three merchants, the current-hero house, four classes with three unlock paths, strict YAML-authored content packs, light-centered tactics, readable enemy intent, synergy-aware content pools, authored vaults, contextual onboarding, fair-death recaps, restrained positional audio, guest and persistent-profile progression, Mailgun magic-link authentication, server-authoritative profile runs, dynamic lighting, all listed screens, deterministic saves, the Hall of Records, opt-in telemetry, and the read-only admin balance dashboard. It ships as one Docker image and stores SQLite on a mounted volume.
 
 Content quantities—enemy count, item count, spell count, room templates, and balance coefficients—are configuration-driven and may be tuned during implementation without changing this design. The release is complete only when a hero can be created, prepare in town, descend, recover the Heart, return or die, create a correct record, clear run-scoped storage, and apply profile unlocks.
