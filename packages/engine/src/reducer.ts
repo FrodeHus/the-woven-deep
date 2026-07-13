@@ -6,6 +6,7 @@ import { tileIndex } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { movementBlockReason } from './terrain.js';
 import { RECENT_COMMAND_LIMIT } from './versions.js';
+import { heroActor, heroPerception } from './actor-model.js';
 
 const DELTAS: Readonly<Record<Direction, Readonly<{ x: number; y: number }>>> = {
   north: { x: 0, y: -1 }, south: { x: 0, y: 1 }, east: { x: 1, y: 0 }, west: { x: -1, y: 0 },
@@ -22,9 +23,21 @@ function rejected(state: ActiveRun, command: GameCommand, reason: 'stale_revisio
   return { state, result: { status: 'rejected', commandId: command.commandId, revision: state.revision, turn: state.turn, reason }, events: [] };
 }
 
-function record(state: ActiveRun, command: GameCommand, result: ProcessedCommandResult, events: readonly DomainEvent[], hero = state.hero): ActiveRun {
-  const next: RecordedCommand = { command, result, events };
-  return { ...state, hero, revision: result.revision, turn: result.turn, recentCommands: [...state.recentCommands, next].slice(-RECENT_COMMAND_LIMIT) };
+function record(
+  state: ActiveRun,
+  command: GameCommand,
+  result: ProcessedCommandResult,
+  events: readonly DomainEvent[],
+  actors = state.actors,
+): ActiveRun {
+  const next: RecordedCommand = { command, result, events, publicEvents: events };
+  return {
+    ...state,
+    actors,
+    revision: result.revision,
+    turn: result.turn,
+    recentCommands: [...state.recentCommands, next].slice(-RECENT_COMMAND_LIMIT),
+  };
 }
 
 function assertCountersCanAdvance(state: ActiveRun): void {
@@ -43,16 +56,18 @@ export function resolveCommand(state: ActiveRun, command: GameCommand): CommandR
   if (command.expectedRevision !== state.revision) return rejected(state, command, 'stale_revision');
 
   if (command.type === 'wait') {
+    const actor = heroActor(state);
     assertCountersCanAdvance(state);
     const result = { status: 'applied', commandId: command.commandId, revision: state.revision + 1, turn: state.turn + 1 } as const;
-    const events = [{ type: 'hero.waited', eventId: command.commandId, heroId: state.hero.heroId, x: state.hero.x, y: state.hero.y }] as const;
+    const events = [{ type: 'hero.waited', eventId: command.commandId, heroId: actor.actorId, x: actor.x, y: actor.y }] as const;
     return { state: record(state, command, result, events), result, events };
   }
 
-  const floor = state.floors.find((candidate) => candidate.floorId === state.hero.floorId);
-  if (!floor) throw new Error(`active floor ${state.hero.floorId} is missing`);
+  const actor = heroActor(state);
+  const floor = state.floors.find((candidate) => candidate.floorId === actor.floorId);
+  if (!floor) throw new Error(`active floor ${actor.floorId} is missing`);
   const delta = DELTAS[command.direction];
-  const target = { x: state.hero.x + delta.x, y: state.hero.y + delta.y };
+  const target = { x: actor.x + delta.x, y: actor.y + delta.y };
   const index = tileIndex(floor, target.x, target.y);
   const reason = index === undefined ? 'blocked.bounds' : movementBlockReason(floor.tiles[index]!);
   if (reason) {
@@ -63,14 +78,17 @@ export function resolveCommand(state: ActiveRun, command: GameCommand): CommandR
 
   assertCountersCanAdvance(state);
   const result = { status: 'applied', commandId: command.commandId, revision: state.revision + 1, turn: state.turn + 1 } as const;
-  const events = [{ type: 'hero.moved', eventId: command.commandId, heroId: state.hero.heroId, from: { x: state.hero.x, y: state.hero.y }, to: target }] as const;
-  const hero = { ...state.hero, ...target };
-  const moved = record(state, command, result, events, hero);
+  const events = [{ type: 'hero.moved', eventId: command.commandId, heroId: actor.actorId, from: { x: actor.x, y: actor.y }, to: target }] as const;
+  const movedActor = { ...actor, ...target };
+  const nextActors = state.actors.map((candidate) => candidate.actorId === movedActor.actorId ? movedActor : candidate);
+  const moved = record(state, command, result, events, nextActors);
   const actors = new Map<string, Readonly<{ x: number; y: number }>>(
     floor.entities.map((entity) => [entity.entityId, entity] as const),
   );
-  actors.set(hero.heroId, hero);
-  const knowledge = refreshKnowledge({ floor, hero, actors }).knowledge;
+  for (const candidate of nextActors) {
+    if (candidate.floorId === floor.floorId) actors.set(candidate.actorId, candidate);
+  }
+  const knowledge = refreshKnowledge({ floor, hero: heroPerception(state.hero, movedActor), actors }).knowledge;
   const floors = state.floors.map((candidate) => candidate === floor ? { ...candidate, knowledge } : candidate);
   return { state: { ...moved, floors }, result, events };
 }

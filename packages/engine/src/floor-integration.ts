@@ -5,6 +5,7 @@ import type { ActiveRun, Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { isNonZeroState } from './random.js';
 import { validateActiveRun } from './save-schema.js';
+import { heroActor, heroPerception } from './actor-model.js';
 
 function assertState(value: Uint32State, label: string): void {
   if (!Array.isArray(value) || value.length !== 4
@@ -44,7 +45,7 @@ export function addGeneratedFloor(
   }
 
   const transitioningToInsertedFloor = run.activeFloorId === generated.floor.floorId
-    && run.hero.floorId === generated.floor.floorId
+    && heroActor(run).floorId === generated.floor.floorId
     && !run.floors.some((floor) => floor.floorId === generated.floor.floorId);
   if (!transitioningToInsertedFloor) validateActiveRun(run);
 
@@ -53,8 +54,12 @@ export function addGeneratedFloor(
     const actors = new Map<string, Readonly<{ x: number; y: number }>>(
       floor.entities.map((entity) => [entity.entityId, entity] as const),
     );
-    actors.set(run.hero.heroId, run.hero);
-    floor = { ...floor, knowledge: refreshKnowledge({ floor, hero: run.hero, actors }).knowledge };
+    const actor = heroActor(run);
+    actors.set(actor.actorId, actor);
+    floor = {
+      ...floor,
+      knowledge: refreshKnowledge({ floor, hero: heroPerception(run.hero, actor), actors }).knowledge,
+    };
   }
 
   return validateActiveRun({

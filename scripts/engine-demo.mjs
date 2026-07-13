@@ -5,6 +5,7 @@ import {
   createDemoRun,
   decodeActiveRun,
   encodeActiveRun,
+  heroActor,
   resolveCommand,
   stableJson,
 } from '../packages/engine/dist/index.js';
@@ -120,7 +121,8 @@ function printRun(run) {
       process.stdout.write(`event ${event.type} ${stableJson(event)}\n`);
     }
   }
-  const { hero, turn, revision: finalRevision } = run.state;
+  const { turn, revision: finalRevision } = run.state;
+  const hero = heroActor(run.state);
   process.stdout.write(`hero (${hero.x},${hero.y}) turn ${turn} revision ${finalRevision}\n`);
   const hash = createHash('sha256').update(encodeActiveRun(run.state)).digest('hex');
   process.stdout.write(`state ${hash}\n`);

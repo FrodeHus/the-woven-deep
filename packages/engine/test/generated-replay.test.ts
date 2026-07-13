@@ -7,6 +7,8 @@ import {
   createGeneratedDemoRun,
   decodeActiveRun,
   encodeActiveRun,
+  heroActor,
+  heroPerception,
   projectFloor,
   refreshKnowledge,
   replayCommands,
@@ -59,9 +61,11 @@ function commandsFor(run: ActiveRun): readonly GameCommand[] {
 function observable(run: ActiveRun): string {
   const floor = run.floors.find((candidate) => candidate.floorId === run.activeFloorId)!;
   const actors = new Map(floor.entities.map((entity) => [entity.entityId, entity] as const));
-  actors.set(run.hero.heroId, run.hero);
-  const perception = refreshKnowledge({ floor, hero: run.hero, actors });
-  return stableJson(projectFloor({ floor, hero: run.hero, ...perception }));
+  const actor = heroActor(run);
+  const hero = heroPerception(run.hero, actor);
+  actors.set(actor.actorId, actor);
+  const perception = refreshKnowledge({ floor, hero, actors });
+  return stableJson(projectFloor({ floor, hero, ...perception }));
 }
 
 describe('generated save and replay continuity', () => {
@@ -70,9 +74,9 @@ describe('generated save and replay continuity', () => {
     const floor = fixture.run.floors.find((candidate) => candidate.floorId === 'floor.generated-01')!;
 
     expect(floor.vaults.map((vault) => vault.vaultId)).toContain('vault.lampwright-cache');
-    expect(fixture.run.hero).toMatchObject({ floorId: floor.floorId, ...floor.stairUp });
+    expect(heroActor(fixture.run)).toMatchObject({ floorId: floor.floorId, ...floor.stairUp });
     expect(floor.lights).toContainEqual({
-      lightId: 'light.hero-demo', location: { type: 'actor', actorId: fixture.run.hero.heroId },
+      lightId: 'light.hero-demo', location: { type: 'actor', actorId: fixture.run.hero.actorId },
       color: [255, 179, 71], radius: 7, strength: 180, enabled: true, falloff: 'linear',
       vaultPlacementId: null, presentation: null,
     });

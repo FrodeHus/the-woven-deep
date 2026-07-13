@@ -1,6 +1,10 @@
 import type { RngStreamName } from './versions.js';
 import type { FloorKnowledge } from './knowledge.js';
 import type { AmbientLight, LightSource } from './light-model.js';
+import type { ActorState, RelationshipOverride } from './actor-model.js';
+import type { DungeonFeature } from './feature-model.js';
+import type { IdentificationState, ItemInstance } from './item-model.js';
+import type { SurvivalState } from './survival-model.js';
 
 export type OpaqueId = string;
 export type Uint32State = readonly [number, number, number, number];
@@ -56,12 +60,10 @@ export interface FloorPlacementSlot {
 }
 
 export interface HeroState {
-  readonly heroId: OpaqueId;
+  readonly actorId: OpaqueId;
   readonly name: string;
-  readonly floorId: OpaqueId;
-  readonly x: number;
-  readonly y: number;
   readonly sightRadius: number;
+  readonly backpackCapacity: number;
 }
 
 export interface CommandEnvelope {
@@ -135,10 +137,11 @@ export interface RecordedCommand {
   readonly command: GameCommand;
   readonly result: ProcessedCommandResult;
   readonly events: readonly DomainEvent[];
+  readonly publicEvents: readonly DomainEvent[];
 }
 
 export interface ActiveRun {
-  readonly schemaVersion: 2;
+  readonly schemaVersion: 3;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly runId: OpaqueId;
@@ -146,7 +149,14 @@ export interface ActiveRun {
   readonly rng: RngStreams;
   readonly revision: number;
   readonly turn: number;
+  readonly worldTime: number;
   readonly hero: HeroState;
+  readonly actors: readonly ActorState[];
+  readonly items: readonly ItemInstance[];
+  readonly features: readonly DungeonFeature[];
+  readonly relationships: readonly RelationshipOverride[];
+  readonly survival: SurvivalState;
+  readonly identification: IdentificationState;
   readonly activeFloorId: OpaqueId;
   readonly floors: readonly FloorSnapshot[];
   readonly recentCommands: readonly RecordedCommand[];

@@ -25,7 +25,12 @@ const event = z.discriminatedUnion('type', [movedEvent, waitedEvent, invalidEven
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
 const invalidResult = z.strictObject({ status: z.literal('invalid'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative, reason: blockReason });
 const processedResult = z.discriminatedUnion('status', [appliedResult, invalidResult]);
-const recorded = z.strictObject({ command, result: processedResult, events: z.array(event).readonly() });
+const recorded = z.strictObject({
+  command,
+  result: processedResult,
+  events: z.array(event).readonly(),
+  publicEvents: z.array(event).readonly(),
+});
 const entity = z.strictObject({ entityId: identifier, x: safeNonNegative, y: safeNonNegative });
 const color = z.tuple([uint8, uint8, uint8]);
 const ambient = z.strictObject({ color, strength: uint8 });
@@ -66,7 +71,109 @@ const floor = z.strictObject({
   themeId: identifier, ambient, knowledge, lights: z.array(light).readonly(), stairUp: point.nullable(), stairDown: point.nullable(),
   vaults: z.array(vault).readonly(), placementSlots: z.array(slot).readonly(),
 });
-const hero = z.strictObject({ heroId: identifier, name: heroName, floorId: identifier, x: safeNonNegative, y: safeNonNegative, sightRadius: safeNonNegative });
+const nullableIdentifier = identifier.nullable();
+const attributes = z.strictObject({
+  might: safeNonNegative,
+  agility: safeNonNegative,
+  vitality: safeNonNegative,
+  wits: safeNonNegative,
+  resolve: safeNonNegative,
+});
+const condition = z.strictObject({
+  conditionId: identifier,
+  sourceActorId: nullableIdentifier,
+  appliedAt: safeNonNegative,
+  expiresAt: safeNonNegative.nullable(),
+  stacks: z.number().int().safe().positive(),
+});
+const equipment = z.strictObject({
+  'main-hand': nullableIdentifier,
+  'off-hand': nullableIdentifier,
+  body: nullableIdentifier,
+  head: nullableIdentifier,
+  hands: nullableIdentifier,
+  feet: nullableIdentifier,
+  neck: nullableIdentifier,
+  'left-ring': nullableIdentifier,
+  'right-ring': nullableIdentifier,
+});
+const behaviorValue = z.union([z.string(), z.number().int().safe(), z.boolean(), z.null()]);
+const actor = z.strictObject({
+  actorId: identifier,
+  contentId: identifier,
+  playerControlled: z.boolean(),
+  floorId: identifier,
+  x: safeNonNegative,
+  y: safeNonNegative,
+  attributes,
+  health: safeNonNegative,
+  maxHealth: safeNonNegative,
+  energy: z.number().int().safe(),
+  speed: z.number().int().safe().positive(),
+  reactionReady: z.boolean(),
+  disposition: z.enum(['friendly', 'neutral', 'hostile']),
+  awareActorIds: z.array(identifier).readonly(),
+  conditions: z.array(condition).readonly(),
+  equipment,
+  behaviorId: nullableIdentifier,
+  behaviorState: z.record(z.string(), behaviorValue).readonly(),
+});
+const itemLocation = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('backpack'), actorId: identifier }),
+  z.strictObject({ type: z.literal('equipped'), actorId: identifier, slot: z.enum(['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring']) }),
+  z.strictObject({ type: z.literal('floor'), floorId: identifier, x: safeNonNegative, y: safeNonNegative }),
+]);
+const enchantment = z.strictObject({
+  enchantmentId: identifier,
+  modifiers: z.record(z.string(), z.number().int().safe()).readonly(),
+});
+const item = z.strictObject({
+  itemId: identifier,
+  contentId: identifier,
+  quantity: z.number().int().safe().positive(),
+  condition: safeNonNegative,
+  enchantment: enchantment.nullable(),
+  identified: z.boolean(),
+  charges: safeNonNegative.nullable(),
+  fuel: safeNonNegative.nullable(),
+  enabled: z.boolean().nullable(),
+  location: itemLocation,
+});
+const discovery = z.strictObject({
+  discoveredByActorIds: z.array(identifier).readonly(),
+  progressByActorId: z.record(identifier, safeNonNegative).readonly(),
+  attemptedContextKeys: z.array(z.string().min(1).max(256)).readonly(),
+});
+const featureBase = {
+  featureId: identifier,
+  floorId: identifier,
+  x: safeNonNegative,
+  y: safeNonNegative,
+  contentId: nullableIdentifier,
+  coverTileId: tile,
+} as const;
+const feature = z.discriminatedUnion('type', [
+  z.strictObject({ ...featureBase, type: z.literal('door'), state: z.enum(['open', 'closed', 'locked']) }),
+  z.strictObject({ ...featureBase, type: z.literal('trap'), state: z.enum(['armed', 'disabled', 'spent']), discoveryDifficulty: safeNonNegative, discovery }),
+  z.strictObject({ ...featureBase, type: z.literal('secret'), state: z.enum(['hidden', 'revealed']), discoveryDifficulty: safeNonNegative, discovery }),
+]);
+const relationship = z.strictObject({
+  leftActorId: identifier,
+  rightActorId: identifier,
+  relationship: z.enum(['friendly', 'neutral', 'hostile']),
+});
+const survival = z.strictObject({
+  hungerReserve: safeNonNegative,
+  hungerStage: z.enum(['sated', 'hungry', 'weak', 'starving']),
+  nextStarvationAt: safeNonNegative.nullable(),
+  emittedHungerWarnings: z.array(z.enum(['sated', 'hungry', 'weak', 'starving'])).readonly(),
+  emittedFuelWarnings: z.array(identifier).readonly(),
+});
+const identification = z.strictObject({
+  appearanceByContentId: z.record(identifier, identifier).readonly(),
+  knownAppearanceIds: z.array(identifier).readonly(),
+});
+const hero = z.strictObject({ actorId: identifier, name: heroName, sightRadius: safeNonNegative, backpackCapacity: safeNonNegative });
 const rngEntries = Object.fromEntries(RNG_STREAM_NAMES.map((name) => [name, uint32State]));
 const directionOffsets: Readonly<Record<Direction, Readonly<{ x: number; y: number }>>> = {
   north: { x: 0, y: -1 }, south: { x: 0, y: 1 }, east: { x: 1, y: 0 }, west: { x: -1, y: 0 },
@@ -76,7 +183,10 @@ const activeRunSchema = z.strictObject({
   schemaVersion: z.literal(SAVE_SCHEMA_VERSION), gameVersion: z.literal(ENGINE_GAME_VERSION),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/), runId: identifier, runSeed: uint32Tuple,
   rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
-  revision: safeNonNegative, turn: safeNonNegative, hero, activeFloorId: identifier,
+  revision: safeNonNegative, turn: safeNonNegative, worldTime: safeNonNegative,
+  hero, actors: z.array(actor).min(1).readonly(), items: z.array(item).readonly(), features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(), survival, identification,
+  activeFloorId: identifier,
   floors: z.array(floor).min(1).readonly(), recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
 });
 
@@ -223,19 +333,110 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   }
   const activeFloor = run.floors.find((candidate) => candidate.floorId === run.activeFloorId);
   if (!activeFloor) fail('activeFloorId', 'active floor does not exist');
-  if (run.hero.floorId !== run.activeFloorId) fail('hero.floorId', 'hero must occupy the active floor');
-  ensureWalkable(activeFloor, run.hero.x, run.hero.y, 'hero');
-  if (globalIds.entities.has(run.hero.heroId)) fail('hero.heroId', 'hero identifier conflicts with a saved entity');
+
+  validateOrderedIds(run.actors.map((entry) => entry.actorId), 'actors', 'actor', 'actorId');
+  const actors = new Map(run.actors.map((entry) => [entry.actorId, entry]));
+  const occupiedCells = new Set<string>();
+  for (const [actorIndex, actorValue] of run.actors.entries()) {
+    const path = `actors.${actorIndex}`;
+    const actorFloor = run.floors.find((candidate) => candidate.floorId === actorValue.floorId);
+    if (!actorFloor) fail(`${path}.floorId`, 'actor floor does not exist');
+    ensureWalkable(actorFloor, actorValue.x, actorValue.y, path);
+    if (actorValue.health > actorValue.maxHealth) fail(`${path}.health`, 'health exceeds maximum health');
+    validateOrderedIds(actorValue.awareActorIds, `${path}.awareActorIds`, 'aware actor');
+    for (const [awareIndex, awareActorId] of actorValue.awareActorIds.entries()) {
+      if (awareActorId === actorValue.actorId) fail(`${path}.awareActorIds.${awareIndex}`, 'actor cannot be aware of itself');
+      if (!actors.has(awareActorId)) fail(`${path}.awareActorIds.${awareIndex}`, 'aware actor does not exist');
+    }
+    validateOrderedIds(actorValue.conditions.map((entry) => entry.conditionId), `${path}.conditions`, 'condition', 'conditionId');
+    for (const [conditionIndex, conditionValue] of actorValue.conditions.entries()) {
+      if (conditionValue.sourceActorId !== null && !actors.has(conditionValue.sourceActorId)) {
+        fail(`${path}.conditions.${conditionIndex}.sourceActorId`, 'condition source actor does not exist');
+      }
+      if (conditionValue.expiresAt !== null && conditionValue.expiresAt < conditionValue.appliedAt) {
+        fail(`${path}.conditions.${conditionIndex}.expiresAt`, 'condition cannot expire before it was applied');
+      }
+    }
+    if (actorValue.health > 0) {
+      const occupiedKey = `${actorValue.floorId}:${actorValue.x}:${actorValue.y}`;
+      if (occupiedCells.has(occupiedKey)) fail(path, 'living actors cannot share a cell');
+      occupiedCells.add(occupiedKey);
+    }
+  }
+
+  const savedHeroActor = actors.get(run.hero.actorId);
+  if (!savedHeroActor || !savedHeroActor.playerControlled) fail('hero.actorId', 'hero must reference one player-controlled actor');
+  if (savedHeroActor.floorId !== run.activeFloorId) fail('hero.actorId', 'hero actor must occupy the active floor');
+
+  validateOrderedIds(run.items.map((entry) => entry.itemId), 'items', 'item', 'itemId');
+  const items = new Map(run.items.map((entry) => [entry.itemId, entry]));
+  for (const [itemIndex, itemValue] of run.items.entries()) {
+    const path = `items.${itemIndex}`;
+    const location = itemValue.location;
+    if (location.type === 'floor') {
+      const itemFloor = run.floors.find((candidate) => candidate.floorId === location.floorId);
+      if (!itemFloor) fail(`${path}.location.floorId`, 'item floor does not exist');
+      ensureWalkable(itemFloor, location.x, location.y, `${path}.location`);
+      continue;
+    }
+    const owner = actors.get(location.actorId);
+    if (!owner) fail(`${path}.location.actorId`, 'item owner does not exist');
+    if (location.type === 'equipped' && owner.equipment[location.slot] !== itemValue.itemId) {
+      fail(`${path}.location.slot`, 'equipped item is not referenced by its actor slot');
+    }
+  }
+  for (const [actorIndex, actorValue] of run.actors.entries()) {
+    for (const [slotName, itemId] of Object.entries(actorValue.equipment)) {
+      if (itemId === null) continue;
+      const itemValue = items.get(itemId);
+      if (!itemValue) fail(`actors.${actorIndex}.equipment.${slotName}`, 'equipped item does not exist');
+      if (itemValue.location.type !== 'equipped' || itemValue.location.actorId !== actorValue.actorId || itemValue.location.slot !== slotName) {
+        fail(`actors.${actorIndex}.equipment.${slotName}`, 'equipment reference disagrees with item location');
+      }
+    }
+  }
+
+  validateOrderedIds(run.features.map((entry) => entry.featureId), 'features', 'feature', 'featureId');
+  for (const [featureIndex, featureValue] of run.features.entries()) {
+    const path = `features.${featureIndex}`;
+    const featureFloor = run.floors.find((candidate) => candidate.floorId === featureValue.floorId);
+    if (!featureFloor) fail(`${path}.floorId`, 'feature floor does not exist');
+    cell(featureFloor, featureValue.x, featureValue.y, path);
+    if (featureValue.type !== 'door') {
+      validateOrderedIds(featureValue.discovery.discoveredByActorIds, `${path}.discovery.discoveredByActorIds`, 'discovering actor');
+      validateOrderedIds(featureValue.discovery.attemptedContextKeys, `${path}.discovery.attemptedContextKeys`, 'discovery context');
+      for (const actorId of featureValue.discovery.discoveredByActorIds) {
+        if (!actors.has(actorId)) fail(`${path}.discovery.discoveredByActorIds`, 'discovering actor does not exist');
+      }
+      for (const actorId of Object.keys(featureValue.discovery.progressByActorId)) {
+        if (!actors.has(actorId)) fail(`${path}.discovery.progressByActorId.${actorId}`, 'progress actor does not exist');
+      }
+    }
+  }
+
+  let previousRelationshipKey = '';
+  for (const [relationshipIndex, relationshipValue] of run.relationships.entries()) {
+    const path = `relationships.${relationshipIndex}`;
+    if (relationshipValue.leftActorId >= relationshipValue.rightActorId) fail(`${path}.rightActorId`, 'relationship actor identifiers must be a strictly increasing pair');
+    if (!actors.has(relationshipValue.leftActorId) || !actors.has(relationshipValue.rightActorId)) fail(path, 'relationship actor does not exist');
+    const key = `${relationshipValue.leftActorId}\u0000${relationshipValue.rightActorId}`;
+    if (key <= previousRelationshipKey) fail(path, 'relationship pairs must be unique and strictly increasing');
+    previousRelationshipKey = key;
+  }
+
+  validateOrderedIds(Object.keys(run.identification.appearanceByContentId), 'identification.appearanceByContentId', 'content');
+  validateOrderedIds(run.identification.knownAppearanceIds, 'identification.knownAppearanceIds', 'appearance');
   for (const [floorIndex, floorValue] of run.floors.entries()) {
     for (const [lightIndex, source] of floorValue.lights.entries()) {
-      if (source.location.type === 'actor' && source.location.actorId === run.hero.heroId && floorValue.floorId === run.hero.floorId) continue;
       const actorId = source.location.type === 'actor' ? source.location.actorId : undefined;
+      const attachedActor = actorId === undefined ? undefined : actors.get(actorId);
+      if (attachedActor && attachedActor.floorId === floorValue.floorId) continue;
       if (actorId !== undefined && !floorValue.entities.some((entry) => entry.entityId === actorId)) {
         fail(`floors.${floorIndex}.lights.${lightIndex}.location.actorId`, 'attached actor does not exist on this floor');
       }
     }
   }
-  if (run.turn !== run.revision) fail('turn', 'turn and revision must match in schema v2');
+  if (run.turn !== run.revision) fail('turn', 'turn and revision must match in schema v3');
 
   const commandIds = new Set<string>();
   let previousRevision = 0;
@@ -245,21 +446,23 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     commandIds.add(recordValue.command.commandId);
     if (recordValue.command.commandId !== recordValue.result.commandId) fail(`${path}.result.commandId`, 'result does not match command');
     if (recordValue.events.length !== 1) fail(`${path}.events`, 'processed commands require exactly one event');
+    if (recordValue.publicEvents.length !== 1) fail(`${path}.publicEvents`, 'processed commands require exactly one public event');
     if (recordValue.events.some((entry) => entry.eventId !== recordValue.command.commandId)) fail(`${path}.events`, 'event identifier does not match command');
+    if (recordValue.publicEvents.some((entry) => entry.eventId !== recordValue.command.commandId)) fail(`${path}.publicEvents`, 'public event identifier does not match command');
     const eventValue = recordValue.events[0]!;
     if (recordValue.result.status === 'invalid') {
       if (eventValue.type !== 'action.invalid' || eventValue.commandId !== recordValue.command.commandId || eventValue.reason !== recordValue.result.reason) fail(`${path}.events.0`, 'invalid result and event are inconsistent');
     } else if (recordValue.command.type === 'wait') {
-      if (eventValue.type !== 'hero.waited' || eventValue.heroId !== run.hero.heroId) fail(`${path}.events.0`, 'wait result and event are inconsistent');
+      if (eventValue.type !== 'hero.waited' || eventValue.heroId !== run.hero.actorId) fail(`${path}.events.0`, 'wait result and event are inconsistent');
       ensureWalkable(activeFloor, eventValue.x, eventValue.y, `${path}.events.0`);
-    } else if (eventValue.type !== 'hero.moved' || eventValue.heroId !== run.hero.heroId) fail(`${path}.events.0`, 'move result and event are inconsistent');
+    } else if (eventValue.type !== 'hero.moved' || eventValue.heroId !== run.hero.actorId) fail(`${path}.events.0`, 'move result and event are inconsistent');
     else {
       ensureWalkable(activeFloor, eventValue.from.x, eventValue.from.y, `${path}.events.0.from`);
       ensureWalkable(activeFloor, eventValue.to.x, eventValue.to.y, `${path}.events.0.to`);
     }
     if (recordValue.result.revision < previousRevision || recordValue.result.revision > run.revision) fail(`${path}.result.revision`, 'record revisions are not monotonic');
     if (recordValue.result.turn > run.turn) fail(`${path}.result.turn`, 'record turn exceeds current turn');
-    if (recordValue.result.turn !== recordValue.result.revision) fail(`${path}.result.turn`, 'result turn and revision must match in schema v2');
+    if (recordValue.result.turn !== recordValue.result.revision) fail(`${path}.result.turn`, 'result turn and revision must match in schema v3');
     if (recordValue.result.status === 'applied' && recordValue.result.revision !== recordValue.command.expectedRevision + 1) fail(`${path}.result.revision`, 'applied revision is inconsistent');
     if (recordValue.result.status === 'invalid' && recordValue.result.revision !== recordValue.command.expectedRevision) fail(`${path}.result.revision`, 'invalid revision is inconsistent');
     const previousRecord = run.recentCommands[index - 1];
@@ -272,7 +475,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     if (finalRecord.result.revision !== run.revision) fail(`recentCommands.${finalIndex}.result.revision`, 'final result does not match current revision');
     if (finalRecord.result.turn !== run.turn) fail(`recentCommands.${finalIndex}.result.turn`, 'final result does not match current turn');
   }
-  let knownPosition = { x: run.hero.x, y: run.hero.y };
+  let knownPosition = { x: savedHeroActor.x, y: savedHeroActor.y };
   for (let index = run.recentCommands.length - 1; index >= 0; index -= 1) {
     const recordValue = run.recentCommands[index]!;
     const eventValue = recordValue.events[0]!;

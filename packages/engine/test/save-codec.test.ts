@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDemoRun, createUnknownKnowledge, decodeActiveRun, encodeActiveRun,
-  refreshKnowledge, resolveCommand, SaveLoadError,
+  heroPerception, refreshKnowledge, resolveCommand, SaveLoadError,
 } from '../src/index.js';
 
 describe('active-run save codec', () => {
@@ -14,22 +14,43 @@ describe('active-run save codec', () => {
       0, 1, 5, 1, 0,
       0, 0, 0, 0, 0,
     ] as const;
-    const hero = { ...base.hero, floorId: 'floor.rich', x: 1, y: 2, sightRadius: 12 };
+    const hero = { ...base.hero, sightRadius: 12 };
+    const heroActor = { ...base.actors[0]!, floorId: 'floor.rich', x: 1, y: 2 };
     const floor = {
       ...base.floors[0]!, floorId: 'floor.rich', width: 5, height: 5, tiles,
       themeId: 'theme.rich', ambient: { color: [255, 240, 224] as const, strength: 64 },
       knowledge: createUnknownKnowledge(25),
       lights: [
         { lightId: 'light.a', location: { type: 'fixed' as const, x: 2, y: 1 }, color: [255, 128, 64] as const, radius: 4, strength: 200, enabled: true, falloff: 'linear' as const, vaultPlacementId: 'placement.a', presentation: { glyph: '*', token: 'fixture.torch' } },
-        { lightId: 'light.b', location: { type: 'actor' as const, actorId: hero.heroId }, color: [64, 128, 255] as const, radius: 3, strength: 100, enabled: true, falloff: 'linear' as const, vaultPlacementId: null, presentation: null },
+        { lightId: 'light.b', location: { type: 'actor' as const, actorId: heroActor.actorId }, color: [64, 128, 255] as const, radius: 3, strength: 100, enabled: true, falloff: 'linear' as const, vaultPlacementId: null, presentation: null },
       ],
       stairUp: { x: 1, y: 1 }, stairDown: { x: 2, y: 3 },
       vaults: [{ placementId: 'placement.a', vaultId: 'vault.a', x: 1, y: 1, width: 2, height: 2, rotation: 90 as const, reflected: true, entrances: [{ x: 1, y: 2 }] }],
       placementSlots: [{ slotId: 'slot.a', vaultPlacementId: 'placement.a', kind: 'fixture' as const, required: true, tags: ['lit'], x: 2, y: 1 }],
       entities: [{ entityId: 'entity.a', x: 3, y: 2 }],
     };
-    const knowledge = refreshKnowledge({ floor, hero, actors: new Map([[hero.heroId, hero], ['entity.a', floor.entities[0]!]]) }).knowledge;
-    return { ...base, hero, activeFloorId: floor.floorId, floors: [{ ...floor, knowledge }] } as ReturnType<typeof createDemoRun>;
+    const knowledge = refreshKnowledge({
+      floor,
+      hero: heroPerception(hero, heroActor),
+      actors: new Map([[heroActor.actorId, heroActor], ['entity.a', floor.entities[0]!]]),
+    }).knowledge;
+    return {
+      ...base,
+      hero,
+      actors: [heroActor],
+      features: [{
+        featureId: 'door.rich.1',
+        type: 'door',
+        floorId: floor.floorId,
+        x: 3,
+        y: 1,
+        contentId: null,
+        coverTileId: 2,
+        state: 'closed',
+      }],
+      activeFloorId: floor.floorId,
+      floors: [{ ...floor, knowledge }],
+    } as ReturnType<typeof createDemoRun>;
   }
 
   function expectInvalidSave(state: ReturnType<typeof createDemoRun>, path: string): void {
@@ -50,7 +71,7 @@ describe('active-run save codec', () => {
     expect(encoded.startsWith('{"activeFloorId"')).toBe(true);
   });
 
-  it('round-trips all schema v2 source state without storing derived fields', () => {
+  it('round-trips all schema v3 source state without storing derived fields', () => {
     const state = richRun();
     const encoded = encodeActiveRun(state);
     expect(decodeActiveRun(encoded)).toEqual(state);
@@ -75,6 +96,7 @@ describe('active-run save codec', () => {
     ['vault-owned light outside placement', (run: any) => { run.floors[0].lights[0].location.x = 3; }],
     ['negative hero sight radius', (run: any) => { run.hero.sightRadius = -1; }],
     ['unsafe hero sight radius', (run: any) => { run.hero.sightRadius = Number.MAX_SAFE_INTEGER + 1; }],
+    ['unsafe actor behavior number', (run: any) => { run.actors[0].behaviorState.counter = Number.MAX_SAFE_INTEGER + 1; }],
     ['stair tile mismatch', (run: any) => { run.floors[0].stairUp = { x: 2, y: 1 }; }],
     ['duplicate stair positions', (run: any) => { run.floors[0].stairDown = { x: 1, y: 1 }; }],
     ['unreferenced stair-up tile', (run: any) => { run.floors[0].stairUp = null; }],
@@ -88,7 +110,7 @@ describe('active-run save codec', () => {
     ['overlapping vaults', (run: any) => { run.floors[0].vaults.push({ ...run.floors[0].vaults[0], placementId: 'placement.b', vaultId: 'vault.b' }); }],
     ['out-of-bounds vault', (run: any) => { run.floors[0].vaults[0].width = 9; }],
     ['unowned slot', (run: any) => { run.floors[0].placementSlots[0].vaultPlacementId = 'placement.missing'; }],
-  ])('rejects v2 corruption: %s', (_label, corrupt) => {
+  ])('rejects v3 corruption: %s', (_label, corrupt) => {
     const input = structuredClone(richRun()) as any;
     corrupt(input);
     expect(() => encodeActiveRun(input)).toThrow(SaveLoadError);
@@ -147,7 +169,7 @@ describe('active-run save codec', () => {
   it.each([
     ['contentHash', 'bad'],
     ['activeFloorId', 'floor.missing'],
-    ['hero.x', 99],
+    ['actors.0.x', 99],
     ['floors.0.tiles', [1]],
     ['floors.0.tiles.8', 9],
     ['rng.combat', [0, 0, 0, 0]],
@@ -169,6 +191,15 @@ describe('active-run save codec', () => {
     expect(() => decodeActiveRun(JSON.stringify({ ...createDemoRun(), surprise: true }))).toThrow(/surprise/);
   });
 
+  it.each([0, 1, 2, 4])('rejects unsupported schema version %i without partial state', (schemaVersion) => {
+    try {
+      decodeActiveRun(JSON.stringify({ schemaVersion }));
+      expect.fail('expected unsupported version');
+    } catch (error) {
+      expect(error).toMatchObject({ kind: 'unsupported_version', path: 'schemaVersion' });
+    }
+  });
+
   it('rejects duplicate floor, entity, and recent-command identifiers', () => {
     const state = createDemoRun();
     expect(() => encodeActiveRun({ ...state, floors: [...state.floors, state.floors[0]!] })).toThrow(/floorId/);
@@ -182,7 +213,7 @@ describe('active-run save codec', () => {
 
   it('rejects remaining semantic and numeric corruption boundaries', () => {
     const state = createDemoRun();
-    expect(() => encodeActiveRun({ ...state, hero: { ...state.hero, x: 0, y: 0 } })).toThrow(/walkable/);
+    expect(() => encodeActiveRun({ ...state, actors: [{ ...state.actors[0]!, x: 0, y: 0 }] })).toThrow(/walkable/);
     expect(() => encodeActiveRun({ ...state, hero: { ...state.hero, name: 'e\u0301' } })).toThrow(/hero.name|Invalid save/);
     expect(() => encodeActiveRun({ ...state, hero: { ...state.hero, name: 'Ada\u0000' } })).toThrow(/hero.name|Invalid save/);
     expect(() => encodeActiveRun({ ...state, rng: { ...state.rng, combat: [0x1_0000_0000, 1, 2, 3] } })).toThrow(/rng.combat/);
@@ -207,7 +238,7 @@ describe('active-run save codec', () => {
       ...state,
       floors: [{ ...floor, floorId: 'floor.z' }, { ...floor, floorId: 'floor.a' }],
       activeFloorId: 'floor.z',
-      hero: { ...state.hero, floorId: 'floor.z' },
+      actors: [{ ...state.actors[0]!, floorId: 'floor.z' }],
     }, 'floors.1.floorId');
   });
 
@@ -232,7 +263,7 @@ describe('active-run save codec', () => {
     const record = moved.recentCommands[0]!;
     expectInvalidSave({
       ...moved,
-      hero: { ...moved.hero, x: 1, y: 2 },
+      actors: [{ ...moved.actors[0]!, x: 1, y: 2 }],
       recentCommands: [{ ...record, events: [{ ...record.events[0]!, from: { x: 1, y: 1 }, to: { x: 1, y: 2 } }] }],
     }, 'recentCommands.0.events.0.to');
   });
@@ -242,7 +273,7 @@ describe('active-run save codec', () => {
     const record = moved.recentCommands[0]!;
     expectInvalidSave({
       ...moved,
-      hero: { ...moved.hero, x: 3, y: 1 },
+      actors: [{ ...moved.actors[0]!, x: 3, y: 1 }],
       recentCommands: [{ ...record, events: [{ ...record.events[0]!, to: { x: 3, y: 1 } }] }],
     }, 'recentCommands.0.events.0.to');
   });
@@ -253,7 +284,7 @@ describe('active-run save codec', () => {
     const finalRecord = second.recentCommands[1]!;
     expectInvalidSave({
       ...second,
-      hero: { ...second.hero, x: 2 },
+      actors: [{ ...second.actors[0]!, x: 2 }],
       recentCommands: [second.recentCommands[0]!, {
         ...finalRecord,
         events: [{ ...finalRecord.events[0]!, from: { x: 1, y: 1 }, to: { x: 2, y: 1 } }],
@@ -264,7 +295,7 @@ describe('active-run save codec', () => {
   it('rejects retained history that does not terminate at the current counters or hero', () => {
     const waited = resolveCommand(createDemoRun(), { type: 'wait', commandId: 'command.wait', expectedRevision: 0 }).state;
     expectInvalidSave({ ...waited, revision: 2, turn: 2 }, 'recentCommands.0.result.revision');
-    expectInvalidSave({ ...waited, hero: { ...waited.hero, x: 2 } }, 'recentCommands.0.events.0');
+    expectInvalidSave({ ...waited, actors: [{ ...waited.actors[0]!, x: 2 }] }, 'recentCommands.0.events.0');
   });
 
   it('rejects an invalid wait record', () => {

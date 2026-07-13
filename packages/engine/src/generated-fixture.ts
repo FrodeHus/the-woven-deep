@@ -7,6 +7,7 @@ import type { FloorSeedAllocation } from './generation-model.js';
 import { allocateFloorSeed } from './generation-random.js';
 import type { LightSource } from './light-model.js';
 import type { ActiveRun, FloorSnapshot } from './model.js';
+import { heroActor } from './actor-model.js';
 
 export interface GeneratedDemoRun {
   readonly run: ActiveRun;
@@ -36,10 +37,11 @@ export function createGeneratedDemoRun(pack: CompiledContentPack): GeneratedDemo
   const stairUp = generated.floor.stairUp;
   if (stairUp === null) throw new Error('generated demo floor must have a stair-up');
 
-  const hero = { ...base.hero, floorId: generated.floor.floorId, ...stairUp };
+  const baseHeroActor = heroActor(base);
+  const movedHeroActor = { ...baseHeroActor, floorId: generated.floor.floorId, ...stairUp };
   const carriedLight: LightSource = {
     lightId: 'light.hero-demo',
-    location: { type: 'actor', actorId: hero.heroId },
+    location: { type: 'actor', actorId: movedHeroActor.actorId },
     color: [255, 179, 71],
     radius: 7,
     strength: 180,
@@ -57,7 +59,7 @@ export function createGeneratedDemoRun(pack: CompiledContentPack): GeneratedDemo
     ...base,
     contentHash: pack.hash,
     runId: 'run.generated-demo',
-    hero,
+    actors: base.actors.map((actor) => actor.actorId === movedHeroActor.actorId ? movedHeroActor : actor),
     activeFloorId: generated.floor.floorId,
   };
   const run = addGeneratedFloor(transitional, { ...generated, floor }, allocation);
