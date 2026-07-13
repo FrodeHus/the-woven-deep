@@ -1387,7 +1387,7 @@ git commit -m "feat: reveal mutable dungeon features"
 - Consumes: complete world-step execution, recovery, visible/aware threats, sound events, hunger/fuel stages, conditions, feature/item/actor projections, and typed rest command.
 - Produces: `resolveRest(input)`, `RestStopReason`, `projectGameplayState(input)`, `projectDomainEvents(input)`, and public action/decision descriptors.
 
-- [ ] **Step 1: Write failing rest-stop tests for trait-bearing conditions**
+- [x] **Step 1: Write failing rest-stop tests for trait-bearing conditions**
 
 ```ts
 it.each([
@@ -1413,11 +1413,11 @@ Expected: FAIL because rest resolution does not exist.
 
 Include one ordinary active condition without `condition-trait.interrupts-rest` and prove it does not stop rest. Include one differently named condition with the trait and prove that it does, so no condition ID becomes a hidden rule.
 
-- [ ] **Step 2: Implement bounded rest through ordinary world steps**
+- [x] **Step 2: Implement bounded rest through ordinary world steps**
 
 Validate positive maximum duration from balance and command. Repeatedly resolve the same wait action and scheduler/time pipeline used by normal play. After every internal action/event group, evaluate stop conditions in the exact priority order listed in the spec. Return all events, elapsed time, effective healing, and one typed stop reason. Enforce maximum internal actions and never directly assign health or skip actor actions.
 
-- [ ] **Step 3: Write failing gameplay projection tests**
+- [x] **Step 3: Write failing gameplay projection tests**
 
 ```ts
 it('includes hero resources and visible actors but excludes private scheduler data', () => {
@@ -1441,13 +1441,13 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/projection.test.ts`
 
 Expected: FAIL because the gameplay projection is incomplete.
 
-- [ ] **Step 4: Implement a composed gameplay projection**
+- [x] **Step 4: Implement a composed gameplay projection**
 
 Compose the existing floor projection with hero attributes and derived explanations, health, hunger stage, observable conditions, equipment, backpack items, fuel, identification knowledge, visible actors, discovered features, ground items, and public action availability. Use item and feature projectors from prior tasks. Never copy authoritative records wholesale.
 
 Visible actor intent appears only when its next registered action is already deterministic from public state. Previews show known range, trajectory, cost, modifiers, and effect ranges without rolling or revealing unknown cells.
 
-- [ ] **Step 5: Write failing event-redaction and sound tests**
+- [x] **Step 5: Write failing event-redaction and sound tests**
 
 ```ts
 it('redacts an unseen attacker while preserving an audible direction', () => {
@@ -1462,15 +1462,15 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/event-projection.tes
 
 Expected: FAIL because authoritative events are not redacted.
 
-- [ ] **Step 6: Implement visibility-aware event projection**
+- [x] **Step 6: Implement visibility-aware event projection**
 
 Project each event against knowledge at the event's resolution point. Visible participants expose public IDs/presentation; unseen sources become categorized sounds with eight-way direction and coarse distance band. Never expose exact hidden coordinates, hidden content IDs, rolls by unseen actors, future decisions, or private state. Hero damage and resource changes remain observable even when their source is hidden. Replace the conservative projector from Task 6 and persist the finished sequence in `RecordedCommand.publicEvents`; command deduplication returns that saved sequence without re-projecting against later knowledge.
 
-- [ ] **Step 7: Add projection noninterference properties**
+- [x] **Step 7: Add projection noninterference properties**
 
 Generate pairs of valid authoritative runs that share the same player knowledge but differ only in hidden actors, features, identities, and random streams. Assert `projectGameplayState(left) === projectGameplayState(right)` and projected decisions/events contain no hidden identifiers.
 
-- [ ] **Step 8: Run GREEN and commit**
+- [x] **Step 8: Run GREEN and commit**
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/rest.test.ts test/projection.test.ts test/event-projection.test.ts test/browser-boundary.test.ts test/gameplay-properties.test.ts`
 

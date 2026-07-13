@@ -3,11 +3,16 @@ import { describe, expect, it } from 'vitest';
 import type { LightSource } from '../src/light-model.js';
 import type { TileId } from '../src/model.js';
 import {
+  createDemoContentPack,
+  createDemoRun,
   createUnknownKnowledge,
+  projectDecision,
   projectFloor,
+  projectGameplayState,
   refreshKnowledge,
   stableJson,
 } from '../src/index.js';
+import type { MonsterContentEntry } from '@woven-deep/content';
 
 const width = 9;
 const height = 7;
@@ -249,5 +254,61 @@ describe('observable floor projection', () => {
     expect(() => projectFloor({ ...input, preview: {
       color: [1, 2, 3], radius: 0, strength: 1, falloff: 'linear',
     } })).toThrow(/radius/);
+  });
+});
+
+function monsterDefinition(id: string): MonsterContentEntry {
+  return {
+    kind: 'monster', id, name: id, glyph: 'm', color: '#aa4444', tags: [], minDepth: 1, maxDepth: 20,
+    attributes: { might: 5, agility: 5, vitality: 5, wits: 5, resolve: 5 }, health: 10, speed: 100,
+    accuracy: 1, defense: 8, perception: 8, damage: { count: 1, sides: 1, bonus: 0 }, armor: 0,
+    resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 },
+    disposition: 'hostile', behaviorId: 'behavior.approach-and-attack', behaviorParameters: {},
+    runAppearanceChance: 1, rarity: 'common',
+  };
+}
+
+describe('gameplay projection', () => {
+  it('includes hero resources and visible actors without private scheduler or random state', () => {
+    const base = createDemoRun();
+    const visible = { ...base.actors[0]!, actorId: 'monster.visible', contentId: 'monster.visible',
+      playerControlled: false, disposition: 'hostile' as const, x: 2, y: 1 };
+    const hidden = { ...visible, actorId: 'monster.hidden', contentId: 'monster.hidden', x: 5, y: 3 };
+    const content = { ...createDemoContentPack(), entries: [
+      ...createDemoContentPack().entries, monsterDefinition(visible.contentId), monsterDefinition(hidden.contentId),
+    ] };
+    const json = stableJson(projectGameplayState({ state: { ...base, actors: [base.actors[0]!, visible, hidden] }, content }));
+
+    expect(json).toContain('monster.visible');
+    expect(json).toContain('hungerStage');
+    expect(json).not.toContain('monster.hidden');
+    expect(json).not.toContain('appearanceByContentId');
+    expect(json).not.toContain('reactionReady');
+    expect(json).not.toContain('rng');
+    expect(json).not.toContain('energy');
+  });
+
+  it('projects only a visible aggression target', () => {
+    const base = createDemoRun();
+    const target = { ...base.actors[0]!, actorId: 'monster.hidden', contentId: 'monster.hidden',
+      playerControlled: false, disposition: 'neutral' as const, x: 5, y: 3 };
+    const content = { ...createDemoContentPack(), entries: [
+      ...createDemoContentPack().entries, monsterDefinition(target.contentId),
+    ] };
+    expect(projectDecision({ state: { ...base, actors: [base.actors[0]!, target] }, content,
+      decision: { type: 'confirm-aggression', targetActorId: target.actorId } })).toBeUndefined();
+  });
+
+  it('is unchanged when only hidden actors and random streams differ', () => {
+    const base = createDemoRun();
+    const hidden = { ...base.actors[0]!, actorId: 'monster.hidden', contentId: 'monster.hidden',
+      playerControlled: false, disposition: 'hostile' as const, x: 5, y: 3 };
+    const content = { ...createDemoContentPack(), entries: [
+      ...createDemoContentPack().entries, monsterDefinition(hidden.contentId),
+    ] };
+    const left = projectGameplayState({ state: base, content });
+    const right = projectGameplayState({ state: { ...base, actors: [...base.actors, hidden],
+      rng: { ...base.rng, combat: [44, 55, 66, 77] } }, content });
+    expect(stableJson(left)).toBe(stableJson(right));
   });
 });

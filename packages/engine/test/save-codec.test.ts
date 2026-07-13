@@ -126,7 +126,7 @@ describe('active-run save codec', () => {
     { type: 'close-door', featureId: 'door.one' },
     { type: 'search' },
     { type: 'disarm', featureId: 'trap.one' },
-    { type: 'rest', until: 'interrupted' },
+    { type: 'rest', until: 'interrupted', maximumDuration: 500 },
   ] as const)('round-trips a processed $type command', (body) => {
     const command = { ...body, commandId: `command.${body.type}`, expectedRevision: 0 } as GameCommand;
     const state = resolveCommand(createDemoRun(), command).state;

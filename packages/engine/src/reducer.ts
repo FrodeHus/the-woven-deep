@@ -6,6 +6,7 @@ import { RECENT_COMMAND_LIMIT } from './versions.js';
 import { stableJson } from './stable-json.js';
 import { validatePlayerAction, type ResolutionContext } from './actions.js';
 import { resolveWorldStep } from './world-step.js';
+import { resolveRest } from './rest.js';
 import { validateContentBoundRun } from './content-bound-validation.js';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
@@ -63,9 +64,10 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
 
   assertCountersCanAdvance(state);
   const result = { status: 'applied', commandId: command.commandId, revision: state.revision + 1, turn: state.turn + 1 } as const;
-  const world = resolveWorldStep({
-    state, content: context.content, action: validation, eventId: command.commandId,
-  });
+  const world = validation.type === 'rest'
+    ? resolveRest({ state, content: context.content, eventId: command.commandId,
+      until: validation.until, maximumDuration: validation.maximumDuration })
+    : resolveWorldStep({ state, content: context.content, action: validation, eventId: command.commandId });
   return {
     state: record(world.state, command, result, world.events, world.publicEvents),
     result,

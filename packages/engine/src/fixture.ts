@@ -17,6 +17,7 @@ export function createDemoContentPack(): CompiledContentPack {
       hungerMaximum: 10_000, hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 },
       starvationInterval: 500, starvationDamage: 1,
       recoveryInterval: 500, recoveryAmount: 1,
+      restMaximumDuration: 5000,
       recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 },
       hungerStageModifiers: { sated: {}, hungry: {}, weak: {}, starving: {} },
       formulas: {

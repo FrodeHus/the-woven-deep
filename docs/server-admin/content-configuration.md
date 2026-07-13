@@ -107,6 +107,7 @@ A pack contains exactly one `balance` entry.
 | `starvationDamage` | positive safe integer | Yes | Damage per starvation event. |
 | `recoveryInterval` | positive safe integer | Yes | World-time interval between natural recovery attempts. |
 | `recoveryAmount` | non-negative safe integer | Yes | Base health restored at each recovery interval before hunger scaling. Zero disables natural recovery. |
+| `restMaximumDuration` | positive safe integer | Yes | Hard upper bound, in world-time units, for a single rest command. Player requests may choose a shorter duration but cannot exceed this value. |
 | `recoveryByHungerStage` | object | Yes | Integer percentages from 0 through 100 for `sated`, `hungry`, `weak`, and `starving` recovery. |
 | `hungerStageModifiers` | object | Yes | Derived-stat modifiers for each hunger stage. Each stage accepts the same closed stat names used by condition modifiers. |
 | `formulas` | map of integer maps | Yes | Derived-stat coefficients; unknown operands fail engine validation. |
@@ -133,6 +134,7 @@ entries:
     starvationDamage: 1
     recoveryInterval: 500
     recoveryAmount: 1
+    restMaximumDuration: 5000
     recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }
     hungerStageModifiers:
       sated: {}

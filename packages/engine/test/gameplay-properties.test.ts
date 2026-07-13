@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   advanceToNextReady, createDemoContentPack, createDemoRun, mergeStacks, selectReadyActor,
   splitStack, stableJson, type ItemInstance, itemLightSources, advanceSurvival, hungerStage, refuelItem,
+  projectGameplayState,
 } from '../src/index.js';
 import type { ItemContentEntry } from '@woven-deep/content';
 import { actor, schedulerStateArbitrary } from './arbitraries.js';
@@ -43,6 +44,29 @@ describe('gameplay scheduler properties', () => {
         expect(() => advanceToNextReady(state)).toThrow(/worldTime.*safe integer/i);
       },
     ), { seed: 0x4a03, numRuns: 500 });
+  });
+});
+
+describe('public projection properties', () => {
+  it('is unaffected by hidden actors, features, identification assignments, and random streams', () => {
+    fc.assert(fc.property(
+      fc.tuple(fc.integer(), fc.integer(), fc.integer(), fc.integer()),
+      fc.stringMatching(/^[a-z][a-z0-9]{0,8}$/),
+      (rng, suffix) => {
+        const base = createDemoRun();
+        const hidden = { ...base.actors[0]!, actorId: `hidden.${suffix}`, contentId: `monster.${suffix}`,
+          playerControlled: false, disposition: 'hostile' as const, x: 5, y: 3 };
+        const secret = { featureId: `secret.${suffix}`, floorId: 'floor.demo', x: 5, y: 3,
+          contentId: null, coverTileId: 1 as const, type: 'secret' as const, state: 'hidden' as const,
+          discoveryDifficulty: 10, discovery: { discoveredByActorIds: [], progressByActorId: {}, attemptedContextKeys: [] } };
+        const content = createDemoContentPack();
+        const changed = { ...base, actors: [...base.actors, hidden], features: [secret],
+          rng: { ...base.rng, combat: rng }, identification: { ...base.identification,
+            appearanceByContentId: { [`item.${suffix}`]: `appearance.${suffix}` } } };
+        expect(stableJson(projectGameplayState({ state: changed, content })))
+          .toBe(stableJson(projectGameplayState({ state: base, content })));
+      },
+    ), { seed: 0x4a08, numRuns: 200 });
   });
 });
 

@@ -81,15 +81,20 @@ export interface SearchAction { readonly type: 'search'; readonly actorId: Opaqu
 export interface DisarmAction {
   readonly type: 'disarm'; readonly actorId: OpaqueId; readonly featureId: OpaqueId; readonly cost: number;
 }
+export interface RestAction {
+  readonly type: 'rest'; readonly actorId: OpaqueId; readonly until: 'healed' | 'interrupted';
+  readonly maximumDuration: number; readonly cost: number;
+}
 
 export type GameAction = MoveAction | WaitAction | BumpAttackAction | PickupAction | DropAction | SplitStackAction
   | FireAction | ThrowItemAction | UseItemAction | EquipAction | UnequipAction | ToggleLightAction | RefuelAction
-  | DoorAction | SearchAction | DisarmAction;
+  | DoorAction | SearchAction | DisarmAction | RestAction;
 export type ActionResolverRegistry = Readonly<Partial<Record<GameAction['type'], true>>>;
 export const ACTION_RESOLVER_REGISTRY: ActionResolverRegistry = Object.freeze({
   move: true, wait: true, 'bump-attack': true, pickup: true, drop: true, 'split-stack': true,
   fire: true, 'throw-item': true, 'use-item': true, equip: true, unequip: true,
   'toggle-light': true, refuel: true, 'open-door': true, 'close-door': true, search: true, disarm: true,
+  rest: true,
 });
 
 export interface InvalidActionValidation {
@@ -146,6 +151,16 @@ export function validatePlayerAction(input: Readonly<{
   }
   if (input.command.type === 'wait') {
     return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };
+  }
+  if (input.command.type === 'rest') {
+    if (!Number.isSafeInteger(input.command.maximumDuration) || input.command.maximumDuration <= 0
+      || input.command.maximumDuration > rules.restMaximumDuration) {
+      return { status: 'invalid', reason: 'action.unavailable' };
+    }
+    return {
+      type: 'rest', actorId: actor.actorId, until: input.command.until,
+      maximumDuration: input.command.maximumDuration, cost: actionCostFor(rules, 'action.wait'),
+    };
   }
   if (input.command.type === 'move') {
     if (actorHasConditionTrait(actor, 'condition-trait.prevents-movement', input.context.content)) {

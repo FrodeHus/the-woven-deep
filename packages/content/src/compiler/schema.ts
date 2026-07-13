@@ -194,6 +194,7 @@ const balanceEntry = z.strictObject({
   starvationDamage: safePositive,
   recoveryInterval: safePositive,
   recoveryAmount: safeNonNegative,
+  restMaximumDuration: safePositive,
   recoveryByHungerStage: z.strictObject({
     sated: safeNonNegative.max(100), hungry: safeNonNegative.max(100),
     weak: safeNonNegative.max(100), starving: safeNonNegative.max(100),

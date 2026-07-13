@@ -4,6 +4,7 @@ import {
   createDemoContentPack,
   createDemoRun,
   relationshipBetween,
+  resolveCommand,
   resolveWorldStep,
   selectReadyActor,
   type ActorState,
@@ -96,7 +97,23 @@ describe('atomic world steps', () => {
     expect(result.events.map((event) => event.type)).toEqual([
       'hero.waited', 'actor.turn.started', 'actor.moved', 'actor.turn.completed',
     ]);
-    expect(result.publicEvents.map((event) => event.type)).toEqual(['hero.waited']);
+    expect(result.publicEvents.map((event) => event.type)).toEqual(['hero.waited', 'sound.heard']);
+    expect(result.publicEvents[1]).toMatchObject({ category: 'movement', direction: 'east' });
+  });
+
+  it('returns the saved public sequence when a duplicate command is retried after visibility changes', () => {
+    const state = createDemoRun();
+    const enemy = monster('monster.unseen', { energy: 100 });
+    const content = contentWithMonster(enemy.contentId);
+    const darkFloor = { ...state.floors[0]!, ambient: { color: [0, 0, 0] as const, strength: 0 } };
+    const command = { type: 'wait' as const, commandId: 'command.retry-dark', expectedRevision: 0 };
+    const first = resolveCommand({ ...state, floors: [darkFloor], actors: [state.actors[0]!, enemy] },
+      command, { content });
+    const later = { ...first.state, floors: first.state.floors.map((floor) => ({ ...floor,
+      ambient: { color: [255, 255, 255] as const, strength: 255 } })) };
+    const duplicate = resolveCommand(later, command, { content });
+    expect(duplicate.events).toEqual(first.events);
+    expect(duplicate.events.map((event) => event.type)).toEqual(['hero.waited', 'sound.heard']);
   });
 
   it('advances hunger and equipped light fuel by scheduler elapsed time', () => {

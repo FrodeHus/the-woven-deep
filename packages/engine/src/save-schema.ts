@@ -37,7 +37,8 @@ const command = z.discriminatedUnion('type', [
   z.strictObject({ ...commandBase, type: z.literal('close-door'), featureId: identifier }),
   z.strictObject({ ...commandBase, type: z.literal('search') }),
   z.strictObject({ ...commandBase, type: z.literal('disarm'), featureId: identifier }),
-  z.strictObject({ ...commandBase, type: z.literal('rest'), until: z.enum(['healed', 'interrupted']) }),
+  z.strictObject({ ...commandBase, type: z.literal('rest'), until: z.enum(['healed', 'interrupted']),
+    maximumDuration: positiveQuantity }),
 ]);
 const movedEvent = z.strictObject({ type: z.literal('hero.moved'), eventId: identifier, heroId: identifier, from: point, to: point });
 const waitedEvent = z.strictObject({ type: z.literal('hero.waited'), eventId: identifier, heroId: identifier, x: safeNonNegative, y: safeNonNegative });
@@ -129,6 +130,16 @@ const trapDisarmFailedEvent = z.strictObject({ type: z.literal('trap.disarm-fail
   actorId: identifier, featureId: identifier });
 const itemDamagedEvent = z.strictObject({ type: z.literal('item.damaged'), eventId: identifier,
   actorId: identifier, itemId: identifier, amount: safeNonNegative, condition: safeNonNegative });
+const soundHeardEvent = z.strictObject({ type: z.literal('sound.heard'),
+  category: z.enum(['combat', 'movement', 'mechanism']),
+  direction: z.enum(['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'here']),
+  distanceBand: z.enum(['near', 'medium', 'far']) });
+const heroDamagedPublicEvent = z.strictObject({ type: z.literal('hero.damaged'), amount: safeNonNegative,
+  damageType: z.enum(['physical', 'fire', 'cold', 'lightning', 'poison', 'arcane']) });
+const restCompletedEvent = z.strictObject({ type: z.literal('rest.completed'), eventId: identifier,
+  stopReason: z.enum(['full-health', 'maximum-duration', 'visible-danger', 'aware-hostile', 'damage',
+    'meaningful-sound', 'hunger-warning', 'fuel-warning', 'condition-change', 'decision-required', 'hero-death']),
+  elapsed: safeNonNegative, effectiveHealing: safeNonNegative });
 const event = z.discriminatedUnion('type', [
   movedEvent, waitedEvent, invalidEvent, attackMissedEvent, attackHitEvent, actorDamagedEvent,
   actorDiedEvent, actorHealedEvent, conditionAppliedEvent, conditionRemovedEvent, actorForcedMoveEvent,
@@ -144,6 +155,7 @@ const event = z.discriminatedUnion('type', [
   doorOpenedEvent, doorClosedEvent,
   featureRevealedEvent, featureSearchedEvent, trapTriggeredEvent, trapDisarmedEvent, trapDisarmFailedEvent,
   itemDamagedEvent,
+  soundHeardEvent, heroDamagedPublicEvent, restCompletedEvent,
 ]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
 const invalidResult = z.strictObject({ status: z.literal('invalid'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative, reason: blockReason });
@@ -598,8 +610,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     commandIds.add(recordValue.command.commandId);
     if (recordValue.command.commandId !== recordValue.result.commandId) fail(`${path}.result.commandId`, 'result does not match command');
     if (recordValue.events.length === 0) fail(`${path}.events`, 'processed commands require at least one event');
-    if (recordValue.events.some((entry) => entry.eventId !== recordValue.command.commandId)) fail(`${path}.events`, 'event identifier does not match command');
-    if (recordValue.publicEvents.some((entry) => entry.eventId !== recordValue.command.commandId)) fail(`${path}.publicEvents`, 'public event identifier does not match command');
+    if (recordValue.events.some((entry) => !('eventId' in entry) || entry.eventId !== recordValue.command.commandId)) fail(`${path}.events`, 'event identifier does not match command');
+    if (recordValue.publicEvents.some((entry) => 'eventId' in entry && entry.eventId !== recordValue.command.commandId)) fail(`${path}.publicEvents`, 'public event identifier does not match command');
     const attackTargetActorId = recordValue.command.type === 'attack' ? recordValue.command.targetActorId : undefined;
     const commandItemId = 'itemId' in recordValue.command ? recordValue.command.itemId : undefined;
     const splitNewItemId = recordValue.command.type === 'split-stack' ? recordValue.command.newItemId : undefined;
@@ -667,6 +679,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                                         ? recordValue.events.find((entry) => (entry.type === 'trap.disarmed'
                                           || entry.type === 'trap.triggered' || entry.type === 'trap.disarm-failed')
                                           && entry.actorId === run.hero.actorId && entry.featureId === commandFeatureId)
+                                        : recordValue.command.type === 'rest'
+                                          ? recordValue.events.find((entry) => entry.type === 'rest.completed')
           : undefined;
     if (!eventValue) fail(`${path}.events`, 'processed result has no matching event');
     if (recordValue.result.status === 'invalid') {
@@ -725,6 +739,10 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         || eventValue.type === 'trap.disarm-failed')
       && eventValue.actorId === run.hero.actorId && eventValue.featureId === recordValue.command.featureId) {
       // Trap state and the effects random stream store the outcome.
+    } else if (recordValue.command.type === 'rest' && eventValue.type === 'rest.completed') {
+      if (eventValue.elapsed > recordValue.command.maximumDuration) {
+        fail(`${path}.events`, 'rest event exceeds requested maximum duration');
+      }
     } else fail(`${path}.events`, 'applied command and event are inconsistent');
     if (recordValue.result.revision < previousRevision || recordValue.result.revision > run.revision) fail(`${path}.result.revision`, 'record revisions are not monotonic');
     if (recordValue.result.turn > run.turn) fail(`${path}.result.turn`, 'record turn exceeds current turn');
@@ -812,7 +830,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       || recordValue.command.type === 'unequip' || recordValue.command.type === 'toggle-light'
       || recordValue.command.type === 'refuel' || recordValue.command.type === 'open-door'
       || recordValue.command.type === 'close-door' || recordValue.command.type === 'search'
-      || recordValue.command.type === 'disarm') continue;
+      || recordValue.command.type === 'disarm' || recordValue.command.type === 'rest') continue;
     if (recordValue.command.type !== 'move') fail(`${path}.events`, 'move result and event are inconsistent');
     if (eventValue.type === 'attack.hit' || eventValue.type === 'attack.missed' || eventValue.type === 'reaction.triggered') continue;
     if (eventValue.type !== 'hero.moved') fail(`${path}.events`, 'move result and event are inconsistent');

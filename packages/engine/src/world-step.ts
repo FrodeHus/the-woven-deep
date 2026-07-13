@@ -15,7 +15,7 @@ import { advanceSurvival, hungerModifiers } from './survival.js';
 import { applyPassiveDiscovery, closeDoor, disarmTrap, featureTiles, openDoor, searchFeatures, triggerTrap } from './features.js';
 import { tileIndex, type ActiveRun, type DomainEvent, type OpaqueId, type Point, type Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
-import { isVisible } from './visibility.js';
+import { projectDomainEvents } from './event-projection.js';
 import {
   completeNormalActorTurn, relationshipBetween, resolveOpportunityAttacks, setRelationship,
   type ReactionAttackResult,
@@ -26,6 +26,7 @@ export interface WorldStepResult {
   readonly state: ActiveRun;
   readonly events: readonly DomainEvent[];
   readonly publicEvents: readonly DomainEvent[];
+  readonly internalActions: number;
 }
 
 interface CombatProfile {
@@ -143,6 +144,7 @@ function applyAction(input: Readonly<{
   const actor = actorById(state, action.actorId);
   if (!actor) throw new Error(`internal invariant: actor ${action.actorId} does not exist`);
   const events: DomainEvent[] = [];
+  if (action.type === 'rest') throw new Error('internal invariant: rest must be expanded into world steps');
   if (action.type === 'search') {
     const floor = state.floors.find((candidate) => candidate.floorId === actor.floorId)!;
     const positions = new Map(state.actors.filter((candidate) => candidate.floorId === floor.floorId)
@@ -367,52 +369,12 @@ function applyAction(input: Readonly<{
   return { state, events };
 }
 
-function eventParticipants(event: DomainEvent): readonly OpaqueId[] {
-  const ids: OpaqueId[] = [];
-  if ('heroId' in event) ids.push(event.heroId);
-  if ('actorId' in event) ids.push(event.actorId);
-  if ('targetActorId' in event) ids.push(event.targetActorId);
-  if ('sourceActorId' in event) ids.push(event.sourceActorId);
-  if ('killerActorId' in event) ids.push(event.killerActorId);
-  return ids;
-}
-
-function eventIsPublic(event: DomainEvent, state: ActiveRun, heroId: OpaqueId, content: CompiledContentPack): boolean {
-  if (event.type === 'action.invalid') return true;
-  if (event.type === 'identification.appearance-revealed' || event.type === 'item.identified') return true;
-  if (event.type === 'fuel.warning' || event.type === 'item.light-extinguished') {
-    const item = state.items.find((candidate) => candidate.itemId === event.itemId);
-    if (item && (item.location.type === 'backpack' || item.location.type === 'equipped')
-      && item.location.actorId === heroId) return true;
-  }
-  const participants = eventParticipants(event);
-  if (participants.includes(heroId)) return true;
-  const hero = actorById(state, heroId);
-  if (!hero || hero.health === 0) return false;
-  const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
-  if (!floor) return false;
-  const positions = new Map<string, Readonly<{ x: number; y: number }>>(
-    floor.entities.map((entity) => [entity.entityId, entity] as const),
-  );
-  for (const actor of state.actors) if (actor.floorId === floor.floorId) positions.set(actor.actorId, actor);
-  const effectiveFloor = { ...floor, tiles: featureTiles(state, floor.floorId) };
-  const perception = refreshKnowledge({ floor: effectiveFloor, hero: heroPerception(state.hero, hero), actors: positions,
-    additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }) });
-  return participants.some((actorId) => {
-    const actor = actorById(state, actorId);
-    if (!actor || actor.floorId !== floor.floorId) return false;
-    const index = tileIndex(floor, actor.x, actor.y);
-    return index !== undefined && isVisible(perception.visibilityWords, index)
-      && perception.illumination.intensity[index]! > 0;
-  });
-}
-
 function appendEvents(
   authoritative: DomainEvent[], publicEvents: DomainEvent[], emitted: readonly DomainEvent[], state: ActiveRun, heroId: OpaqueId,
   content: CompiledContentPack,
 ): void {
   authoritative.push(...emitted);
-  publicEvents.push(...emitted.filter((event) => eventIsPublic(event, state, heroId, content)));
+  publicEvents.push(...projectDomainEvents({ events: emitted, state, heroId, content }));
 }
 
 function refreshHeroKnowledge(state: ActiveRun, content: CompiledContentPack): ActiveRun {
@@ -473,6 +435,7 @@ export function resolveWorldStep(input: Readonly<{
       type: 'actor.turn.started', eventId: input.eventId, actorId: selected.actorId,
     }], state, heroId, input.content);
     const action = chooseBehaviorAction({ state, actorId: selected.actorId, content: input.content });
+    if (action.type === 'rest') throw new Error('internal invariant: non-player behavior selected rest');
     resolved = applyAction({ state, action, content: input.content, eventId: input.eventId });
     state = resolved.state;
     appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
@@ -484,7 +447,7 @@ export function resolveWorldStep(input: Readonly<{
   }
   state = refreshHeroKnowledge(state, input.content);
   const passiveHero = heroActor(state);
-  if (passiveHero.health === 0) return { state, events, publicEvents };
+  if (passiveHero.health === 0) return { state, events, publicEvents, internalActions };
   const passiveFloor = state.floors.find((candidate) => candidate.floorId === passiveHero.floorId)!;
   const passivePositions = new Map<string, Readonly<{ x: number; y: number }>>(
     passiveFloor.entities.map((entity) => [entity.entityId, entity] as const),
@@ -501,5 +464,5 @@ export function resolveWorldStep(input: Readonly<{
   state = passive.run;
   appendEvents(events, publicEvents, passive.events, state, heroId, input.content);
   if (passive.events.length > 0) state = refreshHeroKnowledge(state, input.content);
-  return { state, events, publicEvents };
+  return { state, events, publicEvents, internalActions };
 }

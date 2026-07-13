@@ -102,7 +102,11 @@ export interface OpenDoorCommand extends CommandEnvelope { readonly type: 'open-
 export interface CloseDoorCommand extends CommandEnvelope { readonly type: 'close-door'; readonly featureId: OpaqueId }
 export interface SearchCommand extends CommandEnvelope { readonly type: 'search' }
 export interface DisarmCommand extends CommandEnvelope { readonly type: 'disarm'; readonly featureId: OpaqueId }
-export interface RestCommand extends CommandEnvelope { readonly type: 'rest'; readonly until: 'healed' | 'interrupted' }
+export interface RestCommand extends CommandEnvelope {
+  readonly type: 'rest';
+  readonly until: 'healed' | 'interrupted';
+  readonly maximumDuration: number;
+}
 
 export type GameCommand = MoveCommand | WaitCommand | AttackCommand | FireCommand | CastCommand | ThrowItemCommand
   | UseItemCommand | EquipCommand | UnequipCommand | PickupCommand | DropCommand | SplitStackCommand | RefuelCommand
@@ -273,6 +277,22 @@ export interface TrapStateEvent {
   readonly type: 'trap.triggered' | 'trap.disarmed' | 'trap.disarm-failed'; readonly eventId: OpaqueId;
   readonly actorId: OpaqueId; readonly featureId: OpaqueId;
 }
+export interface SoundHeardEvent {
+  readonly type: 'sound.heard';
+  readonly category: 'combat' | 'movement' | 'mechanism';
+  readonly direction: 'north' | 'northeast' | 'east' | 'southeast' | 'south' | 'southwest' | 'west' | 'northwest' | 'here';
+  readonly distanceBand: 'near' | 'medium' | 'far';
+}
+export interface HeroDamagedPublicEvent {
+  readonly type: 'hero.damaged'; readonly amount: number; readonly damageType: DamageType;
+}
+export interface RestCompletedEvent {
+  readonly type: 'rest.completed'; readonly eventId: OpaqueId;
+  readonly stopReason: 'full-health' | 'maximum-duration' | 'visible-danger' | 'aware-hostile'
+    | 'damage' | 'meaningful-sound' | 'hunger-warning' | 'fuel-warning' | 'condition-change'
+    | 'decision-required' | 'hero-death';
+  readonly elapsed: number; readonly effectiveHealing: number;
+}
 
 export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent | AttackMissedEvent
   | AttackHitEvent | ActorDamagedEvent | ActorDiedEvent | ActorHealedEvent | ConditionAppliedEvent
@@ -282,7 +302,8 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | ItemUnequippedEvent | ItemLightToggledEvent | ItemRefueledEvent
   | IdentificationAppearanceRevealedEvent | ItemIdentifiedEvent
   | HungerStageChangedEvent | HungerRestoredEvent | FuelWarningEvent | ItemLightExtinguishedEvent
-  | ItemDamagedEvent | DoorStateChangedEvent | FeatureRevealedEvent | FeatureSearchEvent | TrapStateEvent;
+  | ItemDamagedEvent | DoorStateChangedEvent | FeatureRevealedEvent | FeatureSearchEvent | TrapStateEvent
+  | SoundHeardEvent | HeroDamagedPublicEvent | RestCompletedEvent;
 
 export interface AppliedCommandResult {
   readonly status: 'applied';
