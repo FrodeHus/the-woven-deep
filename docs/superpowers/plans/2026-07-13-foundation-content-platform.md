@@ -904,6 +904,8 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
 }
 ```
 
+`data/rogue.sqlite` is the local-development default. The production Docker environment in Task 8 explicitly sets `DATABASE_PATH=/data/rogue.sqlite`; tests must cover both values.
+
 ```ts
 // apps/server/src/database.ts
 import Database from 'better-sqlite3';
