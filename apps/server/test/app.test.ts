@@ -25,4 +25,24 @@ describe('content API', () => {
     expect((await app.inject({ method: 'GET', url: '/api/health' })).json()).toMatchObject({ status: 'ok' });
     await app.close();
   });
+
+  it.each(['/api', '/api?x=1', '/api%2Fmissing'])('does not serve the SPA for reserved API URL %s', async (url) => {
+    const root = await mkdtemp(join(tmpdir(), 'woven-web-'));
+    await writeFile(join(root, 'index.html'), '<div id="root"></div>');
+    const app = buildApp({ pack, webDistDir: root });
+    const response = await app.inject({ method: 'GET', url });
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'not_found' });
+    await app.close();
+  });
+
+  it('rejects malformed URL encoding without serving the SPA', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'woven-web-'));
+    await writeFile(join(root, 'index.html'), '<div id="root"></div>');
+    const app = buildApp({ pack, webDistDir: root });
+    const response = await app.inject({ method: 'GET', url: '/api%' });
+    expect(response.statusCode).toBe(400);
+    expect(response.headers['content-type']).toContain('application/json');
+    await app.close();
+  });
 });

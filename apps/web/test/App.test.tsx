@@ -18,4 +18,5 @@ it('shows the compiled content hash and entry counts', async () => {
   expect(await screen.findByText('2 entries bound')).toBeVisible();
   expect(screen.getByText('1 monster')).toBeVisible();
   expect(screen.getByText('1 item')).toBeVisible();
+  expect(screen.getByText('c'.repeat(64))).toBeVisible();
 });
