@@ -158,10 +158,26 @@ function collectFixtures(floor: PerceptionFloor): ReadonlyMap<number, FixturePre
 function computePreview(input: ProjectFloorInput): readonly number[] | undefined {
   if (input.preview === undefined) return undefined;
   validateColor(input.preview.color, 'preview color');
+  const cellCount = input.floor.width * input.floor.height;
+  const previewTiles: TileId[] = [];
+  for (let index = 0; index < cellCount; index += 1) {
+    const currentlyVisible = isVisible(input.visibilityWords, index) && input.illumination.intensity[index]! > 0;
+    if (currentlyVisible) {
+      previewTiles.push(input.floor.tiles[index]!);
+      continue;
+    }
+    if (isExplored(input.floor.knowledge, index)) {
+      const tileId = rememberedTile(input.floor.knowledge, index);
+      if (tileId === undefined) throw new TypeError(`explored cell ${index} must have remembered terrain`);
+      previewTiles.push(tileId);
+      continue;
+    }
+    previewTiles.push(0);
+  }
   const field = computeIllumination({
     width: input.floor.width,
     height: input.floor.height,
-    tiles: input.floor.tiles,
+    tiles: previewTiles,
     ambient: { color: [0, 0, 0], strength: 0 },
     lights: [{
       lightId: 'preview.light',

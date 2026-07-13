@@ -129,6 +129,62 @@ describe('observable floor projection', () => {
     expect(stableJson(input.illumination)).toBe(illuminationBefore);
   });
 
+  it('keeps preview bytes unchanged when unseen authoritative terrain changes', () => {
+    const corridorTiles = Array<TileId>(width * height).fill(0);
+    for (let x = 1; x < width - 1; x += 1) corridorTiles[at(x, 3)] = 1;
+    const corridorHero = { ...hero, x: 1, y: 3, sightRadius: 8 };
+    const corridorTorch: LightSource = {
+      ...torch,
+      location: { type: 'actor', actorId: corridorHero.heroId },
+      radius: 1,
+    };
+    const observedFloor = {
+      ...baseFloor([corridorTorch]),
+      tiles: corridorTiles,
+      ambient: { color: [255, 255, 255] as const, strength: 1 },
+    };
+    const observed = refreshKnowledge({
+      floor: observedFloor,
+      hero: corridorHero,
+      actors: new Map([[corridorHero.heroId, corridorHero]]),
+    });
+    const currentHero = { ...corridorHero, sightRadius: 1 };
+    const openTiles = [...corridorTiles];
+    const closedTiles = [...corridorTiles];
+    closedTiles[at(4, 3)] = 2;
+    const perceiveCurrent = (currentTiles: readonly TileId[]) => {
+      const floor = {
+        ...observedFloor,
+        tiles: currentTiles,
+        ambient: { color: [255, 255, 255] as const, strength: 0 },
+        knowledge: observed.knowledge,
+      };
+      const current = refreshKnowledge({
+        floor,
+        hero: currentHero,
+        actors: new Map([[currentHero.heroId, currentHero]]),
+      });
+      return {
+        floor: { ...floor, knowledge: current.knowledge },
+        hero: currentHero,
+        visibilityWords: current.visibilityWords,
+        illumination: current.illumination,
+        preview: { color: [20, 255, 80] as const, radius: 6, strength: 200, falloff: 'linear' as const },
+      };
+    };
+
+    const openProjection = projectFloor(perceiveCurrent(openTiles));
+    const closedProjection = projectFloor(perceiveCurrent(closedTiles));
+
+    expect(openProjection.cells[at(5, 3)]).toMatchObject({
+      knowledge: 'remembered', tileId: 1, previewIntensity: 85,
+    });
+    expect(closedProjection.cells[at(5, 3)]).toMatchObject({
+      knowledge: 'remembered', tileId: 1, previewIntensity: 85,
+    });
+    expect(stableJson(openProjection)).toBe(stableJson(closedProjection));
+  });
+
   it('returns byte-identical projections regardless of authoritative light input order', () => {
     const forward = perceived([torch, fixture]);
     const reverse = perceived([fixture, torch]);
