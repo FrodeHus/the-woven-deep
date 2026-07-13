@@ -276,9 +276,25 @@ describe('active-run save codec', () => {
     }, 'recentCommands.0.command.type');
   });
 
-  it('rejects an invalid movement reason that disagrees with the active floor', () => {
-    const invalid = resolveCommand(createDemoRun(), { type: 'move', commandId: 'command.wall', expectedRevision: 0, direction: 'north' }).state;
+  it.each([
+    [0, 'blocked.wall'],
+    [2, 'blocked.door'],
+    [3, 'blocked.pillar'],
+    [6, 'blocked.void'],
+  ] as const)('validates retained terrain %i as %s', (tile, reason) => {
+    const demo = createDemoRun();
+    const floor = demo.floors[0]!;
+    const initial = { ...demo, floors: [{
+      ...floor,
+      tiles: floor.tiles.map((current, index) => index === 1 ? tile : current),
+    }] };
+    const invalid = resolveCommand(initial, {
+      type: 'move', commandId: `command.${reason}`, expectedRevision: 0, direction: 'north',
+    }).state;
     const record = invalid.recentCommands[0]!;
+
+    expect(record.result).toMatchObject({ status: 'invalid', reason });
+    expect(() => encodeActiveRun(invalid)).not.toThrow();
     expectInvalidSave({
       ...invalid,
       recentCommands: [{

@@ -3,6 +3,8 @@ import type {
   ProcessedCommandResult, RecordedCommand,
 } from './model.js';
 import { tileIndex } from './model.js';
+import { refreshKnowledge } from './perception.js';
+import { movementBlockReason } from './terrain.js';
 import { RECENT_COMMAND_LIMIT } from './versions.js';
 
 const DELTAS: Readonly<Record<Direction, Readonly<{ x: number; y: number }>>> = {
@@ -52,7 +54,7 @@ export function resolveCommand(state: ActiveRun, command: GameCommand): CommandR
   const delta = DELTAS[command.direction];
   const target = { x: state.hero.x + delta.x, y: state.hero.y + delta.y };
   const index = tileIndex(floor, target.x, target.y);
-  const reason = index === undefined ? 'blocked.bounds' : floor.tiles[index] === 0 ? 'blocked.wall' : undefined;
+  const reason = index === undefined ? 'blocked.bounds' : movementBlockReason(floor.tiles[index]!);
   if (reason) {
     const result = { status: 'invalid', commandId: command.commandId, revision: state.revision, turn: state.turn, reason } as const;
     const events = [{ type: 'action.invalid', eventId: command.commandId, commandId: command.commandId, reason }] as const;
@@ -62,5 +64,13 @@ export function resolveCommand(state: ActiveRun, command: GameCommand): CommandR
   assertCountersCanAdvance(state);
   const result = { status: 'applied', commandId: command.commandId, revision: state.revision + 1, turn: state.turn + 1 } as const;
   const events = [{ type: 'hero.moved', eventId: command.commandId, heroId: state.hero.heroId, from: { x: state.hero.x, y: state.hero.y }, to: target }] as const;
-  return { state: record(state, command, result, events, { ...state.hero, ...target }), result, events };
+  const hero = { ...state.hero, ...target };
+  const moved = record(state, command, result, events, hero);
+  const actors = new Map<string, Readonly<{ x: number; y: number }>>(
+    floor.entities.map((entity) => [entity.entityId, entity] as const),
+  );
+  actors.set(hero.heroId, hero);
+  const knowledge = refreshKnowledge({ floor, hero, actors }).knowledge;
+  const floors = state.floors.map((candidate) => candidate === floor ? { ...candidate, knowledge } : candidate);
+  return { state: { ...moved, floors }, result, events };
 }
