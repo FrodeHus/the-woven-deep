@@ -220,15 +220,17 @@ Members removed by a leader-collapse response count as a group broken rather tha
 
 ### Swarm
 
-A swarm encounter contains a visible source such as a nest, queen, portal, or corpse mass. The source—not each spawned creature—owns the spawn timer. YAML defines the creature mix, interval, placement rules, source and local caps, floor-wide population cap, off-floor growth rate, and source-destruction response.
+A swarm encounter contains a visible source such as a nest, queen, portal, or corpse mass. The source—not each spawned creature—owns the spawn timer. YAML defines the creature mix, interval, placement rules, source and local caps, floor-wide population cap, and source-destruction response.
 
-While the hero is away, the engine does not simulate every swarm turn. Re-entering the floor deterministically calculates elapsed growth from global dungeon turns, available cells, and configured caps. The result is saved in the complete floor snapshot. Destroying the visible source stops spawning or applies its configured shutdown transition.
+While the hero is away, groups and swarms remain frozen in their complete floor snapshot. Re-entering never applies missed swarm growth. Destroying the visible source stops spawning or applies its configured shutdown transition. This makes fleeing a dangerous floor a valid containment choice.
 
 ### Boss
 
 A boss is a unique individual population. Several distinct bosses can occur in one run, but each boss identifier has `maxInstancesPerRun: 1`. A boss has one guaranteed unique reward, an enhanced additional loot table, authored phases, and a first-defeat profile achievement. Achievements may unlock classes, items, spells, traits, or lore but never direct permanent statistics. Guest achievements and their unlocks last only for the browser session.
 
 A boss left alive recovers health from elapsed dungeon turns up to its configured recovery cap. Completed phase transitions, destroyed encounter features, and other permanent arena mutations remain in the floor snapshot. This prevents unlimited retreat-and-heal attrition without fully resetting the encounter.
+
+The current profile or guest session's highest-scoring unconquered dead hero becomes an optional named boss at the depth where that hero died. The encounter preserves the hero name and recognizable build traits while a YAML template normalizes combat power. It never blocks progression. The original death record stores one deterministically selected transferable inventory or equipped item as an heirloom. Defeating the champion grants that heirloom and permanently removes that Hall record's champion encounter; if the conquered record remains the high-score holder, no lower record is promoted.
 
 ### Run-level appearance
 

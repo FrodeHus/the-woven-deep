@@ -45,6 +45,8 @@ Deliver this milestone through two independently reviewable slices:
 
 **4A detailed plan:** `docs/superpowers/plans/2026-07-13-core-gameplay-survival.md`
 
+**4B1 design:** `docs/superpowers/specs/2026-07-14-population-encounters-design.md`
+
 **Exit demonstration:** an automated simulation can fight a leader group, contain or flee a growing swarm, encounter a rare boss, trade with or attack a travelling merchant, and finalize a deterministic run record.
 
 ### 5. Guest game and complete player interface
