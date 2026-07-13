@@ -5,10 +5,10 @@
   "engines": { "node": ">=22" },
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/server",
     "content:validate": "npm run build --workspace @woven-deep/content && node packages/content/dist/cli.js",
-    "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "test": "npm run build --workspace @woven-deep/content && npm run test --workspaces --if-present",
+    "typecheck": "npm run build --workspace @woven-deep/content && npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
     "typescript": "^5.8.0",
