@@ -6,6 +6,7 @@ import { compareCodeUnits, stableJsonHash } from './stable-json.js';
 import { ContentCompileError, type ContentCompileIssue } from './error.js';
 import { parseContentFile } from './parse-file.js';
 import { stableIdSchema } from './schema.js';
+import { validateVaultEntry } from './vault-validation.js';
 
 export interface ContentRegistries {
   readonly ai: ReadonlySet<string>;
@@ -67,6 +68,7 @@ export async function compileContentDirectory(input: {
   if (startupIssues.length > 0) throw new ContentCompileError(startupIssues);
 
   const entries: ContentEntry[] = [];
+  const vaultEntries: Array<{ entry: Extract<ContentEntry, { kind: 'vault' }>; file: string }> = [];
   const issues: ContentCompileIssue[] = [];
   const seen = new Map<string, string>();
 
@@ -88,13 +90,19 @@ export async function compileContentDirectory(input: {
       if (entry.kind === 'item' && !input.registries.effects.has(entry.effect)) {
         issues.push({ file, path: `$.entries.${entry.id}.effect`, message: `unregistered effect ${entry.effect}` });
       }
+      if (entry.kind === 'vault') vaultEntries.push({ entry, file });
       entries.push(entry);
     }
   }
 
+  for (const { entry, file } of vaultEntries) {
+    throwIfAborted(input.signal);
+    issues.push(...validateVaultEntry(entry, file));
+  }
+
   throwIfAborted(input.signal);
   if (entries.length === 0) issues.push({ file: input.rootDir, path: '$', message: 'content directory contains no YAML entries' });
-  for (const requiredKind of ['monster', 'item'] as const) {
+  for (const requiredKind of ['monster', 'item', 'vault'] as const) {
     throwIfAborted(input.signal);
     if (!entries.some((entry) => entry.kind === requiredKind)) {
       issues.push({ file: input.rootDir, path: '$.entries', message: `missing foundational ${requiredKind} content` });

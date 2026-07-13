@@ -24,6 +24,50 @@ entries:
     });
   });
 
+  it('materializes defaults and derived metadata for a strict vault entry', () => {
+    const [entry] = parseContentFile({
+      path: 'vaults/test-room.yaml',
+      source: `schemaVersion: 1
+entries:
+  - kind: vault
+    id: vault.test-room
+    name: Test room
+    tags: [test]
+    minDepth: 1
+    maxDepth: 5
+    rarity: common
+    weight: 10
+    maxPerFloor: 1
+    margin: 1
+    transforms: { rotations: [0, 180], reflectHorizontal: true }
+    layout: ["#####", "#+m.#", "#####"]
+    legend:
+      "#": { terrain: wall }
+      ".": { terrain: floor }
+      "+": { terrain: floor, entrance: true }
+      "m":
+        terrain: floor
+        slot: { id: monster-main, kind: monster, required: true, tags: [guard] }
+`,
+    });
+
+    expect(entry).toMatchObject({
+      kind: 'vault',
+      layout: ['#####', '#+m.#', '#####'],
+      entranceCount: 1,
+      requiredSlotIds: ['monster-main'],
+      legend: {
+        '#': { terrain: 'wall', entrance: false, light: null, slot: null },
+        m: {
+          terrain: 'floor',
+          entrance: false,
+          light: null,
+          slot: { id: 'monster-main', kind: 'monster', required: true, tags: ['guard'] },
+        },
+      },
+    });
+  });
+
   it('rejects unknown properties with a field path', () => {
     expect(() => parseContentFile({
       path: 'monsters/bad.yaml',
