@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-13
 
-**Status:** Proposed for review
+**Status:** Approved design
 
 **Roadmap placement:** Narrow prerequisite between core-gameplay Tasks 5 and 6
 

@@ -716,6 +716,13 @@ git commit -m "feat: resolve deterministic combat effects"
 
 ---
 
+### Task 5A: Move condition definitions into YAML
+
+- [ ] Execute `docs/superpowers/plans/2026-07-13-yaml-condition-definitions.md` completely before Task 6.
+- [ ] Require every operator-editable YAML kind and closed registry ID to remain documented under `docs/server-admin/`.
+
+---
+
 ### Task 6: Add relationships, opportunity reactions, and atomic world steps
 
 **Files:**
@@ -787,7 +794,7 @@ Expected: FAIL on opportunity rules.
 
 - [ ] **Step 4: Implement symmetric reaction resolution**
 
-Capture eligible attackers at movement attempt time. Require alive, hostile, aware, capable, in reach, and `reactionReady`. Consume each reaction before its attack. Resolve by stable ID. Stop after mover death; retain remaining reactions when they never trigger. Root, stun, or another movement blocker cancels movement while already-triggered living attackers continue. Support a registered `movement.no-opportunity` suppression tag.
+Capture eligible attackers at movement attempt time. Require alive, hostile, aware, capable, in reach, and `reactionReady`. Consume each reaction before its attack. Resolve by stable ID. Stop after mover death; retain remaining reactions when they never trigger. Root, stun, or another movement blocker cancels movement while already-triggered living attackers continue. Use the compiled condition traits `condition-trait.suppresses-reactions` and `condition-trait.avoids-opportunity-attacks`; descriptive tags never activate rules.
 
 - [ ] **Step 5: Write failing complete world-step tests**
 
@@ -1380,7 +1387,7 @@ git commit -m "feat: reveal mutable dungeon features"
 - Consumes: complete world-step execution, recovery, visible/aware threats, sound events, hunger/fuel stages, conditions, feature/item/actor projections, and typed rest command.
 - Produces: `resolveRest(input)`, `RestStopReason`, `projectGameplayState(input)`, `projectDomainEvents(input)`, and public action/decision descriptors.
 
-- [ ] **Step 1: Write failing rest-stop tests for every approved condition**
+- [ ] **Step 1: Write failing rest-stop tests for trait-bearing conditions**
 
 ```ts
 it.each([
@@ -1403,6 +1410,8 @@ it.each([
 Run: `npm test --workspace @woven-deep/engine -- --run test/rest.test.ts`
 
 Expected: FAIL because rest resolution does not exist.
+
+Include one ordinary active condition without `condition-trait.interrupts-rest` and prove it does not stop rest. Include one differently named condition with the trait and prove that it does, so no condition ID becomes a hidden rule.
 
 - [ ] **Step 2: Implement bounded rest through ordinary world steps**
 
