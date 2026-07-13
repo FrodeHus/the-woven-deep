@@ -15,6 +15,7 @@ const tags = z.array(slugSchema).default([]);
 export const damageTypes = ['physical', 'fire', 'cold', 'lightning', 'poison', 'arcane'] as const;
 export const targetingIds = ['target.self', 'target.actor', 'target.line', 'target.cell'] as const;
 export const equipmentSlots = ['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring'] as const;
+export const vaultPlacementKinds = ['monster', 'item', 'trap', 'npc', 'fixture', 'objective'] as const;
 
 export const diceSchema = z.strictObject({
   count: safePositive.max(100),
@@ -230,7 +231,7 @@ const conditionEntry = z.strictObject({
 
 const slot = z.strictObject({
   id: slugSchema,
-  kind: z.enum(['monster', 'item', 'trap', 'npc', 'fixture', 'objective']),
+  kind: z.enum(vaultPlacementKinds),
   required: z.boolean().default(false),
   tags,
 });

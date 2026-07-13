@@ -497,7 +497,7 @@ git commit -m "refactor: schedule actors by condition traits"
 - Consumes: `CONTENT_KIND_IDS`, targeting/damage/equipment/vault arrays, behavior/effect registries, `CONDITION_TRAIT_IDS`, compiler bounds, and existing container operations.
 - Produces: the operator-facing content reference and a package-gate check that every published YAML kind and registry ID is documented.
 
-- [ ] **Step 1: Write the failing documentation-consistency test**
+- [x] **Step 1: Write the failing documentation-consistency test**
 
 Read the admin reference from the repository root and require exact backticked tokens:
 
@@ -524,17 +524,17 @@ it('documents every YAML content kind and closed registry ID', async () => {
 
 Export any currently private compiler vocabulary arrays needed by this test through `@woven-deep/content/compiler`; keep the engine's root browser-safe graph free of Node modules.
 
-- [ ] **Step 2: Run the docs test to verify RED**
+- [x] **Step 2: Run the docs test to verify RED**
 
 Run: `npm test --workspace @woven-deep/content -- --run test/admin-docs.test.ts`
 
 Expected: FAIL because the server-admin reference does not exist.
 
-- [ ] **Step 3: Create the server-admin index**
+- [x] **Step 3: Create the server-admin index**
 
 `docs/server-admin/README.md` links to the content reference and the existing storage/backup operations. State that changes must be validated in staging, mounted read-only as a complete content directory, and reviewed like code because they change deterministic gameplay and the content hash.
 
-- [ ] **Step 4: Write the complete content-configuration reference**
+- [x] **Step 4: Write the complete content-configuration reference**
 
 Use these exact top-level sections so administrators can scan and link to stable anchors:
 
@@ -574,11 +574,11 @@ node scripts/smoke.mjs http://localhost:3000
 
 Explain that the mounted directory replaces rather than overlays bundled content, startup rejects the entire pack on any issue, and an active run cannot silently switch to a different content hash.
 
-- [ ] **Step 5: Link operations documentation without duplicating schema**
+- [x] **Step 5: Link operations documentation without duplicating schema**
 
 At the start of `docs/operations/content-and-storage.md`, link to `../server-admin/content-configuration.md`. Keep operational mount, verification, and SQLite backup procedures there; keep field definitions solely in the server-admin reference.
 
-- [ ] **Step 6: Run documentation and full repository GREEN**
+- [x] **Step 6: Run documentation and full repository GREEN**
 
 Run:
 
@@ -593,7 +593,7 @@ git diff --check
 
 Expected: documentation consistency, all workspace tests, all type checks, production builds, bundled content validation, and whitespace checks pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add docs/server-admin docs/operations/content-and-storage.md packages/content/test/admin-docs.test.ts packages/content/src

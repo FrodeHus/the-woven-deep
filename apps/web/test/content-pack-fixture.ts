@@ -12,6 +12,12 @@ const entries: readonly ContentEntry[] = [
     starvationDamage: 1, formulas: { health: { base: 8 } }, actionCosts: { 'action.move': 100 },
   },
   {
+    kind: 'condition', id: 'condition.stunned', name: 'Stunned', description: 'Cannot act', tags: [],
+    color: '#d8c46a', duration: { mode: 'timed', default: 100, maximum: 500 },
+    stacking: { mode: 'refresh', maximumStacks: 1 }, modifiersPerStack: {},
+    traits: ['condition-trait.incapacitated'],
+  },
+  {
     kind: 'item', id: 'item.lantern', name: 'Lantern', tags: [], glyph: '¤', color: '#eeeeaa',
     minDepth: 1, maxDepth: 20, category: 'light', stackLimit: 1, price: 4, rarity: 'common',
     actionCost: 100, equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },

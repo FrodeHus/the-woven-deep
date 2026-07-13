@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { loadContentSummary } from '../src/api.js';
-import type { ContentKind } from '@woven-deep/content';
+import { CONTENT_KIND_IDS, type ContentKind } from '@woven-deep/content';
 import { contentPack } from './content-pack-fixture.js';
 
 function fetcher(kinds: readonly ContentKind[]) {
@@ -12,13 +12,13 @@ function fetcher(kinds: readonly ContentKind[]) {
 }
 
 describe('content summary counts', () => {
-  it('counts all seven content kinds', async () => {
-    const request = fetcher(['monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault']);
+  it('counts every published content kind', async () => {
+    const request = fetcher(CONTENT_KIND_IDS);
 
     const summary = await loadContentSummary(request as typeof fetch);
 
     expect(summary.counts).toEqual({
-      monster: 1, item: 1, spell: 1, trap: 1, 'loot-table': 1, balance: 1, vault: 1,
+      monster: 1, item: 1, spell: 1, trap: 1, 'loot-table': 1, balance: 1, vault: 1, condition: 1,
     });
   });
 
