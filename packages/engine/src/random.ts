@@ -1,0 +1,75 @@
+import type { RngStreams, Uint32State } from './model.js';
+import { RNG_STREAM_NAMES, type RngStreamName } from './versions.js';
+
+const GOLDEN_GAMMA = 0x9e3779b9;
+const NON_ZERO_FALLBACK = 0x6d2b79f5;
+
+const STREAM_DISCRIMINATORS: Readonly<Record<RngStreamName, number>> = {
+  generation: 1,
+  encounters: 2,
+  combat: 3,
+  loot: 4,
+  effects: 5,
+  narrative: 6,
+};
+
+function rotateLeft(value: number, bits: number): number {
+  return ((value << bits) | (value >>> (32 - bits))) >>> 0;
+}
+
+function splitMixWord(value: number): number {
+  let mixed = value >>> 0;
+  mixed = Math.imul(mixed ^ (mixed >>> 16), 0x21f0aaad) >>> 0;
+  mixed = Math.imul(mixed ^ (mixed >>> 15), 0x735a2d97) >>> 0;
+  return (mixed ^ (mixed >>> 15)) >>> 0;
+}
+
+export interface RandomStep {
+  readonly value: number;
+  readonly state: Uint32State;
+}
+
+export function isNonZeroState(state: Uint32State): boolean {
+  return state.some((word) => word !== 0);
+}
+
+export function nextUint32(state: Uint32State): RandomStep {
+  const [initial0, initial1, initial2, initial3] = state;
+  const value = Math.imul(rotateLeft(Math.imul(initial1, 5) >>> 0, 7), 9) >>> 0;
+  const shifted = (initial1 << 9) >>> 0;
+  let s2 = (initial2 ^ initial0) >>> 0;
+  let s3 = (initial3 ^ initial1) >>> 0;
+  let s1 = (initial1 ^ s2) >>> 0;
+  let s0 = (initial0 ^ s3) >>> 0;
+  s2 = (s2 ^ shifted) >>> 0;
+  s3 = rotateLeft(s3, 11);
+  return { value, state: [s0, s1, s2, s3] };
+}
+
+export function expandLegacySeed(seed: number): Uint32State {
+  let cursor = seed >>> 0;
+  const words: number[] = [];
+  for (let index = 0; index < 4; index += 1) {
+    cursor = (cursor + GOLDEN_GAMMA) >>> 0;
+    words.push(splitMixWord(cursor));
+  }
+  const state = words as unknown as Uint32State;
+  return isNonZeroState(state) ? state : [0, 0, 0, NON_ZERO_FALLBACK];
+}
+
+function deriveStream(runSeed: Uint32State, discriminator: number): Uint32State {
+  let cursor = discriminator >>> 0;
+  for (let index = 0; index < runSeed.length; index += 1) {
+    cursor = splitMixWord(
+      (cursor ^ runSeed[index]! ^ Math.imul(index + 1, GOLDEN_GAMMA)) >>> 0,
+    );
+  }
+  const state = expandLegacySeed(cursor);
+  return isNonZeroState(state) ? state : [0, 0, 0, NON_ZERO_FALLBACK];
+}
+
+export function deriveRngStreams(runSeed: Uint32State): RngStreams {
+  return Object.fromEntries(
+    RNG_STREAM_NAMES.map((name) => [name, deriveStream(runSeed, STREAM_DISCRIMINATORS[name])]),
+  ) as unknown as RngStreams;
+}
