@@ -15,8 +15,12 @@ export function parseContentFile(input: { path: string; source: string }): reado
     customTags: [],
     prettyErrors: false,
   });
-  if (document.errors.length > 0) {
-    throw new ContentCompileError(document.errors.map((error) => ({
+  const parseIssues = [
+    ...document.errors,
+    ...document.warnings.filter((warning) => warning.code === 'TAG_RESOLVE_FAILED'),
+  ];
+  if (parseIssues.length > 0) {
+    throw new ContentCompileError(parseIssues.map((error) => ({
       file: input.path,
       path: '$',
       message: error.message,

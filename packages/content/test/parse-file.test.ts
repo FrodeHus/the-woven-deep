@@ -41,10 +41,40 @@ entries:
     })).toThrowError(ContentCompileError);
   });
 
-  it('rejects aliases and custom tags', () => {
+  it('rejects aliases', () => {
     expect(() => parseContentFile({
       path: 'monsters/alias.yaml',
       source: 'schemaVersion: 1\nentries: &entries [*entries]\n',
     })).toThrow(/alias|YAML/i);
+  });
+
+  it('rejects custom tags with file context', () => {
+    let error: unknown;
+    try {
+      parseContentFile({
+        path: 'monsters/tagged.yaml',
+        source: `schemaVersion: 1
+entries: !unsafe
+  - kind: monster
+    id: monster.tagged
+    name: Tagged
+    glyph: t
+    color: '#ffffff'
+    ai: ai.skittish
+    stats: { health: 1, attack: 1, defense: 0 }
+`,
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(ContentCompileError);
+    expect((error as ContentCompileError).issues).toEqual([
+      expect.objectContaining({
+        file: 'monsters/tagged.yaml',
+        path: '$',
+        message: expect.stringMatching(/tag/i),
+      }),
+    ]);
   });
 });
