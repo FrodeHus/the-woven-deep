@@ -220,6 +220,22 @@ describe('illumination input validation', () => {
     expect(() => calculate({ lights: [two, one] })).toThrow(/light.same/);
   });
 
+  it('reports duplicate IDs before validating either duplicate body', () => {
+    const invalid = { ...fixed('light.same', 1, 1, [1, 2, 3]), radius: 0 };
+    const valid = fixed('light.same', 2, 2, [3, 2, 1]);
+    const errorMessage = (lights: readonly LightSource[]): string => {
+      try {
+        calculate({ lights });
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error('expected duplicate sources to be rejected');
+    };
+
+    expect(errorMessage([invalid, valid])).toBe('duplicate light ID light.same');
+    expect(errorMessage([valid, invalid])).toBe('duplicate light ID light.same');
+  });
+
   it('reports invalid light IDs independently of source input order', () => {
     const invalid = { ...fixed('Light Bad', 1, 1, [1, 2, 3]) };
     const valid = fixed('light.valid', 2, 2, [1, 2, 3]);

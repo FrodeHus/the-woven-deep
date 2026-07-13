@@ -130,13 +130,14 @@ function validateLights(input: IlluminationInput): readonly ResolvedLight[] {
     const rightId = right.lightId as string;
     return leftId < rightId ? -1 : leftId > rightId ? 1 : 0;
   });
+  for (let index = 1; index < records.length; index += 1) {
+    const lightId = records[index]!.lightId as string;
+    if (lightId === records[index - 1]!.lightId) throw new TypeError(`duplicate light ID ${lightId}`);
+  }
 
   const resolved: ResolvedLight[] = [];
-  let previousId: string | undefined;
   for (const source of records) {
     const lightId = source.lightId as string;
-    if (lightId === previousId) throw new TypeError(`duplicate light ID ${lightId}`);
-    previousId = lightId;
     const label = `light ${lightId}`;
     validateColor(source.color, `${label} color`);
     assertIntegerRange(source.radius, 1, 32, `${label} radius`);
