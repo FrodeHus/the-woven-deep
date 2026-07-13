@@ -17,9 +17,13 @@ entries:
     starvationInterval: 500
     starvationDamage: 1
     formulas:
-      health: { base: 8, vitality: 2 }
-      accuracy: { base: 0, agility: 1 }
+      maxHealth: { base: 8, vitality: 2 }
+      meleeAccuracy: { might: 1 }
+      meleeDamageBonus: { might: 1 }
+      rangedAccuracy: { agility: 1 }
       defense: { base: 8, agility: 1 }
+      search: { wits: 1 }
+      disarm: { agility: 1, wits: 1 }
     actionCosts:
       action.move: 100
       action.melee: 100

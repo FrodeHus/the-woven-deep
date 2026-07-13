@@ -385,13 +385,13 @@ git commit -m "feat: replace content with gameplay schema"
 - Consumes: schema-v3 `ActorState`, runtime balance content, stable actor ordering, and safe-integer rules.
 - Produces: `deriveActorStats(input)`, `selectReadyActor(actors)`, `advanceToNextReady(input)`, `chargeActionEnergy(actor, cost)`, and reusable fast-check actor/run generators.
 
-- [ ] **Step 1: Install the exact property-testing dependency**
+- [x] **Step 1: Install the exact property-testing dependency**
 
 Run: `npm install --save-dev fast-check@4.8.0 --workspace @woven-deep/engine`
 
 Expected: `packages/engine/package.json` records `fast-check` in `devDependencies` and `package-lock.json` resolves 4.8.0.
 
-- [ ] **Step 2: Write failing derived-stat tests**
+- [x] **Step 2: Write failing derived-stat tests**
 
 ```ts
 it('derives stats from attributes, equipment, and conditions without mutating input', () => {
@@ -409,11 +409,11 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/attributes.test.ts`
 
 Expected: FAIL because `deriveActorStats` is not defined.
 
-- [ ] **Step 3: Implement pure checked derived-stat calculation**
+- [x] **Step 3: Implement pure checked derived-stat calculation**
 
 Accept base attributes, compiled balance coefficients, public equipment modifiers, and conditions. Validate all operands as safe integers before arithmetic. Return one immutable `DerivedActorStats` record; never cache it in `ActiveRun`.
 
-- [ ] **Step 4: Write failing scheduler examples**
+- [x] **Step 4: Write failing scheduler examples**
 
 ```ts
 it('lets equal-speed enemies act once between normal hero actions', () => {
@@ -433,11 +433,11 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/scheduler.test.ts`
 
 Expected: FAIL because scheduler functions do not exist.
 
-- [ ] **Step 5: Implement the pure scheduler contract**
+- [x] **Step 5: Implement the pure scheduler contract**
 
 Use readiness threshold `100`. Select greater energy first, then player-controlled actors, then UTF-16 actor ID. When none are ready, calculate the smallest positive integer elapsed value for any scheduled actor to reach readiness, add `speed * elapsed` with checked arithmetic, and return new actor records plus new `worldTime`. Exclude dead and incapacitated actors. Charging a heavy action may create negative energy within the validated bound.
 
-- [ ] **Step 6: Add seeded property tests**
+- [x] **Step 6: Add seeded property tests**
 
 In `arbitraries.ts`, generate sorted unique actor IDs, safe speed, energy, and health values, with at least one living actor eligible for normal scheduling. Add properties:
 
@@ -454,7 +454,7 @@ fc.assert(fc.property(schedulerStateArbitrary, (state) => {
 
 Also prove stable selection under input-array permutation after normalization and deterministic failure on overflow.
 
-- [ ] **Step 7: Run GREEN and commit**
+- [x] **Step 7: Run GREEN and commit**
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/attributes.test.ts test/scheduler.test.ts test/gameplay-properties.test.ts`
 
