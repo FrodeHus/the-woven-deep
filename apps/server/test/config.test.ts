@@ -3,12 +3,35 @@ import { describe, expect, it } from 'vitest';
 import { readConfig } from '../src/config.js';
 
 describe('readConfig', () => {
-  it('defaults to the local development database path', () => {
-    expect(readConfig({}).databasePath).toBe(resolve('data/rogue.sqlite'));
+  it('resolves local defaults independently of the process working directory', () => {
+    const originalCwd = process.cwd();
+    const repositoryRoot = resolve(import.meta.dirname, '../../..');
+
+    try {
+      process.chdir(import.meta.dirname);
+      const fromServerTestDirectory = readConfig({});
+      process.chdir(repositoryRoot);
+      const fromRepositoryRoot = readConfig({});
+
+      expect(fromServerTestDirectory).toEqual(fromRepositoryRoot);
+      expect(fromRepositoryRoot.databasePath).toBe(resolve(repositoryRoot, 'data/rogue.sqlite'));
+      expect(fromRepositoryRoot.contentDir).toBe(resolve(repositoryRoot, 'content'));
+      expect(fromRepositoryRoot.webDistDir).toBe(resolve(repositoryRoot, 'apps/web/dist'));
+    } finally {
+      process.chdir(originalCwd);
+    }
   });
 
-  it('resolves the production database path override', () => {
-    expect(readConfig({ DATABASE_PATH: '/data/rogue.sqlite' }).databasePath).toBe('/data/rogue.sqlite');
+  it('resolves explicit production path overrides unchanged', () => {
+    expect(readConfig({
+      DATABASE_PATH: '/data/rogue.sqlite',
+      CONTENT_DIR: '/app/content',
+      WEB_DIST_DIR: '/app/apps/web/dist',
+    })).toMatchObject({
+      databasePath: '/data/rogue.sqlite',
+      contentDir: '/app/content',
+      webDistDir: '/app/apps/web/dist',
+    });
   });
 
   it('rejects invalid ports', () => {

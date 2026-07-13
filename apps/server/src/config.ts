@@ -1,4 +1,11 @@
+import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+
+const repositoryRoot = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
+
+function resolvePath(value: string | undefined, fallback: string): string {
+  return value === undefined ? resolve(repositoryRoot, fallback) : resolve(value);
+}
 
 export interface ServerConfig {
   readonly host: string;
@@ -17,8 +24,8 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   return {
     host: env.HOST ?? '0.0.0.0',
     port,
-    databasePath: resolve(env.DATABASE_PATH ?? 'data/rogue.sqlite'),
-    contentDir: resolve(env.CONTENT_DIR ?? 'content'),
-    webDistDir: resolve(env.WEB_DIST_DIR ?? 'apps/web/dist'),
+    databasePath: resolvePath(env.DATABASE_PATH, 'data/rogue.sqlite'),
+    contentDir: resolvePath(env.CONTENT_DIR, 'content'),
+    webDistDir: resolvePath(env.WEB_DIST_DIR, 'apps/web/dist'),
   };
 }
