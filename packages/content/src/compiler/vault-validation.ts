@@ -27,6 +27,7 @@ export function validateVaultEntry(entry: VaultContentEntry, file: string): Cont
   const slotLocations = new Map<string, Array<readonly [number, number]>>();
   const fixtureLocations = new Map<string, Array<readonly [number, number]>>();
   const entrances: Array<readonly [number, number]> = [];
+  let declaredEntranceCount = 0;
 
   for (const [y, row] of rows.entries()) {
     const sourceRow = entry.layout[y]!;
@@ -45,7 +46,11 @@ export function validateVaultEntry(entry: VaultContentEntry, file: string): Cont
         add(path, `layout symbol ${symbol} has no legend entry`);
         continue;
       }
-      if (legend.entrance) entrances.push([x, y]);
+      if (legend.entrance) {
+        declaredEntranceCount += 1;
+        if (potentiallyTraversable.has(legend.terrain)) entrances.push([x, y]);
+        else add(path, `entrance terrain ${legend.terrain} is not potentially traversable`);
+      }
       if (legend.slot) {
         const locations = slotLocations.get(legend.slot.id) ?? [];
         locations.push([x, y]);
@@ -68,7 +73,7 @@ export function validateVaultEntry(entry: VaultContentEntry, file: string): Cont
     }
   }
 
-  if (entrances.length === 0) {
+  if (declaredEntranceCount === 0) {
     add(`$.entries.${entry.id}.legend`, 'vault must declare at least one entrance');
   }
 

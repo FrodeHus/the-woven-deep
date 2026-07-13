@@ -85,6 +85,90 @@ entries:
     })).toThrowError(ContentCompileError);
   });
 
+  it('identifies a vault in structural numeric and fixture diagnostics', () => {
+    let error: unknown;
+    try {
+      parseContentFile({
+        path: 'vaults/bad-room.yaml',
+        source: `schemaVersion: 1
+entries:
+  - kind: vault
+    id: vault.bad-room
+    name: Bad room
+    minDepth: 0
+    maxDepth: 5
+    rarity: common
+    weight: 10
+    maxPerFloor: 1
+    margin: 1
+    transforms: { rotations: [0] }
+    layout: ["+*"]
+    legend:
+      "+": { terrain: floor, entrance: true }
+      "*":
+        terrain: floor
+        light:
+          idSuffix: amber
+          glyph: "*"
+          presentationToken: fixture.lamp
+          color: [255, 180, 64]
+          radius: 0
+          strength: 180
+`,
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(ContentCompileError);
+    expect((error as ContentCompileError).issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        file: 'vaults/bad-room.yaml',
+        path: '$.entries.vault.bad-room.minDepth',
+        message: expect.stringMatching(/expected number to be >0/i),
+      }),
+      expect.objectContaining({
+        file: 'vaults/bad-room.yaml',
+        path: '$.entries.vault.bad-room.legend.*.light.radius',
+        message: expect.stringMatching(/expected number to be >=1/i),
+      }),
+    ]));
+  });
+
+  it('keeps index-only structural paths when a raw vault ID is invalid', () => {
+    let error: unknown;
+    try {
+      parseContentFile({
+        path: 'vaults/invalid-id.yaml',
+        source: `schemaVersion: 1
+entries:
+  - kind: vault
+    id: "vault.Bad secret"
+    name: Bad room
+    minDepth: 0
+    maxDepth: 5
+    rarity: common
+    weight: 10
+    maxPerFloor: 1
+    margin: 1
+    transforms: { rotations: [0] }
+    layout: ["+"]
+    legend:
+      "+": { terrain: floor, entrance: true }
+`,
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(ContentCompileError);
+    expect((error as ContentCompileError).issues.map((issue) => issue.path)).toEqual(expect.arrayContaining([
+      '$.entries.0.id',
+      '$.entries.0.minDepth',
+    ]));
+    expect((error as Error).message).not.toContain('vault.Bad secret');
+  });
+
   it('rejects aliases', () => {
     expect(() => parseContentFile({
       path: 'monsters/alias.yaml',

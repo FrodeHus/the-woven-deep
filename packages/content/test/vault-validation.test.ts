@@ -79,4 +79,16 @@ describe('validateVaultEntry', () => {
       expect.stringContaining('duplicate fixture suffix amber'),
     ]));
   });
+
+  it('rejects an impassable entrance without using it to reach an adjacent required slot', () => {
+    const issues = validateVaultEntry(vault(['+m'], {
+      ...baseLegend,
+      '+': { ...baseLegend['+']!, terrain: 'wall' },
+    }), 'vaults/test-room.yaml');
+
+    expect(issues.map((issue) => issue.message)).toEqual(expect.arrayContaining([
+      'entrance terrain wall is not potentially traversable',
+      'required slot monster-main is unreachable',
+    ]));
+  });
 });
