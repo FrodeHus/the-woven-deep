@@ -6,13 +6,17 @@ export async function bootstrapContent(
   contentDir: string,
   repository: ContentPackRepository,
 ): Promise<CompiledContentPack> {
-  const pack = await compileContentDirectory({
+  const pack = await compileStartupContent(contentDir);
+  repository.put(pack);
+  return pack;
+}
+
+export async function compileStartupContent(contentDir: string): Promise<CompiledContentPack> {
+  return compileContentDirectory({
     rootDir: contentDir,
     registries: {
       ai: new Set(['ai.skittish']),
       effects: new Set(['effect.light-source']),
     },
   });
-  repository.put(pack);
-  return pack;
 }

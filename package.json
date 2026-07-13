@@ -2,7 +2,7 @@
   "name": "the-woven-deep",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": { "node": ">=22.12.0" },
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "build": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/web && npm run build --workspace @woven-deep/server",
