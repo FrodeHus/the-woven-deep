@@ -23,9 +23,13 @@ Touch controls may support basic navigation later, but feature-complete mobile p
 
 ## Technical approach
 
-The application uses React and TypeScript, built with Vite, with a Node.js and Fastify HTTP server in the same repository. A framework-independent game-engine package owns all rules and state transitions. React owns screen composition, input routing, dialogs, animation, and presentation.
+The application uses React and TypeScript, built with Vite, with a Node.js and Fastify HTTP and WebSocket server in the same repository. A framework-independent game-engine package owns all rules and state transitions. React owns screen composition, input routing, dialogs, animation, and presentation.
 
-The engine accepts a validated command and returns a new immutable world state plus a list of domain events. Commands include movement, attacks, item actions, equipment changes, merchant transactions, storage transfers, resting, and stair traversal. Invalid commands do not advance time and produce an explanatory event. Guest mode runs this package in the browser. Persistent-profile mode runs it only on the server; the browser sends commands and receives an observable-state projection plus events.
+The engine accepts a validated command and returns a new immutable world state plus a list of domain events. Commands include movement, attacks, item actions, equipment changes, merchant transactions, storage transfers, resting, and stair traversal. Invalid commands do not advance time and produce an explanatory event. Guest mode runs this package in the browser. Persistent-profile mode runs it only on the server; the browser sends sequenced commands over one authenticated WebSocket and receives observable-state patches plus events.
+
+Every persistent-profile command is validated in order by the server, including movement. The WebSocket removes per-command HTTP setup cost, and the client can coalesce rapid directional inputs into a small ordered batch. Each command carries a unique identifier and expected server revision. The server stops a batch when a command is invalid or requires a new player decision, then returns the canonical revision and results for every processed command.
+
+The browser may predict animation for movement into a currently visible, known-empty, walkable cell, but prediction never changes trusted state. Server patches reconcile glyphs, cell visibility, actors, statistics, and log events. A mismatch replaces the predicted presentation with the authoritative result.
 
 The renderer uses DOM cells rather than canvas. Each visible map cell receives glyph, foreground color, background color, visibility state, and computed light intensity. CSS custom properties visualize brightness, tint, and restrained transitions while preserving selectable text and accessible markup.
 
@@ -40,12 +44,15 @@ Each persistent profile owns:
 - Unlocked classes, items, spells, traits, backgrounds, and lore.
 - Item, spell, enemy, and location discoveries.
 - Its personal Hall of Records.
+- Lifetime statistics aggregated from completed heroes.
 - Profile-specific settings and key bindings.
 - At most one active hero and run.
 
 Guest mode applies the same progression rules and begins with the same locked content as a new persistent profile. Its profile-shaped state, active run, and unverified Hall entries live in `sessionStorage`. Closing the browser session removes them. Guest records never enter the server-backed Hall of Records, and guest state cannot be imported into a persistent profile.
 
-Persistent profile state is stored in a SQLite database on the server. The complete active run is saved transactionally after every resolved turn and after non-turn state changes. The save loader validates records, applies ordered schema migrations, and retains a last-known-good run snapshot. The server never accepts a complete run state, score, Hall entry, or unlock list from the browser.
+Persistent profile state is stored in a SQLite database on the server. While connected, the authoritative active run remains in server memory and is checkpointed transactionally. The server saves immediately after consequential changes: combat or damage, health or status changes, pickups, equipment and consumable actions, traps and secrets, doors, stairs, trading, storage transfers, death, victory, and unlocks. Pure unobstructed movement is checkpointed after ten resolved turns or two seconds from the first unsaved movement, whichever occurs first. A clean WebSocket disconnect also forces a checkpoint.
+
+An actual server or container crash can lose only the bounded pure-movement window since the last checkpoint. Disconnecting the browser does not create a rollback opportunity because the still-running server detects closure and checkpoints the in-memory run. The save loader validates records, applies ordered schema migrations, and retains a last-known-good run snapshot. The server never accepts a complete run state, score, Hall entry, or unlock list from the browser.
 
 A signed-in player can export a portable JSON copy of completed records, discoveries, and unlocks for personal backup. Exports exclude the active run's hidden state and all authentication material. Imports are not accepted because client-supplied progression cannot be trusted. Profile deletion requires authentication within the previous ten minutes and confirmation naming the email address; it removes identity, progression, active runs, sessions, and Hall records.
 
@@ -53,7 +60,7 @@ A signed-in player can export a portable JSON copy of completed records, discove
 
 Persistent profiles use email-only magic-link authentication delivered through Mailgun. The login response is identical whether or not an email already exists. Login requests are rate-limited by normalized email and source address.
 
-Magic-link tokens contain at least 256 bits of cryptographically secure randomness, expire after 15 minutes, are single-use, and are stored only as SHA-256 hashes. Successful verification creates a random server session whose token is also stored only as a hash and delivered in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. State-changing requests validate the request origin and an anti-CSRF token. Sessions are revocable and expire after 30 days of inactivity.
+Magic-link tokens contain at least 256 bits of cryptographically secure randomness, expire after 15 minutes, are single-use, and are stored only as SHA-256 hashes. Successful verification creates a random server session whose token is also stored only as a hash and delivered in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. State-changing HTTP requests validate the request origin and an anti-CSRF token. WebSocket upgrades validate the origin, authenticated session, and a connection token before accepting commands. Sessions are revocable and expire after 30 days of inactivity.
 
 Mailgun credentials, the public application URL, cookie settings, and deployment secrets are supplied as server environment variables and never enter the browser bundle. Unlocks use stable internal identifiers such as `class.lamplighter`; their integrity comes from server-side evaluation and authorization, not obscured or deployment-specific unlock hashes. Deployment secrets protect session and temporary-flow integrity rather than content identifiers.
 
@@ -144,7 +151,7 @@ Each floor snapshot contains:
 - Current creatures, inventories, positions, conditions, and behavior state.
 - Ground items, reinforcements, artifact-return hazards, and floor-local counters.
 
-The current hero, town, global run counters, random-generator states, and all generated floor snapshots form one versioned active-run document. SQLite stores the current document and one previous last-known-good document. The server replaces the current document in the same transaction that commits each accepted command. Guest mode uses the identical serialized format in `sessionStorage`.
+The current hero, town, global run counters, random-generator states, a bounded ring of recently processed command identifiers and results, and all generated floor snapshots form one versioned active-run document. SQLite stores the current document and one previous last-known-good document. The server replaces the current document at the immediate and periodic checkpoint boundaries defined above. Guest mode uses the identical serialized format in `sessionStorage`.
 
 Seeds remain part of saves and Hall records for reproducibility, debugging, and replay under the recorded game version. They are not a substitute for mutable floor state. Compact arrays and bitsets control size; the design favors simple complete snapshots over a smaller but more fragile seed-and-delta format.
 
@@ -189,7 +196,7 @@ The application contains these screens and overlays:
 7. **Hero's house:** transfer items between backpack and limited current-hero storage.
 8. **Map and journal:** explored floor map, objective, clues, history, and known landmarks.
 9. **Unlock codex:** discovered and locked classes, items, spells, enemies, and lore.
-10. **Hall of Records:** filterable and sortable completed-run history with record details and seeds; guest records are marked unverified and session-only.
+10. **Hall of Records:** filterable and sortable completed-run history with record details, seeds, run statistics, and lifetime profile totals; guest records are marked unverified and session-only.
 11. **Run conclusion:** death or victory, score breakdown, newly applied unlocks, notable events, and confirmation that the run was recorded automatically.
 12. **Help and controls:** keyboard reference, glyph legend, and mechanics explanations.
 13. **Settings and account:** display, motion, audio, bindings, progress export, sign-out, profile deletion, and guest-session clearing.
@@ -212,11 +219,30 @@ Records sort first by outcome tier—escaped with the Heart, recovered the Heart
 
 Score rewards deepest floor, milestone bosses, enemy threat values, discoveries, artifact recovery, and successful escape. A bounded turn-efficiency bonus rewards decisive play without making careful play nonviable. The run-conclusion screen itemizes every score source; balance coefficients live in tested configuration data.
 
+## Statistics and memorable metrics
+
+Engine domain events update a typed statistic registry. Metrics are counters and extrema, not a retained raw event history, so they add little save or database size. The active-run snapshot stores current-hero metrics. Finalizing a run copies those metrics into the immutable Hall record and merges them into lifetime profile totals. Guest mode performs the same aggregation within its browser session.
+
+The initial registry includes:
+
+- Total kills and kills grouped by monster type.
+- Attacks, hits, misses, critical hits, damage dealt, hit points lost, and hit points healed.
+- Potions drunk grouped by potion type, scrolls read, spells cast, food eaten, and items identified.
+- Items collected, dropped, bought, sold, equipped, and stored; currency earned and spent.
+- Grid cells moved, displayed as meters traveled using one traversed cell as one meter.
+- Turns survived, turns spent in darkness, light sources exhausted, rests taken, and trips back to town.
+- Doors opened, traps triggered and disarmed, secrets discovered, floors visited, deepest floor, and bosses defeated.
+- Highest single hit, lowest surviving hit-point total, longest darkness streak, and largest carried fortune.
+
+Metric identifiers and display metadata live in a configuration registry so new counters can be added without changing save structure. Monster- and item-grouped metrics use stable content identifiers internally and human-readable labels for display. Damage, loss, and healing counters record effective values after mitigation and health caps rather than attempted values. Metrics never affect combat or unlock eligibility unless an unlock rule explicitly references one. Persistent-profile clients receive only statistics earned through server-validated events.
+
+Current-run highlights appear on the character sheet. The run-conclusion screen selects several notable metrics in addition to showing the complete categorized list. Hall record details preserve every metric for that hero, while the Hall overview can switch between individual records and lifetime profile totals.
+
 ## Failure handling
 
 Invalid game actions show a concrete event-log explanation and consume no turn. Unexpected engine errors pause input and retain the last-known-good state. Guest save failures explain whether session storage is unavailable or full. Server failures distinguish unauthenticated, forbidden, conflicting, unavailable, and incompatible-version states without leaking hidden game data.
 
-If the server is unavailable, a player can start a separate guest run. A persistent run never falls back to editable browser state, and a guest run never merges into a persistent run. Retrying a persistent command is idempotent: every command carries a monotonically increasing expected-turn value and a unique command identifier, allowing the server to reject stale commands and return the already-committed result for duplicates.
+If the server is unavailable, a player can start a separate guest run. A persistent run never falls back to editable browser state, and a guest run never merges into a persistent run. Reconnecting reloads the last durable checkpoint, establishes a new WebSocket, and returns its canonical revision. Persistent commands are idempotent: the server rejects stale revisions and returns the recorded result for a duplicate command identifier that remains in its bounded deduplication window.
 
 Procedural generation has bounded retries and a deterministic fallback floor template. A generation failure never produces an unreachable objective or a partially initialized run.
 
@@ -230,11 +256,11 @@ Glyph meaning is not communicated by color alone. The game supports scalable int
 
 Automated verification includes:
 
-- Unit tests for commands, combat, inventory, equipment, economy, scoring, unlocks, field of view, lighting, save validation, and migrations.
+- Unit tests for commands, combat, inventory, equipment, economy, scoring, statistics, unlocks, field of view, lighting, save validation, and migrations.
 - Seeded property tests that require every generated floor, objective, and exit to remain reachable.
 - Simulation tests covering thousands of automated turns to detect impossible states and balance outliers.
-- React component tests for profiles, character generation, locked classes, inventory, merchants, house storage, codex, and records.
-- API tests for magic-link issuance and consumption, session revocation, authorization, command idempotency, hidden-state projection, transactional saves, profile deletion, and rate limiting.
+- React component tests for profiles, character generation, locked classes, inventory, merchants, house storage, codex, records, and statistics views.
+- API and WebSocket protocol tests for magic-link issuance and consumption, session revocation, authorization, ordered command batches, idempotency, reconnection, prediction correction, hidden-state projection, immediate consequential saves, bounded movement checkpoints, profile deletion, and rate limiting.
 - Browser tests for guest play, session-only cleanup, email sign-in, signed-in save and resume, hero creation with both attribute methods, dungeon actions, death cleanup, victory, unlock application, and Hall of Records insertion.
 - Equivalence tests that run the same seed and command sequence through browser guest mode and server profile mode and require identical engine results.
 - Accessibility checks for keyboard traversal, focus management, reduced motion, scaling, and non-color glyph distinctions.
