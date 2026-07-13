@@ -91,4 +91,39 @@ describe('validateVaultEntry', () => {
       'required slot monster-main is unreachable',
     ]));
   });
+
+  it('rejects an optional placement slot authored on void terrain at its vault legend field', () => {
+    const issues = validateVaultEntry(vault(['+s'], {
+      '+': baseLegend['+']!,
+      s: {
+        terrain: 'void', entrance: false, light: null,
+        slot: { id: 'optional-cache', kind: 'item', required: false, tags: ['cache'] },
+      },
+    }), 'vaults/test-room.yaml');
+
+    expect(issues).toContainEqual({
+      file: 'vaults/test-room.yaml',
+      path: '$.entries.vault.test-room.legend.s.slot',
+      message: 'void terrain cannot contain placement slot optional-cache; use non-void terrain or remove the slot',
+    });
+  });
+
+  it('rejects a light authored on void terrain at its vault legend field', () => {
+    const issues = validateVaultEntry(vault(['+l'], {
+      '+': baseLegend['+']!,
+      l: {
+        terrain: 'void', entrance: false, slot: null,
+        light: {
+          idSuffix: 'void-lamp', glyph: '*', presentationToken: 'fixture.lamp',
+          color: [255, 180, 64], radius: 6, strength: 180, enabled: true,
+        },
+      },
+    }), 'vaults/test-room.yaml');
+
+    expect(issues).toContainEqual({
+      file: 'vaults/test-room.yaml',
+      path: '$.entries.vault.test-room.legend.l.light',
+      message: 'void terrain cannot contain light void-lamp; use non-void terrain or remove the light',
+    });
+  });
 });

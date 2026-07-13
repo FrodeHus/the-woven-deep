@@ -298,4 +298,45 @@ describe('vault placement', () => {
     expect(placed.lights.some((light) => light.location.type === 'fixed' && light.location.y === 5)).toBe(false);
     expect(placed.placementSlots.some((slot) => slot.y === 5)).toBe(false);
   });
+
+  it.each([
+    [
+      'light',
+      { ...floorLegend, terrain: 'void' as const, light: {
+        idSuffix: 'void-light', glyph: '*', presentationToken: 'fixture.test',
+        color: [1, 2, 3] as const, radius: 2, strength: 3, enabled: true,
+      } },
+      'vault vault.invalid legend symbol x cannot place light void-light on void terrain',
+    ],
+    [
+      'slot',
+      { ...floorLegend, terrain: 'void' as const, slot: {
+        id: 'void-slot', kind: 'item' as const, required: false, tags: ['test'],
+      } },
+      'vault vault.invalid legend symbol x cannot place slot void-slot on void terrain',
+    ],
+  ] as const)('rejects compiled-shaped invalid vault %s records on void before placement', (_kind, action, message) => {
+    const input = openTopology([{ roomId: 'room.a', left: 4, top: 4, right: 5, bottom: 4 }]);
+    const invalid = tinyVault('vault.invalid', ['+x'], {
+      '+': { ...floorLegend, entrance: true }, x: action,
+    });
+    const before = stableJson(input);
+
+    expect(() => placeVaults(input, [invalid], { requiredVaultId: invalid.id })).toThrow(new TypeError(message));
+    expect(stableJson(input)).toBe(before);
+  });
+
+  it('preserves authored void terrain cells that contain no placement actions', () => {
+    const input = openTopology([{ roomId: 'room.a', left: 4, top: 4, right: 5, bottom: 4 }]);
+    const valid = tinyVault('vault.void-mask', ['+x'], {
+      '+': { ...floorLegend, entrance: true },
+      x: { ...floorLegend, terrain: 'void' },
+    });
+
+    const placed = success(placeVaults(input, [valid], { requiredVaultId: valid.id }));
+
+    expect(placed.tiles[placed.vaults[0]!.y * input.width + placed.vaults[0]!.x + 1]).toBe(6);
+    expect(placed.lights).toEqual([]);
+    expect(placed.placementSlots).toEqual([]);
+  });
 });

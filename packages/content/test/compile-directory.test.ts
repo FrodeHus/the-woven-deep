@@ -201,6 +201,32 @@ describe('compileContentDirectory', () => {
     await expect(compileContentDirectory({ rootDir: root, registries })).rejects.toBeInstanceOf(ContentCompileError);
   });
 
+  it.each([
+    [
+      'optional slot on void terrain',
+      compactVault
+        .replace('m: {terrain: floor, slot:', 'm: {terrain: void, slot:')
+        .replace('required: true', 'required: false'),
+      '$.entries.vault.test-room.legend.m.slot',
+      'void terrain cannot contain placement slot monster-main; use non-void terrain or remove the slot',
+    ],
+    [
+      'light on void terrain',
+      compactVault.replace(
+        'm: {terrain: floor, slot: {id: monster-main, kind: monster, required: true, tags: [guard]}}',
+        'm: {terrain: void, light: {idSuffix: void-lamp, glyph: "*", presentationToken: fixture.lamp, color: [255, 180, 64], radius: 6, strength: 180}}',
+      ),
+      '$.entries.vault.test-room.legend.m.light',
+      'void terrain cannot contain light void-lamp; use non-void terrain or remove the light',
+    ],
+  ] as const)('strict compilation rejects %s', async (_name, invalidVault, path, message) => {
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, invalidVault) });
+
+    await expectCompileIssues(compileContentDirectory({ rootDir: root, registries }), [{
+      file: 'content.yaml', path, message,
+    }]);
+  });
+
   it('includes vault IDs and values in global uniqueness and content hashing', async () => {
     const duplicateRoot = await fixture({
       'a.yaml': contentFile(compactMonster, compactItem, compactVault),

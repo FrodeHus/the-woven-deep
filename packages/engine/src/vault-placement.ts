@@ -45,6 +45,23 @@ function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function assertVaultActionTerrain(template: VaultContentEntry): void {
+  for (const symbol of Object.keys(template.legend).sort(compareText)) {
+    const legend = template.legend[symbol]!;
+    if (legend.terrain !== 'void') continue;
+    if (legend.light !== null) {
+      throw new TypeError(
+        `vault ${template.id} legend symbol ${symbol} cannot place light ${legend.light.idSuffix} on void terrain`,
+      );
+    }
+    if (legend.slot !== null) {
+      throw new TypeError(
+        `vault ${template.id} legend symbol ${symbol} cannot place slot ${legend.slot.id} on void terrain`,
+      );
+    }
+  }
+}
+
 function overlaps(candidate: Pick<Candidate, 'x' | 'y' | 'transformed'>, placed: VaultPlacement): boolean {
   return candidate.x < placed.x + placed.width && placed.x < candidate.x + candidate.transformed.width
     && candidate.y < placed.y + placed.height && placed.y < candidate.y + candidate.transformed.height;
@@ -178,6 +195,9 @@ export function placeVaults(
   vaults: readonly VaultContentEntry[],
   options: VaultPlacementOptions = {},
 ): VaultPlacementResult {
+  for (const vault of [...vaults].sort((left, right) => compareText(left.id, right.id))) {
+    assertVaultActionTerrain(vault);
+  }
   const eligible = [...vaults].filter((vault) => topology.depth >= vault.minDepth && topology.depth <= vault.maxDepth
     && (options.vaultTags ?? []).every((tag) => vault.tags.includes(tag)))
     .sort((left, right) => compareText(left.id, right.id));

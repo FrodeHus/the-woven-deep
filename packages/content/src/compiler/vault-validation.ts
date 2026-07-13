@@ -65,11 +65,24 @@ export function validateVaultEntry(entry: VaultContentEntry, file: string): Cont
   }
 
   for (const symbol of Object.keys(entry.legend).sort(compareText)) {
+    const legend = entry.legend[symbol]!;
     if ([...symbol].length !== 1) {
       add(`$.entries.${entry.id}.legend.${symbol}`, `legend key ${symbol} must be one Unicode code point`);
     }
     if (!usedSymbols.has(symbol)) {
       add(`$.entries.${entry.id}.legend.${symbol}`, `legend symbol ${symbol} is unused`);
+    }
+    if (legend.terrain === 'void' && legend.light !== null) {
+      add(
+        `$.entries.${entry.id}.legend.${symbol}.light`,
+        `void terrain cannot contain light ${legend.light.idSuffix}; use non-void terrain or remove the light`,
+      );
+    }
+    if (legend.terrain === 'void' && legend.slot !== null) {
+      add(
+        `$.entries.${entry.id}.legend.${symbol}.slot`,
+        `void terrain cannot contain placement slot ${legend.slot.id}; use non-void terrain or remove the slot`,
+      );
     }
   }
 
