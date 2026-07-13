@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 0,
+  "gameVersion": "0.1.0",
+  "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "runId": "run.legacy",
+  "seed": 305419896,
+  "revision": 2,
+  "turn": 2,
+  "hero": { "heroId": "hero.legacy", "name": "Ada", "floorId": "floor.legacy", "x": 2, "y": 1 },
+  "floor": {
+    "floorId": "floor.legacy",
+    "seed": 305419896,
+    "generatorVersion": 1,
+    "width": 5,
+    "height": 4,
+    "depth": 1,
+    "tiles": [0,0,0,0,0,0,1,1,1,0,0,1,1,1,0,0,0,0,0,0],
+    "entities": []
+  }
+}
