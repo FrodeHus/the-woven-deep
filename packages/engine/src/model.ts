@@ -3,7 +3,7 @@ import type { RngStreamName } from './versions.js';
 export type OpaqueId = string;
 export type Uint32State = readonly [number, number, number, number];
 export type RngStreams = Readonly<Record<RngStreamName, Uint32State>>;
-export type TileId = 0 | 1;
+export type TileId = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export type Direction = 'north' | 'south' | 'east' | 'west';
 
 export interface FloorEntityPosition {
@@ -67,7 +67,7 @@ export interface InvalidActionEvent {
   readonly type: 'action.invalid';
   readonly eventId: OpaqueId;
   readonly commandId: OpaqueId;
-  readonly reason: 'blocked.bounds' | 'blocked.wall';
+  readonly reason: 'blocked.bounds' | 'blocked.wall' | 'blocked.door' | 'blocked.pillar' | 'blocked.void';
 }
 
 export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent;

@@ -1,4 +1,5 @@
 export * from './stable-json.js';
+export * from './terrain.js';
 export * from './fixture.js';
 export * from './migration.js';
 export * from './model.js';
