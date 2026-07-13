@@ -1,6 +1,6 @@
 # Dungeon Generation, Visibility, and Light Design
 
-**Status:** Approved design, pending written-spec review
+**Status:** Approved for implementation
 
 **Roadmap milestone:** 3 — dungeon generation, visibility, and light
 
@@ -138,8 +138,8 @@ For each attempt:
 2. Run the pinned ROT.js room-and-corridor generator inside eligible bounds.
 3. Copy rooms, corridors, doors, and carved cells into engine-owned records.
 4. Reject topology outside the mask, overlapping void, below the room budget, or containing invalid geometry.
-5. Evaluate and place eligible vaults into compatible generated rooms.
-6. Place upward and downward stairs in distinct rooms with a minimum route distance.
+5. Place upward and downward stairs in distinct rooms with a minimum route distance.
+6. Evaluate and place eligible vaults into compatible generated rooms without overwriting or disconnecting the stair route.
 7. Validate every potentially traversable cell belongs to one connected component.
 8. Validate both stairs, every vault entrance, and every required placement slot are reachable.
 9. Emit the immutable complete floor snapshot and a generation report.
@@ -194,7 +194,7 @@ A legend symbol declares exactly one terrain tile and may additionally declare o
 
 A placement slot contains a stable slot identifier, required/optional status, and zero or more stable tags. It does not instantiate later gameplay content.
 
-An environmental light fixture additionally declares a stable light identifier suffix, RGB color, radius, strength, and enabled default. Fixture cells must use potentially traversable terrain unless the definition explicitly uses a blocking fixture tile.
+An environmental light fixture additionally declares a stable light identifier suffix, one display glyph, a semantic presentation token, RGB color, radius, strength, and enabled default. Fixture cells must use potentially traversable terrain unless the definition explicitly uses a blocking fixture tile.
 
 ### Vault placement
 
@@ -217,7 +217,7 @@ A vault is placed only when:
 - required slots remain reachable
 - replacing room terrain cannot block the main route
 
-The floor stores vault identifier, transform, bounds, entrances, fixtures, and unresolved placement slots. Hidden slot information never enters observable projections.
+The floor stores a unique placement identifier, source vault identifier, transform, bounds, entrances, fixtures, and unresolved placement slots. Slot and fixture records refer to the placement identifier so the same vault template can appear more than once without ambiguous ownership. Hidden slot information never enters observable projections.
 
 ## Connectivity validation
 
@@ -268,6 +268,10 @@ A saved light source contains:
 - strength 1–255
 - enabled state
 - stable falloff identifier, initially only `linear`
+- source vault-placement identifier for authored fixtures, or `null` for unattached ownership
+- fixed-fixture presentation containing one glyph and a semantic token, or `null` for sources that have no separate map glyph
+
+Actor-attached sources have null vault ownership and null fixture presentation. A source with non-null vault ownership is fixed, resolves to one saved vault placement, and has non-null fixture presentation.
 
 The milestone supports fixed environmental fixtures and a hero-attached carried light. Later source types reuse the same record.
 
@@ -399,7 +403,7 @@ Schema `v2` retains all prior strictness and adds validation for:
 - remembered-terrain consistency
 - hero sight radius
 - unique, ordered light identifiers and valid source locations
-- unique vault placements, bounds, transforms, entrances, fixtures, and slot identifiers
+- unique vault placement identifiers, valid source vault identifiers, bounds, transforms, entrances, fixtures, and slot identifiers
 - distinct in-bounds stair positions matching stair tiles
 - floor identifiers in strict stable order
 - current recent-command histories and hero position under expanded movement blocking
