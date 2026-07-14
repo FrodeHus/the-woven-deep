@@ -27,13 +27,19 @@ describe('registered deterministic behavior', () => {
     });
   });
 
-  it('takes the first legal fixed-order step that reduces distance', () => {
+  it('uses the owned path adapter to route around an occupied cell', () => {
     const state = createDemoRun();
-    const monster = hostile({ x: 3, y: 3 });
+    const monster = hostile({ x: 4, y: 1, behaviorState: {
+      intent: 'approach', goal: { type: 'actor', targetActorId: 'hero.demo' },
+      lastKnownTargets: [], investigation: null,
+    } });
+    const blocker = hostile({
+      actorId: 'monster.blocker', x: 3, y: 1, behaviorId: null, awareActorIds: [],
+    });
     expect(chooseBehaviorAction({
-      state: { ...state, actors: [state.actors[0]!, monster] },
+      state: { ...state, actors: [state.actors[0]!, blocker, monster] },
       actorId: monster.actorId, content: createDemoContentPack(),
-    })).toMatchObject({ type: 'move', to: { x: 2, y: 2 } });
+    })).toMatchObject({ type: 'move', to: { x: 4, y: 2 } });
   });
 
   it('waits when it has no aware hostile target', () => {
@@ -52,5 +58,34 @@ describe('registered deterministic behavior', () => {
       state: { ...state, actors: [state.actors[0]!, npc] },
       actorId: npc.actorId, content: createDemoContentPack(),
     })).toMatchObject({ type: 'wait', actorId: npc.actorId });
+  });
+
+  it('holds when a saved goal becomes non-hostile before selection', () => {
+    const state = createDemoRun();
+    const monster = hostile({ x: 3, y: 1, behaviorState: {
+      intent: 'approach', goal: { type: 'actor', targetActorId: 'hero.demo' },
+      lastKnownTargets: [], investigation: null,
+    } });
+    expect(chooseBehaviorAction({
+      state: {
+        ...state, actors: [state.actors[0]!, monster],
+        relationships: [{ leftActorId: 'hero.demo', rightActorId: monster.actorId, relationship: 'neutral' }],
+      },
+      actorId: monster.actorId, content: createDemoContentPack(),
+    })).toMatchObject({ type: 'wait' });
+  });
+
+  it('holds instead of pathing onto an occupied investigation cell', () => {
+    const state = createDemoRun();
+    const monster = hostile({ x: 3, y: 1, awareActorIds: [], behaviorState: {
+      intent: 'approach', goal: { type: 'cell', floorId: 'floor.demo', x: 2, y: 1 },
+      lastKnownTargets: [], investigation: null,
+    } });
+    const blocker = hostile({ actorId: 'monster.blocker', x: 2, y: 1, behaviorId: null,
+      disposition: 'friendly', awareActorIds: [] });
+    expect(chooseBehaviorAction({
+      state: { ...state, actors: [state.actors[0]!, blocker, monster] },
+      actorId: monster.actorId, content: createDemoContentPack(),
+    })).toMatchObject({ type: 'wait' });
   });
 });

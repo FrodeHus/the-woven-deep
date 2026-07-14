@@ -163,6 +163,7 @@ function monsterActor(
   definition: MonsterContentEntry,
   actorId: OpaqueId,
   point: Point,
+  lastKnownHero: Point,
   balance: BalanceContentEntry,
 ): ActorState {
   return {
@@ -182,7 +183,14 @@ function monsterActor(
     conditions: [],
     equipment: emptyEquipment(),
     behaviorId: definition.behaviorId,
-    behaviorState: { intent: 'hold', goal: null, lastKnownTargets: [], investigation: null },
+    behaviorState: {
+      intent: 'approach', goal: { type: 'cell', floorId: FLOOR_ID, ...lastKnownHero },
+      lastKnownTargets: [{
+        targetActorId: IDS.hero, floorId: FLOOR_ID, ...lastKnownHero,
+        observedAt: 0, source: 'sound', observerActorId: actorId,
+      }],
+      investigation: { floorId: FLOOR_ID, ...lastKnownHero, startedAt: 0, expiresAt: null },
+    },
     populationId: null,
     populationRoleId: null,
     populationPresentation: null,
@@ -313,8 +321,8 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
   };
   const actors = ordered([
     hero,
-    monsterActor(ratDefinition, IDS.rat, positions.rat, balance),
-    monsterActor(beetleDefinition, IDS.beetle, positions.beetle, balance),
+    monsterActor(ratDefinition, IDS.rat, positions.rat, positions.hero, balance),
+    monsterActor(beetleDefinition, IDS.beetle, positions.beetle, positions.hero, balance),
   ], (actor) => actor.actorId);
 
   const backpack = (actorId: OpaqueId = IDS.hero) => ({ type: 'backpack' as const, actorId });

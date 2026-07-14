@@ -15,12 +15,16 @@ import { advanceSurvival, hungerModifiers } from './survival.js';
 import { applyPassiveDiscovery, closeDoor, disarmTrap, featureTiles, openDoor, searchFeatures, triggerTrap } from './features.js';
 import { tileIndex, type ActiveRun, type DomainEvent, type OpaqueId, type Point, type Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
+import { markEncounterObserved } from './population-gates.js';
+import { updatePopulationIntent } from './population-intent.js';
+import { updateActorMemory, visibleTargetObservations } from './population-perception.js';
 import { projectDomainEvents } from './event-projection.js';
 import {
   completeNormalActorTurn, relationshipBetween, resolveOpportunityAttacks, setRelationship,
   type ReactionAttackResult,
 } from './reactions.js';
 import { advanceToNextReady, chargeActionEnergy, selectReadyActor } from './scheduler.js';
+import { compareCodeUnits } from './stable-json.js';
 
 export interface WorldStepResult {
   readonly state: ActiveRun;
@@ -393,6 +397,107 @@ function refreshHeroKnowledge(state: ActiveRun, content: CompiledContentPack): A
   return { ...state, floors: state.floors.map((candidate) => candidate === floor ? { ...candidate, knowledge } : candidate) };
 }
 
+function prepareIndividualTurn(input: Readonly<{
+  state: ActiveRun; actorId: OpaqueId; content: CompiledContentPack; eventId: OpaqueId;
+}>): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+  const actor = actorById(input.state, input.actorId);
+  if (!actor) throw new Error(`internal invariant: actor ${input.actorId} does not exist`);
+  if (actor.floorId !== input.state.activeFloorId || actor.behaviorId === null) return { state: input.state, events: [] };
+  const floor = input.state.floors.find((candidate) => candidate.floorId === actor.floorId);
+  if (!floor) throw new Error(`internal invariant: actor floor ${actor.floorId} does not exist`);
+  const definition = monsterDefinition(input.content, actor);
+  if (!definition) throw new Error(`internal invariant: monster definition ${actor.contentId} does not exist`);
+  const positions = new Map<string, Readonly<Point>>(floor.entities.map((entity) => [entity.entityId, entity] as const));
+  const floorActors = input.state.actors.filter((candidate) => candidate.floorId === floor.floorId && candidate.health > 0);
+  for (const candidate of floorActors) positions.set(candidate.actorId, candidate);
+  const perception = refreshKnowledge({
+    floor: { ...floor, tiles: featureTiles(input.state, floor.floorId) },
+    hero: { heroId: actor.actorId, x: actor.x, y: actor.y, sightRadius: definition.perception },
+    actors: positions,
+    additionalLights: itemLightSources({ run: input.state, content: input.content, floorId: floor.floorId }),
+  });
+  const observations = visibleTargetObservations({
+    observerActorId: actor.actorId, floorId: floor.floorId, width: floor.width,
+    visibilityWords: perception.visibilityWords, illuminationIntensity: perception.illumination.intensity,
+    observedAt: input.state.worldTime, actors: floorActors,
+  });
+  const awareActorIds = observations.map((observation) => observation.targetActorId).sort(compareCodeUnits);
+  const hostileObservations = observations.filter((observation) => (
+    relationshipBetween(input.state, actor.actorId, observation.targetActorId) === 'hostile'
+  )).sort((left, right) => {
+    const leftDistance = Math.max(Math.abs(left.x - actor.x), Math.abs(left.y - actor.y));
+    const rightDistance = Math.max(Math.abs(right.x - actor.x), Math.abs(right.y - actor.y));
+    return leftDistance - rightDistance || compareCodeUnits(left.targetActorId, right.targetActorId);
+  });
+  let behaviorState = updateActorMemory({
+    state: actor.behaviorState, observations: hostileObservations, investigationDuration: null,
+  });
+  const hostileObservation = hostileObservations[0];
+  if (hostileObservation) {
+    behaviorState = { ...behaviorState, goal: { type: 'actor', targetActorId: hostileObservation.targetActorId } };
+  } else if (behaviorState.investigation) {
+    const investigation = behaviorState.investigation;
+    const investigatedTargets = behaviorState.lastKnownTargets.filter((memory) => memory.floorId === investigation.floorId
+      && memory.x === investigation.x && memory.y === investigation.y);
+    const remainsHostile = investigatedTargets.length === 0 || investigatedTargets.some((memory) => (
+      actorById(input.state, memory.targetActorId) !== undefined
+      && relationshipBetween(input.state, actor.actorId, memory.targetActorId) === 'hostile'
+    ));
+    const finished = investigation.floorId !== actor.floorId
+      || (investigation.x === actor.x && investigation.y === actor.y)
+      || (investigation.expiresAt !== null && investigation.expiresAt <= input.state.worldTime)
+      || !remainsHostile;
+    behaviorState = finished
+      ? { ...behaviorState, goal: null, investigation: null }
+      : { ...behaviorState, goal: { type: 'cell', floorId: investigation.floorId,
+        x: investigation.x, y: investigation.y } };
+  } else {
+    behaviorState = { ...behaviorState, goal: null };
+  }
+  const target = behaviorState.goal?.type === 'actor'
+    ? actorById(input.state, behaviorState.goal.targetActorId) : undefined;
+  const adjacent = target !== undefined && Math.max(Math.abs(target.x - actor.x), Math.abs(target.y - actor.y)) === 1;
+  const intent = adjacent ? 'attack' : behaviorState.goal === null ? 'hold' : 'approach';
+  const updatedIntent = updatePopulationIntent({
+    eventId: input.eventId, actorId: actor.actorId, state: behaviorState, intent,
+    targetCategory: behaviorState.goal?.type === 'actor'
+      ? (behaviorState.goal.targetActorId === input.state.hero.actorId ? 'hero' : null)
+      : behaviorState.goal === null ? null : 'position',
+  });
+  const updated = { ...actor, awareActorIds, behaviorState: updatedIntent.state };
+  return {
+    state: withActor(input.state, updated),
+    events: updatedIntent.event ? [updatedIntent.event] : [],
+  };
+}
+
+function observeEncounters(state: ActiveRun, content: CompiledContentPack): ActiveRun {
+  if (state.encounterDecisions.length === 0 || state.populations.length === 0) return state;
+  const hero = heroActor(state);
+  const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
+  if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
+  const positions = new Map<string, Readonly<Point>>(floor.entities.map((entity) => [entity.entityId, entity] as const));
+  for (const actor of state.actors) if (actor.floorId === floor.floorId) positions.set(actor.actorId, actor);
+  const perception = refreshKnowledge({
+    floor: { ...floor, tiles: featureTiles(state, floor.floorId) }, hero: heroPerception(state.hero, hero), actors: positions,
+    additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }),
+  });
+  let decisions = state.encounterDecisions;
+  for (const population of [...state.populations].sort((left, right) => compareCodeUnits(left.populationId, right.populationId))) {
+    if (population.floorId !== floor.floorId) continue;
+    const visible = population.livingMemberIds.some((actorId) => {
+      const member = actorById(state, actorId);
+      const index = member ? tileIndex(floor, member.x, member.y) : undefined;
+      return index !== undefined && ((perception.visibilityWords[Math.floor(index / 32)]! >>> (index % 32)) & 1) === 1
+        && perception.illumination.intensity[index]! > 0;
+    });
+    if (visible && !decisions.find((decision) => decision.encounterId === population.encounterId)?.encountered) {
+      decisions = markEncounterObserved(decisions, population.encounterId);
+    }
+  }
+  return decisions === state.encounterDecisions ? state : { ...state, encounterDecisions: decisions };
+}
+
 export function resolveWorldStep(input: Readonly<{
   state: ActiveRun;
   content: CompiledContentPack;
@@ -408,16 +513,18 @@ export function resolveWorldStep(input: Readonly<{
   let state = resolved.state;
   const events: DomainEvent[] = [];
   const publicEvents: DomainEvent[] = [];
+  state = observeEncounters(state, input.content);
   appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
   const actedHero = actorById(state, heroId);
   if (actedHero) state = withActor(state, completeNormalActorTurn(actedHero));
   const limit = input.maxInternalActions ?? 10_000;
   let internalActions = 0;
   while ((actorById(state, heroId)?.health ?? 0) > 0) {
-    let selected = selectReadyActor(state.actors, input.content);
+    let selected = selectReadyActor(state.actors, input.content, state.activeFloorId);
     if (!selected) {
       const previousWorldTime = state.worldTime;
-      const advanced = advanceToNextReady({ worldTime: state.worldTime, actors: state.actors, content: input.content });
+      const advanced = advanceToNextReady({ worldTime: state.worldTime, actors: state.actors,
+        content: input.content, activeFloorId: state.activeFloorId });
       state = { ...state, worldTime: advanced.worldTime, actors: advanced.actors };
       const danger = state.actors.some((actor) => actor.actorId !== heroId && actor.health > 0
         && actor.awareActorIds.includes(heroId) && relationshipBetween(state, heroId, actor.actorId) === 'hostile');
@@ -425,19 +532,23 @@ export function resolveWorldStep(input: Readonly<{
         elapsed: state.worldTime - previousWorldTime, eventId: input.eventId, danger });
       state = survival.state;
       appendEvents(events, publicEvents, survival.events, state, heroId, input.content);
-      selected = selectReadyActor(state.actors, input.content);
+      selected = selectReadyActor(state.actors, input.content, state.activeFloorId);
       if (!selected) break;
     }
     if (selected.actorId === heroId) break;
     if (internalActions >= limit) throw new Error(`internal action safety limit ${limit} exceeded`);
     internalActions += 1;
+    const prepared = prepareIndividualTurn({ state, actorId: selected.actorId, content: input.content, eventId: input.eventId });
+    state = prepared.state;
     appendEvents(events, publicEvents, [{
       type: 'actor.turn.started', eventId: input.eventId, actorId: selected.actorId,
     }], state, heroId, input.content);
+    appendEvents(events, publicEvents, prepared.events, state, heroId, input.content);
     const action = chooseBehaviorAction({ state, actorId: selected.actorId, content: input.content });
     if (action.type === 'rest') throw new Error('internal invariant: non-player behavior selected rest');
     resolved = applyAction({ state, action, content: input.content, eventId: input.eventId });
     state = resolved.state;
+    state = observeEncounters(state, input.content);
     appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
     const completed = actorById(state, selected.actorId);
     if (completed) state = withActor(state, completeNormalActorTurn(completed));

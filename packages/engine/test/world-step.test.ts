@@ -66,7 +66,7 @@ describe('atomic world steps', () => {
       action: { type: 'move', actorId: 'hero.demo', to: { x: 2, y: 1 }, cost: 100 },
     });
     expect(result.events.map((event) => event.type)).toEqual([
-      'hero.moved', 'actor.turn.started', 'attack.hit', 'actor.damaged', 'actor.turn.completed',
+      'hero.moved', 'actor.turn.started', 'actor.intent-changed', 'attack.hit', 'actor.damaged', 'actor.turn.completed',
     ]);
     expect(result.state.worldTime).toBe(1);
     expect(selectReadyActor(result.state.actors, content)?.actorId).toBe('hero.demo');
@@ -84,6 +84,34 @@ describe('atomic world steps', () => {
     })).toThrow('internal action safety limit 0 exceeded');
   });
 
+  it('does not partially mutate input when one actor behavior fails', () => {
+    const state = createDemoRun();
+    const enemy = monster('monster.invalid-behavior', { energy: 100, behaviorId: 'behavior.missing' });
+    const content = contentWithMonster(enemy.contentId);
+    const input = { ...state, actors: [state.actors[0]!, enemy] };
+    const before = structuredClone(input);
+    expect(() => resolveWorldStep({
+      state: input, content, eventId: 'command.invalid-behavior',
+      action: { type: 'wait', actorId: 'hero.demo', cost: 100 },
+    })).toThrow(/no behavior resolver/);
+    expect(input).toEqual(before);
+  });
+
+  it('resolves hostile opportunity attacks before applying movement', () => {
+    const state = createDemoRun();
+    const hero = { ...state.actors[0]!, x: 2, y: 2 };
+    const enemy = monster('monster.reactor', { x: 3, y: 2, energy: 0, reactionReady: true,
+      awareActorIds: [hero.actorId] });
+    const content = contentWithMonster(enemy.contentId);
+    const result = resolveWorldStep({
+      state: { ...state, actors: [hero, enemy] }, content, eventId: 'command.depart',
+      action: { type: 'move', actorId: hero.actorId, to: { x: 1, y: 2 }, cost: 100 },
+    });
+    const types = result.events.map((event) => event.type);
+    expect(types.indexOf('reaction.triggered')).toBeGreaterThanOrEqual(0);
+    expect(types.indexOf('reaction.triggered')).toBeLessThan(types.indexOf('hero.moved'));
+  });
+
   it('omits unseen actor activity from the public event sequence', () => {
     const state = createDemoRun();
     const enemy = monster('monster.unseen', { energy: 100 });
@@ -95,10 +123,9 @@ describe('atomic world steps', () => {
       action: { type: 'wait', actorId: 'hero.demo', cost: 100 },
     });
     expect(result.events.map((event) => event.type)).toEqual([
-      'hero.waited', 'actor.turn.started', 'actor.moved', 'actor.turn.completed',
+      'hero.waited', 'actor.turn.started', 'actor.turn.completed',
     ]);
-    expect(result.publicEvents.map((event) => event.type)).toEqual(['hero.waited', 'sound.heard']);
-    expect(result.publicEvents[1]).toMatchObject({ category: 'movement', direction: 'east' });
+    expect(result.publicEvents.map((event) => event.type)).toEqual(['hero.waited']);
   });
 
   it('returns the saved public sequence when a duplicate command is retried after visibility changes', () => {
@@ -113,7 +140,7 @@ describe('atomic world steps', () => {
       ambient: { color: [255, 255, 255] as const, strength: 255 } })) };
     const duplicate = resolveCommand(later, command, { content });
     expect(duplicate.events).toEqual(first.events);
-    expect(duplicate.events.map((event) => event.type)).toEqual(['hero.waited', 'sound.heard']);
+    expect(duplicate.events.map((event) => event.type)).toEqual(['hero.waited']);
   });
 
   it('advances hunger and equipped light fuel by scheduler elapsed time', () => {

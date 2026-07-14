@@ -322,19 +322,19 @@ Commit: `feat: populate floors with encounters`
 - Consumes: ready actor, saved perception/memory/goal, registered behavior parameters, A* next step, combat/reaction rules, and inactive-floor state.
 - Produces: one deterministic individual action, updated AI state and intent, and existing combat/movement events.
 
-- [ ] **Step 1: Write failing action-policy examples**
+- [x] **Step 1: Write failing action-policy examples**
 
 Cover unaware hold/patrol, visible hostile approach, adjacent attack, investigation of last-known position, abandoned search, unreachable-goal hold, hostility changes, and opportunity attacks when leaving hostile melee range.
 
-- [ ] **Step 2: Write failing world-step ordering tests**
+- [x] **Step 2: Write failing world-step ordering tests**
 
 Fix the order as direct observation, memory update, intent derivation, action selection, reactions, action application, encounter observation, and public event projection. Verify one actor's failure cannot partially mutate the world.
 
-- [ ] **Step 3: Implement registered individual behavior**
+- [x] **Step 3: Implement registered individual behavior**
 
 Replace greedy direction scanning with the owned path adapter. Keep all action costs and attack rules in existing modules and preserve neutral/non-hostile reaction behavior.
 
-- [ ] **Step 4: Run replay regressions and commit**
+- [x] **Step 4: Run replay regressions and commit**
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/population-individual.test.ts test/behavior.test.ts test/world-step.test.ts test/reactions.test.ts test/gameplay-replay.test.ts`
 
