@@ -87,7 +87,11 @@ export interface BossPopulation extends PopulationBase {
   readonly crossedPhaseIds: readonly string[];
   readonly lastFloorExitAt: number | null;
   readonly rewardCreated: boolean;
-  readonly rewardRollState: Uint32State | null;
+  readonly rewardReceipt: Readonly<{
+    lootStateBefore: Uint32State;
+    lootStateAfter: Uint32State;
+    items: readonly Readonly<{ itemId: OpaqueId; contentId: OpaqueId; quantity: number }>[];
+  }> | null;
   readonly recoveryHistory: readonly Readonly<{ at: number; amount: number }>[];
 }
 export interface ChampionPopulation extends PopulationBase {

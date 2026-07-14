@@ -1,4 +1,6 @@
-import type { CompiledContentPack, PopulationCombatModifiers, SwarmEncounterContentEntry } from '@woven-deep/content';
+import {
+  type CompiledContentPack, type PopulationCombatModifiers, type SwarmEncounterContentEntry,
+} from '@woven-deep/content';
 import { emptyEquipment, type ActorState } from './actor-model.js';
 import { actionCostFor, balanceEntry } from './actions.js';
 import { chargeActionEnergy } from './scheduler.js';
@@ -14,6 +16,20 @@ import { findPath } from './pathfinding.js';
 
 type CapLevel = SwarmPopulation['emittedCapLevels'][number];
 const ZERO_MODIFIERS: PopulationCombatModifiers = { accuracy: 0, defense: 0, damage: 0 };
+const MAX_RANDOM_WEIGHT_TOTAL = 0x1_0000_0000;
+const MAX_SWARM_SPAWN_QUANTITY = 256;
+const MAX_SWARM_LIVING_CHILDREN = 1023;
+const MAX_SWARM_LIVING_MEMBERS = 1024;
+const MAX_SWARM_FLOOR_ACTORS = 1024;
+
+function checkedTotalWithin(values: readonly number[], maximum: number): boolean {
+  let total = 0;
+  for (const value of values) {
+    if (!Number.isSafeInteger(value) || value < 0 || value > maximum - total) return false;
+    total += value;
+  }
+  return true;
+}
 
 function deadline(worldTime: number, interval: number): number {
   const value = worldTime + interval;
@@ -27,6 +43,20 @@ function encounter(content: CompiledContentPack, encounterId: OpaqueId): SwarmEn
     throw new Error(`internal invariant: swarm encounter ${encounterId} does not exist`);
   }
   return entry;
+}
+
+function preflight(definition: SwarmEncounterContentEntry['definition']): void {
+  if (!checkedTotalWithin(definition.spawnRoles.map((role) => role.weight), MAX_RANDOM_WEIGHT_TOTAL)) {
+    throw new RangeError('swarm preflight: spawn-role weight total exceeds rollDie maximum 2^32');
+  }
+  if (definition.maximumSpawnQuantity > MAX_SWARM_SPAWN_QUANTITY) {
+    throw new RangeError(`swarm preflight: spawn quantity exceeds runtime-safe limit ${MAX_SWARM_SPAWN_QUANTITY}`);
+  }
+  if (definition.maximumLivingChildren > MAX_SWARM_LIVING_CHILDREN
+    || definition.maximumLivingMembers > MAX_SWARM_LIVING_MEMBERS
+    || definition.maximumFloorActors > MAX_SWARM_FLOOR_ACTORS) {
+    throw new RangeError('swarm preflight: living caps exceed runtime-safe limits');
+  }
 }
 
 function syncDeaths(population: SwarmPopulation, actors: readonly ActorState[]): SwarmPopulation {
@@ -116,6 +146,7 @@ export function advanceSwarms(input: Readonly<{
   for (const original of [...state.populations].sort((a, b) => compareCodeUnits(a.populationId, b.populationId))) {
     if (original.model !== 'swarm') continue;
     const def = encounter(input.content, original.encounterId).definition;
+    preflight(def);
     let population = syncDeaths(original, state.actors);
     const active = population.floorId === state.activeFloorId;
     if (!active) continue;

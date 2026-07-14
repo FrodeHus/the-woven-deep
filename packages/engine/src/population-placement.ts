@@ -59,6 +59,22 @@ interface MemberPlan {
   readonly roleId: string | null;
 }
 
+const MAX_RANDOM_WEIGHT_TOTAL = 0x1_0000_0000;
+const MAX_ENCOUNTER_MEMBERS = 1024;
+const MAX_SWARM_SPAWN_QUANTITY = 256;
+const MAX_SWARM_LIVING_CHILDREN = 1023;
+const MAX_SWARM_LIVING_MEMBERS = 1024;
+const MAX_SWARM_FLOOR_ACTORS = 1024;
+
+function checkedTotalWithin(values: readonly number[], maximum: number): boolean {
+  let total = 0;
+  for (const value of values) {
+    if (!Number.isSafeInteger(value) || value < 0 || value > maximum - total) return false;
+    total += value;
+  }
+  return true;
+}
+
 function compareId(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -81,6 +97,33 @@ function contentMaps(content: CompiledContentPack): Readonly<{
   const balances = content.entries.filter((entry): entry is BalanceContentEntry => entry.kind === 'balance');
   if (balances.length !== 1) throw new Error(`population placement requires one balance definition; found ${balances.length}`);
   return { encounters, monsters, balance: balances[0]! };
+}
+
+function preflightEncounters(encounters: readonly EncounterContentEntry[]): void {
+  if (!checkedTotalWithin(encounters.map((entry) => entry.weight), MAX_RANDOM_WEIGHT_TOTAL)) {
+    throw new RangeError('population preflight: encounter weight total exceeds rollDie maximum 2^32');
+  }
+  for (const encounter of encounters) {
+    if (encounter.model === 'individual' && encounter.definition.maximumQuantity > MAX_ENCOUNTER_MEMBERS) {
+      throw new RangeError(`population preflight: individual quantity exceeds runtime-safe limit ${MAX_ENCOUNTER_MEMBERS}`);
+    }
+    if (encounter.model === 'group'
+      && !checkedTotalWithin(encounter.definition.roles.map((role) => role.maximumQuantity), MAX_ENCOUNTER_MEMBERS)) {
+      throw new RangeError(`population preflight: group quantity exceeds runtime-safe limit ${MAX_ENCOUNTER_MEMBERS}`);
+    }
+    if (encounter.model === 'swarm') {
+      const definition = encounter.definition;
+      if (!checkedTotalWithin(definition.spawnRoles.map((role) => role.weight), MAX_RANDOM_WEIGHT_TOTAL)) {
+        throw new RangeError('population preflight: swarm spawn-role weight total exceeds rollDie maximum 2^32');
+      }
+      if (definition.maximumSpawnQuantity > MAX_SWARM_SPAWN_QUANTITY
+        || definition.maximumLivingChildren > MAX_SWARM_LIVING_CHILDREN
+        || definition.maximumLivingMembers > MAX_SWARM_LIVING_MEMBERS
+        || definition.maximumFloorActors > MAX_SWARM_FLOOR_ACTORS) {
+        throw new RangeError('population preflight: swarm quantities exceed runtime-safe limits');
+      }
+    }
+  }
 }
 
 function availableVaultTags(floor: FloorSnapshot, content: CompiledContentPack): ReadonlySet<string> {
@@ -343,6 +386,7 @@ function placementFailure(
 
 export function placePopulation(input: PlacePopulationInput): PopulationPlacementResult {
   const maps = contentMaps(input.content);
+  preflightEncounters(maps.encounters);
   const reachedDecisions = input.run.encounterDecisions.map((decision) => {
     const encounter = maps.encounters.find((entry) => entry.id === decision.encounterId);
     return encounter && input.floor.depth >= encounter.minDepth && input.floor.depth <= encounter.maxDepth
@@ -412,7 +456,7 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
   } else {
     population = {
       ...base, model: 'boss', actorId: createdActors[0]!.actorId, currentPhaseId: null,
-      crossedPhaseIds: [], lastFloorExitAt: null, rewardCreated: false, rewardRollState: null, recoveryHistory: [],
+      crossedPhaseIds: [], lastFloorExitAt: null, rewardCreated: false, rewardReceipt: null, recoveryHistory: [],
     };
   }
   const encounterDecisions = reachedDecisions.map((decision) => decision.encounterId === selected.encounter.id

@@ -390,6 +390,47 @@ describe('compileContentDirectory', () => {
     await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/unknown monster reference monster\.missing/i);
   });
 
+  it('accepts encounter selection weight 2^32 exactly and rejects a checked aggregate above it', async () => {
+    const weighted = (source: string, id: string, weight: number) => source
+      .replace('encounter.rat', id).replace('weight: 1, rarity', `weight: ${weight}, rarity`);
+    const atBoundary = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      weighted(compactIndividualEncounter, 'encounter.weight-a', 0x8000_0000),
+      weighted(compactIndividualEncounter, 'encounter.weight-b', 0x8000_0000)) });
+    await expect(compileContentDirectory({ rootDir: atBoundary })).resolves.toBeDefined();
+    const above = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      weighted(compactIndividualEncounter, 'encounter.weight-a', 0x8000_0000),
+      weighted(compactIndividualEncounter, 'encounter.weight-b', 0x8000_0001)) });
+    await expect(compileContentDirectory({ rootDir: above })).rejects.toThrow(/encounter weight.*2\^32/i);
+  });
+
+  it('caps individual and aggregate group quantities at the runtime-safe encounter limit', async () => {
+    const individualBoundary = compactIndividualEncounter.replace('maximumQuantity: 2', 'maximumQuantity: 1024');
+    const boundaryRoot = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      individualBoundary) });
+    await expect(compileContentDirectory({ rootDir: boundaryRoot })).resolves.toBeDefined();
+    const individualAbove = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      individualBoundary.replace('maximumQuantity: 1024', 'maximumQuantity: 1025')) });
+    await expect(compileContentDirectory({ rootDir: individualAbove })).rejects.toThrow(/quantity.*runtime-safe.*1024/i);
+
+    const group = (secondMaximum: number) => `{kind: encounter, id: encounter.group-limit, name: Group, tags: [], model: group, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: uncommon, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 2, minimumObjectiveDistance: 2, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {roles: [{roleId: front, monsterId: monster.rat, minimumQuantity: 1, maximumQuantity: 512, formationPreference: front, behaviorParameters: {}}, {roleId: rear, monsterId: monster.rat, minimumQuantity: 1, maximumQuantity: ${secondMaximum}, formationPreference: rear, behaviorParameters: {}}], formation: line, communicationRadius: 3, leaderChance: 1, leaderRoleId: front, leaderAccentColor: "#ffffff", leaderAlternateGlyph: null, coordinationModifiers: {accuracy: 1, defense: 1, damage: 0}, leaderDeathResponse: weaken, responseParameters: {modifiers: {accuracy: -1, defense: 0, damage: 0}}, supernaturalBond: false, collapseRewards: none}}`;
+    const groupBoundary = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, group(512)) });
+    await expect(compileContentDirectory({ rootDir: groupBoundary })).resolves.toBeDefined();
+    const groupAbove = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, group(513)) });
+    await expect(compileContentDirectory({ rootDir: groupAbove })).rejects.toThrow(/group.*quantity.*1024/i);
+  });
+
+  it('checks spawn-role weights and caps swarm allocation quantities', async () => {
+    const source = compactMonster.replace('tags: [', 'tags: [swarm-source, ');
+    const swarm = (secondWeight: number, maximumSpawnQuantity = 256, maximumLivingChildren = 1023) =>
+      `{kind: encounter, id: encounter.swarm-limit, name: Swarm, tags: [], model: swarm, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: uncommon, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 2, minimumObjectiveDistance: 2, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {sourceMonsterId: monster.rat, spawnRoles: [{roleId: a, monsterId: monster.rat, weight: 2147483648}, {roleId: b, monsterId: monster.rat, weight: ${secondWeight}}], spawnInterval: 100, minimumSpawnQuantity: 1, maximumSpawnQuantity: ${maximumSpawnQuantity}, placementRadius: 2, allowedTerrainTags: [floor], maximumLivingChildren: ${maximumLivingChildren}, maximumLivingMembers: 1024, maximumFloorActors: 1024, sourceDestructionResponse: stop, responseParameters: {}}}`;
+    const boundary = await fixture({ 'content.yaml': contentFile(source, compactItem, compactVault, swarm(2147483648)) });
+    await expect(compileContentDirectory({ rootDir: boundary })).resolves.toBeDefined();
+    for (const invalid of [swarm(2147483649), swarm(2147483648, 257), swarm(2147483648, 256, 1024)]) {
+      const root = await fixture({ 'content.yaml': contentFile(source, compactItem, compactVault, invalid) });
+      await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/spawn-role weight.*2\^32|spawn quantity.*256|living children.*1023/i);
+    }
+  });
+
   it('requires supernatural group collapse and a declared leader role', async () => {
     const group = '{kind: encounter, id: encounter.group, name: Group, tags: [], model: group, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: uncommon, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 2, minimumObjectiveDistance: 2, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {roles: [{roleId: guard, monsterId: monster.rat, minimumQuantity: 2, maximumQuantity: 3, formationPreference: front, behaviorParameters: {}}], formation: line, communicationRadius: 3, leaderChance: 1, leaderRoleId: captain, leaderAccentColor: "#ffffff", leaderAlternateGlyph: null, coordinationModifiers: {accuracy: 1, defense: 1, damage: 0}, leaderDeathResponse: collapse, responseParameters: {}, supernaturalBond: false, collapseRewards: none}}';
     const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, group) });

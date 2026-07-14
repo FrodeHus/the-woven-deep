@@ -252,7 +252,12 @@ function createRewards(input: Readonly<{
   for (const item of created) if (input.state.items.some((existing) => existing.itemId === item.itemId)) {
     throw new Error(`internal invariant: boss reward item ${item.itemId} already exists without reward state`);
   }
-  const population = { ...input.population, rewardCreated: true, rewardRollState: input.state.rng.loot };
+  const population = { ...input.population, rewardCreated: true, rewardReceipt: {
+    lootStateBefore: input.state.rng.loot,
+    lootStateAfter: loot.state,
+    items: created.map((item) => ({ itemId: item.itemId, contentId: item.contentId, quantity: item.quantity }))
+      .sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
+  } };
   const state = { ...input.state, items: [...input.state.items, ...created]
     .sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
     rng: { ...input.state.rng, loot: loot.state } };

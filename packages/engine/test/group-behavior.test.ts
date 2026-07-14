@@ -319,6 +319,25 @@ describe('leaders and deterministic outcomes', () => {
     expect(expiredAttack.total - expiredAttack.naturalRoll).toBe(1);
   });
 
+  it.each(['panic', 'frenzy'] as const)('rejects %s deadline overflow without a partial transition', (response) => {
+    const responseParameters = response === 'panic'
+      ? { duration: 20 }
+      : { duration: 20, modifiers: { accuracy: 3, defense: 0, damage: 4 } };
+    const { state, content } = fixture({ groupDefinition: definition({
+      leaderDeathResponse: response, responseParameters,
+    }), positions: [['monster.a', 2, 2], ['monster.b', 3, 1]] });
+    const hero = state.actors.find((actor) => actor.actorId === state.hero.actorId)!;
+    const prepared = { ...state, worldTime: Number.MAX_SAFE_INTEGER - 10, actors: state.actors.map((actor) =>
+      actor.actorId === 'monster.a' ? { ...actor, health: 0 }
+        : actor.actorId === 'monster.b' ? { ...actor, behaviorState: { ...actor.behaviorState,
+          lastKnownTargets: [{ targetActorId: hero.actorId, floorId: hero.floorId, x: hero.x, y: hero.y,
+            observedAt: state.worldTime, source: 'sight' as const, observerActorId: actor.actorId }] } } : actor) };
+    const before = structuredClone(prepared);
+    expect(() => applyGroupLeaderOutcomes({ state: prepared, content, eventId: `event.${response}.overflow` }))
+      .toThrow(/group deadline.*safe integer/i);
+    expect(prepared).toEqual(before);
+  });
+
   it.each([
     ['weaken', { modifiers: { accuracy: -1, defense: -2, damage: -3 } }],
     ['panic', { duration: 20 }], ['disband', {}], ['surrender', {}],

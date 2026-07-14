@@ -5,7 +5,7 @@ import { hungerStage } from './survival.js';
 import { effectiveEncounterProbability, maximumDiscoveryProtectionBonus } from './population-gates.js';
 import { assertEchoTemplateBoundaries, normalizeFallenHero, retainEchoCandidates } from './champion.js';
 import { createFloorItem, createFloorLootFromTable, recordedHeirloomContentId } from './inventory.js';
-import { stableJson } from './stable-json.js';
+import { compareCodeUnits, stableJson } from './stable-json.js';
 import { boundedDisplayText } from './display-text.js';
 
 function entryMap(pack: CompiledContentPack): ReadonlyMap<string, ContentEntry> {
@@ -162,26 +162,26 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
       const rewardPrefix = `item.reward.${population.populationId}.`;
       const actualRewards = run.items.filter((item) => item.itemId.startsWith(rewardPrefix));
       if (!population.rewardCreated) {
-        if (population.rewardRollState !== null || actualRewards.length > 0) {
+        if (population.rewardReceipt !== null || actualRewards.length > 0) {
           throw new Error(`content-bound validation: boss reward ${population.populationId} exists without reward state`);
         }
       } else {
-        if (population.rewardRollState === null) {
+        if (population.rewardReceipt === null) {
           throw new Error(`content-bound validation: boss reward ${population.populationId} has no deterministic receipt`);
         }
         const actor = actors.get(population.actorId)!;
         const unique = createFloorItem({ content: pack, contentId: encounter.definition.uniqueItemId,
           itemId: `${rewardPrefix}unique`, floorId: population.floorId, x: actor.x, y: actor.y });
         const loot = createFloorLootFromTable({ content: pack, tableId: encounter.definition.enhancedLootTableId,
-          state: population.rewardRollState, itemIdPrefix: `${rewardPrefix}loot`,
+          state: population.rewardReceipt.lootStateBefore, itemIdPrefix: `${rewardPrefix}loot`,
           floorId: population.floorId, x: actor.x, y: actor.y });
-        const expected = [unique, ...loot.items].sort((left, right) => left.itemId.localeCompare(right.itemId));
-        const actual = [...actualRewards].sort((left, right) => left.itemId.localeCompare(right.itemId));
-        const durableShape = (item: typeof expected[number]) => ({ itemId: item.itemId, contentId: item.contentId,
-          quantity: item.quantity, enchantment: item.enchantment, condition: item.condition,
-          charges: item.charges, fuel: item.fuel, enabled: item.enabled, heirloom: item.heirloom ?? null });
-        if (actual.length !== expected.length
-          || actual.some((item, index) => stableJson(durableShape(item)) !== stableJson(durableShape(expected[index]!)))
+        const expected = [unique, ...loot.items].sort((left, right) => compareCodeUnits(left.itemId, right.itemId));
+        const expectedReceipt = { lootStateBefore: population.rewardReceipt.lootStateBefore,
+          lootStateAfter: loot.state,
+          items: expected.map((item) => ({ itemId: item.itemId, contentId: item.contentId, quantity: item.quantity })) };
+        const guaranteed = run.items.filter((item) => item.contentId === encounter.definition.uniqueItemId);
+        if (stableJson(population.rewardReceipt) !== stableJson(expectedReceipt)
+          || guaranteed.length !== 1 || guaranteed[0]!.itemId !== unique.itemId || guaranteed[0]!.quantity !== 1
           || expected.filter((item) => item.contentId === encounter.definition.uniqueItemId).length !== 1) {
           throw new Error(`content-bound validation: boss reward ${population.populationId} does not match its deterministic policy`);
         }

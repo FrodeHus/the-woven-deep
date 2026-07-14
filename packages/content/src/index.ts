@@ -1,5 +1,6 @@
 export * from './model.js';
 export * from './content-schema.js';
+export * from './population-limits.js';
 export {
   EFFECT_PARAMETER_SCHEMAS,
   BOSS_PHASE_EFFECT_IDS,

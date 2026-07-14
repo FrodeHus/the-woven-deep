@@ -57,7 +57,7 @@ function fixture(overrides: Partial<BossEncounterDefinition> = {}) {
   const population: BossPopulation = { populationId: 'population.boss', encounterId: encounter.id, model: 'boss',
     floorId: hero.floorId, createdAt: 0, livingMemberIds: [boss.actorId], formerMemberIds: [], actorId: boss.actorId,
     currentPhaseId: null, crossedPhaseIds: [], lastFloorExitAt: null, rewardCreated: false,
-    rewardRollState: null, recoveryHistory: [] };
+    rewardReceipt: null, recoveryHistory: [] };
   const state: ActiveRun = { ...base, actors: [boss, hero], populations: [population], encounterDecisions: [{
     encounterId: encounter.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1, eligible: true,
     reachedEligibleDepth: true, encountered: true, instancesCreated: 1 }], floors: [{ ...base.floors[0]!,
@@ -277,19 +277,59 @@ describe('boss recovery and defeat rewards', () => {
     expect(retried.events.filter((event) => event.type.startsWith('boss.'))).toEqual([]);
   });
 
-  it('rejects missing, tampered, or duplicate deterministic boss rewards', () => {
+  it.each([
+    ['picked up', (items: ActiveRun['items'], ordinaryId: string, heroId: string) => items.map((entry) =>
+      entry.itemId === ordinaryId ? { ...entry, location: { type: 'backpack' as const, actorId: heroId } } : entry)],
+    ['partly consumed', (items: ActiveRun['items'], ordinaryId: string) => items.map((entry) =>
+      entry.itemId === ordinaryId ? { ...entry, quantity: 1 } : entry)],
+    ['split', (items: ActiveRun['items'], ordinaryId: string) => items.flatMap((entry) => entry.itemId === ordinaryId
+      ? [{ ...entry, quantity: 1 }, { ...entry, itemId: `${entry.itemId}.split`, quantity: 1 }] : [entry])],
+    ['damaged', (items: ActiveRun['items'], ordinaryId: string) => items.map((entry) =>
+      entry.itemId === ordinaryId ? { ...entry, condition: 7 } : entry)],
+    ['deleted', (items: ActiveRun['items'], ordinaryId: string) => items.filter((entry) => entry.itemId !== ordinaryId)],
+  ] as const)('keeps the boss receipt valid after ordinary loot is %s', (_label, transform) => {
+    const { state, content } = fixture();
+    const defeated = { ...state, actors: state.actors.map((actor) => actor.actorId === 'actor.boss'
+      ? { ...actor, health: 0 } : actor) };
+    const rewarded = advanceBosses({ state: defeated, content, eventId: 'event.mutable-loot' }).state;
+    const ordinary = rewarded.items.find((entry) => entry.contentId === 'item.extra-b')!;
+    expect(() => validateContentBoundRun({ ...rewarded,
+      items: transform(rewarded.items, ordinary.itemId, rewarded.hero.actorId) }, content)).not.toThrow();
+  });
+
+  it('keeps the boss receipt valid after ordinary loot is equipped', () => {
+    const base = fixture();
+    const content = { ...base.content, entries: base.content.entries.map((entry) => entry.id === 'item.extra-a'
+      ? { ...entry, equipment: { slots: ['main-hand' as const], handedness: 'one-handed' as const, reservedSlots: [] } }
+      : entry) };
+    const defeated = { ...base.state, actors: base.state.actors.map((actor) => actor.actorId === 'actor.boss'
+      ? { ...actor, health: 0 } : actor) };
+    const rewarded = advanceBosses({ state: defeated, content, eventId: 'event.equipped-loot' }).state;
+    const ordinary = rewarded.items.find((entry) => entry.contentId === 'item.extra-a')!;
+    const equipped = { ...rewarded,
+      items: rewarded.items.map((entry) => entry.itemId === ordinary.itemId
+        ? { ...entry, location: { type: 'equipped' as const, actorId: rewarded.hero.actorId, slot: 'main-hand' as const } }
+        : entry),
+      actors: rewarded.actors.map((actor) => actor.actorId === rewarded.hero.actorId
+        ? { ...actor, equipment: { ...actor.equipment, 'main-hand': ordinary.itemId } } : actor) };
+    expect(() => validateContentBoundRun(equipped, content)).not.toThrow();
+  });
+
+  it('rejects a tampered receipt and missing or duplicate guaranteed unique rewards', () => {
     const { state, content } = fixture();
     const defeated = { ...state, actors: state.actors.map((actor) => actor.actorId === 'actor.boss'
       ? { ...actor, health: 0 } : actor) };
     const rewarded = advanceBosses({ state: defeated, content, eventId: 'event.reward-binding' }).state;
     const rewardItems = rewarded.items.filter((entry) => entry.itemId.startsWith('item.reward.population.boss.'));
-    expect(() => validateContentBoundRun({ ...rewarded, items: rewardItems.slice(1) }, content))
-      .toThrow(/boss reward/i);
-    expect(() => validateContentBoundRun({ ...rewarded, items: rewarded.items.map((entry) =>
-      entry.itemId === rewardItems[1]!.itemId ? { ...entry, contentId: 'item.unique' } : entry) }, content))
+    const population = rewarded.populations[0] as BossPopulation;
+    expect(() => validateContentBoundRun({ ...rewarded, populations: [{ ...population,
+      rewardReceipt: { ...population.rewardReceipt!, items: population.rewardReceipt!.items.map((item, index) =>
+        index === 1 ? { ...item, contentId: 'item.unique' } : item) } }] }, content)).toThrow(/boss reward/i);
+    expect(() => validateContentBoundRun({ ...rewarded,
+      items: rewarded.items.filter((entry) => entry.contentId !== 'item.unique') }, content))
       .toThrow(/boss reward/i);
     expect(() => validateContentBoundRun({ ...rewarded, items: [...rewarded.items, {
-      ...rewardItems[0]!, itemId: 'item.reward.population.boss.unique-copy',
+      ...rewardItems.find((entry) => entry.contentId === 'item.unique')!, itemId: 'item.unique-copy',
     }].sort((left, right) => left.itemId.localeCompare(right.itemId)) }, content)).toThrow(/boss reward/i);
   });
 

@@ -228,7 +228,7 @@ describe('active-run save codec', () => {
       }];
       if (model === 'boss') state.populations = [{
         ...base, actorId: actor.actorId, currentPhaseId: 'kindled', crossedPhaseIds: ['kindled'],
-        lastFloorExitAt: null, rewardCreated: false, rewardRollState: null, recoveryHistory: [],
+        lastFloorExitAt: null, rewardCreated: false, rewardReceipt: null, recoveryHistory: [],
       }];
       if (model === 'champion' || model === 'echo') {
         const standing = state.fallenHeroStandings[model === 'champion' ? 0 : 1];

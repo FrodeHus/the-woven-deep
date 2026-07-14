@@ -453,6 +453,11 @@ const populationBase = {
   livingMemberIds: z.array(identifier).readonly(), formerMemberIds: z.array(identifier).readonly(),
 } as const;
 const roleMembership = z.strictObject({ actorId: identifier, roleId: z.string().min(1).max(80) });
+const bossRewardReceipt = z.strictObject({
+  lootStateBefore: uint32State,
+  lootStateAfter: uint32State,
+  items: z.array(z.strictObject({ itemId: identifier, contentId: identifier, quantity: positiveQuantity })).min(1).readonly(),
+});
 const population = z.discriminatedUnion('model', [
   z.strictObject({ ...populationBase, model: z.literal('individual') }),
   z.strictObject({ ...populationBase, model: z.literal('group'), leaderActorId: nullableIdentifier,
@@ -466,7 +471,7 @@ const population = z.discriminatedUnion('model', [
     shutdownExpiresAt: safeNonNegative.nullable() }),
   z.strictObject({ ...populationBase, model: z.literal('boss'), actorId: identifier,
     currentPhaseId: z.string().min(1).max(80).nullable(), crossedPhaseIds: z.array(z.string().min(1).max(80)).readonly(),
-    lastFloorExitAt: safeNonNegative.nullable(), rewardCreated: z.boolean(), rewardRollState: uint32State.nullable(),
+    lastFloorExitAt: safeNonNegative.nullable(), rewardCreated: z.boolean(), rewardReceipt: bossRewardReceipt.nullable(),
     recoveryHistory: z.array(z.strictObject({ at: safeNonNegative, amount: safeNonNegative })).readonly() }),
   z.strictObject({ ...populationBase, model: z.literal('champion'), actorId: identifier,
     hallRecordId: identifier, rank: z.literal(1), defeated: z.boolean(), rewardCreated: z.boolean(),
@@ -830,8 +835,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         if (populationValue.rewardCreated && populationValue.livingMemberIds.includes(populationValue.actorId)) {
           fail(`${path}.rewardCreated`, 'boss reward cannot exist while the boss lives');
         }
-        if (populationValue.rewardCreated !== (populationValue.rewardRollState !== null)) {
-          fail(`${path}.rewardRollState`, 'boss reward receipt must exist exactly when rewards were created');
+        if (populationValue.rewardCreated !== (populationValue.rewardReceipt !== null)) {
+          fail(`${path}.rewardReceipt`, 'boss reward receipt must exist exactly when rewards were created');
         }
         for (let recoveryIndex = 1; recoveryIndex < populationValue.recoveryHistory.length; recoveryIndex += 1) {
           if (populationValue.recoveryHistory[recoveryIndex - 1]!.at >= populationValue.recoveryHistory[recoveryIndex]!.at) {

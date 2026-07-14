@@ -94,6 +94,27 @@ function runFor(encounters: readonly EncounterContentEntry[]): ActiveRun {
 }
 
 describe('population placement selection and composition', () => {
+  it('rejects bypassed unsafe weights and quantities before consuming RNG or allocating members', () => {
+    const oversized = individual('encounter.oversized', { definition: {
+      monsterId: 'monster.test-a', minimumQuantity: 1, maximumQuantity: 1025,
+    } });
+    const oversizedRun = runFor([oversized]);
+    const before = stableJson(oversizedRun);
+    expect(() => placePopulation({ run: oversizedRun, floor: floor(), content: pack([oversized]),
+      forcedEncounterId: oversized.id })).toThrow(/population preflight.*quantity.*1024/i);
+    expect(stableJson(oversizedRun)).toBe(before);
+
+    const weighted = [
+      individual('encounter.weight-a', { weight: 0x8000_0000 }),
+      individual('encounter.weight-b', { weight: 0x8000_0001 }),
+    ];
+    const weightedRun = runFor(weighted);
+    const weightedBefore = stableJson(weightedRun);
+    expect(() => placePopulation({ run: weightedRun, floor: floor(), content: pack(weighted) }))
+      .toThrow(/population preflight.*weight.*2\^32/i);
+    expect(stableJson(weightedRun)).toBe(weightedBefore);
+  });
+
   it('rejects a swarm placement whose initial saved timer would overflow', () => {
     const entry = swarm('encounter.timer-overflow');
     const result = placePopulation({ run: { ...runFor([entry]), worldTime: Number.MAX_SAFE_INTEGER - 5 },

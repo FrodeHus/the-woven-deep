@@ -8,6 +8,11 @@ import {
   ACTION_COST_IDS, BEHAVIOR_PARAMETER_SCHEMAS, BOSS_PHASE_EFFECT_IDS, EFFECT_PARAMETER_SCHEMAS,
   LEADER_RESPONSE_PARAMETER_SCHEMAS, SWARM_RESPONSE_PARAMETER_SCHEMAS,
 } from './registries.js';
+import {
+  checkedTotalWithin, MAX_ENCOUNTER_MEMBERS, MAX_RANDOM_WEIGHT_TOTAL,
+  MAX_SWARM_FLOOR_ACTORS, MAX_SWARM_LIVING_CHILDREN, MAX_SWARM_LIVING_MEMBERS,
+  MAX_SWARM_SPAWN_QUANTITY,
+} from '../population-limits.js';
 
 function compareCodeUnits(left: string, right: string): number {
   if (left < right) return -1;
@@ -123,6 +128,10 @@ function encounterIssues(
   const issues: ContentCompileIssue[] = [];
   if (encounter.model === 'individual') {
     issues.push(...referencedKindIssue(file, `${path}.monsterId`, encounter.definition.monsterId, 'monster', byId));
+    if (encounter.definition.maximumQuantity > MAX_ENCOUNTER_MEMBERS) {
+      issues.push(issue(file, `${path}.maximumQuantity`,
+        `individual quantity exceeds runtime-safe limit ${MAX_ENCOUNTER_MEMBERS}`));
+    }
     return issues;
   }
   if (encounter.model === 'group') {
@@ -140,6 +149,9 @@ function encounterIssues(
     });
     if (!roleIds.has(definition.leaderRoleId)) {
       issues.push(issue(file, `${path}.leaderRoleId`, `leader role ${definition.leaderRoleId} is not declared in roles`));
+    }
+    if (!checkedTotalWithin(definition.roles.map((role) => role.maximumQuantity), MAX_ENCOUNTER_MEMBERS)) {
+      issues.push(issue(file, `${path}.roles`, `group maximum quantity exceeds runtime-safe limit ${MAX_ENCOUNTER_MEMBERS}`));
     }
     if (definition.leaderDeathResponse === 'collapse' && !definition.supernaturalBond) {
       issues.push(issue(file, `${path}.supernaturalBond`, 'collapse requires supernaturalBond: true'));
@@ -166,6 +178,28 @@ function encounterIssues(
       roleIds.add(role.roleId);
       issues.push(...referencedKindIssue(file, `${path}.spawnRoles.${index}.monsterId`, role.monsterId, 'monster', byId));
     });
+    if (!checkedTotalWithin(definition.spawnRoles.map((role) => role.weight), MAX_RANDOM_WEIGHT_TOTAL)) {
+      issues.push(issue(file, `${path}.spawnRoles`, `spawn-role weight total exceeds rollDie maximum 2^32`));
+    }
+    if (definition.maximumSpawnQuantity > MAX_SWARM_SPAWN_QUANTITY) {
+      issues.push(issue(file, `${path}.maximumSpawnQuantity`,
+        `spawn quantity exceeds runtime-safe limit ${MAX_SWARM_SPAWN_QUANTITY}`));
+    }
+    if (definition.maximumLivingChildren > MAX_SWARM_LIVING_CHILDREN) {
+      issues.push(issue(file, `${path}.maximumLivingChildren`,
+        `maximum living children exceeds runtime-safe limit ${MAX_SWARM_LIVING_CHILDREN}`));
+    }
+    if (definition.maximumLivingMembers > MAX_SWARM_LIVING_MEMBERS) {
+      issues.push(issue(file, `${path}.maximumLivingMembers`,
+        `maximum living members exceeds runtime-safe limit ${MAX_SWARM_LIVING_MEMBERS}`));
+    }
+    if (definition.maximumFloorActors > MAX_SWARM_FLOOR_ACTORS) {
+      issues.push(issue(file, `${path}.maximumFloorActors`,
+        `maximum floor actors exceeds runtime-safe limit ${MAX_SWARM_FLOOR_ACTORS}`));
+    }
+    if (definition.maximumSpawnQuantity > definition.maximumLivingChildren) {
+      issues.push(issue(file, `${path}.maximumSpawnQuantity`, 'maximum spawn quantity must not exceed maximum living children'));
+    }
     if (definition.maximumLivingMembers < definition.maximumLivingChildren + 1) {
       issues.push(issue(file, `${path}.maximumLivingMembers`, 'maximum living members must allow the source plus all living children'));
     }
@@ -495,6 +529,11 @@ function balanceIssues(
 
 export function validateContentEntries(locatedEntries: readonly LocatedContentEntry[]): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
+  const encounters = locatedEntries.filter(({ entry }) => entry.kind === 'encounter');
+  if (!checkedTotalWithin(encounters.map(({ entry }) => (entry as EncounterContentEntry).weight), MAX_RANDOM_WEIGHT_TOTAL)) {
+    const located = encounters.at(-1)!;
+    issues.push(issue(located.file, '$.entries', 'encounter weight total exceeds rollDie maximum 2^32'));
+  }
   const byId = new Map(locatedEntries.map(({ entry }) => [entry.id, entry]));
   const vaultTags = new Set<string>();
   for (const { entry } of locatedEntries) {

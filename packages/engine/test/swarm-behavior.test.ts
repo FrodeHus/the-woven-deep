@@ -60,6 +60,20 @@ function fixture(overrides: Partial<SwarmEncounterDefinition> = {}, active = tru
 }
 
 describe('swarm timers, placement, and caps', () => {
+  it.each([
+    ['spawn quantity', { maximumSpawnQuantity: 257 }],
+    ['spawn-role weight', { spawnRoles: [
+      { roleId: 'a', monsterId: 'monster.child-a', weight: 0x8000_0000 },
+      { roleId: 'b', monsterId: 'monster.child-b', weight: 0x8000_0001 },
+    ] }],
+  ] as const)('rejects bypassed unsafe %s before a partial swarm transition', (_label, overrides) => {
+    const { state, content } = fixture(overrides);
+    const before = structuredClone(state);
+    expect(() => advanceSwarms({ state, content, eventId: 'event.preflight', sourceActionActorId: 'actor.source' }))
+      .toThrow(/swarm preflight.*(spawn quantity|weight).*(256|2\^32)/i);
+    expect(state).toEqual(before);
+  });
+
   it('rejects a saved swarm above its authored living caps', () => {
     const first = fixture();
     const spawned = advanceSwarms({ state: first.state, content: first.content,

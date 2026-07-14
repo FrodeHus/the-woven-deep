@@ -18,6 +18,12 @@ import { relationshipBetween } from './reactions.js';
 
 const ZERO_MODIFIERS: PopulationCombatModifiers = Object.freeze({ accuracy: 0, defense: 0, damage: 0 });
 
+function deadline(worldTime: number, duration: number): number {
+  const value = worldTime + duration;
+  if (!Number.isSafeInteger(value)) throw new RangeError('group deadline must be a safe integer');
+  return value;
+}
+
 export type GroupBehaviorEvent = GroupAwarenessSharedEvent | GroupLeaderDefeatedEvent
   | GroupOutcomeAppliedEvent | ActorDiedEvent;
 
@@ -294,6 +300,8 @@ export function applyGroupLeaderOutcomes(input: Readonly<{
     const definition = groupEncounter(input.content, group.encounterId).definition;
     const survivorIds = group.livingMemberIds;
     const duration = Number((definition.responseParameters as { duration?: number }).duration ?? 0);
+    const responseDeadline = definition.leaderDeathResponse === 'panic'
+      || definition.leaderDeathResponse === 'frenzy' ? deadline(input.state.worldTime, duration) : null;
     let collapsed = 0;
     actors = actors.map((actor) => {
       if (!survivorIds.includes(actor.actorId)) return actor;
@@ -302,7 +310,7 @@ export function applyGroupLeaderOutcomes(input: Readonly<{
           const goal = panicRetreatGoal({ ...input.state, actors }, actor);
           return { ...actor, behaviorState: { ...actor.behaviorState, intent: goal ? 'flee' : 'hold', goal,
             investigation: goal ? { floorId: goal.floorId, x: goal.x, y: goal.y,
-              startedAt: input.state.worldTime, expiresAt: input.state.worldTime + duration } : null } };
+              startedAt: input.state.worldTime, expiresAt: responseDeadline } : null } };
         }
         case 'disband': return { ...actor, populationId: null, populationRoleId: null,
           populationPresentation: actor.populationPresentation ? { ...actor.populationPresentation, leader: false } : null };
@@ -328,7 +336,7 @@ export function applyGroupLeaderOutcomes(input: Readonly<{
       ...group, livingMemberIds: remaining, formerMemberIds, roleMembership,
       bonusActive: false, leaderResponseApplied: true,
       leaderResponseExpiresAt: definition.leaderDeathResponse === 'frenzy'
-        ? input.state.worldTime + duration : null,
+        ? responseDeadline : null,
     };
     changed = true;
     populations = populations.map((candidate) => candidate.populationId === group.populationId ? group : candidate);
