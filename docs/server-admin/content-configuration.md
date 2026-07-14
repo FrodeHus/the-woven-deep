@@ -227,7 +227,7 @@ The bundled `npc-faction.lampwrights` spans `-1000..1000`, starts at `0`, and us
 
 ## Encounter entries
 
-An `encounter` has a strict `model` of `individual`, `group`, `swarm`, or `boss`. All models share:
+An `encounter` has a strict `model` of `individual`, `group`, `swarm`, `boss`, or `merchant`. All models share:
 
 - The common `kind`, `id`, `name`, and `tags` fields described above. `kind` is exactly `encounter`.
 - Positive inclusive `minDepth` and `maxDepth`, positive selection `weight`, `rarity`, `environmentTags`, and `requiredVaultTags`.
@@ -257,7 +257,7 @@ The exact boundary is valid. Boundary plus one is rejected before selection, RNG
 |---|---|---|
 | `definition` | All | Strict model-specific object. Its shape must match `model`; fields from another model and unknown nested fields reject the complete pack. |
 | `intentPresentation`, `visible` | All | `intentPresentation` is required and contains only boolean `visible`. This controls broad observable intent, never exact targets, paths, rolls, or relayed hidden knowledge. |
-| `runAppearanceChance`, `discoveryProtectionIncrement`, `discoveryProtectionCap` | All | Probabilities are 0–1. Discovery values default to zero. For non-merchants the cap must be at least the base chance. |
+| `runAppearanceChance`, `discoveryProtectionIncrement`, `discoveryProtectionCap` | All | Probabilities are 0–1. Discovery values default to zero only for merchants; all other models must declare them, and their cap must be at least the base chance. |
 | `maximumInstancesPerRun` | All | Positive; exactly 1 for a boss. Placement refuses additional instances after this saved run cap. |
 | `minimumStairDistance`, `minimumObjectiveDistance`, `maximumMemberDistance` (under `placement`) | All | Non-negative integers. A placement that cannot preserve distances, routes, occupancy, and member spread is rejected atomically. |
 | `allowedTerrainTags`, `requiresVaultSlot`, `failureMode` (under `placement`) | All | Terrain tags are non-empty. A required vault slot must match all vault tags; `optional` skips an impossible placement while `required` rejects floor creation. |
@@ -283,7 +283,7 @@ The exact boundary is valid. Boundary plus one is rejected before selection, RNG
 | `minimumStockRolls`, `maximumStockRolls` | Merchant | Positive inclusive range; maximum is at least minimum. |
 | `merchantSaleBps`, `merchantPurchaseBps` | Merchant | Positive basis-point multipliers. |
 | `acceptedCategories` | Merchant | Non-empty item categories: `weapon`, `ammunition`, `armor`, `shield`, `light`, `fuel`, `food`, `potion`, `scroll`, `ring`, or `misc`. |
-| `services`, `serviceId`, `basePrice`, `minimumUses`, `maximumUses`, `tierIds` | Merchant | Unique `merchant-service.identify` offers have positive price/use bounds and reference tiers present in the NPC faction. |
+| `services`, `serviceId`, `basePrice`, `minimumUses`, `maximumUses`, `tierIds` | Merchant | Unique `merchant-service.identify` offers have non-negative price/use bounds, maximum uses at least minimum uses, and reference tiers that enable the offered service in the NPC faction. |
 | `minimumLifetime`, `maximumLifetime`, `departureWarningThresholds` | Merchant | Positive lifetime range; warnings are unique, strictly descending, and below the minimum lifetime. |
 | `aggressionResponse` | Merchant | Closed to `flee` or `self-defense`. |
 | `commerceReputationDelta`, `aggressionReputationDelta`, `deathReputationDelta` | Merchant | Safe-integer reputation changes. |

@@ -60,6 +60,94 @@ describe('compileContentDirectory', () => {
     });
   });
 
+  it('allows zero-priced services and zero-use offers', async () => {
+    const zeroService = compactMerchant
+      .replace('basePrice: 10', 'basePrice: 0')
+      .replace('minimumUses: 1, maximumUses: 2', 'minimumUses: 0, maximumUses: 0');
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      compactFaction, compactNpc, compactStock, zeroService) });
+    await expect(compileContentDirectory({ rootDir: root })).resolves.toBeDefined();
+  });
+
+  it('requires nonmerchant discovery protection fields while defaulting them for merchants', async () => {
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      compactIndividualEncounter.replace(', discoveryProtectionIncrement: 0, discoveryProtectionCap: 1', '')) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/expected number/i);
+  });
+
+  it('requires a merchant service to be enabled by every targeted faction tier', async () => {
+    const waryService = compactMerchant.replace('tierIds: [neutral]', 'tierIds: [wary]');
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      compactFaction, compactNpc, compactStock, waryService) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects
+      .toThrow(/service merchant-service\.identify is not enabled for faction tier wary/);
+  });
+
+  it('preserves authored tier indices in overlap diagnostics', async () => {
+    const reversedOverlap = compactFaction.replace(
+      'tiers: [{tierId: wary, name: Wary, minimum: -100, maximum: -1, purchasePriceBps: 12000, salePriceBps: 8000, acceptsTrade: true, serviceIds: []}, {tierId: neutral, name: Neutral, minimum: 0, maximum: 100, purchasePriceBps: 10000, salePriceBps: 10000, acceptsTrade: true, serviceIds: [merchant-service.identify]}]',
+      'tiers: [{tierId: neutral, name: Neutral, minimum: 0, maximum: 100, purchasePriceBps: 10000, salePriceBps: 10000, acceptsTrade: true, serviceIds: [merchant-service.identify]}, {tierId: wary, name: Wary, minimum: -100, maximum: 0, purchasePriceBps: 12000, salePriceBps: 8000, acceptsTrade: true, serviceIds: []}]',
+    );
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      reversedOverlap, compactNpc, compactStock, compactMerchant) });
+    await expectCompileIssues(compileContentDirectory({ rootDir: root }), [{
+      file: 'content.yaml', path: '$.entries.npc-faction.lampwrights.tiers.0',
+      message: 'reputation tiers must cover every value without gaps or overlaps',
+    }]);
+  });
+
+  it.each([
+    ['duplicate tier ID', compactFaction.replace('tierId: neutral', 'tierId: wary'), /duplicate reputation tier wary/],
+    ['duplicate faction service ID', compactFaction.replace('serviceIds: \[merchant-service.identify\]', 'serviceIds: [merchant-service.identify, merchant-service.identify]'), /duplicate service ID/],
+    ['zero faction multiplier', compactFaction.replace('purchasePriceBps: 12000', 'purchasePriceBps: 0'), /purchasePriceBps/],
+    ['negative merchant multiplier', compactMerchant.replace('merchantSaleBps: 12000', 'merchantSaleBps: -1'), /merchantSaleBps/],
+    ['duplicate warning', compactMerchant.replace('[1000, 500, 100]', '[1000, 1000, 100]'), /warning thresholds must be unique/],
+    ['out-of-range warning', compactMerchant.replace('[1000, 500, 100]', '[3000, 500, 100]'), /below minimum lifetime/],
+    ['stock inversion', compactMerchant.replace('minimumStockRolls: 1, maximumStockRolls: 2', 'minimumStockRolls: 3, maximumStockRolls: 2'), /maximum stock rolls/],
+    ['lifetime inversion', compactMerchant.replace('minimumLifetime: 3000, maximumLifetime: 5000', 'minimumLifetime: 6000, maximumLifetime: 5000'), /maximum lifetime/],
+  ])('rejects complete merchant semantic matrix case: %s', async (_label, replacement, diagnostic) => {
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      replacement.includes('kind: npc-faction') ? replacement : compactFaction,
+      compactNpc, compactStock, replacement.includes('model: merchant') ? replacement : compactMerchant) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(diagnostic);
+  });
+
+  it('rejects duplicate merchant service offer IDs', async () => {
+    const duplicateService = compactMerchant.replace('services: [',
+      'services: [{serviceId: merchant-service.identify, basePrice: 0, minimumUses: 0, maximumUses: 0, tierIds: [neutral]}, ');
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      compactFaction, compactNpc, compactStock, duplicateService) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects
+      .toThrow(/duplicate merchant service merchant-service\.identify/);
+  });
+
+  it('walks nested merchant stock tables before accepting the pack', async () => {
+    const nested = '{kind: loot-table, id: loot-table.nested-stock, name: Nested, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const parent = compactStock.replace('contentId: item.lantern, lootTableId: null', 'contentId: null, lootTableId: loot-table.nested-stock');
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster,
+      compactItem.replace('price: 4', 'price: 0'), compactVault, compactFaction, compactNpc, parent, nested, compactMerchant) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects
+      .toThrow(/merchant stock item item\.lantern requires positive price/);
+  });
+
+  it('rejects a boss-unique item reachable from merchant stock', async () => {
+    const ordinary = compactItem.replace('item.lantern', 'item.ordinary').replace('name: Lantern', 'name: Ordinary');
+    const bossLoot = '{kind: loot-table, id: loot-table.boss, name: Boss, tags: [], rolls: 1, choices: [{contentId: item.ordinary, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const boss = '{kind: encounter, id: encounter.boss, name: Boss, tags: [], model: boss, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: legendary, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 2, minimumObjectiveDistance: 2, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, phases: [], recoveryPerWorldTime: 0, recoveryCapPercent: 0, uniqueItemId: item.lantern, enhancedLootTableId: loot-table.boss, vaultTags: []}}';
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, ordinary, compactVault,
+      compactFaction, compactNpc, compactStock, bossLoot, compactMerchant, boss) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects
+      .toThrow(/merchant stock item item\.lantern is guaranteed unique/);
+  });
+
+  it.each(['heirloom', 'quest', 'objective', 'nontransferable'])
+    ('rejects merchant stock tagged %s', async (tag) => {
+      const item = compactItem.replace('tags: [defense, food, healing, identification, light, offense]', `tags: [${tag}]`);
+      const root = await fixture({ 'content.yaml': contentFile(compactMonster, item, compactVault,
+        compactFaction, compactNpc, compactStock, compactMerchant) });
+      await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(new RegExp(`reserved ${tag} tag`));
+    });
+
   it.each([
     ['missing faction', compactNpc.replace('npc-faction.lampwrights', 'npc-faction.missing'), /unknown npc-faction reference/],
     ['faction gap', compactFaction.replace('minimum: 0, maximum: 100', 'minimum: 1, maximum: 100'), /reputation tiers must cover every value/],

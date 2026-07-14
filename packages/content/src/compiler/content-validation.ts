@@ -236,7 +236,9 @@ function encounterIssues(
     });
     const npc = byId.get(definition.npcId);
     const faction = npc?.kind === 'npc' ? byId.get(npc.factionId) : undefined;
-    const factionTiers = faction?.kind === 'npc-faction' ? new Set(faction.tiers.map((tier) => tier.tierId)) : new Set<string>();
+    const factionTiers = faction?.kind === 'npc-faction'
+      ? new Map(faction.tiers.map((tier) => [tier.tierId, tier]))
+      : new Map<string, NpcFactionContentEntry['tiers'][number]>();
     const serviceIds = new Set<string>();
     definition.services.forEach((service, index) => {
       if (serviceIds.has(service.serviceId)) issues.push(issue(file, `${path}.services.${index}.serviceId`, `duplicate merchant service ${service.serviceId}`));
@@ -246,7 +248,12 @@ function encounterIssues(
       service.tierIds.forEach((tierId, tierIndex) => {
         if (tiers.has(tierId)) issues.push(issue(file, `${path}.services.${index}.tierIds.${tierIndex}`, `duplicate service tier ${tierId}`));
         tiers.add(tierId);
-        if (!factionTiers.has(tierId)) issues.push(issue(file, `${path}.services.${index}.tierIds.${tierIndex}`, `service tier ${tierId} is absent from NPC faction`));
+        const factionTier = factionTiers.get(tierId);
+        if (!factionTier) issues.push(issue(file, `${path}.services.${index}.tierIds.${tierIndex}`, `service tier ${tierId} is absent from NPC faction`));
+        else if (!factionTier.serviceIds.includes(service.serviceId)) {
+          issues.push(issue(file, `${path}.services.${index}.tierIds.${tierIndex}`,
+            `service ${service.serviceId} is not enabled for faction tier ${tierId}`));
+        }
       });
     });
     const bossUniqueIds = new Set([...byId.values()].filter((candidate) => candidate.kind === 'encounter' && candidate.model === 'boss')
@@ -327,20 +334,21 @@ function factionIssues(file: string, faction: NpcFactionContentEntry): ContentCo
   if (faction.startingReputation < faction.minimumReputation || faction.startingReputation > faction.maximumReputation) {
     issues.push(issue(file, `${path}.startingReputation`, 'starting reputation must be within faction bounds'));
   }
-  const sorted = [...faction.tiers].sort((a, b) => a.minimum - b.minimum);
+  const sorted = faction.tiers.map((tier, authoredIndex) => ({ tier, authoredIndex }))
+    .sort((left, right) => left.tier.minimum - right.tier.minimum);
   const tierIds = new Set<string>();
-  sorted.forEach((tier, index) => {
-    if (tierIds.has(tier.tierId)) issues.push(issue(file, `${path}.tiers.${index}.tierId`, `duplicate reputation tier ${tier.tierId}`));
+  sorted.forEach(({ tier, authoredIndex }, index) => {
+    if (tierIds.has(tier.tierId)) issues.push(issue(file, `${path}.tiers.${authoredIndex}.tierId`, `duplicate reputation tier ${tier.tierId}`));
     tierIds.add(tier.tierId);
     if (new Set(tier.serviceIds).size !== tier.serviceIds.length) {
-      issues.push(issue(file, `${path}.tiers.${index}.serviceIds`, `duplicate service ID in reputation tier ${tier.tierId}`));
+      issues.push(issue(file, `${path}.tiers.${authoredIndex}.serviceIds`, `duplicate service ID in reputation tier ${tier.tierId}`));
     }
-    if (tier.maximum < tier.minimum) issues.push(issue(file, `${path}.tiers.${index}.maximum`, 'tier maximum must be at least minimum'));
-    if (index === 0 ? tier.minimum !== faction.minimumReputation : tier.minimum !== sorted[index - 1]!.maximum + 1) {
-      issues.push(issue(file, `${path}.tiers.${index}`, 'reputation tiers must cover every value without gaps or overlaps'));
+    if (tier.maximum < tier.minimum) issues.push(issue(file, `${path}.tiers.${authoredIndex}.maximum`, 'tier maximum must be at least minimum'));
+    if (index === 0 ? tier.minimum !== faction.minimumReputation : tier.minimum !== sorted[index - 1]!.tier.maximum + 1) {
+      issues.push(issue(file, `${path}.tiers.${authoredIndex}`, 'reputation tiers must cover every value without gaps or overlaps'));
     }
   });
-  if (sorted.at(-1)?.maximum !== faction.maximumReputation) issues.push(issue(file, `${path}.tiers`, 'reputation tiers must cover every value through maximum reputation'));
+  if (sorted.at(-1)?.tier.maximum !== faction.maximumReputation) issues.push(issue(file, `${path}.tiers`, 'reputation tiers must cover every value through maximum reputation'));
   return issues;
 }
 

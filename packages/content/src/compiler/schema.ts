@@ -350,8 +350,8 @@ const encounterCommon = {
   weight: safePositive,
   rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
   runAppearanceChance: probability,
-  discoveryProtectionIncrement: probability.default(0),
-  discoveryProtectionCap: probability.default(0),
+  discoveryProtectionIncrement: probability.optional(),
+  discoveryProtectionCap: probability.optional(),
   maximumInstancesPerRun: safePositive,
   placement: encounterPlacement,
   intentPresentation: encounterIntentPresentation,
@@ -441,8 +441,8 @@ const bossEncounterEntry = z.strictObject({
 });
 
 const merchantService = z.strictObject({
-  serviceId: z.literal('merchant-service.identify'), basePrice: safePositive,
-  minimumUses: safePositive, maximumUses: safePositive, tierIds: z.array(slugSchema).min(1),
+  serviceId: z.literal('merchant-service.identify'), basePrice: safeNonNegative,
+  minimumUses: safeNonNegative, maximumUses: safeNonNegative, tierIds: z.array(slugSchema).min(1),
 });
 const merchantEncounterDefinition = z.strictObject({
   npcId: stableIdSchema, stockLootTableId: stableIdSchema,
@@ -469,7 +469,14 @@ const encounterEntry = z.strictObject({
   if (entry.maxDepth < entry.minDepth) {
     context.addIssue({ code: 'custom', path: ['maxDepth'], message: 'maximum depth must be greater than or equal to minimum depth' });
   }
-  if (entry.model !== 'merchant' && entry.discoveryProtectionCap < entry.runAppearanceChance) {
+  if (entry.model !== 'merchant' && entry.discoveryProtectionIncrement === undefined) {
+    context.addIssue({ code: 'custom', path: ['discoveryProtectionIncrement'], message: 'Invalid input: expected number, received undefined' });
+  }
+  if (entry.model !== 'merchant' && entry.discoveryProtectionCap === undefined) {
+    context.addIssue({ code: 'custom', path: ['discoveryProtectionCap'], message: 'Invalid input: expected number, received undefined' });
+  }
+  if (entry.model !== 'merchant' && entry.discoveryProtectionCap !== undefined
+    && entry.discoveryProtectionCap < entry.runAppearanceChance) {
     context.addIssue({ code: 'custom', path: ['discoveryProtectionCap'], message: 'discovery protection cap must not be below run appearance chance' });
   }
   const definition = entry.definition;
@@ -572,6 +579,11 @@ export const contentSourceEntrySchema = z.discriminatedUnion('kind', [
 ]);
 
 export const contentEntrySchema = contentSourceEntrySchema.transform((entry) => {
+  if (entry.kind === 'encounter') return {
+    ...entry,
+    discoveryProtectionIncrement: entry.discoveryProtectionIncrement ?? 0,
+    discoveryProtectionCap: entry.discoveryProtectionCap ?? 0,
+  };
   if (entry.kind !== 'vault') return entry;
   let entranceCount = 0;
   const requiredSlotIds = new Set<string>();
