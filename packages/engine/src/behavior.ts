@@ -44,8 +44,6 @@ export function chooseBehaviorAction(input: Readonly<{
 }>): GameAction {
   const actor = actorById(input.state, input.actorId);
   if (!actor) throw new Error(`internal invariant: actor ${input.actorId} does not exist`);
-  const spawn = swarmSpawnAction(input);
-  if (spawn) return spawn;
   const rules = balanceEntry(input.content);
   if (actor.behaviorId === null) {
     return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };
@@ -91,6 +89,8 @@ export function chooseBehaviorAction(input: Readonly<{
       cost: actionCostFor(rules, 'action.attack'),
     };
   }
+  const spawn = swarmSpawnAction(input);
+  if (spawn) return spawn;
   const investigation = actor.behaviorState.investigation;
   const investigationDestination = investigation !== null && investigation.floorId === actor.floorId
     && (investigation.expiresAt === null || investigation.expiresAt > input.state.worldTime)

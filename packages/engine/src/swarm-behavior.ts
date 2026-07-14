@@ -175,8 +175,6 @@ export function advanceSwarms(input: Readonly<{
       population = syncDeaths({ ...population, nextSpawnAt: deadline(state.worldTime, interval) }, state.actors);
     } else if (population.shutdownState === 'frenzy' && population.shutdownExpiresAt !== null
       && population.shutdownExpiresAt <= state.worldTime) {
-      state = { ...state, actors: state.actors.map((actor) => population.livingMemberIds.includes(actor.actorId)
-        ? { ...actor, behaviorState: { ...actor.behaviorState, intent: 'hold', goal: null, investigation: null } } : actor) };
       population = { ...population, shutdownExpiresAt: null };
     } else if (population.shutdownState === null && population.nextSpawnAt <= state.worldTime && source
       && input.sourceActionActorId === source.actorId) {
@@ -243,7 +241,8 @@ export function swarmSpawnAction(input: Readonly<{ state: ActiveRun; content: Co
   const actor = input.state.actors.find((candidate) => candidate.actorId === input.actorId);
   const population = input.state.populations.find((candidate) => candidate.model === 'swarm'
     && candidate.sourceActorId === input.actorId);
-  if (!actor || actor.energy < balanceEntry(input.content).readinessThreshold || population?.model !== 'swarm'
+  if (!actor || actor.health <= 0 || actor.energy < balanceEntry(input.content).readinessThreshold || population?.model !== 'swarm'
+    || !population.livingMemberIds.includes(actor.actorId)
     || population.floorId !== input.state.activeFloorId || population.shutdownState !== null
     || population.nextSpawnAt > input.state.worldTime || population.nextSpawnAt <= input.state.activeFloorEnteredAt) return null;
   return { type: 'swarm-spawn' as const, actorId: actor.actorId,

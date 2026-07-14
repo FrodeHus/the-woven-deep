@@ -22,7 +22,7 @@ import { markEncounterObserved } from './population-gates.js';
 import { updatePopulationIntent } from './population-intent.js';
 import { updateActorMemory, visibleTargetObservations } from './population-perception.js';
 import { applyGroupLeaderOutcomes, coordinateGroups, groupCombatModifiers } from './group-behavior.js';
-import { advanceSwarms, resolveSwarmSpawnAction, swarmCombatModifiers } from './swarm-behavior.js';
+import { advanceSwarms, resolveSwarmSpawnAction, swarmCombatModifiers, swarmSpawnAction } from './swarm-behavior.js';
 import { projectDomainEvents } from './event-projection.js';
 import {
   completeNormalActorTurn, relationshipBetween, resolveOpportunityAttacks, setRelationship,
@@ -510,7 +510,9 @@ function prepareIndividualTurn(input: Readonly<{
   const target = !fleeing && behaviorState.goal?.type === 'actor'
     ? actorById(input.state, behaviorState.goal.targetActorId) : undefined;
   const adjacent = target !== undefined && Math.max(Math.abs(target.x - actor.x), Math.abs(target.y - actor.y)) === 1;
-  const intent = fleeing ? 'flee' : adjacent ? 'attack'
+  const spawning = !fleeing && !adjacent && swarmSpawnAction({ state: input.state, content: input.content,
+    actorId: actor.actorId }) !== null;
+  const intent = fleeing ? 'flee' : adjacent ? 'attack' : spawning ? 'spawn'
     : behaviorState.goal?.type === 'formation' ? 'regroup'
       : behaviorState.goal === null ? 'hold' : 'approach';
   const updatedIntent = updatePopulationIntent({

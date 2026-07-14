@@ -4,6 +4,7 @@ import {
   advanceSwarms, chooseBehaviorAction, createDemoContentPack, createDemoRun, decodeActiveRun, encodeActiveRun,
   resolveSwarmSpawnAction,
   resolveWorldStep,
+  swarmSpawnAction,
   type ActiveRun, type ActorState, type SwarmPopulation,
 } from '../src/index.js';
 
@@ -124,6 +125,21 @@ describe('swarm timers, placement, and caps', () => {
     expect(spawned.events).toContainEqual(expect.objectContaining({ type: 'swarm.members-created' }));
   });
 
+  it.each(['dead', 'former'] as const)('rejects a %s source without charging energy or spawning', (mode) => {
+    const { state, content } = fixture();
+    const guarded = { ...state,
+      actors: state.actors.map((actor) => actor.actorId === 'actor.source'
+        ? { ...actor, health: mode === 'dead' ? 0 : actor.health } : actor),
+      populations: state.populations.map((population) => population.model === 'swarm' && mode === 'former'
+        ? { ...population, livingMemberIds: [], formerMemberIds: ['actor.source'] }
+        : population) };
+    expect(swarmSpawnAction({ state: guarded, content, actorId: 'actor.source' })).toBeNull();
+    expect(() => resolveSwarmSpawnAction({ state: guarded, content, sourceActorId: 'actor.source',
+      eventId: `event.${mode}` })).toThrow(/cannot spawn/);
+    expect(guarded.actors.find((actor) => actor.actorId === 'actor.source')?.energy).toBe(100);
+    expect(guarded.actors).toHaveLength(2);
+  });
+
   it('runs one due spawn through ready actor turn selection', () => {
     const { state, content } = fixture();
     const result = resolveWorldStep({ state, content,
@@ -131,6 +147,34 @@ describe('swarm timers, placement, and caps', () => {
     expect(result.events).toContainEqual(expect.objectContaining({ type: 'actor.turn.started', actorId: 'actor.source' }));
     expect(result.events).toContainEqual(expect.objectContaining({ type: 'swarm.members-created', quantity: 2 }));
     expect(result.events).toContainEqual(expect.objectContaining({ type: 'actor.turn.completed', actionType: 'swarm-spawn' }));
+  });
+
+  it('saves and emits spawn intent before a due non-adjacent source action', () => {
+    const { state, content } = fixture();
+    const slowedContent = { ...content, entries: content.entries.map((entry) => entry.kind === 'monster'
+      && entry.id === 'monster.source' ? { ...entry, speed: 25 } : entry) };
+    const slowedState = { ...state, actors: state.actors.map((actor) => actor.actorId === 'actor.source'
+      ? { ...actor, speed: 25 } : actor) };
+    const result = resolveWorldStep({ state: slowedState, content: slowedContent,
+      action: { type: 'wait', actorId: state.hero.actorId, cost: 100 }, eventId: 'event.spawn-intent' });
+    const intentIndex = result.events.findIndex((event) => event.type === 'actor.intent-changed'
+      && event.actorId === 'actor.source' && event.intent === 'spawn');
+    const spawnIndex = result.events.findIndex((event) => event.type === 'swarm.members-created');
+    expect(intentIndex).toBeGreaterThanOrEqual(0);
+    expect(spawnIndex).toBeGreaterThan(intentIndex);
+    expect(result.state.actors.find((actor) => actor.actorId === 'actor.source')?.behaviorState.intent).toBe('spawn');
+  });
+
+  it('prioritizes adjacent legitimate attack over due spawn intent and action', () => {
+    const { state, content } = fixture();
+    const adjacent = { ...state, actors: state.actors.map((actor) => actor.actorId === state.hero.actorId
+      ? { ...actor, x: 2, y: 3 } : actor) };
+    const result = resolveWorldStep({ state: adjacent, content,
+      action: { type: 'wait', actorId: state.hero.actorId, cost: 100 }, eventId: 'event.attack-before-spawn' });
+    const sourceEvents = result.events.filter((event) => 'actorId' in event && event.actorId === 'actor.source');
+    expect(sourceEvents).toContainEqual(expect.objectContaining({ type: 'actor.intent-changed', intent: 'attack' }));
+    expect(sourceEvents).toContainEqual(expect.objectContaining({ type: 'actor.turn.completed', actionType: 'bump-attack' }));
+    expect(result.events).not.toContainEqual(expect.objectContaining({ type: 'swarm.members-created' }));
   });
 
   it('starts a new cap event episode after population falls below the cap', () => {
@@ -196,6 +240,21 @@ describe('swarm shutdown responses', () => {
     expect(started.state.populations[0]).toMatchObject({ shutdownState: 'frenzy', shutdownExpiresAt: 15 });
     const ended = advanceSwarms({ state: { ...started.state, worldTime: 15 }, content, eventId: 'event.frenzy.end' });
     expect(ended.state.actors.find((actor) => actor.actorId === 'actor.child')?.behaviorState.intent).toBe('hold');
+  });
+
+  it('expires only the frenzy modifier while preserving legitimate member behavior state', () => {
+    const { state, content } = destroyed('frenzy', { duration: 5,
+      modifiers: { accuracy: 1, defense: 0, damage: 2 } });
+    const started = advanceSwarms({ state, content, eventId: 'event.frenzy.preserve' });
+    const goal = { type: 'cell' as const, floorId: state.activeFloorId, x: 5, y: 3 };
+    const behavioral = { ...started.state, actors: started.state.actors.map((actor) => actor.actorId === 'actor.child'
+      ? { ...actor, behaviorState: { ...actor.behaviorState, intent: 'approach' as const, goal,
+        investigation: { floorId: goal.floorId, x: goal.x, y: goal.y, startedAt: 12, expiresAt: null } } } : actor),
+      worldTime: 15 };
+    const ended = advanceSwarms({ state: behavioral, content, eventId: 'event.frenzy.expired' });
+    expect(ended.state.actors.find((actor) => actor.actorId === 'actor.child')?.behaviorState)
+      .toEqual(behavioral.actors.find((actor) => actor.actorId === 'actor.child')?.behaviorState);
+    expect((ended.state.populations[0] as SwarmPopulation).shutdownExpiresAt).toBeNull();
   });
 
   it('round-trips lifecycle state exactly', () => {
