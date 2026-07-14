@@ -16,6 +16,8 @@ export interface HeirloomItemMetadata {
   readonly glyph: string;
   readonly color: string;
   readonly originatingHallRecordId: OpaqueId;
+  readonly originatingRank: 1;
+  readonly sourceItemId: OpaqueId | null;
 }
 
 export interface ItemInstance {

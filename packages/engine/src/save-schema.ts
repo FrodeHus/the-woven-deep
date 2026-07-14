@@ -347,6 +347,8 @@ const heirloomItemMetadata = z.strictObject({
   glyph: z.string().refine((value) => [...value].length === 1, 'must be one Unicode glyph'),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   originatingHallRecordId: identifier,
+  originatingRank: z.literal(1),
+  sourceItemId: nullableIdentifier,
 });
 const item = z.strictObject({
   itemId: identifier,
@@ -881,6 +883,29 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     if (!owner) fail(`${path}.location.actorId`, 'item owner does not exist');
     if (location.type === 'equipped' && owner.equipment[location.slot] !== itemValue.itemId) {
       fail(`${path}.location.slot`, 'equipped item is not referenced by its actor slot');
+    }
+  }
+  const heirloomRecordIds = new Set<string>();
+  for (const [itemIndex, itemValue] of run.items.entries()) {
+    if (itemValue.heirloom === undefined) continue;
+    const champion = run.populations.find((population) => population.model === 'champion'
+      && population.rewardCreated && `item.heirloom.${population.populationId}` === itemValue.itemId);
+    const standing = champion?.model === 'champion'
+      ? run.fallenHeroStandings.find((entry) => entry.hallRecordId === champion.hallRecordId) : undefined;
+    if (!champion || !standing || itemValue.quantity !== 1
+      || itemValue.heirloom.originatingHallRecordId !== standing.hallRecordId
+      || itemValue.heirloom.originatingRank !== standing.rank
+      || itemValue.heirloom.sourceItemId !== standing.heirloom.sourceItemId
+      || heirloomRecordIds.has(itemValue.heirloom.originatingHallRecordId)) {
+      fail(`items.${itemIndex}.heirloom`, 'heirloom provenance must uniquely match its reward-created Champion');
+    }
+    heirloomRecordIds.add(itemValue.heirloom.originatingHallRecordId);
+  }
+  for (const [populationIndex, populationValue] of run.populations.entries()) {
+    if (populationValue.model !== 'champion' || !populationValue.rewardCreated) continue;
+    const expected = items.get(`item.heirloom.${populationValue.populationId}`);
+    if (expected?.heirloom === undefined) {
+      fail(`populations.${populationIndex}.rewardCreated`, 'reward-created Champion requires its exact heirloom item');
     }
   }
   for (const [actorIndex, actorValue] of run.actors.entries()) {

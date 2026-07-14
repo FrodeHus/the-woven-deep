@@ -6,6 +6,7 @@ import { effectiveEncounterProbability, maximumDiscoveryProtectionBonus } from '
 import { assertEchoTemplateBoundaries, normalizeFallenHero, retainEchoCandidates } from './champion.js';
 import { recordedHeirloomContentId } from './inventory.js';
 import { stableJson } from './stable-json.js';
+import { boundedDisplayText } from './display-text.js';
 
 function entryMap(pack: CompiledContentPack): ReadonlyMap<string, ContentEntry> {
   return new Map(pack.entries.map((entry) => [entry.id, entry]));
@@ -118,6 +119,7 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
     }
   }
   const championTemplate = pack.entries.find((entry) => entry.kind === 'fallen-champion-template');
+  const expectedHeirlooms = new Map<string, Readonly<Record<string, unknown>>>();
   if (run.fallenHeroStandings.length > 0 && !championTemplate) {
     throw new Error('content-bound validation: fallen-hero standings require a Champion template');
   }
@@ -163,11 +165,13 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         const reward = run.items.find((item) => item.itemId === rewardId);
         const fallback = expectedContentId !== standing.heirloom.contentId;
         const expectedDefinition = entries.get(expectedContentId);
-        const expectedMetadata = { displayName: fallback && expectedDefinition?.kind === 'item'
-          ? expectedDefinition.name : standing.heirloom.displayName,
+        const expectedMetadata = { displayName: boundedDisplayText(fallback && expectedDefinition?.kind === 'item'
+          ? expectedDefinition.name : standing.heirloom.displayName),
         glyph: fallback && expectedDefinition?.kind === 'item' ? expectedDefinition.glyph : standing.heirloom.glyph,
         color: fallback && expectedDefinition?.kind === 'item' ? expectedDefinition.color : standing.heirloom.color,
-        originatingHallRecordId: standing.hallRecordId };
+        originatingHallRecordId: standing.hallRecordId, originatingRank: 1,
+        sourceItemId: standing.heirloom.sourceItemId };
+        expectedHeirlooms.set(rewardId, expectedMetadata);
         if (!reward || reward.contentId !== expectedContentId || reward.quantity !== 1
           || reward.condition !== (fallback ? 100 : standing.heirloom.condition)
           || reward.charges !== (fallback ? null : standing.heirloom.charges)
@@ -178,6 +182,13 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           throw new Error(`content-bound validation: Champion reward ${rewardId} is invalid`);
         }
       }
+    }
+  }
+  for (const item of run.items) {
+    if (item.heirloom === undefined) continue;
+    const expected = expectedHeirlooms.get(item.itemId);
+    if (!expected || item.quantity !== 1 || stableJson(item.heirloom) !== stableJson(expected)) {
+      throw new Error(`content-bound validation: heirloom provenance on item ${item.itemId} is invalid`);
     }
   }
   const unidentifiedItems = pack.entries.filter((entry): entry is ItemContentEntry =>

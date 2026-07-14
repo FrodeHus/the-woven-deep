@@ -1,5 +1,5 @@
 import type {
-  CompiledContentPack, FallenChampionTemplateContentEntry, ItemContentEntry, MonsterContentEntry,
+  CompiledContentPack, FallenChampionTemplateContentEntry, MonsterContentEntry,
   PopulationCombatModifiers,
 } from '@woven-deep/content';
 import { emptyEquipment, type ActorState, type BaseAttributes } from './actor-model.js';
@@ -12,6 +12,7 @@ import type {
 import { emptyActorBehaviorState } from './population-model.js';
 import { isNonZeroState, nextUint32 } from './random.js';
 import { compareCodeUnits } from './stable-json.js';
+import { boundedPrefixedDisplay, boundedSuffixedDisplay } from './display-text.js';
 
 const UINT32_RANGE = 0x1_0000_0000;
 
@@ -100,19 +101,25 @@ export function normalizeFallenHero(input: Readonly<{
     .map(([key, value]) => [key, clamp(value, 0, input.template.attributeMaximum)])) as unknown as BaseAttributes;
   const championHealth = clamp(fallback.health, input.template.minimumHealth, input.template.maximumHealth);
   const entries = new Map(input.content.entries.map((entry) => [entry.id, entry]));
-  const equipmentContentIds = input.standing.equippedItemContentIds
-    .filter((id) => {
-      const entry = entries.get(id);
-      return entry?.kind === 'item' && entry.equipment !== null;
-    });
-  const equipmentCombat = equipmentContentIds.map((id) => entries.get(id))
-    .filter((entry): entry is ItemContentEntry => entry?.kind === 'item')
-    .map((entry) => entry.combat);
-  const equipmentAccuracy = equipmentCombat.reduce((sum, combat) => sum + (combat?.accuracy ?? 0), 0);
-  const equipmentDefense = equipmentCombat.reduce((sum, combat) => sum + (combat?.defense ?? 0), 0);
-  const equipmentDamage = equipmentCombat.reduce((sum, combat) => sum + (combat?.damage?.bonus ?? 0), 0);
+  const rawDamage = fallback.damage.count * fallback.damage.sides + fallback.damage.bonus;
+  const equipmentContentIds: OpaqueId[] = [];
+  let equipmentAccuracy = 0;
+  let equipmentDefense = 0;
+  let equipmentDamage = 0;
+  for (const id of input.standing.equippedItemContentIds) {
+    const entry = entries.get(id);
+    if (entry?.kind !== 'item' || entry.equipment === null) continue;
+    const nextAccuracy = equipmentAccuracy + (entry.combat?.accuracy ?? 0);
+    const nextDefense = equipmentDefense + (entry.combat?.defense ?? 0);
+    const nextDamage = equipmentDamage + (entry.combat?.damage?.bonus ?? 0);
+    if (fallback.accuracy + nextAccuracy <= 0 || fallback.defense + nextDefense <= 0 || rawDamage + nextDamage <= 0) continue;
+    equipmentContentIds.push(id);
+    equipmentAccuracy = nextAccuracy;
+    equipmentDefense = nextDefense;
+    equipmentDamage = nextDamage;
+  }
   const championDamage = Math.min(input.template.damageMaximum,
-    fallback.damage.count * fallback.damage.sides + fallback.damage.bonus + equipmentDamage);
+    rawDamage + equipmentDamage);
   const championDefense = Math.min(input.template.attributeMaximum, fallback.defense + equipmentDefense);
   const championAccuracy = Math.min(input.template.attributeMaximum, fallback.accuracy + equipmentAccuracy);
   const echo = input.role === 'echo';
@@ -124,11 +131,15 @@ export function normalizeFallenHero(input: Readonly<{
     Math.floor(championDefense * input.template.echoDefensePercent / 100)) : championDefense;
   const accuracyMaximum = echo ? Math.min(championAccuracy - 1,
     Math.floor(championAccuracy * input.template.echoDamagePercent / 100)) : championAccuracy;
-  const abilityLimit = echo ? input.template.echoAbilityLimit : input.template.abilityLimit;
-  const abilityIds = input.standing.signatureAbilityIds
-    .filter((id) => entries.get(id)?.kind === 'spell').slice(0, abilityLimit);
-  return { displayName: echo ? `Echo of ${input.standing.heroName}`
-    : `${input.standing.heroName}, the Deep's Champion`, glyph: input.standing.portraitGlyph || fallback.glyph,
+  const championAbilityIds = input.standing.signatureAbilityIds
+    .filter((id) => entries.get(id)?.kind === 'spell').slice(0, input.template.abilityLimit);
+  if (echo && championAbilityIds.length === 0) {
+    throw new RangeError('Echo ability selection cannot be strictly weaker than the current Champion selection');
+  }
+  const abilityIds = echo ? championAbilityIds.slice(0,
+    Math.min(input.template.echoAbilityLimit, Math.max(0, championAbilityIds.length - 1))) : championAbilityIds;
+  return { displayName: echo ? boundedPrefixedDisplay('Echo of ', input.standing.heroName)
+    : boundedSuffixedDisplay(input.standing.heroName, ", the Deep's Champion"), glyph: input.standing.portraitGlyph || fallback.glyph,
     color: fallback.color, monsterId: fallback.id, attributes, health: Math.max(1, health),
     damageMaximum: Math.max(0, damageMaximum), defenseMaximum: Math.max(0, defenseMaximum),
     accuracyMaximum: Math.max(0, accuracyMaximum), equipmentContentIds, abilityIds };
@@ -234,6 +245,15 @@ export function placeFallenHeroEncounters(input: Readonly<{
       && population.hallRecordId === decision.hallRecordId);
     if (!standing || !decision.retained || decision.encountered || decision.defeated || exists
       || standing.deathDepth !== floor.depth || slots.length === 0) return decision;
+    let normalized: NormalizedFallenHero;
+    try {
+      normalized = normalizeFallenHero({ standing, template: definition, content: input.content, role: decision.role });
+    } catch (error) {
+      if (decision.role === 'echo' && error instanceof RangeError && /ability.*strictly weaker/i.test(error.message)) {
+        return decision;
+      }
+      throw error;
+    }
     const index = slots.findIndex((slot) => preservesRequiredRoutes({ width: floor.width, height: floor.height,
       tiles: floor.tiles, requiredPoints: requiredPoints(floor),
       blockedPoints: [...selectedCells, { x: slot.x, y: slot.y }] }));
@@ -241,7 +261,6 @@ export function placeFallenHeroEncounters(input: Readonly<{
     const slot = slots[index]!;
     selectedCells.push({ x: slot.x, y: slot.y });
     slots = slots.filter((_, slotIndex) => slotIndex !== index);
-    const normalized = normalizeFallenHero({ standing, template: definition, content: input.content, role: decision.role });
     const suffix = decision.role === 'champion' ? 'champion' : `echo-${decision.rank}`;
     const populationId = `population.fallen-${suffix}.${standing.hallRecordId}`;
     const actorId = `actor.${populationId}.001`;

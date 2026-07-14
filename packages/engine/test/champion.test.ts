@@ -6,7 +6,7 @@ import type {
 import {
   advanceFallenHeroEncounters, createDemoContentPack, createDemoRun, createFallenHeroRunDecisions,
   decodeActiveRun, dropItem, encodeActiveRun, normalizeFallenHero, placeFallenHeroEncounters,
-  fallenHeroCombatModifiers, projectGameplayState, retainEchoCandidates, validateContentBoundRun,
+  fallenHeroCombatModifiers, mergeStacks, pickupItem, projectGameplayState, retainEchoCandidates, validateContentBoundRun,
   type ActiveRun, type FallenHeroStandingSnapshot,
 } from '../src/index.js';
 
@@ -122,7 +122,45 @@ describe('normalization and optional placement', () => {
     expect(echo.health).toBeLessThan(champion.health);
     expect(echo.damageMaximum).toBeLessThan(champion.damageMaximum);
     expect(echo.defenseMaximum).toBeLessThan(champion.defenseMaximum);
+    expect(echo.accuracyMaximum).toBeLessThan(champion.accuracyMaximum);
+    expect(echo.abilityIds.length).toBeLessThan(champion.abilityIds.length);
     expect(echo.abilityIds.length).toBeLessThanOrEqual(template.echoAbilityLimit);
+  });
+
+  it('omits current-valid negative equipment that would erase strict Echo combat boundaries', () => {
+    const cursed = item('item.cursed', { combat: { accuracy: -99, defense: -99, armor: 0,
+      damage: { count: 1, sides: 1, bonus: -99 }, range: 1, ammunitionTag: null } });
+    const current = { ...pack(), entries: [...pack().entries, cursed] };
+    const historical = standing(1, { equippedItemContentIds: ['item.cursed', 'item.heirloom'] });
+    const champion = normalizeFallenHero({ standing: historical, template, content: current, role: 'champion' });
+    const echo = normalizeFallenHero({ standing: { ...historical, rank: 2 }, template, content: current, role: 'echo' });
+    expect(champion.equipmentContentIds).toEqual(['item.heirloom']);
+    expect(echo.equipmentContentIds).toEqual(['item.heirloom']);
+    expect(echo.damageMaximum).toBeLessThan(champion.damageMaximum);
+    expect(echo.defenseMaximum).toBeLessThan(champion.defenseMaximum);
+    expect(echo.accuracyMaximum).toBeLessThan(champion.accuracyMaximum);
+    const echoActor = { ...createDemoRun().actors[0]!, actorId: 'actor.echo', contentId: monster.id,
+      playerControlled: false, populationId: 'population.echo', health: echo.health, maxHealth: echo.health };
+    expect(fallenHeroCombatModifiers({ state: { actors: [echoActor], fallenHeroStandings: [{ ...historical, rank: 2 }],
+      populations: [{ populationId: 'population.echo', encounterId: template.id, floorId: 'floor.demo', model: 'echo',
+        createdAt: 0, livingMemberIds: ['actor.echo'], formerMemberIds: [], actorId: 'actor.echo',
+        hallRecordId: historical.hallRecordId, rank: 2, defeated: false, lootCreated: false,
+        equipmentContentIds: echo.equipmentContentIds, abilityIds: echo.abilityIds }] }, content: current,
+      actorId: 'actor.echo' })).toMatchObject({ accuracy: echo.accuracyMaximum - monster.accuracy,
+        defense: echo.defenseMaximum - monster.defense });
+  });
+
+  it('omits an Echo whose current build has no ability that can be made strictly weaker', () => {
+    const standings = [standing(1), standing(2, { signatureAbilityIds: [] })];
+    const selected = initialized(standings);
+    const forced = { ...selected, fallenHeroDecisions: selected.fallenHeroDecisions.map((decision) => decision.rank === 2
+      ? { ...decision, retained: true, gateRoll: 1 } : { ...decision, retained: false }) };
+    const run = withArena(forced, 4);
+    expect(() => normalizeFallenHero({ standing: standings[1]!, template, content: pack(), role: 'echo' }))
+      .toThrow(/ability.*strictly weaker/i);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    expect(placed.populations).toHaveLength(0);
+    expect(placed.decisions.find((decision) => decision.rank === 2)).toMatchObject({ retained: true, encountered: false });
   });
 
   it('honors recorded death depth and only uses bypassable optional side-arena slots', () => {
@@ -213,7 +251,7 @@ describe('fallen hero rewards and run-local lifecycle', () => {
       hallRecordId: 'hall.hero-1', rank: 1 }), expect.objectContaining({ type: 'champion.heirloom-created',
       originatingHallRecordId: 'hall.hero-1', displayName: "Hero 1's Blade" })]));
     expect(reward).toMatchObject({ heirloom: { displayName: "Hero 1's Blade", glyph: ')', color: '#ddeeff',
-      originatingHallRecordId: 'hall.hero-1' } });
+      originatingHallRecordId: 'hall.hero-1', originatingRank: 1, sourceItemId: 'item.original-1' } });
     const carriedState = { ...first.state, items: first.state.items.map((item) => item.itemId === reward.itemId
       ? { ...item, location: { type: 'backpack' as const, actorId: first.state.hero.actorId } } : item) };
     const dropped = dropItem({ run: carriedState, actorId: first.state.hero.actorId,
@@ -235,10 +273,60 @@ describe('fallen hero rewards and run-local lifecycle', () => {
     const corrupted = { ...loadedState, items: loadedState.items.map((item) => item.itemId === reward.itemId
       ? { ...item, heirloom: { ...item.heirloom!, displayName: 'Tampered history' } } : item) };
     expect(() => validateContentBoundRun(corrupted, pack())).toThrow(/Champion reward/i);
+    const ordinary = { ...reward, itemId: 'item.ordinary-copy', heirloom: undefined,
+      location: { type: 'backpack' as const, actorId: first.state.hero.actorId } };
+    const pickupRun = { ...first.state, items: [...first.state.items.map((item) => item.itemId === reward.itemId
+      ? { ...item, location: { type: 'floor' as const, floorId: 'floor.demo', x: 1, y: 1 } } : item), ordinary] };
+    const picked = pickupItem({ run: pickupRun, content: pack(), actorId: first.state.hero.actorId,
+      itemId: reward.itemId, quantity: 1 });
+    expect(picked.ok).toBe(true);
+    if (!picked.ok) throw new Error(picked.reason);
+    expect(picked.items.filter((item) => item.contentId === reward.contentId)).toHaveLength(2);
+    expect(mergeStacks({ run: picked.run, content: pack(), actorId: first.state.hero.actorId,
+      leftItemId: reward.itemId, rightItemId: ordinary.itemId })).toEqual({ ok: false, reason: 'item.incompatible' });
+    const forged = { ...loadedState, items: [...loadedState.items,
+      { ...ordinary, itemId: 'item.forged', heirloom: reward.heirloom }].sort((a, b) => a.itemId.localeCompare(b.itemId)) };
+    expect(() => validateContentBoundRun(forged, pack())).toThrow(/provenance|heirloom/i);
+    expect(() => encodeActiveRun(forged)).toThrow(/provenance|heirloom/i);
+    for (const heirloom of [
+      { ...reward.heirloom!, originatingHallRecordId: 'hall.wrong' },
+      { ...reward.heirloom!, originatingRank: 2 },
+      { ...reward.heirloom!, sourceItemId: 'item.wrong' },
+    ]) {
+      const tampered = { ...loadedState, items: loadedState.items.map((item) => item.itemId === reward.itemId
+        ? { ...item, heirloom } : item) };
+      expect(() => validateContentBoundRun(tampered, pack())).toThrow(/Champion reward|provenance|heirloom/i);
+      expect(() => encodeActiveRun(tampered)).toThrow(/provenance|heirloom/i);
+    }
     const again = advanceFallenHeroEncounters({ state: loadedState, content: pack(),
       eventId: 'event.champion-duplicate' });
     expect(again.state.items).toEqual(loadedState.items);
     expect(again.events).toEqual([]);
+  });
+
+  it('keeps derived Unicode Champion, Echo, and fallback heirloom display strings save-schema safe', () => {
+    const longName = '🛡'.repeat(40);
+    const longFallback = item('item.fallback', { name: 'Relic '.repeat(12) });
+    const current = { ...pack(), entries: pack().entries.map((entry) => entry.id === 'item.fallback' ? longFallback : entry) };
+    const historical = standing(1, { heroName: longName });
+    const champion = normalizeFallenHero({ standing: historical, template, content: current, role: 'champion' });
+    const echo = normalizeFallenHero({ standing: { ...historical, rank: 2 }, template, content: current, role: 'echo' });
+    expect([...champion.displayName]).toHaveLength(40);
+    expect(champion.displayName).toMatch(/, the Deep's Champion$/);
+    expect([...echo.displayName]).toHaveLength(40);
+    expect(echo.displayName).toMatch(/^Echo of /);
+    const changed = standing(1, { heroName: longName, heirloom: { ...historical.heirloom, contentId: 'item.removed' } });
+    const base = initialized([changed]);
+    const run = withArena({ ...base, contentHash: current.hash }, 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: current });
+    const dead = { ...run, actors: [...run.actors, ...placed.actors].map((actor) => actor.populationId === null
+      ? actor : { ...actor, health: 0 }).sort((a, b) => a.actorId.localeCompare(b.actorId)),
+      populations: placed.populations, fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor] };
+    const result = advanceFallenHeroEncounters({ state: dead, content: current, eventId: 'event.long-name' });
+    const reward = result.state.items.find((entry) => entry.heirloom)!;
+    expect([...reward.heirloom!.displayName]).toHaveLength(40);
+    expect(decodeActiveRun(encodeActiveRun(result.state))).toEqual(result.state);
   });
 
   it.each([

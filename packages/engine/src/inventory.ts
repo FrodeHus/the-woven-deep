@@ -4,6 +4,7 @@ import type { ItemInstance } from './item-model.js';
 import type { ActiveRun, OpaqueId, Uint32State } from './model.js';
 import type { RecordedHeirloomSnapshot } from './population-model.js';
 import { stableJson } from './stable-json.js';
+import { boundedDisplayText } from './display-text.js';
 import { rollDie } from './random.js';
 
 export type InventoryFailureReason = 'inventory.full' | 'item.missing' | 'item.unavailable'
@@ -144,6 +145,7 @@ export function createRecordedHeirloom(input: Readonly<{
   const resolvedContentId = recordedHeirloomContentId(input);
   const definition = itemDefinition(input.content, resolvedContentId);
   const fallback = resolvedContentId !== input.snapshot.contentId;
+  const displayName = boundedDisplayText(fallback ? definition.name : input.snapshot.displayName);
   const item: ItemInstance = {
     itemId: input.itemId, contentId: definition.id, quantity: 1,
     condition: fallback ? 100 : input.snapshot.condition,
@@ -153,13 +155,14 @@ export function createRecordedHeirloom(input: Readonly<{
     fuel: fallback ? definition.light?.fuelCapacity ?? null : input.snapshot.fuel,
     enabled: definition.light === null ? null : false,
     location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y },
-    heirloom: { displayName: fallback ? definition.name : input.snapshot.displayName,
+    heirloom: { displayName,
       glyph: fallback ? definition.glyph : input.snapshot.glyph,
       color: fallback ? definition.color : input.snapshot.color,
-      originatingHallRecordId: input.snapshot.originatingHallRecordId },
+      originatingHallRecordId: input.snapshot.originatingHallRecordId,
+      originatingRank: 1, sourceItemId: input.snapshot.sourceItemId },
   };
   return { item, fallback,
-    displayName: fallback ? definition.name : input.snapshot.displayName,
+    displayName,
     glyph: fallback ? definition.glyph : input.snapshot.glyph,
     color: fallback ? definition.color : input.snapshot.color };
 }
@@ -185,7 +188,8 @@ export function recordedHeirloomContentId(input: Readonly<{
 }
 
 export function canStack(left: ItemInstance, right: ItemInstance): boolean {
-  return left.contentId === right.contentId
+  return left.heirloom === undefined && right.heirloom === undefined
+    && left.contentId === right.contentId
     && left.condition === right.condition
     && left.identified === right.identified
     && left.charges === right.charges
