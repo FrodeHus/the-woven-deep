@@ -1,4 +1,4 @@
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: condition
     id: condition.swarm-decay

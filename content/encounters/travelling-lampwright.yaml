@@ -1,0 +1,37 @@
+schemaVersion: 4
+entries:
+  - kind: encounter
+    id: encounter.travelling-lampwright
+    name: Travelling Lampwright
+    tags: [lampwright, merchant]
+    model: merchant
+    minDepth: 1
+    maxDepth: 10
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 1
+    rarity: uncommon
+    runAppearanceChance: 0.25
+    discoveryProtectionIncrement: 0
+    discoveryProtectionCap: 0
+    maximumInstancesPerRun: 2
+    placement: { minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      npcId: npc.travelling-lampwright
+      stockLootTableId: loot-table.travelling-lampwright-stock
+      minimumStockRolls: 1
+      maximumStockRolls: 2
+      merchantSaleBps: 12000
+      merchantPurchaseBps: 6000
+      acceptedCategories: [armor, food, fuel, light, potion, scroll, weapon]
+      services:
+        - { serviceId: merchant-service.identify, basePrice: 10, minimumUses: 1, maximumUses: 2, tierIds: [neutral, trusted] }
+      minimumLifetime: 3000
+      maximumLifetime: 5000
+      departureWarningThresholds: [1000, 500, 100]
+      aggressionResponse: flee
+      commerceReputationDelta: 25
+      aggressionReputationDelta: -300
+      deathReputationDelta: -200
+      stockDropFraction: 0.5

@@ -9,16 +9,40 @@ describe('bundled content', () => {
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
     const kinds = ['monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault',
-      'identification-pool', 'encounter', 'fallen-champion-template'] as const;
+      'identification-pool', 'encounter', 'fallen-champion-template', 'npc', 'npc-faction'] as const;
     expect(Object.fromEntries(kinds.map((kind) => [kind,
       pack.entries.filter((entry) => entry.kind === kind).length]))).toEqual({
-      monster: 4, item: 16, spell: 1, trap: 1, 'loot-table': 3, balance: 1, vault: 1,
-      'identification-pool': 2, encounter: 4, 'fallen-champion-template': 1,
+      monster: 4, item: 16, spell: 1, trap: 1, 'loot-table': 4, balance: 1, vault: 1,
+      'identification-pool': 2, encounter: 5, 'fallen-champion-template': 1, npc: 1, 'npc-faction': 1,
     });
     expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(5);
     expect(pack.entries.map((entry) => entry.id)).toEqual([...pack.entries.map((entry) => entry.id)].sort());
     expect(validateCompiledContentPack(JSON.parse(JSON.stringify(pack)))).toEqual(pack);
     expect(pack.hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('ships the exact Lampwright merchant contract', async () => {
+    const pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+    const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
+    expect(entries.get('balance.core-gameplay')).toMatchObject({ startingCurrency: 40 });
+    expect(entries.get('npc-faction.lampwrights')).toMatchObject({
+      minimumReputation: -1000, maximumReputation: 1000, startingReputation: 0,
+      tiers: [
+        { tierId: 'refused', minimum: -1000, maximum: -251, purchasePriceBps: 15000, salePriceBps: 5000, acceptsTrade: false, serviceIds: [] },
+        { tierId: 'wary', minimum: -250, maximum: -1, purchasePriceBps: 13000, salePriceBps: 7000, acceptsTrade: true, serviceIds: [] },
+        { tierId: 'neutral', minimum: 0, maximum: 249, purchasePriceBps: 11000, salePriceBps: 9000, acceptsTrade: true, serviceIds: ['merchant-service.identify'] },
+        { tierId: 'trusted', minimum: 250, maximum: 1000, purchasePriceBps: 9000, salePriceBps: 10000, acceptsTrade: true, serviceIds: ['merchant-service.identify'] },
+      ],
+    });
+    expect(entries.get('encounter.travelling-lampwright')).toMatchObject({
+      model: 'merchant', minDepth: 1, maxDepth: 10, runAppearanceChance: 0.25,
+      discoveryProtectionIncrement: 0, discoveryProtectionCap: 0, maximumInstancesPerRun: 2,
+      definition: { minimumStockRolls: 1, maximumStockRolls: 2, merchantSaleBps: 12000,
+        merchantPurchaseBps: 6000, minimumLifetime: 3000, maximumLifetime: 5000,
+        departureWarningThresholds: [1000, 500, 100], aggressionResponse: 'flee',
+        commerceReputationDelta: 25, aggressionReputationDelta: -300, deathReputationDelta: -200,
+        stockDropFraction: 0.5 },
+    });
   });
 
   it('reports every foundational gameplay category', async () => {

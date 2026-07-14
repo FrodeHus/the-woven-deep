@@ -26,6 +26,9 @@ import {
   EFFECT_PARAMETER_SCHEMAS,
   LEADER_RESPONSE_PARAMETER_SCHEMAS,
   SWARM_RESPONSE_PARAMETER_SCHEMAS,
+  NPC_BEHAVIOR_PARAMETER_SCHEMAS,
+  MERCHANT_SERVICE_IDS,
+  MERCHANT_AGGRESSION_RESPONSES,
 } from '../src/compiler/registries.js';
 
 describe('server-admin content documentation', () => {
@@ -78,6 +81,9 @@ describe('server-admin content documentation', () => {
       ...Object.keys(EFFECT_PARAMETER_SCHEMAS),
       ...Object.keys(LEADER_RESPONSE_PARAMETER_SCHEMAS),
       ...Object.keys(SWARM_RESPONSE_PARAMETER_SCHEMAS),
+      ...Object.keys(NPC_BEHAVIOR_PARAMETER_SCHEMAS),
+      ...MERCHANT_SERVICE_IDS,
+      ...MERCHANT_AGGRESSION_RESPONSES,
       ...CONDITION_TRAIT_IDS,
     ];
     for (const identifier of required) {

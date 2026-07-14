@@ -25,6 +25,13 @@ export const BEHAVIOR_PARAMETER_SCHEMAS = {
   }),
 } as const;
 
+export const NPC_BEHAVIOR_PARAMETER_SCHEMAS = {
+  'npc-behavior.travelling-merchant': z.strictObject({}),
+} as const;
+
+export const MERCHANT_SERVICE_IDS = ['merchant-service.identify'] as const;
+export const MERCHANT_AGGRESSION_RESPONSES = ['flee', 'self-defense'] as const;
+
 export const LEADER_RESPONSE_PARAMETER_SCHEMAS = {
   weaken: z.strictObject({ modifiers: populationModifiers }),
   panic: z.strictObject({ duration: safePositive }),

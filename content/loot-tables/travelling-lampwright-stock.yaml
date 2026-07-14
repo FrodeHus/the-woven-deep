@@ -1,0 +1,12 @@
+schemaVersion: 4
+entries:
+  - kind: loot-table
+    id: loot-table.travelling-lampwright-stock
+    name: Travelling Lampwright stock
+    tags: [lampwright, merchant]
+    rolls: 1
+    choices:
+      - { contentId: item.lamp-oil, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.pitch-torch, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.brass-lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.travel-ration, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 2 }

@@ -1,0 +1,14 @@
+schemaVersion: 4
+entries:
+  - kind: npc-faction
+    id: npc-faction.lampwrights
+    name: Lampwrights
+    tags: [lampwright, merchant]
+    minimumReputation: -1000
+    maximumReputation: 1000
+    startingReputation: 0
+    tiers:
+      - { tierId: refused, name: Refused, minimum: -1000, maximum: -251, purchasePriceBps: 15000, salePriceBps: 5000, acceptsTrade: false, serviceIds: [] }
+      - { tierId: wary, name: Wary, minimum: -250, maximum: -1, purchasePriceBps: 13000, salePriceBps: 7000, acceptsTrade: true, serviceIds: [] }
+      - { tierId: neutral, name: Neutral, minimum: 0, maximum: 249, purchasePriceBps: 11000, salePriceBps: 9000, acceptsTrade: true, serviceIds: [merchant-service.identify] }
+      - { tierId: trusted, name: Trusted, minimum: 250, maximum: 1000, purchasePriceBps: 9000, salePriceBps: 10000, acceptsTrade: true, serviceIds: [merchant-service.identify] }

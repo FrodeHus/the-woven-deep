@@ -1,6 +1,6 @@
 # Server content configuration
 
-The Woven Deep loads gameplay content from YAML when the server starts. Administrators can add and balance monsters, encounters, fallen-hero bosses, items, identification pools, spells, traps, loot tables, vaults, conditions, and global balance values without rebuilding the application, provided they use the engine's supported behaviors, effects, targets, and condition traits.
+The Woven Deep loads gameplay content from YAML when the server starts. Administrators can add and balance monsters, NPCs, NPC factions, encounters, fallen-hero bosses, items, identification pools, spells, traps, loot tables, vaults, conditions, and global balance values without rebuilding the application, provided they use the engine's supported behaviors, effects, targets, and condition traits.
 
 YAML is configuration, not a scripting language. A new combination of supported rules needs only YAML. A fundamentally new rule requires a code change, a strict schema, tests, and an update to this guide.
 
@@ -38,7 +38,7 @@ For a release image, run the repeatable startup integration gate as well:
 npm run content:startup-gate
 ```
 
-The gate builds the Compose image, starts it with a complete schema-v3 directory mounted read-only,
+The gate builds the Compose image, starts it with a complete schema-v4 directory mounted read-only,
 smoke-tests the server, then restarts against an invalid replacement using the same database. It requires
 the invalid container to exit and verifies that the immutable content-pack publication set did not change.
 Pass an existing image reference after `--` to skip the build, for example
@@ -67,6 +67,8 @@ content/
   items/
   loot-tables/
   monsters/
+  npcs/
+  npc-factions/
   spells/
   traps/
   vaults/
@@ -77,7 +79,7 @@ content/
 Every file is one strict document:
 
 ```yaml
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: monster
     id: monster.example
@@ -90,9 +92,9 @@ Unknown fields are errors, including plausible misspellings.
 
 | Field | Type | Required/default | Rules and meaning |
 |---|---|---|---|
-| `schemaVersion` | integer | Required | Must be exactly `3`. |
+| `schemaVersion` | integer | Required | Must be exactly `4`. |
 | `entries` | array | Required, at least one | May contain any supported content kind. |
-| `kind` | enum | Required | One of `monster`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, `condition`, `encounter`, or `fallen-champion-template`. |
+| `kind` | enum | Required | One of `monster`, `npc`, `npc-faction`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, `condition`, `encounter`, or `fallen-champion-template`. |
 | `id` | string | Required | Globally unique stable ID such as `monster.cave-rat`. |
 | `name` | string | Required | Trimmed display name, 1–80 characters. |
 | `tags` | slug array | Defaults to `[]` | Descriptive taxonomy. Tags never activate engine rules. |
@@ -107,7 +109,7 @@ Cross-file references resolve after every file is parsed, so declaration order i
 
 ## Balance entries
 
-A pack contains exactly one `balance` entry.
+A pack contains exactly one `balance` entry. `startingCurrency` is a non-negative safe integer; the bundled value is `40`.
 
 | Field | Type | Required | Rules and meaning |
 |---|---|---|---|
@@ -129,7 +131,7 @@ A pack contains exactly one `balance` entry.
 | `actionCosts` | registered-action-ID-to-integer map | Yes | Non-negative cost overrides. Unknown action IDs fail compilation. |
 
 ```yaml
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: balance
     id: balance.core-gameplay
@@ -188,7 +190,7 @@ The closed action-cost IDs are `action.attack`, `action.cast`, `action.close-doo
 | `rarity` | enum | Yes | `common`, `uncommon`, `rare`, or `legendary`. |
 
 ```yaml
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -214,6 +216,14 @@ entries:
 ```
 
 Monsters are reusable creature definitions. Population frequency and composition belong to encounter entries, allowing one monster to participate in several encounter types.
+
+## NPC and NPC-faction entries
+
+An `npc` is a presented actor with `glyph`, `color`, a valid `factionId`, positive attributes, `health`, `speed`, `perception`, `accuracy`, and `defense`, non-negative `armor`, damage dice, all six resistances, and `selfPreservationThresholdBps` from `1` through `10000`. NPC disposition is closed to `neutral`; the available behavior is `npc-behavior.travelling-merchant`, whose `behaviorParameters` object is strict and empty.
+
+An `npc-faction` declares safe-integer `minimumReputation`, `maximumReputation`, and `startingReputation`, plus non-empty `tiers`. The starting value must be inside the bounds. Each tier has a unique slug `tierId`, display `name`, inclusive `minimum` and `maximum`, positive `purchasePriceBps` and `salePriceBps`, `acceptsTrade`, and `serviceIds`. Tiers are sorted by minimum and must cover every integer in the faction range exactly once: no gaps or overlaps. The only service ID is `merchant-service.identify`.
+
+The bundled `npc-faction.lampwrights` spans `-1000..1000`, starts at `0`, and uses `refused` (`-1000..-251`, `15000`/`5000`, no trade/services), `wary` (`-250..-1`, `13000`/`7000`, trade/no services), `neutral` (`0..249`, `11000`/`9000`, trade/identify), and `trusted` (`250..1000`, `9000`/`10000`, trade/identify). The neutral `npc.travelling-lampwright` uses threshold `3500`.
 
 ## Encounter entries
 
@@ -247,7 +257,7 @@ The exact boundary is valid. Boundary plus one is rejected before selection, RNG
 |---|---|---|
 | `definition` | All | Strict model-specific object. Its shape must match `model`; fields from another model and unknown nested fields reject the complete pack. |
 | `intentPresentation`, `visible` | All | `intentPresentation` is required and contains only boolean `visible`. This controls broad observable intent, never exact targets, paths, rolls, or relayed hidden knowledge. |
-| `runAppearanceChance`, `discoveryProtectionIncrement`, `discoveryProtectionCap` | All | Probabilities are 0–1. The cap must be at least the base chance and protection advances only after eligible depth was reached without observing the encounter. |
+| `runAppearanceChance`, `discoveryProtectionIncrement`, `discoveryProtectionCap` | All | Probabilities are 0–1. Discovery values default to zero. For non-merchants the cap must be at least the base chance. |
 | `maximumInstancesPerRun` | All | Positive; exactly 1 for a boss. Placement refuses additional instances after this saved run cap. |
 | `minimumStairDistance`, `minimumObjectiveDistance`, `maximumMemberDistance` (under `placement`) | All | Non-negative integers. A placement that cannot preserve distances, routes, occupancy, and member spread is rejected atomically. |
 | `allowedTerrainTags`, `requiresVaultSlot`, `failureMode` (under `placement`) | All | Terrain tags are non-empty. A required vault slot must match all vault tags; `optional` skips an impossible placement while `required` rejects floor creation. |
@@ -269,6 +279,15 @@ The exact boundary is valid. Boundary plus one is rejected before selection, RNG
 | `recoveryPerWorldTime`, `recoveryCapPercent` | Boss | The rate is finite and non-negative and the cap is 0–100. Recovery occurs once on re-entry from elapsed absence and never exceeds the cap. |
 | `uniqueItemId`, `enhancedLootTableId` | Boss | References must resolve to an item and loot table. The guaranteed item is created at most once and its content cannot appear in any ordinary loot graph. |
 | `vaultTags` | Boss | Optional slug list constraining the authored arena or vault context. References that cannot satisfy required placement reject atomically according to `failureMode`. |
+| `npcId`, `stockLootTableId` | Merchant | Valid NPC and loot-table references. The complete stock graph is checked with cycle protection. |
+| `minimumStockRolls`, `maximumStockRolls` | Merchant | Positive inclusive range; maximum is at least minimum. |
+| `merchantSaleBps`, `merchantPurchaseBps` | Merchant | Positive basis-point multipliers. |
+| `acceptedCategories` | Merchant | Non-empty item categories: `weapon`, `ammunition`, `armor`, `shield`, `light`, `fuel`, `food`, `potion`, `scroll`, `ring`, or `misc`. |
+| `services`, `serviceId`, `basePrice`, `minimumUses`, `maximumUses`, `tierIds` | Merchant | Unique `merchant-service.identify` offers have positive price/use bounds and reference tiers present in the NPC faction. |
+| `minimumLifetime`, `maximumLifetime`, `departureWarningThresholds` | Merchant | Positive lifetime range; warnings are unique, strictly descending, and below the minimum lifetime. |
+| `aggressionResponse` | Merchant | Closed to `flee` or `self-defense`. |
+| `commerceReputationDelta`, `aggressionReputationDelta`, `deathReputationDelta` | Merchant | Safe-integer reputation changes. |
+| `stockDropFraction` | Merchant | Probability from 0 through 1. |
 | `fallbackMonsterId`, `fallbackItemId` | Fallen Champion | Required valid references used when historical monster or equipment content has been removed. |
 | `echoAppearanceChance`, `maximumEchoesPerRun` | Fallen Champion | Each rank 2–10 is independently gated, then the lowest rolls are retained up to the run cap. |
 | `echoHealthPercent`, `echoDamagePercent`, `echoDefensePercent`, `echoAbilityLimit` | Fallen Champion | Echo values must be strictly weaker than Champion values and the ability limit cannot exceed the Champion limit. |
@@ -283,8 +302,10 @@ A `swarm` source monster must carry the `swarm-source` tag. `spawnRoles` are wei
 
 A `boss` references one monster, strictly descending unique phase thresholds, registered phase behaviors/effects, recovery rate and cap, one `uniqueItemId`, one `enhancedLootTableId`, and optional vault tags. Boss phases use the closed safe subset `effect.damage`, `effect.heal`, `effect.condition.apply`, `effect.condition.remove`, `effect.reveal`, `effect.fuel.transfer`, `effect.light.toggle`, and `effect.feature.mutate`. Actor-context effects `effect.hunger.restore`, `effect.item.consume`, and `effect.force-move` are rejected in boss phases. Phases never reverse. Recovery is one bounded re-entry calculation, not off-floor turns. The bundled default boss chance is `0.08`, increment `0.03`, and cap `0.35`.
 
+A `merchant` resolves `minimumStockRolls..maximumStockRolls` from its stock loot table. Every reachable stock item must have a positive price and must not be boss-guaranteed unique or tagged `heirloom`, `quest`, `objective`, or `nontransferable`. The bundled travelling Lampwright appears at depths `1..10` with chance `0.25`, discovery increment/cap `0`, and at most `2` instances. It resolves `1..2` stock rolls, uses sale/purchase multipliers `12000`/`6000`, offers `1..2` identify uses at base price `10`, lives `3000..5000`, warns at `[1000, 500, 100]`, uses `flee`, applies reputation deltas `25`, `-300`, and `-200`, and drops stock fraction `0.5`.
+
 ```yaml
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: encounter
     id: encounter.cave-rat-individuals
@@ -328,7 +349,7 @@ the entire pack.
 The Champion heirloom is selected once at the original death from unique equipped item instances only. Backpack items never qualify, and a multi-slot item is still one candidate. Better rarity and positive quality ranks raise its weight, but common equipment retains a non-zero chance. There is no minimum rarity and no reroll, so damaged, depleted, or mundane equipped gear remains possible. If nothing equipped is eligible, the fallback relic is recorded.
 
 ```yaml
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: fallen-champion-template
     id: fallen-champion-template.core
@@ -384,7 +405,7 @@ Identification modes have distinct contracts:
 Items never contain their unidentified names. The generated mapping is saved with the run, so save/reload cannot reroll it, and a later run receives a new mapping. Items using the same pool must have the pool's category. The compiler requires at least as many unique verb–noun combinations as item definitions using the pool.
 
 ```yaml
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: item
     id: item.brass-lantern
@@ -420,7 +441,7 @@ Identification pools are normal content-pack entries and may be placed in any `.
 The pool's `name` is an administrator-facing label. It is not shown as an unidentified item name.
 
 ```yaml
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: identification-pool
     id: identification-pool.potions
@@ -450,7 +471,7 @@ identification: { mode: shuffled, poolId: identification-pool.potions }
 | `effects` | non-empty effect array | Yes | Applied in listed order. |
 
 ```yaml
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: spell
     id: spell.mend
@@ -477,7 +498,7 @@ entries:
 | `effects` | non-empty effect array | Yes | Ordered trigger effects. |
 
 ```yaml
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: trap
     id: trap.poison-dart
@@ -519,7 +540,7 @@ Boss guaranteed-unique content is forbidden anywhere in an ordinary loot graph, 
 | `minimumQuantity`, `maximumQuantity` | positive safe integers | Yes | Inclusive quantity range; maximum cannot be smaller, cannot exceed 256, and for a direct item cannot exceed its `stackLimit`. |
 
 ```yaml
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: loot-table
     id: loot-table.basic-supplies
@@ -556,7 +577,7 @@ guaranteed boss-unique item item.warden-ember cannot appear in ordinary loot
 Terrain is `wall`, `floor`, `closed-door`, `pillar`, `stair-up`, `stair-down`, or `void`. A placement slot kind is `monster`, `item`, `trap`, `npc`, `fixture`, or `objective`. Slot IDs are vault-local slugs. Required slots must occur in the layout. Lights require a local suffix, one glyph, stable presentation token, RGB color, radius 1–32, strength 1–255, and optional enabled state (default true). Void terrain cannot contain lights or placement slots.
 
 ```yaml
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: vault
     id: vault.small-cache
@@ -595,7 +616,7 @@ entries:
 Replace and refresh produce one stack; intensify adds one up to the cap. Every reapplication refreshes source, application time, and deadline. Timed applications may omit duration to use the default or supply a positive override no greater than the maximum. Permanent conditions reject an override. Removal and expiration remove the complete condition instance.
 
 ```yaml
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: condition
     id: condition.stunned
@@ -682,4 +703,4 @@ Never silently attach an active run to a different content hash. Keep old conten
 
 ## Complete examples
 
-Each content-kind section above contains a complete copyable `schemaVersion: 3` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.
+Each content-kind section above contains a complete copyable `schemaVersion: 4` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.

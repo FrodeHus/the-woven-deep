@@ -16,7 +16,7 @@ export const damageTypes = ['physical', 'fire', 'cold', 'lightning', 'poison', '
 export const targetingIds = ['target.self', 'target.actor', 'target.line', 'target.cell'] as const;
 export const equipmentSlots = ['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring'] as const;
 export const vaultPlacementKinds = ['monster', 'item', 'trap', 'npc', 'fixture', 'objective'] as const;
-export const encounterModels = ['individual', 'group', 'swarm', 'boss'] as const;
+export const encounterModels = ['individual', 'group', 'swarm', 'boss', 'merchant'] as const;
 export const encounterFormations = ['cluster', 'line', 'screen', 'wedge', 'surround'] as const;
 export const formationPreferences = ['front', 'center', 'rear', 'flank', 'free'] as const;
 export const leaderDeathResponses = ['weaken', 'panic', 'disband', 'surrender', 'frenzy', 'collapse'] as const;
@@ -34,6 +34,9 @@ const attributes = z.strictObject({
   vitality: safeNonNegative,
   wits: safeNonNegative,
   resolve: safeNonNegative,
+});
+const positiveAttributes = z.strictObject({
+  might: safePositive, agility: safePositive, vitality: safePositive, wits: safePositive, resolve: safePositive,
 });
 
 const resistances = z.strictObject({
@@ -197,6 +200,7 @@ const lootTableEntry = z.strictObject({
 const balanceEntry = z.strictObject({
   ...base,
   kind: z.literal('balance'),
+  startingCurrency: safeNonNegative,
   readinessThreshold: safePositive,
   normalActionCost: safePositive,
   speedMinimum: safePositive,
@@ -346,8 +350,8 @@ const encounterCommon = {
   weight: safePositive,
   rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
   runAppearanceChance: probability,
-  discoveryProtectionIncrement: probability,
-  discoveryProtectionCap: probability,
+  discoveryProtectionIncrement: probability.default(0),
+  discoveryProtectionCap: probability.default(0),
   maximumInstancesPerRun: safePositive,
   placement: encounterPlacement,
   intentPresentation: encounterIntentPresentation,
@@ -436,6 +440,21 @@ const bossEncounterEntry = z.strictObject({
   }),
 });
 
+const merchantService = z.strictObject({
+  serviceId: z.literal('merchant-service.identify'), basePrice: safePositive,
+  minimumUses: safePositive, maximumUses: safePositive, tierIds: z.array(slugSchema).min(1),
+});
+const merchantEncounterDefinition = z.strictObject({
+  npcId: stableIdSchema, stockLootTableId: stableIdSchema,
+  minimumStockRolls: safePositive, maximumStockRolls: safePositive,
+  merchantSaleBps: safePositive, merchantPurchaseBps: safePositive,
+  acceptedCategories: z.array(z.enum(['weapon', 'ammunition', 'armor', 'shield', 'light', 'fuel', 'food', 'potion', 'scroll', 'ring', 'misc'])).min(1),
+  services: z.array(merchantService), minimumLifetime: safePositive, maximumLifetime: safePositive,
+  departureWarningThresholds: z.array(safePositive), aggressionResponse: z.enum(['flee', 'self-defense']),
+  commerceReputationDelta: safeInteger, aggressionReputationDelta: safeInteger,
+  deathReputationDelta: safeInteger, stockDropFraction: probability,
+});
+
 const encounterEntry = z.strictObject({
   ...encounterCommon,
   model: z.enum(encounterModels),
@@ -444,19 +463,21 @@ const encounterEntry = z.strictObject({
     groupEncounterEntry.shape.definition,
     swarmEncounterEntry.shape.definition,
     bossEncounterEntry.shape.definition,
+    merchantEncounterDefinition,
   ]),
 }).superRefine((entry, context) => {
   if (entry.maxDepth < entry.minDepth) {
     context.addIssue({ code: 'custom', path: ['maxDepth'], message: 'maximum depth must be greater than or equal to minimum depth' });
   }
-  if (entry.discoveryProtectionCap < entry.runAppearanceChance) {
+  if (entry.model !== 'merchant' && entry.discoveryProtectionCap < entry.runAppearanceChance) {
     context.addIssue({ code: 'custom', path: ['discoveryProtectionCap'], message: 'discovery protection cap must not be below run appearance chance' });
   }
   const definition = entry.definition;
   const matchesModel = (entry.model === 'individual' && 'monsterId' in definition && 'minimumQuantity' in definition)
     || (entry.model === 'group' && 'roles' in definition)
     || (entry.model === 'swarm' && 'sourceMonsterId' in definition)
-    || (entry.model === 'boss' && 'phases' in definition);
+    || (entry.model === 'boss' && 'phases' in definition)
+    || (entry.model === 'merchant' && 'npcId' in definition);
   if (!matchesModel) {
     context.addIssue({ code: 'custom', path: ['definition'], message: `definition does not match encounter model ${entry.model}` });
     return;
@@ -476,6 +497,23 @@ const encounterEntry = z.strictObject({
     && definition.maximumSpawnQuantity < definition.minimumSpawnQuantity) {
     context.addIssue({ code: 'custom', path: ['definition', 'maximumSpawnQuantity'], message: 'maximum spawn quantity must be at least minimum spawn quantity' });
   }
+});
+
+const reputationTier = z.strictObject({
+  tierId: slugSchema, name: z.string().trim().min(1).max(80), minimum: safeInteger, maximum: safeInteger,
+  purchasePriceBps: safePositive, salePriceBps: safePositive, acceptsTrade: z.boolean(),
+  serviceIds: z.array(z.literal('merchant-service.identify')),
+});
+const npcFactionEntry = z.strictObject({
+  ...base, kind: z.literal('npc-faction'), minimumReputation: safeInteger, maximumReputation: safeInteger,
+  startingReputation: safeInteger, tiers: z.array(reputationTier).min(1),
+});
+const npcEntry = z.strictObject({
+  ...presented, kind: z.literal('npc'), factionId: stableIdSchema, attributes: positiveAttributes,
+  health: safePositive, speed: safePositive, perception: safePositive, accuracy: safePositive,
+  defense: safePositive, damage: diceSchema, armor: safeNonNegative, resistances,
+  disposition: z.literal('neutral'), behaviorId: z.literal('npc-behavior.travelling-merchant'),
+  behaviorParameters: jsonObject.default({}), selfPreservationThresholdBps: safePositive.max(10_000),
 });
 
 const fallenChampionTemplateEntry = z.strictObject({
@@ -529,6 +567,8 @@ export const contentSourceEntrySchema = z.discriminatedUnion('kind', [
   identificationPoolEntry,
   encounterEntry,
   fallenChampionTemplateEntry,
+  npcEntry,
+  npcFactionEntry,
 ]);
 
 export const contentEntrySchema = contentSourceEntrySchema.transform((entry) => {
