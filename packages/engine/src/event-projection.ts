@@ -175,6 +175,7 @@ export function projectDomainEvents(input: Readonly<{
       case 'feature.revealed': case 'trap.triggered': case 'trap.disarmed': case 'trap.disarm-failed':
         if (actorVisible(event.actorId) && featureVisible(event.featureId)) output.push(event); break;
       case 'feature.searched': if (actorVisible(event.actorId)) output.push(event); break;
+      case 'reputation.changed': output.push(event); break;
       case 'population.created': {
         const visibleActor = event.actorIds.find(actorVisible);
         if (visibleActor) output.push(notice(event, 'created', visibleActor, 'population.created')); break;

@@ -3,6 +3,7 @@ import { type GameAction, balanceEntry } from './actions.js';
 import { actorById, heroActor, heroPerception, type ActorState } from './actor-model.js';
 import { deriveActorStats } from './attributes.js';
 import { chooseBehaviorAction, selectPatrolGoal } from './behavior.js';
+import { ensureFactionReputation } from './commerce.js';
 import { applyPopulationCombatModifiers, resolveAttack } from './combat.js';
 import { conditionModifiers } from './conditions.js';
 import { resolveEffectSequence } from './effects.js';
@@ -556,6 +557,7 @@ function observeEncounters(state: ActiveRun, content: CompiledContentPack): Acti
   });
   let decisions = state.encounterDecisions;
   let fallenDecisions = state.fallenHeroDecisions;
+  const observedMerchantFactionIds: OpaqueId[] = [];
   for (const population of [...state.populations].sort((left, right) => compareCodeUnits(left.populationId, right.populationId))) {
     if (population.floorId !== floor.floorId) continue;
     const visible = population.livingMemberIds.some((actorId) => {
@@ -569,10 +571,21 @@ function observeEncounters(state: ActiveRun, content: CompiledContentPack): Acti
         && !decision.encountered ? { ...decision, encountered: true } : decision);
     } else if (visible && !decisions.find((decision) => decision.encounterId === population.encounterId)?.encountered) {
       decisions = markEncounterObserved(decisions, population.encounterId);
+      if (population.model === 'merchant') observedMerchantFactionIds.push(population.factionId);
     }
   }
-  return decisions === state.encounterDecisions && fallenDecisions === state.fallenHeroDecisions
+  let observed = decisions === state.encounterDecisions && fallenDecisions === state.fallenHeroDecisions
     ? state : { ...state, encounterDecisions: decisions, fallenHeroDecisions: fallenDecisions };
+  // First legitimate observation of a merchant materializes its faction's authored
+  // starting reputation exactly once; later observations keep the earned value.
+  for (const factionId of observedMerchantFactionIds) {
+    const faction = content.entries.find((entry) => entry.id === factionId);
+    if (!faction || faction.kind !== 'npc-faction') {
+      throw new Error(`internal invariant: merchant faction ${factionId} does not exist`);
+    }
+    observed = ensureFactionReputation(observed, faction);
+  }
+  return observed;
 }
 
 function bossEncounteredEvents(before: ActiveRun, after: ActiveRun, eventId: OpaqueId): readonly DomainEvent[] {

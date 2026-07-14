@@ -198,6 +198,11 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
       if (!faction || faction.kind !== 'npc-faction') {
         throw new Error(`content-bound validation: merchant population ${population.populationId} faction does not exist`);
       }
+      const merchantDecision = run.encounterDecisions.find((decision) => decision.encounterId === population.encounterId);
+      if (merchantDecision?.encountered === true
+        && !run.reputations.some((entry) => entry.factionId === population.factionId)) {
+        throw new Error(`content-bound validation: merchant population ${population.populationId} faction reputation was never materialized`);
+      }
       if (actor && (actor.contentId !== npc.id || actor.populationId !== population.populationId)) {
         throw new Error(`content-bound validation: merchant population ${population.populationId} actor does not match its NPC`);
       }

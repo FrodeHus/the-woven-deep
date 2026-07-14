@@ -213,6 +213,9 @@ const populationNoticePublicEvent = z.strictObject({ type: z.literal('population
     'boss-defeated', 'boss-reward', 'champion-encountered', 'champion-defeated', 'champion-heirloom',
     'echo-encountered', 'echo-defeated', 'echo-loot']),
   actorId: identifier.nullable(), presentation: z.string().min(1).max(120), displayName: z.string().min(1).max(120).optional() });
+const reputationChangedEvent = z.strictObject({ type: z.literal('reputation.changed'), eventId: identifier,
+  factionId: identifier, previous: z.number().int().safe(), delta: z.number().int().safe(),
+  value: z.number().int().safe(), reason: z.enum(['commerce', 'aggression', 'death']) });
 const restCompletedEvent = z.strictObject({ type: z.literal('rest.completed'), eventId: identifier,
   stopReason: z.enum(['full-health', 'maximum-duration', 'visible-danger', 'aware-hostile', 'damage',
     'meaningful-sound', 'hunger-warning', 'fuel-warning', 'condition-change', 'decision-required', 'hero-death']),
@@ -242,7 +245,7 @@ const eventOptions = [
   actorDamageObservedPublicEvent, actorDeathObservedPublicEvent,
   populationNoticePublicEvent, restCompletedEvent,
 ] as const;
-const event = z.discriminatedUnion('type', [...eventOptions, populationCreatedEvent]);
+const event = z.discriminatedUnion('type', [...eventOptions, populationCreatedEvent, reputationChangedEvent]);
 const legacyEvent = z.discriminatedUnion('type', [...eventOptions, legacyPopulationCreatedEvent]);
 const hiddenPublicEventTypes = new Set([
   'attack.hit', 'attack.missed', 'population.created', 'population.encountered', 'population.placement-skipped',

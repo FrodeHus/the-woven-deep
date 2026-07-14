@@ -421,6 +421,15 @@ export interface PopulationNoticePublicEvent {
   readonly presentation: string;
   readonly displayName?: string;
 }
+export interface ReputationChangedEvent {
+  readonly type: 'reputation.changed';
+  readonly eventId: OpaqueId;
+  readonly factionId: OpaqueId;
+  readonly previous: number;
+  readonly delta: number;
+  readonly value: number;
+  readonly reason: 'commerce' | 'aggression' | 'death';
+}
 export interface RestCompletedEvent {
   readonly type: 'rest.completed'; readonly eventId: OpaqueId;
   readonly stopReason: 'full-health' | 'maximum-duration' | 'visible-danger' | 'aware-hostile'
@@ -438,7 +447,7 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | IdentificationAppearanceRevealedEvent | ItemIdentifiedEvent
   | HungerStageChangedEvent | HungerRestoredEvent | FuelWarningEvent | ItemLightExtinguishedEvent
   | ItemDamagedEvent | DoorStateChangedEvent | FeatureRevealedEvent | FeatureSearchEvent | TrapStateEvent
-  | PopulationDomainEvent | RestCompletedEvent;
+  | PopulationDomainEvent | ReputationChangedEvent | RestCompletedEvent;
 
 export type PublicEvent = Exclude<DomainEvent, AttackMissedEvent | AttackHitEvent | PopulationDomainEvent>
   | ActorIntentChangedEvent | SoundHeardEvent | HeroDamagedPublicEvent | CombatObservedPublicEvent
