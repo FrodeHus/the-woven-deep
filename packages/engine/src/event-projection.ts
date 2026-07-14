@@ -78,7 +78,10 @@ export function projectDomainEvents(input: Readonly<{
   for (const event of input.events) {
     if (event.type === 'group.awareness-shared' || event.type === 'group.leader-defeated'
       || event.type === 'group.outcome-applied' || event.type === 'swarm.members-created'
-      || event.type === 'swarm.cap-reached' || event.type === 'swarm.source-destroyed') continue;
+      || event.type === 'swarm.cap-reached' || event.type === 'swarm.source-destroyed'
+      || event.type === 'boss.encountered' || event.type === 'boss.phase-changed'
+      || event.type === 'boss.recovered' || event.type === 'boss.defeated'
+      || event.type === 'boss.reward-created') continue;
     if (event.type === 'sound.heard' || event.type === 'hero.damaged') { output.push(event); continue; }
     if (event.type === 'fuel.warning' || event.type === 'item.light-extinguished' || event.type === 'item.identified') {
       const item = input.state.items.find((candidate) => candidate.itemId === event.itemId);

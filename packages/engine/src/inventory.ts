@@ -1,8 +1,9 @@
-import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, ItemContentEntry, LootTableContentEntry } from '@woven-deep/content';
 import { actorById } from './actor-model.js';
 import type { ItemInstance } from './item-model.js';
-import type { ActiveRun, OpaqueId } from './model.js';
+import type { ActiveRun, OpaqueId, Uint32State } from './model.js';
 import { stableJson } from './stable-json.js';
+import { rollDie } from './random.js';
 
 export type InventoryFailureReason = 'inventory.full' | 'item.missing' | 'item.unavailable'
   | 'item.quantity' | 'item.incompatible' | 'item.id-conflict';
@@ -28,6 +29,78 @@ function itemDefinition(content: CompiledContentPack, contentId: OpaqueId): Item
   const entry = content.entries.find((candidate) => candidate.id === contentId);
   if (!entry || entry.kind !== 'item') throw new Error(`internal invariant: item definition ${contentId} does not exist`);
   return entry;
+}
+
+function lootTable(content: CompiledContentPack, tableId: OpaqueId): LootTableContentEntry {
+  const entry = content.entries.find((candidate) => candidate.id === tableId);
+  if (!entry || entry.kind !== 'loot-table') {
+    throw new Error(`internal invariant: loot table ${tableId} does not exist`);
+  }
+  return entry;
+}
+
+/** Validates a complete loot graph before consuming RNG or creating any item. */
+function validateLootGraph(content: CompiledContentPack, tableId: OpaqueId, trail: readonly OpaqueId[] = []): void {
+  if (trail.includes(tableId)) throw new Error(`internal invariant: loot table cycle ${[...trail, tableId].join(' -> ')}`);
+  const table = lootTable(content, tableId);
+  for (const choice of table.choices) {
+    if (choice.contentId !== null) itemDefinition(content, choice.contentId);
+    else if (choice.lootTableId !== null) validateLootGraph(content, choice.lootTableId, [...trail, tableId]);
+    else throw new Error(`internal invariant: loot table ${tableId} contains an empty choice`);
+  }
+}
+
+export function createFloorLootFromTable(input: Readonly<{
+  content: CompiledContentPack;
+  tableId: OpaqueId;
+  state: Uint32State;
+  itemIdPrefix: OpaqueId;
+  floorId: OpaqueId;
+  x: number;
+  y: number;
+}>): Readonly<{ items: readonly ItemInstance[]; state: Uint32State }> {
+  validateLootGraph(input.content, input.tableId);
+  if (!Number.isSafeInteger(input.x) || input.x < 0 || !Number.isSafeInteger(input.y) || input.y < 0) {
+    throw new RangeError('loot floor position must use non-negative safe integers');
+  }
+  let state = input.state;
+  let sequence = 0;
+  const items: ItemInstance[] = [];
+  const resolve = (tableId: OpaqueId): void => {
+    const table = lootTable(input.content, tableId);
+    const totalWeight = table.choices.reduce((sum, choice) => sum + choice.weight, 0);
+    for (let roll = 0; roll < table.rolls; roll += 1) {
+      const selected = rollDie(state, totalWeight); state = selected.state;
+      let cursor = selected.value;
+      const choice = table.choices.find((candidate) => (cursor -= candidate.weight) <= 0)!;
+      const quantityRoll = rollDie(state, choice.maximumQuantity - choice.minimumQuantity + 1); state = quantityRoll.state;
+      const quantity = choice.minimumQuantity + quantityRoll.value - 1;
+      if (choice.lootTableId !== null) {
+        for (let count = 0; count < quantity; count += 1) resolve(choice.lootTableId);
+        continue;
+      }
+      const definition = itemDefinition(input.content, choice.contentId!);
+      sequence += 1;
+      items.push({ itemId: `${input.itemIdPrefix}.${String(sequence).padStart(6, '0')}`,
+        contentId: definition.id, quantity, condition: 100, enchantment: null,
+        identified: definition.identification.mode === 'known', charges: null,
+        fuel: definition.light?.fuelCapacity ?? null, enabled: definition.light === null ? null : false,
+        location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y } });
+    }
+  };
+  resolve(input.tableId);
+  return { items, state };
+}
+
+export function createFloorItem(input: Readonly<{
+  content: CompiledContentPack; contentId: OpaqueId; itemId: OpaqueId;
+  floorId: OpaqueId; x: number; y: number;
+}>): ItemInstance {
+  const definition = itemDefinition(input.content, input.contentId);
+  return { itemId: input.itemId, contentId: definition.id, quantity: 1, condition: 100, enchantment: null,
+    identified: definition.identification.mode === 'known', charges: null,
+    fuel: definition.light?.fuelCapacity ?? null, enabled: definition.light === null ? null : false,
+    location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y } };
 }
 
 export function canStack(left: ItemInstance, right: ItemInstance): boolean {

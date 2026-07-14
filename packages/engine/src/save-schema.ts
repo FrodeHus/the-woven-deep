@@ -150,6 +150,17 @@ const swarmCapReachedEvent = z.strictObject({ type: z.literal('swarm.cap-reached
   populationId: identifier, sourceActorId: identifier, level: z.enum(['source', 'encounter', 'floor']) });
 const swarmSourceDestroyedEvent = z.strictObject({ type: z.literal('swarm.source-destroyed'), eventId: identifier,
   populationId: identifier, sourceActorId: identifier, response: z.enum(['stop', 'flee', 'decay', 'frenzy']) });
+const bossEncounteredEvent = z.strictObject({ type: z.literal('boss.encountered'), eventId: identifier,
+  populationId: identifier, actorId: identifier, encounterId: identifier });
+const bossPhaseChangedEvent = z.strictObject({ type: z.literal('boss.phase-changed'), eventId: identifier,
+  populationId: identifier, actorId: identifier, encounterId: identifier, phaseId: z.string().min(1).max(80) });
+const bossRecoveredEvent = z.strictObject({ type: z.literal('boss.recovered'), eventId: identifier,
+  populationId: identifier, actorId: identifier, encounterId: identifier, amount: safeNonNegative, health: safeNonNegative });
+const bossDefeatedEvent = z.strictObject({ type: z.literal('boss.defeated'), eventId: identifier,
+  populationId: identifier, actorId: identifier, encounterId: identifier });
+const bossRewardCreatedEvent = z.strictObject({ type: z.literal('boss.reward-created'), eventId: identifier,
+  populationId: identifier, actorId: identifier, encounterId: identifier, uniqueItemId: identifier,
+  itemIds: z.array(identifier).readonly() });
 const soundHeardEvent = z.strictObject({ type: z.literal('sound.heard'),
   category: z.enum(['combat', 'movement', 'mechanism']),
   direction: z.enum(['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'here']),
@@ -177,6 +188,7 @@ const event = z.discriminatedUnion('type', [
   itemDamagedEvent, actorIntentChangedEvent, groupAwarenessSharedEvent, groupLeaderDefeatedEvent,
   groupOutcomeAppliedEvent,
   swarmMembersCreatedEvent, swarmCapReachedEvent, swarmSourceDestroyedEvent,
+  bossEncounteredEvent, bossPhaseChangedEvent, bossRecoveredEvent, bossDefeatedEvent, bossRewardCreatedEvent,
   soundHeardEvent, heroDamagedPublicEvent, restCompletedEvent,
 ]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });

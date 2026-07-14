@@ -23,7 +23,14 @@ export function selectPatrolGoal(input: Readonly<{
   if (!definition || definition.kind !== 'monster') {
     throw new Error(`internal invariant: monster definition ${input.actor.contentId} does not exist`);
   }
-  const waypoints = definition.behaviorParameters.waypoints;
+  const population = input.state.populations.find((candidate) => candidate.populationId === input.actor.populationId);
+  const bossPhaseId = population?.model === 'boss' ? population.currentPhaseId : null;
+  const bossEncounter = population?.model === 'boss' && bossPhaseId !== null
+    ? input.content.entries.find((entry) => entry.kind === 'encounter' && entry.model === 'boss'
+      && entry.id === population.encounterId) : undefined;
+  const phase = bossEncounter?.kind === 'encounter' && bossEncounter.model === 'boss'
+    ? bossEncounter.definition.phases.find((candidate) => candidate.phaseId === bossPhaseId) : undefined;
+  const waypoints = (phase?.behaviorParameters ?? definition.behaviorParameters).waypoints;
   if (!Array.isArray(waypoints) || waypoints.length === 0 || waypoints.some((waypoint) => (
     typeof waypoint !== 'object' || waypoint === null
     || !Number.isSafeInteger((waypoint as Point).x) || !Number.isSafeInteger((waypoint as Point).y)

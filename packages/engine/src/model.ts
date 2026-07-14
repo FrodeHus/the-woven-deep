@@ -311,6 +311,27 @@ export interface SwarmSourceDestroyedEvent {
   readonly type: 'swarm.source-destroyed'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
   readonly sourceActorId: OpaqueId; readonly response: 'stop' | 'flee' | 'decay' | 'frenzy';
 }
+export interface BossEncounteredEvent {
+  readonly type: 'boss.encountered'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly encounterId: OpaqueId;
+}
+export interface BossPhaseChangedEvent {
+  readonly type: 'boss.phase-changed'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly encounterId: OpaqueId; readonly phaseId: string;
+}
+export interface BossRecoveredEvent {
+  readonly type: 'boss.recovered'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly encounterId: OpaqueId; readonly amount: number; readonly health: number;
+}
+export interface BossDefeatedEvent {
+  readonly type: 'boss.defeated'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly encounterId: OpaqueId;
+}
+export interface BossRewardCreatedEvent {
+  readonly type: 'boss.reward-created'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly encounterId: OpaqueId; readonly uniqueItemId: OpaqueId;
+  readonly itemIds: readonly OpaqueId[];
+}
 export interface SoundHeardEvent {
   readonly type: 'sound.heard';
   readonly category: 'combat' | 'movement' | 'mechanism';
@@ -339,6 +360,7 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | ItemDamagedEvent | DoorStateChangedEvent | FeatureRevealedEvent | FeatureSearchEvent | TrapStateEvent
   | ActorIntentChangedEvent | GroupAwarenessSharedEvent | GroupLeaderDefeatedEvent | GroupOutcomeAppliedEvent
   | SwarmMembersCreatedEvent | SwarmCapReachedEvent | SwarmSourceDestroyedEvent
+  | BossEncounteredEvent | BossPhaseChangedEvent | BossRecoveredEvent | BossDefeatedEvent | BossRewardCreatedEvent
   | SoundHeardEvent | HeroDamagedPublicEvent | RestCompletedEvent;
 
 export interface AppliedCommandResult {

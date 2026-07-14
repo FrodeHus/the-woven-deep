@@ -425,19 +425,19 @@ Commit: `feat: add capped swarm lifecycles`
 - Consumes: boss population, ordered thresholds, phase behavior/effects, floor exit/re-entry times, recovery rate/cap, unique item, enhanced loot table, and run instance limit.
 - Produces: phase/recovery/defeat events, irreversible saved phase state, one guaranteed unique item, and enhanced rolled loot.
 
-- [ ] **Step 1: Write failing phase and uniqueness tests**
+- [x] **Step 1: Write failing phase and uniqueness tests**
 
 Assert thresholds cross once in descending order, a large hit may cross multiple phases in authored order, behavior/effects update atomically, phases never reverse, and each boss encounter ID creates at most one instance per run.
 
-- [ ] **Step 2: Write failing re-entry recovery tests**
+- [x] **Step 2: Write failing re-entry recovery tests**
 
 Use global elapsed world time, the current phase maximum, and authored percentage cap. Assert no active off-floor turns, no resurrection, no repeated recovery for the same interval, and no arena mutation reversal.
 
-- [ ] **Step 3: Write failing reward-idempotency tests**
+- [x] **Step 3: Write failing reward-idempotency tests**
 
 Defeat produces exactly one unique item and one enhanced loot resolution even across duplicate commands and split save/reload. Missing runtime references remain invariant errors without partial item creation.
 
-- [ ] **Step 4: Implement boss lifecycle and commit**
+- [x] **Step 4: Implement boss lifecycle and commit**
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/boss-behavior.test.ts test/effects.test.ts test/inventory.test.ts test/gameplay-replay.test.ts`
 

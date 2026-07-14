@@ -1,0 +1,170 @@
+import { describe, expect, it } from 'vitest';
+import type {
+  BossEncounterDefinition, CompiledContentPack, EncounterContentEntry, ItemContentEntry, LootTableContentEntry,
+} from '@woven-deep/content';
+import {
+  advanceBosses, bossCombatModifiers, createDemoContentPack, createDemoRun, decodeActiveRun, encodeActiveRun,
+  selectPatrolGoal, validateContentBoundRun, type ActiveRun, type ActorState, type BossPopulation,
+} from '../src/index.js';
+
+const monster = {
+  kind: 'monster' as const, id: 'monster.boss', name: 'Boss', description: '', tags: ['boss'], glyph: 'B', color: '#aa3300',
+  attributes: { might: 6, agility: 4, vitality: 8, wits: 4, resolve: 8 }, health: 100,
+  speed: 100, accuracy: 5, defense: 5, perception: 8, damage: { count: 1, sides: 6, bonus: 2 },
+  armor: 1, resistances: { physical: 0, fire: 0, cold: 0, poison: 0, arcane: 0 },
+  disposition: 'hostile' as const, behaviorId: 'behavior.approach-and-attack', behaviorParameters: {},
+  minDepth: 1, maxDepth: 20, rarity: 'legendary' as const,
+};
+
+function item(id: string): ItemContentEntry {
+  return { kind: 'item', id, name: id, description: '', tags: [], glyph: '*', color: '#ffaa00', category: 'misc',
+    stackLimit: 10, price: 1, rarity: 'legendary', heirloomEligible: true, minDepth: 1, maxDepth: 20, actionCost: 100,
+    equipment: null, combat: null, light: null, identification: { mode: 'known', poolId: null }, effects: [] };
+}
+
+const table: LootTableContentEntry = { kind: 'loot-table', id: 'loot-table.boss', name: 'Boss loot',
+  description: '', tags: [], rolls: 2, choices: [
+    { contentId: 'item.extra-a', lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 },
+    { contentId: 'item.extra-b', lootTableId: null, weight: 1, minimumQuantity: 2, maximumQuantity: 2 },
+  ] };
+
+function definition(overrides: Partial<BossEncounterDefinition> = {}): BossEncounterDefinition {
+  return { monsterId: monster.id, phases: [
+    { phaseId: 'kindled', healthThresholdPercent: 70, behaviorId: 'behavior.patrol', behaviorParameters: { waypoints: [{ x: 2, y: 2 }] },
+      modifiers: { accuracy: 1, defense: 2, damage: 3 }, effects: [{ effectId: 'effect.condition.apply',
+        parameters: { conditionId: 'condition.disengaged', duration: 100 }, requiresLivingTarget: true }] },
+    { phaseId: 'inferno', healthThresholdPercent: 30, behaviorId: 'behavior.approach-and-attack', behaviorParameters: {},
+      modifiers: { accuracy: 4, defense: -1, damage: 6 }, effects: [] },
+  ], recoveryPerWorldTime: 0.01, recoveryCapPercent: 20, uniqueItemId: 'item.unique',
+  enhancedLootTableId: table.id, vaultTags: [], ...overrides };
+}
+
+function fixture(overrides: Partial<BossEncounterDefinition> = {}) {
+  const base = createDemoRun();
+  const hero = base.actors[0]!;
+  const boss: ActorState = { ...hero, actorId: 'actor.boss', contentId: monster.id, playerControlled: false,
+    x: 4, y: 3, health: 100, maxHealth: 100, disposition: 'hostile', behaviorId: monster.behaviorId,
+    populationId: 'population.boss', populationRoleId: null,
+    populationPresentation: { name: 'Boss', glyph: 'B', color: '#aa3300', leader: false } };
+  const encounter: EncounterContentEntry = { kind: 'encounter', id: 'encounter.boss', name: 'Boss', description: '', tags: [],
+    adminDescription: null, model: 'boss', minDepth: 1, maxDepth: 20, environmentTags: [], requiredVaultTags: [],
+    weight: 1, rarity: 'legendary', runAppearanceChance: 1, discoveryProtectionIncrement: 0,
+    discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: { minimumStairDistance: 0,
+      minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: ['floor'], requiresVaultSlot: false,
+      failureMode: 'optional' }, intentPresentation: { visible: true }, definition: definition(overrides) };
+  const content: CompiledContentPack = { ...createDemoContentPack(), entries: [...createDemoContentPack().entries,
+    monster, item('item.unique'), item('item.extra-a'), item('item.extra-b'), table, encounter] };
+  const population: BossPopulation = { populationId: 'population.boss', encounterId: encounter.id, model: 'boss',
+    floorId: hero.floorId, createdAt: 0, livingMemberIds: [boss.actorId], formerMemberIds: [], actorId: boss.actorId,
+    currentPhaseId: null, crossedPhaseIds: [], lastFloorExitAt: null, rewardCreated: false, recoveryHistory: [] };
+  const state: ActiveRun = { ...base, actors: [boss, hero], populations: [population], encounterDecisions: [{
+    encounterId: encounter.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1, eligible: true,
+    reachedEligibleDepth: true, encountered: true, instancesCreated: 1 }], floors: [{ ...base.floors[0]!,
+      entities: [{ entityId: boss.actorId, x: boss.x, y: boss.y }] }] };
+  return { state, content };
+}
+
+describe('boss phases', () => {
+  it('crosses multiple thresholds once in authored descending order and changes behavior, effects, and modifiers atomically', () => {
+    const { state, content } = fixture();
+    const damaged = { ...state, actors: state.actors.map((actor) => actor.actorId === 'actor.boss'
+      ? { ...actor, health: 20 } : actor) };
+    const before = structuredClone(damaged);
+    const first = advanceBosses({ state: damaged, content, eventId: 'event.phases' });
+    expect(damaged).toEqual(before);
+    expect(first.state.populations[0]).toMatchObject({ currentPhaseId: 'inferno', crossedPhaseIds: ['kindled', 'inferno'] });
+    expect(first.state.actors.find((actor) => actor.actorId === 'actor.boss')).toMatchObject({
+      behaviorId: 'behavior.approach-and-attack', conditions: [expect.objectContaining({ conditionId: 'condition.disengaged' })],
+    });
+    expect(first.events.filter((event) => event.type === 'boss.phase-changed').map((event) =>
+      'phaseId' in event ? event.phaseId : null)).toEqual(['kindled', 'inferno']);
+    expect(bossCombatModifiers({ state: first.state, content, actorId: 'actor.boss' }))
+      .toEqual({ accuracy: 4, defense: -1, damage: 6 });
+    const again = advanceBosses({ state: first.state, content, eventId: 'event.again' });
+    expect(again.events.filter((event) => event.type === 'boss.phase-changed')).toEqual([]);
+    expect(again.state.populations[0]).toEqual(first.state.populations[0]);
+  });
+
+  it('fails an invalid phase effect without partially crossing a phase or changing behavior', () => {
+    const { state, content } = fixture({ phases: [{ ...definition().phases[0]!, effects: [{ effectId: 'effect.missing' as never,
+      parameters: {}, requiresLivingTarget: true }] }] });
+    const damaged = { ...state, actors: state.actors.map((actor) => actor.actorId === 'actor.boss' ? { ...actor, health: 50 } : actor) };
+    expect(() => advanceBosses({ state: damaged, content, eventId: 'event.invalid-phase' })).toThrow(/unregistered effect/i);
+    expect(damaged.populations[0]).toMatchObject({ currentPhaseId: null, crossedPhaseIds: [] });
+    expect(damaged.actors.find((actor) => actor.actorId === 'actor.boss')?.behaviorId).toBe(monster.behaviorId);
+  });
+
+  it('uses the saved current phase behavior parameters', () => {
+    const { state, content } = fixture();
+    const phased = advanceBosses({ state: { ...state, actors: state.actors.map((actor) => actor.actorId === 'actor.boss'
+      ? { ...actor, health: 60 } : actor) }, content, eventId: 'event.kindled' });
+    const boss = phased.state.actors.find((actor) => actor.actorId === 'actor.boss')!;
+    expect(boss.behaviorId).toBe('behavior.patrol');
+    expect(selectPatrolGoal({ state: phased.state, actor: boss, content })).toEqual({
+      type: 'cell', floorId: boss.floorId, x: 2, y: 2,
+    });
+  });
+
+  it('rejects more than one population instance for the same boss encounter', () => {
+    const { state, content } = fixture();
+    const duplicate = { ...state.populations[0]!, populationId: 'population.boss-copy' } as BossPopulation;
+    expect(() => advanceBosses({ state: { ...state, populations: [state.populations[0]!, duplicate] }, content,
+      eventId: 'event.duplicate-instance' })).toThrow(/one instance/i);
+  });
+});
+
+describe('boss recovery and defeat rewards', () => {
+  it('freezes inactive bosses, then recovers one elapsed interval without reversing phase or resurrecting', () => {
+    const { state, content } = fixture();
+    const phased = advanceBosses({ state: { ...state, worldTime: 10, actors: state.actors.map((actor) =>
+      actor.actorId === 'actor.boss' ? { ...actor, health: 20 } : actor) }, content, eventId: 'event.phase' });
+    const inactive = advanceBosses({ state: { ...phased.state, worldTime: 20, activeFloorId: 'floor.other' }, content,
+      eventId: 'event.exit' });
+    expect(inactive.state.actors).toEqual(phased.state.actors);
+    expect(inactive.state.populations[0]).toMatchObject({ lastFloorExitAt: 20, currentPhaseId: 'inferno' });
+    const stillInactive = advanceBosses({ state: { ...inactive.state, worldTime: 50 }, content, eventId: 'event.frozen' });
+    expect(stillInactive.state.populations[0]).toEqual(inactive.state.populations[0]);
+    const reentered = advanceBosses({ state: { ...stillInactive.state, activeFloorId: 'floor.demo',
+      activeFloorEnteredAt: 50 }, content, eventId: 'event.return' });
+    expect(reentered.state.actors.find((actor) => actor.actorId === 'actor.boss')?.health).toBe(30);
+    expect(reentered.state.populations[0]).toMatchObject({ lastFloorExitAt: null, currentPhaseId: 'inferno',
+      recoveryHistory: [{ at: 50, amount: 10 }] });
+    expect(reentered.events).toContainEqual(expect.objectContaining({ type: 'boss.recovered', amount: 10 }));
+    const duplicate = advanceBosses({ state: reentered.state, content, eventId: 'event.return-again' });
+    expect(duplicate.state.actors.find((actor) => actor.actorId === 'actor.boss')?.health).toBe(30);
+    expect(duplicate.events).not.toContainEqual(expect.objectContaining({ type: 'boss.recovered' }));
+
+    const dead = { ...inactive.state, actors: inactive.state.actors.map((actor) => actor.actorId === 'actor.boss'
+      ? { ...actor, health: 0 } : actor) };
+    const deadReturn = advanceBosses({ state: { ...dead, worldTime: 100, activeFloorId: 'floor.demo', activeFloorEnteredAt: 100 },
+      content, eventId: 'event.dead-return' });
+    expect(deadReturn.state.actors.find((actor) => actor.actorId === 'actor.boss')?.health).toBe(0);
+  });
+
+  it('creates the unique and one enhanced resolution exactly once across retries and save/reload', () => {
+    const { state, content } = fixture();
+    const defeated = { ...state, actors: state.actors.map((actor) => actor.actorId === 'actor.boss'
+      ? { ...actor, health: 0 } : actor) };
+    const first = advanceBosses({ state: defeated, content, eventId: 'event.defeat' });
+    const bossItems = first.state.items.filter((entry) => entry.itemId.startsWith('item.reward.population.boss.'));
+    expect(bossItems.some((entry) => entry.contentId === 'item.unique' && entry.quantity === 1)).toBe(true);
+    expect(bossItems.filter((entry) => entry.itemId.includes('.loot.')).length).toBe(2);
+    expect(first.events.map((event) => event.type)).toEqual(expect.arrayContaining(['boss.defeated', 'boss.reward-created']));
+    const restored = decodeActiveRun(encodeActiveRun(first.state));
+    expect(() => validateContentBoundRun(restored, content)).not.toThrow();
+    const retried = advanceBosses({ state: restored, content, eventId: 'event.duplicate' });
+    expect(retried.state.items).toEqual(first.state.items);
+    expect(retried.state.rng.loot).toEqual(first.state.rng.loot);
+    expect(retried.events.filter((event) => event.type.startsWith('boss.'))).toEqual([]);
+  });
+
+  it('validates every reward reference before consuming loot RNG or creating any item', () => {
+    const { state, content } = fixture();
+    const broken = { ...content, entries: content.entries.filter((entry) => entry.id !== 'item.extra-b') };
+    const defeated = { ...state, actors: state.actors.map((actor) => actor.actorId === 'actor.boss'
+      ? { ...actor, health: 0 } : actor) };
+    expect(() => advanceBosses({ state: defeated, content: broken, eventId: 'event.broken' })).toThrow(/item\.extra-b/);
+    expect(defeated.items).toEqual([]);
+    expect(defeated.rng.loot).toEqual(state.rng.loot);
+  });
+});

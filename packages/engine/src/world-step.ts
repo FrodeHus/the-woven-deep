@@ -23,6 +23,7 @@ import { updatePopulationIntent } from './population-intent.js';
 import { updateActorMemory, visibleTargetObservations } from './population-perception.js';
 import { applyGroupLeaderOutcomes, coordinateGroups, groupCombatModifiers } from './group-behavior.js';
 import { advanceSwarms, resolveSwarmSpawnAction, swarmCombatModifiers, swarmSpawnAction } from './swarm-behavior.js';
+import { advanceBosses, bossCombatModifiers } from './boss-behavior.js';
 import { projectDomainEvents } from './event-projection.js';
 import {
   completeNormalActorTurn, relationshipBetween, resolveOpportunityAttacks, setRelationship,
@@ -70,8 +71,10 @@ function profile(
   const monster = monsterDefinition(content, actor);
   const groupModifiers = groupCombatModifiers({ state: { actors, populations, worldTime }, content, actorId: actor.actorId });
   const swarmModifiers = swarmCombatModifiers({ state: { actors, populations, worldTime }, content, actorId: actor.actorId });
-  const populationModifiers = { accuracy: groupModifiers.accuracy + swarmModifiers.accuracy,
-    defense: groupModifiers.defense + swarmModifiers.defense, damage: groupModifiers.damage + swarmModifiers.damage };
+  const bossModifiers = bossCombatModifiers({ state: { actors, populations }, content, actorId: actor.actorId });
+  const populationModifiers = { accuracy: groupModifiers.accuracy + swarmModifiers.accuracy + bossModifiers.accuracy,
+    defense: groupModifiers.defense + swarmModifiers.defense + bossModifiers.defense,
+    damage: groupModifiers.damage + swarmModifiers.damage + bossModifiers.damage };
   if (monster) return applyPopulationCombatModifiers({
     accuracy: monster.accuracy,
     defense: monster.defense,
@@ -555,6 +558,17 @@ function observeEncounters(state: ActiveRun, content: CompiledContentPack): Acti
   return decisions === state.encounterDecisions ? state : { ...state, encounterDecisions: decisions };
 }
 
+function bossEncounteredEvents(before: ActiveRun, after: ActiveRun, eventId: OpaqueId): readonly DomainEvent[] {
+  return after.encounterDecisions.flatMap((decision) => {
+    const previous = before.encounterDecisions.find((candidate) => candidate.encounterId === decision.encounterId);
+    if (previous?.encountered !== false || !decision.encountered) return [];
+    const population = after.populations.find((candidate) => candidate.model === 'boss'
+      && candidate.encounterId === decision.encounterId);
+    return population?.model === 'boss' ? [{ type: 'boss.encountered' as const, eventId,
+      populationId: population.populationId, actorId: population.actorId, encounterId: population.encounterId }] : [];
+  });
+}
+
 export function resolveWorldStep(input: Readonly<{
   state: ActiveRun;
   content: CompiledContentPack;
@@ -570,8 +584,13 @@ export function resolveWorldStep(input: Readonly<{
   let state = resolved.state;
   const events: DomainEvent[] = [];
   const publicEvents: DomainEvent[] = [];
+  let bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
+  state = bosses.state;
+  let beforeObservation = state;
   state = observeEncounters(state, input.content);
   appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
+  appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
+  appendEvents(events, publicEvents, bossEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
   let groupOutcome = applyGroupLeaderOutcomes({ state, content: input.content, eventId: input.eventId });
   state = groupOutcome.state;
   appendEvents(events, publicEvents, groupOutcome.events, state, heroId, input.content);
@@ -601,6 +620,9 @@ export function resolveWorldStep(input: Readonly<{
       swarms = advanceSwarms({ state, content: input.content, eventId: input.eventId });
       state = swarms.state;
       appendEvents(events, publicEvents, swarms.events, state, heroId, input.content);
+      bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
+      state = bosses.state;
+      appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
       selected = selectReadyActor(state.actors, input.content, state.activeFloorId);
       if (!selected) break;
     }
@@ -620,8 +642,13 @@ export function resolveWorldStep(input: Readonly<{
     if (action.type === 'rest') throw new Error('internal invariant: non-player behavior selected rest');
     resolved = applyAction({ state, action, content: input.content, eventId: input.eventId });
     state = resolved.state;
+    bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
+    state = bosses.state;
+    beforeObservation = state;
     state = observeEncounters(state, input.content);
     appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
+    appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
+    appendEvents(events, publicEvents, bossEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
     groupOutcome = applyGroupLeaderOutcomes({ state, content: input.content, eventId: input.eventId });
     state = groupOutcome.state;
     appendEvents(events, publicEvents, groupOutcome.events, state, heroId, input.content);
