@@ -7,6 +7,7 @@ const NON_ZERO_FALLBACK = 0x6d2b79f5;
 const STREAM_DISCRIMINATORS: Readonly<Record<RngStreamName, number>> = {
   generation: 1,
   encounters: 2,
+  'population-gates': 7,
   combat: 3,
   loot: 4,
   effects: 5,

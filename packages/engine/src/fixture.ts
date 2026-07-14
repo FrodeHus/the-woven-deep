@@ -86,7 +86,10 @@ export function createDemoRun(): ActiveRun {
     conditions: [],
     equipment: emptyEquipment(),
     behaviorId: null,
-    behaviorState: {},
+    behaviorState: { intent: 'hold', goal: null, lastKnownTargets: [], investigation: null },
+    populationId: null,
+    populationRoleId: null,
+    populationPresentation: null,
   };
   const floor = {
     floorId: 'floor.demo', seed, generatorVersion: 1 as const, width: 7, height: 5, depth: 1, tiles, entities: [],
@@ -124,5 +127,10 @@ export function createDemoRun(): ActiveRun {
     activeFloorId: 'floor.demo',
     floors: [{ ...floor, knowledge }],
     recentCommands: [],
+    encounterDecisions: [],
+    populations: [],
+    fallenHeroStandings: [],
+    fallenHeroDecisions: [],
+    conqueredChampionRecordIds: [],
   };
 }

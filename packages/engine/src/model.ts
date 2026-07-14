@@ -6,6 +6,9 @@ import type { DungeonFeature } from './feature-model.js';
 import type { IdentificationState, ItemInstance } from './item-model.js';
 import type { HungerStage, SurvivalState } from './survival-model.js';
 import type { DamageType } from '@woven-deep/content';
+import type {
+  EncounterRunDecision, FallenHeroRunDecision, FallenHeroStandingSnapshot, PopulationInstance,
+} from './population-model.js';
 
 export type OpaqueId = string;
 export type Uint32State = readonly [number, number, number, number];
@@ -354,7 +357,7 @@ export interface RecordedCommand {
 }
 
 export interface ActiveRun {
-  readonly schemaVersion: 3;
+  readonly schemaVersion: 4;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly runId: OpaqueId;
@@ -373,6 +376,11 @@ export interface ActiveRun {
   readonly activeFloorId: OpaqueId;
   readonly floors: readonly FloorSnapshot[];
   readonly recentCommands: readonly RecordedCommand[];
+  readonly encounterDecisions: readonly EncounterRunDecision[];
+  readonly populations: readonly PopulationInstance[];
+  readonly fallenHeroStandings: readonly FallenHeroStandingSnapshot[];
+  readonly fallenHeroDecisions: readonly FallenHeroRunDecision[];
+  readonly conqueredChampionRecordIds: readonly OpaqueId[];
 }
 
 export interface CommandResolution {

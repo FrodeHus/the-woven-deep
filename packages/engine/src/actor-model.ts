@@ -1,4 +1,5 @@
 import type { ActiveRun, HeroState, OpaqueId } from './model.js';
+import type { ActorBehaviorState, ActorPopulationPresentation } from './population-model.js';
 
 export type AttributeName = 'might' | 'agility' | 'vitality' | 'wits' | 'resolve';
 export type Disposition = 'friendly' | 'neutral' | 'hostile';
@@ -40,7 +41,10 @@ export interface ActorState {
   readonly conditions: readonly ConditionState[];
   readonly equipment: EquipmentState;
   readonly behaviorId: OpaqueId | null;
-  readonly behaviorState: Readonly<Record<string, string | number | boolean | null>>;
+  readonly behaviorState: ActorBehaviorState;
+  readonly populationId: OpaqueId | null;
+  readonly populationRoleId: string | null;
+  readonly populationPresentation: ActorPopulationPresentation | null;
 }
 
 export interface RelationshipOverride {

@@ -181,7 +181,10 @@ function monsterActor(
     conditions: [],
     equipment: emptyEquipment(),
     behaviorId: definition.behaviorId,
-    behaviorState: {},
+    behaviorState: { intent: 'hold', goal: null, lastKnownTargets: [], investigation: null },
+    populationId: null,
+    populationRoleId: null,
+    populationPresentation: null,
   };
 }
 
@@ -291,7 +294,10 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
     conditions: [],
     equipment: { ...emptyEquipment(), 'main-hand': IDS.sword, 'off-hand': IDS.lantern },
     behaviorId: null,
-    behaviorState: {},
+    behaviorState: { intent: 'hold', goal: null, lastKnownTargets: [], investigation: null },
+    populationId: null,
+    populationRoleId: null,
+    populationPresentation: null,
   };
   const actors = ordered([
     hero,

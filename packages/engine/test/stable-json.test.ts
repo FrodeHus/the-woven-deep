@@ -14,9 +14,10 @@ describe('stableJson', () => {
     expect(stableJson({ z: 1, a: { beta: 2, alpha: 1 }, list: [3, 2, 1] }))
       .toBe('{"a":{"alpha":1,"beta":2},"list":[3,2,1],"z":1}');
     expect(stableJson({ 2: 'two', 10: 'ten' })).toBe('{"10":"ten","2":"two"}');
+    expect(stableJson({ probability: 0.65 })).toBe('{"probability":0.65}');
   });
 
-  it.each([NaN, Infinity, -Infinity, -0, 1.5, Number.MAX_SAFE_INTEGER + 1, undefined, new Map()])(
+  it.each([NaN, Infinity, -Infinity, -0, Number.MAX_SAFE_INTEGER + 1, undefined, new Map()])(
     'rejects unsupported value %s',
     (value) => expect(() => stableJson({ value })).toThrow(),
   );

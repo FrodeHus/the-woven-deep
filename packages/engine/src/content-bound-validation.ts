@@ -20,6 +20,112 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
     throw new Error(`content-bound validation: content hash ${pack.hash} does not match run ${run.contentHash}`);
   }
   const entries = entryMap(pack);
+  const actors = new Map(run.actors.map((actor) => [actor.actorId, actor]));
+  for (const decision of run.encounterDecisions) {
+    const encounter = entries.get(decision.encounterId);
+    if (!encounter || encounter.kind !== 'encounter') {
+      throw new Error(`content-bound validation: encounter decision ${decision.encounterId} definition does not exist`);
+    }
+    const expectedProbability = Math.min(encounter.discoveryProtectionCap,
+      encounter.runAppearanceChance + decision.protectionBonus);
+    const instanceCount = run.populations.filter((population) => population.model !== 'champion'
+      && population.model !== 'echo' && population.encounterId === decision.encounterId).length;
+    if (decision.baseProbability !== encounter.runAppearanceChance
+      || decision.protectionBonus > encounter.discoveryProtectionCap - encounter.runAppearanceChance
+      || decision.effectiveProbability !== expectedProbability
+      || decision.instancesCreated !== instanceCount
+      || decision.instancesCreated > encounter.maximumInstancesPerRun) {
+      throw new Error(`content-bound validation: encounter decision ${decision.encounterId} does not match its definition`);
+    }
+  }
+  for (const population of run.populations) {
+    if (population.model === 'champion' || population.model === 'echo') {
+      const template = entries.get(population.encounterId);
+      if (!template || template.kind !== 'fallen-champion-template') {
+        throw new Error(`content-bound validation: fallen-hero population ${population.populationId} template does not exist`);
+      }
+      const standing = run.fallenHeroStandings.find((entry) => entry.hallRecordId === population.hallRecordId);
+      if (!standing || standing.rank !== population.rank) {
+        throw new Error(`content-bound validation: fallen-hero population ${population.populationId} has no matching standing`);
+      }
+      continue;
+    }
+    const encounter = entries.get(population.encounterId);
+    if (!encounter || encounter.kind !== 'encounter' || encounter.model !== population.model) {
+      throw new Error(`content-bound validation: population ${population.populationId} does not match encounter ${population.encounterId}`);
+    }
+    const floor = run.floors.find((entry) => entry.floorId === population.floorId)!;
+    if (floor.depth < encounter.minDepth || floor.depth > encounter.maxDepth) {
+      throw new Error(`content-bound validation: population ${population.populationId} is outside encounter depth range`);
+    }
+    const memberActors = [...population.livingMemberIds, ...population.formerMemberIds]
+      .map((actorId) => actors.get(actorId)).filter((actor) => actor !== undefined);
+    if (population.model === 'individual' && encounter.model === 'individual') {
+      if (memberActors.some((actor) => actor.contentId !== encounter.definition.monsterId)) {
+        throw new Error(`content-bound validation: individual population ${population.populationId} uses the wrong monster`);
+      }
+    } else if (population.model === 'group' && encounter.model === 'group') {
+      const roles = new Map(encounter.definition.roles.map((role) => [role.roleId, role.monsterId]));
+      for (const membership of population.roleMembership) {
+        const member = actors.get(membership.actorId);
+        if (!member || roles.get(membership.roleId) !== member.contentId) {
+          throw new Error(`content-bound validation: group population ${population.populationId} role ${membership.roleId} is invalid`);
+        }
+      }
+      if (population.leaderActorId !== null
+        && actors.get(population.leaderActorId)?.populationRoleId !== encounter.definition.leaderRoleId) {
+        throw new Error(`content-bound validation: group population ${population.populationId} leader has the wrong role`);
+      }
+    } else if (population.model === 'swarm' && encounter.model === 'swarm') {
+      if (actors.get(population.sourceActorId)?.contentId !== encounter.definition.sourceMonsterId) {
+        throw new Error(`content-bound validation: swarm population ${population.populationId} source uses the wrong monster`);
+      }
+      const roles = new Map(encounter.definition.spawnRoles.map((role) => [role.roleId, role.monsterId]));
+      for (const member of memberActors) {
+        if (member.actorId === population.sourceActorId) continue;
+        if (member.populationRoleId === null || roles.get(member.populationRoleId) !== member.contentId) {
+          throw new Error(`content-bound validation: swarm population ${population.populationId} member role is invalid`);
+        }
+      }
+    } else if (population.model === 'boss' && encounter.model === 'boss') {
+      if (actors.get(population.actorId)?.contentId !== encounter.definition.monsterId) {
+        throw new Error(`content-bound validation: boss population ${population.populationId} uses the wrong monster`);
+      }
+      const phaseIds = encounter.definition.phases.map((phase) => phase.phaseId);
+      if (population.crossedPhaseIds.some((phaseId, index) => phaseId !== phaseIds[index])
+        || population.currentPhaseId !== (population.crossedPhaseIds.at(-1) ?? null)) {
+        throw new Error(`content-bound validation: boss population ${population.populationId} phase history is invalid`);
+      }
+    }
+  }
+  const championTemplate = pack.entries.find((entry) => entry.kind === 'fallen-champion-template');
+  if (run.fallenHeroStandings.length > 0 && !championTemplate) {
+    throw new Error('content-bound validation: fallen-hero standings require a Champion template');
+  }
+  if (championTemplate) {
+    const retainedEchoes = run.fallenHeroDecisions.filter((decision) => decision.role === 'echo' && decision.retained);
+    if (retainedEchoes.length > championTemplate.maximumEchoesPerRun
+      || retainedEchoes.some((decision) => decision.gateRoll! / 0x1_0000_0000 >= championTemplate.echoAppearanceChance)) {
+      throw new Error('content-bound validation: retained Echo decisions do not match the Champion template');
+    }
+    for (const decision of run.fallenHeroDecisions) {
+      const matching = run.populations.filter((population) => (population.model === 'champion' || population.model === 'echo')
+        && population.hallRecordId === decision.hallRecordId);
+      const matchedDefeated = matching[0]?.model === 'champion' || matching[0]?.model === 'echo'
+        ? matching[0].defeated : false;
+      if (matching.length > 1 || matching.some((population) => population.model !== decision.role)
+        || (matching.length === 1 && !decision.retained)
+        || decision.defeated !== matchedDefeated) {
+        throw new Error(`content-bound validation: fallen-hero decision ${decision.hallRecordId} disagrees with its population`);
+      }
+      if (decision.role === 'champion') {
+        const conquered = run.conqueredChampionRecordIds.includes(decision.hallRecordId);
+        if (decision.retained === conquered) {
+          throw new Error(`content-bound validation: Champion decision ${decision.hallRecordId} disagrees with conquered state`);
+        }
+      }
+    }
+  }
   const unidentifiedItems = pack.entries.filter((entry): entry is ItemContentEntry =>
     entry.kind === 'item' && entry.identification.mode !== 'known');
   const mappedContentIds = Object.keys(run.identification.appearanceByContentId).sort();

@@ -22,6 +22,29 @@ beforeAll(async () => {
 });
 
 describe('seeded gameplay fixture', () => {
+  function withBeetlePopulation(): ReturnType<typeof createGameplayDemoRun>['run'] {
+    const fixture = createGameplayDemoRun(pack);
+    const beetle = fixture.run.actors.find((actor) => actor.actorId === fixture.ids.beetle)!;
+    return {
+      ...fixture.run,
+      actors: fixture.run.actors.map((actor) => actor.actorId === beetle.actorId ? {
+        ...actor, populationId: 'population.beetles.1', populationRoleId: 'guard',
+      } : actor),
+      encounterDecisions: [{
+        encounterId: 'encounter.beetle-patrol', baseProbability: 0.65, protectionBonus: 0.08,
+        effectiveProbability: 0.73, eligible: true, reachedEligibleDepth: true,
+        encountered: false, instancesCreated: 1,
+      }],
+      populations: [{
+        populationId: 'population.beetles.1', encounterId: 'encounter.beetle-patrol',
+        floorId: beetle.floorId, createdAt: 0, model: 'group',
+        livingMemberIds: [beetle.actorId], formerMemberIds: [], leaderActorId: null,
+        bonusActive: false, roleMembership: [{ actorId: beetle.actorId, roleId: 'guard' }],
+        sharedKnowledge: [], leaderResponseApplied: false,
+      }],
+    };
+  }
+
   it('builds the same valid gameplay run twice', () => {
     const first = createGameplayDemoRun(pack);
     const second = createGameplayDemoRun(pack);
@@ -76,5 +99,19 @@ describe('seeded gameplay fixture', () => {
       state: 'hidden',
       discovery: { discoveredByActorIds: [] },
     });
+  });
+
+  it('validates encounter probabilities and population role content references', () => {
+    const run = withBeetlePopulation();
+    expect(validateActiveRun(run)).toEqual(run);
+    expect(() => validateContentBoundRun(run, pack)).not.toThrow();
+
+    const badProbability = structuredClone(run);
+    (badProbability.encounterDecisions[0] as any).effectiveProbability = 0.74;
+    expect(() => validateContentBoundRun(badProbability, pack)).toThrow(/decision.*definition/i);
+
+    const badRole = structuredClone(run);
+    (badRole.populations[0] as any).roleMembership[0].roleId = 'missing';
+    expect(() => validateContentBoundRun(badRole, pack)).toThrow(/role missing is invalid/i);
   });
 });

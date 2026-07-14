@@ -18,6 +18,7 @@ export * from './visibility.js';
 export * from './light-model.js';
 export * from './lighting.js';
 export * from './perception.js';
+export * from './population-model.js';
 export * from './projection.js';
 export * from './fixture.js';
 export * from './actor-model.js';

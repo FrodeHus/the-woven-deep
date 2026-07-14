@@ -28,7 +28,10 @@ function actor(input: Readonly<{
     conditions: [],
     equipment: emptyEquipment(),
     behaviorId: input.playerControlled ? null : 'behavior.approach-and-attack',
-    behaviorState: {},
+    behaviorState: { intent: 'hold', goal: null, lastKnownTargets: [], investigation: null },
+    populationId: null,
+    populationRoleId: null,
+    populationPresentation: null,
   };
 }
 

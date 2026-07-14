@@ -159,11 +159,11 @@ Commit: `feat: add encounter content schema`
 - Consumes: schema-v3 run, actors, floors, random stream derivation, content-bound validation, and direct fixture constructors.
 - Produces: schema-v4 run with `encounterDecisions`, `populations`, champion state, actor behavior state, population membership, and an independently derived `population-gates` stream.
 
-- [ ] **Step 1: Write failing schema-v4 state tests**
+- [x] **Step 1: Write failing schema-v4 state tests**
 
 Require sorted run decisions and population instances; group, swarm, boss, and champion discriminants; bidirectional actor membership; saved intent/goals/memory; reached/encountered flags; crossed phase ordering; one-time reward flags; and champion Hall record identity.
 
-- [ ] **Step 2: Write failing version and stream-isolation tests**
+- [x] **Step 2: Write failing version and stream-isolation tests**
 
 Assert schema versions 0–3 and 5 fail as unsupported, v4 round-trips byte-identically, all RNG states are present, and adding draws to `encounters` does not change `population-gates` results.
 
@@ -171,19 +171,19 @@ Run: `npm test --workspace @woven-deep/engine -- --run test/model.test.ts test/s
 
 Expected: FAIL because schema v4 and the new stream do not exist.
 
-- [ ] **Step 3: Add immutable population contracts**
+- [x] **Step 3: Add immutable population contracts**
 
 Define `EncounterRunDecision`, model-specific `PopulationInstance`, `PopulationIntent`, `ActorGoal`, `LastKnownTarget`, `InvestigationState`, ranked `FallenHeroStandingSnapshot`, `RecordedHeirloomSnapshot`, saved Echo decisions, and the pure host input shape. Store IDs and set-like arrays in code-unit order.
 
-- [ ] **Step 4: Implement strict schema and content-bound invariants**
+- [x] **Step 4: Implement strict schema and content-bound invariants**
 
 Validate safe integers, probabilities, floor ownership, member liveness/history, role membership, leader/source/boss identity, actor-to-population agreement, phase IDs, reward identity, champion record uniqueness, and every content reference. Reject computed paths in input by strict object parsing.
 
-- [ ] **Step 5: Replace fixtures without migration code**
+- [x] **Step 5: Replace fixtures without migration code**
 
 Set `SAVE_SCHEMA_VERSION = 4`, add `population-gates` to stream derivation with a fixed discriminator, rewrite every fixture/arbitrary to direct v4 state, and preserve the existing unsupported-version error boundary.
 
-- [ ] **Step 6: Run package gate and commit**
+- [x] **Step 6: Run package gate and commit**
 
 Run: `npm test --workspace @woven-deep/engine && npm run typecheck --workspace @woven-deep/engine && npm run build --workspace @woven-deep/engine`
 

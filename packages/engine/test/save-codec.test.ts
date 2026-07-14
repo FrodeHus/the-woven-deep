@@ -60,6 +60,72 @@ describe('active-run save codec', () => {
     } as ReturnType<typeof createDemoRun>;
   }
 
+  function populationRun(): ReturnType<typeof createDemoRun> {
+    const base = createDemoRun();
+    const hero = base.actors[0]!;
+    const beetle = {
+      ...hero,
+      actorId: 'monster.beetle.1',
+      contentId: 'monster.training-beetle',
+      playerControlled: false,
+      x: 2,
+      y: 1,
+      disposition: 'hostile' as const,
+      awareActorIds: [hero.actorId],
+      behaviorId: 'behavior.approach-and-attack',
+      behaviorState: {
+        intent: 'regroup' as const,
+        goal: { type: 'formation' as const, populationId: 'population.beetles.1', roleId: 'guard', x: 3, y: 1 },
+        lastKnownTargets: [{
+          targetActorId: hero.actorId, floorId: hero.floorId, x: hero.x, y: hero.y,
+          observedAt: 0, source: 'sight' as const, observerActorId: 'monster.beetle.1',
+        }],
+        investigation: { floorId: hero.floorId, x: 3, y: 1, startedAt: 0, expiresAt: 300 },
+      },
+      populationId: 'population.beetles.1',
+      populationRoleId: 'guard',
+      populationPresentation: { name: 'Beetle guard', glyph: 'B', color: '#d3b45f', leader: true },
+    };
+    const heirloom = (recordId: string, contentId: string) => ({
+      contentId, sourceItemId: 'item.recorded.1', enchantment: null,
+      condition: 90, charges: null, fuel: null, qualityRank: 3,
+      displayName: 'Old iron sword', glyph: ')', color: '#c0c0c0', originatingHallRecordId: recordId,
+    });
+    return {
+      ...base,
+      actors: [hero, beetle],
+      encounterDecisions: [{
+        encounterId: 'encounter.beetle-patrol', baseProbability: 0.65, protectionBonus: 0.08,
+        effectiveProbability: 0.73, eligible: true, reachedEligibleDepth: true,
+        encountered: true, instancesCreated: 1,
+      }],
+      populations: [{
+        populationId: 'population.beetles.1', encounterId: 'encounter.beetle-patrol',
+        floorId: hero.floorId, createdAt: 0, model: 'group' as const,
+        livingMemberIds: [beetle.actorId], formerMemberIds: [], leaderActorId: beetle.actorId,
+        bonusActive: true, roleMembership: [{ actorId: beetle.actorId, roleId: 'guard' }],
+        sharedKnowledge: beetle.behaviorState.lastKnownTargets, leaderResponseApplied: false,
+      }],
+      fallenHeroStandings: [{
+        rank: 1, hallRecordId: 'hall.champion', heroName: 'Brynja', portraitGlyph: '@',
+        classTags: ['fighter'], attributes: hero.attributes,
+        equippedItemContentIds: ['item.iron-sword'], signatureAbilityIds: ['ability.cleave'],
+        deathDepth: 8, sourceContentHash: base.contentHash,
+        heirloom: heirloom('hall.champion', 'item.iron-sword'),
+      }, {
+        rank: 2, hallRecordId: 'hall.echo', heroName: 'Cormac', portraitGlyph: '@',
+        classTags: ['scout'], attributes: hero.attributes,
+        equippedItemContentIds: ['item.short-bow'], signatureAbilityIds: ['ability.quick-shot'],
+        deathDepth: 5, sourceContentHash: base.contentHash,
+        heirloom: heirloom('hall.echo', 'item.short-bow'),
+      }],
+      fallenHeroDecisions: [
+        { hallRecordId: 'hall.champion', rank: 1, role: 'champion' as const, gateRoll: null, retained: true, encountered: false, defeated: false },
+        { hallRecordId: 'hall.echo', rank: 2, role: 'echo' as const, gateRoll: 123, retained: true, encountered: false, defeated: false },
+      ],
+    };
+  }
+
   function expectInvalidSave(state: ReturnType<typeof createDemoRun>, path: string): void {
     try {
       encodeActiveRun(state);
@@ -78,11 +144,98 @@ describe('active-run save codec', () => {
     expect(encoded.startsWith('{"activeFloorId"')).toBe(true);
   });
 
-  it('round-trips all schema v3 source state without storing derived fields', () => {
+  it('round-trips all schema v4 source state without storing derived fields', () => {
     const state = richRun();
     const encoded = encodeActiveRun(state);
     expect(decodeActiveRun(encoded)).toEqual(state);
     expect(encoded).not.toMatch(/visibilityWords|illumination|projection|generationReport/);
+  });
+
+  it('round-trips durable group behavior and fallen-hero run decisions', () => {
+    const state = populationRun();
+    expect(decodeActiveRun(encodeActiveRun(state))).toEqual(state);
+  });
+
+  it.each(['individual', 'swarm', 'boss', 'champion', 'echo'] as const)(
+    'round-trips %s population state',
+    (model) => {
+      const state = structuredClone(populationRun()) as any;
+      const actor = state.actors[1];
+      actor.behaviorState = { intent: 'hold', goal: null, lastKnownTargets: [], investigation: null };
+      actor.populationRoleId = null;
+      actor.populationPresentation.leader = false;
+      const base = {
+        populationId: `population.${model}.1`, encounterId: `encounter.${model}`,
+        floorId: actor.floorId, createdAt: 0, model,
+        livingMemberIds: [actor.actorId], formerMemberIds: [],
+      };
+      actor.populationId = base.populationId;
+      if (model === 'individual') state.populations = [base];
+      if (model === 'swarm') state.populations = [{
+        ...base, sourceActorId: actor.actorId, nextSpawnAt: 300, spawnedCount: 0,
+        peakLivingSize: 1, shutdownState: null,
+      }];
+      if (model === 'boss') state.populations = [{
+        ...base, actorId: actor.actorId, currentPhaseId: 'kindled', crossedPhaseIds: ['kindled'],
+        lastFloorExitAt: null, rewardCreated: false, recoveryHistory: [],
+      }];
+      if (model === 'champion' || model === 'echo') {
+        const standing = state.fallenHeroStandings[model === 'champion' ? 0 : 1];
+        base.encounterId = 'fallen-champion-template.core';
+        state.populations = [{
+          ...base, actorId: actor.actorId, hallRecordId: standing.hallRecordId, rank: standing.rank,
+          defeated: false, ...(model === 'champion' ? { rewardCreated: false } : { lootCreated: false }),
+        }];
+        state.encounterDecisions = [];
+      } else {
+        state.encounterDecisions = [{
+          encounterId: base.encounterId, baseProbability: 0.25, protectionBonus: 0,
+          effectiveProbability: 0.25, eligible: true, reachedEligibleDepth: true,
+          encountered: false, instancesCreated: 1,
+        }];
+      }
+      expect(decodeActiveRun(encodeActiveRun(state))).toEqual(state);
+    },
+  );
+
+  it.each(['group', 'swarm'] as const)('retains a defeated %s source identity', (model) => {
+    const state = structuredClone(populationRun()) as any;
+    const actor = state.actors[1];
+    actor.health = 0;
+    actor.behaviorState = { intent: 'flee', goal: null, lastKnownTargets: [], investigation: null };
+    const population = state.populations[0];
+    population.livingMemberIds = [];
+    population.formerMemberIds = [actor.actorId];
+    if (model === 'group') {
+      population.bonusActive = false;
+      population.leaderResponseApplied = true;
+    } else {
+      actor.populationRoleId = null;
+      population.model = 'swarm';
+      population.sourceActorId = actor.actorId;
+      population.nextSpawnAt = 300;
+      population.spawnedCount = 0;
+      population.peakLivingSize = 1;
+      population.shutdownState = 'flee';
+      delete population.leaderActorId;
+      delete population.bonusActive;
+      delete population.roleMembership;
+      delete population.sharedKnowledge;
+      delete population.leaderResponseApplied;
+    }
+    expect(decodeActiveRun(encodeActiveRun(state))).toEqual(state);
+  });
+
+  it.each([
+    ['actors.1.behaviorState.goal.roleId', (run: any) => { run.actors[1].behaviorState.goal.roleId = 'archer'; }],
+    ['populations.0.roleMembership.0', (run: any) => { run.populations[0].roleMembership[0].roleId = 'archer'; }],
+    ['populations.0.bonusActive', (run: any) => { run.populations[0].bonusActive = false; }],
+    ['fallenHeroStandings.1.hallRecordId', (run: any) => { run.fallenHeroStandings[1].hallRecordId = 'hall.champion'; }],
+    ['fallenHeroDecisions.1.encountered', (run: any) => { run.fallenHeroDecisions[1].retained = false; run.fallenHeroDecisions[1].encountered = true; }],
+  ])('rejects inconsistent population state at %s', (path, corrupt) => {
+    const input = structuredClone(populationRun()) as any;
+    corrupt(input);
+    expectInvalidSave(input, path);
   });
 
   it('round-trips expanded unavailable commands and ordered event arrays', () => {
@@ -165,7 +318,7 @@ describe('active-run save codec', () => {
     ['overlapping vaults', (run: any) => { run.floors[0].vaults.push({ ...run.floors[0].vaults[0], placementId: 'placement.b', vaultId: 'vault.b' }); }],
     ['out-of-bounds vault', (run: any) => { run.floors[0].vaults[0].width = 9; }],
     ['unowned slot', (run: any) => { run.floors[0].placementSlots[0].vaultPlacementId = 'placement.missing'; }],
-  ])('rejects v3 corruption: %s', (_label, corrupt) => {
+  ])('rejects v4 corruption: %s', (_label, corrupt) => {
     const input = structuredClone(richRun()) as any;
     corrupt(input);
     expect(() => encodeActiveRun(input)).toThrow(SaveLoadError);
@@ -246,7 +399,7 @@ describe('active-run save codec', () => {
     expect(() => decodeActiveRun(JSON.stringify({ ...createDemoRun(), surprise: true }))).toThrow(/surprise/);
   });
 
-  it.each([0, 1, 2, 4])('rejects unsupported schema version %i without partial state', (schemaVersion) => {
+  it.each([0, 1, 2, 3, 5])('rejects unsupported schema version %i without partial state', (schemaVersion) => {
     try {
       decodeActiveRun(JSON.stringify({ schemaVersion }));
       expect.fail('expected unsupported version');
