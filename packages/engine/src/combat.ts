@@ -1,4 +1,4 @@
-import type { DamageType, DiceDefinition } from '@woven-deep/content';
+import type { DamageType, DiceDefinition, PopulationCombatModifiers } from '@woven-deep/content';
 import type { ActorState } from './actor-model.js';
 import type { DomainEvent, OpaqueId, Uint32State } from './model.js';
 import { rollDie } from './random.js';
@@ -50,6 +50,15 @@ export interface CombatResolution {
 function safeInteger(label: string, value: number): number {
   if (!Number.isSafeInteger(value)) throw new RangeError(`${label} must be a safe integer`);
   return value;
+}
+
+export function applyPopulationCombatModifiers<T extends Readonly<{
+  accuracy: number; defense: number; damage: DiceDefinition;
+}>>(profile: T, modifiers: PopulationCombatModifiers): T {
+  const accuracy = safeInteger('population accuracy', profile.accuracy + modifiers.accuracy);
+  const defense = safeInteger('population defense', profile.defense + modifiers.defense);
+  const bonus = safeInteger('population damage', profile.damage.bonus + modifiers.damage);
+  return { ...profile, accuracy, defense, damage: { ...profile.damage, bonus } };
 }
 
 export function resolveAttack(input: AttackResolutionInput): CombatResolution {

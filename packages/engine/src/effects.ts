@@ -5,7 +5,7 @@ import {
   type EffectId,
 } from '@woven-deep/content';
 import type { ActorState } from './actor-model.js';
-import type { DomainEvent, OpaqueId, Point, Uint32State } from './model.js';
+import type { DomainEvent, FloorSnapshot, OpaqueId, Point, Uint32State } from './model.js';
 import { rollDie } from './random.js';
 import { resolveDamage } from './combat.js';
 import { applyCondition, conditionDefinition } from './conditions.js';
@@ -13,11 +13,14 @@ import type { ItemInstance } from './item-model.js';
 import { consumeItemQuantityFromItems } from './inventory.js';
 import type { SurvivalState } from './survival-model.js';
 import { restoreHunger } from './survival.js';
+import type { DungeonFeature } from './feature-model.js';
 
 export interface EffectSequenceResult {
   readonly actors: readonly ActorState[];
   readonly items: readonly ItemInstance[];
   readonly survival: SurvivalState;
+  readonly features: readonly DungeonFeature[];
+  readonly floors: readonly FloorSnapshot[];
   readonly effectsState: Uint32State;
   readonly events: readonly DomainEvent[];
 }
@@ -28,10 +31,16 @@ export interface EffectOperationInput {
   readonly sourceActorId: OpaqueId;
   readonly targetActorId: OpaqueId;
   readonly eventId: OpaqueId;
+  readonly items: readonly ItemInstance[];
+  readonly features: readonly DungeonFeature[];
+  readonly floors: readonly FloorSnapshot[];
 }
 
 export type EffectOperation = (input: EffectOperationInput) => Readonly<{
   actors: readonly ActorState[];
+  items?: readonly ItemInstance[];
+  features?: readonly DungeonFeature[];
+  floors?: readonly FloorSnapshot[];
   events: readonly DomainEvent[];
 }>;
 export type EffectOperations = Readonly<Partial<Record<EffectId, EffectOperation>>>;
@@ -48,6 +57,8 @@ export interface EffectSequenceInput {
   readonly forceMoveDirection: Point;
   readonly operations: EffectOperations;
   readonly items?: readonly ItemInstance[];
+  readonly features?: readonly DungeonFeature[];
+  readonly floors?: readonly FloorSnapshot[];
   readonly sourceItemId?: OpaqueId;
   readonly survival: SurvivalState;
   readonly survivalActorId: OpaqueId;
@@ -128,6 +139,8 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
   }
   let actors = [...input.actors]; let state = input.effectsState; const events: DomainEvent[] = [];
   let items = [...(input.items ?? [])];
+  let features = [...(input.features ?? [])];
+  let floors = [...(input.floors ?? [])];
   const balance = input.content.entries.find((entry) => entry.kind === 'balance');
   if (!balance) throw new Error('internal invariant: balance definition does not exist');
   let survival = input.survival;
@@ -200,9 +213,14 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
       });
     } else {
       const operation = input.operations[effect.effectId as EffectId]!;
-      const result = operation({ effect, actors, sourceActorId: input.sourceActorId, targetActorId: target.actorId, eventId: input.eventId });
-      actors = [...result.actors]; events.push(...result.events);
+      const result = operation({ effect, actors, items, features, floors,
+        sourceActorId: input.sourceActorId, targetActorId: target.actorId, eventId: input.eventId });
+      actors = [...result.actors];
+      if (result.items !== undefined) items = [...result.items];
+      if (result.features !== undefined) features = [...result.features];
+      if (result.floors !== undefined) floors = [...result.floors];
+      events.push(...result.events);
     }
   }
-  return { actors, items, survival, effectsState: state, events };
+  return { actors, items, features, floors, survival, effectsState: state, events };
 }

@@ -9,6 +9,7 @@ export interface SchedulerState {
   readonly worldTime: number;
   readonly actors: readonly ActorState[];
   readonly content: CompiledContentPack;
+  readonly activeFloorId?: OpaqueId;
 }
 
 export interface SchedulerResult {
@@ -46,10 +47,12 @@ function validateScheduledActor(actor: ActorState): void {
 export function selectReadyActor(
   actors: readonly ActorState[],
   content: CompiledContentPack,
+  activeFloorId?: OpaqueId,
 ): ActorState | undefined {
   validateActiveConditions(actors, content);
   const ready: ActorState[] = [];
   for (const actor of actors) {
+    if (activeFloorId !== undefined && actor.floorId !== activeFloorId) continue;
     if (!scheduled(actor, content)) continue;
     validateScheduledActor(actor);
     if (actor.energy >= READINESS_THRESHOLD) ready.push(actor);
@@ -66,10 +69,11 @@ export function chargeActionEnergy(actor: ActorState, cost: number): ActorState 
 
 export function advanceToNextReady(input: SchedulerState): SchedulerResult {
   if (safeInteger('worldTime', input.worldTime) < 0) throw new RangeError('worldTime must be non-negative');
-  const immediatelyReady = selectReadyActor(input.actors, input.content);
+  const immediatelyReady = selectReadyActor(input.actors, input.content, input.activeFloorId);
   if (immediatelyReady) return { worldTime: input.worldTime, actors: [...input.actors], selectedActorId: immediatelyReady.actorId };
 
-  const eligible = input.actors.filter((actor) => scheduled(actor, input.content));
+  const eligible = input.actors.filter((actor) => (input.activeFloorId === undefined || actor.floorId === input.activeFloorId)
+    && scheduled(actor, input.content));
   if (eligible.length === 0) return { worldTime: input.worldTime, actors: [...input.actors], selectedActorId: null };
   for (const actor of eligible) validateScheduledActor(actor);
   const elapsed = Math.min(...eligible.map((actor) => {
@@ -84,5 +88,5 @@ export function advanceToNextReady(input: SchedulerState): SchedulerResult {
     const gained = safeInteger(`${actor.actorId}.energy gain`, actor.speed * elapsed);
     return { ...actor, energy: safeInteger(`${actor.actorId}.energy after scheduler advance`, actor.energy + gained) };
   });
-  return { worldTime, actors, selectedActorId: selectReadyActor(actors, input.content)?.actorId ?? null };
+  return { worldTime, actors, selectedActorId: selectReadyActor(actors, input.content, input.activeFloorId)?.actorId ?? null };
 }

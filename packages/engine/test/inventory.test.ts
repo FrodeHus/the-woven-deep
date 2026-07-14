@@ -44,6 +44,10 @@ describe('immutable inventory transitions', () => {
     expect(canStack(item({ fuel: 10 }), item({ itemId: 'item.coin.2', fuel: 9 }))).toBe(false);
     expect(canStack(item({ identified: true }), item({ itemId: 'item.coin.2', identified: false }))).toBe(false);
     expect(canStack(item(), item({ itemId: 'item.coin.2', enchantment: { enchantmentId: 'enchantment.a', modifiers: {} } }))).toBe(false);
+    const provenance = { displayName: 'Ancestral coin', glyph: '$', color: '#e0c060',
+      originatingHallRecordId: 'hall.one', originatingRank: 1 as const, sourceItemId: 'item.source' };
+    expect(canStack(item({ heirloom: provenance }), item({ itemId: 'item.coin.2' }))).toBe(false);
+    expect(canStack(item({ heirloom: provenance }), item({ itemId: 'item.coin.2', heirloom: provenance }))).toBe(false);
   });
 
   it('counts backpack stacks but excludes equipped items', () => {
@@ -218,7 +222,7 @@ describe('immutable inventory transitions', () => {
     const fired = resolveCommand(armed, command, { content: pack });
     expect(fired.result).toMatchObject({ status: 'applied' });
     expect(fired.state.items.map((entry) => entry.itemId)).toEqual([bow.itemId]);
-    expect(fired.events.some((event) => event.type === 'attack.hit' || event.type === 'attack.missed')).toBe(true);
+    expect(fired.events.some((event) => event.type === 'combat.observed')).toBe(true);
     expect(() => encodeActiveRun(fired.state)).not.toThrow();
   });
 

@@ -29,6 +29,7 @@ export function relationshipBetween(
   if (override) return override.relationship;
   const left = requiredActor(run, leftActorId);
   const right = requiredActor(run, rightActorId);
+  if (left.populationId !== null && left.populationId === right.populationId) return 'friendly';
   if (left.disposition === 'hostile' || right.disposition === 'hostile') return 'hostile';
   if (left.disposition === 'neutral' || right.disposition === 'neutral') return 'neutral';
   return 'friendly';

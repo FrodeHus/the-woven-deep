@@ -9,7 +9,7 @@ describe('ContentPackRepository', () => {
     migrateDatabase(database);
     const repository = new ContentPackRepository(database);
     const pack = {
-      schemaVersion: 2 as const,
+      schemaVersion: 3 as const,
       hash: 'a'.repeat(64),
       entries: [],
       generationReport: { foundationalCategories: [] },

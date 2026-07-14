@@ -8,6 +8,7 @@ services:
       DATABASE_PATH: /data/rogue.sqlite
       CONTENT_DIR: /app/content
     volumes:
+      - ${CONTENT_SOURCE:-./content}:/app/content:ro
       - rogue-data:/data
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)})"]

@@ -1,0 +1,39 @@
+schemaVersion: 3
+entries:
+  - kind: item
+    id: item.warden-ember
+    name: Warden's Ember
+    glyph: "*"
+    color: "#ff8c42"
+    tags: [boss-reward, fire, offense]
+    minDepth: 5
+    maxDepth: 20
+    category: ring
+    stackLimit: 1
+    price: 180
+    rarity: legendary
+    actionCost: 100
+    equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
+    combat: { accuracy: 1, defense: 1, armor: 0, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []
+
+  - kind: item
+    id: item.champion-fallback-relic
+    name: Weathered Champion's Token
+    glyph: ","
+    color: "#9b9488"
+    tags: [champion-relic, misc]
+    minDepth: 1
+    maxDepth: 20
+    category: misc
+    stackLimit: 1
+    price: 1
+    rarity: common
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []

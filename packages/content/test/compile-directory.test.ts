@@ -10,14 +10,15 @@ import {
 
 const compactVault = '{kind: vault, id: vault.test-room, name: Test room, tags: [test], minDepth: 1, maxDepth: 5, rarity: common, weight: 10, maxPerFloor: 1, margin: 1, transforms: {rotations: [0, 180], reflectHorizontal: true}, layout: ["#####", "#+m.#", "#####"], legend: {"#": {terrain: wall}, ".": {terrain: floor}, "+": {terrain: floor, entrance: true}, m: {terrain: floor, slot: {id: monster-main, kind: monster, required: true, tags: [guard]}}}}';
 
-const compactMonster = '{kind: monster, id: monster.rat, name: Rat, glyph: r, color: "#aaaaaa", tags: [defense, food, healing, identification, light, offense], minDepth: 1, maxDepth: 5, attributes: {might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2}, health: 4, speed: 110, accuracy: 1, defense: 10, perception: 6, damage: {count: 1, sides: 3, bonus: 0}, armor: 0, resistances: {physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0}, disposition: hostile, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, runAppearanceChance: 1, rarity: common}';
+const compactMonster = '{kind: monster, id: monster.rat, name: Rat, glyph: r, color: "#aaaaaa", tags: [defense, food, healing, identification, light, offense], minDepth: 1, maxDepth: 5, attributes: {might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2}, health: 4, speed: 110, accuracy: 1, defense: 10, perception: 6, damage: {count: 1, sides: 3, bonus: 0}, armor: 0, resistances: {physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0}, disposition: hostile, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, rarity: common}';
 const compactItem = '{kind: item, id: item.lantern, name: Lantern, glyph: "¤", color: "#eeeeaa", tags: [defense, food, healing, identification, light, offense], minDepth: 1, maxDepth: 20, category: light, stackLimit: 1, price: 4, rarity: common, actionCost: 100, equipment: {slots: [off-hand], handedness: one-handed, reservedSlots: []}, combat: null, light: {color: [255, 200, 100], radius: 6, strength: 180, fuelCapacity: 1000, fuelPerTime: 1, warningThresholds: [100], fuelTags: [lamp-oil]}, identification: {mode: known, poolId: null}, effects: []}';
 const compactBalance = '{kind: balance, id: balance.core, name: Core, tags: [core], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000, hungerThresholds: {hungry: 3000, weak: 1000, starving: 0}, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, restMaximumDuration: 5000, recoveryByHungerStage: {sated: 100, hungry: 50, weak: 0, starving: 0}, hungerStageModifiers: {sated: {}, hungry: {}, weak: {}, starving: {}}, formulas: {health: {base: 8, vitality: 2}}, actionCosts: {action.move: 100}}';
 const compactTimedCondition = '{kind: condition, id: condition.stunned, name: Stunned, description: Cannot act, tags: [control], color: "#d8c46a", duration: {mode: timed, default: 100, maximum: 500}, stacking: {mode: refresh, maximumStacks: 1}, modifiersPerStack: {defense: -2}, traits: [condition-trait.incapacitated]}';
 const compactPermanentCondition = '{kind: condition, id: condition.warded, name: Warded, description: Remains until removed, tags: [beneficial], color: "#80b8ff", duration: {mode: permanent, default: null, maximum: null}, stacking: {mode: refresh, maximumStacks: 1}, modifiersPerStack: {}, traits: []}';
+const compactIndividualEncounter = '{kind: encounter, id: encounter.rat, name: Rat encounter, tags: [], model: individual, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: common, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 3, placement: {minimumStairDistance: 2, minimumObjectiveDistance: 2, maximumMemberDistance: 2, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, minimumQuantity: 1, maximumQuantity: 2}}';
 
 function contentFile(...entries: readonly string[]): string {
-  return `schemaVersion: 2\nentries: [${entries.join(', ')}]\n`;
+  return `schemaVersion: 3\nentries: [${entries.join(', ')}]\n`;
 }
 
 async function fixture(files: Record<string, string>): Promise<string> {
@@ -96,6 +97,20 @@ describe('compileContentDirectory', () => {
     );
   });
 
+  it('accepts registered patrol waypoints and rejects an empty patrol', async () => {
+    const patrol = compactMonster
+      .replace('behavior.approach-and-attack', 'behavior.patrol')
+      .replace('behaviorParameters: {}', 'behaviorParameters: {waypoints: [{x: 1, y: 2}, {x: 3, y: 4}]}');
+    const validRoot = await fixture({ 'content.yaml': contentFile(patrol, compactItem, compactVault) });
+    await expect(compileContentDirectory({ rootDir: validRoot })).resolves.toBeDefined();
+
+    const invalidRoot = await fixture({
+      'content.yaml': contentFile(patrol.replace('waypoints: [{x: 1, y: 2}, {x: 3, y: 4}]', 'waypoints: []'),
+        compactItem, compactVault),
+    });
+    await expect(compileContentDirectory({ rootDir: invalidRoot })).rejects.toThrow(/waypoints|too small/i);
+  });
+
   it('rejects inconsistent equipment handedness', async () => {
     const invalidItem = compactItem
       .replace('slots: [off-hand]', 'slots: [head]')
@@ -152,6 +167,34 @@ describe('compileContentDirectory', () => {
     const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, first, second) });
 
     await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/loot-table cycle detected/i);
+  });
+
+  it('bounds checked loot weights, rolls, quantities, and recursive worst-case units', async () => {
+    const boundedItem = compactItem.replace('stackLimit: 1', 'stackLimit: 256');
+    const table = (id: string, rolls: number, secondWeight: number, quantity: number, nested: string | null = null) =>
+      `{kind: loot-table, id: ${id}, name: Bounded loot, tags: [], rolls: ${rolls}, choices: [{contentId: ${nested === null ? 'item.lantern' : 'null'}, lootTableId: ${nested ?? 'null'}, weight: 2147483648, minimumQuantity: ${quantity}, maximumQuantity: ${quantity}}, {contentId: item.lantern, lootTableId: null, weight: ${secondWeight}, minimumQuantity: 1, maximumQuantity: 1}]}`;
+    const boundary = await fixture({ 'content.yaml': contentFile(compactMonster, boundedItem, compactVault,
+      table('loot-table.boundary', 16, 2147483648, 256),
+      table('loot-table.roll-boundary', 256, 1, 16)) });
+    await expect(compileContentDirectory({ rootDir: boundary })).resolves.toBeDefined();
+
+    for (const invalid of [
+      table('loot-table.weight', 1, 2147483649, 1),
+      table('loot-table.rolls', 257, 1, 1),
+      table('loot-table.quantity', 1, 1, 257),
+    ]) {
+      const root = await fixture({ 'content.yaml': contentFile(compactMonster, boundedItem, compactVault, invalid) });
+      await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/loot.*(weight.*2\^32|rolls.*256|quantity.*256)/i);
+    }
+
+    const child = table('loot-table.child', 16, 1, 16);
+    const nestedBoundary = table('loot-table.parent', 16, 1, 1, 'loot-table.child');
+    const nested = await fixture({ 'content.yaml': contentFile(compactMonster, boundedItem, compactVault,
+      child, nestedBoundary) });
+    await expect(compileContentDirectory({ rootDir: nested })).resolves.toBeDefined();
+    const excessive = await fixture({ 'content.yaml': contentFile(compactMonster, boundedItem, compactVault,
+      child, nestedBoundary.replace('minimumQuantity: 1, maximumQuantity: 1', 'minimumQuantity: 2, maximumQuantity: 2')) });
+    await expect(compileContentDirectory({ rootDir: excessive })).rejects.toThrow(/loot.*worst-case.*4096/i);
   });
 
   it('requires exactly one balance entry', async () => {
@@ -367,6 +410,152 @@ describe('compileContentDirectory', () => {
       compileContentDirectory({ rootDir: originalRoot }),
     ]);
     expect(changed.hash).not.toBe(original.hash);
+  });
+
+  it('resolves encounter monster references and quantity bounds', async () => {
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      compactIndividualEncounter.replace('monster.rat, minimumQuantity: 1', 'monster.missing, minimumQuantity: 1')) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/unknown monster reference monster\.missing/i);
+  });
+
+  it('accepts encounter selection weight 2^32 exactly and rejects a checked aggregate above it', async () => {
+    const weighted = (source: string, id: string, weight: number) => source
+      .replace('encounter.rat', id).replace('weight: 1, rarity', `weight: ${weight}, rarity`);
+    const atBoundary = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      weighted(compactIndividualEncounter, 'encounter.weight-a', 0x8000_0000),
+      weighted(compactIndividualEncounter, 'encounter.weight-b', 0x8000_0000)) });
+    await expect(compileContentDirectory({ rootDir: atBoundary })).resolves.toBeDefined();
+    const above = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      weighted(compactIndividualEncounter, 'encounter.weight-a', 0x8000_0000),
+      weighted(compactIndividualEncounter, 'encounter.weight-b', 0x8000_0001)) });
+    await expect(compileContentDirectory({ rootDir: above })).rejects.toThrow(/encounter weight.*2\^32/i);
+  });
+
+  it('caps individual and aggregate group quantities at the runtime-safe encounter limit', async () => {
+    const individualBoundary = compactIndividualEncounter.replace('maximumQuantity: 2', 'maximumQuantity: 1024');
+    const boundaryRoot = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      individualBoundary) });
+    await expect(compileContentDirectory({ rootDir: boundaryRoot })).resolves.toBeDefined();
+    const individualAbove = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      individualBoundary.replace('maximumQuantity: 1024', 'maximumQuantity: 1025')) });
+    await expect(compileContentDirectory({ rootDir: individualAbove })).rejects.toThrow(/quantity.*runtime-safe.*1024/i);
+
+    const group = (secondMaximum: number) => `{kind: encounter, id: encounter.group-limit, name: Group, tags: [], model: group, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: uncommon, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 2, minimumObjectiveDistance: 2, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {roles: [{roleId: front, monsterId: monster.rat, minimumQuantity: 1, maximumQuantity: 512, formationPreference: front, behaviorParameters: {}}, {roleId: rear, monsterId: monster.rat, minimumQuantity: 1, maximumQuantity: ${secondMaximum}, formationPreference: rear, behaviorParameters: {}}], formation: line, communicationRadius: 3, leaderChance: 1, leaderRoleId: front, leaderAccentColor: "#ffffff", leaderAlternateGlyph: null, coordinationModifiers: {accuracy: 1, defense: 1, damage: 0}, leaderDeathResponse: weaken, responseParameters: {modifiers: {accuracy: -1, defense: 0, damage: 0}}, supernaturalBond: false, collapseRewards: none}}`;
+    const groupBoundary = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, group(512)) });
+    await expect(compileContentDirectory({ rootDir: groupBoundary })).resolves.toBeDefined();
+    const groupAbove = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, group(513)) });
+    await expect(compileContentDirectory({ rootDir: groupAbove })).rejects.toThrow(/group.*quantity.*1024/i);
+  });
+
+  it('checks spawn-role weights and caps swarm allocation quantities', async () => {
+    const source = compactMonster.replace('tags: [', 'tags: [swarm-source, ');
+    const swarm = (secondWeight: number, maximumSpawnQuantity = 256, maximumLivingChildren = 1023) =>
+      `{kind: encounter, id: encounter.swarm-limit, name: Swarm, tags: [], model: swarm, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: uncommon, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 2, minimumObjectiveDistance: 2, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {sourceMonsterId: monster.rat, spawnRoles: [{roleId: a, monsterId: monster.rat, weight: 2147483648}, {roleId: b, monsterId: monster.rat, weight: ${secondWeight}}], spawnInterval: 100, minimumSpawnQuantity: 1, maximumSpawnQuantity: ${maximumSpawnQuantity}, placementRadius: 2, allowedTerrainTags: [floor], maximumLivingChildren: ${maximumLivingChildren}, maximumLivingMembers: 1024, maximumFloorActors: 1024, sourceDestructionResponse: stop, responseParameters: {}}}`;
+    const boundary = await fixture({ 'content.yaml': contentFile(source, compactItem, compactVault, swarm(2147483648)) });
+    await expect(compileContentDirectory({ rootDir: boundary })).resolves.toBeDefined();
+    for (const invalid of [swarm(2147483649), swarm(2147483648, 257), swarm(2147483648, 256, 1024)]) {
+      const root = await fixture({ 'content.yaml': contentFile(source, compactItem, compactVault, invalid) });
+      await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/spawn-role weight.*2\^32|spawn quantity.*256|living children.*1023/i);
+    }
+  });
+
+  it('requires supernatural group collapse and a declared leader role', async () => {
+    const group = '{kind: encounter, id: encounter.group, name: Group, tags: [], model: group, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: uncommon, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 2, minimumObjectiveDistance: 2, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {roles: [{roleId: guard, monsterId: monster.rat, minimumQuantity: 2, maximumQuantity: 3, formationPreference: front, behaviorParameters: {}}], formation: line, communicationRadius: 3, leaderChance: 1, leaderRoleId: captain, leaderAccentColor: "#ffffff", leaderAlternateGlyph: null, coordinationModifiers: {accuracy: 1, defense: 1, damage: 0}, leaderDeathResponse: collapse, responseParameters: {}, supernaturalBond: false, collapseRewards: none}}';
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, group) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/leader role captain|collapse requires supernaturalBond/i);
+  });
+
+  it('validates swarm source tags and cap relationships', async () => {
+    const swarm = '{kind: encounter, id: encounter.swarm, name: Swarm, tags: [], model: swarm, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: uncommon, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 2, minimumObjectiveDistance: 2, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {sourceMonsterId: monster.rat, spawnRoles: [{roleId: rat, monsterId: monster.rat, weight: 1}], spawnInterval: 100, minimumSpawnQuantity: 1, maximumSpawnQuantity: 2, placementRadius: 2, allowedTerrainTags: [floor], maximumLivingChildren: 5, maximumLivingMembers: 5, maximumFloorActors: 4, sourceDestructionResponse: stop, responseParameters: {}}}';
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, swarm) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/swarm-source|maximum living members|maximum floor actors/i);
+  });
+
+  it('validates boss uniqueness, phase order, and reward kinds', async () => {
+    const boss = '{kind: encounter, id: encounter.boss, name: Boss, tags: [], model: boss, minDepth: 5, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: legendary, runAppearanceChance: 0.08, discoveryProtectionIncrement: 0.03, discoveryProtectionCap: 0.35, maximumInstancesPerRun: 2, placement: {minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, phases: [{phaseId: late, healthThresholdPercent: 40, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, modifiers: {accuracy: 1, defense: 0, damage: 1}, effects: []}, {phaseId: early, healthThresholdPercent: 60, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, modifiers: {accuracy: 1, defense: 0, damage: 1}, effects: []}], recoveryPerWorldTime: 0.01, recoveryCapPercent: 20, uniqueItemId: monster.rat, enhancedLootTableId: loot-table.missing, vaultTags: []}}';
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, boss) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/maximumInstancesPerRun 1|strictly descending|resolves to monster|unknown loot-table/i);
+  });
+
+  it('rejects a boss enhanced-loot graph that reaches its guaranteed unique item', async () => {
+    const nested = '{kind: loot-table, id: loot-table.nested, name: Nested, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const loot = '{kind: loot-table, id: loot-table.boss, name: Boss loot, tags: [], rolls: 1, choices: [{contentId: null, lootTableId: loot-table.nested, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const boss = '{kind: encounter, id: encounter.boss, name: Boss, tags: [], model: boss, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: legendary, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 1, minimumObjectiveDistance: 1, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, phases: [], recoveryPerWorldTime: 0, recoveryCapPercent: 0, uniqueItemId: item.lantern, enhancedLootTableId: loot-table.boss, vaultTags: []}}';
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, nested, loot, boss) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/enhanced loot.*guaranteed.*unique/i);
+  });
+
+  it('rejects any ordinary loot graph that reaches another boss guaranteed unique item', async () => {
+    const uniqueB = compactItem.replace('item.lantern', 'item.unique-b');
+    const ordinary = compactItem.replace('item.lantern', 'item.ordinary');
+    const lootA = '{kind: loot-table, id: loot-table.boss-a, name: Boss A loot, tags: [], rolls: 1, choices: [{contentId: item.unique-b, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const lootB = '{kind: loot-table, id: loot-table.boss-b, name: Boss B loot, tags: [], rolls: 1, choices: [{contentId: item.ordinary, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const boss = (id: string, unique: string, loot: string) => `{kind: encounter, id: ${id}, name: Boss, tags: [], model: boss, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: legendary, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 1, minimumObjectiveDistance: 1, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, phases: [], recoveryPerWorldTime: 0, recoveryCapPercent: 0, uniqueItemId: ${unique}, enhancedLootTableId: ${loot}, vaultTags: []}}`;
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, uniqueB, ordinary, compactVault,
+      lootA, lootB, boss('encounter.boss-a', 'item.lantern', 'loot-table.boss-a'),
+      boss('encounter.boss-b', 'item.unique-b', 'loot-table.boss-b')) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/boss-unique.*ordinary loot/i);
+  });
+
+  it.each([
+    ['effect.hunger.restore', '{amount: 1}'],
+    ['effect.item.consume', '{quantity: 1}'],
+    ['effect.force-move', '{distance: 1}'],
+  ] as const)('rejects %s in the closed boss phase effect subset', async (effectId, parameters) => {
+    const ordinary = compactItem.replace('item.lantern', 'item.ordinary');
+    const loot = '{kind: loot-table, id: loot-table.boss, name: Boss loot, tags: [], rolls: 1, choices: [{contentId: item.ordinary, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const boss = `{kind: encounter, id: encounter.boss, name: Boss, tags: [], model: boss, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: legendary, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 1, minimumObjectiveDistance: 1, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, phases: [{phaseId: changed, healthThresholdPercent: 50, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, modifiers: {accuracy: 1, defense: 0, damage: 1}, effects: [{effectId: ${effectId}, parameters: ${parameters}, requiresLivingTarget: false}]}], recoveryPerWorldTime: 0, recoveryCapPercent: 0, uniqueItemId: item.lantern, enhancedLootTableId: loot-table.boss, vaultTags: []}}`;
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, ordinary, compactVault, loot, boss) });
+    await expectCompileIssues(compileContentDirectory({ rootDir: root }), [{
+      file: 'content.yaml',
+      path: '$.entries.encounter.boss.definition.phases.0.effects.0.effectId',
+      message: `boss phases do not support effect ${effectId}`,
+    }]);
+  });
+
+  it('accepts every effect in the closed boss phase subset', async () => {
+    const ordinary = compactItem.replace('item.lantern', 'item.ordinary');
+    const loot = '{kind: loot-table, id: loot-table.boss, name: Boss loot, tags: [], rolls: 1, choices: [{contentId: item.ordinary, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const effects = '[{effectId: effect.damage, parameters: {damageType: fire, dice: {count: 1, sides: 1, bonus: 0}}, requiresLivingTarget: true}, {effectId: effect.heal, parameters: {dice: {count: 1, sides: 1, bonus: 0}}, requiresLivingTarget: true}, {effectId: effect.condition.apply, parameters: {conditionId: condition.stunned, duration: 100}, requiresLivingTarget: true}, {effectId: effect.condition.remove, parameters: {conditionId: condition.stunned}, requiresLivingTarget: false}, {effectId: effect.reveal, parameters: {radius: 3}, requiresLivingTarget: false}, {effectId: effect.fuel.transfer, parameters: {maximum: 3}, requiresLivingTarget: false}, {effectId: effect.light.toggle, parameters: {enabled: false}, requiresLivingTarget: false}, {effectId: effect.feature.mutate, parameters: {state: door.open}, requiresLivingTarget: false}]';
+    const boss = `{kind: encounter, id: encounter.boss, name: Boss, tags: [], model: boss, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: legendary, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 1, minimumObjectiveDistance: 1, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, phases: [{phaseId: changed, healthThresholdPercent: 50, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, modifiers: {accuracy: 1, defense: 0, damage: 1}, effects: ${effects}}], recoveryPerWorldTime: 0, recoveryCapPercent: 0, uniqueItemId: item.lantern, enhancedLootTableId: loot-table.boss, vaultTags: []}}`;
+    const root = await fixture({ 'content.yaml': contentFile(
+      compactMonster, compactItem, ordinary, compactVault, compactTimedCondition, loot, boss,
+    ) });
+    await expect(compileContentDirectory({ rootDir: root })).resolves.toMatchObject({ schemaVersion: 3 });
+  });
+
+  it('validates Champion and Echo template references and weaker limits', async () => {
+    const template = '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 10, maximumHealth: 100, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 2, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 3, echoLootTableId: item.lantern, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}}';
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, template) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/Echo ability limit|loot-table reference item\.lantern resolves to item/i);
+  });
+
+  it('requires every enabled Echo ability cap to be strictly below the Champion cap', async () => {
+    const loot = '{kind: loot-table, id: loot-table.echo, name: Echo loot, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const template = '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 10, maximumHealth: 100, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 2, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 2, echoLootTableId: loot-table.echo, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}}';
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, loot, template) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/strictly below Champion ability limit/i);
+  });
+
+  it('rejects enabled Echoes when current Champion combat minima cannot be strictly weakened', async () => {
+    const weakMonster = compactMonster.replace('health: 4', 'health: 1')
+      .replace('accuracy: 1', 'accuracy: 0').replace('defense: 10', 'defense: 0');
+    const loot = '{kind: loot-table, id: loot-table.echo, name: Echo loot, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const template = '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 1, maximumHealth: 1, attributeMaximum: 1, damageMaximum: 1, abilityLimit: 1, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 0, echoLootTableId: loot-table.echo, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}}';
+    const root = await fixture({ 'content.yaml': contentFile(weakMonster, compactItem, compactVault, loot, template) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/strict minimum|strictly weaken|Echoes require Champion/i);
+  });
+
+  it('rejects a Champion Echo loot graph that can reach a guaranteed boss-unique item', async () => {
+    const leaf = '{kind: loot-table, id: loot-table.echo-leaf, name: Echo leaf, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const echo = '{kind: loot-table, id: loot-table.echo, name: Echo loot, tags: [], rolls: 1, choices: [{contentId: null, lootTableId: loot-table.echo-leaf, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const bossLoot = '{kind: loot-table, id: loot-table.boss, name: Boss loot, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const boss = '{kind: encounter, id: encounter.boss, name: Boss, tags: [], model: boss, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: legendary, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 1, minimumObjectiveDistance: 1, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, phases: [], recoveryPerWorldTime: 0, recoveryCapPercent: 0, uniqueItemId: item.lantern, enhancedLootTableId: loot-table.boss, vaultTags: []}}';
+    const template = '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 10, maximumHealth: 100, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 2, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 1, echoLootTableId: loot-table.echo, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}}';
+    const root = await fixture({ 'content.yaml': contentFile(
+      compactMonster, compactItem, compactVault, leaf, echo, bossLoot, boss, template,
+    ) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/Echo loot.*guaranteed.*unique|boss-unique/i);
   });
 
   it('aborts between content discovery and file processing boundaries', async () => {

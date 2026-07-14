@@ -1,6 +1,6 @@
 # Server content configuration
 
-The Woven Deep loads gameplay content from YAML when the server starts. Administrators can add and balance monsters, items, identification pools, spells, traps, loot tables, vaults, conditions, and global balance values without rebuilding the application, provided they use the engine's supported behaviors, effects, targets, and condition traits.
+The Woven Deep loads gameplay content from YAML when the server starts. Administrators can add and balance monsters, encounters, fallen-hero bosses, items, identification pools, spells, traps, loot tables, vaults, conditions, and global balance values without rebuilding the application, provided they use the engine's supported behaviors, effects, targets, and condition traits.
 
 YAML is configuration, not a scripting language. A new combination of supported rules needs only YAML. A fundamentally new rule requires a code change, a strict schema, tests, and an update to this guide.
 
@@ -32,6 +32,18 @@ YAML is configuration, not a scripting language. A new combination of supported 
 
 6. Confirm the running server reports the expected content hash before admitting play.
 
+For a release image, run the repeatable startup integration gate as well:
+
+```bash
+npm run content:startup-gate
+```
+
+The gate builds the Compose image, starts it with a complete schema-v3 directory mounted read-only,
+smoke-tests the server, then restarts against an invalid replacement using the same database. It requires
+the invalid container to exit and verifies that the immutable content-pack publication set did not change.
+Pass an existing image reference after `--` to skip the build, for example
+`npm run content:startup-gate -- rogue-rogue`.
+
 Any parse, schema, reference, or semantic error rejects the entire pack at startup. The server never skips an invalid file or partially loads a directory.
 
 ## Directory and file discovery
@@ -41,7 +53,7 @@ Any parse, schema, reference, or semantic error rejects the entire pack at start
 - Entries from every file share one global ID namespace.
 - Formatting, comments, and file ordering do not affect the hash. Material values and IDs do.
 - YAML aliases and custom tags are rejected. Each file is limited to 262,144 UTF-8 bytes.
-- A complete pack requires at least one `monster`, `item`, `vault`, and `balance` entry. Exactly one balance entry is permitted.
+- A complete pack requires at least one `monster`, `item`, `vault`, and `balance` entry. Exactly one balance entry and at most one `fallen-champion-template` entry are permitted.
 - Across the complete pack, entry tags must cover the foundational generation categories `defense`, `food`, `healing`, `identification`, `light`, and `offense`. These are compile-time coverage markers for pool reporting. They do not implement an item's mechanics; the kind-specific fields and registered effects do that.
 
 A conventional layout is:
@@ -49,7 +61,9 @@ A conventional layout is:
 ```text
 content/
   balance/
+  champions/
   conditions/
+  encounters/
   items/
   loot-tables/
   monsters/
@@ -63,7 +77,7 @@ content/
 Every file is one strict document:
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: monster
     id: monster.example
@@ -76,9 +90,9 @@ Unknown fields are errors, including plausible misspellings.
 
 | Field | Type | Required/default | Rules and meaning |
 |---|---|---|---|
-| `schemaVersion` | integer | Required | Must be exactly `2`. |
+| `schemaVersion` | integer | Required | Must be exactly `3`. |
 | `entries` | array | Required, at least one | May contain any supported content kind. |
-| `kind` | enum | Required | One of `monster`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, or `condition`. |
+| `kind` | enum | Required | One of `monster`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, `condition`, `encounter`, or `fallen-champion-template`. |
 | `id` | string | Required | Globally unique stable ID such as `monster.cave-rat`. |
 | `name` | string | Required | Trimmed display name, 1–80 characters. |
 | `tags` | slug array | Defaults to `[]` | Descriptive taxonomy. Tags never activate engine rules. |
@@ -115,7 +129,7 @@ A pack contains exactly one `balance` entry.
 | `actionCosts` | registered-action-ID-to-integer map | Yes | Non-negative cost overrides. Unknown action IDs fail compilation. |
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: balance
     id: balance.core-gameplay
@@ -150,10 +164,10 @@ entries:
       defense: { base: 8, agility: 1 }
       search: { wits: 1 }
       disarm: { agility: 1, wits: 1 }
-    actionCosts: { action.move: 100, action.wait: 100 }
+    actionCosts: { action.move: 100, action.spawn: 100, action.wait: 100 }
 ```
 
-The closed action-cost IDs are `action.attack`, `action.cast`, `action.close-door`, `action.disarm`, `action.drop`, `action.equip`, `action.fire`, `action.move`, `action.open-door`, `action.pickup`, `action.refuel`, `action.search`, `action.split-stack`, `action.throw-item`, `action.toggle-light`, `action.unequip`, `action.use-item`, and `action.wait`. A pack may override any subset; `normalActionCost` supplies the normal fallback.
+The closed action-cost IDs are `action.attack`, `action.cast`, `action.close-door`, `action.disarm`, `action.drop`, `action.equip`, `action.fire`, `action.move`, `action.open-door`, `action.pickup`, `action.refuel`, `action.search`, `action.spawn`, `action.split-stack`, `action.throw-item`, `action.toggle-light`, `action.unequip`, `action.use-item`, and `action.wait`. A pack may override any subset; `normalActionCost` supplies the normal fallback.
 
 ## Monster entries
 
@@ -171,11 +185,10 @@ The closed action-cost IDs are `action.attack`, `action.cast`, `action.close-doo
 | `disposition` | enum | Yes | `friendly`, `neutral`, or `hostile`. |
 | `behaviorId` | registered ID | Yes | Closed AI behavior described below. |
 | `behaviorParameters` | object | Defaults to `{}` | Strict parameters for the behavior. |
-| `runAppearanceChance` | number | Yes | Inclusive probability from 0 through 1. |
 | `rarity` | enum | Yes | `common`, `uncommon`, `rare`, or `legendary`. |
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -197,8 +210,147 @@ entries:
     disposition: hostile
     behaviorId: behavior.approach-and-attack
     behaviorParameters: {}
-    runAppearanceChance: 1
     rarity: common
+```
+
+Monsters are reusable creature definitions. Population frequency and composition belong to encounter entries, allowing one monster to participate in several encounter types.
+
+## Encounter entries
+
+An `encounter` has a strict `model` of `individual`, `group`, `swarm`, or `boss`. All models share:
+
+- The common `kind`, `id`, `name`, and `tags` fields described above. `kind` is exactly `encounter`.
+- Positive inclusive `minDepth` and `maxDepth`, positive selection `weight`, `rarity`, `environmentTags`, and `requiredVaultTags`.
+- Optional `adminDescription` (plain text up to 500 characters) for operator-facing balance notes. It is required when supernatural collapse grants individual rewards.
+- A run-level `runAppearanceChance` from 0 through 1, rolled once and saved. `discoveryProtectionIncrement` raises a later run's chance after eligible depth was reached without observation, up to `discoveryProtectionCap`. The cap cannot be below the base chance.
+- Positive `maximumInstancesPerRun`; bosses require exactly one.
+- `placement` with non-negative stair/objective distances and member spread, non-empty `allowedTerrainTags`, `requiresVaultSlot`, and `failureMode` of `optional` or `required`. Placement is atomic and preserves required routes.
+- `intentPresentation.visible`, which permits broad visible intent but never exposes exact goals, paths, rolls, or shared knowledge.
+
+### Hard encounter allocation bounds
+
+Positive safe integer validation is necessary but not sufficient: values can be valid JavaScript integers yet still exceed the engine's bounded random-selection or allocation budget. The compiler rejects the complete pack when any of these limits is exceeded:
+
+- Aggregate encounter selection weight: at most `4294967296` (`2^32`). This is the checked sum of every encounter `weight`, not a per-entry limit.
+- Individual or aggregate group members per encounter: at most `1024`. For a group, the compiler checks the sum of every role's `maximumQuantity`.
+- Aggregate swarm `spawnRoles[].weight`: at most `4294967296` (`2^32`).
+- Swarm children created per spawn: at most `256`.
+- Living children per swarm: at most `1023`.
+- Living members per swarm encounter: at most `1024`. The source counts as one living member.
+- Living swarm actors per floor: at most `1024`.
+
+The exact boundary is valid. Boundary plus one is rejected before selection, RNG consumption, or actor allocation. Common errors include assigning several individually valid weights whose checked sum exceeds `2^32`, authoring group roles whose maximum quantities total `1025`, or setting a swarm cap to `1025` because the value is still a positive safe integer.
+
+### Encounter field reference
+
+| Field | Models | Rules and rejection modes |
+|---|---|---|
+| `definition` | All | Strict model-specific object. Its shape must match `model`; fields from another model and unknown nested fields reject the complete pack. |
+| `intentPresentation`, `visible` | All | `intentPresentation` is required and contains only boolean `visible`. This controls broad observable intent, never exact targets, paths, rolls, or relayed hidden knowledge. |
+| `runAppearanceChance`, `discoveryProtectionIncrement`, `discoveryProtectionCap` | All | Probabilities are 0–1. The cap must be at least the base chance and protection advances only after eligible depth was reached without observing the encounter. |
+| `maximumInstancesPerRun` | All | Positive; exactly 1 for a boss. Placement refuses additional instances after this saved run cap. |
+| `minimumStairDistance`, `minimumObjectiveDistance`, `maximumMemberDistance` (under `placement`) | All | Non-negative integers. A placement that cannot preserve distances, routes, occupancy, and member spread is rejected atomically. |
+| `allowedTerrainTags`, `requiresVaultSlot`, `failureMode` (under `placement`) | All | Terrain tags are non-empty. A required vault slot must match all vault tags; `optional` skips an impossible placement while `required` rejects floor creation. |
+| `minimumQuantity`, `maximumQuantity` | Individual | Positive inclusive range with maximum at least minimum and no more than 1,024 members. |
+| `roles`, `roleId` | Group | `roles` is a non-empty list with unique slug `roleId` values. Each role has a valid `monsterId`, quantity range, `formationPreference`, and strict `behaviorParameters`. |
+| `communicationRadius`, `coordinationModifiers` | Group | Radius is positive and used for hop-by-hop relay; disconnected members receive no shared observation. `coordinationModifiers` requires safe-integer `accuracy`, `defense`, and `damage`. |
+| `leaderChance`, `leaderRoleId`, `leaderDeathResponse` | Group | `leaderChance` is 0–1, the leader role must exist, and the response uses its exact registered parameters. |
+| `leaderAccentColor`, `leaderAlternateGlyph` | Group | Accent is required `#RRGGBB`; alternate glyph is either one Unicode glyph or null. These identify the leader without changing the referenced monster. |
+| `responseParameters` | Group, Swarm | Strict parameters selected by the corresponding registered leader-death or source-destruction response. Unknown and missing parameters reject the pack. |
+| `supernaturalBond`, `collapseRewards` | Group | `collapse` requires the bond. Individual rewards additionally require an `adminDescription`; otherwise compilation fails. |
+| `sourceMonsterId` | Swarm | Valid monster reference carrying the `swarm-source` tag. It identifies the one source actor that owns the spawn timer. |
+| `spawnInterval`, `minimumSpawnQuantity`, `maximumSpawnQuantity` | Swarm | Positive source-owned interval and positive inclusive birth range, with maximum at least minimum and at most 256 children per spawn. Off-floor time is frozen and missed births are never replayed. |
+| `placementRadius` | Swarm | Positive maximum distance from the source for each atomic spawn attempt. The nested swarm `allowedTerrainTags` list is non-empty. |
+| `maximumLivingChildren`, `maximumLivingMembers`, `maximumFloorActors` | Swarm | Positive nested caps: at most 1,023 children, 1,024 encounter members including the source, and 1,024 floor swarm actors. Children cannot exceed members, and members cannot exceed the floor cap. |
+| `sourceDestructionResponse` | Swarm | One registered `stop`, `flee`, `decay`, or `frenzy` response with no unknown parameters. |
+| `phases`, `phaseId`, `healthThresholdPercent` | Boss | `phases` is the ordered phase list. Each unique slug `phaseId` has a unique positive threshold below 100; thresholds strictly descend, are crossed once, and never reverse after healing. Each phase also declares registered behavior, strict parameters, modifiers, and effects. |
+| `behaviorId`, `behaviorParameters` | Boss phase | Registered behavior ID and its strict parameter object. The behavior must be supported by the closed behavior registry. |
+| `effects`, `effectId`, `parameters`, `requiresLivingTarget` | Boss phase | Ordered safe-subset effects. Each effect declares its registered `effectId`, strict `parameters`, and boolean `requiresLivingTarget`; unsafe actor-context effects reject the pack. |
+| `recoveryPerWorldTime`, `recoveryCapPercent` | Boss | The rate is finite and non-negative and the cap is 0–100. Recovery occurs once on re-entry from elapsed absence and never exceeds the cap. |
+| `uniqueItemId`, `enhancedLootTableId` | Boss | References must resolve to an item and loot table. The guaranteed item is created at most once and its content cannot appear in any ordinary loot graph. |
+| `vaultTags` | Boss | Optional slug list constraining the authored arena or vault context. References that cannot satisfy required placement reject atomically according to `failureMode`. |
+| `fallbackMonsterId`, `fallbackItemId` | Fallen Champion | Required valid references used when historical monster or equipment content has been removed. |
+| `echoAppearanceChance`, `maximumEchoesPerRun` | Fallen Champion | Each rank 2–10 is independently gated, then the lowest rolls are retained up to the run cap. |
+| `echoHealthPercent`, `echoDamagePercent`, `echoDefensePercent`, `echoAbilityLimit` | Fallen Champion | Echo values must be strictly weaker than Champion values and the ability limit cannot exceed the Champion limit. |
+| `echoLootTableId` | Fallen Champion | Ordinary enhanced loot only; a table containing a boss-unique item is rejected. |
+| `rarityWeights`, `qualityRankBonus` (under `heirloomSelection`) | Fallen Champion | Positive nondecreasing rarity weights plus a non-negative quality bonus select exactly one equipped item instance. |
+
+An `individual` definition has `monsterId`, `minimumQuantity`, and `maximumQuantity`. A `group` has unique roles, a `formation` (`cluster`, `line`, `screen`, `wedge`, or `surround`), positive `communicationRadius`, leader probability and role, accent/glyph, integer coordination modifiers, and a leader response. Role `formationPreference` is `front`, `center`, `rear`, `flank`, or `free`.
+
+Leader responses are `weaken`, `panic`, `disband`, `surrender`, `frenzy`, and `collapse`. `weaken` requires integer combat `modifiers`; `panic` requires positive `duration`; `frenzy` requires both; the other responses require `{}`. `collapse` requires `supernaturalBond: true`; `collapseRewards` explicitly chooses `none` or `individual`. Groups relay knowledge only across range-connected members and freeze on inactive floors.
+
+A `swarm` source monster must carry the `swarm-source` tag. `spawnRoles` are weighted monster references. The source alone owns `spawnInterval`; inclusive spawn quantities, placement radius/terrain, `maximumLivingChildren`, `maximumLivingMembers`, and `maximumFloorActors` bound growth. Source responses are `stop` and `flee` with `{}`, `decay` with positive `interval` and `damage`, or `frenzy` with positive `duration` and integer combat `modifiers`. Swarms freeze off-floor and never catch up missed growth.
+
+A `boss` references one monster, strictly descending unique phase thresholds, registered phase behaviors/effects, recovery rate and cap, one `uniqueItemId`, one `enhancedLootTableId`, and optional vault tags. Boss phases use the closed safe subset `effect.damage`, `effect.heal`, `effect.condition.apply`, `effect.condition.remove`, `effect.reveal`, `effect.fuel.transfer`, `effect.light.toggle`, and `effect.feature.mutate`. Actor-context effects `effect.hunger.restore`, `effect.item.consume`, and `effect.force-move` are rejected in boss phases. Phases never reverse. Recovery is one bounded re-entry calculation, not off-floor turns. The bundled default boss chance is `0.08`, increment `0.03`, and cap `0.35`.
+
+```yaml
+schemaVersion: 3
+entries:
+  - kind: encounter
+    id: encounter.cave-rat-individuals
+    name: Cave rat stragglers
+    tags: [animal, early]
+    model: individual
+    minDepth: 1
+    maxDepth: 6
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 10
+    rarity: common
+    runAppearanceChance: 1
+    discoveryProtectionIncrement: 0
+    discoveryProtectionCap: 1
+    maximumInstancesPerRun: 8
+    placement: { minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.cave-rat, minimumQuantity: 1, maximumQuantity: 2 }
+```
+
+The bundled `content/encounters/early-populations.yaml` is the complete copyable reference for group, swarm, and boss definitions. Add new `.yaml` or `.yml` files anywhere under the complete content directory, then run `npm run content:validate -- /absolute/path/to/content` and `npm run population:demo -- --content-dir /absolute/path/to/content`. Common rejections include unknown or misspelled fields; duplicate IDs, roles, or phases; a missing or wrong-kind monster/item/loot reference; an ascending phase threshold; an unsafe boss effect; an untagged swarm source; inconsistent caps; impossible required placement; `collapse` without a supernatural bond; an Echo that is not strictly weaker; an Echo loot table containing a boss-unique item; or a boss instance limit other than one.
+
+Population actors, group communication, swarm timers, and boss recovery do not simulate while their floor is inactive. The saved clock and population state resume deterministically when the floor becomes active; swarms do not accumulate catch-up births, while bosses calculate their single bounded re-entry recovery from saved exit time.
+
+## Fallen-champion template
+
+The optional single `fallen-champion-template` normalizes the current profile or guest session's ranked fallen heroes. Rank 1 becomes the guaranteed optional Deep's Champion; independently gated ranks 2–10 may become weaker `Echo of <Hero Name>` bosses.
+
+It uses the common `kind`, `id`, `name`, and `tags` fields; `kind` is exactly
+`fallen-champion-template`. Every other supported field is listed below and unknown nested fields reject
+the entire pack.
+
+- `fallbackMonsterId` and `fallbackItemId` handle removed historical content.
+- `minimumHealth`, `maximumHealth`, `attributeMaximum`, `damageMaximum`, and `abilityLimit` cap Champion power.
+- `echoAppearanceChance` is independently rolled once per rank 2–10. Passing candidates with the lowest rolls are retained up to `maximumEchoesPerRun`; bundled content caps this at two.
+- `echoHealthPercent`, `echoDamagePercent`, and `echoDefensePercent` are positive percentages below 100. `echoAbilityLimit` cannot exceed the Champion limit.
+- `echoLootTableId` supplies enhanced ordinary loot. Echoes never drop recorded heirlooms or guaranteed unique rewards. They cannot repeat in one run but may return in later runs.
+- `heirloomSelection.rarityWeights` contains positive nondecreasing `common`, `uncommon`, `rare`, and `legendary` weights. `qualityRankBonus` is non-negative.
+
+The Champion heirloom is selected once at the original death from unique equipped item instances only. Backpack items never qualify, and a multi-slot item is still one candidate. Better rarity and positive quality ranks raise its weight, but common equipment retains a non-zero chance. There is no minimum rarity and no reroll, so damaged, depleted, or mundane equipped gear remains possible. If nothing equipped is eligible, the fallback relic is recorded.
+
+```yaml
+schemaVersion: 3
+entries:
+  - kind: fallen-champion-template
+    id: fallen-champion-template.core
+    name: The Deep's Champion
+    tags: [boss, champion]
+    fallbackMonsterId: monster.ashen-warden
+    fallbackItemId: item.champion-fallback-relic
+    minimumHealth: 18
+    maximumHealth: 180
+    attributeMaximum: 30
+    damageMaximum: 30
+    abilityLimit: 3
+    echoAppearanceChance: 0.08
+    maximumEchoesPerRun: 2
+    echoHealthPercent: 65
+    echoDamagePercent: 70
+    echoDefensePercent: 80
+    echoAbilityLimit: 2
+    echoLootTableId: loot-table.ashen-warden
+    heirloomSelection:
+      rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 }
+      qualityRankBonus: 2
 ```
 
 ## Item entries
@@ -211,6 +363,7 @@ entries:
 | `stackLimit` | positive safe integer | Yes | Maximum quantity per stack. |
 | `price` | non-negative safe integer | Yes | Base economy value. |
 | `rarity` | enum | Yes | `common`, `uncommon`, `rare`, or `legendary`. |
+| `heirloomEligible` | boolean | Defaults to true | Whether the item may be recorded as a Champion heirloom. Set false for objectives, quest tokens, currency, and other non-transferable items. |
 | `actionCost` | non-negative safe integer | Yes | Use/equip action cost. |
 | `equipment` | object or null | Yes | Slots, handedness, and reserved slots. |
 | `combat` | object or null | Yes | Accuracy, defense, armor, optional damage dice, non-negative range, and optional ammunition tag. A non-null ammunition tag must match a tag on an ammunition item. |
@@ -231,7 +384,7 @@ Identification modes have distinct contracts:
 Items never contain their unidentified names. The generated mapping is saved with the run, so save/reload cannot reroll it, and a later run receives a new mapping. Items using the same pool must have the pool's category. The compiler requires at least as many unique verb–noun combinations as item definitions using the pool.
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: item
     id: item.brass-lantern
@@ -267,7 +420,7 @@ Identification pools are normal content-pack entries and may be placed in any `.
 The pool's `name` is an administrator-facing label. It is not shown as an unidentified item name.
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: identification-pool
     id: identification-pool.potions
@@ -297,7 +450,7 @@ identification: { mode: shuffled, poolId: identification-pool.potions }
 | `effects` | non-empty effect array | Yes | Applied in listed order. |
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: spell
     id: spell.mend
@@ -324,7 +477,7 @@ entries:
 | `effects` | non-empty effect array | Yes | Ordered trigger effects. |
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: trap
     id: trap.poison-dart
@@ -345,17 +498,28 @@ entries:
 
 ## Loot-table entries
 
+Loot expansion is bounded across the complete reachable graph, including nested tables. Positive safe integers alone do not make a table safe: all local limits and the recursive worst case must pass together.
+
+- Aggregate `choices[].weight` per loot table: at most `4294967296` (`2^32`).
+- Loot-table `rolls`: at most `256`.
+- Each loot choice quantity: at most `256` and no greater than the direct item's `stackLimit`.
+- Recursive worst-case created loot units: at most `4096`.
+
+The recursive calculation follows the most expensive possible choice at every roll and multiplies through nested-table quantities and rolls using checked arithmetic. The exact boundary is accepted; `4097` worst-case units, `257` rolls, `257` quantity, or a checked weight sum of `4294967297` rejects the pack before any loot RNG is consumed or items are created.
+
+Boss guaranteed-unique content is forbidden anywhere in an ordinary loot graph, including another boss enhanced-loot table or an Echo loot table. A Champion heirloom may legitimately use the same item content because its saved provenance and item identity are distinct; ordinary weighted loot may not.
+
 | Field | Type | Required | Rules and meaning |
 |---|---|---|---|
-| `rolls` | positive safe integer | Yes | Independent selections. |
+| `rolls` | positive safe integer | Yes | Independent selections; maximum 256. |
 | `choices` | non-empty array | Yes | Weighted choices. |
 | `choices[].contentId` | item content ID or null | Yes | Direct result; it must resolve to an `item`, and exactly one reference field is non-null. |
 | `choices[].lootTableId` | loot-table ID or null | Yes | Nested result; cycles are rejected. |
-| `choices[].weight` | positive safe integer | Yes | Relative selection weight. |
-| `minimumQuantity`, `maximumQuantity` | positive safe integers | Yes | Inclusive quantity range; maximum cannot be smaller. |
+| `choices[].weight` | positive safe integer | Yes | Relative selection weight; the checked table sum cannot exceed `2^32`. |
+| `minimumQuantity`, `maximumQuantity` | positive safe integers | Yes | Inclusive quantity range; maximum cannot be smaller, cannot exceed 256, and for a direct item cannot exceed its `stackLimit`. |
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: loot-table
     id: loot-table.basic-supplies
@@ -364,6 +528,16 @@ entries:
     rolls: 1
     choices:
       - { contentId: item.brass-lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+```
+
+Typical diagnostics identify the table or choice path and the violated contract, for example:
+
+```text
+loot choice weight total exceeds rollDie maximum 2^32
+loot table rolls exceed runtime-safe limit 256
+loot choice quantity exceeds item stack limit 4
+loot table worst-case created units exceed runtime-safe limit 4096
+guaranteed boss-unique item item.warden-ember cannot appear in ordinary loot
 ```
 
 ## Vault entries
@@ -382,7 +556,7 @@ entries:
 Terrain is `wall`, `floor`, `closed-door`, `pillar`, `stair-up`, `stair-down`, or `void`. A placement slot kind is `monster`, `item`, `trap`, `npc`, `fixture`, or `objective`. Slot IDs are vault-local slugs. Required slots must occur in the layout. Lights require a local suffix, one glyph, stable presentation token, RGB color, radius 1–32, strength 1–255, and optional enabled state (default true). Void terrain cannot contain lights or placement slots.
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: vault
     id: vault.small-cache
@@ -421,7 +595,7 @@ entries:
 Replace and refresh produce one stack; intensify adds one up to the cap. Every reapplication refreshes source, application time, and deadline. Timed applications may omit duration to use the default or supply a positive override no greater than the maximum. Permanent conditions reject an override. Removal and expiration remove the complete condition instance.
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: condition
     id: condition.stunned
@@ -438,6 +612,9 @@ entries:
 ## Closed behavior registry
 
 - `behavior.approach-and-attack`: parameters `{}`. Approaches a hostile target and attacks when able.
+- `behavior.patrol`: parameters `{ waypoints: [{ x, y }, ...] }` with at least one safe-integer floor cell.
+  While unaware, the actor paths to the first waypoint, advances to the next waypoint when standing on one,
+  and wraps to the beginning. Current hostile observations and valid last-known investigations take precedence.
 
 Unregistered behavior IDs and extra parameters fail compilation.
 
@@ -505,4 +682,4 @@ Never silently attach an active run to a different content hash. Keep old conten
 
 ## Complete examples
 
-Each content-kind section above contains a complete copyable `schemaVersion: 2` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.
+Each content-kind section above contains a complete copyable `schemaVersion: 3` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.

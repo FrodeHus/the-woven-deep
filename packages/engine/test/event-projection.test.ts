@@ -3,7 +3,21 @@ import type { MonsterContentEntry } from '@woven-deep/content';
 import {
   createDemoContentPack, createDemoRun, projectDomainEvents, stableJson,
   type DomainEvent,
+  type PopulationDomainEvent,
 } from '../src/index.js';
+
+function exhaustPopulationEvent(event: PopulationDomainEvent): string {
+  switch (event.type) {
+    case 'population.created': case 'population.encountered': case 'population.placement-skipped':
+    case 'actor.intent-changed': case 'group.awareness-shared': case 'group.leader-created':
+    case 'group.leader-defeated': case 'group.outcome-applied': case 'swarm.members-created':
+    case 'swarm.cap-reached': case 'swarm.source-destroyed': case 'boss.encountered':
+    case 'boss.phase-changed': case 'boss.recovered': case 'boss.defeated': case 'boss.reward-created':
+    case 'champion.encountered': case 'champion.defeated': case 'champion.heirloom-created':
+    case 'echo.encountered': case 'echo.defeated': case 'echo.loot-created': return event.type;
+    default: { const exhaustive: never = event; return exhaustive; }
+  }
+}
 
 function monsterDefinition(): MonsterContentEntry {
   return {
@@ -59,5 +73,154 @@ describe('public event projection', () => {
     expect(projectDomainEvents({ ...input, events, heroId: input.state.hero.actorId })).toEqual([
       { type: 'sound.heard', category: 'movement', direction: 'southeast', distanceBand: 'near' },
     ]);
+  });
+
+  it('projects broad intent only for a currently visible actor', () => {
+    const input = fixture();
+    const event: DomainEvent = { type: 'actor.intent-changed', eventId: 'event.intent', actorId: 'monster.hidden',
+      intent: 'approach', presentation: 'intent.approach', targetCategory: 'hero' };
+    expect(projectDomainEvents({ ...input, events: [event], heroId: input.state.hero.actorId })).toEqual([]);
+    const visible = { ...input, state: { ...input.state, floors: [{ ...input.state.floors[0]!,
+      ambient: { color: [255, 255, 255] as const, strength: 255 } }] } };
+    expect(projectDomainEvents({ ...visible, events: [event], heroId: visible.state.hero.actorId })).toEqual([event]);
+  });
+
+  it('redacts every population lifecycle event to observable qualitative presentation', () => {
+    const input = fixture();
+    const visible = { ...input, state: { ...input.state, floors: [{ ...input.state.floors[0]!,
+      ambient: { color: [255, 255, 255] as const, strength: 255 } }] } };
+    const actorId = 'monster.hidden';
+    const eventId = 'event.population';
+    const events: DomainEvent[] = [
+      { type: 'population.created', eventId, populationId: 'population.secret', encounterId: 'encounter.secret',
+        floorId: visible.state.activeFloorId, model: 'group', actorIds: [actorId, 'actor.unseen'] },
+      { type: 'population.encountered', eventId, populationId: 'population.secret', encounterId: 'encounter.secret', actorId },
+      { type: 'population.placement-skipped', eventId, encounterId: 'encounter.unseen',
+        floorId: visible.state.activeFloorId, reason: 'no-valid-placement' },
+      { type: 'group.awareness-shared', eventId, populationId: 'population.secret', actorId,
+        targetActorId: visible.state.hero.actorId, floorId: visible.state.activeFloorId, x: 9, y: 9,
+        observedAt: 99, observerActorId: 'actor.observer-secret' },
+      { type: 'group.leader-created', eventId, populationId: 'population.secret', actorId, roleId: 'role.secret' },
+      { type: 'group.leader-defeated', eventId, populationId: 'population.secret', actorId },
+      { type: 'group.outcome-applied', eventId, populationId: 'population.secret', actorId,
+        response: 'panic', individualRewards: false, collapsedMemberCount: 7 },
+      { type: 'swarm.members-created', eventId, populationId: 'population.secret', sourceActorId: actorId,
+        actorIds: ['actor.future-secret'], quantity: 4 },
+      { type: 'swarm.cap-reached', eventId, populationId: 'population.secret', sourceActorId: actorId, level: 'floor' },
+      { type: 'swarm.source-destroyed', eventId, populationId: 'population.secret', sourceActorId: actorId, response: 'decay' },
+      { type: 'boss.encountered', eventId, populationId: 'population.secret', actorId, encounterId: 'encounter.secret' },
+      { type: 'boss.phase-changed', eventId, populationId: 'population.secret', actorId,
+        encounterId: 'encounter.secret', phaseId: 'enraged' },
+      { type: 'boss.recovered', eventId, populationId: 'population.secret', actorId,
+        encounterId: 'encounter.secret', amount: 22, health: 88 },
+      { type: 'boss.defeated', eventId, populationId: 'population.secret', actorId, encounterId: 'encounter.secret' },
+      { type: 'boss.reward-created', eventId, populationId: 'population.secret', actorId,
+        encounterId: 'encounter.secret', uniqueItemId: 'item.unopened-secret', itemIds: ['item.roll-secret'] },
+      { type: 'champion.encountered', eventId, populationId: 'population.secret', actorId,
+        hallRecordId: 'hall.secret', rank: 1 },
+      { type: 'champion.defeated', eventId, populationId: 'population.secret', actorId,
+        hallRecordId: 'hall.secret', rank: 1 },
+      { type: 'champion.heirloom-created', eventId, populationId: 'population.secret', actorId,
+        hallRecordId: 'hall.secret', rank: 1, itemId: 'item.secret', contentId: 'item.content-secret',
+        originatingHallRecordId: 'hall.secret', displayName: 'Observed heirloom', glyph: ')', color: '#ffffff', fallback: false },
+      { type: 'echo.encountered', eventId, populationId: 'population.secret', actorId, hallRecordId: 'hall.secret', rank: 2 },
+      { type: 'echo.defeated', eventId, populationId: 'population.secret', actorId, hallRecordId: 'hall.secret', rank: 2 },
+      { type: 'echo.loot-created', eventId, populationId: 'population.secret', actorId,
+        hallRecordId: 'hall.secret', rank: 2, itemIds: ['item.echo-secret'] },
+    ];
+    const output = projectDomainEvents({ ...visible, events, heroId: visible.state.hero.actorId });
+    expect(events.map(exhaustPopulationEvent)).toHaveLength(21);
+    expect(output.map((event) => event.type)).toEqual(Array(19).fill('population.notice'));
+    const json = stableJson(output);
+    for (const secret of ['population.secret', 'encounter.secret', 'actor.unseen', 'actor.future-secret',
+      'observerActorId', 'observedAt', 'collapsedMemberCount', 'individualRewards', 'uniqueItemId',
+      'item.roll-secret', 'hall.secret', 'amount', 'health']) expect(json).not.toContain(secret);
+    expect(json).toContain('Observed heirloom');
+  });
+
+  it('never publishes combat rolls even when both participants are visible', () => {
+    const input = fixture();
+    const visible = { ...input, state: { ...input.state, floors: [{ ...input.state.floors[0]!,
+      ambient: { color: [255, 255, 255] as const, strength: 255 } }] } };
+    const output = projectDomainEvents({ ...visible, events: [visible.events[0]!], heroId: visible.state.hero.actorId });
+    expect(output).toEqual([{ type: 'combat.observed', eventId: 'command.wait', outcome: 'hit',
+      attackerActorId: 'monster.hidden', targetActorId: visible.state.hero.actorId, attackerName: 'Hidden monster' }]);
+    expect(stableJson(output)).not.toMatch(/naturalRoll|rolledDice|rolledDamage|defense/);
+  });
+
+  it('uses both prior and next observation without revealing the hidden endpoint', () => {
+    const input = fixture();
+    const state = { ...input.state, hero: { ...input.state.hero, sightRadius: 1 },
+      floors: [{ ...input.state.floors[0]!, ambient: { color: [255, 255, 255] as const, strength: 255 } }] };
+    const events: DomainEvent[] = [{ type: 'actor.moved', eventId: 'event.leave', actorId: 'monster.hidden',
+      from: { x: 2, y: 1 }, to: { x: 3, y: 1 } }];
+    expect(projectDomainEvents({ state, content: input.content, events, heroId: state.hero.actorId })).toEqual([{
+      type: 'actor.movement-observed', eventId: 'event.leave', actorId: 'monster.hidden',
+      direction: 'east', visibility: 'left',
+    }]);
+  });
+
+  it('redacts hidden damage and death sources while retaining a visible victim transition', () => {
+    const input = fixture();
+    const victim = { ...input.state.actors[1]!, actorId: 'monster.victim', x: 2, y: 1 };
+    const attacker = { ...input.state.actors[1]!, actorId: 'monster.hidden', x: 5, y: 3 };
+    const state = { ...input.state, hero: { ...input.state.hero, sightRadius: 2 },
+      floors: [{ ...input.state.floors[0]!, ambient: { color: [255, 255, 255] as const, strength: 255 } }],
+      actors: [input.state.actors[0]!, victim, attacker] };
+    const events: DomainEvent[] = [
+      { type: 'actor.damaged', eventId: 'event.damage', actorId: victim.actorId,
+        sourceActorId: attacker.actorId, amount: 4, health: 6 },
+      { type: 'actor.died', eventId: 'event.death', actorId: victim.actorId,
+        contentId: victim.contentId, killerActorId: attacker.actorId },
+    ];
+    expect(projectDomainEvents({ state, content: input.content, events, heroId: state.hero.actorId })).toEqual([
+      { type: 'actor.damage-observed', eventId: 'event.damage', actorId: victim.actorId, amount: 4, health: 6 },
+      { type: 'actor.death-observed', eventId: 'event.death', actorId: victim.actorId,
+        contentId: victim.contentId, displayName: 'Hidden monster' },
+    ]);
+  });
+
+  it('suppresses hidden victim transitions even when the source is visible, and suppresses both hidden', () => {
+    const input = fixture();
+    const hiddenVictim = { ...input.state.actors[1]!, actorId: 'monster.victim', x: 5, y: 3 };
+    const hiddenKiller = { ...hiddenVictim, actorId: 'monster.killer', x: 5, y: 2 };
+    const state = { ...input.state, hero: { ...input.state.hero, sightRadius: 2 },
+      floors: [{ ...input.state.floors[0]!, ambient: { color: [255, 255, 255] as const, strength: 255 } }],
+      actors: [input.state.actors[0]!, hiddenVictim, hiddenKiller] };
+    const heroKill: DomainEvent = { type: 'actor.died', eventId: 'event.hero-kill', actorId: hiddenVictim.actorId,
+      contentId: hiddenVictim.contentId, killerActorId: state.hero.actorId };
+    const hiddenKill: DomainEvent = { ...heroKill, eventId: 'event.hidden-kill', killerActorId: hiddenKiller.actorId };
+    expect(projectDomainEvents({ state, content: input.content, events: [heroKill, hiddenKill],
+      heroId: state.hero.actorId })).toEqual([]);
+  });
+
+  it('keeps a hero death observable without publishing the hidden killer', () => {
+    const input = fixture();
+    const hero = input.state.actors[0]!;
+    const event: DomainEvent = { type: 'actor.died', eventId: 'event.hero-death', actorId: hero.actorId,
+      contentId: hero.contentId, killerActorId: 'monster.hidden' };
+    expect(projectDomainEvents({ ...input, events: [event], heroId: input.state.hero.actorId })).toEqual([{
+      type: 'actor.death-observed', eventId: event.eventId, actorId: hero.actorId, contentId: hero.contentId,
+    }]);
+  });
+
+  it('redacts partial forced movement and rejects unchecked thrown destinations and hidden feature/item IDs', () => {
+    const input = fixture();
+    const state = { ...input.state, hero: { ...input.state.hero, sightRadius: 1 },
+      floors: [{ ...input.state.floors[0]!, ambient: { color: [255, 255, 255] as const, strength: 255 } }] };
+    const events: DomainEvent[] = [
+      { type: 'actor.forced-move', eventId: 'event.force', actorId: 'monster.hidden',
+        from: { x: 2, y: 1 }, to: { x: 3, y: 1 } },
+      { type: 'item.thrown', eventId: 'event.throw', actorId: state.hero.actorId,
+        itemId: 'item.hidden', quantity: 1, to: { x: 5, y: 3 } },
+      { type: 'door.opened', eventId: 'event.door', actorId: 'monster.hidden', featureId: 'feature.hidden' },
+      { type: 'item.damaged', eventId: 'event.item', actorId: 'monster.hidden',
+        itemId: 'item.hidden', amount: 1, condition: 9 },
+    ];
+    const output = projectDomainEvents({ state, content: input.content, events, heroId: state.hero.actorId });
+    expect(output).toEqual([{ type: 'actor.movement-observed', eventId: 'event.force', actorId: 'monster.hidden',
+      direction: 'east', visibility: 'left' }]);
+    const json = stableJson(output);
+    expect(json).not.toMatch(/item\.hidden|feature\.hidden|"from"|"to"/);
   });
 });

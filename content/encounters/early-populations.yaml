@@ -1,0 +1,112 @@
+schemaVersion: 3
+entries:
+  - kind: encounter
+    id: encounter.cave-rat-individuals
+    name: Cave rat stragglers
+    tags: [animal, early]
+    model: individual
+    minDepth: 1
+    maxDepth: 6
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 10
+    rarity: common
+    runAppearanceChance: 1
+    discoveryProtectionIncrement: 0
+    discoveryProtectionCap: 1
+    maximumInstancesPerRun: 8
+    placement: { minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.cave-rat, minimumQuantity: 1, maximumQuantity: 2 }
+
+  - kind: encounter
+    id: encounter.beetle-patrol
+    name: Beetle patrol
+    tags: [early, insect]
+    model: group
+    minDepth: 1
+    maxDepth: 4
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 6
+    rarity: uncommon
+    runAppearanceChance: 0.65
+    discoveryProtectionIncrement: 0.08
+    discoveryProtectionCap: 0.9
+    maximumInstancesPerRun: 3
+    placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 4, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      roles:
+        - { roleId: guard, monsterId: monster.training-beetle, minimumQuantity: 2, maximumQuantity: 4, formationPreference: front, behaviorParameters: {} }
+      formation: screen
+      communicationRadius: 4
+      leaderChance: 0.35
+      leaderRoleId: guard
+      leaderAccentColor: "#d3b45f"
+      leaderAlternateGlyph: B
+      coordinationModifiers: { accuracy: 1, defense: 1, damage: 0 }
+      leaderDeathResponse: weaken
+      responseParameters: { modifiers: { accuracy: -1, defense: -2, damage: -1 } }
+      supernaturalBond: false
+      collapseRewards: none
+
+  - kind: encounter
+    id: encounter.rat-brood
+    name: Rat brood
+    tags: [animal, swarm]
+    model: swarm
+    minDepth: 2
+    maxDepth: 8
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 4
+    rarity: uncommon
+    runAppearanceChance: 0.4
+    discoveryProtectionIncrement: 0.08
+    discoveryProtectionCap: 0.8
+    maximumInstancesPerRun: 2
+    placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      sourceMonsterId: monster.rat-brood
+      spawnRoles:
+        - { roleId: rat, monsterId: monster.cave-rat, weight: 1 }
+      spawnInterval: 300
+      minimumSpawnQuantity: 1
+      maximumSpawnQuantity: 2
+      placementRadius: 3
+      allowedTerrainTags: [floor]
+      maximumLivingChildren: 8
+      maximumLivingMembers: 9
+      maximumFloorActors: 20
+      sourceDestructionResponse: flee
+      responseParameters: {}
+
+  - kind: encounter
+    id: encounter.ashen-warden
+    name: Ashen Warden
+    tags: [boss, fire]
+    model: boss
+    minDepth: 5
+    maxDepth: 12
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 1
+    rarity: legendary
+    runAppearanceChance: 0.08
+    discoveryProtectionIncrement: 0.03
+    discoveryProtectionCap: 0.35
+    maximumInstancesPerRun: 1
+    placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      monsterId: monster.ashen-warden
+      phases:
+        - { phaseId: kindled, healthThresholdPercent: 65, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, modifiers: { accuracy: 1, defense: 0, damage: 1 }, effects: [] }
+        - { phaseId: inferno, healthThresholdPercent: 30, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, modifiers: { accuracy: 2, defense: -1, damage: 3 }, effects: [] }
+      recoveryPerWorldTime: 0.01
+      recoveryCapPercent: 20
+      uniqueItemId: item.warden-ember
+      enhancedLootTableId: loot-table.ashen-warden
+      vaultTags: []

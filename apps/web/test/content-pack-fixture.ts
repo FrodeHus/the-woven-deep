@@ -23,6 +23,7 @@ const entries: readonly ContentEntry[] = [
   {
     kind: 'item', id: 'item.lantern', name: 'Lantern', tags: [], glyph: '¤', color: '#eeeeaa',
     minDepth: 1, maxDepth: 20, category: 'light', stackLimit: 1, price: 4, rarity: 'common',
+    heirloomEligible: true,
     actionCost: 100, equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
     combat: null, light: { color: [255, 200, 100], radius: 6, strength: 180, fuelCapacity: 1000,
       fuelPerTime: 1, warningThresholds: [100], fuelTags: ['lamp-oil'] },
@@ -41,7 +42,7 @@ const entries: readonly ContentEntry[] = [
     kind: 'monster', id: 'monster.rat', name: 'Rat', tags: [], glyph: 'r', color: '#aaaaaa',
     minDepth: 1, maxDepth: 5, attributes, health: 4, speed: 110, accuracy: 1, defense: 10,
     perception: 6, damage: dice, armor: 0, resistances, disposition: 'hostile',
-    behaviorId: 'behavior.approach-and-attack', behaviorParameters: {}, runAppearanceChance: 1, rarity: 'common',
+    behaviorId: 'behavior.approach-and-attack', behaviorParameters: {}, rarity: 'common',
   },
   {
     kind: 'spell', id: 'spell.spark', name: 'Spark', tags: [], targetingId: 'target.actor', range: 5,
@@ -64,7 +65,7 @@ const entries: readonly ContentEntry[] = [
 
 export function contentPack(hash: string, kinds: readonly ContentKind[]): CompiledContentPack {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     hash,
     entries: entries.filter((entry) => kinds.includes(entry.kind))
       .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),

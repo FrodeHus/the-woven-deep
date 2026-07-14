@@ -1,10 +1,14 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { resolve } from 'node:path';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { compileContentDirectory, type CompiledContentPack, type EncounterContentEntry } from '@woven-deep/content/compiler';
 import {
   addGeneratedFloor,
   allocateFloorSeed,
   createDemoRun,
   heroActor,
+  integrateGeneratedFloor,
+  projectDomainEvents,
   heroPerception,
   refreshKnowledge,
   stableJson,
@@ -12,6 +16,12 @@ import {
   type FloorSeedAllocation,
   type GeneratedFloor,
 } from '../src/index.js';
+
+let content: CompiledContentPack;
+
+beforeAll(async () => {
+  content = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+});
 
 function generatedFloor(
   floorId = 'floor.generated-01',
@@ -33,6 +43,100 @@ function allocation(run: ActiveRun = createDemoRun()): FloorSeedAllocation {
 }
 
 describe('addGeneratedFloor', () => {
+  it('emits a committed population creation exactly once from floor integration', () => {
+    const encounter = content.entries.find((entry): entry is EncounterContentEntry =>
+      entry.kind === 'encounter' && entry.id === 'encounter.cave-rat-individuals')!;
+    const base = createDemoRun();
+    const run: ActiveRun = { ...base, contentHash: content.hash, encounterDecisions: [{
+      encounterId: encounter.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1,
+      eligible: true, reachedEligibleDepth: false, encountered: false, instancesCreated: 0,
+    }] };
+    const integrated = integrateGeneratedFloor(run, generatedFloor(), allocation(run), {
+      content, forcedEncounterId: encounter.id,
+    });
+    const population = integrated.state.populations[0]!;
+    expect(integrated.events).toEqual([{
+      type: 'population.created', eventId: 'event.floor.generated-01.population',
+      populationId: population.populationId, encounterId: encounter.id, floorId: population.floorId,
+      model: 'individual', actorIds: population.livingMemberIds,
+    }]);
+    expect(projectDomainEvents({ state: integrated.state, content, heroId: integrated.state.hero.actorId,
+      events: integrated.events })).toEqual([]);
+    expect(() => integrateGeneratedFloor(integrated.state, generatedFloor('floor.generated-01'),
+      allocation(integrated.state), { content, forcedEncounterId: encounter.id })).toThrow();
+  });
+
+  it('emits group leader creation only when a committed placement has a leader', () => {
+    const encounter = content.entries.find((entry): entry is EncounterContentEntry =>
+      entry.kind === 'encounter' && entry.id === 'encounter.beetle-patrol')!;
+    const base = createDemoRun();
+    const run: ActiveRun = { ...base, contentHash: content.hash, rng: { ...base.rng, encounters: [1, 2, 3, 4] },
+      encounterDecisions: [{ encounterId: encounter.id, baseProbability: 1, protectionBonus: 0,
+        effectiveProbability: 1, eligible: true, reachedEligibleDepth: false, encountered: false, instancesCreated: 0 }] };
+    const integrated = integrateGeneratedFloor(run, generatedFloor(), allocation(run), {
+      content, forcedEncounterId: encounter.id,
+    });
+    const population = integrated.state.populations[0]!;
+    expect(population.model).toBe('group');
+    if (population.model !== 'group') throw new Error('expected group');
+    expect(population.leaderActorId).not.toBeNull();
+    expect(integrated.events.map((event) => event.type)).toEqual(['population.created', 'group.leader-created']);
+    expect(integrated.events[1]).toMatchObject({ actorId: population.leaderActorId, roleId: 'guard' });
+  });
+
+  it('emits an optional placement skip but never publishes rejected draft work', () => {
+    const source = content.entries.find((entry): entry is EncounterContentEntry =>
+      entry.kind === 'encounter' && entry.id === 'encounter.cave-rat-individuals')!;
+    const impossible = { ...source, placement: { ...source.placement, minimumStairDistance: 10_000 } };
+    const pack = { ...content, entries: content.entries.map((entry) => entry.id === source.id ? impossible : entry) };
+    const base = createDemoRun();
+    const run: ActiveRun = { ...base, contentHash: pack.hash, encounterDecisions: [{
+      encounterId: source.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1,
+      eligible: true, reachedEligibleDepth: false, encountered: false, instancesCreated: 0,
+    }] };
+    const integrated = integrateGeneratedFloor(run, generatedFloor(), allocation(run), {
+      content: pack, forcedEncounterId: source.id,
+    });
+    expect(integrated.state.populations).toEqual([]);
+    expect(integrated.events).toEqual([{
+      type: 'population.placement-skipped', eventId: 'event.floor.generated-01.population',
+      encounterId: source.id, floorId: 'floor.generated-01', reason: 'no-valid-placement',
+    }]);
+    expect(projectDomainEvents({ state: integrated.state, content: pack, heroId: integrated.state.hero.actorId,
+      events: integrated.events })).toEqual([]);
+    const requiredPack = { ...pack, entries: pack.entries.map((entry) => entry.id === source.id
+      ? { ...impossible, placement: { ...impossible.placement, failureMode: 'required' as const } } : entry) };
+    expect(() => integrateGeneratedFloor({ ...run, contentHash: requiredPack.hash }, generatedFloor(), allocation(run), {
+      content: requiredPack, forcedEncounterId: source.id,
+    })).toThrow(/rejected/);
+  });
+  it('atomically publishes a generated floor population and advances both owned streams', () => {
+    const encounter = content.entries.find((entry): entry is EncounterContentEntry =>
+      entry.kind === 'encounter' && entry.id === 'encounter.cave-rat-individuals')!;
+    const base = createDemoRun();
+    const run: ActiveRun = {
+      ...base,
+      contentHash: content.hash,
+      encounterDecisions: [{
+        encounterId: encounter.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1,
+        eligible: true, reachedEligibleDepth: false, encountered: false, instancesCreated: 0,
+      }],
+    };
+    const generated = generatedFloor();
+
+    const result = addGeneratedFloor(run, generated, allocation(run), {
+      content, forcedEncounterId: encounter.id,
+    });
+
+    expect(result.floors[1]!.entities).toHaveLength(0);
+    expect(result.actors.filter((actor) => actor.populationId !== null).length).toBeGreaterThan(0);
+    expect(result.populations).toHaveLength(1);
+    expect(result.populations[0]!.floorId).toBe(generated.floor.floorId);
+    expect(result.encounterDecisions[0]!.instancesCreated).toBe(1);
+    expect(result.rng.generation).toEqual(allocation(run).nextGenerationState);
+    expect(result.rng.encounters).not.toEqual(run.rng.encounters);
+  });
+
   it('appends a complete floor and advances only the generation stream', () => {
     const run = createDemoRun();
     const generated = generatedFloor();

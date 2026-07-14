@@ -1,9 +1,10 @@
-export const CONTENT_SCHEMA_VERSION = 2 as const;
+export const CONTENT_SCHEMA_VERSION = 3 as const;
 
 export type ContentId = string;
 export const CONTENT_KIND_IDS = [
   'monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault', 'condition',
   'identification-pool',
+  'encounter', 'fallen-champion-template',
 ] as const;
 export type ContentKind = typeof CONTENT_KIND_IDS[number];
 export const DERIVED_STAT_NAMES = [
@@ -77,10 +78,166 @@ export interface MonsterContentEntry extends PresentedContentEntry {
   readonly disposition: Disposition;
   readonly behaviorId: string;
   readonly behaviorParameters: Readonly<Record<string, unknown>>;
-  readonly runAppearanceChance: number;
   readonly minDepth: number;
   readonly maxDepth: number;
   readonly rarity: ItemRarity;
+}
+
+export type EncounterModel = 'individual' | 'group' | 'swarm' | 'boss';
+export type EncounterFormation = 'cluster' | 'line' | 'screen' | 'wedge' | 'surround';
+export type FormationPreference = 'front' | 'center' | 'rear' | 'flank' | 'free';
+export type LeaderDeathResponse = 'weaken' | 'panic' | 'disband' | 'surrender' | 'frenzy' | 'collapse';
+export type SwarmDestructionResponse = 'stop' | 'flee' | 'decay' | 'frenzy';
+
+export interface EncounterPlacementDefinition {
+  readonly minimumStairDistance: number;
+  readonly minimumObjectiveDistance: number;
+  readonly maximumMemberDistance: number;
+  readonly allowedTerrainTags: readonly string[];
+  readonly requiresVaultSlot: boolean;
+  readonly failureMode: 'optional' | 'required';
+}
+
+export interface EncounterIntentPresentation {
+  readonly visible: boolean;
+}
+
+export interface IndividualEncounterDefinition {
+  readonly monsterId: ContentId;
+  readonly minimumQuantity: number;
+  readonly maximumQuantity: number;
+}
+
+export interface GroupRoleDefinition {
+  readonly roleId: string;
+  readonly monsterId: ContentId;
+  readonly minimumQuantity: number;
+  readonly maximumQuantity: number;
+  readonly formationPreference: FormationPreference;
+  readonly behaviorParameters: Readonly<Record<string, unknown>>;
+}
+
+export interface PopulationCombatModifiers {
+  readonly accuracy: number;
+  readonly defense: number;
+  readonly damage: number;
+}
+
+export interface GroupEncounterDefinition {
+  readonly roles: readonly GroupRoleDefinition[];
+  readonly formation: EncounterFormation;
+  readonly communicationRadius: number;
+  readonly leaderChance: number;
+  readonly leaderRoleId: string;
+  readonly leaderAccentColor: string;
+  readonly leaderAlternateGlyph: string | null;
+  readonly coordinationModifiers: PopulationCombatModifiers;
+  readonly leaderDeathResponse: LeaderDeathResponse;
+  readonly responseParameters: Readonly<Record<string, unknown>>;
+  readonly supernaturalBond: boolean;
+  readonly collapseRewards: 'none' | 'individual';
+}
+
+export interface SwarmSpawnRoleDefinition {
+  readonly roleId: string;
+  readonly monsterId: ContentId;
+  readonly weight: number;
+}
+
+export interface SwarmEncounterDefinition {
+  readonly sourceMonsterId: ContentId;
+  readonly spawnRoles: readonly SwarmSpawnRoleDefinition[];
+  readonly spawnInterval: number;
+  readonly minimumSpawnQuantity: number;
+  readonly maximumSpawnQuantity: number;
+  readonly placementRadius: number;
+  readonly allowedTerrainTags: readonly string[];
+  readonly maximumLivingChildren: number;
+  readonly maximumLivingMembers: number;
+  readonly maximumFloorActors: number;
+  readonly sourceDestructionResponse: SwarmDestructionResponse;
+  readonly responseParameters: Readonly<Record<string, unknown>>;
+}
+
+export interface BossPhaseDefinition {
+  readonly phaseId: string;
+  readonly healthThresholdPercent: number;
+  readonly behaviorId: string;
+  readonly behaviorParameters: Readonly<Record<string, unknown>>;
+  readonly modifiers: PopulationCombatModifiers;
+  readonly effects: readonly EffectDefinition[];
+}
+
+export interface BossEncounterDefinition {
+  readonly monsterId: ContentId;
+  readonly phases: readonly BossPhaseDefinition[];
+  readonly recoveryPerWorldTime: number;
+  readonly recoveryCapPercent: number;
+  readonly uniqueItemId: ContentId;
+  readonly enhancedLootTableId: ContentId;
+  readonly vaultTags: readonly string[];
+}
+
+interface BaseEncounterContentEntry extends BaseContentEntry {
+  readonly kind: 'encounter';
+  readonly adminDescription: string | null;
+  readonly minDepth: number;
+  readonly maxDepth: number;
+  readonly environmentTags: readonly string[];
+  readonly requiredVaultTags: readonly string[];
+  readonly weight: number;
+  readonly rarity: ItemRarity;
+  readonly runAppearanceChance: number;
+  readonly discoveryProtectionIncrement: number;
+  readonly discoveryProtectionCap: number;
+  readonly maximumInstancesPerRun: number;
+  readonly placement: EncounterPlacementDefinition;
+  readonly intentPresentation: EncounterIntentPresentation;
+}
+
+export interface IndividualEncounterContentEntry extends BaseEncounterContentEntry {
+  readonly model: 'individual';
+  readonly definition: IndividualEncounterDefinition;
+}
+
+export interface GroupEncounterContentEntry extends BaseEncounterContentEntry {
+  readonly model: 'group';
+  readonly definition: GroupEncounterDefinition;
+}
+
+export interface SwarmEncounterContentEntry extends BaseEncounterContentEntry {
+  readonly model: 'swarm';
+  readonly definition: SwarmEncounterDefinition;
+}
+
+export interface BossEncounterContentEntry extends BaseEncounterContentEntry {
+  readonly model: 'boss';
+  readonly definition: BossEncounterDefinition;
+}
+
+export type EncounterContentEntry = IndividualEncounterContentEntry | GroupEncounterContentEntry
+  | SwarmEncounterContentEntry | BossEncounterContentEntry;
+
+export interface FallenChampionTemplateContentEntry extends BaseContentEntry {
+  readonly kind: 'fallen-champion-template';
+  readonly fallbackMonsterId: ContentId;
+  readonly fallbackItemId: ContentId;
+  readonly minimumHealth: number;
+  readonly maximumHealth: number;
+  readonly attributeMaximum: number;
+  readonly damageMaximum: number;
+  readonly abilityLimit: number;
+  readonly echoAppearanceChance: number;
+  readonly maximumEchoesPerRun: number;
+  readonly echoHealthPercent: number;
+  readonly echoDamagePercent: number;
+  readonly echoDefensePercent: number;
+  readonly echoAbilityLimit: number;
+  readonly echoLootTableId: ContentId;
+  readonly heirloomSelection: Readonly<{
+    rarityWeights: Readonly<Record<ItemRarity, number>>;
+    qualityRankBonus: number;
+  }>;
 }
 
 export interface EquipmentDefinition {
@@ -133,6 +290,7 @@ export interface ItemContentEntry extends PresentedContentEntry {
   readonly stackLimit: number;
   readonly price: number;
   readonly rarity: ItemRarity;
+  readonly heirloomEligible: boolean;
   readonly minDepth: number;
   readonly maxDepth: number;
   readonly actionCost: number;
@@ -261,7 +419,7 @@ export interface VaultContentEntry extends BaseContentEntry {
 
 export type ContentEntry = MonsterContentEntry | ItemContentEntry | SpellContentEntry | TrapContentEntry
   | LootTableContentEntry | BalanceContentEntry | VaultContentEntry | ConditionContentEntry
-  | IdentificationPoolContentEntry;
+  | IdentificationPoolContentEntry | EncounterContentEntry | FallenChampionTemplateContentEntry;
 
 export interface ContentGenerationReport {
   readonly foundationalCategories: readonly string[];

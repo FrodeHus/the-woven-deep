@@ -20,6 +20,7 @@ import { allocateIdentificationMap } from './identification.js';
 import type { ItemInstance } from './item-model.js';
 import { tileIndex, type ActiveRun, type FloorSnapshot, type OpaqueId, type Point, type TileId } from './model.js';
 import { refreshKnowledge } from './perception.js';
+import { createEncounterRunDecisions, recordReachedEncounterDepths } from './population-gates.js';
 import { validateActiveRun } from './save-schema.js';
 import { tileDefinition } from './terrain.js';
 import { computeFieldOfView, isVisible } from './visibility.js';
@@ -162,6 +163,7 @@ function monsterActor(
   definition: MonsterContentEntry,
   actorId: OpaqueId,
   point: Point,
+  lastKnownHero: Point,
   balance: BalanceContentEntry,
 ): ActorState {
   return {
@@ -181,7 +183,17 @@ function monsterActor(
     conditions: [],
     equipment: emptyEquipment(),
     behaviorId: definition.behaviorId,
-    behaviorState: {},
+    behaviorState: {
+      intent: 'approach', goal: { type: 'cell', floorId: FLOOR_ID, ...lastKnownHero },
+      lastKnownTargets: [{
+        targetActorId: IDS.hero, floorId: FLOOR_ID, ...lastKnownHero,
+        observedAt: 0, source: 'sound', observerActorId: actorId,
+      }],
+      investigation: { floorId: FLOOR_ID, ...lastKnownHero, startedAt: 0, expiresAt: null },
+    },
+    populationId: null,
+    populationRoleId: null,
+    populationPresentation: null,
   };
 }
 
@@ -223,7 +235,18 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
 
   const base = createDemoRun();
   const identified = allocateIdentificationMap({ content: pack, rng: base.rng });
-  const initialized = { ...base, identification: identified.identification, rng: identified.rng };
+  const encounters = pack.entries.filter((entry) => entry.kind === 'encounter');
+  const gates = createEncounterRunDecisions({
+    encounters,
+    protectionBonuses: [],
+    state: identified.rng['population-gates'],
+  });
+  const initialized = {
+    ...base,
+    identification: identified.identification,
+    rng: { ...identified.rng, 'population-gates': gates.state },
+    encounterDecisions: gates.decisions,
+  };
   const allocation = allocateFloorSeed(initialized.rng.generation);
   const generated = generateFloor({
     floorId: FLOOR_ID,
@@ -291,12 +314,15 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
     conditions: [],
     equipment: { ...emptyEquipment(), 'main-hand': IDS.sword, 'off-hand': IDS.lantern },
     behaviorId: null,
-    behaviorState: {},
+    behaviorState: { intent: 'hold', goal: null, lastKnownTargets: [], investigation: null },
+    populationId: null,
+    populationRoleId: null,
+    populationPresentation: null,
   };
   const actors = ordered([
     hero,
-    monsterActor(ratDefinition, IDS.rat, positions.rat, balance),
-    monsterActor(beetleDefinition, IDS.beetle, positions.beetle, balance),
+    monsterActor(ratDefinition, IDS.rat, positions.rat, positions.hero, balance),
+    monsterActor(beetleDefinition, IDS.beetle, positions.beetle, positions.hero, balance),
   ], (actor) => actor.actorId);
 
   const backpack = (actorId: OpaqueId = IDS.hero) => ({ type: 'backpack' as const, actorId });
@@ -342,8 +368,9 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
     features,
     survival: { ...initialized.survival, hungerReserve: balance.hungerMaximum },
     activeFloorId: FLOOR_ID,
+    activeFloorEnteredAt: 0,
   };
-  const inserted = addGeneratedFloor(transitional, generated, allocation);
+  const inserted = addGeneratedFloor(transitional, generated, allocation, { content: pack });
   const activeFloor = inserted.floors.find((floor) => floor.floorId === FLOOR_ID)!;
   const actorPositions = new Map(inserted.actors
     .filter((actor) => actor.floorId === FLOOR_ID)
@@ -356,6 +383,11 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
   }).knowledge;
   const run = validateActiveRun({
     ...inserted,
+    encounterDecisions: recordReachedEncounterDepths({
+      decisions: inserted.encounterDecisions,
+      encounters,
+      reachedDepths: inserted.floors.map((floor) => floor.depth),
+    }),
     floors: inserted.floors.map((floor) => floor.floorId === FLOOR_ID ? { ...floor, knowledge } : floor),
   });
   validateContentBoundRun(run, pack);

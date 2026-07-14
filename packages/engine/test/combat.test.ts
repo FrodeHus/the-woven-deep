@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDemoRun,
+  applyPopulationCombatModifiers,
   expandLegacySeed,
   nextUint32,
   resolveAttack,
@@ -39,6 +40,17 @@ function attack(overrides: Readonly<Record<string, unknown>> = {}) {
 }
 
 describe('deterministic combat', () => {
+  it('applies population modifiers through pure checked combat arithmetic', () => {
+    const profile = { accuracy: 4, defense: 8, damage: { count: 1, sides: 6, bonus: 1 } };
+    expect(applyPopulationCombatModifiers(profile, { accuracy: 2, defense: -1, damage: 3 })).toEqual({
+      accuracy: 6, defense: 7, damage: { count: 1, sides: 6, bonus: 4 },
+    });
+    expect(profile).toEqual({ accuracy: 4, defense: 8, damage: { count: 1, sides: 6, bonus: 1 } });
+    expect(() => applyPopulationCombatModifiers(profile, {
+      accuracy: Number.MAX_SAFE_INTEGER, defense: 0, damage: 0,
+    })).toThrow(/accuracy.*safe integer/i);
+  });
+
   it('rolls unbiased bounded dice without mutating random state', () => {
     const state = stateProducing(6, 6);
     const before = [...state];

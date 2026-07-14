@@ -1,0 +1,12 @@
+schemaVersion: 3
+entries:
+  - kind: condition
+    id: condition.swarm-decay
+    name: Swarm decay
+    description: The destroyed source causes this swarm member to decay.
+    tags: [population]
+    color: "#8a7766"
+    duration: { mode: permanent, default: null, maximum: null }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: {}
+    traits: []

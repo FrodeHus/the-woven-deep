@@ -84,8 +84,8 @@ function serialize(value: unknown, ancestors: Set<object>): string {
   if (typeof value === 'string') return JSON.stringify(value);
   if (typeof value === 'boolean') return String(value);
   if (typeof value === 'number') {
-    if (!Number.isSafeInteger(value) || Object.is(value, -0)) {
-      throw new TypeError('stable JSON numbers must be unambiguous finite safe integers');
+    if (!Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER || Object.is(value, -0)) {
+      throw new TypeError('stable JSON numbers must be finite, unambiguous, and within safe magnitude');
     }
     return String(value);
   }

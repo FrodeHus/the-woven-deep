@@ -2,17 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { ContentCompileError, parseContentFile } from '../src/compiler/index.js';
 
 describe('parseContentFile', () => {
-  it('rejects source schema v1 with a stable version diagnostic', () => {
+  it('rejects source schema v2 with a stable version diagnostic', () => {
     expect(() => parseContentFile({
       path: 'legacy.yaml',
-      source: 'schemaVersion: 1\nentries: []\n',
-    })).toThrow(/legacy\.yaml.*schemaVersion.*expected 2/i);
+      source: 'schemaVersion: 2\nentries: []\n',
+    })).toThrow(/legacy\.yaml.*schemaVersion.*expected 3/i);
   });
 
-  it('applies defaults to a strict monster entry', () => {
-    const [entry] = parseContentFile({
-      path: 'monsters/rat.yaml',
-      source: `schemaVersion: 2
+  it('keeps appearance probability on encounters and rejects it on reusable monsters', () => {
+    const source = `schemaVersion: 3
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -32,7 +30,70 @@ entries:
     resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 }
     disposition: hostile
     behaviorId: behavior.approach-and-attack
+    rarity: common
+  - kind: encounter
+    id: encounter.lone-rats
+    name: Lone rats
+    tags: [animal]
+    model: individual
+    minDepth: 1
+    maxDepth: 5
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 10
+    rarity: common
     runAppearanceChance: 1
+    discoveryProtectionIncrement: 0
+    discoveryProtectionCap: 1
+    maximumInstancesPerRun: 3
+    placement: { minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 2, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.cave-rat, minimumQuantity: 1, maximumQuantity: 2 }
+`;
+    expect(parseContentFile({ path: 'encounters/rats.yaml', source }).map((entry) => entry.kind))
+      .toEqual(['monster', 'encounter']);
+    expect(() => parseContentFile({
+      path: 'monsters/bad.yaml',
+      source: source.replace('behaviorId: behavior.approach-and-attack\n    rarity',
+        'behaviorId: behavior.approach-and-attack\n    runAppearanceChance: 1\n    rarity'),
+    })).toThrow(/runAppearanceChance/i);
+  });
+
+  it('parses strict group, swarm, boss, and champion-template definitions', () => {
+    const source = `schemaVersion: 3
+entries:
+  - { kind: encounter, id: encounter.patrol, name: Patrol, tags: [], model: group, minDepth: 1, maxDepth: 4, environmentTags: [], requiredVaultTags: [], weight: 5, rarity: uncommon, runAppearanceChance: 0.5, discoveryProtectionIncrement: 0.1, discoveryProtectionCap: 0.8, maximumInstancesPerRun: 2, placement: { minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 4, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }, intentPresentation: { visible: true }, definition: { roles: [{ roleId: guard, monsterId: monster.guard, minimumQuantity: 2, maximumQuantity: 3, formationPreference: front, behaviorParameters: {} }], formation: line, communicationRadius: 4, leaderChance: 0.5, leaderRoleId: guard, leaderAccentColor: '#ffcc44', leaderAlternateGlyph: null, coordinationModifiers: { accuracy: 1, defense: 1, damage: 0 }, leaderDeathResponse: weaken, responseParameters: {}, supernaturalBond: false, collapseRewards: none } }
+  - { kind: encounter, id: encounter.nest, name: Nest, tags: [], model: swarm, minDepth: 1, maxDepth: 6, environmentTags: [], requiredVaultTags: [], weight: 4, rarity: uncommon, runAppearanceChance: 0.4, discoveryProtectionIncrement: 0.1, discoveryProtectionCap: 0.8, maximumInstancesPerRun: 2, placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }, intentPresentation: { visible: true }, definition: { sourceMonsterId: monster.nest, spawnRoles: [{ roleId: rat, monsterId: monster.rat, weight: 1 }], spawnInterval: 200, minimumSpawnQuantity: 1, maximumSpawnQuantity: 2, placementRadius: 3, allowedTerrainTags: [floor], maximumLivingChildren: 8, maximumLivingMembers: 9, maximumFloorActors: 20, sourceDestructionResponse: flee, responseParameters: {} } }
+  - { kind: encounter, id: encounter.warden, name: Warden, tags: [], model: boss, minDepth: 5, maxDepth: 5, environmentTags: [], requiredVaultTags: [boss-arena], weight: 1, rarity: legendary, runAppearanceChance: 0.08, discoveryProtectionIncrement: 0.03, discoveryProtectionCap: 0.35, maximumInstancesPerRun: 1, placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: required }, intentPresentation: { visible: true }, definition: { monsterId: monster.warden, phases: [{ phaseId: enraged, healthThresholdPercent: 50, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, modifiers: { accuracy: 2, defense: 0, damage: 2 }, effects: [] }], recoveryPerWorldTime: 0.01, recoveryCapPercent: 25, uniqueItemId: item.warden-key, enhancedLootTableId: loot-table.warden, vaultTags: [boss-arena] } }
+  - { kind: fallen-champion-template, id: fallen-champion-template.core, name: Deep's Champion, tags: [], fallbackMonsterId: monster.guard, fallbackItemId: item.fallback-relic, minimumHealth: 10, maximumHealth: 200, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 3, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 2, echoLootTableId: loot-table.echo, heirloomSelection: { rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 }, qualityRankBonus: 2 } }
+`;
+    expect(parseContentFile({ path: 'population.yaml', source }).map((entry) => entry.kind))
+      .toEqual(['encounter', 'encounter', 'encounter', 'fallen-champion-template']);
+  });
+
+  it('applies defaults to a strict monster entry', () => {
+    const [entry] = parseContentFile({
+      path: 'monsters/rat.yaml',
+      source: `schemaVersion: 3
+entries:
+  - kind: monster
+    id: monster.cave-rat
+    name: Cave rat
+    glyph: r
+    color: '#a89b82'
+    minDepth: 1
+    maxDepth: 5
+    attributes: { might: 4, agility: 8, vitality: 4, wits: 3, resolve: 2 }
+    health: 4
+    speed: 100
+    accuracy: 1
+    defense: 10
+    perception: 6
+    damage: { count: 1, sides: 3, bonus: 0 }
+    armor: 0
+    resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
     rarity: common
 `,
     });
@@ -40,14 +101,13 @@ entries:
     expect(entry).toMatchObject({
       id: 'monster.cave-rat',
       tags: [],
-      runAppearanceChance: 1,
     });
   });
 
   it('parses strict timed and permanent condition definitions', () => {
     const entries = parseContentFile({
       path: 'conditions/control.yaml',
-      source: `schemaVersion: 2
+      source: `schemaVersion: 3
 entries:
   - kind: condition
     id: condition.stunned
@@ -87,7 +147,7 @@ entries:
     ['permanent numeric duration', 'duration: { mode: permanent, default: 100, maximum: 100 }', /duration\.default/i],
     ['refresh with multiple stacks', 'stacking: { mode: refresh, maximumStacks: 2 }', /maximumStacks/i],
   ])('rejects condition with %s', (_label, replacement, message) => {
-    const base = `schemaVersion: 2
+    const base = `schemaVersion: 3
 entries:
   - kind: condition
     id: condition.stunned
@@ -113,7 +173,7 @@ entries:
   it('parses strict item, spell, trap, loot-table, and balance entries', () => {
     const entries = parseContentFile({
       path: 'gameplay.yaml',
-      source: `schemaVersion: 2
+      source: `schemaVersion: 3
 entries:
   - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, identification: { mode: known, poolId: null }, effects: [] }
   - { kind: spell, id: spell.mend, name: Mend, tags: [], targetingId: target.self, range: 0, actionCost: 100, effects: [{ effectId: effect.heal, parameters: { dice: { count: 1, sides: 4, bonus: 0 } } }] }
@@ -131,7 +191,7 @@ entries:
     ['dice count', 'damage: { count: 0, sides: 3, bonus: 0 }', /entries\.monster\.cave-rat\.damage\.count/],
     ['non-positive speed', 'speed: 100', /entries\.monster\.cave-rat\.speed/],
   ])('rejects invalid %s with a stable path', (_name, replacement, path) => {
-    const source = `schemaVersion: 2
+    const source = `schemaVersion: 3
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -151,7 +211,6 @@ entries:
     resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 }
     disposition: hostile
     behaviorId: behavior.approach-and-attack
-    runAppearanceChance: 1
     rarity: common
 `.replace(replacement === 'speed: 100' ? replacement : 'damage: { count: 1, sides: 3, bonus: 0 }', replacement === 'speed: 100' ? 'speed: 0' : replacement);
     expect(() => parseContentFile({ path: 'invalid.yaml', source })).toThrow(path);
@@ -160,21 +219,21 @@ entries:
   it('rejects unknown targeting rules with a stable path', () => {
     expect(() => parseContentFile({
       path: 'spell.yaml',
-      source: 'schemaVersion: 2\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.unknown, range: 1, actionCost: 100, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
+      source: 'schemaVersion: 3\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.unknown, range: 1, actionCost: 100, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
     })).toThrow(/entries\.spell\.bad\.targetingId/);
   });
 
   it('rejects a negative action cost with a stable path', () => {
     expect(() => parseContentFile({
       path: 'spell.yaml',
-      source: 'schemaVersion: 2\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.self, range: 0, actionCost: -1, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
+      source: 'schemaVersion: 3\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.self, range: 0, actionCost: -1, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
     })).toThrow(/entries\.spell\.bad\.actionCost/);
   });
 
   it('materializes defaults and derived metadata for a strict vault entry', () => {
     const [entry] = parseContentFile({
       path: 'vaults/test-room.yaml',
-      source: `schemaVersion: 2
+      source: `schemaVersion: 3
 entries:
   - kind: vault
     id: vault.test-room
@@ -218,7 +277,7 @@ entries:
   it('rejects unknown properties with a field path', () => {
     expect(() => parseContentFile({
       path: 'monsters/bad.yaml',
-      source: `schemaVersion: 2
+      source: `schemaVersion: 3
 entries:
   - kind: monster
     id: monster.bad
@@ -238,7 +297,6 @@ entries:
     resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 }
     disposition: hostile
     behaviorId: behavior.approach-and-attack
-    runAppearanceChance: 1
     rarity: common
     surpriseProperty: true
 `,
@@ -250,7 +308,7 @@ entries:
     try {
       parseContentFile({
         path: 'vaults/bad-room.yaml',
-        source: `schemaVersion: 2
+        source: `schemaVersion: 3
 entries:
   - kind: vault
     id: vault.bad-room
@@ -300,7 +358,7 @@ entries:
     try {
       parseContentFile({
         path: 'vaults/invalid-id.yaml',
-        source: `schemaVersion: 2
+        source: `schemaVersion: 3
 entries:
   - kind: vault
     id: "vault.Bad secret"
@@ -332,7 +390,7 @@ entries:
   it('rejects aliases', () => {
     expect(() => parseContentFile({
       path: 'monsters/alias.yaml',
-      source: 'schemaVersion: 2\nentries: &entries [*entries]\n',
+      source: 'schemaVersion: 3\nentries: &entries [*entries]\n',
     })).toThrow(/alias|YAML/i);
   });
 
@@ -341,7 +399,7 @@ entries:
     try {
       parseContentFile({
         path: 'monsters/tagged.yaml',
-        source: `schemaVersion: 2
+        source: `schemaVersion: 3
 entries: !unsafe
   - kind: monster
     id: monster.tagged

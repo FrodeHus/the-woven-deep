@@ -2,20 +2,10 @@ import type { CompiledContentPack, DamageType } from '@woven-deep/content';
 import { heroActor, heroPerception } from './actor-model.js';
 import { featureTiles } from './features.js';
 import { itemLightSources } from './equipment.js';
-import type { ActiveRun, DomainEvent, OpaqueId, Point, SoundHeardEvent } from './model.js';
+import type { ActiveRun, DomainEvent, OpaqueId, Point, PopulationNoticePublicEvent, PublicEvent, SoundHeardEvent } from './model.js';
 import { tileIndex } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { isVisible } from './visibility.js';
-
-function participants(event: DomainEvent): readonly OpaqueId[] {
-  const result: OpaqueId[] = [];
-  if ('heroId' in event) result.push(event.heroId);
-  if ('actorId' in event) result.push(event.actorId);
-  if ('targetActorId' in event) result.push(event.targetActorId);
-  if ('sourceActorId' in event) result.push(event.sourceActorId);
-  if ('killerActorId' in event) result.push(event.killerActorId);
-  return [...new Set(result)];
-}
 
 function direction(from: Point, to: Point): SoundHeardEvent['direction'] {
   const dx = Math.sign(to.x - from.x);
@@ -37,6 +27,14 @@ function sourcePoint(event: DomainEvent, state: ActiveRun): Point | undefined {
   return sourceId === undefined ? undefined : state.actors.find((actor) => actor.actorId === sourceId);
 }
 
+function notice(
+  event: Readonly<{ eventId: OpaqueId }>, category: PopulationNoticePublicEvent['category'],
+  actorId: OpaqueId | null, presentation: string, displayName?: string,
+): PopulationNoticePublicEvent {
+  return { type: 'population.notice', eventId: event.eventId, category, actorId, presentation,
+    ...(displayName === undefined ? {} : { displayName }) };
+}
+
 function sound(event: DomainEvent, state: ActiveRun, hero: Point) {
   const point = sourcePoint(event, state);
   if (!point) return undefined;
@@ -53,7 +51,7 @@ export function projectDomainEvents(input: Readonly<{
   content: CompiledContentPack;
   heroId: OpaqueId;
   events: readonly DomainEvent[];
-}>): readonly DomainEvent[] {
+}>): readonly PublicEvent[] {
   const hero = heroActor(input.state);
   if (hero.actorId !== input.heroId) throw new Error('public event hero must match the active hero');
   const floor = input.state.floors.find((candidate) => candidate.floorId === hero.floorId);
@@ -73,34 +71,145 @@ export function projectDomainEvents(input: Readonly<{
     return index !== undefined && isVisible(perception.visibilityWords, index)
       && perception.illumination.intensity[index]! > 0;
   };
-  const output: DomainEvent[] = [];
+  const pointVisible = (point: Point): boolean => {
+    const index = tileIndex(floor, point.x, point.y);
+    return index !== undefined && isVisible(perception.visibilityWords, index)
+      && perception.illumination.intensity[index]! > 0;
+  };
+  const actorName = (actorId: OpaqueId): string | undefined => {
+    const actor = input.state.actors.find((candidate) => candidate.actorId === actorId);
+    if (!actor || !actorVisible(actorId)) return undefined;
+    if (actor.populationPresentation?.name) return actor.populationPresentation.name;
+    const definition = input.content.entries.find((entry) => entry.kind === 'monster' && entry.id === actor.contentId);
+    return definition?.kind === 'monster' ? definition.name : undefined;
+  };
+  const itemVisible = (itemId: OpaqueId): boolean => {
+    const item = input.state.items.find((candidate) => candidate.itemId === itemId);
+    if (!item) return false;
+    if (item.location.type === 'floor') return item.location.floorId === floor.floorId && pointVisible(item.location);
+    return actorVisible(item.location.actorId);
+  };
+  const featureVisible = (featureId: OpaqueId): boolean => {
+    const feature = input.state.features.find((candidate) => candidate.featureId === featureId);
+    return feature !== undefined && feature.floorId === floor.floorId && pointVisible(feature);
+  };
+  const movement = (event: Extract<DomainEvent, { type: 'actor.moved' | 'actor.forced-move' }>): void => {
+    const fromVisible = pointVisible(event.from);
+    const toVisible = pointVisible(event.to);
+    if (fromVisible && toVisible) output.push(event);
+    else if (fromVisible || toVisible) output.push({ type: 'actor.movement-observed', eventId: event.eventId,
+      actorId: event.actorId, direction: direction(event.from, event.to) as Exclude<SoundHeardEvent['direction'], 'here'>,
+      visibility: toVisible ? 'entered' : 'left' });
+    else { const heard = sound(event, input.state, hero); if (heard) output.push(heard); }
+  };
+  const output: PublicEvent[] = [];
   let pendingDamageType: DamageType = 'physical';
   for (const event of input.events) {
-    if (event.type === 'sound.heard' || event.type === 'hero.damaged') { output.push(event); continue; }
-    if (event.type === 'fuel.warning' || event.type === 'item.light-extinguished' || event.type === 'item.identified') {
-      const item = input.state.items.find((candidate) => candidate.itemId === event.itemId);
-      if (!item || item.location.type === 'floor' || item.location.actorId !== hero.actorId) continue;
-      output.push(event);
-      continue;
-    }
-    const ids = participants(event);
-    const allVisible = ids.every(actorVisible);
-    if ((event.type === 'attack.hit' || event.type === 'attack.missed') && event.targetActorId === hero.actorId
-      && !actorVisible(event.actorId)) {
-      if (event.type === 'attack.hit') pendingDamageType = event.damageType;
-      const heard = sound(event, input.state, hero);
-      if (heard) output.push(heard);
-      continue;
-    }
-    if (event.type === 'actor.damaged' && event.actorId === hero.actorId && !actorVisible(event.sourceActorId)) {
-      output.push({ type: 'hero.damaged', amount: event.amount, damageType: pendingDamageType });
-      pendingDamageType = 'physical';
-      continue;
-    }
-    if (allVisible) { output.push(event); continue; }
-    if (event.type === 'actor.moved' || event.type === 'door.opened' || event.type === 'door.closed') {
-      const heard = sound(event, input.state, hero);
-      if (heard) output.push(heard);
+    switch (event.type) {
+      case 'hero.moved': case 'hero.waited': case 'action.invalid': case 'rest.completed':
+      case 'identification.appearance-revealed': output.push(event); break;
+      case 'attack.hit': case 'attack.missed': {
+        const attackerVisible = actorVisible(event.actorId); const targetVisible = actorVisible(event.targetActorId);
+        if (attackerVisible && targetVisible) {
+          const attackerName = actorName(event.actorId); const targetName = actorName(event.targetActorId);
+          output.push({ type: 'combat.observed', eventId: event.eventId,
+            outcome: event.type === 'attack.hit' ? 'hit' : 'missed', attackerActorId: event.actorId,
+            targetActorId: event.targetActorId, ...(attackerName ? { attackerName } : {}), ...(targetName ? { targetName } : {}) });
+        } else if (event.targetActorId === hero.actorId) {
+          if (event.type === 'attack.hit') pendingDamageType = event.damageType;
+          const heard = sound(event, input.state, hero); if (heard) output.push(heard);
+        }
+        break;
+      }
+      case 'actor.damaged':
+        if (event.actorId === hero.actorId && !actorVisible(event.sourceActorId)) {
+          output.push({ type: 'hero.damaged', amount: event.amount, damageType: pendingDamageType }); pendingDamageType = 'physical';
+        } else if (actorVisible(event.actorId) && actorVisible(event.sourceActorId)) output.push(event);
+        else if (actorVisible(event.actorId)) output.push({ type: 'actor.damage-observed', eventId: event.eventId,
+          actorId: event.actorId, amount: event.amount, health: event.health });
+        break;
+      case 'actor.died':
+        if (actorVisible(event.actorId) && actorVisible(event.killerActorId)) output.push(event);
+        else if (actorVisible(event.actorId)) {
+          const displayName = actorName(event.actorId);
+          output.push({ type: 'actor.death-observed', eventId: event.eventId, actorId: event.actorId,
+            contentId: event.contentId, ...(displayName ? { displayName } : {}) });
+        }
+        break;
+      case 'actor.healed':
+        if (actorVisible(event.actorId) && actorVisible(event.sourceActorId)) output.push(event);
+        break;
+      case 'condition.applied':
+        if (actorVisible(event.actorId) && actorVisible(event.sourceActorId)) output.push(event);
+        break;
+      case 'condition.removed': case 'condition.expired':
+        if (actorVisible(event.actorId)) output.push(event); break;
+      case 'actor.moved': case 'actor.forced-move': movement(event); break;
+      case 'reaction.triggered': case 'relationship.changed':
+        if (actorVisible(event.actorId) && actorVisible(event.targetActorId)) output.push(event); break;
+      case 'actor.turn.started': case 'actor.turn.completed': case 'actor.intent-changed':
+        if (actorVisible(event.actorId)) output.push(event); break;
+      case 'item.picked-up': case 'item.dropped': case 'item.consumed': case 'item.thrown':
+        if (actorVisible(event.actorId) && (event.actorId === hero.actorId || itemVisible(event.itemId))
+          && (event.type !== 'item.thrown' || pointVisible(event.to))) output.push(event); break;
+      case 'item.stack-split':
+        if (actorVisible(event.actorId) && itemVisible(event.itemId) && itemVisible(event.newItemId)) output.push(event); break;
+      case 'item.used':
+        if (actorVisible(event.actorId) && actorVisible(event.targetActorId)
+          && (event.actorId === hero.actorId || itemVisible(event.itemId))) output.push(event); break;
+      case 'item.equipped': case 'item.unequipped': case 'item.light-toggled':
+        if (actorVisible(event.actorId) && itemVisible(event.itemId)) output.push(event); break;
+      case 'item.refueled':
+        if (actorVisible(event.actorId) && itemVisible(event.itemId)
+          && (event.actorId === hero.actorId || itemVisible(event.fuelItemId))) output.push(event); break;
+      case 'item.identified': case 'fuel.warning': case 'item.light-extinguished':
+        if (itemVisible(event.itemId)) output.push(event); break;
+      case 'hunger.stage-changed': case 'hunger.restored':
+        if (event.actorId === hero.actorId) output.push(event); break;
+      case 'item.damaged':
+        if (actorVisible(event.actorId) && itemVisible(event.itemId)) output.push(event); break;
+      case 'door.opened': case 'door.closed':
+        if (actorVisible(event.actorId) && featureVisible(event.featureId)) output.push(event);
+        else { const heard = sound(event, input.state, hero); if (heard) output.push(heard); } break;
+      case 'feature.revealed': case 'trap.triggered': case 'trap.disarmed': case 'trap.disarm-failed':
+        if (actorVisible(event.actorId) && featureVisible(event.featureId)) output.push(event); break;
+      case 'feature.searched': if (actorVisible(event.actorId)) output.push(event); break;
+      case 'population.created': {
+        const visibleActor = event.actorIds.find(actorVisible);
+        if (visibleActor) output.push(notice(event, 'created', visibleActor, 'population.created')); break;
+      }
+      case 'population.encountered':
+        if (actorVisible(event.actorId)) output.push(notice(event, 'encountered', event.actorId, event.type)); break;
+      case 'population.placement-skipped': case 'group.awareness-shared': break;
+      case 'group.leader-created': case 'group.leader-defeated': case 'group.outcome-applied':
+        if (actorVisible(event.actorId)) output.push(notice(event,
+          event.type === 'group.leader-created' ? 'leader-created' : event.type === 'group.leader-defeated' ? 'leader-defeated' : 'group-outcome',
+          event.actorId, event.type === 'group.outcome-applied' ? `leader-response.${event.response}` : event.type)); break;
+      case 'swarm.members-created': case 'swarm.cap-reached': case 'swarm.source-destroyed':
+        if (actorVisible(event.sourceActorId)) output.push(notice(event,
+          event.type === 'swarm.members-created' ? 'swarm-growth' : event.type === 'swarm.cap-reached' ? 'swarm-cap' : 'source-destroyed',
+          event.sourceActorId, event.type === 'swarm.cap-reached' ? 'swarm.growth-contained'
+            : event.type === 'swarm.source-destroyed' ? `swarm.source-${event.response}` : 'swarm.growth'));
+        else if (event.type === 'swarm.source-destroyed') { const heard = sound(event, input.state, hero); if (heard) output.push(heard); }
+        break;
+      case 'boss.encountered': case 'boss.phase-changed': case 'boss.recovered': case 'boss.defeated': case 'boss.reward-created':
+        if (actorVisible(event.actorId)) output.push(notice(event,
+          event.type === 'boss.encountered' ? 'boss-encountered' : event.type === 'boss.phase-changed' ? 'boss-phase'
+            : event.type === 'boss.recovered' ? 'boss-recovery' : event.type === 'boss.defeated' ? 'boss-defeated' : 'boss-reward',
+          event.actorId, event.type === 'boss.phase-changed' ? `boss.phase.${event.phaseId}` : event.type, actorName(event.actorId)));
+        else if (event.type === 'boss.phase-changed' || event.type === 'boss.defeated') {
+          const heard = sound(event, input.state, hero); if (heard) output.push(heard);
+        }
+        break;
+      case 'champion.encountered': case 'champion.defeated': case 'champion.heirloom-created':
+      case 'echo.encountered': case 'echo.defeated': case 'echo.loot-created':
+        if (actorVisible(event.actorId)) output.push(notice(event,
+          event.type === 'champion.encountered' ? 'champion-encountered' : event.type === 'champion.defeated' ? 'champion-defeated'
+            : event.type === 'champion.heirloom-created' ? 'champion-heirloom' : event.type === 'echo.encountered' ? 'echo-encountered'
+              : event.type === 'echo.defeated' ? 'echo-defeated' : 'echo-loot', event.actorId, event.type,
+          event.type === 'champion.heirloom-created' ? event.displayName : actorName(event.actorId)));
+        break;
+      default: { const exhaustive: never = event; return exhaustive; }
     }
   }
   return output;

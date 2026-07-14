@@ -9,6 +9,7 @@ import type { LightSource } from './light-model.js';
 import type { ActiveRun, FloorSnapshot } from './model.js';
 import { heroActor } from './actor-model.js';
 import { allocateIdentificationMap } from './identification.js';
+import { createEncounterRunDecisions } from './population-gates.js';
 
 export interface GeneratedDemoRun {
   readonly run: ActiveRun;
@@ -22,7 +23,16 @@ const HEIGHT = 25;
 export function createGeneratedDemoRun(pack: CompiledContentPack): GeneratedDemoRun {
   const base = createDemoRun();
   const identified = allocateIdentificationMap({ content: pack, rng: base.rng });
-  const initialized = { ...base, identification: identified.identification, rng: identified.rng };
+  const encounters = pack.entries.filter((entry) => entry.kind === 'encounter');
+  const gates = createEncounterRunDecisions({
+    encounters, protectionBonuses: [], state: identified.rng['population-gates'],
+  });
+  const initialized = {
+    ...base,
+    identification: identified.identification,
+    rng: { ...identified.rng, 'population-gates': gates.state },
+    encounterDecisions: gates.decisions,
+  };
   const allocation = allocateFloorSeed(initialized.rng.generation);
   const vaults = pack.entries.filter((entry): entry is VaultContentEntry => entry.kind === 'vault');
   const generated = generateFloor({
@@ -64,7 +74,8 @@ export function createGeneratedDemoRun(pack: CompiledContentPack): GeneratedDemo
     runId: 'run.generated-demo',
     actors: initialized.actors.map((actor) => actor.actorId === movedHeroActor.actorId ? movedHeroActor : actor),
     activeFloorId: generated.floor.floorId,
+    activeFloorEnteredAt: 0,
   };
-  const run = addGeneratedFloor(transitional, { ...generated, floor }, allocation);
+  const run = addGeneratedFloor(transitional, { ...generated, floor }, allocation, { content: pack });
   return { run, generated, allocation };
 }

@@ -73,5 +73,5 @@ export function parseContentFile(input: { path: string; source: string }): reado
       message: issue.message,
     })));
   }
-  return result.data.entries;
+  return result.data.entries as readonly ContentEntry[];
 }

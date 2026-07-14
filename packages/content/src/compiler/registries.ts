@@ -2,6 +2,12 @@ import { z } from 'zod';
 import { damageTypes, diceSchema, stableIdSchema, targetingIds } from './schema.js';
 
 const safePositive = z.number().int().safe().positive();
+const safeInteger = z.number().int().safe();
+const populationModifiers = z.strictObject({
+  accuracy: safeInteger,
+  defense: safeInteger,
+  damage: safeInteger,
+});
 
 export const TARGETING_REGISTRY = targetingIds;
 
@@ -9,11 +15,30 @@ export const ACTION_COST_IDS = [
   'action.attack', 'action.cast', 'action.close-door', 'action.disarm', 'action.drop', 'action.equip',
   'action.fire', 'action.move', 'action.open-door', 'action.pickup', 'action.refuel', 'action.search',
   'action.split-stack', 'action.throw-item', 'action.toggle-light', 'action.unequip', 'action.use-item',
-  'action.wait',
+  'action.wait', 'action.spawn',
 ] as const;
 
 export const BEHAVIOR_PARAMETER_SCHEMAS = {
   'behavior.approach-and-attack': z.strictObject({}),
+  'behavior.patrol': z.strictObject({
+    waypoints: z.array(z.strictObject({ x: safeInteger, y: safeInteger })).min(1),
+  }),
+} as const;
+
+export const LEADER_RESPONSE_PARAMETER_SCHEMAS = {
+  weaken: z.strictObject({ modifiers: populationModifiers }),
+  panic: z.strictObject({ duration: safePositive }),
+  disband: z.strictObject({}),
+  surrender: z.strictObject({}),
+  frenzy: z.strictObject({ duration: safePositive, modifiers: populationModifiers }),
+  collapse: z.strictObject({}),
+} as const;
+
+export const SWARM_RESPONSE_PARAMETER_SCHEMAS = {
+  stop: z.strictObject({}),
+  flee: z.strictObject({}),
+  decay: z.strictObject({ interval: safePositive, damage: safePositive }),
+  frenzy: z.strictObject({ duration: safePositive, modifiers: populationModifiers }),
 } as const;
 
 export const EFFECT_PARAMETER_SCHEMAS = {
@@ -32,3 +57,15 @@ export const EFFECT_PARAMETER_SCHEMAS = {
 
 export type BehaviorId = keyof typeof BEHAVIOR_PARAMETER_SCHEMAS;
 export type EffectId = keyof typeof EFFECT_PARAMETER_SCHEMAS;
+
+/** Effects with a well-defined immutable self/arena target contract during boss phase changes. */
+export const BOSS_PHASE_EFFECT_IDS = [
+  'effect.damage',
+  'effect.heal',
+  'effect.condition.apply',
+  'effect.condition.remove',
+  'effect.reveal',
+  'effect.fuel.transfer',
+  'effect.light.toggle',
+  'effect.feature.mutate',
+] as const satisfies readonly EffectId[];

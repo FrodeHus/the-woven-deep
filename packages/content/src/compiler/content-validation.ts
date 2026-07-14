@@ -1,9 +1,22 @@
 import type {
   BalanceContentEntry, ContentEntry, EffectDefinition, ItemContentEntry, LootTableContentEntry,
-  MonsterContentEntry, IdentificationPoolContentEntry,
+  MonsterContentEntry, IdentificationPoolContentEntry, EncounterContentEntry,
+  FallenChampionTemplateContentEntry,
 } from '../model.js';
 import type { ContentCompileIssue } from './error.js';
-import { ACTION_COST_IDS, BEHAVIOR_PARAMETER_SCHEMAS, EFFECT_PARAMETER_SCHEMAS } from './registries.js';
+import {
+  ACTION_COST_IDS, BEHAVIOR_PARAMETER_SCHEMAS, BOSS_PHASE_EFFECT_IDS, EFFECT_PARAMETER_SCHEMAS,
+  LEADER_RESPONSE_PARAMETER_SCHEMAS, SWARM_RESPONSE_PARAMETER_SCHEMAS,
+} from './registries.js';
+import {
+  checkedTotalWithin, MAX_ENCOUNTER_MEMBERS, MAX_RANDOM_WEIGHT_TOTAL,
+  MAX_SWARM_FLOOR_ACTORS, MAX_SWARM_LIVING_CHILDREN, MAX_SWARM_LIVING_MEMBERS,
+  MAX_SWARM_SPAWN_QUANTITY,
+} from '../population-limits.js';
+import {
+  boundedProduct, MAX_LOOT_CHOICE_QUANTITY, MAX_LOOT_CREATED_UNITS, MAX_LOOT_TABLE_ROLLS,
+  MAX_LOOT_WEIGHT_TOTAL,
+} from '../loot-limits.js';
 
 function compareCodeUnits(left: string, right: string): number {
   if (left < right) return -1;
@@ -78,6 +91,230 @@ function effectIssues(
       ? parameterIssues
       : conditionReferenceIssues(file, path, effect, byId);
   });
+}
+
+function effectsAtPath(
+  file: string,
+  path: string,
+  effects: readonly EffectDefinition[],
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  return effects.flatMap((effect, index) => {
+    const effectPath = `${path}.${index}`;
+    const parameterIssues = validateParameters(
+      file, effectPath, effect.effectId, effect.parameters, EFFECT_PARAMETER_SCHEMAS, 'effect',
+    );
+    return parameterIssues.length > 0
+      ? parameterIssues
+      : conditionReferenceIssues(file, effectPath, effect, byId);
+  });
+}
+
+function referencedKindIssue(
+  file: string,
+  path: string,
+  id: string,
+  kind: ContentEntry['kind'],
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  const target = byId.get(id);
+  if (!target) return [issue(file, path, `unknown ${kind} reference ${id}`)];
+  if (target.kind !== kind) return [issue(file, path, `${kind} reference ${id} resolves to ${target.kind}`)];
+  return [];
+}
+
+function encounterIssues(
+  file: string,
+  encounter: EncounterContentEntry,
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  const path = `$.entries.${encounter.id}.definition`;
+  const issues: ContentCompileIssue[] = [];
+  if (encounter.model === 'individual') {
+    issues.push(...referencedKindIssue(file, `${path}.monsterId`, encounter.definition.monsterId, 'monster', byId));
+    if (encounter.definition.maximumQuantity > MAX_ENCOUNTER_MEMBERS) {
+      issues.push(issue(file, `${path}.maximumQuantity`,
+        `individual quantity exceeds runtime-safe limit ${MAX_ENCOUNTER_MEMBERS}`));
+    }
+    return issues;
+  }
+  if (encounter.model === 'group') {
+    const definition = encounter.definition;
+    const roleIds = new Set<string>();
+    definition.roles.forEach((role, index) => {
+      if (roleIds.has(role.roleId)) issues.push(issue(file, `${path}.roles.${index}.roleId`, `duplicate group role ${role.roleId}`));
+      roleIds.add(role.roleId);
+      issues.push(...referencedKindIssue(file, `${path}.roles.${index}.monsterId`, role.monsterId, 'monster', byId));
+      const monster = byId.get(role.monsterId);
+      if (monster?.kind === 'monster') {
+        issues.push(...validateParameters(file, `${path}.roles.${index}.behavior`, monster.behaviorId,
+          role.behaviorParameters, BEHAVIOR_PARAMETER_SCHEMAS, 'behavior'));
+      }
+    });
+    if (!roleIds.has(definition.leaderRoleId)) {
+      issues.push(issue(file, `${path}.leaderRoleId`, `leader role ${definition.leaderRoleId} is not declared in roles`));
+    }
+    if (!checkedTotalWithin(definition.roles.map((role) => role.maximumQuantity), MAX_ENCOUNTER_MEMBERS)) {
+      issues.push(issue(file, `${path}.roles`, `group maximum quantity exceeds runtime-safe limit ${MAX_ENCOUNTER_MEMBERS}`));
+    }
+    if (definition.leaderDeathResponse === 'collapse' && !definition.supernaturalBond) {
+      issues.push(issue(file, `${path}.supernaturalBond`, 'collapse requires supernaturalBond: true'));
+    }
+    if (definition.leaderDeathResponse === 'collapse' && definition.collapseRewards === 'individual'
+      && encounter.adminDescription === null) {
+      issues.push(issue(file, `$.entries.${encounter.id}.adminDescription`,
+        'collapse with individual rewards requires an admin description of the reward behavior'));
+    }
+    issues.push(...validateParameters(file, `${path}.response`, definition.leaderDeathResponse,
+      definition.responseParameters, LEADER_RESPONSE_PARAMETER_SCHEMAS, 'leader response'));
+    return issues;
+  }
+  if (encounter.model === 'swarm') {
+    const definition = encounter.definition;
+    issues.push(...referencedKindIssue(file, `${path}.sourceMonsterId`, definition.sourceMonsterId, 'monster', byId));
+    const source = byId.get(definition.sourceMonsterId);
+    if (source?.kind === 'monster' && !source.tags.includes('swarm-source')) {
+      issues.push(issue(file, `${path}.sourceMonsterId`, `swarm source ${source.id} requires tag swarm-source`));
+    }
+    const roleIds = new Set<string>();
+    definition.spawnRoles.forEach((role, index) => {
+      if (roleIds.has(role.roleId)) issues.push(issue(file, `${path}.spawnRoles.${index}.roleId`, `duplicate swarm role ${role.roleId}`));
+      roleIds.add(role.roleId);
+      issues.push(...referencedKindIssue(file, `${path}.spawnRoles.${index}.monsterId`, role.monsterId, 'monster', byId));
+    });
+    if (!checkedTotalWithin(definition.spawnRoles.map((role) => role.weight), MAX_RANDOM_WEIGHT_TOTAL)) {
+      issues.push(issue(file, `${path}.spawnRoles`, `spawn-role weight total exceeds rollDie maximum 2^32`));
+    }
+    if (definition.maximumSpawnQuantity > MAX_SWARM_SPAWN_QUANTITY) {
+      issues.push(issue(file, `${path}.maximumSpawnQuantity`,
+        `spawn quantity exceeds runtime-safe limit ${MAX_SWARM_SPAWN_QUANTITY}`));
+    }
+    if (definition.maximumLivingChildren > MAX_SWARM_LIVING_CHILDREN) {
+      issues.push(issue(file, `${path}.maximumLivingChildren`,
+        `maximum living children exceeds runtime-safe limit ${MAX_SWARM_LIVING_CHILDREN}`));
+    }
+    if (definition.maximumLivingMembers > MAX_SWARM_LIVING_MEMBERS) {
+      issues.push(issue(file, `${path}.maximumLivingMembers`,
+        `maximum living members exceeds runtime-safe limit ${MAX_SWARM_LIVING_MEMBERS}`));
+    }
+    if (definition.maximumFloorActors > MAX_SWARM_FLOOR_ACTORS) {
+      issues.push(issue(file, `${path}.maximumFloorActors`,
+        `maximum floor actors exceeds runtime-safe limit ${MAX_SWARM_FLOOR_ACTORS}`));
+    }
+    if (definition.maximumSpawnQuantity > definition.maximumLivingChildren) {
+      issues.push(issue(file, `${path}.maximumSpawnQuantity`, 'maximum spawn quantity must not exceed maximum living children'));
+    }
+    if (definition.maximumLivingMembers < definition.maximumLivingChildren + 1) {
+      issues.push(issue(file, `${path}.maximumLivingMembers`, 'maximum living members must allow the source plus all living children'));
+    }
+    if (definition.maximumFloorActors < definition.maximumLivingMembers) {
+      issues.push(issue(file, `${path}.maximumFloorActors`, 'maximum floor actors must be at least maximum living members'));
+    }
+    issues.push(...validateParameters(file, `${path}.response`, definition.sourceDestructionResponse,
+      definition.responseParameters, SWARM_RESPONSE_PARAMETER_SCHEMAS, 'swarm response'));
+    return issues;
+  }
+  const definition = encounter.definition;
+  issues.push(...referencedKindIssue(file, `${path}.monsterId`, definition.monsterId, 'monster', byId));
+  issues.push(...referencedKindIssue(file, `${path}.uniqueItemId`, definition.uniqueItemId, 'item', byId));
+  issues.push(...referencedKindIssue(file, `${path}.enhancedLootTableId`, definition.enhancedLootTableId, 'loot-table', byId));
+  const visitLootForUnique = (tableId: string, visited = new Set<string>()): boolean => {
+    if (visited.has(tableId)) return false;
+    visited.add(tableId);
+    const table = byId.get(tableId);
+    if (table?.kind !== 'loot-table') return false;
+    return table.choices.some((choice) => choice.contentId === definition.uniqueItemId
+      || (choice.lootTableId !== null && visitLootForUnique(choice.lootTableId, visited)));
+  };
+  if (visitLootForUnique(definition.enhancedLootTableId)) {
+    issues.push(issue(file, `${path}.enhancedLootTableId`,
+      `boss enhanced loot graph reaches guaranteed unique item ${definition.uniqueItemId}`));
+  }
+  const duplicateUnique = [...byId.values()].filter((candidate) => candidate.kind === 'encounter'
+    && candidate.model === 'boss' && candidate.id !== encounter.id
+    && candidate.definition.uniqueItemId === definition.uniqueItemId);
+  if (duplicateUnique.length > 0) {
+    issues.push(issue(file, `${path}.uniqueItemId`, `boss guaranteed unique item ${definition.uniqueItemId} is shared`));
+  }
+  if (encounter.maximumInstancesPerRun !== 1) {
+    issues.push(issue(file, `$.entries.${encounter.id}.maximumInstancesPerRun`, 'boss encounters require maximumInstancesPerRun 1'));
+  }
+  const phaseIds = new Set<string>();
+  let previousThreshold = 100;
+  definition.phases.forEach((phase, index) => {
+    if (phaseIds.has(phase.phaseId)) issues.push(issue(file, `${path}.phases.${index}.phaseId`, `duplicate boss phase ${phase.phaseId}`));
+    phaseIds.add(phase.phaseId);
+    if (phase.healthThresholdPercent >= previousThreshold) {
+      issues.push(issue(file, `${path}.phases.${index}.healthThresholdPercent`, 'boss phase thresholds must be unique and strictly descending'));
+    }
+    previousThreshold = phase.healthThresholdPercent;
+    issues.push(...validateParameters(file, `${path}.phases.${index}.behavior`, phase.behaviorId,
+      phase.behaviorParameters, BEHAVIOR_PARAMETER_SCHEMAS, 'behavior'));
+    phase.effects.forEach((effect, effectIndex) => {
+      if (!(BOSS_PHASE_EFFECT_IDS as readonly string[]).includes(effect.effectId)) {
+        issues.push(issue(file, `${path}.phases.${index}.effects.${effectIndex}.effectId`,
+          `boss phases do not support effect ${effect.effectId}`));
+      }
+    });
+    issues.push(...effectsAtPath(file, `${path}.phases.${index}.effects`, phase.effects, byId));
+  });
+  return issues;
+}
+
+function championTemplateIssues(
+  located: readonly (LocatedContentEntry & { entry: FallenChampionTemplateContentEntry })[],
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  if (located.length === 0) return [];
+  const issues: ContentCompileIssue[] = [];
+  if (located.length > 1) {
+    issues.push(issue(located[1]!.file, '$.entries', `expected at most one fallen champion template; found ${located.length}`));
+  }
+  for (const { entry, file } of located) {
+    const path = `$.entries.${entry.id}`;
+    issues.push(...referencedKindIssue(file, `${path}.fallbackMonsterId`, entry.fallbackMonsterId, 'monster', byId));
+    issues.push(...referencedKindIssue(file, `${path}.fallbackItemId`, entry.fallbackItemId, 'item', byId));
+    const fallbackItem = byId.get(entry.fallbackItemId);
+    if (fallbackItem?.kind === 'item' && !fallbackItem.heirloomEligible) {
+      issues.push(issue(file, `${path}.fallbackItemId`, 'Champion fallback item must be heirloom eligible'));
+    }
+    issues.push(...referencedKindIssue(file, `${path}.echoLootTableId`, entry.echoLootTableId, 'loot-table', byId));
+    const fallbackMonster = byId.get(entry.fallbackMonsterId);
+    if (entry.echoAppearanceChance > 0 && fallbackMonster?.kind === 'monster') {
+      const championHealth = Math.max(entry.minimumHealth, Math.min(entry.maximumHealth, fallbackMonster.health));
+      const championDamage = Math.min(entry.damageMaximum,
+        fallbackMonster.damage.count * fallbackMonster.damage.sides + fallbackMonster.damage.bonus);
+      const championDefense = Math.min(entry.attributeMaximum, fallbackMonster.defense);
+      const championAccuracy = Math.min(entry.attributeMaximum, fallbackMonster.accuracy);
+      if (championHealth <= 1 || championDamage <= 0 || championDefense <= 0 || championAccuracy <= 0) {
+        issues.push(issue(file, path,
+          'Echoes require Champion health, damage, defense, and accuracy boundaries above their strict minimums'));
+      }
+    }
+    const bossUniqueIds = new Set([...byId.values()].filter((candidate): candidate is Extract<EncounterContentEntry, { readonly model: 'boss' }> =>
+      candidate.kind === 'encounter' && candidate.model === 'boss')
+      .map((candidate) => candidate.definition.uniqueItemId));
+    const visitLoot = (tableId: string, visited = new Set<string>()): string | null => {
+      if (visited.has(tableId)) return null;
+      visited.add(tableId);
+      const table = byId.get(tableId);
+      if (table?.kind !== 'loot-table') return null;
+      for (const choice of table.choices) {
+        if (choice.contentId !== null && bossUniqueIds.has(choice.contentId)) return choice.contentId;
+        if (choice.lootTableId !== null) {
+          const found = visitLoot(choice.lootTableId, visited);
+          if (found !== null) return found;
+        }
+      }
+      return null;
+    };
+    const uniqueEchoReward = visitLoot(entry.echoLootTableId);
+    if (uniqueEchoReward !== null) {
+      issues.push(issue(file, `${path}.echoLootTableId`,
+        `Echo loot graph reaches guaranteed boss-unique item ${uniqueEchoReward}; Echo rewards must be ordinary`));
+    }
+  }
+  return issues;
 }
 
 function equipmentIssues(file: string, item: ItemContentEntry): ContentCompileIssue[] {
@@ -210,9 +447,17 @@ function identificationIssues(
 function lootIssues(locatedEntries: readonly LocatedContentEntry[], byId: ReadonlyMap<string, ContentEntry>): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
   const tables = locatedEntries.filter(({ entry }) => entry.kind === 'loot-table') as readonly (LocatedContentEntry & { entry: LootTableContentEntry })[];
+  const bossUniqueIds = new Set(locatedEntries.filter(({ entry }) => entry.kind === 'encounter' && entry.model === 'boss')
+    .map(({ entry }) => (entry as EncounterContentEntry & { model: 'boss' }).definition.uniqueItemId));
   const graph = new Map<string, string[]>();
   for (const { entry, file } of tables) {
     const edges: string[] = [];
+    if (entry.rolls > MAX_LOOT_TABLE_ROLLS) {
+      issues.push(issue(file, `$.entries.${entry.id}.rolls`, `loot table rolls exceed runtime-safe limit ${MAX_LOOT_TABLE_ROLLS}`));
+    }
+    if (!checkedTotalWithin(entry.choices.map((choice) => choice.weight), MAX_LOOT_WEIGHT_TOTAL)) {
+      issues.push(issue(file, `$.entries.${entry.id}.choices`, 'loot choice weight total exceeds rollDie maximum 2^32'));
+    }
     entry.choices.forEach((choice, index) => {
       const path = `$.entries.${entry.id}.choices.${index}`;
       if ((choice.contentId === null) === (choice.lootTableId === null)) {
@@ -221,11 +466,24 @@ function lootIssues(locatedEntries: readonly LocatedContentEntry[], byId: Readon
       if (choice.minimumQuantity > choice.maximumQuantity) {
         issues.push(issue(file, `${path}.maximumQuantity`, 'maximum quantity must be at least minimum quantity'));
       }
+      if (choice.maximumQuantity > MAX_LOOT_CHOICE_QUANTITY) {
+        issues.push(issue(file, `${path}.maximumQuantity`,
+          `loot choice quantity exceeds runtime-safe limit ${MAX_LOOT_CHOICE_QUANTITY}`));
+      }
       if (choice.contentId !== null && !byId.has(choice.contentId)) {
         issues.push(issue(file, `${path}.contentId`, `unknown content reference ${choice.contentId}`));
       } else if (choice.contentId !== null && byId.get(choice.contentId)?.kind !== 'item') {
         issues.push(issue(file, `${path}.contentId`,
           `content reference ${choice.contentId} resolves to ${byId.get(choice.contentId)!.kind}; expected item`));
+      }
+      const itemTarget = choice.contentId === null ? undefined : byId.get(choice.contentId);
+      if (itemTarget?.kind === 'item' && choice.maximumQuantity > itemTarget.stackLimit) {
+        issues.push(issue(file, `${path}.maximumQuantity`,
+          `loot choice quantity exceeds item stack limit ${itemTarget.stackLimit}`));
+      }
+      if (choice.contentId !== null && bossUniqueIds.has(choice.contentId)) {
+        issues.push(issue(file, `${path}.contentId`,
+          `guaranteed boss-unique item ${choice.contentId} cannot appear in ordinary loot`));
       }
       if (choice.lootTableId !== null) {
         edges.push(choice.lootTableId);
@@ -251,6 +509,28 @@ function lootIssues(locatedEntries: readonly LocatedContentEntry[], byId: Readon
     visited.add(id);
   };
   for (const id of [...graph.keys()].sort(compareCodeUnits)) visit(id, []);
+  const worstMemo = new Map<string, number>();
+  const worstUnits = (id: string, trail = new Set<string>()): number => {
+    const memoized = worstMemo.get(id);
+    if (memoized !== undefined) return memoized;
+    if (trail.has(id)) return MAX_LOOT_CREATED_UNITS + 1;
+    const table = tables.find(({ entry }) => entry.id === id)?.entry;
+    if (!table) return MAX_LOOT_CREATED_UNITS + 1;
+    const nextTrail = new Set(trail); nextTrail.add(id);
+    let worstChoice = 0;
+    for (const choice of table.choices) {
+      const child = choice.lootTableId === null ? 1 : worstUnits(choice.lootTableId, nextTrail);
+      worstChoice = Math.max(worstChoice,
+        boundedProduct(choice.maximumQuantity, child, MAX_LOOT_CREATED_UNITS));
+    }
+    const result = boundedProduct(table.rolls, worstChoice, MAX_LOOT_CREATED_UNITS);
+    worstMemo.set(id, result);
+    return result;
+  };
+  for (const { entry, file } of tables) if (worstUnits(entry.id) > MAX_LOOT_CREATED_UNITS) {
+    issues.push(issue(file, `$.entries.${entry.id}`,
+      `loot table worst-case created units exceed runtime-safe limit ${MAX_LOOT_CREATED_UNITS}`));
+  }
   return issues;
 }
 
@@ -296,7 +576,18 @@ function balanceIssues(
 
 export function validateContentEntries(locatedEntries: readonly LocatedContentEntry[]): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
+  const encounters = locatedEntries.filter(({ entry }) => entry.kind === 'encounter');
+  if (!checkedTotalWithin(encounters.map(({ entry }) => (entry as EncounterContentEntry).weight), MAX_RANDOM_WEIGHT_TOTAL)) {
+    const located = encounters.at(-1)!;
+    issues.push(issue(located.file, '$.entries', 'encounter weight total exceeds rollDie maximum 2^32'));
+  }
   const byId = new Map(locatedEntries.map(({ entry }) => [entry.id, entry]));
+  const vaultTags = new Set<string>();
+  for (const { entry } of locatedEntries) {
+    if (entry.kind !== 'vault') continue;
+    entry.tags.forEach((tag) => vaultTags.add(tag));
+    Object.values(entry.legend).forEach((legend) => legend.slot?.tags.forEach((tag) => vaultTags.add(tag)));
+  }
   const allItems = locatedEntries.filter(({ entry }) => entry.kind === 'item')
     .map(({ entry }) => entry as ItemContentEntry);
   for (const { entry, file } of locatedEntries) {
@@ -308,11 +599,25 @@ export function validateContentEntries(locatedEntries: readonly LocatedContentEn
         ...effectIssues(file, entry.id, entry.effects, byId));
     }
     if (entry.kind === 'spell' || entry.kind === 'trap') issues.push(...effectIssues(file, entry.id, entry.effects, byId));
+    if (entry.kind === 'encounter') issues.push(...encounterIssues(file, entry, byId));
+    if (entry.kind === 'encounter') {
+      entry.requiredVaultTags.forEach((tag, index) => {
+        if (!vaultTags.has(tag)) issues.push(issue(file, `$.entries.${entry.id}.requiredVaultTags.${index}`,
+          `unknown vault tag ${tag}`));
+      });
+      if (entry.model === 'boss') entry.definition.vaultTags.forEach((tag, index) => {
+        if (!vaultTags.has(tag)) issues.push(issue(file, `$.entries.${entry.id}.definition.vaultTags.${index}`,
+          `unknown vault tag ${tag}`));
+      });
+    }
   }
   const itemEntries = locatedEntries.filter(({ entry }) => entry.kind === 'item');
   const poolEntries = locatedEntries.filter(({ entry }) => entry.kind === 'identification-pool');
   issues.push(...identificationIssues(itemEntries, poolEntries, byId));
   issues.push(...lootIssues(locatedEntries, byId));
+  const championTemplates = locatedEntries.filter((located): located is LocatedContentEntry & { entry: FallenChampionTemplateContentEntry } =>
+    located.entry.kind === 'fallen-champion-template');
+  issues.push(...championTemplateIssues(championTemplates, byId));
   const balanceEntries = locatedEntries.filter(({ entry }) => entry.kind === 'balance');
   if (balanceEntries.length > 1) {
     issues.push(issue(balanceEntries[1]!.file, '$.entries', `expected exactly one balance entry; found ${balanceEntries.length}`));

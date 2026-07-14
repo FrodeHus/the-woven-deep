@@ -17,16 +17,18 @@ describe('content model', () => {
       generationReport: { foundationalCategories: [] },
     };
 
-    expect(pack.schemaVersion).toBe(2);
+    expect(pack.schemaVersion).toBe(3);
     expect(pack.hash).toHaveLength(64);
   });
 
-  it('exposes every schema-v2 content kind', () => {
+  it('exposes every schema-v3 content kind', () => {
     const kinds: ContentKind[] = [...CONTENT_KIND_IDS];
 
-    expect(kinds).toHaveLength(9);
+    expect(kinds).toHaveLength(11);
     expect(kinds).toContain('condition');
     expect(kinds).toContain('identification-pool');
+    expect(kinds).toContain('encounter');
+    expect(kinds).toContain('fallen-champion-template');
   });
 
   it('rejects a stored schema-v1 pack before exposing entries', async () => {
@@ -42,7 +44,7 @@ describe('content model', () => {
   it('does not fill source defaults while validating a stored pack', async () => {
     const { validateCompiledContentPack } = await import('../src/index.js');
     expect(() => validateCompiledContentPack({
-      schemaVersion: 2,
+      schemaVersion: 3,
       hash: '0'.repeat(64),
       entries: [{
         kind: 'spell', id: 'spell.bad', name: 'Bad', tags: [], targetingId: 'target.self', range: 0,

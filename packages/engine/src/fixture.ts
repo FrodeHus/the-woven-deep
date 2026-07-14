@@ -4,11 +4,11 @@ import { createUnknownKnowledge } from './knowledge.js';
 import { refreshKnowledge } from './perception.js';
 import { ENGINE_GAME_VERSION, SAVE_SCHEMA_VERSION } from './versions.js';
 import { emptyEquipment, heroPerception, type ActorState } from './actor-model.js';
-import type { CompiledContentPack } from '@woven-deep/content';
+import { CONTENT_SCHEMA_VERSION, type CompiledContentPack } from '@woven-deep/content';
 
 export function createDemoContentPack(): CompiledContentPack {
   return {
-    schemaVersion: 2,
+    schemaVersion: CONTENT_SCHEMA_VERSION,
     hash: 'a'.repeat(64),
     entries: [{
       kind: 'balance', id: 'balance.core-gameplay', name: 'Core gameplay', tags: ['core'],
@@ -25,7 +25,7 @@ export function createDemoContentPack(): CompiledContentPack {
         rangedAccuracy: { agility: 1 }, defense: { base: 8, agility: 1 }, search: { wits: 1 },
         disarm: { agility: 1, wits: 1 },
       },
-      actionCosts: { 'action.move': 100, 'action.wait': 100 },
+      actionCosts: { 'action.move': 100, 'action.wait': 100, 'action.spawn': 100 },
     }, {
       kind: 'condition', id: 'condition.disengaged', name: 'Disengaged',
       description: 'Avoids opportunity attacks', tags: ['beneficial'], color: '#78c8dc',
@@ -44,6 +44,11 @@ export function createDemoContentPack(): CompiledContentPack {
       duration: { mode: 'timed', default: 100, maximum: 1000 },
       stacking: { mode: 'refresh', maximumStacks: 1 }, modifiersPerStack: {},
       traits: ['condition-trait.suppresses-reactions'],
+    }, {
+      kind: 'condition', id: 'condition.swarm-decay', name: 'Swarm decay',
+      description: 'The destroyed source causes this swarm member to decay.', tags: ['population'], color: '#8a7766',
+      duration: { mode: 'permanent', default: null, maximum: null },
+      stacking: { mode: 'refresh', maximumStacks: 1 }, modifiersPerStack: {}, traits: [],
     }, {
       kind: 'condition', id: 'condition.restless', name: 'Restless',
       description: 'Interrupts rest', tags: ['survival'], color: '#c89070',
@@ -86,7 +91,10 @@ export function createDemoRun(): ActiveRun {
     conditions: [],
     equipment: emptyEquipment(),
     behaviorId: null,
-    behaviorState: {},
+    behaviorState: { intent: 'hold', goal: null, lastKnownTargets: [], investigation: null },
+    populationId: null,
+    populationRoleId: null,
+    populationPresentation: null,
   };
   const floor = {
     floorId: 'floor.demo', seed, generatorVersion: 1 as const, width: 7, height: 5, depth: 1, tiles, entities: [],
@@ -122,7 +130,13 @@ export function createDemoRun(): ActiveRun {
     },
     identification: { appearanceByContentId: {}, knownAppearanceIds: [] },
     activeFloorId: 'floor.demo',
+    activeFloorEnteredAt: 0,
     floors: [{ ...floor, knowledge }],
     recentCommands: [],
+    encounterDecisions: [],
+    populations: [],
+    fallenHeroStandings: [],
+    fallenHeroDecisions: [],
+    conqueredChampionRecordIds: [],
   };
 }

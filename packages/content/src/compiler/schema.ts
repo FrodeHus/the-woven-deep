@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CONDITION_TRAIT_IDS, DERIVED_STAT_NAMES } from '../model.js';
+import { CONDITION_TRAIT_IDS, CONTENT_SCHEMA_VERSION, DERIVED_STAT_NAMES } from '../model.js';
 
 export const stableIdSchema = z.string().regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/);
 export const slugSchema = z.string().regex(/^[a-z][a-z0-9-]*$/);
@@ -16,6 +16,11 @@ export const damageTypes = ['physical', 'fire', 'cold', 'lightning', 'poison', '
 export const targetingIds = ['target.self', 'target.actor', 'target.line', 'target.cell'] as const;
 export const equipmentSlots = ['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring'] as const;
 export const vaultPlacementKinds = ['monster', 'item', 'trap', 'npc', 'fixture', 'objective'] as const;
+export const encounterModels = ['individual', 'group', 'swarm', 'boss'] as const;
+export const encounterFormations = ['cluster', 'line', 'screen', 'wedge', 'surround'] as const;
+export const formationPreferences = ['front', 'center', 'rear', 'flank', 'free'] as const;
+export const leaderDeathResponses = ['weaken', 'panic', 'disband', 'surrender', 'frenzy', 'collapse'] as const;
+export const swarmDestructionResponses = ['stop', 'flee', 'decay', 'frenzy'] as const;
 
 export const diceSchema = z.strictObject({
   count: safePositive.max(100),
@@ -79,7 +84,6 @@ const monsterEntry = z.strictObject({
   disposition: z.enum(['friendly', 'neutral', 'hostile']),
   behaviorId: stableIdSchema,
   behaviorParameters: jsonObject.default({}),
-  runAppearanceChance: probability,
   rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
 }).superRefine((entry, context) => {
   if (entry.maxDepth < entry.minDepth) context.addIssue({ code: 'custom', path: ['maxDepth'], message: 'maximum depth must be greater than or equal to minimum depth' });
@@ -142,6 +146,7 @@ const itemEntry = z.strictObject({
   stackLimit: safePositive,
   price: safeNonNegative,
   rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
+  heirloomEligible: z.boolean().default(true),
   actionCost: safeNonNegative,
   equipment: equipment.nullable(),
   combat: combat.nullable(),
@@ -314,7 +319,205 @@ const vaultEntry = z.strictObject({
   if (entry.maxDepth < entry.minDepth) context.addIssue({ code: 'custom', path: ['maxDepth'], message: 'maximum depth must be greater than or equal to minimum depth' });
 });
 
-const rawContentEntrySchema = z.discriminatedUnion('kind', [
+const populationModifiers = z.strictObject({
+  accuracy: safeInteger,
+  defense: safeInteger,
+  damage: safeInteger,
+});
+
+const encounterPlacement = z.strictObject({
+  minimumStairDistance: safeNonNegative,
+  minimumObjectiveDistance: safeNonNegative,
+  maximumMemberDistance: safeNonNegative,
+  allowedTerrainTags: z.array(slugSchema).min(1),
+  requiresVaultSlot: z.boolean(),
+  failureMode: z.enum(['optional', 'required']),
+});
+
+const encounterIntentPresentation = z.strictObject({ visible: z.boolean() });
+
+const encounterCommon = {
+  ...base,
+  ...depthRange,
+  kind: z.literal('encounter'),
+  adminDescription: z.string().trim().min(1).max(500).nullable().default(null),
+  environmentTags: z.array(slugSchema),
+  requiredVaultTags: z.array(slugSchema),
+  weight: safePositive,
+  rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
+  runAppearanceChance: probability,
+  discoveryProtectionIncrement: probability,
+  discoveryProtectionCap: probability,
+  maximumInstancesPerRun: safePositive,
+  placement: encounterPlacement,
+  intentPresentation: encounterIntentPresentation,
+} as const;
+
+const quantityRange = {
+  minimumQuantity: safePositive,
+  maximumQuantity: safePositive,
+} as const;
+
+const individualEncounterEntry = z.strictObject({
+  ...encounterCommon,
+  model: z.literal('individual'),
+  definition: z.strictObject({
+    monsterId: stableIdSchema,
+    ...quantityRange,
+  }),
+});
+
+const groupEncounterEntry = z.strictObject({
+  ...encounterCommon,
+  model: z.literal('group'),
+  definition: z.strictObject({
+    roles: z.array(z.strictObject({
+      roleId: slugSchema,
+      monsterId: stableIdSchema,
+      ...quantityRange,
+      formationPreference: z.enum(formationPreferences),
+      behaviorParameters: jsonObject.default({}),
+    })).min(1),
+    formation: z.enum(encounterFormations),
+    communicationRadius: safePositive,
+    leaderChance: probability,
+    leaderRoleId: slugSchema,
+    leaderAccentColor: color,
+    leaderAlternateGlyph: glyph.nullable(),
+    coordinationModifiers: populationModifiers,
+    leaderDeathResponse: z.enum(leaderDeathResponses),
+    responseParameters: jsonObject.default({}),
+    supernaturalBond: z.boolean(),
+    collapseRewards: z.enum(['none', 'individual']),
+  }),
+});
+
+const swarmEncounterEntry = z.strictObject({
+  ...encounterCommon,
+  model: z.literal('swarm'),
+  definition: z.strictObject({
+    sourceMonsterId: stableIdSchema,
+    spawnRoles: z.array(z.strictObject({
+      roleId: slugSchema,
+      monsterId: stableIdSchema,
+      weight: safePositive,
+    })).min(1),
+    spawnInterval: safePositive,
+    minimumSpawnQuantity: safePositive,
+    maximumSpawnQuantity: safePositive,
+    placementRadius: safePositive,
+    allowedTerrainTags: z.array(slugSchema).min(1),
+    maximumLivingChildren: safePositive,
+    maximumLivingMembers: safePositive,
+    maximumFloorActors: safePositive,
+    sourceDestructionResponse: z.enum(swarmDestructionResponses),
+    responseParameters: jsonObject.default({}),
+  }),
+});
+
+const bossEncounterEntry = z.strictObject({
+  ...encounterCommon,
+  model: z.literal('boss'),
+  definition: z.strictObject({
+    monsterId: stableIdSchema,
+    phases: z.array(z.strictObject({
+      phaseId: slugSchema,
+      healthThresholdPercent: safePositive.max(99),
+      behaviorId: stableIdSchema,
+      behaviorParameters: jsonObject.default({}),
+      modifiers: populationModifiers,
+      effects: z.array(effect),
+    })),
+    recoveryPerWorldTime: z.number().finite().nonnegative(),
+    recoveryCapPercent: safeNonNegative.max(100),
+    uniqueItemId: stableIdSchema,
+    enhancedLootTableId: stableIdSchema,
+    vaultTags: z.array(slugSchema),
+  }),
+});
+
+const encounterEntry = z.strictObject({
+  ...encounterCommon,
+  model: z.enum(encounterModels),
+  definition: z.union([
+    individualEncounterEntry.shape.definition,
+    groupEncounterEntry.shape.definition,
+    swarmEncounterEntry.shape.definition,
+    bossEncounterEntry.shape.definition,
+  ]),
+}).superRefine((entry, context) => {
+  if (entry.maxDepth < entry.minDepth) {
+    context.addIssue({ code: 'custom', path: ['maxDepth'], message: 'maximum depth must be greater than or equal to minimum depth' });
+  }
+  if (entry.discoveryProtectionCap < entry.runAppearanceChance) {
+    context.addIssue({ code: 'custom', path: ['discoveryProtectionCap'], message: 'discovery protection cap must not be below run appearance chance' });
+  }
+  const definition = entry.definition;
+  const matchesModel = (entry.model === 'individual' && 'monsterId' in definition && 'minimumQuantity' in definition)
+    || (entry.model === 'group' && 'roles' in definition)
+    || (entry.model === 'swarm' && 'sourceMonsterId' in definition)
+    || (entry.model === 'boss' && 'phases' in definition);
+  if (!matchesModel) {
+    context.addIssue({ code: 'custom', path: ['definition'], message: `definition does not match encounter model ${entry.model}` });
+    return;
+  }
+  if ('minimumQuantity' in definition && definition.maximumQuantity < definition.minimumQuantity) {
+    context.addIssue({ code: 'custom', path: ['definition', 'maximumQuantity'], message: 'maximum quantity must be at least minimum quantity' });
+  }
+  if (entry.model === 'group' && 'roles' in definition) {
+    for (let index = 0; index < definition.roles.length; index += 1) {
+      const role = definition.roles[index]!;
+      if (role.maximumQuantity < role.minimumQuantity) {
+        context.addIssue({ code: 'custom', path: ['definition', 'roles', index, 'maximumQuantity'], message: 'maximum quantity must be at least minimum quantity' });
+      }
+    }
+  }
+  if (entry.model === 'swarm' && 'maximumSpawnQuantity' in definition
+    && definition.maximumSpawnQuantity < definition.minimumSpawnQuantity) {
+    context.addIssue({ code: 'custom', path: ['definition', 'maximumSpawnQuantity'], message: 'maximum spawn quantity must be at least minimum spawn quantity' });
+  }
+});
+
+const fallenChampionTemplateEntry = z.strictObject({
+  ...base,
+  kind: z.literal('fallen-champion-template'),
+  fallbackMonsterId: stableIdSchema,
+  fallbackItemId: stableIdSchema,
+  minimumHealth: safePositive,
+  maximumHealth: safePositive,
+  attributeMaximum: safePositive,
+  damageMaximum: safePositive,
+  abilityLimit: safeNonNegative,
+  echoAppearanceChance: probability,
+  maximumEchoesPerRun: safePositive.max(9),
+  echoHealthPercent: safePositive.max(99),
+  echoDamagePercent: safePositive.max(99),
+  echoDefensePercent: safePositive.max(99),
+  echoAbilityLimit: safeNonNegative,
+  echoLootTableId: stableIdSchema,
+  heirloomSelection: z.strictObject({
+    rarityWeights: z.strictObject({
+      common: safePositive,
+      uncommon: safePositive,
+      rare: safePositive,
+      legendary: safePositive,
+    }),
+    qualityRankBonus: safeNonNegative,
+  }),
+}).superRefine((entry, context) => {
+  if (entry.maximumHealth < entry.minimumHealth) {
+    context.addIssue({ code: 'custom', path: ['maximumHealth'], message: 'maximum health must be at least minimum health' });
+  }
+  if (entry.echoAppearanceChance > 0 && entry.echoAbilityLimit >= entry.abilityLimit) {
+    context.addIssue({ code: 'custom', path: ['echoAbilityLimit'], message: 'Echo ability limit must be strictly below Champion ability limit' });
+  }
+  const weights = entry.heirloomSelection.rarityWeights;
+  if (!(weights.common <= weights.uncommon && weights.uncommon <= weights.rare && weights.rare <= weights.legendary)) {
+    context.addIssue({ code: 'custom', path: ['heirloomSelection', 'rarityWeights'], message: 'rarity weights must be nondecreasing from common through legendary' });
+  }
+});
+
+export const contentSourceEntrySchema = z.discriminatedUnion('kind', [
   monsterEntry,
   itemEntry,
   spellEntry,
@@ -324,9 +527,11 @@ const rawContentEntrySchema = z.discriminatedUnion('kind', [
   vaultEntry,
   conditionEntry,
   identificationPoolEntry,
+  encounterEntry,
+  fallenChampionTemplateEntry,
 ]);
 
-export const contentEntrySchema = rawContentEntrySchema.transform((entry) => {
+export const contentEntrySchema = contentSourceEntrySchema.transform((entry) => {
   if (entry.kind !== 'vault') return entry;
   let entranceCount = 0;
   const requiredSlotIds = new Set<string>();
@@ -345,6 +550,6 @@ export const contentEntrySchema = rawContentEntrySchema.transform((entry) => {
 });
 
 export const contentFileSchema = z.strictObject({
-  schemaVersion: z.literal(2),
+  schemaVersion: z.literal(CONTENT_SCHEMA_VERSION),
   entries: z.array(contentEntrySchema).min(1),
 });

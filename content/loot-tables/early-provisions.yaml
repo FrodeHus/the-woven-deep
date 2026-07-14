@@ -1,4 +1,4 @@
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: loot-table
     id: loot-table.early-provisions

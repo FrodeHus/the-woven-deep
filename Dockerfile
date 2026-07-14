@@ -1,13 +1,14 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.base.json ./
+COPY compose.yaml ./
 COPY apps ./apps
 COPY packages ./packages
 COPY content ./content
 COPY docs ./docs
 COPY scripts ./scripts
 RUN npm ci
-RUN npm test && npm run typecheck && npm run build && npm run engine:demo && npm run dungeon:demo && npm run gameplay:demo
+RUN npm test && npm run typecheck && npm run build && npm run engine:demo && npm run dungeon:demo && npm run gameplay:demo && npm run population:demo
 RUN npm prune --omit=dev
 
 FROM node:22-bookworm-slim AS runtime

@@ -1,0 +1,10 @@
+schemaVersion: 3
+entries:
+  - kind: loot-table
+    id: loot-table.ashen-warden
+    name: Ashen Warden spoils
+    tags: [boss, reward]
+    rolls: 2
+    choices:
+      - { contentId: item.crimson-potion, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.etched-ring, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }

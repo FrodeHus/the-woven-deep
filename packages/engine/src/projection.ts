@@ -346,11 +346,36 @@ export function projectGameplayState(input: Readonly<{
     .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0)
     .map((actor) => {
       const definition = input.content.entries.find((entry) => entry.id === actor.contentId);
-      const presentation = definition?.kind === 'monster'
-        ? { name: definition.name, glyph: definition.glyph, color: definition.color } : {};
+      const population = input.state.populations.find((candidate) => candidate.populationId === actor.populationId);
+      const encounter = population === undefined ? undefined : input.content.entries.find((entry) =>
+        entry.kind === 'encounter' && entry.id === population.encounterId);
+      const presentation = actor.populationPresentation ?? (definition?.kind === 'monster'
+        ? { name: definition.name, glyph: definition.glyph, color: definition.color } : {});
+      const healthRatio = actor.maxHealth === 0 ? 0 : actor.health / actor.maxHealth;
+      const healthBand = healthRatio >= 0.75 ? 'healthy' : healthRatio >= 0.4 ? 'wounded' : 'critical';
+      const sourceState = population?.model === 'swarm' && population.sourceActorId === actor.actorId
+        ? { source: true, sourceState: population.shutdownState === null ? 'active' : population.shutdownState,
+          growthWarning: population.shutdownState === null ? 'may-spawn' : 'contained' }
+        : {};
+      const bossState = population?.model === 'boss'
+        ? { bossPhase: population.currentPhaseId }
+        : {};
       return { actorId: actor.actorId, contentId: actor.contentId, ...presentation,
+        ...((population?.model === 'champion' || population?.model === 'echo') ? {
+          equipmentContentIds: population.equipmentContentIds,
+          abilityIds: population.abilityIds,
+        } : {}),
+        ...sourceState, ...bossState,
         x: actor.x, y: actor.y, health: actor.health, maxHealth: actor.maxHealth,
-        disposition: relationshipBetween(input.state, hero.actorId, actor.actorId) };
+        healthPresentation: { current: actor.health, maximum: actor.maxHealth, band: healthBand },
+        disposition: relationshipBetween(input.state, hero.actorId, actor.actorId),
+        ...((encounter?.kind === 'encounter' && encounter.intentPresentation.visible) ? {
+          intent: actor.behaviorState.intent,
+          intentPresentation: `intent.${actor.behaviorState.intent}`,
+        } : {}),
+        ...(population?.model === 'group' && population.leaderActorId === actor.actorId
+          ? { leadershipRole: actor.populationRoleId } : {}),
+      };
     });
   const features = input.state.features.filter((feature) => feature.floorId === hero.floorId
     && visiblyOccupied(observed, feature.x, feature.y))

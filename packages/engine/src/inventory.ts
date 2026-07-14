@@ -1,8 +1,15 @@
-import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
+import {
+  boundedProduct, checkedTotalWithin, DERIVED_STAT_NAMES, MAX_LOOT_CHOICE_QUANTITY,
+  MAX_LOOT_CREATED_UNITS, MAX_LOOT_TABLE_ROLLS, MAX_LOOT_WEIGHT_TOTAL,
+  type CompiledContentPack, type ItemContentEntry, type LootTableContentEntry,
+} from '@woven-deep/content';
 import { actorById } from './actor-model.js';
 import type { ItemInstance } from './item-model.js';
-import type { ActiveRun, OpaqueId } from './model.js';
+import type { ActiveRun, OpaqueId, Uint32State } from './model.js';
+import type { RecordedHeirloomSnapshot } from './population-model.js';
 import { stableJson } from './stable-json.js';
+import { boundedDisplayText } from './display-text.js';
+import { rollDie } from './random.js';
 
 export type InventoryFailureReason = 'inventory.full' | 'item.missing' | 'item.unavailable'
   | 'item.quantity' | 'item.incompatible' | 'item.id-conflict';
@@ -30,8 +37,207 @@ function itemDefinition(content: CompiledContentPack, contentId: OpaqueId): Item
   return entry;
 }
 
+function lootTable(content: CompiledContentPack, tableId: OpaqueId): LootTableContentEntry {
+  const entry = content.entries.find((candidate) => candidate.id === tableId);
+  if (!entry || entry.kind !== 'loot-table') {
+    throw new Error(`internal invariant: loot table ${tableId} does not exist`);
+  }
+  return entry;
+}
+
+/** Validates a complete loot graph before consuming RNG or creating any item. */
+function validateLootGraph(content: CompiledContentPack, rootTableId: OpaqueId): void {
+  const memo = new Map<OpaqueId, number>();
+  const bossUniqueIds = new Set(content.entries.filter((entry) => entry.kind === 'encounter' && entry.model === 'boss')
+    .map((entry) => entry.definition.uniqueItemId));
+  const visit = (tableId: OpaqueId, trail: readonly OpaqueId[]): number => {
+    const memoized = memo.get(tableId);
+    if (memoized !== undefined) return memoized;
+    if (trail.includes(tableId)) {
+      throw new Error(`internal invariant: loot table cycle ${[...trail, tableId].join(' -> ')}`);
+    }
+    const table = lootTable(content, tableId);
+    if (!Number.isSafeInteger(table.rolls) || table.rolls <= 0 || table.rolls > MAX_LOOT_TABLE_ROLLS) {
+      throw new RangeError(`loot preflight: roll count exceeds runtime-safe limit ${MAX_LOOT_TABLE_ROLLS}`);
+    }
+    if (table.choices.some((choice) => !Number.isSafeInteger(choice.weight) || choice.weight <= 0)
+      || !checkedTotalWithin(table.choices.map((choice) => choice.weight), MAX_LOOT_WEIGHT_TOTAL)) {
+      throw new RangeError('loot preflight: choice weight total exceeds rollDie maximum 2^32');
+    }
+    let worstChoice = 0;
+    for (const choice of table.choices) {
+      if (!Number.isSafeInteger(choice.maximumQuantity) || choice.maximumQuantity <= 0
+        || choice.maximumQuantity > MAX_LOOT_CHOICE_QUANTITY) {
+        throw new RangeError(`loot preflight: choice quantity exceeds runtime-safe limit ${MAX_LOOT_CHOICE_QUANTITY}`);
+      }
+      if (!Number.isSafeInteger(choice.minimumQuantity) || choice.minimumQuantity <= 0
+        || choice.minimumQuantity > choice.maximumQuantity) {
+        throw new RangeError('loot preflight: choice quantity range is invalid');
+      }
+      if ((choice.contentId === null) === (choice.lootTableId === null)) {
+        throw new Error(`internal invariant: loot table ${tableId} choice must have exactly one target`);
+      }
+      const directItem = choice.contentId === null ? null : itemDefinition(content, choice.contentId);
+      if (directItem && choice.maximumQuantity > directItem.stackLimit) {
+        throw new RangeError(`loot preflight: choice quantity exceeds item stack limit ${directItem.stackLimit}`);
+      }
+      if (choice.contentId !== null && bossUniqueIds.has(choice.contentId)) {
+        throw new Error(`loot preflight: guaranteed boss-unique item ${choice.contentId} cannot appear in ordinary loot`);
+      }
+      const childUnits = directItem !== null
+        ? 1
+        : visit(choice.lootTableId!, [...trail, tableId]);
+      worstChoice = Math.max(worstChoice,
+        boundedProduct(choice.maximumQuantity, childUnits, MAX_LOOT_CREATED_UNITS));
+    }
+    const worst = boundedProduct(table.rolls, worstChoice, MAX_LOOT_CREATED_UNITS);
+    if (worst > MAX_LOOT_CREATED_UNITS) {
+      throw new RangeError(`loot preflight: worst-case created units exceed runtime-safe limit ${MAX_LOOT_CREATED_UNITS}`);
+    }
+    memo.set(tableId, worst);
+    return worst;
+  };
+  visit(rootTableId, []);
+}
+
+export function validateEchoLootGraph(input: Readonly<{
+  content: CompiledContentPack;
+  tableId: OpaqueId;
+  recordedHeirloomContentId: OpaqueId;
+}>): void {
+  validateLootGraph(input.content, input.tableId);
+  const bossUniqueIds = new Set(input.content.entries.filter((entry) => entry.kind === 'encounter' && entry.model === 'boss')
+    .map((entry) => entry.definition.uniqueItemId));
+  const visited = new Set<OpaqueId>();
+  const visit = (tableId: OpaqueId): void => {
+    if (visited.has(tableId)) return;
+    visited.add(tableId);
+    const table = lootTable(input.content, tableId);
+    for (const choice of table.choices) {
+      if (choice.contentId !== null) {
+        if (choice.contentId === input.recordedHeirloomContentId) {
+          throw new Error(`Echo loot graph ${input.tableId} reaches recorded heirloom ${choice.contentId}; Echo rewards must be ordinary`);
+        }
+        if (bossUniqueIds.has(choice.contentId)) {
+          throw new Error(`Echo loot graph ${input.tableId} reaches guaranteed boss-unique item ${choice.contentId}; Echo rewards must be ordinary`);
+        }
+      } else if (choice.lootTableId !== null) visit(choice.lootTableId);
+    }
+  };
+  visit(input.tableId);
+}
+
+export function createFloorLootFromTable(input: Readonly<{
+  content: CompiledContentPack;
+  tableId: OpaqueId;
+  state: Uint32State;
+  itemIdPrefix: OpaqueId;
+  floorId: OpaqueId;
+  x: number;
+  y: number;
+}>): Readonly<{ items: readonly ItemInstance[]; state: Uint32State }> {
+  validateLootGraph(input.content, input.tableId);
+  if (!Number.isSafeInteger(input.x) || input.x < 0 || !Number.isSafeInteger(input.y) || input.y < 0) {
+    throw new RangeError('loot floor position must use non-negative safe integers');
+  }
+  let state = input.state;
+  let sequence = 0;
+  const items: ItemInstance[] = [];
+  const resolve = (tableId: OpaqueId): void => {
+    const table = lootTable(input.content, tableId);
+    const totalWeight = table.choices.reduce((sum, choice) => sum + choice.weight, 0);
+    for (let roll = 0; roll < table.rolls; roll += 1) {
+      const selected = rollDie(state, totalWeight); state = selected.state;
+      let cursor = selected.value;
+      const choice = table.choices.find((candidate) => (cursor -= candidate.weight) <= 0)!;
+      const quantityRoll = rollDie(state, choice.maximumQuantity - choice.minimumQuantity + 1); state = quantityRoll.state;
+      const quantity = choice.minimumQuantity + quantityRoll.value - 1;
+      if (choice.lootTableId !== null) {
+        for (let count = 0; count < quantity; count += 1) resolve(choice.lootTableId);
+        continue;
+      }
+      const definition = itemDefinition(input.content, choice.contentId!);
+      sequence += 1;
+      items.push({ itemId: `${input.itemIdPrefix}.${String(sequence).padStart(6, '0')}`,
+        contentId: definition.id, quantity, condition: 100, enchantment: null,
+        identified: definition.identification.mode === 'known', charges: null,
+        fuel: definition.light?.fuelCapacity ?? null, enabled: definition.light === null ? null : false,
+        location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y } });
+    }
+  };
+  resolve(input.tableId);
+  return { items, state };
+}
+
+export function createFloorItem(input: Readonly<{
+  content: CompiledContentPack; contentId: OpaqueId; itemId: OpaqueId;
+  floorId: OpaqueId; x: number; y: number;
+}>): ItemInstance {
+  const definition = itemDefinition(input.content, input.contentId);
+  return { itemId: input.itemId, contentId: definition.id, quantity: 1, condition: 100, enchantment: null,
+    identified: definition.identification.mode === 'known', charges: null,
+    fuel: definition.light?.fuelCapacity ?? null, enabled: definition.light === null ? null : false,
+    location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y } };
+}
+
+export function createRecordedHeirloom(input: Readonly<{
+  content: CompiledContentPack;
+  snapshot: RecordedHeirloomSnapshot;
+  equippedItemContentIds: readonly OpaqueId[];
+  fallbackItemId: OpaqueId;
+  itemId: OpaqueId;
+  floorId: OpaqueId;
+  x: number;
+  y: number;
+}>): Readonly<{ item: ItemInstance; fallback: boolean; displayName: string; glyph: string; color: string }> {
+  const resolvedContentId = recordedHeirloomContentId(input);
+  const definition = itemDefinition(input.content, resolvedContentId);
+  const fallback = resolvedContentId !== input.snapshot.contentId;
+  const displayName = boundedDisplayText(fallback ? definition.name : input.snapshot.displayName);
+  const item: ItemInstance = {
+    itemId: input.itemId, contentId: definition.id, quantity: 1,
+    condition: fallback ? 100 : input.snapshot.condition,
+    enchantment: fallback ? null : input.snapshot.enchantment,
+    identified: true,
+    charges: fallback ? null : input.snapshot.charges,
+    fuel: fallback ? definition.light?.fuelCapacity ?? null : input.snapshot.fuel,
+    enabled: definition.light === null ? null : false,
+    location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y },
+    heirloom: { displayName,
+      glyph: fallback ? definition.glyph : input.snapshot.glyph,
+      color: fallback ? definition.color : input.snapshot.color,
+      originatingHallRecordId: input.snapshot.originatingHallRecordId,
+      originatingRank: 1, sourceItemId: input.snapshot.sourceItemId },
+  };
+  return { item, fallback,
+    displayName,
+    glyph: fallback ? definition.glyph : input.snapshot.glyph,
+    color: fallback ? definition.color : input.snapshot.color };
+}
+
+export function recordedHeirloomContentId(input: Readonly<{
+  content: CompiledContentPack;
+  snapshot: RecordedHeirloomSnapshot;
+  equippedItemContentIds: readonly OpaqueId[];
+  fallbackItemId: OpaqueId;
+}>): OpaqueId {
+  const recorded = input.content.entries.find((entry): entry is ItemContentEntry =>
+    entry.kind === 'item' && entry.id === input.snapshot.contentId);
+  const fuelCompatible = recorded?.light === null
+    ? input.snapshot.fuel === null
+    : recorded?.light !== undefined && input.snapshot.fuel !== null
+      && input.snapshot.fuel <= recorded.light.fuelCapacity;
+  const modifiersCompatible = Object.keys(input.snapshot.enchantment?.modifiers ?? {})
+    .every((name) => (DERIVED_STAT_NAMES as readonly string[]).includes(name));
+  return input.snapshot.sourceItemId !== null
+    && input.equippedItemContentIds.includes(input.snapshot.contentId)
+    && recorded?.heirloomEligible === true && recorded.equipment !== null && fuelCompatible && modifiersCompatible
+    ? input.snapshot.contentId : input.fallbackItemId;
+}
+
 export function canStack(left: ItemInstance, right: ItemInstance): boolean {
-  return left.contentId === right.contentId
+  return left.heirloom === undefined && right.heirloom === undefined
+    && left.contentId === right.contentId
     && left.condition === right.condition
     && left.identified === right.identified
     && left.charges === right.charges
