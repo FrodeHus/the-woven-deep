@@ -104,7 +104,10 @@ export function projectItem(input: Readonly<{
       category: entry.category, quantity: item.quantity, identified: false };
   }
   const projected: Record<string, unknown> = {
-    itemId: item.itemId, contentId: entry.id, name: entry.name, category: entry.category,
+    itemId: item.itemId, contentId: entry.id, name: item.heirloom?.displayName ?? entry.name,
+    ...(item.heirloom ? { glyph: item.heirloom.glyph, color: item.heirloom.color,
+      provenance: { originatingHallRecordId: item.heirloom.originatingHallRecordId } } : {}),
+    category: entry.category,
     quantity: item.quantity, identified: item.identified, effects: entry.effects,
   };
   if (item.enchantment && item.identified) projected.enchantment = item.enchantment;

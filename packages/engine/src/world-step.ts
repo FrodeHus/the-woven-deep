@@ -433,6 +433,7 @@ function appendEvents(
   authoritative: DomainEvent[], publicEvents: DomainEvent[], emitted: readonly DomainEvent[], state: ActiveRun, heroId: OpaqueId,
   content: CompiledContentPack,
 ): void {
+  if (emitted.length === 0) return;
   authoritative.push(...emitted);
   publicEvents.push(...projectDomainEvents({ events: emitted, state, heroId, content }));
 }

@@ -3,8 +3,9 @@ import type { ActiveRun } from './model.js';
 import { unidentifiedPresentation } from './identification.js';
 import { hungerStage } from './survival.js';
 import { effectiveEncounterProbability, maximumDiscoveryProtectionBonus } from './population-gates.js';
-import { normalizeFallenHero, retainEchoCandidates } from './champion.js';
+import { assertEchoTemplateBoundaries, normalizeFallenHero, retainEchoCandidates } from './champion.js';
 import { recordedHeirloomContentId } from './inventory.js';
+import { stableJson } from './stable-json.js';
 
 function entryMap(pack: CompiledContentPack): ReadonlyMap<string, ContentEntry> {
   return new Map(pack.entries.map((entry) => [entry.id, entry]));
@@ -55,7 +56,11 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
       if (!actor || actor.contentId !== normalized?.monsterId || actor.maxHealth !== normalized.health
         || actor.populationPresentation?.name !== normalized.displayName
         || actor.populationPresentation.glyph !== normalized.glyph
-        || actor.populationPresentation.color !== normalized.color) {
+        || actor.populationPresentation.color !== normalized.color
+        || population.equipmentContentIds.length !== normalized.equipmentContentIds.length
+        || population.equipmentContentIds.some((id, index) => id !== normalized.equipmentContentIds[index])
+        || population.abilityIds.length !== normalized.abilityIds.length
+        || population.abilityIds.some((id, index) => id !== normalized.abilityIds[index])) {
         throw new Error(`content-bound validation: fallen-hero population ${population.populationId} is not normalized`);
       }
       continue;
@@ -117,6 +122,9 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
     throw new Error('content-bound validation: fallen-hero standings require a Champion template');
   }
   if (championTemplate) {
+    try { assertEchoTemplateBoundaries(championTemplate, pack); } catch (error) {
+      throw new Error(`content-bound validation: ${(error as Error).message}`);
+    }
     const retainedEchoes = run.fallenHeroDecisions.filter((decision) => decision.role === 'echo' && decision.retained);
     const echoStandings = run.fallenHeroStandings.slice(1);
     const echoDecisions = run.fallenHeroDecisions.filter((decision) => decision.role === 'echo');
@@ -153,7 +161,20 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           equippedItemContentIds: standing.equippedItemContentIds, fallbackItemId: championTemplate.fallbackItemId });
         const rewardId = `item.heirloom.${matching[0].populationId}`;
         const reward = run.items.find((item) => item.itemId === rewardId);
-        if (!reward || reward.contentId !== expectedContentId || reward.quantity !== 1) {
+        const fallback = expectedContentId !== standing.heirloom.contentId;
+        const expectedDefinition = entries.get(expectedContentId);
+        const expectedMetadata = { displayName: fallback && expectedDefinition?.kind === 'item'
+          ? expectedDefinition.name : standing.heirloom.displayName,
+        glyph: fallback && expectedDefinition?.kind === 'item' ? expectedDefinition.glyph : standing.heirloom.glyph,
+        color: fallback && expectedDefinition?.kind === 'item' ? expectedDefinition.color : standing.heirloom.color,
+        originatingHallRecordId: standing.hallRecordId };
+        if (!reward || reward.contentId !== expectedContentId || reward.quantity !== 1
+          || reward.condition !== (fallback ? 100 : standing.heirloom.condition)
+          || reward.charges !== (fallback ? null : standing.heirloom.charges)
+          || reward.fuel !== (fallback && expectedDefinition?.kind === 'item'
+            ? expectedDefinition.light?.fuelCapacity ?? null : standing.heirloom.fuel)
+          || stableJson(reward.enchantment) !== stableJson(fallback ? null : standing.heirloom.enchantment)
+          || stableJson(reward.heirloom) !== stableJson(expectedMetadata)) {
           throw new Error(`content-bound validation: Champion reward ${rewardId} is invalid`);
         }
       }

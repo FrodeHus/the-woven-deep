@@ -12,7 +12,7 @@ describe('bundled content', () => {
       'identification-pool', 'encounter', 'fallen-champion-template'] as const;
     expect(Object.fromEntries(kinds.map((kind) => [kind,
       pack.entries.filter((entry) => entry.kind === kind).length]))).toEqual({
-      monster: 4, item: 15, spell: 1, trap: 1, 'loot-table': 2, balance: 1, vault: 1,
+      monster: 4, item: 16, spell: 1, trap: 1, 'loot-table': 3, balance: 1, vault: 1,
       'identification-pool': 2, encounter: 4, 'fallen-champion-template': 1,
     });
     expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(5);

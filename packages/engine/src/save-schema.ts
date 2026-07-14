@@ -161,6 +161,22 @@ const bossDefeatedEvent = z.strictObject({ type: z.literal('boss.defeated'), eve
 const bossRewardCreatedEvent = z.strictObject({ type: z.literal('boss.reward-created'), eventId: identifier,
   populationId: identifier, actorId: identifier, encounterId: identifier, uniqueItemId: identifier,
   itemIds: z.array(identifier).readonly() });
+const championEncounteredEvent = z.strictObject({ type: z.literal('champion.encountered'), eventId: identifier,
+  populationId: identifier, actorId: identifier, hallRecordId: identifier, rank: z.literal(1) });
+const championDefeatedEvent = z.strictObject({ type: z.literal('champion.defeated'), eventId: identifier,
+  populationId: identifier, actorId: identifier, hallRecordId: identifier, rank: z.literal(1) });
+const championHeirloomCreatedEvent = z.strictObject({ type: z.literal('champion.heirloom-created'), eventId: identifier,
+  populationId: identifier, actorId: identifier, hallRecordId: identifier, rank: z.literal(1),
+  itemId: identifier, contentId: identifier, originatingHallRecordId: identifier, displayName: heroName,
+  glyph: z.string().refine((value) => [...value].length === 1), color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  fallback: z.boolean() });
+const echoEncounteredEvent = z.strictObject({ type: z.literal('echo.encountered'), eventId: identifier,
+  populationId: identifier, actorId: identifier, hallRecordId: identifier, rank: z.number().int().min(2).max(10) });
+const echoDefeatedEvent = z.strictObject({ type: z.literal('echo.defeated'), eventId: identifier,
+  populationId: identifier, actorId: identifier, hallRecordId: identifier, rank: z.number().int().min(2).max(10) });
+const echoLootCreatedEvent = z.strictObject({ type: z.literal('echo.loot-created'), eventId: identifier,
+  populationId: identifier, actorId: identifier, hallRecordId: identifier, rank: z.number().int().min(2).max(10),
+  itemIds: z.array(identifier).readonly() });
 const soundHeardEvent = z.strictObject({ type: z.literal('sound.heard'),
   category: z.enum(['combat', 'movement', 'mechanism']),
   direction: z.enum(['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'here']),
@@ -189,6 +205,8 @@ const event = z.discriminatedUnion('type', [
   groupOutcomeAppliedEvent,
   swarmMembersCreatedEvent, swarmCapReachedEvent, swarmSourceDestroyedEvent,
   bossEncounteredEvent, bossPhaseChangedEvent, bossRecoveredEvent, bossDefeatedEvent, bossRewardCreatedEvent,
+  championEncounteredEvent, championDefeatedEvent, championHeirloomCreatedEvent,
+  echoEncounteredEvent, echoDefeatedEvent, echoLootCreatedEvent,
   soundHeardEvent, heroDamagedPublicEvent, restCompletedEvent,
 ]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
@@ -324,6 +342,12 @@ const enchantment = z.strictObject({
   enchantmentId: identifier,
   modifiers: z.record(z.string(), z.number().int().safe()).readonly(),
 });
+const heirloomItemMetadata = z.strictObject({
+  displayName: heroName,
+  glyph: z.string().refine((value) => [...value].length === 1, 'must be one Unicode glyph'),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  originatingHallRecordId: identifier,
+});
 const item = z.strictObject({
   itemId: identifier,
   contentId: identifier,
@@ -335,6 +359,7 @@ const item = z.strictObject({
   fuel: safeNonNegative.nullable(),
   enabled: z.boolean().nullable(),
   location: itemLocation,
+  heirloom: heirloomItemMetadata.optional(),
 });
 const discovery = z.strictObject({
   discoveredByActorIds: z.array(identifier).readonly(),
@@ -398,9 +423,11 @@ const population = z.discriminatedUnion('model', [
     lastFloorExitAt: safeNonNegative.nullable(), rewardCreated: z.boolean(),
     recoveryHistory: z.array(z.strictObject({ at: safeNonNegative, amount: safeNonNegative })).readonly() }),
   z.strictObject({ ...populationBase, model: z.literal('champion'), actorId: identifier,
-    hallRecordId: identifier, rank: z.literal(1), defeated: z.boolean(), rewardCreated: z.boolean() }),
+    hallRecordId: identifier, rank: z.literal(1), defeated: z.boolean(), rewardCreated: z.boolean(),
+    equipmentContentIds: z.array(identifier).readonly(), abilityIds: z.array(identifier).readonly() }),
   z.strictObject({ ...populationBase, model: z.literal('echo'), actorId: identifier,
-    hallRecordId: identifier, rank: z.number().int().min(2).max(10), defeated: z.boolean(), lootCreated: z.boolean() }),
+    hallRecordId: identifier, rank: z.number().int().min(2).max(10), defeated: z.boolean(), lootCreated: z.boolean(),
+    equipmentContentIds: z.array(identifier).readonly(), abilityIds: z.array(identifier).readonly() }),
 ]);
 const heirloom = z.strictObject({
   contentId: identifier, sourceItemId: nullableIdentifier,
@@ -733,6 +760,10 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       }
     } else if (populationValue.model === 'boss' || populationValue.model === 'champion' || populationValue.model === 'echo') {
       if (!memberIds.has(populationValue.actorId)) fail(`${path}.actorId`, 'primary actor must belong to its population');
+      if (populationValue.model === 'champion' || populationValue.model === 'echo') {
+        validateOrderedIds(populationValue.equipmentContentIds, `${path}.equipmentContentIds`, 'normalized equipment');
+        validateOrderedIds(populationValue.abilityIds, `${path}.abilityIds`, 'normalized ability');
+      }
       if ('defeated' in populationValue && populationValue.defeated !== populationValue.formerMemberIds.includes(populationValue.actorId)) {
         fail(`${path}.defeated`, 'fallen-hero defeat state disagrees with primary actor membership');
       }

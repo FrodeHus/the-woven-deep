@@ -508,8 +508,8 @@ const fallenChampionTemplateEntry = z.strictObject({
   if (entry.maximumHealth < entry.minimumHealth) {
     context.addIssue({ code: 'custom', path: ['maximumHealth'], message: 'maximum health must be at least minimum health' });
   }
-  if (entry.echoAbilityLimit > entry.abilityLimit) {
-    context.addIssue({ code: 'custom', path: ['echoAbilityLimit'], message: 'Echo ability limit must not exceed Champion ability limit' });
+  if (entry.echoAppearanceChance > 0 && entry.echoAbilityLimit >= entry.abilityLimit) {
+    context.addIssue({ code: 'custom', path: ['echoAbilityLimit'], message: 'Echo ability limit must be strictly below Champion ability limit' });
   }
   const weights = entry.heirloomSelection.rarityWeights;
   if (!(weights.common <= weights.uncommon && weights.uncommon <= weights.rare && weights.rare <= weights.legendary)) {

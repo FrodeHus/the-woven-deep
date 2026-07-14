@@ -17,7 +17,7 @@ entries:
     echoDamagePercent: 70
     echoDefensePercent: 80
     echoAbilityLimit: 2
-    echoLootTableId: loot-table.ashen-warden
+    echoLootTableId: loot-table.echo-spoils
     heirloomSelection:
       rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 }
       qualityRankBonus: 2

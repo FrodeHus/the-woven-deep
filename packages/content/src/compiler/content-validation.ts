@@ -223,6 +223,40 @@ function championTemplateIssues(
       issues.push(issue(file, `${path}.fallbackItemId`, 'Champion fallback item must be heirloom eligible'));
     }
     issues.push(...referencedKindIssue(file, `${path}.echoLootTableId`, entry.echoLootTableId, 'loot-table', byId));
+    const fallbackMonster = byId.get(entry.fallbackMonsterId);
+    if (entry.echoAppearanceChance > 0 && fallbackMonster?.kind === 'monster') {
+      const championHealth = Math.max(entry.minimumHealth, Math.min(entry.maximumHealth, fallbackMonster.health));
+      const championDamage = Math.min(entry.damageMaximum,
+        fallbackMonster.damage.count * fallbackMonster.damage.sides + fallbackMonster.damage.bonus);
+      const championDefense = Math.min(entry.attributeMaximum, fallbackMonster.defense);
+      const championAccuracy = Math.min(entry.attributeMaximum, fallbackMonster.accuracy);
+      if (championHealth <= 1 || championDamage <= 0 || championDefense <= 0 || championAccuracy <= 0) {
+        issues.push(issue(file, path,
+          'Echoes require Champion health, damage, defense, and accuracy boundaries above their strict minimums'));
+      }
+    }
+    const bossUniqueIds = new Set([...byId.values()].filter((candidate): candidate is Extract<EncounterContentEntry, { readonly model: 'boss' }> =>
+      candidate.kind === 'encounter' && candidate.model === 'boss')
+      .map((candidate) => candidate.definition.uniqueItemId));
+    const visitLoot = (tableId: string, visited = new Set<string>()): string | null => {
+      if (visited.has(tableId)) return null;
+      visited.add(tableId);
+      const table = byId.get(tableId);
+      if (table?.kind !== 'loot-table') return null;
+      for (const choice of table.choices) {
+        if (choice.contentId !== null && bossUniqueIds.has(choice.contentId)) return choice.contentId;
+        if (choice.lootTableId !== null) {
+          const found = visitLoot(choice.lootTableId, visited);
+          if (found !== null) return found;
+        }
+      }
+      return null;
+    };
+    const uniqueEchoReward = visitLoot(entry.echoLootTableId);
+    if (uniqueEchoReward !== null) {
+      issues.push(issue(file, `${path}.echoLootTableId`,
+        `Echo loot graph reaches guaranteed boss-unique item ${uniqueEchoReward}; Echo rewards must be ordinary`));
+    }
   }
   return issues;
 }

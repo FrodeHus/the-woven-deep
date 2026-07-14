@@ -11,6 +11,13 @@ export interface ItemEnchantmentState {
   readonly modifiers: Readonly<Record<string, number>>;
 }
 
+export interface HeirloomItemMetadata {
+  readonly displayName: string;
+  readonly glyph: string;
+  readonly color: string;
+  readonly originatingHallRecordId: OpaqueId;
+}
+
 export interface ItemInstance {
   readonly itemId: OpaqueId;
   readonly contentId: OpaqueId;
@@ -22,6 +29,7 @@ export interface ItemInstance {
   readonly fuel: number | null;
   readonly enabled: boolean | null;
   readonly location: ItemLocation;
+  readonly heirloom?: HeirloomItemMetadata;
 }
 
 export interface IdentificationState {

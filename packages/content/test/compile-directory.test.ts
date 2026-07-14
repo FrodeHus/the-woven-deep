@@ -439,6 +439,34 @@ describe('compileContentDirectory', () => {
     await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/Echo ability limit|loot-table reference item\.lantern resolves to item/i);
   });
 
+  it('requires every enabled Echo ability cap to be strictly below the Champion cap', async () => {
+    const loot = '{kind: loot-table, id: loot-table.echo, name: Echo loot, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const template = '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 10, maximumHealth: 100, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 2, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 2, echoLootTableId: loot-table.echo, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}}';
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, loot, template) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/strictly below Champion ability limit/i);
+  });
+
+  it('rejects enabled Echoes when current Champion combat minima cannot be strictly weakened', async () => {
+    const weakMonster = compactMonster.replace('health: 4', 'health: 1')
+      .replace('accuracy: 1', 'accuracy: 0').replace('defense: 10', 'defense: 0');
+    const loot = '{kind: loot-table, id: loot-table.echo, name: Echo loot, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const template = '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 1, maximumHealth: 1, attributeMaximum: 1, damageMaximum: 1, abilityLimit: 1, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 0, echoLootTableId: loot-table.echo, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}}';
+    const root = await fixture({ 'content.yaml': contentFile(weakMonster, compactItem, compactVault, loot, template) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/strict minimum|strictly weaken|Echoes require Champion/i);
+  });
+
+  it('rejects a Champion Echo loot graph that can reach a guaranteed boss-unique item', async () => {
+    const leaf = '{kind: loot-table, id: loot-table.echo-leaf, name: Echo leaf, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const echo = '{kind: loot-table, id: loot-table.echo, name: Echo loot, tags: [], rolls: 1, choices: [{contentId: null, lootTableId: loot-table.echo-leaf, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const bossLoot = '{kind: loot-table, id: loot-table.boss, name: Boss loot, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const boss = '{kind: encounter, id: encounter.boss, name: Boss, tags: [], model: boss, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: legendary, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 1, minimumObjectiveDistance: 1, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, phases: [], recoveryPerWorldTime: 0, recoveryCapPercent: 0, uniqueItemId: item.lantern, enhancedLootTableId: loot-table.boss, vaultTags: []}}';
+    const template = '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 10, maximumHealth: 100, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 2, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 1, echoLootTableId: loot-table.echo, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}}';
+    const root = await fixture({ 'content.yaml': contentFile(
+      compactMonster, compactItem, compactVault, leaf, echo, bossLoot, boss, template,
+    ) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/Echo loot.*guaranteed.*unique|boss-unique/i);
+  });
+
   it('aborts between content discovery and file processing boundaries', async () => {
     const root = await fixture({
       'a.yaml': contentFile(compactMonster),

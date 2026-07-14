@@ -145,6 +145,39 @@ describe('active-run save codec', () => {
     expect(encoded.startsWith('{"activeFloorEnteredAt"')).toBe(true);
   });
 
+  it('round-trips every Champion and Echo event through command history and duplicate replay', () => {
+    const state = createDemoRun();
+    const eventId = 'command.champion-events';
+    const events = [
+      { type: 'hero.waited' as const, eventId, heroId: state.hero.actorId, x: 1, y: 1 },
+      { type: 'champion.encountered' as const, eventId, populationId: 'population.champion',
+        actorId: 'actor.champion', hallRecordId: 'hall.champion', rank: 1 as const },
+      { type: 'champion.defeated' as const, eventId, populationId: 'population.champion',
+        actorId: 'actor.champion', hallRecordId: 'hall.champion', rank: 1 as const },
+      { type: 'champion.heirloom-created' as const, eventId, populationId: 'population.champion',
+        actorId: 'actor.champion', hallRecordId: 'hall.champion', rank: 1 as const, itemId: 'item.heirloom',
+        contentId: 'item.sword', originatingHallRecordId: 'hall.champion', displayName: 'Safe sword',
+        glyph: ')', color: '#c0c0c0', fallback: false },
+      { type: 'echo.encountered' as const, eventId, populationId: 'population.echo',
+        actorId: 'actor.echo', hallRecordId: 'hall.echo', rank: 2 },
+      { type: 'echo.defeated' as const, eventId, populationId: 'population.echo',
+        actorId: 'actor.echo', hallRecordId: 'hall.echo', rank: 2 },
+      { type: 'echo.loot-created' as const, eventId, populationId: 'population.echo',
+        actorId: 'actor.echo', hallRecordId: 'hall.echo', rank: 2, itemIds: ['item.echo-loot'] },
+    ];
+    const command = { type: 'wait' as const, commandId: 'command.champion-events', expectedRevision: 0 };
+    const result = { status: 'applied' as const, commandId: command.commandId, revision: 1, turn: 1 };
+    const withHistory = { ...state, revision: 1, turn: 1,
+      recentCommands: [{ command, result, events, publicEvents: [] }] };
+    const loaded = decodeActiveRun(encodeActiveRun(withHistory));
+    expect(loaded.recentCommands[0]?.events.slice(1)).toEqual(events.slice(1));
+    expect(loaded.recentCommands[0]?.result).toEqual(result);
+    const duplicate = resolveCommand(loaded, command);
+    expect(duplicate.state).toBe(loaded);
+    expect(duplicate.result).toEqual(result);
+    expect(duplicate.events).toEqual([]);
+  });
+
   it('round-trips all schema v4 source state without storing derived fields', () => {
     const state = richRun();
     const encoded = encodeActiveRun(state);
@@ -185,7 +218,9 @@ describe('active-run save codec', () => {
         base.encounterId = 'fallen-champion-template.core';
         state.populations = [{
           ...base, actorId: actor.actorId, hallRecordId: standing.hallRecordId, rank: standing.rank,
-          defeated: false, ...(model === 'champion' ? { rewardCreated: false } : { lootCreated: false }),
+          defeated: false, equipmentContentIds: standing.equippedItemContentIds,
+          abilityIds: standing.signatureAbilityIds,
+          ...(model === 'champion' ? { rewardCreated: false } : { lootCreated: false }),
         }];
         state.encounterDecisions = [];
       } else {

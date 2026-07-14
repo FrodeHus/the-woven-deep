@@ -1,0 +1,21 @@
+schemaVersion: 3
+entries:
+  - kind: item
+    id: item.echo-remnant
+    name: Faded echo remnant
+    glyph: "~"
+    color: "#8f8aa8"
+    tags: [echo, ordinary-loot]
+    minDepth: 1
+    maxDepth: 20
+    category: misc
+    stackLimit: 5
+    price: 8
+    rarity: uncommon
+    heirloomEligible: false
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []

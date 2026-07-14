@@ -4,7 +4,7 @@ import type {
 } from '@woven-deep/content';
 import { emptyEquipment, type ActorState, type BaseAttributes } from './actor-model.js';
 import { preservesRequiredRoutes } from './connectivity.js';
-import { createFloorLootFromTable, createRecordedHeirloom } from './inventory.js';
+import { createFloorLootFromTable, createRecordedHeirloom, validateEchoLootGraph } from './inventory.js';
 import type { ActiveRun, DomainEvent, FloorSnapshot, OpaqueId, Uint32State } from './model.js';
 import type {
   ChampionPopulation, EchoPopulation, FallenHeroRunDecision, FallenHeroStandingSnapshot, PopulationInstance,
@@ -49,6 +49,7 @@ export function createFallenHeroRunDecisions(input: Readonly<{
   state: Uint32State;
 }>): Readonly<{ decisions: readonly FallenHeroRunDecision[]; state: Uint32State }> {
   validateStandings(input.standings);
+  assertEchoTemplateBoundaries(input.template, undefined);
   if (input.standings.length === 0) return { decisions: [], state: input.state };
   if (!isNonZeroState(input.state)) throw new RangeError('population gate random state must not be all zero');
   const echoes = input.standings.slice(1);
@@ -83,6 +84,7 @@ export interface NormalizedFallenHero {
   readonly health: number;
   readonly damageMaximum: number;
   readonly defenseMaximum: number;
+  readonly accuracyMaximum: number;
   readonly equipmentContentIds: readonly OpaqueId[];
   readonly abilityIds: readonly OpaqueId[];
 }
@@ -97,9 +99,22 @@ export function normalizeFallenHero(input: Readonly<{
   const attributes = Object.fromEntries(Object.entries(input.standing.attributes)
     .map(([key, value]) => [key, clamp(value, 0, input.template.attributeMaximum)])) as unknown as BaseAttributes;
   const championHealth = clamp(fallback.health, input.template.minimumHealth, input.template.maximumHealth);
+  const entries = new Map(input.content.entries.map((entry) => [entry.id, entry]));
+  const equipmentContentIds = input.standing.equippedItemContentIds
+    .filter((id) => {
+      const entry = entries.get(id);
+      return entry?.kind === 'item' && entry.equipment !== null;
+    });
+  const equipmentCombat = equipmentContentIds.map((id) => entries.get(id))
+    .filter((entry): entry is ItemContentEntry => entry?.kind === 'item')
+    .map((entry) => entry.combat);
+  const equipmentAccuracy = equipmentCombat.reduce((sum, combat) => sum + (combat?.accuracy ?? 0), 0);
+  const equipmentDefense = equipmentCombat.reduce((sum, combat) => sum + (combat?.defense ?? 0), 0);
+  const equipmentDamage = equipmentCombat.reduce((sum, combat) => sum + (combat?.damage?.bonus ?? 0), 0);
   const championDamage = Math.min(input.template.damageMaximum,
-    fallback.damage.count * fallback.damage.sides + fallback.damage.bonus);
-  const championDefense = Math.min(input.template.attributeMaximum, fallback.defense);
+    fallback.damage.count * fallback.damage.sides + fallback.damage.bonus + equipmentDamage);
+  const championDefense = Math.min(input.template.attributeMaximum, fallback.defense + equipmentDefense);
+  const championAccuracy = Math.min(input.template.attributeMaximum, fallback.accuracy + equipmentAccuracy);
   const echo = input.role === 'echo';
   const health = echo ? Math.min(championHealth - 1,
     Math.floor(championHealth * input.template.echoHealthPercent / 100)) : championHealth;
@@ -107,9 +122,8 @@ export function normalizeFallenHero(input: Readonly<{
     Math.floor(championDamage * input.template.echoDamagePercent / 100)) : championDamage;
   const defenseMaximum = echo ? Math.min(championDefense - 1,
     Math.floor(championDefense * input.template.echoDefensePercent / 100)) : championDefense;
-  const entries = new Map(input.content.entries.map((entry) => [entry.id, entry]));
-  const equipmentContentIds = input.standing.equippedItemContentIds
-    .filter((id) => entries.get(id)?.kind === 'item').slice(0, input.template.abilityLimit);
+  const accuracyMaximum = echo ? Math.min(championAccuracy - 1,
+    Math.floor(championAccuracy * input.template.echoDamagePercent / 100)) : championAccuracy;
   const abilityLimit = echo ? input.template.echoAbilityLimit : input.template.abilityLimit;
   const abilityIds = input.standing.signatureAbilityIds
     .filter((id) => entries.get(id)?.kind === 'spell').slice(0, abilityLimit);
@@ -117,7 +131,7 @@ export function normalizeFallenHero(input: Readonly<{
     : `${input.standing.heroName}, the Deep's Champion`, glyph: input.standing.portraitGlyph || fallback.glyph,
     color: fallback.color, monsterId: fallback.id, attributes, health: Math.max(1, health),
     damageMaximum: Math.max(0, damageMaximum), defenseMaximum: Math.max(0, defenseMaximum),
-    equipmentContentIds, abilityIds };
+    accuracyMaximum: Math.max(0, accuracyMaximum), equipmentContentIds, abilityIds };
 }
 
 export function fallenHeroCombatModifiers(input: Readonly<{
@@ -136,13 +150,34 @@ export function fallenHeroCombatModifiers(input: Readonly<{
   const normalized = normalizeFallenHero({ standing, template: definition, content: input.content, role: population.model });
   const fallback = monster(input.content, definition);
   const rawDamageMaximum = fallback.damage.count * fallback.damage.sides + fallback.damage.bonus;
-  const accuracyMaximum = population.model === 'echo'
-    ? Math.min(definition.attributeMaximum - 1,
-      Math.floor(Math.min(definition.attributeMaximum, fallback.accuracy) * definition.echoDamagePercent / 100))
-    : Math.min(definition.attributeMaximum, fallback.accuracy);
-  return { accuracy: accuracyMaximum - fallback.accuracy,
+  return { accuracy: normalized.accuracyMaximum - fallback.accuracy,
     defense: normalized.defenseMaximum - fallback.defense,
     damage: normalized.damageMaximum - rawDamageMaximum };
+}
+
+export function assertEchoTemplateBoundaries(
+  definition: FallenChampionTemplateContentEntry,
+  content: CompiledContentPack | undefined,
+): void {
+  if (definition.echoAppearanceChance === 0) return;
+  if (definition.echoAbilityLimit >= definition.abilityLimit) {
+    throw new Error('Echo ability limit must be strictly below the Champion ability limit');
+  }
+  if (content === undefined) {
+    if (definition.maximumHealth <= 1 || definition.damageMaximum <= 0 || definition.attributeMaximum <= 0) {
+      throw new Error('Echo combat boundaries cannot be strictly weaker than Champion boundaries');
+    }
+    return;
+  }
+  const fallback = monster(content, definition);
+  const health = clamp(fallback.health, definition.minimumHealth, definition.maximumHealth);
+  const damage = Math.min(definition.damageMaximum,
+    fallback.damage.count * fallback.damage.sides + fallback.damage.bonus);
+  const defense = Math.min(definition.attributeMaximum, fallback.defense);
+  const accuracy = Math.min(definition.attributeMaximum, fallback.accuracy);
+  if (health <= 1 || damage <= 0 || defense <= 0 || accuracy <= 0) {
+    throw new Error('Echo health, damage, defense, and accuracy boundaries cannot be strictly weaker');
+  }
 }
 
 function template(content: CompiledContentPack): FallenChampionTemplateContentEntry | undefined {
@@ -185,6 +220,14 @@ export function placeFallenHeroEncounters(input: Readonly<{
   const createdActors: ActorState[] = [];
   const populations = [...input.run.populations];
   let slots = candidateSlots(floor);
+  const selectedCells: Readonly<{ x: number; y: number }>[] = populations
+    .filter((population): population is ChampionPopulation | EchoPopulation =>
+      (population.model === 'champion' || population.model === 'echo')
+      && population.floorId === floor.floorId)
+    .flatMap((population) => {
+      const actor = input.run.actors.find((candidate) => candidate.actorId === population.actorId);
+      return actor && actor.health > 0 ? [{ x: actor.x, y: actor.y }] : [];
+    });
   const decisions = input.run.fallenHeroDecisions.map((decision): FallenHeroRunDecision => {
     const standing = input.run.fallenHeroStandings.find((candidate) => candidate.hallRecordId === decision.hallRecordId);
     const exists = populations.some((population) => (population.model === 'champion' || population.model === 'echo')
@@ -192,9 +235,11 @@ export function placeFallenHeroEncounters(input: Readonly<{
     if (!standing || !decision.retained || decision.encountered || decision.defeated || exists
       || standing.deathDepth !== floor.depth || slots.length === 0) return decision;
     const index = slots.findIndex((slot) => preservesRequiredRoutes({ width: floor.width, height: floor.height,
-      tiles: floor.tiles, requiredPoints: requiredPoints(floor), blockedPoints: [{ x: slot.x, y: slot.y }] }));
+      tiles: floor.tiles, requiredPoints: requiredPoints(floor),
+      blockedPoints: [...selectedCells, { x: slot.x, y: slot.y }] }));
     if (index < 0) return decision;
     const slot = slots[index]!;
+    selectedCells.push({ x: slot.x, y: slot.y });
     slots = slots.filter((_, slotIndex) => slotIndex !== index);
     const normalized = normalizeFallenHero({ standing, template: definition, content: input.content, role: decision.role });
     const suffix = decision.role === 'champion' ? 'champion' : `echo-${decision.rank}`;
@@ -212,8 +257,10 @@ export function placeFallenHeroEncounters(input: Readonly<{
       createdAt: input.run.worldTime, livingMemberIds: [actorId], formerMemberIds: [], actorId,
       hallRecordId: standing.hallRecordId, defeated: false };
     const population: ChampionPopulation | EchoPopulation = decision.role === 'champion'
-      ? { ...base, model: 'champion', rank: 1, rewardCreated: false }
-      : { ...base, model: 'echo', rank: standing.rank, lootCreated: false };
+      ? { ...base, model: 'champion', rank: 1, rewardCreated: false,
+        equipmentContentIds: normalized.equipmentContentIds, abilityIds: normalized.abilityIds }
+      : { ...base, model: 'echo', rank: standing.rank, lootCreated: false,
+        equipmentContentIds: normalized.equipmentContentIds, abilityIds: normalized.abilityIds };
     createdActors.push(actor); populations.push(population);
     floor = { ...floor, entities: [...floor.entities, { entityId: actorId, x: actor.x, y: actor.y }]
       .sort((left, right) => compareCodeUnits(left.entityId, right.entityId)) };
@@ -265,6 +312,8 @@ export function advanceFallenHeroEncounters(input: Readonly<{
         contentId: reward.item.contentId, originatingHallRecordId: standing.hallRecordId,
         displayName: reward.displayName, glyph: reward.glyph, color: reward.color, fallback: reward.fallback });
     } else {
+      validateEchoLootGraph({ content: input.content, tableId: definition.echoLootTableId,
+        recordedHeirloomContentId: standing.heirloom.contentId });
       const loot = createFloorLootFromTable({ content: input.content, tableId: definition.echoLootTableId,
         state: state.rng.loot, itemIdPrefix: `item.echo-loot.${population.populationId}`,
         floorId: population.floorId, x: actor.x, y: actor.y });

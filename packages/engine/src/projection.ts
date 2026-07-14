@@ -346,9 +346,14 @@ export function projectGameplayState(input: Readonly<{
     .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0)
     .map((actor) => {
       const definition = input.content.entries.find((entry) => entry.id === actor.contentId);
+      const population = input.state.populations.find((candidate) => candidate.populationId === actor.populationId);
       const presentation = actor.populationPresentation ?? (definition?.kind === 'monster'
         ? { name: definition.name, glyph: definition.glyph, color: definition.color } : {});
       return { actorId: actor.actorId, contentId: actor.contentId, ...presentation,
+        ...((population?.model === 'champion' || population?.model === 'echo') ? {
+          equipmentContentIds: population.equipmentContentIds,
+          abilityIds: population.abilityIds,
+        } : {}),
         x: actor.x, y: actor.y, health: actor.health, maxHealth: actor.maxHealth,
         disposition: relationshipBetween(input.state, hero.actorId, actor.actorId) };
     });

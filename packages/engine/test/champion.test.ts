@@ -5,14 +5,15 @@ import type {
 } from '@woven-deep/content';
 import {
   advanceFallenHeroEncounters, createDemoContentPack, createDemoRun, createFallenHeroRunDecisions,
-  decodeActiveRun, encodeActiveRun, normalizeFallenHero, placeFallenHeroEncounters,
-  retainEchoCandidates, validateContentBoundRun, type ActiveRun, type FallenHeroStandingSnapshot,
+  decodeActiveRun, dropItem, encodeActiveRun, normalizeFallenHero, placeFallenHeroEncounters,
+  fallenHeroCombatModifiers, projectGameplayState, retainEchoCandidates, validateContentBoundRun,
+  type ActiveRun, type FallenHeroStandingSnapshot,
 } from '../src/index.js';
 
 const monster: MonsterContentEntry = {
   kind: 'monster', id: 'monster.champion-fallback', name: 'Ashen Warden', tags: ['boss'], glyph: 'W', color: '#aa7755',
   attributes: { might: 18, agility: 12, vitality: 20, wits: 10, resolve: 16 }, health: 120,
-  speed: 100, accuracy: 18, defense: 16, perception: 10, damage: { count: 3, sides: 10, bonus: 8 }, armor: 8,
+  speed: 100, accuracy: 18, defense: 16, perception: 10, damage: { count: 2, sides: 6, bonus: 2 }, armor: 8,
   resistances: { physical: 10, fire: 20, cold: 0, lightning: 0, poison: 30, arcane: 0 },
   disposition: 'hostile', behaviorId: 'behavior.approach-and-attack', behaviorParameters: {},
   minDepth: 1, maxDepth: 20, rarity: 'legendary',
@@ -39,9 +40,10 @@ const template: FallenChampionTemplateContentEntry = { kind: 'fallen-champion-te
 
 function pack(): CompiledContentPack {
   const base = createDemoContentPack();
-  return { ...base, entries: [...base.entries, monster, item('item.heirloom', { light: { color: [255, 220, 180],
+  return { ...base, entries: [...base.entries, monster, item('item.heirloom', { combat: { accuracy: 3, defense: 2,
+    armor: 1, damage: { count: 1, sides: 2, bonus: 3 }, range: 1, ammunitionTag: null }, light: { color: [255, 220, 180],
     radius: 3, strength: 100, fuelCapacity: 20, fuelPerTime: 1, warningThresholds: [5], fuelTags: ['oil'] } }), item('item.fallback'),
-    item('item.echo-loot', { heirloomEligible: false, rarity: 'common' }), spell, echoLoot, template] };
+    item('item.echo-loot', { heirloomEligible: false, rarity: 'common', equipment: null }), spell, echoLoot, template] };
 }
 
 function standing(rank: number, overrides: Partial<FallenHeroStandingSnapshot> = {}): FallenHeroStandingSnapshot {
@@ -147,6 +149,52 @@ describe('normalization and optional placement', () => {
     expect(first.populations).toHaveLength(1);
     expect(second.populations).toEqual(first.populations);
   });
+
+  it('applies cumulative route safety when multiple fallen heroes share a depth', () => {
+    const standings = [standing(1), standing(2)];
+    const selected = initialized(standings);
+    const forced = { ...selected, fallenHeroDecisions: selected.fallenHeroDecisions.map((decision) =>
+      ({ ...decision, retained: true, ...(decision.role === 'echo' ? { gateRoll: 1 } : {}) })) };
+    const baseFloor = forced.floors[0]!;
+    const floor = { ...baseFloor, width: 5, height: 3, depth: 4,
+      tiles: [1, 1, 1, 1, 1, 4, 1, 0, 1, 5, 1, 1, 1, 1, 1] as const,
+      stairUp: { x: 0, y: 1 }, stairDown: { x: 4, y: 1 }, entities: [],
+      vaults: [{ placementId: 'vault.side', vaultId: 'vault.side-arena', x: 0, y: 0, width: 5, height: 3,
+        rotation: 0 as const, reflected: false, entrances: [{ x: 0, y: 1 }] }],
+      placementSlots: [{ slotId: 'slot.a', vaultPlacementId: 'vault.side', kind: 'monster' as const,
+        required: false, tags: ['side-arena'], x: 2, y: 0 },
+      { slotId: 'slot.b', vaultPlacementId: 'vault.side', kind: 'monster' as const,
+        required: false, tags: ['side-arena'], x: 2, y: 2 }] };
+    const result = placeFallenHeroEncounters({ run: { ...forced, floors: [floor] }, floor, content: pack() });
+    expect(result.populations).toHaveLength(1);
+    expect(result.decisions.filter((decision) => decision.retained && !decision.encountered)).toHaveLength(2);
+    const published = { ...forced, actors: [...forced.actors, ...result.actors], populations: result.populations,
+      fallenHeroDecisions: result.decisions, floors: [result.floor] };
+    expect(placeFallenHeroEncounters({ run: published, floor: result.floor, content: pack() }).populations).toHaveLength(1);
+  });
+
+  it('persists normalized loadout choices and uses current-valid equipment in combat and projection', () => {
+    const run = withArena(initialized([standing(1, { equippedItemContentIds: ['item.echo-loot', 'item.heirloom', 'item.missing'],
+      signatureAbilityIds: ['spell.ember', 'spell.missing'] })]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    expect(placed.populations[0]).toMatchObject({ equipmentContentIds: ['item.heirloom'], abilityIds: ['spell.ember'] });
+    const state = { ...run, actors: [...run.actors, ...placed.actors].sort((a, b) => a.actorId.localeCompare(b.actorId)),
+      populations: placed.populations, fallenHeroDecisions: placed.decisions, floors: [placed.floor] };
+    expect(fallenHeroCombatModifiers({ state, content: pack(), actorId: placed.actors[0]!.actorId }))
+      .toMatchObject({ accuracy: 2, defense: 2, damage: 3 });
+    expect(projectGameplayState({ state, content: pack() }).actors[0]).toMatchObject({
+      equipmentContentIds: ['item.heirloom'], abilityIds: ['spell.ember'],
+    });
+  });
+
+  it('rejects bypassed templates whose Echo combat boundaries cannot be strictly weaker', () => {
+    const unsafeTemplate = { ...template, minimumHealth: 1, maximumHealth: 1, attributeMaximum: 1,
+      damageMaximum: 1, abilityLimit: 0, echoAbilityLimit: 0 };
+    const unsafePack = { ...pack(), entries: pack().entries.map((entry) => entry.kind === 'fallen-champion-template'
+      ? unsafeTemplate : entry) };
+    const run = initialized([standing(1), standing(2)]);
+    expect(() => validateContentBoundRun(run, unsafePack)).toThrow(/strictly weaker|strictly below|Echo.*boundar/i);
+  });
 });
 
 describe('fallen hero rewards and run-local lifecycle', () => {
@@ -164,9 +212,32 @@ describe('fallen hero rewards and run-local lifecycle', () => {
     expect(first.events).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'champion.defeated',
       hallRecordId: 'hall.hero-1', rank: 1 }), expect.objectContaining({ type: 'champion.heirloom-created',
       originatingHallRecordId: 'hall.hero-1', displayName: "Hero 1's Blade" })]));
-    const again = advanceFallenHeroEncounters({ state: decodeActiveRun(encodeActiveRun(first.state)), content: pack(),
+    expect(reward).toMatchObject({ heirloom: { displayName: "Hero 1's Blade", glyph: ')', color: '#ddeeff',
+      originatingHallRecordId: 'hall.hero-1' } });
+    const carriedState = { ...first.state, items: first.state.items.map((item) => item.itemId === reward.itemId
+      ? { ...item, location: { type: 'backpack' as const, actorId: first.state.hero.actorId } } : item) };
+    const dropped = dropItem({ run: carriedState, actorId: first.state.hero.actorId,
+      itemId: reward.itemId, quantity: 1 });
+    if (!dropped.ok) throw new Error(`test setup failed to drop heirloom: ${dropped.reason}`);
+    const loadedState = decodeActiveRun(encodeActiveRun(dropped.run));
+    expect(loadedState.items.find((item) => item.itemId === reward.itemId)).toMatchObject({
+      contentId: reward.contentId, heirloom: reward.heirloom,
+      location: { type: 'floor', floorId: 'floor.demo', x: 1, y: 1 },
+    });
+    const projected = projectGameplayState({ state: loadedState, content: pack() });
+    expect(projected.groundItems.find((item) => item.itemId === reward.itemId)).toMatchObject({
+      name: "Hero 1's Blade", glyph: ')', color: '#ddeeff',
+      provenance: { originatingHallRecordId: 'hall.hero-1' },
+    });
+    expect(JSON.stringify(projected.groundItems.find((item) => item.itemId === reward.itemId)))
+      .not.toMatch(/sourceItemId|qualityRank|sourceContentHash|equippedItemContentIds/);
+    expect(() => validateContentBoundRun(loadedState, pack())).not.toThrow();
+    const corrupted = { ...loadedState, items: loadedState.items.map((item) => item.itemId === reward.itemId
+      ? { ...item, heirloom: { ...item.heirloom!, displayName: 'Tampered history' } } : item) };
+    expect(() => validateContentBoundRun(corrupted, pack())).toThrow(/Champion reward/i);
+    const again = advanceFallenHeroEncounters({ state: loadedState, content: pack(),
       eventId: 'event.champion-duplicate' });
-    expect(again.state.items).toEqual(first.state.items);
+    expect(again.state.items).toEqual(loadedState.items);
     expect(again.events).toEqual([]);
   });
 
@@ -206,6 +277,26 @@ describe('fallen hero rewards and run-local lifecycle', () => {
     expect(retry.populations).toHaveLength(1);
     const laterRun = initialized(standings);
     expect(laterRun.fallenHeroDecisions.find((decision) => decision.rank === 2)?.defeated).toBe(false);
+  });
+
+  it('preflights the complete Echo loot graph before consuming RNG or creating a forbidden reward', () => {
+    const standings = [standing(1), standing(2)];
+    const selected = initialized(standings);
+    const forced = { ...selected, fallenHeroDecisions: selected.fallenHeroDecisions.map((decision) => decision.rank === 2
+      ? { ...decision, retained: true, gateRoll: 1 } : { ...decision, retained: false }) };
+    const run = withArena(forced, 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const dead = { ...run, actors: [...run.actors, ...placed.actors].map((actor) => actor.populationId === null
+      ? actor : { ...actor, health: 0 }), populations: placed.populations, fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor] };
+    const unsafe = pack();
+    const entries = unsafe.entries.map((entry) => entry.id === echoLoot.id && entry.kind === 'loot-table'
+      ? { ...entry, choices: [{ contentId: 'item.heirloom', lootTableId: null, weight: 1,
+        minimumQuantity: 1, maximumQuantity: 1 }] } : entry);
+    const before = structuredClone(dead);
+    expect(() => advanceFallenHeroEncounters({ state: dead, content: { ...unsafe, entries }, eventId: 'event.unsafe-echo' }))
+      .toThrow(/Echo loot.*heirloom|ordinary/i);
+    expect(dead).toEqual(before);
   });
 
   it('validates the complete current-content state after materialization', () => {

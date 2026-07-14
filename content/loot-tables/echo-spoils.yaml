@@ -1,0 +1,10 @@
+schemaVersion: 3
+entries:
+  - kind: loot-table
+    id: loot-table.echo-spoils
+    name: Echo spoils
+    tags: [echo, ordinary-loot]
+    rolls: 2
+    choices:
+      - { contentId: item.echo-remnant, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.crimson-potion, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }

@@ -51,6 +51,33 @@ function validateLootGraph(content: CompiledContentPack, tableId: OpaqueId, trai
   }
 }
 
+export function validateEchoLootGraph(input: Readonly<{
+  content: CompiledContentPack;
+  tableId: OpaqueId;
+  recordedHeirloomContentId: OpaqueId;
+}>): void {
+  validateLootGraph(input.content, input.tableId);
+  const bossUniqueIds = new Set(input.content.entries.filter((entry) => entry.kind === 'encounter' && entry.model === 'boss')
+    .map((entry) => entry.definition.uniqueItemId));
+  const visited = new Set<OpaqueId>();
+  const visit = (tableId: OpaqueId): void => {
+    if (visited.has(tableId)) return;
+    visited.add(tableId);
+    const table = lootTable(input.content, tableId);
+    for (const choice of table.choices) {
+      if (choice.contentId !== null) {
+        if (choice.contentId === input.recordedHeirloomContentId) {
+          throw new Error(`Echo loot graph ${input.tableId} reaches recorded heirloom ${choice.contentId}; Echo rewards must be ordinary`);
+        }
+        if (bossUniqueIds.has(choice.contentId)) {
+          throw new Error(`Echo loot graph ${input.tableId} reaches guaranteed boss-unique item ${choice.contentId}; Echo rewards must be ordinary`);
+        }
+      } else if (choice.lootTableId !== null) visit(choice.lootTableId);
+    }
+  };
+  visit(input.tableId);
+}
+
 export function createFloorLootFromTable(input: Readonly<{
   content: CompiledContentPack;
   tableId: OpaqueId;
@@ -126,6 +153,10 @@ export function createRecordedHeirloom(input: Readonly<{
     fuel: fallback ? definition.light?.fuelCapacity ?? null : input.snapshot.fuel,
     enabled: definition.light === null ? null : false,
     location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y },
+    heirloom: { displayName: fallback ? definition.name : input.snapshot.displayName,
+      glyph: fallback ? definition.glyph : input.snapshot.glyph,
+      color: fallback ? definition.color : input.snapshot.color,
+      originatingHallRecordId: input.snapshot.originatingHallRecordId },
   };
   return { item, fallback,
     displayName: fallback ? definition.name : input.snapshot.displayName,
@@ -149,7 +180,7 @@ export function recordedHeirloomContentId(input: Readonly<{
     .every((name) => (DERIVED_STAT_NAMES as readonly string[]).includes(name));
   return input.snapshot.sourceItemId !== null
     && input.equippedItemContentIds.includes(input.snapshot.contentId)
-    && recorded?.heirloomEligible === true && fuelCompatible && modifiersCompatible
+    && recorded?.heirloomEligible === true && recorded.equipment !== null && fuelCompatible && modifiersCompatible
     ? input.snapshot.contentId : input.fallbackItemId;
 }
 

@@ -96,6 +96,8 @@ export interface ChampionPopulation extends PopulationBase {
   readonly rank: 1;
   readonly defeated: boolean;
   readonly rewardCreated: boolean;
+  readonly equipmentContentIds: readonly OpaqueId[];
+  readonly abilityIds: readonly OpaqueId[];
 }
 export interface EchoPopulation extends PopulationBase {
   readonly model: 'echo';
@@ -104,6 +106,8 @@ export interface EchoPopulation extends PopulationBase {
   readonly rank: number;
   readonly defeated: boolean;
   readonly lootCreated: boolean;
+  readonly equipmentContentIds: readonly OpaqueId[];
+  readonly abilityIds: readonly OpaqueId[];
 }
 
 export type PopulationInstance = IndividualPopulation | GroupPopulation | SwarmPopulation
