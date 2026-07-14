@@ -227,6 +227,20 @@ An `encounter` has a strict `model` of `individual`, `group`, `swarm`, or `boss`
 - `placement` with non-negative stair/objective distances and member spread, non-empty `allowedTerrainTags`, `requiresVaultSlot`, and `failureMode` of `optional` or `required`. Placement is atomic and preserves required routes.
 - `intentPresentation.visible`, which permits broad visible intent but never exposes exact goals, paths, rolls, or shared knowledge.
 
+### Hard encounter allocation bounds
+
+Positive safe integer validation is necessary but not sufficient: values can be valid JavaScript integers yet still exceed the engine's bounded random-selection or allocation budget. The compiler rejects the complete pack when any of these limits is exceeded:
+
+- Aggregate encounter selection weight: at most `4294967296` (`2^32`). This is the checked sum of every encounter `weight`, not a per-entry limit.
+- Individual or aggregate group members per encounter: at most `1024`. For a group, the compiler checks the sum of every role's `maximumQuantity`.
+- Aggregate swarm `spawnRoles[].weight`: at most `4294967296` (`2^32`).
+- Swarm children created per spawn: at most `256`.
+- Living children per swarm: at most `1023`.
+- Living members per swarm encounter: at most `1024`. The source counts as one living member.
+- Living swarm actors per floor: at most `1024`.
+
+The exact boundary is valid. Boundary plus one is rejected before selection, RNG consumption, or actor allocation. Common errors include assigning several individually valid weights whose checked sum exceeds `2^32`, authoring group roles whose maximum quantities total `1025`, or setting a swarm cap to `1025` because the value is still a positive safe integer.
+
 ### Encounter field reference
 
 | Field | Models | Rules and rejection modes |
@@ -237,7 +251,7 @@ An `encounter` has a strict `model` of `individual`, `group`, `swarm`, or `boss`
 | `maximumInstancesPerRun` | All | Positive; exactly 1 for a boss. Placement refuses additional instances after this saved run cap. |
 | `minimumStairDistance`, `minimumObjectiveDistance`, `maximumMemberDistance` (under `placement`) | All | Non-negative integers. A placement that cannot preserve distances, routes, occupancy, and member spread is rejected atomically. |
 | `allowedTerrainTags`, `requiresVaultSlot`, `failureMode` (under `placement`) | All | Terrain tags are non-empty. A required vault slot must match all vault tags; `optional` skips an impossible placement while `required` rejects floor creation. |
-| `minimumQuantity`, `maximumQuantity` | Individual | Positive inclusive range with maximum at least minimum. |
+| `minimumQuantity`, `maximumQuantity` | Individual | Positive inclusive range with maximum at least minimum and no more than 1,024 members. |
 | `roles`, `roleId` | Group | `roles` is a non-empty list with unique slug `roleId` values. Each role has a valid `monsterId`, quantity range, `formationPreference`, and strict `behaviorParameters`. |
 | `communicationRadius`, `coordinationModifiers` | Group | Radius is positive and used for hop-by-hop relay; disconnected members receive no shared observation. `coordinationModifiers` requires safe-integer `accuracy`, `defense`, and `damage`. |
 | `leaderChance`, `leaderRoleId`, `leaderDeathResponse` | Group | `leaderChance` is 0–1, the leader role must exist, and the response uses its exact registered parameters. |
@@ -245,15 +259,15 @@ An `encounter` has a strict `model` of `individual`, `group`, `swarm`, or `boss`
 | `responseParameters` | Group, Swarm | Strict parameters selected by the corresponding registered leader-death or source-destruction response. Unknown and missing parameters reject the pack. |
 | `supernaturalBond`, `collapseRewards` | Group | `collapse` requires the bond. Individual rewards additionally require an `adminDescription`; otherwise compilation fails. |
 | `sourceMonsterId` | Swarm | Valid monster reference carrying the `swarm-source` tag. It identifies the one source actor that owns the spawn timer. |
-| `spawnInterval`, `minimumSpawnQuantity`, `maximumSpawnQuantity` | Swarm | Positive source-owned interval and positive inclusive birth range, with maximum at least minimum. Off-floor time is frozen and missed births are never replayed. |
+| `spawnInterval`, `minimumSpawnQuantity`, `maximumSpawnQuantity` | Swarm | Positive source-owned interval and positive inclusive birth range, with maximum at least minimum and at most 256 children per spawn. Off-floor time is frozen and missed births are never replayed. |
 | `placementRadius` | Swarm | Positive maximum distance from the source for each atomic spawn attempt. The nested swarm `allowedTerrainTags` list is non-empty. |
-| `maximumLivingChildren`, `maximumLivingMembers`, `maximumFloorActors` | Swarm | Positive nested caps: children cannot exceed members, and members cannot exceed the floor cap. |
+| `maximumLivingChildren`, `maximumLivingMembers`, `maximumFloorActors` | Swarm | Positive nested caps: at most 1,023 children, 1,024 encounter members including the source, and 1,024 floor swarm actors. Children cannot exceed members, and members cannot exceed the floor cap. |
 | `sourceDestructionResponse` | Swarm | One registered `stop`, `flee`, `decay`, or `frenzy` response with no unknown parameters. |
 | `phases`, `phaseId`, `healthThresholdPercent` | Boss | `phases` is the ordered phase list. Each unique slug `phaseId` has a unique positive threshold below 100; thresholds strictly descend, are crossed once, and never reverse after healing. Each phase also declares registered behavior, strict parameters, modifiers, and effects. |
 | `behaviorId`, `behaviorParameters` | Boss phase | Registered behavior ID and its strict parameter object. The behavior must be supported by the closed behavior registry. |
 | `effects`, `effectId`, `parameters`, `requiresLivingTarget` | Boss phase | Ordered safe-subset effects. Each effect declares its registered `effectId`, strict `parameters`, and boolean `requiresLivingTarget`; unsafe actor-context effects reject the pack. |
 | `recoveryPerWorldTime`, `recoveryCapPercent` | Boss | The rate is finite and non-negative and the cap is 0–100. Recovery occurs once on re-entry from elapsed absence and never exceeds the cap. |
-| `uniqueItemId`, `enhancedLootTableId` | Boss | References must resolve to an item and loot table. The unique item is created at most once. |
+| `uniqueItemId`, `enhancedLootTableId` | Boss | References must resolve to an item and loot table. The guaranteed item is created at most once and its content cannot appear in any ordinary loot graph. |
 | `vaultTags` | Boss | Optional slug list constraining the authored arena or vault context. References that cannot satisfy required placement reject atomically according to `failureMode`. |
 | `fallbackMonsterId`, `fallbackItemId` | Fallen Champion | Required valid references used when historical monster or equipment content has been removed. |
 | `echoAppearanceChance`, `maximumEchoesPerRun` | Fallen Champion | Each rank 2–10 is independently gated, then the lowest rolls are retained up to the run cap. |
@@ -484,14 +498,25 @@ entries:
 
 ## Loot-table entries
 
+Loot expansion is bounded across the complete reachable graph, including nested tables. Positive safe integers alone do not make a table safe: all local limits and the recursive worst case must pass together.
+
+- Aggregate `choices[].weight` per loot table: at most `4294967296` (`2^32`).
+- Loot-table `rolls`: at most `256`.
+- Each loot choice quantity: at most `256` and no greater than the direct item's `stackLimit`.
+- Recursive worst-case created loot units: at most `4096`.
+
+The recursive calculation follows the most expensive possible choice at every roll and multiplies through nested-table quantities and rolls using checked arithmetic. The exact boundary is accepted; `4097` worst-case units, `257` rolls, `257` quantity, or a checked weight sum of `4294967297` rejects the pack before any loot RNG is consumed or items are created.
+
+Boss guaranteed-unique content is forbidden anywhere in an ordinary loot graph, including another boss enhanced-loot table or an Echo loot table. A Champion heirloom may legitimately use the same item content because its saved provenance and item identity are distinct; ordinary weighted loot may not.
+
 | Field | Type | Required | Rules and meaning |
 |---|---|---|---|
-| `rolls` | positive safe integer | Yes | Independent selections. |
+| `rolls` | positive safe integer | Yes | Independent selections; maximum 256. |
 | `choices` | non-empty array | Yes | Weighted choices. |
 | `choices[].contentId` | item content ID or null | Yes | Direct result; it must resolve to an `item`, and exactly one reference field is non-null. |
 | `choices[].lootTableId` | loot-table ID or null | Yes | Nested result; cycles are rejected. |
-| `choices[].weight` | positive safe integer | Yes | Relative selection weight. |
-| `minimumQuantity`, `maximumQuantity` | positive safe integers | Yes | Inclusive quantity range; maximum cannot be smaller. |
+| `choices[].weight` | positive safe integer | Yes | Relative selection weight; the checked table sum cannot exceed `2^32`. |
+| `minimumQuantity`, `maximumQuantity` | positive safe integers | Yes | Inclusive quantity range; maximum cannot be smaller, cannot exceed 256, and for a direct item cannot exceed its `stackLimit`. |
 
 ```yaml
 schemaVersion: 3
@@ -503,6 +528,16 @@ entries:
     rolls: 1
     choices:
       - { contentId: item.brass-lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+```
+
+Typical diagnostics identify the table or choice path and the violated contract, for example:
+
+```text
+loot choice weight total exceeds rollDie maximum 2^32
+loot table rolls exceed runtime-safe limit 256
+loot choice quantity exceeds item stack limit 4
+loot table worst-case created units exceed runtime-safe limit 4096
+guaranteed boss-unique item item.warden-ember cannot appear in ordinary loot
 ```
 
 ## Vault entries

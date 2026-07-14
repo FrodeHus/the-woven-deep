@@ -2,7 +2,12 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { CONDITION_TRAIT_IDS, CONTENT_KIND_IDS } from '../src/index.js';
+import {
+  CONDITION_TRAIT_IDS, CONTENT_KIND_IDS, MAX_ENCOUNTER_MEMBERS, MAX_LOOT_CHOICE_QUANTITY,
+  MAX_LOOT_CREATED_UNITS, MAX_LOOT_TABLE_ROLLS, MAX_LOOT_WEIGHT_TOTAL, MAX_RANDOM_WEIGHT_TOTAL,
+  MAX_SWARM_FLOOR_ACTORS, MAX_SWARM_LIVING_CHILDREN, MAX_SWARM_LIVING_MEMBERS,
+  MAX_SWARM_SPAWN_QUANTITY,
+} from '../src/index.js';
 import {
   damageTypes,
   encounterFormations,
@@ -112,5 +117,31 @@ describe('server-admin content documentation', () => {
     const missing = collectEncounterSchemaTerms(contentSourceEntrySchema)
       .filter((term) => !populationReference.includes(`\`${term}\``));
     expect(missing, 'missing schema-derived admin documentation').toEqual([]);
+  });
+
+  it('documents every enforced encounter and loot allocation bound with drift-resistant values', async () => {
+    const reference = await readFile(resolve(
+      import.meta.dirname,
+      '../../../docs/server-admin/content-configuration.md',
+    ), 'utf8');
+    const required = [
+      'Positive safe integer validation is necessary but not sufficient',
+      `Aggregate encounter selection weight: at most \`${MAX_RANDOM_WEIGHT_TOTAL}\` (\`2^32\`).`,
+      `Individual or aggregate group members per encounter: at most \`${MAX_ENCOUNTER_MEMBERS}\`.`,
+      `Aggregate swarm \`spawnRoles[].weight\`: at most \`${MAX_RANDOM_WEIGHT_TOTAL}\` (\`2^32\`).`,
+      `Swarm children created per spawn: at most \`${MAX_SWARM_SPAWN_QUANTITY}\`.`,
+      `Living children per swarm: at most \`${MAX_SWARM_LIVING_CHILDREN}\`.`,
+      `Living members per swarm encounter: at most \`${MAX_SWARM_LIVING_MEMBERS}\`.`,
+      `Living swarm actors per floor: at most \`${MAX_SWARM_FLOOR_ACTORS}\`.`,
+      `Aggregate \`choices[].weight\` per loot table: at most \`${MAX_LOOT_WEIGHT_TOTAL}\` (\`2^32\`).`,
+      `Loot-table \`rolls\`: at most \`${MAX_LOOT_TABLE_ROLLS}\`.`,
+      `Each loot choice quantity: at most \`${MAX_LOOT_CHOICE_QUANTITY}\` and no greater than the direct item's \`stackLimit\`.`,
+      `Recursive worst-case created loot units: at most \`${MAX_LOOT_CREATED_UNITS}\`.`,
+      'Boss guaranteed-unique content is forbidden anywhere in an ordinary loot graph',
+      'including another boss enhanced-loot table or an Echo loot table',
+    ];
+    for (const contract of required) {
+      expect(reference, `missing numeric/rejection contract: ${contract}`).toContain(contract);
+    }
   });
 });
