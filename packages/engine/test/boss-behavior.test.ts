@@ -65,6 +65,75 @@ function fixture(overrides: Partial<BossEncounterDefinition> = {}) {
 }
 
 describe('boss phases', () => {
+  it('persists authored arena feature mutations across exit and re-entry', () => {
+    const { state, content } = fixture({ phases: [{ ...definition().phases[0]!, effects: [
+      { effectId: 'effect.feature.mutate', parameters: { state: 'door.open' }, requiresLivingTarget: false },
+      { effectId: 'effect.light.toggle', parameters: { enabled: false }, requiresLivingTarget: false },
+    ] }] });
+    const door = { featureId: 'feature.arena-door', floorId: state.activeFloorId, x: 5, y: 3,
+      contentId: null, coverTileId: 1 as const, type: 'door' as const, state: 'locked' as const };
+    const light = { lightId: 'light.arena', location: { type: 'fixed' as const, x: 4, y: 2 },
+      color: [255, 80, 20] as const, radius: 5, strength: 180, enabled: true, falloff: 'linear' as const,
+      vaultPlacementId: null, presentation: null };
+    const phased = advanceBosses({ state: { ...state, features: [door], floors: state.floors.map((floor) =>
+      floor.floorId === state.activeFloorId ? { ...floor, lights: [light] } : floor), actors: state.actors.map((actor) =>
+      actor.actorId === 'actor.boss' ? { ...actor, health: 60 } : actor) }, content, eventId: 'event.arena-open' });
+    expect(phased.state.features).toEqual([{ ...door, state: 'open' }]);
+    expect(phased.state.floors[0]!.lights).toEqual([{ ...light, enabled: false }]);
+    const inactive = advanceBosses({ state: { ...phased.state, worldTime: 20, activeFloorId: 'floor.other' }, content,
+      eventId: 'event.arena-exit' });
+    const reentered = advanceBosses({ state: { ...inactive.state, worldTime: 30, activeFloorId: 'floor.demo',
+      activeFloorEnteredAt: 30 }, content, eventId: 'event.arena-return' });
+    expect(reentered.state.features).toEqual([{ ...door, state: 'open' }]);
+    expect(reentered.state.floors[0]!.lights).toEqual([{ ...light, enabled: false }]);
+    expect(reentered.events).not.toContainEqual(expect.objectContaining({ type: 'boss.phase-changed' }));
+    expect(decodeActiveRun(encodeActiveRun(reentered.state))).toEqual(reentered.state);
+  });
+
+  it('rolls back an earlier arena mutation when a later environment reference is missing', () => {
+    const { state, content } = fixture({ phases: [{ ...definition().phases[0]!, effects: [
+      { effectId: 'effect.feature.mutate', parameters: { state: 'door.open' }, requiresLivingTarget: false },
+      { effectId: 'effect.light.toggle', parameters: { enabled: false }, requiresLivingTarget: false },
+    ] }] });
+    const door = { featureId: 'feature.arena-door', floorId: state.activeFloorId, x: 5, y: 3,
+      contentId: null, coverTileId: 1 as const, type: 'door' as const, state: 'locked' as const };
+    const damaged = { ...state, features: [door], actors: state.actors.map((actor) => actor.actorId === 'actor.boss'
+      ? { ...actor, health: 60 } : actor) };
+    const before = structuredClone(damaged);
+    expect(() => advanceBosses({ state: damaged, content, eventId: 'event.arena-rollback' }))
+      .toThrow(/arena light/i);
+    expect(damaged).toEqual(before);
+    expect(damaged.populations[0]).toMatchObject({ currentPhaseId: null, crossedPhaseIds: [] });
+    expect(damaged.items).toEqual([]);
+  });
+
+  it('passes immutable item changes between authored arena fuel and light operations', () => {
+    const { state, content } = fixture({ phases: [{ ...definition().phases[0]!, effects: [
+      { effectId: 'effect.fuel.transfer', parameters: { maximum: 3 }, requiresLivingTarget: false },
+      { effectId: 'effect.light.toggle', parameters: { enabled: true }, requiresLivingTarget: false },
+    ] }] });
+    const lantern = { ...item('item.arena-lantern'), tags: ['arena-light'], light: { color: [255, 120, 40] as const,
+      radius: 5, strength: 180, fuelCapacity: 5, fuelPerTime: 1, warningThresholds: [1], fuelTags: ['arena-fuel'] } };
+    const fuel = { ...item('item.arena-fuel'), tags: ['arena-fuel'] };
+    const enriched = { ...content, entries: [...content.entries, fuel, lantern] };
+    const items = [{ itemId: 'item.arena-fuel.1', contentId: fuel.id, quantity: 4, condition: 100,
+      enchantment: null, identified: true, charges: null, fuel: null, enabled: null,
+      location: { type: 'backpack' as const, actorId: 'actor.boss' } },
+    { itemId: 'item.arena-light.1', contentId: lantern.id, quantity: 1, condition: 100,
+      enchantment: null, identified: true, charges: null, fuel: 0, enabled: false,
+      location: { type: 'backpack' as const, actorId: 'actor.boss' } }];
+    const phased = advanceBosses({ state: { ...state, items, actors: state.actors.map((actor) =>
+      actor.actorId === 'actor.boss' ? { ...actor, health: 60 } : actor) }, content: enriched,
+      eventId: 'event.arena-fuel' });
+    expect(phased.state.items).toEqual([
+      { ...items[0]!, quantity: 1 }, { ...items[1]!, fuel: 3, enabled: true },
+    ]);
+    expect(phased.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'item.refueled', quantity: 3, fuel: 3 }),
+      expect.objectContaining({ type: 'item.light-toggled', enabled: true }),
+    ]));
+  });
+
   it('crosses multiple thresholds once in authored descending order and changes behavior, effects, and modifiers atomically', () => {
     const { state, content } = fixture();
     const damaged = { ...state, actors: state.actors.map((actor) => actor.actorId === 'actor.boss'

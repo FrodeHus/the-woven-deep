@@ -1,10 +1,11 @@
-import type { BossEncounterContentEntry, CompiledContentPack, PopulationCombatModifiers } from '@woven-deep/content';
+import type { BossEncounterContentEntry, CompiledContentPack, ItemContentEntry, PopulationCombatModifiers } from '@woven-deep/content';
 import type { ActorState } from './actor-model.js';
-import { resolveEffectSequence } from './effects.js';
-import { createFloorItem, createFloorLootFromTable } from './inventory.js';
+import { resolveEffectSequence, type EffectOperations } from './effects.js';
+import { consumeItemQuantityFromItems, createFloorItem, createFloorLootFromTable } from './inventory.js';
 import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
 import type { BossPopulation } from './population-model.js';
 import { compareCodeUnits } from './stable-json.js';
+import type { DungeonFeature } from './feature-model.js';
 
 const ZERO_MODIFIERS: PopulationCombatModifiers = { accuracy: 0, defense: 0, damage: 0 };
 
@@ -41,6 +42,133 @@ function synchronizeDeath(population: BossPopulation, actor: ActorState): BossPo
     formerMemberIds: [...new Set([...population.formerMemberIds, actor.actorId])].sort(compareCodeUnits) };
 }
 
+function itemDefinition(content: CompiledContentPack, contentId: OpaqueId): ItemContentEntry {
+  const entry = content.entries.find((candidate) => candidate.id === contentId);
+  if (!entry || entry.kind !== 'item') throw new Error(`internal invariant: item definition ${contentId} does not exist`);
+  return entry;
+}
+
+function mutatedFeature(feature: DungeonFeature, state: string): DungeonFeature | null {
+  if (feature.type === 'door' && state === 'door.open') return { ...feature, state: 'open' };
+  if (feature.type === 'door' && state === 'door.closed') return { ...feature, state: 'closed' };
+  if (feature.type === 'door' && state === 'door.locked') return { ...feature, state: 'locked' };
+  if (feature.type === 'trap' && state === 'trap.armed') return { ...feature, state: 'armed' };
+  if (feature.type === 'trap' && state === 'trap.disabled') return { ...feature, state: 'disabled' };
+  if (feature.type === 'trap' && state === 'trap.spent') return { ...feature, state: 'spent' };
+  if (feature.type === 'secret' && state === 'secret.hidden') return { ...feature, state: 'hidden' };
+  if (feature.type === 'secret' && state === 'secret.revealed') return { ...feature, state: 'revealed' };
+  return null;
+}
+
+function bossEffectOperations(input: Readonly<{
+  content: CompiledContentPack; population: BossPopulation; heroId: OpaqueId;
+  definition: BossEncounterContentEntry['definition'];
+}>): EffectOperations {
+  const arenaPlacements = (floors: ActiveRun['floors']) => {
+    if (input.definition.vaultTags.length === 0) return null;
+    const floor = floors.find((candidate) => candidate.floorId === input.population.floorId);
+    if (!floor) throw new Error(`internal invariant: boss floor ${input.population.floorId} does not exist`);
+    return floor.vaults.filter((placement) => {
+      const vault = input.content.entries.find((entry) => entry.kind === 'vault' && entry.id === placement.vaultId);
+      return vault?.kind === 'vault' && input.definition.vaultTags.every((tag) => vault.tags.includes(tag));
+    });
+  };
+  const inArena = (x: number, y: number, floors: ActiveRun['floors']) => {
+    const placements = arenaPlacements(floors);
+    return placements === null || placements.some((placement) => x >= placement.x && y >= placement.y
+      && x < placement.x + placement.width && y < placement.y + placement.height);
+  };
+  return {
+    'effect.feature.mutate': (operation) => {
+      const state = (operation.effect.parameters as { state: string }).state;
+      let changed = 0;
+      const events: DomainEvent[] = [];
+      const features = operation.features.map((feature): DungeonFeature => {
+        if (feature.floorId !== input.population.floorId || !inArena(feature.x, feature.y, operation.floors)) return feature;
+        const updated = mutatedFeature(feature, state);
+        if (updated === null) return feature;
+        changed += 1;
+        if (feature.type === 'door' && updated.type === 'door' && feature.state !== updated.state
+          && (updated.state === 'open' || updated.state === 'closed')) {
+          events.push({ type: updated.state === 'open' ? 'door.opened' : 'door.closed', eventId: operation.eventId,
+            actorId: operation.sourceActorId, featureId: feature.featureId });
+        }
+        return updated;
+      });
+      if (changed === 0) throw new Error(`internal invariant: boss arena feature target for ${state} does not exist`);
+      return { actors: operation.actors, features, events };
+    },
+    'effect.light.toggle': (operation) => {
+      const enabled = (operation.effect.parameters as { enabled: boolean }).enabled;
+      let changed = 0;
+      const events: DomainEvent[] = [];
+      const items = operation.items.map((item) => {
+        const owned = (item.location.type === 'backpack' || item.location.type === 'equipped')
+          && item.location.actorId === operation.targetActorId;
+        if (!owned || itemDefinition(input.content, item.contentId).light === null) return item;
+        if (enabled && (item.fuel ?? 0) <= 0) throw new Error(`internal invariant: boss arena light ${item.itemId} has no fuel`);
+        changed += 1;
+        events.push({ type: 'item.light-toggled', eventId: operation.eventId, actorId: operation.targetActorId,
+          itemId: item.itemId, enabled });
+        return { ...item, enabled };
+      });
+      const placements = arenaPlacements(operation.floors);
+      const placementIds = placements === null ? null : new Set(placements.map((placement) => placement.placementId));
+      const floors = operation.floors.map((floor) => floor.floorId !== input.population.floorId ? floor : { ...floor,
+        lights: floor.lights.map((light) => {
+          if (light.location.type !== 'fixed' && light.location.actorId !== operation.targetActorId) return light;
+          if (placementIds !== null && (light.vaultPlacementId === null || !placementIds.has(light.vaultPlacementId))) return light;
+          changed += 1;
+          return { ...light, enabled };
+        }) });
+      if (changed === 0) throw new Error('internal invariant: boss arena light target does not exist');
+      return { actors: operation.actors, items, floors, events };
+    },
+    'effect.reveal': (operation) => {
+      const radius = (operation.effect.parameters as { radius: number }).radius;
+      const target = operation.actors.find((actor) => actor.actorId === operation.targetActorId)!;
+      const events: DomainEvent[] = [];
+      const features = operation.features.map((feature): DungeonFeature => {
+        if (feature.type === 'door' || feature.floorId !== target.floorId
+          || Math.max(Math.abs(feature.x - target.x), Math.abs(feature.y - target.y)) > radius
+          || feature.discovery.discoveredByActorIds.includes(input.heroId)) return feature;
+        events.push({ type: 'feature.revealed', eventId: operation.eventId,
+          actorId: input.heroId, featureId: feature.featureId });
+        const discoveredByActorIds = [...feature.discovery.discoveredByActorIds, input.heroId].sort(compareCodeUnits);
+        const discovery = { ...feature.discovery, discoveredByActorIds };
+        return feature.type === 'secret' ? { ...feature, state: 'revealed', discovery } : { ...feature, discovery };
+      });
+      return { actors: operation.actors, features, events };
+    },
+    'effect.fuel.transfer': (operation) => {
+      const maximum = (operation.effect.parameters as { maximum: number }).maximum;
+      const owned = (item: typeof operation.items[number]) => (item.location.type === 'backpack'
+        || item.location.type === 'equipped') && item.location.actorId === operation.targetActorId;
+      const lights = operation.items.filter((item) => owned(item) && itemDefinition(input.content, item.contentId).light !== null)
+        .sort((left, right) => compareCodeUnits(left.itemId, right.itemId));
+      for (const lightItem of lights) {
+        const light = itemDefinition(input.content, lightItem.contentId).light!;
+        const capacity = light.fuelCapacity - (lightItem.fuel ?? 0);
+        if (capacity <= 0) continue;
+        const fuel = operation.items.filter((item) => item.location.type === 'backpack'
+          && item.location.actorId === operation.targetActorId
+          && itemDefinition(input.content, item.contentId).tags.some((tag) => light.fuelTags.includes(tag)))
+          .sort((left, right) => compareCodeUnits(left.itemId, right.itemId))[0];
+        if (!fuel) continue;
+        const quantity = Math.min(maximum, capacity, fuel.quantity);
+        const consumed = consumeItemQuantityFromItems({ items: operation.items, itemId: fuel.itemId, quantity });
+        if (!consumed.ok) throw new Error(`internal invariant: boss arena fuel transfer failed with ${consumed.reason}`);
+        const items = consumed.items.map((item) => item.itemId === lightItem.itemId
+          ? { ...item, fuel: (lightItem.fuel ?? 0) + quantity } : item);
+        return { actors: operation.actors, items, events: [{ type: 'item.refueled', eventId: operation.eventId,
+          actorId: operation.targetActorId, itemId: lightItem.itemId, fuelItemId: fuel.itemId,
+          quantity, fuel: (lightItem.fuel ?? 0) + quantity }] };
+      }
+      throw new Error('internal invariant: boss arena fuel target does not exist');
+    },
+  };
+}
+
 function applyNewPhases(input: Readonly<{
   state: ActiveRun; content: CompiledContentPack; population: BossPopulation;
   boss: ActorState; definition: BossEncounterContentEntry['definition']; eventId: OpaqueId;
@@ -53,10 +181,12 @@ function applyNewPhases(input: Readonly<{
   // Resolve the complete authored effect sequence first. resolveEffectSequence validates every
   // effect before applying one, so a missing operation/reference cannot leave a partial phase.
   const effectResult = resolveEffectSequence({ effects: phases.flatMap((phase) => phase.effects),
-    actors: input.state.actors, items: input.state.items, content: input.content,
+    actors: input.state.actors, items: input.state.items, features: input.state.features,
+    floors: input.state.floors, content: input.content,
     sourceActorId: input.boss.actorId, targetActorId: input.boss.actorId,
     effectsState: input.state.rng.effects, worldTime: input.state.worldTime, eventId: input.eventId,
-    forceMoveDirection: { x: 1, y: 0 }, operations: {}, survival: input.state.survival,
+    forceMoveDirection: { x: 1, y: 0 }, operations: bossEffectOperations({ content: input.content,
+      population: input.population, heroId: input.state.hero.actorId, definition: input.definition }), survival: input.state.survival,
     survivalActorId: input.state.hero.actorId });
   const finalPhase = phases.at(-1)!;
   const actors = effectResult.actors.map((actor) => actor.actorId === input.boss.actorId
@@ -68,6 +198,7 @@ function applyNewPhases(input: Readonly<{
     populationId: population.populationId, actorId: population.actorId,
     encounterId: population.encounterId, phaseId: phase.phaseId }));
   return { population, state: { ...input.state, actors, items: effectResult.items,
+    features: effectResult.features, floors: effectResult.floors,
     survival: effectResult.survival, rng: { ...input.state.rng, effects: effectResult.effectsState } },
     events: [...phaseEvents, ...effectResult.events] };
 }
