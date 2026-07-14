@@ -367,7 +367,8 @@ const population = z.discriminatedUnion('model', [
   z.strictObject({ ...populationBase, model: z.literal('individual') }),
   z.strictObject({ ...populationBase, model: z.literal('group'), leaderActorId: nullableIdentifier,
     bonusActive: z.boolean(), roleMembership: z.array(roleMembership).readonly(),
-    sharedKnowledge: z.array(lastKnownTarget).readonly(), leaderResponseApplied: z.boolean() }),
+    sharedKnowledge: z.array(lastKnownTarget).readonly(), leaderResponseApplied: z.boolean(),
+    leaderResponseExpiresAt: safeNonNegative.nullable() }),
   z.strictObject({ ...populationBase, model: z.literal('swarm'), sourceActorId: identifier,
     nextSpawnAt: safeNonNegative, spawnedCount: safeNonNegative, peakLivingSize: safeNonNegative,
     shutdownState: z.enum(['stop', 'flee', 'decay', 'frenzy']).nullable() }),
@@ -686,6 +687,9 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         && populationValue.formerMemberIds.includes(populationValue.leaderActorId);
       if (populationValue.leaderResponseApplied !== leaderDefeated) {
         fail(`${path}.leaderResponseApplied`, 'leader response state disagrees with leader membership');
+      }
+      if (!populationValue.leaderResponseApplied && populationValue.leaderResponseExpiresAt !== null) {
+        fail(`${path}.leaderResponseExpiresAt`, 'an unapplied leader response cannot have an expiry');
       }
       validateMemories(populationValue.sharedKnowledge, `${path}.sharedKnowledge`);
     } else if (populationValue.model === 'swarm') {

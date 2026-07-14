@@ -40,7 +40,7 @@ describe('seeded gameplay fixture', () => {
         floorId: beetle.floorId, createdAt: 0, model: 'group',
         livingMemberIds: [beetle.actorId], formerMemberIds: [], leaderActorId: null,
         bonusActive: false, roleMembership: [{ actorId: beetle.actorId, roleId: 'guard' }],
-        sharedKnowledge: [], leaderResponseApplied: false,
+        sharedKnowledge: [], leaderResponseApplied: false, leaderResponseExpiresAt: null,
       }].sort((left, right) => left.populationId < right.populationId ? -1 : 1),
     };
   }

@@ -497,13 +497,15 @@ function prepareIndividualTurn(input: Readonly<{
     behaviorState = { ...behaviorState, goal: selectPatrolGoal({
       state: input.state, actor, content: input.content,
     }) };
-  } else {
+  } else if (behaviorState.goal?.type !== 'formation') {
     behaviorState = { ...behaviorState, goal: null };
   }
   const target = !fleeing && behaviorState.goal?.type === 'actor'
     ? actorById(input.state, behaviorState.goal.targetActorId) : undefined;
   const adjacent = target !== undefined && Math.max(Math.abs(target.x - actor.x), Math.abs(target.y - actor.y)) === 1;
-  const intent = fleeing ? 'flee' : adjacent ? 'attack' : behaviorState.goal === null ? 'hold' : 'approach';
+  const intent = fleeing ? 'flee' : adjacent ? 'attack'
+    : behaviorState.goal?.type === 'formation' ? 'regroup'
+      : behaviorState.goal === null ? 'hold' : 'approach';
   const updatedIntent = updatePopulationIntent({
     eventId: input.eventId, actorId: actor.actorId, state: behaviorState, intent,
     targetCategory: behaviorState.goal?.type === 'actor'

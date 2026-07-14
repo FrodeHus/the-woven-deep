@@ -398,7 +398,7 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
     population = {
       ...base, model: 'group', leaderActorId, bonusActive: leaderActorId !== null,
       roleMembership: createdActors.map((actor) => ({ actorId: actor.actorId, roleId: actor.populationRoleId! })),
-      sharedKnowledge: [], leaderResponseApplied: false,
+      sharedKnowledge: [], leaderResponseApplied: false, leaderResponseExpiresAt: null,
     };
   } else if (selected.encounter.model === 'swarm') {
     population = {

@@ -76,6 +76,10 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         && actors.get(population.leaderActorId)?.populationRoleId !== encounter.definition.leaderRoleId) {
         throw new Error(`content-bound validation: group population ${population.populationId} leader has the wrong role`);
       }
+      const timedFrenzy = population.leaderResponseApplied && encounter.definition.leaderDeathResponse === 'frenzy';
+      if (timedFrenzy !== (population.leaderResponseExpiresAt !== null)) {
+        throw new Error(`content-bound validation: group population ${population.populationId} leader response expiry is invalid`);
+      }
     } else if (population.model === 'swarm' && encounter.model === 'swarm') {
       if (actors.get(population.sourceActorId)?.contentId !== encounter.definition.sourceMonsterId) {
         throw new Error(`content-bound validation: swarm population ${population.populationId} source uses the wrong monster`);

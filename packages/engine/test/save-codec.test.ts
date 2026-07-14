@@ -105,6 +105,7 @@ describe('active-run save codec', () => {
         livingMemberIds: [beetle.actorId], formerMemberIds: [], leaderActorId: beetle.actorId,
         bonusActive: true, roleMembership: [{ actorId: beetle.actorId, roleId: 'guard' }],
         sharedKnowledge: beetle.behaviorState.lastKnownTargets, leaderResponseApplied: false,
+        leaderResponseExpiresAt: null,
       }],
       fallenHeroStandings: [{
         rank: 1, hallRecordId: 'hall.champion', heroName: 'Brynja', portraitGlyph: '@',
@@ -222,6 +223,7 @@ describe('active-run save codec', () => {
       delete population.roleMembership;
       delete population.sharedKnowledge;
       delete population.leaderResponseApplied;
+      delete population.leaderResponseExpiresAt;
     }
     expect(decodeActiveRun(encodeActiveRun(state))).toEqual(state);
   });

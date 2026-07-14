@@ -68,6 +68,7 @@ export interface GroupPopulation extends PopulationBase {
   readonly roleMembership: readonly Readonly<{ actorId: OpaqueId; roleId: string }>[];
   readonly sharedKnowledge: readonly LastKnownTarget[];
   readonly leaderResponseApplied: boolean;
+  readonly leaderResponseExpiresAt: number | null;
 }
 export interface SwarmPopulation extends PopulationBase {
   readonly model: 'swarm';

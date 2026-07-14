@@ -8,6 +8,7 @@ import {
   decodeActiveRun,
   encodeActiveRun,
   groupCombatModifiers,
+  projectDomainEvents,
   resolveWorldStep,
   type ActiveRun,
   type ActorState,
@@ -81,7 +82,7 @@ function fixture(options: Readonly<{ positions?: readonly [string, number, numbe
     floorId: hero.floorId, createdAt: 0, livingMemberIds: members.map((actor) => actor.actorId).sort(),
     formerMemberIds: [], leaderActorId: 'monster.a', bonusActive: true,
     roleMembership: members.map((actor) => ({ actorId: actor.actorId, roleId: 'guard' })),
-    sharedKnowledge: [], leaderResponseApplied: false,
+    sharedKnowledge: [], leaderResponseApplied: false, leaderResponseExpiresAt: null,
   };
   const state: ActiveRun = { ...base, worldTime: 20,
     activeFloorId: options.active === false ? 'floor.inactive' : hero.floorId,
@@ -149,9 +150,52 @@ describe('group communication and formations', () => {
       }
     },
   );
+
+  it('assigns center, front, rear, and flank roles to distinct preferred slots', () => {
+    const roles = [
+      { ...ROLE, roleId: 'center', formationPreference: 'center' as const },
+      { ...ROLE, roleId: 'front', formationPreference: 'front' as const },
+      { ...ROLE, roleId: 'rear', formationPreference: 'rear' as const },
+      { ...ROLE, roleId: 'flank', formationPreference: 'flank' as const },
+    ];
+    const { state, content } = fixture({ groupDefinition: definition({ formation: 'wedge', roles,
+      leaderRoleId: 'center' }), positions: [
+      ['monster.a', 3, 2], ['monster.b', 1, 1], ['monster.c', 5, 1], ['monster.d', 1, 3],
+    ] });
+    const roleByActor = new Map([['monster.a', 'center'], ['monster.b', 'front'],
+      ['monster.c', 'rear'], ['monster.d', 'flank']]);
+    const actors = state.actors.map((actor) => roleByActor.has(actor.actorId)
+      ? { ...actor, populationRoleId: roleByActor.get(actor.actorId)! } : actor);
+    const populations = state.populations.map((population) => population.model === 'group' ? {
+      ...population, roleMembership: [...roleByActor].map(([actorId, roleId]) => ({ actorId, roleId })),
+    } : population);
+    const openFloor = state.floors.map((floor) => floor.floorId === state.activeFloorId
+      ? { ...floor, tiles: floor.tiles.map(() => 1 as const) } : floor);
+    const result = coordinateGroups({ state: { ...state, actors, populations, floors: openFloor },
+      content, eventId: 'event.roles' }).state;
+    const goal = (actorId: string) => result.actors.find((actor) => actor.actorId === actorId)!.behaviorState.goal!;
+    expect(goal('monster.a')).toMatchObject({ type: 'formation', roleId: 'center', x: 3, y: 2 });
+    expect(goal('monster.b')).toMatchObject({ type: 'formation', roleId: 'front' });
+    expect(goal('monster.c')).toMatchObject({ type: 'formation', roleId: 'rear' });
+    expect(goal('monster.d')).toMatchObject({ type: 'formation', roleId: 'flank' });
+    expect(goal('monster.b').y).toBeGreaterThan(2);
+    expect(goal('monster.c').y).toBeLessThan(2);
+    expect(Math.abs(goal('monster.d').x - 3)).toBeGreaterThanOrEqual(2);
+  });
 });
 
 describe('leaders and deterministic outcomes', () => {
+  it('reconciles an ordinary dead member before saves are encoded', () => {
+    const { state, content } = fixture();
+    const dead = { ...state, actors: state.actors.map((actor) => actor.actorId === 'monster.b'
+      ? { ...actor, health: 0 } : actor) };
+    const result = applyGroupLeaderOutcomes({ state: dead, content, eventId: 'event.member-death' });
+    const population = result.state.populations[0] as GroupPopulation;
+    expect(population.livingMemberIds).not.toContain('monster.b');
+    expect(population.formerMemberIds).toContain('monster.b');
+    expect(decodeActiveRun(encodeActiveRun(result.state))).toEqual(result.state);
+  });
+
   it('resolves a defeated leader at the authoritative world-step boundary', () => {
     const { state, content } = fixture();
     const dead = { ...state, actors: state.actors.map((actor) => actor.actorId === 'monster.a'
@@ -180,6 +224,40 @@ describe('leaders and deterministic outcomes', () => {
       .toEqual({ accuracy: 0, defense: 0, damage: 0 });
   });
 
+  it('keeps all group outcome details out of public projection until explicit redaction exists', () => {
+    const { state, content } = fixture();
+    const events = [
+      { type: 'group.leader-defeated' as const, eventId: 'event.public',
+        populationId: 'population.secret', actorId: 'monster.a' },
+      { type: 'group.outcome-applied' as const, eventId: 'event.public',
+        populationId: 'population.secret', actorId: 'monster.a', response: 'collapse' as const,
+        individualRewards: true, collapsedMemberCount: 7 },
+    ];
+    expect(projectDomainEvents({ state, content, heroId: state.hero.actorId, events })).toEqual([]);
+    expect(JSON.stringify(projectDomainEvents({ state, content, heroId: state.hero.actorId, events })))
+      .not.toMatch(/population\.secret|collapse|individualRewards|collapsedMemberCount|7/);
+  });
+
+  it('applies frenzy combat modifiers through direct observation until deterministic expiry', () => {
+    const groupDefinition = definition({ leaderDeathResponse: 'frenzy',
+      responseParameters: { duration: 20, modifiers: { accuracy: 3, defense: 0, damage: 4 } } });
+    const { state, content } = fixture({ groupDefinition,
+      positions: [['monster.a', 1, 2], ['monster.b', 2, 2]] });
+    const dead = { ...state, actors: state.actors.map((actor) => actor.actorId === 'monster.a'
+      ? { ...actor, health: 0, energy: 0 } : actor) };
+    const outcome = applyGroupLeaderOutcomes({ state: dead, content, eventId: 'event.frenzy' }).state;
+    const runAt = (worldTime: number) => resolveWorldStep({
+      state: { ...outcome, worldTime, rng: state.rng, actors: outcome.actors.map((actor) => ({
+        ...actor, energy: actor.actorId === state.hero.actorId || actor.actorId === 'monster.b' ? 100 : 0,
+      })) }, content, action: { type: 'wait', actorId: state.hero.actorId, cost: 100 },
+      eventId: `event.frenzy.${worldTime}`, maxInternalActions: 1,
+    });
+    const activeAttack = runAt(39).events.find((event) => event.type === 'attack.hit' || event.type === 'attack.missed')!;
+    const expiredAttack = runAt(40).events.find((event) => event.type === 'attack.hit' || event.type === 'attack.missed')!;
+    expect(activeAttack.total - activeAttack.naturalRoll).toBe(4);
+    expect(expiredAttack.total - expiredAttack.naturalRoll).toBe(1);
+  });
+
   it.each([
     ['weaken', { modifiers: { accuracy: -1, defense: -2, damage: -3 } }],
     ['panic', { duration: 20 }], ['disband', {}], ['surrender', {}],
@@ -203,6 +281,16 @@ describe('leaders and deterministic outcomes', () => {
       state: { ...first.state, worldTime: first.state.worldTime + responseParameters.duration },
       content, actorId: 'monster.b',
     })).toEqual({ accuracy: 0, defense: 0, damage: 0 });
+    if (response === 'frenzy') {
+      expect(survivors.every((actor) => actor.behaviorState.investigation === null)).toBe(true);
+      expect((first.state.populations[0] as GroupPopulation)).toMatchObject({ leaderResponseExpiresAt: 40 });
+      const observed = { ...first.state, actors: first.state.actors.map((actor) => actor.actorId === 'monster.b'
+        ? { ...actor, behaviorState: { ...actor.behaviorState, investigation: {
+          floorId: actor.floorId, x: 1, y: 1, startedAt: 21, expiresAt: null,
+        } } } : actor) };
+      expect(groupCombatModifiers({ state: observed, content, actorId: 'monster.b' }))
+        .toEqual(responseParameters.modifiers);
+    }
   });
 
   it.each(['none', 'individual'] as const)('collapses supernatural members with %s reward policy', (collapseRewards) => {
@@ -218,5 +306,19 @@ describe('leaders and deterministic outcomes', () => {
     expect(result.events.find((event) => event.type === 'group.outcome-applied')).toMatchObject({
       response: 'collapse', individualRewards: collapseRewards === 'individual', collapsedMemberCount: 2,
     });
+  });
+
+  it('derives regroup intent from a formation goal before emitting or acting', () => {
+    const { state, content } = fixture({ positions: [['monster.a', 4, 3]] });
+    const neutral = { ...state, relationships: [{ leftActorId: state.hero.actorId,
+      rightActorId: 'monster.a', relationship: 'neutral' as const }] };
+    const result = resolveWorldStep({ state: neutral, content,
+      action: { type: 'wait', actorId: state.hero.actorId, cost: 100 },
+      eventId: 'event.regroup', maxInternalActions: 1 });
+    expect(result.events).toContainEqual(expect.objectContaining({
+      type: 'actor.intent-changed', actorId: 'monster.a', intent: 'regroup', presentation: 'intent.regroup',
+    }));
+    expect(result.state.actors.find((actor) => actor.actorId === 'monster.a')?.behaviorState)
+      .toMatchObject({ intent: 'regroup', goal: { type: 'formation' } });
   });
 });
