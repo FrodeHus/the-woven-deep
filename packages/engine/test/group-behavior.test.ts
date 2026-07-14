@@ -9,6 +9,8 @@ import {
   encodeActiveRun,
   groupCombatModifiers,
   projectDomainEvents,
+  relationshipBetween,
+  validateContentBoundRun,
   resolveWorldStep,
   type ActiveRun,
   type ActorState,
@@ -234,6 +236,11 @@ describe('group communication and formations', () => {
 });
 
 describe('leaders and deterministic outcomes', () => {
+  it('rejects group membership outside authored role quantities', () => {
+    const { state, content } = fixture({ groupDefinition: definition({ roles: [{ ...ROLE, maximumQuantity: 2 }] }) });
+    expect(() => validateContentBoundRun(state, content)).toThrow(/group.*quantity|role.*quantity/i);
+  });
+
   it('reconciles an ordinary dead member before saves are encoded', () => {
     const { state, content } = fixture();
     const dead = { ...state, actors: state.actors.map((actor) => actor.actorId === 'monster.b'
@@ -324,7 +331,7 @@ describe('leaders and deterministic outcomes', () => {
     expect(first.events.map((event) => event.type)).toEqual(['group.leader-defeated', 'group.outcome-applied']);
     expect(second).toEqual({ state: first.state, events: [] });
     const survivors = first.state.actors.filter((actor) => actor.actorId === 'monster.b' || actor.actorId === 'monster.c');
-    if (response === 'panic') expect(survivors.every((actor) => actor.behaviorState.intent === 'flee')).toBe(true);
+    if (response === 'panic') expect(survivors.every((actor) => actor.behaviorState.intent === 'hold')).toBe(true);
     if (response === 'disband') expect(survivors.every((actor) => actor.populationId === null)).toBe(true);
     if (response === 'surrender') expect(survivors.every((actor) => actor.disposition === 'neutral')).toBe(true);
     if (response === 'weaken' || response === 'frenzy') {
@@ -345,6 +352,46 @@ describe('leaders and deterministic outcomes', () => {
       expect(groupCombatModifiers({ state: observed, content, actorId: 'monster.b' }))
         .toEqual(responseParameters.modifiers);
     }
+  });
+
+  it('saves a reachable panic retreat away from the latest hostile observation', () => {
+    const { state, content } = fixture({ groupDefinition: definition({ leaderDeathResponse: 'panic',
+      responseParameters: { duration: 20 } }), positions: [['monster.a', 2, 2], ['monster.b', 3, 1]] });
+    const hero = state.actors.find((actor) => actor.actorId === state.hero.actorId)!;
+    const prepared = { ...state, actors: state.actors.map((actor) => actor.actorId === 'monster.a'
+      ? { ...actor, health: 0 }
+      : actor.actorId === 'monster.b' ? { ...actor, behaviorState: { ...actor.behaviorState,
+        lastKnownTargets: [{ targetActorId: hero.actorId, floorId: hero.floorId, x: hero.x, y: hero.y,
+          observedAt: state.worldTime, source: 'sight' as const, observerActorId: actor.actorId }] } } : actor) };
+    const result = applyGroupLeaderOutcomes({ state: prepared, content, eventId: 'event.panic-retreat' });
+    const survivor = result.state.actors.find((actor) => actor.actorId === 'monster.b')!;
+    expect(survivor.behaviorState.goal).toMatchObject({ type: 'cell', floorId: survivor.floorId });
+    expect(survivor.behaviorState.goal).not.toMatchObject({ x: survivor.x, y: survivor.y });
+    const goal = survivor.behaviorState.goal as Extract<typeof survivor.behaviorState.goal, { type: 'cell' }>;
+    expect(Math.max(Math.abs(goal.x - hero.x), Math.abs(goal.y - hero.y)))
+      .toBeGreaterThan(Math.max(Math.abs(survivor.x - hero.x), Math.abs(survivor.y - hero.y)));
+    expect(decodeActiveRun(encodeActiveRun(result.state))).toEqual(result.state);
+  });
+
+  it('clears hostile overrides on surrender and becomes hostile again only when attacked', () => {
+    const { state, content } = fixture({ groupDefinition: definition({ leaderDeathResponse: 'surrender',
+      responseParameters: {} }), positions: [['monster.a', 2, 2], ['monster.b', 2, 1]] });
+    const heroId = state.hero.actorId;
+    const hostile = { ...state,
+      relationships: state.relationships.map((entry) => entry.leftActorId === heroId
+        && entry.rightActorId === 'monster.b' ? { ...entry, relationship: 'hostile' as const } : entry),
+      actors: state.actors.map((actor) => actor.actorId === 'monster.a' ? { ...actor, health: 0 } : actor) };
+    const surrendered = applyGroupLeaderOutcomes({ state: hostile, content, eventId: 'event.surrender' }).state;
+    expect(relationshipBetween(surrendered, heroId, 'monster.b')).toBe('neutral');
+    const held = resolveWorldStep({ state: surrendered, content,
+      action: { type: 'wait', actorId: heroId, cost: 100 }, eventId: 'event.surrender-hold', maxInternalActions: 1 });
+    expect(held.events).not.toContainEqual(expect.objectContaining({ actorId: 'monster.b', targetActorId: heroId,
+      type: expect.stringMatching(/^attack\./) }));
+    const attacked = resolveWorldStep({ state: { ...surrendered, actors: surrendered.actors.map((actor) =>
+      actor.actorId === heroId ? { ...actor, energy: 100 } : actor) }, content,
+    action: { type: 'attack', actorId: heroId, targetActorId: 'monster.b', cost: 100 },
+    eventId: 'event.break-surrender', maxInternalActions: 0 });
+    expect(relationshipBetween(attacked.state, heroId, 'monster.b')).toBe('hostile');
   });
 
   it.each(['none', 'individual'] as const)('collapses supernatural members with %s reward policy', (collapseRewards) => {

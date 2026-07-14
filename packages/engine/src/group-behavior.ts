@@ -13,6 +13,8 @@ import type {
 import type { GroupPopulation, LastKnownTarget } from './population-model.js';
 import { compareCodeUnits } from './stable-json.js';
 import { movementBlockReason } from './terrain.js';
+import { findPath } from './pathfinding.js';
+import { relationshipBetween } from './reactions.js';
 
 const ZERO_MODIFIERS: PopulationCombatModifiers = Object.freeze({ accuracy: 0, defense: 0, damage: 0 });
 
@@ -190,6 +192,39 @@ function formationGoals(
   });
 }
 
+function panicRetreatGoal(state: ActiveRun, actor: ActorState) {
+  const memory = [...actor.behaviorState.lastKnownTargets]
+    .filter((candidate) => candidate.floorId === actor.floorId
+      && state.actors.some((target) => target.actorId === candidate.targetActorId
+        && relationshipBetween(state, actor.actorId, target.actorId) === 'hostile'))
+    .sort((left, right) => right.observedAt - left.observedAt
+      || compareCodeUnits(left.observerActorId, right.observerActorId)
+      || compareCodeUnits(left.targetActorId, right.targetActorId))[0];
+  if (!memory) return null;
+  const floor = state.floors.find((candidate) => candidate.floorId === actor.floorId);
+  if (!floor) return null;
+  const tiles = featureTiles(state, floor.floorId);
+  const occupied = new Set(state.actors.filter((candidate) => candidate.actorId !== actor.actorId
+    && candidate.floorId === actor.floorId && candidate.health > 0)
+    .map((candidate) => `${candidate.x}:${candidate.y}`));
+  const distance = (x: number, y: number) => Math.max(Math.abs(x - memory.x), Math.abs(y - memory.y));
+  const currentDistance = distance(actor.x, actor.y);
+  const candidates = Array.from({ length: floor.width * floor.height }, (_, index) => ({
+    x: index % floor.width, y: Math.floor(index / floor.width),
+  })).filter((point) => distance(point.x, point.y) > currentDistance
+    && movementBlockReason(tiles[point.y * floor.width + point.x]!) === undefined
+    && !occupied.has(`${point.x}:${point.y}`))
+    .sort((left, right) => distance(right.x, right.y) - distance(left.x, left.y)
+      || left.y - right.y || left.x - right.x);
+  for (const destination of candidates) {
+    const path = findPath({ width: floor.width, height: floor.height, topology: 8, origin: actor, destination,
+      isPassable: (x, y) => movementBlockReason(tiles[y * floor.width + x]!) === undefined
+        && ((x === actor.x && y === actor.y) || !occupied.has(`${x}:${y}`)) });
+    if (path !== null) return { type: 'cell' as const, floorId: actor.floorId, ...destination };
+  }
+  return null;
+}
+
 export function coordinateGroups(input: Readonly<{
   state: ActiveRun; content: CompiledContentPack; eventId: OpaqueId;
 }>): Readonly<{ state: ActiveRun; events: readonly GroupBehaviorEvent[] }> {
@@ -236,6 +271,7 @@ export function applyGroupLeaderOutcomes(input: Readonly<{
 }>): Readonly<{ state: ActiveRun; events: readonly GroupBehaviorEvent[] }> {
   let actors = input.state.actors;
   let populations = input.state.populations;
+  let relationships = input.state.relationships;
   let changed = false;
   const events: GroupBehaviorEvent[] = [];
   for (const population of [...input.state.populations].sort((left, right) => compareCodeUnits(left.populationId, right.populationId))) {
@@ -262,10 +298,12 @@ export function applyGroupLeaderOutcomes(input: Readonly<{
     actors = actors.map((actor) => {
       if (!survivorIds.includes(actor.actorId)) return actor;
       switch (definition.leaderDeathResponse) {
-        case 'panic': return { ...actor, behaviorState: { ...actor.behaviorState, intent: 'flee',
-          goal: { type: 'cell', floorId: actor.floorId, x: actor.x, y: actor.y },
-          investigation: { floorId: actor.floorId, x: actor.x, y: actor.y,
-            startedAt: input.state.worldTime, expiresAt: input.state.worldTime + duration } } };
+        case 'panic': {
+          const goal = panicRetreatGoal({ ...input.state, actors }, actor);
+          return { ...actor, behaviorState: { ...actor.behaviorState, intent: goal ? 'flee' : 'hold', goal,
+            investigation: goal ? { floorId: goal.floorId, x: goal.x, y: goal.y,
+              startedAt: input.state.worldTime, expiresAt: input.state.worldTime + duration } : null } };
+        }
         case 'disband': return { ...actor, populationId: null, populationRoleId: null,
           populationPresentation: actor.populationPresentation ? { ...actor.populationPresentation, leader: false } : null };
         case 'surrender': return { ...actor, disposition: 'neutral', awareActorIds: [],
@@ -275,14 +313,17 @@ export function applyGroupLeaderOutcomes(input: Readonly<{
         default: return actor;
       }
     });
+    if (definition.leaderDeathResponse === 'surrender') {
+      const surrendered = new Set(survivorIds);
+      relationships = relationships.filter((relationship) =>
+        !surrendered.has(relationship.leftActorId) && !surrendered.has(relationship.rightActorId));
+    }
     const disband = definition.leaderDeathResponse === 'disband';
     const collapse = definition.leaderDeathResponse === 'collapse';
     const remaining = disband || collapse ? [] : survivorIds;
     const formerMemberIds = [...new Set([...group.formerMemberIds, leader.actorId,
       ...(disband || collapse ? survivorIds : [])])].sort(compareCodeUnits);
-    const roleMembership = disband
-      ? group.roleMembership.filter((entry) => entry.actorId === leader.actorId)
-      : group.roleMembership;
+    const roleMembership = group.roleMembership;
     group = {
       ...group, livingMemberIds: remaining, formerMemberIds, roleMembership,
       bonusActive: false, leaderResponseApplied: true,
@@ -306,5 +347,5 @@ export function applyGroupLeaderOutcomes(input: Readonly<{
       individualRewards: collapse && definition.collapseRewards === 'individual', collapsedMemberCount: collapsed });
   }
   return !changed ? { state: input.state, events: [] }
-    : { state: { ...input.state, actors, populations }, events };
+    : { state: { ...input.state, actors, populations, relationships }, events };
 }

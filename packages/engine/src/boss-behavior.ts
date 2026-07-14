@@ -252,7 +252,7 @@ function createRewards(input: Readonly<{
   for (const item of created) if (input.state.items.some((existing) => existing.itemId === item.itemId)) {
     throw new Error(`internal invariant: boss reward item ${item.itemId} already exists without reward state`);
   }
-  const population = { ...input.population, rewardCreated: true };
+  const population = { ...input.population, rewardCreated: true, rewardRollState: input.state.rng.loot };
   const state = { ...input.state, items: [...input.state.items, ...created]
     .sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
     rng: { ...input.state.rng, loot: loot.state } };
@@ -299,6 +299,12 @@ export function advanceBosses(input: Readonly<{
     const recovered = recoverOnReentry({ state, population, boss, definition, eventId: input.eventId });
     state = recovered.state; population = recovered.population; events.push(...recovered.events);
     const currentBoss = state.actors.find((actor) => actor.actorId === population.actorId)!;
+    if (currentBoss.health <= 0) {
+      const reward = createRewards({ state, content: input.content, population,
+        boss: currentBoss, definition, eventId: input.eventId });
+      state = replacePopulation(reward.state, reward.population); events.push(...reward.events);
+      continue;
+    }
     const phased = applyNewPhases({ state, content: input.content, population, boss: currentBoss,
       definition, eventId: input.eventId });
     state = phased.state; population = synchronizeDeath(phased.population,

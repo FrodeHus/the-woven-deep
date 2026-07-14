@@ -180,6 +180,24 @@ function encounterIssues(
   issues.push(...referencedKindIssue(file, `${path}.monsterId`, definition.monsterId, 'monster', byId));
   issues.push(...referencedKindIssue(file, `${path}.uniqueItemId`, definition.uniqueItemId, 'item', byId));
   issues.push(...referencedKindIssue(file, `${path}.enhancedLootTableId`, definition.enhancedLootTableId, 'loot-table', byId));
+  const visitLootForUnique = (tableId: string, visited = new Set<string>()): boolean => {
+    if (visited.has(tableId)) return false;
+    visited.add(tableId);
+    const table = byId.get(tableId);
+    if (table?.kind !== 'loot-table') return false;
+    return table.choices.some((choice) => choice.contentId === definition.uniqueItemId
+      || (choice.lootTableId !== null && visitLootForUnique(choice.lootTableId, visited)));
+  };
+  if (visitLootForUnique(definition.enhancedLootTableId)) {
+    issues.push(issue(file, `${path}.enhancedLootTableId`,
+      `boss enhanced loot graph reaches guaranteed unique item ${definition.uniqueItemId}`));
+  }
+  const duplicateUnique = [...byId.values()].filter((candidate) => candidate.kind === 'encounter'
+    && candidate.model === 'boss' && candidate.id !== encounter.id
+    && candidate.definition.uniqueItemId === definition.uniqueItemId);
+  if (duplicateUnique.length > 0) {
+    issues.push(issue(file, `${path}.uniqueItemId`, `boss guaranteed unique item ${definition.uniqueItemId} is shared`));
+  }
   if (encounter.maximumInstancesPerRun !== 1) {
     issues.push(issue(file, `$.entries.${encounter.id}.maximumInstancesPerRun`, 'boss encounters require maximumInstancesPerRun 1'));
   }

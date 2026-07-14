@@ -5,6 +5,7 @@ import {
   resolveSwarmSpawnAction,
   resolveWorldStep,
   swarmSpawnAction,
+  validateContentBoundRun,
   type ActiveRun, type ActorState, type SwarmPopulation,
 } from '../src/index.js';
 
@@ -32,7 +33,7 @@ function fixture(overrides: Partial<SwarmEncounterDefinition> = {}, active = tru
   const hero = base.actors[0]!;
   const source: ActorState = { ...hero, actorId: 'actor.source', contentId: 'monster.source',
     playerControlled: false, x: 3, y: 3, health: 8, maxHealth: 8, disposition: 'hostile',
-    behaviorId: 'behavior.approach-and-attack', populationId: 'population.swarm', populationRoleId: 'source',
+    behaviorId: 'behavior.approach-and-attack', populationId: 'population.swarm', populationRoleId: null,
     populationPresentation: { name: 'Source', glyph: 'S', color: '#ffffff', leader: false } };
   const def = definition(overrides);
   const encounter: EncounterContentEntry = { kind: 'encounter', id: 'encounter.swarm', name: 'Swarm',
@@ -59,6 +60,33 @@ function fixture(overrides: Partial<SwarmEncounterDefinition> = {}, active = tru
 }
 
 describe('swarm timers, placement, and caps', () => {
+  it('rejects a saved swarm above its authored living caps', () => {
+    const first = fixture();
+    const spawned = advanceSwarms({ state: first.state, content: first.content,
+      eventId: 'event.overcap-validation', sourceActionActorId: 'actor.source' });
+    const constrained = fixture({ maximumLivingChildren: 1, maximumLivingMembers: 2 }).content;
+    expect(() => validateContentBoundRun(spawned.state, constrained)).toThrow(/swarm.*(cap|living)/i);
+  });
+
+  it('keeps spawned actor occupancy authoritative after movement frees an origin', () => {
+    const first = fixture();
+    const spawned = advanceSwarms({ state: first.state, content: first.content,
+      eventId: 'event.spawn-authoritative', sourceActionActorId: 'actor.source' });
+    const child = spawned.state.actors.find((actor) => actor.actorId.startsWith('actor.population.swarm.spawn.'))!;
+    const floor = spawned.state.floors.find((candidate) => candidate.floorId === child.floorId)!;
+    expect(floor.entities.some((entity) => entity.entityId === child.actorId)).toBe(false);
+    const moved = { ...spawned.state, actors: spawned.state.actors.map((actor) => actor.actorId === child.actorId
+      ? { ...actor, x: 5, y: 5, health: 0 } : actor), worldTime: spawned.state.worldTime + 10,
+      populations: spawned.state.populations.map((population) => population.model === 'swarm'
+        ? { ...population, nextSpawnAt: spawned.state.worldTime + 10 } : population) };
+    const respawned = advanceSwarms({ state: moved, content: first.content,
+      eventId: 'event.respawn-authoritative', sourceActionActorId: 'actor.source' });
+    expect(respawned.state.actors.filter((actor) => actor.health > 0 && actor.populationId === 'population.swarm')
+      .some((actor) => actor.x === child.x && actor.y === child.y)).toBe(true);
+    expect(respawned.state.floors.find((candidate) => candidate.floorId === child.floorId)?.entities
+      .some((entity) => entity.entityId.startsWith('actor.population.swarm.spawn.'))).toBe(false);
+  });
+
   it('processes one world-time transition, fills legal row-major cells, and advances only encounters RNG', () => {
     const { state, content } = fixture();
     const before = structuredClone(state);

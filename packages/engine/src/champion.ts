@@ -239,6 +239,7 @@ export function placeFallenHeroEncounters(input: Readonly<{
       const actor = input.run.actors.find((candidate) => candidate.actorId === population.actorId);
       return actor && actor.health > 0 ? [{ x: actor.x, y: actor.y }] : [];
     });
+  slots = slots.filter((slot) => !selectedCells.some((cell) => cell.x === slot.x && cell.y === slot.y));
   const decisions = input.run.fallenHeroDecisions.map((decision): FallenHeroRunDecision => {
     const standing = input.run.fallenHeroStandings.find((candidate) => candidate.hallRecordId === decision.hallRecordId);
     const exists = populations.some((population) => (population.model === 'champion' || population.model === 'echo')
@@ -281,8 +282,6 @@ export function placeFallenHeroEncounters(input: Readonly<{
       : { ...base, model: 'echo', rank: standing.rank, lootCreated: false,
         equipmentContentIds: normalized.equipmentContentIds, abilityIds: normalized.abilityIds };
     createdActors.push(actor); populations.push(population);
-    floor = { ...floor, entities: [...floor.entities, { entityId: actorId, x: actor.x, y: actor.y }]
-      .sort((left, right) => compareCodeUnits(left.entityId, right.entityId)) };
     return decision;
   });
   populations.sort((left, right) => compareCodeUnits(left.populationId, right.populationId));

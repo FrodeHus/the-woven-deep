@@ -412,15 +412,14 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
   } else {
     population = {
       ...base, model: 'boss', actorId: createdActors[0]!.actorId, currentPhaseId: null,
-      crossedPhaseIds: [], lastFloorExitAt: null, rewardCreated: false, recoveryHistory: [],
+      crossedPhaseIds: [], lastFloorExitAt: null, rewardCreated: false, rewardRollState: null, recoveryHistory: [],
     };
   }
   const encounterDecisions = reachedDecisions.map((decision) => decision.encounterId === selected.encounter.id
     ? { ...decision, instancesCreated: decision.instancesCreated + 1 } : decision);
-  const newEntities = createdActors.map((actor) => ({ entityId: actor.actorId, x: actor.x, y: actor.y }));
   return {
     status: 'placed', encounterId: selected.encounter.id, nextEncounterState: planned.state,
     encounterDecisions, diagnostics: [], createdActors, population,
-    floor: { ...input.floor, entities: [...input.floor.entities, ...newEntities].sort((left, right) => compareId(left.entityId, right.entityId)) },
+    floor: input.floor,
   };
 }

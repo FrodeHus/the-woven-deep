@@ -70,6 +70,15 @@ function proveMilestone(result, split, content) {
     'boss.phase-changed', 'boss.recovered', 'boss.reward-created',
     'champion.defeated', 'champion.heirloom-created', 'echo.defeated', 'echo.loot-created',
   ]) has(type);
+  const causalAttackBoundaries = new Set([
+    'before-leader-death', 'before-boss-threshold', 'before-champion-defeat',
+    'before-echo-defeat', 'before-reward-creation',
+  ]);
+  for (const record of result.records.filter((candidate) => causalAttackBoundaries.has(candidate.boundary))) {
+    assert(record.command.type === 'attack', `${record.boundary} was not caused by a production attack command`);
+    assert(record.authoritativeEvents.some((event) => event.type === 'actor.died'
+      && event.actorId === record.command.targetActorId), `${record.boundary} attack did not defeat its target`);
+  }
 
   const group = result.state.populations.find((population) => population.model === 'group');
   const swarm = result.state.populations.find((population) => population.model === 'swarm');
@@ -134,7 +143,7 @@ async function main() {
   const options = parseArguments(process.argv.slice(2));
   const content = await compileContentDirectory({ rootDir: options.contentDirectory });
   const continuous = runPopulationDemo(content);
-  const split = runPopulationDemo(content, new Set([0, 1, 2, 3, 4, 5, 6]));
+  const split = runPopulationDemo(content, new Set(continuous.records.map((_, index) => index)));
   proveMilestone(continuous, split, content);
 
   const authoritativeEvents = continuous.records.flatMap((record) => record.authoritativeEvents);

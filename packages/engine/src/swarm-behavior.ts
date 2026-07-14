@@ -62,7 +62,7 @@ function legalCells(state: ActiveRun, population: SwarmPopulation, radius: numbe
   for (const feature of state.features) if (feature.floorId === floor.floorId) occupied.add(`${feature.x}:${feature.y}`);
   if (floor.stairUp) occupied.add(`${floor.stairUp.x}:${floor.stairUp.y}`);
   if (floor.stairDown) occupied.add(`${floor.stairDown.x}:${floor.stairDown.y}`);
-  for (const slot of floor.placementSlots) if (slot.required || slot.kind === 'objective') occupied.add(`${slot.x}:${slot.y}`);
+  for (const slot of floor.placementSlots) occupied.add(`${slot.x}:${slot.y}`);
   const cells: { x: number; y: number }[] = [];
   for (let y = 0; y < floor.height; y += 1) for (let x = 0; x < floor.width; x += 1) {
     if (Math.max(Math.abs(x - source.x), Math.abs(y - source.y)) > radius || (x === source.x && y === source.y)) continue;
@@ -217,12 +217,8 @@ export function advanceSwarms(input: Readonly<{
           livingMemberIds: [...population.livingMemberIds, ...actorIds].sort(compareCodeUnits),
           peakLivingSize: Math.max(population.peakLivingSize, population.livingMemberIds.length + created.length),
           emittedCapLevels: [...new Set([...population.emittedCapLevels, ...limitingLevels])].sort(compareCodeUnits) as CapLevel[] };
-        const floor = state.floors.find((candidate) => candidate.floorId === population.floorId)!;
         state = { ...state, rng: { ...state.rng, encounters: rng }, actors: [...state.actors, ...created]
-          .sort((a, b) => compareCodeUnits(a.actorId, b.actorId)),
-          floors: state.floors.map((candidate) => candidate.floorId === floor.floorId ? { ...candidate,
-            entities: [...candidate.entities, ...created.map((actor) => ({ entityId: actor.actorId, x: actor.x, y: actor.y }))]
-              .sort((a, b) => compareCodeUnits(a.entityId, b.entityId)) } : candidate) };
+          .sort((a, b) => compareCodeUnits(a.actorId, b.actorId)) };
         if (created.length > 0) events.push({ type: 'swarm.members-created', eventId: input.eventId,
           populationId: population.populationId, sourceActorId: population.sourceActorId, actorIds, quantity: created.length });
         for (const level of limitingLevels) {

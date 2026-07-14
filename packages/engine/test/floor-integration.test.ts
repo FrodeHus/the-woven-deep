@@ -128,7 +128,7 @@ describe('addGeneratedFloor', () => {
       content, forcedEncounterId: encounter.id,
     });
 
-    expect(result.floors[1]!.entities.length).toBeGreaterThan(0);
+    expect(result.floors[1]!.entities).toHaveLength(0);
     expect(result.actors.filter((actor) => actor.populationId !== null).length).toBeGreaterThan(0);
     expect(result.populations).toHaveLength(1);
     expect(result.populations[0]!.floorId).toBe(generated.floor.floorId);

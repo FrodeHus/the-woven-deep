@@ -342,7 +342,7 @@ describe('atomic population placement', () => {
     if (result.status !== 'placed') return;
     expect(result.createdActors.map(({ x, y }) => ({ x, y }))).toEqual([{ x: 1, y: 2 }]);
     expect(result.floor.entities.find((entity) => entity.entityId === result.createdActors[0]!.actorId))
-      .toEqual({ entityId: result.createdActors[0]!.actorId, x: 1, y: 2 });
+      .toBeUndefined();
   });
 
   it('skips the complete optional encounter when member separation or terrain prevents composition', () => {

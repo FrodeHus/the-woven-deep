@@ -1,5 +1,5 @@
 import type { BaseAttributes } from './actor-model.js';
-import type { OpaqueId } from './model.js';
+import type { OpaqueId, Uint32State } from './model.js';
 
 export type PopulationIntent = 'approach' | 'attack' | 'hold' | 'regroup' | 'flee' | 'protect' | 'spawn' | 'phase-change';
 
@@ -87,6 +87,7 @@ export interface BossPopulation extends PopulationBase {
   readonly crossedPhaseIds: readonly string[];
   readonly lastFloorExitAt: number | null;
   readonly rewardCreated: boolean;
+  readonly rewardRollState: Uint32State | null;
   readonly recoveryHistory: readonly Readonly<{ at: number; amount: number }>[];
 }
 export interface ChampionPopulation extends PopulationBase {

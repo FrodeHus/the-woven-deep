@@ -56,7 +56,8 @@ function fixture(overrides: Partial<BossEncounterDefinition> = {}) {
     monster, item('item.unique'), item('item.extra-a'), item('item.extra-b'), table, encounter] };
   const population: BossPopulation = { populationId: 'population.boss', encounterId: encounter.id, model: 'boss',
     floorId: hero.floorId, createdAt: 0, livingMemberIds: [boss.actorId], formerMemberIds: [], actorId: boss.actorId,
-    currentPhaseId: null, crossedPhaseIds: [], lastFloorExitAt: null, rewardCreated: false, recoveryHistory: [] };
+    currentPhaseId: null, crossedPhaseIds: [], lastFloorExitAt: null, rewardCreated: false,
+    rewardRollState: null, recoveryHistory: [] };
   const state: ActiveRun = { ...base, actors: [boss, hero], populations: [population], encounterDecisions: [{
     encounterId: encounter.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1, eligible: true,
     reachedEligibleDepth: true, encountered: true, instancesCreated: 1 }], floors: [{ ...base.floors[0]!,
@@ -65,6 +66,16 @@ function fixture(overrides: Partial<BossEncounterDefinition> = {}) {
 }
 
 describe('boss phases', () => {
+  it('requires exactly one current encounter decision and exact boss membership', () => {
+    const { state, content } = fixture();
+    expect(() => validateContentBoundRun({ ...state, encounterDecisions: [] }, content))
+      .toThrow(/every encounter|encounter decision/i);
+    const boss = state.populations[0] as BossPopulation;
+    const malformed = { ...state, populations: [{ ...boss,
+      livingMemberIds: [...boss.livingMemberIds, state.hero.actorId].sort() }] };
+    expect(() => validateContentBoundRun(malformed, content)).toThrow(/boss.*(membership|wrong monster)|primary actor/i);
+  });
+
   it('persists authored arena feature mutations across exit and re-entry', () => {
     const { state, content } = fixture({ phases: [{ ...definition().phases[0]!, effects: [
       { effectId: 'effect.feature.mutate', parameters: { state: 'door.open' }, requiresLivingTarget: false },
@@ -204,6 +215,24 @@ describe('boss phases', () => {
 });
 
 describe('boss recovery and defeat rewards', () => {
+  it('does not resurrect a boss killed across multiple phases by a default healing effect', () => {
+    const healingPhases = definition().phases.map((phase) => ({ ...phase, effects: [{
+      effectId: 'effect.heal' as const, parameters: { dice: { count: 1, sides: 1, bonus: 49 } },
+      requiresLivingTarget: false,
+    }] }));
+    const { state, content } = fixture({ phases: healingPhases });
+    const dead = { ...state, actors: state.actors.map((actor) => actor.actorId === 'actor.boss'
+      ? { ...actor, health: 0 } : actor) };
+    const first = advanceBosses({ state: dead, content, eventId: 'event.killing-thresholds' });
+    expect(first.state.actors.find((actor) => actor.actorId === 'actor.boss')?.health).toBe(0);
+    expect(first.state.populations[0]).toMatchObject({ crossedPhaseIds: [], rewardCreated: true });
+    expect(first.events.filter((event) => event.type === 'boss.phase-changed')).toHaveLength(0);
+    expect(first.events.filter((event) => event.type === 'boss.reward-created')).toHaveLength(1);
+    const retried = advanceBosses({ state: first.state, content, eventId: 'event.killing-thresholds-retry' });
+    expect(retried.state.actors.find((actor) => actor.actorId === 'actor.boss')?.health).toBe(0);
+    expect(retried.events.filter((event) => event.type === 'boss.reward-created')).toHaveLength(0);
+  });
+
   it('freezes inactive bosses, then recovers one elapsed interval without reversing phase or resurrecting', () => {
     const { state, content } = fixture();
     const phased = advanceBosses({ state: { ...state, worldTime: 10, actors: state.actors.map((actor) =>
@@ -246,6 +275,22 @@ describe('boss recovery and defeat rewards', () => {
     expect(retried.state.items).toEqual(first.state.items);
     expect(retried.state.rng.loot).toEqual(first.state.rng.loot);
     expect(retried.events.filter((event) => event.type.startsWith('boss.'))).toEqual([]);
+  });
+
+  it('rejects missing, tampered, or duplicate deterministic boss rewards', () => {
+    const { state, content } = fixture();
+    const defeated = { ...state, actors: state.actors.map((actor) => actor.actorId === 'actor.boss'
+      ? { ...actor, health: 0 } : actor) };
+    const rewarded = advanceBosses({ state: defeated, content, eventId: 'event.reward-binding' }).state;
+    const rewardItems = rewarded.items.filter((entry) => entry.itemId.startsWith('item.reward.population.boss.'));
+    expect(() => validateContentBoundRun({ ...rewarded, items: rewardItems.slice(1) }, content))
+      .toThrow(/boss reward/i);
+    expect(() => validateContentBoundRun({ ...rewarded, items: rewarded.items.map((entry) =>
+      entry.itemId === rewardItems[1]!.itemId ? { ...entry, contentId: 'item.unique' } : entry) }, content))
+      .toThrow(/boss reward/i);
+    expect(() => validateContentBoundRun({ ...rewarded, items: [...rewarded.items, {
+      ...rewardItems[0]!, itemId: 'item.reward.population.boss.unique-copy',
+    }].sort((left, right) => left.itemId.localeCompare(right.itemId)) }, content)).toThrow(/boss reward/i);
   });
 
   it('validates every reward reference before consuming loot RNG or creating any item', () => {

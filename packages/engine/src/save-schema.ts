@@ -466,7 +466,7 @@ const population = z.discriminatedUnion('model', [
     shutdownExpiresAt: safeNonNegative.nullable() }),
   z.strictObject({ ...populationBase, model: z.literal('boss'), actorId: identifier,
     currentPhaseId: z.string().min(1).max(80).nullable(), crossedPhaseIds: z.array(z.string().min(1).max(80)).readonly(),
-    lastFloorExitAt: safeNonNegative.nullable(), rewardCreated: z.boolean(),
+    lastFloorExitAt: safeNonNegative.nullable(), rewardCreated: z.boolean(), rewardRollState: uint32State.nullable(),
     recoveryHistory: z.array(z.strictObject({ at: safeNonNegative, amount: safeNonNegative })).readonly() }),
   z.strictObject({ ...populationBase, model: z.literal('champion'), actorId: identifier,
     hallRecordId: identifier, rank: z.literal(1), defeated: z.boolean(), rewardCreated: z.boolean(),
@@ -763,7 +763,9 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       const roles = new Map(populationValue.roleMembership.map((entry) => [entry.actorId, entry.roleId]));
       for (const [roleIndex, role] of populationValue.roleMembership.entries()) {
         const member = actors.get(role.actorId);
-        if (!memberIds.has(role.actorId) || !member || member.populationRoleId !== role.roleId) {
+        const disbandedFormer = member?.populationId === null && member.populationRoleId === null
+          && populationValue.formerMemberIds.includes(role.actorId);
+        if (!memberIds.has(role.actorId) || !member || (!disbandedFormer && member.populationRoleId !== role.roleId)) {
           fail(`${path}.roleMembership.${roleIndex}`, 'group role membership disagrees with its actor');
         }
       }
@@ -827,6 +829,9 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         }
         if (populationValue.rewardCreated && populationValue.livingMemberIds.includes(populationValue.actorId)) {
           fail(`${path}.rewardCreated`, 'boss reward cannot exist while the boss lives');
+        }
+        if (populationValue.rewardCreated !== (populationValue.rewardRollState !== null)) {
+          fail(`${path}.rewardRollState`, 'boss reward receipt must exist exactly when rewards were created');
         }
         for (let recoveryIndex = 1; recoveryIndex < populationValue.recoveryHistory.length; recoveryIndex += 1) {
           if (populationValue.recoveryHistory[recoveryIndex - 1]!.at >= populationValue.recoveryHistory[recoveryIndex]!.at) {
@@ -946,6 +951,16 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     heirloomRecordIds.add(itemValue.heirloom.originatingHallRecordId);
   }
   for (const [populationIndex, populationValue] of run.populations.entries()) {
+    if (populationValue.model === 'boss') {
+      const uniqueRewardId = `item.reward.${populationValue.populationId}.unique`;
+      if (populationValue.rewardCreated && !items.has(uniqueRewardId)) {
+        fail(`populations.${populationIndex}.rewardCreated`, 'reward-created boss requires its guaranteed unique item');
+      }
+      if (!populationValue.rewardCreated
+        && run.items.some((item) => item.itemId.startsWith(`item.reward.${populationValue.populationId}.`))) {
+        fail(`populations.${populationIndex}.rewardCreated`, 'boss reward items cannot exist before reward creation');
+      }
+    }
     if (populationValue.model !== 'champion' || !populationValue.rewardCreated) continue;
     const expected = items.get(`item.heirloom.${populationValue.populationId}`);
     if (expected?.heirloom === undefined) {

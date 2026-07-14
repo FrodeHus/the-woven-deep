@@ -25,11 +25,13 @@ describe('seeded gameplay fixture', () => {
   function withBeetlePopulation(): ReturnType<typeof createGameplayDemoRun>['run'] {
     const fixture = createGameplayDemoRun(pack);
     const beetle = fixture.run.actors.find((actor) => actor.actorId === fixture.ids.beetle)!;
+    const fallenGuard = { ...beetle, actorId: 'monster.training-beetle.former', health: 0,
+      populationId: 'population.beetles.1', populationRoleId: 'guard' };
     return {
       ...fixture.run,
-      actors: fixture.run.actors.map((actor) => actor.actorId === beetle.actorId ? {
+      actors: [...fixture.run.actors.map((actor) => actor.actorId === beetle.actorId ? {
         ...actor, populationId: 'population.beetles.1', populationRoleId: 'guard',
-      } : actor),
+      } : actor), fallenGuard].sort((left, right) => left.actorId.localeCompare(right.actorId)),
       encounterDecisions: fixture.run.encounterDecisions.map((decision) =>
         decision.encounterId === 'encounter.beetle-patrol'
           ? { ...decision, eligible: true, reachedEligibleDepth: true,
@@ -38,8 +40,9 @@ describe('seeded gameplay fixture', () => {
       populations: [...fixture.run.populations, {
         populationId: 'population.beetles.1', encounterId: 'encounter.beetle-patrol',
         floorId: beetle.floorId, createdAt: 0, model: 'group',
-        livingMemberIds: [beetle.actorId], formerMemberIds: [], leaderActorId: null,
-        bonusActive: false, roleMembership: [{ actorId: beetle.actorId, roleId: 'guard' }],
+        livingMemberIds: [beetle.actorId], formerMemberIds: [fallenGuard.actorId], leaderActorId: null,
+        bonusActive: false, roleMembership: [{ actorId: beetle.actorId, roleId: 'guard' },
+          { actorId: fallenGuard.actorId, roleId: 'guard' }],
         sharedKnowledge: [], leaderResponseApplied: false, leaderResponseExpiresAt: null,
       }].sort((left, right) => left.populationId < right.populationId ? -1 : 1),
     };

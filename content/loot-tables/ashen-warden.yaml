@@ -8,4 +8,3 @@ entries:
     choices:
       - { contentId: item.crimson-potion, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 2 }
       - { contentId: item.etched-ring, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
-      - { contentId: item.warden-ember, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }

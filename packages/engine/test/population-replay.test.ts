@@ -47,9 +47,13 @@ describe('population continuous-versus-split replay', () => {
     expect(stableJson(state.recentCommands)).toBe(stableJson(expected.state.recentCommands));
   });
 
-  it('persists production wait commands and their authoritative/public artifacts', () => {
+  it('persists varied production commands and their authoritative/public artifacts', () => {
     const result = runPopulationDemo(pack);
-    expect(result.records.every((record) => record.command.type === 'wait')).toBe(true);
+    expect(new Set(result.records.map((record) => record.command.type))).toEqual(new Set(['wait', 'attack']));
+    const attackRecords = result.records.filter((record) => record.command.type === 'attack');
+    expect(attackRecords).toHaveLength(5);
+    expect(attackRecords.every((record) => record.authoritativeEvents.some((event) => event.type === 'actor.died'
+      && event.actorId === record.command.targetActorId))).toBe(true);
     expect(result.state.recentCommands).toHaveLength(POPULATION_REPLAY_BOUNDARIES.length);
     expect(stableJson(result.state.recentCommands.map((record) => record.command)))
       .toBe(stableJson(result.records.map((record) => record.command)));

@@ -150,6 +150,8 @@ describe('full floor generation', () => {
     expect(generated.report.fallback).toBe(true);
     expect(generated.report.rejectionCounts).toEqual({ 'population.required-placement': 2 });
     expect(generated.populationPlacement?.status).toBe('placed');
-    expect(generated.floor.entities.length).toBeGreaterThan(0);
+    expect(generated.floor.entities).toHaveLength(0);
+    expect(generated.populationPlacement?.status === 'placed'
+      ? generated.populationPlacement.createdActors.length : 0).toBeGreaterThan(0);
   });
 });

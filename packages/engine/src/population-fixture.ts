@@ -16,13 +16,16 @@ import { decodeActiveRun, encodeActiveRun } from './save-codec.js';
 import { validateActiveRun } from './save-schema.js';
 import { compareCodeUnits, stableJson } from './stable-json.js';
 import { resolveSwarmSpawnAction } from './swarm-behavior.js';
+import { movementBlockReason } from './terrain.js';
+import { rollDie } from './random.js';
 
 const WIDTH = 19;
 const HEIGHT = 13;
 
 export const POPULATION_REPLAY_BOUNDARIES = [
   'before-group-relay', 'before-source-spawn', 'before-leader-death', 'before-boss-threshold',
-  'before-boss-re-entry', 'before-champion-encounter', 'before-reward-creation',
+  'before-boss-re-entry', 'before-champion-encounter', 'before-champion-defeat',
+  'before-echo-defeat', 'before-reward-creation',
 ] as const;
 
 export interface PopulationDemoRecord {
@@ -230,7 +233,7 @@ export function validatePopulationInvariants(run: ActiveRun, pack: CompiledConte
 export function populationDemoScenario(seed: number): PopulationDemoScenario {
   if (!Number.isSafeInteger(seed) || seed < 0) throw new RangeError('population scenario seed must be non-negative');
   const mixed = Math.imul((seed ^ (seed >>> 16)) >>> 0, 0x45d9f3b) >>> 0;
-  return { seed, reloadMask: mixed & 0x7f, relayMemberIndex: (mixed >>> 7) % 3,
+  return { seed, reloadMask: mixed & 0x1ff, relayMemberIndex: (mixed >>> 9) % 3,
     bossHealthPercent: 1 + ((mixed >>> 11) % 20), recoveryElapsed: 20 + ((mixed >>> 16) % 81) };
 }
 
@@ -242,10 +245,56 @@ export function shrinkPopulationScenario(seed: number): readonly number[] {
 }
 
 export function populationDemoCommands(initial: ActiveRun, scenario: PopulationDemoScenario): readonly PopulationDemoInput[] {
-  return POPULATION_REPLAY_BOUNDARIES.map((boundary, index) => ({ boundary, scenario, command: {
-    type: 'wait', commandId: `command.population-demo-${String(index + 1).padStart(2, '0')}`,
-    expectedRevision: initial.revision + index,
-  } }));
+  const targetFor = (boundary: typeof POPULATION_REPLAY_BOUNDARIES[number]) => {
+    if (boundary === 'before-leader-death') {
+      return initial.populations.find((population): population is GroupPopulation => population.model === 'group')!.leaderActorId!;
+    }
+    if (boundary === 'before-boss-threshold') {
+      return initial.populations.find((population): population is SwarmPopulation => population.model === 'swarm')!.sourceActorId;
+    }
+    if (boundary === 'before-champion-defeat') {
+      return initial.populations.find((population) => population.model === 'champion')!.actorId;
+    }
+    if (boundary === 'before-echo-defeat') return initial.populations.find((population) => population.model === 'echo')!.actorId;
+    if (boundary === 'before-reward-creation') return initial.populations.find((population) => population.model === 'boss')!.actorId;
+    return null;
+  };
+  return POPULATION_REPLAY_BOUNDARIES.map((boundary, index) => {
+    const common = { commandId: `command.population-demo-${String(index + 1).padStart(2, '0')}`,
+      expectedRevision: initial.revision + index };
+    const targetActorId = targetFor(boundary);
+    return { boundary, scenario, command: targetActorId === null
+      ? { ...common, type: 'wait' as const }
+      : { ...common, type: 'attack' as const, targetActorId } };
+  });
+}
+
+function prepareCommandAttack(state: ActiveRun, targetActorId: string): ActiveRun {
+  const target = state.actors.find((actor) => actor.actorId === targetActorId);
+  if (!target) throw new Error(`population fixture attack target ${targetActorId} does not exist`);
+  const hero = state.actors.find((actor) => actor.actorId === state.hero.actorId)!;
+  if (target.floorId !== hero.floorId) throw new Error(`population fixture attack target ${targetActorId} is off the hero floor`);
+  const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId)!;
+  const occupied = new Set(state.actors.filter((actor) => actor.actorId !== state.hero.actorId
+    && actor.actorId !== targetActorId && actor.floorId === floor.floorId && actor.health > 0)
+    .map((actor) => `${actor.x}:${actor.y}`));
+  let destination: Readonly<{ x: number; y: number }> | null = null;
+  for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+    const x = hero.x + dx; const y = hero.y + dy;
+    if (x < 0 || y < 0 || x >= floor.width || y >= floor.height
+      || movementBlockReason(floor.tiles[y * floor.width + x]!) !== undefined || occupied.has(`${x}:${y}`)) continue;
+    destination = { x, y }; break;
+  }
+  if (destination === null) throw new Error(`population fixture cannot place attack target ${targetActorId}`);
+  let combatState = state.rng.combat;
+  for (let candidate = 1; candidate < 100_000; candidate += 1) {
+    const proposed = [candidate, 2, 3, 4] as const;
+    if (rollDie(proposed, 20).value === 20) { combatState = proposed; break; }
+  }
+  return { ...state,
+    actors: state.actors.map((actor) => actor.actorId === state.hero.actorId ? { ...actor, energy: 100 }
+      : actor.actorId === targetActorId ? { ...actor, ...destination!, health: 1 } : actor),
+    rng: { ...state.rng, combat: combatState } };
 }
 
 function preparePopulationDemoBoundary(state: ActiveRun, input: PopulationDemoInput,
@@ -314,16 +363,15 @@ function preparePopulationDemoBoundary(state: ActiveRun, input: PopulationDemoIn
     const group = state.populations.find((population): population is GroupPopulation => population.model === 'group')!;
     const swarm = state.populations.find((population): population is SwarmPopulation => population.model === 'swarm')!;
     const readyAt = Math.max(state.worldTime, state.activeFloorEnteredAt + 1);
-    return { ...state, worldTime: readyAt,
-      actors: state.actors.map((actor) => actor.actorId === group.leaderActorId ? { ...actor, health: 0 }
-        : actor.actorId === swarm.sourceActorId ? { ...actor, energy: 1_000 } : actor),
+    const ready = { ...state, worldTime: readyAt,
+      actors: state.actors.map((actor) => actor.actorId === swarm.sourceActorId ? { ...actor, energy: 1_000 } : actor),
       populations: state.populations.map((population) => population.populationId === swarm.populationId
         ? { ...swarm, nextSpawnAt: readyAt, emittedCapLevels: [] } : population) };
+    return prepareCommandAttack(ready, group.leaderActorId!);
   }
   if (boundary === 'before-boss-threshold') {
     const swarm = state.populations.find((population): population is SwarmPopulation => population.model === 'swarm')!;
-    return { ...state, actors: state.actors.map((actor) => actor.actorId === swarm.sourceActorId
-      ? { ...actor, health: 0 } : actor) };
+    return prepareCommandAttack(state, swarm.sourceActorId);
   }
   if (boundary === 'before-boss-re-entry') {
     const boss = state.populations.find((population) => population.model === 'boss')!;
@@ -336,12 +384,12 @@ function preparePopulationDemoBoundary(state: ActiveRun, input: PopulationDemoIn
       populations: state.populations.map((population) => population.populationId === boss.populationId
         ? { ...boss, lastFloorExitAt: state.worldTime } : population) };
   }
-  if (boundary === 'before-reward-creation') {
-    const terminalPopulationIds = new Set(state.populations.filter((population) => population.model === 'boss'
-      || population.model === 'champion' || population.model === 'echo').map((population) => population.populationId));
-    return { ...state, actors: state.actors.map((actor) => actor.populationId !== null
-      && terminalPopulationIds.has(actor.populationId) ? { ...actor, health: 0 } : actor) };
-  }
+  if (boundary === 'before-champion-defeat') return prepareCommandAttack(state,
+    state.populations.find((population) => population.model === 'champion')!.actorId);
+  if (boundary === 'before-echo-defeat') return prepareCommandAttack(state,
+    state.populations.find((population) => population.model === 'echo')!.actorId);
+  if (boundary === 'before-reward-creation') return prepareCommandAttack(state,
+    state.populations.find((population) => population.model === 'boss')!.actorId);
   return state;
 }
 

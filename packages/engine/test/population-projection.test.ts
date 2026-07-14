@@ -85,7 +85,7 @@ describe('population actor projection', () => {
         shutdownState: null, emittedCapLevels: [], shutdownExpiresAt: null },
       { ...common, populationId: 'population.boss', model: 'boss' as const, livingMemberIds: [boss.actorId],
         actorId: boss.actorId, currentPhaseId: 'enraged', crossedPhaseIds: ['enraged'], lastFloorExitAt: null,
-        rewardCreated: false, recoveryHistory: [] },
+        rewardCreated: false, rewardRollState: null, recoveryHistory: [] },
       { ...common, populationId: 'population.champion', model: 'champion' as const, livingMemberIds: [champion.actorId],
         actorId: champion.actorId, hallRecordId: 'hall.brynja', rank: 1 as const, defeated: false,
         rewardCreated: false, equipmentContentIds: ['item.iron-sword'], abilityIds: ['ability.cleave'] },
