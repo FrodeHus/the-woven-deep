@@ -1,18 +1,13 @@
 import {
   boundedProduct,
-  checkedTotalWithin,
-  MAX_LOOT_CHOICE_QUANTITY,
   MAX_LOOT_CREATED_UNITS,
-  MAX_LOOT_TABLE_ROLLS,
-  MAX_LOOT_WEIGHT_TOTAL,
+  type BalanceContentEntry,
   type CompiledContentPack,
-  type ItemContentEntry,
-  type LootChoiceDefinition,
-  type LootTableContentEntry,
   type MerchantEncounterContentEntry,
   type NpcContentEntry,
 } from '@woven-deep/content';
 import { emptyEquipment, type ActorState } from './actor-model.js';
+import { projectLootGraph, rollLootFromProjection } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
 import type { MerchantPopulation } from './merchant-model.js';
 import type { ActiveRun, OpaqueId, Point, Uint32State } from './model.js';
@@ -26,98 +21,18 @@ export interface MerchantMaterialization {
   readonly nextMerchantStockState: Uint32State;
 }
 
-interface EligibleTable {
-  readonly table: LootTableContentEntry;
-  readonly choices: readonly LootChoiceDefinition[];
-  readonly worstCreatedItems: number;
-}
-
-function contentEntry<T extends CompiledContentPack['entries'][number]['kind']>(
-  content: CompiledContentPack,
-  id: OpaqueId,
-  kind: T,
-): Extract<CompiledContentPack['entries'][number], { kind: T }> {
+function npcDefinition(content: CompiledContentPack, id: OpaqueId): NpcContentEntry {
   const entry = content.entries.find((candidate) => candidate.id === id);
-  if (!entry || entry.kind !== kind) {
-    throw new Error(`internal invariant: merchant ${kind} definition ${id} does not exist`);
+  if (!entry || entry.kind !== 'npc') {
+    throw new Error(`internal invariant: merchant npc definition ${id} does not exist`);
   }
-  return entry as Extract<CompiledContentPack['entries'][number], { kind: T }>;
+  return entry;
 }
 
-/** Validates the complete authored stock graph and returns its depth-eligible projection. */
-function eligibleStockGraph(
-  content: CompiledContentPack,
-  rootTableId: OpaqueId,
-  depth: number,
-  maximumStockRolls: number,
-): ReadonlyMap<OpaqueId, EligibleTable> {
-  if (!Number.isSafeInteger(maximumStockRolls) || maximumStockRolls <= 0) {
-    throw new RangeError('merchant stock preflight: stock roll count must be a positive safe integer');
-  }
-  const memo = new Map<OpaqueId, EligibleTable>();
-  const visit = (tableId: OpaqueId, trail: readonly OpaqueId[]): EligibleTable => {
-    const memoized = memo.get(tableId);
-    if (memoized) return memoized;
-    if (trail.includes(tableId)) {
-      throw new Error(`internal invariant: merchant stock table cycle ${[...trail, tableId].join(' -> ')}`);
-    }
-    const table = contentEntry(content, tableId, 'loot-table') as LootTableContentEntry;
-    if (!Number.isSafeInteger(table.rolls) || table.rolls <= 0 || table.rolls > MAX_LOOT_TABLE_ROLLS) {
-      throw new RangeError(`merchant stock preflight: roll count exceeds runtime-safe limit ${MAX_LOOT_TABLE_ROLLS}`);
-    }
-    if (table.choices.some((choice) => !Number.isSafeInteger(choice.weight) || choice.weight <= 0)
-      || !checkedTotalWithin(table.choices.map((choice) => choice.weight), MAX_LOOT_WEIGHT_TOTAL)) {
-      throw new RangeError('merchant stock preflight: choice weight total exceeds rollDie maximum 2^32');
-    }
-    const choices: LootChoiceDefinition[] = [];
-    let worstChoice = 0;
-    for (const choice of table.choices) {
-      if (!Number.isSafeInteger(choice.maximumQuantity) || choice.maximumQuantity <= 0
-        || choice.maximumQuantity > MAX_LOOT_CHOICE_QUANTITY) {
-        throw new RangeError(`merchant stock preflight: choice quantity exceeds runtime-safe limit ${MAX_LOOT_CHOICE_QUANTITY}`);
-      }
-      if (!Number.isSafeInteger(choice.minimumQuantity) || choice.minimumQuantity <= 0
-        || choice.minimumQuantity > choice.maximumQuantity) {
-        throw new RangeError('merchant stock preflight: choice quantity range is invalid');
-      }
-      if ((choice.contentId === null) === (choice.lootTableId === null)) {
-        throw new Error(`internal invariant: merchant stock table ${tableId} choice must have exactly one target`);
-      }
-      if (choice.contentId !== null) {
-        const item = contentEntry(content, choice.contentId, 'item') as ItemContentEntry;
-        if (choice.maximumQuantity > item.stackLimit) {
-          throw new RangeError(`merchant stock preflight: choice quantity exceeds item stack limit ${item.stackLimit}`);
-        }
-        if (depth >= item.minDepth && depth <= item.maxDepth) {
-          choices.push(choice);
-          worstChoice = Math.max(worstChoice, 1);
-        }
-        continue;
-      }
-      const child = visit(choice.lootTableId!, [...trail, tableId]);
-      if (child.choices.length > 0) {
-        choices.push(choice);
-        worstChoice = Math.max(worstChoice,
-          boundedProduct(choice.maximumQuantity, child.worstCreatedItems, MAX_LOOT_CREATED_UNITS));
-      }
-    }
-    const projected = {
-      table,
-      choices,
-      worstCreatedItems: boundedProduct(table.rolls, worstChoice, MAX_LOOT_CREATED_UNITS),
-    };
-    memo.set(tableId, projected);
-    return projected;
-  };
-  const root = visit(rootTableId, []);
-  if (root.choices.length === 0) {
-    throw new Error(`internal invariant: merchant stock table ${rootTableId} has no eligible choice at depth ${depth}`);
-  }
-  const worst = boundedProduct(maximumStockRolls, root.worstCreatedItems, MAX_LOOT_CREATED_UNITS);
-  if (worst > MAX_LOOT_CREATED_UNITS) {
-    throw new RangeError(`merchant stock preflight: worst-case created items exceed runtime-safe limit ${MAX_LOOT_CREATED_UNITS}`);
-  }
-  return memo;
+function balanceDefinition(content: CompiledContentPack): BalanceContentEntry {
+  const entry = content.entries.find((candidate) => candidate.kind === 'balance');
+  if (!entry) throw new Error('internal invariant: merchant balance definition does not exist');
+  return entry;
 }
 
 export function materializeMerchant(input: Readonly<{
@@ -131,12 +46,30 @@ export function materializeMerchant(input: Readonly<{
   const floor = input.run.floors.find((candidate) => candidate.floorId === input.floorId);
   if (!floor) throw new Error(`internal invariant: merchant floor ${input.floorId} does not exist`);
   const definition = input.encounter.definition;
-  const npc = contentEntry(input.content, definition.npcId, 'npc') as NpcContentEntry;
+  const npc = npcDefinition(input.content, definition.npcId);
+  const balance = balanceDefinition(input.content);
   if (!Number.isSafeInteger(input.run.worldTime + definition.maximumLifetime)) {
     throw new RangeError('merchant lifetime would exceed safe world time');
   }
-  const graph = eligibleStockGraph(input.content, definition.stockLootTableId, floor.depth,
-    definition.maximumStockRolls);
+  if (!Number.isSafeInteger(definition.maximumStockRolls) || definition.maximumStockRolls <= 0) {
+    throw new RangeError('merchant stock preflight: stock roll count must be a positive safe integer');
+  }
+  // Shared projection validates the complete authored graph (including the boss-unique
+  // rejection: merchants must never stock boss uniques) and prunes depth-ineligible choices
+  // before any merchant-stock RNG is consumed.
+  const graph = projectLootGraph({
+    content: input.content, rootTableId: definition.stockLootTableId,
+    preflightLabel: 'merchant stock preflight',
+    itemEligible: (item) => floor.depth >= item.minDepth && floor.depth <= item.maxDepth,
+  });
+  const root = graph.get(definition.stockLootTableId)!;
+  if (root.choices.length === 0) {
+    throw new Error(`internal invariant: merchant stock table ${definition.stockLootTableId} has no eligible choice at depth ${floor.depth}`);
+  }
+  if (boundedProduct(definition.maximumStockRolls, root.worstCreatedUnits, MAX_LOOT_CREATED_UNITS)
+    > MAX_LOOT_CREATED_UNITS) {
+    throw new RangeError(`merchant stock preflight: worst-case created items exceed runtime-safe limit ${MAX_LOOT_CREATED_UNITS}`);
+  }
 
   let state = input.run.rng['merchant-stock'];
   const lifetimeRoll = rollDie(state, definition.maximumLifetime - definition.minimumLifetime + 1);
@@ -145,30 +78,14 @@ export function materializeMerchant(input: Readonly<{
   const stockRoll = rollDie(state, definition.maximumStockRolls - definition.minimumStockRolls + 1);
   state = stockRoll.state;
   const stockRolls = definition.minimumStockRolls + stockRoll.value - 1;
-  const items: ItemInstance[] = [];
-  const resolve = (tableId: OpaqueId): void => {
-    const eligible = graph.get(tableId)!;
-    const totalWeight = eligible.choices.reduce((sum, choice) => sum + choice.weight, 0);
-    for (let roll = 0; roll < eligible.table.rolls; roll += 1) {
-      const selection = rollDie(state, totalWeight); state = selection.state;
-      let cursor = selection.value;
-      const choice = eligible.choices.find((candidate) => (cursor -= candidate.weight) <= 0)!;
-      const quantityRoll = rollDie(state, choice.maximumQuantity - choice.minimumQuantity + 1);
-      state = quantityRoll.state;
-      const quantity = choice.minimumQuantity + quantityRoll.value - 1;
-      if (choice.lootTableId !== null) {
-        for (let count = 0; count < quantity; count += 1) resolve(choice.lootTableId);
-        continue;
-      }
-      const item = contentEntry(input.content, choice.contentId!, 'item') as ItemContentEntry;
-      const itemId = `item.${input.populationId}.stock.${String(items.length + 1).padStart(6, '0')}`;
-      items.push({ itemId, contentId: item.id, quantity, condition: 100, enchantment: null,
-        identified: item.identification.mode === 'known', charges: null,
-        fuel: item.light?.fuelCapacity ?? null, enabled: item.light === null ? null : false,
-        location: { type: 'merchant-stock', populationId: input.populationId } });
-    }
-  };
-  for (let roll = 0; roll < stockRolls; roll += 1) resolve(definition.stockLootTableId);
+  const stock = rollLootFromProjection({
+    content: input.content, tables: graph, tableId: definition.stockLootTableId,
+    rootIterations: stockRolls, state,
+    itemIdPrefix: `item.${input.populationId}.stock`,
+    location: { type: 'merchant-stock', populationId: input.populationId },
+  });
+  state = stock.state;
+  const items = stock.items;
 
   const services = definition.services.map((service) => {
     const useRoll = rollDie(state, service.maximumUses - service.minimumUses + 1); state = useRoll.state;
@@ -179,8 +96,7 @@ export function materializeMerchant(input: Readonly<{
   const actor: ActorState = {
     actorId, contentId: npc.id, playerControlled: false, floorId: input.floorId, ...input.position,
     attributes: npc.attributes, health: npc.health, maxHealth: npc.health,
-    energy: contentEntry(input.content, input.content.entries.find((entry) => entry.kind === 'balance')!.id,
-      'balance').readinessThreshold,
+    energy: balance.readinessThreshold,
     speed: npc.speed, reactionReady: true, disposition: 'neutral', awareActorIds: [], conditions: [],
     equipment: emptyEquipment(), behaviorId: npc.behaviorId, behaviorState: emptyActorBehaviorState(),
     populationId: input.populationId, populationRoleId: null,

@@ -1,7 +1,8 @@
 import {
   boundedProduct, checkedTotalWithin, DERIVED_STAT_NAMES, MAX_LOOT_CHOICE_QUANTITY,
   MAX_LOOT_CREATED_UNITS, MAX_LOOT_TABLE_ROLLS, MAX_LOOT_WEIGHT_TOTAL,
-  type CompiledContentPack, type ItemContentEntry, type LootTableContentEntry,
+  type CompiledContentPack, type ItemContentEntry, type LootChoiceDefinition,
+  type LootTableContentEntry,
 } from '@woven-deep/content';
 import { actorById } from './actor-model.js';
 import type { ItemInstance } from './item-model.js';
@@ -45,12 +46,40 @@ function lootTable(content: CompiledContentPack, tableId: OpaqueId): LootTableCo
   return entry;
 }
 
-/** Validates a complete loot graph before consuming RNG or creating any item. */
-function validateLootGraph(content: CompiledContentPack, rootTableId: OpaqueId): void {
-  const memo = new Map<OpaqueId, number>();
+export interface ProjectedLootTable {
+  readonly table: LootTableContentEntry;
+  /** Choices that survive eligibility filtering (all authored choices when no filter is given). */
+  readonly choices: readonly LootChoiceDefinition[];
+  /** Worst-case created units for one resolution of this table. */
+  readonly worstCreatedUnits: number;
+}
+
+/**
+ * Validates a complete loot graph before consuming RNG or creating any item and returns its
+ * projection, keyed by table id.
+ *
+ * `itemEligible` restricts direct-item choices (merchant stock filters by floor depth).
+ * Every authored choice is validated, but ineligible direct choices — and nested choices whose
+ * child table keeps no eligible choice — are pruned from the projection so resolution never
+ * selects them. Two semantics are deliberately shared by every caller:
+ * - Worst-case accounting counts item units (`maximumQuantity` per direct choice), not stack
+ *   instances, so ordinary loot and merchant stock bound the same runtime cost.
+ * - Graphs reaching guaranteed boss-unique items are rejected everywhere; merchants must never
+ *   stock boss uniques, exactly as ordinary loot must never drop them.
+ */
+export function projectLootGraph(input: Readonly<{
+  content: CompiledContentPack;
+  rootTableId: OpaqueId;
+  /** Error-message prefix; defaults to the ordinary-loot 'loot preflight'. */
+  preflightLabel?: string;
+  itemEligible?: (item: ItemContentEntry) => boolean;
+}>): ReadonlyMap<OpaqueId, ProjectedLootTable> {
+  const { content, itemEligible } = input;
+  const label = input.preflightLabel ?? 'loot preflight';
+  const memo = new Map<OpaqueId, ProjectedLootTable>();
   const bossUniqueIds = new Set(content.entries.filter((entry) => entry.kind === 'encounter' && entry.model === 'boss')
     .map((entry) => entry.definition.uniqueItemId));
-  const visit = (tableId: OpaqueId, trail: readonly OpaqueId[]): number => {
+  const visit = (tableId: OpaqueId, trail: readonly OpaqueId[]): ProjectedLootTable => {
     const memoized = memo.get(tableId);
     if (memoized !== undefined) return memoized;
     if (trail.includes(tableId)) {
@@ -58,46 +87,104 @@ function validateLootGraph(content: CompiledContentPack, rootTableId: OpaqueId):
     }
     const table = lootTable(content, tableId);
     if (!Number.isSafeInteger(table.rolls) || table.rolls <= 0 || table.rolls > MAX_LOOT_TABLE_ROLLS) {
-      throw new RangeError(`loot preflight: roll count exceeds runtime-safe limit ${MAX_LOOT_TABLE_ROLLS}`);
+      throw new RangeError(`${label}: roll count exceeds runtime-safe limit ${MAX_LOOT_TABLE_ROLLS}`);
     }
     if (table.choices.some((choice) => !Number.isSafeInteger(choice.weight) || choice.weight <= 0)
       || !checkedTotalWithin(table.choices.map((choice) => choice.weight), MAX_LOOT_WEIGHT_TOTAL)) {
-      throw new RangeError('loot preflight: choice weight total exceeds rollDie maximum 2^32');
+      throw new RangeError(`${label}: choice weight total exceeds rollDie maximum 2^32`);
     }
+    const choices: LootChoiceDefinition[] = [];
     let worstChoice = 0;
     for (const choice of table.choices) {
       if (!Number.isSafeInteger(choice.maximumQuantity) || choice.maximumQuantity <= 0
         || choice.maximumQuantity > MAX_LOOT_CHOICE_QUANTITY) {
-        throw new RangeError(`loot preflight: choice quantity exceeds runtime-safe limit ${MAX_LOOT_CHOICE_QUANTITY}`);
+        throw new RangeError(`${label}: choice quantity exceeds runtime-safe limit ${MAX_LOOT_CHOICE_QUANTITY}`);
       }
       if (!Number.isSafeInteger(choice.minimumQuantity) || choice.minimumQuantity <= 0
         || choice.minimumQuantity > choice.maximumQuantity) {
-        throw new RangeError('loot preflight: choice quantity range is invalid');
+        throw new RangeError(`${label}: choice quantity range is invalid`);
       }
       if ((choice.contentId === null) === (choice.lootTableId === null)) {
         throw new Error(`internal invariant: loot table ${tableId} choice must have exactly one target`);
       }
       const directItem = choice.contentId === null ? null : itemDefinition(content, choice.contentId);
       if (directItem && choice.maximumQuantity > directItem.stackLimit) {
-        throw new RangeError(`loot preflight: choice quantity exceeds item stack limit ${directItem.stackLimit}`);
+        throw new RangeError(`${label}: choice quantity exceeds item stack limit ${directItem.stackLimit}`);
       }
       if (choice.contentId !== null && bossUniqueIds.has(choice.contentId)) {
-        throw new Error(`loot preflight: guaranteed boss-unique item ${choice.contentId} cannot appear in ordinary loot`);
+        throw new Error(`${label}: guaranteed boss-unique item ${choice.contentId} cannot appear in ordinary loot`);
       }
-      const childUnits = directItem !== null
-        ? 1
-        : visit(choice.lootTableId!, [...trail, tableId]);
-      worstChoice = Math.max(worstChoice,
-        boundedProduct(choice.maximumQuantity, childUnits, MAX_LOOT_CREATED_UNITS));
+      if (directItem !== null) {
+        if (itemEligible === undefined || itemEligible(directItem)) {
+          choices.push(choice);
+          worstChoice = Math.max(worstChoice,
+            boundedProduct(choice.maximumQuantity, 1, MAX_LOOT_CREATED_UNITS));
+        }
+        continue;
+      }
+      const child = visit(choice.lootTableId!, [...trail, tableId]);
+      if (itemEligible === undefined || child.choices.length > 0) {
+        choices.push(choice);
+        worstChoice = Math.max(worstChoice,
+          boundedProduct(choice.maximumQuantity, child.worstCreatedUnits, MAX_LOOT_CREATED_UNITS));
+      }
     }
     const worst = boundedProduct(table.rolls, worstChoice, MAX_LOOT_CREATED_UNITS);
     if (worst > MAX_LOOT_CREATED_UNITS) {
-      throw new RangeError(`loot preflight: worst-case created units exceed runtime-safe limit ${MAX_LOOT_CREATED_UNITS}`);
+      throw new RangeError(`${label}: worst-case created units exceed runtime-safe limit ${MAX_LOOT_CREATED_UNITS}`);
     }
-    memo.set(tableId, worst);
-    return worst;
+    const projected: ProjectedLootTable = { table, choices, worstCreatedUnits: worst };
+    memo.set(tableId, projected);
+    return projected;
   };
-  visit(rootTableId, []);
+  visit(input.rootTableId, []);
+  return memo;
+}
+
+/** Validates a complete loot graph before consuming RNG or creating any item. */
+function validateLootGraph(content: CompiledContentPack, rootTableId: OpaqueId): void {
+  projectLootGraph({ content, rootTableId });
+}
+
+/**
+ * Resolves a projected loot graph into item instances, consuming only the supplied stream.
+ * Item ids continue the shared `${itemIdPrefix}.NNNNNN` sequence across `rootIterations`.
+ */
+export function rollLootFromProjection(input: Readonly<{
+  content: CompiledContentPack;
+  tables: ReadonlyMap<OpaqueId, ProjectedLootTable>;
+  tableId: OpaqueId;
+  rootIterations?: number;
+  state: Uint32State;
+  itemIdPrefix: OpaqueId;
+  location: ItemInstance['location'];
+}>): Readonly<{ items: readonly ItemInstance[]; state: Uint32State }> {
+  let state = input.state;
+  const items: ItemInstance[] = [];
+  const resolve = (tableId: OpaqueId): void => {
+    const projected = input.tables.get(tableId);
+    if (!projected) throw new Error(`internal invariant: loot table ${tableId} is not part of the projected graph`);
+    const totalWeight = projected.choices.reduce((sum, choice) => sum + choice.weight, 0);
+    for (let roll = 0; roll < projected.table.rolls; roll += 1) {
+      const selected = rollDie(state, totalWeight); state = selected.state;
+      let cursor = selected.value;
+      const choice = projected.choices.find((candidate) => (cursor -= candidate.weight) <= 0)!;
+      const quantityRoll = rollDie(state, choice.maximumQuantity - choice.minimumQuantity + 1); state = quantityRoll.state;
+      const quantity = choice.minimumQuantity + quantityRoll.value - 1;
+      if (choice.lootTableId !== null) {
+        for (let count = 0; count < quantity; count += 1) resolve(choice.lootTableId);
+        continue;
+      }
+      const definition = itemDefinition(input.content, choice.contentId!);
+      items.push({ itemId: `${input.itemIdPrefix}.${String(items.length + 1).padStart(6, '0')}`,
+        contentId: definition.id, quantity, condition: 100, enchantment: null,
+        identified: definition.identification.mode === 'known', charges: null,
+        fuel: definition.light?.fuelCapacity ?? null, enabled: definition.light === null ? null : false,
+        location: input.location });
+    }
+  };
+  for (let iteration = 0; iteration < (input.rootIterations ?? 1); iteration += 1) resolve(input.tableId);
+  return { items, state };
 }
 
 export function validateEchoLootGraph(input: Readonly<{
@@ -136,37 +223,15 @@ export function createFloorLootFromTable(input: Readonly<{
   x: number;
   y: number;
 }>): Readonly<{ items: readonly ItemInstance[]; state: Uint32State }> {
-  validateLootGraph(input.content, input.tableId);
+  const tables = projectLootGraph({ content: input.content, rootTableId: input.tableId });
   if (!Number.isSafeInteger(input.x) || input.x < 0 || !Number.isSafeInteger(input.y) || input.y < 0) {
     throw new RangeError('loot floor position must use non-negative safe integers');
   }
-  let state = input.state;
-  let sequence = 0;
-  const items: ItemInstance[] = [];
-  const resolve = (tableId: OpaqueId): void => {
-    const table = lootTable(input.content, tableId);
-    const totalWeight = table.choices.reduce((sum, choice) => sum + choice.weight, 0);
-    for (let roll = 0; roll < table.rolls; roll += 1) {
-      const selected = rollDie(state, totalWeight); state = selected.state;
-      let cursor = selected.value;
-      const choice = table.choices.find((candidate) => (cursor -= candidate.weight) <= 0)!;
-      const quantityRoll = rollDie(state, choice.maximumQuantity - choice.minimumQuantity + 1); state = quantityRoll.state;
-      const quantity = choice.minimumQuantity + quantityRoll.value - 1;
-      if (choice.lootTableId !== null) {
-        for (let count = 0; count < quantity; count += 1) resolve(choice.lootTableId);
-        continue;
-      }
-      const definition = itemDefinition(input.content, choice.contentId!);
-      sequence += 1;
-      items.push({ itemId: `${input.itemIdPrefix}.${String(sequence).padStart(6, '0')}`,
-        contentId: definition.id, quantity, condition: 100, enchantment: null,
-        identified: definition.identification.mode === 'known', charges: null,
-        fuel: definition.light?.fuelCapacity ?? null, enabled: definition.light === null ? null : false,
-        location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y } });
-    }
-  };
-  resolve(input.tableId);
-  return { items, state };
+  return rollLootFromProjection({
+    content: input.content, tables, tableId: input.tableId, state: input.state,
+    itemIdPrefix: input.itemIdPrefix,
+    location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y },
+  });
 }
 
 export function createFloorItem(input: Readonly<{
