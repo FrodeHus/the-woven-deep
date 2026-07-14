@@ -30,18 +30,18 @@ describe('seeded gameplay fixture', () => {
       actors: fixture.run.actors.map((actor) => actor.actorId === beetle.actorId ? {
         ...actor, populationId: 'population.beetles.1', populationRoleId: 'guard',
       } : actor),
-      encounterDecisions: [{
-        encounterId: 'encounter.beetle-patrol', baseProbability: 0.65, protectionBonus: 0.08,
-        effectiveProbability: 0.73, eligible: true, reachedEligibleDepth: true,
-        encountered: false, instancesCreated: 1,
-      }],
-      populations: [{
+      encounterDecisions: fixture.run.encounterDecisions.map((decision) =>
+        decision.encounterId === 'encounter.beetle-patrol'
+          ? { ...decision, eligible: true, reachedEligibleDepth: true,
+            instancesCreated: decision.instancesCreated + 1 }
+          : decision),
+      populations: [...fixture.run.populations, {
         populationId: 'population.beetles.1', encounterId: 'encounter.beetle-patrol',
         floorId: beetle.floorId, createdAt: 0, model: 'group',
         livingMemberIds: [beetle.actorId], formerMemberIds: [], leaderActorId: null,
         bonusActive: false, roleMembership: [{ actorId: beetle.actorId, roleId: 'guard' }],
         sharedKnowledge: [], leaderResponseApplied: false,
-      }],
+      }].sort((left, right) => left.populationId < right.populationId ? -1 : 1),
     };
   }
 
@@ -52,6 +52,7 @@ describe('seeded gameplay fixture', () => {
     expect(stableJson(first.run)).toBe(stableJson(second.run));
     expect(validateActiveRun(first.run)).toEqual(first.run);
     expect(() => validateContentBoundRun(first.run, pack)).not.toThrow();
+    expect(first.run.populations.length).toBeGreaterThan(0);
     expect(first.ids).toMatchObject({
       hero: 'hero.gameplay-demo',
       rat: 'monster.cave-rat.1',
@@ -111,7 +112,8 @@ describe('seeded gameplay fixture', () => {
     expect(() => validateContentBoundRun(badProbability, pack)).toThrow(/decision.*definition/i);
 
     const badRole = structuredClone(run);
-    (badRole.populations[0] as any).roleMembership[0].roleId = 'missing';
+    const group = badRole.populations.find((population) => population.populationId === 'population.beetles.1')!;
+    (group as any).roleMembership[0].roleId = 'missing';
     expect(() => validateContentBoundRun(badRole, pack)).toThrow(/role missing is invalid/i);
   });
 });

@@ -1,8 +1,10 @@
 import type { FloorSeedAllocation } from './generation-model.js';
 import type { GeneratedFloor } from './generate-floor.js';
+import type { CompiledContentPack } from '@woven-deep/content';
 import { allocateFloorSeed } from './generation-random.js';
 import type { ActiveRun, Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
+import { placePopulation } from './population-placement.js';
 import { isNonZeroState } from './random.js';
 import { validateActiveRun } from './save-schema.js';
 import { heroActor, heroPerception } from './actor-model.js';
@@ -24,6 +26,12 @@ export function addGeneratedFloor(
   run: ActiveRun,
   generated: GeneratedFloor,
   allocation: FloorSeedAllocation,
+  population?: Readonly<{
+    content: CompiledContentPack;
+    environmentTags?: readonly string[];
+    /** Test/demo-only override. Production callers leave encounter selection weighted. */
+    forcedEncounterId?: string;
+  }>,
 ): ActiveRun {
   assertState(allocation.floorSeed, 'allocated floor seed');
   assertState(allocation.nextGenerationState, 'next generation state');
@@ -49,7 +57,21 @@ export function addGeneratedFloor(
     && !run.floors.some((floor) => floor.floorId === generated.floor.floorId);
   if (!transitioningToInsertedFloor) validateActiveRun(run);
 
-  let floor = generated.floor;
+  if (generated.populationPlacement !== undefined && population !== undefined) {
+    throw new TypeError('generated floor population must not be planned twice');
+  }
+  const placement = generated.populationPlacement ?? (population === undefined ? null : placePopulation({
+    run, floor: generated.floor, content: population.content,
+    ...(population.environmentTags === undefined ? {} : { environmentTags: population.environmentTags }),
+    ...(population.forcedEncounterId === undefined ? {} : { forcedEncounterId: population.forcedEncounterId }),
+  }));
+  if (placement?.status === 'rejected') {
+    throw new RangeError(`required population placement rejected generated floor: ${placement.reason}`);
+  }
+  let floor = placement?.status === 'placed' ? placement.floor : generated.floor;
+  const createdActors = placement?.status === 'placed' ? placement.createdActors : [];
+  const actorsAfterPlacement = [...run.actors, ...createdActors]
+    .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0);
   if (transitioningToInsertedFloor) {
     const actors = new Map<string, Readonly<{ x: number; y: number }>>(
       floor.entities.map((entity) => [entity.entityId, entity] as const),
@@ -64,7 +86,17 @@ export function addGeneratedFloor(
 
   return validateActiveRun({
     ...run,
-    rng: { ...run.rng, generation: [...allocation.nextGenerationState] },
+    rng: {
+      ...run.rng,
+      generation: [...allocation.nextGenerationState],
+      ...(placement === null ? {} : { encounters: [...placement.nextEncounterState] }),
+    },
+    actors: actorsAfterPlacement,
+    encounterDecisions: placement?.encounterDecisions ?? run.encounterDecisions,
+    populations: placement?.status === 'placed'
+      ? [...run.populations, placement.population]
+        .sort((left, right) => left.populationId < right.populationId ? -1 : left.populationId > right.populationId ? 1 : 0)
+      : run.populations,
     floors: [...run.floors, floor],
   });
 }

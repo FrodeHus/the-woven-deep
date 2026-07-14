@@ -1,4 +1,4 @@
-import type { VaultContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, VaultContentEntry } from '@woven-deep/content';
 import { analyzeConnectivity } from './connectivity.js';
 import { createFallbackTopology } from './fallback-floor.js';
 import { generateTopologyAttempt, validateTopologyRequest } from './generate-topology.js';
@@ -11,17 +11,54 @@ import {
 } from './generation-model.js';
 import { createUnknownKnowledge } from './knowledge.js';
 import type { FloorSnapshot } from './model.js';
+import type { ActiveRun } from './model.js';
+import {
+  placePopulation,
+  type PopulationPlacementResult,
+  type PopulationSkipped,
+} from './population-placement.js';
 import { placeVaults } from './vault-placement.js';
 
 export interface GenerateFloorRequest extends GenerateTopologyRequest {
   readonly vaults: readonly VaultContentEntry[];
   readonly requiredVaultId?: string;
   readonly vaultTags?: readonly string[];
+  readonly population?: Readonly<{
+    run: ActiveRun;
+    content: CompiledContentPack;
+    environmentTags?: readonly string[];
+    /** Test/demo-only override. Production callers leave encounter selection weighted. */
+    forcedEncounterId?: string;
+  }>;
 }
 
 export interface GeneratedFloor {
   readonly floor: FloorSnapshot;
   readonly report: GenerationReport;
+  readonly populationPlacement?: Exclude<PopulationPlacementResult, { readonly status: 'rejected' }>;
+}
+
+function withPopulation(
+  request: GenerateFloorRequest,
+  run: ActiveRun,
+  floor: FloorSnapshot,
+): PopulationPlacementResult | null {
+  if (request.population === undefined) return null;
+  return placePopulation({
+    run, floor, content: request.population.content,
+    ...(request.population.environmentTags === undefined
+      ? {} : { environmentTags: request.population.environmentTags }),
+    ...(request.population.forcedEncounterId === undefined
+      ? {} : { forcedEncounterId: request.population.forcedEncounterId }),
+  });
+}
+
+function advancedPopulationRun(run: ActiveRun, placement: PopulationPlacementResult): ActiveRun {
+  return {
+    ...run,
+    rng: { ...run.rng, encounters: placement.nextEncounterState },
+    encounterDecisions: placement.encounterDecisions,
+  };
 }
 
 function increment(
@@ -121,6 +158,7 @@ export function generateFloor(request: GenerateFloorRequest): GeneratedFloor {
   }
   const rejectionCounts: Partial<Record<GenerationRejectionCode, number>> = {};
   const factory = request.topologyFactory ?? generateTopologyAttempt;
+  let populationRun = request.population?.run;
   for (let attempt = 0; attempt < attemptLimit; attempt += 1) {
     const topology = factory(request, attempt);
     if (!topology.ok) { increment(rejectionCounts, topology.code); continue; }
@@ -130,10 +168,30 @@ export function generateFloor(request: GenerateFloorRequest): GeneratedFloor {
     });
     if (!placement.ok) { increment(rejectionCounts, placement.code); continue; }
     const floor = floorSnapshot(request, topology.draft, placement);
-    return { floor, report: generatedReport(topology.draft, floor.tiles, floor.vaults, rejectionCounts) };
+    const population = populationRun === undefined ? null : withPopulation(request, populationRun, floor);
+    if (population?.status === 'rejected') {
+      increment(rejectionCounts, 'population.required-placement');
+      populationRun = advancedPopulationRun(populationRun!, population);
+      continue;
+    }
+    const completedFloor = population?.status === 'placed' ? population.floor : floor;
+    return {
+      floor: completedFloor,
+      report: generatedReport(topology.draft, completedFloor.tiles, completedFloor.vaults, rejectionCounts),
+      ...(population === null ? {} : { populationPlacement: population }),
+    };
   }
   const topology = fallbackDraft(request, rejectionCounts);
   const placement = { ok: true as const, tiles: topology.tiles, vaults: [], lights: [], placementSlots: [] };
   const floor = floorSnapshot(request, topology, placement);
-  return { floor, report: topology.report };
+  const population = populationRun === undefined ? null : withPopulation(request, populationRun, floor);
+  const acceptedPopulation: PopulationSkipped | Exclude<PopulationPlacementResult, { readonly status: 'rejected' }> | null =
+    population?.status === 'rejected' ? { ...population, status: 'skipped' } : population;
+  if (population?.status === 'rejected') increment(rejectionCounts, 'population.required-placement');
+  const completedFloor = acceptedPopulation?.status === 'placed' ? acceptedPopulation.floor : floor;
+  return {
+    floor: completedFloor,
+    report: { ...topology.report, rejectionCounts: { ...rejectionCounts } },
+    ...(acceptedPopulation === null ? {} : { populationPlacement: acceptedPopulation }),
+  };
 }

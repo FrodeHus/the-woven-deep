@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { VaultContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, EncounterContentEntry, VaultContentEntry } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   analyzeConnectivity,
+  createDemoRun,
   createClassicTheme,
   generateFloor,
   generateTopology,
@@ -14,12 +15,13 @@ import {
 
 const ambient = { color: [19, 23, 31] as const, strength: 7 };
 let vaults: VaultContentEntry[];
+let content: CompiledContentPack;
 
 beforeAll(async () => {
-  const pack = await compileContentDirectory({
+  content = await compileContentDirectory({
     rootDir: resolve(import.meta.dirname, '../../../content'),
   });
-  vaults = pack.entries.filter((entry): entry is VaultContentEntry => entry.kind === 'vault');
+  vaults = content.entries.filter((entry): entry is VaultContentEntry => entry.kind === 'vault');
 });
 
 function request(): GenerateFloorRequest {
@@ -100,5 +102,54 @@ describe('full floor generation', () => {
       'topology.empty': 1, 'vault.no-valid-placement': 1,
     });
     expect(generated.report.fallback).toBe(true);
+  });
+
+  it('shares bounded retries with required population rejection before using the fallback', () => {
+    const source = content.entries.find((entry): entry is EncounterContentEntry =>
+      entry.kind === 'encounter' && entry.id === 'encounter.cave-rat-individuals')!;
+    const required = { ...source, placement: { ...source.placement, failureMode: 'required' as const } };
+    const populationContent: CompiledContentPack = {
+      ...content,
+      entries: content.entries.map((entry) => entry.id === source.id ? required : entry),
+    };
+    const baseRun = createDemoRun();
+    const run = {
+      ...baseRun,
+      encounterDecisions: [{
+        encounterId: required.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1,
+        eligible: true, reachedEligibleDepth: false, encountered: false, instancesCreated: 0,
+      }],
+    };
+    const width = 20; const height = 15;
+    const narrowTiles = Array(width * height).fill(0) as number[];
+    for (let x = 1; x <= 18; x += 1) narrowTiles[7 * width + x] = 1;
+    narrowTiles[7 * width + 1] = 4;
+    narrowTiles[7 * width + 18] = 5;
+
+    const generated = generateFloor({
+      floorId: 'floor.generated-01', floorSeed: [11, 12, 13, 14], depth: 3, width, height,
+      theme: createClassicTheme(width, height, { ambient, minimumStairDistance: 10 }), vaults: [],
+      attemptLimit: 2,
+      topologyFactory: (_request, attempt) => ({
+        ok: true,
+        draft: {
+          floorId: 'floor.generated-01', floorSeed: [11, 12, 13, 14], depth: 3,
+          themeId: 'theme.classic', width, height, tiles: narrowTiles as never,
+          rooms: [], corridors: [], stairUp: { x: 1, y: 7 }, stairDown: { x: 18, y: 7 },
+          vaultState: [11, 12, 13, 14],
+          report: {
+            generatorVersion: 2, attempt, fallback: false, roomCount: 0, corridorCount: 0,
+            vaults: [], stairUp: { x: 1, y: 7 }, stairDown: { x: 18, y: 7 }, stairDistance: 17,
+            traversableCellCount: 18, connected: true, rejectionCounts: {},
+          },
+        },
+      }),
+      population: { run, content: populationContent, forcedEncounterId: required.id },
+    });
+
+    expect(generated.report.fallback).toBe(true);
+    expect(generated.report.rejectionCounts).toEqual({ 'population.required-placement': 2 });
+    expect(generated.populationPlacement?.status).toBe('placed');
+    expect(generated.floor.entities.length).toBeGreaterThan(0);
   });
 });

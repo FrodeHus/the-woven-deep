@@ -81,6 +81,7 @@ describe('generated save and replay continuity', () => {
     });
     expect(fixture.generated.floor.lights).not.toContainEqual(expect.objectContaining({ lightId: 'light.hero-demo' }));
     expect(fixture.run.rng.generation).toEqual(fixture.allocation.nextGenerationState);
+    expect(fixture.run.populations.length).toBeGreaterThan(0);
     expect(floor.lights.map((light) => light.lightId)).toEqual([...floor.lights.map((light) => light.lightId)].sort());
     expect(fixture.run.floors.map((entry) => entry.floorId)).toEqual([...fixture.run.floors.map((entry) => entry.floorId)].sort());
   });

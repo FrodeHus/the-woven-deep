@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { resolve } from 'node:path';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { compileContentDirectory, type CompiledContentPack, type EncounterContentEntry } from '@woven-deep/content/compiler';
 import {
   addGeneratedFloor,
   allocateFloorSeed,
@@ -12,6 +14,12 @@ import {
   type FloorSeedAllocation,
   type GeneratedFloor,
 } from '../src/index.js';
+
+let content: CompiledContentPack;
+
+beforeAll(async () => {
+  content = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+});
 
 function generatedFloor(
   floorId = 'floor.generated-01',
@@ -33,6 +41,33 @@ function allocation(run: ActiveRun = createDemoRun()): FloorSeedAllocation {
 }
 
 describe('addGeneratedFloor', () => {
+  it('atomically publishes a generated floor population and advances both owned streams', () => {
+    const encounter = content.entries.find((entry): entry is EncounterContentEntry =>
+      entry.kind === 'encounter' && entry.id === 'encounter.cave-rat-individuals')!;
+    const base = createDemoRun();
+    const run: ActiveRun = {
+      ...base,
+      contentHash: content.hash,
+      encounterDecisions: [{
+        encounterId: encounter.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1,
+        eligible: true, reachedEligibleDepth: false, encountered: false, instancesCreated: 0,
+      }],
+    };
+    const generated = generatedFloor();
+
+    const result = addGeneratedFloor(run, generated, allocation(run), {
+      content, forcedEncounterId: encounter.id,
+    });
+
+    expect(result.floors[1]!.entities.length).toBeGreaterThan(0);
+    expect(result.actors.filter((actor) => actor.populationId !== null).length).toBeGreaterThan(0);
+    expect(result.populations).toHaveLength(1);
+    expect(result.populations[0]!.floorId).toBe(generated.floor.floorId);
+    expect(result.encounterDecisions[0]!.instancesCreated).toBe(1);
+    expect(result.rng.generation).toEqual(allocation(run).nextGenerationState);
+    expect(result.rng.encounters).not.toEqual(run.rng.encounters);
+  });
+
   it('appends a complete floor and advances only the generation stream', () => {
     const run = createDemoRun();
     const generated = generatedFloor();

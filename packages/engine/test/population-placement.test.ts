@@ -1,0 +1,399 @@
+import { describe, expect, it } from 'vitest';
+import type {
+  CompiledContentPack,
+  ContentEntry,
+  EncounterContentEntry,
+  MonsterContentEntry,
+  VaultContentEntry,
+} from '@woven-deep/content';
+import {
+  createDemoContentPack,
+  createDemoRun,
+  createUnknownKnowledge,
+  placePopulation,
+  rollDie,
+  stableJson,
+  type ActiveRun,
+  type FloorSnapshot,
+} from '../src/index.js';
+
+function monster(id: string): MonsterContentEntry {
+  return {
+    kind: 'monster', id, name: id, tags: ['test'], glyph: 'm', color: '#808080',
+    attributes: { might: 3, agility: 4, vitality: 5, wits: 2, resolve: 1 },
+    health: 7, speed: 90, accuracy: 1, defense: 2, perception: 4,
+    damage: { count: 1, sides: 4, bonus: 0 }, armor: 0,
+    resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 },
+    disposition: 'hostile', behaviorId: 'behavior.approach-and-attack', behaviorParameters: {},
+    minDepth: 1, maxDepth: 20, rarity: 'common',
+  };
+}
+
+const placement = {
+  minimumStairDistance: 1, minimumObjectiveDistance: 1, maximumMemberDistance: 3,
+  allowedTerrainTags: ['floor'], requiresVaultSlot: false, failureMode: 'optional' as const,
+};
+
+function individual(id: string, overrides: Partial<EncounterContentEntry> = {}): EncounterContentEntry {
+  return {
+    kind: 'encounter', id, name: id, tags: ['test'], model: 'individual', adminDescription: null,
+    minDepth: 1, maxDepth: 10, environmentTags: [], requiredVaultTags: [], weight: 1,
+    rarity: 'common', runAppearanceChance: 1, discoveryProtectionIncrement: 0,
+    discoveryProtectionCap: 1, maximumInstancesPerRun: 2, placement,
+    intentPresentation: { visible: true },
+    definition: { monsterId: 'monster.test-a', minimumQuantity: 1, maximumQuantity: 1 },
+    ...overrides,
+  } as EncounterContentEntry;
+}
+
+function pack(encounters: readonly EncounterContentEntry[], extras: readonly ContentEntry[] = []): CompiledContentPack {
+  const base = createDemoContentPack();
+  return {
+    ...base,
+    entries: [...base.entries, monster('monster.test-a'), monster('monster.test-b'), ...extras, ...encounters],
+  };
+}
+
+function floor(overrides: Partial<FloorSnapshot> = {}): FloorSnapshot {
+  const width = 9; const height = 7;
+  const tiles = Array.from({ length: width * height }, (_, index) => {
+    const x = index % width; const y = Math.floor(index / width);
+    if (x === 0 || y === 0 || x === width - 1 || y === height - 1) return 0 as const;
+    return 1 as const;
+  });
+  tiles[1 * width + 1] = 4;
+  tiles[5 * width + 7] = 5;
+  return {
+    floorId: 'floor.population', seed: [11, 12, 13, 14], generatorVersion: 2,
+    width, height, depth: 3, tiles, entities: [], themeId: 'theme.cavern',
+    ambient: { color: [0, 0, 0], strength: 0 }, knowledge: createUnknownKnowledge(tiles.length),
+    lights: [], stairUp: { x: 1, y: 1 }, stairDown: { x: 7, y: 5 }, vaults: [], placementSlots: [],
+    ...overrides,
+  };
+}
+
+function runFor(encounters: readonly EncounterContentEntry[]): ActiveRun {
+  const base = createDemoRun();
+  return {
+    ...base,
+    rng: { ...base.rng, encounters: [1, 2, 3, 4] },
+    encounterDecisions: encounters.map((entry) => ({
+      encounterId: entry.id, baseProbability: entry.runAppearanceChance, protectionBonus: 0,
+      effectiveProbability: entry.runAppearanceChance, eligible: true,
+      reachedEligibleDepth: false, encountered: false, instancesCreated: 0,
+    })).sort((left, right) => left.encounterId < right.encounterId ? -1 : 1),
+  };
+}
+
+describe('population placement selection and composition', () => {
+  it('filters by depth, environment, vault tags, eligibility, and the per-run limit', () => {
+    const entries = [
+      individual('encounter.depth', { minDepth: 4 }),
+      individual('encounter.environment', { environmentTags: ['forest'] }),
+      individual('encounter.vault', { requiredVaultTags: ['arena'] }),
+      individual('encounter.limit', { maximumInstancesPerRun: 1 }),
+      individual('encounter.ineligible'),
+    ];
+    const run = runFor(entries);
+    const decisions = run.encounterDecisions.map((decision) => decision.encounterId === 'encounter.limit'
+      ? { ...decision, instancesCreated: 1 }
+      : decision.encounterId === 'encounter.ineligible' ? { ...decision, eligible: false } : decision);
+
+    const result = placePopulation({ run: { ...run, encounterDecisions: decisions }, floor: floor(), content: pack(entries) });
+
+    expect(result).toMatchObject({ status: 'skipped', reason: 'no-eligible-encounter' });
+  });
+
+  it('matches authored environment tags supplied by floor generation', () => {
+    const encounter = individual('encounter.environment-match', { environmentTags: ['cavern'] });
+    const run = runFor([encounter]);
+
+    const absent = placePopulation({ run, floor: floor(), content: pack([encounter]) });
+    const present = placePopulation({
+      run, floor: floor(), content: pack([encounter]), environmentTags: ['cavern'],
+      forcedEncounterId: encounter.id,
+    });
+
+    expect(absent.status).toBe('skipped');
+    expect(present.status).toBe('placed');
+  });
+
+  it('does not mark an encounter reached outside its inclusive depth range', () => {
+    const encounter = individual('encounter.expired', { minDepth: 2, maxDepth: 4 });
+    const run = runFor([encounter]);
+
+    const result = placePopulation({ run, floor: floor({ depth: 5 }), content: pack([encounter]) });
+
+    expect(result.status).toBe('skipped');
+    expect(result.encounterDecisions[0]!.reachedEligibleDepth).toBe(false);
+  });
+
+  it('uses code-unit encounter ordering before stable weighted selection', () => {
+    const a = individual('encounter.a', { weight: 1 });
+    const b = individual('encounter.b', { weight: 3, definition: {
+      monsterId: 'monster.test-b', minimumQuantity: 1, maximumQuantity: 1,
+    } });
+    const run = runFor([b, a]);
+    const selection = rollDie(run.rng.encounters, 4);
+    const expected = selection.value <= 1 ? a.id : b.id;
+
+    const first = placePopulation({ run, floor: floor(), content: pack([b, a]) });
+    const second = placePopulation({ run, floor: floor(), content: pack([a, b]) });
+
+    expect(first.status).toBe('placed');
+    expect(first.encounterId).toBe(expected);
+    expect(stableJson(first)).toBe(stableJson(second));
+  });
+
+  it('rolls inclusive role quantities and optional leadership in authored role order', () => {
+    const encounter: EncounterContentEntry = {
+      ...individual('encounter.group'), model: 'group',
+      definition: {
+        roles: [
+          { roleId: 'front', monsterId: 'monster.test-a', minimumQuantity: 2, maximumQuantity: 3,
+            formationPreference: 'front', behaviorParameters: {} },
+          { roleId: 'rear', monsterId: 'monster.test-b', minimumQuantity: 1, maximumQuantity: 2,
+            formationPreference: 'rear', behaviorParameters: {} },
+        ],
+        formation: 'line', communicationRadius: 4, leaderChance: 1, leaderRoleId: 'front',
+        leaderAccentColor: '#ffcc00', leaderAlternateGlyph: 'L',
+        coordinationModifiers: { accuracy: 1, defense: 1, damage: 0 },
+        leaderDeathResponse: 'weaken', responseParameters: {}, supernaturalBond: false,
+        collapseRewards: 'none',
+      },
+    };
+    const run = runFor([encounter]);
+    const frontRoll = rollDie(run.rng.encounters, 2);
+    const rearRoll = rollDie(frontRoll.state, 2);
+    const expectedRoles = [
+      ...Array.from({ length: frontRoll.value + 1 }, () => 'front'),
+      ...Array.from({ length: rearRoll.value }, () => 'rear'),
+    ];
+
+    const result = placePopulation({ run, floor: floor(), content: pack([encounter]), forcedEncounterId: encounter.id });
+
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed' || result.population.model !== 'group') return;
+    expect(result.createdActors.map((actor) => actor.populationRoleId)).toEqual(expectedRoles);
+    expect(result.population.populationId).toBe('population.000001');
+    expect(result.createdActors.map((actor) => actor.actorId)).toEqual(
+      expectedRoles.map((_, index) => `actor.population.000001.${String(index + 1).padStart(3, '0')}`),
+    );
+    expect(result.population.leaderActorId).toBe(result.createdActors[0]!.actorId);
+    expect(result.createdActors[0]!.populationPresentation).toEqual({
+      name: 'monster.test-a', glyph: 'L', color: '#ffcc00', leader: true,
+    });
+  });
+
+  it('advances fixed population allocation past existing actor identifiers', () => {
+    const encounter = individual('encounter.id-collision');
+    const base = runFor([encounter]);
+    const collidingActor = {
+      ...base.actors[0]!, actorId: 'actor.population.000001.001', playerControlled: false,
+      contentId: 'monster.test-a', behaviorId: 'behavior.approach-and-attack',
+    };
+    const run = {
+      ...base,
+      actors: [...base.actors, collidingActor].sort((left, right) => left.actorId < right.actorId ? -1 : 1),
+    };
+
+    const result = placePopulation({
+      run, floor: floor(), content: pack([encounter]), forcedEncounterId: encounter.id,
+    });
+
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed') return;
+    expect(result.population.populationId).toBe('population.000002');
+    expect(result.createdActors[0]!.actorId).toBe('actor.population.000002.001');
+  });
+});
+
+describe('atomic population placement', () => {
+  it('finds a complete distance-bounded set when an earlier compatible point is a dead end', () => {
+    const encounter = individual('encounter.distance-window', {
+      placement: { ...placement, maximumMemberDistance: 2 },
+      definition: { monsterId: 'monster.test-a', minimumQuantity: 4, maximumQuantity: 4 },
+    });
+    const width = 6; const height = 3;
+    const candidateIndexes = new Set([[0, 0], [3, 0], [4, 0], [1, 1], [3, 1], [1, 2]]
+      .map(([x, y]) => y! * width + x!));
+    const generated = floor({
+      width, height, tiles: Array.from({ length: width * height }, (_, index) =>
+        candidateIndexes.has(index) ? 1 as const : 0 as const),
+      stairUp: null, stairDown: null, knowledge: createUnknownKnowledge(width * height),
+    });
+
+    const result = placePopulation({
+      run: runFor([encounter]), floor: generated, content: pack([encounter]), forcedEncounterId: encounter.id,
+    });
+
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed') return;
+    expect(result.createdActors.map(({ x, y }) => [x, y])).toEqual([[3, 0], [1, 1], [3, 1], [1, 2]]);
+  });
+
+  it('inherits mandatory anchor tags from the parent vault', () => {
+    const encounter = individual('encounter.parent-vault-anchor', {
+      requiredVaultTags: ['parent-arena'],
+      placement: { ...placement, requiresVaultSlot: true },
+    });
+    const vault: VaultContentEntry = {
+      kind: 'vault', id: 'vault.parent-arena', name: 'Parent arena', tags: ['parent-arena'],
+      minDepth: 1, maxDepth: 10, rarity: 'common', weight: 1, maxPerFloor: 1, margin: 0,
+      transforms: { rotations: [0], reflectHorizontal: false }, layout: ['.'],
+      legend: { '.': { terrain: 'floor', entrance: false, light: null, slot: null } },
+      entranceCount: 0, requiredSlotIds: [],
+    };
+    const generated = floor({
+      vaults: [{
+        placementId: 'vault-placement.parent', vaultId: vault.id, x: 3, y: 2,
+        width: 1, height: 1, rotation: 0, reflected: false, entrances: [],
+      }],
+      placementSlots: [{
+        slotId: 'slot.parent-monster', vaultPlacementId: 'vault-placement.parent', kind: 'monster',
+        required: false, tags: [], x: 3, y: 2,
+      }],
+    });
+
+    const result = placePopulation({
+      run: runFor([encounter]), floor: generated, content: pack([encounter], [vault]),
+      forcedEncounterId: encounter.id,
+    });
+
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed') return;
+    expect(result.createdActors.map(({ x, y }) => ({ x, y }))).toEqual([{ x: 3, y: 2 }]);
+  });
+
+  it('uses a matching mandatory vault slot without overwriting an occupied slot', () => {
+    const encounter = individual('encounter.vault-anchor', {
+      requiredVaultTags: ['arena'],
+      placement: { ...placement, requiresVaultSlot: true },
+    });
+    const generated = floor({
+      entities: [{ entityId: 'fixture.occupied-slot', x: 3, y: 2 }],
+      vaults: [{
+        placementId: 'vault-placement.arena', vaultId: 'vault.arena', x: 2, y: 1,
+        width: 5, height: 3, rotation: 0, reflected: false, entrances: [{ x: 2, y: 2 }],
+      }],
+      placementSlots: [
+        { slotId: 'slot.arena-a', vaultPlacementId: 'vault-placement.arena', kind: 'monster',
+          required: false, tags: ['arena'], x: 3, y: 2 },
+        { slotId: 'slot.arena-b', vaultPlacementId: 'vault-placement.arena', kind: 'monster',
+          required: false, tags: ['arena'], x: 5, y: 2 },
+      ],
+    });
+
+    const result = placePopulation({
+      run: runFor([encounter]), floor: generated, content: pack([encounter]), forcedEncounterId: encounter.id,
+    });
+
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed') return;
+    expect(result.createdActors.map(({ x, y }) => ({ x, y }))).toEqual([{ x: 5, y: 2 }]);
+  });
+
+  it('enumerates row-major cells while excluding actors, features, stairs, objectives, and vault slots', () => {
+    const encounter = individual('encounter.reservations');
+    const baseRun = runFor([encounter]);
+    const generated = floor({
+      entities: [{ entityId: 'fixture.blocker', x: 2, y: 1 }],
+      vaults: [{
+        placementId: 'vault-placement.test', vaultId: 'vault.test', x: 5, y: 1,
+        width: 2, height: 1, rotation: 0, reflected: false, entrances: [{ x: 5, y: 1 }],
+      }],
+      placementSlots: [
+        { slotId: 'slot.objective', vaultPlacementId: 'vault-placement.test', kind: 'objective',
+          required: true, tags: ['goal'], x: 5, y: 1 },
+        { slotId: 'slot.monster', vaultPlacementId: 'vault-placement.test', kind: 'monster',
+          required: false, tags: ['arena'], x: 6, y: 1 },
+      ],
+    });
+    const occupyingActor = { ...baseRun.actors[0]!, actorId: 'monster.existing', contentId: 'monster.test-a',
+      playerControlled: false, floorId: generated.floorId, x: 3, y: 1 };
+    const run = {
+      ...baseRun,
+      actors: [...baseRun.actors, occupyingActor].sort((left, right) => left.actorId < right.actorId ? -1 : 1),
+      features: [...baseRun.features, {
+        featureId: 'feature.blocker', type: 'trap' as const, floorId: generated.floorId,
+        x: 4, y: 1, contentId: null, coverTileId: 1 as const, state: 'armed' as const,
+        discoveryDifficulty: 1,
+        discovery: { discoveredByActorIds: [], progressByActorId: {}, attemptedContextKeys: [] },
+      }],
+    };
+
+    const result = placePopulation({ run, floor: generated, content: pack([encounter]), forcedEncounterId: encounter.id });
+
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed') return;
+    expect(result.createdActors.map(({ x, y }) => ({ x, y }))).toEqual([{ x: 1, y: 2 }]);
+    expect(result.floor.entities.find((entity) => entity.entityId === result.createdActors[0]!.actorId))
+      .toEqual({ entityId: result.createdActors[0]!.actorId, x: 1, y: 2 });
+  });
+
+  it('skips the complete optional encounter when member separation or terrain prevents composition', () => {
+    const encounter = individual('encounter.too-wide', {
+      placement: { ...placement, maximumMemberDistance: 1, allowedTerrainTags: ['floor'] },
+      definition: { monsterId: 'monster.test-a', minimumQuantity: 2, maximumQuantity: 2 },
+    });
+    const generated = floor({
+      stairUp: null,
+      stairDown: null,
+      tiles: floor().tiles.map((tile, index) => {
+        const x = index % floor().width; const y = Math.floor(index / floor().width);
+        if ((x === 2 && y === 1) || (x === 6 && y === 5)) return 1 as const;
+        if (tile === 4 || tile === 5) return tile;
+        return 0 as const;
+      }),
+    });
+    const run = runFor([encounter]);
+    const before = [stableJson(run), stableJson(generated)];
+
+    const result = placePopulation({ run, floor: generated, content: pack([encounter]), forcedEncounterId: encounter.id });
+
+    expect(result).toMatchObject({ status: 'skipped', encounterId: encounter.id, reason: 'no-valid-placement' });
+    expect(result).not.toHaveProperty('createdActors');
+    expect([stableJson(run), stableJson(generated)]).toEqual(before);
+  });
+
+  it('does not place an optional actor where it would sever the required stair route', () => {
+    const encounter = individual('encounter.route-optional');
+    const width = 7; const height = 3;
+    const tiles = [
+      0, 0, 0, 0, 0, 0, 0,
+      0, 4, 1, 1, 1, 5, 0,
+      0, 0, 0, 0, 0, 0, 0,
+    ] as const;
+    const generated = floor({
+      width, height, tiles, stairUp: { x: 1, y: 1 }, stairDown: { x: 5, y: 1 },
+      knowledge: createUnknownKnowledge(width * height),
+    });
+
+    const result = placePopulation({
+      run: runFor([encounter]), floor: generated, content: pack([encounter]), forcedEncounterId: encounter.id,
+    });
+
+    expect(result).toMatchObject({ status: 'skipped', reason: 'required-route-blocked' });
+    expect(result).not.toHaveProperty('createdActors');
+  });
+
+  it('rejects the bounded generation attempt atomically for required placement failure', () => {
+    const encounter = individual('encounter.route-required', {
+      placement: { ...placement, failureMode: 'required' },
+    });
+    const width = 7; const height = 3;
+    const generated = floor({
+      width, height,
+      tiles: [0, 0, 0, 0, 0, 0, 0, 0, 4, 1, 1, 1, 5, 0, 0, 0, 0, 0, 0, 0, 0],
+      stairUp: { x: 1, y: 1 }, stairDown: { x: 5, y: 1 },
+      knowledge: createUnknownKnowledge(width * height),
+    });
+
+    const result = placePopulation({
+      run: runFor([encounter]), floor: generated, content: pack([encounter]), forcedEncounterId: encounter.id,
+    });
+
+    expect(result).toMatchObject({ status: 'rejected', encounterId: encounter.id, reason: 'required-route-blocked' });
+    expect(result).not.toHaveProperty('createdActors');
+  });
+});

@@ -29,6 +29,7 @@ export type GenerationRejectionCode =
   | 'topology.invalid-geometry'
   | 'vault.required-unavailable'
   | 'vault.no-valid-placement'
+  | 'population.required-placement'
   | 'stairs.no-valid-pair'
   | 'connectivity.disconnected';
 

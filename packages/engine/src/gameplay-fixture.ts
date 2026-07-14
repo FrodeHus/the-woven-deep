@@ -361,7 +361,7 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
     survival: { ...initialized.survival, hungerReserve: balance.hungerMaximum },
     activeFloorId: FLOOR_ID,
   };
-  const inserted = addGeneratedFloor(transitional, generated, allocation);
+  const inserted = addGeneratedFloor(transitional, generated, allocation, { content: pack });
   const activeFloor = inserted.floors.find((floor) => floor.floorId === FLOOR_ID)!;
   const actorPositions = new Map(inserted.actors
     .filter((actor) => actor.floorId === FLOOR_ID)

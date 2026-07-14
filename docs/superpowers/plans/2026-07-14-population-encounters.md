@@ -285,19 +285,19 @@ Commit: `feat: add population perception and pathfinding`
 - Consumes: successful run decisions, depth/theme/vault tags, placement slots, reserved cells, route checks, reusable monster definitions, and the `encounters` stream.
 - Produces: complete population instances and actors, or a deterministic optional skip / required generation rejection with no partial state.
 
-- [ ] **Step 1: Write failing selection and composition tests**
+- [x] **Step 1: Write failing selection and composition tests**
 
 Assert depth/environment/vault filtering, weighted stable selection, per-run instance limits, inclusive quantity rolls, optional leader roll, row-major candidates, and fixed actor/instance ID allocation.
 
-- [ ] **Step 2: Write failing atomic-placement tests**
+- [x] **Step 2: Write failing atomic-placement tests**
 
 Reject actor/feature/stair/objective/vault-slot overlap, excessive member separation, invalid terrain, and placements that sever required routes. Prove optional failures create no actors and required failures reject the bounded generation attempt.
 
-- [ ] **Step 3: Implement stable materialization**
+- [x] **Step 3: Implement stable materialization**
 
 Reserve mandatory cells first, plan the entire composition without mutating the run, validate the route after the planned occupancy, then publish actors and population state in stable role/member order through one immutable commit.
 
-- [ ] **Step 4: Integrate with floor generation and commit**
+- [x] **Step 4: Integrate with floor generation and commit**
 
 Ensure generation retries and fallback floors preserve their current bounded behavior. Use forced eligibility only in test/demo inputs; production YAML keeps authored rarity.
 
