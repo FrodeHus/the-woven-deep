@@ -8,6 +8,8 @@ const STREAM_DISCRIMINATORS: Readonly<Record<RngStreamName, number>> = {
   generation: 1,
   encounters: 2,
   'population-gates': 7,
+  'merchant-stock': 8,
+  'merchant-runtime': 9,
   combat: 3,
   loot: 4,
   effects: 5,

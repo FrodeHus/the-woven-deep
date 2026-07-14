@@ -12,6 +12,7 @@ export function createDemoContentPack(): CompiledContentPack {
     hash: 'a'.repeat(64),
     entries: [{
       kind: 'balance', id: 'balance.core-gameplay', name: 'Core gameplay', tags: ['core'],
+      startingCurrency: 40,
       readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400,
       energyMinimum: -10_000, energyMaximum: 10_000, attributeMinimum: 0, attributeMaximum: 30,
       hungerMaximum: 10_000, hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 },
@@ -72,7 +73,7 @@ const tiles = FLOOR_LINES.flatMap((line) => [...line].map<TileId>((glyph) => gly
 const seed = [1, 2, 3, 4] as const;
 
 export function createDemoRun(): ActiveRun {
-  const hero = { actorId: 'hero.demo', name: 'Ada', sightRadius: 12, backpackCapacity: 12 } as const;
+  const hero = { actorId: 'hero.demo', name: 'Ada', sightRadius: 12, backpackCapacity: 12, currency: 40 } as const;
   const heroActor: ActorState = {
     actorId: hero.actorId,
     contentId: 'hero.adventurer',
@@ -117,6 +118,8 @@ export function createDemoRun(): ActiveRun {
     turn: 0,
     worldTime: 0,
     hero,
+    reputations: [],
+    activeTrade: null,
     actors: [heroActor],
     items: [],
     features: [],

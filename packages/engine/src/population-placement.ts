@@ -202,6 +202,9 @@ function composition(
       ? members.findIndex((member) => member.roleId === encounter.definition.leaderRoleId) : -1;
     return { members, leaderIndex: leaderIndex < 0 ? null : leaderIndex, state };
   }
+  if (encounter.model === 'merchant') {
+    throw new Error('internal invariant: merchant materialization is not implemented by population placement');
+  }
   const monsterId = encounter.model === 'swarm'
     ? encounter.definition.sourceMonsterId : encounter.definition.monsterId;
   return { members: [{ monsterId, roleId: null }], leaderIndex: null, state };

@@ -9,6 +9,7 @@ import type { DamageType, LeaderDeathResponse } from '@woven-deep/content';
 import type {
   EncounterRunDecision, FallenHeroRunDecision, FallenHeroStandingSnapshot, PopulationInstance, PopulationIntent,
 } from './population-model.js';
+import type { ActiveTrade, FactionReputation } from './merchant-model.js';
 
 export type OpaqueId = string;
 export type Uint32State = readonly [number, number, number, number];
@@ -69,6 +70,7 @@ export interface HeroState {
   readonly name: string;
   readonly sightRadius: number;
   readonly backpackCapacity: number;
+  readonly currency: number;
 }
 
 export interface CommandEnvelope {
@@ -492,7 +494,7 @@ export interface RecordedCommand {
 }
 
 export interface ActiveRun {
-  readonly schemaVersion: 4;
+  readonly schemaVersion: 5;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly runId: OpaqueId;
@@ -502,6 +504,8 @@ export interface ActiveRun {
   readonly turn: number;
   readonly worldTime: number;
   readonly hero: HeroState;
+  readonly reputations: readonly FactionReputation[];
+  readonly activeTrade: ActiveTrade | null;
   readonly actors: readonly ActorState[];
   readonly items: readonly ItemInstance[];
   readonly features: readonly DungeonFeature[];

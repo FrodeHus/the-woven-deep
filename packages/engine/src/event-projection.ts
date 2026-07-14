@@ -87,6 +87,7 @@ export function projectDomainEvents(input: Readonly<{
     const item = input.state.items.find((candidate) => candidate.itemId === itemId);
     if (!item) return false;
     if (item.location.type === 'floor') return item.location.floorId === floor.floorId && pointVisible(item.location);
+    if (item.location.type === 'merchant-stock') return false;
     return actorVisible(item.location.actorId);
   };
   const featureVisible = (featureId: OpaqueId): boolean => {

@@ -135,9 +135,13 @@ const actorIntentChangedEvent = z.strictObject({ type: z.literal('actor.intent-c
   presentation: z.enum(['intent.approach', 'intent.attack', 'intent.hold', 'intent.regroup', 'intent.flee',
     'intent.protect', 'intent.spawn', 'intent.phase-change']),
   targetCategory: z.enum(['hero', 'leader', 'source', 'position']).nullable() });
-const populationCreatedEvent = z.strictObject({ type: z.literal('population.created'), eventId: identifier,
+const legacyPopulationCreatedEvent = z.strictObject({ type: z.literal('population.created'), eventId: identifier,
   populationId: identifier, encounterId: identifier, floorId: identifier,
   model: z.enum(['individual', 'group', 'swarm', 'boss', 'champion', 'echo']),
+  actorIds: z.array(identifier).readonly() });
+const populationCreatedEvent = z.strictObject({ type: z.literal('population.created'), eventId: identifier,
+  populationId: identifier, encounterId: identifier, floorId: identifier,
+  model: z.enum(['individual', 'group', 'swarm', 'boss', 'champion', 'echo', 'merchant']),
   actorIds: z.array(identifier).readonly() });
 const populationEncounteredEvent = z.strictObject({ type: z.literal('population.encountered'), eventId: identifier,
   populationId: identifier, encounterId: identifier, actorId: identifier });
@@ -213,7 +217,7 @@ const restCompletedEvent = z.strictObject({ type: z.literal('rest.completed'), e
   stopReason: z.enum(['full-health', 'maximum-duration', 'visible-danger', 'aware-hostile', 'damage',
     'meaningful-sound', 'hunger-warning', 'fuel-warning', 'condition-change', 'decision-required', 'hero-death']),
   elapsed: safeNonNegative, effectiveHealing: safeNonNegative });
-const event = z.discriminatedUnion('type', [
+const eventOptions = [
   movedEvent, waitedEvent, invalidEvent, attackMissedEvent, attackHitEvent, actorDamagedEvent,
   actorDiedEvent, actorHealedEvent, conditionAppliedEvent, conditionRemovedEvent, actorForcedMoveEvent,
   reactionTriggeredEvent, relationshipChangedEvent, actorTurnStartedEvent, actorTurnCompletedEvent, actorMovedEvent,
@@ -227,7 +231,7 @@ const event = z.discriminatedUnion('type', [
   hungerStageChangedEvent, hungerRestoredEvent, fuelWarningEvent, itemLightExtinguishedEvent,
   doorOpenedEvent, doorClosedEvent,
   featureRevealedEvent, featureSearchedEvent, trapTriggeredEvent, trapDisarmedEvent, trapDisarmFailedEvent,
-  itemDamagedEvent, actorIntentChangedEvent, populationCreatedEvent, populationEncounteredEvent,
+  itemDamagedEvent, actorIntentChangedEvent, populationEncounteredEvent,
   populationPlacementSkippedEvent, groupAwarenessSharedEvent, groupLeaderCreatedEvent, groupLeaderDefeatedEvent,
   groupOutcomeAppliedEvent,
   swarmMembersCreatedEvent, swarmCapReachedEvent, swarmSourceDestroyedEvent,
@@ -237,7 +241,9 @@ const event = z.discriminatedUnion('type', [
   soundHeardEvent, heroDamagedPublicEvent, combatObservedPublicEvent, actorMovementObservedPublicEvent,
   actorDamageObservedPublicEvent, actorDeathObservedPublicEvent,
   populationNoticePublicEvent, restCompletedEvent,
-]);
+] as const;
+const event = z.discriminatedUnion('type', [...eventOptions, populationCreatedEvent]);
+const legacyEvent = z.discriminatedUnion('type', [...eventOptions, legacyPopulationCreatedEvent]);
 const hiddenPublicEventTypes = new Set([
   'attack.hit', 'attack.missed', 'population.created', 'population.encountered', 'population.placement-skipped',
   'group.awareness-shared', 'group.leader-created', 'group.leader-defeated', 'group.outcome-applied',
@@ -253,6 +259,10 @@ const authoritativeEvent = event.refine((value) => !publicOnlyEventTypes.has(val
   'public projection event cannot be stored as authoritative');
 const publicEvent = event.refine((value) => !hiddenPublicEventTypes.has(value.type),
   'authoritative or roll-bearing event must be projected before public storage');
+const legacyAuthoritativeEvent = legacyEvent.refine((value) => !publicOnlyEventTypes.has(value.type),
+  'public projection event cannot be stored as authoritative');
+const legacyPublicEvent = legacyEvent.refine((value) => !hiddenPublicEventTypes.has(value.type),
+  'authoritative or roll-bearing event must be projected before public storage');
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
 const invalidResult = z.strictObject({ status: z.literal('invalid'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative, reason: blockReason });
 const processedResult = z.discriminatedUnion('status', [appliedResult, invalidResult]);
@@ -261,6 +271,12 @@ const recorded = z.strictObject({
   result: processedResult,
   events: z.array(authoritativeEvent).readonly(),
   publicEvents: z.array(publicEvent).readonly(),
+});
+const legacyRecorded = z.strictObject({
+  command,
+  result: processedResult,
+  events: z.array(legacyAuthoritativeEvent).readonly(),
+  publicEvents: z.array(legacyPublicEvent).readonly(),
 });
 const entity = z.strictObject({ entityId: identifier, x: safeNonNegative, y: safeNonNegative });
 const color = z.tuple([uint8, uint8, uint8]);
@@ -377,10 +393,14 @@ const actor = z.strictObject({
   populationRoleId: z.string().min(1).max(80).nullable(),
   populationPresentation: populationPresentation.nullable(),
 });
-const itemLocation = z.discriminatedUnion('type', [
+const legacyItemLocation = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('backpack'), actorId: identifier }),
   z.strictObject({ type: z.literal('equipped'), actorId: identifier, slot: z.enum(['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring']) }),
   z.strictObject({ type: z.literal('floor'), floorId: identifier, x: safeNonNegative, y: safeNonNegative }),
+]);
+const itemLocation = z.discriminatedUnion('type', [
+  ...legacyItemLocation.options,
+  z.strictObject({ type: z.literal('merchant-stock'), populationId: identifier }),
 ]);
 const enchantment = z.strictObject({
   enchantmentId: identifier,
@@ -394,7 +414,7 @@ const heirloomItemMetadata = z.strictObject({
   originatingRank: z.literal(1),
   sourceItemId: nullableIdentifier,
 });
-const item = z.strictObject({
+const itemFields = {
   itemId: identifier,
   contentId: identifier,
   quantity: z.number().int().safe().positive(),
@@ -404,9 +424,10 @@ const item = z.strictObject({
   charges: safeNonNegative.nullable(),
   fuel: safeNonNegative.nullable(),
   enabled: z.boolean().nullable(),
-  location: itemLocation,
   heirloom: heirloomItemMetadata.optional(),
-});
+} as const;
+const legacyItem = z.strictObject({ ...itemFields, location: legacyItemLocation });
+const item = z.strictObject({ ...itemFields, location: itemLocation });
 const discovery = z.strictObject({
   discoveredByActorIds: z.array(identifier).readonly(),
   progressByActorId: z.record(identifier, safeNonNegative).readonly(),
@@ -441,7 +462,10 @@ const identification = z.strictObject({
   appearanceByContentId: z.record(identifier, identifier).readonly(),
   knownAppearanceIds: z.array(identifier).readonly(),
 });
-const hero = z.strictObject({ actorId: identifier, name: heroName, sightRadius: safeNonNegative, backpackCapacity: safeNonNegative });
+const legacyHero = z.strictObject({ actorId: identifier, name: heroName, sightRadius: safeNonNegative,
+  backpackCapacity: safeNonNegative });
+const hero = z.strictObject({ actorId: identifier, name: heroName, sightRadius: safeNonNegative,
+  backpackCapacity: safeNonNegative, currency: safeNonNegative });
 const probability = z.number().finite().min(0).max(1);
 const encounterDecision = z.strictObject({
   encounterId: identifier, baseProbability: probability, protectionBonus: probability,
@@ -458,7 +482,7 @@ const bossRewardReceipt = z.strictObject({
   lootStateAfter: uint32State,
   items: z.array(z.strictObject({ itemId: identifier, contentId: identifier, quantity: positiveQuantity })).min(1).readonly(),
 });
-const population = z.discriminatedUnion('model', [
+const legacyPopulation = z.discriminatedUnion('model', [
   z.strictObject({ ...populationBase, model: z.literal('individual') }),
   z.strictObject({ ...populationBase, model: z.literal('group'), leaderActorId: nullableIdentifier,
     bonusActive: z.boolean(), roleMembership: z.array(roleMembership).readonly(),
@@ -480,6 +504,21 @@ const population = z.discriminatedUnion('model', [
     hallRecordId: identifier, rank: z.number().int().min(2).max(10), defeated: z.boolean(), lootCreated: z.boolean(),
     equipmentContentIds: z.array(identifier).readonly(), abilityIds: z.array(identifier).readonly() }),
 ]);
+const merchantService = z.strictObject({
+  serviceId: z.literal('merchant-service.identify'), basePrice: safeNonNegative,
+  remainingUses: safeNonNegative, tierIds: z.array(z.string().min(1).max(80)).readonly(),
+});
+const merchantPopulation = z.strictObject({
+  ...populationBase, model: z.literal('merchant'), actorId: identifier, npcId: identifier, factionId: identifier,
+  rolledLifetime: safeNonNegative, departureAt: safeNonNegative,
+  emittedWarningThresholds: z.array(safeNonNegative).readonly(),
+  initialStockItemIds: z.array(identifier).readonly(), stockItemIds: z.array(identifier).readonly(),
+  services: z.array(merchantService).readonly(),
+  lifecycle: z.enum(['available', 'fleeing', 'defending', 'departed', 'dead']),
+  provoked: z.boolean(), aggressionPenaltyApplied: z.boolean(), deathPenaltyApplied: z.boolean(),
+  stockLossResolved: z.boolean(), commerceBonusApplied: z.boolean(),
+});
+const population = z.discriminatedUnion('model', [...legacyPopulation.options, merchantPopulation]);
 const heirloom = z.strictObject({
   contentId: identifier, sourceItemId: nullableIdentifier,
   enchantment: z.strictObject({ enchantmentId: identifier,
@@ -499,7 +538,11 @@ const fallenDecision = z.strictObject({
   hallRecordId: identifier, rank: z.number().int().min(1).max(10), role: z.enum(['champion', 'echo']),
   gateRoll: uint32.nullable(), retained: z.boolean(), encountered: z.boolean(), defeated: z.boolean(),
 });
+const LEGACY_RNG_STREAM_NAMES = [
+  'generation', 'encounters', 'population-gates', 'combat', 'loot', 'effects', 'narrative',
+] as const;
 const rngEntries = Object.fromEntries(RNG_STREAM_NAMES.map((name) => [name, uint32State]));
+const legacyRngEntries = Object.fromEntries(LEGACY_RNG_STREAM_NAMES.map((name) => [name, uint32State]));
 const directionOffsets: Readonly<Record<Direction, Readonly<{ x: number; y: number }>>> = {
   northwest: { x: -1, y: -1 }, north: { x: 0, y: -1 }, northeast: { x: 1, y: -1 },
   west: { x: -1, y: 0 }, east: { x: 1, y: 0 },
@@ -511,11 +554,31 @@ const activeRunSchema = z.strictObject({
   contentHash: z.string().regex(/^[a-f0-9]{64}$/), runId: identifier, runSeed: uint32Tuple,
   rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
   revision: safeNonNegative, turn: safeNonNegative, worldTime: safeNonNegative,
-  hero, actors: z.array(actor).min(1).readonly(), items: z.array(item).readonly(), features: z.array(feature).readonly(),
+  hero, reputations: z.array(z.strictObject({ factionId: identifier, value: z.number().int().safe() })).readonly(),
+  activeTrade: z.strictObject({
+    merchantPopulationId: identifier, merchantActorId: identifier, openedByCommandId: identifier,
+    openedAtRevision: safeNonNegative, completedCommerce: z.boolean(),
+  }).nullable(),
+  actors: z.array(actor).min(1).readonly(), items: z.array(item).readonly(), features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(), survival, identification,
   activeFloorId: identifier, activeFloorEnteredAt: safeNonNegative,
   floors: z.array(floor).min(1).readonly(), recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(), populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+});
+
+export const legacyActiveRunV4Schema = z.strictObject({
+  schemaVersion: z.literal(4), gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/), runId: identifier, runSeed: uint32Tuple,
+  rng: z.strictObject(legacyRngEntries as Record<(typeof LEGACY_RNG_STREAM_NAMES)[number], typeof uint32State>),
+  revision: safeNonNegative, turn: safeNonNegative, worldTime: safeNonNegative,
+  hero: legacyHero, actors: z.array(actor).min(1).readonly(), items: z.array(legacyItem).readonly(),
+  features: z.array(feature).readonly(), relationships: z.array(relationship).readonly(), survival, identification,
+  activeFloorId: identifier, activeFloorEnteredAt: safeNonNegative,
+  floors: z.array(floor).min(1).readonly(), recentCommands: z.array(legacyRecorded).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(), populations: z.array(legacyPopulation).readonly(),
   fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
@@ -682,6 +745,9 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   if (!activeFloor) fail('activeFloorId', 'active floor does not exist');
   if (run.activeFloorEnteredAt > run.worldTime) fail('activeFloorEnteredAt', 'active floor entry cannot be in the future');
 
+  validateOrderedIds(run.reputations.map((entry) => entry.factionId),
+    'reputations', 'faction reputation', 'factionId');
+
   validateOrderedIds(run.actors.map((entry) => entry.actorId), 'actors', 'actor', 'actorId');
   const actors = new Map(run.actors.map((entry) => [entry.actorId, entry]));
   const occupiedCells = new Set<string>();
@@ -811,6 +877,60 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       if (populationValue.shutdownState !== 'frenzy' && populationValue.shutdownExpiresAt !== null) {
         fail(`${path}.shutdownExpiresAt`, 'only frenzy may own a shutdown expiry');
       }
+    } else if (populationValue.model === 'merchant') {
+      validateOrderedIds(populationValue.initialStockItemIds, `${path}.initialStockItemIds`, 'initial stock item');
+      validateOrderedIds(populationValue.stockItemIds, `${path}.stockItemIds`, 'stock item');
+      validateOrderedIds(populationValue.services.map((service) => service.serviceId),
+        `${path}.services`, 'merchant service', 'serviceId');
+      for (const [serviceIndex, service] of populationValue.services.entries()) {
+        validateOrderedIds(service.tierIds, `${path}.services.${serviceIndex}.tierIds`, 'service tier');
+      }
+      if (populationValue.departureAt !== populationValue.createdAt + populationValue.rolledLifetime) {
+        fail(`${path}.departureAt`, 'merchant departure must equal creation time plus rolled lifetime');
+      }
+      for (let warningIndex = 0; warningIndex < populationValue.emittedWarningThresholds.length; warningIndex += 1) {
+        const threshold = populationValue.emittedWarningThresholds[warningIndex]!;
+        if (threshold >= populationValue.rolledLifetime) {
+          fail(`${path}.emittedWarningThresholds.${warningIndex}`, 'merchant warning must be below rolled lifetime');
+        }
+        if (warningIndex > 0 && populationValue.emittedWarningThresholds[warningIndex - 1]! <= threshold) {
+          fail(`${path}.emittedWarningThresholds.${warningIndex}`, 'merchant warnings must be unique and strictly descending');
+        }
+      }
+      const actorValue = actors.get(populationValue.actorId);
+      if (populationValue.lifecycle === 'available' || populationValue.lifecycle === 'fleeing'
+        || populationValue.lifecycle === 'defending') {
+        if (!actorValue || actorValue.health <= 0 || populationValue.livingMemberIds.length !== 1
+          || populationValue.livingMemberIds[0] !== populationValue.actorId
+          || populationValue.formerMemberIds.length !== 0) {
+          fail(`${path}.lifecycle`, 'active merchant lifecycle requires exactly one living actor');
+        }
+      } else if (populationValue.lifecycle === 'departed') {
+        if (actorValue || populationValue.livingMemberIds.length !== 0 || populationValue.formerMemberIds.length !== 0
+          || populationValue.stockItemIds.length !== 0) {
+          fail(`${path}.lifecycle`, 'departed merchant cannot retain an actor or stock');
+        }
+      } else if (!actorValue || actorValue.health !== 0 || populationValue.livingMemberIds.length !== 0
+        || populationValue.formerMemberIds.length !== 1 || populationValue.formerMemberIds[0] !== populationValue.actorId
+        || populationValue.stockItemIds.length !== 0) {
+        fail(`${path}.lifecycle`, 'dead merchant requires one health-zero former actor and no stock');
+      }
+      if ((populationValue.lifecycle === 'fleeing' || populationValue.lifecycle === 'defending')
+        && !populationValue.provoked) {
+        fail(`${path}.provoked`, 'hostile merchant lifecycle requires provocation');
+      }
+      if (populationValue.lifecycle === 'available' && populationValue.provoked) {
+        fail(`${path}.provoked`, 'an available merchant cannot already be provoked');
+      }
+      if (populationValue.aggressionPenaltyApplied !== populationValue.provoked) {
+        fail(`${path}.aggressionPenaltyApplied`, 'aggression penalty must be applied exactly with provocation');
+      }
+      if (populationValue.deathPenaltyApplied && populationValue.lifecycle !== 'dead') {
+        fail(`${path}.deathPenaltyApplied`, 'death penalty requires a dead merchant');
+      }
+      if (populationValue.stockLossResolved !== (populationValue.provoked || populationValue.lifecycle === 'dead')) {
+        fail(`${path}.stockLossResolved`, 'stock loss must be resolved exactly after provocation or merchant death');
+      }
     } else if (populationValue.model === 'boss' || populationValue.model === 'champion' || populationValue.model === 'echo') {
       if (!memberIds.has(populationValue.actorId)) fail(`${path}.actorId`, 'primary actor must belong to its population');
       if (populationValue.model === 'champion' || populationValue.model === 'echo') {
@@ -927,6 +1047,16 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   for (const [itemIndex, itemValue] of run.items.entries()) {
     const path = `items.${itemIndex}`;
     const location = itemValue.location;
+    if (location.type === 'merchant-stock') {
+      const owner = populations.get(location.populationId);
+      if (!owner || owner.model !== 'merchant') {
+        fail(`${path}.location.populationId`, 'merchant stock owner does not exist');
+      }
+      if (!owner.stockItemIds.includes(itemValue.itemId)) {
+        fail(`${path}.location.populationId`, 'merchant stock location is not referenced by its population');
+      }
+      continue;
+    }
     if (location.type === 'floor') {
       const itemFloor = run.floors.find((candidate) => candidate.floorId === location.floorId);
       if (!itemFloor) fail(`${path}.location.floorId`, 'item floor does not exist');
@@ -937,6 +1067,38 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     if (!owner) fail(`${path}.location.actorId`, 'item owner does not exist');
     if (location.type === 'equipped' && owner.equipment[location.slot] !== itemValue.itemId) {
       fail(`${path}.location.slot`, 'equipped item is not referenced by its actor slot');
+    }
+  }
+  for (const [populationIndex, populationValue] of run.populations.entries()) {
+    if (populationValue.model !== 'merchant') continue;
+    for (const [stockIndex, itemId] of populationValue.stockItemIds.entries()) {
+      const stock = items.get(itemId);
+      if (!stock || stock.location.type !== 'merchant-stock'
+        || stock.location.populationId !== populationValue.populationId) {
+        fail(`populations.${populationIndex}.stockItemIds.${stockIndex}`,
+          'merchant stock item does not resolve bidirectionally');
+      }
+    }
+  }
+
+  if (run.activeTrade !== null) {
+    const trade = run.activeTrade;
+    const merchant = populations.get(trade.merchantPopulationId);
+    const merchantActor = actors.get(trade.merchantActorId);
+    if (!merchant || merchant.model !== 'merchant' || merchant.lifecycle !== 'available') {
+      fail('activeTrade.merchantPopulationId', 'active trade requires an available merchant population');
+    }
+    if (!merchantActor || merchant.actorId !== trade.merchantActorId
+      || merchantActor.populationId !== merchant.populationId || merchantActor.health <= 0) {
+      fail('activeTrade.merchantActorId', 'active trade merchant actor does not match its population');
+    }
+    const heroActor = actors.get(run.hero.actorId)!;
+    if (merchant.floorId !== run.activeFloorId || merchantActor.floorId !== heroActor.floorId
+      || Math.max(Math.abs(merchantActor.x - heroActor.x), Math.abs(merchantActor.y - heroActor.y)) !== 1) {
+      fail('activeTrade.merchantActorId', 'active trade merchant must be adjacent on the active floor');
+    }
+    if (trade.openedAtRevision > run.revision) {
+      fail('activeTrade.openedAtRevision', 'active trade cannot open in a future revision');
     }
   }
   const heirloomRecordIds = new Set<string>();

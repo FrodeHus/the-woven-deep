@@ -4,7 +4,8 @@ import type { OpaqueId } from './model.js';
 export type ItemLocation =
   | Readonly<{ type: 'backpack'; actorId: OpaqueId }>
   | Readonly<{ type: 'equipped'; actorId: OpaqueId; slot: EquipmentSlot }>
-  | Readonly<{ type: 'floor'; floorId: OpaqueId; x: number; y: number }>;
+  | Readonly<{ type: 'floor'; floorId: OpaqueId; x: number; y: number }>
+  | Readonly<{ type: 'merchant-stock'; populationId: OpaqueId }>;
 
 export interface ItemEnchantmentState {
   readonly enchantmentId: OpaqueId;

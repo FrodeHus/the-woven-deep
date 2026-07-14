@@ -187,6 +187,38 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           throw new Error(`content-bound validation: boss reward ${population.populationId} does not match its deterministic policy`);
         }
       }
+    } else if (population.model === 'merchant' && encounter.model === 'merchant') {
+      const npc = entries.get(population.npcId);
+      const faction = entries.get(population.factionId);
+      const actor = actors.get(population.actorId);
+      if (!npc || npc.kind !== 'npc' || encounter.definition.npcId !== npc.id
+        || npc.factionId !== population.factionId) {
+        throw new Error(`content-bound validation: merchant population ${population.populationId} NPC does not exist`);
+      }
+      if (!faction || faction.kind !== 'npc-faction') {
+        throw new Error(`content-bound validation: merchant population ${population.populationId} faction does not exist`);
+      }
+      if (actor && (actor.contentId !== npc.id || actor.populationId !== population.populationId)) {
+        throw new Error(`content-bound validation: merchant population ${population.populationId} actor does not match its NPC`);
+      }
+      if (population.rolledLifetime < encounter.definition.minimumLifetime
+        || population.rolledLifetime > encounter.definition.maximumLifetime) {
+        throw new Error(`content-bound validation: merchant population ${population.populationId} lifetime is invalid`);
+      }
+      const authoredWarnings = new Set(encounter.definition.departureWarningThresholds);
+      if (population.emittedWarningThresholds.some((threshold) => !authoredWarnings.has(threshold)
+        || population.departureAt - run.worldTime > threshold)) {
+        throw new Error(`content-bound validation: merchant population ${population.populationId} warnings are invalid`);
+      }
+      const authoredServices = new Map(encounter.definition.services.map((service) => [service.serviceId, service]));
+      for (const service of population.services) {
+        const authored = authoredServices.get(service.serviceId);
+        if (!authored || service.basePrice !== authored.basePrice || service.remainingUses > authored.maximumUses
+          || service.tierIds.length !== authored.tierIds.length
+          || service.tierIds.some((tierId, index) => tierId !== authored.tierIds[index])) {
+          throw new Error(`content-bound validation: merchant population ${population.populationId} service ${service.serviceId} is invalid`);
+        }
+      }
     }
   }
   const championTemplate = pack.entries.find((entry) => entry.kind === 'fallen-champion-template');
@@ -298,6 +330,15 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
   const balances = pack.entries.filter((entry) => entry.kind === 'balance');
   if (balances.length !== 1) throw new Error(`content-bound validation: expected one balance definition; found ${balances.length}`);
   const balance = balances[0]!;
+  for (const reputation of run.reputations) {
+    const faction = entries.get(reputation.factionId);
+    if (!faction || faction.kind !== 'npc-faction') {
+      throw new Error(`content-bound validation: reputation faction ${reputation.factionId} does not exist`);
+    }
+    if (reputation.value < faction.minimumReputation || reputation.value > faction.maximumReputation) {
+      throw new Error(`content-bound validation: reputation for ${reputation.factionId} is outside authored bounds`);
+    }
+  }
   if (run.survival.hungerReserve > balance.hungerMaximum) {
     throw new Error(`content-bound validation: hunger reserve exceeds maximum ${balance.hungerMaximum}`);
   }
@@ -365,7 +406,7 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
     }
     if (actor.playerControlled || actor.behaviorId === null) continue;
     const definition = entries.get(actor.contentId);
-    if (!definition || definition.kind !== 'monster') {
+    if (!definition || (definition.kind !== 'monster' && definition.kind !== 'npc')) {
       throw new Error(`content-bound validation: actor ${actor.actorId} template ${actor.contentId} does not exist`);
     }
   }

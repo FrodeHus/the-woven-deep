@@ -29,14 +29,14 @@ function probability(value: number): number {
 }
 
 export function maximumDiscoveryProtectionBonus(encounter: EncounterContentEntry): number {
-  return probability(encounter.discoveryProtectionCap - encounter.runAppearanceChance);
+  return probability(Math.max(0, encounter.discoveryProtectionCap - encounter.runAppearanceChance));
 }
 
 export function effectiveEncounterProbability(
   encounter: EncounterContentEntry, protectionBonus: number,
 ): number {
   return probability(Math.min(
-    encounter.discoveryProtectionCap,
+    Math.max(encounter.discoveryProtectionCap, encounter.runAppearanceChance),
     probability(encounter.runAppearanceChance + protectionBonus),
   ));
 }

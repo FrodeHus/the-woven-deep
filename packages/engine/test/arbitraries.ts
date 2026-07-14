@@ -1,8 +1,25 @@
 import fc from 'fast-check';
-import { createDemoContentPack, emptyEquipment, type ActorState, type Uint32State } from '../src/index.js';
+import {
+  createDemoContentPack, emptyEquipment, type ActorState, type FactionReputation,
+  type MerchantServiceState, type Uint32State,
+} from '../src/index.js';
 import type { EncounterContentEntry } from '@woven-deep/content';
 
 const identifierPart = fc.stringMatching(/^[a-z][a-z0-9-]{0,15}$/);
+
+export const currencyArbitrary = fc.integer({ min: 0, max: Number.MAX_SAFE_INTEGER });
+
+export const factionReputationArbitrary: fc.Arbitrary<FactionReputation> = fc.record({
+  factionId: identifierPart.map((suffix) => `npc-faction.${suffix}`),
+  value: fc.integer({ min: -1_000, max: 1_000 }),
+});
+
+export const merchantServiceStateArbitrary: fc.Arbitrary<MerchantServiceState> = fc.record({
+  serviceId: fc.constant('merchant-service.identify' as const),
+  basePrice: currencyArbitrary,
+  remainingUses: fc.integer({ min: 0, max: 100 }),
+  tierIds: fc.uniqueArray(identifierPart, { maxLength: 8 }).map((ids) => ids.sort()),
+});
 
 function actor(input: Readonly<{
   actorId: string;
