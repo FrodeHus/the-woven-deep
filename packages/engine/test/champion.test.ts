@@ -329,6 +329,39 @@ describe('fallen hero rewards and run-local lifecycle', () => {
     expect(decodeActiveRun(encodeActiveRun(result.state))).toEqual(result.state);
   });
 
+  it('normalizes NFC, removes controls and formats, and supplies a non-empty derived display label', () => {
+    const unsafeName = `Cafe\u0000\u200b\u0301`;
+    const champion = normalizeFallenHero({ standing: standing(1, { heroName: unsafeName }),
+      template, content: pack(), role: 'champion' });
+    const echo = normalizeFallenHero({ standing: standing(2, { heroName: unsafeName }),
+      template, content: pack(), role: 'echo' });
+    expect(champion.displayName).toBe("Café, the Deep's Champion");
+    expect(echo.displayName).toBe('Echo of Café');
+    expect(champion.displayName.normalize('NFC')).toBe(champion.displayName);
+    expect(champion.displayName).not.toMatch(/[\p{Cc}\p{Cf}]/u);
+    expect(normalizeFallenHero({ standing: standing(1, { heroName: '\u0000\u200b' }),
+      template, content: pack(), role: 'champion' }).displayName).toBe("Unknown, the Deep's Champion");
+  });
+
+  it('sanitizes a bypassed fallback item name before reward metadata, event emission, and save round-trip', () => {
+    const unsafeFallback = item('item.fallback', { name: `${'e\u0301'.repeat(50)}\u0000\u200b` });
+    const current = { ...pack(), entries: pack().entries.map((entry) => entry.id === 'item.fallback'
+      ? unsafeFallback : entry) };
+    const original = standing(1);
+    const changed = standing(1, { heirloom: { ...original.heirloom, contentId: 'item.removed' } });
+    const base = initialized([changed]);
+    const run = withArena({ ...base, contentHash: current.hash }, 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: current });
+    const dead = { ...run, actors: [...run.actors, ...placed.actors].map((actor) => actor.populationId === null
+      ? actor : { ...actor, health: 0 }).sort((a, b) => a.actorId.localeCompare(b.actorId)),
+      populations: placed.populations, fallenHeroDecisions: placed.decisions, floors: [placed.floor] };
+    const result = advanceFallenHeroEncounters({ state: dead, content: current, eventId: 'event.sanitized-fallback' });
+    const expected = 'é'.repeat(40);
+    expect(result.state.items.find((entry) => entry.heirloom)?.heirloom?.displayName).toBe(expected);
+    expect(result.events).toContainEqual(expect.objectContaining({ type: 'champion.heirloom-created', displayName: expected }));
+    expect(decodeActiveRun(encodeActiveRun(result.state))).toEqual(result.state);
+  });
+
   it.each([
     ['missing definition', { contentId: 'item.removed' }],
     ['invalid backpack-like record', { sourceItemId: null }],
