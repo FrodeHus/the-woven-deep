@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { CONDITION_TRAIT_IDS, CONTENT_KIND_IDS } from '../src/index.js';
 import {
   damageTypes,
@@ -12,6 +13,7 @@ import {
   swarmDestructionResponses,
   targetingIds,
   vaultPlacementKinds,
+  contentSourceEntrySchema,
 } from '../src/compiler/schema.js';
 import {
   ACTION_COST_IDS,
@@ -22,6 +24,34 @@ import {
 } from '../src/compiler/registries.js';
 
 describe('server-admin content documentation', () => {
+  function collectEncounterSchemaTerms(schema: unknown): string[] {
+    const terms = new Set<string>();
+    const visit = (value: unknown, insidePopulationEntry = false): void => {
+      if (Array.isArray(value)) {
+        for (const item of value) visit(item, insidePopulationEntry);
+        return;
+      }
+      if (typeof value !== 'object' || value === null) return;
+      const record = value as Record<string, unknown>;
+      const properties = record.properties as Record<string, unknown> | undefined;
+      const kind = properties?.kind as Record<string, unknown> | undefined;
+      const populationEntry = insidePopulationEntry
+        || kind?.const === 'encounter'
+        || kind?.const === 'fallen-champion-template';
+      if (populationEntry && properties) {
+        for (const field of Object.keys(properties)) terms.add(field);
+      }
+      if (populationEntry && Array.isArray(record.enum)) {
+        for (const identifier of record.enum) {
+          if (typeof identifier === 'string') terms.add(identifier);
+        }
+      }
+      for (const child of Object.values(record)) visit(child, populationEntry);
+    };
+    visit(z.toJSONSchema(schema as Parameters<typeof z.toJSONSchema>[0]));
+    return [...terms].sort();
+  }
+
   it('documents every YAML content kind and closed registry ID', async () => {
     const reference = await readFile(resolve(
       import.meta.dirname,
@@ -57,7 +87,7 @@ describe('server-admin content documentation', () => {
       'runAppearanceChance', 'discoveryProtectionIncrement', 'discoveryProtectionCap',
       'maximumInstancesPerRun', 'minimumStairDistance', 'minimumObjectiveDistance',
       'maximumMemberDistance', 'allowedTerrainTags', 'requiresVaultSlot', 'failureMode',
-      'minimumQuantity', 'maximumQuantity', 'communicationRadius', 'leaderProbability',
+      'minimumQuantity', 'maximumQuantity', 'communicationRadius', 'leaderChance',
       'leaderRoleId', 'leaderDeathResponse', 'supernaturalBond', 'collapseRewards',
       'spawnInterval', 'maximumLivingChildren', 'maximumLivingMembers', 'maximumFloorActors',
       'sourceDestructionResponse', 'healthThresholdPercent', 'recoveryPerWorldTime',
@@ -68,5 +98,19 @@ describe('server-admin content documentation', () => {
     ]) {
       expect(reference, `missing encounter field documentation for ${field}`).toContain(`\`${field}\``);
     }
+  });
+
+  it('derives exhaustive encounter and fallen-template field coverage from the source schema', async () => {
+    const reference = await readFile(resolve(
+      import.meta.dirname,
+      '../../../docs/server-admin/content-configuration.md',
+    ), 'utf8');
+    const populationReference = reference.slice(
+      reference.indexOf('## Encounter entries'),
+      reference.indexOf('## Item entries'),
+    );
+    const missing = collectEncounterSchemaTerms(contentSourceEntrySchema)
+      .filter((term) => !populationReference.includes(`\`${term}\``));
+    expect(missing, 'missing schema-derived admin documentation').toEqual([]);
   });
 });

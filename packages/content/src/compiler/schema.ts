@@ -517,7 +517,7 @@ const fallenChampionTemplateEntry = z.strictObject({
   }
 });
 
-const rawContentEntrySchema = z.discriminatedUnion('kind', [
+export const contentSourceEntrySchema = z.discriminatedUnion('kind', [
   monsterEntry,
   itemEntry,
   spellEntry,
@@ -531,7 +531,7 @@ const rawContentEntrySchema = z.discriminatedUnion('kind', [
   fallenChampionTemplateEntry,
 ]);
 
-export const contentEntrySchema = rawContentEntrySchema.transform((entry) => {
+export const contentEntrySchema = contentSourceEntrySchema.transform((entry) => {
   if (entry.kind !== 'vault') return entry;
   let entranceCount = 0;
   const requiredSlotIds = new Set<string>();

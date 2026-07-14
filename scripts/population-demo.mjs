@@ -5,7 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   encodeActiveRun,
+  createEncounterRunDecisions,
   populationDemoEquivalent,
+  preservesRequiredRoutes,
   runPopulationDemo,
   stableJson,
 } from '../packages/engine/dist/index.js';
@@ -63,7 +65,8 @@ function proveMilestone(result, split, content) {
   const has = (type) => assert(types.includes(type), `population demo did not produce ${type}`);
   for (const type of [
     'group.awareness-shared', 'group.leader-defeated', 'group.outcome-applied',
-    'swarm.members-created', 'boss.phase-changed', 'boss.recovered', 'boss.reward-created',
+    'swarm.members-created', 'swarm.cap-reached', 'swarm.source-destroyed',
+    'boss.phase-changed', 'boss.recovered', 'boss.reward-created',
     'champion.defeated', 'champion.heirloom-created', 'echo.defeated', 'echo.loot-created',
   ]) has(type);
 
@@ -81,6 +84,8 @@ function proveMilestone(result, split, content) {
   const swarmDefinition = content.entries.find((entry) => entry.id === swarm?.encounterId);
   assert(swarmDefinition?.kind === 'encounter' && swarmDefinition.model === 'swarm', 'swarm content missing');
   assert(swarm.livingMemberIds.length <= swarmDefinition.definition.maximumLivingMembers, 'swarm exceeded member cap');
+  assert(swarm.shutdownState === swarmDefinition.definition.sourceDestructionResponse,
+    'swarm did not persist its configured containment response');
   assert(result.records[0].projection.actors.some((actor) => actor.actorId === swarm.sourceActorId),
     'swarm source was not visibly projected');
   assert(boss?.crossedPhaseIds.length > 1 && boss.rewardCreated, 'boss phase or reward demonstration missing');
@@ -94,6 +99,21 @@ function proveMilestone(result, split, content) {
     'named Champion is not in an optional bypassable arena slot');
   assert(echoActor?.populationPresentation?.name === 'Echo of Bryn'
     && echoActor.maxHealth < championActor.maxHealth, 'Echo was not named and weaker than the Champion');
+  const arenaFloor = result.initial.floors.find((floor) => floor.floorId === championActor.floorId);
+  const arenaEntrance = arenaFloor.vaults.flatMap((vault) => vault.entrances)[0];
+  assert(preservesRequiredRoutes({ width: arenaFloor.width, height: arenaFloor.height, tiles: arenaFloor.tiles,
+    requiredPoints: [{ x: 1, y: 1 }, arenaEntrance], blockedPoints: [championActor, echoActor] }),
+  'optional Champion arena blocked the required route');
+  const encounters = content.entries.filter((entry) => entry.kind === 'encounter');
+  const bossEncounter = encounters.find((entry) => entry.model === 'boss');
+  let rejectedByNormalGate = false;
+  for (let seed = 1; seed < 10_000 && !rejectedByNormalGate; seed += 1) {
+    const decisions = createEncounterRunDecisions({ encounters, state: [seed >>> 0, (seed ^ 0x9e3779b9) >>> 0,
+      Math.imul(seed, 0x85ebca6b) >>> 0, Math.imul(seed ^ 0xc2b2ae35, 0x27d4eb2f) >>> 0] }).decisions;
+    rejectedByNormalGate = decisions.find((decision) => decision.encounterId === bossEncounter.id)?.eligible === false;
+  }
+  assert(rejectedByNormalGate && result.initial.populations.some((population) => population.model === 'boss'),
+    'forced fixture did not override a normally rejected production encounter gate');
   const heirlooms = result.state.items.filter((item) => item.heirloom !== undefined);
   assert(heirlooms.length === 1 && heirlooms[0].heirloom.displayName === "Ada's Iron Sword",
     'exact Champion heirloom was not preserved');
@@ -134,6 +154,7 @@ async function main() {
   console.log(stableJson(authoritativeEvents.filter((event) => event.type.startsWith('boss.'))));
   console.log("Deep's Champion and exact heirloom");
   console.log(stableJson(authoritativeEvents.filter((event) => event.type.startsWith('champion.'))));
+  console.log('normal production gate rejected; forced optional arena placed; required route remains passable');
   console.log(`${echoActor?.populationPresentation?.displayName ?? 'Echo of Bryn'} and ordinary loot`);
   console.log(stableJson(authoritativeEvents.filter((event) => event.type.startsWith('echo.'))));
   console.log('split execution equivalent');

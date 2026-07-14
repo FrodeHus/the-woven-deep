@@ -32,6 +32,18 @@ YAML is configuration, not a scripting language. A new combination of supported 
 
 6. Confirm the running server reports the expected content hash before admitting play.
 
+For a release image, run the repeatable startup integration gate as well:
+
+```bash
+npm run content:startup-gate
+```
+
+The gate builds the Compose image, starts it with a complete schema-v3 directory mounted read-only,
+smoke-tests the server, then restarts against an invalid replacement using the same database. It requires
+the invalid container to exit and verifies that the immutable content-pack publication set did not change.
+Pass an existing image reference after `--` to skip the build, for example
+`npm run content:startup-gate -- rogue-rogue`.
+
 Any parse, schema, reference, or semantic error rejects the entire pack at startup. The server never skips an invalid file or partially loads a directory.
 
 ## Directory and file discovery
@@ -207,6 +219,7 @@ Monsters are reusable creature definitions. Population frequency and composition
 
 An `encounter` has a strict `model` of `individual`, `group`, `swarm`, or `boss`. All models share:
 
+- The common `kind`, `id`, `name`, and `tags` fields described above. `kind` is exactly `encounter`.
 - Positive inclusive `minDepth` and `maxDepth`, positive selection `weight`, `rarity`, `environmentTags`, and `requiredVaultTags`.
 - Optional `adminDescription` (plain text up to 500 characters) for operator-facing balance notes. It is required when supernatural collapse grants individual rewards.
 - A run-level `runAppearanceChance` from 0 through 1, rolled once and saved. `discoveryProtectionIncrement` raises a later run's chance after eligible depth was reached without observation, up to `discoveryProtectionCap`. The cap cannot be below the base chance.
@@ -218,20 +231,30 @@ An `encounter` has a strict `model` of `individual`, `group`, `swarm`, or `boss`
 
 | Field | Models | Rules and rejection modes |
 |---|---|---|
+| `definition` | All | Strict model-specific object. Its shape must match `model`; fields from another model and unknown nested fields reject the complete pack. |
+| `intentPresentation`, `visible` | All | `intentPresentation` is required and contains only boolean `visible`. This controls broad observable intent, never exact targets, paths, rolls, or relayed hidden knowledge. |
 | `runAppearanceChance`, `discoveryProtectionIncrement`, `discoveryProtectionCap` | All | Probabilities are 0–1. The cap must be at least the base chance and protection advances only after eligible depth was reached without observing the encounter. |
 | `maximumInstancesPerRun` | All | Positive; exactly 1 for a boss. Placement refuses additional instances after this saved run cap. |
 | `minimumStairDistance`, `minimumObjectiveDistance`, `maximumMemberDistance` (under `placement`) | All | Non-negative integers. A placement that cannot preserve distances, routes, occupancy, and member spread is rejected atomically. |
 | `allowedTerrainTags`, `requiresVaultSlot`, `failureMode` (under `placement`) | All | Terrain tags are non-empty. A required vault slot must match all vault tags; `optional` skips an impossible placement while `required` rejects floor creation. |
 | `minimumQuantity`, `maximumQuantity` | Individual | Positive inclusive range with maximum at least minimum. |
-| `communicationRadius` | Group | Positive range used for hop-by-hop relay; disconnected members receive no shared observation. |
-| `leaderProbability`, `leaderRoleId`, `leaderDeathResponse` | Group | Probability is 0–1, the leader role must exist, and the response uses its exact registered parameters. |
+| `roles`, `roleId` | Group | `roles` is a non-empty list with unique slug `roleId` values. Each role has a valid `monsterId`, quantity range, `formationPreference`, and strict `behaviorParameters`. |
+| `communicationRadius`, `coordinationModifiers` | Group | Radius is positive and used for hop-by-hop relay; disconnected members receive no shared observation. `coordinationModifiers` requires safe-integer `accuracy`, `defense`, and `damage`. |
+| `leaderChance`, `leaderRoleId`, `leaderDeathResponse` | Group | `leaderChance` is 0–1, the leader role must exist, and the response uses its exact registered parameters. |
+| `leaderAccentColor`, `leaderAlternateGlyph` | Group | Accent is required `#RRGGBB`; alternate glyph is either one Unicode glyph or null. These identify the leader without changing the referenced monster. |
+| `responseParameters` | Group, Swarm | Strict parameters selected by the corresponding registered leader-death or source-destruction response. Unknown and missing parameters reject the pack. |
 | `supernaturalBond`, `collapseRewards` | Group | `collapse` requires the bond. Individual rewards additionally require an `adminDescription`; otherwise compilation fails. |
-| `spawnInterval` | Swarm | Positive source-owned timer. Off-floor time is frozen and missed births are never replayed. |
+| `sourceMonsterId` | Swarm | Valid monster reference carrying the `swarm-source` tag. It identifies the one source actor that owns the spawn timer. |
+| `spawnInterval`, `minimumSpawnQuantity`, `maximumSpawnQuantity` | Swarm | Positive source-owned interval and positive inclusive birth range, with maximum at least minimum. Off-floor time is frozen and missed births are never replayed. |
+| `placementRadius` | Swarm | Positive maximum distance from the source for each atomic spawn attempt. The nested swarm `allowedTerrainTags` list is non-empty. |
 | `maximumLivingChildren`, `maximumLivingMembers`, `maximumFloorActors` | Swarm | Positive nested caps: children cannot exceed members, and members cannot exceed the floor cap. |
 | `sourceDestructionResponse` | Swarm | One registered `stop`, `flee`, `decay`, or `frenzy` response with no unknown parameters. |
-| `healthThresholdPercent` | Boss | Unique phase values strictly descend, are crossed once, and never reverse after healing. |
+| `phases`, `phaseId`, `healthThresholdPercent` | Boss | `phases` is the ordered phase list. Each unique slug `phaseId` has a unique positive threshold below 100; thresholds strictly descend, are crossed once, and never reverse after healing. Each phase also declares registered behavior, strict parameters, modifiers, and effects. |
+| `behaviorId`, `behaviorParameters` | Boss phase | Registered behavior ID and its strict parameter object. The behavior must be supported by the closed behavior registry. |
+| `effects`, `effectId`, `parameters`, `requiresLivingTarget` | Boss phase | Ordered safe-subset effects. Each effect declares its registered `effectId`, strict `parameters`, and boolean `requiresLivingTarget`; unsafe actor-context effects reject the pack. |
 | `recoveryPerWorldTime`, `recoveryCapPercent` | Boss | The rate is finite and non-negative and the cap is 0–100. Recovery occurs once on re-entry from elapsed absence and never exceeds the cap. |
 | `uniqueItemId`, `enhancedLootTableId` | Boss | References must resolve to an item and loot table. The unique item is created at most once. |
+| `vaultTags` | Boss | Optional slug list constraining the authored arena or vault context. References that cannot satisfy required placement reject atomically according to `failureMode`. |
 | `fallbackMonsterId`, `fallbackItemId` | Fallen Champion | Required valid references used when historical monster or equipment content has been removed. |
 | `echoAppearanceChance`, `maximumEchoesPerRun` | Fallen Champion | Each rank 2–10 is independently gated, then the lowest rolls are retained up to the run cap. |
 | `echoHealthPercent`, `echoDamagePercent`, `echoDefensePercent`, `echoAbilityLimit` | Fallen Champion | Echo values must be strictly weaker than Champion values and the ability limit cannot exceed the Champion limit. |
@@ -276,6 +299,10 @@ Population actors, group communication, swarm timers, and boss recovery do not s
 ## Fallen-champion template
 
 The optional single `fallen-champion-template` normalizes the current profile or guest session's ranked fallen heroes. Rank 1 becomes the guaranteed optional Deep's Champion; independently gated ranks 2–10 may become weaker `Echo of <Hero Name>` bosses.
+
+It uses the common `kind`, `id`, `name`, and `tags` fields; `kind` is exactly
+`fallen-champion-template`. Every other supported field is listed below and unknown nested fields reject
+the entire pack.
 
 - `fallbackMonsterId` and `fallbackItemId` handle removed historical content.
 - `minimumHealth`, `maximumHealth`, `attributeMaximum`, `damageMaximum`, and `abilityLimit` cap Champion power.

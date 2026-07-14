@@ -15,6 +15,7 @@ Validate the complete replacement directory before changing the container:
 
 ```bash
 npm run content:validate -- /absolute/path/to/content
+npm run content:startup-gate
 npm run population:demo -- --content-dir /absolute/path/to/content
 ```
 
