@@ -199,6 +199,10 @@ const combatObservedPublicEvent = z.strictObject({ type: z.literal('combat.obser
   attackerName: z.string().min(1).max(120).optional(), targetName: z.string().min(1).max(120).optional() });
 const actorMovementObservedPublicEvent = z.strictObject({ type: z.literal('actor.movement-observed'), eventId: identifier,
   actorId: identifier, direction, visibility: z.enum(['entered', 'left']) });
+const actorDamageObservedPublicEvent = z.strictObject({ type: z.literal('actor.damage-observed'), eventId: identifier,
+  actorId: identifier, amount: safeNonNegative, health: safeNonNegative });
+const actorDeathObservedPublicEvent = z.strictObject({ type: z.literal('actor.death-observed'), eventId: identifier,
+  actorId: identifier, contentId: identifier, displayName: z.string().min(1).max(120).optional() });
 const populationNoticePublicEvent = z.strictObject({ type: z.literal('population.notice'), eventId: identifier,
   category: z.enum(['created', 'encountered', 'leader-created', 'leader-defeated', 'group-outcome',
     'swarm-growth', 'swarm-cap', 'source-destroyed', 'boss-encountered', 'boss-phase', 'boss-recovery',
@@ -231,6 +235,7 @@ const event = z.discriminatedUnion('type', [
   championEncounteredEvent, championDefeatedEvent, championHeirloomCreatedEvent,
   echoEncounteredEvent, echoDefeatedEvent, echoLootCreatedEvent,
   soundHeardEvent, heroDamagedPublicEvent, combatObservedPublicEvent, actorMovementObservedPublicEvent,
+  actorDamageObservedPublicEvent, actorDeathObservedPublicEvent,
   populationNoticePublicEvent, restCompletedEvent,
 ]);
 const hiddenPublicEventTypes = new Set([
@@ -241,7 +246,8 @@ const hiddenPublicEventTypes = new Set([
   'champion.defeated', 'champion.heirloom-created', 'echo.encountered', 'echo.defeated', 'echo.loot-created',
 ]);
 const publicOnlyEventTypes = new Set([
-  'sound.heard', 'hero.damaged', 'combat.observed', 'actor.movement-observed', 'population.notice',
+  'sound.heard', 'hero.damaged', 'combat.observed', 'actor.movement-observed', 'actor.damage-observed',
+  'actor.death-observed', 'population.notice',
 ]);
 const authoritativeEvent = event.refine((value) => !publicOnlyEventTypes.has(value.type),
   'public projection event cannot be stored as authoritative');

@@ -2,7 +2,7 @@ import type { FloorSeedAllocation } from './generation-model.js';
 import type { GeneratedFloor } from './generate-floor.js';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { allocateFloorSeed } from './generation-random.js';
-import type { ActiveRun, Uint32State } from './model.js';
+import type { ActiveRun, DomainEvent, Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { placePopulation } from './population-placement.js';
 import { isNonZeroState } from './random.js';
@@ -23,7 +23,12 @@ function sameState(left: Uint32State, right: Uint32State): boolean {
     && left[2] === right[2] && left[3] === right[3];
 }
 
-export function addGeneratedFloor(
+export interface FloorIntegrationResult {
+  readonly state: ActiveRun;
+  readonly events: readonly DomainEvent[];
+}
+
+export function integrateGeneratedFloor(
   run: ActiveRun,
   generated: GeneratedFloor,
   allocation: FloorSeedAllocation,
@@ -33,7 +38,7 @@ export function addGeneratedFloor(
     /** Test/demo-only override. Production callers leave encounter selection weighted. */
     forcedEncounterId?: string;
   }>,
-): ActiveRun {
+): FloorIntegrationResult {
   assertState(allocation.floorSeed, 'allocated floor seed');
   assertState(allocation.nextGenerationState, 'next generation state');
   if (!isNonZeroState(allocation.nextGenerationState)) {
@@ -97,7 +102,7 @@ export function addGeneratedFloor(
     };
   }
 
-  return validateActiveRun({
+  const state = validateActiveRun({
     ...run,
     rng: {
       ...run.rng,
@@ -110,4 +115,37 @@ export function addGeneratedFloor(
     fallenHeroDecisions: fallen?.decisions ?? run.fallenHeroDecisions,
     floors: [...run.floors, floor],
   });
+  const eventId = `event.${floor.floorId}.population`;
+  const committed = state.populations.filter((candidate) => !run.populations.some((prior) =>
+    prior.populationId === candidate.populationId));
+  const events: DomainEvent[] = [];
+  for (const created of committed) {
+    events.push({ type: 'population.created', eventId, populationId: created.populationId,
+      encounterId: created.encounterId, floorId: created.floorId, model: created.model,
+      actorIds: created.livingMemberIds });
+    if (created.model === 'group' && created.leaderActorId !== null) {
+      const roleId = created.roleMembership.find((role) => role.actorId === created.leaderActorId)?.roleId;
+      if (roleId === undefined) throw new Error(`internal invariant: group leader ${created.leaderActorId} has no role`);
+      events.push({ type: 'group.leader-created', eventId, populationId: created.populationId,
+        actorId: created.leaderActorId, roleId });
+    }
+  }
+  if (placement?.status === 'skipped') {
+    for (const diagnostic of placement.diagnostics) events.push({ ...diagnostic, eventId, floorId: floor.floorId });
+  }
+  return { state, events };
+}
+
+export function addGeneratedFloor(
+  run: ActiveRun,
+  generated: GeneratedFloor,
+  allocation: FloorSeedAllocation,
+  population?: Readonly<{
+    content: CompiledContentPack;
+    environmentTags?: readonly string[];
+    /** Test/demo-only override. Production callers leave encounter selection weighted. */
+    forcedEncounterId?: string;
+  }>,
+): ActiveRun {
+  return integrateGeneratedFloor(run, generated, allocation, population).state;
 }

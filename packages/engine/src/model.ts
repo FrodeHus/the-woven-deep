@@ -401,6 +401,14 @@ export interface ActorMovementObservedPublicEvent {
   readonly type: 'actor.movement-observed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
   readonly direction: Direction; readonly visibility: 'entered' | 'left';
 }
+export interface ActorDamageObservedPublicEvent {
+  readonly type: 'actor.damage-observed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly amount: number; readonly health: number;
+}
+export interface ActorDeathObservedPublicEvent {
+  readonly type: 'actor.death-observed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly contentId: OpaqueId; readonly displayName?: string;
+}
 export interface PopulationNoticePublicEvent {
   readonly type: 'population.notice'; readonly eventId: OpaqueId;
   readonly category: 'created' | 'encountered' | 'leader-created' | 'leader-defeated' | 'group-outcome'
@@ -432,7 +440,8 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
 
 export type PublicEvent = Exclude<DomainEvent, AttackMissedEvent | AttackHitEvent | PopulationDomainEvent>
   | ActorIntentChangedEvent | SoundHeardEvent | HeroDamagedPublicEvent | CombatObservedPublicEvent
-  | ActorMovementObservedPublicEvent | PopulationNoticePublicEvent;
+  | ActorMovementObservedPublicEvent | ActorDamageObservedPublicEvent | ActorDeathObservedPublicEvent
+  | PopulationNoticePublicEvent;
 
 export interface AppliedCommandResult {
   readonly status: 'applied';

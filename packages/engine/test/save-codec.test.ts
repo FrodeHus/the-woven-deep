@@ -169,7 +169,10 @@ describe('active-run save codec', () => {
     const result = { status: 'applied' as const, commandId: command.commandId, revision: 1, turn: 1 };
     const publicEvents = [{ type: 'population.notice' as const, eventId,
       category: 'champion-encountered' as const, actorId: 'actor.champion',
-      presentation: 'champion.encountered', displayName: 'Brynja, the Deep\'s Champion' }];
+      presentation: 'champion.encountered', displayName: 'Brynja, the Deep\'s Champion' },
+    { type: 'actor.damage-observed' as const, eventId, actorId: 'actor.champion', amount: 2, health: 8 },
+    { type: 'actor.death-observed' as const, eventId, actorId: 'actor.champion',
+      contentId: 'monster.champion', displayName: 'Brynja, the Deep\'s Champion' }];
     const withHistory = { ...state, revision: 1, turn: 1,
       recentCommands: [{ command, result, events, publicEvents }] };
     const loaded = decodeActiveRun(encodeActiveRun(withHistory));

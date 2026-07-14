@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CompiledContentPack, ItemContentEntry, MonsterContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, EncounterContentEntry, ItemContentEntry, MonsterContentEntry } from '@woven-deep/content';
 import {
   createDemoContentPack,
   createDemoRun,
@@ -141,6 +141,35 @@ describe('atomic world steps', () => {
       'hero.waited', 'actor.turn.started', 'actor.turn.completed',
     ]);
     expect(result.publicEvents.map((event) => event.type)).toEqual(['hero.waited']);
+  });
+
+  it('emits an ordinary population encounter exactly once with public redaction', () => {
+    const base = createDemoRun();
+    const enemy = { ...monster('monster.population', { energy: 0 }), x: 2, y: 1,
+      populationId: 'population.visible', populationRoleId: 'individual' };
+    const encounter: EncounterContentEntry = {
+      kind: 'encounter', id: 'encounter.visible', name: 'Visible encounter', adminDescription: null, tags: [],
+      model: 'individual', minDepth: 1, maxDepth: 2, environmentTags: [], requiredVaultTags: [], weight: 1,
+      rarity: 'common', runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1,
+      maximumInstancesPerRun: 1, placement: { minimumStairDistance: 1, minimumObjectiveDistance: 1,
+        maximumMemberDistance: 1, allowedTerrainTags: ['floor'], requiresVaultSlot: false, failureMode: 'optional' },
+      intentPresentation: { visible: true }, definition: { monsterId: enemy.contentId, minimumQuantity: 1, maximumQuantity: 1 },
+    };
+    const content = contentWithMonster(enemy.contentId);
+    const withEncounter = { ...content, entries: [...content.entries, encounter] };
+    const state = { ...base, contentHash: withEncounter.hash, actors: [base.actors[0]!, enemy],
+      encounterDecisions: [{ encounterId: encounter.id, baseProbability: 1, protectionBonus: 0,
+        effectiveProbability: 1, eligible: true, reachedEligibleDepth: true, encountered: false, instancesCreated: 1 }],
+      populations: [{ populationId: 'population.visible', encounterId: encounter.id, floorId: base.activeFloorId,
+        createdAt: 0, model: 'individual' as const, livingMemberIds: [enemy.actorId], formerMemberIds: [] }] };
+    const first = resolveWorldStep({ state, content: withEncounter, eventId: 'command.encounter-1',
+      action: { type: 'wait', actorId: base.hero.actorId, cost: 100 } });
+    expect(first.events.filter((event) => event.type === 'population.encountered')).toHaveLength(1);
+    expect(first.publicEvents).toContainEqual({ type: 'population.notice', eventId: 'command.encounter-1',
+      category: 'encountered', actorId: enemy.actorId, presentation: 'population.encountered' });
+    const second = resolveWorldStep({ state: first.state, content: withEncounter, eventId: 'command.encounter-2',
+      action: { type: 'wait', actorId: base.hero.actorId, cost: 100 } });
+    expect(second.events.some((event) => event.type === 'population.encountered')).toBe(false);
   });
 
   it('returns the saved public sequence when a duplicate command is retried after visibility changes', () => {

@@ -586,6 +586,38 @@ function bossEncounteredEvents(before: ActiveRun, after: ActiveRun, eventId: Opa
   });
 }
 
+function populationEncounteredEvents(
+  before: ActiveRun, after: ActiveRun, eventId: OpaqueId, content: CompiledContentPack,
+): readonly DomainEvent[] {
+  const transitioned = after.encounterDecisions.filter((decision) => {
+    const previous = before.encounterDecisions.find((candidate) => candidate.encounterId === decision.encounterId);
+    return previous?.encountered === false && decision.encountered;
+  });
+  if (transitioned.length === 0) return [];
+  const hero = heroActor(after);
+  const floor = after.floors.find((candidate) => candidate.floorId === hero.floorId);
+  if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
+  const positions = new Map<string, Readonly<Point>>(floor.entities.map((entity) => [entity.entityId, entity] as const));
+  for (const actor of after.actors) if (actor.floorId === floor.floorId) positions.set(actor.actorId, actor);
+  const perception = refreshKnowledge({ floor: { ...floor, tiles: featureTiles(after, floor.floorId) },
+    hero: heroPerception(after.hero, hero), actors: positions,
+    additionalLights: itemLightSources({ run: after, content, floorId: floor.floorId }) });
+  return transitioned.flatMap((decision) => {
+    for (const population of after.populations.filter((candidate) => candidate.encounterId === decision.encounterId)
+      .sort((left, right) => compareCodeUnits(left.populationId, right.populationId))) {
+      for (const actorId of population.livingMemberIds) {
+        const actor = actorById(after, actorId); const index = actor ? tileIndex(floor, actor.x, actor.y) : undefined;
+        if (index !== undefined && ((perception.visibilityWords[Math.floor(index / 32)]! >>> (index % 32)) & 1) === 1
+          && perception.illumination.intensity[index]! > 0) {
+          return [{ type: 'population.encountered' as const, eventId, populationId: population.populationId,
+            encounterId: population.encounterId, actorId }];
+        }
+      }
+    }
+    throw new Error(`internal invariant: encountered population ${decision.encounterId} has no visible member`);
+  });
+}
+
 function fallenHeroEncounteredEvents(before: ActiveRun, after: ActiveRun, eventId: OpaqueId): readonly DomainEvent[] {
   const events: DomainEvent[] = [];
   for (const decision of after.fallenHeroDecisions) {
@@ -627,6 +659,7 @@ export function resolveWorldStep(input: Readonly<{
   appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
   appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
   appendEvents(events, publicEvents, fallen.events, state, heroId, input.content);
+  appendEvents(events, publicEvents, populationEncounteredEvents(beforeObservation, state, input.eventId, input.content), state, heroId, input.content);
   appendEvents(events, publicEvents, bossEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
   appendEvents(events, publicEvents, fallenHeroEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
   let groupOutcome = applyGroupLeaderOutcomes({ state, content: input.content, eventId: input.eventId });
@@ -692,6 +725,7 @@ export function resolveWorldStep(input: Readonly<{
     appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
     appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
     appendEvents(events, publicEvents, fallen.events, state, heroId, input.content);
+    appendEvents(events, publicEvents, populationEncounteredEvents(beforeObservation, state, input.eventId, input.content), state, heroId, input.content);
     appendEvents(events, publicEvents, bossEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
     appendEvents(events, publicEvents, fallenHeroEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
     groupOutcome = applyGroupLeaderOutcomes({ state, content: input.content, eventId: input.eventId });

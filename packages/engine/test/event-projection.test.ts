@@ -159,4 +159,68 @@ describe('public event projection', () => {
       direction: 'east', visibility: 'left',
     }]);
   });
+
+  it('redacts hidden damage and death sources while retaining a visible victim transition', () => {
+    const input = fixture();
+    const victim = { ...input.state.actors[1]!, actorId: 'monster.victim', x: 2, y: 1 };
+    const attacker = { ...input.state.actors[1]!, actorId: 'monster.hidden', x: 5, y: 3 };
+    const state = { ...input.state, hero: { ...input.state.hero, sightRadius: 2 },
+      floors: [{ ...input.state.floors[0]!, ambient: { color: [255, 255, 255] as const, strength: 255 } }],
+      actors: [input.state.actors[0]!, victim, attacker] };
+    const events: DomainEvent[] = [
+      { type: 'actor.damaged', eventId: 'event.damage', actorId: victim.actorId,
+        sourceActorId: attacker.actorId, amount: 4, health: 6 },
+      { type: 'actor.died', eventId: 'event.death', actorId: victim.actorId,
+        contentId: victim.contentId, killerActorId: attacker.actorId },
+    ];
+    expect(projectDomainEvents({ state, content: input.content, events, heroId: state.hero.actorId })).toEqual([
+      { type: 'actor.damage-observed', eventId: 'event.damage', actorId: victim.actorId, amount: 4, health: 6 },
+      { type: 'actor.death-observed', eventId: 'event.death', actorId: victim.actorId,
+        contentId: victim.contentId, displayName: 'Hidden monster' },
+    ]);
+  });
+
+  it('suppresses hidden victim transitions even when the source is visible, and suppresses both hidden', () => {
+    const input = fixture();
+    const hiddenVictim = { ...input.state.actors[1]!, actorId: 'monster.victim', x: 5, y: 3 };
+    const hiddenKiller = { ...hiddenVictim, actorId: 'monster.killer', x: 5, y: 2 };
+    const state = { ...input.state, hero: { ...input.state.hero, sightRadius: 2 },
+      floors: [{ ...input.state.floors[0]!, ambient: { color: [255, 255, 255] as const, strength: 255 } }],
+      actors: [input.state.actors[0]!, hiddenVictim, hiddenKiller] };
+    const heroKill: DomainEvent = { type: 'actor.died', eventId: 'event.hero-kill', actorId: hiddenVictim.actorId,
+      contentId: hiddenVictim.contentId, killerActorId: state.hero.actorId };
+    const hiddenKill: DomainEvent = { ...heroKill, eventId: 'event.hidden-kill', killerActorId: hiddenKiller.actorId };
+    expect(projectDomainEvents({ state, content: input.content, events: [heroKill, hiddenKill],
+      heroId: state.hero.actorId })).toEqual([]);
+  });
+
+  it('keeps a hero death observable without publishing the hidden killer', () => {
+    const input = fixture();
+    const hero = input.state.actors[0]!;
+    const event: DomainEvent = { type: 'actor.died', eventId: 'event.hero-death', actorId: hero.actorId,
+      contentId: hero.contentId, killerActorId: 'monster.hidden' };
+    expect(projectDomainEvents({ ...input, events: [event], heroId: input.state.hero.actorId })).toEqual([{
+      type: 'actor.death-observed', eventId: event.eventId, actorId: hero.actorId, contentId: hero.contentId,
+    }]);
+  });
+
+  it('redacts partial forced movement and rejects unchecked thrown destinations and hidden feature/item IDs', () => {
+    const input = fixture();
+    const state = { ...input.state, hero: { ...input.state.hero, sightRadius: 1 },
+      floors: [{ ...input.state.floors[0]!, ambient: { color: [255, 255, 255] as const, strength: 255 } }] };
+    const events: DomainEvent[] = [
+      { type: 'actor.forced-move', eventId: 'event.force', actorId: 'monster.hidden',
+        from: { x: 2, y: 1 }, to: { x: 3, y: 1 } },
+      { type: 'item.thrown', eventId: 'event.throw', actorId: state.hero.actorId,
+        itemId: 'item.hidden', quantity: 1, to: { x: 5, y: 3 } },
+      { type: 'door.opened', eventId: 'event.door', actorId: 'monster.hidden', featureId: 'feature.hidden' },
+      { type: 'item.damaged', eventId: 'event.item', actorId: 'monster.hidden',
+        itemId: 'item.hidden', amount: 1, condition: 9 },
+    ];
+    const output = projectDomainEvents({ state, content: input.content, events, heroId: state.hero.actorId });
+    expect(output).toEqual([{ type: 'actor.movement-observed', eventId: 'event.force', actorId: 'monster.hidden',
+      direction: 'east', visibility: 'left' }]);
+    const json = stableJson(output);
+    expect(json).not.toMatch(/item\.hidden|feature\.hidden|"from"|"to"/);
+  });
 });
