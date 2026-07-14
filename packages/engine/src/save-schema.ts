@@ -144,6 +144,12 @@ const groupOutcomeAppliedEvent = z.strictObject({ type: z.literal('group.outcome
   populationId: identifier, actorId: identifier,
   response: z.enum(['weaken', 'panic', 'disband', 'surrender', 'frenzy', 'collapse']),
   individualRewards: z.boolean(), collapsedMemberCount: safeNonNegative });
+const swarmSpawnedEvent = z.strictObject({ type: z.literal('swarm.spawned'), eventId: identifier,
+  populationId: identifier, sourceActorId: identifier, actorIds: z.array(identifier).readonly(), quantity: safeNonNegative });
+const swarmCapReachedEvent = z.strictObject({ type: z.literal('swarm.cap-reached'), eventId: identifier,
+  populationId: identifier, sourceActorId: identifier, level: z.enum(['source', 'encounter', 'floor']) });
+const swarmSourceDestroyedEvent = z.strictObject({ type: z.literal('swarm.source-destroyed'), eventId: identifier,
+  populationId: identifier, sourceActorId: identifier, response: z.enum(['stop', 'flee', 'decay', 'frenzy']) });
 const soundHeardEvent = z.strictObject({ type: z.literal('sound.heard'),
   category: z.enum(['combat', 'movement', 'mechanism']),
   direction: z.enum(['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'here']),
@@ -170,6 +176,7 @@ const event = z.discriminatedUnion('type', [
   featureRevealedEvent, featureSearchedEvent, trapTriggeredEvent, trapDisarmedEvent, trapDisarmFailedEvent,
   itemDamagedEvent, actorIntentChangedEvent, groupAwarenessSharedEvent, groupLeaderDefeatedEvent,
   groupOutcomeAppliedEvent,
+  swarmSpawnedEvent, swarmCapReachedEvent, swarmSourceDestroyedEvent,
   soundHeardEvent, heroDamagedPublicEvent, restCompletedEvent,
 ]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
@@ -371,7 +378,9 @@ const population = z.discriminatedUnion('model', [
     leaderResponseExpiresAt: safeNonNegative.nullable() }),
   z.strictObject({ ...populationBase, model: z.literal('swarm'), sourceActorId: identifier,
     nextSpawnAt: safeNonNegative, spawnedCount: safeNonNegative, peakLivingSize: safeNonNegative,
-    shutdownState: z.enum(['stop', 'flee', 'decay', 'frenzy']).nullable() }),
+    shutdownState: z.enum(['stop', 'flee', 'decay', 'frenzy']).nullable(),
+    emittedCapLevels: z.array(z.enum(['source', 'encounter', 'floor'])).readonly(),
+    shutdownExpiresAt: safeNonNegative.nullable() }),
   z.strictObject({ ...populationBase, model: z.literal('boss'), actorId: identifier,
     currentPhaseId: z.string().min(1).max(80).nullable(), crossedPhaseIds: z.array(z.string().min(1).max(80)).readonly(),
     lastFloorExitAt: safeNonNegative.nullable(), rewardCreated: z.boolean(),
@@ -699,6 +708,16 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         fail(`${path}.shutdownState`, 'swarm shutdown state must begin when its source is destroyed');
       }
       if (populationValue.peakLivingSize < populationValue.livingMemberIds.length) fail(`${path}.peakLivingSize`, 'peak living size is below current size');
+      if (new Set(populationValue.emittedCapLevels).size !== populationValue.emittedCapLevels.length) {
+        fail(`${path}.emittedCapLevels`, 'swarm cap level is duplicated');
+      }
+      if (populationValue.emittedCapLevels.some((level, index) => index > 0
+        && populationValue.emittedCapLevels[index - 1]! >= level)) {
+        fail(`${path}.emittedCapLevels`, 'swarm cap levels must use stable ordering');
+      }
+      if (populationValue.shutdownState !== 'frenzy' && populationValue.shutdownExpiresAt !== null) {
+        fail(`${path}.shutdownExpiresAt`, 'only frenzy may own a shutdown expiry');
+      }
     } else if (populationValue.model === 'boss' || populationValue.model === 'champion' || populationValue.model === 'echo') {
       if (!memberIds.has(populationValue.actorId)) fail(`${path}.actorId`, 'primary actor must belong to its population');
       if ('defeated' in populationValue && populationValue.defeated !== populationValue.formerMemberIds.includes(populationValue.actorId)) {

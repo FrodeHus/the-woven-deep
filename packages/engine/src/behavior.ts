@@ -63,15 +63,21 @@ export function chooseBehaviorAction(input: Readonly<{
       const tiles = featureTiles(input.state, floor.floorId);
       const occupied = new Set(input.state.actors.filter((candidate) => candidate.actorId !== actor.actorId
         && candidate.floorId === actor.floorId && candidate.health > 0).map((candidate) => `${candidate.x}:${candidate.y}`));
-      const candidates = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => ({ x: actor.x + dx, y: actor.y + dy })))
-        .filter((point) => point.x >= 0 && point.y >= 0 && point.x < floor.width && point.y < floor.height
-          && (point.x !== actor.x || point.y !== actor.y)
+      const candidates = Array.from({ length: floor.width * floor.height }, (_, index) => ({
+        x: index % floor.width, y: Math.floor(index / floor.width),
+      })).filter((point) => (point.x !== actor.x || point.y !== actor.y)
           && movementBlockReason(tiles[point.y * floor.width + point.x]!) === undefined
           && !occupied.has(`${point.x}:${point.y}`))
         .sort((left, right) => distance(right, nearest) - distance(left, nearest)
           || left.y - right.y || left.x - right.x);
-      if (candidates[0] && distance(candidates[0], nearest) > distance(actor, nearest)) {
-        return { type: 'move', actorId: actor.actorId, to: candidates[0], cost: actionCostFor(rules, 'action.move') };
+      for (const destination of candidates) {
+        if (distance(destination, nearest) <= distance(actor, nearest)) break;
+        const path = findPath({ width: floor.width, height: floor.height, topology: 8,
+          origin: actor, destination, isPassable: (x, y) => movementBlockReason(tiles[y * floor.width + x]!) === undefined
+            && ((x === actor.x && y === actor.y) || !occupied.has(`${x}:${y}`)) });
+        const selected = selectPathStep(path);
+        if (selected.status === 'move') return { type: 'move', actorId: actor.actorId,
+          to: selected.step, cost: actionCostFor(rules, 'action.move') };
       }
     }
     return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };

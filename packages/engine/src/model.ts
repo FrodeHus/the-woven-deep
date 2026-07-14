@@ -299,6 +299,18 @@ export interface GroupOutcomeAppliedEvent {
   readonly actorId: OpaqueId; readonly response: LeaderDeathResponse; readonly individualRewards: boolean;
   readonly collapsedMemberCount: number;
 }
+export interface SwarmSpawnedEvent {
+  readonly type: 'swarm.spawned'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly sourceActorId: OpaqueId; readonly actorIds: readonly OpaqueId[]; readonly quantity: number;
+}
+export interface SwarmCapReachedEvent {
+  readonly type: 'swarm.cap-reached'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly sourceActorId: OpaqueId; readonly level: 'source' | 'encounter' | 'floor';
+}
+export interface SwarmSourceDestroyedEvent {
+  readonly type: 'swarm.source-destroyed'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly sourceActorId: OpaqueId; readonly response: 'stop' | 'flee' | 'decay' | 'frenzy';
+}
 export interface SoundHeardEvent {
   readonly type: 'sound.heard';
   readonly category: 'combat' | 'movement' | 'mechanism';
@@ -326,6 +338,7 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | HungerStageChangedEvent | HungerRestoredEvent | FuelWarningEvent | ItemLightExtinguishedEvent
   | ItemDamagedEvent | DoorStateChangedEvent | FeatureRevealedEvent | FeatureSearchEvent | TrapStateEvent
   | ActorIntentChangedEvent | GroupAwarenessSharedEvent | GroupLeaderDefeatedEvent | GroupOutcomeAppliedEvent
+  | SwarmSpawnedEvent | SwarmCapReachedEvent | SwarmSourceDestroyedEvent
   | SoundHeardEvent | HeroDamagedPublicEvent | RestCompletedEvent;
 
 export interface AppliedCommandResult {

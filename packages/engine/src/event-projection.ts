@@ -77,7 +77,8 @@ export function projectDomainEvents(input: Readonly<{
   let pendingDamageType: DamageType = 'physical';
   for (const event of input.events) {
     if (event.type === 'group.awareness-shared' || event.type === 'group.leader-defeated'
-      || event.type === 'group.outcome-applied') continue;
+      || event.type === 'group.outcome-applied' || event.type === 'swarm.spawned'
+      || event.type === 'swarm.cap-reached' || event.type === 'swarm.source-destroyed') continue;
     if (event.type === 'sound.heard' || event.type === 'hero.damaged') { output.push(event); continue; }
     if (event.type === 'fuel.warning' || event.type === 'item.light-extinguished' || event.type === 'item.identified') {
       const item = input.state.items.find((candidate) => candidate.itemId === event.itemId);

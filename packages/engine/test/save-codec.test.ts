@@ -174,7 +174,7 @@ describe('active-run save codec', () => {
       if (model === 'individual') state.populations = [base];
       if (model === 'swarm') state.populations = [{
         ...base, sourceActorId: actor.actorId, nextSpawnAt: 300, spawnedCount: 0,
-        peakLivingSize: 1, shutdownState: null,
+        peakLivingSize: 1, shutdownState: null, emittedCapLevels: [], shutdownExpiresAt: null,
       }];
       if (model === 'boss') state.populations = [{
         ...base, actorId: actor.actorId, currentPhaseId: 'kindled', crossedPhaseIds: ['kindled'],
@@ -218,6 +218,8 @@ describe('active-run save codec', () => {
       population.spawnedCount = 0;
       population.peakLivingSize = 1;
       population.shutdownState = 'flee';
+      population.emittedCapLevels = [];
+      population.shutdownExpiresAt = null;
       delete population.leaderActorId;
       delete population.bonusActive;
       delete population.roleMembership;

@@ -22,6 +22,7 @@ import { markEncounterObserved } from './population-gates.js';
 import { updatePopulationIntent } from './population-intent.js';
 import { updateActorMemory, visibleTargetObservations } from './population-perception.js';
 import { applyGroupLeaderOutcomes, coordinateGroups, groupCombatModifiers } from './group-behavior.js';
+import { advanceSwarms, swarmCombatModifiers } from './swarm-behavior.js';
 import { projectDomainEvents } from './event-projection.js';
 import {
   completeNormalActorTurn, relationshipBetween, resolveOpportunityAttacks, setRelationship,
@@ -67,6 +68,10 @@ function profile(
   worldTime = 0,
 ): CombatProfile {
   const monster = monsterDefinition(content, actor);
+  const groupModifiers = groupCombatModifiers({ state: { actors, populations, worldTime }, content, actorId: actor.actorId });
+  const swarmModifiers = swarmCombatModifiers({ state: { actors, populations, worldTime }, content, actorId: actor.actorId });
+  const populationModifiers = { accuracy: groupModifiers.accuracy + swarmModifiers.accuracy,
+    defense: groupModifiers.defense + swarmModifiers.defense, damage: groupModifiers.damage + swarmModifiers.damage };
   if (monster) return applyPopulationCombatModifiers({
     accuracy: monster.accuracy,
     defense: monster.defense,
@@ -74,7 +79,7 @@ function profile(
     armor: monster.armor,
     resistance: monster.resistances.physical,
     immune: monster.resistances.physical === 100,
-  }, groupCombatModifiers({ state: { actors, populations, worldTime }, content, actorId: actor.actorId }));
+  }, populationModifiers);
   const stats = deriveActorStats({
     attributes: actor.attributes,
     formulas: balanceEntry(content).formulas,
@@ -102,7 +107,7 @@ function profile(
     armor,
     resistance: 0,
     immune: false,
-  }, groupCombatModifiers({ state: { actors, populations, worldTime }, content, actorId: actor.actorId }));
+  }, populationModifiers);
 }
 
 function combat(input: Readonly<{
@@ -569,6 +574,9 @@ export function resolveWorldStep(input: Readonly<{
   let coordinated = coordinateGroups({ state, content: input.content, eventId: input.eventId });
   state = coordinated.state;
   appendEvents(events, publicEvents, coordinated.events, state, heroId, input.content);
+  let swarms = advanceSwarms({ state, content: input.content, eventId: input.eventId });
+  state = swarms.state;
+  appendEvents(events, publicEvents, swarms.events, state, heroId, input.content);
   const actedHero = actorById(state, heroId);
   if (actedHero) state = withActor(state, completeNormalActorTurn(actedHero));
   const limit = input.maxInternalActions ?? 10_000;
@@ -586,6 +594,9 @@ export function resolveWorldStep(input: Readonly<{
         elapsed: state.worldTime - previousWorldTime, eventId: input.eventId, danger });
       state = survival.state;
       appendEvents(events, publicEvents, survival.events, state, heroId, input.content);
+      swarms = advanceSwarms({ state, content: input.content, eventId: input.eventId });
+      state = swarms.state;
+      appendEvents(events, publicEvents, swarms.events, state, heroId, input.content);
       selected = selectReadyActor(state.actors, input.content, state.activeFloorId);
       if (!selected) break;
     }
@@ -610,6 +621,9 @@ export function resolveWorldStep(input: Readonly<{
     groupOutcome = applyGroupLeaderOutcomes({ state, content: input.content, eventId: input.eventId });
     state = groupOutcome.state;
     appendEvents(events, publicEvents, groupOutcome.events, state, heroId, input.content);
+    swarms = advanceSwarms({ state, content: input.content, eventId: input.eventId });
+    state = swarms.state;
+    appendEvents(events, publicEvents, swarms.events, state, heroId, input.content);
     const completed = actorById(state, selected.actorId);
     if (completed) state = withActor(state, completeNormalActorTurn(completed));
     appendEvents(events, publicEvents, [{

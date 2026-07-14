@@ -389,19 +389,19 @@ Commit: `feat: coordinate encounter groups`
 - Consumes: visible source, source-owned next spawn time, weighted child roles, allowed terrain, stable candidate cells, three cap levels, current world time, and source-destruction response.
 - Produces: saved children and timers, cap/source events, and deterministic `stop`, `flee`, `decay`, or `frenzy` transitions.
 
-- [ ] **Step 1: Write failing timer and placement tests**
+- [x] **Step 1: Write failing timer and placement tests**
 
 Assert only sources own timers, intervals use world time, due spawns process once, quantities use stable weighted choice, row-major legal cells fill only available capacity, and blocked cells are never overwritten.
 
-- [ ] **Step 2: Write failing cap and inactive-floor tests**
+- [x] **Step 2: Write failing cap and inactive-floor tests**
 
 Cover source child cap, encounter living cap, floor swarm cap, qualitative cap event de-duplication, no growth while inactive, and no catch-up growth on re-entry.
 
-- [ ] **Step 3: Write failing shutdown-response tests**
+- [x] **Step 3: Write failing shutdown-response tests**
 
 Exercise `stop`, path-based `flee`, deterministic timed `decay`, and bounded `frenzy`. Children cannot inherit spawning ability.
 
-- [ ] **Step 4: Implement lifecycle and commit**
+- [x] **Step 4: Implement lifecycle and commit**
 
 Apply each due transition atomically, allocate stable IDs, update member history, and use the existing `encounters` stream only for authored composition randomness.
 

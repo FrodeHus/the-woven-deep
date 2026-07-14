@@ -77,6 +77,8 @@ export interface SwarmPopulation extends PopulationBase {
   readonly spawnedCount: number;
   readonly peakLivingSize: number;
   readonly shutdownState: 'stop' | 'flee' | 'decay' | 'frenzy' | null;
+  readonly emittedCapLevels: readonly ('source' | 'encounter' | 'floor')[];
+  readonly shutdownExpiresAt: number | null;
 }
 export interface BossPopulation extends PopulationBase {
   readonly model: 'boss';

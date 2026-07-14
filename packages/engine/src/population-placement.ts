@@ -404,7 +404,7 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
     population = {
       ...base, model: 'swarm', sourceActorId: createdActors[0]!.actorId,
       nextSpawnAt: input.run.worldTime + selected.encounter.definition.spawnInterval,
-      spawnedCount: 0, peakLivingSize: 1, shutdownState: null,
+      spawnedCount: 0, peakLivingSize: 1, shutdownState: null, emittedCapLevels: [], shutdownExpiresAt: null,
     };
   } else {
     population = {
