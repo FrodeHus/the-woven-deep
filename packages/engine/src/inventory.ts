@@ -323,6 +323,63 @@ export function inventorySlotCount(input: Readonly<{
   return { used, capacity };
 }
 
+/**
+ * Moves `quantity` units of `source` (wherever it currently rests) into an actor's backpack,
+ * merging into compatible stacks first. A leftover stack keeps the source item id when the whole
+ * stack moves, otherwise it uses `newItemId` (trade commands derive it from the command id).
+ * Pure preflight-and-apply: any failure returns a reason with no mutation.
+ */
+export function depositIntoBackpack(input: Readonly<{
+  run: ActiveRun;
+  content: CompiledContentPack;
+  actorId: OpaqueId;
+  sourceItemId: OpaqueId;
+  quantity: number;
+  newItemId: OpaqueId;
+}>): InventoryTransition {
+  if (!positiveQuantity(input.quantity)) return failure('item.quantity');
+  const actor = actorById(input.run, input.actorId);
+  const source = input.run.items.find((entry) => entry.itemId === input.sourceItemId);
+  if (!actor || !source) return failure('item.missing');
+  if (input.quantity > source.quantity) return failure('item.quantity');
+  const definition = itemDefinition(input.content, source.contentId);
+  const backpack = input.run.items.filter((entry) => entry.location.type === 'backpack'
+    && entry.location.actorId === actor.actorId && entry.itemId !== source.itemId && canStack(entry, source))
+    .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0);
+  let remaining = input.quantity;
+  const updates = new Map<OpaqueId, ItemInstance>();
+  for (const target of backpack) {
+    const transferred = Math.min(remaining, definition.stackLimit - target.quantity);
+    if (transferred <= 0) continue;
+    updates.set(target.itemId, { ...target, quantity: target.quantity + transferred });
+    remaining -= transferred;
+    if (remaining === 0) break;
+  }
+  const slots = inventorySlotCount({ run: input.run, actorId: actor.actorId });
+  if (remaining > 0 && slots.used >= slots.capacity) return failure('inventory.full');
+  const sourceRemainder = source.quantity - input.quantity;
+  let carried: ItemInstance | undefined;
+  if (remaining > 0) {
+    const carriedId = sourceRemainder === 0 ? source.itemId : input.newItemId;
+    if (carriedId !== source.itemId && input.run.items.some((entry) => entry.itemId === carriedId)) {
+      return failure('item.id-conflict');
+    }
+    carried = {
+      ...source, itemId: carriedId, quantity: remaining,
+      location: { type: 'backpack', actorId: actor.actorId },
+    };
+  }
+  const items = input.run.items.flatMap((entry) => {
+    const update = updates.get(entry.itemId);
+    if (update) return [update];
+    if (entry.itemId !== source.itemId) return [entry];
+    if (sourceRemainder > 0) return [{ ...source, quantity: sourceRemainder }];
+    return carried?.itemId === source.itemId ? [carried] : [];
+  });
+  if (carried && carried.itemId !== source.itemId) items.push(carried);
+  return success(input.run, items);
+}
+
 export function pickupItem(input: Readonly<{
   run: ActiveRun;
   content: CompiledContentPack;

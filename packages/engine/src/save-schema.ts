@@ -39,6 +39,12 @@ const command = z.discriminatedUnion('type', [
   z.strictObject({ ...commandBase, type: z.literal('disarm'), featureId: identifier }),
   z.strictObject({ ...commandBase, type: z.literal('rest'), until: z.enum(['healed', 'interrupted']),
     maximumDuration: positiveQuantity }),
+  z.strictObject({ ...commandBase, type: z.literal('trade-open'), merchantActorId: identifier }),
+  z.strictObject({ ...commandBase, type: z.literal('trade-buy'), merchantPopulationId: identifier,
+    itemId: identifier, quantity: positiveQuantity }),
+  z.strictObject({ ...commandBase, type: z.literal('trade-sell'), merchantPopulationId: identifier,
+    itemId: identifier, quantity: positiveQuantity }),
+  z.strictObject({ ...commandBase, type: z.literal('trade-close'), merchantPopulationId: identifier }),
 ]);
 const movedEvent = z.strictObject({ type: z.literal('hero.moved'), eventId: identifier, heroId: identifier, from: point, to: point });
 const waitedEvent = z.strictObject({ type: z.literal('hero.waited'), eventId: identifier, heroId: identifier, x: safeNonNegative, y: safeNonNegative });
@@ -47,6 +53,9 @@ const blockReason = z.enum([
   'blocked.corner', 'blocked.actor', 'action.unavailable', 'inventory.full', 'item.missing',
   'item.unavailable', 'item.quantity', 'item.incompatible', 'item.id-conflict',
   'target.not_visible', 'target.out_of_range', 'target.blocked', 'target.invalid',
+  'trade.active', 'trade.required', 'merchant.unavailable', 'merchant.out-of-range',
+  'merchant.refuses', 'trade.merchant-mismatch', 'trade.insufficient-funds',
+  'trade.stock-unavailable', 'trade.item-unacceptable', 'trade.capacity',
 ]);
 const invalidEvent = z.strictObject({ type: z.literal('action.invalid'), eventId: identifier, commandId: identifier, reason: blockReason });
 const attackBase = { eventId: identifier, actorId: identifier, targetActorId: identifier,
@@ -216,6 +225,16 @@ const populationNoticePublicEvent = z.strictObject({ type: z.literal('population
 const reputationChangedEvent = z.strictObject({ type: z.literal('reputation.changed'), eventId: identifier,
   factionId: identifier, previous: z.number().int().safe(), delta: z.number().int().safe(),
   value: z.number().int().safe(), reason: z.enum(['commerce', 'aggression', 'death']) });
+const tradeOpenedEvent = z.strictObject({ type: z.literal('trade.opened'), eventId: identifier,
+  merchantPopulationId: identifier, merchantActorId: identifier });
+const tradeCommerceFields = { eventId: identifier, merchantPopulationId: identifier, itemId: identifier,
+  contentId: identifier, quantity: positiveQuantity, unitPrice: safeNonNegative, total: safeNonNegative,
+  currency: safeNonNegative } as const;
+const tradeBoughtEvent = z.strictObject({ type: z.literal('trade.bought'), ...tradeCommerceFields });
+const tradeSoldEvent = z.strictObject({ type: z.literal('trade.sold'), ...tradeCommerceFields });
+const tradeClosedEvent = z.strictObject({ type: z.literal('trade.closed'), eventId: identifier,
+  merchantPopulationId: identifier, reason: z.enum(['player', 'aggression', 'death', 'unavailable', 'departure']),
+  completedCommerce: z.boolean() });
 const restCompletedEvent = z.strictObject({ type: z.literal('rest.completed'), eventId: identifier,
   stopReason: z.enum(['full-health', 'maximum-duration', 'visible-danger', 'aware-hostile', 'damage',
     'meaningful-sound', 'hunger-warning', 'fuel-warning', 'condition-change', 'decision-required', 'hero-death']),
@@ -245,7 +264,8 @@ const eventOptions = [
   actorDamageObservedPublicEvent, actorDeathObservedPublicEvent,
   populationNoticePublicEvent, restCompletedEvent,
 ] as const;
-const event = z.discriminatedUnion('type', [...eventOptions, populationCreatedEvent, reputationChangedEvent]);
+const event = z.discriminatedUnion('type', [...eventOptions, populationCreatedEvent, reputationChangedEvent,
+  tradeOpenedEvent, tradeBoughtEvent, tradeSoldEvent, tradeClosedEvent]);
 const legacyEvent = z.discriminatedUnion('type', [...eventOptions, legacyPopulationCreatedEvent]);
 const hiddenPublicEventTypes = new Set([
   'attack.hit', 'attack.missed', 'population.created', 'population.encountered', 'population.placement-skipped',
@@ -1201,7 +1221,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       }
     }
   }
-  if (run.turn !== run.revision) fail('turn', 'turn and revision must match in schema v4');
+  // Revision-only trade commands advance the revision without a turn, so turn may trail revision.
+  if (run.turn > run.revision) fail('turn', 'turn cannot exceed revision');
 
   const commandIds = new Set<string>();
   let previousRevision = 0;
@@ -1290,6 +1311,16 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                                           && entry.actorId === run.hero.actorId && entry.featureId === commandFeatureId)
                                         : recordValue.command.type === 'rest'
                                           ? recordValue.events.find((entry) => entry.type === 'rest.completed')
+                                          : recordValue.command.type === 'trade-open'
+                                            ? recordValue.events.find((entry) => entry.type === 'trade.opened')
+                                            : recordValue.command.type === 'trade-buy'
+                                              ? recordValue.events.find((entry) => entry.type === 'trade.bought'
+                                                && entry.itemId === commandItemId && entry.quantity === commandQuantity)
+                                              : recordValue.command.type === 'trade-sell'
+                                                ? recordValue.events.find((entry) => entry.type === 'trade.sold'
+                                                  && entry.itemId === commandItemId && entry.quantity === commandQuantity)
+                                                : recordValue.command.type === 'trade-close'
+                                                  ? recordValue.events.find((entry) => entry.type === 'trade.closed')
           : undefined;
     if (!eventValue) fail(`${path}.events`, 'processed result has no matching event');
     if (recordValue.result.status === 'invalid') {
@@ -1352,10 +1383,27 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       if (eventValue.elapsed > recordValue.command.maximumDuration) {
         fail(`${path}.events`, 'rest event exceeds requested maximum duration');
       }
+    } else if (recordValue.command.type === 'trade-open' && eventValue.type === 'trade.opened') {
+      if (eventValue.merchantActorId !== recordValue.command.merchantActorId) {
+        fail(`${path}.events`, 'trade-open merchant and event are inconsistent');
+      }
+    } else if ((recordValue.command.type === 'trade-buy' && eventValue.type === 'trade.bought')
+      || (recordValue.command.type === 'trade-sell' && eventValue.type === 'trade.sold')) {
+      if (eventValue.merchantPopulationId !== recordValue.command.merchantPopulationId
+        || eventValue.itemId !== recordValue.command.itemId
+        || eventValue.quantity !== recordValue.command.quantity
+        || eventValue.total !== eventValue.unitPrice * eventValue.quantity) {
+        fail(`${path}.events`, 'trade transaction command and event are inconsistent');
+      }
+    } else if (recordValue.command.type === 'trade-close' && eventValue.type === 'trade.closed') {
+      if (eventValue.merchantPopulationId !== recordValue.command.merchantPopulationId
+        || eventValue.reason !== 'player') {
+        fail(`${path}.events`, 'trade-close command and event are inconsistent');
+      }
     } else fail(`${path}.events`, 'applied command and event are inconsistent');
     if (recordValue.result.revision < previousRevision || recordValue.result.revision > run.revision) fail(`${path}.result.revision`, 'record revisions are not monotonic');
     if (recordValue.result.turn > run.turn) fail(`${path}.result.turn`, 'record turn exceeds current turn');
-    if (recordValue.result.turn !== recordValue.result.revision) fail(`${path}.result.turn`, 'result turn and revision must match in schema v4');
+    if (recordValue.result.turn > recordValue.result.revision) fail(`${path}.result.turn`, 'result turn cannot exceed its revision');
     if (recordValue.result.status === 'applied' && recordValue.result.revision !== recordValue.command.expectedRevision + 1) fail(`${path}.result.revision`, 'applied revision is inconsistent');
     if (recordValue.result.status === 'invalid' && recordValue.result.revision !== recordValue.command.expectedRevision) fail(`${path}.result.revision`, 'invalid revision is inconsistent');
     const previousRecord = run.recentCommands[index - 1];
@@ -1395,6 +1443,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
             ?? recordValue.events.find((entry) => (entry.type === 'trap.disarmed' || entry.type === 'trap.triggered'
               || entry.type === 'trap.disarm-failed') && entry.actorId === run.hero.actorId)!;
     const path = `recentCommands.${index}`;
+    const tradeCommand = recordValue.command.type === 'trade-open' || recordValue.command.type === 'trade-buy'
+      || recordValue.command.type === 'trade-sell' || recordValue.command.type === 'trade-close';
     if (recordValue.result.status === 'invalid') {
       if (recordValue.command.type !== 'move') {
         const inventoryCommand = recordValue.command.type === 'pickup' || recordValue.command.type === 'drop'
@@ -1406,9 +1456,20 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         const targetReason = recordValue.result.reason.startsWith('target.');
         const targetingCommand = recordValue.command.type === 'fire' || recordValue.command.type === 'cast'
           || recordValue.command.type === 'throw-item' || recordValue.command.type === 'use-item';
+        const tradeReason = recordValue.result.reason.startsWith('trade.')
+          || recordValue.result.reason.startsWith('merchant.');
+        if (tradeReason) {
+          // Modal rejection: any command may fail with trade.active; other trade reasons
+          // require the trade command boundary.
+          if (!tradeCommand && recordValue.result.reason !== 'trade.active') {
+            fail(`${path}.result.reason`, 'trade reason requires a trade command');
+          }
+          continue;
+        }
         if (inventoryReason && !inventoryCommand) {
           if (!inventoryCommand && recordValue.command.type !== 'fire' && recordValue.command.type !== 'throw-item'
-            && recordValue.command.type !== 'use-item') {
+            && recordValue.command.type !== 'use-item' && recordValue.command.type !== 'trade-buy'
+            && recordValue.command.type !== 'trade-sell') {
             fail(`${path}.result.reason`, 'inventory reasons require an item command');
           }
         }
@@ -1439,7 +1500,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       || recordValue.command.type === 'unequip' || recordValue.command.type === 'toggle-light'
       || recordValue.command.type === 'refuel' || recordValue.command.type === 'open-door'
       || recordValue.command.type === 'close-door' || recordValue.command.type === 'search'
-      || recordValue.command.type === 'disarm' || recordValue.command.type === 'rest') continue;
+      || recordValue.command.type === 'disarm' || recordValue.command.type === 'rest'
+      || tradeCommand) continue;
     if (recordValue.command.type !== 'move') fail(`${path}.events`, 'move result and event are inconsistent');
     if (eventValue.type === 'attack.hit' || eventValue.type === 'attack.missed' || eventValue.type === 'reaction.triggered') continue;
     if (eventValue.type !== 'hero.moved') fail(`${path}.events`, 'move result and event are inconsistent');

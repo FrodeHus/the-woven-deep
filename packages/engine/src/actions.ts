@@ -150,6 +150,12 @@ export function validatePlayerAction(input: Readonly<{
   if (actorHasConditionTrait(actor, 'condition-trait.incapacitated', input.context.content)) {
     return { status: 'invalid', reason: 'action.unavailable' };
   }
+  if (input.command.type === 'trade-open' || input.command.type === 'trade-buy'
+    || input.command.type === 'trade-sell' || input.command.type === 'trade-close') {
+    // Trade commands are modal and revision-only; the reducer dispatches them before this
+    // world-step action path, so reaching here means the command cannot become a GameAction.
+    return { status: 'invalid', reason: 'action.unavailable' };
+  }
   if (input.command.type === 'wait') {
     return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };
   }

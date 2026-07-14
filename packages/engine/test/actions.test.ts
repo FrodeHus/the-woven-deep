@@ -39,6 +39,19 @@ describe('player action validation', () => {
     })).toEqual({ status: 'invalid', reason: 'action.unavailable' });
   });
 
+  it('never resolves trade commands through the world-step action path', () => {
+    expect(validatePlayerAction({
+      state: createDemoRun(),
+      command: { type: 'trade-open', commandId: 'command.trade-open', expectedRevision: 0, merchantActorId: 'actor.absent' },
+      context,
+    })).toEqual({ status: 'invalid', reason: 'action.unavailable' });
+    expect(validatePlayerAction({
+      state: createDemoRun(),
+      command: { type: 'trade-close', commandId: 'command.trade-close', expectedRevision: 0, merchantPopulationId: 'population.absent' },
+      context,
+    })).toEqual({ status: 'invalid', reason: 'action.unavailable' });
+  });
+
   it('rejects actions while the hero is incapacitated', () => {
     const state = createDemoRun();
     const hero = state.actors[0]!;

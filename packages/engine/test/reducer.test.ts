@@ -192,6 +192,24 @@ describe('resolveCommand', () => {
     expect(state.recentCommands.at(-1)?.command.commandId).toBe('command.128');
   });
 
+  it('rejects trade commands without an eligible merchant or open session', () => {
+    const initial = createDemoRun();
+    const open = resolveCommand(initial, {
+      type: 'trade-open', commandId: 'command.trade-open', expectedRevision: 0, merchantActorId: 'actor.absent',
+    });
+    expect(open.result).toEqual({
+      status: 'invalid', commandId: 'command.trade-open', reason: 'merchant.unavailable', revision: 0, turn: 0,
+    });
+    expect(open.state).toMatchObject({ revision: 0, turn: 0, worldTime: 0, activeTrade: null });
+
+    const buy = resolveCommand(initial, {
+      type: 'trade-buy', commandId: 'command.trade-buy', expectedRevision: 0,
+      merchantPopulationId: 'population.absent', itemId: 'item.absent', quantity: 1,
+    });
+    expect(buy.result).toMatchObject({ status: 'invalid', reason: 'trade.required', revision: 0, turn: 0 });
+    expect(buy.state.rng).toEqual(initial.rng);
+  });
+
   it.each([
     { type: 'wait', commandId: 'command.overflow.wait', expectedRevision: Number.MAX_SAFE_INTEGER } as const,
     move('command.overflow.move', Number.MAX_SAFE_INTEGER, 'east'),
