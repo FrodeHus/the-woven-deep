@@ -143,9 +143,13 @@ describe('group communication and formations', () => {
       const second = coordinateGroups({ state, content, eventId: 'event.formation' }).state;
       expect(first).toEqual(second);
       expect(state).toEqual(before);
-      for (const actor of first.actors.filter((candidate) => candidate.populationId === 'population.group-test')) {
-        expect(actor.behaviorState.goal).toMatchObject({ type: 'formation', populationId: 'population.group-test' });
-        const goal = actor.behaviorState.goal!;
+      const groupActors = first.actors.filter((candidate) => candidate.populationId === 'population.group-test');
+      expect(groupActors.find((actor) => actor.actorId === 'monster.a')?.behaviorState.goal).toBeNull();
+      const formationGoals = groupActors.map((actor) => actor.behaviorState.goal)
+        .filter((goal) => goal?.type === 'formation');
+      expect(formationGoals.length).toBeGreaterThan(0);
+      for (const goal of formationGoals) {
+        expect(goal).toMatchObject({ type: 'formation', populationId: 'population.group-test' });
         expect(goal.type === 'formation' && goal.x >= 0 && goal.y >= 0).toBe(true);
       }
     },
@@ -161,9 +165,10 @@ describe('group communication and formations', () => {
     const { state, content } = fixture({ groupDefinition: definition({ formation: 'wedge', roles,
       leaderRoleId: 'center' }), positions: [
       ['monster.a', 3, 2], ['monster.b', 1, 1], ['monster.c', 5, 1], ['monster.d', 1, 3],
+      ['monster.e', 6, 4],
     ] });
     const roleByActor = new Map([['monster.a', 'center'], ['monster.b', 'front'],
-      ['monster.c', 'rear'], ['monster.d', 'flank']]);
+      ['monster.c', 'rear'], ['monster.d', 'flank'], ['monster.e', 'center']]);
     const actors = state.actors.map((actor) => roleByActor.has(actor.actorId)
       ? { ...actor, populationRoleId: roleByActor.get(actor.actorId)! } : actor);
     const populations = state.populations.map((population) => population.model === 'group' ? {
@@ -174,13 +179,57 @@ describe('group communication and formations', () => {
     const result = coordinateGroups({ state: { ...state, actors, populations, floors: openFloor },
       content, eventId: 'event.roles' }).state;
     const goal = (actorId: string) => result.actors.find((actor) => actor.actorId === actorId)!.behaviorState.goal!;
-    expect(goal('monster.a')).toMatchObject({ type: 'formation', roleId: 'center', x: 3, y: 2 });
+    expect(goal('monster.a')).toBeNull();
+    expect(goal('monster.e')).toMatchObject({ type: 'formation', roleId: 'center' });
+    expect(Math.max(Math.abs(goal('monster.e').x - 3), Math.abs(goal('monster.e').y - 2))).toBe(1);
     expect(goal('monster.b')).toMatchObject({ type: 'formation', roleId: 'front' });
     expect(goal('monster.c')).toMatchObject({ type: 'formation', roleId: 'rear' });
     expect(goal('monster.d')).toMatchObject({ type: 'formation', roleId: 'flank' });
     expect(goal('monster.b').y).toBeGreaterThan(2);
     expect(goal('monster.c').y).toBeLessThan(2);
     expect(Math.abs(goal('monster.d').x - 3)).toBeGreaterThanOrEqual(2);
+  });
+
+  it('keeps a front-preference leader as a stable anchor across sequential world steps', () => {
+    const { state, content } = fixture({ positions: [['monster.a', 4, 3]],
+      groupDefinition: definition({ roles: [{ ...ROLE, formationPreference: 'front' }] }) });
+    let current = { ...state, relationships: [{ leftActorId: state.hero.actorId,
+      rightActorId: 'monster.a', relationship: 'neutral' as const }] };
+    const origin = current.actors.find((actor) => actor.actorId === 'monster.a')!;
+    for (let step = 0; step < 4; step += 1) {
+      const result = resolveWorldStep({ state: current, content,
+        action: { type: 'wait', actorId: state.hero.actorId, cost: 100 },
+        eventId: `event.anchor.${step}`, maxInternalActions: 1 });
+      current = result.state;
+      expect(current.actors.find((actor) => actor.actorId === 'monster.a')).toMatchObject({
+        x: origin.x, y: origin.y, behaviorState: { intent: 'hold', goal: null },
+      });
+      expect(result.events).not.toContainEqual(expect.objectContaining({ type: 'actor.moved', actorId: 'monster.a' }));
+    }
+  });
+
+  it('holds without a formation goal when every improving formation cell is blocked', () => {
+    const { state, content } = fixture({ positions: [['monster.a', 4, 3], ['monster.b', 5, 3]] });
+    const floor = state.floors[0]!;
+    const open = new Set([`${state.actors[0]!.x}:${state.actors[0]!.y}`, '4:3', '5:3']);
+    const floors = [{ ...floor, tiles: floor.tiles.map((_, index) => (
+      open.has(`${index % floor.width}:${Math.floor(index / floor.width)}`) ? 1 as const : 0 as const
+    )) }];
+    const actors = state.actors.map((actor) => actor.actorId === 'monster.a' ? { ...actor, energy: 0 }
+      : actor.actorId === 'monster.b' ? { ...actor, energy: 100 } : actor);
+    const relationships = ['monster.a', 'monster.b'].map((actorId) => ({
+      leftActorId: state.hero.actorId, rightActorId: actorId, relationship: 'neutral' as const,
+    }));
+    const result = resolveWorldStep({ state: { ...state, actors, floors, relationships }, content,
+      action: { type: 'wait', actorId: state.hero.actorId, cost: 100 },
+      eventId: 'event.blocked-formation', maxInternalActions: 1 });
+    expect(result.state.actors.find((actor) => actor.actorId === 'monster.b')).toMatchObject({
+      x: 5, y: 3, behaviorState: { intent: 'hold', goal: null },
+    });
+    expect(result.events).toContainEqual(expect.objectContaining({
+      type: 'actor.turn.completed', actorId: 'monster.b', actionType: 'wait',
+    }));
+    expect(result.events).not.toContainEqual(expect.objectContaining({ type: 'actor.moved', actorId: 'monster.b' }));
   });
 });
 
@@ -309,16 +358,19 @@ describe('leaders and deterministic outcomes', () => {
   });
 
   it('derives regroup intent from a formation goal before emitting or acting', () => {
-    const { state, content } = fixture({ positions: [['monster.a', 4, 3]] });
-    const neutral = { ...state, relationships: [{ leftActorId: state.hero.actorId,
-      rightActorId: 'monster.a', relationship: 'neutral' as const }] };
+    const { state, content } = fixture({ positions: [['monster.a', 4, 3], ['monster.b', 5, 3]] });
+    const actors = state.actors.map((actor) => actor.actorId === 'monster.a' ? { ...actor, energy: 0 }
+      : actor.actorId === 'monster.b' ? { ...actor, energy: 100 } : actor);
+    const neutral = { ...state, actors, relationships: ['monster.a', 'monster.b'].map((actorId) => ({
+      leftActorId: state.hero.actorId, rightActorId: actorId, relationship: 'neutral' as const,
+    })) };
     const result = resolveWorldStep({ state: neutral, content,
       action: { type: 'wait', actorId: state.hero.actorId, cost: 100 },
       eventId: 'event.regroup', maxInternalActions: 1 });
     expect(result.events).toContainEqual(expect.objectContaining({
-      type: 'actor.intent-changed', actorId: 'monster.a', intent: 'regroup', presentation: 'intent.regroup',
+      type: 'actor.intent-changed', actorId: 'monster.b', intent: 'regroup', presentation: 'intent.regroup',
     }));
-    expect(result.state.actors.find((actor) => actor.actorId === 'monster.a')?.behaviorState)
+    expect(result.state.actors.find((actor) => actor.actorId === 'monster.b')?.behaviorState)
       .toMatchObject({ intent: 'regroup', goal: { type: 'formation' } });
   });
 });

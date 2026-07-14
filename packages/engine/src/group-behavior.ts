@@ -156,16 +156,22 @@ function formationGoals(
   const allocation = [...members].sort((left, right) => preferenceOrder[rolePreference(left, definition)]
     - preferenceOrder[rolePreference(right, definition)] || compareCodeUnits(left.actorId, right.actorId));
   const goals = new Map<OpaqueId, ActorState['behaviorState']['goal']>();
+  const preserved = new Set<OpaqueId>();
   for (const actor of allocation) {
+    if (actor.actorId === anchor.actorId) continue;
     if (actor.behaviorState.goal?.type === 'actor' || actor.behaviorState.intent === 'flee'
-      || (actor.behaviorState.goal?.type === 'cell' && actor.behaviorState.investigation !== null)) continue;
+      || (actor.behaviorState.goal?.type === 'cell' && actor.behaviorState.investigation !== null)) {
+      preserved.add(actor.actorId);
+      continue;
+    }
     const candidates = preferredOffsets(definition.formation, rolePreference(actor, definition));
     const selected = candidates.map((offset) => ({ x: anchor.x + offset.x, y: anchor.y + offset.y }))
       .find((point) => point.x >= 0 && point.y >= 0 && point.x < floor.width && point.y < floor.height
         && movementBlockReason(tiles[point.y * floor.width + point.x]!) === undefined
         && !actors.some((occupant) => occupant.actorId !== actor.actorId && occupant.health > 0
           && occupant.floorId === actor.floorId && occupant.x === point.x && occupant.y === point.y)
-        && !reserved.has(`${point.x}:${point.y}`)) ?? { x: actor.x, y: actor.y };
+        && !reserved.has(`${point.x}:${point.y}`));
+    if (!selected || (selected.x === actor.x && selected.y === actor.y)) continue;
     reserved.add(`${selected.x}:${selected.y}`);
     const roleId = actor.populationRoleId;
     if (roleId === null) continue;
@@ -175,7 +181,12 @@ function formationGoals(
   }
   return actors.map((actor) => {
     const goal = goals.get(actor.actorId);
-    return goal ? { ...actor, behaviorState: { ...actor.behaviorState, goal } } : actor;
+    if (goal) return { ...actor, behaviorState: { ...actor.behaviorState, goal } };
+    if (population.livingMemberIds.includes(actor.actorId) && !preserved.has(actor.actorId)
+      && actor.behaviorState.goal?.type === 'formation') {
+      return { ...actor, behaviorState: { ...actor.behaviorState, goal: null } };
+    }
+    return actor;
   });
 }
 
