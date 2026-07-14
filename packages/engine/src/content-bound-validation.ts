@@ -179,9 +179,10 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         const expectedReceipt = { lootStateBefore: population.rewardReceipt.lootStateBefore,
           lootStateAfter: loot.state,
           items: expected.map((item) => ({ itemId: item.itemId, contentId: item.contentId, quantity: item.quantity })) };
-        const guaranteed = run.items.filter((item) => item.contentId === encounter.definition.uniqueItemId);
+        const guaranteed = run.items.filter((item) => item.itemId === unique.itemId);
         if (stableJson(population.rewardReceipt) !== stableJson(expectedReceipt)
-          || guaranteed.length !== 1 || guaranteed[0]!.itemId !== unique.itemId || guaranteed[0]!.quantity !== 1
+          || guaranteed.length !== 1 || guaranteed[0]!.contentId !== encounter.definition.uniqueItemId
+          || guaranteed[0]!.quantity !== 1
           || expected.filter((item) => item.contentId === encounter.definition.uniqueItemId).length !== 1) {
           throw new Error(`content-bound validation: boss reward ${population.populationId} does not match its deterministic policy`);
         }

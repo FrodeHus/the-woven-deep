@@ -1,4 +1,8 @@
-import { DERIVED_STAT_NAMES, type CompiledContentPack, type ItemContentEntry, type LootTableContentEntry } from '@woven-deep/content';
+import {
+  boundedProduct, checkedTotalWithin, DERIVED_STAT_NAMES, MAX_LOOT_CHOICE_QUANTITY,
+  MAX_LOOT_CREATED_UNITS, MAX_LOOT_TABLE_ROLLS, MAX_LOOT_WEIGHT_TOTAL,
+  type CompiledContentPack, type ItemContentEntry, type LootTableContentEntry,
+} from '@woven-deep/content';
 import { actorById } from './actor-model.js';
 import type { ItemInstance } from './item-model.js';
 import type { ActiveRun, OpaqueId, Uint32State } from './model.js';
@@ -42,14 +46,58 @@ function lootTable(content: CompiledContentPack, tableId: OpaqueId): LootTableCo
 }
 
 /** Validates a complete loot graph before consuming RNG or creating any item. */
-function validateLootGraph(content: CompiledContentPack, tableId: OpaqueId, trail: readonly OpaqueId[] = []): void {
-  if (trail.includes(tableId)) throw new Error(`internal invariant: loot table cycle ${[...trail, tableId].join(' -> ')}`);
-  const table = lootTable(content, tableId);
-  for (const choice of table.choices) {
-    if (choice.contentId !== null) itemDefinition(content, choice.contentId);
-    else if (choice.lootTableId !== null) validateLootGraph(content, choice.lootTableId, [...trail, tableId]);
-    else throw new Error(`internal invariant: loot table ${tableId} contains an empty choice`);
-  }
+function validateLootGraph(content: CompiledContentPack, rootTableId: OpaqueId): void {
+  const memo = new Map<OpaqueId, number>();
+  const bossUniqueIds = new Set(content.entries.filter((entry) => entry.kind === 'encounter' && entry.model === 'boss')
+    .map((entry) => entry.definition.uniqueItemId));
+  const visit = (tableId: OpaqueId, trail: readonly OpaqueId[]): number => {
+    const memoized = memo.get(tableId);
+    if (memoized !== undefined) return memoized;
+    if (trail.includes(tableId)) {
+      throw new Error(`internal invariant: loot table cycle ${[...trail, tableId].join(' -> ')}`);
+    }
+    const table = lootTable(content, tableId);
+    if (!Number.isSafeInteger(table.rolls) || table.rolls <= 0 || table.rolls > MAX_LOOT_TABLE_ROLLS) {
+      throw new RangeError(`loot preflight: roll count exceeds runtime-safe limit ${MAX_LOOT_TABLE_ROLLS}`);
+    }
+    if (table.choices.some((choice) => !Number.isSafeInteger(choice.weight) || choice.weight <= 0)
+      || !checkedTotalWithin(table.choices.map((choice) => choice.weight), MAX_LOOT_WEIGHT_TOTAL)) {
+      throw new RangeError('loot preflight: choice weight total exceeds rollDie maximum 2^32');
+    }
+    let worstChoice = 0;
+    for (const choice of table.choices) {
+      if (!Number.isSafeInteger(choice.maximumQuantity) || choice.maximumQuantity <= 0
+        || choice.maximumQuantity > MAX_LOOT_CHOICE_QUANTITY) {
+        throw new RangeError(`loot preflight: choice quantity exceeds runtime-safe limit ${MAX_LOOT_CHOICE_QUANTITY}`);
+      }
+      if (!Number.isSafeInteger(choice.minimumQuantity) || choice.minimumQuantity <= 0
+        || choice.minimumQuantity > choice.maximumQuantity) {
+        throw new RangeError('loot preflight: choice quantity range is invalid');
+      }
+      if ((choice.contentId === null) === (choice.lootTableId === null)) {
+        throw new Error(`internal invariant: loot table ${tableId} choice must have exactly one target`);
+      }
+      const directItem = choice.contentId === null ? null : itemDefinition(content, choice.contentId);
+      if (directItem && choice.maximumQuantity > directItem.stackLimit) {
+        throw new RangeError(`loot preflight: choice quantity exceeds item stack limit ${directItem.stackLimit}`);
+      }
+      if (choice.contentId !== null && bossUniqueIds.has(choice.contentId)) {
+        throw new Error(`loot preflight: guaranteed boss-unique item ${choice.contentId} cannot appear in ordinary loot`);
+      }
+      const childUnits = directItem !== null
+        ? 1
+        : visit(choice.lootTableId!, [...trail, tableId]);
+      worstChoice = Math.max(worstChoice,
+        boundedProduct(choice.maximumQuantity, childUnits, MAX_LOOT_CREATED_UNITS));
+    }
+    const worst = boundedProduct(table.rolls, worstChoice, MAX_LOOT_CREATED_UNITS);
+    if (worst > MAX_LOOT_CREATED_UNITS) {
+      throw new RangeError(`loot preflight: worst-case created units exceed runtime-safe limit ${MAX_LOOT_CREATED_UNITS}`);
+    }
+    memo.set(tableId, worst);
+    return worst;
+  };
+  visit(rootTableId, []);
 }
 
 export function validateEchoLootGraph(input: Readonly<{

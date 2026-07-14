@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type {
-  CompiledContentPack, FallenChampionTemplateContentEntry, ItemContentEntry, LootTableContentEntry,
+  CompiledContentPack, EncounterContentEntry, FallenChampionTemplateContentEntry, ItemContentEntry, LootTableContentEntry,
   MonsterContentEntry, SpellContentEntry,
 } from '@woven-deep/content';
 import {
-  advanceFallenHeroEncounters, createDemoContentPack, createDemoRun, createFallenHeroRunDecisions,
+  advanceBosses, advanceFallenHeroEncounters, createDemoContentPack, createDemoRun, createFallenHeroRunDecisions,
   decodeActiveRun, dropItem, encodeActiveRun, normalizeFallenHero, placeFallenHeroEncounters,
   fallenHeroCombatModifiers, mergeStacks, pickupItem, projectGameplayState, retainEchoCandidates, validateContentBoundRun,
-  type ActiveRun, type FallenHeroStandingSnapshot,
+  type ActiveRun, type ActorState, type BossPopulation, type FallenHeroStandingSnapshot,
 } from '../src/index.js';
 
 const monster: MonsterContentEntry = {
@@ -236,6 +236,45 @@ describe('normalization and optional placement', () => {
 });
 
 describe('fallen hero rewards and run-local lifecycle', () => {
+  it('allows a legitimate Champion heirloom sharing boss-unique content before the exact boss reward', () => {
+    const run = withArena(initialized([standing(1)]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const championDead = { ...run, actors: [...run.actors, ...placed.actors].map((actor) => actor.populationId === null
+      ? actor : { ...actor, health: 0 }), populations: placed.populations, fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor] };
+    const championRewarded = advanceFallenHeroEncounters({ state: championDead, content: pack(),
+      eventId: 'event.shared-content-champion' }).state;
+    const bossLoot: LootTableContentEntry = { ...echoLoot, id: 'loot-table.shared-content-boss' };
+    const bossEncounter: EncounterContentEntry = { kind: 'encounter', id: 'encounter.shared-content-boss',
+      name: 'Shared content boss', tags: [], adminDescription: null, model: 'boss', minDepth: 1, maxDepth: 20,
+      environmentTags: [], requiredVaultTags: [], weight: 1, rarity: 'legendary', runAppearanceChance: 1,
+      discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1,
+      placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0,
+        allowedTerrainTags: ['floor'], requiresVaultSlot: false, failureMode: 'optional' },
+      intentPresentation: { visible: true }, definition: { monsterId: monster.id, phases: [],
+        recoveryPerWorldTime: 0, recoveryCapPercent: 0, uniqueItemId: 'item.heirloom',
+        enhancedLootTableId: bossLoot.id, vaultTags: [] } };
+    const content = { ...pack(), entries: [...pack().entries, bossLoot, bossEncounter] };
+    const hero = championRewarded.actors.find((actor) => actor.actorId === championRewarded.hero.actorId)!;
+    const boss: ActorState = { ...hero, actorId: 'actor.shared-content-boss', contentId: monster.id,
+      playerControlled: false, health: 0, maxHealth: monster.health, disposition: 'hostile',
+      populationId: 'population.shared-content-boss', populationRoleId: null,
+      populationPresentation: { name: 'Shared content boss', glyph: 'B', color: '#aa7755', leader: false } };
+    const population: BossPopulation = { populationId: 'population.shared-content-boss', encounterId: bossEncounter.id,
+      floorId: boss.floorId, model: 'boss', createdAt: championRewarded.worldTime,
+      livingMemberIds: [boss.actorId], formerMemberIds: [], actorId: boss.actorId, currentPhaseId: null,
+      crossedPhaseIds: [], lastFloorExitAt: null, rewardCreated: false, rewardReceipt: null, recoveryHistory: [] };
+    const prepared = { ...championRewarded, actors: [...championRewarded.actors, boss],
+      populations: [...championRewarded.populations, population], encounterDecisions: [{
+        encounterId: bossEncounter.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1,
+        eligible: true, reachedEligibleDepth: true, encountered: true, instancesCreated: 1 }] };
+    const rewarded = advanceBosses({ state: prepared, content, eventId: 'event.shared-content-boss' }).state;
+    expect(rewarded.items.filter((entry) => entry.contentId === 'item.heirloom')).toHaveLength(2);
+    expect(rewarded.items.some((entry) => entry.heirloom?.originatingHallRecordId === 'hall.hero-1')).toBe(true);
+    expect(rewarded.items.some((entry) => entry.itemId === 'item.reward.population.shared-content-boss.unique')).toBe(true);
+    expect(() => validateContentBoundRun(rewarded, content)).not.toThrow();
+  });
+
   it('creates the recorded eligible equipped heirloom exactly once with provenance fields intact', () => {
     const run = withArena(initialized([standing(1)]), 4);
     const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
@@ -417,6 +456,27 @@ describe('fallen hero rewards and run-local lifecycle', () => {
     const before = structuredClone(dead);
     expect(() => advanceFallenHeroEncounters({ state: dead, content: { ...unsafe, entries }, eventId: 'event.unsafe-echo' }))
       .toThrow(/Echo loot.*heirloom|ordinary/i);
+    expect(dead).toEqual(before);
+  });
+
+  it('preflights recursively excessive Echo loot expansion before RNG or item changes', () => {
+    const standings = [standing(1), standing(2)];
+    const selected = initialized(standings);
+    const forced = { ...selected, fallenHeroDecisions: selected.fallenHeroDecisions.map((decision) => decision.rank === 2
+      ? { ...decision, retained: true, gateRoll: 1 } : { ...decision, retained: false }) };
+    const run = withArena(forced, 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const dead = { ...run, actors: [...run.actors, ...placed.actors].map((actor) => actor.populationId === null
+      ? actor : { ...actor, health: 0 }), populations: placed.populations, fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor] };
+    const child: LootTableContentEntry = { ...echoLoot, id: 'loot-table.echo-child', rolls: 256 };
+    const unsafe = pack();
+    const entries = [...unsafe.entries.map((entry) => entry.id === echoLoot.id && entry.kind === 'loot-table'
+      ? { ...entry, choices: [{ contentId: null, lootTableId: child.id, weight: 1,
+        minimumQuantity: 17, maximumQuantity: 17 }] } : entry), child];
+    const before = structuredClone(dead);
+    expect(() => advanceFallenHeroEncounters({ state: dead, content: { ...unsafe, entries },
+      eventId: 'event.excessive-echo' })).toThrow(/loot preflight.*worst-case.*4096/i);
     expect(dead).toEqual(before);
   });
 

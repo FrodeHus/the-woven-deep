@@ -328,8 +328,11 @@ describe('boss recovery and defeat rewards', () => {
     expect(() => validateContentBoundRun({ ...rewarded,
       items: rewarded.items.filter((entry) => entry.contentId !== 'item.unique') }, content))
       .toThrow(/boss reward/i);
+    expect(() => validateContentBoundRun({ ...rewarded, items: rewarded.items.map((entry) =>
+      entry.contentId === 'item.unique' ? { ...entry, contentId: 'item.extra-a' } : entry) }, content))
+      .toThrow(/boss reward/i);
     expect(() => validateContentBoundRun({ ...rewarded, items: [...rewarded.items, {
-      ...rewardItems.find((entry) => entry.contentId === 'item.unique')!, itemId: 'item.unique-copy',
+      ...rewardItems.find((entry) => entry.contentId === 'item.unique')!,
     }].sort((left, right) => left.itemId.localeCompare(right.itemId)) }, content)).toThrow(/boss reward/i);
   });
 
@@ -341,5 +344,23 @@ describe('boss recovery and defeat rewards', () => {
     expect(() => advanceBosses({ state: defeated, content: broken, eventId: 'event.broken' })).toThrow(/item\.extra-b/);
     expect(defeated.items).toEqual([]);
     expect(defeated.rng.loot).toEqual(state.rng.loot);
+  });
+
+  it.each([
+    ['roll count', (current: LootTableContentEntry) => ({ ...current, rolls: 257 })],
+    ['choice weight', (current: LootTableContentEntry) => ({ ...current, choices: current.choices.map((choice, index) =>
+      ({ ...choice, weight: index === 0 ? 0x8000_0000 : 0x8000_0001 })) })],
+    ['choice quantity', (current: LootTableContentEntry) => ({ ...current, choices: current.choices.map((choice, index) =>
+      index === 0 ? { ...choice, maximumQuantity: 257 } : choice) })],
+  ] as const)('preflights bypassed boss loot %s before RNG or item changes', (_label, mutate) => {
+    const { state, content } = fixture();
+    const unsafe = { ...content, entries: content.entries.map((entry) => entry.id === table.id && entry.kind === 'loot-table'
+      ? mutate(entry) : entry) };
+    const defeated = { ...state, actors: state.actors.map((actor) => actor.actorId === 'actor.boss'
+      ? { ...actor, health: 0 } : actor) };
+    const before = structuredClone(defeated);
+    expect(() => advanceBosses({ state: defeated, content: unsafe, eventId: 'event.unsafe-loot' }))
+      .toThrow(/loot preflight.*(roll|weight|quantity).*(256|2\^32)/i);
+    expect(defeated).toEqual(before);
   });
 });
