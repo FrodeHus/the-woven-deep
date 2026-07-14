@@ -53,5 +53,20 @@ describe('server-admin content documentation', () => {
       expect(reference, `missing foundational category documentation for ${category}`)
         .toContain(`\`${category}\``);
     }
+    for (const field of [
+      'runAppearanceChance', 'discoveryProtectionIncrement', 'discoveryProtectionCap',
+      'maximumInstancesPerRun', 'minimumStairDistance', 'minimumObjectiveDistance',
+      'maximumMemberDistance', 'allowedTerrainTags', 'requiresVaultSlot', 'failureMode',
+      'minimumQuantity', 'maximumQuantity', 'communicationRadius', 'leaderProbability',
+      'leaderRoleId', 'leaderDeathResponse', 'supernaturalBond', 'collapseRewards',
+      'spawnInterval', 'maximumLivingChildren', 'maximumLivingMembers', 'maximumFloorActors',
+      'sourceDestructionResponse', 'healthThresholdPercent', 'recoveryPerWorldTime',
+      'recoveryCapPercent', 'uniqueItemId', 'enhancedLootTableId',
+      'fallbackMonsterId', 'fallbackItemId', 'echoAppearanceChance', 'maximumEchoesPerRun',
+      'echoHealthPercent', 'echoDamagePercent', 'echoDefensePercent', 'echoAbilityLimit',
+      'echoLootTableId', 'rarityWeights', 'qualityRankBonus',
+    ]) {
+      expect(reference, `missing encounter field documentation for ${field}`).toContain(`\`${field}\``);
+    }
   });
 });

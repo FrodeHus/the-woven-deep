@@ -214,6 +214,30 @@ An `encounter` has a strict `model` of `individual`, `group`, `swarm`, or `boss`
 - `placement` with non-negative stair/objective distances and member spread, non-empty `allowedTerrainTags`, `requiresVaultSlot`, and `failureMode` of `optional` or `required`. Placement is atomic and preserves required routes.
 - `intentPresentation.visible`, which permits broad visible intent but never exposes exact goals, paths, rolls, or shared knowledge.
 
+### Encounter field reference
+
+| Field | Models | Rules and rejection modes |
+|---|---|---|
+| `runAppearanceChance`, `discoveryProtectionIncrement`, `discoveryProtectionCap` | All | Probabilities are 0–1. The cap must be at least the base chance and protection advances only after eligible depth was reached without observing the encounter. |
+| `maximumInstancesPerRun` | All | Positive; exactly 1 for a boss. Placement refuses additional instances after this saved run cap. |
+| `minimumStairDistance`, `minimumObjectiveDistance`, `maximumMemberDistance` (under `placement`) | All | Non-negative integers. A placement that cannot preserve distances, routes, occupancy, and member spread is rejected atomically. |
+| `allowedTerrainTags`, `requiresVaultSlot`, `failureMode` (under `placement`) | All | Terrain tags are non-empty. A required vault slot must match all vault tags; `optional` skips an impossible placement while `required` rejects floor creation. |
+| `minimumQuantity`, `maximumQuantity` | Individual | Positive inclusive range with maximum at least minimum. |
+| `communicationRadius` | Group | Positive range used for hop-by-hop relay; disconnected members receive no shared observation. |
+| `leaderProbability`, `leaderRoleId`, `leaderDeathResponse` | Group | Probability is 0–1, the leader role must exist, and the response uses its exact registered parameters. |
+| `supernaturalBond`, `collapseRewards` | Group | `collapse` requires the bond. Individual rewards additionally require an `adminDescription`; otherwise compilation fails. |
+| `spawnInterval` | Swarm | Positive source-owned timer. Off-floor time is frozen and missed births are never replayed. |
+| `maximumLivingChildren`, `maximumLivingMembers`, `maximumFloorActors` | Swarm | Positive nested caps: children cannot exceed members, and members cannot exceed the floor cap. |
+| `sourceDestructionResponse` | Swarm | One registered `stop`, `flee`, `decay`, or `frenzy` response with no unknown parameters. |
+| `healthThresholdPercent` | Boss | Unique phase values strictly descend, are crossed once, and never reverse after healing. |
+| `recoveryPerWorldTime`, `recoveryCapPercent` | Boss | The rate is finite and non-negative and the cap is 0–100. Recovery occurs once on re-entry from elapsed absence and never exceeds the cap. |
+| `uniqueItemId`, `enhancedLootTableId` | Boss | References must resolve to an item and loot table. The unique item is created at most once. |
+| `fallbackMonsterId`, `fallbackItemId` | Fallen Champion | Required valid references used when historical monster or equipment content has been removed. |
+| `echoAppearanceChance`, `maximumEchoesPerRun` | Fallen Champion | Each rank 2–10 is independently gated, then the lowest rolls are retained up to the run cap. |
+| `echoHealthPercent`, `echoDamagePercent`, `echoDefensePercent`, `echoAbilityLimit` | Fallen Champion | Echo values must be strictly weaker than Champion values and the ability limit cannot exceed the Champion limit. |
+| `echoLootTableId` | Fallen Champion | Ordinary enhanced loot only; a table containing a boss-unique item is rejected. |
+| `rarityWeights`, `qualityRankBonus` (under `heirloomSelection`) | Fallen Champion | Positive nondecreasing rarity weights plus a non-negative quality bonus select exactly one equipped item instance. |
+
 An `individual` definition has `monsterId`, `minimumQuantity`, and `maximumQuantity`. A `group` has unique roles, a `formation` (`cluster`, `line`, `screen`, `wedge`, or `surround`), positive `communicationRadius`, leader probability and role, accent/glyph, integer coordination modifiers, and a leader response. Role `formationPreference` is `front`, `center`, `rear`, `flank`, or `free`.
 
 Leader responses are `weaken`, `panic`, `disband`, `surrender`, `frenzy`, and `collapse`. `weaken` requires integer combat `modifiers`; `panic` requires positive `duration`; `frenzy` requires both; the other responses require `{}`. `collapse` requires `supernaturalBond: true`; `collapseRewards` explicitly chooses `none` or `individual`. Groups relay knowledge only across range-connected members and freeze on inactive floors.
@@ -245,7 +269,9 @@ entries:
     definition: { monsterId: monster.cave-rat, minimumQuantity: 1, maximumQuantity: 2 }
 ```
 
-The bundled `content/encounters/early-populations.yaml` is the complete copyable reference for group, swarm, and boss definitions. Common rejections include a missing monster/item/loot reference, duplicate role or phase IDs, ascending phase thresholds, an untagged swarm source, inconsistent caps, `collapse` without a supernatural bond, or a boss instance limit other than one.
+The bundled `content/encounters/early-populations.yaml` is the complete copyable reference for group, swarm, and boss definitions. Add new `.yaml` or `.yml` files anywhere under the complete content directory, then run `npm run content:validate -- /absolute/path/to/content` and `npm run population:demo -- --content-dir /absolute/path/to/content`. Common rejections include unknown or misspelled fields; duplicate IDs, roles, or phases; a missing or wrong-kind monster/item/loot reference; an ascending phase threshold; an unsafe boss effect; an untagged swarm source; inconsistent caps; impossible required placement; `collapse` without a supernatural bond; an Echo that is not strictly weaker; an Echo loot table containing a boss-unique item; or a boss instance limit other than one.
+
+Population actors, group communication, swarm timers, and boss recovery do not simulate while their floor is inactive. The saved clock and population state resume deterministically when the floor becomes active; swarms do not accumulate catch-up births, while bosses calculate their single bounded re-entry recovery from saved exit time.
 
 ## Fallen-champion template
 

@@ -15,6 +15,7 @@ Validate the complete replacement directory before changing the container:
 
 ```bash
 npm run content:validate -- /absolute/path/to/content
+npm run population:demo -- --content-dir /absolute/path/to/content
 ```
 
 Add this service volume and keep it read-only:
@@ -31,6 +32,8 @@ Restart and verify that the reported content hash is the expected new hash:
 docker compose up -d --force-recreate --wait --wait-timeout 60
 node scripts/smoke.mjs http://localhost:3000
 ```
+
+Startup compiles and cross-validates the entire schema-v3 directory before the server begins listening. A parse, schema, reference, or semantic failure aborts startup; mounted content is never partially accepted. Keep the mount read-only so the hash verified before restart remains the pack used for every new run.
 
 ## Back up SQLite safely
 

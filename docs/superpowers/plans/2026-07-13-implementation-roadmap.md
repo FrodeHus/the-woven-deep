@@ -47,6 +47,12 @@ Deliver this milestone through two independently reviewable slices:
 
 **4B1 design:** `docs/superpowers/specs/2026-07-14-population-encounters-design.md`
 
+**4B1 population encounters — complete:** `docs/superpowers/plans/2026-07-14-population-encounters.md`
+
+**4B2 NPCs — pending.**
+
+**4B3 run records — pending.**
+
 **Exit demonstration:** an automated simulation can fight a leader group, contain or flee a growing swarm, encounter a rare boss, trade with or attack a travelling merchant, and finalize a deterministic run record.
 
 ### 5. Guest game and complete player interface

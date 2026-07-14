@@ -544,27 +544,27 @@ Commit: `feat: project observable population intent`
 - Consumes: all 4B1 systems, deterministic command/replay helpers, bundled production content, server content bootstrap, and Docker release stages.
 - Produces: 500+ seeded invariant simulations, exact split replay, forced terminal demonstration, complete operator reference, and repeatable production verification.
 
-- [ ] **Step 1: Write the 500-seed property harness before relaxing any implementation**
+- [x] **Step 1: Write the 500-seed property harness before relaxing any implementation**
 
 After every applied step validate schema and content binding, occupancy/routes, population membership, role/leader/source identity, caps, nondecreasing world time, inactive-floor freeze, bounded group communication, irreversible boss phases, unique rewards, Champion singleton/heirloom singleton, per-record Echo singleton, Echo run cap, no Echo heirlooms, and hidden-state-safe projection. Convert every discovered shrink to a named regression test.
 
-- [ ] **Step 2: Add continuous-versus-split replay tests**
+- [x] **Step 2: Add continuous-versus-split replay tests**
 
 Split the same scenario at several boundaries, including before group relay, source spawn, leader death, boss threshold, boss re-entry, champion encounter, and reward creation. Compare byte-identical final saves, command results, authoritative events, public events, and projections.
 
-- [ ] **Step 3: Build the forced exit demonstration**
+- [x] **Step 3: Build the forced exit demonstration**
 
 Use explicit test input to force eligibility while leaving production YAML unchanged. Demonstrate a relay-limited leader group, leader outcome, capped visible swarm source, optional phased boss and unique reward, named bypassable Champion, exact heirloom, one weaker `Echo of <Hero Name>` with ordinary loot, and equivalent split execution. Check stable hashes into `population-demo-hashes.json`.
 
-- [ ] **Step 4: Document every YAML field and rejection mode**
+- [x] **Step 4: Document every YAML field and rejection mode**
 
 Expand server-admin documentation with common encounter fields, probabilities, discovery protection, placement, each model, roles/formations, every leader and swarm response, boss phases/recovery/rewards, champion normalization/fallback, quality-weighted heirloom selection, off-floor freeze, full valid YAML, adding files, validation commands, and common errors. Extend the docs test so every new content kind and closed identifier must appear.
 
-- [ ] **Step 5: Add root and Docker gates**
+- [x] **Step 5: Add root and Docker gates**
 
 Add `population:demo` to root scripts and invoke it in the production Docker build alongside engine, dungeon, and gameplay demonstrations. Confirm mounted schema-v3 content is validated atomically at startup.
 
-- [ ] **Step 6: Run final verification from a clean dependency state**
+- [x] **Step 6: Run final verification from a clean dependency state**
 
 Run:
 
