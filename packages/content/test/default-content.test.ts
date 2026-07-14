@@ -15,7 +15,7 @@ describe('bundled content', () => {
       monster: 4, item: 15, spell: 1, trap: 1, 'loot-table': 2, balance: 1, vault: 1,
       'identification-pool': 2, encounter: 4, 'fallen-champion-template': 1,
     });
-    expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(4);
+    expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(5);
     expect(pack.entries.map((entry) => entry.id)).toEqual([...pack.entries.map((entry) => entry.id)].sort());
     expect(validateCompiledContentPack(JSON.parse(JSON.stringify(pack)))).toEqual(pack);
     expect(pack.hash).toMatch(/^[0-9a-f]{64}$/);

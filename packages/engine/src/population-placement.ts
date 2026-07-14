@@ -401,9 +401,12 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
       sharedKnowledge: [], leaderResponseApplied: false, leaderResponseExpiresAt: null,
     };
   } else if (selected.encounter.model === 'swarm') {
+    const nextSpawnAt = input.run.worldTime + selected.encounter.definition.spawnInterval;
+    if (!Number.isSafeInteger(nextSpawnAt)) return placementFailure(selected.encounter,
+      'no-valid-placement', planned.state, reachedDecisions);
     population = {
       ...base, model: 'swarm', sourceActorId: createdActors[0]!.actorId,
-      nextSpawnAt: input.run.worldTime + selected.encounter.definition.spawnInterval,
+      nextSpawnAt,
       spawnedCount: 0, peakLivingSize: 1, shutdownState: null, emittedCapLevels: [], shutdownExpiresAt: null,
     };
   } else {

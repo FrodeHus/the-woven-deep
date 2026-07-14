@@ -142,7 +142,7 @@ describe('active-run save codec', () => {
     const state = createDemoRun();
     const encoded = encodeActiveRun(state);
     expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
-    expect(encoded.startsWith('{"activeFloorId"')).toBe(true);
+    expect(encoded.startsWith('{"activeFloorEnteredAt"')).toBe(true);
   });
 
   it('round-trips all schema v4 source state without storing derived fields', () => {

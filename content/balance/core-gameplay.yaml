@@ -46,6 +46,7 @@ entries:
       action.pickup: 100
       action.refuel: 100
       action.search: 100
+      action.spawn: 100
       action.split-stack: 100
       action.throw-item: 100
       action.toggle-light: 100

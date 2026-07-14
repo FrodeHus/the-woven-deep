@@ -74,6 +74,7 @@ export function createGeneratedDemoRun(pack: CompiledContentPack): GeneratedDemo
     runId: 'run.generated-demo',
     actors: initialized.actors.map((actor) => actor.actorId === movedHeroActor.actorId ? movedHeroActor : actor),
     activeFloorId: generated.floor.floorId,
+    activeFloorEnteredAt: 0,
   };
   const run = addGeneratedFloor(transitional, { ...generated, floor }, allocation, { content: pack });
   return { run, generated, allocation };

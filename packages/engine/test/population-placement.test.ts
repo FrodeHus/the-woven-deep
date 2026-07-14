@@ -46,6 +46,14 @@ function individual(id: string, overrides: Partial<EncounterContentEntry> = {}):
   } as EncounterContentEntry;
 }
 
+function swarm(id: string): EncounterContentEntry {
+  return individual(id, { model: 'swarm', definition: { sourceMonsterId: 'monster.test-a',
+    spawnRoles: [{ roleId: 'child', monsterId: 'monster.test-b', weight: 1 }], spawnInterval: 10,
+    minimumSpawnQuantity: 1, maximumSpawnQuantity: 1, placementRadius: 2, allowedTerrainTags: ['floor'],
+    maximumLivingChildren: 2, maximumLivingMembers: 3, maximumFloorActors: 4,
+    sourceDestructionResponse: 'stop', responseParameters: {} } });
+}
+
 function pack(encounters: readonly EncounterContentEntry[], extras: readonly ContentEntry[] = []): CompiledContentPack {
   const base = createDemoContentPack();
   return {
@@ -86,6 +94,12 @@ function runFor(encounters: readonly EncounterContentEntry[]): ActiveRun {
 }
 
 describe('population placement selection and composition', () => {
+  it('rejects a swarm placement whose initial saved timer would overflow', () => {
+    const entry = swarm('encounter.timer-overflow');
+    const result = placePopulation({ run: { ...runFor([entry]), worldTime: Number.MAX_SAFE_INTEGER - 5 },
+      floor: floor(), content: pack([entry]), forcedEncounterId: entry.id });
+    expect(result).toMatchObject({ status: 'skipped', reason: 'no-valid-placement' });
+  });
   it('filters by depth, environment, vault tags, eligibility, and the per-run limit', () => {
     const entries = [
       individual('encounter.depth', { minDepth: 4 }),

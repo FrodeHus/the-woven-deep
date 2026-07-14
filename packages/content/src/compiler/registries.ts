@@ -15,7 +15,7 @@ export const ACTION_COST_IDS = [
   'action.attack', 'action.cast', 'action.close-door', 'action.disarm', 'action.drop', 'action.equip',
   'action.fire', 'action.move', 'action.open-door', 'action.pickup', 'action.refuel', 'action.search',
   'action.split-stack', 'action.throw-item', 'action.toggle-light', 'action.unequip', 'action.use-item',
-  'action.wait',
+  'action.wait', 'action.spawn',
 ] as const;
 
 export const BEHAVIOR_PARAMETER_SCHEMAS = {

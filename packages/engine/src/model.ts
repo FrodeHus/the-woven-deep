@@ -193,7 +193,7 @@ export interface ActorTurnCompletedEvent {
   readonly type: 'actor.turn.completed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
   readonly actionType: 'move' | 'wait' | 'bump-attack' | 'pickup' | 'drop' | 'split-stack'
     | 'fire' | 'throw-item' | 'use-item' | 'equip' | 'unequip' | 'toggle-light' | 'refuel'
-    | 'open-door' | 'close-door' | 'search' | 'disarm';
+    | 'open-door' | 'close-door' | 'search' | 'disarm' | 'swarm-spawn';
 }
 export interface ActorMovedEvent {
   readonly type: 'actor.moved'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
@@ -299,8 +299,8 @@ export interface GroupOutcomeAppliedEvent {
   readonly actorId: OpaqueId; readonly response: LeaderDeathResponse; readonly individualRewards: boolean;
   readonly collapsedMemberCount: number;
 }
-export interface SwarmSpawnedEvent {
-  readonly type: 'swarm.spawned'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+export interface SwarmMembersCreatedEvent {
+  readonly type: 'swarm.members-created'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
   readonly sourceActorId: OpaqueId; readonly actorIds: readonly OpaqueId[]; readonly quantity: number;
 }
 export interface SwarmCapReachedEvent {
@@ -338,7 +338,7 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | HungerStageChangedEvent | HungerRestoredEvent | FuelWarningEvent | ItemLightExtinguishedEvent
   | ItemDamagedEvent | DoorStateChangedEvent | FeatureRevealedEvent | FeatureSearchEvent | TrapStateEvent
   | ActorIntentChangedEvent | GroupAwarenessSharedEvent | GroupLeaderDefeatedEvent | GroupOutcomeAppliedEvent
-  | SwarmSpawnedEvent | SwarmCapReachedEvent | SwarmSourceDestroyedEvent
+  | SwarmMembersCreatedEvent | SwarmCapReachedEvent | SwarmSourceDestroyedEvent
   | SoundHeardEvent | HeroDamagedPublicEvent | RestCompletedEvent;
 
 export interface AppliedCommandResult {
@@ -407,6 +407,7 @@ export interface ActiveRun {
   readonly survival: SurvivalState;
   readonly identification: IdentificationState;
   readonly activeFloorId: OpaqueId;
+  readonly activeFloorEnteredAt: number;
   readonly floors: readonly FloorSnapshot[];
   readonly recentCommands: readonly RecordedCommand[];
   readonly encounterDecisions: readonly EncounterRunDecision[];

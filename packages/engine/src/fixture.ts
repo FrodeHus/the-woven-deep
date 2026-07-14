@@ -25,7 +25,7 @@ export function createDemoContentPack(): CompiledContentPack {
         rangedAccuracy: { agility: 1 }, defense: { base: 8, agility: 1 }, search: { wits: 1 },
         disarm: { agility: 1, wits: 1 },
       },
-      actionCosts: { 'action.move': 100, 'action.wait': 100 },
+      actionCosts: { 'action.move': 100, 'action.wait': 100, 'action.spawn': 100 },
     }, {
       kind: 'condition', id: 'condition.disengaged', name: 'Disengaged',
       description: 'Avoids opportunity attacks', tags: ['beneficial'], color: '#78c8dc',
@@ -44,6 +44,11 @@ export function createDemoContentPack(): CompiledContentPack {
       duration: { mode: 'timed', default: 100, maximum: 1000 },
       stacking: { mode: 'refresh', maximumStacks: 1 }, modifiersPerStack: {},
       traits: ['condition-trait.suppresses-reactions'],
+    }, {
+      kind: 'condition', id: 'condition.swarm-decay', name: 'Swarm decay',
+      description: 'The destroyed source causes this swarm member to decay.', tags: ['population'], color: '#8a7766',
+      duration: { mode: 'permanent', default: null, maximum: null },
+      stacking: { mode: 'refresh', maximumStacks: 1 }, modifiersPerStack: {}, traits: [],
     }, {
       kind: 'condition', id: 'condition.restless', name: 'Restless',
       description: 'Interrupts rest', tags: ['survival'], color: '#c89070',
@@ -125,6 +130,7 @@ export function createDemoRun(): ActiveRun {
     },
     identification: { appearanceByContentId: {}, knownAppearanceIds: [] },
     activeFloorId: 'floor.demo',
+    activeFloorEnteredAt: 0,
     floors: [{ ...floor, knowledge }],
     recentCommands: [],
     encounterDecisions: [],

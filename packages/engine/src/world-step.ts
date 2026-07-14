@@ -22,7 +22,7 @@ import { markEncounterObserved } from './population-gates.js';
 import { updatePopulationIntent } from './population-intent.js';
 import { updateActorMemory, visibleTargetObservations } from './population-perception.js';
 import { applyGroupLeaderOutcomes, coordinateGroups, groupCombatModifiers } from './group-behavior.js';
-import { advanceSwarms, swarmCombatModifiers } from './swarm-behavior.js';
+import { advanceSwarms, resolveSwarmSpawnAction, swarmCombatModifiers } from './swarm-behavior.js';
 import { projectDomainEvents } from './event-projection.js';
 import {
   completeNormalActorTurn, relationshipBetween, resolveOpportunityAttacks, setRelationship,
@@ -174,7 +174,9 @@ function applyAction(input: Readonly<{
   if (!actor) throw new Error(`internal invariant: actor ${action.actorId} does not exist`);
   const events: DomainEvent[] = [];
   if (action.type === 'rest') throw new Error('internal invariant: rest must be expanded into world steps');
-  if (action.type === 'search') {
+  if (action.type === 'swarm-spawn') {
+    return resolveSwarmSpawnAction({ state, content: input.content, sourceActorId: actor.actorId, eventId: input.eventId });
+  } else if (action.type === 'search') {
     const floor = state.floors.find((candidate) => candidate.floorId === actor.floorId)!;
     const positions = new Map(state.actors.filter((candidate) => candidate.floorId === floor.floorId)
       .map((candidate) => [candidate.actorId, candidate] as const));

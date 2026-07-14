@@ -28,6 +28,7 @@ export interface WaitAction {
   readonly actorId: OpaqueId;
   readonly cost: number;
 }
+export interface SwarmSpawnAction { readonly type: 'swarm-spawn'; readonly actorId: OpaqueId; readonly cost: number }
 
 export interface BumpAttackAction {
   readonly type: 'bump-attack';
@@ -86,12 +87,12 @@ export interface RestAction {
   readonly maximumDuration: number; readonly cost: number;
 }
 
-export type GameAction = MoveAction | WaitAction | BumpAttackAction | PickupAction | DropAction | SplitStackAction
+export type GameAction = MoveAction | WaitAction | SwarmSpawnAction | BumpAttackAction | PickupAction | DropAction | SplitStackAction
   | FireAction | ThrowItemAction | UseItemAction | EquipAction | UnequipAction | ToggleLightAction | RefuelAction
   | DoorAction | SearchAction | DisarmAction | RestAction;
 export type ActionResolverRegistry = Readonly<Partial<Record<GameAction['type'], true>>>;
 export const ACTION_RESOLVER_REGISTRY: ActionResolverRegistry = Object.freeze({
-  move: true, wait: true, 'bump-attack': true, pickup: true, drop: true, 'split-stack': true,
+  move: true, wait: true, 'swarm-spawn': true, 'bump-attack': true, pickup: true, drop: true, 'split-stack': true,
   fire: true, 'throw-item': true, 'use-item': true, equip: true, unequip: true,
   'toggle-light': true, refuel: true, 'open-door': true, 'close-door': true, search: true, disarm: true,
   rest: true,

@@ -152,10 +152,10 @@ entries:
       defense: { base: 8, agility: 1 }
       search: { wits: 1 }
       disarm: { agility: 1, wits: 1 }
-    actionCosts: { action.move: 100, action.wait: 100 }
+    actionCosts: { action.move: 100, action.spawn: 100, action.wait: 100 }
 ```
 
-The closed action-cost IDs are `action.attack`, `action.cast`, `action.close-door`, `action.disarm`, `action.drop`, `action.equip`, `action.fire`, `action.move`, `action.open-door`, `action.pickup`, `action.refuel`, `action.search`, `action.split-stack`, `action.throw-item`, `action.toggle-light`, `action.unequip`, `action.use-item`, and `action.wait`. A pack may override any subset; `normalActionCost` supplies the normal fallback.
+The closed action-cost IDs are `action.attack`, `action.cast`, `action.close-door`, `action.disarm`, `action.drop`, `action.equip`, `action.fire`, `action.move`, `action.open-door`, `action.pickup`, `action.refuel`, `action.search`, `action.spawn`, `action.split-stack`, `action.throw-item`, `action.toggle-light`, `action.unequip`, `action.use-item`, and `action.wait`. A pack may override any subset; `normalActionCost` supplies the normal fallback.
 
 ## Monster entries
 

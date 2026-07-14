@@ -7,6 +7,7 @@ import { movementBlockReason } from './terrain.js';
 import type { ActiveRun, OpaqueId, Point } from './model.js';
 import type { ActorGoal } from './population-model.js';
 import { relationshipBetween } from './reactions.js';
+import { swarmSpawnAction } from './swarm-behavior.js';
 
 function distance(left: Point, right: Point): number {
   return Math.max(Math.abs(left.x - right.x), Math.abs(left.y - right.y));
@@ -43,6 +44,8 @@ export function chooseBehaviorAction(input: Readonly<{
 }>): GameAction {
   const actor = actorById(input.state, input.actorId);
   if (!actor) throw new Error(`internal invariant: actor ${input.actorId} does not exist`);
+  const spawn = swarmSpawnAction(input);
+  if (spawn) return spawn;
   const rules = balanceEntry(input.content);
   if (actor.behaviorId === null) {
     return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };
@@ -53,32 +56,18 @@ export function chooseBehaviorAction(input: Readonly<{
   if (actor.behaviorState.intent === 'flee' && actor.behaviorState.investigation
     && (actor.behaviorState.investigation.expiresAt === null
       || actor.behaviorState.investigation.expiresAt > input.state.worldTime)) {
-    const hostiles = input.state.actors.filter((candidate) => candidate.actorId !== actor.actorId
-      && candidate.health > 0 && candidate.floorId === actor.floorId
-      && relationshipBetween(input.state, actor.actorId, candidate.actorId) === 'hostile');
-    const nearest = hostiles.sort((left, right) => distance(actor, left) - distance(actor, right)
-      || (left.actorId < right.actorId ? -1 : 1))[0];
-    if (nearest) {
+    const goal = actor.behaviorState.goal;
+    if (goal?.type === 'cell' && goal.floorId === actor.floorId) {
       const floor = input.state.floors.find((candidate) => candidate.floorId === actor.floorId)!;
       const tiles = featureTiles(input.state, floor.floorId);
       const occupied = new Set(input.state.actors.filter((candidate) => candidate.actorId !== actor.actorId
         && candidate.floorId === actor.floorId && candidate.health > 0).map((candidate) => `${candidate.x}:${candidate.y}`));
-      const candidates = Array.from({ length: floor.width * floor.height }, (_, index) => ({
-        x: index % floor.width, y: Math.floor(index / floor.width),
-      })).filter((point) => (point.x !== actor.x || point.y !== actor.y)
-          && movementBlockReason(tiles[point.y * floor.width + point.x]!) === undefined
-          && !occupied.has(`${point.x}:${point.y}`))
-        .sort((left, right) => distance(right, nearest) - distance(left, nearest)
-          || left.y - right.y || left.x - right.x);
-      for (const destination of candidates) {
-        if (distance(destination, nearest) <= distance(actor, nearest)) break;
-        const path = findPath({ width: floor.width, height: floor.height, topology: 8,
-          origin: actor, destination, isPassable: (x, y) => movementBlockReason(tiles[y * floor.width + x]!) === undefined
-            && ((x === actor.x && y === actor.y) || !occupied.has(`${x}:${y}`)) });
-        const selected = selectPathStep(path);
-        if (selected.status === 'move') return { type: 'move', actorId: actor.actorId,
-          to: selected.step, cost: actionCostFor(rules, 'action.move') };
-      }
+      const path = findPath({ width: floor.width, height: floor.height, topology: 8,
+        origin: actor, destination: goal, isPassable: (x, y) => movementBlockReason(tiles[y * floor.width + x]!) === undefined
+          && ((x === actor.x && y === actor.y) || !occupied.has(`${x}:${y}`)) });
+      const selected = selectPathStep(path);
+      if (selected.status === 'move') return { type: 'move', actorId: actor.actorId,
+        to: selected.step, cost: actionCostFor(rules, 'action.move') };
     }
     return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };
   }

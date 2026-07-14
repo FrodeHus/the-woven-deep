@@ -78,7 +78,7 @@ const actorTurnStartedEvent = z.strictObject({ type: z.literal('actor.turn.start
 const actorTurnCompletedEvent = z.strictObject({ type: z.literal('actor.turn.completed'), eventId: identifier,
   actorId: identifier, actionType: z.enum([
     'move', 'wait', 'bump-attack', 'pickup', 'drop', 'split-stack', 'fire', 'throw-item', 'use-item', 'equip', 'unequip',
-    'toggle-light', 'refuel',
+    'toggle-light', 'refuel', 'open-door', 'close-door', 'search', 'disarm', 'swarm-spawn',
   ]) });
 const actorMovedEvent = z.strictObject({ type: z.literal('actor.moved'), eventId: identifier,
   actorId: identifier, from: point, to: point });
@@ -144,7 +144,7 @@ const groupOutcomeAppliedEvent = z.strictObject({ type: z.literal('group.outcome
   populationId: identifier, actorId: identifier,
   response: z.enum(['weaken', 'panic', 'disband', 'surrender', 'frenzy', 'collapse']),
   individualRewards: z.boolean(), collapsedMemberCount: safeNonNegative });
-const swarmSpawnedEvent = z.strictObject({ type: z.literal('swarm.spawned'), eventId: identifier,
+const swarmMembersCreatedEvent = z.strictObject({ type: z.literal('swarm.members-created'), eventId: identifier,
   populationId: identifier, sourceActorId: identifier, actorIds: z.array(identifier).readonly(), quantity: safeNonNegative });
 const swarmCapReachedEvent = z.strictObject({ type: z.literal('swarm.cap-reached'), eventId: identifier,
   populationId: identifier, sourceActorId: identifier, level: z.enum(['source', 'encounter', 'floor']) });
@@ -176,7 +176,7 @@ const event = z.discriminatedUnion('type', [
   featureRevealedEvent, featureSearchedEvent, trapTriggeredEvent, trapDisarmedEvent, trapDisarmFailedEvent,
   itemDamagedEvent, actorIntentChangedEvent, groupAwarenessSharedEvent, groupLeaderDefeatedEvent,
   groupOutcomeAppliedEvent,
-  swarmSpawnedEvent, swarmCapReachedEvent, swarmSourceDestroyedEvent,
+  swarmMembersCreatedEvent, swarmCapReachedEvent, swarmSourceDestroyedEvent,
   soundHeardEvent, heroDamagedPublicEvent, restCompletedEvent,
 ]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
@@ -423,7 +423,7 @@ const activeRunSchema = z.strictObject({
   revision: safeNonNegative, turn: safeNonNegative, worldTime: safeNonNegative,
   hero, actors: z.array(actor).min(1).readonly(), items: z.array(item).readonly(), features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(), survival, identification,
-  activeFloorId: identifier,
+  activeFloorId: identifier, activeFloorEnteredAt: safeNonNegative,
   floors: z.array(floor).min(1).readonly(), recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(), populations: z.array(population).readonly(),
   fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
@@ -590,6 +590,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   }
   const activeFloor = run.floors.find((candidate) => candidate.floorId === run.activeFloorId);
   if (!activeFloor) fail('activeFloorId', 'active floor does not exist');
+  if (run.activeFloorEnteredAt > run.worldTime) fail('activeFloorEnteredAt', 'active floor entry cannot be in the future');
 
   validateOrderedIds(run.actors.map((entry) => entry.actorId), 'actors', 'actor', 'actorId');
   const actors = new Map(run.actors.map((entry) => [entry.actorId, entry]));
