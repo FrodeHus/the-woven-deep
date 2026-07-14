@@ -130,6 +130,11 @@ const trapDisarmFailedEvent = z.strictObject({ type: z.literal('trap.disarm-fail
   actorId: identifier, featureId: identifier });
 const itemDamagedEvent = z.strictObject({ type: z.literal('item.damaged'), eventId: identifier,
   actorId: identifier, itemId: identifier, amount: safeNonNegative, condition: safeNonNegative });
+const actorIntentChangedEvent = z.strictObject({ type: z.literal('actor.intent-changed'), eventId: identifier,
+  actorId: identifier, intent: z.enum(['approach', 'attack', 'hold', 'regroup', 'flee', 'protect', 'spawn', 'phase-change']),
+  presentation: z.enum(['intent.approach', 'intent.attack', 'intent.hold', 'intent.regroup', 'intent.flee',
+    'intent.protect', 'intent.spawn', 'intent.phase-change']),
+  targetCategory: z.enum(['hero', 'leader', 'source', 'position']).nullable() });
 const soundHeardEvent = z.strictObject({ type: z.literal('sound.heard'),
   category: z.enum(['combat', 'movement', 'mechanism']),
   direction: z.enum(['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'here']),
@@ -154,7 +159,7 @@ const event = z.discriminatedUnion('type', [
   hungerStageChangedEvent, hungerRestoredEvent, fuelWarningEvent, itemLightExtinguishedEvent,
   doorOpenedEvent, doorClosedEvent,
   featureRevealedEvent, featureSearchedEvent, trapTriggeredEvent, trapDisarmedEvent, trapDisarmFailedEvent,
-  itemDamagedEvent,
+  itemDamagedEvent, actorIntentChangedEvent,
   soundHeardEvent, heroDamagedPublicEvent, restCompletedEvent,
 ]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
@@ -871,6 +876,14 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   let previousRevision = 0;
   for (const [index, recordValue] of run.recentCommands.entries()) {
     const path = `recentCommands.${index}`;
+    for (const [eventIndex, savedEvent] of recordValue.events.entries()) {
+      if (savedEvent.type === 'actor.intent-changed') {
+        if (!actors.has(savedEvent.actorId)) fail(`${path}.events.${eventIndex}.actorId`, 'intent actor does not exist');
+        if (savedEvent.presentation !== `intent.${savedEvent.intent}`) {
+          fail(`${path}.events.${eventIndex}.presentation`, 'intent presentation disagrees with intent');
+        }
+      }
+    }
     if (commandIds.has(recordValue.command.commandId)) fail(`${path}.command.commandId`, 'command identifier is duplicated');
     commandIds.add(recordValue.command.commandId);
     if (recordValue.command.commandId !== recordValue.result.commandId) fail(`${path}.result.commandId`, 'result does not match command');

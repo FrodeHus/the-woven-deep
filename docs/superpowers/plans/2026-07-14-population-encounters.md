@@ -245,23 +245,23 @@ Commit: `feat: decide encounter eligibility per run`
 - Consumes: ROT.js A*, current floor geometry/features/occupancy, existing FOV and lighting, observable sound events, actor perception, and hostile relationships.
 - Produces: copied candidate coordinates, deterministic next steps, saved legitimate last-known targets, investigation state, and visible broad intent change events.
 
-- [ ] **Step 1: Write failing A* contract tests**
+- [x] **Step 1: Write failing A* contract tests**
 
 Cover caller-owned passability, blocked doors, occupied destinations, eight-direction corner blocking, unreachable goals, stable equal-cost tie resolution, no mutation, and no ROT.js type escaping the adapter.
 
-- [ ] **Step 2: Write failing memory tests**
+- [x] **Step 2: Write failing memory tests**
 
 Assert direct visible detection, perceivable sound memory, newest-observation replacement, stable equal-time observer tie-breaking, investigation of the last known cell, and no tracking through later unseen movement.
 
-- [ ] **Step 3: Write failing broad-intent tests**
+- [x] **Step 3: Write failing broad-intent tests**
 
 Cover `approach`, `attack`, `hold`, `regroup`, `flee`, `protect`, `spawn`, and `phase-change`; emit changes only when the saved intent changes; never include the exact goal or path in the public shape.
 
-- [ ] **Step 4: Implement the adapter and pure state updates**
+- [x] **Step 4: Implement the adapter and pure state updates**
 
 Copy ROT.js output immediately, rank legal first steps with explicit code-owned ordering, and fall back to `hold` plus a deterministic internal diagnostic when selection cannot produce a valid action.
 
-- [ ] **Step 5: Run focused and browser-boundary gates, then commit**
+- [x] **Step 5: Run focused and browser-boundary gates, then commit**
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/pathfinding.test.ts test/population-perception.test.ts test/population-intent.test.ts test/browser-boundary.test.ts`
 

@@ -257,6 +257,8 @@ describe('active-run save codec', () => {
         { type: 'fuel.warning' as const, eventId: 'command.saved-attack', itemId: 'item.lantern',
           threshold: 100, fuel: 90 },
         { type: 'item.light-extinguished' as const, eventId: 'command.saved-attack', itemId: 'item.lantern' },
+        { type: 'actor.intent-changed' as const, eventId: 'command.saved-attack', actorId: 'hero.demo',
+          intent: 'hold' as const, presentation: 'intent.hold' as const, targetCategory: null },
       ], publicEvents: [] }],
     };
     expect(decodeActiveRun(encodeActiveRun(withMultipleEvents))).toEqual(withMultipleEvents);

@@ -60,4 +60,14 @@ describe('public event projection', () => {
       { type: 'sound.heard', category: 'movement', direction: 'southeast', distanceBand: 'near' },
     ]);
   });
+
+  it('projects broad intent only for a currently visible actor', () => {
+    const input = fixture();
+    const event: DomainEvent = { type: 'actor.intent-changed', eventId: 'event.intent', actorId: 'monster.hidden',
+      intent: 'approach', presentation: 'intent.approach', targetCategory: 'hero' };
+    expect(projectDomainEvents({ ...input, events: [event], heroId: input.state.hero.actorId })).toEqual([]);
+    const visible = { ...input, state: { ...input.state, floors: [{ ...input.state.floors[0]!,
+      ambient: { color: [255, 255, 255] as const, strength: 255 } }] } };
+    expect(projectDomainEvents({ ...visible, events: [event], heroId: visible.state.hero.actorId })).toEqual([event]);
+  });
 });

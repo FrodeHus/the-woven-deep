@@ -35,6 +35,12 @@ export interface RefreshedPerception {
   readonly illumination: IlluminationField;
 }
 
+export function isPerceivedCell(
+  visibilityWords: readonly number[], illumination: Readonly<{ intensity: readonly number[] }>, index: number,
+): boolean {
+  return isVisible(visibilityWords, index) && (illumination.intensity[index] ?? 0) > 0;
+}
+
 export function refreshKnowledge(input: RefreshKnowledgeInput): RefreshedPerception {
   assertOpaqueId(input.floor.floorId, 'floorId');
   assertOpaqueId(input.hero.heroId, 'heroId');
@@ -62,7 +68,7 @@ export function refreshKnowledge(input: RefreshKnowledgeInput): RefreshedPercept
   const observed: { index: number; tile: TileId }[] = [];
 
   for (let index = 0; index < cellCount; index += 1) {
-    if (isVisible(visibilityWords, index) && illumination.intensity[index]! > 0) {
+    if (isPerceivedCell(visibilityWords, illumination, index)) {
       observed.push({ index, tile: input.floor.tiles[index]! });
     }
   }

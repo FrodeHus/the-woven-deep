@@ -7,7 +7,7 @@ import type { IdentificationState, ItemInstance } from './item-model.js';
 import type { HungerStage, SurvivalState } from './survival-model.js';
 import type { DamageType } from '@woven-deep/content';
 import type {
-  EncounterRunDecision, FallenHeroRunDecision, FallenHeroStandingSnapshot, PopulationInstance,
+  EncounterRunDecision, FallenHeroRunDecision, FallenHeroStandingSnapshot, PopulationInstance, PopulationIntent,
 } from './population-model.js';
 
 export type OpaqueId = string;
@@ -280,6 +280,11 @@ export interface TrapStateEvent {
   readonly type: 'trap.triggered' | 'trap.disarmed' | 'trap.disarm-failed'; readonly eventId: OpaqueId;
   readonly actorId: OpaqueId; readonly featureId: OpaqueId;
 }
+export interface ActorIntentChangedEvent {
+  readonly type: 'actor.intent-changed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly intent: PopulationIntent; readonly presentation: `intent.${PopulationIntent}`;
+  readonly targetCategory: 'hero' | 'leader' | 'source' | 'position' | null;
+}
 export interface SoundHeardEvent {
   readonly type: 'sound.heard';
   readonly category: 'combat' | 'movement' | 'mechanism';
@@ -306,6 +311,7 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | IdentificationAppearanceRevealedEvent | ItemIdentifiedEvent
   | HungerStageChangedEvent | HungerRestoredEvent | FuelWarningEvent | ItemLightExtinguishedEvent
   | ItemDamagedEvent | DoorStateChangedEvent | FeatureRevealedEvent | FeatureSearchEvent | TrapStateEvent
+  | ActorIntentChangedEvent
   | SoundHeardEvent | HeroDamagedPublicEvent | RestCompletedEvent;
 
 export interface AppliedCommandResult {
