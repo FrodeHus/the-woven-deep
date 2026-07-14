@@ -585,7 +585,7 @@ git status --short
 
 Expected: every command exits 0; deterministic hashes match; Docker repeats all demonstrations; only intended source, content, fixture, plan, and documentation changes remain.
 
-- [ ] **Step 7: Request final code review, fix findings, and commit**
+- [x] **Step 7: Request final code review, fix findings, and commit**
 
 Commit: `test: verify population encounter milestone`
 
