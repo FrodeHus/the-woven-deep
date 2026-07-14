@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
+  analyzeConnectivity,
   encodeActiveRun,
   createEncounterRunDecisions,
   populationDemoEquivalent,
@@ -79,7 +80,7 @@ function proveMilestone(result, split, content) {
   assert(group.sharedKnowledge.length > 0, 'leader group did not relay knowledge');
   const relays = result.records.flatMap((record) => record.authoritativeEvents)
     .filter((event) => event.type === 'group.awareness-shared');
-  assert(relays.length > 0 && relays.length < group.roleMembership.length,
+  assert(relays.length > 0 && new Set(relays.map((event) => event.actorId)).size < group.roleMembership.length,
     'group relay was not limited by communication reach');
   const swarmDefinition = content.entries.find((entry) => entry.id === swarm?.encounterId);
   assert(swarmDefinition?.kind === 'encounter' && swarmDefinition.model === 'swarm', 'swarm content missing');
@@ -100,10 +101,17 @@ function proveMilestone(result, split, content) {
   assert(echoActor?.populationPresentation?.name === 'Echo of Bryn'
     && echoActor.maxHealth < championActor.maxHealth, 'Echo was not named and weaker than the Champion');
   const arenaFloor = result.initial.floors.find((floor) => floor.floorId === championActor.floorId);
-  const arenaEntrance = arenaFloor.vaults.flatMap((vault) => vault.entrances)[0];
+  const livingPopulationActors = result.initial.actors.filter((actor) => actor.floorId === arenaFloor.floorId
+    && actor.health > 0 && actor.populationId !== null);
   assert(preservesRequiredRoutes({ width: arenaFloor.width, height: arenaFloor.height, tiles: arenaFloor.tiles,
-    requiredPoints: [{ x: 1, y: 1 }, arenaEntrance], blockedPoints: [championActor, echoActor] }),
-  'optional Champion arena blocked the required route');
+    requiredPoints: [arenaFloor.stairUp, arenaFloor.stairDown], blockedPoints: livingPopulationActors }),
+  'living population placements blocked the mandatory stair route');
+  const blockedTiles = [...arenaFloor.tiles];
+  for (const actor of livingPopulationActors) blockedTiles[actor.y * arenaFloor.width + actor.x] = 0;
+  const mandatoryRoute = analyzeConnectivity({ width: arenaFloor.width, height: arenaFloor.height,
+    tiles: blockedTiles, start: arenaFloor.stairUp, target: arenaFloor.stairDown }).route;
+  assert(mandatoryRoute.length > 0 && mandatoryRoute.every((point) => point.x < 12),
+    'mandatory stair route entered the optional side arena');
   const encounters = content.entries.filter((entry) => entry.kind === 'encounter');
   const bossEncounter = encounters.find((entry) => entry.model === 'boss');
   let rejectedByNormalGate = false;
@@ -154,7 +162,7 @@ async function main() {
   console.log(stableJson(authoritativeEvents.filter((event) => event.type.startsWith('boss.'))));
   console.log("Deep's Champion and exact heirloom");
   console.log(stableJson(authoritativeEvents.filter((event) => event.type.startsWith('champion.'))));
-  console.log('normal production gate rejected; forced optional arena placed; required route remains passable');
+  console.log('normal production gate rejected; forced optional arena placed; stair endpoints remain connected while Champion and Echo are blocked');
   console.log(`${echoActor?.populationPresentation?.displayName ?? 'Echo of Bryn'} and ordinary loot`);
   console.log(stableJson(authoritativeEvents.filter((event) => event.type.startsWith('echo.'))));
   console.log('split execution equivalent');

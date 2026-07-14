@@ -3,7 +3,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  POPULATION_REPLAY_BOUNDARIES, encodeActiveRun, populationDemoEquivalent, runPopulationDemo, stableJson,
+  POPULATION_REPLAY_BOUNDARIES, createPopulationDemoRun, decodeActiveRun, encodeActiveRun,
+  populationDemoCommands, populationDemoEquivalent, populationDemoScenario, resolveCommand,
+  resolvePopulationDemoCommand, runPopulationDemo, stableJson, type PopulationDemoInput,
 } from '../src/index.js';
 
 let pack: CompiledContentPack;
@@ -31,5 +33,48 @@ describe('population continuous-versus-split replay', () => {
     const continuous = runPopulationDemo(pack);
     const split = runPopulationDemo(pack, new Set(POPULATION_REPLAY_BOUNDARIES.map((_, index) => index)));
     expect(populationDemoEquivalent(split, continuous)).toBe(true);
+  });
+
+  it('replays serialized fixture inputs through production command resolution', () => {
+    const scenario = populationDemoScenario(73);
+    const initial = createPopulationDemoRun(pack, scenario.seed);
+    const serialized = JSON.stringify(populationDemoCommands(initial, scenario));
+    const inputs = JSON.parse(serialized) as PopulationDemoInput[];
+    let state = decodeActiveRun(encodeActiveRun(initial));
+    for (const input of inputs) state = resolvePopulationDemoCommand(state, input, pack).state;
+    const expected = runPopulationDemo(pack, new Set(), scenario);
+    expect(encodeActiveRun(state)).toBe(encodeActiveRun(expected.state));
+    expect(stableJson(state.recentCommands)).toBe(stableJson(expected.state.recentCommands));
+  });
+
+  it('persists production wait commands and their authoritative/public artifacts', () => {
+    const result = runPopulationDemo(pack);
+    expect(result.records.every((record) => record.command.type === 'wait')).toBe(true);
+    expect(result.state.recentCommands).toHaveLength(POPULATION_REPLAY_BOUNDARIES.length);
+    expect(stableJson(result.state.recentCommands.map((record) => record.command)))
+      .toBe(stableJson(result.records.map((record) => record.command)));
+    expect(stableJson(result.state.recentCommands.map((record) => record.events)))
+      .toBe(stableJson(result.records.map((record) => record.authoritativeEvents)));
+    expect(stableJson(result.state.recentCommands.map((record) => record.publicEvents)))
+      .toBe(stableJson(result.records.map((record) => record.publicEvents)));
+  });
+
+  it('deduplicates a persisted command after save and reload', () => {
+    const result = runPopulationDemo(pack);
+    const reloaded = decodeActiveRun(encodeActiveRun(result.state));
+    const record = result.records[2]!;
+    const duplicate = resolveCommand(reloaded, record.command, { content: pack });
+    expect(encodeActiveRun(duplicate.state)).toBe(encodeActiveRun(reloaded));
+    expect(duplicate.result).toEqual(record.commandResult);
+    expect(duplicate.events).toEqual(record.publicEvents);
+  });
+
+  it('rejects stale new command ids without changing persisted history', () => {
+    const result = runPopulationDemo(pack);
+    const stale = resolveCommand(result.state, {
+      type: 'wait', commandId: 'command.population-demo-stale', expectedRevision: result.initial.revision,
+    }, { content: pack });
+    expect(stale.result).toMatchObject({ status: 'rejected', reason: 'stale_revision' });
+    expect(encodeActiveRun(stale.state)).toBe(encodeActiveRun(result.state));
   });
 });

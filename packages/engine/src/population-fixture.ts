@@ -1,23 +1,21 @@
 import type { CompiledContentPack, EncounterContentEntry, FallenChampionTemplateContentEntry } from '@woven-deep/content';
 import { heroPerception } from './actor-model.js';
-import { advanceBosses } from './boss-behavior.js';
-import { advanceFallenHeroEncounters, createFallenHeroRunDecisions, placeFallenHeroEncounters } from './champion.js';
+import { createFallenHeroRunDecisions, placeFallenHeroEncounters } from './champion.js';
 import { validateContentBoundRun } from './content-bound-validation.js';
 import { preservesRequiredRoutes } from './connectivity.js';
 import { createDemoRun } from './fixture.js';
-import { applyGroupLeaderOutcomes, coordinateGroups } from './group-behavior.js';
 import { createUnknownKnowledge } from './knowledge.js';
 import { allocateIdentificationMap } from './identification.js';
-import type { ActiveRun, CommandResult, DomainEvent, FloorSnapshot, PublicEvent, TileId } from './model.js';
+import type { ActiveRun, CommandResult, DomainEvent, FloorSnapshot, GameCommand, PublicEvent, TileId } from './model.js';
 import type { FallenHeroStandingSnapshot, GroupPopulation, SwarmPopulation } from './population-model.js';
 import { placePopulation } from './population-placement.js';
 import { refreshKnowledge } from './perception.js';
-import { projectDomainEvents } from './event-projection.js';
 import { projectGameplayState, type GameplayProjection } from './projection.js';
+import { replayCommands } from './replay.js';
 import { decodeActiveRun, encodeActiveRun } from './save-codec.js';
 import { validateActiveRun } from './save-schema.js';
-import { stableJson } from './stable-json.js';
-import { advanceSwarms, resolveSwarmSpawnAction } from './swarm-behavior.js';
+import { compareCodeUnits, stableJson } from './stable-json.js';
+import { resolveSwarmSpawnAction } from './swarm-behavior.js';
 
 const WIDTH = 19;
 const HEIGHT = 13;
@@ -29,7 +27,7 @@ export const POPULATION_REPLAY_BOUNDARIES = [
 
 export interface PopulationDemoRecord {
   readonly boundary: typeof POPULATION_REPLAY_BOUNDARIES[number];
-  readonly command: PopulationDemoCommand;
+  readonly command: GameCommand;
   readonly commandResult: CommandResult;
   readonly authoritativeEvents: readonly DomainEvent[];
   readonly publicEvents: readonly PublicEvent[];
@@ -50,11 +48,9 @@ export interface PopulationDemoScenario {
   readonly recoveryElapsed: number;
 }
 
-export interface PopulationDemoCommand {
-  readonly type: 'population-demo-transition';
+export interface PopulationDemoInput {
   readonly boundary: typeof POPULATION_REPLAY_BOUNDARIES[number];
-  readonly commandId: string;
-  readonly expectedRevision: number;
+  readonly command: GameCommand;
   readonly scenario: PopulationDemoScenario;
 }
 
@@ -73,11 +69,16 @@ function championTemplate(pack: CompiledContentPack): FallenChampionTemplateCont
 function demoFloor(run: ActiveRun, floorId: string, depth: number, withArena: boolean): FloorSnapshot {
   const tiles = Array.from({ length: WIDTH * HEIGHT }, (_, index): TileId => {
     const x = index % WIDTH; const y = Math.floor(index / WIDTH);
-    return x === 0 || y === 0 || x === WIDTH - 1 || y === HEIGHT - 1 ? 0 : 1;
+    if (x === 0 || y === 0 || x === WIDTH - 1 || y === HEIGHT - 1) return 0;
+    if (!withArena) return 1;
+    if (x === 1 && y === 6) return 4;
+    if (x === 10 && y === 6) return 5;
+    return y === 6 || (x >= 12 && x <= 17 && y >= 1 && y <= 11) ? 1 : 0;
   });
   const base: FloorSnapshot = {
     ...run.floors[0]!, floorId, width: WIDTH, height: HEIGHT, depth, tiles, entities: [],
-    stairUp: null, stairDown: null, vaults: withArena ? [{ placementId: 'vault.population-demo', vaultId: 'vault.lampwright-cache',
+    stairUp: withArena ? { x: 1, y: 6 } : null, stairDown: withArena ? { x: 10, y: 6 } : null,
+    vaults: withArena ? [{ placementId: 'vault.population-demo', vaultId: 'vault.lampwright-cache',
       x: 12, y: 1, width: 6, height: 11, rotation: 0, reflected: false, entrances: [{ x: 12, y: 6 }] }] : [],
     placementSlots: withArena ? [{ slotId: 'slot.champion', vaultPlacementId: 'vault.population-demo', kind: 'monster',
       required: false, tags: ['side-arena', 'fallen-hero'], x: 16, y: 3 },
@@ -103,23 +104,11 @@ function standing(rank: number): FallenHeroStandingSnapshot {
 }
 
 function publishPlacement(run: ActiveRun, placement: Extract<ReturnType<typeof placePopulation>, { status: 'placed' }>): ActiveRun {
-  return { ...run, actors: [...run.actors, ...placement.createdActors].sort((a, b) => a.actorId.localeCompare(b.actorId)),
-    populations: [...run.populations, placement.population].sort((a, b) => a.populationId.localeCompare(b.populationId)),
+  return { ...run, actors: [...run.actors, ...placement.createdActors].sort((a, b) => compareCodeUnits(a.actorId, b.actorId)),
+    populations: [...run.populations, placement.population].sort((a, b) => compareCodeUnits(a.populationId, b.populationId)),
     floors: run.floors.map((floor) => floor.floorId === placement.floor.floorId ? placement.floor : floor),
     encounterDecisions: placement.encounterDecisions,
     rng: { ...run.rng, encounters: placement.nextEncounterState } };
-}
-
-function firstFreeCell(run: ActiveRun, floorId: string, ignoredActorId: string): Readonly<{ x: number; y: number }> {
-  const floor = run.floors.find((candidate) => candidate.floorId === floorId)!;
-  const occupied = new Set(run.actors.filter((actor) => actor.floorId === floorId && actor.health > 0
-    && actor.actorId !== ignoredActorId).map((actor) => `${actor.x},${actor.y}`));
-  for (let y = 1; y < floor.height - 1; y += 1) {
-    for (let x = 1; x < floor.width - 1; x += 1) {
-      if (floor.tiles[y * floor.width + x] === 1 && !occupied.has(`${x},${y}`)) return { x, y };
-    }
-  }
-  throw new Error(`population fixture has no free cell on ${floorId}`);
 }
 
 /** Builds the milestone exit fixture. Eligibility overrides are explicit test/demo input; authored YAML is untouched. */
@@ -134,8 +123,9 @@ export function createPopulationDemoRun(pack: CompiledContentPack, scenarioSeed 
   const populationFloor = demoFloor(base, 'floor.population-demo', 4, false);
   const bossFloor = demoFloor(base, 'floor.population-boss-demo', 5, true);
   let run: ActiveRun = { ...base, contentHash: pack.hash, activeFloorId: populationFloor.floorId,
-    actors: base.actors.map((actor) => ({ ...actor, floorId: populationFloor.floorId })),
-    floors: [populationFloor, bossFloor].sort((left, right) => left.floorId.localeCompare(right.floorId)),
+    actors: base.actors.map((actor) => ({ ...actor, floorId: populationFloor.floorId, x: 1, y: 6,
+      health: 100_000, maxHealth: 100_000 })),
+    floors: [populationFloor, bossFloor].sort((left, right) => compareCodeUnits(left.floorId, right.floorId)),
     fallenHeroStandings: standings, fallenHeroDecisions: selected.decisions.map((decision) => ({
       ...decision, retained: true, ...(decision.role === 'echo' ? { gateRoll: 0 } : {}) })),
     identification: identified.identification,
@@ -157,7 +147,7 @@ export function createPopulationDemoRun(pack: CompiledContentPack, scenarioSeed 
   const fallen = placeFallenHeroEncounters({ run,
     floor: run.floors.find((floor) => floor.floorId === bossFloor.floorId)!, content: pack });
   run = { ...run, floors: run.floors.map((floor) => floor.floorId === fallen.floor.floorId ? fallen.floor : floor),
-    actors: [...run.actors, ...fallen.actors].sort((a, b) => a.actorId.localeCompare(b.actorId)),
+    actors: [...run.actors, ...fallen.actors].sort((a, b) => compareCodeUnits(a.actorId, b.actorId)),
     populations: fallen.populations, fallenHeroDecisions: fallen.decisions };
   const groupPopulation = run.populations.find((population): population is GroupPopulation => population.model === 'group')!;
   if (groupPopulation.leaderActorId === null) {
@@ -168,8 +158,15 @@ export function createPopulationDemoRun(pack: CompiledContentPack, scenarioSeed 
       populationPresentation: { ...actor.populationPresentation!, leader: true } } : actor) };
   }
   const seedWord = (scenarioSeed >>> 0) || 0x6d2b79f5;
-  run = { ...run, rng: { ...run.rng, encounters: [seedWord, (seedWord ^ 0x9e3779b9) >>> 0,
-    Math.imul(seedWord, 0x85ebca6b) >>> 0, Math.imul(seedWord ^ 0xc2b2ae35, 0x27d4eb2f) >>> 0] } };
+  const relationships = run.actors.flatMap((left, leftIndex) => run.actors.slice(leftIndex + 1).map((right) => ({
+    leftActorId: left.actorId < right.actorId ? left.actorId : right.actorId,
+    rightActorId: left.actorId < right.actorId ? right.actorId : left.actorId,
+    relationship: 'friendly' as const,
+  }))).sort((left, right) => compareCodeUnits(left.leftActorId, right.leftActorId)
+    || compareCodeUnits(left.rightActorId, right.rightActorId));
+  run = { ...run, relationships, rng: { ...run.rng,
+    encounters: [seedWord, (seedWord ^ 0x9e3779b9) >>> 0, Math.imul(seedWord, 0x85ebca6b) >>> 0,
+      Math.imul(seedWord ^ 0xc2b2ae35, 0x27d4eb2f) >>> 0] } };
   validatePopulationInvariants(run, pack);
   return run;
 }
@@ -177,10 +174,13 @@ export function createPopulationDemoRun(pack: CompiledContentPack, scenarioSeed 
 export function validatePopulationInvariants(run: ActiveRun, pack: CompiledContentPack): void {
   validateActiveRun(run); validateContentBoundRun(run, pack);
   for (const floor of run.floors) {
-    const requiredPoints = [floor.stairUp, floor.stairDown, ...floor.vaults.flatMap((vault) => vault.entrances)]
+    const requiredPoints = [floor.stairUp, floor.stairDown,
+      ...floor.placementSlots.filter((slot) => slot.kind === 'objective')]
       .filter((point): point is { x: number; y: number } => point !== null);
+    const blockedPoints = run.actors.filter((actor) => actor.floorId === floor.floorId && actor.health > 0
+      && actor.populationId !== null).map((actor) => ({ x: actor.x, y: actor.y }));
     if (!preservesRequiredRoutes({ width: floor.width, height: floor.height, tiles: floor.tiles,
-      requiredPoints, blockedPoints: [] })) throw new Error('population invariant: required route is disconnected');
+      requiredPoints, blockedPoints })) throw new Error('population invariant: required route is disconnected');
   }
   const living = new Set(run.actors.filter((actor) => actor.health > 0).map((actor) => actor.actorId));
   const memberships = new Set<string>();
@@ -241,107 +241,135 @@ export function shrinkPopulationScenario(seed: number): readonly number[] {
   return [...new Set(values)];
 }
 
-export function populationDemoCommands(initial: ActiveRun, scenario: PopulationDemoScenario): readonly PopulationDemoCommand[] {
-  return POPULATION_REPLAY_BOUNDARIES.map((boundary, index) => ({ type: 'population-demo-transition', boundary,
-    commandId: `command.population-demo-${String(index + 1).padStart(2, '0')}`, expectedRevision: initial.revision + index,
-    scenario }));
+export function populationDemoCommands(initial: ActiveRun, scenario: PopulationDemoScenario): readonly PopulationDemoInput[] {
+  return POPULATION_REPLAY_BOUNDARIES.map((boundary, index) => ({ boundary, scenario, command: {
+    type: 'wait', commandId: `command.population-demo-${String(index + 1).padStart(2, '0')}`,
+    expectedRevision: initial.revision + index,
+  } }));
 }
 
-function inactiveSnapshot(state: ActiveRun, activeFloorId: string) {
-  const floorIds = new Set(state.floors.filter((floor) => floor.floorId !== activeFloorId).map((floor) => floor.floorId));
-  return { actors: state.actors.filter((actor) => floorIds.has(actor.floorId)),
-    populations: state.populations.filter((population) => floorIds.has(population.floorId)) };
-}
-
-export function resolvePopulationDemoCommand(state: ActiveRun, command: PopulationDemoCommand,
-  pack: CompiledContentPack): Readonly<{ state: ActiveRun; result: CommandResult; authoritativeEvents: readonly DomainEvent[];
-    publicEvents: readonly PublicEvent[]; projection: GameplayProjection }> {
-  if (command.expectedRevision !== state.revision) return { state,
-    result: { status: 'rejected', commandId: command.commandId, revision: state.revision, turn: state.turn,
-      reason: 'stale_revision' }, authoritativeEvents: [], publicEvents: [],
-    projection: projectGameplayState({ state, content: pack }) };
-  let transition: Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }>;
-  if (command.boundary === 'before-group-relay') {
+function preparePopulationDemoBoundary(state: ActiveRun, input: PopulationDemoInput,
+  pack: CompiledContentPack): ActiveRun {
+  const { boundary, command, scenario } = input;
+  if (boundary === 'before-group-relay') {
     const group = state.populations.find((population): population is GroupPopulation => population.model === 'group')!;
     const observers = group.livingMemberIds.map((actorId) => state.actors.find((actor) => actor.actorId === actorId)!)
-      .sort((a, b) => a.actorId.localeCompare(b.actorId));
-    const observer = observers[command.scenario.relayMemberIndex % observers.length]!;
+      .sort((a, b) => compareCodeUnits(a.actorId, b.actorId));
+    const observer = observers[scenario.relayMemberIndex % observers.length]!;
     const hero = state.actors.find((actor) => actor.actorId === state.hero.actorId)!;
-    const primed = { ...state, actors: state.actors.map((actor) => actor.actorId === observer.actorId ? { ...actor,
+    return { ...state, actors: state.actors.map((actor) => actor.actorId === observer.actorId ? { ...actor,
       behaviorState: { ...actor.behaviorState, lastKnownTargets: [{ targetActorId: hero.actorId, floorId: hero.floorId,
         x: hero.x, y: hero.y, observedAt: state.worldTime, source: 'sight' as const,
         observerActorId: actor.actorId }] } } : actor) };
-    transition = coordinateGroups({ state: primed, content: pack, eventId: command.commandId });
-  } else if (command.boundary === 'before-source-spawn') {
-    let current = state; const events: DomainEvent[] = [];
-    for (let attempt = 0; attempt < 16 && !events.some((event) => event.type === 'swarm.cap-reached'); attempt += 1) {
-      const swarm = current.populations.find((population): population is SwarmPopulation => population.model === 'swarm')!;
-      const ready = { ...current, worldTime: swarm.nextSpawnAt,
-        actors: current.actors.map((actor) => actor.actorId === swarm.sourceActorId ? { ...actor, energy: 100 } : actor) };
-      const spawned = resolveSwarmSpawnAction({ state: ready, content: pack, sourceActorId: swarm.sourceActorId,
-        eventId: command.commandId });
-      current = spawned.state; events.push(...spawned.events);
-    }
-    if (!events.some((event) => event.type === 'swarm.cap-reached')) throw new Error('population demo did not reach a swarm cap');
-    const swarm = current.populations.find((population): population is SwarmPopulation => population.model === 'swarm')!;
-    const killed = { ...current, actors: current.actors.map((actor) => actor.actorId === swarm.sourceActorId
-      ? { ...actor, health: 0 } : actor) };
-    const shutdown = advanceSwarms({ state: killed, content: pack, eventId: command.commandId });
-    transition = { state: shutdown.state, events: [...events, ...shutdown.events] };
-  } else if (command.boundary === 'before-leader-death') {
-    const group = state.populations.find((population): population is GroupPopulation => population.model === 'group')!;
-    transition = applyGroupLeaderOutcomes({ state: { ...state, actors: state.actors.map((actor) => actor.actorId === group.leaderActorId
-      ? { ...actor, health: 0 } : actor) }, content: pack, eventId: command.commandId });
-  } else if (command.boundary === 'before-boss-threshold') {
-    const boss = state.populations.find((population) => population.model === 'boss')!;
-    const heroCell = firstFreeCell(state, boss.floorId, state.hero.actorId);
-    const threshold = { ...state, activeFloorId: boss.floorId, activeFloorEnteredAt: state.worldTime,
-      actors: state.actors.map((actor) => actor.actorId === state.hero.actorId
-        ? { ...actor, floorId: boss.floorId, x: heroCell.x, y: heroCell.y }
-        : actor.actorId === boss.actorId ? { ...actor,
-          health: Math.max(1, Math.floor(actor.maxHealth * command.scenario.bossHealthPercent / 100)) } : actor) };
-    transition = advanceBosses({ state: threshold, content: pack, eventId: command.commandId });
-  } else if (command.boundary === 'before-boss-re-entry') {
-    const frozen = inactiveSnapshot(state, state.activeFloorId);
-    const exited = advanceBosses({ state: { ...state, activeFloorId: 'floor.inactive' }, content: pack,
-      eventId: command.commandId }).state;
-    transition = advanceBosses({ state: { ...exited, activeFloorId: state.activeFloorId,
-      worldTime: state.worldTime + command.scenario.recoveryElapsed,
-      activeFloorEnteredAt: state.worldTime + command.scenario.recoveryElapsed }, content: pack,
-      eventId: command.commandId });
-    if (stableJson(inactiveSnapshot(transition.state, state.activeFloorId)) !== stableJson(frozen)) {
-      throw new Error('population fixture inactive actors, populations, or timers advanced');
-    }
-  } else if (command.boundary === 'before-champion-encounter') {
-    transition = advanceFallenHeroEncounters({ state, content: pack, eventId: command.commandId });
-  } else {
-    const defeated = { ...state, actors: state.actors.map((actor) => actor.populationId !== null
-      && state.populations.some((population) => population.populationId === actor.populationId
-        && (population.model === 'boss' || population.model === 'champion' || population.model === 'echo'))
-      ? { ...actor, health: 0 } : actor) };
-    const boss = advanceBosses({ state: defeated, content: pack, eventId: command.commandId });
-    const fallen = advanceFallenHeroEncounters({ state: boss.state, content: pack, eventId: command.commandId });
-    transition = { state: fallen.state, events: [...boss.events, ...fallen.events] };
   }
-  if (transition.state.worldTime < state.worldTime) throw new Error(`population fixture time reversed at ${command.boundary}`);
-  const result = { status: 'applied', commandId: command.commandId, revision: state.revision + 1,
-    turn: state.turn + 1 } as const;
-  const next = { ...transition.state, revision: result.revision, turn: result.turn };
-  validatePopulationInvariants(next, pack);
-  const publicEvents = projectDomainEvents({ state: next, content: pack, heroId: next.hero.actorId,
-    events: transition.events });
-  return { state: next, result, authoritativeEvents: transition.events, publicEvents,
-    projection: projectGameplayState({ state: next, content: pack }) };
+  if (boundary === 'before-source-spawn') {
+    let current = state;
+    const definition = encounter(pack, 'swarm');
+    if (definition.model !== 'swarm') throw new Error('population fixture requires swarm content');
+    const initialSwarm = current.populations.find((population): population is SwarmPopulation => population.model === 'swarm')!;
+    current = { ...current,
+      actors: current.actors.map((actor) => actor.actorId === initialSwarm.sourceActorId
+        ? { ...actor, x: 17, y: 11, awareActorIds: [], behaviorState: { ...actor.behaviorState,
+          goal: null, lastKnownTargets: [], investigation: null } } : actor),
+      floors: current.floors.map((floor) => floor.floorId === initialSwarm.floorId ? { ...floor,
+        entities: floor.entities.map((entity) => entity.entityId === initialSwarm.sourceActorId
+          ? { ...entity, x: 17, y: 11 } : entity) } : floor) };
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      const swarm = current.populations.find((population): population is SwarmPopulation => population.model === 'swarm')!;
+      const livingChildren = swarm.livingMemberIds.filter((actorId) => actorId !== swarm.sourceActorId).length;
+      if (livingChildren >= definition.definition.maximumLivingChildren) break;
+      const readyAt = Math.max(current.worldTime, swarm.nextSpawnAt, current.activeFloorEnteredAt + 1);
+      current = { ...current, worldTime: readyAt,
+        actors: current.actors.map((actor) => actor.actorId === swarm.sourceActorId
+          ? { ...actor, energy: 100 } : actor),
+        populations: current.populations.map((population) => population.populationId === swarm.populationId
+          ? { ...swarm, nextSpawnAt: readyAt } : population) };
+      current = resolveSwarmSpawnAction({ state: current, content: pack,
+        sourceActorId: swarm.sourceActorId, eventId: `${command.commandId}.fixture` }).state;
+    }
+    const swarm = current.populations.find((population): population is SwarmPopulation => population.model === 'swarm')!;
+    const livingChildren = swarm.livingMemberIds.filter((actorId) => actorId !== swarm.sourceActorId).length;
+    if (livingChildren < definition.definition.maximumLivingChildren) {
+      throw new Error('population fixture could not prepare the swarm cap');
+    }
+    const removedChildId = [...swarm.livingMemberIds]
+      .filter((actorId) => actorId !== swarm.sourceActorId).sort().at(-1)!;
+    current = { ...current,
+      actors: current.actors.filter((actor) => actor.actorId !== removedChildId),
+      floors: current.floors.map((floor) => floor.floorId === swarm.floorId
+        ? { ...floor, entities: floor.entities.filter((entity) => entity.entityId !== removedChildId) } : floor),
+      populations: current.populations.map((population) => population.populationId === swarm.populationId
+        ? { ...swarm, spawnedCount: swarm.spawnedCount - 1,
+          livingMemberIds: swarm.livingMemberIds.filter((actorId) => actorId !== removedChildId) }
+        : population) };
+    const preparedSwarm = current.populations.find((population): population is SwarmPopulation => population.model === 'swarm')!;
+    const readyAt = Math.max(current.worldTime, current.activeFloorEnteredAt + 1);
+    return { ...current, worldTime: readyAt,
+      actors: current.actors.map((actor) => actor.actorId === preparedSwarm.sourceActorId
+        ? { ...actor, energy: 1_000 } : actor),
+      populations: current.populations.map((population) => population.populationId === preparedSwarm.populationId
+        ? { ...preparedSwarm, nextSpawnAt: readyAt, emittedCapLevels: [] } : population) };
+  }
+  if (boundary === 'before-leader-death') {
+    const group = state.populations.find((population): population is GroupPopulation => population.model === 'group')!;
+    const swarm = state.populations.find((population): population is SwarmPopulation => population.model === 'swarm')!;
+    const readyAt = Math.max(state.worldTime, state.activeFloorEnteredAt + 1);
+    return { ...state, worldTime: readyAt,
+      actors: state.actors.map((actor) => actor.actorId === group.leaderActorId ? { ...actor, health: 0 }
+        : actor.actorId === swarm.sourceActorId ? { ...actor, energy: 1_000 } : actor),
+      populations: state.populations.map((population) => population.populationId === swarm.populationId
+        ? { ...swarm, nextSpawnAt: readyAt, emittedCapLevels: [] } : population) };
+  }
+  if (boundary === 'before-boss-threshold') {
+    const swarm = state.populations.find((population): population is SwarmPopulation => population.model === 'swarm')!;
+    return { ...state, actors: state.actors.map((actor) => actor.actorId === swarm.sourceActorId
+      ? { ...actor, health: 0 } : actor) };
+  }
+  if (boundary === 'before-boss-re-entry') {
+    const boss = state.populations.find((population) => population.model === 'boss')!;
+    const enteredAt = state.worldTime + scenario.recoveryElapsed;
+    return { ...state, worldTime: enteredAt, activeFloorId: boss.floorId, activeFloorEnteredAt: enteredAt,
+      actors: state.actors.map((actor) => actor.actorId === state.hero.actorId
+        ? { ...actor, floorId: boss.floorId }
+        : actor.actorId === boss.actorId ? { ...actor,
+          health: Math.max(1, Math.floor(actor.maxHealth * scenario.bossHealthPercent / 100)) } : actor),
+      populations: state.populations.map((population) => population.populationId === boss.populationId
+        ? { ...boss, lastFloorExitAt: state.worldTime } : population) };
+  }
+  if (boundary === 'before-reward-creation') {
+    const terminalPopulationIds = new Set(state.populations.filter((population) => population.model === 'boss'
+      || population.model === 'champion' || population.model === 'echo').map((population) => population.populationId));
+    return { ...state, actors: state.actors.map((actor) => actor.populationId !== null
+      && terminalPopulationIds.has(actor.populationId) ? { ...actor, health: 0 } : actor) };
+  }
+  return state;
+}
+
+export function resolvePopulationDemoCommand(state: ActiveRun, input: PopulationDemoInput,
+  pack: CompiledContentPack): Readonly<{ state: ActiveRun; result: CommandResult; authoritativeEvents: readonly DomainEvent[];
+    publicEvents: readonly PublicEvent[]; projection: GameplayProjection }> {
+  const prepared = preparePopulationDemoBoundary(state, input, pack);
+  const replay = replayCommands(prepared, [input.command], { content: pack });
+  const step = replay.steps[0]!;
+  const recorded = replay.state.recentCommands.find((entry) => entry.command.commandId === input.command.commandId);
+  const authoritativeEvents = recorded?.events ?? [];
+  if (step.result.status === 'applied' && !recorded) {
+    throw new Error(`population demo command ${input.command.commandId} was not persisted`);
+  }
+  if (replay.state.worldTime < state.worldTime) throw new Error(`population fixture time reversed at ${input.boundary}`);
+  validatePopulationInvariants(replay.state, pack);
+  return { state: replay.state, result: step.result, authoritativeEvents,
+    publicEvents: step.events, projection: projectGameplayState({ state: replay.state, content: pack }) };
 }
 
 export function runPopulationDemo(pack: CompiledContentPack, reloadBefore: ReadonlySet<number> = new Set(),
   scenario: PopulationDemoScenario = populationDemoScenario(0)): PopulationDemoResult {
   const initial = createPopulationDemoRun(pack, scenario.seed); let state = initial; const records: PopulationDemoRecord[] = [];
-  for (const [index, command] of populationDemoCommands(initial, scenario).entries()) {
+  for (const [index, input] of populationDemoCommands(initial, scenario).entries()) {
     if (reloadBefore.has(index)) state = decodeActiveRun(encodeActiveRun(state));
-    const resolved = resolvePopulationDemoCommand(state, command, pack); state = resolved.state;
-    if (resolved.result.status !== 'applied') throw new Error(`population demo command ${command.commandId} was rejected`);
-    records.push({ boundary: command.boundary, command, commandResult: resolved.result,
+    const resolved = resolvePopulationDemoCommand(state, input, pack); state = resolved.state;
+    if (resolved.result.status !== 'applied') throw new Error(`population demo command ${input.command.commandId} was rejected`);
+    records.push({ boundary: input.boundary, command: input.command, commandResult: resolved.result,
       authoritativeEvents: resolved.authoritativeEvents, publicEvents: resolved.publicEvents,
       projection: resolved.projection });
   }

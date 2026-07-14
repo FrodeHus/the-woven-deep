@@ -23,7 +23,7 @@ describe('population encounter demonstration CLI', () => {
     expect(first.stdout).toMatch(/relay-limited leader group[\s\S]*leader outcome/);
     expect(first.stdout).toMatch(/capped visible swarm source[\s\S]*phased boss and unique reward/);
     expect(first.stdout).toMatch(/Deep's Champion[\s\S]*heirloom[\s\S]*Echo of /);
-    expect(first.stdout).toContain('normal production gate rejected; forced optional arena placed; required route remains passable');
+    expect(first.stdout).toContain('normal production gate rejected; forced optional arena placed; stair endpoints remain connected while Champion and Echo are blocked');
     expect(first.stdout).toMatch(/ordinary loot[\s\S]*split execution equivalent/);
     expect(first.stdout).toMatch(/stable hashes\n(?:[^\n]+ [a-f0-9]{64}\n)+/);
     expect(first.stdout).toContain('population encounter milestone verified\n');
