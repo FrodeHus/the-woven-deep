@@ -5,17 +5,19 @@ import { heroActor, heroPerception, type ActorState } from './actor-model.js';
 import { actorHasConditionTrait } from './conditions.js';
 import {
   changeReputation, factionReputation, guaranteedUniqueItemIds, merchantAcceptsItem,
-  quoteMerchantPurchase, quoteMerchantSale, reputationTier,
+  quoteMerchantPurchase, quoteMerchantSale, quoteMerchantService, reputationTier,
 } from './commerce.js';
+import { identifyItemCompletely } from './identification.js';
 import { itemLightSources } from './equipment.js';
 import { featureTiles } from './features.js';
 import { depositIntoBackpack } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
-import type { MerchantPopulation } from './merchant-model.js';
+import type { MerchantPopulation, MerchantServiceState } from './merchant-model.js';
 import {
   tileIndex,
   type ActiveRun, type DomainEvent, type GameCommand, type InvalidActionReason, type OpaqueId,
   type TradeBuyCommand, type TradeCloseReason, type TradeCommand, type TradeSellCommand,
+  type TradeServiceCommand,
 } from './model.js';
 import { isPerceivedCell, refreshKnowledge } from './perception.js';
 import { compareCodeUnits } from './stable-json.js';
@@ -26,7 +28,8 @@ export type TradeValidation = Readonly<{ ok: true }>
 
 export function isTradeCommand(command: GameCommand): command is TradeCommand {
   return command.type === 'trade-open' || command.type === 'trade-buy'
-    || command.type === 'trade-sell' || command.type === 'trade-close';
+    || command.type === 'trade-sell' || command.type === 'trade-service'
+    || command.type === 'trade-close';
 }
 
 function itemDefinition(content: CompiledContentPack, contentId: OpaqueId): ItemContentEntry {
@@ -256,6 +259,60 @@ function planSell(input: Readonly<{
   };
 }
 
+interface ServicePlan {
+  readonly service: MerchantServiceState;
+  readonly price: number;
+  readonly currency: number;
+}
+
+type ServicePlanResult = Readonly<{ ok: true; plan: ServicePlan }>
+  | Readonly<{ ok: false; reason: InvalidActionReason }>;
+
+/**
+ * Preflight-and-plan for the identification service. Tier gating requires BOTH directions: the
+ * hero's current faction tier must allow the service, and the merchant's saved offer must list
+ * that tier. The target must be hero-owned (backpack or equipped) and still have something to
+ * identify (an unidentified instance, or an unrevealed shuffled appearance).
+ */
+function planService(input: Readonly<{
+  state: ActiveRun; content: CompiledContentPack; command: TradeServiceCommand; session: MerchantSession;
+}>): ServicePlanResult {
+  const { state, content, command, session } = input;
+  const service = session.population.services.find((candidate) => candidate.serviceId === command.serviceId);
+  if (!service || service.remainingUses <= 0
+    || !session.tier.serviceIds.includes(command.serviceId)
+    || !service.tierIds.includes(session.tier.tierId)) {
+    return { ok: false, reason: 'trade.service-unavailable' };
+  }
+  const target = state.items.find((candidate) => candidate.itemId === command.targetItemId);
+  const hero = heroActor(state);
+  const heroOwned = target !== undefined
+    && (target.location.type === 'backpack' || target.location.type === 'equipped')
+    && target.location.actorId === hero.actorId;
+  if (!target || !heroOwned) return { ok: false, reason: 'trade.target-invalid' };
+  const definition = itemDefinition(content, target.contentId);
+  const appearanceId = state.identification.appearanceByContentId[target.contentId];
+  const appearanceUnknown = definition.identification.mode === 'shuffled' && appearanceId !== undefined
+    && !state.identification.knownAppearanceIds.includes(appearanceId);
+  if (target.identified && !appearanceUnknown) return { ok: false, reason: 'trade.target-invalid' };
+  let price: number;
+  try {
+    price = quoteMerchantService({ basePrice: service.basePrice, factionBps: session.tier.purchasePriceBps });
+  } catch {
+    return { ok: false, reason: 'trade.insufficient-funds' };
+  }
+  if (state.hero.currency < price) return { ok: false, reason: 'trade.insufficient-funds' };
+  return { ok: true, plan: { service, price, currency: state.hero.currency - price } };
+}
+
+function plannedService(input: Readonly<{
+  state: ActiveRun; content: CompiledContentPack; command: TradeServiceCommand;
+}>): ServicePlanResult {
+  const session = activeSession({ state: input.state, content: input.content, command: input.command });
+  if (!session.ok) return session;
+  return planService({ state: input.state, content: input.content, command: input.command, session: session.session });
+}
+
 function planned(input: Readonly<{
   state: ActiveRun; content: CompiledContentPack; command: TradeCommand;
 }>): PlanResult | Readonly<{ ok: false; reason: InvalidActionReason }> | null {
@@ -283,6 +340,10 @@ export function validateTradeCommand(input: Readonly<{
   if (input.command.type === 'trade-close') {
     const session = activeSession({ state: input.state, content: input.content, command: input.command });
     return session.ok ? { ok: true } : { ok: false, reason: session.reason };
+  }
+  if (input.command.type === 'trade-service') {
+    const plan = plannedService({ state: input.state, content: input.content, command: input.command });
+    return plan.ok ? { ok: true } : { ok: false, reason: plan.reason };
   }
   const plan = planned({ state: input.state, content: input.content, command: input.command });
   return plan === null || plan.ok ? { ok: true } : { ok: false, reason: plan.reason };
@@ -379,6 +440,36 @@ export function resolveTradeCommand(input: Readonly<{
   }
   if (command.type === 'trade-close') {
     return closeTrade({ state, content, eventId: command.commandId, reason: 'player' });
+  }
+  if (command.type === 'trade-service') {
+    const session = activeSession({ state, content, command });
+    if (!session.ok) throw new Error('internal invariant: trade-service was not validated');
+    const plan = planService({ state, content, command, session: session.session });
+    if (!plan.ok) throw new Error('internal invariant: trade-service was not validated');
+    const trade = state.activeTrade;
+    if (trade === null) throw new Error('internal invariant: trade-service requires an active trade');
+    const population = session.session.population;
+    const remainingUses = plan.plan.service.remainingUses - 1;
+    const services = population.services.map((candidate) =>
+      candidate.serviceId === command.serviceId ? { ...candidate, remainingUses } : candidate);
+    const charged: ActiveRun = {
+      ...state,
+      hero: { ...state.hero, currency: plan.plan.currency },
+      populations: replaceMerchantPopulation(state, { ...population, services }),
+      activeTrade: { ...trade, completedCommerce: true },
+    };
+    const identified = identifyItemCompletely({
+      run: charged, content, itemId: command.targetItemId, eventId: command.commandId,
+    });
+    return {
+      state: identified.state,
+      events: [{
+        type: 'trade.service-purchased', eventId: command.commandId,
+        merchantPopulationId: trade.merchantPopulationId, serviceId: command.serviceId,
+        targetItemId: command.targetItemId, price: plan.plan.price,
+        currency: plan.plan.currency, remainingUses,
+      }, ...identified.events],
+    };
   }
   const plan = planned({ state, content, command });
   if (plan === null || !plan.ok) throw new Error(`internal invariant: ${command.type} was not validated`);

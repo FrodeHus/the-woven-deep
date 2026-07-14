@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { IdentificationPoolContentEntry, ItemContentEntry } from '@woven-deep/content';
 import {
-  allocateIdentificationMap, createDemoContentPack, createDemoRun, identifyItem, projectItem, stableJson,
+  allocateIdentificationMap, createDemoContentPack, createDemoRun, identifyItem, identifyItemCompletely,
+  projectItem, stableJson,
   type ItemInstance, resolveCommand, createGeneratedDemoRun, validateContentBoundRun,
   decodeActiveRun, encodeActiveRun, unidentifiedPresentation,
 } from '../src/index.js';
@@ -82,6 +83,57 @@ describe('per-run item identification', () => {
     const result = identifyItem({ run: { ...base, items: [first, second] }, itemId: first.itemId, eventId: 'event.identify' });
     expect(result.state.items.find((item) => item.itemId === first.itemId)!.identified).toBe(true);
     expect(result.state.items.find((item) => item.itemId === second.itemId)!.identified).toBe(false);
+  });
+
+  it('completely identifies a shuffled item revealing the appearance before the instance', () => {
+    const definition = potion('item.heal');
+    const content = contentWith(definition, potion('item.harm'));
+    const item: ItemInstance = { itemId: 'item.potion.1', contentId: definition.id, quantity: 1, condition: 100,
+      enchantment: null, identified: false, charges: null, fuel: null, enabled: null,
+      location: { type: 'backpack', actorId: 'hero.demo' } };
+    const identification = allocateIdentificationMap({ content, rng: createDemoRun().rng }).identification;
+    const run = { ...createDemoRun(), items: [item], identification };
+    const result = identifyItemCompletely({ run, content, itemId: item.itemId, eventId: 'event.identify' });
+    expect(result.events).toEqual([
+      { type: 'identification.appearance-revealed', eventId: 'event.identify',
+        appearanceId: identification.appearanceByContentId[definition.id], contentId: definition.id },
+      { type: 'item.identified', eventId: 'event.identify', itemId: item.itemId },
+    ]);
+    expect(result.state.identification.knownAppearanceIds)
+      .toEqual([identification.appearanceByContentId[definition.id]]);
+    expect(result.state.items[0]!.identified).toBe(true);
+  });
+
+  it('completely identifies an instance item without touching the shared appearance map', () => {
+    const definition = { ...potion('item.ring'), category: 'ring',
+      identification: { mode: 'instance', poolId: 'identification-pool.rings' } } as ItemContentEntry;
+    const content = contentWith(definition);
+    const item: ItemInstance = { itemId: 'item.ring.1', contentId: definition.id, quantity: 1, condition: 100,
+      enchantment: null, identified: false, charges: null, fuel: null, enabled: null,
+      location: { type: 'backpack', actorId: 'hero.demo' } };
+    const identification = allocateIdentificationMap({ content, rng: createDemoRun().rng }).identification;
+    const run = { ...createDemoRun(), items: [item], identification };
+    const result = identifyItemCompletely({ run, content, itemId: item.itemId, eventId: 'event.identify' });
+    expect(result.events).toEqual([
+      { type: 'item.identified', eventId: 'event.identify', itemId: item.itemId },
+    ]);
+    expect(result.state.identification.knownAppearanceIds).toEqual([]);
+    expect(result.state.items[0]!.identified).toBe(true);
+    expect(() => validateContentBoundRun(result.state, content)).not.toThrow();
+  });
+
+  it('completely identifying an identified item is a no-op', () => {
+    const definition = potion('item.heal');
+    const content = contentWith(definition, potion('item.harm'));
+    const identification = allocateIdentificationMap({ content, rng: createDemoRun().rng }).identification;
+    const item: ItemInstance = { itemId: 'item.potion.1', contentId: definition.id, quantity: 1, condition: 100,
+      enchantment: null, identified: true, charges: null, fuel: null, enabled: null,
+      location: { type: 'backpack', actorId: 'hero.demo' } };
+    const run = { ...createDemoRun(), items: [item], identification: {
+      ...identification, knownAppearanceIds: [identification.appearanceByContentId[definition.id]!] } };
+    const result = identifyItemCompletely({ run, content, itemId: item.itemId, eventId: 'event.identify' });
+    expect(result.events).toEqual([]);
+    expect(result.state).toBe(run);
   });
 
   it('projects shuffled appearance without hidden content or enchantment', () => {
