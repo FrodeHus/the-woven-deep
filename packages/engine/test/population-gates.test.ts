@@ -40,6 +40,21 @@ function encounter(input: Readonly<{
 const state = [1, 2, 3, 4] as const;
 
 describe('encounter run gates', () => {
+  it('applies the same authored appearance chance and discovery defaults to merchant encounters', () => {
+    const merchant = { ...encounter({ id: 'encounter.merchant', chance: 0.25, increment: 0, cap: 0 }),
+      model: 'merchant' as const, discoveryProtectionIncrement: 0, discoveryProtectionCap: 0,
+      definition: { npcId: 'npc.merchant', stockLootTableId: 'loot-table.stock', minimumStockRolls: 1,
+        maximumStockRolls: 1, merchantSaleBps: 12000, merchantPurchaseBps: 6000, acceptedCategories: [],
+        services: [], minimumLifetime: 10, maximumLifetime: 10, departureWarningThresholds: [],
+        aggressionResponse: 'flee' as const, commerceReputationDelta: 0, aggressionReputationDelta: 0,
+        deathReputationDelta: 0, stockDropFraction: 0 } } satisfies EncounterContentEntry;
+
+    const result = createEncounterRunDecisions({ encounters: [merchant], state });
+
+    expect(result.decisions[0]).toMatchObject({ encounterId: merchant.id, baseProbability: 0.25,
+      protectionBonus: 0, effectiveProbability: 0.25, reachedEligibleDepth: false,
+      encountered: false, instancesCreated: 0 });
+  });
   it('processes sorted encounters, clamps protection, and draws exactly once at probability boundaries', () => {
     const entries = [
       encounter({ id: 'encounter.z', chance: 1 }),

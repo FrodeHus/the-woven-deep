@@ -3,7 +3,11 @@ import type {
   CompiledContentPack,
   ContentEntry,
   EncounterContentEntry,
+  ItemContentEntry,
+  LootTableContentEntry,
+  MerchantEncounterContentEntry,
   MonsterContentEntry,
+  NpcContentEntry,
   VaultContentEntry,
 } from '@woven-deep/content';
 import {
@@ -93,7 +97,86 @@ function runFor(encounters: readonly EncounterContentEntry[]): ActiveRun {
   };
 }
 
+function merchantFixture(overrides: Partial<MerchantEncounterContentEntry> = {}): Readonly<{
+  npc: NpcContentEntry; stockItem: ItemContentEntry; stock: LootTableContentEntry;
+  encounter: MerchantEncounterContentEntry;
+}> {
+  const npc: NpcContentEntry = {
+    kind: 'npc', id: 'npc.test-merchant', name: 'Test Merchant', tags: ['merchant'], glyph: '$', color: '#ffaa00',
+    factionId: 'npc-faction.test', attributes: { might: 1, agility: 2, vitality: 3, wits: 4, resolve: 5 },
+    health: 9, speed: 80, perception: 6, accuracy: 2, defense: 3, damage: { count: 1, sides: 2, bonus: 0 },
+    armor: 0, resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 },
+    disposition: 'neutral', behaviorId: 'npc-behavior.travelling-merchant', behaviorParameters: {},
+    selfPreservationThresholdBps: 3000,
+  };
+  const stockItem: ItemContentEntry = {
+    kind: 'item', id: 'item.test-stock', name: 'Test Stock', tags: [], glyph: '!', color: '#ffffff',
+    category: 'potion', stackLimit: 9, price: 1, rarity: 'common', heirloomEligible: false,
+    minDepth: 1, maxDepth: 10, actionCost: 100, equipment: null, combat: null, light: null,
+    identification: { mode: 'known', poolId: null }, effects: [],
+  };
+  const stock: LootTableContentEntry = {
+    kind: 'loot-table', id: 'loot-table.test-stock', name: 'Test Stock', tags: [], rolls: 1,
+    choices: [{ contentId: stockItem.id, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }],
+  };
+  const encounter = {
+    ...individual('encounter.test-merchant', {
+      model: 'merchant', maximumInstancesPerRun: 1,
+      definition: {
+        npcId: npc.id, stockLootTableId: stock.id, minimumStockRolls: 1, maximumStockRolls: 1,
+        merchantSaleBps: 12000, merchantPurchaseBps: 6000, acceptedCategories: [stockItem.category], services: [],
+        minimumLifetime: 10, maximumLifetime: 10, departureWarningThresholds: [5], aggressionResponse: 'flee',
+        commerceReputationDelta: 1, aggressionReputationDelta: -1, deathReputationDelta: -1, stockDropFraction: 0.5,
+      },
+    }) as MerchantEncounterContentEntry,
+    ...overrides,
+  };
+  return { npc, stockItem, stock, encounter };
+}
+
 describe('population placement selection and composition', () => {
+  it('composes a merchant as one neutral NPC with finite stock while preserving encounter stream behavior', () => {
+    const { npc, stockItem, stock, encounter } = merchantFixture();
+    const run = runFor([encounter]);
+
+    const result = placePopulation({ run, floor: floor(), content: pack([encounter], [npc, stockItem, stock]),
+      forcedEncounterId: encounter.id });
+
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed' || result.population.model !== 'merchant') return;
+    expect(result.createdActors).toHaveLength(1);
+    expect(result.createdActors[0]).toMatchObject({ contentId: npc.id, disposition: 'neutral',
+      behaviorId: npc.behaviorId, populationId: result.population.populationId });
+    expect(result.createdItems.length).toBeGreaterThan(0);
+    expect(result.nextEncounterState).toEqual(run.rng.encounters);
+    expect(result.nextMerchantStockState).not.toEqual(run.rng['merchant-stock']);
+  });
+  it('gates merchants by depth, instance cap, and stair distance without touching the merchant stream', () => {
+    const shallow = merchantFixture({ minDepth: 5, maxDepth: 10 });
+    const shallowResult = placePopulation({ run: runFor([shallow.encounter]), floor: floor(),
+      content: pack([shallow.encounter], [shallow.npc, shallow.stockItem, shallow.stock]),
+      forcedEncounterId: shallow.encounter.id });
+    expect(shallowResult).toMatchObject({ status: 'skipped', reason: 'no-eligible-encounter' });
+
+    const capped = merchantFixture();
+    const cappedRun = runFor([capped.encounter]);
+    const cappedResult = placePopulation({
+      run: { ...cappedRun, encounterDecisions: cappedRun.encounterDecisions.map((decision) =>
+        ({ ...decision, instancesCreated: capped.encounter.maximumInstancesPerRun })) },
+      floor: floor(), content: pack([capped.encounter], [capped.npc, capped.stockItem, capped.stock]),
+      forcedEncounterId: capped.encounter.id,
+    });
+    expect(cappedResult).toMatchObject({ status: 'skipped', reason: 'no-eligible-encounter' });
+
+    const distant = merchantFixture({ placement: { ...placement, minimumStairDistance: 10_000 } });
+    const distantRun = runFor([distant.encounter]);
+    const distantResult = placePopulation({ run: distantRun, floor: floor(),
+      content: pack([distant.encounter], [distant.npc, distant.stockItem, distant.stock]),
+      forcedEncounterId: distant.encounter.id });
+    expect(distantResult).toMatchObject({ status: 'skipped', reason: 'no-valid-placement' });
+    expect('createdItems' in distantResult).toBe(false);
+    expect(distantRun.rng['merchant-stock']).toEqual(createDemoRun().rng['merchant-stock']);
+  });
   it('rejects bypassed unsafe weights and quantities before consuming RNG or allocating members', () => {
     const oversized = individual('encounter.oversized', { definition: {
       monsterId: 'monster.test-a', minimumQuantity: 1, maximumQuantity: 1025,

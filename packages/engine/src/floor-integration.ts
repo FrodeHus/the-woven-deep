@@ -76,6 +76,8 @@ export function integrateGeneratedFloor(
   }
   let floor = placement?.status === 'placed' ? placement.floor : generated.floor;
   const createdActors = placement?.status === 'placed' ? placement.createdActors : [];
+  const createdItems = placement?.status === 'placed' ? placement.createdItems : [];
+  const nextMerchantStockState = placement?.status === 'placed' ? placement.nextMerchantStockState : null;
   const ordinaryPopulations = placement?.status === 'placed'
     ? [...run.populations, placement.population]
       .sort((left, right) => left.populationId < right.populationId ? -1 : left.populationId > right.populationId ? 1 : 0)
@@ -108,8 +110,11 @@ export function integrateGeneratedFloor(
       ...run.rng,
       generation: [...allocation.nextGenerationState],
       ...(placement === null ? {} : { encounters: [...placement.nextEncounterState] }),
+      ...(nextMerchantStockState === null ? {} : { 'merchant-stock': [...nextMerchantStockState] }),
     },
     actors: actorsAfterPlacement,
+    items: createdItems.length === 0 ? run.items : [...run.items, ...createdItems]
+      .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0),
     encounterDecisions: placement?.encounterDecisions ?? run.encounterDecisions,
     populations: fallen?.populations ?? ordinaryPopulations,
     fallenHeroDecisions: fallen?.decisions ?? run.fallenHeroDecisions,

@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { compileContentDirectory, type CompiledContentPack, type EncounterContentEntry } from '@woven-deep/content/compiler';
+import { compileContentDirectory, type CompiledContentPack, type EncounterContentEntry,
+  type MerchantEncounterContentEntry } from '@woven-deep/content/compiler';
 import {
   addGeneratedFloor,
   allocateFloorSeed,
@@ -43,6 +44,54 @@ function allocation(run: ActiveRun = createDemoRun()): FloorSeedAllocation {
 }
 
 describe('addGeneratedFloor', () => {
+  it('atomically commits merchant actor, population, stock, decisions, and both owned RNG streams', () => {
+    const encounter = content.entries.find((entry): entry is MerchantEncounterContentEntry =>
+      entry.kind === 'encounter' && entry.model === 'merchant')!;
+    const base = createDemoRun();
+    const run: ActiveRun = { ...base, contentHash: content.hash, encounterDecisions: [{
+      encounterId: encounter.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1,
+      eligible: true, reachedEligibleDepth: false, encountered: false, instancesCreated: 0,
+    }] };
+
+    const integrated = integrateGeneratedFloor(run, generatedFloor(), allocation(run), {
+      content, forcedEncounterId: encounter.id,
+    });
+    const merchant = integrated.state.populations.find((entry) => entry.model === 'merchant');
+
+    expect(merchant?.model).toBe('merchant');
+    if (!merchant || merchant.model !== 'merchant') return;
+    expect(integrated.state.actors.some((actor) => actor.actorId === merchant.actorId)).toBe(true);
+    expect(integrated.state.items.filter((item) => item.location.type === 'merchant-stock'
+      && item.location.populationId === merchant.populationId).map((item) => item.itemId))
+      .toEqual(merchant.stockItemIds);
+    expect(integrated.state.rng.encounters).toEqual(run.rng.encounters);
+    expect(integrated.state.rng['merchant-stock']).not.toEqual(run.rng['merchant-stock']);
+    expect(integrated.state.rng.combat).toEqual(run.rng.combat);
+    expect(integrated.state.rng.loot).toEqual(run.rng.loot);
+    expect(integrated.events).toEqual([expect.objectContaining({ type: 'population.created',
+      populationId: merchant.populationId, model: 'merchant' })]);
+  });
+
+  it('does not advance merchant stock or create items when merchant placement is skipped', () => {
+    const source = content.entries.find((entry): entry is MerchantEncounterContentEntry =>
+      entry.kind === 'encounter' && entry.model === 'merchant')!;
+    const impossible = { ...source, placement: { ...source.placement, minimumStairDistance: 10_000 } };
+    const pack = { ...content, entries: content.entries.map((entry) => entry.id === source.id ? impossible : entry) };
+    const base = createDemoRun();
+    const run: ActiveRun = { ...base, contentHash: pack.hash, encounterDecisions: [{
+      encounterId: source.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1,
+      eligible: true, reachedEligibleDepth: false, encountered: false, instancesCreated: 0,
+    }] };
+
+    const integrated = integrateGeneratedFloor(run, generatedFloor(), allocation(run), {
+      content: pack, forcedEncounterId: source.id,
+    });
+
+    expect(integrated.state.items).toEqual(run.items);
+    expect(integrated.state.rng['merchant-stock']).toEqual(run.rng['merchant-stock']);
+    expect(integrated.state.rng.encounters).toEqual(run.rng.encounters);
+    expect(integrated.state.populations).toEqual([]);
+  });
   it('emits a committed population creation exactly once from floor integration', () => {
     const encounter = content.entries.find((entry): entry is EncounterContentEntry =>
       entry.kind === 'encounter' && entry.id === 'encounter.cave-rat-individuals')!;
