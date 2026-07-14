@@ -107,6 +107,26 @@ describe('boss phases', () => {
     expect(damaged.items).toEqual([]);
   });
 
+  it.each([
+    ['effect.hunger.restore', { amount: 1 }],
+    ['effect.item.consume', { quantity: 1 }],
+    ['effect.force-move', { distance: 1 }],
+  ] as const)('rejects bypassed boss phase %s before an earlier arena effect can publish', (effectId, parameters) => {
+    const { state, content } = fixture({ phases: [{ ...definition().phases[0]!, effects: [
+      { effectId: 'effect.feature.mutate', parameters: { state: 'door.open' }, requiresLivingTarget: false },
+      { effectId, parameters, requiresLivingTarget: false },
+    ] }] });
+    const door = { featureId: 'feature.arena-door', floorId: state.activeFloorId, x: 5, y: 3,
+      contentId: null, coverTileId: 1 as const, type: 'door' as const, state: 'locked' as const };
+    const damaged = { ...state, features: [door], actors: state.actors.map((actor) => actor.actorId === 'actor.boss'
+      ? { ...actor, health: 60 } : actor) };
+    expect(() => advanceBosses({ state: damaged, content, eventId: 'event.unsupported-phase' }))
+      .toThrow(new RegExp(`boss phase effect ${effectId.replace('.', '\\.')}`));
+    expect(damaged.features).toEqual([door]);
+    expect(damaged.populations[0]).toMatchObject({ currentPhaseId: null, crossedPhaseIds: [] });
+    expect(damaged.items).toEqual([]);
+  });
+
   it('passes immutable item changes between authored arena fuel and light operations', () => {
     const { state, content } = fixture({ phases: [{ ...definition().phases[0]!, effects: [
       { effectId: 'effect.fuel.transfer', parameters: { maximum: 3 }, requiresLivingTarget: false },
@@ -158,7 +178,8 @@ describe('boss phases', () => {
     const { state, content } = fixture({ phases: [{ ...definition().phases[0]!, effects: [{ effectId: 'effect.missing' as never,
       parameters: {}, requiresLivingTarget: true }] }] });
     const damaged = { ...state, actors: state.actors.map((actor) => actor.actorId === 'actor.boss' ? { ...actor, health: 50 } : actor) };
-    expect(() => advanceBosses({ state: damaged, content, eventId: 'event.invalid-phase' })).toThrow(/unregistered effect/i);
+    expect(() => advanceBosses({ state: damaged, content, eventId: 'event.invalid-phase' }))
+      .toThrow(/boss phase effect effect\.missing is unsupported/i);
     expect(damaged.populations[0]).toMatchObject({ currentPhaseId: null, crossedPhaseIds: [] });
     expect(damaged.actors.find((actor) => actor.actorId === 'actor.boss')?.behaviorId).toBe(monster.behaviorId);
   });

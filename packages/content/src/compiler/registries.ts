@@ -57,3 +57,15 @@ export const EFFECT_PARAMETER_SCHEMAS = {
 
 export type BehaviorId = keyof typeof BEHAVIOR_PARAMETER_SCHEMAS;
 export type EffectId = keyof typeof EFFECT_PARAMETER_SCHEMAS;
+
+/** Effects with a well-defined immutable self/arena target contract during boss phase changes. */
+export const BOSS_PHASE_EFFECT_IDS = [
+  'effect.damage',
+  'effect.heal',
+  'effect.condition.apply',
+  'effect.condition.remove',
+  'effect.reveal',
+  'effect.fuel.transfer',
+  'effect.light.toggle',
+  'effect.feature.mutate',
+] as const satisfies readonly EffectId[];

@@ -1,4 +1,10 @@
-import type { BossEncounterContentEntry, CompiledContentPack, ItemContentEntry, PopulationCombatModifiers } from '@woven-deep/content';
+import {
+  BOSS_PHASE_EFFECT_IDS,
+  type BossEncounterContentEntry,
+  type CompiledContentPack,
+  type ItemContentEntry,
+  type PopulationCombatModifiers,
+} from '@woven-deep/content';
 import type { ActorState } from './actor-model.js';
 import { resolveEffectSequence, type EffectOperations } from './effects.js';
 import { consumeItemQuantityFromItems, createFloorItem, createFloorLootFromTable } from './inventory.js';
@@ -177,6 +183,11 @@ function applyNewPhases(input: Readonly<{
   const phases = input.definition.phases.filter((phase) => !crossed.has(phase.phaseId)
     && input.boss.health * 100 <= input.boss.maxHealth * phase.healthThresholdPercent);
   if (phases.length === 0) return { state: input.state, population: input.population, events: [] };
+  const unsupported = phases.flatMap((phase) => phase.effects)
+    .find((effect) => !(BOSS_PHASE_EFFECT_IDS as readonly string[]).includes(effect.effectId));
+  if (unsupported) {
+    throw new Error(`internal invariant: boss phase effect ${unsupported.effectId} is unsupported`);
+  }
 
   // Resolve the complete authored effect sequence first. resolveEffectSequence validates every
   // effect before applying one, so a missing operation/reference cannot leave a partial phase.

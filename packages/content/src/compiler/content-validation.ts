@@ -5,7 +5,7 @@ import type {
 } from '../model.js';
 import type { ContentCompileIssue } from './error.js';
 import {
-  ACTION_COST_IDS, BEHAVIOR_PARAMETER_SCHEMAS, EFFECT_PARAMETER_SCHEMAS,
+  ACTION_COST_IDS, BEHAVIOR_PARAMETER_SCHEMAS, BOSS_PHASE_EFFECT_IDS, EFFECT_PARAMETER_SCHEMAS,
   LEADER_RESPONSE_PARAMETER_SCHEMAS, SWARM_RESPONSE_PARAMETER_SCHEMAS,
 } from './registries.js';
 
@@ -194,6 +194,12 @@ function encounterIssues(
     previousThreshold = phase.healthThresholdPercent;
     issues.push(...validateParameters(file, `${path}.phases.${index}.behavior`, phase.behaviorId,
       phase.behaviorParameters, BEHAVIOR_PARAMETER_SCHEMAS, 'behavior'));
+    phase.effects.forEach((effect, effectIndex) => {
+      if (!(BOSS_PHASE_EFFECT_IDS as readonly string[]).includes(effect.effectId)) {
+        issues.push(issue(file, `${path}.phases.${index}.effects.${effectIndex}.effectId`,
+          `boss phases do not support effect ${effect.effectId}`));
+      }
+    });
     issues.push(...effectsAtPath(file, `${path}.phases.${index}.effects`, phase.effects, byId));
   });
   return issues;

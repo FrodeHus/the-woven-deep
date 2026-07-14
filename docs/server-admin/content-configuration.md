@@ -220,7 +220,7 @@ Leader responses are `weaken`, `panic`, `disband`, `surrender`, `frenzy`, and `c
 
 A `swarm` source monster must carry the `swarm-source` tag. `spawnRoles` are weighted monster references. The source alone owns `spawnInterval`; inclusive spawn quantities, placement radius/terrain, `maximumLivingChildren`, `maximumLivingMembers`, and `maximumFloorActors` bound growth. Source responses are `stop` and `flee` with `{}`, `decay` with positive `interval` and `damage`, or `frenzy` with positive `duration` and integer combat `modifiers`. Swarms freeze off-floor and never catch up missed growth.
 
-A `boss` references one monster, strictly descending unique phase thresholds, registered phase behaviors/effects, recovery rate and cap, one `uniqueItemId`, one `enhancedLootTableId`, and optional vault tags. Phases never reverse. Recovery is one bounded re-entry calculation, not off-floor turns. The bundled default boss chance is `0.08`, increment `0.03`, and cap `0.35`.
+A `boss` references one monster, strictly descending unique phase thresholds, registered phase behaviors/effects, recovery rate and cap, one `uniqueItemId`, one `enhancedLootTableId`, and optional vault tags. Boss phases use the closed safe subset `effect.damage`, `effect.heal`, `effect.condition.apply`, `effect.condition.remove`, `effect.reveal`, `effect.fuel.transfer`, `effect.light.toggle`, and `effect.feature.mutate`. Actor-context effects `effect.hunger.restore`, `effect.item.consume`, and `effect.force-move` are rejected in boss phases. Phases never reverse. Recovery is one bounded re-entry calculation, not off-floor turns. The bundled default boss chance is `0.08`, increment `0.03`, and cap `0.35`.
 
 ```yaml
 schemaVersion: 3

@@ -408,6 +408,31 @@ describe('compileContentDirectory', () => {
     await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/maximumInstancesPerRun 1|strictly descending|resolves to monster|unknown loot-table/i);
   });
 
+  it.each([
+    ['effect.hunger.restore', '{amount: 1}'],
+    ['effect.item.consume', '{quantity: 1}'],
+    ['effect.force-move', '{distance: 1}'],
+  ] as const)('rejects %s in the closed boss phase effect subset', async (effectId, parameters) => {
+    const loot = '{kind: loot-table, id: loot-table.boss, name: Boss loot, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const boss = `{kind: encounter, id: encounter.boss, name: Boss, tags: [], model: boss, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: legendary, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 1, minimumObjectiveDistance: 1, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, phases: [{phaseId: changed, healthThresholdPercent: 50, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, modifiers: {accuracy: 1, defense: 0, damage: 1}, effects: [{effectId: ${effectId}, parameters: ${parameters}, requiresLivingTarget: false}]}], recoveryPerWorldTime: 0, recoveryCapPercent: 0, uniqueItemId: item.lantern, enhancedLootTableId: loot-table.boss, vaultTags: []}}`;
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, loot, boss) });
+    await expectCompileIssues(compileContentDirectory({ rootDir: root }), [{
+      file: 'content.yaml',
+      path: '$.entries.encounter.boss.definition.phases.0.effects.0.effectId',
+      message: `boss phases do not support effect ${effectId}`,
+    }]);
+  });
+
+  it('accepts every effect in the closed boss phase subset', async () => {
+    const loot = '{kind: loot-table, id: loot-table.boss, name: Boss loot, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
+    const effects = '[{effectId: effect.damage, parameters: {damageType: fire, dice: {count: 1, sides: 1, bonus: 0}}, requiresLivingTarget: true}, {effectId: effect.heal, parameters: {dice: {count: 1, sides: 1, bonus: 0}}, requiresLivingTarget: true}, {effectId: effect.condition.apply, parameters: {conditionId: condition.stunned, duration: 100}, requiresLivingTarget: true}, {effectId: effect.condition.remove, parameters: {conditionId: condition.stunned}, requiresLivingTarget: false}, {effectId: effect.reveal, parameters: {radius: 3}, requiresLivingTarget: false}, {effectId: effect.fuel.transfer, parameters: {maximum: 3}, requiresLivingTarget: false}, {effectId: effect.light.toggle, parameters: {enabled: false}, requiresLivingTarget: false}, {effectId: effect.feature.mutate, parameters: {state: door.open}, requiresLivingTarget: false}]';
+    const boss = `{kind: encounter, id: encounter.boss, name: Boss, tags: [], model: boss, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: legendary, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 1, minimumObjectiveDistance: 1, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, phases: [{phaseId: changed, healthThresholdPercent: 50, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, modifiers: {accuracy: 1, defense: 0, damage: 1}, effects: ${effects}}], recoveryPerWorldTime: 0, recoveryCapPercent: 0, uniqueItemId: item.lantern, enhancedLootTableId: loot-table.boss, vaultTags: []}}`;
+    const root = await fixture({ 'content.yaml': contentFile(
+      compactMonster, compactItem, compactVault, compactTimedCondition, loot, boss,
+    ) });
+    await expect(compileContentDirectory({ rootDir: root })).resolves.toMatchObject({ schemaVersion: 3 });
+  });
+
   it('validates Champion and Echo template references and weaker limits', async () => {
     const template = '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 10, maximumHealth: 100, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 2, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 3, echoLootTableId: item.lantern, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}}';
     const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, template) });
