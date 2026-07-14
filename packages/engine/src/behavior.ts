@@ -5,16 +5,18 @@ import { featureTiles } from './features.js';
 import { findPath, selectPathStep } from './pathfinding.js';
 import { movementBlockReason } from './terrain.js';
 import type { ActiveRun, OpaqueId, Point } from './model.js';
+import type { ActorGoal } from './population-model.js';
 import { relationshipBetween } from './reactions.js';
 
 function distance(left: Point, right: Point): number {
   return Math.max(Math.abs(left.x - right.x), Math.abs(left.y - right.y));
 }
 
-function patrolGoal(input: Readonly<{
+export function selectPatrolGoal(input: Readonly<{
+  state: ActiveRun;
   actor: ActorState;
   content: CompiledContentPack;
-}>): Point | null {
+}>): ActorGoal | null {
   const definition = input.content.entries.find((entry) => entry.kind === 'monster'
     && entry.id === input.actor.contentId);
   if (!definition || definition.kind !== 'monster') {
@@ -28,7 +30,10 @@ function patrolGoal(input: Readonly<{
   const points = waypoints as readonly Point[];
   const current = points.findIndex((point) => point.x === input.actor.x && point.y === input.actor.y);
   const selected = points[current < 0 ? 0 : (current + 1) % points.length]!;
-  return { x: selected.x, y: selected.y };
+  const floor = input.state.floors.find((candidate) => candidate.floorId === input.actor.floorId);
+  if (!floor) throw new Error(`internal invariant: actor floor ${input.actor.floorId} does not exist`);
+  if (selected.x < 0 || selected.y < 0 || selected.x >= floor.width || selected.y >= floor.height) return null;
+  return { type: 'cell', floorId: floor.floorId, x: selected.x, y: selected.y };
 }
 
 export function chooseBehaviorAction(input: Readonly<{
@@ -77,8 +82,6 @@ export function chooseBehaviorAction(input: Readonly<{
       ? { x: savedGoal.x, y: savedGoal.y }
       : savedGoal?.type === 'formation'
       ? { x: savedGoal.x, y: savedGoal.y }
-      : actor.behaviorId === 'behavior.patrol'
-        ? patrolGoal({ actor, content: input.content })
       : null;
   if (!destination || (destination.x === actor.x && destination.y === actor.y)) {
     return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };

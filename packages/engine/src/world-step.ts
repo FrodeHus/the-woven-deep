@@ -2,7 +2,7 @@ import type { CompiledContentPack, MonsterContentEntry } from '@woven-deep/conte
 import { type GameAction, balanceEntry } from './actions.js';
 import { actorById, heroActor, heroPerception, type ActorState } from './actor-model.js';
 import { deriveActorStats } from './attributes.js';
-import { chooseBehaviorAction } from './behavior.js';
+import { chooseBehaviorAction, selectPatrolGoal } from './behavior.js';
 import { resolveAttack } from './combat.js';
 import { conditionModifiers } from './conditions.js';
 import { resolveEffectSequence } from './effects.js';
@@ -477,6 +477,10 @@ function prepareIndividualTurn(input: Readonly<{
       ? { ...behaviorState, goal: null, investigation: null }
       : { ...behaviorState, goal: { type: 'cell', floorId: investigation.floorId,
         x: investigation.x, y: investigation.y } };
+  } else if (actor.behaviorId === 'behavior.patrol') {
+    behaviorState = { ...behaviorState, goal: selectPatrolGoal({
+      state: input.state, actor, content: input.content,
+    }) };
   } else {
     behaviorState = { ...behaviorState, goal: null };
   }

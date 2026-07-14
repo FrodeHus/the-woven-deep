@@ -5,7 +5,7 @@ import {
   type ActorState, type FloorSnapshot,
 } from '../src/index.js';
 
-function definition(id: string): MonsterContentEntry {
+function definition(id: string, overrides: Partial<MonsterContentEntry> = {}): MonsterContentEntry {
   return {
     kind: 'monster', id, name: id, glyph: 'm', color: '#aa4444', tags: [],
     minDepth: 1, maxDepth: 20,
@@ -14,6 +14,7 @@ function definition(id: string): MonsterContentEntry {
     damage: { count: 1, sides: 1, bonus: 0 }, armor: 0,
     resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 },
     disposition: 'hostile', behaviorId: 'behavior.approach-and-attack', behaviorParameters: {}, rarity: 'common',
+    ...overrides,
   };
 }
 
@@ -52,6 +53,49 @@ describe('individual population behavior', () => {
       state: { ...run, actors: [run.actors[0]!, actor] }, actorId: actor.actorId,
       content: pack(definition(actor.contentId)),
     })).toMatchObject({ type: 'wait' });
+  });
+
+  it('saves a patrol goal and truthful broad intent before applying its move', () => {
+    const run = createDemoRun();
+    const darkFloor = { ...run.floors[0]!, ambient: { color: [0, 0, 0] as const, strength: 0 } };
+    const actor = monster('monster.patrol-state', {
+      x: 5, y: 3, energy: 100, behaviorId: 'behavior.patrol',
+    });
+    const content = pack(definition(actor.contentId, {
+      behaviorId: 'behavior.patrol', behaviorParameters: { waypoints: [{ x: 3, y: 3 }, { x: 5, y: 1 }] },
+    }));
+    const result = resolveWorldStep({
+      state: { ...run, floors: [darkFloor], actors: [run.actors[0]!, actor] }, content,
+      eventId: 'event.patrol-state', action: { type: 'wait', actorId: run.hero.actorId, cost: 100 },
+    });
+    const saved = result.state.actors.find((candidate) => candidate.actorId === actor.actorId)!;
+    expect(saved).toMatchObject({ x: 4, y: 3, behaviorState: {
+      goal: { type: 'cell', floorId: 'floor.demo', x: 3, y: 3 }, intent: 'approach',
+    } });
+    expect(result.events.map((event) => event.type)).toEqual([
+      'hero.waited', 'actor.turn.started', 'actor.intent-changed', 'actor.moved', 'actor.turn.completed',
+    ]);
+  });
+
+  it.each([
+    ['negative', { x: -1, y: 3 }],
+    ['beyond-grid', { x: 7, y: 3 }],
+  ] as const)('holds with saved hold intent for a %s patrol waypoint outside its floor', (_label, waypoint) => {
+    const run = createDemoRun();
+    const darkFloor = { ...run.floors[0]!, ambient: { color: [0, 0, 0] as const, strength: 0 } };
+    const actor = monster(`monster.patrol-${_label}`, {
+      x: 5, y: 3, energy: 100, behaviorId: 'behavior.patrol',
+    });
+    const content = pack(definition(actor.contentId, {
+      behaviorId: 'behavior.patrol', behaviorParameters: { waypoints: [waypoint] },
+    }));
+    const result = resolveWorldStep({
+      state: { ...run, floors: [darkFloor], actors: [run.actors[0]!, actor] }, content,
+      eventId: `event.patrol-${_label}`, action: { type: 'wait', actorId: run.hero.actorId, cost: 100 },
+    });
+    expect(result.state.actors.find((candidate) => candidate.actorId === actor.actorId))
+      .toMatchObject({ x: 5, y: 3, behaviorState: { goal: null, intent: 'hold' } });
+    expect(result.events.some((event) => event.type === 'actor.moved')).toBe(false);
   });
 
   it('approaches a directly observed hostile and saves memory, goal, and intent before movement', () => {

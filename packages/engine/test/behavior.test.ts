@@ -133,7 +133,10 @@ describe('registered deterministic behavior', () => {
     const state = createDemoRun();
     const patrol = hostile({
       actorId: 'monster.patrol', contentId: 'monster.patrol', x: 5, y: 3,
-      behaviorId: 'behavior.patrol', awareActorIds: [],
+      behaviorId: 'behavior.patrol', awareActorIds: [], behaviorState: {
+        intent: 'approach', goal: { type: 'cell', floorId: 'floor.demo', x: 3, y: 3 },
+        lastKnownTargets: [], investigation: null,
+      },
     });
     expect(chooseBehaviorAction({
       state: { ...state, actors: [state.actors[0]!, patrol] }, actorId: patrol.actorId,
