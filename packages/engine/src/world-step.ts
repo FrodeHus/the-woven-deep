@@ -14,7 +14,7 @@ import { identifyAppearance } from './identification.js';
 import { advanceSurvival, hungerModifiers } from './survival.js';
 import { applyPassiveDiscovery, closeDoor, disarmTrap, featureTiles, openDoor, searchFeatures, triggerTrap } from './features.js';
 import {
-  tileIndex, type ActiveRun, type Direction, type DomainEvent, type OpaqueId, type Point, type Uint32State,
+  tileIndex, type ActiveRun, type Direction, type DomainEvent, type OpaqueId, type Point, type PublicEvent, type Uint32State,
 } from './model.js';
 import { movementAction } from './movement.js';
 import { refreshKnowledge } from './perception.js';
@@ -36,7 +36,7 @@ import { compareCodeUnits } from './stable-json.js';
 export interface WorldStepResult {
   readonly state: ActiveRun;
   readonly events: readonly DomainEvent[];
-  readonly publicEvents: readonly DomainEvent[];
+  readonly publicEvents: readonly PublicEvent[];
   readonly internalActions: number;
 }
 
@@ -430,7 +430,7 @@ function applyAction(input: Readonly<{
 }
 
 function appendEvents(
-  authoritative: DomainEvent[], publicEvents: DomainEvent[], emitted: readonly DomainEvent[], state: ActiveRun, heroId: OpaqueId,
+  authoritative: DomainEvent[], publicEvents: PublicEvent[], emitted: readonly DomainEvent[], state: ActiveRun, heroId: OpaqueId,
   content: CompiledContentPack,
 ): void {
   if (emitted.length === 0) return;
@@ -617,7 +617,7 @@ export function resolveWorldStep(input: Readonly<{
   let resolved = applyAction({ state: input.state, action: input.action, content: input.content, eventId: input.eventId });
   let state = resolved.state;
   const events: DomainEvent[] = [];
-  const publicEvents: DomainEvent[] = [];
+  const publicEvents: PublicEvent[] = [];
   let bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
   state = bosses.state;
   let fallen = advanceFallenHeroEncounters({ state, content: input.content, eventId: input.eventId });

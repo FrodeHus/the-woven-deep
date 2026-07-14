@@ -1,6 +1,6 @@
 import type {
   ActiveRun, CommandResolution, DomainEvent, GameCommand,
-  ProcessedCommandResult, RecordedCommand,
+  ProcessedCommandResult, PublicEvent, RecordedCommand,
 } from './model.js';
 import { RECENT_COMMAND_LIMIT } from './versions.js';
 import { stableJson } from './stable-json.js';
@@ -22,7 +22,7 @@ function record(
   command: GameCommand,
   result: ProcessedCommandResult,
   events: readonly DomainEvent[],
-  publicEvents: readonly DomainEvent[] = events,
+  publicEvents: readonly PublicEvent[],
 ): ActiveRun {
   const next: RecordedCommand = { command, result, events, publicEvents };
   return {
@@ -59,7 +59,7 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
   if ('status' in validation) {
     const result = { status: 'invalid', commandId: command.commandId, revision: state.revision, turn: state.turn, reason: validation.reason } as const;
     const events = [{ type: 'action.invalid', eventId: command.commandId, commandId: command.commandId, reason: validation.reason }] as const;
-    return { state: record(state, command, result, events), result, events };
+    return { state: record(state, command, result, events, events), result, events };
   }
 
   assertCountersCanAdvance(state);

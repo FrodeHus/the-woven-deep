@@ -7,7 +7,7 @@ import { itemLightSources } from './equipment.js';
 import { refreshKnowledge } from './perception.js';
 import { relationshipBetween } from './reactions.js';
 import { resolveWorldStep } from './world-step.js';
-import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
+import type { ActiveRun, DomainEvent, OpaqueId, PublicEvent, RestCompletedEvent } from './model.js';
 import { tileIndex } from './model.js';
 import { isVisible } from './visibility.js';
 
@@ -92,13 +92,13 @@ function meaningfulSound(events: readonly DomainEvent[], heroId: OpaqueId): bool
 export interface RestResult {
   readonly state: ActiveRun;
   readonly events: readonly DomainEvent[];
-  readonly publicEvents: readonly DomainEvent[];
+  readonly publicEvents: readonly PublicEvent[];
   readonly stopReason: RestStopReason;
   readonly elapsed: number;
   readonly effectiveHealing: number;
 }
 
-function completedEvent(eventId: OpaqueId, stopReason: RestStopReason, elapsed: number, effectiveHealing: number): DomainEvent {
+function completedEvent(eventId: OpaqueId, stopReason: RestStopReason, elapsed: number, effectiveHealing: number): RestCompletedEvent {
   return { type: 'rest.completed', eventId, stopReason, elapsed, effectiveHealing };
 }
 
@@ -136,7 +136,7 @@ export function resolveRest(input: Readonly<{
   let state = start;
   let effectiveHealing = 0;
   const events: DomainEvent[] = [];
-  const publicEvents: DomainEvent[] = [];
+  const publicEvents: PublicEvent[] = [];
   const limit = input.maxInternalActions ?? 10_000;
   const waitCost = actionCostFor(rules, 'action.wait');
   let internalActions = 0;

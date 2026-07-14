@@ -167,15 +167,29 @@ describe('active-run save codec', () => {
     ];
     const command = { type: 'wait' as const, commandId: 'command.champion-events', expectedRevision: 0 };
     const result = { status: 'applied' as const, commandId: command.commandId, revision: 1, turn: 1 };
+    const publicEvents = [{ type: 'population.notice' as const, eventId,
+      category: 'champion-encountered' as const, actorId: 'actor.champion',
+      presentation: 'champion.encountered', displayName: 'Brynja, the Deep\'s Champion' }];
     const withHistory = { ...state, revision: 1, turn: 1,
-      recentCommands: [{ command, result, events, publicEvents: [] }] };
+      recentCommands: [{ command, result, events, publicEvents }] };
     const loaded = decodeActiveRun(encodeActiveRun(withHistory));
     expect(loaded.recentCommands[0]?.events.slice(1)).toEqual(events.slice(1));
     expect(loaded.recentCommands[0]?.result).toEqual(result);
     const duplicate = resolveCommand(loaded, command);
     expect(duplicate.state).toBe(loaded);
     expect(duplicate.result).toEqual(result);
-    expect(duplicate.events).toEqual([]);
+    expect(duplicate.events).toEqual(publicEvents);
+  });
+
+  it('rejects authoritative population details stored as public events', () => {
+    const state = createDemoRun();
+    const command = { type: 'wait' as const, commandId: 'command.private-public', expectedRevision: 0 };
+    const result = { status: 'applied' as const, commandId: command.commandId, revision: 1, turn: 1 };
+    const hidden = { type: 'boss.recovered' as const, eventId: command.commandId,
+      populationId: 'population.secret', actorId: 'actor.secret', encounterId: 'encounter.secret',
+      amount: 23, health: 88 };
+    expect(() => encodeActiveRun({ ...state, revision: 1, turn: 1,
+      recentCommands: [{ command, result, events: [hidden], publicEvents: [hidden] }] })).toThrow(/publicEvents/);
   });
 
   it('round-trips all schema v4 source state without storing derived fields', () => {

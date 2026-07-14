@@ -1,11 +1,11 @@
-import type { ActiveRun, CommandResult, DomainEvent, GameCommand } from './model.js';
+import type { ActiveRun, CommandResult, GameCommand, PublicEvent } from './model.js';
 import { resolveCommand } from './reducer.js';
 import type { ResolutionContext } from './actions.js';
 
 export interface ReplayStep {
   readonly command: GameCommand;
   readonly result: CommandResult;
-  readonly events: readonly DomainEvent[];
+  readonly events: readonly PublicEvent[];
 }
 
 export interface ReplayResult {

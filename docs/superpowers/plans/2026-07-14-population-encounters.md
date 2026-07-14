@@ -500,19 +500,19 @@ Commit: `feat: add champion and echo encounters`
 - Consumes: authoritative population events, current/previous legitimate visibility, actor presentation, leader/source/boss/champion state, and broad intent.
 - Produces: observable actors and redacted public events suitable for later desktop UI, metrics, achievements, and replay.
 
-- [ ] **Step 1: Write failing complete-event-union tests**
+- [x] **Step 1: Write failing complete-event-union tests**
 
 Add every event listed in the design with stable authoritative IDs and fields. Assert exhaustive switches compile and recorded command deduplication returns the original public events.
 
-- [ ] **Step 2: Write failing observable-projection tests**
+- [x] **Step 2: Write failing observable-projection tests**
 
 Visible actors expose name, glyph, color, health presentation, disposition, broad intent, leader distinction, source warning, boss phase, and champion identity. Remembered/unseen cells expose none of the living actor state.
 
-- [ ] **Step 3: Write adversarial hidden-state tests**
+- [x] **Step 3: Write adversarial hidden-state tests**
 
 Recursively scan JSON projections and public events for run decisions, probabilities, protection bonuses, unseen IDs/cells, exact goals, paths, target cells, shared information source, future spawn composition, thresholds, recovery arithmetic, rolls, and unopened reward data.
 
-- [ ] **Step 4: Implement visibility-aware redaction and commit**
+- [x] **Step 4: Implement visibility-aware redaction and commit**
 
 Use prior and next observation for moving/dying event visibility, qualitative public messages for unseen causes when sound permits, and prominent champion naming only after legitimate observation.
 

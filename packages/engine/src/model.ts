@@ -285,10 +285,27 @@ export interface ActorIntentChangedEvent {
   readonly intent: PopulationIntent; readonly presentation: `intent.${PopulationIntent}`;
   readonly targetCategory: 'hero' | 'leader' | 'source' | 'position' | null;
 }
+export interface PopulationCreatedEvent {
+  readonly type: 'population.created'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly encounterId: OpaqueId; readonly floorId: OpaqueId; readonly model: PopulationInstance['model'];
+  readonly actorIds: readonly OpaqueId[];
+}
+export interface PopulationEncounteredEvent {
+  readonly type: 'population.encountered'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly encounterId: OpaqueId; readonly actorId: OpaqueId;
+}
+export interface PopulationPlacementSkippedEvent {
+  readonly type: 'population.placement-skipped'; readonly eventId: OpaqueId; readonly encounterId: OpaqueId;
+  readonly floorId: OpaqueId; readonly reason: 'no-eligible-encounter' | 'no-valid-placement' | 'required-route-blocked';
+}
 export interface GroupAwarenessSharedEvent {
   readonly type: 'group.awareness-shared'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
   readonly actorId: OpaqueId; readonly targetActorId: OpaqueId; readonly floorId: OpaqueId;
   readonly x: number; readonly y: number; readonly observedAt: number; readonly observerActorId: OpaqueId;
+}
+export interface GroupLeaderCreatedEvent {
+  readonly type: 'group.leader-created'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly roleId: string;
 }
 export interface GroupLeaderDefeatedEvent {
   readonly type: 'group.leader-defeated'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
@@ -359,6 +376,13 @@ export interface EchoLootCreatedEvent {
   readonly actorId: OpaqueId; readonly hallRecordId: OpaqueId; readonly rank: number;
   readonly itemIds: readonly OpaqueId[];
 }
+export type PopulationDomainEvent = PopulationCreatedEvent | PopulationEncounteredEvent
+  | PopulationPlacementSkippedEvent | ActorIntentChangedEvent | GroupAwarenessSharedEvent
+  | GroupLeaderCreatedEvent | GroupLeaderDefeatedEvent | GroupOutcomeAppliedEvent
+  | SwarmMembersCreatedEvent | SwarmCapReachedEvent | SwarmSourceDestroyedEvent
+  | BossEncounteredEvent | BossPhaseChangedEvent | BossRecoveredEvent | BossDefeatedEvent | BossRewardCreatedEvent
+  | ChampionEncounteredEvent | ChampionDefeatedEvent | ChampionHeirloomCreatedEvent
+  | EchoEncounteredEvent | EchoDefeatedEvent | EchoLootCreatedEvent;
 export interface SoundHeardEvent {
   readonly type: 'sound.heard';
   readonly category: 'combat' | 'movement' | 'mechanism';
@@ -367,6 +391,25 @@ export interface SoundHeardEvent {
 }
 export interface HeroDamagedPublicEvent {
   readonly type: 'hero.damaged'; readonly amount: number; readonly damageType: DamageType;
+}
+export interface CombatObservedPublicEvent {
+  readonly type: 'combat.observed'; readonly eventId: OpaqueId; readonly outcome: 'hit' | 'missed';
+  readonly attackerActorId: OpaqueId; readonly targetActorId: OpaqueId;
+  readonly attackerName?: string; readonly targetName?: string;
+}
+export interface ActorMovementObservedPublicEvent {
+  readonly type: 'actor.movement-observed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly direction: Direction; readonly visibility: 'entered' | 'left';
+}
+export interface PopulationNoticePublicEvent {
+  readonly type: 'population.notice'; readonly eventId: OpaqueId;
+  readonly category: 'created' | 'encountered' | 'leader-created' | 'leader-defeated' | 'group-outcome'
+    | 'swarm-growth' | 'swarm-cap' | 'source-destroyed' | 'boss-encountered' | 'boss-phase'
+    | 'boss-recovery' | 'boss-defeated' | 'boss-reward' | 'champion-encountered' | 'champion-defeated'
+    | 'champion-heirloom' | 'echo-encountered' | 'echo-defeated' | 'echo-loot';
+  readonly actorId: OpaqueId | null;
+  readonly presentation: string;
+  readonly displayName?: string;
 }
 export interface RestCompletedEvent {
   readonly type: 'rest.completed'; readonly eventId: OpaqueId;
@@ -385,12 +428,11 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | IdentificationAppearanceRevealedEvent | ItemIdentifiedEvent
   | HungerStageChangedEvent | HungerRestoredEvent | FuelWarningEvent | ItemLightExtinguishedEvent
   | ItemDamagedEvent | DoorStateChangedEvent | FeatureRevealedEvent | FeatureSearchEvent | TrapStateEvent
-  | ActorIntentChangedEvent | GroupAwarenessSharedEvent | GroupLeaderDefeatedEvent | GroupOutcomeAppliedEvent
-  | SwarmMembersCreatedEvent | SwarmCapReachedEvent | SwarmSourceDestroyedEvent
-  | BossEncounteredEvent | BossPhaseChangedEvent | BossRecoveredEvent | BossDefeatedEvent | BossRewardCreatedEvent
-  | ChampionEncounteredEvent | ChampionDefeatedEvent | ChampionHeirloomCreatedEvent
-  | EchoEncounteredEvent | EchoDefeatedEvent | EchoLootCreatedEvent
-  | SoundHeardEvent | HeroDamagedPublicEvent | RestCompletedEvent;
+  | PopulationDomainEvent | RestCompletedEvent;
+
+export type PublicEvent = Exclude<DomainEvent, AttackMissedEvent | AttackHitEvent | PopulationDomainEvent>
+  | ActorIntentChangedEvent | SoundHeardEvent | HeroDamagedPublicEvent | CombatObservedPublicEvent
+  | ActorMovementObservedPublicEvent | PopulationNoticePublicEvent;
 
 export interface AppliedCommandResult {
   readonly status: 'applied';
@@ -437,7 +479,7 @@ export interface RecordedCommand {
   readonly command: GameCommand;
   readonly result: ProcessedCommandResult;
   readonly events: readonly DomainEvent[];
-  readonly publicEvents: readonly DomainEvent[];
+  readonly publicEvents: readonly PublicEvent[];
 }
 
 export interface ActiveRun {
@@ -471,7 +513,7 @@ export interface ActiveRun {
 export interface CommandResolution {
   readonly state: ActiveRun;
   readonly result: CommandResult;
-  readonly events: readonly DomainEvent[];
+  readonly events: readonly PublicEvent[];
 }
 
 const OPAQUE_ID = /^[a-z0-9][a-z0-9._:-]{0,127}$/;

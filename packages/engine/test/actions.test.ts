@@ -115,7 +115,7 @@ describe('player action validation', () => {
       context,
     );
     expect(resolution.result).toMatchObject({ status: 'applied' });
-    expect(resolution.events.some((event) => event.type === 'attack.hit' || event.type === 'attack.missed')).toBe(true);
+    expect(resolution.events.some((event) => event.type === 'combat.observed')).toBe(true);
     expect(resolution.state.actors.find((actor) => actor.actorId === run.hero.actorId)).toMatchObject({ x: 1, y: 1 });
     expect(() => encodeActiveRun(resolution.state)).not.toThrow();
   });

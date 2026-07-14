@@ -135,9 +135,20 @@ const actorIntentChangedEvent = z.strictObject({ type: z.literal('actor.intent-c
   presentation: z.enum(['intent.approach', 'intent.attack', 'intent.hold', 'intent.regroup', 'intent.flee',
     'intent.protect', 'intent.spawn', 'intent.phase-change']),
   targetCategory: z.enum(['hero', 'leader', 'source', 'position']).nullable() });
+const populationCreatedEvent = z.strictObject({ type: z.literal('population.created'), eventId: identifier,
+  populationId: identifier, encounterId: identifier, floorId: identifier,
+  model: z.enum(['individual', 'group', 'swarm', 'boss', 'champion', 'echo']),
+  actorIds: z.array(identifier).readonly() });
+const populationEncounteredEvent = z.strictObject({ type: z.literal('population.encountered'), eventId: identifier,
+  populationId: identifier, encounterId: identifier, actorId: identifier });
+const populationPlacementSkippedEvent = z.strictObject({ type: z.literal('population.placement-skipped'), eventId: identifier,
+  encounterId: identifier, floorId: identifier,
+  reason: z.enum(['no-eligible-encounter', 'no-valid-placement', 'required-route-blocked']) });
 const groupAwarenessSharedEvent = z.strictObject({ type: z.literal('group.awareness-shared'), eventId: identifier,
   populationId: identifier, actorId: identifier, targetActorId: identifier, floorId: identifier,
   x: safeNonNegative, y: safeNonNegative, observedAt: safeNonNegative, observerActorId: identifier });
+const groupLeaderCreatedEvent = z.strictObject({ type: z.literal('group.leader-created'), eventId: identifier,
+  populationId: identifier, actorId: identifier, roleId: z.string().min(1).max(80) });
 const groupLeaderDefeatedEvent = z.strictObject({ type: z.literal('group.leader-defeated'), eventId: identifier,
   populationId: identifier, actorId: identifier });
 const groupOutcomeAppliedEvent = z.strictObject({ type: z.literal('group.outcome-applied'), eventId: identifier,
@@ -183,6 +194,17 @@ const soundHeardEvent = z.strictObject({ type: z.literal('sound.heard'),
   distanceBand: z.enum(['near', 'medium', 'far']) });
 const heroDamagedPublicEvent = z.strictObject({ type: z.literal('hero.damaged'), amount: safeNonNegative,
   damageType: z.enum(['physical', 'fire', 'cold', 'lightning', 'poison', 'arcane']) });
+const combatObservedPublicEvent = z.strictObject({ type: z.literal('combat.observed'), eventId: identifier,
+  outcome: z.enum(['hit', 'missed']), attackerActorId: identifier, targetActorId: identifier,
+  attackerName: z.string().min(1).max(120).optional(), targetName: z.string().min(1).max(120).optional() });
+const actorMovementObservedPublicEvent = z.strictObject({ type: z.literal('actor.movement-observed'), eventId: identifier,
+  actorId: identifier, direction, visibility: z.enum(['entered', 'left']) });
+const populationNoticePublicEvent = z.strictObject({ type: z.literal('population.notice'), eventId: identifier,
+  category: z.enum(['created', 'encountered', 'leader-created', 'leader-defeated', 'group-outcome',
+    'swarm-growth', 'swarm-cap', 'source-destroyed', 'boss-encountered', 'boss-phase', 'boss-recovery',
+    'boss-defeated', 'boss-reward', 'champion-encountered', 'champion-defeated', 'champion-heirloom',
+    'echo-encountered', 'echo-defeated', 'echo-loot']),
+  actorId: identifier.nullable(), presentation: z.string().min(1).max(120), displayName: z.string().min(1).max(120).optional() });
 const restCompletedEvent = z.strictObject({ type: z.literal('rest.completed'), eventId: identifier,
   stopReason: z.enum(['full-health', 'maximum-duration', 'visible-danger', 'aware-hostile', 'damage',
     'meaningful-sound', 'hunger-warning', 'fuel-warning', 'condition-change', 'decision-required', 'hero-death']),
@@ -201,22 +223,38 @@ const event = z.discriminatedUnion('type', [
   hungerStageChangedEvent, hungerRestoredEvent, fuelWarningEvent, itemLightExtinguishedEvent,
   doorOpenedEvent, doorClosedEvent,
   featureRevealedEvent, featureSearchedEvent, trapTriggeredEvent, trapDisarmedEvent, trapDisarmFailedEvent,
-  itemDamagedEvent, actorIntentChangedEvent, groupAwarenessSharedEvent, groupLeaderDefeatedEvent,
+  itemDamagedEvent, actorIntentChangedEvent, populationCreatedEvent, populationEncounteredEvent,
+  populationPlacementSkippedEvent, groupAwarenessSharedEvent, groupLeaderCreatedEvent, groupLeaderDefeatedEvent,
   groupOutcomeAppliedEvent,
   swarmMembersCreatedEvent, swarmCapReachedEvent, swarmSourceDestroyedEvent,
   bossEncounteredEvent, bossPhaseChangedEvent, bossRecoveredEvent, bossDefeatedEvent, bossRewardCreatedEvent,
   championEncounteredEvent, championDefeatedEvent, championHeirloomCreatedEvent,
   echoEncounteredEvent, echoDefeatedEvent, echoLootCreatedEvent,
-  soundHeardEvent, heroDamagedPublicEvent, restCompletedEvent,
+  soundHeardEvent, heroDamagedPublicEvent, combatObservedPublicEvent, actorMovementObservedPublicEvent,
+  populationNoticePublicEvent, restCompletedEvent,
 ]);
+const hiddenPublicEventTypes = new Set([
+  'attack.hit', 'attack.missed', 'population.created', 'population.encountered', 'population.placement-skipped',
+  'group.awareness-shared', 'group.leader-created', 'group.leader-defeated', 'group.outcome-applied',
+  'swarm.members-created', 'swarm.cap-reached', 'swarm.source-destroyed', 'boss.encountered',
+  'boss.phase-changed', 'boss.recovered', 'boss.defeated', 'boss.reward-created', 'champion.encountered',
+  'champion.defeated', 'champion.heirloom-created', 'echo.encountered', 'echo.defeated', 'echo.loot-created',
+]);
+const publicOnlyEventTypes = new Set([
+  'sound.heard', 'hero.damaged', 'combat.observed', 'actor.movement-observed', 'population.notice',
+]);
+const authoritativeEvent = event.refine((value) => !publicOnlyEventTypes.has(value.type),
+  'public projection event cannot be stored as authoritative');
+const publicEvent = event.refine((value) => !hiddenPublicEventTypes.has(value.type),
+  'authoritative or roll-bearing event must be projected before public storage');
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
 const invalidResult = z.strictObject({ status: z.literal('invalid'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative, reason: blockReason });
 const processedResult = z.discriminatedUnion('status', [appliedResult, invalidResult]);
 const recorded = z.strictObject({
   command,
   result: processedResult,
-  events: z.array(event).readonly(),
-  publicEvents: z.array(event).readonly(),
+  events: z.array(authoritativeEvent).readonly(),
+  publicEvents: z.array(publicEvent).readonly(),
 });
 const entity = z.strictObject({ entityId: identifier, x: safeNonNegative, y: safeNonNegative });
 const color = z.tuple([uint8, uint8, uint8]);

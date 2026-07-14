@@ -273,7 +273,7 @@ describe('leaders and deterministic outcomes', () => {
       .toEqual({ accuracy: 0, defense: 0, damage: 0 });
   });
 
-  it('keeps all group outcome details out of public projection until explicit redaction exists', () => {
+  it('publishes qualitative visible group outcomes without authoritative details', () => {
     const { state, content } = fixture();
     const events = [
       { type: 'group.leader-defeated' as const, eventId: 'event.public',
@@ -282,9 +282,14 @@ describe('leaders and deterministic outcomes', () => {
         populationId: 'population.secret', actorId: 'monster.a', response: 'collapse' as const,
         individualRewards: true, collapsedMemberCount: 7 },
     ];
-    expect(projectDomainEvents({ state, content, heroId: state.hero.actorId, events })).toEqual([]);
+    expect(projectDomainEvents({ state, content, heroId: state.hero.actorId, events })).toEqual([
+      { type: 'population.notice', eventId: 'event.public', category: 'leader-defeated',
+        actorId: 'monster.a', presentation: 'group.leader-defeated' },
+      { type: 'population.notice', eventId: 'event.public', category: 'group-outcome',
+        actorId: 'monster.a', presentation: 'leader-response.collapse' },
+    ]);
     expect(JSON.stringify(projectDomainEvents({ state, content, heroId: state.hero.actorId, events })))
-      .not.toMatch(/population\.secret|collapse|individualRewards|collapsedMemberCount|7/);
+      .not.toMatch(/population\.secret|individualRewards|collapsedMemberCount|7/);
   });
 
   it('applies frenzy combat modifiers through direct observation until deterministic expiry', () => {

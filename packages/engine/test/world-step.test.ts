@@ -70,7 +70,10 @@ describe('atomic world steps', () => {
     ]);
     expect(result.state.worldTime).toBe(1);
     expect(selectReadyActor(result.state.actors, content)?.actorId).toBe('hero.demo');
-    expect(result.publicEvents).toEqual(result.events);
+    expect(result.publicEvents.map((event) => event.type)).toEqual([
+      'hero.moved', 'actor.turn.started', 'actor.intent-changed', 'combat.observed', 'actor.damaged', 'actor.turn.completed',
+    ]);
+    expect(JSON.stringify(result.publicEvents)).not.toMatch(/naturalRoll|rolledDice|rolledDamage|defense/);
   });
 
   it('throws before returning when the internal action safety limit is reached', () => {

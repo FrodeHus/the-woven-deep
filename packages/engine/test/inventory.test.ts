@@ -222,7 +222,7 @@ describe('immutable inventory transitions', () => {
     const fired = resolveCommand(armed, command, { content: pack });
     expect(fired.result).toMatchObject({ status: 'applied' });
     expect(fired.state.items.map((entry) => entry.itemId)).toEqual([bow.itemId]);
-    expect(fired.events.some((event) => event.type === 'attack.hit' || event.type === 'attack.missed')).toBe(true);
+    expect(fired.events.some((event) => event.type === 'combat.observed')).toBe(true);
     expect(() => encodeActiveRun(fired.state)).not.toThrow();
   });
 
