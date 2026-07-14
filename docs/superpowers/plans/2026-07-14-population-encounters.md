@@ -460,21 +460,21 @@ Commit: `feat: add phased boss encounters`
 - Consumes: up to ten ranked `FallenHeroStandingSnapshot` records, conquered Champion record IDs, the YAML champion template, current content pack, recorded death depths, optional side-arena slots, and recorded heirloom snapshots.
 - Produces: at most one normalized named Champion, up to the configured number of weaker rare Echoes, optional bypassable placements, conquest/defeat events, exact one-time Champion heirloom or fallback relic, and enhanced ordinary Echo loot.
 
-- [ ] **Step 1: Write failing selection-boundary tests**
+- [x] **Step 1: Write failing selection-boundary tests**
 
 Assert no standings means no Champion or Echo; conquered rank-1 suppression; unrelated lower records are never promoted to Champion; death depths are honored; and the Champion bypasses normal run gates/discovery protection. Give ranks 2–10 independent hidden rolls, retain passing candidates with the lowest rolls up to the configured cap, resolve ties by rank/record ID, and never reroll after save/reload.
 
-- [ ] **Step 2: Write failing normalization and optional-placement tests**
+- [x] **Step 2: Write failing normalization and optional-placement tests**
 
 Clamp historical attributes/equipment/abilities through current template limits, fall back cleanly for missing content, show `<Hero Name>, the Deep's Champion`, and require a side arena/branch that cannot block stairs, objectives, or required routes. Apply stricter Echo percentages, show `Echo of <Hero Name>`, and prove no Echo combat cap can equal or exceed its Champion counterpart.
 
-- [ ] **Step 3: Write failing heirloom tests**
+- [x] **Step 3: Write failing heirloom tests**
 
 On first defeat, materialize one unit preserving content ID, enchantment, condition, charges, fuel, safe display metadata, and Hall provenance. The recorded candidate must have been a unique eligible equipped item instance at the original death; backpack items are invalid. If no equipment was eligible or the recorded definition is absent, use the YAML fallback relic while retaining provenance. Duplicate defeat paths and reload cannot create a second reward.
 
 For each Echo, create enhanced ordinary loot from `echoLootTableId`, never the recorded heirloom or a guaranteed unique item. The same record cannot create or respawn another Echo in that run after encounter or defeat, but a new run may independently gate it again.
 
-- [ ] **Step 4: Implement champion lifecycle and commit**
+- [x] **Step 4: Implement champion lifecycle and commit**
 
 Keep 4B1 host-only: do not choose Hall standings or original heirlooms here and do not persist profile/session conquest or achievements. Emit exact record IDs and ranks for 4B3 to consume later. Champion conquest is permanent; Echo suppression lasts only for the active run, while first lifetime defeat achievement state belongs to 4B3.
 

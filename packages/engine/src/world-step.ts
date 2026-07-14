@@ -24,6 +24,7 @@ import { updateActorMemory, visibleTargetObservations } from './population-perce
 import { applyGroupLeaderOutcomes, coordinateGroups, groupCombatModifiers } from './group-behavior.js';
 import { advanceSwarms, resolveSwarmSpawnAction, swarmCombatModifiers, swarmSpawnAction } from './swarm-behavior.js';
 import { advanceBosses, bossCombatModifiers } from './boss-behavior.js';
+import { advanceFallenHeroEncounters, fallenHeroCombatModifiers } from './champion.js';
 import { projectDomainEvents } from './event-projection.js';
 import {
   completeNormalActorTurn, relationshipBetween, resolveOpportunityAttacks, setRelationship,
@@ -66,15 +67,19 @@ function profile(
   actors: ActiveRun['actors'] = [actor],
   survival: ActiveRun['survival'] | undefined = undefined,
   populations: ActiveRun['populations'] = [],
+  fallenHeroStandings: ActiveRun['fallenHeroStandings'] = [],
   worldTime = 0,
 ): CombatProfile {
   const monster = monsterDefinition(content, actor);
   const groupModifiers = groupCombatModifiers({ state: { actors, populations, worldTime }, content, actorId: actor.actorId });
   const swarmModifiers = swarmCombatModifiers({ state: { actors, populations, worldTime }, content, actorId: actor.actorId });
   const bossModifiers = bossCombatModifiers({ state: { actors, populations }, content, actorId: actor.actorId });
-  const populationModifiers = { accuracy: groupModifiers.accuracy + swarmModifiers.accuracy + bossModifiers.accuracy,
-    defense: groupModifiers.defense + swarmModifiers.defense + bossModifiers.defense,
-    damage: groupModifiers.damage + swarmModifiers.damage + bossModifiers.damage };
+  const fallenModifiers = fallenHeroCombatModifiers({ state: { actors, populations,
+    fallenHeroStandings }, content, actorId: actor.actorId });
+  const populationModifiers = { accuracy: groupModifiers.accuracy + swarmModifiers.accuracy
+    + bossModifiers.accuracy + fallenModifiers.accuracy,
+    defense: groupModifiers.defense + swarmModifiers.defense + bossModifiers.defense + fallenModifiers.defense,
+    damage: groupModifiers.damage + swarmModifiers.damage + bossModifiers.damage + fallenModifiers.damage };
   if (monster) return applyPopulationCombatModifiers({
     accuracy: monster.accuracy,
     defense: monster.defense,
@@ -123,13 +128,16 @@ function combat(input: Readonly<{
   items: ActiveRun['items'];
   survival: ActiveRun['survival'];
   populations: ActiveRun['populations'];
+  fallenHeroStandings: ActiveRun['fallenHeroStandings'];
   worldTime: number;
 }>): ReactionAttackResult {
   const attacker = input.actors.find((candidate) => candidate.actorId === input.attackerId);
   const target = input.actors.find((candidate) => candidate.actorId === input.targetActorId);
   if (!attacker || !target) throw new Error('internal invariant: combat actors must exist');
-  const attack = profile(attacker, input.content, input.items, input.actors, input.survival, input.populations, input.worldTime);
-  const defense = profile(target, input.content, input.items, input.actors, input.survival, input.populations, input.worldTime);
+  const attack = profile(attacker, input.content, input.items, input.actors, input.survival,
+    input.populations, input.fallenHeroStandings, input.worldTime);
+  const defense = profile(target, input.content, input.items, input.actors, input.survival,
+    input.populations, input.fallenHeroStandings, input.worldTime);
   return resolveAttack({
     ...input,
     accuracy: attack.accuracy,
@@ -284,7 +292,7 @@ function applyAction(input: Readonly<{
     const ranged = applyPopulationCombatModifiers({ accuracy: attackerStats.rangedAccuracy, defense: 0,
       damage: definition.combat.damage }, modifiers);
     const defense = profile(target, input.content, state.items, state.actors, state.survival,
-      state.populations, state.worldTime);
+      state.populations, state.fallenHeroStandings, state.worldTime);
     const shot = resolveAttack({
       eventId: input.eventId, attackerId: actor.actorId, targetActorId: target.actorId,
       actors: state.actors, combatState: state.rng.combat,
@@ -365,7 +373,8 @@ function applyAction(input: Readonly<{
       run: state, content: input.content, moverActorId: actor.actorId,
       from: { x: actor.x, y: actor.y }, to: action.to, eventId: input.eventId,
       resolveAttack: (attack) => combat({ ...attack, content: input.content, items: state.items,
-        survival: state.survival, populations: state.populations, worldTime: state.worldTime }),
+        survival: state.survival, populations: state.populations,
+        fallenHeroStandings: state.fallenHeroStandings, worldTime: state.worldTime }),
     });
     state = reactions.state;
     events.push(...reactions.events);
@@ -408,7 +417,8 @@ function applyAction(input: Readonly<{
     const resolved = combat({
       actors: state.actors, combatState: state.rng.combat, attackerId: actor.actorId,
       targetActorId: action.targetActorId, eventId: input.eventId, content: input.content,
-      items: state.items, survival: state.survival, populations: state.populations, worldTime: state.worldTime,
+      items: state.items, survival: state.survival, populations: state.populations,
+      fallenHeroStandings: state.fallenHeroStandings, worldTime: state.worldTime,
     });
     state = { ...state, actors: resolved.actors, rng: { ...state.rng, combat: resolved.combatState } };
     events.push(...resolved.events);
@@ -532,7 +542,8 @@ function prepareIndividualTurn(input: Readonly<{
 }
 
 function observeEncounters(state: ActiveRun, content: CompiledContentPack): ActiveRun {
-  if (state.encounterDecisions.length === 0 || state.populations.length === 0) return state;
+  if (state.populations.length === 0
+    || (state.encounterDecisions.length === 0 && state.fallenHeroDecisions.length === 0)) return state;
   const hero = heroActor(state);
   const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
   if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
@@ -543,6 +554,7 @@ function observeEncounters(state: ActiveRun, content: CompiledContentPack): Acti
     additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }),
   });
   let decisions = state.encounterDecisions;
+  let fallenDecisions = state.fallenHeroDecisions;
   for (const population of [...state.populations].sort((left, right) => compareCodeUnits(left.populationId, right.populationId))) {
     if (population.floorId !== floor.floorId) continue;
     const visible = population.livingMemberIds.some((actorId) => {
@@ -551,11 +563,15 @@ function observeEncounters(state: ActiveRun, content: CompiledContentPack): Acti
       return index !== undefined && ((perception.visibilityWords[Math.floor(index / 32)]! >>> (index % 32)) & 1) === 1
         && perception.illumination.intensity[index]! > 0;
     });
-    if (visible && !decisions.find((decision) => decision.encounterId === population.encounterId)?.encountered) {
+    if (visible && (population.model === 'champion' || population.model === 'echo')) {
+      fallenDecisions = fallenDecisions.map((decision) => decision.hallRecordId === population.hallRecordId
+        && !decision.encountered ? { ...decision, encountered: true } : decision);
+    } else if (visible && !decisions.find((decision) => decision.encounterId === population.encounterId)?.encountered) {
       decisions = markEncounterObserved(decisions, population.encounterId);
     }
   }
-  return decisions === state.encounterDecisions ? state : { ...state, encounterDecisions: decisions };
+  return decisions === state.encounterDecisions && fallenDecisions === state.fallenHeroDecisions
+    ? state : { ...state, encounterDecisions: decisions, fallenHeroDecisions: fallenDecisions };
 }
 
 function bossEncounteredEvents(before: ActiveRun, after: ActiveRun, eventId: OpaqueId): readonly DomainEvent[] {
@@ -567,6 +583,23 @@ function bossEncounteredEvents(before: ActiveRun, after: ActiveRun, eventId: Opa
     return population?.model === 'boss' ? [{ type: 'boss.encountered' as const, eventId,
       populationId: population.populationId, actorId: population.actorId, encounterId: population.encounterId }] : [];
   });
+}
+
+function fallenHeroEncounteredEvents(before: ActiveRun, after: ActiveRun, eventId: OpaqueId): readonly DomainEvent[] {
+  const events: DomainEvent[] = [];
+  for (const decision of after.fallenHeroDecisions) {
+    const previous = before.fallenHeroDecisions.find((candidate) => candidate.hallRecordId === decision.hallRecordId);
+    if (previous?.encountered !== false || !decision.encountered) continue;
+    const population = after.populations.find((candidate) => (candidate.model === 'champion' || candidate.model === 'echo')
+      && candidate.hallRecordId === decision.hallRecordId);
+    if (population?.model === 'champion') events.push({ type: 'champion.encountered', eventId,
+      populationId: population.populationId, actorId: population.actorId,
+      hallRecordId: population.hallRecordId, rank: 1 });
+    if (population?.model === 'echo') events.push({ type: 'echo.encountered', eventId,
+      populationId: population.populationId, actorId: population.actorId,
+      hallRecordId: population.hallRecordId, rank: population.rank });
+  }
+  return events;
 }
 
 export function resolveWorldStep(input: Readonly<{
@@ -586,11 +619,15 @@ export function resolveWorldStep(input: Readonly<{
   const publicEvents: DomainEvent[] = [];
   let bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
   state = bosses.state;
+  let fallen = advanceFallenHeroEncounters({ state, content: input.content, eventId: input.eventId });
+  state = fallen.state;
   let beforeObservation = state;
   state = observeEncounters(state, input.content);
   appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
   appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
+  appendEvents(events, publicEvents, fallen.events, state, heroId, input.content);
   appendEvents(events, publicEvents, bossEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
+  appendEvents(events, publicEvents, fallenHeroEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
   let groupOutcome = applyGroupLeaderOutcomes({ state, content: input.content, eventId: input.eventId });
   state = groupOutcome.state;
   appendEvents(events, publicEvents, groupOutcome.events, state, heroId, input.content);
@@ -623,6 +660,9 @@ export function resolveWorldStep(input: Readonly<{
       bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
       state = bosses.state;
       appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
+      fallen = advanceFallenHeroEncounters({ state, content: input.content, eventId: input.eventId });
+      state = fallen.state;
+      appendEvents(events, publicEvents, fallen.events, state, heroId, input.content);
       selected = selectReadyActor(state.actors, input.content, state.activeFloorId);
       if (!selected) break;
     }
@@ -644,11 +684,15 @@ export function resolveWorldStep(input: Readonly<{
     state = resolved.state;
     bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
     state = bosses.state;
+    fallen = advanceFallenHeroEncounters({ state, content: input.content, eventId: input.eventId });
+    state = fallen.state;
     beforeObservation = state;
     state = observeEncounters(state, input.content);
     appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
     appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
+    appendEvents(events, publicEvents, fallen.events, state, heroId, input.content);
     appendEvents(events, publicEvents, bossEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
+    appendEvents(events, publicEvents, fallenHeroEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
     groupOutcome = applyGroupLeaderOutcomes({ state, content: input.content, eventId: input.eventId });
     state = groupOutcome.state;
     appendEvents(events, publicEvents, groupOutcome.events, state, heroId, input.content);

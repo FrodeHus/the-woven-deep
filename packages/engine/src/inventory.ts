@@ -1,7 +1,8 @@
-import type { CompiledContentPack, ItemContentEntry, LootTableContentEntry } from '@woven-deep/content';
+import { DERIVED_STAT_NAMES, type CompiledContentPack, type ItemContentEntry, type LootTableContentEntry } from '@woven-deep/content';
 import { actorById } from './actor-model.js';
 import type { ItemInstance } from './item-model.js';
 import type { ActiveRun, OpaqueId, Uint32State } from './model.js';
+import type { RecordedHeirloomSnapshot } from './population-model.js';
 import { stableJson } from './stable-json.js';
 import { rollDie } from './random.js';
 
@@ -101,6 +102,55 @@ export function createFloorItem(input: Readonly<{
     identified: definition.identification.mode === 'known', charges: null,
     fuel: definition.light?.fuelCapacity ?? null, enabled: definition.light === null ? null : false,
     location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y } };
+}
+
+export function createRecordedHeirloom(input: Readonly<{
+  content: CompiledContentPack;
+  snapshot: RecordedHeirloomSnapshot;
+  equippedItemContentIds: readonly OpaqueId[];
+  fallbackItemId: OpaqueId;
+  itemId: OpaqueId;
+  floorId: OpaqueId;
+  x: number;
+  y: number;
+}>): Readonly<{ item: ItemInstance; fallback: boolean; displayName: string; glyph: string; color: string }> {
+  const resolvedContentId = recordedHeirloomContentId(input);
+  const definition = itemDefinition(input.content, resolvedContentId);
+  const fallback = resolvedContentId !== input.snapshot.contentId;
+  const item: ItemInstance = {
+    itemId: input.itemId, contentId: definition.id, quantity: 1,
+    condition: fallback ? 100 : input.snapshot.condition,
+    enchantment: fallback ? null : input.snapshot.enchantment,
+    identified: true,
+    charges: fallback ? null : input.snapshot.charges,
+    fuel: fallback ? definition.light?.fuelCapacity ?? null : input.snapshot.fuel,
+    enabled: definition.light === null ? null : false,
+    location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y },
+  };
+  return { item, fallback,
+    displayName: fallback ? definition.name : input.snapshot.displayName,
+    glyph: fallback ? definition.glyph : input.snapshot.glyph,
+    color: fallback ? definition.color : input.snapshot.color };
+}
+
+export function recordedHeirloomContentId(input: Readonly<{
+  content: CompiledContentPack;
+  snapshot: RecordedHeirloomSnapshot;
+  equippedItemContentIds: readonly OpaqueId[];
+  fallbackItemId: OpaqueId;
+}>): OpaqueId {
+  const recorded = input.content.entries.find((entry): entry is ItemContentEntry =>
+    entry.kind === 'item' && entry.id === input.snapshot.contentId);
+  const fuelCompatible = recorded?.light === null
+    ? input.snapshot.fuel === null
+    : recorded?.light !== undefined && input.snapshot.fuel !== null
+      && input.snapshot.fuel <= recorded.light.fuelCapacity;
+  const modifiersCompatible = Object.keys(input.snapshot.enchantment?.modifiers ?? {})
+    .every((name) => (DERIVED_STAT_NAMES as readonly string[]).includes(name));
+  return input.snapshot.sourceItemId !== null
+    && input.equippedItemContentIds.includes(input.snapshot.contentId)
+    && recorded?.heirloomEligible === true && fuelCompatible && modifiersCompatible
+    ? input.snapshot.contentId : input.fallbackItemId;
 }
 
 export function canStack(left: ItemInstance, right: ItemInstance): boolean {

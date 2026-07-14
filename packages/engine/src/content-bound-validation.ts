@@ -3,6 +3,8 @@ import type { ActiveRun } from './model.js';
 import { unidentifiedPresentation } from './identification.js';
 import { hungerStage } from './survival.js';
 import { effectiveEncounterProbability, maximumDiscoveryProtectionBonus } from './population-gates.js';
+import { normalizeFallenHero, retainEchoCandidates } from './champion.js';
+import { recordedHeirloomContentId } from './inventory.js';
 
 function entryMap(pack: CompiledContentPack): ReadonlyMap<string, ContentEntry> {
   return new Map(pack.entries.map((entry) => [entry.id, entry]));
@@ -47,6 +49,14 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
       const standing = run.fallenHeroStandings.find((entry) => entry.hallRecordId === population.hallRecordId);
       if (!standing || standing.rank !== population.rank) {
         throw new Error(`content-bound validation: fallen-hero population ${population.populationId} has no matching standing`);
+      }
+      const actor = actors.get(population.actorId);
+      const normalized = actor && normalizeFallenHero({ standing, template, content: pack, role: population.model });
+      if (!actor || actor.contentId !== normalized?.monsterId || actor.maxHealth !== normalized.health
+        || actor.populationPresentation?.name !== normalized.displayName
+        || actor.populationPresentation.glyph !== normalized.glyph
+        || actor.populationPresentation.color !== normalized.color) {
+        throw new Error(`content-bound validation: fallen-hero population ${population.populationId} is not normalized`);
       }
       continue;
     }
@@ -108,8 +118,17 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
   }
   if (championTemplate) {
     const retainedEchoes = run.fallenHeroDecisions.filter((decision) => decision.role === 'echo' && decision.retained);
+    const echoStandings = run.fallenHeroStandings.slice(1);
+    const echoDecisions = run.fallenHeroDecisions.filter((decision) => decision.role === 'echo');
+    const expectedEchoIds = retainEchoCandidates({ candidates: echoStandings,
+      rolls: echoDecisions.map((decision) => decision.gateRoll!), chance: championTemplate.echoAppearanceChance,
+      maximum: championTemplate.maximumEchoesPerRun });
+    const retainedEchoIds = retainedEchoes.map((decision) => decision.hallRecordId).sort();
+    const sortedExpectedEchoIds = [...expectedEchoIds].sort();
     if (retainedEchoes.length > championTemplate.maximumEchoesPerRun
-      || retainedEchoes.some((decision) => decision.gateRoll! / 0x1_0000_0000 >= championTemplate.echoAppearanceChance)) {
+      || retainedEchoIds.length !== sortedExpectedEchoIds.length
+      || retainedEchoes.some((decision) => decision.gateRoll! / 0x1_0000_0000 >= championTemplate.echoAppearanceChance)
+      || retainedEchoIds.some((recordId, index) => recordId !== sortedExpectedEchoIds[index])) {
       throw new Error('content-bound validation: retained Echo decisions do not match the Champion template');
     }
     for (const decision of run.fallenHeroDecisions) {
@@ -126,6 +145,16 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         const conquered = run.conqueredChampionRecordIds.includes(decision.hallRecordId);
         if (decision.retained === conquered) {
           throw new Error(`content-bound validation: Champion decision ${decision.hallRecordId} disagrees with conquered state`);
+        }
+      }
+      if (matching[0]?.model === 'champion' && matching[0].rewardCreated) {
+        const standing = run.fallenHeroStandings.find((entry) => entry.hallRecordId === decision.hallRecordId)!;
+        const expectedContentId = recordedHeirloomContentId({ content: pack, snapshot: standing.heirloom,
+          equippedItemContentIds: standing.equippedItemContentIds, fallbackItemId: championTemplate.fallbackItemId });
+        const rewardId = `item.heirloom.${matching[0].populationId}`;
+        const reward = run.items.find((item) => item.itemId === rewardId);
+        if (!reward || reward.contentId !== expectedContentId || reward.quantity !== 1) {
+          throw new Error(`content-bound validation: Champion reward ${rewardId} is invalid`);
         }
       }
     }

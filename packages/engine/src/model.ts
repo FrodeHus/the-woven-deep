@@ -332,6 +332,33 @@ export interface BossRewardCreatedEvent {
   readonly actorId: OpaqueId; readonly encounterId: OpaqueId; readonly uniqueItemId: OpaqueId;
   readonly itemIds: readonly OpaqueId[];
 }
+export interface ChampionDefeatedEvent {
+  readonly type: 'champion.defeated'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly hallRecordId: OpaqueId; readonly rank: 1;
+}
+export interface ChampionEncounteredEvent {
+  readonly type: 'champion.encountered'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly hallRecordId: OpaqueId; readonly rank: 1;
+}
+export interface ChampionHeirloomCreatedEvent {
+  readonly type: 'champion.heirloom-created'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly hallRecordId: OpaqueId; readonly rank: 1; readonly itemId: OpaqueId;
+  readonly contentId: OpaqueId; readonly originatingHallRecordId: OpaqueId; readonly displayName: string;
+  readonly glyph: string; readonly color: string; readonly fallback: boolean;
+}
+export interface EchoDefeatedEvent {
+  readonly type: 'echo.defeated'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly hallRecordId: OpaqueId; readonly rank: number;
+}
+export interface EchoEncounteredEvent {
+  readonly type: 'echo.encountered'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly hallRecordId: OpaqueId; readonly rank: number;
+}
+export interface EchoLootCreatedEvent {
+  readonly type: 'echo.loot-created'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly hallRecordId: OpaqueId; readonly rank: number;
+  readonly itemIds: readonly OpaqueId[];
+}
 export interface SoundHeardEvent {
   readonly type: 'sound.heard';
   readonly category: 'combat' | 'movement' | 'mechanism';
@@ -361,6 +388,8 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | ActorIntentChangedEvent | GroupAwarenessSharedEvent | GroupLeaderDefeatedEvent | GroupOutcomeAppliedEvent
   | SwarmMembersCreatedEvent | SwarmCapReachedEvent | SwarmSourceDestroyedEvent
   | BossEncounteredEvent | BossPhaseChangedEvent | BossRecoveredEvent | BossDefeatedEvent | BossRewardCreatedEvent
+  | ChampionEncounteredEvent | ChampionDefeatedEvent | ChampionHeirloomCreatedEvent
+  | EchoEncounteredEvent | EchoDefeatedEvent | EchoLootCreatedEvent
   | SoundHeardEvent | HeroDamagedPublicEvent | RestCompletedEvent;
 
 export interface AppliedCommandResult {

@@ -8,6 +8,7 @@ import { placePopulation } from './population-placement.js';
 import { isNonZeroState } from './random.js';
 import { validateActiveRun } from './save-schema.js';
 import { heroActor, heroPerception } from './actor-model.js';
+import { placeFallenHeroEncounters } from './champion.js';
 
 function assertState(value: Uint32State, label: string): void {
   if (!Array.isArray(value) || value.length !== 4
@@ -70,7 +71,19 @@ export function addGeneratedFloor(
   }
   let floor = placement?.status === 'placed' ? placement.floor : generated.floor;
   const createdActors = placement?.status === 'placed' ? placement.createdActors : [];
-  const actorsAfterPlacement = [...run.actors, ...createdActors]
+  const ordinaryPopulations = placement?.status === 'placed'
+    ? [...run.populations, placement.population]
+      .sort((left, right) => left.populationId < right.populationId ? -1 : left.populationId > right.populationId ? 1 : 0)
+    : run.populations;
+  const fallen = population === undefined ? null : placeFallenHeroEncounters({
+    run: { ...run, actors: [...run.actors, ...createdActors]
+      .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0),
+    populations: ordinaryPopulations,
+    encounterDecisions: placement?.encounterDecisions ?? run.encounterDecisions },
+    floor, content: population.content,
+  });
+  if (fallen !== null) floor = fallen.floor;
+  const actorsAfterPlacement = [...run.actors, ...createdActors, ...(fallen?.actors ?? [])]
     .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0);
   if (transitioningToInsertedFloor) {
     const actors = new Map<string, Readonly<{ x: number; y: number }>>(
@@ -93,10 +106,8 @@ export function addGeneratedFloor(
     },
     actors: actorsAfterPlacement,
     encounterDecisions: placement?.encounterDecisions ?? run.encounterDecisions,
-    populations: placement?.status === 'placed'
-      ? [...run.populations, placement.population]
-        .sort((left, right) => left.populationId < right.populationId ? -1 : left.populationId > right.populationId ? 1 : 0)
-      : run.populations,
+    populations: fallen?.populations ?? ordinaryPopulations,
+    fallenHeroDecisions: fallen?.decisions ?? run.fallenHeroDecisions,
     floors: [...run.floors, floor],
   });
 }
