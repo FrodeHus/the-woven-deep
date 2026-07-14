@@ -1,6 +1,6 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import { actionCostFor, balanceEntry, type GameAction } from './actions.js';
-import { actorById } from './actor-model.js';
+import { actorById, type ActorState } from './actor-model.js';
 import { featureTiles } from './features.js';
 import { findPath, selectPathStep } from './pathfinding.js';
 import { movementBlockReason } from './terrain.js';
@@ -9,6 +9,26 @@ import { relationshipBetween } from './reactions.js';
 
 function distance(left: Point, right: Point): number {
   return Math.max(Math.abs(left.x - right.x), Math.abs(left.y - right.y));
+}
+
+function patrolGoal(input: Readonly<{
+  actor: ActorState;
+  content: CompiledContentPack;
+}>): Point | null {
+  const definition = input.content.entries.find((entry) => entry.kind === 'monster'
+    && entry.id === input.actor.contentId);
+  if (!definition || definition.kind !== 'monster') {
+    throw new Error(`internal invariant: monster definition ${input.actor.contentId} does not exist`);
+  }
+  const waypoints = definition.behaviorParameters.waypoints;
+  if (!Array.isArray(waypoints) || waypoints.length === 0 || waypoints.some((waypoint) => (
+    typeof waypoint !== 'object' || waypoint === null
+    || !Number.isSafeInteger((waypoint as Point).x) || !Number.isSafeInteger((waypoint as Point).y)
+  ))) throw new Error(`internal invariant: invalid patrol waypoints for ${definition.id}`);
+  const points = waypoints as readonly Point[];
+  const current = points.findIndex((point) => point.x === input.actor.x && point.y === input.actor.y);
+  const selected = points[current < 0 ? 0 : (current + 1) % points.length]!;
+  return { x: selected.x, y: selected.y };
 }
 
 export function chooseBehaviorAction(input: Readonly<{
@@ -22,7 +42,7 @@ export function chooseBehaviorAction(input: Readonly<{
   if (actor.behaviorId === null) {
     return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };
   }
-  if (actor.behaviorId !== 'behavior.approach-and-attack') {
+  if (actor.behaviorId !== 'behavior.approach-and-attack' && actor.behaviorId !== 'behavior.patrol') {
     throw new Error(`internal invariant: no behavior resolver for ${actor.behaviorId ?? 'null'}`);
   }
   const awareTargets = input.state.actors.filter((candidate) => (
@@ -35,6 +55,7 @@ export function chooseBehaviorAction(input: Readonly<{
   const goalTarget = savedGoal?.type === 'actor'
     ? input.state.actors.find((candidate) => candidate.actorId === savedGoal.targetActorId
       && candidate.health > 0 && candidate.floorId === actor.floorId
+      && actor.awareActorIds.includes(candidate.actorId)
       && relationshipBetween(input.state, actor.actorId, candidate.actorId) === 'hostile')
     : undefined;
   const target = goalTarget ?? awareTargets[0];
@@ -44,12 +65,20 @@ export function chooseBehaviorAction(input: Readonly<{
       cost: actionCostFor(rules, 'action.attack'),
     };
   }
+  const investigation = actor.behaviorState.investigation;
+  const investigationDestination = investigation !== null && investigation.floorId === actor.floorId
+    && (investigation.expiresAt === null || investigation.expiresAt > input.state.worldTime)
+    ? { x: investigation.x, y: investigation.y }
+    : null;
   const destination = target
     ? { x: target.x, y: target.y }
+    : savedGoal?.type === 'actor' ? investigationDestination
     : savedGoal?.type === 'cell' && savedGoal.floorId === actor.floorId
       ? { x: savedGoal.x, y: savedGoal.y }
       : savedGoal?.type === 'formation'
       ? { x: savedGoal.x, y: savedGoal.y }
+      : actor.behaviorId === 'behavior.patrol'
+        ? patrolGoal({ actor, content: input.content })
       : null;
   if (!destination || (destination.x === actor.x && destination.y === actor.y)) {
     return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };

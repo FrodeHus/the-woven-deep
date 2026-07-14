@@ -97,6 +97,20 @@ describe('compileContentDirectory', () => {
     );
   });
 
+  it('accepts registered patrol waypoints and rejects an empty patrol', async () => {
+    const patrol = compactMonster
+      .replace('behavior.approach-and-attack', 'behavior.patrol')
+      .replace('behaviorParameters: {}', 'behaviorParameters: {waypoints: [{x: 1, y: 2}, {x: 3, y: 4}]}');
+    const validRoot = await fixture({ 'content.yaml': contentFile(patrol, compactItem, compactVault) });
+    await expect(compileContentDirectory({ rootDir: validRoot })).resolves.toBeDefined();
+
+    const invalidRoot = await fixture({
+      'content.yaml': contentFile(patrol.replace('waypoints: [{x: 1, y: 2}, {x: 3, y: 4}]', 'waypoints: []'),
+        compactItem, compactVault),
+    });
+    await expect(compileContentDirectory({ rootDir: invalidRoot })).rejects.toThrow(/waypoints|too small/i);
+  });
+
   it('rejects inconsistent equipment handedness', async () => {
     const invalidItem = compactItem
       .replace('slots: [off-hand]', 'slots: [head]')

@@ -15,6 +15,19 @@ function hostile(overrides: Partial<ActorState> = {}): ActorState {
   };
 }
 
+function contentWithBehavior(actor: ActorState, behaviorParameters: Readonly<Record<string, unknown>>) {
+  const content = createDemoContentPack();
+  return { ...content, entries: [...content.entries, {
+    kind: 'monster' as const, id: actor.contentId, name: actor.contentId, glyph: 'm', color: '#aa4444', tags: [],
+    minDepth: 1, maxDepth: 20,
+    attributes: { might: 5, agility: 5, vitality: 5, wits: 5, resolve: 5 },
+    health: 10, speed: 100, accuracy: 100, defense: 8, perception: 8,
+    damage: { count: 1, sides: 1, bonus: 0 }, armor: 0,
+    resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 },
+    disposition: 'hostile' as const, behaviorId: actor.behaviorId!, behaviorParameters, rarity: 'common' as const,
+  }] };
+}
+
 describe('registered deterministic behavior', () => {
   it('attacks an adjacent aware hostile target', () => {
     const state = createDemoRun();
@@ -87,5 +100,44 @@ describe('registered deterministic behavior', () => {
       state: { ...state, actors: [state.actors[0]!, blocker, monster] },
       actorId: monster.actorId, content: createDemoContentPack(),
     })).toMatchObject({ type: 'wait' });
+  });
+
+  it('uses saved investigation instead of hidden live coordinates for a stale actor goal', () => {
+    const state = createDemoRun();
+    const monster = hostile({ x: 5, y: 3, awareActorIds: [], behaviorState: {
+      intent: 'approach', goal: { type: 'actor', targetActorId: 'hero.demo' },
+      lastKnownTargets: [{ targetActorId: 'hero.demo', floorId: 'floor.demo', x: 5, y: 1,
+        observedAt: 1, source: 'sight', observerActorId: 'monster.hunter' }],
+      investigation: { floorId: 'floor.demo', x: 5, y: 1, startedAt: 1, expiresAt: null },
+    } });
+    const action = chooseBehaviorAction({
+      state: { ...state, actors: [state.actors[0]!, monster] },
+      actorId: monster.actorId, content: createDemoContentPack(),
+    });
+    expect(action).toMatchObject({ type: 'move', to: { x: 5, y: 2 } });
+  });
+
+  it('holds for a stale hidden actor goal without valid last-known investigation', () => {
+    const state = createDemoRun();
+    const monster = hostile({ x: 5, y: 3, awareActorIds: [], behaviorState: {
+      intent: 'approach', goal: { type: 'actor', targetActorId: 'hero.demo' },
+      lastKnownTargets: [], investigation: null,
+    } });
+    expect(chooseBehaviorAction({
+      state: { ...state, actors: [state.actors[0]!, monster] },
+      actorId: monster.actorId, content: createDemoContentPack(),
+    })).toMatchObject({ type: 'wait' });
+  });
+
+  it('runs a registered waypoint patrol while unaware', () => {
+    const state = createDemoRun();
+    const patrol = hostile({
+      actorId: 'monster.patrol', contentId: 'monster.patrol', x: 5, y: 3,
+      behaviorId: 'behavior.patrol', awareActorIds: [],
+    });
+    expect(chooseBehaviorAction({
+      state: { ...state, actors: [state.actors[0]!, patrol] }, actorId: patrol.actorId,
+      content: contentWithBehavior(patrol, { waypoints: [{ x: 3, y: 3 }, { x: 5, y: 1 }] }),
+    })).toMatchObject({ type: 'move', to: { x: 4, y: 3 } });
   });
 });

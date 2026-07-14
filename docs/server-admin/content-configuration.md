@@ -524,6 +524,9 @@ entries:
 ## Closed behavior registry
 
 - `behavior.approach-and-attack`: parameters `{}`. Approaches a hostile target and attacks when able.
+- `behavior.patrol`: parameters `{ waypoints: [{ x, y }, ...] }` with at least one safe-integer floor cell.
+  While unaware, the actor paths to the first waypoint, advances to the next waypoint when standing on one,
+  and wraps to the beginning. Current hostile observations and valid last-known investigations take precedence.
 
 Unregistered behavior IDs and extra parameters fail compilation.
 

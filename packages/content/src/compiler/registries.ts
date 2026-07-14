@@ -20,6 +20,9 @@ export const ACTION_COST_IDS = [
 
 export const BEHAVIOR_PARAMETER_SCHEMAS = {
   'behavior.approach-and-attack': z.strictObject({}),
+  'behavior.patrol': z.strictObject({
+    waypoints: z.array(z.strictObject({ x: safeInteger, y: safeInteger })).min(1),
+  }),
 } as const;
 
 export const LEADER_RESPONSE_PARAMETER_SCHEMAS = {

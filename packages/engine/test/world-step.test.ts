@@ -112,6 +112,18 @@ describe('atomic world steps', () => {
     expect(types.indexOf('reaction.triggered')).toBeLessThan(types.indexOf('hero.moved'));
   });
 
+  it('revalidates a candidate move against normal movement rules before mutation', () => {
+    const state = createDemoRun();
+    const before = structuredClone(state);
+    const result = resolveWorldStep({
+      state, content: createDemoContentPack(), eventId: 'command.stale-move',
+      action: { type: 'move', actorId: state.hero.actorId, to: { x: 0, y: 1 }, cost: 100 },
+    });
+    expect(result.state.actors[0]).toMatchObject({ x: 1, y: 1 });
+    expect(result.events.some((event) => event.type === 'hero.moved')).toBe(false);
+    expect(state).toEqual(before);
+  });
+
   it('omits unseen actor activity from the public event sequence', () => {
     const state = createDemoRun();
     const enemy = monster('monster.unseen', { energy: 100 });

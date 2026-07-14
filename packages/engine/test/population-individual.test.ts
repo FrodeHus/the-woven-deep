@@ -181,4 +181,27 @@ describe('individual population behavior', () => {
     });
     expect(result.state.encounterDecisions[0]?.encountered).toBe(true);
   });
+
+  it('does not mark generated membership encountered while every member is dark and unseen', () => {
+    const run = createDemoRun();
+    const actor = monster('monster.hidden-population', {
+      x: 3, y: 1, energy: 0, populationId: 'population.hidden',
+      populationPresentation: { name: 'Hidden monster', glyph: 'm', color: '#aa4444', leader: false },
+    });
+    const entry = encounter('encounter.hidden', actor.contentId);
+    const darkFloor = { ...run.floors[0]!, ambient: { color: [0, 0, 0] as const, strength: 0 } };
+    const result = resolveWorldStep({
+      state: {
+        ...run, floors: [darkFloor], actors: [run.actors[0]!, actor],
+        encounterDecisions: [{ encounterId: entry.id, baseProbability: 1, protectionBonus: 0,
+          effectiveProbability: 1, eligible: true, reachedEligibleDepth: true, encountered: false,
+          instancesCreated: 1 }],
+        populations: [{ populationId: 'population.hidden', encounterId: entry.id, model: 'individual',
+          floorId: 'floor.demo', createdAt: 0, livingMemberIds: [actor.actorId], formerMemberIds: [] }],
+      },
+      content: pack(definition(actor.contentId), entry), eventId: 'event.encounter-unseen',
+      action: { type: 'wait', actorId: run.hero.actorId, cost: 100 },
+    });
+    expect(result.state.encounterDecisions[0]?.encountered).toBe(false);
+  });
 });

@@ -13,7 +13,10 @@ import {
 import { identifyAppearance } from './identification.js';
 import { advanceSurvival, hungerModifiers } from './survival.js';
 import { applyPassiveDiscovery, closeDoor, disarmTrap, featureTiles, openDoor, searchFeatures, triggerTrap } from './features.js';
-import { tileIndex, type ActiveRun, type DomainEvent, type OpaqueId, type Point, type Uint32State } from './model.js';
+import {
+  tileIndex, type ActiveRun, type Direction, type DomainEvent, type OpaqueId, type Point, type Uint32State,
+} from './model.js';
+import { movementAction } from './movement.js';
 import { refreshKnowledge } from './perception.js';
 import { markEncounterObserved } from './population-gates.js';
 import { updatePopulationIntent } from './population-intent.js';
@@ -131,6 +134,18 @@ function moveActor(state: ActiveRun, actorId: OpaqueId, to: Point): ActiveRun {
     ...state,
     actors: state.actors.map((actor) => actor.actorId === actorId ? { ...actor, ...to } : actor),
   };
+}
+
+function movementDirection(from: Point, to: Point): Direction | null {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) > 1 || Math.abs(dy) > 1 || (dx === 0 && dy === 0)) return null;
+  const directions: Readonly<Record<string, Direction>> = {
+    '-1:-1': 'northwest', '0:-1': 'north', '1:-1': 'northeast',
+    '-1:0': 'west', '1:0': 'east',
+    '-1:1': 'southwest', '0:1': 'south', '1:1': 'southeast',
+  };
+  return directions[`${dx}:${dy}`] ?? null;
 }
 
 function withActor(state: ActiveRun, actor: ActorState): ActiveRun {
@@ -335,16 +350,27 @@ function applyAction(input: Readonly<{
     state = reactions.state;
     events.push(...reactions.events);
     if (reactions.movementAllowed) {
-      state = moveActor(state, actor.actorId, action.to);
-      events.push(actor.playerControlled
-        ? { type: 'hero.moved', eventId: input.eventId, heroId: actor.actorId, from: { x: actor.x, y: actor.y }, to: action.to }
-        : { type: 'actor.moved', eventId: input.eventId, actorId: actor.actorId, from: { x: actor.x, y: actor.y }, to: action.to });
-      const trap = state.features.find((feature) => feature.type === 'trap' && feature.state === 'armed'
-        && feature.floorId === actor.floorId && feature.x === action.to.x && feature.y === action.to.y);
-      if (trap) {
-        const triggered = triggerTrap({ run: state, content: input.content, actorId: actor.actorId,
-          featureId: trap.featureId, eventId: input.eventId });
-        state = triggered.run; events.push(...triggered.events);
+      const current = actorById(state, actor.actorId);
+      const floor = current && state.floors.find((candidate) => candidate.floorId === current.floorId);
+      const direction = current ? movementDirection(current, action.to) : null;
+      const validated = current && floor && direction ? movementAction({
+        actor: current, floor, actors: state.actors, features: state.features,
+        relationships: state.relationships, direction, cost: action.cost,
+      }) : null;
+      if (validated?.status === 'move' && validated.to.x === action.to.x && validated.to.y === action.to.y) {
+        state = moveActor(state, actor.actorId, validated.to);
+        events.push(actor.playerControlled
+          ? { type: 'hero.moved', eventId: input.eventId, heroId: actor.actorId,
+            from: { x: actor.x, y: actor.y }, to: validated.to }
+          : { type: 'actor.moved', eventId: input.eventId, actorId: actor.actorId,
+            from: { x: actor.x, y: actor.y }, to: validated.to });
+        const trap = state.features.find((feature) => feature.type === 'trap' && feature.state === 'armed'
+          && feature.floorId === actor.floorId && feature.x === validated.to.x && feature.y === validated.to.y);
+        if (trap) {
+          const triggered = triggerTrap({ run: state, content: input.content, actorId: actor.actorId,
+            featureId: trap.featureId, eventId: input.eventId });
+          state = triggered.run; events.push(...triggered.events);
+        }
       }
     }
   } else if (action.type === 'wait') {
