@@ -1,0 +1,23 @@
+schemaVersion: 3
+entries:
+  - kind: fallen-champion-template
+    id: fallen-champion-template.core
+    name: The Deep's Champion
+    tags: [boss, champion]
+    fallbackMonsterId: monster.ashen-warden
+    fallbackItemId: item.champion-fallback-relic
+    minimumHealth: 18
+    maximumHealth: 180
+    attributeMaximum: 30
+    damageMaximum: 30
+    abilityLimit: 3
+    echoAppearanceChance: 0.08
+    maximumEchoesPerRun: 2
+    echoHealthPercent: 65
+    echoDamagePercent: 70
+    echoDefensePercent: 80
+    echoAbilityLimit: 2
+    echoLootTableId: loot-table.ashen-warden
+    heirloomSelection:
+      rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 }
+      qualityRankBonus: 2

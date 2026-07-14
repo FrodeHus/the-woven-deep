@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { CONDITION_TRAIT_IDS, CONTENT_KIND_IDS } from '../src/index.js';
 import {
   damageTypes,
+  encounterFormations,
+  encounterModels,
   equipmentSlots,
+  formationPreferences,
+  leaderDeathResponses,
+  swarmDestructionResponses,
   targetingIds,
   vaultPlacementKinds,
 } from '../src/compiler/schema.js';
@@ -12,6 +17,8 @@ import {
   ACTION_COST_IDS,
   BEHAVIOR_PARAMETER_SCHEMAS,
   EFFECT_PARAMETER_SCHEMAS,
+  LEADER_RESPONSE_PARAMETER_SCHEMAS,
+  SWARM_RESPONSE_PARAMETER_SCHEMAS,
 } from '../src/compiler/registries.js';
 
 describe('server-admin content documentation', () => {
@@ -26,9 +33,16 @@ describe('server-admin content documentation', () => {
       ...targetingIds,
       ...equipmentSlots,
       ...vaultPlacementKinds,
+      ...encounterModels,
+      ...encounterFormations,
+      ...formationPreferences,
+      ...leaderDeathResponses,
+      ...swarmDestructionResponses,
       ...ACTION_COST_IDS,
       ...Object.keys(BEHAVIOR_PARAMETER_SCHEMAS),
       ...Object.keys(EFFECT_PARAMETER_SCHEMAS),
+      ...Object.keys(LEADER_RESPONSE_PARAMETER_SCHEMAS),
+      ...Object.keys(SWARM_RESPONSE_PARAMETER_SCHEMAS),
       ...CONDITION_TRAIT_IDS,
     ];
     for (const identifier of required) {

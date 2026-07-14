@@ -1,4 +1,4 @@
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: monster
     id: monster.training-beetle
@@ -20,5 +20,4 @@ entries:
     disposition: hostile
     behaviorId: behavior.approach-and-attack
     behaviorParameters: {}
-    runAppearanceChance: 0.7
     rarity: common

@@ -21,7 +21,7 @@
 - Group and swarm state freezes while its floor is inactive. Boss recovery is a bounded re-entry calculation, not off-floor simulation.
 - Opportunity attacks remain hostility- and awareness-gated. Neutral actors are unaffected until a relationship override makes them hostile.
 - Broad intent is observable only for visible actors. Exact goals, paths, target cells, group knowledge, run gates, probabilities, spawn rolls, and reward rolls stay hidden.
-- A Deep's Champion is optional for progression, appears at most once for the supplied unconquered Hall record, and creates the recorded heirloom at most once.
+- A Deep's Champion is optional for progression, appears at most once for the supplied unconquered rank-1 Hall record, and creates the recorded heirloom at most once. Ranks 2–10 are independently rare-gated weaker Echoes, capped at two per run, with no heirloom path.
 - Every task follows RED/GREEN TDD, runs the focused suite and affected package gates, ends with a focused commit, and receives review before the next task.
 - Do not use the disallowed technical term noted in project guidance; prefer stable, authoritative, primary, or content-hash wording.
 
@@ -60,7 +60,7 @@
 - `packages/engine/src/group-behavior.ts`: relay graph, formations, roles, leader bonuses, and leader outcomes.
 - `packages/engine/src/swarm-behavior.ts`: source timers, stable child placement, caps, and shutdown responses.
 - `packages/engine/src/boss-behavior.ts`: phases, arena state, re-entry recovery, uniqueness, and reward creation.
-- `packages/engine/src/champion.ts`: host snapshot normalization, optional placement, display identity, conquest, and heirloom creation.
+- `packages/engine/src/champion.ts`: ranked host snapshot normalization, optional Champion/Echo placement, display identity, conquest, Echo gating, and heirloom creation.
 - `packages/engine/src/behavior.ts`: registered individual decisions and delegation to model-specific behavior.
 - `packages/engine/src/world-step.ts`: population observation and state transitions at deterministic action boundaries.
 
@@ -93,22 +93,19 @@
 - Modify: `packages/content/test/compile-directory.test.ts`
 - Modify: `packages/content/test/default-content.test.ts`
 - Modify: every existing `content/**/*.yaml`
-- Create: `content/encounters/early-individuals.yaml`
-- Create: `content/encounters/rat-brood.yaml`
-- Create: `content/encounters/beetle-patrol.yaml`
-- Create: `content/encounters/ashen-warden.yaml`
+- Create: `content/encounters/early-populations.yaml`
 - Create: `content/champions/deeps-champion.yaml`
 - Create: supporting monster, item, and loot-table YAML named by those definitions
 
 **Interfaces:**
 - Consumes: schema-v2 content compiler, stable hashing, existing monster behaviors/effects, vault tags, item transferability, and loot tables.
-- Produces: schema-v3 `EncounterContentEntry`, `FallenChampionTemplateContentEntry`, strict discriminated encounter definitions, generation report counts, and reusable monsters without `runAppearanceChance`.
+- Produces: schema-v3 `EncounterContentEntry`, `FallenChampionTemplateContentEntry`, strict discriminated encounter definitions, bundled-kind coverage, and reusable monsters without `runAppearanceChance`.
 
-- [ ] **Step 1: Write failing v3 public-model and parser tests**
+- [x] **Step 1: Write failing v3 public-model and parser tests**
 
 Require `CONTENT_SCHEMA_VERSION === 3`, include `encounter` and `fallen-champion-template` in `ContentKind`, and reject source version 2 before exposing entries. Assert that monster entries no longer accept `runAppearanceChance` and encounter entries require it.
 
-- [ ] **Step 2: Write failing strict encounter-shape tests**
+- [x] **Step 2: Write failing strict encounter-shape tests**
 
 Cover all four models, unknown fields, probability bounds, positive quantities, placement distance/cell rules, group role uniqueness, formation identifiers, leader constraints, `collapse` plus `supernaturalBond`, swarm source tags and cap ordering, descending unique boss thresholds, one unique item reward, one enhanced loot table, and `maximumInstancesPerRun: 1` for bosses.
 
@@ -116,19 +113,19 @@ Run: `npm test --workspace @woven-deep/content -- --run test/model.test.ts test/
 
 Expected: FAIL because schema v3 and encounter kinds do not exist.
 
-- [ ] **Step 3: Add closed schema-v3 types and registries**
+- [x] **Step 3: Add closed schema-v3 types and registries**
 
-Add common encounter fields and discriminated definitions from the design. Use closed string unions for formation, intent presentation, leader outcome, swarm shutdown, behavior overrides, and boss phase effects. Define exactly one champion template with depth-scaled caps, normalized ability/equipment choices, fallback monster presentation, fallback item reference, positive per-rarity heirloom weights, a non-negative quality-rank bonus, and a non-negative equipped-item bonus.
+Add common encounter fields and discriminated definitions from the design. Use closed string unions for formation, intent presentation, leader outcome, swarm shutdown, behavior overrides, and boss phase effects. Define exactly one champion template with depth-scaled caps, normalized ability/equipment choices, fallback monster presentation, fallback item reference, positive per-rarity heirloom weights, a non-negative quality-rank bonus, a low Echo probability, a positive per-run Echo cap, stricter Echo power percentages, and an enhanced ordinary Echo loot table. Items expose explicit heirloom eligibility so mechanics never infer transferability from descriptive tags.
 
-- [ ] **Step 4: Add semantic cross-file validation**
+- [x] **Step 4: Add semantic cross-file validation**
 
 Resolve monster, item, loot-table, vault-tag, behavior, effect, ability, and champion fallback references. Validate all min/max/cap relationships, stable role/phase IDs, leader role membership, source monster tags, unique rewards, item transferability, positive nondecreasing rarity weights, and required descriptions for supernatural collapse rewards.
 
-- [ ] **Step 5: Rewrite bundled YAML and add proof content**
+- [x] **Step 5: Rewrite bundled YAML and add proof content**
 
 Change every file envelope to schema v3, remove monster-owned appearance chance, and add low-volume production examples for each encounter model. Keep the boss base chance at `0.08`, discovery increment at `0.03`, cap at `0.35`, and maximum one instance per run. Add a safe champion fallback relic and enhanced boss loot table.
 
-- [ ] **Step 6: Verify stable compilation and commit**
+- [x] **Step 6: Verify stable compilation and commit**
 
 Run: `npm test --workspace @woven-deep/content && npm run typecheck --workspace @woven-deep/content && npm run build --workspace @woven-deep/content && npm run content:validate`
 
@@ -176,7 +173,7 @@ Expected: FAIL because schema v4 and the new stream do not exist.
 
 - [ ] **Step 3: Add immutable population contracts**
 
-Define `EncounterRunDecision`, model-specific `PopulationInstance`, `PopulationIntent`, `ActorGoal`, `LastKnownTarget`, `InvestigationState`, `FallenChampionSnapshot`, `RecordedHeirloomSnapshot`, and the pure host input shape. Store IDs and set-like arrays in code-unit order.
+Define `EncounterRunDecision`, model-specific `PopulationInstance`, `PopulationIntent`, `ActorGoal`, `LastKnownTarget`, `InvestigationState`, ranked `FallenHeroStandingSnapshot`, `RecordedHeirloomSnapshot`, saved Echo decisions, and the pure host input shape. Store IDs and set-like arrays in code-unit order.
 
 - [ ] **Step 4: Implement strict schema and content-bound invariants**
 
@@ -448,7 +445,7 @@ Commit: `feat: add phased boss encounters`
 
 ---
 
-### Task 10: Materialize the one-time Deep's Champion
+### Task 10: Materialize the Deep's Champion and rare Echoes
 
 **Files:**
 - Create: `packages/engine/src/champion.ts`
@@ -460,30 +457,32 @@ Commit: `feat: add phased boss encounters`
 - Modify: `packages/engine/src/projection.ts`
 
 **Interfaces:**
-- Consumes: optional `FallenChampionSnapshot`, conquered Hall record IDs, the YAML champion template, current content pack, death depth, optional side-arena slots, and recorded heirloom snapshot.
-- Produces: at most one normalized named champion, optional bypassable placement, conquest event, and exact one-time heirloom or documented fallback relic.
+- Consumes: up to ten ranked `FallenHeroStandingSnapshot` records, conquered Champion record IDs, the YAML champion template, current content pack, recorded death depths, optional side-arena slots, and recorded heirloom snapshots.
+- Produces: at most one normalized named Champion, up to the configured number of weaker rare Echoes, optional bypassable placements, conquest/defeat events, exact one-time Champion heirloom or fallback relic, and enhanced ordinary Echo loot.
 
 - [ ] **Step 1: Write failing selection-boundary tests**
 
-Assert no snapshot means no champion, conquered record suppression, unrelated lower records are never promoted, the supplied death depth is honored, and the champion bypasses normal run gates/discovery protection.
+Assert no standings means no Champion or Echo; conquered rank-1 suppression; unrelated lower records are never promoted to Champion; death depths are honored; and the Champion bypasses normal run gates/discovery protection. Give ranks 2–10 independent hidden rolls, retain passing candidates with the lowest rolls up to the configured cap, resolve ties by rank/record ID, and never reroll after save/reload.
 
 - [ ] **Step 2: Write failing normalization and optional-placement tests**
 
-Clamp historical attributes/equipment/abilities through current template limits, fall back cleanly for missing content, show `<Hero Name>, the Deep's Champion`, and require a side arena/branch that cannot block stairs, objectives, or required routes.
+Clamp historical attributes/equipment/abilities through current template limits, fall back cleanly for missing content, show `<Hero Name>, the Deep's Champion`, and require a side arena/branch that cannot block stairs, objectives, or required routes. Apply stricter Echo percentages, show `Echo of <Hero Name>`, and prove no Echo combat cap can equal or exceed its Champion counterpart.
 
 - [ ] **Step 3: Write failing heirloom tests**
 
-On first defeat, materialize one unit preserving content ID, enchantment, condition, charges, fuel, safe display metadata, and Hall provenance. If the item definition is absent, use the YAML fallback relic while retaining provenance. Duplicate defeat paths and reload cannot create a second reward.
+On first defeat, materialize one unit preserving content ID, enchantment, condition, charges, fuel, safe display metadata, and Hall provenance. The recorded candidate must have been a unique eligible equipped item instance at the original death; backpack items are invalid. If no equipment was eligible or the recorded definition is absent, use the YAML fallback relic while retaining provenance. Duplicate defeat paths and reload cannot create a second reward.
+
+For each Echo, create enhanced ordinary loot from `echoLootTableId`, never the recorded heirloom or a guaranteed unique item. The same record cannot create or respawn another Echo in that run after encounter or defeat, but a new run may independently gate it again.
 
 - [ ] **Step 4: Implement champion lifecycle and commit**
 
-Keep 4B1 host-only: do not choose the Hall record or original heirloom here and do not persist profile/session conquest. Emit the exact record ID for 4B3 to consume later.
+Keep 4B1 host-only: do not choose Hall standings or original heirlooms here and do not persist profile/session conquest or achievements. Emit exact record IDs and ranks for 4B3 to consume later. Champion conquest is permanent; Echo suppression lasts only for the active run, while first lifetime defeat achievement state belongs to 4B3.
 
-The later 4B3 finalizer performs one deterministic weighted choice using the champion template: rarity weight plus supported positive quality-rank and equipped-item bonuses. Each eligible item instance is one candidate regardless of stack quantity, every candidate has non-zero probability, and the recorded choice is never rerolled.
+The later 4B3 finalizer performs one deterministic weighted choice over unique eligible equipped item instances using rarity weight plus supported positive quality-rank bonuses. Backpack items never enter the pool, a multi-slot item remains one candidate, every candidate has non-zero probability, and the recorded choice is never rerolled. With no eligible equipment it records the fallback relic.
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/champion.test.ts test/floor-integration.test.ts test/content-bound-validation.test.ts test/save-codec.test.ts`
 
-Commit: `feat: add the deeps champion encounter`
+Commit: `feat: add champion and echo encounters`
 
 ---
 
@@ -547,7 +546,7 @@ Commit: `feat: project observable population intent`
 
 - [ ] **Step 1: Write the 500-seed property harness before relaxing any implementation**
 
-After every applied step validate schema and content binding, occupancy/routes, population membership, role/leader/source identity, caps, nondecreasing world time, inactive-floor freeze, bounded group communication, irreversible boss phases, unique rewards, champion singleton/heirloom singleton, and hidden-state-safe projection. Convert every discovered shrink to a named regression test.
+After every applied step validate schema and content binding, occupancy/routes, population membership, role/leader/source identity, caps, nondecreasing world time, inactive-floor freeze, bounded group communication, irreversible boss phases, unique rewards, Champion singleton/heirloom singleton, per-record Echo singleton, Echo run cap, no Echo heirlooms, and hidden-state-safe projection. Convert every discovered shrink to a named regression test.
 
 - [ ] **Step 2: Add continuous-versus-split replay tests**
 
@@ -555,7 +554,7 @@ Split the same scenario at several boundaries, including before group relay, sou
 
 - [ ] **Step 3: Build the forced exit demonstration**
 
-Use explicit test input to force eligibility while leaving production YAML unchanged. Demonstrate a relay-limited leader group, leader outcome, capped visible swarm source, optional phased boss and unique reward, named bypassable champion, exact heirloom, and equivalent split execution. Check stable hashes into `population-demo-hashes.json`.
+Use explicit test input to force eligibility while leaving production YAML unchanged. Demonstrate a relay-limited leader group, leader outcome, capped visible swarm source, optional phased boss and unique reward, named bypassable Champion, exact heirloom, one weaker `Echo of <Hero Name>` with ordinary loot, and equivalent split execution. Check stable hashes into `population-demo-hashes.json`.
 
 - [ ] **Step 4: Document every YAML field and rejection mode**
 

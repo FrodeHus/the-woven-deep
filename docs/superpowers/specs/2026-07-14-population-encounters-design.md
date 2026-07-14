@@ -317,7 +317,7 @@ The engine emits boss encounter, phase, recovery, and defeat events. 4B3 consume
 
 ### Selection boundary
 
-4B1 accepts an optional `FallenChampionSnapshot` from the run host. It never queries Hall storage itself.
+4B1 accepts up to ten sorted `FallenHeroStandingSnapshot` records from the run host. It never queries Hall storage itself. Rank 1 is the Champion candidate; ranks 2 through 10 are Echo candidates. Records are scoped to the current profile or guest session rather than a global cross-player leaderboard.
 
 4B3 later derives the snapshot from the current profile or guest session's highest-scoring dead-hero record when:
 
@@ -327,15 +327,15 @@ The engine emits boss encounter, phase, recovery, and defeat events. 4B3 consume
 
 If the conquered record remains the high-score holder, no lower record is promoted. There is no Deep's Champion until a new dead hero takes the high-score position.
 
-The snapshot contains the Hall record ID, hero name, portrait glyph, class/build tags, attributes, equipped item content IDs, signature ability IDs, death depth, source content hash, and one recorded heirloom item snapshot.
+Each snapshot contains its rank, Hall record ID, hero name, portrait glyph, class/build tags, attributes, equipped item content IDs, signature ability IDs, death depth, source content hash, and one recorded heirloom item snapshot. Only rank 1 can use the recorded heirloom as a reward.
 
 ### Heirloom selection
 
-At the original hero's death, 4B3 will select the heirloom once using deterministic run randomness from ordinary backpack and equipped item instances. Selection is weighted toward higher-quality items, but every eligible instance retains a positive weight so mundane, depleted, or damaged possessions remain possible. Objective artifacts, quest tokens, currency, and explicitly non-transferable items are excluded.
+At the original hero's death, 4B3 will select the heirloom once using deterministic run randomness from the hero's equipped item instances only. Backpack items are never candidates: the reward represents something the fallen hero valued enough to use at death. Selection is weighted toward higher-quality equipment, but every eligible instance retains a positive weight so mundane, depleted, or damaged gear remains possible. Objective artifacts, quest tokens, currency, and explicitly non-transferable items are excluded.
 
-The single `fallen-champion-template` entry owns the selection weights. It declares a positive weight for each item rarity, a non-negative bonus per supported positive enchantment or quality rank, and a non-negative bonus for equipped items. Bundled defaults increase substantially from common through legendary while leaving the common weight above zero. The compiler rejects zero/negative rarity weights and decreasing rarity weights. Selection uses one weighted roll over eligible item instances; it never guarantees a minimum rarity, rerolls an undesirable result, or weights a stack by its quantity.
+The single `fallen-champion-template` entry owns the selection weights. It declares a positive weight for each item rarity and a non-negative bonus per supported positive enchantment or quality rank. Bundled defaults increase substantially from common through legendary while leaving the common weight above zero. The compiler rejects zero/negative rarity weights and decreasing rarity weights. Selection uses one weighted roll over unique equipped item instances; a two-handed item occupying multiple slot relationships remains one candidate. It never guarantees a minimum rarity or rerolls an undesirable result.
 
-One unit is recorded from a stack. The snapshot preserves content ID, enchantment, condition, charges, fuel, identification-safe display metadata, and the originating Hall record ID. The selection is stored in the Hall record and never rerolled when a later run starts or reaches the champion.
+One unit is recorded from a stack. The snapshot preserves content ID, enchantment, condition, charges, fuel, identification-safe display metadata, and the originating Hall record ID. The selection is stored in the Hall record and never rerolled when a later run starts or reaches the champion. If the hero has no eligible equipped item, the Hall record names the template's fallback relic instead so the Champion still has a guaranteed reward.
 
 If a later content pack no longer contains the item definition, the run substitutes a documented YAML fallback relic while preserving provenance text. Missing class, equipment, or ability references similarly fall back to the champion template defaults.
 
@@ -353,6 +353,16 @@ On its first defeat:
 4. Let 4B3 mark that Hall record permanently conquered and grant the first-defeat achievement, named initially `Defeated the Deep's Champion`.
 
 Once conquered in profile/session state, that champion never appears again. It has no repeat encounter or repeat loot path.
+
+## Echoes of fallen heroes
+
+Ranks 2 through 10 may become weaker optional boss encounters named `Echo of <Hero Name>`. They use the same current-content normalization boundary as the Champion, followed by stricter YAML health, damage, defense, and ability limits. An Echo can never equal or exceed the Champion template's corresponding limits.
+
+Echoes are not guaranteed. At run creation, each eligible Echo receives one independent hidden appearance roll from `population-gates` using the template's low `echoAppearanceChance`. If more candidates pass than `maximumEchoesPerRun`, normally `2`, the passing candidates with the lowest raw rolls are retained; equal rolls resolve by Hall rank and then record ID. This avoids rank-order roll bias while preserving deterministic replay. The decisions are saved and never rerolled.
+
+A retained Echo appears only if the hero reaches its recorded death depth and optional side-arena placement succeeds. It never blocks stairs, objectives, required routes, or run completion. Each Hall record can produce at most one Echo instance in a run. Once defeated, that Echo cannot reappear during the same run, but it may pass its gate again in a later run.
+
+Echoes use the template's enhanced ordinary `echoLootTableId`. They never drop the historical hero's recorded heirloom and have no guaranteed unique reward. The first lifetime defeat of any Echo grants a lower-tier achievement, initially named `Silenced an Echo`; defeating the Champion remains a separate, more prestigious achievement. 4B1 emits the record and rank in authoritative events, while 4B3 owns lifetime achievement persistence.
 
 ## Discovery protection
 
@@ -389,6 +399,9 @@ Generating an unseen population does not count as encountering it. Legitimate ob
 - `champion.encountered`
 - `champion.defeated`
 - `champion.heirloom-created`
+- `echo.encountered`
+- `echo.defeated`
+- `echo.loot-created`
 
 Authoritative events may contain stable content and population IDs required for metrics. Public event projection removes hidden IDs, cells, probabilities, rolls, and information sources unless currently observable.
 
@@ -402,6 +415,7 @@ The player can receive:
 - A visible swarm source, its readable source state, and qualitative growth warning.
 - Perceivable boss phase transitions and current visible phase presentation.
 - The Deep's Champion's original hero name, glyph, normalized build presentation, and heirloom provenance after it drops.
+- A visible Echo's `Echo of <Hero Name>` name, glyph, normalized build presentation, and broad intent.
 
 The player never receives:
 
@@ -410,7 +424,7 @@ The player never receives:
 - Unseen encounter IDs, actors, roles, sources, or rewards.
 - Exact AI goals, path candidates, hidden target cells, or shared knowledge.
 - Future spawn composition, phase thresholds, recovery calculation, hit rolls, or loot rolls.
-- The complete fallen-champion snapshot before legitimately observing the champion or reward.
+- Complete fallen-hero standing snapshots before legitimately observing the Champion, Echo, or reward.
 
 ## Failure handling
 
@@ -448,7 +462,7 @@ The automated server-admin documentation test includes all new content kinds and
 - Probability, depth, quantity, cap, placement, formation, and phase ordering.
 - Required supernatural declaration for collapse.
 - Boss uniqueness and reward requirements.
-- Champion-template fallback, transferability, and positive quality-weight rules.
+- Champion-template fallback, transferability, positive quality-weight, Echo chance/cap, weaker normalization, and ordinary-loot rules.
 - Deterministic ordering, hashing, mounted content, and documentation coverage.
 
 ### Engine examples
@@ -462,6 +476,7 @@ The automated server-admin documentation test includes all new content kinds and
 - Swarm timing, cell ordering, all caps, and every shutdown response.
 - Boss threshold ordering, irreversible phases, bounded recovery, uniqueness, and reward idempotency.
 - Champion naming, optional placement, normalization, one-time defeat, heirloom materialization, and conquered suppression.
+- Echo independent gates, fair cap selection, weaker normalization, optional placement, run-local singleton defeat, naming, ordinary loot, and later-run eligibility.
 - Public projection and event redaction.
 
 ### Properties and replay
@@ -475,7 +490,7 @@ At least 500 seeded population sequences assert after every applied step:
 - Group communication never crosses a disconnected range gap.
 - Swarm size never exceeds any declared cap.
 - Boss phases never reverse and unique rewards never duplicate.
-- A champion record produces at most one active instance and one heirloom.
+- A champion record produces at most one active instance and one heirloom; each Echo record produces at most one instance per run and no heirloom.
 - Player projection contains no hidden population decisions, knowledge, goals, paths, or future rolls.
 
 Every shrunk counterexample becomes a fixed regression before implementation changes.
@@ -490,6 +505,6 @@ Run a clean dependency install, content validation, all workspace tests, all typ
 
 4B2 may add neutral/NPC encounter variants and reputation state. It must reuse run gates, population placement, saved intent, pathfinding, and observable projection without weakening hostile-only opportunity rules.
 
-4B3 consumes population events and pure discovery-protection outcomes. It provides fallen-champion and heirloom snapshots at run creation and permanently stores conquered champion record IDs at finalization.
+4B3 consumes population events and pure discovery-protection outcomes. It provides up to ten ranked fallen-hero and heirloom snapshots at run creation, permanently stores conquered Champion record IDs, and records first lifetime Echo defeats for the lower-tier achievement.
 
 Milestone 5 projects the same observable population state in the desktop interface. Milestone 6 supplies trusted profile inputs and runs the same engine server-side. Milestone 8 aggregates privacy-reduced population outcomes without receiving raw commands, hidden population rolls, run seeds, emails, or hero names.

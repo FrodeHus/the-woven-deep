@@ -2,6 +2,12 @@ import { z } from 'zod';
 import { damageTypes, diceSchema, stableIdSchema, targetingIds } from './schema.js';
 
 const safePositive = z.number().int().safe().positive();
+const safeInteger = z.number().int().safe();
+const populationModifiers = z.strictObject({
+  accuracy: safeInteger,
+  defense: safeInteger,
+  damage: safeInteger,
+});
 
 export const TARGETING_REGISTRY = targetingIds;
 
@@ -14,6 +20,22 @@ export const ACTION_COST_IDS = [
 
 export const BEHAVIOR_PARAMETER_SCHEMAS = {
   'behavior.approach-and-attack': z.strictObject({}),
+} as const;
+
+export const LEADER_RESPONSE_PARAMETER_SCHEMAS = {
+  weaken: z.strictObject({ modifiers: populationModifiers }),
+  panic: z.strictObject({ duration: safePositive }),
+  disband: z.strictObject({}),
+  surrender: z.strictObject({}),
+  frenzy: z.strictObject({ duration: safePositive, modifiers: populationModifiers }),
+  collapse: z.strictObject({}),
+} as const;
+
+export const SWARM_RESPONSE_PARAMETER_SCHEMAS = {
+  stop: z.strictObject({}),
+  flee: z.strictObject({}),
+  decay: z.strictObject({ interval: safePositive, damage: safePositive }),
+  frenzy: z.strictObject({ duration: safePositive, modifiers: populationModifiers }),
 } as const;
 
 export const EFFECT_PARAMETER_SCHEMAS = {

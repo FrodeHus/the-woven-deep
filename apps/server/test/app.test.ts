@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 
 const pack = {
-  schemaVersion: 2 as const,
+  schemaVersion: 3 as const,
   hash: 'b'.repeat(64),
   entries: [],
   generationReport: { foundationalCategories: [] },

@@ -1,9 +1,13 @@
 import type {
   BalanceContentEntry, ContentEntry, EffectDefinition, ItemContentEntry, LootTableContentEntry,
-  MonsterContentEntry, IdentificationPoolContentEntry,
+  MonsterContentEntry, IdentificationPoolContentEntry, EncounterContentEntry,
+  FallenChampionTemplateContentEntry,
 } from '../model.js';
 import type { ContentCompileIssue } from './error.js';
-import { ACTION_COST_IDS, BEHAVIOR_PARAMETER_SCHEMAS, EFFECT_PARAMETER_SCHEMAS } from './registries.js';
+import {
+  ACTION_COST_IDS, BEHAVIOR_PARAMETER_SCHEMAS, EFFECT_PARAMETER_SCHEMAS,
+  LEADER_RESPONSE_PARAMETER_SCHEMAS, SWARM_RESPONSE_PARAMETER_SCHEMAS,
+} from './registries.js';
 
 function compareCodeUnits(left: string, right: string): number {
   if (left < right) return -1;
@@ -78,6 +82,143 @@ function effectIssues(
       ? parameterIssues
       : conditionReferenceIssues(file, path, effect, byId);
   });
+}
+
+function effectsAtPath(
+  file: string,
+  path: string,
+  effects: readonly EffectDefinition[],
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  return effects.flatMap((effect, index) => {
+    const effectPath = `${path}.${index}`;
+    const parameterIssues = validateParameters(
+      file, effectPath, effect.effectId, effect.parameters, EFFECT_PARAMETER_SCHEMAS, 'effect',
+    );
+    return parameterIssues.length > 0
+      ? parameterIssues
+      : conditionReferenceIssues(file, effectPath, effect, byId);
+  });
+}
+
+function referencedKindIssue(
+  file: string,
+  path: string,
+  id: string,
+  kind: ContentEntry['kind'],
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  const target = byId.get(id);
+  if (!target) return [issue(file, path, `unknown ${kind} reference ${id}`)];
+  if (target.kind !== kind) return [issue(file, path, `${kind} reference ${id} resolves to ${target.kind}`)];
+  return [];
+}
+
+function encounterIssues(
+  file: string,
+  encounter: EncounterContentEntry,
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  const path = `$.entries.${encounter.id}.definition`;
+  const issues: ContentCompileIssue[] = [];
+  if (encounter.model === 'individual') {
+    issues.push(...referencedKindIssue(file, `${path}.monsterId`, encounter.definition.monsterId, 'monster', byId));
+    return issues;
+  }
+  if (encounter.model === 'group') {
+    const definition = encounter.definition;
+    const roleIds = new Set<string>();
+    definition.roles.forEach((role, index) => {
+      if (roleIds.has(role.roleId)) issues.push(issue(file, `${path}.roles.${index}.roleId`, `duplicate group role ${role.roleId}`));
+      roleIds.add(role.roleId);
+      issues.push(...referencedKindIssue(file, `${path}.roles.${index}.monsterId`, role.monsterId, 'monster', byId));
+      const monster = byId.get(role.monsterId);
+      if (monster?.kind === 'monster') {
+        issues.push(...validateParameters(file, `${path}.roles.${index}.behavior`, monster.behaviorId,
+          role.behaviorParameters, BEHAVIOR_PARAMETER_SCHEMAS, 'behavior'));
+      }
+    });
+    if (!roleIds.has(definition.leaderRoleId)) {
+      issues.push(issue(file, `${path}.leaderRoleId`, `leader role ${definition.leaderRoleId} is not declared in roles`));
+    }
+    if (definition.leaderDeathResponse === 'collapse' && !definition.supernaturalBond) {
+      issues.push(issue(file, `${path}.supernaturalBond`, 'collapse requires supernaturalBond: true'));
+    }
+    if (definition.leaderDeathResponse === 'collapse' && definition.collapseRewards === 'individual'
+      && encounter.adminDescription === null) {
+      issues.push(issue(file, `$.entries.${encounter.id}.adminDescription`,
+        'collapse with individual rewards requires an admin description of the reward behavior'));
+    }
+    issues.push(...validateParameters(file, `${path}.response`, definition.leaderDeathResponse,
+      definition.responseParameters, LEADER_RESPONSE_PARAMETER_SCHEMAS, 'leader response'));
+    return issues;
+  }
+  if (encounter.model === 'swarm') {
+    const definition = encounter.definition;
+    issues.push(...referencedKindIssue(file, `${path}.sourceMonsterId`, definition.sourceMonsterId, 'monster', byId));
+    const source = byId.get(definition.sourceMonsterId);
+    if (source?.kind === 'monster' && !source.tags.includes('swarm-source')) {
+      issues.push(issue(file, `${path}.sourceMonsterId`, `swarm source ${source.id} requires tag swarm-source`));
+    }
+    const roleIds = new Set<string>();
+    definition.spawnRoles.forEach((role, index) => {
+      if (roleIds.has(role.roleId)) issues.push(issue(file, `${path}.spawnRoles.${index}.roleId`, `duplicate swarm role ${role.roleId}`));
+      roleIds.add(role.roleId);
+      issues.push(...referencedKindIssue(file, `${path}.spawnRoles.${index}.monsterId`, role.monsterId, 'monster', byId));
+    });
+    if (definition.maximumLivingMembers < definition.maximumLivingChildren + 1) {
+      issues.push(issue(file, `${path}.maximumLivingMembers`, 'maximum living members must allow the source plus all living children'));
+    }
+    if (definition.maximumFloorActors < definition.maximumLivingMembers) {
+      issues.push(issue(file, `${path}.maximumFloorActors`, 'maximum floor actors must be at least maximum living members'));
+    }
+    issues.push(...validateParameters(file, `${path}.response`, definition.sourceDestructionResponse,
+      definition.responseParameters, SWARM_RESPONSE_PARAMETER_SCHEMAS, 'swarm response'));
+    return issues;
+  }
+  const definition = encounter.definition;
+  issues.push(...referencedKindIssue(file, `${path}.monsterId`, definition.monsterId, 'monster', byId));
+  issues.push(...referencedKindIssue(file, `${path}.uniqueItemId`, definition.uniqueItemId, 'item', byId));
+  issues.push(...referencedKindIssue(file, `${path}.enhancedLootTableId`, definition.enhancedLootTableId, 'loot-table', byId));
+  if (encounter.maximumInstancesPerRun !== 1) {
+    issues.push(issue(file, `$.entries.${encounter.id}.maximumInstancesPerRun`, 'boss encounters require maximumInstancesPerRun 1'));
+  }
+  const phaseIds = new Set<string>();
+  let previousThreshold = 100;
+  definition.phases.forEach((phase, index) => {
+    if (phaseIds.has(phase.phaseId)) issues.push(issue(file, `${path}.phases.${index}.phaseId`, `duplicate boss phase ${phase.phaseId}`));
+    phaseIds.add(phase.phaseId);
+    if (phase.healthThresholdPercent >= previousThreshold) {
+      issues.push(issue(file, `${path}.phases.${index}.healthThresholdPercent`, 'boss phase thresholds must be unique and strictly descending'));
+    }
+    previousThreshold = phase.healthThresholdPercent;
+    issues.push(...validateParameters(file, `${path}.phases.${index}.behavior`, phase.behaviorId,
+      phase.behaviorParameters, BEHAVIOR_PARAMETER_SCHEMAS, 'behavior'));
+    issues.push(...effectsAtPath(file, `${path}.phases.${index}.effects`, phase.effects, byId));
+  });
+  return issues;
+}
+
+function championTemplateIssues(
+  located: readonly (LocatedContentEntry & { entry: FallenChampionTemplateContentEntry })[],
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  if (located.length === 0) return [];
+  const issues: ContentCompileIssue[] = [];
+  if (located.length > 1) {
+    issues.push(issue(located[1]!.file, '$.entries', `expected at most one fallen champion template; found ${located.length}`));
+  }
+  for (const { entry, file } of located) {
+    const path = `$.entries.${entry.id}`;
+    issues.push(...referencedKindIssue(file, `${path}.fallbackMonsterId`, entry.fallbackMonsterId, 'monster', byId));
+    issues.push(...referencedKindIssue(file, `${path}.fallbackItemId`, entry.fallbackItemId, 'item', byId));
+    const fallbackItem = byId.get(entry.fallbackItemId);
+    if (fallbackItem?.kind === 'item' && !fallbackItem.heirloomEligible) {
+      issues.push(issue(file, `${path}.fallbackItemId`, 'Champion fallback item must be heirloom eligible'));
+    }
+    issues.push(...referencedKindIssue(file, `${path}.echoLootTableId`, entry.echoLootTableId, 'loot-table', byId));
+  }
+  return issues;
 }
 
 function equipmentIssues(file: string, item: ItemContentEntry): ContentCompileIssue[] {
@@ -297,6 +438,12 @@ function balanceIssues(
 export function validateContentEntries(locatedEntries: readonly LocatedContentEntry[]): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
   const byId = new Map(locatedEntries.map(({ entry }) => [entry.id, entry]));
+  const vaultTags = new Set<string>();
+  for (const { entry } of locatedEntries) {
+    if (entry.kind !== 'vault') continue;
+    entry.tags.forEach((tag) => vaultTags.add(tag));
+    Object.values(entry.legend).forEach((legend) => legend.slot?.tags.forEach((tag) => vaultTags.add(tag)));
+  }
   const allItems = locatedEntries.filter(({ entry }) => entry.kind === 'item')
     .map(({ entry }) => entry as ItemContentEntry);
   for (const { entry, file } of locatedEntries) {
@@ -308,11 +455,25 @@ export function validateContentEntries(locatedEntries: readonly LocatedContentEn
         ...effectIssues(file, entry.id, entry.effects, byId));
     }
     if (entry.kind === 'spell' || entry.kind === 'trap') issues.push(...effectIssues(file, entry.id, entry.effects, byId));
+    if (entry.kind === 'encounter') issues.push(...encounterIssues(file, entry, byId));
+    if (entry.kind === 'encounter') {
+      entry.requiredVaultTags.forEach((tag, index) => {
+        if (!vaultTags.has(tag)) issues.push(issue(file, `$.entries.${entry.id}.requiredVaultTags.${index}`,
+          `unknown vault tag ${tag}`));
+      });
+      if (entry.model === 'boss') entry.definition.vaultTags.forEach((tag, index) => {
+        if (!vaultTags.has(tag)) issues.push(issue(file, `$.entries.${entry.id}.definition.vaultTags.${index}`,
+          `unknown vault tag ${tag}`));
+      });
+    }
   }
   const itemEntries = locatedEntries.filter(({ entry }) => entry.kind === 'item');
   const poolEntries = locatedEntries.filter(({ entry }) => entry.kind === 'identification-pool');
   issues.push(...identificationIssues(itemEntries, poolEntries, byId));
   issues.push(...lootIssues(locatedEntries, byId));
+  const championTemplates = locatedEntries.filter((located): located is LocatedContentEntry & { entry: FallenChampionTemplateContentEntry } =>
+    located.entry.kind === 'fallen-champion-template');
+  issues.push(...championTemplateIssues(championTemplates, byId));
   const balanceEntries = locatedEntries.filter(({ entry }) => entry.kind === 'balance');
   if (balanceEntries.length > 1) {
     issues.push(issue(balanceEntries[1]!.file, '$.entries', `expected exactly one balance entry; found ${balanceEntries.length}`));

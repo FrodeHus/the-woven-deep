@@ -1,0 +1,45 @@
+schemaVersion: 3
+entries:
+  - kind: monster
+    id: monster.rat-brood
+    name: Rat brood
+    glyph: "&"
+    color: "#776957"
+    tags: [animal, darkness, swarm-source]
+    minDepth: 2
+    maxDepth: 8
+    attributes: { might: 2, agility: 2, vitality: 8, wits: 1, resolve: 5 }
+    health: 12
+    speed: 50
+    accuracy: -1
+    defense: 7
+    perception: 5
+    damage: { count: 1, sides: 2, bonus: 0 }
+    armor: 0
+    resistances: { physical: 0, fire: -25, cold: 0, lightning: 0, poison: 20, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    rarity: uncommon
+
+  - kind: monster
+    id: monster.ashen-warden
+    name: Ashen Warden
+    glyph: W
+    color: "#d06a42"
+    tags: [boss, fire, guardian]
+    minDepth: 5
+    maxDepth: 12
+    attributes: { might: 12, agility: 7, vitality: 14, wits: 8, resolve: 14 }
+    health: 48
+    speed: 90
+    accuracy: 5
+    defense: 13
+    perception: 9
+    damage: { count: 2, sides: 6, bonus: 2 }
+    armor: 3
+    resistances: { physical: 10, fire: 75, cold: -25, lightning: 0, poison: 50, arcane: 10 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    rarity: legendary

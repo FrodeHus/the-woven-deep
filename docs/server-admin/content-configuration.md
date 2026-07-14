@@ -1,6 +1,6 @@
 # Server content configuration
 
-The Woven Deep loads gameplay content from YAML when the server starts. Administrators can add and balance monsters, items, identification pools, spells, traps, loot tables, vaults, conditions, and global balance values without rebuilding the application, provided they use the engine's supported behaviors, effects, targets, and condition traits.
+The Woven Deep loads gameplay content from YAML when the server starts. Administrators can add and balance monsters, encounters, fallen-hero bosses, items, identification pools, spells, traps, loot tables, vaults, conditions, and global balance values without rebuilding the application, provided they use the engine's supported behaviors, effects, targets, and condition traits.
 
 YAML is configuration, not a scripting language. A new combination of supported rules needs only YAML. A fundamentally new rule requires a code change, a strict schema, tests, and an update to this guide.
 
@@ -41,7 +41,7 @@ Any parse, schema, reference, or semantic error rejects the entire pack at start
 - Entries from every file share one global ID namespace.
 - Formatting, comments, and file ordering do not affect the hash. Material values and IDs do.
 - YAML aliases and custom tags are rejected. Each file is limited to 262,144 UTF-8 bytes.
-- A complete pack requires at least one `monster`, `item`, `vault`, and `balance` entry. Exactly one balance entry is permitted.
+- A complete pack requires at least one `monster`, `item`, `vault`, and `balance` entry. Exactly one balance entry and at most one `fallen-champion-template` entry are permitted.
 - Across the complete pack, entry tags must cover the foundational generation categories `defense`, `food`, `healing`, `identification`, `light`, and `offense`. These are compile-time coverage markers for pool reporting. They do not implement an item's mechanics; the kind-specific fields and registered effects do that.
 
 A conventional layout is:
@@ -49,7 +49,9 @@ A conventional layout is:
 ```text
 content/
   balance/
+  champions/
   conditions/
+  encounters/
   items/
   loot-tables/
   monsters/
@@ -63,7 +65,7 @@ content/
 Every file is one strict document:
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: monster
     id: monster.example
@@ -76,9 +78,9 @@ Unknown fields are errors, including plausible misspellings.
 
 | Field | Type | Required/default | Rules and meaning |
 |---|---|---|---|
-| `schemaVersion` | integer | Required | Must be exactly `2`. |
+| `schemaVersion` | integer | Required | Must be exactly `3`. |
 | `entries` | array | Required, at least one | May contain any supported content kind. |
-| `kind` | enum | Required | One of `monster`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, or `condition`. |
+| `kind` | enum | Required | One of `monster`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, `condition`, `encounter`, or `fallen-champion-template`. |
 | `id` | string | Required | Globally unique stable ID such as `monster.cave-rat`. |
 | `name` | string | Required | Trimmed display name, 1–80 characters. |
 | `tags` | slug array | Defaults to `[]` | Descriptive taxonomy. Tags never activate engine rules. |
@@ -115,7 +117,7 @@ A pack contains exactly one `balance` entry.
 | `actionCosts` | registered-action-ID-to-integer map | Yes | Non-negative cost overrides. Unknown action IDs fail compilation. |
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: balance
     id: balance.core-gameplay
@@ -171,11 +173,10 @@ The closed action-cost IDs are `action.attack`, `action.cast`, `action.close-doo
 | `disposition` | enum | Yes | `friendly`, `neutral`, or `hostile`. |
 | `behaviorId` | registered ID | Yes | Closed AI behavior described below. |
 | `behaviorParameters` | object | Defaults to `{}` | Strict parameters for the behavior. |
-| `runAppearanceChance` | number | Yes | Inclusive probability from 0 through 1. |
 | `rarity` | enum | Yes | `common`, `uncommon`, `rare`, or `legendary`. |
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -197,8 +198,92 @@ entries:
     disposition: hostile
     behaviorId: behavior.approach-and-attack
     behaviorParameters: {}
-    runAppearanceChance: 1
     rarity: common
+```
+
+Monsters are reusable creature definitions. Population frequency and composition belong to encounter entries, allowing one monster to participate in several encounter types.
+
+## Encounter entries
+
+An `encounter` has a strict `model` of `individual`, `group`, `swarm`, or `boss`. All models share:
+
+- Positive inclusive `minDepth` and `maxDepth`, positive selection `weight`, `rarity`, `environmentTags`, and `requiredVaultTags`.
+- Optional `adminDescription` (plain text up to 500 characters) for operator-facing balance notes. It is required when supernatural collapse grants individual rewards.
+- A run-level `runAppearanceChance` from 0 through 1, rolled once and saved. `discoveryProtectionIncrement` raises a later run's chance after eligible depth was reached without observation, up to `discoveryProtectionCap`. The cap cannot be below the base chance.
+- Positive `maximumInstancesPerRun`; bosses require exactly one.
+- `placement` with non-negative stair/objective distances and member spread, non-empty `allowedTerrainTags`, `requiresVaultSlot`, and `failureMode` of `optional` or `required`. Placement is atomic and preserves required routes.
+- `intentPresentation.visible`, which permits broad visible intent but never exposes exact goals, paths, rolls, or shared knowledge.
+
+An `individual` definition has `monsterId`, `minimumQuantity`, and `maximumQuantity`. A `group` has unique roles, a `formation` (`cluster`, `line`, `screen`, `wedge`, or `surround`), positive `communicationRadius`, leader probability and role, accent/glyph, integer coordination modifiers, and a leader response. Role `formationPreference` is `front`, `center`, `rear`, `flank`, or `free`.
+
+Leader responses are `weaken`, `panic`, `disband`, `surrender`, `frenzy`, and `collapse`. `weaken` requires integer combat `modifiers`; `panic` requires positive `duration`; `frenzy` requires both; the other responses require `{}`. `collapse` requires `supernaturalBond: true`; `collapseRewards` explicitly chooses `none` or `individual`. Groups relay knowledge only across range-connected members and freeze on inactive floors.
+
+A `swarm` source monster must carry the `swarm-source` tag. `spawnRoles` are weighted monster references. The source alone owns `spawnInterval`; inclusive spawn quantities, placement radius/terrain, `maximumLivingChildren`, `maximumLivingMembers`, and `maximumFloorActors` bound growth. Source responses are `stop` and `flee` with `{}`, `decay` with positive `interval` and `damage`, or `frenzy` with positive `duration` and integer combat `modifiers`. Swarms freeze off-floor and never catch up missed growth.
+
+A `boss` references one monster, strictly descending unique phase thresholds, registered phase behaviors/effects, recovery rate and cap, one `uniqueItemId`, one `enhancedLootTableId`, and optional vault tags. Phases never reverse. Recovery is one bounded re-entry calculation, not off-floor turns. The bundled default boss chance is `0.08`, increment `0.03`, and cap `0.35`.
+
+```yaml
+schemaVersion: 3
+entries:
+  - kind: encounter
+    id: encounter.cave-rat-individuals
+    name: Cave rat stragglers
+    tags: [animal, early]
+    model: individual
+    minDepth: 1
+    maxDepth: 6
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 10
+    rarity: common
+    runAppearanceChance: 1
+    discoveryProtectionIncrement: 0
+    discoveryProtectionCap: 1
+    maximumInstancesPerRun: 8
+    placement: { minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.cave-rat, minimumQuantity: 1, maximumQuantity: 2 }
+```
+
+The bundled `content/encounters/early-populations.yaml` is the complete copyable reference for group, swarm, and boss definitions. Common rejections include a missing monster/item/loot reference, duplicate role or phase IDs, ascending phase thresholds, an untagged swarm source, inconsistent caps, `collapse` without a supernatural bond, or a boss instance limit other than one.
+
+## Fallen-champion template
+
+The optional single `fallen-champion-template` normalizes the current profile or guest session's ranked fallen heroes. Rank 1 becomes the guaranteed optional Deep's Champion; independently gated ranks 2–10 may become weaker `Echo of <Hero Name>` bosses.
+
+- `fallbackMonsterId` and `fallbackItemId` handle removed historical content.
+- `minimumHealth`, `maximumHealth`, `attributeMaximum`, `damageMaximum`, and `abilityLimit` cap Champion power.
+- `echoAppearanceChance` is independently rolled once per rank 2–10. Passing candidates with the lowest rolls are retained up to `maximumEchoesPerRun`; bundled content caps this at two.
+- `echoHealthPercent`, `echoDamagePercent`, and `echoDefensePercent` are positive percentages below 100. `echoAbilityLimit` cannot exceed the Champion limit.
+- `echoLootTableId` supplies enhanced ordinary loot. Echoes never drop recorded heirlooms or guaranteed unique rewards. They cannot repeat in one run but may return in later runs.
+- `heirloomSelection.rarityWeights` contains positive nondecreasing `common`, `uncommon`, `rare`, and `legendary` weights. `qualityRankBonus` is non-negative.
+
+The Champion heirloom is selected once at the original death from unique equipped item instances only. Backpack items never qualify, and a multi-slot item is still one candidate. Better rarity and positive quality ranks raise its weight, but common equipment retains a non-zero chance. There is no minimum rarity and no reroll, so damaged, depleted, or mundane equipped gear remains possible. If nothing equipped is eligible, the fallback relic is recorded.
+
+```yaml
+schemaVersion: 3
+entries:
+  - kind: fallen-champion-template
+    id: fallen-champion-template.core
+    name: The Deep's Champion
+    tags: [boss, champion]
+    fallbackMonsterId: monster.ashen-warden
+    fallbackItemId: item.champion-fallback-relic
+    minimumHealth: 18
+    maximumHealth: 180
+    attributeMaximum: 30
+    damageMaximum: 30
+    abilityLimit: 3
+    echoAppearanceChance: 0.08
+    maximumEchoesPerRun: 2
+    echoHealthPercent: 65
+    echoDamagePercent: 70
+    echoDefensePercent: 80
+    echoAbilityLimit: 2
+    echoLootTableId: loot-table.ashen-warden
+    heirloomSelection:
+      rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 }
+      qualityRankBonus: 2
 ```
 
 ## Item entries
@@ -211,6 +296,7 @@ entries:
 | `stackLimit` | positive safe integer | Yes | Maximum quantity per stack. |
 | `price` | non-negative safe integer | Yes | Base economy value. |
 | `rarity` | enum | Yes | `common`, `uncommon`, `rare`, or `legendary`. |
+| `heirloomEligible` | boolean | Defaults to true | Whether the item may be recorded as a Champion heirloom. Set false for objectives, quest tokens, currency, and other non-transferable items. |
 | `actionCost` | non-negative safe integer | Yes | Use/equip action cost. |
 | `equipment` | object or null | Yes | Slots, handedness, and reserved slots. |
 | `combat` | object or null | Yes | Accuracy, defense, armor, optional damage dice, non-negative range, and optional ammunition tag. A non-null ammunition tag must match a tag on an ammunition item. |
@@ -231,7 +317,7 @@ Identification modes have distinct contracts:
 Items never contain their unidentified names. The generated mapping is saved with the run, so save/reload cannot reroll it, and a later run receives a new mapping. Items using the same pool must have the pool's category. The compiler requires at least as many unique verb–noun combinations as item definitions using the pool.
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: item
     id: item.brass-lantern
@@ -267,7 +353,7 @@ Identification pools are normal content-pack entries and may be placed in any `.
 The pool's `name` is an administrator-facing label. It is not shown as an unidentified item name.
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: identification-pool
     id: identification-pool.potions
@@ -297,7 +383,7 @@ identification: { mode: shuffled, poolId: identification-pool.potions }
 | `effects` | non-empty effect array | Yes | Applied in listed order. |
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: spell
     id: spell.mend
@@ -324,7 +410,7 @@ entries:
 | `effects` | non-empty effect array | Yes | Ordered trigger effects. |
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: trap
     id: trap.poison-dart
@@ -355,7 +441,7 @@ entries:
 | `minimumQuantity`, `maximumQuantity` | positive safe integers | Yes | Inclusive quantity range; maximum cannot be smaller. |
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: loot-table
     id: loot-table.basic-supplies
@@ -382,7 +468,7 @@ entries:
 Terrain is `wall`, `floor`, `closed-door`, `pillar`, `stair-up`, `stair-down`, or `void`. A placement slot kind is `monster`, `item`, `trap`, `npc`, `fixture`, or `objective`. Slot IDs are vault-local slugs. Required slots must occur in the layout. Lights require a local suffix, one glyph, stable presentation token, RGB color, radius 1–32, strength 1–255, and optional enabled state (default true). Void terrain cannot contain lights or placement slots.
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: vault
     id: vault.small-cache
@@ -421,7 +507,7 @@ entries:
 Replace and refresh produce one stack; intensify adds one up to the cap. Every reapplication refreshes source, application time, and deadline. Timed applications may omit duration to use the default or supply a positive override no greater than the maximum. Permanent conditions reject an override. Removal and expiration remove the complete condition instance.
 
 ```yaml
-schemaVersion: 2
+schemaVersion: 3
 entries:
   - kind: condition
     id: condition.stunned
@@ -505,4 +591,4 @@ Never silently attach an active run to a different content hash. Keep old conten
 
 ## Complete examples
 
-Each content-kind section above contains a complete copyable `schemaVersion: 2` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.
+Each content-kind section above contains a complete copyable `schemaVersion: 3` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.

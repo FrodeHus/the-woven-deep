@@ -4,11 +4,11 @@ import { createUnknownKnowledge } from './knowledge.js';
 import { refreshKnowledge } from './perception.js';
 import { ENGINE_GAME_VERSION, SAVE_SCHEMA_VERSION } from './versions.js';
 import { emptyEquipment, heroPerception, type ActorState } from './actor-model.js';
-import type { CompiledContentPack } from '@woven-deep/content';
+import { CONTENT_SCHEMA_VERSION, type CompiledContentPack } from '@woven-deep/content';
 
 export function createDemoContentPack(): CompiledContentPack {
   return {
-    schemaVersion: 2,
+    schemaVersion: CONTENT_SCHEMA_VERSION,
     hash: 'a'.repeat(64),
     entries: [{
       kind: 'balance', id: 'balance.core-gameplay', name: 'Core gameplay', tags: ['core'],

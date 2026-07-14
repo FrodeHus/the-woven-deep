@@ -8,11 +8,12 @@ describe('bundled content', () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
-    const kinds = ['monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault', 'identification-pool'] as const;
+    const kinds = ['monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault',
+      'identification-pool', 'encounter', 'fallen-champion-template'] as const;
     expect(Object.fromEntries(kinds.map((kind) => [kind,
       pack.entries.filter((entry) => entry.kind === kind).length]))).toEqual({
-      monster: 2, item: 13, spell: 1, trap: 1, 'loot-table': 1, balance: 1, vault: 1,
-      'identification-pool': 2,
+      monster: 4, item: 15, spell: 1, trap: 1, 'loot-table': 2, balance: 1, vault: 1,
+      'identification-pool': 2, encounter: 4, 'fallen-champion-template': 1,
     });
     expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(4);
     expect(pack.entries.map((entry) => entry.id)).toEqual([...pack.entries.map((entry) => entry.id)].sort());
