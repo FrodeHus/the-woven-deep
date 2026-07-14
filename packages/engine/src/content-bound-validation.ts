@@ -219,7 +219,7 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
       for (const service of population.services) {
         const authored = authoredServices.get(service.serviceId);
         if (!authored || service.basePrice !== authored.basePrice
-          || service.remainingUses < authored.minimumUses || service.remainingUses > authored.maximumUses
+          || service.remainingUses > authored.maximumUses
           || service.tierIds.length !== authored.tierIds.length
           || service.tierIds.some((tierId, index) => tierId !== authored.tierIds[index])) {
           throw new Error(`content-bound validation: merchant population ${population.populationId} service ${service.serviceId} is invalid`);

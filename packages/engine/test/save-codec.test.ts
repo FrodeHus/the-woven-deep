@@ -260,7 +260,6 @@ describe('active-run save codec', () => {
     ['extra service state', (population: any) => { population.services.push(structuredClone(population.services[0])); }],
     ['base price mismatch', (population: any) => { population.services[0].basePrice += 1; }],
     ['tier mismatch', (population: any) => { population.services[0].tierIds = ['trusted']; }],
-    ['uses below authored minimum', (population: any) => { population.services[0].remainingUses = 0; }],
     ['uses above authored maximum', (population: any) => { population.services[0].remainingUses = 3; }],
   ])('rejects merchant content with %s', (_label, corrupt) => {
     const run = contentBoundMerchantRun();
@@ -269,15 +268,11 @@ describe('active-run save codec', () => {
     expect(() => validateContentBoundRun(run, compiledContent)).toThrow(/merchant population.*service/i);
   });
 
-  it('accepts an exact authored merchant service state with zero remaining uses', () => {
+  it('accepts zero remaining merchant service uses after depletion below the authored initial minimum', () => {
     const run = contentBoundMerchantRun();
     const population = run.populations.find((candidate: any) => candidate.model === 'merchant');
     population.services[0].remainingUses = 0;
-    const content = structuredClone(compiledContent) as any;
-    const encounter = content.entries.find((entry: any) => entry.id === population.encounterId);
-    encounter.definition.services[0].minimumUses = 0;
-    encounter.definition.services[0].maximumUses = 0;
-    expect(() => validateContentBoundRun(run, content)).not.toThrow();
+    expect(() => validateContentBoundRun(run, compiledContent)).not.toThrow();
   });
 
   function richRun(): ReturnType<typeof createDemoRun> {
