@@ -19,6 +19,7 @@ export * from './light-model.js';
 export * from './lighting.js';
 export * from './perception.js';
 export * from './population-model.js';
+export * from './population-gates.js';
 export * from './projection.js';
 export * from './fixture.js';
 export * from './actor-model.js';

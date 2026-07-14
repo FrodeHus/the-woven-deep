@@ -1,5 +1,6 @@
 import fc from 'fast-check';
-import { createDemoContentPack, emptyEquipment, type ActorState } from '../src/index.js';
+import { createDemoContentPack, emptyEquipment, type ActorState, type Uint32State } from '../src/index.js';
+import type { EncounterContentEntry } from '@woven-deep/content';
 
 const identifierPart = fc.stringMatching(/^[a-z][a-z0-9-]{0,15}$/);
 
@@ -64,5 +65,35 @@ export const schedulerStateArbitrary = fc.record({
     ...enemies.map(({ suffix, ...enemy }) => actor({ actorId: `monster.${suffix}`, playerControlled: false, ...enemy })),
   ].sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0),
 }));
+
+export const encounterGateInputArbitrary = fc.uniqueArray(fc.record({
+  suffix: identifierPart,
+  baseUnits: fc.integer({ min: 0, max: 80 }),
+  roomUnits: fc.integer({ min: 0, max: 20 }),
+  incrementUnits: fc.integer({ min: 0, max: 20 }),
+}), { selector: ({ suffix }) => suffix, minLength: 1, maxLength: 12 }).chain((definitions) => {
+  const encounters = definitions.map(({ suffix, baseUnits, roomUnits, incrementUnits }): EncounterContentEntry => ({
+    kind: 'encounter', id: `encounter.${suffix}`, name: suffix, adminDescription: null, tags: [], model: 'individual',
+    minDepth: 1, maxDepth: 10, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: 'common',
+    runAppearanceChance: baseUnits / 100, discoveryProtectionIncrement: incrementUnits / 100,
+    discoveryProtectionCap: (baseUnits + roomUnits) / 100, maximumInstancesPerRun: 1,
+    placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0,
+      allowedTerrainTags: [], requiresVaultSlot: false, failureMode: 'optional' },
+    intentPresentation: { visible: true },
+    definition: { monsterId: 'monster.test', minimumQuantity: 1, maximumQuantity: 1 },
+  }));
+  return fc.tuple(
+    fc.constant(encounters),
+    fc.array(fc.integer({ min: 0, max: 20 }), { minLength: encounters.length, maxLength: encounters.length }),
+    fc.tuple(fc.nat(), fc.nat(), fc.nat(), fc.integer({ min: 1, max: 0xffff_ffff })),
+  ).map(([entries, bonusUnits, randomState]) => ({
+    encounters: entries,
+    bonuses: entries.map((entry, index) => ({
+      encounterId: entry.id,
+      bonus: Math.min(bonusUnits[index]! / 100, entry.discoveryProtectionCap - entry.runAppearanceChance),
+    })).sort((left, right) => left.encounterId < right.encounterId ? -1 : left.encounterId > right.encounterId ? 1 : 0),
+    state: randomState as Uint32State,
+  }));
+});
 
 export { actor };

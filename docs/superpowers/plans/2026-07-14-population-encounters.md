@@ -206,19 +206,19 @@ Commit: `feat: add active population state`
 - Consumes: compiled encounters, run seed streams, prior sorted discovery bonuses, floor depths reached, and observation state.
 - Produces: saved `EncounterRunDecision[]`, encounter-observation transitions, and pure sorted `DiscoveryProtectionUpdate[]` for later 4B3 finalization.
 
-- [ ] **Step 1: Write exact failing gate tests**
+- [x] **Step 1: Write exact failing gate tests**
 
 Use fixed stream states to assert sorted encounter processing, `min(cap, base + bonus)`, probability 0/1 boundaries, one roll per encounter, no reroll after reload, and no coupling to the `encounters` stream.
 
-- [ ] **Step 2: Write failing discovery-outcome tests**
+- [x] **Step 2: Write failing discovery-outcome tests**
 
 Assert encountered resets to zero; eligible depth reached but unseen increments to the allowed maximum; unreached depth preserves the prior bonus; merely generating an unseen population does not mark it encountered.
 
-- [ ] **Step 3: Implement pure gate creation and conclusion evaluation**
+- [x] **Step 3: Implement pure gate creation and conclusion evaluation**
 
 Return new immutable state and the advanced `population-gates` stream. Validate host inputs against current encounter IDs, treating omitted bonuses as zero and rejecting duplicates, unknown IDs, or out-of-range values.
 
-- [ ] **Step 4: Add properties and commit**
+- [x] **Step 4: Add properties and commit**
 
 Use fast-check to prove output ordering, bounds, idempotent conclusion calculation, and stream isolation over at least 500 cases.
 

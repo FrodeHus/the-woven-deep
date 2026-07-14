@@ -20,6 +20,7 @@ import { allocateIdentificationMap } from './identification.js';
 import type { ItemInstance } from './item-model.js';
 import { tileIndex, type ActiveRun, type FloorSnapshot, type OpaqueId, type Point, type TileId } from './model.js';
 import { refreshKnowledge } from './perception.js';
+import { createEncounterRunDecisions, recordReachedEncounterDepths } from './population-gates.js';
 import { validateActiveRun } from './save-schema.js';
 import { tileDefinition } from './terrain.js';
 import { computeFieldOfView, isVisible } from './visibility.js';
@@ -226,7 +227,18 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
 
   const base = createDemoRun();
   const identified = allocateIdentificationMap({ content: pack, rng: base.rng });
-  const initialized = { ...base, identification: identified.identification, rng: identified.rng };
+  const encounters = pack.entries.filter((entry) => entry.kind === 'encounter');
+  const gates = createEncounterRunDecisions({
+    encounters,
+    protectionBonuses: [],
+    state: identified.rng['population-gates'],
+  });
+  const initialized = {
+    ...base,
+    identification: identified.identification,
+    rng: { ...identified.rng, 'population-gates': gates.state },
+    encounterDecisions: gates.decisions,
+  };
   const allocation = allocateFloorSeed(initialized.rng.generation);
   const generated = generateFloor({
     floorId: FLOOR_ID,
@@ -362,6 +374,11 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
   }).knowledge;
   const run = validateActiveRun({
     ...inserted,
+    encounterDecisions: recordReachedEncounterDepths({
+      decisions: inserted.encounterDecisions,
+      encounters,
+      reachedDepths: inserted.floors.map((floor) => floor.depth),
+    }),
     floors: inserted.floors.map((floor) => floor.floorId === FLOOR_ID ? { ...floor, knowledge } : floor),
   });
   validateContentBoundRun(run, pack);

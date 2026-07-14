@@ -2,6 +2,7 @@ import { DERIVED_STAT_NAMES, type CompiledContentPack, type ContentEntry, type I
 import type { ActiveRun } from './model.js';
 import { unidentifiedPresentation } from './identification.js';
 import { hungerStage } from './survival.js';
+import { effectiveEncounterProbability, maximumDiscoveryProtectionBonus } from './population-gates.js';
 
 function entryMap(pack: CompiledContentPack): ReadonlyMap<string, ContentEntry> {
   return new Map(pack.entries.map((entry) => [entry.id, entry]));
@@ -26,12 +27,11 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
     if (!encounter || encounter.kind !== 'encounter') {
       throw new Error(`content-bound validation: encounter decision ${decision.encounterId} definition does not exist`);
     }
-    const expectedProbability = Math.min(encounter.discoveryProtectionCap,
-      encounter.runAppearanceChance + decision.protectionBonus);
+    const expectedProbability = effectiveEncounterProbability(encounter, decision.protectionBonus);
     const instanceCount = run.populations.filter((population) => population.model !== 'champion'
       && population.model !== 'echo' && population.encounterId === decision.encounterId).length;
     if (decision.baseProbability !== encounter.runAppearanceChance
-      || decision.protectionBonus > encounter.discoveryProtectionCap - encounter.runAppearanceChance
+      || decision.protectionBonus > maximumDiscoveryProtectionBonus(encounter)
       || decision.effectiveProbability !== expectedProbability
       || decision.instancesCreated !== instanceCount
       || decision.instancesCreated > encounter.maximumInstancesPerRun) {
