@@ -4,7 +4,9 @@ import { actorHasConditionTrait, conditionDefinition } from './conditions.js';
 import { heroActor, heroPerception } from './actor-model.js';
 import { featureTiles } from './features.js';
 import { itemLightSources } from './equipment.js';
+import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import { refreshKnowledge } from './perception.js';
+import { projectDomainEvents } from './event-projection.js';
 import { relationshipBetween } from './reactions.js';
 import { resolveWorldStep } from './world-step.js';
 import type { ActiveRun, DomainEvent, OpaqueId, PublicEvent, RestCompletedEvent } from './model.js';
@@ -128,8 +130,18 @@ export function resolveRest(input: Readonly<{
     decisionRequired: false, heroDead: startHero.health === 0,
   });
   if (initialReason) {
+    // Rest that completes without a substep still observes the global merchant deadlines, so an
+    // already-due merchant (e.g. straight after load) resolves at this boundary too.
+    const lifecycle = advanceMerchantLifecycle({
+      state: start, content: input.content, previousWorldTime: start.worldTime,
+      nextWorldTime: start.worldTime, eventId: input.eventId,
+    });
+    const lifecyclePublic = lifecycle.events.length === 0 ? [] : projectDomainEvents({
+      state: lifecycle.state, content: input.content, heroId: startHero.actorId, events: lifecycle.events,
+    });
     const completed = completedEvent(input.eventId, initialReason, 0, 0);
-    return { state: start, events: [completed], publicEvents: [completed],
+    return { state: lifecycle.state, events: [...lifecycle.events, completed],
+      publicEvents: [...lifecyclePublic, completed],
       stopReason: initialReason, elapsed: 0, effectiveHealing: 0 };
   }
 

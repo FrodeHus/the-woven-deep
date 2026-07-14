@@ -241,6 +241,11 @@ const tradeServicePurchasedEvent = z.strictObject({ type: z.literal('trade.servi
 const tradeClosedEvent = z.strictObject({ type: z.literal('trade.closed'), eventId: identifier,
   merchantPopulationId: identifier, reason: z.enum(['player', 'aggression', 'death', 'unavailable', 'departure']),
   completedCommerce: z.boolean() });
+const merchantDepartureWarningEvent = z.strictObject({ type: z.literal('merchant.departure-warning'),
+  eventId: identifier, populationId: identifier, actorId: identifier,
+  threshold: safeNonNegative, remaining: safeNonNegative });
+const merchantDepartedEvent = z.strictObject({ type: z.literal('merchant.departed'), eventId: identifier,
+  populationId: identifier, actorId: identifier, stockItemIds: z.array(identifier).readonly() });
 const restCompletedEvent = z.strictObject({ type: z.literal('rest.completed'), eventId: identifier,
   stopReason: z.enum(['full-health', 'maximum-duration', 'visible-danger', 'aware-hostile', 'damage',
     'meaningful-sound', 'hunger-warning', 'fuel-warning', 'condition-change', 'decision-required', 'hero-death']),
@@ -271,7 +276,8 @@ const eventOptions = [
   populationNoticePublicEvent, restCompletedEvent,
 ] as const;
 const event = z.discriminatedUnion('type', [...eventOptions, populationCreatedEvent, reputationChangedEvent,
-  tradeOpenedEvent, tradeBoughtEvent, tradeSoldEvent, tradeServicePurchasedEvent, tradeClosedEvent]);
+  tradeOpenedEvent, tradeBoughtEvent, tradeSoldEvent, tradeServicePurchasedEvent, tradeClosedEvent,
+  merchantDepartureWarningEvent, merchantDepartedEvent]);
 const legacyEvent = z.discriminatedUnion('type', [...eventOptions, legacyPopulationCreatedEvent]);
 const hiddenPublicEventTypes = new Set([
   'attack.hit', 'attack.missed', 'population.created', 'population.encountered', 'population.placement-skipped',

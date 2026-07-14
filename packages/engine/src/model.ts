@@ -507,6 +507,22 @@ export interface TradeClosedEvent {
 }
 export type TradeDomainEvent = TradeOpenedEvent | TradeBoughtEvent | TradeSoldEvent
   | TradeServicePurchasedEvent | TradeClosedEvent;
+export interface MerchantDepartureWarningEvent {
+  readonly type: 'merchant.departure-warning';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly threshold: number;
+  readonly remaining: number;
+}
+export interface MerchantDepartedEvent {
+  readonly type: 'merchant.departed';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly stockItemIds: readonly OpaqueId[];
+}
+export type MerchantLifecycleDomainEvent = MerchantDepartureWarningEvent | MerchantDepartedEvent;
 export interface RestCompletedEvent {
   readonly type: 'rest.completed'; readonly eventId: OpaqueId;
   readonly stopReason: 'full-health' | 'maximum-duration' | 'visible-danger' | 'aware-hostile'
@@ -524,7 +540,8 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | IdentificationAppearanceRevealedEvent | ItemIdentifiedEvent
   | HungerStageChangedEvent | HungerRestoredEvent | FuelWarningEvent | ItemLightExtinguishedEvent
   | ItemDamagedEvent | DoorStateChangedEvent | FeatureRevealedEvent | FeatureSearchEvent | TrapStateEvent
-  | PopulationDomainEvent | ReputationChangedEvent | TradeDomainEvent | RestCompletedEvent;
+  | PopulationDomainEvent | ReputationChangedEvent | TradeDomainEvent | MerchantLifecycleDomainEvent
+  | RestCompletedEvent;
 
 export type PublicEvent = Exclude<DomainEvent, AttackMissedEvent | AttackHitEvent | PopulationDomainEvent>
   | ActorIntentChangedEvent | SoundHeardEvent | HeroDamagedPublicEvent | CombatObservedPublicEvent

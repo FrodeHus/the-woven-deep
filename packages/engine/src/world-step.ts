@@ -31,6 +31,7 @@ import {
   completeNormalActorTurn, relationshipBetween, resolveOpportunityAttacks, setRelationship,
   type ReactionAttackResult,
 } from './reactions.js';
+import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import { advanceToNextReady, chargeActionEnergy, selectReadyActor } from './scheduler.js';
 import { compareCodeUnits } from './stable-json.js';
 
@@ -753,6 +754,14 @@ export function resolveWorldStep(input: Readonly<{
       type: 'actor.turn.completed', eventId: input.eventId, actorId: selected.actorId, actionType: action.type,
     }], state, heroId, input.content);
   }
+  // Global merchant deadlines resolve at every world-time boundary — including merchants on
+  // inactive floors, whose actors never take turns above.
+  const lifecycle = advanceMerchantLifecycle({
+    state, content: input.content, previousWorldTime: input.state.worldTime,
+    nextWorldTime: state.worldTime, eventId: input.eventId,
+  });
+  state = lifecycle.state;
+  appendEvents(events, publicEvents, lifecycle.events, state, heroId, input.content);
   state = refreshHeroKnowledge(state, input.content);
   const passiveHero = heroActor(state);
   if (passiveHero.health === 0) return { state, events, publicEvents, internalActions };

@@ -178,6 +178,15 @@ export function projectDomainEvents(input: Readonly<{
       case 'reputation.changed': output.push(event); break;
       case 'trade.opened': case 'trade.bought': case 'trade.sold': case 'trade.service-purchased': case 'trade.closed':
         output.push(event); break;
+      case 'merchant.departure-warning': case 'merchant.departed': {
+        // Global merchant deadlines resolve even on inactive floors; the player only hears about
+        // merchants whose encounter was legitimately observed at least once.
+        const population = input.state.populations.find((candidate) => candidate.populationId === event.populationId);
+        const decision = population === undefined ? undefined
+          : input.state.encounterDecisions.find((candidate) => candidate.encounterId === population.encounterId);
+        if (decision?.encountered) output.push(event);
+        break;
+      }
       case 'population.created': {
         const visibleActor = event.actorIds.find(actorVisible);
         if (visibleActor) output.push(notice(event, 'created', visibleActor, 'population.created')); break;

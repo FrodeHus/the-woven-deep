@@ -9,6 +9,7 @@ import { resolveWorldStep } from './world-step.js';
 import { resolveRest } from './rest.js';
 import { validateContentBoundRun } from './content-bound-validation.js';
 import { closeTradeIfInvalid, isTradeCommand, resolveTradeCommand, validateTradeCommand } from './trade.js';
+import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import { projectDomainEvents } from './event-projection.js';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
@@ -78,17 +79,35 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
   });
 
   if (isTradeCommand(command)) {
+    // Ordinary trade commands never advance the merchant lifecycle; only trade-close resolves a
+    // previously due merchant immediately after its session closed (whether the player closed it
+    // or normalization above already did).
+    const resolveDeadlines = (state: ActiveRun): ReturnType<typeof advanceMerchantLifecycle> =>
+      command.type === 'trade-close'
+        ? advanceMerchantLifecycle({ state, content: context.content, previousWorldTime: state.worldTime,
+          nextWorldTime: state.worldTime, eventId: command.commandId })
+        : { state, events: [] };
     const validation = validateTradeCommand({ state: current, command, content: context.content });
-    if (!validation.ok) return recordInvalid(current, command, validation.reason, preEvents, prePublicEvents);
+    if (!validation.ok) {
+      const lifecycle = resolveDeadlines(current);
+      const lifecyclePublic = lifecycle.events.length === 0 ? [] : projectDomainEvents({
+        state: lifecycle.state, content: context.content, heroId: lifecycle.state.hero.actorId,
+        events: lifecycle.events,
+      });
+      return recordInvalid(lifecycle.state, command, validation.reason,
+        [...preEvents, ...lifecycle.events], [...prePublicEvents, ...lifecyclePublic]);
+    }
     assertCountersCanAdvance(current, false);
     // Trade commands advance the revision only; turn, world time, energy, and survival are untouched.
     const result = { status: 'applied', commandId: command.commandId, revision: current.revision + 1, turn: current.turn } as const;
     const resolved = resolveTradeCommand({ state: current, command, content: context.content });
-    const events = [...preEvents, ...resolved.events];
+    const lifecycle = resolveDeadlines(resolved.state);
+    const commandEvents = [...resolved.events, ...lifecycle.events];
+    const events = [...preEvents, ...commandEvents];
     const publicEvents = [...prePublicEvents, ...projectDomainEvents({
-      state: resolved.state, content: context.content, heroId: resolved.state.hero.actorId, events: resolved.events,
+      state: lifecycle.state, content: context.content, heroId: lifecycle.state.hero.actorId, events: commandEvents,
     })];
-    return { state: record(resolved.state, command, result, events, publicEvents), result, events: publicEvents };
+    return { state: record(lifecycle.state, command, result, events, publicEvents), result, events: publicEvents };
   }
   if (current.activeTrade !== null) {
     return recordInvalid(current, command, 'trade.active', preEvents, prePublicEvents);

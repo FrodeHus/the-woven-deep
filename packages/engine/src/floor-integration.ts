@@ -2,6 +2,7 @@ import type { FloorSeedAllocation } from './generation-model.js';
 import type { GeneratedFloor } from './generate-floor.js';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { allocateFloorSeed } from './generation-random.js';
+import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import type { ActiveRun, DomainEvent, Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { placePopulation } from './population-placement.js';
@@ -63,6 +64,15 @@ export function integrateGeneratedFloor(
     && !run.floors.some((floor) => floor.floorId === generated.floor.floorId);
   if (!transitioningToInsertedFloor) validateActiveRun(run);
 
+  // A floor transition can observe a save whose merchants are already due (or crossed warning
+  // thresholds); resolve the global merchant lifecycle before the new floor is populated.
+  const lifecycleEventId = `event.${generated.floor.floorId}.population`;
+  const lifecycle = population === undefined ? null : advanceMerchantLifecycle({
+    state: run, content: population.content, previousWorldTime: run.worldTime,
+    nextWorldTime: run.worldTime, eventId: lifecycleEventId,
+  });
+  run = lifecycle?.state ?? run;
+
   if (generated.populationPlacement !== undefined && population !== undefined) {
     throw new TypeError('generated floor population must not be planned twice');
   }
@@ -123,7 +133,7 @@ export function integrateGeneratedFloor(
   const eventId = `event.${floor.floorId}.population`;
   const committed = state.populations.filter((candidate) => !run.populations.some((prior) =>
     prior.populationId === candidate.populationId));
-  const events: DomainEvent[] = [];
+  const events: DomainEvent[] = [...(lifecycle?.events ?? [])];
   for (const created of committed) {
     events.push({ type: 'population.created', eventId, populationId: created.populationId,
       encounterId: created.encounterId, floorId: created.floorId, model: created.model,

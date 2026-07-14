@@ -87,6 +87,7 @@ type MerchantSessionResult =
 /** Shared open/normalization invariant: living, available, not-due, nonhostile, adjacent, and perceived. */
 function merchantSession(
   state: ActiveRun, content: CompiledContentPack, merchantActorId: OpaqueId,
+  options: Readonly<{ ignoreDue?: boolean }> = {},
 ): MerchantSessionResult {
   const hero = heroActor(state);
   const population = state.populations.find((candidate): candidate is MerchantPopulation =>
@@ -104,7 +105,7 @@ function merchantSession(
   if (population.lifecycle !== 'available') {
     return { ok: false, reason: 'merchant.unavailable', close: 'aggression' };
   }
-  if (population.departureAt <= state.worldTime) {
+  if (!options.ignoreDue && population.departureAt <= state.worldTime) {
     return { ok: false, reason: 'merchant.unavailable', close: 'departure' };
   }
   if (relationshipBetween(state, hero.actorId, actor.actorId) === 'hostile') {
@@ -122,6 +123,20 @@ function merchantSession(
   const tier = reputationTier(factionReputation(state, faction), faction);
   if (!tier.acceptsTrade) return { ok: false, reason: 'merchant.refuses', close: 'unavailable' };
   return { ok: true, session: { population, actor, encounter, faction, tier } };
+}
+
+/**
+ * Departure-deferral probe: whether the modal session would remain valid if the merchant were
+ * not yet due. The merchant lifecycle boundary defers a due departure exactly while this holds;
+ * an invalid session is closed automatically before the departure proceeds.
+ */
+export function activeTradeValidIgnoringDeparture(
+  state: ActiveRun, content: CompiledContentPack,
+): boolean {
+  const trade = state.activeTrade;
+  if (trade === null) return false;
+  const session = merchantSession(state, content, trade.merchantActorId, { ignoreDue: true });
+  return session.ok && session.session.population.populationId === trade.merchantPopulationId;
 }
 
 function activeSession(input: Readonly<{
