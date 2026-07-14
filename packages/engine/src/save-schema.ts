@@ -925,8 +925,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       if (populationValue.aggressionPenaltyApplied !== populationValue.provoked) {
         fail(`${path}.aggressionPenaltyApplied`, 'aggression penalty must be applied exactly with provocation');
       }
-      if (populationValue.deathPenaltyApplied && populationValue.lifecycle !== 'dead') {
-        fail(`${path}.deathPenaltyApplied`, 'death penalty requires a dead merchant');
+      if (populationValue.deathPenaltyApplied !== (populationValue.lifecycle === 'dead')) {
+        fail(`${path}.deathPenaltyApplied`, 'death penalty must be resolved exactly for a dead merchant');
       }
       if (populationValue.stockLossResolved !== (populationValue.provoked || populationValue.lifecycle === 'dead')) {
         fail(`${path}.stockLossResolved`, 'stock loss must be resolved exactly after provocation or merchant death');

@@ -2,9 +2,10 @@ import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { compileContentDirectory, type CompiledContentPack } from '@woven-deep/content/compiler';
 import {
-  createDemoContentPack, createDemoRun, createGameplayDemoRun, createUnknownKnowledge, decodeActiveRun, encodeActiveRun,
+  createDemoContentPack, createDemoRun, createGameplayDemoRun, createUnknownKnowledge, decodeActiveRun,
+  emptyEquipment, encodeActiveRun,
   deriveRngStreams, heroPerception, refreshKnowledge, resolveCommand as resolveCommandWithContext, SaveLoadError,
-  validateContentBoundRun, type GameCommand,
+  validateActiveRun, validateContentBoundRun, type GameCommand,
 } from '../src/index.js';
 
 const context = { content: createDemoContentPack() };
@@ -74,6 +75,7 @@ describe('active-run save codec', () => {
     const actor = {
       ...hero, actorId: 'actor.merchant.content', contentId: 'npc.travelling-lampwright', playerControlled: false,
       disposition: 'neutral', behaviorId: 'npc-behavior.travelling-merchant',
+      equipment: emptyEquipment(),
       populationId: 'population.merchant.content', populationRoleId: null,
       populationPresentation: { name: 'Travelling Lampwright', glyph: 'L', color: '#ffd080', leader: false },
     };
@@ -91,14 +93,31 @@ describe('active-run save codec', () => {
       }], lifecycle: 'available', provoked: false, aggressionPenaltyApplied: false,
       deathPenaltyApplied: false, stockLossResolved: false, commerceBonusApplied: false,
     };
-    run.actors.push(actor);
-    run.items.push(stock);
-    run.populations.push(population);
+    run.actors = [...run.actors, actor]
+      .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0);
+    run.items = [...run.items, stock]
+      .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0);
+    run.populations = [...run.populations, population]
+      .sort((left, right) => left.populationId < right.populationId ? -1 : left.populationId > right.populationId ? 1 : 0);
     run.reputations = [{ factionId: population.factionId, value: 0 }];
     run.encounterDecisions = run.encounterDecisions.map((decision: any) =>
       decision.encounterId === population.encounterId ? { ...decision, eligible: true,
         reachedEligibleDepth: true, instancesCreated: decision.instancesCreated + 1 } : decision);
     return run;
+  }
+
+  function deadMerchant(run: any): any {
+    const population = run.populations.find((candidate: any) => candidate.model === 'merchant');
+    run.actors = run.actors.map((actor: any) => actor.actorId === population.actorId
+      ? { ...actor, health: 0 } : actor);
+    run.items = run.items.filter((item: any) => item.location.type !== 'merchant-stock'
+      || item.location.populationId !== population.populationId);
+    population.lifecycle = 'dead';
+    population.livingMemberIds = [];
+    population.formerMemberIds = [population.actorId];
+    population.stockItemIds = [];
+    population.stockLossResolved = true;
+    return population;
   }
 
   it('migrates strict schema v4 state once and preserves every former field', () => {
@@ -200,10 +219,29 @@ describe('active-run save codec', () => {
         population.formerMemberIds = [population.actorId];
         population.stockItemIds = [];
         population.stockLossResolved = true;
+        population.deathPenaltyApplied = true;
       }
       expect(decodeActiveRun(encodeActiveRun(run))).toEqual(run);
     },
   );
+
+  it('rejects a dead merchant whose death transition was not flagged as resolved', () => {
+    const run = merchantRun() as any;
+    const population = deadMerchant(run);
+    population.deathPenaltyApplied = false;
+    expect(() => encodeActiveRun(run)).toThrow(/deathPenaltyApplied|death penalty/i);
+  });
+
+  it('accepts a resolved dead merchant even when the authored death reputation delta is zero', () => {
+    const run = contentBoundMerchantRun();
+    const population = deadMerchant(run);
+    population.deathPenaltyApplied = true;
+    const content = structuredClone(compiledContent) as any;
+    const encounter = content.entries.find((entry: any) => entry.id === population.encounterId);
+    encounter.definition.deathReputationDelta = 0;
+    expect(() => validateActiveRun(run)).not.toThrow();
+    expect(() => validateContentBoundRun(run, content)).not.toThrow();
+  });
 
   it.each([
     ['NPC', (run: any) => { run.populations.at(-1).npcId = 'npc.missing'; }],
@@ -215,6 +253,31 @@ describe('active-run save codec', () => {
     expect(() => validateContentBoundRun(run, compiledContent)).not.toThrow();
     corrupt(run);
     expect(() => validateContentBoundRun(run, compiledContent)).toThrow(/content-bound validation/i);
+  });
+
+  it.each([
+    ['missing service state', (population: any) => { population.services = []; }],
+    ['extra service state', (population: any) => { population.services.push(structuredClone(population.services[0])); }],
+    ['base price mismatch', (population: any) => { population.services[0].basePrice += 1; }],
+    ['tier mismatch', (population: any) => { population.services[0].tierIds = ['trusted']; }],
+    ['uses below authored minimum', (population: any) => { population.services[0].remainingUses = 0; }],
+    ['uses above authored maximum', (population: any) => { population.services[0].remainingUses = 3; }],
+  ])('rejects merchant content with %s', (_label, corrupt) => {
+    const run = contentBoundMerchantRun();
+    const population = run.populations.find((candidate: any) => candidate.model === 'merchant');
+    corrupt(population);
+    expect(() => validateContentBoundRun(run, compiledContent)).toThrow(/merchant population.*service/i);
+  });
+
+  it('accepts an exact authored merchant service state with zero remaining uses', () => {
+    const run = contentBoundMerchantRun();
+    const population = run.populations.find((candidate: any) => candidate.model === 'merchant');
+    population.services[0].remainingUses = 0;
+    const content = structuredClone(compiledContent) as any;
+    const encounter = content.entries.find((entry: any) => entry.id === population.encounterId);
+    encounter.definition.services[0].minimumUses = 0;
+    encounter.definition.services[0].maximumUses = 0;
+    expect(() => validateContentBoundRun(run, content)).not.toThrow();
   });
 
   function richRun(): ReturnType<typeof createDemoRun> {

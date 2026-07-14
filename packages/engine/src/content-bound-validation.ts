@@ -211,9 +211,15 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         throw new Error(`content-bound validation: merchant population ${population.populationId} warnings are invalid`);
       }
       const authoredServices = new Map(encounter.definition.services.map((service) => [service.serviceId, service]));
+      const savedServiceIds = new Set(population.services.map((service) => service.serviceId));
+      if (population.services.length !== authoredServices.size || savedServiceIds.size !== population.services.length
+        || encounter.definition.services.some((service) => !savedServiceIds.has(service.serviceId))) {
+        throw new Error(`content-bound validation: merchant population ${population.populationId} service state does not match authored offers`);
+      }
       for (const service of population.services) {
         const authored = authoredServices.get(service.serviceId);
-        if (!authored || service.basePrice !== authored.basePrice || service.remainingUses > authored.maximumUses
+        if (!authored || service.basePrice !== authored.basePrice
+          || service.remainingUses < authored.minimumUses || service.remainingUses > authored.maximumUses
           || service.tierIds.length !== authored.tierIds.length
           || service.tierIds.some((tierId, index) => tierId !== authored.tierIds[index])) {
           throw new Error(`content-bound validation: merchant population ${population.populationId} service ${service.serviceId} is invalid`);
