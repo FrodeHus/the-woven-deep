@@ -7,6 +7,8 @@ import {
   addGeneratedFloor,
   allocateFloorSeed,
   createDemoRun,
+  decodeActiveRun,
+  encodeActiveRun,
   heroActor,
   integrateGeneratedFloor,
   projectDomainEvents,
@@ -70,6 +72,39 @@ describe('addGeneratedFloor', () => {
     expect(integrated.state.rng.loot).toEqual(run.rng.loot);
     expect(integrated.events).toEqual([expect.objectContaining({ type: 'population.created',
       populationId: merchant.populationId, model: 'merchant' })]);
+  });
+
+  it('preserves merchant lifetime, stock, and service uses across save/load without re-rolling', () => {
+    const encounter = content.entries.find((entry): entry is MerchantEncounterContentEntry =>
+      entry.kind === 'encounter' && entry.model === 'merchant')!;
+    const base = createDemoRun();
+    const run: ActiveRun = { ...base, contentHash: content.hash, encounterDecisions: [{
+      encounterId: encounter.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1,
+      eligible: true, reachedEligibleDepth: false, encountered: false, instancesCreated: 0,
+    }] };
+    const integrated = integrateGeneratedFloor(run, generatedFloor(), allocation(run), {
+      content, forcedEncounterId: encounter.id,
+    });
+    const merchant = integrated.state.populations.find((entry) => entry.model === 'merchant');
+    expect(merchant?.model).toBe('merchant');
+    if (!merchant || merchant.model !== 'merchant') return;
+
+    const restored = decodeActiveRun(encodeActiveRun(integrated.state));
+    const restoredMerchant = restored.populations.find((entry) => entry.model === 'merchant');
+
+    expect(restored).toEqual(integrated.state);
+    expect(restoredMerchant).toEqual(merchant);
+    if (!restoredMerchant || restoredMerchant.model !== 'merchant') return;
+    expect(restoredMerchant.rolledLifetime).toBe(merchant.rolledLifetime);
+    expect(restoredMerchant.departureAt).toBe(merchant.departureAt);
+    expect(restoredMerchant.stockItemIds).toEqual(merchant.stockItemIds);
+    expect(restoredMerchant.initialStockItemIds).toEqual(merchant.initialStockItemIds);
+    expect(restoredMerchant.services).toEqual(merchant.services);
+    expect(restored.items.filter((item) => item.location.type === 'merchant-stock'))
+      .toEqual(integrated.state.items.filter((item) => item.location.type === 'merchant-stock'));
+    // The merchant-stock stream must round-trip untouched: loading never re-rolls stock.
+    expect(restored.rng['merchant-stock']).toEqual(integrated.state.rng['merchant-stock']);
+    expect(decodeActiveRun(encodeActiveRun(restored))).toEqual(restored);
   });
 
   it('does not advance merchant stock or create items when merchant placement is skipped', () => {

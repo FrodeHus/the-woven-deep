@@ -177,6 +177,101 @@ describe('population placement selection and composition', () => {
     expect('createdItems' in distantResult).toBe(false);
     expect(distantRun.rng['merchant-stock']).toEqual(createDemoRun().rng['merchant-stock']);
   });
+  it('gates merchants by authored environment tags through the shared candidate filter', () => {
+    const { npc, stockItem, stock, encounter } = merchantFixture({ environmentTags: ['cavern'] });
+    const run = runFor([encounter]);
+    const content = pack([encounter], [npc, stockItem, stock]);
+
+    const absent = placePopulation({ run, floor: floor(), content, forcedEncounterId: encounter.id });
+    const present = placePopulation({
+      run, floor: floor(), content, environmentTags: ['cavern'], forcedEncounterId: encounter.id,
+    });
+
+    expect(absent).toMatchObject({ status: 'skipped', reason: 'no-eligible-encounter' });
+    expect(present.status).toBe('placed');
+    expect(run.rng['merchant-stock']).toEqual(createDemoRun().rng['merchant-stock']);
+  });
+
+  it('anchors a merchant to a matching mandatory vault slot without overwriting an occupied slot', () => {
+    const { npc, stockItem, stock, encounter } = merchantFixture({
+      requiredVaultTags: ['arena'],
+      placement: { ...placement, requiresVaultSlot: true },
+    });
+    const generated = floor({
+      entities: [{ entityId: 'fixture.occupied-slot', x: 3, y: 2 }],
+      vaults: [{
+        placementId: 'vault-placement.arena', vaultId: 'vault.arena', x: 2, y: 1,
+        width: 5, height: 3, rotation: 0, reflected: false, entrances: [{ x: 2, y: 2 }],
+      }],
+      placementSlots: [
+        { slotId: 'slot.arena-a', vaultPlacementId: 'vault-placement.arena', kind: 'monster',
+          required: false, tags: ['arena'], x: 3, y: 2 },
+        { slotId: 'slot.arena-b', vaultPlacementId: 'vault-placement.arena', kind: 'monster',
+          required: false, tags: ['arena'], x: 5, y: 2 },
+      ],
+    });
+    const slotless = placePopulation({
+      run: runFor([encounter]), floor: floor(), content: pack([encounter], [npc, stockItem, stock]),
+      forcedEncounterId: encounter.id,
+    });
+
+    const result = placePopulation({
+      run: runFor([encounter]), floor: generated, content: pack([encounter], [npc, stockItem, stock]),
+      forcedEncounterId: encounter.id,
+    });
+
+    expect(slotless).toMatchObject({ status: 'skipped', reason: 'no-eligible-encounter' });
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed') return;
+    expect(result.population.model).toBe('merchant');
+    expect(result.createdActors.map(({ x, y }) => ({ x, y }))).toEqual([{ x: 5, y: 2 }]);
+  });
+
+  it('skips a merchant that cannot honor the objective distance without touching the merchant stream', () => {
+    const { npc, stockItem, stock, encounter } = merchantFixture({
+      placement: { ...placement, minimumObjectiveDistance: 10_000 },
+    });
+    const generated = floor({
+      vaults: [{
+        placementId: 'vault-placement.goal', vaultId: 'vault.goal', x: 5, y: 1,
+        width: 1, height: 1, rotation: 0, reflected: false, entrances: [{ x: 5, y: 1 }],
+      }],
+      placementSlots: [{ slotId: 'slot.objective', vaultPlacementId: 'vault-placement.goal',
+        kind: 'objective', required: true, tags: ['goal'], x: 5, y: 1 }],
+    });
+    const run = runFor([encounter]);
+
+    const result = placePopulation({ run, floor: generated,
+      content: pack([encounter], [npc, stockItem, stock]), forcedEncounterId: encounter.id });
+
+    expect(result).toMatchObject({ status: 'skipped', encounterId: encounter.id, reason: 'no-valid-placement' });
+    expect(result).not.toHaveProperty('createdItems');
+    expect(run.rng['merchant-stock']).toEqual(createDemoRun().rng['merchant-stock']);
+  });
+
+  it('does not place a merchant where it would sever the required stair route', () => {
+    const { npc, stockItem, stock, encounter } = merchantFixture();
+    const width = 7; const height = 3;
+    const tiles = [
+      0, 0, 0, 0, 0, 0, 0,
+      0, 4, 1, 1, 1, 5, 0,
+      0, 0, 0, 0, 0, 0, 0,
+    ] as const;
+    const generated = floor({
+      width, height, tiles, stairUp: { x: 1, y: 1 }, stairDown: { x: 5, y: 1 },
+      knowledge: createUnknownKnowledge(width * height),
+    });
+    const run = runFor([encounter]);
+
+    const result = placePopulation({ run, floor: generated,
+      content: pack([encounter], [npc, stockItem, stock]), forcedEncounterId: encounter.id });
+
+    expect(result).toMatchObject({ status: 'skipped', encounterId: encounter.id, reason: 'required-route-blocked' });
+    expect(result).not.toHaveProperty('createdActors');
+    expect(result).not.toHaveProperty('createdItems');
+    expect(run.rng['merchant-stock']).toEqual(createDemoRun().rng['merchant-stock']);
+  });
+
   it('rejects bypassed unsafe weights and quantities before consuming RNG or allocating members', () => {
     const oversized = individual('encounter.oversized', { definition: {
       monsterId: 'monster.test-a', minimumQuantity: 1, maximumQuantity: 1025,
