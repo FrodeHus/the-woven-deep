@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ConditionContentEntry } from '@woven-deep/content';
 import {
-  conditionModifiers, createDemoContentPack, createDemoRun, deriveActorStats, type ActorDerivationInput,
+  conditionModifiers, createDemoContentPack, createDemoRun, deriveActorStats, populationDerivedStatModifier,
+  type ActorDerivationInput,
 } from '../src/index.js';
 
 function fixture(): ActorDerivationInput {
@@ -62,5 +63,13 @@ describe('deriveActorStats', () => {
       conditions: [{ conditionId: condition.id, sourceActorId: null, appliedAt: 0, expiresAt: 10, stacks: 2 }],
     };
     expect(deriveActorStats({ ...fixture(), conditionModifiers: conditionModifiers(actor, content) }).defense).toBe(8);
+  });
+
+  it('maps group combat bonuses into derived actor stats without hidden mutation', () => {
+    const modifiers = { accuracy: 2, defense: 3, damage: 4 };
+    expect(populationDerivedStatModifier(modifiers)).toEqual({
+      meleeAccuracy: 2, rangedAccuracy: 2, defense: 3, meleeDamageBonus: 4,
+    });
+    expect(modifiers).toEqual({ accuracy: 2, defense: 3, damage: 4 });
   });
 });

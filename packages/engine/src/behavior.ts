@@ -50,6 +50,32 @@ export function chooseBehaviorAction(input: Readonly<{
   if (actor.behaviorId !== 'behavior.approach-and-attack' && actor.behaviorId !== 'behavior.patrol') {
     throw new Error(`internal invariant: no behavior resolver for ${actor.behaviorId ?? 'null'}`);
   }
+  if (actor.behaviorState.intent === 'flee' && actor.behaviorState.investigation
+    && (actor.behaviorState.investigation.expiresAt === null
+      || actor.behaviorState.investigation.expiresAt > input.state.worldTime)) {
+    const hostiles = input.state.actors.filter((candidate) => candidate.actorId !== actor.actorId
+      && candidate.health > 0 && candidate.floorId === actor.floorId
+      && relationshipBetween(input.state, actor.actorId, candidate.actorId) === 'hostile');
+    const nearest = hostiles.sort((left, right) => distance(actor, left) - distance(actor, right)
+      || (left.actorId < right.actorId ? -1 : 1))[0];
+    if (nearest) {
+      const floor = input.state.floors.find((candidate) => candidate.floorId === actor.floorId)!;
+      const tiles = featureTiles(input.state, floor.floorId);
+      const occupied = new Set(input.state.actors.filter((candidate) => candidate.actorId !== actor.actorId
+        && candidate.floorId === actor.floorId && candidate.health > 0).map((candidate) => `${candidate.x}:${candidate.y}`));
+      const candidates = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => ({ x: actor.x + dx, y: actor.y + dy })))
+        .filter((point) => point.x >= 0 && point.y >= 0 && point.x < floor.width && point.y < floor.height
+          && (point.x !== actor.x || point.y !== actor.y)
+          && movementBlockReason(tiles[point.y * floor.width + point.x]!) === undefined
+          && !occupied.has(`${point.x}:${point.y}`))
+        .sort((left, right) => distance(right, nearest) - distance(left, nearest)
+          || left.y - right.y || left.x - right.x);
+      if (candidates[0] && distance(candidates[0], nearest) > distance(actor, nearest)) {
+        return { type: 'move', actorId: actor.actorId, to: candidates[0], cost: actionCostFor(rules, 'action.move') };
+      }
+    }
+    return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };
+  }
   const awareTargets = input.state.actors.filter((candidate) => (
     candidate.actorId !== actor.actorId && candidate.health > 0 && candidate.floorId === actor.floorId
     && actor.awareActorIds.includes(candidate.actorId)

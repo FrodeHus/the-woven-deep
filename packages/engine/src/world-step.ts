@@ -3,7 +3,7 @@ import { type GameAction, balanceEntry } from './actions.js';
 import { actorById, heroActor, heroPerception, type ActorState } from './actor-model.js';
 import { deriveActorStats } from './attributes.js';
 import { chooseBehaviorAction, selectPatrolGoal } from './behavior.js';
-import { resolveAttack } from './combat.js';
+import { applyPopulationCombatModifiers, resolveAttack } from './combat.js';
 import { conditionModifiers } from './conditions.js';
 import { resolveEffectSequence } from './effects.js';
 import { consumeItemQuantity, dropItem, pickupItem, splitStack } from './inventory.js';
@@ -21,6 +21,7 @@ import { refreshKnowledge } from './perception.js';
 import { markEncounterObserved } from './population-gates.js';
 import { updatePopulationIntent } from './population-intent.js';
 import { updateActorMemory, visibleTargetObservations } from './population-perception.js';
+import { applyGroupLeaderOutcomes, coordinateGroups, groupCombatModifiers } from './group-behavior.js';
 import { projectDomainEvents } from './event-projection.js';
 import {
   completeNormalActorTurn, relationshipBetween, resolveOpportunityAttacks, setRelationship,
@@ -62,16 +63,18 @@ function profile(
   items: ActiveRun['items'] = [],
   actors: ActiveRun['actors'] = [actor],
   survival: ActiveRun['survival'] | undefined = undefined,
+  populations: ActiveRun['populations'] = [],
+  worldTime = 0,
 ): CombatProfile {
   const monster = monsterDefinition(content, actor);
-  if (monster) return {
+  if (monster) return applyPopulationCombatModifiers({
     accuracy: monster.accuracy,
     defense: monster.defense,
     damage: monster.damage,
     armor: monster.armor,
     resistance: monster.resistances.physical,
     immune: monster.resistances.physical === 100,
-  };
+  }, groupCombatModifiers({ state: { actors, populations, worldTime }, content, actorId: actor.actorId }));
   const stats = deriveActorStats({
     attributes: actor.attributes,
     formulas: balanceEntry(content).formulas,
@@ -92,14 +95,14 @@ function profile(
     : { count: 1, sides: 4, bonus: stats.meleeDamageBonus };
   const armor = equipped.reduce((total, item) => total
     + (requiredItemDefinition(content, item.contentId).combat?.armor ?? 0), 0);
-  return {
+  return applyPopulationCombatModifiers({
     accuracy: stats.meleeAccuracy,
     defense: stats.defense,
     damage,
     armor,
     resistance: 0,
     immune: false,
-  };
+  }, groupCombatModifiers({ state: { actors, populations, worldTime }, content, actorId: actor.actorId }));
 }
 
 function combat(input: Readonly<{
@@ -111,12 +114,14 @@ function combat(input: Readonly<{
   content: CompiledContentPack;
   items: ActiveRun['items'];
   survival: ActiveRun['survival'];
+  populations: ActiveRun['populations'];
+  worldTime: number;
 }>): ReactionAttackResult {
   const attacker = input.actors.find((candidate) => candidate.actorId === input.attackerId);
   const target = input.actors.find((candidate) => candidate.actorId === input.targetActorId);
   if (!attacker || !target) throw new Error('internal invariant: combat actors must exist');
-  const attack = profile(attacker, input.content, input.items, input.actors, input.survival);
-  const defense = profile(target, input.content, input.items, input.actors, input.survival);
+  const attack = profile(attacker, input.content, input.items, input.actors, input.survival, input.populations, input.worldTime);
+  const defense = profile(target, input.content, input.items, input.actors, input.survival, input.populations, input.worldTime);
   return resolveAttack({
     ...input,
     accuracy: attack.accuracy,
@@ -265,12 +270,16 @@ function applyAction(input: Readonly<{
     });
     const target = actorById(state, action.targetActorId);
     if (!target) throw new Error(`internal invariant: target ${action.targetActorId} disappeared`);
-    const defense = profile(target, input.content, state.items, state.actors, state.survival);
+    const modifiers = groupCombatModifiers({ state, content: input.content, actorId: actor.actorId });
+    const ranged = applyPopulationCombatModifiers({ accuracy: attackerStats.rangedAccuracy, defense: 0,
+      damage: definition.combat.damage }, modifiers);
+    const defense = profile(target, input.content, state.items, state.actors, state.survival,
+      state.populations, state.worldTime);
     const shot = resolveAttack({
       eventId: input.eventId, attackerId: actor.actorId, targetActorId: target.actorId,
       actors: state.actors, combatState: state.rng.combat,
-      accuracy: attackerStats.rangedAccuracy,
-      defense: defense.defense, damage: definition.combat.damage, armor: defense.armor,
+      accuracy: ranged.accuracy,
+      defense: defense.defense, damage: ranged.damage, armor: defense.armor,
       resistance: defense.resistance, immune: defense.immune, damageType: 'physical',
     });
     state = { ...state, actors: shot.actors, rng: { ...state.rng, combat: shot.combatState } };
@@ -345,7 +354,8 @@ function applyAction(input: Readonly<{
     const reactions = resolveOpportunityAttacks({
       run: state, content: input.content, moverActorId: actor.actorId,
       from: { x: actor.x, y: actor.y }, to: action.to, eventId: input.eventId,
-      resolveAttack: (attack) => combat({ ...attack, content: input.content, items: state.items, survival: state.survival }),
+      resolveAttack: (attack) => combat({ ...attack, content: input.content, items: state.items,
+        survival: state.survival, populations: state.populations, worldTime: state.worldTime }),
     });
     state = reactions.state;
     events.push(...reactions.events);
@@ -388,7 +398,7 @@ function applyAction(input: Readonly<{
     const resolved = combat({
       actors: state.actors, combatState: state.rng.combat, attackerId: actor.actorId,
       targetActorId: action.targetActorId, eventId: input.eventId, content: input.content,
-      items: state.items, survival: state.survival,
+      items: state.items, survival: state.survival, populations: state.populations, worldTime: state.worldTime,
     });
     state = { ...state, actors: resolved.actors, rng: { ...state.rng, combat: resolved.combatState } };
     events.push(...resolved.events);
@@ -458,8 +468,14 @@ function prepareIndividualTurn(input: Readonly<{
   let behaviorState = updateActorMemory({
     state: actor.behaviorState, observations: hostileObservations, investigationDuration: null,
   });
+  const fleeing = actor.behaviorState.intent === 'flee' && actor.behaviorState.investigation !== null
+    && (actor.behaviorState.investigation.expiresAt === null
+      || actor.behaviorState.investigation.expiresAt > input.state.worldTime);
   const hostileObservation = hostileObservations[0];
-  if (hostileObservation) {
+  if (fleeing) {
+    behaviorState = { ...behaviorState, intent: 'flee', goal: actor.behaviorState.goal,
+      investigation: actor.behaviorState.investigation };
+  } else if (hostileObservation) {
     behaviorState = { ...behaviorState, goal: { type: 'actor', targetActorId: hostileObservation.targetActorId } };
   } else if (behaviorState.investigation) {
     const investigation = behaviorState.investigation;
@@ -484,10 +500,10 @@ function prepareIndividualTurn(input: Readonly<{
   } else {
     behaviorState = { ...behaviorState, goal: null };
   }
-  const target = behaviorState.goal?.type === 'actor'
+  const target = !fleeing && behaviorState.goal?.type === 'actor'
     ? actorById(input.state, behaviorState.goal.targetActorId) : undefined;
   const adjacent = target !== undefined && Math.max(Math.abs(target.x - actor.x), Math.abs(target.y - actor.y)) === 1;
-  const intent = adjacent ? 'attack' : behaviorState.goal === null ? 'hold' : 'approach';
+  const intent = fleeing ? 'flee' : adjacent ? 'attack' : behaviorState.goal === null ? 'hold' : 'approach';
   const updatedIntent = updatePopulationIntent({
     eventId: input.eventId, actorId: actor.actorId, state: behaviorState, intent,
     targetCategory: behaviorState.goal?.type === 'actor'
@@ -545,6 +561,12 @@ export function resolveWorldStep(input: Readonly<{
   const publicEvents: DomainEvent[] = [];
   state = observeEncounters(state, input.content);
   appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
+  let groupOutcome = applyGroupLeaderOutcomes({ state, content: input.content, eventId: input.eventId });
+  state = groupOutcome.state;
+  appendEvents(events, publicEvents, groupOutcome.events, state, heroId, input.content);
+  let coordinated = coordinateGroups({ state, content: input.content, eventId: input.eventId });
+  state = coordinated.state;
+  appendEvents(events, publicEvents, coordinated.events, state, heroId, input.content);
   const actedHero = actorById(state, heroId);
   if (actedHero) state = withActor(state, completeNormalActorTurn(actedHero));
   const limit = input.maxInternalActions ?? 10_000;
@@ -570,16 +592,22 @@ export function resolveWorldStep(input: Readonly<{
     internalActions += 1;
     const prepared = prepareIndividualTurn({ state, actorId: selected.actorId, content: input.content, eventId: input.eventId });
     state = prepared.state;
+    coordinated = coordinateGroups({ state, content: input.content, eventId: input.eventId });
+    state = coordinated.state;
     appendEvents(events, publicEvents, [{
       type: 'actor.turn.started', eventId: input.eventId, actorId: selected.actorId,
     }], state, heroId, input.content);
     appendEvents(events, publicEvents, prepared.events, state, heroId, input.content);
+    appendEvents(events, publicEvents, coordinated.events, state, heroId, input.content);
     const action = chooseBehaviorAction({ state, actorId: selected.actorId, content: input.content });
     if (action.type === 'rest') throw new Error('internal invariant: non-player behavior selected rest');
     resolved = applyAction({ state, action, content: input.content, eventId: input.eventId });
     state = resolved.state;
     state = observeEncounters(state, input.content);
     appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
+    groupOutcome = applyGroupLeaderOutcomes({ state, content: input.content, eventId: input.eventId });
+    state = groupOutcome.state;
+    appendEvents(events, publicEvents, groupOutcome.events, state, heroId, input.content);
     const completed = actorById(state, selected.actorId);
     if (completed) state = withActor(state, completeNormalActorTurn(completed));
     appendEvents(events, publicEvents, [{

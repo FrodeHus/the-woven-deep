@@ -4,6 +4,7 @@ import {
   type DerivedStatName,
 } from '@woven-deep/content';
 import type { AttributeName, BaseAttributes } from './actor-model.js';
+import type { PopulationCombatModifiers } from '@woven-deep/content';
 
 export { DERIVED_STAT_NAMES, type DerivedStatName } from '@woven-deep/content';
 export type DerivedStatModifier = Readonly<Partial<Record<DerivedStatName, number>>>;
@@ -17,6 +18,18 @@ export interface ActorDerivationInput {
 }
 
 export type DerivedActorStats = Readonly<Record<DerivedStatName, number>>;
+
+export function populationDerivedStatModifier(
+  modifiers: PopulationCombatModifiers,
+): DerivedStatModifier {
+  for (const [name, value] of Object.entries(modifiers)) safeInteger(`population ${name}`, value);
+  return Object.freeze({
+    meleeAccuracy: modifiers.accuracy,
+    rangedAccuracy: modifiers.accuracy,
+    defense: modifiers.defense,
+    meleeDamageBonus: modifiers.damage,
+  });
+}
 
 const ATTRIBUTE_NAMES = new Set<AttributeName>(['might', 'agility', 'vitality', 'wits', 'resolve']);
 const DERIVED_NAMES = new Set<DerivedStatName>(DERIVED_STAT_NAMES);

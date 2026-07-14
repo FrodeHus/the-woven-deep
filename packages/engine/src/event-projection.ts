@@ -76,6 +76,7 @@ export function projectDomainEvents(input: Readonly<{
   const output: DomainEvent[] = [];
   let pendingDamageType: DamageType = 'physical';
   for (const event of input.events) {
+    if (event.type === 'group.awareness-shared') continue;
     if (event.type === 'sound.heard' || event.type === 'hero.damaged') { output.push(event); continue; }
     if (event.type === 'fuel.warning' || event.type === 'item.light-extinguished' || event.type === 'item.identified') {
       const item = input.state.items.find((candidate) => candidate.itemId === event.itemId);

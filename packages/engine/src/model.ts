@@ -5,7 +5,7 @@ import type { ActorState, EquipmentSlot, RelationshipOverride } from './actor-mo
 import type { DungeonFeature } from './feature-model.js';
 import type { IdentificationState, ItemInstance } from './item-model.js';
 import type { HungerStage, SurvivalState } from './survival-model.js';
-import type { DamageType } from '@woven-deep/content';
+import type { DamageType, LeaderDeathResponse } from '@woven-deep/content';
 import type {
   EncounterRunDecision, FallenHeroRunDecision, FallenHeroStandingSnapshot, PopulationInstance, PopulationIntent,
 } from './population-model.js';
@@ -285,6 +285,20 @@ export interface ActorIntentChangedEvent {
   readonly intent: PopulationIntent; readonly presentation: `intent.${PopulationIntent}`;
   readonly targetCategory: 'hero' | 'leader' | 'source' | 'position' | null;
 }
+export interface GroupAwarenessSharedEvent {
+  readonly type: 'group.awareness-shared'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly targetActorId: OpaqueId; readonly floorId: OpaqueId;
+  readonly x: number; readonly y: number; readonly observedAt: number; readonly observerActorId: OpaqueId;
+}
+export interface GroupLeaderDefeatedEvent {
+  readonly type: 'group.leader-defeated'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+}
+export interface GroupOutcomeAppliedEvent {
+  readonly type: 'group.outcome-applied'; readonly eventId: OpaqueId; readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId; readonly response: LeaderDeathResponse; readonly individualRewards: boolean;
+  readonly collapsedMemberCount: number;
+}
 export interface SoundHeardEvent {
   readonly type: 'sound.heard';
   readonly category: 'combat' | 'movement' | 'mechanism';
@@ -311,7 +325,7 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | IdentificationAppearanceRevealedEvent | ItemIdentifiedEvent
   | HungerStageChangedEvent | HungerRestoredEvent | FuelWarningEvent | ItemLightExtinguishedEvent
   | ItemDamagedEvent | DoorStateChangedEvent | FeatureRevealedEvent | FeatureSearchEvent | TrapStateEvent
-  | ActorIntentChangedEvent
+  | ActorIntentChangedEvent | GroupAwarenessSharedEvent | GroupLeaderDefeatedEvent | GroupOutcomeAppliedEvent
   | SoundHeardEvent | HeroDamagedPublicEvent | RestCompletedEvent;
 
 export interface AppliedCommandResult {

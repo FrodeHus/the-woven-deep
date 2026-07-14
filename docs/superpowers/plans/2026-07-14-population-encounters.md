@@ -356,19 +356,19 @@ Commit: `feat: run individual encounter behavior`
 - Consumes: group roles, communication radius, direct member observations, formation definition, leader state, and configured leader outcome.
 - Produces: bounded shared knowledge, formation goals, active coordination modifiers, leader events, and one deterministic outcome transition.
 
-- [ ] **Step 1: Write failing relay and formation tests**
+- [x] **Step 1: Write failing relay and formation tests**
 
 Prove sorted breadth-first relay across connected chains, no sharing across a gap larger than range, latest legitimate observation wins, inactive floors do not relay, and each formation yields stable legal role goals.
 
-- [ ] **Step 2: Write failing leader tests**
+- [x] **Step 2: Write failing leader tests**
 
 Cover leader accent/glyph state, coordination modifiers only while alive, and exact transitions for `weaken`, `panic`, `disband`, `surrender`, `frenzy`, and supernatural `collapse`. Ensure collapse reward/kill accounting follows compiled policy.
 
-- [ ] **Step 3: Implement group behavior and modifiers**
+- [x] **Step 3: Implement group behavior and modifiers**
 
 Keep shared knowledge on the population instance, individual received memory on actors, and derived bonuses in pure attribute/combat calculation. Formation goals may change; paths remain derived and unsaved.
 
-- [ ] **Step 4: Verify deterministic leader death and commit**
+- [x] **Step 4: Verify deterministic leader death and commit**
 
 Run: `npm test --workspace @woven-deep/engine -- --run test/group-behavior.test.ts test/attributes.test.ts test/combat.test.ts test/world-step.test.ts`
 

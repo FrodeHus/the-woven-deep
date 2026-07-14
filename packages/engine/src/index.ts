@@ -24,6 +24,7 @@ export * from './population-placement.js';
 export * from './pathfinding.js';
 export * from './population-perception.js';
 export * from './population-intent.js';
+export * from './group-behavior.js';
 export * from './projection.js';
 export * from './fixture.js';
 export * from './actor-model.js';

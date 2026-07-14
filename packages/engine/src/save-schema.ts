@@ -135,6 +135,15 @@ const actorIntentChangedEvent = z.strictObject({ type: z.literal('actor.intent-c
   presentation: z.enum(['intent.approach', 'intent.attack', 'intent.hold', 'intent.regroup', 'intent.flee',
     'intent.protect', 'intent.spawn', 'intent.phase-change']),
   targetCategory: z.enum(['hero', 'leader', 'source', 'position']).nullable() });
+const groupAwarenessSharedEvent = z.strictObject({ type: z.literal('group.awareness-shared'), eventId: identifier,
+  populationId: identifier, actorId: identifier, targetActorId: identifier, floorId: identifier,
+  x: safeNonNegative, y: safeNonNegative, observedAt: safeNonNegative, observerActorId: identifier });
+const groupLeaderDefeatedEvent = z.strictObject({ type: z.literal('group.leader-defeated'), eventId: identifier,
+  populationId: identifier, actorId: identifier });
+const groupOutcomeAppliedEvent = z.strictObject({ type: z.literal('group.outcome-applied'), eventId: identifier,
+  populationId: identifier, actorId: identifier,
+  response: z.enum(['weaken', 'panic', 'disband', 'surrender', 'frenzy', 'collapse']),
+  individualRewards: z.boolean(), collapsedMemberCount: safeNonNegative });
 const soundHeardEvent = z.strictObject({ type: z.literal('sound.heard'),
   category: z.enum(['combat', 'movement', 'mechanism']),
   direction: z.enum(['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'here']),
@@ -159,7 +168,8 @@ const event = z.discriminatedUnion('type', [
   hungerStageChangedEvent, hungerRestoredEvent, fuelWarningEvent, itemLightExtinguishedEvent,
   doorOpenedEvent, doorClosedEvent,
   featureRevealedEvent, featureSearchedEvent, trapTriggeredEvent, trapDisarmedEvent, trapDisarmFailedEvent,
-  itemDamagedEvent, actorIntentChangedEvent,
+  itemDamagedEvent, actorIntentChangedEvent, groupAwarenessSharedEvent, groupLeaderDefeatedEvent,
+  groupOutcomeAppliedEvent,
   soundHeardEvent, heroDamagedPublicEvent, restCompletedEvent,
 ]);
 const appliedResult = z.strictObject({ status: z.literal('applied'), commandId: identifier, revision: safeNonNegative, turn: safeNonNegative });
