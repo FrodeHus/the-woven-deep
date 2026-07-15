@@ -1,4 +1,5 @@
 import type { CompiledContentPack, VaultContentEntry } from '@woven-deep/content';
+import type { OpaqueId } from './model.js';
 import { heroActor } from './actor-model.js';
 import { generateFloor } from './generate-floor.js';
 import { createClassicTheme } from './generation-mask.js';
@@ -7,8 +8,20 @@ import { integrateGeneratedFloor, type FloorIntegrationResult } from './floor-in
 import type { ActiveRun } from './model.js';
 import { NEW_RUN_FLOOR_HEIGHT, NEW_RUN_FLOOR_THEME_SETTINGS, NEW_RUN_FLOOR_WIDTH } from './new-run.js';
 
+/**
+ * Generates a floor identifier from a depth number with 3-digit zero-padding.
+ * Supports depths 1-999; depths >= 1000 throw RangeError.
+ * Uses 3-digit padding to ensure lexicographic string comparison matches numeric ordering.
+ */
+export function depthFloorId(depth: number): OpaqueId {
+  if (depth < 1 || depth > 999) {
+    throw new RangeError(`floor depth must be between 1 and 999, got ${depth}`);
+  }
+  return `floor.depth-${String(depth).padStart(3, '0')}` as OpaqueId;
+}
+
 function nextFloorId(depth: number): string {
-  return `floor.depth-${String(depth).padStart(2, '0')}`;
+  return depthFloorId(depth);
 }
 
 /**

@@ -2,6 +2,7 @@ import type { CompiledContentPack, ItemContentEntry, VaultContentEntry } from '@
 import type { BaseAttributes, EquipmentSlot } from './actor-model.js';
 import { emptyEquipment, type ActorState } from './actor-model.js';
 import { addGeneratedFloor } from './floor-integration.js';
+import { depthFloorId } from './floor-transition.js';
 import { generateFloor } from './generate-floor.js';
 import type { ClassicThemeSettings } from './generation-model.js';
 import { createClassicTheme } from './generation-mask.js';
@@ -22,7 +23,7 @@ export const NEW_RUN_FLOOR_THEME_SETTINGS: ClassicThemeSettings = {
 };
 const WIDTH = NEW_RUN_FLOOR_WIDTH;
 const HEIGHT = NEW_RUN_FLOOR_HEIGHT;
-const FIRST_FLOOR_ID = 'floor.depth-01';
+const FIRST_FLOOR_ID = depthFloorId(1);
 
 export interface NewRunHeroItem {
   readonly contentId: OpaqueId;

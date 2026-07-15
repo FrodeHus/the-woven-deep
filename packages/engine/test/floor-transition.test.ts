@@ -4,7 +4,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   createNewRun, DEFAULT_GUEST_HERO, decodeActiveRun, descendToNextFloor, encodeActiveRun,
-  heroActor, validateActiveRun,
+  heroActor, validateActiveRun, depthFloorId,
   type ActiveRun,
 } from '../src/index.js';
 
@@ -26,6 +26,25 @@ function teleportHeroTo(run: ActiveRun, position: Readonly<{ x: number; y: numbe
   };
   return validateActiveRun(teleported);
 }
+
+describe('depthFloorId', () => {
+  it('formats floor IDs with 3-digit zero-padding for proper lexicographic sorting', () => {
+    expect(depthFloorId(1)).toBe('floor.depth-001');
+    expect(depthFloorId(99)).toBe('floor.depth-099');
+    expect(depthFloorId(100)).toBe('floor.depth-100');
+    expect(depthFloorId(999)).toBe('floor.depth-999');
+  });
+
+  it('ensures correct string comparison ordering at deep depths', () => {
+    expect(depthFloorId(1) < depthFloorId(2)).toBe(true);
+    expect(depthFloorId(99) < depthFloorId(100)).toBe(true);
+    expect(depthFloorId(999) > depthFloorId(100)).toBe(true);
+  });
+
+  it('throws RangeError for depths beyond 999', () => {
+    expect(() => depthFloorId(1000)).toThrow(RangeError);
+  });
+});
 
 describe('descendToNextFloor', () => {
   it('generates and enters the next depth when the hero stands on stair-down', () => {
