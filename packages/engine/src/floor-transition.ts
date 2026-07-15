@@ -72,6 +72,11 @@ export function descendToNextFloor(
       : actor),
     activeFloorId: floorId,
     activeFloorEnteredAt: run.worldTime,
+    // Retained command events (e.g. moves) reference coordinates on the floor being left; the
+    // save schema validates them against the active floor, so they cannot survive a descent.
+    // Replay-after-descend safety is unaffected: revision never resets, so stale-revision
+    // rejection still guards against replaying commands issued before this transition.
+    recentCommands: [],
   };
 
   return integrateGeneratedFloor(moved, generated, allocation, { content: context.content });

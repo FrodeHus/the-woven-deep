@@ -4,8 +4,9 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   createNewRun, DEFAULT_GUEST_HERO, decodeActiveRun, descendToNextFloor, encodeActiveRun,
-  heroActor, validateActiveRun, depthFloorId,
+  heroActor, resolveCommand, validateActiveRun, depthFloorId,
   type ActiveRun,
+  type GameCommand,
 } from '../src/index.js';
 
 let pack: CompiledContentPack;
@@ -84,5 +85,44 @@ describe('descendToNextFloor', () => {
       },
     };
     expect(() => descendToNextFloor(concluded, { content: pack })).toThrow();
+  });
+
+  it('descends cleanly after a walk-then-descend sequence, clearing stale command history', () => {
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const stairDown = run.floors[0]!.stairDown!;
+
+    // Directions paired with the offset that lands on stairDown from an adjacent tile.
+    const directionsFromOffset: ReadonlyArray<{ direction: 'north' | 'northeast' | 'east' | 'southeast' | 'south' | 'southwest' | 'west' | 'northwest'; dx: number; dy: number }> = [
+      { direction: 'south', dx: 0, dy: -1 }, { direction: 'north', dx: 0, dy: 1 },
+      { direction: 'east', dx: -1, dy: 0 }, { direction: 'west', dx: 1, dy: 0 },
+      { direction: 'southeast', dx: -1, dy: -1 }, { direction: 'northwest', dx: 1, dy: 1 },
+      { direction: 'southwest', dx: 1, dy: -1 }, { direction: 'northeast', dx: -1, dy: 1 },
+    ];
+
+    let walked: ActiveRun | undefined;
+    for (const { direction, dx, dy } of directionsFromOffset) {
+      const adjacent = { x: stairDown.x + dx, y: stairDown.y + dy };
+      let staged: ActiveRun;
+      try {
+        staged = teleportHeroTo(run, adjacent);
+      } catch {
+        continue;
+      }
+      const command: GameCommand = { type: 'move', commandId: `command.walk-${direction}`, expectedRevision: staged.revision, direction };
+      const resolution = resolveCommand(staged, command, { content: pack });
+      const hero = heroActor(resolution.state);
+      if (resolution.result.status === 'applied' && hero.x === stairDown.x && hero.y === stairDown.y) {
+        walked = resolution.state;
+        break;
+      }
+    }
+    if (!walked) throw new Error('test setup failure: could not walk the hero onto stair-down from an adjacent tile');
+    expect(walked.recentCommands.length).toBeGreaterThan(0);
+    // Sanity: the walked state is itself a valid save on floor 1 before we ever descend.
+    validateActiveRun(walked);
+
+    const descended = descendToNextFloor(walked, { content: pack });
+    expect(descended.state.recentCommands).toEqual([]);
+    expect(heroActor(descended.state).floorId).toBe(descended.state.activeFloorId);
   });
 });

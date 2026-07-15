@@ -111,11 +111,7 @@ export class GuestSession {
     }
 
     if (built.kind === 'descend') {
-      // `recentCommands` is a same-floor dedup/replay window: its recorded move events carry
-      // positions on the floor being left, which the save schema validates against whichever
-      // floor is *currently* active. Clearing it before the transition avoids failing that check
-      // against the new floor's terrain; it discards no invariant the new floor depends on.
-      const transition = descendToNextFloor({ ...this.run, recentCommands: [] }, { content: this.pack });
+      const transition = descendToNextFloor(this.run, { content: this.pack });
       const events = projectDomainEvents({
         state: transition.state, content: this.pack, heroId: transition.state.hero.actorId, events: transition.events,
       });
