@@ -63,22 +63,26 @@ The Tactical Triptych per the master design: the map is the primary center regio
 - `BackpackMenu` — the survival-set item menu. Focus-trapped list; equip, use, drop; Escape closes; movement keys are blocked while it is open.
 - `KeyRouter` — one keydown listener at the app root consulting a static keymap table (arrows, numpad, and vi keys for the eight directions; `.` wait; `R` rest; `g` pick up; `>` descend; `i` backpack). Rebinding arrives in 5D. Per the master design's input-routing rule, movement commands are blocked while any overlay, form field, or dialog has focus, and visible focus styling is never removed.
 
-## Rendering: ASCII with animated light
+## Rendering: ASCII with a modern effects layer
 
-Two layers over the same grid with a strict truth/decoration split.
+The playfield stays old-school ASCII; everything modern lives in a decorative effects layer above it. Two layers over the same grid with a strict truth/decoration split.
 
 **Cell layer (gameplay truth).** Each cell keeps its glyph and the engine-computed knowledge state and light intensity. What the player can see, target, and read in the log is decided only by this layer; the engine's visibility and light-radius rules are unchanged. Unknown cells render empty, remembered cells render dim and desaturated, visible cells scale brightness with `--light`.
 
-**Glow layer (pure decoration).** One absolutely positioned overlay element per active light source — in 5A, the hero's carried light — rendered as a radial gradient centered on the source's cell position and blended over the grid with `mix-blend-mode: screen`. This produces a smooth warm falloff that breathes across cell boundaries instead of stepping per cell. A keyframe animation drives the living-flame feel: a slow scale and opacity drift on a two-to-three-second loop plus a faint low-amplitude flicker. The glow's base intensity and radius are driven by CSS custom properties fed from the engine's light state, so a dying torch visibly gutters as fuel runs down.
+**Effects layer (pure decoration).** One overlay pane above the grid hosting two kinds of effect, both positioned in cell coordinates and rendered as absolutely positioned DOM elements:
 
-Constraints on the glow layer:
+- *Persistent light sources.* One radial-gradient glow per active light source — in 5A, the hero's carried light — blended over the grid with `mix-blend-mode: screen`, producing a smooth warm falloff that breathes across cell boundaries instead of stepping per cell. The animation mimics the physical source: a torch flickers with a low-amplitude irregular gutter on top of a slow two-to-three-second drift, while a steadier source (a lantern) barely wavers. Base intensity and radius are CSS custom properties fed from the engine's light and fuel state, so a dying torch visibly gutters as fuel runs down, and the flicker profile is keyed by the light source's content identity so new source types get their own character in content-adjacent CSS rather than new code.
+- *Transient event effects.* Short-lived elements spawned from hero-visible domain events and removed when their animation ends: a hit flash on the struck cell for melee damage, a brief streak along the attack line for ranged and spell attacks (the ember-bolt and dart-trap events in the bundled content), and a fading burst on a death. The event-to-effect mapping is one declarative table in the renderer; 5D's art pass extends the vocabulary (ambient braziers, richer spell signatures, condition auras) through that same table rather than a second system.
 
-- `prefers-reduced-motion` renders it static; the 120 millisecond light transitions from the master design also collapse to immediate state changes.
-- It is `aria-hidden` and ignores pointer events; selectable text and accessible markup are preserved.
-- It animates only compositor-friendly properties (transform, opacity).
-- Tests assert on the cell layer only, so the decorative layer cannot affect determinism.
+Constraints on the effects layer:
 
-The hero glyph carries the warm accent and a subtle text-shadow bloom; item glyphs get a faint category-colored shimmer only while visible and lit. The 5D art pass extends this same mechanism to ambient sources (braziers, spell effects) rather than introducing a second system.
+- `prefers-reduced-motion` renders glows static and replaces transient effects with an immediate, single-frame state change; the 120 millisecond light transitions from the master design also collapse to immediate.
+- Effects never carry information the cell layer and log do not: every effect corresponds to a logged, cell-visible event, so nothing is playable-by-effects-only and nothing is lost with effects reduced.
+- The layer is `aria-hidden` and ignores pointer events; selectable text and accessible markup are preserved.
+- It animates only compositor-friendly properties (transform, opacity, filter).
+- Tests assert on the cell layer and log only, so the decorative layer cannot affect determinism; transient effects are additionally capped (oldest dropped first) so event bursts cannot accumulate unbounded DOM nodes.
+
+The hero glyph carries the warm accent and a subtle text-shadow bloom; item glyphs get a faint category-colored shimmer only while visible and lit.
 
 ## Persistence and error handling
 
@@ -93,7 +97,7 @@ The hero glyph carries the warm accent and a subtle text-shadow bloom; item glyp
 
 - **Engine (Vitest):** `createNewRun` unit tests (determinism for equal seeds, floor 1 generated, hero placed and equipped, `validateActiveRun` passes, `floorsEntered` recorded) plus a seeded property test folding it into the existing invariant suites.
 - **Session (Vitest):** dispatch, persist, and restore round-trips against the real engine and real codec with a fake storage; command-builder table tests; event-log folds; corrupt-save and storage-failure fallbacks.
-- **UI (Vitest + Testing Library):** GridRenderer knowledge states and custom properties; panels from fixture snapshots; KeyRouter focus rules; BackpackMenu focus trap.
+- **UI (Vitest + Testing Library):** GridRenderer knowledge states and custom properties; panels from fixture snapshots; KeyRouter focus rules; BackpackMenu focus trap; the event-to-effect mapping table (each mapped event spawns the declared effect and unmapped events spawn nothing), with the animations themselves left to visual review.
 - **End-to-end (Playwright, `e2e/guest-play.spec.ts`):** a seeded run driven by a scripted keyboard sequence that moves, bump-attacks a monster, picks up and uses an item, rests, and descends to floor 2, asserting rendered cells and log text along the way; a mid-run reload that restores the run; a cleared session that starts fresh. The seed is injected through a test-only query parameter.
 - **Exit demonstration:** `npm run guest:e2e` green alongside every existing engine, content, demo, and Docker gate.
 
