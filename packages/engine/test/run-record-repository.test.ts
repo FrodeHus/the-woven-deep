@@ -118,6 +118,20 @@ describe('createInMemoryRunRecordRepository', () => {
     expect(() => repository.appendRecord(storedRecordA)).toThrow(/immutable append-only Hall/);
   });
 
+  it('deep-freezes appended records so mutations of the caller original do not affect the Hall', () => {
+    const repository = createInMemoryRunRecordRepository();
+    // Create a mutable clone of a record via structuredClone
+    const mutableRecord = structuredClone(storedRecord()) as StoredHallRecord;
+    repository.appendRecord(mutableRecord);
+
+    // Mutate nested field of the original/mutable record
+    (mutableRecord.build.equippedItemContentIds as OpaqueId[]).push('item.fake-item' as OpaqueId);
+
+    // Verify the Hall's stored copy is unaffected
+    const hallRecords = repository.records();
+    expect(hallRecords[0]?.build.equippedItemContentIds).toEqual(['item.iron-sword']);
+  });
+
   it('standings(limit) reflects appended records', () => {
     const repository = createInMemoryRunRecordRepository();
     const storedRecordA = storedRecord();

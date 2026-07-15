@@ -10,6 +10,32 @@ import { compareCodeUnits } from './stable-json.js';
 
 const MAX_STANDINGS = 10;
 
+/**
+ * Recursively deep-copies and deep-freezes a value. Arrays and plain objects are cloned
+ * recursively; primitives are returned as-is. No special handling for functions or non-plain objects.
+ */
+function deepFreezeCopy<T>(value: T): T {
+  // Primitives: return as-is
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  // Arrays: clone and recursively deep-freeze each element
+  if (Array.isArray(value)) {
+    const cloned = value.map((item) => deepFreezeCopy(item)) as T;
+    return Object.freeze(cloned);
+  }
+
+  // Plain objects: clone properties and recursively deep-freeze each value
+  const cloned = {} as T;
+  for (const key in value) {
+    if (Object.prototype.hasOwnProperty.call(value, key)) {
+      (cloned as Record<string, unknown>)[key] = deepFreezeCopy(value[key]);
+    }
+  }
+  return Object.freeze(cloned);
+}
+
 function checkedAdd(left: number, right: number, label: string): number {
   const sum = left + right;
   if (!Number.isSafeInteger(sum)) {
@@ -135,7 +161,7 @@ export function createInMemoryRunRecordRepository(): RunRecordRepository {
       if (hall.some((existing) => existing.recordId === stored.recordId)) {
         throw new Error(`the immutable append-only Hall already contains record ${stored.recordId}`);
       }
-      hall.push(Object.freeze({ ...stored }));
+      hall.push(deepFreezeCopy(stored));
     },
     currentHeart() {
       return heart;
