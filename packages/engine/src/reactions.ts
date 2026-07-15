@@ -30,8 +30,10 @@ export function relationshipBetween(
   const left = requiredActor(run, leftActorId);
   const right = requiredActor(run, rightActorId);
   if (left.populationId !== null && left.populationId === right.populationId) return 'friendly';
-  if (left.disposition === 'hostile' || right.disposition === 'hostile') return 'hostile';
+  // Explicit-neutral parties (merchants, surrendered actors) stay out of fights by default:
+  // hostility toward them exists only through an explicit override, never by disposition.
   if (left.disposition === 'neutral' || right.disposition === 'neutral') return 'neutral';
+  if (left.disposition === 'hostile' || right.disposition === 'hostile') return 'hostile';
   return 'friendly';
 }
 

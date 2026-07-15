@@ -246,6 +246,15 @@ const merchantDepartureWarningEvent = z.strictObject({ type: z.literal('merchant
   threshold: safeNonNegative, remaining: safeNonNegative });
 const merchantDepartedEvent = z.strictObject({ type: z.literal('merchant.departed'), eventId: identifier,
   populationId: identifier, actorId: identifier, stockItemIds: z.array(identifier).readonly() });
+const merchantProvokedEvent = z.strictObject({ type: z.literal('merchant.provoked'), eventId: identifier,
+  populationId: identifier, actorId: identifier, sourceActorId: identifier,
+  response: z.enum(['flee', 'self-defense']) });
+const merchantStockDroppedEvent = z.strictObject({ type: z.literal('merchant.stock-dropped'), eventId: identifier,
+  populationId: identifier, actorId: identifier, itemIds: z.array(identifier).readonly(),
+  units: safeNonNegative });
+const merchantDiedEvent = z.strictObject({ type: z.literal('merchant.died'), eventId: identifier,
+  populationId: identifier, actorId: identifier, killerActorId: identifier,
+  destroyedStockItemIds: z.array(identifier).readonly() });
 const restCompletedEvent = z.strictObject({ type: z.literal('rest.completed'), eventId: identifier,
   stopReason: z.enum(['full-health', 'maximum-duration', 'visible-danger', 'aware-hostile', 'damage',
     'meaningful-sound', 'hunger-warning', 'fuel-warning', 'condition-change', 'decision-required', 'hero-death']),
@@ -277,7 +286,8 @@ const eventOptions = [
 ] as const;
 const event = z.discriminatedUnion('type', [...eventOptions, populationCreatedEvent, reputationChangedEvent,
   tradeOpenedEvent, tradeBoughtEvent, tradeSoldEvent, tradeServicePurchasedEvent, tradeClosedEvent,
-  merchantDepartureWarningEvent, merchantDepartedEvent]);
+  merchantDepartureWarningEvent, merchantDepartedEvent,
+  merchantProvokedEvent, merchantStockDroppedEvent, merchantDiedEvent]);
 const legacyEvent = z.discriminatedUnion('type', [...eventOptions, legacyPopulationCreatedEvent]);
 const hiddenPublicEventTypes = new Set([
   'attack.hit', 'attack.missed', 'population.created', 'population.encountered', 'population.placement-skipped',

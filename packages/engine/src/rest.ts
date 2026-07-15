@@ -4,7 +4,7 @@ import { actorHasConditionTrait, conditionDefinition } from './conditions.js';
 import { heroActor, heroPerception } from './actor-model.js';
 import { featureTiles } from './features.js';
 import { itemLightSources } from './equipment.js';
-import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
+import { advanceMerchantLifecycle, scrubDepartedIntentEvents } from './merchant-lifecycle.js';
 import { refreshKnowledge } from './perception.js';
 import { projectDomainEvents } from './event-projection.js';
 import { relationshipBetween } from './reactions.js';
@@ -173,6 +173,9 @@ export function resolveRest(input: Readonly<{
     state = step.state;
     events.push(...step.events);
     publicEvents.push(...step.publicEvents);
+    // A merchant may depart in a later substep than the one that recorded its intent change;
+    // scrub the whole accumulated command so no dangling actor reference is recorded.
+    scrubDepartedIntentEvents({ events, publicEvents, departureEvents: step.events });
     const after = heroActor(state);
     for (const event of step.events) {
       if (event.type === 'actor.healed' && event.actorId === after.actorId) effectiveHealing += event.amount;

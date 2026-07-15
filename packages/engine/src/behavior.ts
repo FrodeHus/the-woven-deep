@@ -2,6 +2,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { actionCostFor, balanceEntry, type GameAction } from './actions.js';
 import { actorById, type ActorState } from './actor-model.js';
 import { featureTiles } from './features.js';
+import { MERCHANT_BEHAVIOR_ID, merchantBehaviorAction } from './merchant-behavior.js';
 import { findPath, selectPathStep } from './pathfinding.js';
 import { movementBlockReason } from './terrain.js';
 import type { ActiveRun, OpaqueId, Point } from './model.js';
@@ -54,6 +55,9 @@ export function chooseBehaviorAction(input: Readonly<{
   const rules = balanceEntry(input.content);
   if (actor.behaviorId === null) {
     return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };
+  }
+  if (actor.behaviorId === MERCHANT_BEHAVIOR_ID) {
+    return merchantBehaviorAction({ state: input.state, content: input.content, actorId: actor.actorId });
   }
   if (actor.behaviorId !== 'behavior.approach-and-attack' && actor.behaviorId !== 'behavior.patrol') {
     throw new Error(`internal invariant: no behavior resolver for ${actor.behaviorId ?? 'null'}`);

@@ -22,6 +22,7 @@ export * from './population-model.js';
 export * from './merchant-model.js';
 export * from './merchant-stock.js';
 export * from './merchant-lifecycle.js';
+export * from './merchant-behavior.js';
 export * from './commerce.js';
 export * from './trade.js';
 export * from './population-gates.js';

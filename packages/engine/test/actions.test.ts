@@ -120,6 +120,27 @@ describe('player action validation', () => {
     expect(() => encodeActiveRun(resolution.state)).not.toThrow();
   });
 
+  it('keeps bump confirmation and explicit attack behavior for neutral NPC targets', () => {
+    const run = withAdjacentActor('neutral');
+    const bump = validatePlayerAction({
+      state: run,
+      command: { type: 'move', commandId: 'command.bump-npc', expectedRevision: 0, direction: 'east' },
+      context,
+    });
+    expect(bump).toMatchObject({
+      status: 'decision_required',
+      decision: { type: 'confirm-aggression', targetActorId: 'npc.traveler' },
+    });
+    const explicit = validatePlayerAction({
+      state: run,
+      command: { type: 'attack', commandId: 'command.attack-npc', expectedRevision: 0, targetActorId: 'npc.traveler' },
+      context,
+    });
+    expect(explicit).toEqual({
+      type: 'bump-attack', actorId: 'hero.demo', targetActorId: 'npc.traveler', cost: 100,
+    });
+  });
+
   it('turns hostile bump movement into an attack without moving', () => {
     const run = withAdjacentActor('hostile');
     const resolution = resolveCommand(

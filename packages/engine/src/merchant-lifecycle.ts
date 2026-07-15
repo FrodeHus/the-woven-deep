@@ -59,6 +59,31 @@ function scrubRecordedCommands(
   });
 }
 
+/**
+ * Drops in-flight `actor.intent-changed` events referencing merchants that departed within the
+ * same command. Recorded saved commands are scrubbed by `advanceMerchantLifecycle` itself; this
+ * covers the event arrays still being accumulated when the departure resolves, so the command
+ * about to be recorded never carries a dangling actor reference.
+ */
+export function scrubDepartedIntentEvents(input: Readonly<{
+  events: DomainEvent[];
+  publicEvents: PublicEvent[];
+  departureEvents: readonly DomainEvent[];
+}>): void {
+  const departedActorIds = new Set(input.departureEvents
+    .flatMap((event) => event.type === 'merchant.departed' ? [event.actorId] : []));
+  if (departedActorIds.size === 0) return;
+  const stale = (event: DomainEvent | PublicEvent): boolean =>
+    event.type === 'actor.intent-changed' && departedActorIds.has(event.actorId);
+  if (input.events.some(stale)) {
+    input.events.splice(0, input.events.length, ...input.events.filter((event) => !stale(event)));
+  }
+  if (input.publicEvents.some(stale)) {
+    input.publicEvents.splice(0, input.publicEvents.length,
+      ...input.publicEvents.filter((event) => !stale(event)));
+  }
+}
+
 function scrubPopulationReferences(
   population: ActiveRun['populations'][number], departedActorId: OpaqueId,
 ): ActiveRun['populations'][number] {

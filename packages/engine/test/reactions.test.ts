@@ -68,6 +68,43 @@ describe('relationships and reactions', () => {
     expect(relationshipBetween(run, 'hero.demo', 'npc.friendly')).toBe('friendly');
   });
 
+  it('defaults hostile-versus-neutral pairs to neutral so monsters ignore merchants', () => {
+    const base = createDemoRun();
+    const neutral = actor({ actorId: 'npc.merchant', disposition: 'neutral', x: 2 });
+    const hostile = actor({ actorId: 'monster.hostile', disposition: 'hostile', x: 3 });
+    const run = { ...base, actors: [base.actors[0]!, neutral, hostile] };
+    expect(relationshipBetween(run, 'monster.hostile', 'npc.merchant')).toBe('neutral');
+    expect(relationshipBetween(run, 'npc.merchant', 'monster.hostile')).toBe('neutral');
+    // An explicit override still wins over the disposition default.
+    const provoked = setRelationship(run, 'monster.hostile', 'npc.merchant', 'hostile');
+    expect(relationshipBetween(provoked, 'monster.hostile', 'npc.merchant')).toBe('hostile');
+  });
+
+  it('creates no opportunity reaction for a neutral merchant fleeing past a monster', () => {
+    const base = createDemoRun();
+    const merchant = actor({ actorId: 'npc.merchant', disposition: 'neutral', x: 2, y: 2 });
+    const monster = actor({
+      actorId: 'monster.hostile', disposition: 'hostile', x: 3, y: 2,
+      awareActorIds: ['npc.merchant'], reactionReady: true,
+    });
+    const run = { ...base, actors: [base.actors[0]!, merchant, monster] };
+    expect(eligibleOpportunityAttackers({
+      run, content: createDemoContentPack(), moverActorId: 'npc.merchant',
+      from: { x: 2, y: 2 }, to: { x: 1, y: 2 },
+    })).toEqual([]);
+  });
+
+  it('makes a provoked merchant movement reaction-eligible through the hostile override', () => {
+    const base = createDemoRun();
+    const hero = { ...base.actors[0]!, x: 3, y: 2, awareActorIds: ['npc.merchant'] };
+    const merchant = actor({ actorId: 'npc.merchant', disposition: 'neutral', x: 2, y: 2 });
+    const run = setRelationship({ ...base, actors: [hero, merchant] }, hero.actorId, 'npc.merchant', 'hostile');
+    expect(eligibleOpportunityAttackers({
+      run, content: createDemoContentPack(), moverActorId: 'npc.merchant',
+      from: { x: 2, y: 2 }, to: { x: 1, y: 2 },
+    }).map((attacker) => attacker.actorId)).toEqual([hero.actorId]);
+  });
+
   it('never creates an opportunity reaction between neutral actors', () => {
     const base = createDemoRun();
     const hero = { ...base.actors[0]!, x: 2, y: 2 };

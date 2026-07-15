@@ -522,7 +522,32 @@ export interface MerchantDepartedEvent {
   readonly actorId: OpaqueId;
   readonly stockItemIds: readonly OpaqueId[];
 }
-export type MerchantLifecycleDomainEvent = MerchantDepartureWarningEvent | MerchantDepartedEvent;
+export interface MerchantProvokedEvent {
+  readonly type: 'merchant.provoked';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly sourceActorId: OpaqueId;
+  readonly response: 'flee' | 'self-defense';
+}
+export interface MerchantStockDroppedEvent {
+  readonly type: 'merchant.stock-dropped';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly itemIds: readonly OpaqueId[];
+  readonly units: number;
+}
+export interface MerchantDiedEvent {
+  readonly type: 'merchant.died';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly killerActorId: OpaqueId;
+  readonly destroyedStockItemIds: readonly OpaqueId[];
+}
+export type MerchantLifecycleDomainEvent = MerchantDepartureWarningEvent | MerchantDepartedEvent
+  | MerchantProvokedEvent | MerchantStockDroppedEvent | MerchantDiedEvent;
 export interface RestCompletedEvent {
   readonly type: 'rest.completed'; readonly eventId: OpaqueId;
   readonly stopReason: 'full-health' | 'maximum-duration' | 'visible-danger' | 'aware-hostile'
