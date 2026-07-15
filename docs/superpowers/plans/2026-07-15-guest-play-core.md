@@ -512,40 +512,63 @@ Also in this task: `loadContentPack(fetcher = fetch): Promise<CompiledContentPac
 ### Task 5: Grid renderer and effects layer
 
 **Files:**
+- Create: `apps/web/src/ui/camera.ts`
 - Create: `apps/web/src/ui/GridRenderer.tsx`
 - Create: `apps/web/src/ui/effects-map.ts`
 - Create: `apps/web/src/ui/EffectsLayer.tsx`
+- Create: `apps/web/test/camera.test.ts`
 - Create: `apps/web/test/grid-renderer.test.tsx`
 - Create: `apps/web/test/effects-map.test.ts`
 - Modify: `apps/web/src/styles.css`
 
 **Interfaces:**
 - Consumes: `GameplayProjection` (`floor.cells` with `glyph/token/knowledge/intensity/tint`, `actors`, `groundItems`, `hero`), `PublicEvent`, the pack (light definitions for glow radius/color via the hero's enabled equipped light).
-- Produces: `<GridRenderer projection={...} />`, `<EffectsLayer projection={...} pack={...} lastEvents={...} />`, and:
+- Produces: `<GridRenderer projection={...} camera={...} />`, `<EffectsLayer projection={...} pack={...} lastEvents={...} camera={...} />`, and:
 
 ```ts
+// camera.ts — pure deadzone camera so floors larger than the pane render as a scrolling viewport
+export interface CameraViewport { readonly width: number; readonly height: number }   // in cells
+export interface CameraOrigin { readonly x: number; readonly y: number }              // world coordinate of the viewport's top-left cell
+export const CAMERA_MARGIN = 4;    // hero stays at least this many cells from a viewport edge before the camera scrolls
+export function computeCamera(input: Readonly<{
+  hero: Readonly<{ x: number; y: number }>;
+  floor: Readonly<{ width: number; height: number }>;
+  viewport: CameraViewport;
+  previous: CameraOrigin | null;   // null on first render or floor change → center on hero
+}>): CameraOrigin;
+
 // effects-map.ts
 export interface TransientEffect { readonly key: string; readonly kind: 'hit-flash' | 'attack-streak' | 'death-burst'; readonly x: number; readonly y: number; readonly toX?: number; readonly toY?: number }
 export const MAX_TRANSIENT_EFFECTS = 12;
 export function effectsForEvents(events: readonly PublicEvent[], heroId: OpaqueId): readonly TransientEffect[];
 ```
 
+Camera rules (all in `computeCamera`, unit-tested in `camera.test.ts`): with `previous: null`, center the viewport on the hero, clamped to floor bounds. With a previous origin, keep it unchanged while the hero remains at least `CAMERA_MARGIN` cells from every viewport edge; when the hero crosses the margin on an axis, scroll that axis by exactly the amount that restores the margin. Always clamp so the viewport never shows cells outside the floor; when the floor is smaller than the viewport on an axis, center the floor on that axis (origin may be negative in that case — the renderer pads with empty cells). Camera state lives in the `PlayScreen` component (a ref/previous-origin pair keyed by `floorId` so a descend recenters); `computeCamera` itself is stateless.
+
+Camera test cases for `camera.test.ts`: initial centering and clamping at each corner; no scroll while moving inside the deadzone; exact scroll amount when crossing each of the four margins; clamping at every floor edge; small-floor centering on one and both axes; floor-change recentering is the caller's responsibility (null previous) — assert the null branch centers.
+
 - [ ] **Step 1: Write failing renderer and mapping tests**
 
 ```tsx
 // apps/web/test/grid-renderer.test.tsx — assert on the cell layer only
-it('renders one cell per floor cell with knowledge classes and light variables', () => {
-  render(<GridRenderer projection={projection} />);
+it('renders exactly the viewport window of cells, keyed by world coordinates', () => {
+  const camera = { x: 10, y: 3 };
+  render(<GridRenderer projection={projection} camera={camera} viewport={{ width: 40, height: 15 }} />);
   const grid = screen.getByRole('grid', { name: /dungeon/i });
   const cells = grid.querySelectorAll('[data-cell]');
-  expect(cells).toHaveLength(projection.floor.width * projection.floor.height);
+  expect(cells).toHaveLength(40 * 15);
+  expect(grid.querySelector('[data-cell="10,3"]')).not.toBeNull();   // top-left of the window, world coords
+  expect(grid.querySelector('[data-cell="9,3"]')).toBeNull();        // outside the window
   const visible = grid.querySelector('[data-cell="12,5"]')!;
   expect(visible).toHaveClass('cell-visible');
   expect(visible.getAttribute('style')).toContain('--light');
 });
 it('renders unknown cells empty, remembered cells dim, and overlays hero > actor > item > tile glyphs', () => { /* precedence table */ });
 it('marks the hero cell with the hero glyph @ and an accessible label', () => { /* aria-label on hero cell */ });
+it('pads with empty out-of-floor cells when the floor is smaller than the viewport', () => { /* negative-origin centering case */ });
 ```
+
+Camera unit tests (`camera.test.ts`) come first in this task's RED step — the case list is in the Interfaces section above.
 
 ```ts
 // apps/web/test/effects-map.test.ts
@@ -561,9 +584,11 @@ Expected: FAIL — components do not exist.
 
 - [ ] **Step 3: Implement renderer, mapping, and effects layer**
 
-`GridRenderer`: a `role="grid"` container with `display: grid; grid-template-columns: repeat(width, 1ch)`. One `<span data-cell="x,y">` per cell: class `cell-unknown|cell-remembered|cell-visible`, inline custom properties `--light: intensity/255` and `--fg: rgb(tint)` when present, text content by precedence hero `@` > actor glyph > ground-item glyph > `cell.fixture?.glyph` > `cell.glyph ?? ''`. Remembered cells always render the remembered tile glyph dim/desaturated via CSS, never actors or items. The grid is one tab stop; cells are not individually focusable.
+`camera.ts`: implement `computeCamera` exactly per the Interfaces section — pure, stateless, deadzone margin `CAMERA_MARGIN = 4`, axis-independent scrolling, floor-bounds clamping, small-floor centering.
 
-`EffectsLayer`: `aria-hidden`, `pointer-events: none`, absolutely positioned over the grid, cell coordinates converted with `calc(var(--cell-w) * x)` custom properties set by the shared playfield wrapper. Renders (a) one `.glow` div at the hero's cell while the hero has an enabled equipped light — radius/color read from the pack's light definition for that item's `contentId`, flicker profile selected by a `data-source` attribute (`pitch-torch` gutter vs `brass-lantern` steady), base intensity scaled by remaining fuel fraction; (b) transient effect divs from `effectsForEvents(lastEvents, heroId)`, removed on `animationend`. CSS keyframes in `styles.css`: `glow-drift` (2.6s ease-in-out infinite alternate scale/opacity), `glow-gutter` (irregular steps flicker), `hit-flash` (120ms), `attack-streak` (160ms translate along the line), `death-burst` (240ms expanding fade). All under `@media (prefers-reduced-motion: reduce) { animation: none; }` with the glow rendered static.
+`GridRenderer`: a `role="grid"` container with `display: grid; grid-template-columns: repeat(viewport.width, 1ch)`. It receives `camera: CameraOrigin` and `viewport: CameraViewport` and renders only the world cells inside `[camera.x, camera.x + viewport.width) × [camera.y, camera.y + viewport.height)`, indexing into `projection.floor.cells` by `y * floor.width + x`; world coordinates outside the floor render as empty padding cells (`data-cell` omitted). One `<span data-cell="x,y">` per in-floor cell using WORLD coordinates: class `cell-unknown|cell-remembered|cell-visible`, inline custom properties `--light: intensity/255` and `--fg: rgb(tint)` when present, text content by precedence hero `@` > actor glyph > ground-item glyph > `cell.fixture?.glyph` > `cell.glyph ?? ''`. Remembered cells always render the remembered tile glyph dim/desaturated via CSS, never actors or items. The grid is one tab stop; cells are not individually focusable.
+
+`EffectsLayer`: `aria-hidden`, `pointer-events: none`, absolutely positioned over the grid; it receives the same `camera` and positions each effect at viewport coordinates `(worldX - camera.x, worldY - camera.y)` via `calc(var(--cell-w) * x)` custom properties set by the shared playfield wrapper; effects whose world position falls outside the viewport are skipped. Renders (a) one `.glow` div at the hero's cell while the hero has an enabled equipped light — radius/color read from the pack's light definition for that item's `contentId`, flicker profile selected by a `data-source` attribute (`pitch-torch` gutter vs `brass-lantern` steady), base intensity scaled by remaining fuel fraction; (b) transient effect divs from `effectsForEvents(lastEvents, heroId)`, removed on `animationend`. CSS keyframes in `styles.css`: `glow-drift` (2.6s ease-in-out infinite alternate scale/opacity), `glow-gutter` (irregular steps flicker), `hit-flash` (120ms), `attack-streak` (160ms translate along the line), `death-burst` (240ms expanding fade). All under `@media (prefers-reduced-motion: reduce) { animation: none; }` with the glow rendered static.
 
 - [ ] **Step 4: Run and verify GREEN, then commit**
 
@@ -607,7 +632,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement panels and layout**
 
-All four panels are pure functions of the snapshot — no session access, no effects. `PlayScreen` composes the Triptych with CSS grid areas:
+All four panels are pure functions of the snapshot — no session access, no effects. `PlayScreen` also owns the camera state: it keeps the previous `CameraOrigin` plus the `floorId` it belongs to (a ref pair), passes `previous: null` on first render or when `projection.floor.floorId` changes (so a descend recenters), calls `computeCamera` each render with the hero position and a viewport size derived from the pane (a fixed default like 60×20 is fine for 5A; responsive sizing is 5D polish), and hands the resulting `camera`/`viewport` to `GridRenderer` and `EffectsLayer`. `PlayScreen` composes the Triptych with CSS grid areas:
 
 ```css
 .triptych { display: grid; grid-template: "status status status" auto "hero map threat" 1fr "log log log" minmax(6rem, 20vh) / minmax(14rem, 1fr) minmax(0, 4fr) minmax(14rem, 1fr); }
