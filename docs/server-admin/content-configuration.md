@@ -345,6 +345,8 @@ Client contract: when a trade command resolves as invalid, any events attached t
 
 Runs persist with save schema version `5`, which adds faction `reputations`, the modal `activeTrade` session, merchant populations, and the dedicated `merchant-stock` and `merchant-runtime` RNG streams. Schema-v4 saves migrate to v5 automatically on load with empty merchant state; unknown save versions are rejected.
 
+Run records raise the current save format to schema version `6`, which adds the typed run `metrics` registry, the explicit run `conclusion` (completion type, cause, `concludedAtRevision`, `finalized`), and the derived `run-records` RNG stream that seeds heirloom selection. The single ordered v5→v6 migration preserves every v5 field byte-for-byte and adds zeroed metrics, a null conclusion, and the derived `run-records` stream; migrated saves re-validate through the strict v6 decoder, and every other version stays rejected. New runs start with zeroed metrics and no conclusion. On the content side, schema version `5` adds the `achievement` kind and the balance `score` coefficients described above; every bundled source file declares `schemaVersion: 5`, and the compiled pack hash covers the new entries.
+
 ```yaml
 schemaVersion: 5
 entries:

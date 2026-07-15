@@ -53,7 +53,7 @@ Deliver this milestone through two independently reviewable slices:
 
 **4B2 dungeon NPCs (travelling merchants) — complete:** `docs/superpowers/plans/2026-07-14-dungeon-npcs.md`
 
-**4B3 run records — pending.**
+**4B3 run records — complete:** `docs/superpowers/specs/2026-07-15-run-records-design.md`, `docs/superpowers/plans/2026-07-13-implementation-roadmap.md`
 
 **Exit demonstration:** an automated simulation can fight a leader group, contain or flee a growing swarm, encounter a rare boss, trade with or attack a travelling merchant, and finalize a deterministic run record.
 
@@ -71,9 +71,11 @@ Implement Mailgun magic links, hashed tokens and sessions, CSRF and WebSocket co
 
 ### 7. Town progression and full campaign content
 
-Expand the vertical slice to 20 floors, five-floor depth bands, milestone encounters, the Heart of the Deep return journey, four classes, backgrounds, traits, three town merchants, unlock pools, class foreshadowing, boss rewards, profile achievements, and balance-complete YAML content.
+Expand the vertical slice to 20 floors, five-floor depth bands, milestone encounters, the **Final Chamber and endings** milestone, four classes, backgrounds, traits, three town merchants, unlock pools, class foreshadowing, boss rewards, profile achievements, and balance-complete YAML content.
 
-**Exit demonstration:** a new persistent profile can create a hero, prepare in town, recover the Heart, escape or die, clear hero-scoped storage, and apply breadth-only unlocks.
+**Final Chamber and endings** (superseding endgame requirements, 2026-07-15): the Heart of the Deep is a living person, not an artifact — there is no artifact to recover or carry out. This milestone implements the Final Chamber encounter, the ending choices that produce the `became-heart`, `refused`, and `broke-cycle` completion types, ending dialogue, lore prerequisites gating the choices, and the Break-the-Cycle unlock content. It only wires ending triggers into the run-records finalization pipeline built in 4B3 (`finalizeRun`, the completion-type tiers, and the Heart lineage store); the data model for all four completion types already exists. This replaces the master design's "Heart of the Deep return journey" and its escaped-with-Heart / died-with-Heart outcome tiers everywhere.
+
+**Exit demonstration:** a new persistent profile can create a hero, prepare in town, reach the Final Chamber, and finalize each ending choice into its completion-type tier (`became-heart`, `refused`, `broke-cycle`, or `died`), clear hero-scoped storage, and apply breadth-only unlocks.
 
 ### 8. Records, telemetry, and admin dashboard
 
