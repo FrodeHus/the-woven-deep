@@ -554,6 +554,25 @@ describe('trade-close and commerce consequence', () => {
     expect(waited.events.some((event) => event.type === 'hero.waited')).toBe(true);
   });
 
+  it('keeps the automatic close when the next command only requires a decision', () => {
+    // Reputation dropped to the refused tier invalidates the open session; the next command bumps
+    // the still-neutral adjacent merchant, which requires an aggression decision instead of
+    // resolving. The normalization must not be discarded with the unrecorded command.
+    const opened = openedRun();
+    const refused = { ...opened, reputations: [{ factionId: faction.id, value: -500 }] };
+    const resolution = resolveCommand(refused,
+      { type: 'move', commandId: 'command.bump-merchant', expectedRevision: 1, direction: 'east' },
+      context());
+    expect(resolution.result).toMatchObject({
+      status: 'decision_required', revision: 1,
+      decision: { type: 'confirm-aggression', targetActorId: MERCHANT_ACTOR_ID },
+    });
+    expect(resolution.state.activeTrade).toBeNull();
+    expect(resolution.events).toEqual([expect.objectContaining({
+      type: 'trade.closed', merchantPopulationId: POPULATION_ID, reason: 'unavailable',
+    })]);
+  });
+
   it('keeps a full trade session valid under save validation', () => {
     const opened = openedRun();
     let state = resolveCommand(opened, buyCommand({ itemId: 'item.stock.ration', quantity: 1 }), context()).state;

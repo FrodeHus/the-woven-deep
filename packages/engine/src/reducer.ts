@@ -115,7 +115,9 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
 
   const validation = validatePlayerAction({ state: current, command, context });
   if ('status' in validation && validation.status === 'decision_required') {
-    return { state, result: validation, events: [] };
+    // A pending decision leaves the command unrecorded, but the modal-session normalization above
+    // already happened: keep the normalized state and deliver its events (e.g. trade.closed).
+    return { state: current, result: validation, events: prePublicEvents };
   }
   if ('status' in validation) {
     return recordInvalid(current, command, validation.reason, preEvents, prePublicEvents);
