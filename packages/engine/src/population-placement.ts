@@ -6,6 +6,8 @@ import type {
 } from '@woven-deep/content';
 import { emptyEquipment, type ActorState } from './actor-model.js';
 import { analyzeConnectivity, preservesRequiredRoutes } from './connectivity.js';
+import type { ItemInstance } from './item-model.js';
+import { materializeMerchant } from './merchant-stock.js';
 import type { ActiveRun, FloorSnapshot, OpaqueId, Point, Uint32State } from './model.js';
 import { emptyActorBehaviorState, type EncounterRunDecision, type PopulationInstance } from './population-model.js';
 import { nextUint32, rollDie } from './random.js';
@@ -30,6 +32,8 @@ export interface PopulationPlaced extends PlacementBase {
   readonly floor: FloorSnapshot;
   readonly createdActors: readonly ActorState[];
   readonly population: PopulationInstance;
+  readonly createdItems: readonly ItemInstance[];
+  readonly nextMerchantStockState: Uint32State | null;
 }
 
 export interface PopulationSkipped extends PlacementBase {
@@ -201,6 +205,11 @@ function composition(
     const leaderIndex = leaderRoll.value / 0x1_0000_0000 < encounter.definition.leaderChance
       ? members.findIndex((member) => member.roleId === encounter.definition.leaderRoleId) : -1;
     return { members, leaderIndex: leaderIndex < 0 ? null : leaderIndex, state };
+  }
+  if (encounter.model === 'merchant') {
+    // Merchants occupy one cell and roll nothing here; every merchant roll
+    // comes from the dedicated merchant-stock stream during materialization.
+    return { members: [{ monsterId: encounter.definition.npcId, roleId: null }], leaderIndex: null, state };
   }
   const monsterId = encounter.model === 'swarm'
     ? encounter.definition.sourceMonsterId : encounter.definition.monsterId;
@@ -407,6 +416,23 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
   }
 
   const populationId = nextPopulationId(input, planned.members.length);
+  if (selected.encounter.model === 'merchant') {
+    // Materialize only after a legal cell exists so skipped or rejected
+    // placement never advances the merchant-stock stream or creates items.
+    const runWithFloor = input.run.floors.some((floor) => floor.floorId === input.floor.floorId)
+      ? input.run : { ...input.run, floors: [...input.run.floors, input.floor] };
+    const merchant = materializeMerchant({
+      run: runWithFloor, content: input.content, encounter: selected.encounter,
+      populationId, floorId: input.floor.floorId, position: positions.cells[0]!,
+    });
+    return {
+      status: 'placed', encounterId: selected.encounter.id, nextEncounterState: planned.state,
+      encounterDecisions: reachedDecisions.map((decision) => decision.encounterId === selected.encounter.id
+        ? { ...decision, instancesCreated: decision.instancesCreated + 1 } : decision),
+      diagnostics: [], createdActors: [merchant.actor], population: merchant.population,
+      floor: input.floor, createdItems: merchant.items, nextMerchantStockState: merchant.nextMerchantStockState,
+    };
+  }
   const createdActors = planned.members.map((member, index): ActorState => {
     const definition = maps.monsters.get(member.monsterId);
     if (!definition) throw new Error(`population placement monster ${member.monsterId} does not exist`);
@@ -464,6 +490,6 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
   return {
     status: 'placed', encounterId: selected.encounter.id, nextEncounterState: planned.state,
     encounterDecisions, diagnostics: [], createdActors, population,
-    floor: input.floor,
+    floor: input.floor, createdItems: [], nextMerchantStockState: null,
   };
 }

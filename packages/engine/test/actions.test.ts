@@ -39,6 +39,19 @@ describe('player action validation', () => {
     })).toEqual({ status: 'invalid', reason: 'action.unavailable' });
   });
 
+  it('never resolves trade commands through the world-step action path', () => {
+    expect(validatePlayerAction({
+      state: createDemoRun(),
+      command: { type: 'trade-open', commandId: 'command.trade-open', expectedRevision: 0, merchantActorId: 'actor.absent' },
+      context,
+    })).toEqual({ status: 'invalid', reason: 'action.unavailable' });
+    expect(validatePlayerAction({
+      state: createDemoRun(),
+      command: { type: 'trade-close', commandId: 'command.trade-close', expectedRevision: 0, merchantPopulationId: 'population.absent' },
+      context,
+    })).toEqual({ status: 'invalid', reason: 'action.unavailable' });
+  });
+
   it('rejects actions while the hero is incapacitated', () => {
     const state = createDemoRun();
     const hero = state.actors[0]!;
@@ -105,6 +118,27 @@ describe('player action validation', () => {
       type: 'relationship.changed', actorId: 'hero.demo', targetActorId: 'npc.traveler', relationship: 'hostile',
     });
     expect(() => encodeActiveRun(resolution.state)).not.toThrow();
+  });
+
+  it('keeps bump confirmation and explicit attack behavior for neutral NPC targets', () => {
+    const run = withAdjacentActor('neutral');
+    const bump = validatePlayerAction({
+      state: run,
+      command: { type: 'move', commandId: 'command.bump-npc', expectedRevision: 0, direction: 'east' },
+      context,
+    });
+    expect(bump).toMatchObject({
+      status: 'decision_required',
+      decision: { type: 'confirm-aggression', targetActorId: 'npc.traveler' },
+    });
+    const explicit = validatePlayerAction({
+      state: run,
+      command: { type: 'attack', commandId: 'command.attack-npc', expectedRevision: 0, targetActorId: 'npc.traveler' },
+      context,
+    });
+    expect(explicit).toEqual({
+      type: 'bump-attack', actorId: 'hero.demo', targetActorId: 'npc.traveler', cost: 100,
+    });
   });
 
   it('turns hostile bump movement into an attack without moving', () => {

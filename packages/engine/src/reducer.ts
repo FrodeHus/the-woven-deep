@@ -1,5 +1,5 @@
 import type {
-  ActiveRun, CommandResolution, DomainEvent, GameCommand,
+  ActiveRun, CommandResolution, DomainEvent, GameCommand, InvalidActionReason,
   ProcessedCommandResult, PublicEvent, RecordedCommand,
 } from './model.js';
 import { RECENT_COMMAND_LIMIT } from './versions.js';
@@ -8,6 +8,9 @@ import { validatePlayerAction, type ResolutionContext } from './actions.js';
 import { resolveWorldStep } from './world-step.js';
 import { resolveRest } from './rest.js';
 import { validateContentBoundRun } from './content-bound-validation.js';
+import { closeTradeIfInvalid, isTradeCommand, resolveTradeCommand, validateTradeCommand } from './trade.js';
+import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
+import { projectDomainEvents } from './event-projection.js';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
   return stableJson(left) === stableJson(right);
@@ -33,10 +36,24 @@ function record(
   };
 }
 
-function assertCountersCanAdvance(state: ActiveRun): void {
-  if (!Number.isSafeInteger(state.revision + 1) || !Number.isSafeInteger(state.turn + 1)) {
+function assertCountersCanAdvance(state: ActiveRun, advanceTurn: boolean): void {
+  if (!Number.isSafeInteger(state.revision + 1) || (advanceTurn && !Number.isSafeInteger(state.turn + 1))) {
     throw new Error('internal invariant: applied transition would overflow counters');
   }
+}
+
+function recordInvalid(
+  state: ActiveRun,
+  command: GameCommand,
+  reason: InvalidActionReason,
+  preEvents: readonly DomainEvent[],
+  prePublicEvents: readonly PublicEvent[],
+): CommandResolution {
+  const result = { status: 'invalid', commandId: command.commandId, revision: state.revision, turn: state.turn, reason } as const;
+  const invalid = { type: 'action.invalid', eventId: command.commandId, commandId: command.commandId, reason } as const;
+  const events = [...preEvents, invalid];
+  const publicEvents = [...prePublicEvents, invalid];
+  return { state: record(state, command, result, events, publicEvents), result, events: publicEvents };
 }
 
 export function resolveCommand(state: ActiveRun, command: GameCommand, context: ResolutionContext): CommandResolution {
@@ -52,25 +69,71 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
   }
   validateContentBoundRun(state, context.content);
 
-  const validation = validatePlayerAction({ state, command, context });
-  if ('status' in validation && validation.status === 'decision_required') {
-    return { state, result: validation, events: [] };
+  // Normalize the modal session first: a session whose merchant no longer satisfies the
+  // invariant closes (without a bonus) before the submitted command resolves against it.
+  const normalized = closeTradeIfInvalid({ state, content: context.content, eventId: command.commandId });
+  const current = normalized.state;
+  const preEvents = normalized.events;
+  const prePublicEvents = preEvents.length === 0 ? [] : projectDomainEvents({
+    state: current, content: context.content, heroId: current.hero.actorId, events: preEvents,
+  });
+
+  if (isTradeCommand(command)) {
+    // Ordinary trade commands never advance the merchant lifecycle; only trade-close resolves a
+    // previously due merchant immediately after its session closed (whether the player closed it
+    // or normalization above already did).
+    const resolveDeadlines = (state: ActiveRun): ReturnType<typeof advanceMerchantLifecycle> =>
+      command.type === 'trade-close'
+        ? advanceMerchantLifecycle({ state, content: context.content, previousWorldTime: state.worldTime,
+          nextWorldTime: state.worldTime, eventId: command.commandId })
+        : { state, events: [] };
+    const validation = validateTradeCommand({ state: current, command, content: context.content });
+    if (!validation.ok) {
+      const lifecycle = resolveDeadlines(current);
+      const lifecyclePublic = lifecycle.events.length === 0 ? [] : projectDomainEvents({
+        state: lifecycle.state, content: context.content, heroId: lifecycle.state.hero.actorId,
+        events: lifecycle.events,
+      });
+      return recordInvalid(lifecycle.state, command, validation.reason,
+        [...preEvents, ...lifecycle.events], [...prePublicEvents, ...lifecyclePublic]);
+    }
+    assertCountersCanAdvance(current, false);
+    // Trade commands advance the revision only; turn, world time, energy, and survival are untouched.
+    const result = { status: 'applied', commandId: command.commandId, revision: current.revision + 1, turn: current.turn } as const;
+    const resolved = resolveTradeCommand({ state: current, command, content: context.content });
+    const lifecycle = resolveDeadlines(resolved.state);
+    const commandEvents = [...resolved.events, ...lifecycle.events];
+    const events = [...preEvents, ...commandEvents];
+    const publicEvents = [...prePublicEvents, ...projectDomainEvents({
+      state: lifecycle.state, content: context.content, heroId: lifecycle.state.hero.actorId, events: commandEvents,
+    })];
+    return { state: record(lifecycle.state, command, result, events, publicEvents), result, events: publicEvents };
   }
-  if ('status' in validation) {
-    const result = { status: 'invalid', commandId: command.commandId, revision: state.revision, turn: state.turn, reason: validation.reason } as const;
-    const events = [{ type: 'action.invalid', eventId: command.commandId, commandId: command.commandId, reason: validation.reason }] as const;
-    return { state: record(state, command, result, events, events), result, events };
+  if (current.activeTrade !== null) {
+    return recordInvalid(current, command, 'trade.active', preEvents, prePublicEvents);
   }
 
-  assertCountersCanAdvance(state);
-  const result = { status: 'applied', commandId: command.commandId, revision: state.revision + 1, turn: state.turn + 1 } as const;
+  const validation = validatePlayerAction({ state: current, command, context });
+  if ('status' in validation && validation.status === 'decision_required') {
+    // A pending decision leaves the command unrecorded, but the modal-session normalization above
+    // already happened: keep the normalized state and deliver its events (e.g. trade.closed).
+    return { state: current, result: validation, events: prePublicEvents };
+  }
+  if ('status' in validation) {
+    return recordInvalid(current, command, validation.reason, preEvents, prePublicEvents);
+  }
+
+  assertCountersCanAdvance(current, true);
+  const result = { status: 'applied', commandId: command.commandId, revision: current.revision + 1, turn: current.turn + 1 } as const;
   const world = validation.type === 'rest'
-    ? resolveRest({ state, content: context.content, eventId: command.commandId,
+    ? resolveRest({ state: current, content: context.content, eventId: command.commandId,
       until: validation.until, maximumDuration: validation.maximumDuration })
-    : resolveWorldStep({ state, content: context.content, action: validation, eventId: command.commandId });
+    : resolveWorldStep({ state: current, content: context.content, action: validation, eventId: command.commandId });
+  const events = preEvents.length === 0 ? world.events : [...preEvents, ...world.events];
+  const publicEvents = prePublicEvents.length === 0 ? world.publicEvents : [...prePublicEvents, ...world.publicEvents];
   return {
-    state: record(world.state, command, result, world.events, world.publicEvents),
+    state: record(world.state, command, result, events, publicEvents),
     result,
-    events: world.publicEvents,
+    events: publicEvents,
   };
 }

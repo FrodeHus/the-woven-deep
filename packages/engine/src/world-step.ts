@@ -1,8 +1,9 @@
-import type { CompiledContentPack, MonsterContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, MonsterContentEntry, NpcContentEntry } from '@woven-deep/content';
 import { type GameAction, balanceEntry } from './actions.js';
 import { actorById, heroActor, heroPerception, type ActorState } from './actor-model.js';
 import { deriveActorStats } from './attributes.js';
 import { chooseBehaviorAction, selectPatrolGoal } from './behavior.js';
+import { ensureFactionReputation } from './commerce.js';
 import { applyPopulationCombatModifiers, resolveAttack } from './combat.js';
 import { conditionModifiers } from './conditions.js';
 import { resolveEffectSequence } from './effects.js';
@@ -30,6 +31,11 @@ import {
   completeNormalActorTurn, relationshipBetween, resolveOpportunityAttacks, setRelationship,
   type ReactionAttackResult,
 } from './reactions.js';
+import { advanceMerchantLifecycle, scrubDepartedIntentEvents } from './merchant-lifecycle.js';
+import {
+  MERCHANT_BEHAVIOR_ID, prepareMerchantTurn, provokeMerchant, resolveMerchantCombatOutcomes,
+} from './merchant-behavior.js';
+import type { MerchantPopulation } from './merchant-model.js';
 import { advanceToNextReady, chargeActionEnergy, selectReadyActor } from './scheduler.js';
 import { compareCodeUnits } from './stable-json.js';
 
@@ -52,6 +58,11 @@ interface CombatProfile {
 function monsterDefinition(content: CompiledContentPack, actor: ActorState): MonsterContentEntry | undefined {
   const entry = content.entries.find((candidate) => candidate.id === actor.contentId);
   return entry?.kind === 'monster' ? entry : undefined;
+}
+
+function npcDefinition(content: CompiledContentPack, actor: ActorState): NpcContentEntry | undefined {
+  const entry = content.entries.find((candidate) => candidate.id === actor.contentId);
+  return entry?.kind === 'npc' ? entry : undefined;
 }
 
 function requiredItemDefinition(content: CompiledContentPack, contentId: OpaqueId) {
@@ -80,6 +91,15 @@ function profile(
     + bossModifiers.accuracy + fallenModifiers.accuracy,
     defense: groupModifiers.defense + swarmModifiers.defense + bossModifiers.defense + fallenModifiers.defense,
     damage: groupModifiers.damage + swarmModifiers.damage + bossModifiers.damage + fallenModifiers.damage };
+  const npc = monster === undefined ? npcDefinition(content, actor) : undefined;
+  if (npc) return applyPopulationCombatModifiers({
+    accuracy: npc.accuracy,
+    defense: npc.defense,
+    damage: npc.damage,
+    armor: npc.armor,
+    resistance: npc.resistances.physical,
+    immune: npc.resistances.physical === 100,
+  }, populationModifiers);
   if (monster) return applyPopulationCombatModifiers({
     accuracy: monster.accuracy,
     defense: monster.defense,
@@ -407,6 +427,21 @@ function applyAction(input: Readonly<{
       type: 'hero.waited', eventId: input.eventId, heroId: actor.actorId, x: actor.x, y: actor.y,
     });
   } else {
+    // A hero's explicit adjacent attack on an unprovoked merchant provokes it before the
+    // attack resolves: even a miss counts as deliberate aggression.
+    if (actor.playerControlled) {
+      const merchant = state.populations.find((candidate): candidate is MerchantPopulation =>
+        candidate.model === 'merchant' && candidate.actorId === action.targetActorId
+        && !candidate.provoked && candidate.lifecycle !== 'dead' && candidate.lifecycle !== 'departed');
+      if (merchant) {
+        const provoked = provokeMerchant({
+          state, content: input.content, merchantPopulationId: merchant.populationId,
+          sourceActorId: actor.actorId, eventId: input.eventId,
+        });
+        state = provoked.state;
+        events.push(...provoked.events);
+      }
+    }
     if (relationshipBetween(state, actor.actorId, action.targetActorId) !== 'hostile') {
       state = setRelationship(state, actor.actorId, action.targetActorId, 'hostile');
       events.push({
@@ -462,6 +497,11 @@ function prepareIndividualTurn(input: Readonly<{
   if (actor.floorId !== input.state.activeFloorId || actor.behaviorId === null) return { state: input.state, events: [] };
   const floor = input.state.floors.find((candidate) => candidate.floorId === actor.floorId);
   if (!floor) throw new Error(`internal invariant: actor floor ${actor.floorId} does not exist`);
+  if (actor.behaviorId === MERCHANT_BEHAVIOR_ID) {
+    return prepareMerchantTurn({
+      state: input.state, content: input.content, actorId: actor.actorId, eventId: input.eventId,
+    });
+  }
   const definition = monsterDefinition(input.content, actor);
   if (!definition) throw new Error(`internal invariant: monster definition ${actor.contentId} does not exist`);
   const positions = new Map<string, Readonly<Point>>(floor.entities.map((entity) => [entity.entityId, entity] as const));
@@ -556,6 +596,7 @@ function observeEncounters(state: ActiveRun, content: CompiledContentPack): Acti
   });
   let decisions = state.encounterDecisions;
   let fallenDecisions = state.fallenHeroDecisions;
+  const observedMerchantFactionIds: OpaqueId[] = [];
   for (const population of [...state.populations].sort((left, right) => compareCodeUnits(left.populationId, right.populationId))) {
     if (population.floorId !== floor.floorId) continue;
     const visible = population.livingMemberIds.some((actorId) => {
@@ -569,10 +610,21 @@ function observeEncounters(state: ActiveRun, content: CompiledContentPack): Acti
         && !decision.encountered ? { ...decision, encountered: true } : decision);
     } else if (visible && !decisions.find((decision) => decision.encounterId === population.encounterId)?.encountered) {
       decisions = markEncounterObserved(decisions, population.encounterId);
+      if (population.model === 'merchant') observedMerchantFactionIds.push(population.factionId);
     }
   }
-  return decisions === state.encounterDecisions && fallenDecisions === state.fallenHeroDecisions
+  let observed = decisions === state.encounterDecisions && fallenDecisions === state.fallenHeroDecisions
     ? state : { ...state, encounterDecisions: decisions, fallenHeroDecisions: fallenDecisions };
+  // First legitimate observation of a merchant materializes its faction's authored
+  // starting reputation exactly once; later observations keep the earned value.
+  for (const factionId of observedMerchantFactionIds) {
+    const faction = content.entries.find((entry) => entry.id === factionId);
+    if (!faction || faction.kind !== 'npc-faction') {
+      throw new Error(`internal invariant: merchant faction ${factionId} does not exist`);
+    }
+    observed = ensureFactionReputation(observed, faction);
+  }
+  return observed;
 }
 
 function bossEncounteredEvents(before: ActiveRun, after: ActiveRun, eventId: OpaqueId): readonly DomainEvent[] {
@@ -650,6 +702,11 @@ export function resolveWorldStep(input: Readonly<{
   let state = resolved.state;
   const events: DomainEvent[] = [];
   const publicEvents: PublicEvent[] = [];
+  // Ranged/effect damage and deaths carry merchant consequences resolved from the action events.
+  let merchantOutcome = resolveMerchantCombatOutcomes({
+    state, content: input.content, events: resolved.events, eventId: input.eventId,
+  });
+  state = merchantOutcome.state;
   let bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
   state = bosses.state;
   let fallen = advanceFallenHeroEncounters({ state, content: input.content, eventId: input.eventId });
@@ -657,6 +714,7 @@ export function resolveWorldStep(input: Readonly<{
   let beforeObservation = state;
   state = observeEncounters(state, input.content);
   appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
+  appendEvents(events, publicEvents, merchantOutcome.events, state, heroId, input.content);
   appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
   appendEvents(events, publicEvents, fallen.events, state, heroId, input.content);
   appendEvents(events, publicEvents, populationEncounteredEvents(beforeObservation, state, input.eventId, input.content), state, heroId, input.content);
@@ -716,6 +774,10 @@ export function resolveWorldStep(input: Readonly<{
     if (action.type === 'rest') throw new Error('internal invariant: non-player behavior selected rest');
     resolved = applyAction({ state, action, content: input.content, eventId: input.eventId });
     state = resolved.state;
+    merchantOutcome = resolveMerchantCombatOutcomes({
+      state, content: input.content, events: resolved.events, eventId: input.eventId,
+    });
+    state = merchantOutcome.state;
     bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
     state = bosses.state;
     fallen = advanceFallenHeroEncounters({ state, content: input.content, eventId: input.eventId });
@@ -723,6 +785,7 @@ export function resolveWorldStep(input: Readonly<{
     beforeObservation = state;
     state = observeEncounters(state, input.content);
     appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
+    appendEvents(events, publicEvents, merchantOutcome.events, state, heroId, input.content);
     appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
     appendEvents(events, publicEvents, fallen.events, state, heroId, input.content);
     appendEvents(events, publicEvents, populationEncounteredEvents(beforeObservation, state, input.eventId, input.content), state, heroId, input.content);
@@ -740,6 +803,18 @@ export function resolveWorldStep(input: Readonly<{
       type: 'actor.turn.completed', eventId: input.eventId, actorId: selected.actorId, actionType: action.type,
     }], state, heroId, input.content);
   }
+  // Global merchant deadlines resolve at every world-time boundary — including merchants on
+  // inactive floors, whose actors never take turns above.
+  const lifecycle = advanceMerchantLifecycle({
+    state, content: input.content, previousWorldTime: input.state.worldTime,
+    nextWorldTime: state.worldTime, eventId: input.eventId,
+  });
+  state = lifecycle.state;
+  // A merchant departing within this same command may already have emitted intent events into
+  // the in-flight arrays; drop them before they are recorded, exactly as saved commands are
+  // scrubbed, so the recorded command never carries a dangling actor reference.
+  scrubDepartedIntentEvents({ events, publicEvents, departureEvents: lifecycle.events });
+  appendEvents(events, publicEvents, lifecycle.events, state, heroId, input.content);
   state = refreshHeroKnowledge(state, input.content);
   const passiveHero = heroActor(state);
   if (passiveHero.health === 0) return { state, events, publicEvents, internalActions };

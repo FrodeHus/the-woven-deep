@@ -6,6 +6,7 @@ import type {
 import { tileIndex } from './model.js';
 import { movementBlockReason } from './terrain.js';
 import { featureBlocksMovement } from './features.js';
+import { relationshipBetween } from './reactions.js';
 
 const DIRECTION_DELTAS: Readonly<Record<Direction, Point>> = {
   northwest: { x: -1, y: -1 }, north: { x: 0, y: -1 }, northeast: { x: 1, y: -1 },
@@ -44,15 +45,12 @@ function blockReasonAt(input: MovementActionInput, point: Point): MovementInvali
 }
 
 function relationship(input: MovementActionInput, target: ActorState): ActorState['disposition'] {
-  const override = input.relationships.find((candidate) => (
-    candidate.leftActorId === input.actor.actorId && candidate.rightActorId === target.actorId
-  ) || (
-    candidate.leftActorId === target.actorId && candidate.rightActorId === input.actor.actorId
-  ));
-  if (override) return override.relationship;
-  if (input.actor.disposition === 'hostile' || target.disposition === 'hostile') return 'hostile';
-  if (input.actor.disposition === 'neutral' || target.disposition === 'neutral') return 'neutral';
-  return 'friendly';
+  // Delegate to the single source of truth so movement can never drift from the
+  // relationship precedence defined in reactions.ts.
+  return relationshipBetween(
+    { actors: [input.actor, target], relationships: input.relationships },
+    input.actor.actorId, target.actorId,
+  );
 }
 
 export function movementAction(input: MovementActionInput): MovementActionResult {

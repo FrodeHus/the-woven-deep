@@ -1,17 +1,280 @@
-import { describe, expect, it } from 'vitest';
+import { resolve } from 'node:path';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { compileContentDirectory, type CompiledContentPack } from '@woven-deep/content/compiler';
 import {
-  createDemoContentPack, createDemoRun, createUnknownKnowledge, decodeActiveRun, encodeActiveRun,
-  heroPerception, refreshKnowledge, resolveCommand as resolveCommandWithContext, SaveLoadError,
-  type GameCommand,
+  createDemoContentPack, createDemoRun, createGameplayDemoRun, createUnknownKnowledge, decodeActiveRun,
+  emptyEquipment, encodeActiveRun,
+  deriveRngStreams, heroPerception, refreshKnowledge, resolveCommand as resolveCommandWithContext, SaveLoadError,
+  validateActiveRun, validateContentBoundRun, type GameCommand,
 } from '../src/index.js';
 
 const context = { content: createDemoContentPack() };
+let compiledContent: CompiledContentPack;
+
+beforeAll(async () => {
+  compiledContent = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+});
 const resolveCommand = (
   state: Parameters<typeof resolveCommandWithContext>[0],
   command: Parameters<typeof resolveCommandWithContext>[1],
 ) => resolveCommandWithContext(state, command, context);
 
 describe('active-run save codec', () => {
+  function v4Fixture(): Record<string, unknown> {
+    const current = structuredClone(createDemoRun()) as any;
+    const { reputations: _reputations, activeTrade: _activeTrade, ...withoutRunFields } = current;
+    const { currency: _currency, ...hero } = withoutRunFields.hero;
+    const { 'merchant-stock': _merchantStock, 'merchant-runtime': _merchantRuntime, ...rng } = withoutRunFields.rng;
+    return { ...withoutRunFields, schemaVersion: 4, hero, rng };
+  }
+
+  function stripV5Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
+    const current = structuredClone(run) as any;
+    const { reputations: _reputations, activeTrade: _activeTrade, ...withoutRunFields } = current;
+    const { currency: _currency, ...hero } = withoutRunFields.hero;
+    const { 'merchant-stock': _merchantStock, 'merchant-runtime': _merchantRuntime, ...rng } = withoutRunFields.rng;
+    return { ...withoutRunFields, schemaVersion: 4, hero, rng };
+  }
+
+  function merchantRun(): ReturnType<typeof createDemoRun> {
+    const run = structuredClone(createDemoRun()) as any;
+    const merchantActor = {
+      ...run.actors[0], actorId: 'actor.merchant.1', contentId: 'npc.lampwright', playerControlled: false,
+      x: 2, disposition: 'neutral', behaviorId: 'npc-behavior.travelling-merchant',
+      populationId: 'population.merchant.1', populationRoleId: null,
+      populationPresentation: { name: 'Lampwright', glyph: 'L', color: '#ffd080', leader: false },
+    };
+    const stock = {
+      itemId: 'item.merchant.1', contentId: 'item.lantern', quantity: 1, condition: 100,
+      enchantment: null, identified: true, charges: null, fuel: null, enabled: null,
+      location: { type: 'merchant-stock', populationId: 'population.merchant.1' },
+    };
+    run.actors = [...run.actors, merchantActor].sort((left, right) => left.actorId.localeCompare(right.actorId));
+    run.items = [stock];
+    run.encounterDecisions = [{
+      encounterId: 'encounter.travelling-lampwright', baseProbability: 0.25, protectionBonus: 0,
+      effectiveProbability: 0.25, eligible: true, reachedEligibleDepth: true, encountered: true, instancesCreated: 1,
+    }];
+    run.populations = [{
+      populationId: 'population.merchant.1', encounterId: 'encounter.travelling-lampwright', floorId: merchantActor.floorId,
+      createdAt: 0, livingMemberIds: [merchantActor.actorId], formerMemberIds: [], model: 'merchant',
+      actorId: merchantActor.actorId, npcId: 'npc.travelling-lampwright', factionId: 'npc-faction.lampwrights',
+      rolledLifetime: 3000, departureAt: 3000, emittedWarningThresholds: [],
+      initialStockItemIds: [stock.itemId], stockItemIds: [stock.itemId], services: [{
+        serviceId: 'merchant-service.identify', basePrice: 10, remainingUses: 1, tierIds: ['neutral', 'trusted'],
+      }], lifecycle: 'available', provoked: false, aggressionPenaltyApplied: false,
+      deathPenaltyApplied: false, stockLossResolved: false, commerceBonusApplied: false,
+    }];
+    run.reputations = [{ factionId: 'npc-faction.lampwrights', value: 0 }];
+    return run;
+  }
+
+  function contentBoundMerchantRun(): any {
+    const run = structuredClone(createGameplayDemoRun(compiledContent).run) as any;
+    const hero = run.actors.find((actor: any) => actor.actorId === run.hero.actorId);
+    const actor = {
+      ...hero, actorId: 'actor.merchant.content', contentId: 'npc.travelling-lampwright', playerControlled: false,
+      disposition: 'neutral', behaviorId: 'npc-behavior.travelling-merchant',
+      equipment: emptyEquipment(),
+      populationId: 'population.merchant.content', populationRoleId: null,
+      populationPresentation: { name: 'Travelling Lampwright', glyph: 'L', color: '#ffd080', leader: false },
+    };
+    const stock = {
+      ...run.items[0], itemId: 'item.merchant.content.stock', heirloom: undefined,
+      location: { type: 'merchant-stock', populationId: 'population.merchant.content' },
+    };
+    const population = {
+      populationId: 'population.merchant.content', encounterId: 'encounter.travelling-lampwright',
+      floorId: actor.floorId, createdAt: 0, livingMemberIds: [actor.actorId], formerMemberIds: [], model: 'merchant',
+      actorId: actor.actorId, npcId: 'npc.travelling-lampwright', factionId: 'npc-faction.lampwrights',
+      rolledLifetime: 3000, departureAt: 3000, emittedWarningThresholds: [],
+      initialStockItemIds: [stock.itemId], stockItemIds: [stock.itemId], services: [{
+        serviceId: 'merchant-service.identify', basePrice: 10, remainingUses: 1, tierIds: ['neutral', 'trusted'],
+      }], lifecycle: 'available', provoked: false, aggressionPenaltyApplied: false,
+      deathPenaltyApplied: false, stockLossResolved: false, commerceBonusApplied: false,
+    };
+    run.actors = [...run.actors, actor]
+      .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0);
+    run.items = [...run.items, stock]
+      .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0);
+    run.populations = [...run.populations, population]
+      .sort((left, right) => left.populationId < right.populationId ? -1 : left.populationId > right.populationId ? 1 : 0);
+    run.reputations = [{ factionId: population.factionId, value: 0 }];
+    run.encounterDecisions = run.encounterDecisions.map((decision: any) =>
+      decision.encounterId === population.encounterId ? { ...decision, eligible: true,
+        reachedEligibleDepth: true, instancesCreated: decision.instancesCreated + 1 } : decision);
+    return run;
+  }
+
+  function deadMerchant(run: any): any {
+    const population = run.populations.find((candidate: any) => candidate.model === 'merchant');
+    run.actors = run.actors.map((actor: any) => actor.actorId === population.actorId
+      ? { ...actor, health: 0 } : actor);
+    run.items = run.items.filter((item: any) => item.location.type !== 'merchant-stock'
+      || item.location.populationId !== population.populationId);
+    population.lifecycle = 'dead';
+    population.livingMemberIds = [];
+    population.formerMemberIds = [population.actorId];
+    population.stockItemIds = [];
+    population.stockLossResolved = true;
+    return population;
+  }
+
+  it('migrates strict schema v4 state once and preserves every former field', () => {
+    const legacy = v4Fixture();
+    const decoded = decodeActiveRun(JSON.stringify(legacy));
+
+    expect(decoded.schemaVersion).toBe(5);
+    expect(decoded.hero.currency).toBe(0);
+    expect(decoded.reputations).toEqual([]);
+    expect(decoded.activeTrade).toBeNull();
+    const derived = deriveRngStreams(legacy.runSeed as any);
+    expect(decoded.rng['merchant-stock']).toEqual(derived['merchant-stock']);
+    expect(decoded.rng['merchant-runtime']).toEqual(derived['merchant-runtime']);
+    expect(stripV5Fields(decoded)).toEqual(legacy);
+    expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(encodeActiveRun(decoded));
+  });
+
+  it.each([
+    ['hero currency', (legacy: any) => { legacy.hero.currency = 0; }],
+    ['merchant RNG stream', (legacy: any) => { legacy.rng['merchant-stock'] = [1, 2, 3, 4]; }],
+    ['run reputation', (legacy: any) => { legacy.reputations = []; }],
+  ])('rejects schema-v5-only %s in strict schema v4 input', (_label, corrupt) => {
+    const legacy = v4Fixture();
+    corrupt(legacy);
+    expect(() => decodeActiveRun(JSON.stringify(legacy))).toThrow(SaveLoadError);
+  });
+
+  it.each([-1, Number.MAX_SAFE_INTEGER + 1])('rejects invalid hero currency %s', (currency) => {
+    expect(() => encodeActiveRun({ ...createDemoRun(), hero: { ...createDemoRun().hero, currency } } as any))
+      .toThrow(/hero\.currency/i);
+  });
+
+  it('rejects unsorted and duplicate faction reputation records', () => {
+    const run = createDemoRun();
+    expect(() => encodeActiveRun({ ...run, reputations: [
+      { factionId: 'faction.z', value: 0 }, { factionId: 'faction.a', value: 0 },
+    ] } as any)).toThrow(/reputations\.1\.factionId|strictly increasing/i);
+    expect(() => encodeActiveRun({ ...run, reputations: [
+      { factionId: 'faction.a', value: 0 }, { factionId: 'faction.a', value: 1 },
+    ] } as any)).toThrow(/reputations\.1\.factionId|strictly increasing/i);
+  });
+
+  it.each([
+    ['missing actor', (run: any) => { run.actors = run.actors.filter((actor: any) => actor.actorId !== run.populations[0].actorId); }],
+    ['invalid departure', (run: any) => { run.populations[0].departureAt = 2999; }],
+    ['inconsistent warning', (run: any) => { run.populations[0].emittedWarningThresholds = [3000]; }],
+    ['negative service uses', (run: any) => { run.populations[0].services[0].remainingUses = -1; }],
+    ['duplicate service', (run: any) => { run.populations[0].services.push(run.populations[0].services[0]); }],
+    ['contradictory penalty', (run: any) => { run.populations[0].aggressionPenaltyApplied = true; }],
+    ['unapplied provocation', (run: any) => { run.populations[0].provoked = true; }],
+    ['available after provocation', (run: any) => {
+      run.populations[0].provoked = true;
+      run.populations[0].aggressionPenaltyApplied = true;
+      run.populations[0].stockLossResolved = true;
+    }],
+    ['dangling stock id', (run: any) => { run.populations[0].stockItemIds = ['item.missing']; }],
+    ['reverse dangling stock', (run: any) => { run.populations[0].stockItemIds = []; }],
+    ['departed actor', (run: any) => { run.populations[0].lifecycle = 'departed'; }],
+    ['dead living actor', (run: any) => { run.populations[0].lifecycle = 'dead'; }],
+  ])('rejects invalid merchant lifecycle state: %s', (_label, corrupt) => {
+    const run = merchantRun() as any;
+    corrupt(run);
+    expect(() => encodeActiveRun(run)).toThrow(/population|merchant|stock|service|departure|warning|penalty/i);
+  });
+
+  it('rejects an active trade that does not match an adjacent available merchant', () => {
+    const run = merchantRun() as any;
+    run.activeTrade = {
+      merchantPopulationId: run.populations[0].populationId,
+      merchantActorId: 'actor.missing', openedByCommandId: 'command.trade-open',
+      openedAtRevision: 0, completedCommerce: false,
+    };
+    expect(() => encodeActiveRun(run)).toThrow(/activeTrade|merchantActorId/i);
+  });
+
+  it.each(['available', 'fleeing', 'departed', 'dead'] as const)(
+    'round-trips a valid %s merchant lifecycle',
+    (lifecycle) => {
+      const run = merchantRun() as any;
+      const population = run.populations[0];
+      population.lifecycle = lifecycle;
+      if (lifecycle === 'fleeing') {
+        population.provoked = true;
+        population.aggressionPenaltyApplied = true;
+        population.stockLossResolved = true;
+      }
+      if (lifecycle === 'departed') {
+        run.actors = run.actors.filter((actor: any) => actor.actorId !== population.actorId);
+        run.items = [];
+        population.livingMemberIds = [];
+        population.formerMemberIds = [];
+        population.stockItemIds = [];
+      }
+      if (lifecycle === 'dead') {
+        run.actors = run.actors.map((actor: any) => actor.actorId === population.actorId
+          ? { ...actor, health: 0 } : actor);
+        run.items = [];
+        population.livingMemberIds = [];
+        population.formerMemberIds = [population.actorId];
+        population.stockItemIds = [];
+        population.stockLossResolved = true;
+        population.deathPenaltyApplied = true;
+      }
+      expect(decodeActiveRun(encodeActiveRun(run))).toEqual(run);
+    },
+  );
+
+  it('rejects a dead merchant whose death transition was not flagged as resolved', () => {
+    const run = merchantRun() as any;
+    const population = deadMerchant(run);
+    population.deathPenaltyApplied = false;
+    expect(() => encodeActiveRun(run)).toThrow(/deathPenaltyApplied|death penalty/i);
+  });
+
+  it('accepts a resolved dead merchant even when the authored death reputation delta is zero', () => {
+    const run = contentBoundMerchantRun();
+    const population = deadMerchant(run);
+    population.deathPenaltyApplied = true;
+    const content = structuredClone(compiledContent) as any;
+    const encounter = content.entries.find((entry: any) => entry.id === population.encounterId);
+    encounter.definition.deathReputationDelta = 0;
+    expect(() => validateActiveRun(run)).not.toThrow();
+    expect(() => validateContentBoundRun(run, content)).not.toThrow();
+  });
+
+  it.each([
+    ['NPC', (run: any) => { run.populations.at(-1).npcId = 'npc.missing'; }],
+    ['faction', (run: any) => { run.populations.at(-1).factionId = 'npc-faction.missing'; }],
+    ['encounter', (run: any) => { run.populations.at(-1).encounterId = 'encounter.missing'; }],
+    ['service', (run: any) => { run.populations.at(-1).services[0].serviceId = 'merchant-service.missing'; }],
+  ])('rejects a merchant with a missing content-bound %s reference', (_label, corrupt) => {
+    const run = contentBoundMerchantRun();
+    expect(() => validateContentBoundRun(run, compiledContent)).not.toThrow();
+    corrupt(run);
+    expect(() => validateContentBoundRun(run, compiledContent)).toThrow(/content-bound validation/i);
+  });
+
+  it.each([
+    ['missing service state', (population: any) => { population.services = []; }],
+    ['extra service state', (population: any) => { population.services.push(structuredClone(population.services[0])); }],
+    ['base price mismatch', (population: any) => { population.services[0].basePrice += 1; }],
+    ['tier mismatch', (population: any) => { population.services[0].tierIds = ['trusted']; }],
+    ['uses above authored maximum', (population: any) => { population.services[0].remainingUses = 3; }],
+  ])('rejects merchant content with %s', (_label, corrupt) => {
+    const run = contentBoundMerchantRun();
+    const population = run.populations.find((candidate: any) => candidate.model === 'merchant');
+    corrupt(population);
+    expect(() => validateContentBoundRun(run, compiledContent)).toThrow(/merchant population.*service/i);
+  });
+
+  it('accepts zero remaining merchant service uses after depletion below the authored initial minimum', () => {
+    const run = contentBoundMerchantRun();
+    const population = run.populations.find((candidate: any) => candidate.model === 'merchant');
+    population.services[0].remainingUses = 0;
+    expect(() => validateContentBoundRun(run, compiledContent)).not.toThrow();
+  });
+
   function richRun(): ReturnType<typeof createDemoRun> {
     const base = createDemoRun();
     const tiles = [
@@ -195,7 +458,7 @@ describe('active-run save codec', () => {
       recentCommands: [{ command, result, events: [hidden], publicEvents: [hidden] }] })).toThrow(/publicEvents/);
   });
 
-  it('round-trips all schema v4 source state without storing derived fields', () => {
+  it('round-trips all schema v5 source state without storing derived fields', () => {
     const state = richRun();
     const encoded = encodeActiveRun(state);
     expect(decodeActiveRun(encoded)).toEqual(state);
@@ -376,7 +639,7 @@ describe('active-run save codec', () => {
     ['overlapping vaults', (run: any) => { run.floors[0].vaults.push({ ...run.floors[0].vaults[0], placementId: 'placement.b', vaultId: 'vault.b' }); }],
     ['out-of-bounds vault', (run: any) => { run.floors[0].vaults[0].width = 9; }],
     ['unowned slot', (run: any) => { run.floors[0].placementSlots[0].vaultPlacementId = 'placement.missing'; }],
-  ])('rejects v4 corruption: %s', (_label, corrupt) => {
+  ])('rejects v5 corruption: %s', (_label, corrupt) => {
     const input = structuredClone(richRun()) as any;
     corrupt(input);
     expect(() => encodeActiveRun(input)).toThrow(SaveLoadError);
@@ -457,7 +720,7 @@ describe('active-run save codec', () => {
     expect(() => decodeActiveRun(JSON.stringify({ ...createDemoRun(), surprise: true }))).toThrow(/surprise/);
   });
 
-  it.each([0, 1, 2, 3, 5])('rejects unsupported schema version %i without partial state', (schemaVersion) => {
+  it.each([0, 1, 2, 3, 6])('rejects unsupported schema version %i without partial state', (schemaVersion) => {
     try {
       decodeActiveRun(JSON.stringify({ schemaVersion }));
       expect.fail('expected unsupported version');

@@ -286,6 +286,12 @@ describe('gameplay projection', () => {
     expect(json).not.toContain('reactionReady');
     expect(json).not.toContain('rng');
     expect(json).not.toContain('energy');
+    expect(json).not.toContain('merchant-stock');
+  });
+
+  it('carries no trade projection without an active trade session', () => {
+    const base = createDemoRun();
+    expect(projectGameplayState({ state: base, content: createDemoContentPack() })).not.toHaveProperty('trade');
   });
 
   it('projects only a visible aggression target', () => {

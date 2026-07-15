@@ -1,11 +1,11 @@
-import type { CompiledContentPack, ContentEntry, ContentKind } from '@woven-deep/content';
+import { CONTENT_SCHEMA_VERSION, type CompiledContentPack, type ContentEntry, type ContentKind } from '@woven-deep/content';
 
 const attributes = { might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2 } as const;
 const resistances = { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 } as const;
 const dice = { count: 1, sides: 4, bonus: 0 } as const;
 const entries: readonly ContentEntry[] = [
   {
-    kind: 'balance', id: 'balance.core', name: 'Core', tags: [], readinessThreshold: 100,
+    kind: 'balance', id: 'balance.core', name: 'Core', tags: [], startingCurrency: 40, readinessThreshold: 100,
     normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000,
     energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000,
     hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 }, starvationInterval: 500,
@@ -65,7 +65,7 @@ const entries: readonly ContentEntry[] = [
 
 export function contentPack(hash: string, kinds: readonly ContentKind[]): CompiledContentPack {
   return {
-    schemaVersion: 3,
+    schemaVersion: CONTENT_SCHEMA_VERSION,
     hash,
     entries: entries.filter((entry) => kinds.includes(entry.kind))
       .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),

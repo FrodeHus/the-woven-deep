@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
+import { CONTENT_SCHEMA_VERSION } from '@woven-deep/content';
 import { migrateDatabase } from '../src/database.js';
 import { ContentPackRepository } from '../src/content-repository.js';
 
@@ -9,7 +10,7 @@ describe('ContentPackRepository', () => {
     migrateDatabase(database);
     const repository = new ContentPackRepository(database);
     const pack = {
-      schemaVersion: 3 as const,
+      schemaVersion: CONTENT_SCHEMA_VERSION,
       hash: 'a'.repeat(64),
       entries: [],
       generationReport: { foundationalCategories: [] },

@@ -2,6 +2,7 @@ import type { FloorSeedAllocation } from './generation-model.js';
 import type { GeneratedFloor } from './generate-floor.js';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { allocateFloorSeed } from './generation-random.js';
+import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import type { ActiveRun, DomainEvent, Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { placePopulation } from './population-placement.js';
@@ -28,6 +29,11 @@ export interface FloorIntegrationResult {
   readonly events: readonly DomainEvent[];
 }
 
+/**
+ * Appends a generated floor to the run, planning (or committing pre-planned) population placement.
+ * Merchant lifecycle processing only runs when the content-bearing `population` argument is
+ * supplied; callers integrating a bare floor resolve merchant deadlines at their own boundary.
+ */
 export function integrateGeneratedFloor(
   run: ActiveRun,
   generated: GeneratedFloor,
@@ -63,6 +69,15 @@ export function integrateGeneratedFloor(
     && !run.floors.some((floor) => floor.floorId === generated.floor.floorId);
   if (!transitioningToInsertedFloor) validateActiveRun(run);
 
+  // A floor transition can observe a save whose merchants are already due (or crossed warning
+  // thresholds); resolve the global merchant lifecycle before the new floor is populated.
+  const eventId = `event.${generated.floor.floorId}.population`;
+  const lifecycle = population === undefined ? null : advanceMerchantLifecycle({
+    state: run, content: population.content, previousWorldTime: run.worldTime,
+    nextWorldTime: run.worldTime, eventId,
+  });
+  run = lifecycle?.state ?? run;
+
   if (generated.populationPlacement !== undefined && population !== undefined) {
     throw new TypeError('generated floor population must not be planned twice');
   }
@@ -76,6 +91,8 @@ export function integrateGeneratedFloor(
   }
   let floor = placement?.status === 'placed' ? placement.floor : generated.floor;
   const createdActors = placement?.status === 'placed' ? placement.createdActors : [];
+  const createdItems = placement?.status === 'placed' ? placement.createdItems : [];
+  const nextMerchantStockState = placement?.status === 'placed' ? placement.nextMerchantStockState : null;
   const ordinaryPopulations = placement?.status === 'placed'
     ? [...run.populations, placement.population]
       .sort((left, right) => left.populationId < right.populationId ? -1 : left.populationId > right.populationId ? 1 : 0)
@@ -108,17 +125,19 @@ export function integrateGeneratedFloor(
       ...run.rng,
       generation: [...allocation.nextGenerationState],
       ...(placement === null ? {} : { encounters: [...placement.nextEncounterState] }),
+      ...(nextMerchantStockState === null ? {} : { 'merchant-stock': [...nextMerchantStockState] }),
     },
     actors: actorsAfterPlacement,
+    items: createdItems.length === 0 ? run.items : [...run.items, ...createdItems]
+      .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0),
     encounterDecisions: placement?.encounterDecisions ?? run.encounterDecisions,
     populations: fallen?.populations ?? ordinaryPopulations,
     fallenHeroDecisions: fallen?.decisions ?? run.fallenHeroDecisions,
     floors: [...run.floors, floor],
   });
-  const eventId = `event.${floor.floorId}.population`;
   const committed = state.populations.filter((candidate) => !run.populations.some((prior) =>
     prior.populationId === candidate.populationId));
-  const events: DomainEvent[] = [];
+  const events: DomainEvent[] = [...(lifecycle?.events ?? [])];
   for (const created of committed) {
     events.push({ type: 'population.created', eventId, populationId: created.populationId,
       encounterId: created.encounterId, floorId: created.floorId, model: created.model,

@@ -1,6 +1,7 @@
-schemaVersion: 3
+schemaVersion: 4
 entries:
   - kind: balance
+    startingCurrency: 40
     id: balance.core-gameplay
     name: Core gameplay
     tags: [core, survival]

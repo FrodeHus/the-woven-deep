@@ -1,10 +1,10 @@
-export const CONTENT_SCHEMA_VERSION = 3 as const;
+export const CONTENT_SCHEMA_VERSION = 4 as const;
 
 export type ContentId = string;
 export const CONTENT_KIND_IDS = [
   'monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault', 'condition',
   'identification-pool',
-  'encounter', 'fallen-champion-template',
+  'encounter', 'fallen-champion-template', 'npc', 'npc-faction',
 ] as const;
 export type ContentKind = typeof CONTENT_KIND_IDS[number];
 export const DERIVED_STAT_NAMES = [
@@ -83,7 +83,7 @@ export interface MonsterContentEntry extends PresentedContentEntry {
   readonly rarity: ItemRarity;
 }
 
-export type EncounterModel = 'individual' | 'group' | 'swarm' | 'boss';
+export type EncounterModel = 'individual' | 'group' | 'swarm' | 'boss' | 'merchant';
 export type EncounterFormation = 'cluster' | 'line' | 'screen' | 'wedge' | 'surround';
 export type FormationPreference = 'front' | 'center' | 'rear' | 'flank' | 'free';
 export type LeaderDeathResponse = 'weaken' | 'panic' | 'disband' | 'surrender' | 'frenzy' | 'collapse';
@@ -178,6 +178,44 @@ export interface BossEncounterDefinition {
   readonly vaultTags: readonly string[];
 }
 
+export type MerchantServiceId = 'merchant-service.identify';
+
+export interface ReputationTierDefinition {
+  readonly tierId: string; readonly name: string; readonly minimum: number; readonly maximum: number;
+  readonly purchasePriceBps: number; readonly salePriceBps: number; readonly acceptsTrade: boolean;
+  readonly serviceIds: readonly MerchantServiceId[];
+}
+
+export interface NpcFactionContentEntry extends BaseContentEntry {
+  readonly kind: 'npc-faction'; readonly minimumReputation: number; readonly maximumReputation: number;
+  readonly startingReputation: number; readonly tiers: readonly ReputationTierDefinition[];
+}
+
+export interface NpcContentEntry extends PresentedContentEntry {
+  readonly kind: 'npc'; readonly factionId: ContentId; readonly attributes: BaseAttributeDefinition;
+  readonly health: number; readonly speed: number; readonly perception: number; readonly accuracy: number;
+  readonly defense: number; readonly damage: DiceDefinition; readonly armor: number;
+  readonly resistances: Readonly<Record<DamageType, number>>; readonly disposition: 'neutral';
+  readonly behaviorId: 'npc-behavior.travelling-merchant';
+  readonly behaviorParameters: Readonly<Record<string, unknown>>; readonly selfPreservationThresholdBps: number;
+}
+
+export interface MerchantServiceOfferDefinition {
+  readonly serviceId: 'merchant-service.identify'; readonly basePrice: number;
+  readonly minimumUses: number; readonly maximumUses: number; readonly tierIds: readonly string[];
+}
+
+export interface MerchantEncounterDefinition {
+  readonly npcId: ContentId; readonly stockLootTableId: ContentId;
+  readonly minimumStockRolls: number; readonly maximumStockRolls: number;
+  readonly merchantSaleBps: number; readonly merchantPurchaseBps: number;
+  readonly acceptedCategories: readonly ItemCategory[]; readonly services: readonly MerchantServiceOfferDefinition[];
+  readonly minimumLifetime: number; readonly maximumLifetime: number;
+  readonly departureWarningThresholds: readonly number[]; readonly aggressionResponse: 'flee' | 'self-defense';
+  readonly commerceReputationDelta: number; readonly aggressionReputationDelta: number;
+  readonly deathReputationDelta: number; readonly stockDropFraction: number;
+}
+
 interface BaseEncounterContentEntry extends BaseContentEntry {
   readonly kind: 'encounter';
   readonly adminDescription: string | null;
@@ -215,8 +253,12 @@ export interface BossEncounterContentEntry extends BaseEncounterContentEntry {
   readonly definition: BossEncounterDefinition;
 }
 
+export interface MerchantEncounterContentEntry extends BaseEncounterContentEntry {
+  readonly model: 'merchant'; readonly definition: MerchantEncounterDefinition;
+}
+
 export type EncounterContentEntry = IndividualEncounterContentEntry | GroupEncounterContentEntry
-  | SwarmEncounterContentEntry | BossEncounterContentEntry;
+  | SwarmEncounterContentEntry | BossEncounterContentEntry | MerchantEncounterContentEntry;
 
 export interface FallenChampionTemplateContentEntry extends BaseContentEntry {
   readonly kind: 'fallen-champion-template';
@@ -339,6 +381,7 @@ export interface LootTableContentEntry extends BaseContentEntry {
 
 export interface BalanceContentEntry extends BaseContentEntry {
   readonly kind: 'balance';
+  readonly startingCurrency: number;
   readonly readinessThreshold: number;
   readonly normalActionCost: number;
   readonly speedMinimum: number;
@@ -419,7 +462,8 @@ export interface VaultContentEntry extends BaseContentEntry {
 
 export type ContentEntry = MonsterContentEntry | ItemContentEntry | SpellContentEntry | TrapContentEntry
   | LootTableContentEntry | BalanceContentEntry | VaultContentEntry | ConditionContentEntry
-  | IdentificationPoolContentEntry | EncounterContentEntry | FallenChampionTemplateContentEntry;
+  | IdentificationPoolContentEntry | EncounterContentEntry | FallenChampionTemplateContentEntry
+  | NpcContentEntry | NpcFactionContentEntry;
 
 export interface ContentGenerationReport {
   readonly foundationalCategories: readonly string[];

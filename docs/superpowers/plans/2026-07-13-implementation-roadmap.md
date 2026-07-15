@@ -49,7 +49,9 @@ Deliver this milestone through two independently reviewable slices:
 
 **4B1 population encounters — complete:** `docs/superpowers/plans/2026-07-14-population-encounters.md`
 
-**4B2 NPCs — pending.**
+**4B2 design:** `docs/superpowers/specs/2026-07-14-dungeon-npcs-design.md`
+
+**4B2 dungeon NPCs (travelling merchants) — complete:** `docs/superpowers/plans/2026-07-14-dungeon-npcs.md`
 
 **4B3 run records — pending.**
 

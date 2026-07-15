@@ -85,6 +85,27 @@ export function identifyItem(input: Readonly<{
     events: [{ type: 'item.identified', eventId: input.eventId, itemId: item.itemId }] };
 }
 
+/**
+ * Applies every identification transition an item still needs: shuffled definitions reveal the
+ * shared appearance first, then the instance is marked identified. Both underlying transitions
+ * are no-op safe, so an already identified item returns the same state with no events.
+ */
+export function identifyItemCompletely(input: Readonly<{
+  run: ActiveRun; content: CompiledContentPack; itemId: OpaqueId; eventId: OpaqueId;
+}>): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+  const item = input.run.items.find((candidate) => candidate.itemId === input.itemId);
+  if (!item) throw new Error(`internal invariant: item ${input.itemId} does not exist`);
+  const entry = input.content.entries.find((candidate) => candidate.id === item.contentId);
+  if (!entry || entry.kind !== 'item') {
+    throw new Error(`internal invariant: item definition ${item.contentId} does not exist`);
+  }
+  const appearance = entry.identification.mode === 'shuffled'
+    ? identifyAppearance({ run: input.run, contentId: item.contentId, eventId: input.eventId })
+    : { state: input.run, events: [] as const };
+  const identified = identifyItem({ run: appearance.state, itemId: input.itemId, eventId: input.eventId });
+  return { state: identified.state, events: [...appearance.events, ...identified.events] };
+}
+
 export function projectItem(input: Readonly<{
   run: Pick<ActiveRun, 'items' | 'identification'>;
   content: CompiledContentPack;

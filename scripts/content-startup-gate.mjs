@@ -49,10 +49,10 @@ async function createDirectories(root) {
 
   const invalidBalance = join(invalid, 'balance', 'core-gameplay.yaml');
   const source = await readFile(invalidBalance, 'utf8');
-  if (!source.startsWith('schemaVersion: 3')) {
-    throw new Error('content startup gate expected bundled schemaVersion 3 content');
+  if (!source.startsWith('schemaVersion: 4')) {
+    throw new Error('content startup gate expected bundled schemaVersion 4 content');
   }
-  await writeFile(invalidBalance, source.replace('schemaVersion: 3', 'schemaVersion: 2'));
+  await writeFile(invalidBalance, source.replace('schemaVersion: 4', 'schemaVersion: 2'));
   return { valid, invalid, data };
 }
 
@@ -98,7 +98,7 @@ async function main() {
           timeoutMs: 3_000,
           retryDelayMs: 250,
         });
-        const health = /^ok ([a-f0-9]{64}) (\d+) entries\n$/.exec(output);
+        const health = /^ok ([a-f0-9]{64}) (\d+) entries, ([1-9]\d*) merchant encounters\n$/.exec(output);
         if (!health) throw new Error(`unexpected smoke output: ${output}`);
         return { contentHash: health[1], entries: Number(health[2]) };
       },

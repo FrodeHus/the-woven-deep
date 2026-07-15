@@ -15,7 +15,20 @@ async function verifyOnce(baseUrl, fetch, timeoutMs) {
   if (!page.ok || !(await page.text()).includes('<div id="root">')) {
     throw new Error('web client was not served');
   }
-  return `ok ${body.contentHash} ${body.entries} entries\n`;
+  const content = await fetch(`${baseUrl}/api/content/guest`, {
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!content.ok) throw new Error(`content returned ${content.status}`);
+  const pack = await content.json();
+  const entries = Array.isArray(pack.entries) ? pack.entries : [];
+  const merchants = entries.filter((entry) => entry.kind === 'encounter' && entry.model === 'merchant');
+  if (merchants.length === 0
+    || !merchants.every((entry) => entries.some((candidate) => candidate.kind === 'npc'
+      && candidate.id === entry.definition?.npcId))
+    || !entries.some((entry) => entry.kind === 'npc-faction')) {
+    throw new Error('served content is missing the travelling merchant vertical');
+  }
+  return `ok ${body.contentHash} ${body.entries} entries, ${merchants.length} merchant encounters\n`;
 }
 
 export async function runSmoke(baseUrl, options = {}) {

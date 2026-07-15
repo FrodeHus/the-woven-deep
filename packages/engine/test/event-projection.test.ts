@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { MonsterContentEntry } from '@woven-deep/content';
 import {
   createDemoContentPack, createDemoRun, projectDomainEvents, stableJson,
+  type ActiveRun,
   type DomainEvent,
+  type MerchantPopulation,
   type PopulationDomainEvent,
 } from '../src/index.js';
 
@@ -46,6 +48,38 @@ function fixture() {
     sourceActorId: attacker.actorId, amount: 3, health: 17,
   }];
   return { state: { ...base, floors: [floor], actors: [base.actors[0]!, attacker] }, content, events };
+}
+
+function merchantEventFixture(visible: boolean) {
+  const base = createDemoRun();
+  const merchant = { ...base.actors[0]!, actorId: 'actor.merchant', contentId: 'npc.test-merchant',
+    playerControlled: false, disposition: 'neutral' as const, x: visible ? 2 : 5, y: visible ? 1 : 3,
+    populationId: 'population.merchant', populationRoleId: null,
+    populationPresentation: { name: 'Travelling Lampwright', glyph: 'L', color: '#ffd166', leader: false } };
+  const population: MerchantPopulation = {
+    populationId: 'population.merchant', encounterId: 'encounter.merchant', floorId: base.activeFloorId,
+    createdAt: 0, livingMemberIds: [merchant.actorId], formerMemberIds: [], model: 'merchant',
+    actorId: merchant.actorId, npcId: merchant.contentId, factionId: 'npc-faction.test',
+    rolledLifetime: 4000, departureAt: 4000, emittedWarningThresholds: [1000, 500],
+    initialStockItemIds: [], stockItemIds: [], services: [], lifecycle: 'available', provoked: false,
+    aggressionPenaltyApplied: false, deathPenaltyApplied: false, stockLossResolved: false,
+    commerceBonusApplied: false,
+  };
+  const state: ActiveRun = { ...base, actors: [base.actors[0]!, merchant], populations: [population],
+    encounterDecisions: [{ encounterId: 'encounter.merchant', baseProbability: 1, protectionBonus: 0,
+      effectiveProbability: 1, eligible: true, reachedEligibleDepth: true, encountered: true, instancesCreated: 1 }] };
+  const eventId = 'event.merchant';
+  const events: DomainEvent[] = [
+    { type: 'merchant.departure-warning', eventId, populationId: population.populationId,
+      actorId: merchant.actorId, threshold: 500, remaining: 137 },
+    { type: 'merchant.provoked', eventId, populationId: population.populationId,
+      actorId: merchant.actorId, sourceActorId: base.hero.actorId, response: 'flee' },
+    { type: 'merchant.stock-dropped', eventId, populationId: population.populationId,
+      actorId: merchant.actorId, itemIds: ['item.drop-secret'], units: 3 },
+    { type: 'merchant.died', eventId, populationId: population.populationId,
+      actorId: merchant.actorId, killerActorId: base.hero.actorId, destroyedStockItemIds: ['item.destroyed-secret'] },
+  ];
+  return { state, content: createDemoContentPack(), events };
 }
 
 describe('public event projection', () => {
@@ -202,6 +236,67 @@ describe('public event projection', () => {
     expect(projectDomainEvents({ ...input, events: [event], heroId: input.state.hero.actorId })).toEqual([{
       type: 'actor.death-observed', eventId: event.eventId, actorId: hero.actorId, contentId: hero.contentId,
     }]);
+  });
+
+  it('redacts visible merchant lifecycle events to qualitative notices', () => {
+    const input = merchantEventFixture(true);
+    const output = projectDomainEvents({ ...input, heroId: input.state.hero.actorId });
+    expect(output).toEqual([
+      { type: 'population.notice', eventId: 'event.merchant', category: 'merchant-departure-warning',
+        actorId: 'actor.merchant', presentation: 'merchant.departure-warning.500', displayName: 'Travelling Lampwright' },
+      { type: 'population.notice', eventId: 'event.merchant', category: 'merchant-provoked',
+        actorId: 'actor.merchant', presentation: 'merchant.provoked.flee', displayName: 'Travelling Lampwright' },
+      { type: 'population.notice', eventId: 'event.merchant', category: 'merchant-stock-dropped',
+        actorId: 'actor.merchant', presentation: 'merchant.stock-dropped', displayName: 'Travelling Lampwright' },
+      { type: 'population.notice', eventId: 'event.merchant', category: 'merchant-died',
+        actorId: 'actor.merchant', presentation: 'merchant.died', displayName: 'Travelling Lampwright' },
+    ]);
+    const json = stableJson(output);
+    for (const secret of ['remaining', '137', 'item.drop-secret', 'item.destroyed-secret',
+      'stockItemIds', 'killerActorId', 'units']) expect(json, secret).not.toContain(secret);
+  });
+
+  it('suppresses merchant lifecycle events for unseen merchants entirely', () => {
+    const input = merchantEventFixture(false);
+    expect(projectDomainEvents({ ...input, heroId: input.state.hero.actorId })).toEqual([]);
+  });
+
+  it('notices an encountered same-floor departure without stock, and suppresses off-floor departures', () => {
+    const departed: DomainEvent = { type: 'merchant.departed', eventId: 'event.merchant',
+      populationId: 'population.merchant', actorId: 'actor.merchant', stockItemIds: ['item.unsold-secret'] };
+    const base = merchantEventFixture(true);
+    const gone = {
+      ...base,
+      state: { ...base.state, actors: base.state.actors.filter((actor) => actor.actorId !== 'actor.merchant') },
+      events: [departed],
+    };
+    expect(projectDomainEvents({ ...gone, heroId: gone.state.hero.actorId })).toEqual([
+      { type: 'population.notice', eventId: 'event.merchant', category: 'merchant-departed',
+        actorId: null, presentation: 'merchant.departed' },
+    ]);
+    const offFloor = {
+      ...gone,
+      state: { ...gone.state, populations: gone.state.populations.map((population) =>
+        ({ ...population, floorId: 'floor.elsewhere' })) } as ActiveRun,
+    };
+    expect(projectDomainEvents({ ...offFloor, heroId: offFloor.state.hero.actorId })).toEqual([]);
+    const unencountered = {
+      ...gone,
+      state: { ...gone.state, encounterDecisions: gone.state.encounterDecisions.map((decision) =>
+        ({ ...decision, encountered: false })) },
+    };
+    expect(projectDomainEvents({ ...unencountered, heroId: unencountered.state.hero.actorId })).toEqual([]);
+  });
+
+  it('always delivers the hero its own trade close and reputation change, even unseen', () => {
+    const input = merchantEventFixture(false);
+    const events: DomainEvent[] = [
+      { type: 'trade.closed', eventId: 'event.merchant', merchantPopulationId: 'population.merchant',
+        reason: 'departure', completedCommerce: false },
+      { type: 'reputation.changed', eventId: 'event.merchant', factionId: 'npc-faction.test',
+        previous: 0, delta: -300, value: -300, reason: 'aggression' },
+    ];
+    expect(projectDomainEvents({ ...input, events, heroId: input.state.hero.actorId })).toEqual(events);
   });
 
   it('redacts partial forced movement and rejects unchecked thrown destinations and hidden feature/item IDs', () => {

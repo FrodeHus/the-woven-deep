@@ -2,11 +2,13 @@ import type {
   BalanceContentEntry, ContentEntry, EffectDefinition, ItemContentEntry, LootTableContentEntry,
   MonsterContentEntry, IdentificationPoolContentEntry, EncounterContentEntry,
   FallenChampionTemplateContentEntry,
+  NpcFactionContentEntry,
 } from '../model.js';
 import type { ContentCompileIssue } from './error.js';
 import {
   ACTION_COST_IDS, BEHAVIOR_PARAMETER_SCHEMAS, BOSS_PHASE_EFFECT_IDS, EFFECT_PARAMETER_SCHEMAS,
   LEADER_RESPONSE_PARAMETER_SCHEMAS, SWARM_RESPONSE_PARAMETER_SCHEMAS,
+  NPC_BEHAVIOR_PARAMETER_SCHEMAS,
 } from './registries.js';
 import {
   checkedTotalWithin, MAX_ENCOUNTER_MEMBERS, MAX_RANDOM_WEIGHT_TOTAL,
@@ -214,6 +216,70 @@ function encounterIssues(
       definition.responseParameters, SWARM_RESPONSE_PARAMETER_SCHEMAS, 'swarm response'));
     return issues;
   }
+  if (encounter.model === 'merchant') {
+    const definition = encounter.definition;
+    issues.push(...referencedKindIssue(file, `${path}.npcId`, definition.npcId, 'npc', byId));
+    issues.push(...referencedKindIssue(file, `${path}.stockLootTableId`, definition.stockLootTableId, 'loot-table', byId));
+    if (definition.maximumStockRolls < definition.minimumStockRolls) {
+      issues.push(issue(file, `${path}.maximumStockRolls`, 'maximum stock rolls must be at least minimum stock rolls'));
+    }
+    if (definition.maximumLifetime < definition.minimumLifetime) {
+      issues.push(issue(file, `${path}.maximumLifetime`, 'maximum lifetime must be at least minimum lifetime'));
+    }
+    let previous = Number.POSITIVE_INFINITY;
+    definition.departureWarningThresholds.forEach((threshold, index) => {
+      if (threshold >= previous || threshold >= definition.minimumLifetime) {
+        issues.push(issue(file, `${path}.departureWarningThresholds.${index}`,
+          'departure warning thresholds must be unique, strictly descending, and below minimum lifetime'));
+      }
+      previous = threshold;
+    });
+    const npc = byId.get(definition.npcId);
+    const faction = npc?.kind === 'npc' ? byId.get(npc.factionId) : undefined;
+    const factionTiers = faction?.kind === 'npc-faction'
+      ? new Map(faction.tiers.map((tier) => [tier.tierId, tier]))
+      : new Map<string, NpcFactionContentEntry['tiers'][number]>();
+    const serviceIds = new Set<string>();
+    definition.services.forEach((service, index) => {
+      if (serviceIds.has(service.serviceId)) issues.push(issue(file, `${path}.services.${index}.serviceId`, `duplicate merchant service ${service.serviceId}`));
+      serviceIds.add(service.serviceId);
+      if (service.maximumUses < service.minimumUses) issues.push(issue(file, `${path}.services.${index}.maximumUses`, 'maximum service uses must be at least minimum uses'));
+      const tiers = new Set<string>();
+      service.tierIds.forEach((tierId, tierIndex) => {
+        if (tiers.has(tierId)) issues.push(issue(file, `${path}.services.${index}.tierIds.${tierIndex}`, `duplicate service tier ${tierId}`));
+        tiers.add(tierId);
+        const factionTier = factionTiers.get(tierId);
+        if (!factionTier) issues.push(issue(file, `${path}.services.${index}.tierIds.${tierIndex}`, `service tier ${tierId} is absent from NPC faction`));
+        else if (!factionTier.serviceIds.includes(service.serviceId)) {
+          issues.push(issue(file, `${path}.services.${index}.tierIds.${tierIndex}`,
+            `service ${service.serviceId} is not enabled for faction tier ${tierId}`));
+        }
+      });
+    });
+    const bossUniqueIds = new Set([...byId.values()].filter((candidate) => candidate.kind === 'encounter' && candidate.model === 'boss')
+      .map((candidate) => candidate.definition.uniqueItemId));
+    const visited = new Set<string>();
+    const visit = (tableId: string): void => {
+      if (visited.has(tableId)) return;
+      visited.add(tableId);
+      const table = byId.get(tableId);
+      if (table?.kind !== 'loot-table') return;
+      for (const choice of table.choices) {
+        if (choice.contentId !== null) {
+          const item = byId.get(choice.contentId);
+          if (item?.kind === 'item') {
+            if (item.price <= 0) issues.push(issue(file, `${path}.stockLootTableId`, `merchant stock item ${item.id} requires positive price`));
+            if (bossUniqueIds.has(item.id)) issues.push(issue(file, `${path}.stockLootTableId`, `merchant stock item ${item.id} is guaranteed unique`));
+            const reserved = item.tags.find((tag) => ['heirloom', 'quest', 'objective', 'nontransferable'].includes(tag));
+            if (reserved) issues.push(issue(file, `${path}.stockLootTableId`, `merchant stock item ${item.id} has reserved ${reserved} tag`));
+          }
+        }
+        if (choice.lootTableId !== null) visit(choice.lootTableId);
+      }
+    };
+    visit(definition.stockLootTableId);
+    return issues;
+  }
   const definition = encounter.definition;
   issues.push(...referencedKindIssue(file, `${path}.monsterId`, definition.monsterId, 'monster', byId));
   issues.push(...referencedKindIssue(file, `${path}.uniqueItemId`, definition.uniqueItemId, 'item', byId));
@@ -258,6 +324,31 @@ function encounterIssues(
     });
     issues.push(...effectsAtPath(file, `${path}.phases.${index}.effects`, phase.effects, byId));
   });
+  return issues;
+}
+
+function factionIssues(file: string, faction: NpcFactionContentEntry): ContentCompileIssue[] {
+  const path = `$.entries.${faction.id}`;
+  const issues: ContentCompileIssue[] = [];
+  if (faction.minimumReputation > faction.maximumReputation) issues.push(issue(file, `${path}.minimumReputation`, 'minimum reputation must not exceed maximum reputation'));
+  if (faction.startingReputation < faction.minimumReputation || faction.startingReputation > faction.maximumReputation) {
+    issues.push(issue(file, `${path}.startingReputation`, 'starting reputation must be within faction bounds'));
+  }
+  const sorted = faction.tiers.map((tier, authoredIndex) => ({ tier, authoredIndex }))
+    .sort((left, right) => left.tier.minimum - right.tier.minimum);
+  const tierIds = new Set<string>();
+  sorted.forEach(({ tier, authoredIndex }, index) => {
+    if (tierIds.has(tier.tierId)) issues.push(issue(file, `${path}.tiers.${authoredIndex}.tierId`, `duplicate reputation tier ${tier.tierId}`));
+    tierIds.add(tier.tierId);
+    if (new Set(tier.serviceIds).size !== tier.serviceIds.length) {
+      issues.push(issue(file, `${path}.tiers.${authoredIndex}.serviceIds`, `duplicate service ID in reputation tier ${tier.tierId}`));
+    }
+    if (tier.maximum < tier.minimum) issues.push(issue(file, `${path}.tiers.${authoredIndex}.maximum`, 'tier maximum must be at least minimum'));
+    if (index === 0 ? tier.minimum !== faction.minimumReputation : tier.minimum !== sorted[index - 1]!.tier.maximum + 1) {
+      issues.push(issue(file, `${path}.tiers.${authoredIndex}`, 'reputation tiers must cover every value without gaps or overlaps'));
+    }
+  });
+  if (sorted.at(-1)?.tier.maximum !== faction.maximumReputation) issues.push(issue(file, `${path}.tiers`, 'reputation tiers must cover every value through maximum reputation'));
   return issues;
 }
 
@@ -594,6 +685,12 @@ export function validateContentEntries(locatedEntries: readonly LocatedContentEn
     if (entry.kind === 'monster') {
       issues.push(...validateParameters(file, `$.entries.${entry.id}.behavior`, entry.behaviorId, entry.behaviorParameters, BEHAVIOR_PARAMETER_SCHEMAS, 'behavior'));
     }
+    if (entry.kind === 'npc') {
+      issues.push(...referencedKindIssue(file, `$.entries.${entry.id}.factionId`, entry.factionId, 'npc-faction', byId));
+      issues.push(...validateParameters(file, `$.entries.${entry.id}.behavior`, entry.behaviorId,
+        entry.behaviorParameters, NPC_BEHAVIOR_PARAMETER_SCHEMAS, 'NPC behavior'));
+    }
+    if (entry.kind === 'npc-faction') issues.push(...factionIssues(file, entry));
     if (entry.kind === 'item') {
       issues.push(...equipmentIssues(file, entry), ...itemCompatibilityIssues(file, entry, allItems),
         ...effectIssues(file, entry.id, entry.effects, byId));

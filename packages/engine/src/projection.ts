@@ -1,7 +1,13 @@
-import type { CompiledContentPack } from '@woven-deep/content';
+import type {
+  CompiledContentPack, ItemContentEntry, MerchantEncounterContentEntry,
+} from '@woven-deep/content';
 import { heroActor, heroPerception } from './actor-model.js';
 import { deriveActorStats } from './attributes.js';
 import { balanceEntry } from './actions.js';
+import {
+  factionReputation, guaranteedUniqueItemIds, merchantAcceptsItem,
+  quoteMerchantPurchase, quoteMerchantSale, quoteMerchantService, reputationTier,
+} from './commerce.js';
 import { conditionDefinition, conditionModifiers } from './conditions.js';
 import { equipmentModifiers, itemLightSources } from './equipment.js';
 import { featureTiles, projectFeature } from './features.js';
@@ -9,11 +15,14 @@ import { projectItem } from './identification.js';
 import { isExplored, rememberedTile, validateKnowledgePacking } from './knowledge.js';
 import type { IlluminationField, RgbColor } from './light-model.js';
 import { computeIllumination } from './lighting.js';
+import type { MerchantPopulation } from './merchant-model.js';
 import { assertOpaqueId, tileIndex, type ActiveRun, type OpaqueId, type PublicDecision, type TileId } from './model.js';
 import { refreshKnowledge, type PerceptionFloor, type PerceptionHero } from './perception.js';
 import { relationshipBetween } from './reactions.js';
+import { compareCodeUnits } from './stable-json.js';
 import { hungerModifiers } from './survival.js';
 import { tileDefinition } from './terrain.js';
+import { activeTradeValidIgnoringDeparture, merchantFaction } from './trade.js';
 import { computeFieldOfView, isVisible } from './visibility.js';
 
 export type KnowledgeState = 'unknown' | 'remembered' | 'visible';
@@ -275,6 +284,21 @@ export function projectFloor(input: ProjectFloorInput): ObservableFloorProjectio
   return { floorId: input.floor.floorId, width: input.floor.width, height: input.floor.height, cells };
 }
 
+export interface ObservableTradeProjection {
+  readonly merchantPopulationId: OpaqueId;
+  readonly merchantActorId: OpaqueId;
+  readonly merchantName: string;
+  readonly factionName: string;
+  readonly reputationTier: string;
+  readonly currency: number;
+  readonly stock: readonly Readonly<{ item: Readonly<Record<string, unknown>>; quantity: number; unitPrice: number }>[];
+  readonly saleOffers: readonly Readonly<{ itemId: OpaqueId; quantity: number; unitPrice: number }>[];
+  readonly services: readonly Readonly<{
+    serviceId: 'merchant-service.identify'; unitPrice: number; remainingUses: number;
+    targetItemIds: readonly OpaqueId[];
+  }>[];
+}
+
 export interface GameplayProjection {
   readonly floor: ObservableFloorProjection;
   readonly hero: Readonly<Record<string, unknown>>;
@@ -282,6 +306,115 @@ export interface GameplayProjection {
   readonly features: readonly Readonly<Record<string, unknown>>[];
   readonly groundItems: readonly Readonly<Record<string, unknown>>[];
   readonly actions: readonly Readonly<{ type: string; cost: number }>[];
+  readonly trade?: ObservableTradeProjection;
+}
+
+/**
+ * Qualitative merchant extension for a visible merchant actor: faction name, reputation tier,
+ * trade availability, and only the most urgent already-emitted departure warning. The exact
+ * `departureAt` deadline never influences anything beyond the availability boolean.
+ */
+function visibleMerchantState(
+  state: ActiveRun, content: CompiledContentPack, population: MerchantPopulation,
+): Readonly<Record<string, unknown>> {
+  const faction = merchantFaction(content, population.factionId);
+  const tier = reputationTier(factionReputation(state, faction), faction);
+  const urgentWarning = population.emittedWarningThresholds.length === 0
+    ? undefined : Math.min(...population.emittedWarningThresholds);
+  return {
+    factionName: faction.name,
+    reputationTier: tier.tierId,
+    tradeAvailable: population.lifecycle === 'available' && tier.acceptsTrade
+      && population.departureAt > state.worldTime,
+    ...(urgentWarning === undefined ? {} : { departureWarning: urgentWarning }),
+  };
+}
+
+/**
+ * Exact modal commerce projection, derived only while the active trade session invariant still
+ * holds (the same probe the merchant lifecycle uses to defer a due departure). Every item is
+ * routed through `projectItem`, so unidentified stock stays appearance-only, and all lists are
+ * sorted by code-unit identifier.
+ */
+function projectActiveTrade(
+  state: ActiveRun, content: CompiledContentPack,
+): ObservableTradeProjection | undefined {
+  const trade = state.activeTrade;
+  if (trade === null || !activeTradeValidIgnoringDeparture(state, content)) return undefined;
+  const population = state.populations.find((candidate): candidate is MerchantPopulation =>
+    candidate.model === 'merchant' && candidate.populationId === trade.merchantPopulationId);
+  const actor = state.actors.find((candidate) => candidate.actorId === trade.merchantActorId);
+  const encounterEntry = population === undefined ? undefined
+    : content.entries.find((candidate) => candidate.id === population.encounterId);
+  const encounter: MerchantEncounterContentEntry | undefined =
+    encounterEntry?.kind === 'encounter' && encounterEntry.model === 'merchant' ? encounterEntry : undefined;
+  if (!population || !actor || !encounter) return undefined;
+  const faction = merchantFaction(content, population.factionId);
+  const tier = reputationTier(factionReputation(state, faction), faction);
+  const hero = heroActor(state);
+  const itemEntry = (contentId: OpaqueId): ItemContentEntry | undefined => {
+    const entry = content.entries.find((candidate) => candidate.id === contentId);
+    return entry?.kind === 'item' ? entry : undefined;
+  };
+  const stock = [...population.stockItemIds]
+    .sort(compareCodeUnits)
+    .flatMap((itemId) => {
+      const item = state.items.find((candidate) => candidate.itemId === itemId);
+      const definition = item === undefined ? undefined : itemEntry(item.contentId);
+      if (!item || !definition) return [];
+      return [{
+        item: projectItem({ run: state, content, itemId }),
+        quantity: item.quantity,
+        unitPrice: quoteMerchantPurchase({ basePrice: definition.price,
+          merchantBps: encounter.definition.merchantSaleBps, factionBps: tier.purchasePriceBps }),
+      }];
+    });
+  const uniqueItemIds = guaranteedUniqueItemIds(content);
+  const saleOffers = state.items
+    .filter((item) => item.location.type === 'backpack' && item.location.actorId === hero.actorId)
+    .sort((left, right) => compareCodeUnits(left.itemId, right.itemId))
+    .flatMap((item) => {
+      const definition = itemEntry(item.contentId);
+      if (!definition || !merchantAcceptsItem(item, definition, encounter, uniqueItemIds)) return [];
+      return [{
+        itemId: item.itemId,
+        quantity: item.quantity,
+        unitPrice: quoteMerchantSale({ basePrice: definition.price,
+          merchantBps: encounter.definition.merchantPurchaseBps, factionBps: tier.salePriceBps }),
+      }];
+    });
+  const identifyTargetIds = state.items
+    .filter((item) => (item.location.type === 'backpack' || item.location.type === 'equipped')
+      && item.location.actorId === hero.actorId)
+    .filter((item) => {
+      const definition = itemEntry(item.contentId);
+      if (!definition) return false;
+      const appearanceId = state.identification.appearanceByContentId[item.contentId];
+      const appearanceUnknown = definition.identification.mode === 'shuffled' && appearanceId !== undefined
+        && !state.identification.knownAppearanceIds.includes(appearanceId);
+      return !item.identified || appearanceUnknown;
+    })
+    .map((item) => item.itemId)
+    .sort(compareCodeUnits);
+  const services = [...population.services]
+    .filter((service) => tier.serviceIds.includes(service.serviceId)
+      && service.tierIds.includes(tier.tierId))
+    .sort((left, right) => compareCodeUnits(left.serviceId, right.serviceId))
+    .map((service) => ({
+      serviceId: service.serviceId,
+      unitPrice: quoteMerchantService({ basePrice: service.basePrice, factionBps: tier.purchasePriceBps }),
+      remainingUses: service.remainingUses,
+      targetItemIds: identifyTargetIds,
+    }));
+  return {
+    merchantPopulationId: population.populationId,
+    merchantActorId: actor.actorId,
+    merchantName: actor.populationPresentation?.name ?? faction.name,
+    factionName: faction.name,
+    reputationTier: tier.tierId,
+    currency: state.hero.currency,
+    stock, saleOffers, services,
+  };
 }
 
 function projectionPerception(state: ActiveRun, content: CompiledContentPack) {
@@ -360,12 +493,15 @@ export function projectGameplayState(input: Readonly<{
       const bossState = population?.model === 'boss'
         ? { bossPhase: population.currentPhaseId }
         : {};
+      const merchantState = population?.model === 'merchant'
+        ? visibleMerchantState(input.state, input.content, population)
+        : {};
       return { actorId: actor.actorId, contentId: actor.contentId, ...presentation,
         ...((population?.model === 'champion' || population?.model === 'echo') ? {
           equipmentContentIds: population.equipmentContentIds,
           abilityIds: population.abilityIds,
         } : {}),
-        ...sourceState, ...bossState,
+        ...sourceState, ...bossState, ...merchantState,
         x: actor.x, y: actor.y, health: actor.health, maxHealth: actor.maxHealth,
         healthPresentation: { current: actor.health, maximum: actor.maxHealth, band: healthBand },
         disposition: relationshipBetween(input.state, hero.actorId, actor.actorId),
@@ -387,7 +523,9 @@ export function projectGameplayState(input: Readonly<{
     .map((item) => ({ ...projectItem({ run: input.state, content: input.content, itemId: item.itemId }),
       x: item.location.type === 'floor' ? item.location.x : 0,
       y: item.location.type === 'floor' ? item.location.y : 0 }));
+  const trade = projectActiveTrade(input.state, input.content);
   return {
+    ...(trade === undefined ? {} : { trade }),
     floor: projectFloor({ floor: observed.floor, hero: heroPerception(input.state.hero, hero),
       visibilityWords: observed.visibilityWords, illumination: observed.illumination }),
     hero: {

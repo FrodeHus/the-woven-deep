@@ -9,6 +9,7 @@ import type { DamageType, LeaderDeathResponse } from '@woven-deep/content';
 import type {
   EncounterRunDecision, FallenHeroRunDecision, FallenHeroStandingSnapshot, PopulationInstance, PopulationIntent,
 } from './population-model.js';
+import type { ActiveTrade, FactionReputation } from './merchant-model.js';
 
 export type OpaqueId = string;
 export type Uint32State = readonly [number, number, number, number];
@@ -69,6 +70,7 @@ export interface HeroState {
   readonly name: string;
   readonly sightRadius: number;
   readonly backpackCapacity: number;
+  readonly currency: number;
 }
 
 export interface CommandEnvelope {
@@ -111,13 +113,42 @@ export interface RestCommand extends CommandEnvelope {
   readonly maximumDuration: number;
 }
 
+export interface TradeOpenCommand extends CommandEnvelope {
+  readonly type: 'trade-open'; readonly merchantActorId: OpaqueId;
+}
+export interface TradeBuyCommand extends CommandEnvelope {
+  readonly type: 'trade-buy'; readonly merchantPopulationId: OpaqueId;
+  readonly itemId: OpaqueId; readonly quantity: number;
+}
+export interface TradeSellCommand extends CommandEnvelope {
+  readonly type: 'trade-sell'; readonly merchantPopulationId: OpaqueId;
+  readonly itemId: OpaqueId; readonly quantity: number;
+}
+export interface TradeServiceCommand extends CommandEnvelope {
+  readonly type: 'trade-service';
+  readonly merchantPopulationId: OpaqueId;
+  readonly serviceId: 'merchant-service.identify';
+  readonly targetItemId: OpaqueId;
+}
+export interface TradeCloseCommand extends CommandEnvelope {
+  readonly type: 'trade-close'; readonly merchantPopulationId: OpaqueId;
+}
+
+export type TradeCommand = TradeOpenCommand | TradeBuyCommand | TradeSellCommand
+  | TradeServiceCommand | TradeCloseCommand;
+
 export type GameCommand = MoveCommand | WaitCommand | AttackCommand | FireCommand | CastCommand | ThrowItemCommand
   | UseItemCommand | EquipCommand | UnequipCommand | PickupCommand | DropCommand | SplitStackCommand | RefuelCommand
-  | ToggleLightCommand | OpenDoorCommand | CloseDoorCommand | SearchCommand | DisarmCommand | RestCommand;
+  | ToggleLightCommand | OpenDoorCommand | CloseDoorCommand | SearchCommand | DisarmCommand | RestCommand
+  | TradeCommand;
 
 export type MovementInvalidReason = 'blocked.bounds' | 'blocked.wall' | 'blocked.door' | 'blocked.pillar'
   | 'blocked.void' | 'blocked.corner' | 'blocked.actor';
-export type InvalidActionReason = MovementInvalidReason | 'action.unavailable' | 'inventory.full'
+export type TradeInvalidReason = 'trade.active' | 'trade.required' | 'merchant.unavailable'
+  | 'merchant.out-of-range' | 'merchant.refuses' | 'trade.merchant-mismatch' | 'trade.insufficient-funds'
+  | 'trade.stock-unavailable' | 'trade.item-unacceptable' | 'trade.capacity'
+  | 'trade.service-unavailable' | 'trade.target-invalid';
+export type InvalidActionReason = MovementInvalidReason | TradeInvalidReason | 'action.unavailable' | 'inventory.full'
   | 'item.missing' | 'item.unavailable' | 'item.quantity' | 'item.incompatible' | 'item.id-conflict'
   | 'target.not_visible' | 'target.out_of_range' | 'target.blocked' | 'target.invalid';
 
@@ -414,11 +445,111 @@ export interface PopulationNoticePublicEvent {
   readonly category: 'created' | 'encountered' | 'leader-created' | 'leader-defeated' | 'group-outcome'
     | 'swarm-growth' | 'swarm-cap' | 'source-destroyed' | 'boss-encountered' | 'boss-phase'
     | 'boss-recovery' | 'boss-defeated' | 'boss-reward' | 'champion-encountered' | 'champion-defeated'
-    | 'champion-heirloom' | 'echo-encountered' | 'echo-defeated' | 'echo-loot';
+    | 'champion-heirloom' | 'echo-encountered' | 'echo-defeated' | 'echo-loot'
+    | 'merchant-departure-warning' | 'merchant-departed' | 'merchant-provoked'
+    | 'merchant-stock-dropped' | 'merchant-died';
   readonly actorId: OpaqueId | null;
   readonly presentation: string;
   readonly displayName?: string;
 }
+export interface ReputationChangedEvent {
+  readonly type: 'reputation.changed';
+  readonly eventId: OpaqueId;
+  readonly factionId: OpaqueId;
+  readonly previous: number;
+  readonly delta: number;
+  readonly value: number;
+  readonly reason: 'commerce' | 'aggression' | 'death';
+}
+export interface TradeOpenedEvent {
+  readonly type: 'trade.opened';
+  readonly eventId: OpaqueId;
+  readonly merchantPopulationId: OpaqueId;
+  readonly merchantActorId: OpaqueId;
+}
+export interface TradeBoughtEvent {
+  readonly type: 'trade.bought';
+  readonly eventId: OpaqueId;
+  readonly merchantPopulationId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly contentId: OpaqueId;
+  readonly quantity: number;
+  readonly unitPrice: number;
+  readonly total: number;
+  readonly currency: number;
+}
+export interface TradeSoldEvent {
+  readonly type: 'trade.sold';
+  readonly eventId: OpaqueId;
+  readonly merchantPopulationId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly contentId: OpaqueId;
+  readonly quantity: number;
+  readonly unitPrice: number;
+  readonly total: number;
+  readonly currency: number;
+}
+export interface TradeServicePurchasedEvent {
+  readonly type: 'trade.service-purchased';
+  readonly eventId: OpaqueId;
+  readonly merchantPopulationId: OpaqueId;
+  readonly serviceId: 'merchant-service.identify';
+  readonly targetItemId: OpaqueId;
+  readonly price: number;
+  readonly currency: number;
+  readonly remainingUses: number;
+}
+export type TradeCloseReason = 'player' | 'aggression' | 'death' | 'unavailable' | 'departure';
+export interface TradeClosedEvent {
+  readonly type: 'trade.closed';
+  readonly eventId: OpaqueId;
+  readonly merchantPopulationId: OpaqueId;
+  readonly reason: TradeCloseReason;
+  readonly completedCommerce: boolean;
+}
+export type TradeDomainEvent = TradeOpenedEvent | TradeBoughtEvent | TradeSoldEvent
+  | TradeServicePurchasedEvent | TradeClosedEvent;
+export interface MerchantDepartureWarningEvent {
+  readonly type: 'merchant.departure-warning';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly threshold: number;
+  readonly remaining: number;
+}
+export interface MerchantDepartedEvent {
+  readonly type: 'merchant.departed';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly stockItemIds: readonly OpaqueId[];
+}
+export interface MerchantProvokedEvent {
+  readonly type: 'merchant.provoked';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly sourceActorId: OpaqueId;
+  readonly response: 'flee' | 'self-defense';
+}
+export interface MerchantStockDroppedEvent {
+  readonly type: 'merchant.stock-dropped';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly itemIds: readonly OpaqueId[];
+  readonly units: number;
+}
+export interface MerchantDiedEvent {
+  readonly type: 'merchant.died';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly killerActorId: OpaqueId;
+  readonly destroyedStockItemIds: readonly OpaqueId[];
+}
+export type MerchantLifecycleDomainEvent = MerchantDepartureWarningEvent | MerchantDepartedEvent
+  | MerchantProvokedEvent | MerchantStockDroppedEvent | MerchantDiedEvent;
 export interface RestCompletedEvent {
   readonly type: 'rest.completed'; readonly eventId: OpaqueId;
   readonly stopReason: 'full-health' | 'maximum-duration' | 'visible-danger' | 'aware-hostile'
@@ -436,9 +567,11 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | IdentificationAppearanceRevealedEvent | ItemIdentifiedEvent
   | HungerStageChangedEvent | HungerRestoredEvent | FuelWarningEvent | ItemLightExtinguishedEvent
   | ItemDamagedEvent | DoorStateChangedEvent | FeatureRevealedEvent | FeatureSearchEvent | TrapStateEvent
-  | PopulationDomainEvent | RestCompletedEvent;
+  | PopulationDomainEvent | ReputationChangedEvent | TradeDomainEvent | MerchantLifecycleDomainEvent
+  | RestCompletedEvent;
 
-export type PublicEvent = Exclude<DomainEvent, AttackMissedEvent | AttackHitEvent | PopulationDomainEvent>
+export type PublicEvent =
+  Exclude<DomainEvent, AttackMissedEvent | AttackHitEvent | PopulationDomainEvent | MerchantLifecycleDomainEvent>
   | ActorIntentChangedEvent | SoundHeardEvent | HeroDamagedPublicEvent | CombatObservedPublicEvent
   | ActorMovementObservedPublicEvent | ActorDamageObservedPublicEvent | ActorDeathObservedPublicEvent
   | PopulationNoticePublicEvent;
@@ -492,7 +625,7 @@ export interface RecordedCommand {
 }
 
 export interface ActiveRun {
-  readonly schemaVersion: 4;
+  readonly schemaVersion: 5;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly runId: OpaqueId;
@@ -502,6 +635,8 @@ export interface ActiveRun {
   readonly turn: number;
   readonly worldTime: number;
   readonly hero: HeroState;
+  readonly reputations: readonly FactionReputation[];
+  readonly activeTrade: ActiveTrade | null;
   readonly actors: readonly ActorState[];
   readonly items: readonly ItemInstance[];
   readonly features: readonly DungeonFeature[];

@@ -1,5 +1,6 @@
 import type { BaseAttributes } from './actor-model.js';
 import type { OpaqueId, Uint32State } from './model.js';
+import type { MerchantPopulation } from './merchant-model.js';
 
 export type PopulationIntent = 'approach' | 'attack' | 'hold' | 'regroup' | 'flee' | 'protect' | 'spawn' | 'phase-change';
 
@@ -51,7 +52,7 @@ export interface EncounterRunDecision {
   readonly instancesCreated: number;
 }
 
-interface PopulationBase {
+export interface PopulationBase {
   readonly populationId: OpaqueId;
   readonly encounterId: OpaqueId;
   readonly floorId: OpaqueId;
@@ -116,7 +117,7 @@ export interface EchoPopulation extends PopulationBase {
 }
 
 export type PopulationInstance = IndividualPopulation | GroupPopulation | SwarmPopulation
-  | BossPopulation | ChampionPopulation | EchoPopulation;
+  | BossPopulation | ChampionPopulation | EchoPopulation | MerchantPopulation;
 
 export interface RecordedHeirloomSnapshot {
   readonly contentId: OpaqueId;
