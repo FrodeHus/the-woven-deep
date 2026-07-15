@@ -13,6 +13,7 @@ import { closeTradeIfInvalid, isTradeCommand, resolveTradeCommand, validateTrade
 import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import { projectDomainEvents } from './event-projection.js';
 import { foldRunMetrics } from './run-metrics.js';
+import { concludeRunOnHeroDeath } from './run-conclusion.js';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
   return stableJson(left) === stableJson(right);
@@ -75,6 +76,12 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
   }
   validateContentBoundRun(state, context.content);
 
+  // A concluded run accepts no further commands: the rejection consumes no randomness and never
+  // touches the modal-session normalization or world branches below.
+  if (state.conclusion !== null) {
+    return recordInvalid(state, context.content, command, 'run.concluded', [], []);
+  }
+
   // Normalize the modal session first: a session whose merchant no longer satisfies the
   // invariant closes (without a bonus) before the submitted command resolves against it.
   const normalized = closeTradeIfInvalid({ state, content: context.content, eventId: command.commandId });
@@ -135,10 +142,23 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
     ? resolveRest({ state: current, content: context.content, eventId: command.commandId,
       until: validation.until, maximumDuration: validation.maximumDuration })
     : resolveWorldStep({ state: current, content: context.content, action: validation, eventId: command.commandId });
-  const events = preEvents.length === 0 ? world.events : [...preEvents, ...world.events];
-  const publicEvents = prePublicEvents.length === 0 ? world.publicEvents : [...prePublicEvents, ...world.publicEvents];
+  // The conclusion boundary runs inside this same transition: a hero killed by the world branch
+  // above is concluded here, before the command is recorded, so the recorded event stream and the
+  // resulting state agree on whether (and how) the run ended.
+  const concluded = concludeRunOnHeroDeath({
+    state: world.state, content: context.content, events: world.events,
+    revision: result.revision, turn: result.turn, eventId: command.commandId,
+  });
+  const conclusionEvents = concluded.events.slice(world.events.length);
+  const conclusionPublicEvents = conclusionEvents.length === 0 ? [] : projectDomainEvents({
+    state: concluded.state, content: context.content, heroId: concluded.state.hero.actorId, events: conclusionEvents,
+  });
+  const worldPublicEvents = conclusionPublicEvents.length === 0 ? world.publicEvents
+    : [...world.publicEvents, ...conclusionPublicEvents];
+  const events = preEvents.length === 0 ? concluded.events : [...preEvents, ...concluded.events];
+  const publicEvents = prePublicEvents.length === 0 ? worldPublicEvents : [...prePublicEvents, ...worldPublicEvents];
   return {
-    state: record(world.state, context.content, command, result, events, publicEvents),
+    state: record(concluded.state, context.content, command, result, events, publicEvents),
     result,
     events: publicEvents,
   };

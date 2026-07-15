@@ -6,6 +6,8 @@ import {
   createDemoContentPack,
   createMerchantDemoRun,
   createUnknownKnowledge,
+  decodeActiveRun,
+  encodeActiveRun,
   expandLegacySeed,
   heroActor,
   heroPerception,
@@ -297,6 +299,112 @@ describe('metrics folding at the record() boundary', () => {
       expect(bought.state.metrics.currencySpent).toBeGreaterThan(opened.state.metrics.currencySpent);
       expect(bought.state.metrics.turnsElapsed).toBe(opened.state.metrics.turnsElapsed);
       expect(bought.state.turn).toBe(opened.state.turn);
+    });
+  });
+});
+
+describe('run conclusion', () => {
+  function starvingDemoRun(): ActiveRun {
+    const demo = createDemoRun();
+    const hero = { ...demo.actors[0]!, health: 1 };
+    return {
+      ...demo,
+      actors: [hero],
+      survival: { ...demo.survival, hungerReserve: 0, hungerStage: 'starving', nextStarvationAt: 1 },
+    };
+  }
+
+  it('concludes the run with a died completion inside the killing transition, then rejects every later command', () => {
+    const initial = starvingDemoRun();
+    const killing = resolveCommand(initial, { type: 'wait', commandId: 'command.fatal', expectedRevision: 0 });
+
+    expect(killing.result).toMatchObject({ status: 'applied' });
+    expect(heroActor(killing.state).health).toBe(0);
+    expect(killing.events.map((event) => event.type)).toEqual(['hero.waited', 'actor.damaged', 'actor.died', 'run.concluded']);
+    expect(killing.state.conclusion).toMatchObject({
+      completionType: 'died',
+      cause: { killerContentId: null },
+    });
+
+    const concludedState = killing.state;
+    const revisionBefore = concludedState.revision;
+    const turnBefore = concludedState.turn;
+    const rngBefore = concludedState.rng;
+
+    const attempts: GameCommand[] = [
+      move('command.after.move', revisionBefore, 'east'),
+      { type: 'wait', commandId: 'command.after.wait', expectedRevision: revisionBefore },
+      {
+        type: 'trade-open', commandId: 'command.after.trade-open', expectedRevision: revisionBefore,
+        merchantActorId: 'actor.absent',
+      },
+      {
+        type: 'rest', commandId: 'command.after.rest', expectedRevision: revisionBefore,
+        until: 'healed', maximumDuration: 100,
+      },
+    ];
+
+    let state = concludedState;
+    for (const command of attempts) {
+      const resolution = resolveCommand(state, command);
+      expect(resolution.result).toMatchObject({
+        status: 'invalid', reason: 'run.concluded', revision: revisionBefore, turn: turnBefore,
+      });
+      expect(resolution.events.at(-1)).toMatchObject({ type: 'action.invalid', reason: 'run.concluded' });
+      expect(resolution.state.revision).toBe(revisionBefore);
+      expect(resolution.state.turn).toBe(turnBefore);
+      expect(resolution.state.rng).toEqual(rngBefore);
+      state = resolution.state;
+    }
+
+    const encoded = encodeActiveRun(concludedState);
+    expect(decodeActiveRun(encoded)).toEqual(concludedState);
+  });
+
+  it('credits the killer when a reaction (opportunity attack) kills the hero mid-move', () => {
+    const base = createDemoContentPack();
+    const packWithMonster = { ...base, entries: [...base.entries, monsterDefinition('monster.reaction-killer')] };
+    const demo = createDemoRun();
+    const hero = { ...demo.actors[0]!, x: 2, y: 1, health: 1 };
+    const monster: ActorState = {
+      ...hero, actorId: 'monster.reaction-killer.1', contentId: 'monster.reaction-killer',
+      playerControlled: false, x: 3, y: 1, health: 10, maxHealth: 10,
+      disposition: 'hostile', populationId: null, reactionReady: true, awareActorIds: [hero.actorId],
+    };
+    const initial: ActiveRun = {
+      ...demo, actors: [hero, monster], rng: { ...demo.rng, combat: combatStateProducing(20) },
+    };
+
+    const killing = resolveCommandWithContext(initial, move('command.reaction-fatal', 0, 'west'), { content: packWithMonster });
+
+    expect(killing.result).toMatchObject({ status: 'applied' });
+    expect(heroActor(killing.state)).toMatchObject({ x: 2, y: 1, health: 0 });
+    expect(killing.events.map((event) => event.type)).toEqual(
+      ['reaction.triggered', 'combat.observed', 'actor.damaged', 'actor.died', 'run.concluded'],
+    );
+    expect(killing.state.conclusion).toMatchObject({
+      completionType: 'died',
+      cause: { killerContentId: 'monster.reaction-killer' },
+    });
+  });
+
+  it('concludes the run when a rest is interrupted by a fatal starvation tick', () => {
+    const initial = starvingDemoRun();
+    const killing = resolveCommand(initial, {
+      type: 'rest', commandId: 'command.rest-fatal', expectedRevision: 0, until: 'healed', maximumDuration: 5000,
+    });
+
+    expect(killing.result).toMatchObject({ status: 'applied' });
+    expect(heroActor(killing.state).health).toBe(0);
+    // The tick that starves the hero to death is observed as ordinary rest-interrupting damage
+    // (restStopReason ranks 'damage' above 'hero-death'); the conclusion boundary still fires in
+    // this same transition regardless of which stop reason the rest itself records.
+    const restCompleted = killing.events.find((event) => event.type === 'rest.completed');
+    expect(restCompleted).toMatchObject({ stopReason: 'damage' });
+    expect(killing.events.at(-1)).toMatchObject({ type: 'run.concluded', completionType: 'died' });
+    expect(killing.state.conclusion).toMatchObject({
+      completionType: 'died',
+      cause: { killerContentId: null },
     });
   });
 });
