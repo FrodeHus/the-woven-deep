@@ -612,8 +612,12 @@ git commit -m "feat: render playfield cells with effects layer"
 
 **Files:**
 - Create: `apps/web/src/ui/panels.tsx`
+- Create: `apps/web/src/ui/ThreatPopover.tsx`
+- Create: `apps/web/src/ui/layout.ts`
 - Create: `apps/web/src/ui/PlayScreen.tsx`
 - Create: `apps/web/test/panels.test.tsx`
+- Create: `apps/web/test/layout.test.ts`
+- Create: `apps/web/test/threat-popover.test.tsx`
 - Modify: `apps/web/src/styles.css`
 
 **Interfaces:**
@@ -639,14 +643,38 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement panels and layout**
 
-All four panels are pure functions of the snapshot — no session access, no effects. `PlayScreen` also owns the camera state: it keeps the previous `CameraOrigin` plus the `floorId` it belongs to (a ref pair), passes `previous: null` on first render or when `projection.floor.floorId` changes (so a descend recenters), calls `computeCamera` each render with the hero position, the hero's sight radius from the projection, and a viewport size derived from the pane (a fixed default like 60×20 is fine for 5A; responsive sizing is 5D polish), and hands the resulting `camera`/`viewport` to `GridRenderer` and `EffectsLayer`. `PlayScreen` composes the Triptych with CSS grid areas:
+All four panels are pure functions of the snapshot — no session access, no effects.
+
+`layout.ts` is a pure module owning the responsive decisions so they are unit-testable without DOM measurement:
+
+```ts
+export type LayoutTier = 'full' | 'compact' | 'minimal';   // full triptych | threats collapsed | both collapsed
+export function layoutTier(paneWidthPx: number): LayoutTier;   // full ≥ 1100, compact ≥ 760, else minimal
+export const MIN_VIEWPORT: CameraViewport = { width: 30, height: 12 };
+export function viewportForPane(input: Readonly<{ panePx: { width: number; height: number }; cellPx: { width: number; height: number }; floor: { width: number; height: number } }>): CameraViewport;
+// floor(pane / cell) per axis, clamped to at least MIN_VIEWPORT and at most the floor size
+```
+
+`layout.test.ts` covers: tier thresholds at, above, and below each boundary; viewport arithmetic (exact floor division, MIN_VIEWPORT clamp, floor-size clamp on each axis independently).
+
+`PlayScreen` owns the camera and layout state: a `ResizeObserver` on the map pane (plus one measured cell's `getBoundingClientRect` for `cellPx`) feeds `viewportForPane`; the window resize also drives `layoutTier` off the pane width. Camera state is a previous-`CameraOrigin` ref keyed by `floorId` (null on first render or floor change, so a descend recenters); each render calls `computeCamera` with the hero position, the hero's sight radius from the projection, and the dynamic viewport, handing `camera`/`viewport` to `GridRenderer` and `EffectsLayer`. In tests, mock `ResizeObserver` (jsdom lacks it — a three-line stub in `test/setup.ts`) and assert the plumbing, not pixel math (that's `layout.test.ts`'s job).
+
+Tier behavior (assert in `panels.test.tsx` by rendering `PlayScreen` at forced tiers via a `tier` override prop used only in tests):
+- `full`: hero panel, map, threat panel, log at 6 visible lines.
+- `compact`: threat panel replaced by (a) `ThreatPopover` on actor-cell hover and (b) a keyboard-openable `<details>` drawer containing the full `ThreatPanel` content — the same information, never hover-only.
+- `minimal`: hero panel additionally collapses to an always-visible vitals strip (health, hunger stage, light state as text) with the full `HeroPanel` in its own drawer; log shrinks to 3 visible lines but never unmounts.
+
+`ThreatPopover`: `role="tooltip"`, non-focusable, rendered on `mouseenter` over a grid cell whose world coordinate holds a visible actor, dismissed on `mouseleave`/scroll/dispatch; shows the actor's name, glyph, health band, intent, and disposition — the same fields `ThreatPanel` lists. Positioned near the cell from the shared `--cell-w`/`--cell-h` custom properties; clamped to the pane. `threat-popover.test.tsx`: hover shows the card with the actor's name, unhover removes it, hovering an empty cell shows nothing.
+
+`PlayScreen` composes the Triptych with CSS grid areas:
 
 ```css
 .triptych { display: grid; grid-template: "status status status" auto "hero map threat" 1fr "log log log" minmax(6rem, 20vh) / minmax(14rem, 1fr) minmax(0, 4fr) minmax(14rem, 1fr); }
-@media (max-width: 60rem) { /* side panels collapse into keyboard-accessible drawers; map keeps primacy */ }
+.triptych[data-tier='compact'] { grid-template-columns: minmax(14rem, 1fr) minmax(0, 5fr) 0; }
+.triptych[data-tier='minimal'] { grid-template-columns: 0 1fr 0; }
 ```
 
-The narrow-width drawer is a `<details>` element per side panel (native keyboard toggle) — no new dependency, focus behaviour comes free. Health is text plus a bar; the accessibility rule is text-first (no color-only meaning). LogPanel is `role="log"` `aria-live="polite"` and auto-scrolls to the newest line. StatusBar renders the turn counter as `<span data-testid="turn-count">Turn {n}</span>` and the depth as text containing `Depth {n}` — Task 8's end-to-end spec asserts on both.
+The drawer is a `<details>` element per collapsed panel (native keyboard toggle) — no new dependency, focus behaviour comes free; the vitals strip overlays the map's top edge in `minimal` without stealing map rows. Health is text plus a bar; the accessibility rule is text-first (no color-only meaning). LogPanel is `role="log"` `aria-live="polite"` and auto-scrolls to the newest line. StatusBar renders the turn counter as `<span data-testid="turn-count">Turn {n}</span>` and the depth as text containing `Depth {n}` — Task 8's end-to-end spec asserts on both.
 
 - [ ] **Step 4: Run and verify GREEN, then commit**
 
@@ -743,7 +771,7 @@ git commit -m "feat: wire keyboard play into the guest app"
 
 - [ ] **Step 1: Configure Playwright**
 
-`playwright.config.ts`: single chromium project, `webServer` block that runs the built server (`command: 'node ../server/dist/main.js'` with `PORT=4173` and the web dist path, `reuseExistingServer: false`) — check `apps/server/src/main.ts`/`config.ts` for the exact env names it reads and use those. `use: { baseURL: 'http://localhost:4173' }`. The root `guest:e2e` script builds first: `npm run build && npm run e2e --workspace @woven-deep/web`. Install browsers in the script via `npx playwright install --with-deps chromium` only in CI docs — locally document `npx playwright install chromium` once in the README of the e2e directory (a three-line `apps/web/e2e/README.md`).
+`playwright.config.ts`: single chromium project, `webServer` block that runs the built server (`command: 'node ../server/dist/main.js'` with `PORT=4173` and the web dist path, `reuseExistingServer: false`) — check `apps/server/src/main.ts`/`config.ts` for the exact env names it reads and use those. `use: { baseURL: 'http://localhost:4173', viewport: { width: 1440, height: 900 } }` — the browser viewport is pinned because the cell window is now responsive; 1440×900 lands in the `full` layout tier, and the scripted walk's camera positions depend on it. One additional e2e case: resize the page to a `compact`-tier width mid-run and assert the threat panel is replaced by its drawer while the grid remains, then hover an actor cell and assert the popover card appears. The root `guest:e2e` script builds first: `npm run build && npm run e2e --workspace @woven-deep/web`. Install browsers in the script via `npx playwright install --with-deps chromium` only in CI docs — locally document `npx playwright install chromium` once in the README of the e2e directory (a three-line `apps/web/e2e/README.md`).
 
 - [ ] **Step 2: Write the end-to-end spec**
 
