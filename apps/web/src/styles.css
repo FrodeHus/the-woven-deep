@@ -15,3 +15,94 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 [role="alert"] { color: #db7f78; }
 :focus-visible { outline: 2px solid #e8c879; outline-offset: 4px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+
+/* Playfield: the grid renders gameplay truth, the effects layer is a purely decorative overlay
+   sharing its coordinate space via --cell-w/--cell-h set on the wrapper. */
+.playfield { position: relative; --cell-w: 1ch; --cell-h: 1lh; line-height: 1; }
+.playfield-grid {
+  display: grid;
+  grid-auto-rows: 1lh;
+  line-height: 1;
+  background: #0b0d15;
+}
+.playfield-grid:focus-visible { outline: 2px solid #e8c879; outline-offset: -2px; }
+.cell { display: block; text-align: center; }
+.cell-empty { color: transparent; }
+.cell-unknown { color: transparent; background: #0b0d15; }
+.cell-remembered { color: #4b526b; filter: saturate(0.4); }
+.cell-visible { color: var(--fg, #aab3d1); opacity: calc(0.35 + 0.65 * var(--light, 1)); }
+
+.effects-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.glow, .effect {
+  position: absolute;
+  left: calc(var(--cell-w) * var(--x, 0));
+  top: calc(var(--cell-h) * var(--y, 0));
+  width: var(--cell-w);
+  height: var(--cell-h);
+  pointer-events: none;
+}
+
+.glow {
+  --glow-color: #e8c879;
+  --glow-radius: 5;
+  --glow-intensity: 1;
+  transform: translate(-50%, -50%);
+  width: calc(var(--cell-w) * var(--glow-radius) * 2);
+  height: calc(var(--cell-h) * var(--glow-radius) * 2);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--glow-color) calc(var(--glow-intensity) * 70%), transparent) 0%, transparent 70%);
+  animation: glow-drift 2.6s ease-in-out infinite alternate;
+}
+.glow[data-source*="torch"] { animation: glow-gutter 900ms steps(6, jump-none) infinite; }
+
+.effect { transform-origin: center; }
+.effect-hit-flash {
+  background: radial-gradient(circle, #ff8a7a 0%, transparent 70%);
+  animation: hit-flash 120ms ease-out;
+}
+.effect-attack-streak {
+  --dx: calc(var(--to-x, 0) - var(--x, 0));
+  --dy: calc(var(--to-y, 0) - var(--y, 0));
+  background: linear-gradient(90deg, #f1d898, transparent);
+  animation: attack-streak 160ms ease-out;
+}
+.effect-death-burst {
+  background: radial-gradient(circle, #db7f78 0%, transparent 70%);
+  animation: death-burst 240ms ease-out;
+}
+
+@keyframes glow-drift {
+  from { transform: translate(-50%, -50%) scale(0.94); opacity: 0.85; }
+  to { transform: translate(-50%, -50%) scale(1.04); opacity: 1; }
+}
+@keyframes glow-gutter {
+  0%, 100% { opacity: 0.75; }
+  20% { opacity: 0.9; }
+  40% { opacity: 0.6; }
+  60% { opacity: 1; }
+  80% { opacity: 0.7; }
+}
+@keyframes hit-flash {
+  from { opacity: 1; filter: brightness(1.6); }
+  to { opacity: 0; filter: brightness(1); }
+}
+@keyframes attack-streak {
+  from { transform: translate(0, 0); opacity: 1; }
+  to {
+    transform: translate(calc(var(--cell-w) * var(--dx)), calc(var(--cell-h) * var(--dy)));
+    opacity: 0;
+  }
+}
+@keyframes death-burst {
+  from { transform: scale(0.4); opacity: 1; }
+  to { transform: scale(2.2); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow { animation: none; opacity: calc(var(--glow-intensity) * 0.7); }
+  .effect { animation: none; display: none; }
+}
