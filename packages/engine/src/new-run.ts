@@ -3,6 +3,7 @@ import type { BaseAttributes, EquipmentSlot } from './actor-model.js';
 import { emptyEquipment, type ActorState } from './actor-model.js';
 import { addGeneratedFloor } from './floor-integration.js';
 import { generateFloor } from './generate-floor.js';
+import type { ClassicThemeSettings } from './generation-model.js';
 import { createClassicTheme } from './generation-mask.js';
 import { allocateFloorSeed } from './generation-random.js';
 import { allocateIdentificationMap } from './identification.js';
@@ -14,8 +15,13 @@ import { encodeRunSeed } from './run-records-model.js';
 import { emptyRunMetrics } from './run-metrics.js';
 import { ENGINE_GAME_VERSION, SAVE_SCHEMA_VERSION } from './versions.js';
 
-const WIDTH = 80;
-const HEIGHT = 25;
+export const NEW_RUN_FLOOR_WIDTH = 80;
+export const NEW_RUN_FLOOR_HEIGHT = 25;
+export const NEW_RUN_FLOOR_THEME_SETTINGS: ClassicThemeSettings = {
+  ambient: { color: [19, 23, 31], strength: 7 },
+};
+const WIDTH = NEW_RUN_FLOOR_WIDTH;
+const HEIGHT = NEW_RUN_FLOOR_HEIGHT;
 const FIRST_FLOOR_ID = 'floor.depth-01';
 
 export interface NewRunHeroItem {
@@ -108,7 +114,7 @@ export function createNewRun(input: Readonly<{
     depth: 1,
     width: WIDTH,
     height: HEIGHT,
-    theme: createClassicTheme(WIDTH, HEIGHT, { ambient: { color: [19, 23, 31], strength: 7 } }),
+    theme: createClassicTheme(WIDTH, HEIGHT, NEW_RUN_FLOOR_THEME_SETTINGS),
     vaults,
   });
   const stairUp = generated.floor.stairUp;
