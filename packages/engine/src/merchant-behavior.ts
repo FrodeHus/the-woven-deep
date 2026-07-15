@@ -176,8 +176,14 @@ export function prepareMerchantTurn(input: Readonly<{
   const mode = merchantMode({ population, encounter, npc, actor: observed, threats });
   const target = mode === 'defend' ? selectDefenseTarget(observed, threats) : undefined;
   const goal = target === undefined ? null : { type: 'actor' as const, targetActorId: target.actorId };
+  // The attack intent requires a currently perceived target adjacent at its LIVE position;
+  // a stale memory of an adjacent cell only warrants approaching the remembered cell.
+  const liveTarget = target === undefined ? undefined : actorById(input.state, target.actorId);
+  const targetAdjacent = target !== undefined && liveTarget !== undefined && liveTarget.health > 0
+    && liveTarget.floorId === observed.floorId && awareActorIds.includes(target.actorId)
+    && chebyshev(observed, liveTarget) === 1;
   const intent = mode === 'hold' ? 'hold' : mode === 'flee' ? 'flee'
-    : chebyshev(observed, target!) === 1 ? 'attack' : 'approach';
+    : targetAdjacent ? 'attack' : 'approach';
   const updated = updatePopulationIntent({
     eventId: input.eventId, actorId: actor.actorId,
     state: { ...observed.behaviorState, goal }, intent,
@@ -220,14 +226,18 @@ export function merchantBehaviorAction(input: Readonly<{
   if (mode === 'defend') {
     const target = selectDefenseTarget(actor, threats);
     const live = actorById(input.state, target.actorId);
-    const destination = live !== undefined && live.floorId === actor.floorId
-      && actor.awareActorIds.includes(target.actorId) ? { x: live.x, y: live.y } : { x: target.x, y: target.y };
-    if (chebyshev(actor, destination) === 1) {
+    // Mirror monster gating: only bump-attack a live, currently perceived target actually
+    // adjacent at its live position. A stale memory of an adjacent cell never licenses an
+    // attack at arbitrary range — the merchant paths toward the remembered cell instead.
+    const perceived = live !== undefined && live.health > 0 && live.floorId === actor.floorId
+      && actor.awareActorIds.includes(target.actorId);
+    if (perceived && chebyshev(actor, live) === 1) {
       return {
         type: 'bump-attack', actorId: actor.actorId, targetActorId: target.actorId,
         cost: actionCostFor(rules, 'action.attack'),
       };
     }
+    const destination = perceived ? { x: live.x, y: live.y } : { x: target.x, y: target.y };
     const path = findPath({
       width: floor.width, height: floor.height, topology: 8,
       origin: { x: actor.x, y: actor.y }, destination,

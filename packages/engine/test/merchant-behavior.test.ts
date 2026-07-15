@@ -281,6 +281,26 @@ describe('merchant neutral threat response', () => {
       .toMatchObject({ type: 'bump-attack', targetActorId: BEETLE_ID });
   });
 
+  it('never attacks a remembered position after the target escapes perception', () => {
+    const selfDefense = withMerchantDefinition({ aggressionResponse: 'self-defense' });
+    // Hero (1,1) provokes while adjacent to the merchant (2,1): the merchant remembers the
+    // hero at the adjacent cell and switches to the defending lifecycle.
+    const provoked = provokeMerchant({
+      state: merchantRun(), content: selfDefense, merchantPopulationId: POPULATION_ID,
+      sourceActorId: HERO_ID, eventId: 'event.provoke',
+    });
+    expect(merchantPopulation(provoked.state).lifecycle).toBe('defending');
+    // The hero steps away out of the merchant's perception; only the stale memory remains.
+    let run = updateActor(provoked.state, HERO_ID, { x: 5, y: 3 });
+    run = updateActor(run, MERCHANT_ACTOR_ID, {
+      awareActorIds: merchantActor(run).awareActorIds.filter((actorId) => actorId !== HERO_ID),
+    });
+    const action = merchantBehaviorAction({ state: run, content: selfDefense, actorId: MERCHANT_ACTOR_ID });
+    // The live hero is far away: attacking the remembered cell would hit at arbitrary range.
+    expect(action.type).not.toBe('bump-attack');
+    expect(action).toMatchObject({ type: 'move', to: { x: 1, y: 1 } });
+  });
+
   it('falls back to fleeing below the authored self-preservation threshold', () => {
     const selfDefense = withMerchantDefinition({ aggressionResponse: 'self-defense' });
     let run = withActor(merchantRun(), beetle({ x: 3, y: 1 }));
@@ -414,8 +434,10 @@ describe('merchant provocation and stock loss', () => {
     expect(merchantPopulation(provoked.state).lifecycle).toBe('defending');
     expect(provoked.events.find((event) => event.type === 'merchant.provoked'))
       .toMatchObject({ response: 'self-defense', sourceActorId: HERO_ID });
-    // The provoked merchant now attacks the hero it stands next to.
-    expect(merchantBehaviorAction({ state: provoked.state, content: selfDefense, actorId: MERCHANT_ACTOR_ID }))
+    // Once perception confirms the adjacent hero (as prepareMerchantTurn does before every
+    // scheduled turn), the provoked merchant attacks the hero it stands next to.
+    const aware = updateActor(provoked.state, MERCHANT_ACTOR_ID, { awareActorIds: [HERO_ID] });
+    expect(merchantBehaviorAction({ state: aware, content: selfDefense, actorId: MERCHANT_ACTOR_ID }))
       .toMatchObject({ type: 'bump-attack', targetActorId: HERO_ID });
   });
 
