@@ -150,4 +150,40 @@ describe('server-admin content documentation', () => {
       expect(reference, `missing numeric/rejection contract: ${contract}`).toContain(contract);
     }
   });
+
+  it('documents every merchant commerce, lifecycle, and save-migration contract', async () => {
+    const reference = await readFile(resolve(
+      import.meta.dirname,
+      '../../../docs/server-admin/content-configuration.md',
+    ), 'utf8');
+    const required = [
+      // Price formulas and rounding.
+      '`basePrice * merchantSaleBps * tier purchasePriceBps / 10000^2`, rounded up, with a minimum price of `1`',
+      '`basePrice * merchantPurchaseBps * tier salePriceBps / 10000^2`, rounded down',
+      '`basePrice * tier purchasePriceBps / 10000`, rounded up',
+      'non-negative safe integer; a transaction that would overflow is rejected atomically',
+      // Stock transferability.
+      'must not be boss-guaranteed unique or tagged `heirloom`, `quest`, `objective`, or `nontransferable`',
+      'heirlooms, boss uniques, and the tagged exclusions above are never transferable in either direction',
+      // Starting currency.
+      "starts at the balance entry's `startingCurrency`",
+      // Lifetime, warnings, and off-floor departure.
+      'rolled once at materialization inside `minimumLifetime..maximumLifetime`',
+      'emitted exactly once as remaining time crosses it, on any floor',
+      'never takes catch-up actor turns',
+      // Aggression, stock-drop ceiling, and one-time reputation deltas.
+      'switches to its authored `aggressionResponse` (`flee` or `self-defense`)',
+      'drops exactly `ceil(total stock units * stockDropFraction)` units',
+      'the ceiling rule guarantees any positive fraction drops at least one unit',
+      'applies `deathReputationDelta` once (hero kills only) and destroys the remaining held stock',
+      'grants `commerceReputationDelta` at most once per merchant',
+      // Production rarity and save migration.
+      'production rarity `uncommon`',
+      'save schema version `5`',
+      'Schema-v4 saves migrate to v5 automatically on load with empty merchant state',
+    ];
+    for (const contract of required) {
+      expect(reference, `missing merchant contract: ${contract}`).toContain(contract);
+    }
+  });
 });
