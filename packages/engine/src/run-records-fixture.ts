@@ -221,9 +221,6 @@ export function validateRunRecordsInvariants(run: ActiveRun, pack: CompiledConte
   if (heroDead !== (run.conclusion !== null)) {
     throw new Error('run-records invariant: dead hero must have exactly a non-null conclusion');
   }
-  if (run.conclusion !== null && run.conclusion.finalized && run.conclusion === undefined) {
-    throw new Error('run-records invariant: finalized requires a conclusion');
-  }
 }
 
 function merchantOnFloor(run: ActiveRun): MerchantPopulation {

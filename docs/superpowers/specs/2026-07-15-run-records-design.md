@@ -93,6 +93,7 @@ interface HallRecord {
   readonly metrics: RunMetrics;           // copied snapshot
   readonly reputations: readonly FactionReputation[]; // finalized statistics
   readonly heirloom: RecordedHeirloomSnapshot;
+  readonly build: FallenHeroBuildSnapshot; // engine facts (attributes, equipped items, abilities) feeding 4B1 standings normalization
   readonly runSeed: string;
   readonly contentHash: string;
 }
@@ -127,6 +128,8 @@ Pure, callable exactly once (`finalized` guard; second call is an invariant erro
 4. **Achievement evaluation** against fallen-hero decisions plus `lifetime` (first Champion defeat when a retained champion decision is defeated and its record not yet conquered; first lifetime Echo defeat).
 5. **Lifetime deltas**: newly conquered Champion record IDs, achievement grants, discovery-protection updates (4B1's sorted `DiscoveryProtectionUpdate[]`), lifetime metric merges.
 6. **Events**: `run.finalized` (record ID, completion type, score total) plus achievement-granted events, all hero-visible.
+
+An equipped instance carrying `ItemInstance.heirloom` metadata (i.e. inherited from an earlier fallen hero) is not excluded from selection by that fact alone — only the content-defined `heirloomEligible`/tag/unique rules above exclude candidates — so a re-inherited heirloom remains eligible to be chosen again as a later run's heirloom. Re-selection reassigns `originatingHallRecordId` to the new record: provenance is one hop, and the most recent origin always wins.
 
 `LifetimeDeltas` is pure data; the host applies it through the repository. The engine never imports the repository.
 

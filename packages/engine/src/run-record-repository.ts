@@ -104,7 +104,7 @@ export function standingsFromRecords(
 ): readonly FallenHeroStandingSnapshot[] {
   const eligible = records.filter((record) => record.completionType === 'died' && record.cause.depth >= 1);
   const sorted = [...eligible].sort(compareHallRecords);
-  const capped = sorted.slice(0, Math.min(limit, MAX_STANDINGS));
+  const capped = sorted.slice(0, Math.max(0, Math.min(limit, MAX_STANDINGS)));
   return capped.map((record, index): FallenHeroStandingSnapshot => ({
     rank: index + 1,
     hallRecordId: record.recordId,
@@ -167,7 +167,7 @@ export function createInMemoryRunRecordRepository(): RunRecordRepository {
       return heart;
     },
     recordHeart(record) {
-      heart = record;
+      heart = deepFreezeCopy(record);
     },
     lifetime() {
       return lifetime;

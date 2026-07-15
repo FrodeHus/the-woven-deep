@@ -94,6 +94,16 @@ describe('standingsFromRecords', () => {
     expect(standings[0]?.rank).toBe(1);
     expect(standings[0]?.hallRecordId).toBe(died.recordId);
   });
+
+  it('a limit of 0 returns no standings', () => {
+    const standings = standingsFromRecords([storedRecord(), secondStoredRecord()], 0);
+    expect(standings).toEqual([]);
+  });
+
+  it('a negative limit clamps to no standings rather than returning all-but-last', () => {
+    const standings = standingsFromRecords([storedRecord(), secondStoredRecord()], -1);
+    expect(standings).toEqual([]);
+  });
 });
 
 describe('createInMemoryRunRecordRepository', () => {
@@ -157,6 +167,21 @@ describe('createInMemoryRunRecordRepository', () => {
     expect(repository.currentHeart()).toEqual(first);
     repository.recordHeart(second);
     expect(repository.currentHeart()).toEqual(second);
+  });
+
+  it('deep-freezes recorded Hearts so mutations of the caller original do not affect currentHeart', () => {
+    const repository = createInMemoryRunRecordRepository();
+    const mutableHeart = structuredClone({
+      heroName: 'Ada', classTags: ['fighter'], hallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+      enrichment: { achievedAt: '2026-01-01', portraitGlyph: '@' },
+    }) as HeartLineageRecord;
+    repository.recordHeart(mutableHeart);
+
+    // Mutate a nested field of the original/mutable record
+    (mutableHeart.enrichment as { achievedAt: string }).achievedAt = '2099-12-31';
+
+    // Verify the stored Heart is unaffected
+    expect(repository.currentHeart()?.enrichment.achievedAt).toBe('2026-01-01');
   });
 
   it('applyDeltas merges conquered/achievement IDs as sorted unions, replaces discovery-protection bonuses by encounter ID, and merges metrics additively except deepestDepth (maximum); reapplying an already-applied recordId is idempotent', () => {

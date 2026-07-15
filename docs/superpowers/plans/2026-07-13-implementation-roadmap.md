@@ -53,7 +53,7 @@ Deliver this milestone through two independently reviewable slices:
 
 **4B2 dungeon NPCs (travelling merchants) — complete:** `docs/superpowers/plans/2026-07-14-dungeon-npcs.md`
 
-**4B3 run records — complete:** `docs/superpowers/specs/2026-07-15-run-records-design.md`, `docs/superpowers/plans/2026-07-13-implementation-roadmap.md`
+**4B3 run records — complete:** `docs/superpowers/specs/2026-07-15-run-records-design.md`, `docs/superpowers/plans/2026-07-15-run-records.md`
 
 **Exit demonstration:** an automated simulation can fight a leader group, contain or flee a growing swarm, encounter a rare boss, trade with or attack a travelling merchant, and finalize a deterministic run record.
 
