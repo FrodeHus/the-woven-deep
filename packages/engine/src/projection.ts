@@ -1,5 +1,5 @@
 import type {
-  CompiledContentPack, ItemContentEntry, MerchantEncounterContentEntry, NpcFactionContentEntry,
+  CompiledContentPack, ItemContentEntry, MerchantEncounterContentEntry,
 } from '@woven-deep/content';
 import { heroActor, heroPerception } from './actor-model.js';
 import { deriveActorStats } from './attributes.js';
@@ -22,7 +22,7 @@ import { relationshipBetween } from './reactions.js';
 import { compareCodeUnits } from './stable-json.js';
 import { hungerModifiers } from './survival.js';
 import { tileDefinition } from './terrain.js';
-import { activeTradeValidIgnoringDeparture } from './trade.js';
+import { activeTradeValidIgnoringDeparture, merchantFaction } from './trade.js';
 import { computeFieldOfView, isVisible } from './visibility.js';
 
 export type KnowledgeState = 'unknown' | 'remembered' | 'visible';
@@ -309,13 +309,6 @@ export interface GameplayProjection {
   readonly trade?: ObservableTradeProjection;
 }
 
-function merchantFactionEntry(
-  content: CompiledContentPack, factionId: OpaqueId,
-): NpcFactionContentEntry | undefined {
-  const entry = content.entries.find((candidate) => candidate.id === factionId);
-  return entry?.kind === 'npc-faction' ? entry : undefined;
-}
-
 /**
  * Qualitative merchant extension for a visible merchant actor: faction name, reputation tier,
  * trade availability, and only the most urgent already-emitted departure warning. The exact
@@ -324,8 +317,7 @@ function merchantFactionEntry(
 function visibleMerchantState(
   state: ActiveRun, content: CompiledContentPack, population: MerchantPopulation,
 ): Readonly<Record<string, unknown>> {
-  const faction = merchantFactionEntry(content, population.factionId);
-  if (faction === undefined) return {};
+  const faction = merchantFaction(content, population.factionId);
   const tier = reputationTier(factionReputation(state, faction), faction);
   const urgentWarning = population.emittedWarningThresholds.length === 0
     ? undefined : Math.min(...population.emittedWarningThresholds);
@@ -356,8 +348,8 @@ function projectActiveTrade(
     : content.entries.find((candidate) => candidate.id === population.encounterId);
   const encounter: MerchantEncounterContentEntry | undefined =
     encounterEntry?.kind === 'encounter' && encounterEntry.model === 'merchant' ? encounterEntry : undefined;
-  const faction = population === undefined ? undefined : merchantFactionEntry(content, population.factionId);
-  if (!population || !actor || !encounter || !faction) return undefined;
+  if (!population || !actor || !encounter) return undefined;
+  const faction = merchantFaction(content, population.factionId);
   const tier = reputationTier(factionReputation(state, faction), faction);
   const hero = heroActor(state);
   const itemEntry = (contentId: OpaqueId): ItemContentEntry | undefined => {
@@ -370,14 +362,12 @@ function projectActiveTrade(
       const item = state.items.find((candidate) => candidate.itemId === itemId);
       const definition = item === undefined ? undefined : itemEntry(item.contentId);
       if (!item || !definition) return [];
-      try {
-        return [{
-          item: projectItem({ run: state, content, itemId }),
-          quantity: item.quantity,
-          unitPrice: quoteMerchantPurchase({ basePrice: definition.price,
-            merchantBps: encounter.definition.merchantSaleBps, factionBps: tier.purchasePriceBps }),
-        }];
-      } catch { return []; }
+      return [{
+        item: projectItem({ run: state, content, itemId }),
+        quantity: item.quantity,
+        unitPrice: quoteMerchantPurchase({ basePrice: definition.price,
+          merchantBps: encounter.definition.merchantSaleBps, factionBps: tier.purchasePriceBps }),
+      }];
     });
   const uniqueItemIds = guaranteedUniqueItemIds(content);
   const saleOffers = state.items
@@ -386,14 +376,12 @@ function projectActiveTrade(
     .flatMap((item) => {
       const definition = itemEntry(item.contentId);
       if (!definition || !merchantAcceptsItem(item, definition, encounter, uniqueItemIds)) return [];
-      try {
-        return [{
-          itemId: item.itemId,
-          quantity: item.quantity,
-          unitPrice: quoteMerchantSale({ basePrice: definition.price,
-            merchantBps: encounter.definition.merchantPurchaseBps, factionBps: tier.salePriceBps }),
-        }];
-      } catch { return []; }
+      return [{
+        itemId: item.itemId,
+        quantity: item.quantity,
+        unitPrice: quoteMerchantSale({ basePrice: definition.price,
+          merchantBps: encounter.definition.merchantPurchaseBps, factionBps: tier.salePriceBps }),
+      }];
     });
   const identifyTargetIds = state.items
     .filter((item) => (item.location.type === 'backpack' || item.location.type === 'equipped')
@@ -412,16 +400,12 @@ function projectActiveTrade(
     .filter((service) => tier.serviceIds.includes(service.serviceId)
       && service.tierIds.includes(tier.tierId))
     .sort((left, right) => compareCodeUnits(left.serviceId, right.serviceId))
-    .flatMap((service) => {
-      try {
-        return [{
-          serviceId: service.serviceId,
-          unitPrice: quoteMerchantService({ basePrice: service.basePrice, factionBps: tier.purchasePriceBps }),
-          remainingUses: service.remainingUses,
-          targetItemIds: identifyTargetIds,
-        }];
-      } catch { return []; }
-    });
+    .map((service) => ({
+      serviceId: service.serviceId,
+      unitPrice: quoteMerchantService({ basePrice: service.basePrice, factionBps: tier.purchasePriceBps }),
+      remainingUses: service.remainingUses,
+      targetItemIds: identifyTargetIds,
+    }));
   return {
     merchantPopulationId: population.populationId,
     merchantActorId: actor.actorId,

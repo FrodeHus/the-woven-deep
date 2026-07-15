@@ -48,7 +48,7 @@ function merchantEncounter(content: CompiledContentPack, encounterId: OpaqueId):
   return entry;
 }
 
-function merchantFaction(content: CompiledContentPack, factionId: OpaqueId): NpcFactionContentEntry {
+export function merchantFaction(content: CompiledContentPack, factionId: OpaqueId): NpcFactionContentEntry {
   const entry = content.entries.find((candidate) => candidate.id === factionId);
   if (!entry || entry.kind !== 'npc-faction') {
     throw new Error(`internal invariant: merchant faction ${factionId} does not exist`);
