@@ -178,14 +178,33 @@ export function projectDomainEvents(input: Readonly<{
       case 'reputation.changed': output.push(event); break;
       case 'trade.opened': case 'trade.bought': case 'trade.sold': case 'trade.service-purchased': case 'trade.closed':
         output.push(event); break;
-      case 'merchant.departure-warning': case 'merchant.departed':
-      case 'merchant.provoked': case 'merchant.stock-dropped': case 'merchant.died': {
-        // Global merchant deadlines resolve even on inactive floors; the player only hears about
-        // merchants whose encounter was legitimately observed at least once.
+      case 'merchant.departure-warning': case 'merchant.provoked':
+      case 'merchant.stock-dropped': case 'merchant.died': {
+        // Merchant lifecycle transitions are observable only while the merchant itself is
+        // legitimately visible, and even then only as a qualitative notice: exact remaining
+        // time, dropped/destroyed stock identifiers, and killer identity stay hidden. The
+        // hero's own trade auto-close and reputation change arrive separately as exact events.
+        if (!actorVisible(event.actorId)) break;
+        const category = event.type === 'merchant.departure-warning' ? 'merchant-departure-warning' as const
+          : event.type === 'merchant.provoked' ? 'merchant-provoked' as const
+            : event.type === 'merchant.stock-dropped' ? 'merchant-stock-dropped' as const
+              : 'merchant-died' as const;
+        const presentation = event.type === 'merchant.departure-warning'
+          ? `merchant.departure-warning.${event.threshold}`
+          : event.type === 'merchant.provoked' ? `merchant.provoked.${event.response}` : event.type;
+        output.push(notice(event, category, event.actorId, presentation, actorName(event.actorId)));
+        break;
+      }
+      case 'merchant.departed': {
+        // The departed actor no longer exists, so visibility cannot be evaluated; the player is
+        // told only that a previously encountered merchant left their current floor. Off-floor
+        // departures and never-observed merchants resolve silently, without stock identifiers.
         const population = input.state.populations.find((candidate) => candidate.populationId === event.populationId);
         const decision = population === undefined ? undefined
           : input.state.encounterDecisions.find((candidate) => candidate.encounterId === population.encounterId);
-        if (decision?.encountered) output.push(event);
+        if (decision?.encountered && population?.floorId === floor.floorId) {
+          output.push(notice(event, 'merchant-departed', null, 'merchant.departed'));
+        }
         break;
       }
       case 'population.created': {

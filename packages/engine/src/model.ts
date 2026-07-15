@@ -445,7 +445,9 @@ export interface PopulationNoticePublicEvent {
   readonly category: 'created' | 'encountered' | 'leader-created' | 'leader-defeated' | 'group-outcome'
     | 'swarm-growth' | 'swarm-cap' | 'source-destroyed' | 'boss-encountered' | 'boss-phase'
     | 'boss-recovery' | 'boss-defeated' | 'boss-reward' | 'champion-encountered' | 'champion-defeated'
-    | 'champion-heirloom' | 'echo-encountered' | 'echo-defeated' | 'echo-loot';
+    | 'champion-heirloom' | 'echo-encountered' | 'echo-defeated' | 'echo-loot'
+    | 'merchant-departure-warning' | 'merchant-departed' | 'merchant-provoked'
+    | 'merchant-stock-dropped' | 'merchant-died';
   readonly actorId: OpaqueId | null;
   readonly presentation: string;
   readonly displayName?: string;
@@ -568,7 +570,8 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | PopulationDomainEvent | ReputationChangedEvent | TradeDomainEvent | MerchantLifecycleDomainEvent
   | RestCompletedEvent;
 
-export type PublicEvent = Exclude<DomainEvent, AttackMissedEvent | AttackHitEvent | PopulationDomainEvent>
+export type PublicEvent =
+  Exclude<DomainEvent, AttackMissedEvent | AttackHitEvent | PopulationDomainEvent | MerchantLifecycleDomainEvent>
   | ActorIntentChangedEvent | SoundHeardEvent | HeroDamagedPublicEvent | CombatObservedPublicEvent
   | ActorMovementObservedPublicEvent | ActorDamageObservedPublicEvent | ActorDeathObservedPublicEvent
   | PopulationNoticePublicEvent;

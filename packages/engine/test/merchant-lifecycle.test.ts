@@ -422,8 +422,9 @@ describe('world-step merchant deadlines', () => {
       populationId: population.populationId, actorId: population.actorId,
       threshold: 100, remaining: 99,
     }]);
-    // The encountered merchant's warning is visible to the player.
-    expect(stepped.events.some((event) => event.type === 'merchant.departure-warning')).toBe(true);
+    // The off-floor merchant is not visible, so the player receives no public warning; the
+    // authoritative record above still carries it for replay.
+    expect(stepped.events).toEqual([expect.objectContaining({ type: 'hero.waited' })]);
     const after = stepped.state.actors.find((actor) => actor.actorId === population.actorId);
     expect(after).toEqual(before);
     expect(merchantPopulation(stepped.state).emittedWarningThresholds).toEqual([1000, 500, 100]);

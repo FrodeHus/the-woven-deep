@@ -223,7 +223,9 @@ const populationNoticePublicEvent = z.strictObject({ type: z.literal('population
   category: z.enum(['created', 'encountered', 'leader-created', 'leader-defeated', 'group-outcome',
     'swarm-growth', 'swarm-cap', 'source-destroyed', 'boss-encountered', 'boss-phase', 'boss-recovery',
     'boss-defeated', 'boss-reward', 'champion-encountered', 'champion-defeated', 'champion-heirloom',
-    'echo-encountered', 'echo-defeated', 'echo-loot']),
+    'echo-encountered', 'echo-defeated', 'echo-loot',
+    'merchant-departure-warning', 'merchant-departed', 'merchant-provoked',
+    'merchant-stock-dropped', 'merchant-died']),
   actorId: identifier.nullable(), presentation: z.string().min(1).max(120), displayName: z.string().min(1).max(120).optional() });
 const reputationChangedEvent = z.strictObject({ type: z.literal('reputation.changed'), eventId: identifier,
   factionId: identifier, previous: z.number().int().safe(), delta: z.number().int().safe(),
@@ -295,6 +297,8 @@ const hiddenPublicEventTypes = new Set([
   'swarm.members-created', 'swarm.cap-reached', 'swarm.source-destroyed', 'boss.encountered',
   'boss.phase-changed', 'boss.recovered', 'boss.defeated', 'boss.reward-created', 'champion.encountered',
   'champion.defeated', 'champion.heirloom-created', 'echo.encountered', 'echo.defeated', 'echo.loot-created',
+  'merchant.departure-warning', 'merchant.departed', 'merchant.provoked', 'merchant.stock-dropped',
+  'merchant.died',
 ]);
 const publicOnlyEventTypes = new Set([
   'sound.heard', 'hero.damaged', 'combat.observed', 'actor.movement-observed', 'actor.damage-observed',
