@@ -39,10 +39,14 @@ keyboard event
 
 ### Engine additions (`packages/engine`)
 
-The only engine change in 5A is a production run constructor:
+5A adds two production engine entry points. (Amended during planning: the engine has no descend command — floor transition is a host-driven `allocateFloorSeed` → `generateFloor` → `integrateGeneratedFloor` sequence, and performing that state surgery in the browser would move rules out of the engine. A second helper keeps the transition inside the engine boundary.)
+
+- `descendToNextFloor(run, { content }): { state; events }` — validates the hero stands on the active floor's stair-down tile and the run is unconcluded, allocates the next floor seed, generates the next-depth floor through the existing pipeline, moves the hero to its stair-up, and integrates it through `integrateGeneratedFloor` (which records the floor entry and re-validates). Deterministic, browser-safe, engine-tested.
+
+And the run constructor:
 
 - `createNewRun(input: { pack: CompiledContentPack; seed: Uint32State; hero: NewRunHero }): ActiveRun` — derives the RNG streams from the seed, procedurally generates floor 1 through the existing generation pipeline, places the hero at the entry, resolves the hero's starting equipment from content, records the initial floor entry (so `floorsEntered >= 1` holds), and returns a valid schema-v6 `ActiveRun` that passes `validateActiveRun`.
-- `NewRunHero` carries name, attribute block, and starting-equipment content IDs. `DEFAULT_GUEST_HERO` is the exported fixed Wayfarer 5A uses: 10 in each of the five attributes (Might, Agility, Vitality, Wits, Resolve) and the Wayfarer starting gear resolved from the bundled pack.
+- `NewRunHero` carries name, attribute block, and starting-equipment content IDs. `DEFAULT_GUEST_HERO` is the exported fixed Wayfarer 5A uses: 10 in each of the five attributes (Might, Agility, Vitality, Wits, Resolve) and a fixed starting loadout of bundled item IDs (iron sword and leather armor equipped, a lit pitch torch, travel rations in the backpack). No class content kind exists yet — class entries arrive with later milestones — so the loadout is data on `NewRunHero`, which is exactly the field 5B's character generation will populate from its equipment step.
 - Browser-safe, deterministic, clock-free, covered by engine unit and property tests like every other engine module. Milestone 5B replaces only the `hero` argument, not the constructor.
 
 ### Guest session layer (`apps/web/src/session/`)
