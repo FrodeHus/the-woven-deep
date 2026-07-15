@@ -363,6 +363,33 @@ describe('merchant provocation and stock loss', () => {
     }
   });
 
+  it('drops stock saveably when the merchant is provoked while standing on an open door', () => {
+    const base = merchantRun();
+    const floor = base.floors[0]!;
+    // Put closed-door terrain (tile 2) under the merchant at (2,1) with an open door feature on
+    // top: actors may legally stand there, so the dropped stock must be saveable there too.
+    const state: ActiveRun = {
+      ...base,
+      floors: [{ ...floor, tiles: floor.tiles.map((tile, index) => index === 9 ? 2 : tile) }],
+      features: [{
+        featureId: 'door.open', type: 'door', floorId: floor.floorId, x: 2, y: 1,
+        contentId: null, coverTileId: 2, state: 'open',
+      }],
+    };
+    const provoked = provokeMerchant({
+      state, content, merchantPopulationId: POPULATION_ID,
+      sourceActorId: HERO_ID, eventId: 'command.attack',
+    });
+    const dropped = provoked.state.items.filter((entry) => entry.location.type === 'floor');
+    expect(dropped.length).toBeGreaterThan(0);
+    for (const entry of dropped) {
+      expect(entry.location).toMatchObject({ floorId: 'floor.demo', x: 2, y: 1 });
+    }
+    expect(groundUnits(provoked.state)).toBe(Math.ceil(stockUnits(state) * encounter.definition.stockDropFraction));
+    const restored = decodeActiveRun(encodeActiveRun(provoked.state));
+    expect(stableJson(restored)).toBe(stableJson(provoked.state));
+  });
+
   it('uses split identifiers under the population drop namespace and selects units deterministically', () => {
     const state = merchantRun();
     const first = provokeMerchant({

@@ -1109,7 +1109,9 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     if (location.type === 'floor') {
       const itemFloor = run.floors.find((candidate) => candidate.floorId === location.floorId);
       if (!itemFloor) fail(`${path}.location.floorId`, 'item floor does not exist');
-      ensureWalkable(itemFloor, location.x, location.y, `${path}.location`);
+      // Items drop at actor positions (hero drops, merchant stock loss), so floor items accept
+      // exactly the cells actors may legally occupy: walkable terrain plus feature-walkable cells.
+      ensureActorWalkable(itemFloor, run.features, location.x, location.y, `${path}.location`);
       continue;
     }
     const owner = actors.get(location.actorId);
