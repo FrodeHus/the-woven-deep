@@ -65,10 +65,11 @@ export function integrateGeneratedFloor(
     && !run.floors.some((floor) => floor.floorId === generated.floor.floorId);
 
   // A brand-new run bootstraps its first-ever floor with no prior floors to append after; every
-  // other caller transitions between floors that already exist in an established run.
+  // other caller transitions between floors that already exist in an established run. This admits
+  // exactly the shape `createNewRun` hands off: `floors: []` with the hero already placed on the
+  // generated floor and `activeFloorId` already pointing at it (`transitioningToInsertedFloor`).
   const previousFloor = run.floors.at(-1);
-  const isBootstrappingFirstFloor = previousFloor === undefined && run.floors.length === 0
-    && transitioningToInsertedFloor;
+  const isBootstrappingFirstFloor = run.floors.length === 0 && transitioningToInsertedFloor;
   if (!isBootstrappingFirstFloor
     && (previousFloor === undefined || generated.floor.floorId <= previousFloor.floorId)) {
     throw new RangeError('generated floor identifier must be a unique strict append in increasing order');

@@ -287,6 +287,35 @@ describe('addGeneratedFloor', () => {
     expect(result.metrics.deepestDepth).toBe(run.metrics.deepestDepth);
   });
 
+  it('rejects an empty-floors run that is not the exact bootstrap shape (hero still on the prior floor)', () => {
+    const run = createDemoRun();
+    const emptyFloors: ActiveRun = { ...run, floors: [] };
+    // activeFloorId and the hero's actor still point at 'floor.demo', not the generated floor,
+    // so this is a bare `floors: []` run rather than the transitioning bootstrap shape.
+    expect(() => addGeneratedFloor(emptyFloors, generatedFloor(), allocation(run)))
+      .toThrow(/unique strict append|increasing order/);
+  });
+
+  it('bootstraps a run whose floors are empty and the hero is already placed on the generated floor', () => {
+    const run = createDemoRun();
+    const generated = generatedFloor();
+    const stair = generated.floor.stairUp!;
+    const bootstrapping: ActiveRun = {
+      ...run,
+      floors: [],
+      activeFloorId: generated.floor.floorId,
+      actors: [{ ...run.actors[0]!, floorId: generated.floor.floorId, ...stair }],
+    };
+
+    const result = addGeneratedFloor(bootstrapping, generated, allocation(run));
+
+    expect(result.floors).toHaveLength(1);
+    expect(result.floors[0]!.floorId).toBe(generated.floor.floorId);
+    expect(result.activeFloorId).toBe(generated.floor.floorId);
+    expect(result.metrics.floorsEntered).toBe(run.metrics.floorsEntered + 1);
+    expect(result.metrics.deepestDepth).toBe(generated.floor.depth);
+  });
+
   it.each([
     [[0, 2, 3, 4], 'seed'],
     [[1, 0, 3, 4], 'seed'],
