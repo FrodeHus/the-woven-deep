@@ -1,17 +1,26 @@
-import { describe, expect, it } from 'vitest';
+import { resolve } from 'node:path';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { compileContentDirectory, type CompiledContentPack, type MonsterContentEntry } from '@woven-deep/content/compiler';
 import {
   createDemoRun,
   createDemoContentPack,
+  createMerchantDemoRun,
   createUnknownKnowledge,
+  expandLegacySeed,
   heroActor,
   heroPerception,
   isExplored,
+  merchantDemoCommands,
+  nextUint32,
   refreshKnowledge,
   resolveCommand as resolveCommandWithContext,
   stableJson,
+  type ActiveRun,
+  type ActorState,
   type GameCommand,
   type LightSource,
   type TileId,
+  type Uint32State,
 } from '../src/index.js';
 
 const context = { content: createDemoContentPack() };
@@ -218,5 +227,76 @@ describe('resolveCommand', () => {
     const before = structuredClone(initial);
     expect(() => resolveCommand(initial, command)).toThrow(/invariant/i);
     expect(initial).toEqual(before);
+  });
+});
+
+function monsterDefinition(id: string): MonsterContentEntry {
+  return {
+    kind: 'monster', id, name: id, glyph: 'm', color: '#aa4444', tags: [],
+    minDepth: 1, maxDepth: 20,
+    attributes: { might: 5, agility: 5, vitality: 5, wits: 5, resolve: 5 },
+    health: 10, speed: 100, accuracy: 100, defense: 8, perception: 8,
+    damage: { count: 1, sides: 1, bonus: 0 }, armor: 0,
+    resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 },
+    disposition: 'hostile', behaviorId: 'behavior.approach-and-attack', behaviorParameters: {},
+    rarity: 'common', threat: 4,
+  };
+}
+
+function combatStateProducing(face: number, sides = 20): Uint32State {
+  const limit = Math.floor(0x1_0000_0000 / sides) * sides;
+  for (let seed = 1; seed < 100_000; seed += 1) {
+    const state = expandLegacySeed(seed);
+    const step = nextUint32(state);
+    if (step.value < limit && step.value % sides + 1 === face) return state;
+  }
+  throw new Error(`no state found for d${sides} face ${face}`);
+}
+
+describe('metrics folding at the record() boundary', () => {
+  it('credits a kill and advances turnsElapsed when a hero attack kills an adjacent monster', () => {
+    const base = createDemoContentPack();
+    const packWithMonster = { ...base, entries: [...base.entries, monsterDefinition('monster.reducer-target')] };
+    const demo = createDemoRun();
+    const hero = demo.actors[0]!;
+    const target: ActorState = {
+      ...hero, actorId: 'monster.reducer-target', contentId: 'monster.reducer-target',
+      playerControlled: false, x: hero.x + 1, y: hero.y, health: 1, maxHealth: 1,
+      disposition: 'hostile', populationId: null,
+    };
+    const initial: ActiveRun = {
+      ...demo, actors: [hero, target], rng: { ...demo.rng, combat: combatStateProducing(20) },
+    };
+    const resolution = resolveCommandWithContext(initial, {
+      type: 'attack', commandId: 'command.reducer-kill', expectedRevision: 0, targetActorId: target.actorId,
+    }, { content: packWithMonster });
+
+    expect(resolution.result.status).toBe('applied');
+    expect(resolution.state.metrics.kills).toBe(1);
+    expect(resolution.state.metrics.turnsElapsed).toBe(1);
+  });
+
+  describe('trade commerce', () => {
+    let content: CompiledContentPack;
+
+    beforeAll(async () => {
+      content = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+    });
+
+    it('grows currencySpent from a trade-buy without advancing turnsElapsed', () => {
+      const initial = createMerchantDemoRun(content);
+      const commands = merchantDemoCommands(initial);
+      const openCommand = commands.find((entry) => entry.boundary === 'before-open')!.command;
+      const buyCommand = commands.find((entry) => entry.boundary === 'before-buy')!.command;
+
+      const opened = resolveCommandWithContext(initial, openCommand, { content });
+      expect(opened.result.status).toBe('applied');
+
+      const bought = resolveCommandWithContext(opened.state, buyCommand, { content });
+      expect(bought.result.status).toBe('applied');
+      expect(bought.state.metrics.currencySpent).toBeGreaterThan(opened.state.metrics.currencySpent);
+      expect(bought.state.metrics.turnsElapsed).toBe(opened.state.metrics.turnsElapsed);
+      expect(bought.state.turn).toBe(opened.state.turn);
+    });
   });
 });

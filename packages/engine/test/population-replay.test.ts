@@ -81,4 +81,14 @@ describe('population continuous-versus-split replay', () => {
     expect(stale.result).toMatchObject({ status: 'rejected', reason: 'stale_revision' });
     expect(encodeActiveRun(stale.state)).toBe(encodeActiveRun(result.state));
   });
+
+  it('records the starting floor entry at creation and the boss re-entry crossing', () => {
+    const initial = createPopulationDemoRun(pack);
+    expect(initial.metrics.floorsEntered).toBe(1);
+    expect(initial.metrics.deepestDepth).toBe(4);
+    const result = runPopulationDemo(pack);
+    // before-boss-re-entry moves the hero onto the deeper boss arena floor (depth 5).
+    expect(result.state.metrics.floorsEntered).toBe(2);
+    expect(result.state.metrics.deepestDepth).toBe(5);
+  });
 });

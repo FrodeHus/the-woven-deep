@@ -107,4 +107,14 @@ describe('merchant continuous-versus-split replay', () => {
     expect(duplicate.result).toEqual(record.commandResult);
     expect(duplicate.events).toEqual(record.publicEvents);
   });
+
+  it('records the home-floor entry at creation and every away/home crossing thereafter', () => {
+    const initial = createMerchantDemoRun(pack);
+    expect(initial.metrics.floorsEntered).toBe(1);
+    expect(initial.metrics.deepestDepth).toBe(2);
+    const result = runMerchantDemo(pack);
+    // before-refusal moves the hero to the away floor (depth 3), before-return moves back home (depth 2).
+    expect(result.state.metrics.floorsEntered).toBe(3);
+    expect(result.state.metrics.deepestDepth).toBe(3);
+  });
 });

@@ -10,6 +10,7 @@ import { isNonZeroState } from './random.js';
 import { validateActiveRun } from './save-schema.js';
 import { heroActor, heroPerception } from './actor-model.js';
 import { placeFallenHeroEncounters } from './champion.js';
+import { recordFloorEntered } from './run-metrics.js';
 
 function assertState(value: Uint32State, label: string): void {
   if (!Array.isArray(value) || value.length !== 4
@@ -119,7 +120,7 @@ export function integrateGeneratedFloor(
     };
   }
 
-  const state = validateActiveRun({
+  const beforeValidation: ActiveRun = {
     ...run,
     rng: {
       ...run.rng,
@@ -134,7 +135,10 @@ export function integrateGeneratedFloor(
     populations: fallen?.populations ?? ordinaryPopulations,
     fallenHeroDecisions: fallen?.decisions ?? run.fallenHeroDecisions,
     floors: [...run.floors, floor],
-  });
+  };
+  const state = validateActiveRun(transitioningToInsertedFloor
+    ? recordFloorEntered(beforeValidation, generated.floor.depth)
+    : beforeValidation);
   const committed = state.populations.filter((candidate) => !run.populations.some((prior) =>
     prior.populationId === candidate.populationId));
   const events: DomainEvent[] = [...(lifecycle?.events ?? [])];

@@ -56,6 +56,10 @@ describe('seeded gameplay fixture', () => {
     expect(validateActiveRun(first.run)).toEqual(first.run);
     expect(() => validateContentBoundRun(first.run, pack)).not.toThrow();
     expect(first.run.populations.length).toBeGreaterThan(0);
+    expect(first.run.metrics.floorsEntered).toBe(1);
+    expect(first.run.metrics.deepestDepth).toBe(
+      first.run.floors.find((floor) => floor.floorId === first.run.activeFloorId)!.depth,
+    );
     expect(first.ids).toMatchObject({
       hero: 'hero.gameplay-demo',
       rat: 'monster.cave-rat.1',
