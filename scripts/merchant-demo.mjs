@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
@@ -17,8 +18,6 @@ const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 const reviewedHashesPath = fileURLToPath(
   new URL('../packages/engine/test/fixtures/merchant-demo-hashes.json', import.meta.url),
 );
-const candidateHashesPath = '/tmp/merchant-demo-hashes.json';
-
 function parseArguments(arguments_) {
   let verify = false;
   let hashesOnly = false;
@@ -226,11 +225,12 @@ async function main() {
   console.log('second process hashes');
   process.stdout.write(second.stdout);
 
-  await writeFile(candidateHashesPath, `${JSON.stringify(hashes, null, 2)}\n`, 'utf8');
   if (options.verify) {
     await verifyReviewedHashes(hashes);
     console.log('travelling merchant milestone verified');
   } else {
+    const candidateHashesPath = join(await mkdtemp(join(tmpdir(), 'merchant-demo-')), 'merchant-demo-hashes.json');
+    await writeFile(candidateHashesPath, `${JSON.stringify(hashes, null, 2)}\n`, 'utf8');
     console.log(`candidate hashes written ${candidateHashesPath}`);
   }
 }

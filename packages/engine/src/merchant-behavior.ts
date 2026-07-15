@@ -251,7 +251,9 @@ export function merchantBehaviorAction(input: Readonly<{
     return wait;
   }
   // Flee: score every valid candidate step (including standing still) by its distance from the
-  // nearest threat; the greatest distance wins, tie-broken by stable cell order.
+  // nearest threat. Only a strictly greater distance replaces the current best, so standing still
+  // wins ties with any move, and moves that tie each other resolve to the earliest candidate in
+  // stable cell order.
   const candidates: Point[] = [{ x: actor.x, y: actor.y }];
   for (let dy = -1; dy <= 1; dy += 1) {
     for (let dx = -1; dx <= 1; dx += 1) {

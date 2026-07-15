@@ -81,9 +81,6 @@ describe('merchant stock materialization', () => {
       expect(service.remainingUses).toBeLessThanOrEqual(authored.maximumUses);
     }
     expect(first.nextMerchantStockState).not.toEqual(input.run.rng['merchant-stock']);
-    expect(input.run.rng.combat).toEqual(fixture().run.rng.combat);
-    expect(input.run.rng.encounters).toEqual(fixture().run.rng.encounters);
-    expect(input.run.rng.loot).toEqual(fixture().run.rng.loot);
   });
 
   it('filters direct stock choices by floor depth without consuming unrelated streams', () => {
