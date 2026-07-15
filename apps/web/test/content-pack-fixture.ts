@@ -13,6 +13,11 @@ const entries: readonly ContentEntry[] = [
     recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 },
     hungerStageModifiers: { sated: {}, hungry: {}, weak: {}, starving: {} },
     formulas: { health: { base: 8 } }, actionCosts: { 'action.move': 100 },
+    score: {
+      depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25,
+      completionBonus: { died: 0, refused: 400, 'became-heart': 800, 'broke-cycle': 1500 },
+      turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200,
+    },
   },
   {
     kind: 'condition', id: 'condition.stunned', name: 'Stunned', description: 'Cannot act', tags: [],
@@ -42,7 +47,7 @@ const entries: readonly ContentEntry[] = [
     kind: 'monster', id: 'monster.rat', name: 'Rat', tags: [], glyph: 'r', color: '#aaaaaa',
     minDepth: 1, maxDepth: 5, attributes, health: 4, speed: 110, accuracy: 1, defense: 10,
     perception: 6, damage: dice, armor: 0, resistances, disposition: 'hostile',
-    behaviorId: 'behavior.approach-and-attack', behaviorParameters: {}, rarity: 'common',
+    behaviorId: 'behavior.approach-and-attack', behaviorParameters: {}, rarity: 'common', threat: 1,
   },
   {
     kind: 'spell', id: 'spell.spark', name: 'Spark', tags: [], targetingId: 'target.actor', range: 5,
