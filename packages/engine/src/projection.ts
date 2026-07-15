@@ -1,5 +1,5 @@
 import type {
-  CompiledContentPack, ItemContentEntry, MerchantEncounterContentEntry,
+  CompiledContentPack, CompletionType, ItemContentEntry, MerchantEncounterContentEntry,
 } from '@woven-deep/content';
 import { heroActor, heroPerception } from './actor-model.js';
 import { deriveActorStats } from './attributes.js';
@@ -17,8 +17,13 @@ import type { IlluminationField, RgbColor } from './light-model.js';
 import { computeIllumination } from './lighting.js';
 import type { MerchantPopulation } from './merchant-model.js';
 import { assertOpaqueId, tileIndex, type ActiveRun, type OpaqueId, type PublicDecision, type TileId } from './model.js';
+import type { RecordedHeirloomSnapshot } from './population-model.js';
 import { refreshKnowledge, type PerceptionFloor, type PerceptionHero } from './perception.js';
 import { relationshipBetween } from './reactions.js';
+import type { RunConclusion } from './run-conclusion.js';
+import type { RunMetrics } from './run-metrics.js';
+import { deriveHallRecordId, type AchievementGrant, type HallRecord } from './run-records-model.js';
+import type { ScoreBreakdown } from './score-run.js';
 import { compareCodeUnits } from './stable-json.js';
 import { hungerModifiers } from './survival.js';
 import { tileDefinition } from './terrain.js';
@@ -307,6 +312,51 @@ export interface GameplayProjection {
   readonly groundItems: readonly Readonly<Record<string, unknown>>[];
   readonly actions: readonly Readonly<{ type: string; cost: number }>[];
   readonly trade?: ObservableTradeProjection;
+  readonly metrics: RunMetrics;
+  readonly conclusion: Readonly<{ completionType: CompletionType; cause: RunConclusion['cause'] }> | null;
+}
+
+/**
+ * Projects a concluded run's story for its controlling hero: the run is over, so the completion
+ * type, cause, and metrics snapshot are always safe to expose. Once the host supplies the
+ * `finalizeRun` output — its `record` — the full score breakdown, heirloom, and granted
+ * achievements join the projection; the record's `recordId` must match this run's own derived
+ * identifier, else the caller has attached the wrong hero's Hall record and the projection throws
+ * rather than leak it. Returns `null` while the run is still in progress.
+ */
+export function projectRunConclusion(input: Readonly<{
+  run: ActiveRun;
+  record: HallRecord | null;
+  achievements: readonly AchievementGrant[];
+}>): RunConclusionProjection | null {
+  const { run, record, achievements } = input;
+  const { conclusion } = run;
+  if (conclusion === null) return null;
+  if (record !== null) {
+    const expectedRecordId = deriveHallRecordId(run.runSeed, run.contentHash);
+    if (record.recordId !== expectedRecordId) {
+      throw new Error(`run conclusion record provenance mismatch: expected ${expectedRecordId}, got ${record.recordId}`);
+    }
+  }
+  return {
+    completionType: conclusion.completionType,
+    cause: conclusion.cause,
+    metrics: run.metrics,
+    finalized: record !== null,
+    score: record?.score ?? null,
+    heirloom: record?.heirloom ?? null,
+    achievements,
+  };
+}
+
+export interface RunConclusionProjection {
+  readonly completionType: CompletionType;
+  readonly cause: RunConclusion['cause'];
+  readonly metrics: RunMetrics;
+  readonly finalized: boolean;
+  readonly score: ScoreBreakdown | null;
+  readonly heirloom: RecordedHeirloomSnapshot | null;
+  readonly achievements: readonly AchievementGrant[];
 }
 
 /**
@@ -544,6 +594,11 @@ export function projectGameplayState(input: Readonly<{
       type, cost: type === 'rest' ? rules.actionCosts['action.wait'] ?? rules.normalActionCost
         : rules.actionCosts[`action.${type}`] ?? rules.normalActionCost,
     })),
+    metrics: input.state.metrics,
+    conclusion: input.state.conclusion === null ? null : {
+      completionType: input.state.conclusion.completionType,
+      cause: input.state.conclusion.cause,
+    },
   };
 }
 

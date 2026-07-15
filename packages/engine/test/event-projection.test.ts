@@ -299,6 +299,18 @@ describe('public event projection', () => {
     expect(projectDomainEvents({ ...input, events, heroId: input.state.hero.actorId })).toEqual(events);
   });
 
+  it('delivers run-record events to the controlling hero unchanged', () => {
+    const input = fixture();
+    const events: DomainEvent[] = [
+      { type: 'run.concluded', eventId: 'event.conclude', completionType: 'died',
+        cause: { killerContentId: null, depth: 4, turn: 120, worldTime: 12_000 } },
+      { type: 'run.finalized', eventId: 'event.finalize', recordId: 'record.test', completionType: 'died', scoreTotal: 900 },
+      { type: 'achievement.granted', eventId: 'event.finalize', achievementId: 'achievement.test',
+        criteriaId: 'first-champion-defeat', name: 'Test achievement' },
+    ];
+    expect(projectDomainEvents({ ...input, events, heroId: input.state.hero.actorId })).toEqual(events);
+  });
+
   it('redacts partial forced movement and rejects unchecked thrown destinations and hidden feature/item IDs', () => {
     const input = fixture();
     const state = { ...input.state, hero: { ...input.state.hero, sightRadius: 1 },
