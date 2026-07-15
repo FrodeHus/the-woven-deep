@@ -1,5 +1,7 @@
 # The Woven Deep
 
+<img src="images/woven-deep-cover.png" alt="Cover art: a lone hero with a lantern descending into a vast woven abyss" width="320" align="right">
+
 A dark fantasy roguelike in the spirit of classic Rogue.
 
 > Many enter.
