@@ -64,6 +64,8 @@ export * from './survival.js';
 export * from './model.js';
 export * from './knowledge.js';
 export * from './random.js';
+export * from './run-metrics.js';
+export * from './run-conclusion.js';
 export * from './reducer.js';
 export * from './replay.js';
 export * from './save-codec.js';

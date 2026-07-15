@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ACHIEVEMENT_CRITERIA_IDS } from '@woven-deep/content';
 import { validateKnowledgePacking } from './knowledge.js';
 import { tileIndex, type ActiveRun, type Direction } from './model.js';
 import { SaveLoadError } from './save-error.js';
@@ -58,7 +59,7 @@ const blockReason = z.enum([
   'trade.active', 'trade.required', 'merchant.unavailable', 'merchant.out-of-range',
   'merchant.refuses', 'trade.merchant-mismatch', 'trade.insufficient-funds',
   'trade.stock-unavailable', 'trade.item-unacceptable', 'trade.capacity',
-  'trade.service-unavailable', 'trade.target-invalid',
+  'trade.service-unavailable', 'trade.target-invalid', 'run.concluded',
 ]);
 const invalidEvent = z.strictObject({ type: z.literal('action.invalid'), eventId: identifier, commandId: identifier, reason: blockReason });
 const attackBase = { eventId: identifier, actorId: identifier, targetActorId: identifier,
@@ -261,6 +262,16 @@ const restCompletedEvent = z.strictObject({ type: z.literal('rest.completed'), e
   stopReason: z.enum(['full-health', 'maximum-duration', 'visible-danger', 'aware-hostile', 'damage',
     'meaningful-sound', 'hunger-warning', 'fuel-warning', 'condition-change', 'decision-required', 'hero-death']),
   elapsed: safeNonNegative, effectiveHealing: safeNonNegative });
+const completionType = z.enum(['died', 'became-heart', 'refused', 'broke-cycle']);
+const runConclusionCause = z.strictObject({
+  killerContentId: identifier.nullable(), depth: safeNonNegative, turn: safeNonNegative, worldTime: safeNonNegative,
+});
+const runConcludedEvent = z.strictObject({ type: z.literal('run.concluded'), eventId: identifier,
+  completionType, cause: runConclusionCause });
+const runFinalizedEvent = z.strictObject({ type: z.literal('run.finalized'), eventId: identifier,
+  recordId: identifier, completionType, scoreTotal: safeNonNegative });
+const achievementGrantedEvent = z.strictObject({ type: z.literal('achievement.granted'), eventId: identifier,
+  achievementId: identifier, criteriaId: z.enum(ACHIEVEMENT_CRITERIA_IDS), name: heroName });
 const eventOptions = [
   movedEvent, waitedEvent, invalidEvent, attackMissedEvent, attackHitEvent, actorDamagedEvent,
   actorDiedEvent, actorHealedEvent, conditionAppliedEvent, conditionRemovedEvent, actorForcedMoveEvent,
@@ -289,7 +300,8 @@ const eventOptions = [
 const event = z.discriminatedUnion('type', [...eventOptions, populationCreatedEvent, reputationChangedEvent,
   tradeOpenedEvent, tradeBoughtEvent, tradeSoldEvent, tradeServicePurchasedEvent, tradeClosedEvent,
   merchantDepartureWarningEvent, merchantDepartedEvent,
-  merchantProvokedEvent, merchantStockDroppedEvent, merchantDiedEvent]);
+  merchantProvokedEvent, merchantStockDroppedEvent, merchantDiedEvent,
+  runConcludedEvent, runFinalizedEvent, achievementGrantedEvent]);
 const legacyEvent = z.discriminatedUnion('type', [...eventOptions, legacyPopulationCreatedEvent]);
 const hiddenPublicEventTypes = new Set([
   'attack.hit', 'attack.missed', 'population.created', 'population.encountered', 'population.placement-skipped',
@@ -590,8 +602,41 @@ const fallenDecision = z.strictObject({
 const LEGACY_RNG_STREAM_NAMES = [
   'generation', 'encounters', 'population-gates', 'combat', 'loot', 'effects', 'narrative',
 ] as const;
+const LEGACY_V5_RNG_STREAM_NAMES = [
+  'generation', 'encounters', 'population-gates', 'merchant-stock', 'merchant-runtime',
+  'combat', 'loot', 'effects', 'narrative',
+] as const;
 const rngEntries = Object.fromEntries(RNG_STREAM_NAMES.map((name) => [name, uint32State]));
 const legacyRngEntries = Object.fromEntries(LEGACY_RNG_STREAM_NAMES.map((name) => [name, uint32State]));
+const legacyV5RngEntries = Object.fromEntries(LEGACY_V5_RNG_STREAM_NAMES.map((name) => [name, uint32State]));
+const runKillsByModel = z.strictObject({
+  individual: safeNonNegative, group: safeNonNegative, swarm: safeNonNegative, boss: safeNonNegative,
+});
+const runMetrics = z.strictObject({
+  kills: safeNonNegative, killsByModel: runKillsByModel, bossKills: safeNonNegative,
+  championKills: safeNonNegative, echoKills: safeNonNegative, threatDefeated: safeNonNegative,
+  damageDealt: safeNonNegative, damageTaken: safeNonNegative, itemsCollected: safeNonNegative,
+  itemsIdentified: safeNonNegative, currencyEarned: safeNonNegative, currencySpent: safeNonNegative,
+  tradesCompleted: safeNonNegative, floorsEntered: safeNonNegative, deepestDepth: safeNonNegative,
+  discoveriesRevealed: safeNonNegative, turnsElapsed: safeNonNegative, restsCompleted: safeNonNegative,
+});
+const runConclusionSchema = z.strictObject({
+  completionType, cause: runConclusionCause, concludedAtRevision: safeNonNegative, finalized: z.boolean(),
+});
+const legacyV5Event = z.discriminatedUnion('type', [...eventOptions, populationCreatedEvent, reputationChangedEvent,
+  tradeOpenedEvent, tradeBoughtEvent, tradeSoldEvent, tradeServicePurchasedEvent, tradeClosedEvent,
+  merchantDepartureWarningEvent, merchantDepartedEvent,
+  merchantProvokedEvent, merchantStockDroppedEvent, merchantDiedEvent]);
+const legacyV5AuthoritativeEvent = legacyV5Event.refine((value) => !publicOnlyEventTypes.has(value.type),
+  'public projection event cannot be stored as authoritative');
+const legacyV5PublicEvent = legacyV5Event.refine((value) => !hiddenPublicEventTypes.has(value.type),
+  'authoritative or roll-bearing event must be projected before public storage');
+const legacyV5Recorded = z.strictObject({
+  command,
+  result: processedResult,
+  events: z.array(legacyV5AuthoritativeEvent).readonly(),
+  publicEvents: z.array(legacyV5PublicEvent).readonly(),
+});
 const directionOffsets: Readonly<Record<Direction, Readonly<{ x: number; y: number }>>> = {
   northwest: { x: -1, y: -1 }, north: { x: 0, y: -1 }, northeast: { x: 1, y: -1 },
   west: { x: -1, y: 0 }, east: { x: 1, y: 0 },
@@ -612,6 +657,27 @@ const activeRunSchema = z.strictObject({
   relationships: z.array(relationship).readonly(), survival, identification,
   activeFloorId: identifier, activeFloorEnteredAt: safeNonNegative,
   floors: z.array(floor).min(1).readonly(), recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(), populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+  metrics: runMetrics, conclusion: runConclusionSchema.nullable(),
+});
+
+export const legacyActiveRunV5Schema = z.strictObject({
+  schemaVersion: z.literal(5), gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/), runId: identifier, runSeed: uint32Tuple,
+  rng: z.strictObject(legacyV5RngEntries as Record<(typeof LEGACY_V5_RNG_STREAM_NAMES)[number], typeof uint32State>),
+  revision: safeNonNegative, turn: safeNonNegative, worldTime: safeNonNegative,
+  hero, reputations: z.array(z.strictObject({ factionId: identifier, value: z.number().int().safe() })).readonly(),
+  activeTrade: z.strictObject({
+    merchantPopulationId: identifier, merchantActorId: identifier, openedByCommandId: identifier,
+    openedAtRevision: safeNonNegative, completedCommerce: z.boolean(),
+  }).nullable(),
+  actors: z.array(actor).min(1).readonly(), items: z.array(item).readonly(), features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(), survival, identification,
+  activeFloorId: identifier, activeFloorEnteredAt: safeNonNegative,
+  floors: z.array(floor).min(1).readonly(), recentCommands: z.array(legacyV5Recorded).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(), populations: z.array(population).readonly(),
   fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
@@ -1091,6 +1157,31 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   if (!savedHeroActor || !savedHeroActor.playerControlled) fail('hero.actorId', 'hero must reference one player-controlled actor');
   if (savedHeroActor.floorId !== run.activeFloorId) fail('hero.actorId', 'hero actor must occupy the active floor');
 
+  if ((savedHeroActor.health === 0) !== (run.conclusion !== null)) {
+    fail('conclusion', 'a dead hero requires a non-null conclusion, and a living hero requires a null conclusion');
+  }
+  if (run.conclusion !== null) {
+    const { conclusion } = run;
+    if (conclusion.concludedAtRevision > run.revision) {
+      fail('conclusion.concludedAtRevision', 'conclusion cannot be recorded after the current revision');
+    }
+    if (conclusion.cause.turn > run.turn) fail('conclusion.cause.turn', 'conclusion cause cannot occur after the current turn');
+    if (conclusion.cause.worldTime > run.worldTime) {
+      fail('conclusion.cause.worldTime', 'conclusion cause cannot occur after the current world time');
+    }
+    if (!run.floors.some((floorValue) => floorValue.depth === conclusion.cause.depth)) {
+      fail('conclusion.cause.depth', 'conclusion cause depth must match an existing floor');
+    }
+    if (conclusion.completionType !== 'died' && conclusion.cause.killerContentId !== null) {
+      fail('conclusion.cause.killerContentId', 'only a died completion may record a killer content id');
+    }
+  }
+  const killsByModelSum = run.metrics.killsByModel.individual + run.metrics.killsByModel.group
+    + run.metrics.killsByModel.swarm + run.metrics.killsByModel.boss;
+  if (run.metrics.kills < killsByModelSum) {
+    fail('metrics.kills', 'total kills cannot be below the sum of kills by population model');
+  }
+
   validateOrderedIds(run.items.map((entry) => entry.itemId), 'items', 'item', 'itemId');
   const items = new Map(run.items.map((entry) => [entry.itemId, entry]));
   for (const [itemIndex, itemValue] of run.items.entries()) {
@@ -1254,6 +1345,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
 
   const commandIds = new Set<string>();
   let previousRevision = 0;
+  let concludedEventCount = 0;
   for (const [index, recordValue] of run.recentCommands.entries()) {
     const path = `recentCommands.${index}`;
     for (const [eventIndex, savedEvent] of recordValue.events.entries()) {
@@ -1262,6 +1354,19 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         if (savedEvent.presentation !== `intent.${savedEvent.intent}`) {
           fail(`${path}.events.${eventIndex}.presentation`, 'intent presentation disagrees with intent');
         }
+      }
+      if (savedEvent.type === 'run.finalized' || savedEvent.type === 'achievement.granted') {
+        fail(`${path}.events.${eventIndex}`, 'run.finalized and achievement.granted are produced only by finalizeRun and cannot be retained in recentCommands');
+      }
+      if (savedEvent.type === 'run.concluded') {
+        concludedEventCount += 1;
+        if (concludedEventCount > 1) fail(`${path}.events.${eventIndex}`, 'at most one run.concluded event may be retained across recentCommands');
+        if (run.conclusion === null) fail(`${path}.events.${eventIndex}`, 'a run.concluded event requires a concluded run');
+      }
+    }
+    for (const [eventIndex, savedEvent] of recordValue.publicEvents.entries()) {
+      if (savedEvent.type === 'run.finalized' || savedEvent.type === 'achievement.granted') {
+        fail(`${path}.publicEvents.${eventIndex}`, 'run.finalized and achievement.granted are produced only by finalizeRun and cannot be retained in recentCommands');
       }
     }
     if (commandIds.has(recordValue.command.commandId)) fail(`${path}.command.commandId`, 'command identifier is duplicated');
@@ -1513,12 +1618,13 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           }
         }
         if (targetReason && !targetingCommand) fail(`${path}.result.reason`, 'target reason requires a targeting command');
-        if (!inventoryReason && !targetReason && recordValue.result.reason !== 'action.unavailable') {
+        if (!inventoryReason && !targetReason && recordValue.result.reason !== 'action.unavailable'
+          && recordValue.result.reason !== 'run.concluded') {
           fail(`${path}.result.reason`, 'non-movement command reason is inconsistent');
         }
         continue;
       }
-      if (recordValue.result.reason === 'action.unavailable') continue;
+      if (recordValue.result.reason === 'action.unavailable' || recordValue.result.reason === 'run.concluded') continue;
       if (['blocked.bounds', 'blocked.wall', 'blocked.door', 'blocked.pillar', 'blocked.void'].includes(recordValue.result.reason)) {
         const offset = directionOffsets[recordValue.command.direction];
         const attempted = { x: knownPosition.x + offset.x, y: knownPosition.y + offset.y };

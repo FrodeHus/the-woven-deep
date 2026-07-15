@@ -176,6 +176,7 @@ export function projectDomainEvents(input: Readonly<{
         if (actorVisible(event.actorId) && featureVisible(event.featureId)) output.push(event); break;
       case 'feature.searched': if (actorVisible(event.actorId)) output.push(event); break;
       case 'reputation.changed': output.push(event); break;
+      case 'run.concluded': case 'run.finalized': case 'achievement.granted': output.push(event); break;
       case 'trade.opened': case 'trade.bought': case 'trade.sold': case 'trade.service-purchased': case 'trade.closed':
         output.push(event); break;
       case 'merchant.departure-warning': case 'merchant.provoked':
