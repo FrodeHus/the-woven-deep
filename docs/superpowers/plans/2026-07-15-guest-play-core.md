@@ -842,3 +842,38 @@ git commit -m "feat: prove guest play core end to end"
 - [ ] **Step 7: Request final review**
 
 Run the `superpowers:requesting-code-review` workflow against the branch diff from its merge base; resolve confirmed issues with failing regression tests first, then rerun the affected suites and the full verification block before reporting 5A complete.
+
+---
+
+### Task 9: Marketing landing page from the design handoff
+
+*(Added 2026-07-16 by direction: deferred low-priority work, executed last. A high-fidelity design handoff exists — recreate it in the app, but rework the copy to sound human while keeping the epic register.)*
+
+**Files:**
+- Read first: `docs/design/landing-handoff/README.md` (the complete design spec: tokens, sections, interactions, ember particle system) and open `docs/design/landing-handoff/The Woven Deep.dc.html` in a browser for the living reference; screenshots in `docs/design/landing-handoff/screenshots/`.
+- Create: `apps/web/src/landing/LandingPage.tsx` (sections may be split into sibling files if it grows past ~300 lines — follow the handoff's section list)
+- Create: `apps/web/src/landing/EmberCanvas.tsx` (the particle system — component-local state, rAF, cleanup on unmount)
+- Create: `apps/web/src/landing/landing.css`
+- Create: `apps/web/test/landing.test.tsx`
+- Modify: `apps/web/src/main.tsx` or `App.tsx` (route: landing at `/`, the game behind the "Descend Now"/"Enter as guest" CTAs — a simple path check, no router dependency)
+- Modify: `apps/web/e2e/guest-play.spec.ts` (entry now flows through the landing CTA; keep the seeded-run entry working)
+
+**Interfaces:**
+- Consumes: the handoff's design tokens, section structure, and interaction specs verbatim (colors, type scale, spacing, reveal/parallax/accordion behavior, ember system); `images/woven-deep-cover.png` from the repo root (serve via the web app's asset pipeline).
+- Produces: the landing page at `/`, with CTAs routed to the guest game.
+
+**Constraints:**
+- Follow the handoff's fidelity note: recreate faithfully in React/Vite with plain CSS (this repo's convention — no Tailwind/styled-components), EXCEPT the copy. **The copy gets a humanizing pass:** keep the epic, mythic register, but strip AI-typical patterns — no "It's not just X, it's Y" constructions, no rule-of-three padding, no em dashes, no "stands as a testament" inflation, no generic upbeat closers. Short declarative lines carry the tone ("Many enter. Few return. All are woven in." is the register to match). Rewrite each section's copy in that voice; the structure, headings hierarchy, and CTA texts stay per the design unless they read as AI-typical.
+- All animation honors `prefers-reduced-motion` (the handoff specifies this; the repo's styles-contract test pattern from Task 5 can guard it).
+- FAQ toggles are real `<button>`s with `aria-expanded`, per the handoff's accessibility notes.
+- The "Be Woven In" registered-account card describes milestone-6 features that do not exist yet — keep the card (it sells the vision) but its CTA points to a "coming soon" anchor, not a dead registration route; note this in the code.
+- Fonts: self-host or system-fallback only if Google Fonts is unacceptable to the reviewer; otherwise load Marcellus + EB Garamond as the handoff specifies with the web-safe chains as fallback.
+- No new runtime dependencies.
+
+- [ ] **Step 1: Tests for structure and behavior** — render the landing page: nav, hero H1, all six section landmarks present; FAQ accordion single-open behavior (click toggles, opening one closes another, `aria-expanded` flips); CTAs link to the play route/anchors; reduced-motion contract test extended to the landing CSS.
+- [ ] **Step 2: Implement the page per the handoff** — sections, tokens, reveal/parallax/keyframes, ember canvas (sparks + motes, heat ramp, vertical falloff, streaks, resize re-seed, unmount cleanup).
+- [ ] **Step 3: Humanize the copy** — rewrite all section copy per the constraint above; read it aloud; no AI-isms.
+- [ ] **Step 4: Wire routing** — landing at `/`, game at the CTA target; the e2e's seeded entry updated; full web suite + typecheck + `npm run guest:e2e` green.
+- [ ] **Step 5: Commit** — `feat: add landing page from design handoff`
+
+---
