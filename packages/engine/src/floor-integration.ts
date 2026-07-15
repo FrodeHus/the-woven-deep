@@ -60,14 +60,20 @@ export function integrateGeneratedFloor(
     throw new RangeError('generated floor seed must equal the allocated floor seed');
   }
 
-  const previousFloor = run.floors.at(-1);
-  if (previousFloor === undefined || generated.floor.floorId <= previousFloor.floorId) {
-    throw new RangeError('generated floor identifier must be a unique strict append in increasing order');
-  }
-
   const transitioningToInsertedFloor = run.activeFloorId === generated.floor.floorId
     && heroActor(run).floorId === generated.floor.floorId
     && !run.floors.some((floor) => floor.floorId === generated.floor.floorId);
+
+  // A brand-new run bootstraps its first-ever floor with no prior floors to append after; every
+  // other caller transitions between floors that already exist in an established run.
+  const previousFloor = run.floors.at(-1);
+  const isBootstrappingFirstFloor = previousFloor === undefined && run.floors.length === 0
+    && transitioningToInsertedFloor;
+  if (!isBootstrappingFirstFloor
+    && (previousFloor === undefined || generated.floor.floorId <= previousFloor.floorId)) {
+    throw new RangeError('generated floor identifier must be a unique strict append in increasing order');
+  }
+
   if (!transitioningToInsertedFloor) validateActiveRun(run);
 
   // A floor transition can observe a save whose merchants are already due (or crossed warning

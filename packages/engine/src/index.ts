@@ -39,6 +39,7 @@ export * from './champion.js';
 export * from './population-fixture.js';
 export * from './projection.js';
 export * from './fixture.js';
+export * from './new-run.js';
 export * from './actor-model.js';
 export * from './attributes.js';
 export * from './scheduler.js';
