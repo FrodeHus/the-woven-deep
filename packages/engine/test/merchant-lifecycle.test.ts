@@ -20,6 +20,7 @@ import {
   stableJson,
   type ActiveRun,
   type ActorState,
+  type DomainEvent,
   type FloorSeedAllocation,
   type GameCommand,
   type GeneratedFloor,
@@ -293,6 +294,73 @@ describe('advanceMerchantLifecycle', () => {
     expect(advanced.state.actors).toEqual(untouched);
     expect(advanced.state.floors).toEqual(run.floors);
     expect(advanced.state.rng).toEqual(run.rng);
+  });
+
+  it('scrubs recorded intent events referencing the departed merchant so the run stays saveable', () => {
+    const opened = openedRun();
+    const population = merchantPopulation(opened);
+    const closed = resolveCommand(opened, {
+      type: 'trade-close', commandId: 'command.trade-close-1', expectedRevision: 1,
+      merchantPopulationId: population.populationId,
+    }, context());
+    expect(closed.result.status).toBe('applied');
+    // A provoked merchant records an intent change within the recent-command window.
+    const intentEvent: DomainEvent = {
+      type: 'actor.intent-changed', eventId: 'command.trade-open',
+      actorId: MERCHANT_ACTOR_ID, intent: 'flee', presentation: 'intent.flee', targetCategory: null,
+    };
+    const provoked: ActiveRun = {
+      ...closed.state,
+      recentCommands: closed.state.recentCommands.map((record) =>
+        record.command.commandId === 'command.trade-open'
+          ? { ...record, events: [...record.events, intentEvent] }
+          : record),
+    };
+    // While the merchant still exists the recorded intent event satisfies every save invariant.
+    expect(() => encodeActiveRun(provoked)).not.toThrow();
+    const advanced = advanceMerchantLifecycle({
+      state: atWorldTime(provoked, population.departureAt + 1),
+      content,
+      previousWorldTime: population.departureAt - 1,
+      nextWorldTime: population.departureAt + 1,
+      eventId: 'event.depart-intent',
+    });
+    expect(advanced.events.map((event) => event.type)).toContain('merchant.departed');
+    expect(advanced.state.recentCommands.some((record) => record.events.some((event) =>
+      event.type === 'actor.intent-changed' && event.actorId === MERCHANT_ACTOR_ID))).toBe(false);
+    // The command records themselves survive for dedup and replay, keeping their other events.
+    expect(advanced.state.recentCommands.map((record) => record.command.commandId))
+      .toEqual(provoked.recentCommands.map((record) => record.command.commandId));
+    expect(advanced.state.recentCommands.at(-1)!.events.some((event) =>
+      event.type === 'trade.closed')).toBe(true);
+    const restored = decodeActiveRun(encodeActiveRun(advanced.state));
+    expect(restored).toEqual(advanced.state);
+  });
+
+  it('scrubs condition sources referencing the departed merchant so the run stays saveable', () => {
+    const run = merchantRun();
+    const population = merchantPopulation(run);
+    const withCondition: ActiveRun = {
+      ...run,
+      actors: run.actors.map((actor) => actor.actorId === HERO_ID
+        ? { ...actor, conditions: [{ conditionId: 'condition.disengaged', sourceActorId: MERCHANT_ACTOR_ID,
+          appliedAt: 0, expiresAt: population.departureAt + 1000, stacks: 1 }] }
+        : actor),
+    };
+    const advanced = advanceMerchantLifecycle({
+      state: atWorldTime(withCondition, population.departureAt + 1),
+      content,
+      previousWorldTime: 0,
+      nextWorldTime: population.departureAt + 1,
+      eventId: 'event.depart-condition',
+    });
+    expect(advanced.events.map((event) => event.type)).toContain('merchant.departed');
+    const hero = advanced.state.actors.find((actor) => actor.actorId === HERO_ID)!;
+    // The condition itself survives departure; only its stale source reference is cleared.
+    expect(hero.conditions).toEqual([{ conditionId: 'condition.disengaged', sourceActorId: null,
+      appliedAt: 0, expiresAt: population.departureAt + 1000, stacks: 1 }]);
+    const restored = decodeActiveRun(encodeActiveRun(advanced.state));
+    expect(restored).toEqual(advanced.state);
   });
 
   it('defers departure while the active trade remains valid', () => {

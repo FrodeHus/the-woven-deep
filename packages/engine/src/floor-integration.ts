@@ -29,6 +29,11 @@ export interface FloorIntegrationResult {
   readonly events: readonly DomainEvent[];
 }
 
+/**
+ * Appends a generated floor to the run, planning (or committing pre-planned) population placement.
+ * Merchant lifecycle processing only runs when the content-bearing `population` argument is
+ * supplied; callers integrating a bare floor resolve merchant deadlines at their own boundary.
+ */
 export function integrateGeneratedFloor(
   run: ActiveRun,
   generated: GeneratedFloor,
@@ -66,10 +71,10 @@ export function integrateGeneratedFloor(
 
   // A floor transition can observe a save whose merchants are already due (or crossed warning
   // thresholds); resolve the global merchant lifecycle before the new floor is populated.
-  const lifecycleEventId = `event.${generated.floor.floorId}.population`;
+  const eventId = `event.${generated.floor.floorId}.population`;
   const lifecycle = population === undefined ? null : advanceMerchantLifecycle({
     state: run, content: population.content, previousWorldTime: run.worldTime,
-    nextWorldTime: run.worldTime, eventId: lifecycleEventId,
+    nextWorldTime: run.worldTime, eventId,
   });
   run = lifecycle?.state ?? run;
 
@@ -130,7 +135,6 @@ export function integrateGeneratedFloor(
     fallenHeroDecisions: fallen?.decisions ?? run.fallenHeroDecisions,
     floors: [...run.floors, floor],
   });
-  const eventId = `event.${floor.floorId}.population`;
   const committed = state.populations.filter((candidate) => !run.populations.some((prior) =>
     prior.populationId === candidate.populationId));
   const events: DomainEvent[] = [...(lifecycle?.events ?? [])];

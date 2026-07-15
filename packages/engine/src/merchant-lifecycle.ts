@@ -1,7 +1,7 @@
 import type { CompiledContentPack, MerchantEncounterContentEntry } from '@woven-deep/content';
 import type { ActorState } from './actor-model.js';
 import type { MerchantPopulation } from './merchant-model.js';
-import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
+import type { ActiveRun, DomainEvent, OpaqueId, PublicEvent } from './model.js';
 import { compareCodeUnits } from './stable-json.js';
 import { activeTradeValidIgnoringDeparture, closeTradeIfInvalid } from './trade.js';
 
@@ -13,7 +13,7 @@ function merchantEncounter(content: CompiledContentPack, encounterId: OpaqueId):
   return entry;
 }
 
-/** Drops awareness, memories, and goals that reference the departed actor. */
+/** Drops awareness, memories, goals, and condition sources that reference the departed actor. */
 function scrubActorReferences(actor: ActorState, departedActorId: OpaqueId): ActorState {
   const awareActorIds = actor.awareActorIds.includes(departedActorId)
     ? actor.awareActorIds.filter((candidate) => candidate !== departedActorId)
@@ -25,11 +25,38 @@ function scrubActorReferences(actor: ActorState, departedActorId: OpaqueId): Act
     : actor.behaviorState.lastKnownTargets;
   const goal = actor.behaviorState.goal?.type === 'actor'
     && actor.behaviorState.goal.targetActorId === departedActorId ? null : actor.behaviorState.goal;
+  // A condition outlives its source; only the stale source reference is cleared.
+  const conditions = actor.conditions.some((condition) => condition.sourceActorId === departedActorId)
+    ? actor.conditions.map((condition) => condition.sourceActorId === departedActorId
+      ? { ...condition, sourceActorId: null } : condition)
+    : actor.conditions;
   if (awareActorIds === actor.awareActorIds && lastKnownTargets === actor.behaviorState.lastKnownTargets
-    && goal === actor.behaviorState.goal) {
+    && goal === actor.behaviorState.goal && conditions === actor.conditions) {
     return actor;
   }
-  return { ...actor, awareActorIds, behaviorState: { ...actor.behaviorState, goal, lastKnownTargets } };
+  return { ...actor, awareActorIds, conditions, behaviorState: { ...actor.behaviorState, goal, lastKnownTargets } };
+}
+
+/**
+ * Drops recorded intent events that reference the departed actor. The command records themselves
+ * survive untouched for dedup and replay; only the stale `actor.intent-changed` entries (which the
+ * save schema requires to reference an existing actor) are filtered from their event streams.
+ */
+function scrubRecordedCommands(
+  recentCommands: ActiveRun['recentCommands'], departedActorId: OpaqueId,
+): ActiveRun['recentCommands'] {
+  const stale = (event: DomainEvent | PublicEvent): boolean =>
+    event.type === 'actor.intent-changed' && event.actorId === departedActorId;
+  if (!recentCommands.some((record) => record.events.some(stale) || record.publicEvents.some(stale))) {
+    return recentCommands;
+  }
+  return recentCommands.map((record) => {
+    const events = record.events.some(stale) ? record.events.filter((event) => !stale(event)) : record.events;
+    const publicEvents = record.publicEvents.some(stale)
+      ? record.publicEvents.filter((event) => !stale(event)) : record.publicEvents;
+    return events === record.events && publicEvents === record.publicEvents
+      ? record : { ...record, events, publicEvents };
+  });
 }
 
 function scrubPopulationReferences(
@@ -55,6 +82,10 @@ function scrubPopulationReferences(
  * `emittedWarningThresholds`) and resolves due departures. A due merchant engaged in a currently
  * valid modal trade defers its departure; an invalid trade is closed automatically first, then the
  * departure removes the actor and all held stock atomically and marks the population departed.
+ *
+ * `previousWorldTime` is accepted for the interval signature; crossing detection is threshold-set
+ * based (each threshold compares against the persisted `emittedWarningThresholds`), so the lower
+ * bound never influences which warnings fire.
  */
 export function advanceMerchantLifecycle(input: Readonly<{
   state: ActiveRun;
@@ -121,6 +152,7 @@ export function advanceMerchantLifecycle(input: Readonly<{
       populations: state.populations.map((candidate) => candidate.populationId === populationId
         ? { ...departing, lifecycle: 'departed' as const, livingMemberIds: [], stockItemIds: [] }
         : scrubPopulationReferences(candidate, departing.actorId)),
+      recentCommands: scrubRecordedCommands(state.recentCommands, departing.actorId),
     };
     events.push({
       type: 'merchant.departed', eventId: input.eventId,
