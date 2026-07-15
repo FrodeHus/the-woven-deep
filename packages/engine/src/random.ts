@@ -14,6 +14,7 @@ const STREAM_DISCRIMINATORS: Readonly<Record<RngStreamName, number>> = {
   loot: 4,
   effects: 5,
   narrative: 6,
+  'run-records': 10,
 };
 
 function rotateLeft(value: number, bits: number): number {

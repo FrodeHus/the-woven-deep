@@ -1,3 +1,4 @@
+import type { CompiledContentPack } from '@woven-deep/content';
 import type {
   ActiveRun, CommandResolution, DomainEvent, GameCommand, InvalidActionReason,
   ProcessedCommandResult, PublicEvent, RecordedCommand,
@@ -11,6 +12,8 @@ import { validateContentBoundRun } from './content-bound-validation.js';
 import { closeTradeIfInvalid, isTradeCommand, resolveTradeCommand, validateTradeCommand } from './trade.js';
 import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import { projectDomainEvents } from './event-projection.js';
+import { foldRunMetrics } from './run-metrics.js';
+import { concludeRunOnHeroDeath } from './run-conclusion.js';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
   return stableJson(left) === stableJson(right);
@@ -22,17 +25,20 @@ function rejected(state: ActiveRun, command: GameCommand, reason: 'stale_revisio
 
 function record(
   state: ActiveRun,
+  content: CompiledContentPack,
   command: GameCommand,
   result: ProcessedCommandResult,
   events: readonly DomainEvent[],
   publicEvents: readonly PublicEvent[],
 ): ActiveRun {
   const next: RecordedCommand = { command, result, events, publicEvents };
+  const turnAdvanced = result.status === 'applied' && result.turn > state.turn;
   return {
     ...state,
     revision: result.revision,
     turn: result.turn,
     recentCommands: [...state.recentCommands, next].slice(-RECENT_COMMAND_LIMIT),
+    metrics: foldRunMetrics({ metrics: state.metrics, state, content, events, turnAdvanced }),
   };
 }
 
@@ -44,6 +50,7 @@ function assertCountersCanAdvance(state: ActiveRun, advanceTurn: boolean): void 
 
 function recordInvalid(
   state: ActiveRun,
+  content: CompiledContentPack,
   command: GameCommand,
   reason: InvalidActionReason,
   preEvents: readonly DomainEvent[],
@@ -53,7 +60,7 @@ function recordInvalid(
   const invalid = { type: 'action.invalid', eventId: command.commandId, commandId: command.commandId, reason } as const;
   const events = [...preEvents, invalid];
   const publicEvents = [...prePublicEvents, invalid];
-  return { state: record(state, command, result, events, publicEvents), result, events: publicEvents };
+  return { state: record(state, content, command, result, events, publicEvents), result, events: publicEvents };
 }
 
 export function resolveCommand(state: ActiveRun, command: GameCommand, context: ResolutionContext): CommandResolution {
@@ -68,6 +75,12 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
     throw new Error(`internal invariant: content hash ${context.content.hash} does not match run ${state.contentHash}`);
   }
   validateContentBoundRun(state, context.content);
+
+  // A concluded run accepts no further commands: the rejection consumes no randomness and never
+  // touches the modal-session normalization or world branches below.
+  if (state.conclusion !== null) {
+    return recordInvalid(state, context.content, command, 'run.concluded', [], []);
+  }
 
   // Normalize the modal session first: a session whose merchant no longer satisfies the
   // invariant closes (without a bonus) before the submitted command resolves against it.
@@ -94,7 +107,7 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
         state: lifecycle.state, content: context.content, heroId: lifecycle.state.hero.actorId,
         events: lifecycle.events,
       });
-      return recordInvalid(lifecycle.state, command, validation.reason,
+      return recordInvalid(lifecycle.state, context.content, command, validation.reason,
         [...preEvents, ...lifecycle.events], [...prePublicEvents, ...lifecyclePublic]);
     }
     assertCountersCanAdvance(current, false);
@@ -107,10 +120,10 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
     const publicEvents = [...prePublicEvents, ...projectDomainEvents({
       state: lifecycle.state, content: context.content, heroId: lifecycle.state.hero.actorId, events: commandEvents,
     })];
-    return { state: record(lifecycle.state, command, result, events, publicEvents), result, events: publicEvents };
+    return { state: record(lifecycle.state, context.content, command, result, events, publicEvents), result, events: publicEvents };
   }
   if (current.activeTrade !== null) {
-    return recordInvalid(current, command, 'trade.active', preEvents, prePublicEvents);
+    return recordInvalid(current, context.content, command, 'trade.active', preEvents, prePublicEvents);
   }
 
   const validation = validatePlayerAction({ state: current, command, context });
@@ -120,7 +133,7 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
     return { state: current, result: validation, events: prePublicEvents };
   }
   if ('status' in validation) {
-    return recordInvalid(current, command, validation.reason, preEvents, prePublicEvents);
+    return recordInvalid(current, context.content, command, validation.reason, preEvents, prePublicEvents);
   }
 
   assertCountersCanAdvance(current, true);
@@ -129,10 +142,23 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
     ? resolveRest({ state: current, content: context.content, eventId: command.commandId,
       until: validation.until, maximumDuration: validation.maximumDuration })
     : resolveWorldStep({ state: current, content: context.content, action: validation, eventId: command.commandId });
-  const events = preEvents.length === 0 ? world.events : [...preEvents, ...world.events];
-  const publicEvents = prePublicEvents.length === 0 ? world.publicEvents : [...prePublicEvents, ...world.publicEvents];
+  // The conclusion boundary runs inside this same transition: a hero killed by the world branch
+  // above is concluded here, before the command is recorded, so the recorded event stream and the
+  // resulting state agree on whether (and how) the run ended.
+  const concluded = concludeRunOnHeroDeath({
+    state: world.state, content: context.content, events: world.events,
+    revision: result.revision, turn: result.turn, eventId: command.commandId,
+  });
+  const conclusionEvents = concluded.events.slice(world.events.length);
+  const conclusionPublicEvents = conclusionEvents.length === 0 ? [] : projectDomainEvents({
+    state: concluded.state, content: context.content, heroId: concluded.state.hero.actorId, events: conclusionEvents,
+  });
+  const worldPublicEvents = conclusionPublicEvents.length === 0 ? world.publicEvents
+    : [...world.publicEvents, ...conclusionPublicEvents];
+  const events = preEvents.length === 0 ? concluded.events : [...preEvents, ...concluded.events];
+  const publicEvents = prePublicEvents.length === 0 ? worldPublicEvents : [...prePublicEvents, ...worldPublicEvents];
   return {
-    state: record(world.state, command, result, events, publicEvents),
+    state: record(concluded.state, context.content, command, result, events, publicEvents),
     result,
     events: publicEvents,
   };

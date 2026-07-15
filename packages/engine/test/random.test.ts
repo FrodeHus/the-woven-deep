@@ -32,7 +32,7 @@ describe('xoshiro128**', () => {
     const left = deriveRngStreams(seed);
     const right = deriveRngStreams(seed);
     expect(left).toEqual(right);
-    expect(new Set(Object.values(left).map((state) => state.join(','))).size).toBe(9);
+    expect(new Set(Object.values(left).map((state) => state.join(','))).size).toBe(10);
     const advancedCombat = nextUint32(left.combat).state;
     expect(advancedCombat).not.toEqual(left.combat);
     expect(left.generation).toEqual(right.generation);

@@ -1,0 +1,14 @@
+schemaVersion: 5
+entries:
+  - kind: achievement
+    id: achievement.defeated-the-deeps-champion
+    name: Defeated the Deep's Champion
+    tags: [fallen-hero, prestige]
+    description: Defeat the Deep's Champion for the first time.
+    criteriaId: first-champion-defeat
+  - kind: achievement
+    id: achievement.silenced-an-echo
+    name: Silenced an Echo
+    tags: [fallen-hero]
+    description: Defeat an Echo of a fallen hero for the first time.
+    criteriaId: first-echo-defeat

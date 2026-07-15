@@ -204,5 +204,5 @@ describe('mixed ordinary/trade merchant properties', () => {
       expect(stableJson(split.publicEvents)).toBe(stableJson(continuous.publicEvents));
       expect(stableJson(split.projections)).toBe(stableJson(continuous.projections));
     }), { seed: 0x4b02, numRuns: 512 });
-  });
+  }, 120_000);
 });

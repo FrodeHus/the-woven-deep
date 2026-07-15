@@ -263,6 +263,30 @@ describe('addGeneratedFloor', () => {
     expect(result.floors[1]!.knowledge).toEqual(generated.floor.knowledge);
   });
 
+  it('records exactly one floor entry and the reached depth when the hero transitions onto the inserted floor', () => {
+    const run = createDemoRun();
+    const generated = generatedFloor();
+    const stair = generated.floor.stairUp!;
+    const transitional: ActiveRun = {
+      ...run,
+      activeFloorId: generated.floor.floorId,
+      actors: [{ ...run.actors[0]!, floorId: generated.floor.floorId, ...stair }],
+    };
+    const result = addGeneratedFloor(transitional, generated, allocation());
+
+    expect(result.metrics.floorsEntered).toBe(run.metrics.floorsEntered + 1);
+    expect(result.metrics.deepestDepth).toBe(generated.floor.depth);
+  });
+
+  it('does not record a floor entry when appending a floor the hero has not transitioned onto', () => {
+    const run = createDemoRun();
+    const generated = generatedFloor();
+    const result = addGeneratedFloor(run, generated, allocation());
+
+    expect(result.metrics.floorsEntered).toBe(run.metrics.floorsEntered);
+    expect(result.metrics.deepestDepth).toBe(run.metrics.deepestDepth);
+  });
+
   it.each([
     [[0, 2, 3, 4], 'seed'],
     [[1, 0, 3, 4], 'seed'],

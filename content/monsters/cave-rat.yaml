@@ -1,4 +1,4 @@
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -20,4 +20,5 @@ entries:
     disposition: hostile
     behaviorId: behavior.approach-and-attack
     behaviorParameters: {}
+    threat: 1
     rarity: common

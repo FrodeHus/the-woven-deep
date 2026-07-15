@@ -2,6 +2,7 @@ import type { ActiveRun, TileId } from './model.js';
 import { deriveRngStreams } from './random.js';
 import { createUnknownKnowledge } from './knowledge.js';
 import { refreshKnowledge } from './perception.js';
+import { emptyRunMetrics } from './run-metrics.js';
 import { ENGINE_GAME_VERSION, SAVE_SCHEMA_VERSION } from './versions.js';
 import { emptyEquipment, heroPerception, type ActorState } from './actor-model.js';
 import { CONTENT_SCHEMA_VERSION, type CompiledContentPack } from '@woven-deep/content';
@@ -21,6 +22,11 @@ export function createDemoContentPack(): CompiledContentPack {
       restMaximumDuration: 5000,
       recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 },
       hungerStageModifiers: { sated: {}, hungry: {}, weak: {}, starving: {} },
+      score: {
+        depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25,
+        completionBonus: { died: 0, refused: 400, 'became-heart': 800, 'broke-cycle': 1500 },
+        turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200,
+      },
       formulas: {
         maxHealth: { base: 8, vitality: 2 }, meleeAccuracy: { might: 1 }, meleeDamageBonus: { might: 1 },
         rangedAccuracy: { agility: 1 }, defense: { base: 8, agility: 1 }, search: { wits: 1 },
@@ -141,5 +147,7 @@ export function createDemoRun(): ActiveRun {
     fallenHeroStandings: [],
     fallenHeroDecisions: [],
     conqueredChampionRecordIds: [],
+    metrics: emptyRunMetrics(),
+    conclusion: null,
   };
 }

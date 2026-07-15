@@ -289,6 +289,13 @@ describe('gameplay projection', () => {
     expect(json).not.toContain('merchant-stock');
   });
 
+  it('exposes read-only metrics and a null conclusion for a living run', () => {
+    const base = createDemoRun();
+    const projected = projectGameplayState({ state: base, content: createDemoContentPack() });
+    expect(projected.metrics).toEqual(base.metrics);
+    expect(projected.conclusion).toBeNull();
+  });
+
   it('carries no trade projection without an active trade session', () => {
     const base = createDemoRun();
     expect(projectGameplayState({ state: base, content: createDemoContentPack() })).not.toHaveProperty('trade');

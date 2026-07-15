@@ -5,7 +5,7 @@ import { encounterModels } from '../src/compiler/schema.js';
 describe('parseContentFile', () => {
   it('publishes and parses strict schema-v4 NPC content', () => {
     expect(encounterModels).toContain('merchant');
-    const validNpcYaml = `schemaVersion: 4
+    const validNpcYaml = `schemaVersion: 5
 entries:
   - kind: npc
     id: npc.travelling-lampwright
@@ -45,19 +45,74 @@ entries:
     }
   });
 
-  it('rejects schema v3 after the schema-v4 upgrade', () => {
-    expect(() => parseContentFile({ path: 'legacy.yaml', source: 'schemaVersion: 3\nentries: []\n' }))
-      .toThrow(/expected 4/i);
+  it('rejects schema v4 after the schema-v5 upgrade', () => {
+    expect(() => parseContentFile({ path: 'legacy.yaml', source: 'schemaVersion: 4\nentries: []\n' }))
+      .toThrow(/expected 5/i);
   });
   it('rejects source schema v2 with a stable version diagnostic', () => {
     expect(() => parseContentFile({
       path: 'legacy.yaml',
       source: 'schemaVersion: 2\nentries: []\n',
-    })).toThrow(/legacy\.yaml.*schemaVersion.*expected 4/i);
+    })).toThrow(/legacy\.yaml.*schemaVersion.*expected 5/i);
   });
 
-  it('keeps appearance probability on encounters and rejects it on reusable monsters', () => {
-    const source = `schemaVersion: 4
+  it('publishes and parses strict schema-v5 achievement content', () => {
+    const validAchievementYaml = `schemaVersion: 5
+entries:
+  - kind: achievement
+    id: achievement.defeated-the-deeps-champion
+    name: Defeated the Deep's Champion
+    tags: [fallen-hero, prestige]
+    description: Defeat the Deep's Champion for the first time.
+    criteriaId: first-champion-defeat
+`;
+    expect(parseContentFile({ path: 'achievements/first-defeats.yaml', source: validAchievementYaml })[0]).toMatchObject({
+      kind: 'achievement', criteriaId: 'first-champion-defeat',
+      name: "Defeated the Deep's Champion",
+    });
+    for (const [label, source] of [
+      ['unknown field', validAchievementYaml.replace('    criteriaId: first-champion-defeat',
+        '    criteriaId: first-champion-defeat\n    reward: 100')],
+      ['unknown criteria', validAchievementYaml.replace('criteriaId: first-champion-defeat', 'criteriaId: first-boss-defeat')],
+      ['empty description', validAchievementYaml.replace("description: Defeat the Deep's Champion for the first time.", 'description: " "')],
+      ['missing criteria', validAchievementYaml.replace('    criteriaId: first-champion-defeat\n', '')],
+    ] as const) {
+      expect(() => parseContentFile({ path: 'achievements/invalid.yaml', source }), `expected rejection: ${label}`).toThrow();
+    }
+  });
+
+  it('parses strict score coefficients on the balance entry', () => {
+    const validBalanceYaml = `schemaVersion: 5
+entries:
+  - { kind: balance, startingCurrency: 40, id: balance.core, name: Core, tags: [], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000, hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 }, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, restMaximumDuration: 5000, recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }, hungerStageModifiers: { sated: {}, hungry: {}, weak: {}, starving: {} }, formulas: { health: { base: 8, vitality: 2 } }, actionCosts: { action.move: 100 }, score: { depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200 } }
+`;
+    expect(parseContentFile({ path: 'balance.yaml', source: validBalanceYaml })[0]).toMatchObject({
+      score: {
+        depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5,
+        discoveryCoefficient: 25,
+        completionBonus: { died: 0, refused: 400, 'became-heart': 800, 'broke-cycle': 1500 },
+        turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200,
+      },
+    });
+    for (const [label, needle, substitute] of [
+      ['negative coefficient', 'depthCoefficient: 100', 'depthCoefficient: -1'],
+      ['unsafe coefficient', 'bossDefeatCoefficient: 250', `bossDefeatCoefficient: ${Number.MAX_SAFE_INTEGER + 1}`],
+      ['fractional coefficient', 'threatCoefficient: 5', 'threatCoefficient: 0.5'],
+      ['negative completion bonus', 'refused: 400', 'refused: -400'],
+      ['missing completion bonus key', 'became-heart: 800, ', ''],
+      ['unknown completion bonus key', 'died: 0', 'died: 0, fled: 1'],
+      ['zero decay interval', 'turnEfficiencyDecayInterval: 200', 'turnEfficiencyDecayInterval: 0'],
+      ['unknown score field', 'turnEfficiencyBudget: 500', 'turnEfficiencyBudget: 500, styleBonus: 1'],
+      ['missing score block', ', score: { depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200 }', ''],
+    ] as const) {
+      const source = validBalanceYaml.replace(needle, substitute);
+      expect(source, `replacement applied: ${label}`).not.toBe(validBalanceYaml);
+      expect(() => parseContentFile({ path: 'balance.yaml', source }), `expected rejection: ${label}`).toThrow();
+    }
+  });
+
+  it('requires a non-negative safe-integer threat on every monster', () => {
+    const validMonsterYaml = `schemaVersion: 5
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -75,6 +130,44 @@ entries:
     damage: { count: 1, sides: 3, bonus: 0 }
     armor: 0
     resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    threat: 1
+    rarity: common
+`;
+    expect(parseContentFile({ path: 'monsters/rat.yaml', source: validMonsterYaml })[0]).toMatchObject({ threat: 1 });
+    for (const [label, replacement] of [
+      ['negative threat', 'threat: -1'],
+      ['fractional threat', 'threat: 0.5'],
+      ['unsafe threat', `threat: ${Number.MAX_SAFE_INTEGER + 1}`],
+      ['missing threat', ''],
+    ] as const) {
+      const source = validMonsterYaml.replace('    threat: 1\n', replacement === '' ? '' : `    ${replacement}\n`);
+      expect(() => parseContentFile({ path: 'monsters/invalid.yaml', source }), `expected rejection: ${label}`)
+        .toThrow(/threat/);
+    }
+  });
+
+  it('keeps appearance probability on encounters and rejects it on reusable monsters', () => {
+    const source = `schemaVersion: 5
+entries:
+  - kind: monster
+    id: monster.cave-rat
+    name: Cave rat
+    glyph: r
+    color: '#a89b82'
+    minDepth: 1
+    maxDepth: 5
+    attributes: { might: 4, agility: 8, vitality: 4, wits: 3, resolve: 2 }
+    health: 4
+    speed: 100
+    accuracy: 1
+    defense: 10
+    perception: 6
+    damage: { count: 1, sides: 3, bonus: 0 }
+    armor: 0
+    resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 }
+    threat: 1
     disposition: hostile
     behaviorId: behavior.approach-and-attack
     rarity: common
@@ -107,7 +200,7 @@ entries:
   });
 
   it('parses strict group, swarm, boss, and champion-template definitions', () => {
-    const source = `schemaVersion: 4
+    const source = `schemaVersion: 5
 entries:
   - { kind: encounter, id: encounter.patrol, name: Patrol, tags: [], model: group, minDepth: 1, maxDepth: 4, environmentTags: [], requiredVaultTags: [], weight: 5, rarity: uncommon, runAppearanceChance: 0.5, discoveryProtectionIncrement: 0.1, discoveryProtectionCap: 0.8, maximumInstancesPerRun: 2, placement: { minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 4, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }, intentPresentation: { visible: true }, definition: { roles: [{ roleId: guard, monsterId: monster.guard, minimumQuantity: 2, maximumQuantity: 3, formationPreference: front, behaviorParameters: {} }], formation: line, communicationRadius: 4, leaderChance: 0.5, leaderRoleId: guard, leaderAccentColor: '#ffcc44', leaderAlternateGlyph: null, coordinationModifiers: { accuracy: 1, defense: 1, damage: 0 }, leaderDeathResponse: weaken, responseParameters: {}, supernaturalBond: false, collapseRewards: none } }
   - { kind: encounter, id: encounter.nest, name: Nest, tags: [], model: swarm, minDepth: 1, maxDepth: 6, environmentTags: [], requiredVaultTags: [], weight: 4, rarity: uncommon, runAppearanceChance: 0.4, discoveryProtectionIncrement: 0.1, discoveryProtectionCap: 0.8, maximumInstancesPerRun: 2, placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }, intentPresentation: { visible: true }, definition: { sourceMonsterId: monster.nest, spawnRoles: [{ roleId: rat, monsterId: monster.rat, weight: 1 }], spawnInterval: 200, minimumSpawnQuantity: 1, maximumSpawnQuantity: 2, placementRadius: 3, allowedTerrainTags: [floor], maximumLivingChildren: 8, maximumLivingMembers: 9, maximumFloorActors: 20, sourceDestructionResponse: flee, responseParameters: {} } }
@@ -121,7 +214,7 @@ entries:
   it('applies defaults to a strict monster entry', () => {
     const [entry] = parseContentFile({
       path: 'monsters/rat.yaml',
-      source: `schemaVersion: 4
+      source: `schemaVersion: 5
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -139,6 +232,7 @@ entries:
     damage: { count: 1, sides: 3, bonus: 0 }
     armor: 0
     resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 }
+    threat: 1
     disposition: hostile
     behaviorId: behavior.approach-and-attack
     rarity: common
@@ -154,7 +248,7 @@ entries:
   it('parses strict timed and permanent condition definitions', () => {
     const entries = parseContentFile({
       path: 'conditions/control.yaml',
-      source: `schemaVersion: 4
+      source: `schemaVersion: 5
 entries:
   - kind: condition
     id: condition.stunned
@@ -194,7 +288,7 @@ entries:
     ['permanent numeric duration', 'duration: { mode: permanent, default: 100, maximum: 100 }', /duration\.default/i],
     ['refresh with multiple stacks', 'stacking: { mode: refresh, maximumStacks: 2 }', /maximumStacks/i],
   ])('rejects condition with %s', (_label, replacement, message) => {
-    const base = `schemaVersion: 4
+    const base = `schemaVersion: 5
 entries:
   - kind: condition
     id: condition.stunned
@@ -220,13 +314,13 @@ entries:
   it('parses strict item, spell, trap, loot-table, and balance entries', () => {
     const entries = parseContentFile({
       path: 'gameplay.yaml',
-      source: `schemaVersion: 4
+      source: `schemaVersion: 5
 entries:
   - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, identification: { mode: known, poolId: null }, effects: [] }
   - { kind: spell, id: spell.mend, name: Mend, tags: [], targetingId: target.self, range: 0, actionCost: 100, effects: [{ effectId: effect.heal, parameters: { dice: { count: 1, sides: 4, bonus: 0 } } }] }
   - { kind: trap, id: trap.dart, name: Dart trap, glyph: "^", color: "#aaaaaa", tags: [], targetingId: target.actor, discoveryDifficulty: 5, disarmDifficulty: 6, disarmOutcomes: { failure: safe, criticalFailure: trigger, toolDamage: 10 }, resetMode: once, effects: [{ effectId: effect.damage, parameters: { damageType: physical, dice: { count: 1, sides: 4, bonus: 0 } } }] }
   - { kind: loot-table, id: loot-table.basic, name: Basic loot, tags: [], rolls: 1, choices: [{ contentId: item.sword, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }] }
-  - { kind: balance, startingCurrency: 40, id: balance.core, name: Core, tags: [], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000, hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 }, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, restMaximumDuration: 5000, recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }, hungerStageModifiers: { sated: {}, hungry: {}, weak: {}, starving: {} }, formulas: { health: { base: 8, vitality: 2 } }, actionCosts: { action.move: 100 } }
+  - { kind: balance, startingCurrency: 40, id: balance.core, name: Core, tags: [], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000, hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 }, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, restMaximumDuration: 5000, recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }, hungerStageModifiers: { sated: {}, hungry: {}, weak: {}, starving: {} }, formulas: { health: { base: 8, vitality: 2 } }, actionCosts: { action.move: 100 }, score: { depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200 } }
 `,
     });
 
@@ -238,7 +332,7 @@ entries:
     ['dice count', 'damage: { count: 0, sides: 3, bonus: 0 }', /entries\.monster\.cave-rat\.damage\.count/],
     ['non-positive speed', 'speed: 100', /entries\.monster\.cave-rat\.speed/],
   ])('rejects invalid %s with a stable path', (_name, replacement, path) => {
-    const source = `schemaVersion: 4
+    const source = `schemaVersion: 5
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -256,6 +350,7 @@ entries:
     damage: { count: 1, sides: 3, bonus: 0 }
     armor: 0
     resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 }
+    threat: 1
     disposition: hostile
     behaviorId: behavior.approach-and-attack
     rarity: common
@@ -266,21 +361,21 @@ entries:
   it('rejects unknown targeting rules with a stable path', () => {
     expect(() => parseContentFile({
       path: 'spell.yaml',
-      source: 'schemaVersion: 4\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.unknown, range: 1, actionCost: 100, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
+      source: 'schemaVersion: 5\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.unknown, range: 1, actionCost: 100, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
     })).toThrow(/entries\.spell\.bad\.targetingId/);
   });
 
   it('rejects a negative action cost with a stable path', () => {
     expect(() => parseContentFile({
       path: 'spell.yaml',
-      source: 'schemaVersion: 4\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.self, range: 0, actionCost: -1, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
+      source: 'schemaVersion: 5\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.self, range: 0, actionCost: -1, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
     })).toThrow(/entries\.spell\.bad\.actionCost/);
   });
 
   it('materializes defaults and derived metadata for a strict vault entry', () => {
     const [entry] = parseContentFile({
       path: 'vaults/test-room.yaml',
-      source: `schemaVersion: 4
+      source: `schemaVersion: 5
 entries:
   - kind: vault
     id: vault.test-room
@@ -324,7 +419,7 @@ entries:
   it('rejects unknown properties with a field path', () => {
     expect(() => parseContentFile({
       path: 'monsters/bad.yaml',
-      source: `schemaVersion: 4
+      source: `schemaVersion: 5
 entries:
   - kind: monster
     id: monster.bad
@@ -342,6 +437,7 @@ entries:
     damage: { count: 1, sides: 1, bonus: 0 }
     armor: 0
     resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 }
+    threat: 1
     disposition: hostile
     behaviorId: behavior.approach-and-attack
     rarity: common
@@ -355,7 +451,7 @@ entries:
     try {
       parseContentFile({
         path: 'vaults/bad-room.yaml',
-        source: `schemaVersion: 4
+        source: `schemaVersion: 5
 entries:
   - kind: vault
     id: vault.bad-room
@@ -405,7 +501,7 @@ entries:
     try {
       parseContentFile({
         path: 'vaults/invalid-id.yaml',
-        source: `schemaVersion: 4
+        source: `schemaVersion: 5
 entries:
   - kind: vault
     id: "vault.Bad secret"
@@ -437,7 +533,7 @@ entries:
   it('rejects aliases', () => {
     expect(() => parseContentFile({
       path: 'monsters/alias.yaml',
-      source: 'schemaVersion: 4\nentries: &entries [*entries]\n',
+      source: 'schemaVersion: 5\nentries: &entries [*entries]\n',
     })).toThrow(/alias|YAML/i);
   });
 
@@ -446,7 +542,7 @@ entries:
     try {
       parseContentFile({
         path: 'monsters/tagged.yaml',
-        source: `schemaVersion: 4
+        source: `schemaVersion: 5
 entries: !unsafe
   - kind: monster
     id: monster.tagged

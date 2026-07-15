@@ -5,11 +5,13 @@ import type { ActorState, EquipmentSlot, RelationshipOverride } from './actor-mo
 import type { DungeonFeature } from './feature-model.js';
 import type { IdentificationState, ItemInstance } from './item-model.js';
 import type { HungerStage, SurvivalState } from './survival-model.js';
-import type { DamageType, LeaderDeathResponse } from '@woven-deep/content';
+import type { AchievementCriteriaId, CompletionType, DamageType, LeaderDeathResponse } from '@woven-deep/content';
 import type {
   EncounterRunDecision, FallenHeroRunDecision, FallenHeroStandingSnapshot, PopulationInstance, PopulationIntent,
 } from './population-model.js';
 import type { ActiveTrade, FactionReputation } from './merchant-model.js';
+import type { RunConclusion, RunConclusionCause } from './run-conclusion.js';
+import type { RunMetrics } from './run-metrics.js';
 
 export type OpaqueId = string;
 export type Uint32State = readonly [number, number, number, number];
@@ -150,7 +152,7 @@ export type TradeInvalidReason = 'trade.active' | 'trade.required' | 'merchant.u
   | 'trade.service-unavailable' | 'trade.target-invalid';
 export type InvalidActionReason = MovementInvalidReason | TradeInvalidReason | 'action.unavailable' | 'inventory.full'
   | 'item.missing' | 'item.unavailable' | 'item.quantity' | 'item.incompatible' | 'item.id-conflict'
-  | 'target.not_visible' | 'target.out_of_range' | 'target.blocked' | 'target.invalid';
+  | 'target.not_visible' | 'target.out_of_range' | 'target.blocked' | 'target.invalid' | 'run.concluded';
 
 export interface HeroMovedEvent {
   readonly type: 'hero.moved';
@@ -558,6 +560,22 @@ export interface RestCompletedEvent {
   readonly elapsed: number; readonly effectiveHealing: number;
 }
 
+export interface RunConcludedEvent {
+  readonly type: 'run.concluded'; readonly eventId: OpaqueId;
+  readonly completionType: CompletionType; readonly cause: RunConclusionCause;
+}
+export interface RunFinalizedEvent {
+  readonly type: 'run.finalized'; readonly eventId: OpaqueId;
+  readonly recordId: OpaqueId; readonly completionType: CompletionType;
+  readonly scoreTotal: number;
+}
+export interface AchievementGrantedEvent {
+  readonly type: 'achievement.granted'; readonly eventId: OpaqueId;
+  readonly achievementId: OpaqueId; readonly criteriaId: AchievementCriteriaId;
+  readonly name: string;
+}
+export type RunRecordDomainEvent = RunConcludedEvent | RunFinalizedEvent | AchievementGrantedEvent;
+
 export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent | AttackMissedEvent
   | AttackHitEvent | ActorDamagedEvent | ActorDiedEvent | ActorHealedEvent | ConditionAppliedEvent
   | ConditionRemovedEvent | ActorForcedMoveEvent | ReactionTriggeredEvent | RelationshipChangedEvent
@@ -568,7 +586,7 @@ export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent 
   | HungerStageChangedEvent | HungerRestoredEvent | FuelWarningEvent | ItemLightExtinguishedEvent
   | ItemDamagedEvent | DoorStateChangedEvent | FeatureRevealedEvent | FeatureSearchEvent | TrapStateEvent
   | PopulationDomainEvent | ReputationChangedEvent | TradeDomainEvent | MerchantLifecycleDomainEvent
-  | RestCompletedEvent;
+  | RestCompletedEvent | RunRecordDomainEvent;
 
 export type PublicEvent =
   Exclude<DomainEvent, AttackMissedEvent | AttackHitEvent | PopulationDomainEvent | MerchantLifecycleDomainEvent>
@@ -625,7 +643,7 @@ export interface RecordedCommand {
 }
 
 export interface ActiveRun {
-  readonly schemaVersion: 5;
+  readonly schemaVersion: 6;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly runId: OpaqueId;
@@ -652,6 +670,8 @@ export interface ActiveRun {
   readonly fallenHeroStandings: readonly FallenHeroStandingSnapshot[];
   readonly fallenHeroDecisions: readonly FallenHeroRunDecision[];
   readonly conqueredChampionRecordIds: readonly OpaqueId[];
+  readonly metrics: RunMetrics;
+  readonly conclusion: RunConclusion | null;
 }
 
 export interface CommandResolution {

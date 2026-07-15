@@ -12,6 +12,7 @@ import { placePopulation } from './population-placement.js';
 import { refreshKnowledge } from './perception.js';
 import { projectGameplayState, type GameplayProjection } from './projection.js';
 import { replayCommands } from './replay.js';
+import { recordFloorEntered } from './run-metrics.js';
 import { decodeActiveRun, encodeActiveRun } from './save-codec.js';
 import { validateActiveRun } from './save-schema.js';
 import { compareCodeUnits, stableJson } from './stable-json.js';
@@ -167,9 +168,9 @@ export function createPopulationDemoRun(pack: CompiledContentPack, scenarioSeed 
     relationship: 'friendly' as const,
   }))).sort((left, right) => compareCodeUnits(left.leftActorId, right.leftActorId)
     || compareCodeUnits(left.rightActorId, right.rightActorId));
-  run = { ...run, relationships, rng: { ...run.rng,
+  run = recordFloorEntered({ ...run, relationships, rng: { ...run.rng,
     encounters: [seedWord, (seedWord ^ 0x9e3779b9) >>> 0, Math.imul(seedWord, 0x85ebca6b) >>> 0,
-      Math.imul(seedWord ^ 0xc2b2ae35, 0x27d4eb2f) >>> 0] } };
+      Math.imul(seedWord ^ 0xc2b2ae35, 0x27d4eb2f) >>> 0] } }, populationFloor.depth);
   validatePopulationInvariants(run, pack);
   return run;
 }
@@ -376,13 +377,14 @@ function preparePopulationDemoBoundary(state: ActiveRun, input: PopulationDemoIn
   if (boundary === 'before-boss-re-entry') {
     const boss = state.populations.find((population) => population.model === 'boss')!;
     const enteredAt = state.worldTime + scenario.recoveryElapsed;
-    return { ...state, worldTime: enteredAt, activeFloorId: boss.floorId, activeFloorEnteredAt: enteredAt,
+    const depth = state.floors.find((floor) => floor.floorId === boss.floorId)!.depth;
+    return recordFloorEntered({ ...state, worldTime: enteredAt, activeFloorId: boss.floorId, activeFloorEnteredAt: enteredAt,
       actors: state.actors.map((actor) => actor.actorId === state.hero.actorId
         ? { ...actor, floorId: boss.floorId }
         : actor.actorId === boss.actorId ? { ...actor,
           health: Math.max(1, Math.floor(actor.maxHealth * scenario.bossHealthPercent / 100)) } : actor),
       populations: state.populations.map((population) => population.populationId === boss.populationId
-        ? { ...boss, lastFloorExitAt: state.worldTime } : population) };
+        ? { ...boss, lastFloorExitAt: state.worldTime } : population) }, depth);
   }
   if (boundary === 'before-champion-defeat') return prepareCommandAttack(state,
     state.populations.find((population) => population.model === 'champion')!.actorId);

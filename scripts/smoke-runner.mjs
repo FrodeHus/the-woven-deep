@@ -28,7 +28,11 @@ async function verifyOnce(baseUrl, fetch, timeoutMs) {
     || !entries.some((entry) => entry.kind === 'npc-faction')) {
     throw new Error('served content is missing the travelling merchant vertical');
   }
-  return `ok ${body.contentHash} ${body.entries} entries, ${merchants.length} merchant encounters\n`;
+  const achievements = entries.filter((entry) => entry.kind === 'achievement');
+  if (achievements.length === 0) {
+    throw new Error('served content is missing the run-records achievement vertical');
+  }
+  return `ok ${body.contentHash} ${body.entries} entries, ${merchants.length} merchant encounters, ${achievements.length} achievements\n`;
 }
 
 export async function runSmoke(baseUrl, options = {}) {

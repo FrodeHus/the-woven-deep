@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { compileContentDirectory, type CompiledContentPack } from '@woven-deep/content/compiler';
 import {
   createDemoContentPack, createDemoRun, createGameplayDemoRun, createUnknownKnowledge, decodeActiveRun,
-  emptyEquipment, encodeActiveRun,
+  emptyEquipment, emptyRunMetrics, encodeActiveRun,
   deriveRngStreams, heroPerception, refreshKnowledge, resolveCommand as resolveCommandWithContext, SaveLoadError,
   validateActiveRun, validateContentBoundRun, type GameCommand,
 } from '../src/index.js';
@@ -22,18 +22,70 @@ const resolveCommand = (
 describe('active-run save codec', () => {
   function v4Fixture(): Record<string, unknown> {
     const current = structuredClone(createDemoRun()) as any;
-    const { reputations: _reputations, activeTrade: _activeTrade, ...withoutRunFields } = current;
+    const { reputations: _reputations, activeTrade: _activeTrade, metrics: _metrics, conclusion: _conclusion,
+      ...withoutRunFields } = current;
     const { currency: _currency, ...hero } = withoutRunFields.hero;
-    const { 'merchant-stock': _merchantStock, 'merchant-runtime': _merchantRuntime, ...rng } = withoutRunFields.rng;
+    const { 'merchant-stock': _merchantStock, 'merchant-runtime': _merchantRuntime, 'run-records': _runRecords,
+      ...rng } = withoutRunFields.rng;
     return { ...withoutRunFields, schemaVersion: 4, hero, rng };
   }
 
-  function stripV5Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
+  function stripToV4Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
     const current = structuredClone(run) as any;
-    const { reputations: _reputations, activeTrade: _activeTrade, ...withoutRunFields } = current;
+    const { reputations: _reputations, activeTrade: _activeTrade, metrics: _metrics, conclusion: _conclusion,
+      ...withoutRunFields } = current;
     const { currency: _currency, ...hero } = withoutRunFields.hero;
-    const { 'merchant-stock': _merchantStock, 'merchant-runtime': _merchantRuntime, ...rng } = withoutRunFields.rng;
+    const { 'merchant-stock': _merchantStock, 'merchant-runtime': _merchantRuntime, 'run-records': _runRecords,
+      ...rng } = withoutRunFields.rng;
     return { ...withoutRunFields, schemaVersion: 4, hero, rng };
+  }
+
+  function v5Fixture(): Record<string, unknown> {
+    const current = structuredClone(createDemoRun()) as any;
+    const { metrics: _metrics, conclusion: _conclusion, ...withoutV6Fields } = current;
+    const { 'run-records': _runRecords, ...rng } = withoutV6Fields.rng;
+    return { ...withoutV6Fields, schemaVersion: 5, rng };
+  }
+
+  function stripV6Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
+    const current = structuredClone(run) as any;
+    const { metrics: _metrics, conclusion: _conclusion, ...withoutV6Fields } = current;
+    const { 'run-records': _runRecords, ...rng } = withoutV6Fields.rng;
+    return { ...withoutV6Fields, schemaVersion: 5, rng };
+  }
+
+  function concludedRun(): ReturnType<typeof createDemoRun> {
+    const base = createDemoRun();
+    const heroActor = { ...base.actors[0]!, health: 0 };
+    return {
+      ...base,
+      actors: [heroActor],
+      metrics: { ...emptyRunMetrics(), kills: 1, killsByModel: { ...emptyRunMetrics().killsByModel, individual: 1 } },
+      conclusion: {
+        completionType: 'died' as const,
+        cause: {
+          killerContentId: 'monster.cave-rat', depth: base.floors[0]!.depth,
+          turn: base.turn, worldTime: base.worldTime,
+        },
+        concludedAtRevision: base.revision,
+        finalized: false,
+      },
+    };
+  }
+
+  function heroWaitRecord(state: ReturnType<typeof createDemoRun>, commandId: string, extraEvents: readonly Record<string, unknown>[]) {
+    const revision = state.revision + 1;
+    const turn = state.turn + 1;
+    const heroActor = state.actors.find((actor) => actor.actorId === state.hero.actorId)!;
+    const command = { type: 'wait' as const, commandId, expectedRevision: state.revision };
+    const result = { status: 'applied' as const, commandId, revision, turn };
+    const waited = { type: 'hero.waited' as const, eventId: commandId, heroId: state.hero.actorId, x: heroActor.x, y: heroActor.y };
+    const record = {
+      command, result,
+      events: [waited, ...extraEvents.map((event) => ({ ...event, eventId: commandId }))],
+      publicEvents: [],
+    };
+    return { record, revision, turn };
   }
 
   function merchantRun(): ReturnType<typeof createDemoRun> {
@@ -120,18 +172,34 @@ describe('active-run save codec', () => {
     return population;
   }
 
-  it('migrates strict schema v4 state once and preserves every former field', () => {
+  it('migrates strict schema v4 state through v5 to v6 and preserves every former field', () => {
     const legacy = v4Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(5);
+    expect(decoded.schemaVersion).toBe(6);
     expect(decoded.hero.currency).toBe(0);
     expect(decoded.reputations).toEqual([]);
     expect(decoded.activeTrade).toBeNull();
+    expect(decoded.metrics).toEqual(emptyRunMetrics());
+    expect(decoded.conclusion).toBeNull();
     const derived = deriveRngStreams(legacy.runSeed as any);
     expect(decoded.rng['merchant-stock']).toEqual(derived['merchant-stock']);
     expect(decoded.rng['merchant-runtime']).toEqual(derived['merchant-runtime']);
-    expect(stripV5Fields(decoded)).toEqual(legacy);
+    expect(decoded.rng['run-records']).toEqual(derived['run-records']);
+    expect(stripToV4Fields(decoded)).toEqual(legacy);
+    expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(encodeActiveRun(decoded));
+  });
+
+  it('migrates strict schema v5 state once and preserves every former field', () => {
+    const legacy = v5Fixture();
+    const decoded = decodeActiveRun(JSON.stringify(legacy));
+
+    expect(decoded.schemaVersion).toBe(6);
+    expect(decoded.metrics).toEqual(emptyRunMetrics());
+    expect(decoded.conclusion).toBeNull();
+    const derived = deriveRngStreams(legacy.runSeed as any);
+    expect(decoded.rng['run-records']).toEqual(derived['run-records']);
+    expect(stripV6Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(encodeActiveRun(decoded));
   });
 
@@ -143,6 +211,64 @@ describe('active-run save codec', () => {
     const legacy = v4Fixture();
     corrupt(legacy);
     expect(() => decodeActiveRun(JSON.stringify(legacy))).toThrow(SaveLoadError);
+  });
+
+  it.each([
+    ['negative metric value', (run: any) => { run.metrics = { ...run.metrics, kills: -1 }; }],
+    ['unsafe metric value', (run: any) => { run.metrics = { ...run.metrics, kills: Number.MAX_SAFE_INTEGER + 1 }; }],
+    ['extra metric key', (run: any) => { run.metrics = { ...run.metrics, bogus: 1 }; }],
+    ['missing metric key', (run: any) => { const { kills: _kills, ...rest } = run.metrics; run.metrics = rest; }],
+    ['kills below killsByModel sum', (run: any) => {
+      run.metrics = { ...run.metrics, kills: 0, killsByModel: { individual: 1, group: 0, swarm: 0, boss: 0 } };
+    }],
+    ['non-null conclusion with a living hero', (run: any) => { run.actors[0].health = 20; }],
+    ['dead hero with a null conclusion', (run: any) => { run.conclusion = null; }],
+    ['finalized shape without the rest of a conclusion (structural)', (run: any) => { run.conclusion = { finalized: true }; }],
+    ['concludedAtRevision above revision', (run: any) => { run.conclusion.concludedAtRevision = run.revision + 1; }],
+    ['cause.turn above turn', (run: any) => { run.conclusion.cause.turn = run.turn + 1; }],
+    ['cause.worldTime above worldTime', (run: any) => { run.conclusion.cause.worldTime = run.worldTime + 1; }],
+    ['non-null killerContentId on a non-died completion', (run: any) => { run.conclusion.completionType = 'refused'; }],
+  ])('rejects strict v6 corruption: %s', (_label, corrupt) => {
+    const input = structuredClone(concludedRun()) as any;
+    corrupt(input);
+    expect(() => encodeActiveRun(input)).toThrow(SaveLoadError);
+  });
+
+  it('round-trips a single retained run.concluded event once the run is concluded', () => {
+    const state = concludedRun();
+    const concludedEvent = { type: 'run.concluded' as const, completionType: state.conclusion!.completionType, cause: state.conclusion!.cause };
+    const { record, revision, turn } = heroWaitRecord(state, 'command.concluded', [concludedEvent]);
+    const input = { ...state, revision, turn, recentCommands: [record] };
+    expect(decodeActiveRun(encodeActiveRun(input))).toEqual(input);
+  });
+
+  it('rejects more than one retained run.concluded event across recentCommands', () => {
+    const state = concludedRun();
+    const concludedEvent = { type: 'run.concluded' as const, completionType: state.conclusion!.completionType, cause: state.conclusion!.cause };
+    const first = heroWaitRecord(state, 'command.concluded.1', [concludedEvent]);
+    const second = heroWaitRecord({ ...state, revision: first.revision, turn: first.turn }, 'command.concluded.2', [concludedEvent]);
+    const input = { ...state, revision: second.revision, turn: second.turn, recentCommands: [first.record, second.record] };
+    expect(() => encodeActiveRun(input)).toThrow(SaveLoadError);
+  });
+
+  it('rejects a run.finalized event retained inside recentCommands', () => {
+    const state = concludedRun();
+    const finalizedEvent = {
+      type: 'run.finalized' as const, recordId: 'record.demo',
+      completionType: state.conclusion!.completionType, scoreTotal: 100,
+    };
+    const { record, revision, turn } = heroWaitRecord(state, 'command.finalized', [finalizedEvent]);
+    expect(() => encodeActiveRun({ ...state, revision, turn, recentCommands: [record] })).toThrow(SaveLoadError);
+  });
+
+  it('rejects an achievement.granted event retained inside recentCommands', () => {
+    const state = concludedRun();
+    const grantedEvent = {
+      type: 'achievement.granted' as const, achievementId: 'achievement.first-champion-defeat',
+      criteriaId: 'first-champion-defeat' as const, name: 'First Champion Defeat',
+    };
+    const { record, revision, turn } = heroWaitRecord(state, 'command.granted', [grantedEvent]);
+    expect(() => encodeActiveRun({ ...state, revision, turn, recentCommands: [record] })).toThrow(SaveLoadError);
   });
 
   it.each([-1, Number.MAX_SAFE_INTEGER + 1])('rejects invalid hero currency %s', (currency) => {
@@ -720,7 +846,7 @@ describe('active-run save codec', () => {
     expect(() => decodeActiveRun(JSON.stringify({ ...createDemoRun(), surprise: true }))).toThrow(/surprise/);
   });
 
-  it.each([0, 1, 2, 3, 6])('rejects unsupported schema version %i without partial state', (schemaVersion) => {
+  it.each([0, 1, 2, 3, 7])('rejects unsupported schema version %i without partial state', (schemaVersion) => {
     try {
       decodeActiveRun(JSON.stringify({ schemaVersion }));
       expect.fail('expected unsupported version');

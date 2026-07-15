@@ -14,6 +14,7 @@ import { placePopulation } from './population-placement.js';
 import { projectGameplayState, type GameplayProjection } from './projection.js';
 import { rollDie } from './random.js';
 import { replayCommands } from './replay.js';
+import { recordFloorEntered } from './run-metrics.js';
 import { decodeActiveRun, encodeActiveRun } from './save-codec.js';
 import { validateActiveRun } from './save-schema.js';
 import { compareCodeUnits, stableJson } from './stable-json.js';
@@ -185,10 +186,10 @@ export function createMerchantDemoRun(pack: CompiledContentPack): ActiveRun {
     actors: new Map(run.actors.filter((actor) => actor.floorId === HOME_FLOOR_ID)
       .map((actor) => [actor.actorId, actor] as const)),
   }).knowledge;
-  run = {
+  run = recordFloorEntered({
     ...run,
     floors: run.floors.map((floor) => floor.floorId === HOME_FLOOR_ID ? { ...floor, knowledge } : floor),
-  };
+  }, home.depth);
   validateActiveRun(run);
   validateContentBoundRun(run, pack);
   validateMerchantInvariants(run, pack);
@@ -330,14 +331,16 @@ function prepareCommandAttack(state: ActiveRun, targetActorId: string, targetHea
  */
 function moveHeroToFloor(state: ActiveRun, floorId: string, worldTime: number): ActiveRun {
   if (worldTime < state.worldTime) throw new Error('merchant fixture cannot reverse world time');
-  return {
+  const depth = state.floors.find((floor) => floor.floorId === floorId)?.depth;
+  if (depth === undefined) throw new Error(`merchant fixture cannot enter unknown floor ${floorId}`);
+  return recordFloorEntered({
     ...state,
     worldTime,
     activeFloorId: floorId,
     activeFloorEnteredAt: worldTime,
     actors: state.actors.map((actor) => actor.actorId === state.hero.actorId
       ? { ...actor, floorId } : actor),
-  };
+  }, depth);
 }
 
 function prepareMerchantDemoBoundary(state: ActiveRun, input: MerchantDemoInput): ActiveRun {

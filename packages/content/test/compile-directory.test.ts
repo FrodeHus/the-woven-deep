@@ -10,9 +10,9 @@ import {
 
 const compactVault = '{kind: vault, id: vault.test-room, name: Test room, tags: [test], minDepth: 1, maxDepth: 5, rarity: common, weight: 10, maxPerFloor: 1, margin: 1, transforms: {rotations: [0, 180], reflectHorizontal: true}, layout: ["#####", "#+m.#", "#####"], legend: {"#": {terrain: wall}, ".": {terrain: floor}, "+": {terrain: floor, entrance: true}, m: {terrain: floor, slot: {id: monster-main, kind: monster, required: true, tags: [guard]}}}}';
 
-const compactMonster = '{kind: monster, id: monster.rat, name: Rat, glyph: r, color: "#aaaaaa", tags: [defense, food, healing, identification, light, offense], minDepth: 1, maxDepth: 5, attributes: {might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2}, health: 4, speed: 110, accuracy: 1, defense: 10, perception: 6, damage: {count: 1, sides: 3, bonus: 0}, armor: 0, resistances: {physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0}, disposition: hostile, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, rarity: common}';
+const compactMonster = '{kind: monster, id: monster.rat, name: Rat, glyph: r, color: "#aaaaaa", tags: [defense, food, healing, identification, light, offense], minDepth: 1, maxDepth: 5, attributes: {might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2}, health: 4, speed: 110, accuracy: 1, defense: 10, perception: 6, damage: {count: 1, sides: 3, bonus: 0}, armor: 0, resistances: {physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0}, disposition: hostile, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, threat: 2, rarity: common}';
 const compactItem = '{kind: item, id: item.lantern, name: Lantern, glyph: "¤", color: "#eeeeaa", tags: [defense, food, healing, identification, light, offense], minDepth: 1, maxDepth: 20, category: light, stackLimit: 1, price: 4, rarity: common, actionCost: 100, equipment: {slots: [off-hand], handedness: one-handed, reservedSlots: []}, combat: null, light: {color: [255, 200, 100], radius: 6, strength: 180, fuelCapacity: 1000, fuelPerTime: 1, warningThresholds: [100], fuelTags: [lamp-oil]}, identification: {mode: known, poolId: null}, effects: []}';
-const compactBalance = '{kind: balance, startingCurrency: 40, id: balance.core, name: Core, tags: [core], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000, hungerThresholds: {hungry: 3000, weak: 1000, starving: 0}, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, restMaximumDuration: 5000, recoveryByHungerStage: {sated: 100, hungry: 50, weak: 0, starving: 0}, hungerStageModifiers: {sated: {}, hungry: {}, weak: {}, starving: {}}, formulas: {health: {base: 8, vitality: 2}}, actionCosts: {action.move: 100}}';
+const compactBalance = '{kind: balance, startingCurrency: 40, id: balance.core, name: Core, tags: [core], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000, hungerThresholds: {hungry: 3000, weak: 1000, starving: 0}, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, restMaximumDuration: 5000, recoveryByHungerStage: {sated: 100, hungry: 50, weak: 0, starving: 0}, hungerStageModifiers: {sated: {}, hungry: {}, weak: {}, starving: {}}, formulas: {health: {base: 8, vitality: 2}}, actionCosts: {action.move: 100}, score: {depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: {died: 0, refused: 400, became-heart: 800, broke-cycle: 1500}, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200}}';
 const compactTimedCondition = '{kind: condition, id: condition.stunned, name: Stunned, description: Cannot act, tags: [control], color: "#d8c46a", duration: {mode: timed, default: 100, maximum: 500}, stacking: {mode: refresh, maximumStacks: 1}, modifiersPerStack: {defense: -2}, traits: [condition-trait.incapacitated]}';
 const compactPermanentCondition = '{kind: condition, id: condition.warded, name: Warded, description: Remains until removed, tags: [beneficial], color: "#80b8ff", duration: {mode: permanent, default: null, maximum: null}, stacking: {mode: refresh, maximumStacks: 1}, modifiersPerStack: {}, traits: []}';
 const compactIndividualEncounter = '{kind: encounter, id: encounter.rat, name: Rat encounter, tags: [], model: individual, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: common, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 3, placement: {minimumStairDistance: 2, minimumObjectiveDistance: 2, maximumMemberDistance: 2, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, minimumQuantity: 1, maximumQuantity: 2}}';
@@ -21,8 +21,12 @@ const compactNpc = '{kind: npc, id: npc.lampwright, name: Lampwright, tags: [], 
 const compactStock = '{kind: loot-table, id: loot-table.stock, name: Stock, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
 const compactMerchant = '{kind: encounter, id: encounter.merchant, name: Merchant, tags: [], model: merchant, minDepth: 1, maxDepth: 10, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: uncommon, runAppearanceChance: 0.25, maximumInstancesPerRun: 2, placement: {minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {npcId: npc.lampwright, stockLootTableId: loot-table.stock, minimumStockRolls: 1, maximumStockRolls: 2, merchantSaleBps: 12000, merchantPurchaseBps: 6000, acceptedCategories: [light], services: [{serviceId: merchant-service.identify, basePrice: 10, minimumUses: 1, maximumUses: 2, tierIds: [neutral]}], minimumLifetime: 3000, maximumLifetime: 5000, departureWarningThresholds: [1000, 500, 100], aggressionResponse: flee, commerceReputationDelta: 25, aggressionReputationDelta: -300, deathReputationDelta: -200, stockDropFraction: 0.5}}';
 
+function achievement(id: string, criteriaId: string): string {
+  return `{kind: achievement, id: ${id}, name: Achievement, tags: [], description: Do the thing first., criteriaId: ${criteriaId}}`;
+}
+
 function contentFile(...entries: readonly string[]): string {
-  return `schemaVersion: 4\nentries: [${entries.join(', ')}]\n`;
+  return `schemaVersion: 5\nentries: [${entries.join(', ')}]\n`;
 }
 
 async function fixture(files: Record<string, string>): Promise<string> {
@@ -174,6 +178,20 @@ describe('compileContentDirectory', () => {
       await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/positive price|reserved quest tag/);
     }
   });
+  it('compiles achievements and allows at most one achievement per criterion', async () => {
+    const validRoot = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      achievement('achievement.a', 'first-champion-defeat'),
+      achievement('achievement.b', 'first-echo-defeat')) });
+    const pack = await compileContentDirectory({ rootDir: validRoot });
+    expect(pack.entries.filter((entry) => entry.kind === 'achievement')).toHaveLength(2);
+
+    const duplicateRoot = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      achievement('achievement.a', 'first-champion-defeat'),
+      achievement('achievement.b', 'first-champion-defeat')) });
+    await expect(compileContentDirectory({ rootDir: duplicateRoot })).rejects
+      .toThrow(/at most one achievement per criterion/);
+  });
+
   it('produces the same hash regardless of YAML formatting and filenames', async () => {
     const compact = await fixture({
       'z.yaml': contentFile(compactMonster, compactItem, compactVault),
@@ -648,7 +666,7 @@ describe('compileContentDirectory', () => {
     const root = await fixture({ 'content.yaml': contentFile(
       compactMonster, compactItem, ordinary, compactVault, compactTimedCondition, loot, boss,
     ) });
-    await expect(compileContentDirectory({ rootDir: root })).resolves.toMatchObject({ schemaVersion: 4 });
+    await expect(compileContentDirectory({ rootDir: root })).resolves.toMatchObject({ schemaVersion: 5 });
   });
 
   it('validates Champion and Echo template references and weaker limits', async () => {

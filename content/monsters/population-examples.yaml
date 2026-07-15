@@ -1,4 +1,4 @@
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: monster
     id: monster.rat-brood
@@ -20,6 +20,7 @@ entries:
     disposition: hostile
     behaviorId: behavior.approach-and-attack
     behaviorParameters: {}
+    threat: 4
     rarity: uncommon
 
   - kind: monster
@@ -42,4 +43,5 @@ entries:
     disposition: hostile
     behaviorId: behavior.approach-and-attack
     behaviorParameters: {}
+    threat: 12
     rarity: legendary

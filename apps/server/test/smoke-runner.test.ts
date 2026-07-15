@@ -9,6 +9,7 @@ const servedContent = {
       kind: 'encounter', id: 'encounter.travelling-lampwright', model: 'merchant',
       definition: { npcId: 'npc.travelling-lampwright' },
     },
+    { kind: 'achievement', id: 'achievement.defeated-the-deeps-champion' },
   ],
 };
 
@@ -30,7 +31,7 @@ it('retries transient failures with bounded requests and preserves the smoke out
     attempts: 2,
     timeoutMs: 100,
     retryDelayMs: 10,
-  })).resolves.toBe(`ok ${'a'.repeat(64)} 2 entries, 1 merchant encounters\n`);
+  })).resolves.toBe(`ok ${'a'.repeat(64)} 2 entries, 1 merchant encounters, 1 achievements\n`);
 
   expect(sleep).toHaveBeenCalledWith(10);
   expect(fetch).toHaveBeenCalledTimes(4);
