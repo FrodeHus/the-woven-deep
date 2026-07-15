@@ -1,6 +1,6 @@
 # Server content configuration
 
-The Woven Deep loads gameplay content from YAML when the server starts. Administrators can add and balance monsters, NPCs, NPC factions, encounters, fallen-hero bosses, items, identification pools, spells, traps, loot tables, vaults, conditions, and global balance values without rebuilding the application, provided they use the engine's supported behaviors, effects, targets, and condition traits.
+The Woven Deep loads gameplay content from YAML when the server starts. Administrators can add and balance monsters, NPCs, NPC factions, encounters, fallen-hero bosses, achievements, items, identification pools, spells, traps, loot tables, vaults, conditions, and global balance values without rebuilding the application, provided they use the engine's supported behaviors, effects, targets, and condition traits.
 
 YAML is configuration, not a scripting language. A new combination of supported rules needs only YAML. A fundamentally new rule requires a code change, a strict schema, tests, and an update to this guide.
 
@@ -38,7 +38,7 @@ For a release image, run the repeatable startup integration gate as well:
 npm run content:startup-gate
 ```
 
-The gate builds the Compose image, starts it with a complete schema-v4 directory mounted read-only,
+The gate builds the Compose image, starts it with a complete schema-v5 directory mounted read-only,
 smoke-tests the server, then restarts against an invalid replacement using the same database. It requires
 the invalid container to exit and verifies that the immutable content-pack publication set did not change.
 Pass an existing image reference after `--` to skip the build, for example
@@ -60,6 +60,7 @@ A conventional layout is:
 
 ```text
 content/
+  achievements/
   balance/
   champions/
   conditions/
@@ -79,7 +80,7 @@ content/
 Every file is one strict document:
 
 ```yaml
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: monster
     id: monster.example
@@ -92,9 +93,9 @@ Unknown fields are errors, including plausible misspellings.
 
 | Field | Type | Required/default | Rules and meaning |
 |---|---|---|---|
-| `schemaVersion` | integer | Required | Must be exactly `4`. |
+| `schemaVersion` | integer | Required | Must be exactly `5`. |
 | `entries` | array | Required, at least one | May contain any supported content kind. |
-| `kind` | enum | Required | One of `monster`, `npc`, `npc-faction`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, `condition`, `encounter`, or `fallen-champion-template`. |
+| `kind` | enum | Required | One of `monster`, `npc`, `npc-faction`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, `condition`, `encounter`, `fallen-champion-template`, or `achievement`. |
 | `id` | string | Required | Globally unique stable ID such as `monster.cave-rat`. |
 | `name` | string | Required | Trimmed display name, 1–80 characters. |
 | `tags` | slug array | Defaults to `[]` | Descriptive taxonomy. Tags never activate engine rules. |
@@ -129,9 +130,10 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `hungerStageModifiers` | object | Yes | Derived-stat modifiers for each hunger stage. Each stage accepts the same closed stat names used by condition modifiers. |
 | `formulas` | map of integer maps | Yes | Derived-stat coefficients; unknown operands fail engine validation. |
 | `actionCosts` | registered-action-ID-to-integer map | Yes | Non-negative cost overrides. Unknown action IDs fail compilation. |
+| `score` | object | Yes | Run scoring coefficients described in the `score` table below. Every value is an integer; no floating point is accepted. |
 
 ```yaml
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: balance
     id: balance.core-gameplay
@@ -167,9 +169,31 @@ entries:
       search: { wits: 1 }
       disarm: { agility: 1, wits: 1 }
     actionCosts: { action.move: 100, action.spawn: 100, action.wait: 100 }
+    score:
+      depthCoefficient: 100
+      bossDefeatCoefficient: 250
+      threatCoefficient: 5
+      discoveryCoefficient: 25
+      completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }
+      turnEfficiencyBudget: 500
+      turnEfficiencyDecayInterval: 200
 ```
 
 The closed action-cost IDs are `action.attack`, `action.cast`, `action.close-door`, `action.disarm`, `action.drop`, `action.equip`, `action.fire`, `action.move`, `action.open-door`, `action.pickup`, `action.refuel`, `action.search`, `action.spawn`, `action.split-stack`, `action.throw-item`, `action.toggle-light`, `action.unequip`, `action.use-item`, and `action.wait`. A pack may override any subset; `normalActionCost` supplies the normal fallback.
+
+### Score coefficients
+
+The `score` object supplies every coefficient used to compute a deterministic run score. Each coefficient is a non-negative safe integer (`0` through `9007199254740991`, meaning `2^53 - 1`); fractional, negative, and unsafe values are rejected, as are unknown fields.
+
+| Field | Type | Required | Rules and meaning |
+|---|---|---|---|
+| `depthCoefficient` | non-negative safe integer | Yes | Points per deepest floor reached. Bundled value `100`. |
+| `bossDefeatCoefficient` | non-negative safe integer | Yes | Points per boss defeated. Bundled value `250`. |
+| `threatCoefficient` | non-negative safe integer | Yes | Points per monster `threat` point defeated. Bundled value `5`. |
+| `discoveryCoefficient` | non-negative safe integer | Yes | Points per discovery. Bundled value `25`. |
+| `completionBonus` | object | Yes | Non-negative safe-integer bonus for exactly the closed completion keys `died`, `became-heart`, `refused`, and `broke-cycle`. All four keys are required; unknown keys are rejected. Bundled values are `0`, `800`, `400`, and `1500` respectively. |
+| `turnEfficiencyBudget` | non-negative safe integer | Yes | Turn budget before efficiency decay begins. Bundled value `500`. |
+| `turnEfficiencyDecayInterval` | positive safe integer | Yes | Turns per efficiency decay step; zero is rejected. Bundled value `200`. |
 
 ## Monster entries
 
@@ -187,10 +211,11 @@ The closed action-cost IDs are `action.attack`, `action.cast`, `action.close-doo
 | `disposition` | enum | Yes | `friendly`, `neutral`, or `hostile`. |
 | `behaviorId` | registered ID | Yes | Closed AI behavior described below. |
 | `behaviorParameters` | object | Defaults to `{}` | Strict parameters for the behavior. |
+| `threat` | non-negative safe integer | Yes | Scoring weight of defeating this monster, multiplied by the balance `threatCoefficient`. Bounds are `0` through `9007199254740991` (`2^53 - 1`); fractional and negative values are rejected. Bundled values: `1` for `monster.cave-rat`, `2` for `monster.training-beetle`, `4` for the swarm-source `monster.rat-brood`, and `12` for the boss `monster.ashen-warden`. |
 | `rarity` | enum | Yes | `common`, `uncommon`, `rare`, or `legendary`. |
 
 ```yaml
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -212,6 +237,7 @@ entries:
     disposition: hostile
     behaviorId: behavior.approach-and-attack
     behaviorParameters: {}
+    threat: 1
     rarity: common
 ```
 
@@ -320,7 +346,7 @@ Client contract: when a trade command resolves as invalid, any events attached t
 Runs persist with save schema version `5`, which adds faction `reputations`, the modal `activeTrade` session, merchant populations, and the dedicated `merchant-stock` and `merchant-runtime` RNG streams. Schema-v4 saves migrate to v5 automatically on load with empty merchant state; unknown save versions are rejected.
 
 ```yaml
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: encounter
     id: encounter.cave-rat-individuals
@@ -364,7 +390,7 @@ the entire pack.
 The Champion heirloom is selected once at the original death from unique equipped item instances only. Backpack items never qualify, and a multi-slot item is still one candidate. Better rarity and positive quality ranks raise its weight, but common equipment retains a non-zero chance. There is no minimum rarity and no reroll, so damaged, depleted, or mundane equipped gear remains possible. If nothing equipped is eligible, the fallback relic is recorded.
 
 ```yaml
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: fallen-champion-template
     id: fallen-champion-template.core
@@ -420,7 +446,7 @@ Identification modes have distinct contracts:
 Items never contain their unidentified names. The generated mapping is saved with the run, so save/reload cannot reroll it, and a later run receives a new mapping. Items using the same pool must have the pool's category. The compiler requires at least as many unique verb–noun combinations as item definitions using the pool.
 
 ```yaml
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: item
     id: item.brass-lantern
@@ -456,7 +482,7 @@ Identification pools are normal content-pack entries and may be placed in any `.
 The pool's `name` is an administrator-facing label. It is not shown as an unidentified item name.
 
 ```yaml
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: identification-pool
     id: identification-pool.potions
@@ -486,7 +512,7 @@ identification: { mode: shuffled, poolId: identification-pool.potions }
 | `effects` | non-empty effect array | Yes | Applied in listed order. |
 
 ```yaml
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: spell
     id: spell.mend
@@ -513,7 +539,7 @@ entries:
 | `effects` | non-empty effect array | Yes | Ordered trigger effects. |
 
 ```yaml
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: trap
     id: trap.poison-dart
@@ -555,7 +581,7 @@ Boss guaranteed-unique content is forbidden anywhere in an ordinary loot graph, 
 | `minimumQuantity`, `maximumQuantity` | positive safe integers | Yes | Inclusive quantity range; maximum cannot be smaller, cannot exceed 256, and for a direct item cannot exceed its `stackLimit`. |
 
 ```yaml
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: loot-table
     id: loot-table.basic-supplies
@@ -592,7 +618,7 @@ guaranteed boss-unique item item.warden-ember cannot appear in ordinary loot
 Terrain is `wall`, `floor`, `closed-door`, `pillar`, `stair-up`, `stair-down`, or `void`. A placement slot kind is `monster`, `item`, `trap`, `npc`, `fixture`, or `objective`. Slot IDs are vault-local slugs. Required slots must occur in the layout. Lights require a local suffix, one glyph, stable presentation token, RGB color, radius 1–32, strength 1–255, and optional enabled state (default true). Void terrain cannot contain lights or placement slots.
 
 ```yaml
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: vault
     id: vault.small-cache
@@ -631,7 +657,7 @@ entries:
 Replace and refresh produce one stack; intensify adds one up to the cap. Every reapplication refreshes source, application time, and deadline. Timed applications may omit duration to use the default or supply a positive override no greater than the maximum. Permanent conditions reject an override. Removal and expiration remove the complete condition instance.
 
 ```yaml
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: condition
     id: condition.stunned
@@ -643,6 +669,34 @@ entries:
     stacking: { mode: intensify, maximumStacks: 3 }
     modifiersPerStack: { defense: -2 }
     traits: [condition-trait.incapacitated, condition-trait.suppresses-reactions]
+```
+
+## Achievement entries
+
+An `achievement` names a permanent account milestone. Beyond the common `id`, `name`, and `tags` fields it accepts exactly two kind-specific fields; unknown fields are rejected.
+
+| Field | Type | Required | Rules and meaning |
+|---|---|---|---|
+| `description` | string | Yes | Trimmed non-empty text, at most 200 characters. |
+| `criteriaId` | registered ID | Yes | One entry from the closed criteria registry below. Each criterion may be claimed by at most one achievement per pack. |
+
+The closed achievement criteria registry contains exactly `first-champion-defeat` (first defeat of the Deep's Champion) and `first-echo-defeat` (first defeat of a fallen hero's Echo). New criteria require a code change; unknown criteria IDs fail compilation.
+
+```yaml
+schemaVersion: 5
+entries:
+  - kind: achievement
+    id: achievement.defeated-the-deeps-champion
+    name: Defeated the Deep's Champion
+    tags: [fallen-hero, prestige]
+    description: Defeat the Deep's Champion for the first time.
+    criteriaId: first-champion-defeat
+  - kind: achievement
+    id: achievement.silenced-an-echo
+    name: Silenced an Echo
+    tags: [fallen-hero]
+    description: Defeat an Echo of a fallen hero for the first time.
+    criteriaId: first-echo-defeat
 ```
 
 ## Closed behavior registry
@@ -718,4 +772,4 @@ Never silently attach an active run to a different content hash. Keep old conten
 
 ## Complete examples
 
-Each content-kind section above contains a complete copyable `schemaVersion: 4` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.
+Each content-kind section above contains a complete copyable `schemaVersion: 5` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.

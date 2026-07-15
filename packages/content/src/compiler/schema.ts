@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CONDITION_TRAIT_IDS, CONTENT_SCHEMA_VERSION, DERIVED_STAT_NAMES } from '../model.js';
+import { ACHIEVEMENT_CRITERIA_IDS, CONDITION_TRAIT_IDS, CONTENT_SCHEMA_VERSION, DERIVED_STAT_NAMES } from '../model.js';
 
 export const stableIdSchema = z.string().regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/);
 export const slugSchema = z.string().regex(/^[a-z][a-z0-9-]*$/);
@@ -87,6 +87,7 @@ const monsterEntry = z.strictObject({
   disposition: z.enum(['friendly', 'neutral', 'hostile']),
   behaviorId: stableIdSchema,
   behaviorParameters: jsonObject.default({}),
+  threat: safeNonNegative,
   rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
 }).superRefine((entry, context) => {
   if (entry.maxDepth < entry.minDepth) context.addIssue({ code: 'custom', path: ['maxDepth'], message: 'maximum depth must be greater than or equal to minimum depth' });
@@ -197,6 +198,28 @@ const lootTableEntry = z.strictObject({
   choices: z.array(lootChoice).min(1),
 });
 
+const scoreCoefficients = z.strictObject({
+  depthCoefficient: safeNonNegative,
+  bossDefeatCoefficient: safeNonNegative,
+  threatCoefficient: safeNonNegative,
+  discoveryCoefficient: safeNonNegative,
+  completionBonus: z.strictObject({
+    died: safeNonNegative,
+    'became-heart': safeNonNegative,
+    refused: safeNonNegative,
+    'broke-cycle': safeNonNegative,
+  }),
+  turnEfficiencyBudget: safeNonNegative,
+  turnEfficiencyDecayInterval: safePositive,
+});
+
+const achievementEntry = z.strictObject({
+  ...base,
+  kind: z.literal('achievement'),
+  description: z.string().trim().min(1).max(200),
+  criteriaId: z.enum(ACHIEVEMENT_CRITERIA_IDS),
+});
+
 const balanceEntry = z.strictObject({
   ...base,
   kind: z.literal('balance'),
@@ -228,6 +251,7 @@ const balanceEntry = z.strictObject({
   }),
   formulas: z.record(z.string(), z.record(z.string(), safeInteger)),
   actionCosts: z.record(stableIdSchema, safeNonNegative),
+  score: scoreCoefficients,
 }).superRefine((entry, context) => {
   const { starving, weak, hungry } = entry.hungerThresholds;
   if (!(starving <= weak && weak <= hungry && hungry < entry.hungerMaximum)) {
@@ -576,6 +600,7 @@ export const contentSourceEntrySchema = z.discriminatedUnion('kind', [
   fallenChampionTemplateEntry,
   npcEntry,
   npcFactionEntry,
+  achievementEntry,
 ]);
 
 export const contentEntrySchema = contentSourceEntrySchema.transform((entry) => {

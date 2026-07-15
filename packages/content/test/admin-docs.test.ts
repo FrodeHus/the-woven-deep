@@ -21,6 +21,7 @@ import {
   contentSourceEntrySchema,
 } from '../src/compiler/schema.js';
 import {
+  ACHIEVEMENT_CRITERIA_IDS,
   ACTION_COST_IDS,
   BEHAVIOR_PARAMETER_SCHEMAS,
   EFFECT_PARAMETER_SCHEMAS,
@@ -85,6 +86,7 @@ describe('server-admin content documentation', () => {
       ...MERCHANT_SERVICE_IDS,
       ...MERCHANT_AGGRESSION_RESPONSES,
       ...CONDITION_TRAIT_IDS,
+      ...ACHIEVEMENT_CRITERIA_IDS,
     ];
     for (const identifier of required) {
       expect(reference, `missing admin documentation for ${identifier}`)
@@ -108,6 +110,24 @@ describe('server-admin content documentation', () => {
       'echoLootTableId', 'rarityWeights', 'qualityRankBonus',
     ]) {
       expect(reference, `missing encounter field documentation for ${field}`).toContain(`\`${field}\``);
+    }
+  });
+
+  it('documents the achievement kind, score coefficients, and monster threat', async () => {
+    const reference = await readFile(resolve(
+      import.meta.dirname,
+      '../../../docs/server-admin/content-configuration.md',
+    ), 'utf8');
+    for (const identifier of [
+      'achievement', 'criteriaId', 'description',
+      ...ACHIEVEMENT_CRITERIA_IDS,
+      'score', 'threat',
+      'depthCoefficient', 'bossDefeatCoefficient', 'threatCoefficient', 'discoveryCoefficient',
+      'completionBonus', 'died', 'became-heart', 'refused', 'broke-cycle',
+      'turnEfficiencyBudget', 'turnEfficiencyDecayInterval',
+    ]) {
+      expect(reference, `missing run-record documentation for ${identifier}`)
+        .toContain(`\`${identifier}\``);
     }
   });
 

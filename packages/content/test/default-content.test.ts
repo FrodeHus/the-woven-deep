@@ -9,11 +9,13 @@ describe('bundled content', () => {
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
     const kinds = ['monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault',
-      'identification-pool', 'encounter', 'fallen-champion-template', 'npc', 'npc-faction'] as const;
+      'identification-pool', 'encounter', 'fallen-champion-template', 'npc', 'npc-faction',
+      'achievement'] as const;
     expect(Object.fromEntries(kinds.map((kind) => [kind,
       pack.entries.filter((entry) => entry.kind === kind).length]))).toEqual({
       monster: 4, item: 16, spell: 1, trap: 1, 'loot-table': 4, balance: 1, vault: 1,
       'identification-pool': 2, encounter: 5, 'fallen-champion-template': 1, npc: 1, 'npc-faction': 1,
+      achievement: 2,
     });
     expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(5);
     expect(pack.entries.map((entry) => entry.id)).toEqual([...pack.entries.map((entry) => entry.id)].sort());
@@ -43,6 +45,30 @@ describe('bundled content', () => {
         commerceReputationDelta: 25, aggressionReputationDelta: -300, deathReputationDelta: -200,
         stockDropFraction: 0.5 },
     });
+  });
+
+  it('ships schema-v5 run-record content: achievements, score coefficients, and monster threat', async () => {
+    const pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+    expect(pack.schemaVersion).toBe(5);
+    const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
+    expect(entries.get('achievement.defeated-the-deeps-champion')).toMatchObject({
+      kind: 'achievement', name: "Defeated the Deep's Champion", criteriaId: 'first-champion-defeat',
+    });
+    expect(entries.get('achievement.silenced-an-echo')).toMatchObject({
+      kind: 'achievement', name: 'Silenced an Echo', criteriaId: 'first-echo-defeat',
+    });
+    expect(entries.get('balance.core-gameplay')).toMatchObject({
+      score: {
+        depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5,
+        discoveryCoefficient: 25,
+        completionBonus: { died: 0, refused: 400, 'became-heart': 800, 'broke-cycle': 1500 },
+        turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200,
+      },
+    });
+    expect(entries.get('monster.cave-rat')).toMatchObject({ threat: 1 });
+    expect(entries.get('monster.training-beetle')).toMatchObject({ threat: 2 });
+    expect(entries.get('monster.rat-brood')).toMatchObject({ threat: 4 });
+    expect(entries.get('monster.ashen-warden')).toMatchObject({ threat: 12 });
   });
 
   it('reports every foundational gameplay category', async () => {

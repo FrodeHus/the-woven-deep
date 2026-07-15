@@ -1,10 +1,10 @@
-export const CONTENT_SCHEMA_VERSION = 4 as const;
+export const CONTENT_SCHEMA_VERSION = 5 as const;
 
 export type ContentId = string;
 export const CONTENT_KIND_IDS = [
   'monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault', 'condition',
   'identification-pool',
-  'encounter', 'fallen-champion-template', 'npc', 'npc-faction',
+  'encounter', 'fallen-champion-template', 'npc', 'npc-faction', 'achievement',
 ] as const;
 export type ContentKind = typeof CONTENT_KIND_IDS[number];
 export const DERIVED_STAT_NAMES = [
@@ -80,7 +80,29 @@ export interface MonsterContentEntry extends PresentedContentEntry {
   readonly behaviorParameters: Readonly<Record<string, unknown>>;
   readonly minDepth: number;
   readonly maxDepth: number;
+  readonly threat: number;
   readonly rarity: ItemRarity;
+}
+
+export type CompletionType = 'died' | 'became-heart' | 'refused' | 'broke-cycle';
+
+export const ACHIEVEMENT_CRITERIA_IDS = ['first-champion-defeat', 'first-echo-defeat'] as const;
+export type AchievementCriteriaId = typeof ACHIEVEMENT_CRITERIA_IDS[number];
+
+export interface AchievementContentEntry extends BaseContentEntry {
+  readonly kind: 'achievement';
+  readonly description: string;
+  readonly criteriaId: AchievementCriteriaId;
+}
+
+export interface ScoreCoefficientsDefinition {
+  readonly depthCoefficient: number;
+  readonly bossDefeatCoefficient: number;
+  readonly threatCoefficient: number;
+  readonly discoveryCoefficient: number;
+  readonly completionBonus: Readonly<Record<CompletionType, number>>;
+  readonly turnEfficiencyBudget: number;
+  readonly turnEfficiencyDecayInterval: number;
 }
 
 export type EncounterModel = 'individual' | 'group' | 'swarm' | 'boss' | 'merchant';
@@ -401,6 +423,7 @@ export interface BalanceContentEntry extends BaseContentEntry {
   readonly hungerStageModifiers: Readonly<Record<'sated' | 'hungry' | 'weak' | 'starving', Readonly<Partial<Record<DerivedStatName, number>>>>>;
   readonly formulas: Readonly<Record<string, Readonly<Record<string, number>>>>;
   readonly actionCosts: Readonly<Record<string, number>>;
+  readonly score: ScoreCoefficientsDefinition;
 }
 
 export interface ConditionContentEntry extends BaseContentEntry {
@@ -463,7 +486,7 @@ export interface VaultContentEntry extends BaseContentEntry {
 export type ContentEntry = MonsterContentEntry | ItemContentEntry | SpellContentEntry | TrapContentEntry
   | LootTableContentEntry | BalanceContentEntry | VaultContentEntry | ConditionContentEntry
   | IdentificationPoolContentEntry | EncounterContentEntry | FallenChampionTemplateContentEntry
-  | NpcContentEntry | NpcFactionContentEntry;
+  | NpcContentEntry | NpcFactionContentEntry | AchievementContentEntry;
 
 export interface ContentGenerationReport {
   readonly foundationalCategories: readonly string[];

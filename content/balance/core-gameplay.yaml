@@ -1,4 +1,4 @@
-schemaVersion: 4
+schemaVersion: 5
 entries:
   - kind: balance
     startingCurrency: 40
@@ -54,3 +54,11 @@ entries:
       action.unequip: 100
       action.use-item: 100
       action.wait: 100
+    score:
+      depthCoefficient: 100
+      bossDefeatCoefficient: 250
+      threatCoefficient: 5
+      discoveryCoefficient: 25
+      completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }
+      turnEfficiencyBudget: 500
+      turnEfficiencyDecayInterval: 200
