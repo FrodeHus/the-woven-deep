@@ -103,6 +103,8 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .glow { animation: none; opacity: calc(var(--glow-intensity) * 0.7); }
-  .effect { animation: none; display: none; }
+  /* !important is required here: .glow[data-source*="torch"] (specificity 0,2,0) otherwise
+     beats this bare .glow override (0,1,0) and the torch flicker keeps animating. */
+  .glow { animation: none !important; opacity: calc(var(--glow-intensity) * 0.7); }
+  .effect { animation: none !important; display: none; }
 }
