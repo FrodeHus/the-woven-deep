@@ -97,10 +97,10 @@ function instantiateHeroItem(
     identified: definition.identification.mode === 'known',
     charges: null,
     // `fuel`/`enabled` overrides only apply to light items — content-bound validation rejects a
-    // non-light item carrying either. Kit definitions can (and, per the content schema's
-    // `enabled: z.boolean().default(true)`, always DO) carry an `enabled` override regardless of
-    // whether the item is a light source, so a non-light item must ignore it rather than
-    // propagate it, instead of merely defaulting when the override is absent.
+    // non-light item carrying either. The content schema keeps kit `enabled` optional and content
+    // validation rejects it on non-light kit lines, so validated packs can never deliver one here;
+    // this light-gating is defense-in-depth for hand-built `NewRunHero` inputs that bypass
+    // content validation.
     fuel: light ? (overrides.fuel ?? light.fuelCapacity) : null,
     enabled: light ? (overrides.enabled ?? false) : null,
     location,
