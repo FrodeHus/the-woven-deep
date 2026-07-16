@@ -41,6 +41,7 @@ export * from './population-fixture.js';
 export * from './projection.js';
 export * from './fixture.js';
 export * from './new-run.js';
+export * from './chargen.js';
 export * from './floor-transition.js';
 export * from './actor-model.js';
 export * from './attributes.js';

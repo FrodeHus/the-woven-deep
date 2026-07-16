@@ -1,6 +1,7 @@
 import type { CompiledContentPack, ItemContentEntry, VaultContentEntry } from '@woven-deep/content';
 import type { BaseAttributes, EquipmentSlot } from './actor-model.js';
 import { emptyEquipment, type ActorState } from './actor-model.js';
+import type { DerivedStatModifier } from './attributes.js';
 import { addGeneratedFloor } from './floor-integration.js';
 import { depthFloorId } from './floor-transition.js';
 import { generateFloor } from './generate-floor.js';
@@ -41,6 +42,8 @@ export interface NewRunHero {
   readonly attributes: BaseAttributes;
   readonly equipped: readonly NewRunHeroItem[];
   readonly backpack: readonly NewRunBackpackItem[];
+  readonly classTags: readonly string[];
+  readonly statModifiers: DerivedStatModifier;
 }
 
 export const DEFAULT_GUEST_HERO: NewRunHero = {
@@ -52,6 +55,8 @@ export const DEFAULT_GUEST_HERO: NewRunHero = {
     { contentId: 'item.pitch-torch', slot: 'off-hand', enabled: true },
   ],
   backpack: [{ contentId: 'item.travel-ration', quantity: 3 }],
+  classTags: ['wayfarer'],
+  statModifiers: {},
 };
 
 function itemContentEntry(pack: CompiledContentPack, contentId: OpaqueId): ItemContentEntry {
