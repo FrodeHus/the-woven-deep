@@ -86,11 +86,35 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
   const snapshot = useGuestSession(session);
   const { projection } = snapshot;
 
+  const triptychRef = useRef<HTMLDivElement>(null);
   const mapPaneRef = useRef<HTMLDivElement>(null);
   const cellProbeRef = useRef<HTMLSpanElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
   const [paneSize, setPaneSize] = useState({ width: 0, height: 0 });
   const [cellSize, setCellSize] = useState(FALLBACK_CELL_PX);
 
+  // Tier derivation MUST watch a tier-independent measurement. The triptych container's width
+  // does not depend on `data-tier` (only its children's grid columns do), so this observer never
+  // feeds back into itself — unlike watching the map pane, whose own column shrinks when the tier
+  // changes, which used to oscillate the tier indefinitely at mid-band widths (see layout.ts).
+  useEffect(() => {
+    const node = triptychRef.current;
+    if (!node) return undefined;
+    const measure = (): void => {
+      setContainerWidth(node.getBoundingClientRect().width);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
+
+  // The map pane observer only ever feeds `viewportForPane` (cell math for the camera/grid), and
+  // never the tier — see above.
   useEffect(() => {
     const node = mapPaneRef.current;
     if (!node) return undefined;
@@ -105,11 +129,7 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
-    window.addEventListener('resize', measure);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', measure);
-    };
+    return () => observer.disconnect();
   }, []);
 
   // The single global keydown listener: `createKeyDispatcher` translates keys to intents via the
@@ -131,7 +151,7 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
     return () => window.removeEventListener('keydown', dispatcher);
   }, [session, snapshot.backpackOpen, snapshot.pendingDecision]);
 
-  const tier = tierOverride ?? layoutTier(paneSize.width);
+  const tier = tierOverride ?? layoutTier(containerWidth);
   const viewport = viewportForPane({ panePx: paneSize, cellPx: cellSize, floor: projection.floor });
 
   const cameraRef = useRef<Readonly<{ floorId: string; origin: CameraOrigin }> | null>(null);
@@ -177,7 +197,7 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
   const logLines = tier === 'minimal' ? 3 : 6;
 
   return (
-    <div className="triptych" data-tier={tier}>
+    <div className="triptych" data-tier={tier} ref={triptychRef}>
       <div className="status-slot">
         <StatusBar snapshot={snapshot} />
       </div>
