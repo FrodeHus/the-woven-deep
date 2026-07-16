@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { StrictMode } from 'react';
 import { beforeAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
@@ -6,9 +7,10 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, encodeActiveRun, type Uint32State,
+  createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, encodeActiveRun, type ActiveRun, type Uint32State,
 } from '@woven-deep/engine';
 import { App, PORTRAIT_KEY } from '../src/App.js';
+import { createSessionRunRecordRepository } from '../src/session/run-records-storage.js';
 import { PORTRAIT_GLYPHS } from '../src/session/wizard-reducer.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 
@@ -42,6 +44,26 @@ function fakeStorage(initial: string | null = null): SessionStorageLike & { peek
 
 function decodableSave(seed: Uint32State = SEED): string {
   return encodeActiveRun(createNewRun({ pack, seed, hero: DEFAULT_GUEST_HERO }));
+}
+
+/** A run already concluded by hero death, exactly like `guest-session.test.ts`'s `deadRun`
+ * fixture — a fresh real-pack run with the hero's health forced to 0 and a matching `died`
+ * conclusion, built directly rather than driven to death by dispatching commands (see that
+ * file's comment for why: this pack's fresh runs spawn population actors alongside the hero,
+ * and a natural mid-transition starvation death drags in unrelated multi-actor machinery that
+ * has nothing to do with the app-boot/finalize-once wiring this suite exercises). */
+function deadRunSave(seed: Uint32State = SEED): string {
+  const fresh: ActiveRun = createNewRun({ pack, seed, hero: DEFAULT_GUEST_HERO });
+  const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+  return encodeActiveRun({
+    ...fresh,
+    actors: fresh.actors.map((actor) => (actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor)),
+    conclusion: {
+      completionType: 'died',
+      cause: { killerContentId: null, depth: 1, turn: fresh.turn, worldTime: fresh.worldTime },
+      concludedAtRevision: fresh.revision, finalized: false,
+    },
+  });
 }
 
 function wayfarerKit(): { kitId: string; name: string } {
@@ -270,5 +292,54 @@ describe('App boot flow', () => {
 
     await screen.findByRole('option', { name: /enter the deep/i });
     expect(screen.queryByRole('option', { name: /continue/i })).not.toBeInTheDocument();
+  });
+});
+
+/** StrictMode double-invokes the boot effect that calls this fetcher, and a plain
+ * `mockResolvedValue` would hand back the SAME `Response` both times -- whose body can only be
+ * read once. Build a fresh `Response` per call so double-invocation is harmless, exactly like a
+ * real `fetch` would behave. */
+function strictModeSafePackFetcher(): typeof fetch {
+  return vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(pack)))) as unknown as typeof fetch;
+}
+
+describe('App finalize-once (concluded run)', () => {
+  it('reaches the conclusion screen and appends exactly one Hall record under StrictMode double-effects, then a remount over the same storage shows the conclusion again without appending a second record', async () => {
+    const user = userEvent.setup();
+    const storage = fakeStorage(deadRunSave());
+
+    // Render inside StrictMode explicitly: React double-invokes effects in dev/test StrictMode,
+    // so this is exactly the environment the finalize-once guard (`GameRoot`'s `finalizedRef`,
+    // plus the engine's own idempotent `finalizeConcludedRun`) has to survive.
+    const first = render(
+      <StrictMode>
+        <App fetcher={strictModeSafePackFetcher()} storage={storage} />
+      </StrictMode>,
+    );
+
+    const continueOption = await screen.findByRole('option', { name: /continue/i });
+    await user.click(continueOption);
+
+    // (a) the app switches to the conclusion screen.
+    expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
+    expect(screen.queryByRole('grid', { name: /dungeon/i })).not.toBeInTheDocument();
+
+    // (b) exactly one record, even though StrictMode ran every effect twice.
+    expect(createSessionRunRecordRepository(storage).records()).toHaveLength(1);
+
+    first.unmount();
+
+    // (c) a remount over the SAME storage (Continue into the now-finalized, still-dead run)
+    // shows the conclusion screen again without appending a second record.
+    render(
+      <StrictMode>
+        <App fetcher={strictModeSafePackFetcher()} storage={storage} />
+      </StrictMode>,
+    );
+    const continueAgain = await screen.findByRole('option', { name: /continue/i });
+    await user.click(continueAgain);
+
+    expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
+    expect(createSessionRunRecordRepository(storage).records()).toHaveLength(1);
   });
 });

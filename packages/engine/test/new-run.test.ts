@@ -5,7 +5,7 @@ import { compileContentDirectory } from '@woven-deep/content/compiler';
 import type { ClassContentEntry } from '@woven-deep/content';
 import {
   createNewRun, DEFAULT_GUEST_HERO, decodeActiveRun, encodeActiveRun,
-  heroActor, heroFromChoices, resolveCommand, validateActiveRun, validateContentBoundRun,
+  heroActor, heroFromChoices, itemLightSources, resolveCommand, validateActiveRun, validateContentBoundRun,
   type HeroChoices, type ResolutionContext,
 } from '../src/index.js';
 
@@ -151,5 +151,51 @@ describe('createNewRun', () => {
       }
     }
     expect(checked).toBeGreaterThanOrEqual(4);
+  });
+});
+
+// Regression: a guest hero always starts with a lit, equipped torch. If the hero dies from
+// starvation mid-worldstep (in the advance-world-time branch, before another actor's pending
+// turn is prepared), `itemLightSources` used to keep emitting a light for the now-dead hero
+// (it only checked fuel/enabled, not wielder health) while the turn-preparation position map
+// filters actors to `health > 0`. The lighting resolver then failed to resolve the dead
+// hero's actor id and threw a RangeError, crashing the whole command.
+describe('dead wielders and illumination', () => {
+  it('does not crash illumination when a starving hero with a lit torch dies mid-command', () => {
+    // Real depth-1 generation for this seed places a live individual-model population
+    // (two hostile cave rats, already energy-ready) alongside the guest hero -- exactly the
+    // "another actor's turn pending" condition that exposes the bug: one of those rats gets
+    // its turn prepared in the same resolveWorldStep call that kills the hero from starvation.
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const hero = heroActor(run);
+    expect(run.items.find((item) => item.contentId === 'item.pitch-torch')?.enabled).toBe(true);
+    expect(run.actors.filter((actor) => actor.actorId !== hero.actorId && actor.health > 0).length)
+      .toBeGreaterThan(0);
+
+    const dyingHero = { ...hero, health: 1 };
+    const state = {
+      ...run,
+      actors: run.actors.map((actor) => actor.actorId === hero.actorId ? dyingHero : actor),
+      survival: { ...run.survival, hungerReserve: 0, hungerStage: 'starving' as const, nextStarvationAt: 1 },
+    };
+
+    const context: ResolutionContext = { content: pack };
+    let result: ReturnType<typeof resolveCommand>;
+    expect(() => {
+      result = resolveCommand(state, { type: 'wait', commandId: 'command.starve-with-torch', expectedRevision: state.revision }, context);
+    }).not.toThrow();
+    result = result!;
+    expect(result.result.status).toBe('applied');
+    expect(result.events.map((event) => event.type)).toContain('actor.died');
+    const heroAfter = result.state.actors.find((actor) => actor.actorId === hero.actorId);
+    expect(heroAfter?.health).toBe(0);
+    expect(result.state.conclusion).not.toBeNull();
+    expect(() => encodeActiveRun(result.state)).not.toThrow();
+
+    // The dead hero's torch must no longer illuminate: it must not appear as a light source
+    // referencing an actor absent from the floor's living-actor position map.
+    const torch = result.state.items.find((item) => item.contentId === 'item.pitch-torch')!;
+    const lights = itemLightSources({ run: result.state, content: pack, floorId: hero.floorId });
+    expect(lights.some((light) => light.lightId === torch.itemId)).toBe(false);
   });
 });
