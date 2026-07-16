@@ -649,7 +649,10 @@ All four panels are pure functions of the snapshot — no session access, no eff
 
 ```ts
 export type LayoutTier = 'full' | 'compact' | 'minimal';   // full triptych | threats collapsed | both collapsed
-export function layoutTier(paneWidthPx: number): LayoutTier;   // full ≥ 1100, compact ≥ 760, else minimal
+export function layoutTier(containerWidthPx: number): LayoutTier;   // full ≥ 1100, compact ≥ 760, else minimal
+// Amended after e2e review: the tier MUST derive from a tier-independent measurement — the
+// triptych container (or window) width — never the map pane. The tier changes the pane's grid
+// column, so pane-derived tiers feed back into themselves and oscillate at mid-band widths.
 export const MIN_VIEWPORT: CameraViewport = { width: 30, height: 12 };
 export function viewportForPane(input: Readonly<{ panePx: { width: number; height: number }; cellPx: { width: number; height: number }; floor: { width: number; height: number } }>): CameraViewport;
 // floor(pane / cell) per axis, clamped to at least MIN_VIEWPORT and at most the floor size
