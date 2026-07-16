@@ -33,6 +33,19 @@ export function createDemoContentPack(): CompiledContentPack {
         disarm: { agility: 1, wits: 1 },
       },
       actionCosts: { 'action.move': 100, 'action.wait': 100, 'action.spawn': 100 },
+      pointBuy: {
+        budget: 30,
+        costs: [
+          { value: 0, cost: 0 }, { value: 1, cost: 1 }, { value: 2, cost: 2 }, { value: 3, cost: 3 },
+          { value: 4, cost: 4 }, { value: 5, cost: 5 }, { value: 6, cost: 6 }, { value: 7, cost: 7 },
+          { value: 8, cost: 8 }, { value: 9, cost: 9 }, { value: 10, cost: 10 }, { value: 11, cost: 12 },
+          { value: 12, cost: 14 }, { value: 13, cost: 16 }, { value: 14, cost: 18 }, { value: 15, cost: 20 },
+          { value: 16, cost: 22 }, { value: 17, cost: 24 }, { value: 18, cost: 26 }, { value: 19, cost: 28 },
+          { value: 20, cost: 30 }, { value: 21, cost: 33 }, { value: 22, cost: 36 }, { value: 23, cost: 39 },
+          { value: 24, cost: 42 }, { value: 25, cost: 45 }, { value: 26, cost: 48 }, { value: 27, cost: 51 },
+          { value: 28, cost: 54 }, { value: 29, cost: 57 }, { value: 30, cost: 60 },
+        ],
+      },
     }, {
       kind: 'condition', id: 'condition.disengaged', name: 'Disengaged',
       description: 'Avoids opportunity attacks', tags: ['beneficial'], color: '#78c8dc',
