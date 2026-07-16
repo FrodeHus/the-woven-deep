@@ -11,6 +11,7 @@ import { useGuestSession } from './session/store.js';
 import { browserSessionStorage, type SessionStorageLike } from './session/storage.js';
 import { ChargenScreen } from './ui/screens/ChargenScreen.js';
 import { ConclusionScreen } from './ui/screens/ConclusionScreen.js';
+import { HallScreen } from './ui/screens/HallScreen.js';
 import { TitleScreen } from './ui/screens/TitleScreen.js';
 import { PlayScreen } from './ui/PlayScreen.js';
 import './styles.css';
@@ -313,9 +314,7 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
     const { returnTo } = screen;
     return withHallNotice(
       <main className="shell">
-        <h1>Hall of Records</h1>
-        <p role="status">Coming soon.</p>
-        <button type="button" onClick={() => setScreen({ screen: returnTo })}>Back</button>
+        <HallScreen repository={repository} onBack={() => setScreen({ screen: returnTo })} />
       </main>,
     );
   }
