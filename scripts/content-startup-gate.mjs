@@ -32,10 +32,22 @@ async function command(file, args, allowFailure = false) {
 async function imageReference(argument) {
   if (argument) return argument;
   await command('docker', ['compose', 'build', '--quiet']);
-  const result = await command('docker', ['compose', 'images', '-q', 'rogue']);
-  const image = result.output.trim().split(/\s+/)[0];
-  if (!image) throw new Error('content startup gate could not resolve the built rogue image');
-  return image;
+  const composeImages = await command('docker', ['compose', 'images', '-q', 'rogue'], true);
+  const fromCompose = composeImages.output.trim().split(/\s+/)[0];
+  if (fromCompose) return fromCompose;
+
+  // Compose v29+ can return no output from `compose images -q` even after a
+  // successful build. Fall back to looking up the image by the name compose
+  // itself would have tagged it with (`<project>-<service>`).
+  const projectImages = await command('docker', ['compose', 'config', '--images'], true);
+  const imageName = projectImages.output.trim().split(/\s+/)[0];
+  if (imageName) {
+    const byName = await command('docker', ['images', '-q', imageName], true);
+    const image = byName.output.trim().split(/\s+/)[0];
+    if (image) return image;
+  }
+
+  throw new Error('content startup gate could not resolve the built rogue image');
 }
 
 async function createDirectories(root) {
@@ -49,10 +61,19 @@ async function createDirectories(root) {
 
   const invalidBalance = join(invalid, 'balance', 'core-gameplay.yaml');
   const source = await readFile(invalidBalance, 'utf8');
-  if (!source.startsWith('schemaVersion: 4')) {
-    throw new Error('content startup gate expected bundled schemaVersion 4 content');
+  const match = /^schemaVersion: (\d+)/.exec(source);
+  if (!match) {
+    throw new Error('content startup gate could not read the bundled schemaVersion');
   }
-  await writeFile(invalidBalance, source.replace('schemaVersion: 4', 'schemaVersion: 2'));
+  const liveVersion = Number(match[1]);
+  const invalidVersion = liveVersion - 2 > 0 ? liveVersion - 2 : 2;
+  if (invalidVersion === liveVersion) {
+    throw new Error('content startup gate could not derive an unsupported schemaVersion');
+  }
+  await writeFile(
+    invalidBalance,
+    source.replace(`schemaVersion: ${liveVersion}`, `schemaVersion: ${invalidVersion}`),
+  );
   return { valid, invalid, data };
 }
 
@@ -98,7 +119,12 @@ async function main() {
           timeoutMs: 3_000,
           retryDelayMs: 250,
         });
-        const health = /^ok ([a-f0-9]{64}) (\d+) entries, ([1-9]\d*) merchant encounters\n$/.exec(output);
+        // Match smoke-runner's own output contract (see verifyOnce in
+        // scripts/smoke-runner.mjs) rather than re-deriving it here, so the
+        // gate stays in sync as smoke-runner's reported facts change.
+        const health = /^ok ([a-f0-9]{64}) (\d+) entries, ([1-9]\d*) merchant encounters, ([1-9]\d*) achievements\n$/.exec(
+          output,
+        );
         if (!health) throw new Error(`unexpected smoke output: ${output}`);
         return { contentHash: health[1], entries: Number(health[2]) };
       },
