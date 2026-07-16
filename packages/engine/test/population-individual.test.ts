@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { CompiledContentPack, EncounterContentEntry, MonsterContentEntry } from '@woven-deep/content';
 import {
-  chooseBehaviorAction, createDemoContentPack, createDemoRun, resolveWorldStep,
-  type ActorState, type FloorSnapshot,
+  chooseBehaviorAction, createDemoContentPack, createDemoRun, decodeActiveRun, encodeActiveRun,
+  expandLegacySeed, nextUint32, resolveCommand, resolveWorldStep,
+  type ActiveRun, type ActorState, type FloorSnapshot, type Uint32State,
 } from '../src/index.js';
 
 function definition(id: string, overrides: Partial<MonsterContentEntry> = {}): MonsterContentEntry {
@@ -34,6 +35,16 @@ function encounter(id: string, monsterId: string): EncounterContentEntry {
     intentPresentation: { visible: true },
     definition: { monsterId, minimumQuantity: 1, maximumQuantity: 1 },
   };
+}
+
+function combatStateProducing(face: number, sides = 20): Uint32State {
+  const limit = Math.floor(0x1_0000_0000 / sides) * sides;
+  for (let seed = 1; seed < 100_000; seed += 1) {
+    const state = expandLegacySeed(seed);
+    const step = nextUint32(state);
+    if (step.value < limit && step.value % sides + 1 === face) return state;
+  }
+  throw new Error(`no state found for d${sides} face ${face}`);
 }
 
 function monster(id: string, overrides: Partial<ActorState> = {}): ActorState {
@@ -247,5 +258,34 @@ describe('individual population behavior', () => {
       action: { type: 'wait', actorId: run.hero.actorId, cost: 100 },
     });
     expect(result.state.encounterDecisions[0]?.encountered).toBe(false);
+  });
+
+  it('moves a dead individual-population member into formerMemberIds and keeps the run savable', () => {
+    const run = createDemoRun();
+    const hero = run.actors[0]!;
+    const actor = monster('monster.individual-victim', {
+      x: hero.x + 1, y: hero.y, health: 1, maxHealth: 1, populationId: 'population.individual-victim',
+      populationPresentation: { name: 'Victim monster', glyph: 'm', color: '#aa4444', leader: false },
+    });
+    const entry = encounter('encounter.individual-victim', actor.contentId);
+    const content = pack(definition(actor.contentId, { threat: 1 }), entry);
+    const initial: ActiveRun = {
+      ...run, actors: [hero, actor], rng: { ...run.rng, combat: combatStateProducing(20) },
+      encounterDecisions: [{ encounterId: entry.id, baseProbability: 1, protectionBonus: 0,
+        effectiveProbability: 1, eligible: true, reachedEligibleDepth: true, encountered: true,
+        instancesCreated: 1 }],
+      populations: [{ populationId: 'population.individual-victim', encounterId: entry.id, model: 'individual',
+        floorId: 'floor.demo', createdAt: 0, livingMemberIds: [actor.actorId], formerMemberIds: [] }],
+    };
+    const resolution = resolveCommand(initial, {
+      type: 'attack', commandId: 'command.individual-kill', expectedRevision: 0, targetActorId: actor.actorId,
+    }, { content });
+
+    expect(resolution.result.status).toBe('applied');
+    expect(resolution.state.actors.find((candidate) => candidate.actorId === actor.actorId)?.health).toBeLessThanOrEqual(0);
+    const population = resolution.state.populations.find((candidate) => candidate.populationId === 'population.individual-victim')!;
+    expect(population.livingMemberIds).not.toContain(actor.actorId);
+    expect(population.formerMemberIds).toContain(actor.actorId);
+    expect(() => decodeActiveRun(encodeActiveRun(resolution.state))).not.toThrow();
   });
 });

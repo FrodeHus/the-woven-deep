@@ -180,8 +180,12 @@ export class GuestSession {
   }
 
   private persist(): void {
+    // `encodeActiveRun` can throw a `SaveLoadError` when the run violates an engine invariant —
+    // that is a bug, not a storage problem, so it must propagate loudly rather than being
+    // misreported as a storage failure. Only the storage write itself is classified below.
+    const encoded = encodeActiveRun(this.run);
     try {
-      this.storage.set(encodeActiveRun(this.run));
+      this.storage.set(encoded);
     } catch (error) {
       this.notice = { kind: 'storage', failure: classifyStorageFailure(error) };
     }

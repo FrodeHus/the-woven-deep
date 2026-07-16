@@ -25,6 +25,7 @@ import { updateActorMemory, visibleTargetObservations } from './population-perce
 import { applyGroupLeaderOutcomes, coordinateGroups, groupCombatModifiers } from './group-behavior.js';
 import { advanceSwarms, resolveSwarmSpawnAction, swarmCombatModifiers, swarmSpawnAction } from './swarm-behavior.js';
 import { advanceBosses, bossCombatModifiers } from './boss-behavior.js';
+import { reconcileIndividualDeaths } from './individual-behavior.js';
 import { advanceFallenHeroEncounters, fallenHeroCombatModifiers } from './champion.js';
 import { projectDomainEvents } from './event-projection.js';
 import {
@@ -709,6 +710,7 @@ export function resolveWorldStep(input: Readonly<{
   state = merchantOutcome.state;
   let bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
   state = bosses.state;
+  state = reconcileIndividualDeaths({ state, eventId: input.eventId }).state;
   let fallen = advanceFallenHeroEncounters({ state, content: input.content, eventId: input.eventId });
   state = fallen.state;
   let beforeObservation = state;
@@ -752,6 +754,7 @@ export function resolveWorldStep(input: Readonly<{
       bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
       state = bosses.state;
       appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
+      state = reconcileIndividualDeaths({ state, eventId: input.eventId }).state;
       fallen = advanceFallenHeroEncounters({ state, content: input.content, eventId: input.eventId });
       state = fallen.state;
       appendEvents(events, publicEvents, fallen.events, state, heroId, input.content);
@@ -780,6 +783,7 @@ export function resolveWorldStep(input: Readonly<{
     state = merchantOutcome.state;
     bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
     state = bosses.state;
+    state = reconcileIndividualDeaths({ state, eventId: input.eventId }).state;
     fallen = advanceFallenHeroEncounters({ state, content: input.content, eventId: input.eventId });
     state = fallen.state;
     beforeObservation = state;

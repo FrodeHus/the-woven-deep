@@ -226,6 +226,39 @@ describe('GuestSession', () => {
     expect(snapshot.projection.metrics.turnsElapsed).toBe(1);
   });
 
+  it('lets an engine invariant failure from encodeActiveRun propagate out of persist instead of reporting a storage notice', () => {
+    // Regression coverage for the bug reconcileIndividualDeaths (packages/engine/src/
+    // individual-behavior.ts) fixes: a dead actor left in a population's livingMemberIds makes
+    // encodeActiveRun (via validateActiveRun) throw a SaveLoadError. That is an engine bug, not a
+    // storage problem, so `persist()` must let it propagate rather than swallow it into a storage
+    // notice. `resolveCommand` itself re-validates content-bound state on every call, so a
+    // corrupted run can only be observed by exercising the private `persist()` method directly —
+    // this is the most honest way to isolate persist's classification behavior without an
+    // engine-level seam.
+    const storage = fakeStorage();
+    let setCalls = 0;
+    const countingStorage: SessionStorageLike = {
+      get: storage.get,
+      set: (value: string) => { setCalls += 1; storage.set(value); },
+    };
+    const session = new GuestSession({ pack, storage: countingStorage, seed: SEED });
+    const sessionInternals = session as unknown as { run: ActiveRun; persist(): void };
+
+    sessionInternals.run = {
+      ...sessionInternals.run,
+      populations: [{
+        populationId: 'population.corrupt', encounterId: 'encounter.corrupt', model: 'individual',
+        floorId: sessionInternals.run.activeFloorId, createdAt: 0,
+        livingMemberIds: ['monster.does-not-exist'], formerMemberIds: [],
+      }],
+    };
+
+    expect(() => sessionInternals.persist()).toThrow();
+    expect(setCalls).toBe(0);
+    expect(session.getSnapshot().notice).not.toEqual({ kind: 'storage', failure: 'unavailable' });
+    expect(session.getSnapshot().notice).not.toEqual({ kind: 'storage', failure: 'full' });
+  });
+
   it('keeps a stable snapshot reference between notifications', () => {
     const storage = fakeStorage();
     const session = new GuestSession({ pack, storage, seed: SEED });

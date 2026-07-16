@@ -35,6 +35,7 @@ export * from './population-intent.js';
 export * from './group-behavior.js';
 export * from './swarm-behavior.js';
 export * from './boss-behavior.js';
+export * from './individual-behavior.js';
 export * from './champion.js';
 export * from './population-fixture.js';
 export * from './projection.js';
