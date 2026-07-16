@@ -24,7 +24,7 @@ describe('active-run save codec', () => {
     const current = structuredClone(createDemoRun()) as any;
     const { reputations: _reputations, activeTrade: _activeTrade, metrics: _metrics, conclusion: _conclusion,
       ...withoutRunFields } = current;
-    const { currency: _currency, ...hero } = withoutRunFields.hero;
+    const { currency: _currency, classTags: _classTags, statModifiers: _statModifiers, ...hero } = withoutRunFields.hero;
     const { 'merchant-stock': _merchantStock, 'merchant-runtime': _merchantRuntime, 'run-records': _runRecords,
       ...rng } = withoutRunFields.rng;
     return { ...withoutRunFields, schemaVersion: 4, hero, rng };
@@ -34,7 +34,7 @@ describe('active-run save codec', () => {
     const current = structuredClone(run) as any;
     const { reputations: _reputations, activeTrade: _activeTrade, metrics: _metrics, conclusion: _conclusion,
       ...withoutRunFields } = current;
-    const { currency: _currency, ...hero } = withoutRunFields.hero;
+    const { currency: _currency, classTags: _classTags, statModifiers: _statModifiers, ...hero } = withoutRunFields.hero;
     const { 'merchant-stock': _merchantStock, 'merchant-runtime': _merchantRuntime, 'run-records': _runRecords,
       ...rng } = withoutRunFields.rng;
     return { ...withoutRunFields, schemaVersion: 4, hero, rng };
@@ -44,14 +44,28 @@ describe('active-run save codec', () => {
     const current = structuredClone(createDemoRun()) as any;
     const { metrics: _metrics, conclusion: _conclusion, ...withoutV6Fields } = current;
     const { 'run-records': _runRecords, ...rng } = withoutV6Fields.rng;
-    return { ...withoutV6Fields, schemaVersion: 5, rng };
+    const { classTags: _classTags, statModifiers: _statModifiers, ...hero } = withoutV6Fields.hero;
+    return { ...withoutV6Fields, schemaVersion: 5, hero, rng };
   }
 
   function stripV6Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
     const current = structuredClone(run) as any;
     const { metrics: _metrics, conclusion: _conclusion, ...withoutV6Fields } = current;
     const { 'run-records': _runRecords, ...rng } = withoutV6Fields.rng;
-    return { ...withoutV6Fields, schemaVersion: 5, rng };
+    const { classTags: _classTags, statModifiers: _statModifiers, ...hero } = withoutV6Fields.hero;
+    return { ...withoutV6Fields, schemaVersion: 5, hero, rng };
+  }
+
+  function v6Fixture(): Record<string, unknown> {
+    const current = structuredClone(createDemoRun()) as any;
+    const { classTags: _classTags, statModifiers: _statModifiers, ...hero } = current.hero;
+    return { ...current, schemaVersion: 6, hero };
+  }
+
+  function stripV7Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
+    const current = structuredClone(run) as any;
+    const { classTags: _classTags, statModifiers: _statModifiers, ...hero } = current.hero;
+    return { ...current, schemaVersion: 6, hero };
   }
 
   function concludedRun(): ReturnType<typeof createDemoRun> {
@@ -172,12 +186,14 @@ describe('active-run save codec', () => {
     return population;
   }
 
-  it('migrates strict schema v4 state through v5 to v6 and preserves every former field', () => {
+  it('migrates strict schema v4 state through v5, v6, and v7 and preserves every former field', () => {
     const legacy = v4Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(6);
+    expect(decoded.schemaVersion).toBe(7);
     expect(decoded.hero.currency).toBe(0);
+    expect(decoded.hero.classTags).toEqual([]);
+    expect(decoded.hero.statModifiers).toEqual({});
     expect(decoded.reputations).toEqual([]);
     expect(decoded.activeTrade).toBeNull();
     expect(decoded.metrics).toEqual(emptyRunMetrics());
@@ -190,16 +206,29 @@ describe('active-run save codec', () => {
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(encodeActiveRun(decoded));
   });
 
-  it('migrates strict schema v5 state once and preserves every former field', () => {
+  it('migrates strict schema v5 state through v6 and v7 and preserves every former field', () => {
     const legacy = v5Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(6);
+    expect(decoded.schemaVersion).toBe(7);
+    expect(decoded.hero.classTags).toEqual([]);
+    expect(decoded.hero.statModifiers).toEqual({});
     expect(decoded.metrics).toEqual(emptyRunMetrics());
     expect(decoded.conclusion).toBeNull();
     const derived = deriveRngStreams(legacy.runSeed as any);
     expect(decoded.rng['run-records']).toEqual(derived['run-records']);
     expect(stripV6Fields(decoded)).toEqual(legacy);
+    expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(encodeActiveRun(decoded));
+  });
+
+  it('migrates strict schema v6 state to v7 and preserves every former field', () => {
+    const legacy = v6Fixture();
+    const decoded = decodeActiveRun(JSON.stringify(legacy));
+
+    expect(decoded.schemaVersion).toBe(7);
+    expect(decoded.hero.classTags).toEqual([]);
+    expect(decoded.hero.statModifiers).toEqual({});
+    expect(stripV7Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(encodeActiveRun(decoded));
   });
 
@@ -274,6 +303,24 @@ describe('active-run save codec', () => {
   it.each([-1, Number.MAX_SAFE_INTEGER + 1])('rejects invalid hero currency %s', (currency) => {
     expect(() => encodeActiveRun({ ...createDemoRun(), hero: { ...createDemoRun().hero, currency } } as any))
       .toThrow(/hero\.currency/i);
+  });
+
+  it('rejects an empty-string hero class tag', () => {
+    const run = createDemoRun();
+    expect(() => encodeActiveRun({ ...run, hero: { ...run.hero, classTags: [''] } } as any))
+      .toThrow(/hero\.classTags/i);
+  });
+
+  it('rejects a hero stat modifier with an unknown stat key', () => {
+    const run = createDemoRun();
+    expect(() => encodeActiveRun({ ...run, hero: { ...run.hero, statModifiers: { bogusStat: 1 } } } as any))
+      .toThrow(/hero\.statModifiers/i);
+  });
+
+  it.each([1.5, Number.MAX_SAFE_INTEGER + 1])('rejects a hero stat modifier value %s that is not a safe integer', (value) => {
+    const run = createDemoRun();
+    expect(() => encodeActiveRun({ ...run, hero: { ...run.hero, statModifiers: { defense: value } } } as any))
+      .toThrow(/hero\.statModifiers/i);
   });
 
   it('rejects unsorted and duplicate faction reputation records', () => {
@@ -846,7 +893,7 @@ describe('active-run save codec', () => {
     expect(() => decodeActiveRun(JSON.stringify({ ...createDemoRun(), surprise: true }))).toThrow(/surprise/);
   });
 
-  it.each([0, 1, 2, 3, 7])('rejects unsupported schema version %i without partial state', (schemaVersion) => {
+  it.each([0, 1, 2, 3, 8])('rejects unsupported schema version %i without partial state', (schemaVersion) => {
     try {
       decodeActiveRun(JSON.stringify({ schemaVersion }));
       expect.fail('expected unsupported version');

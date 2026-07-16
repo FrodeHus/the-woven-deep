@@ -193,6 +193,8 @@ export function createNewRun(input: Readonly<{
       sightRadius: 12,
       backpackCapacity: 12,
       currency: 0,
+      classTags: [],
+      statModifiers: {},
     },
     reputations: [],
     activeTrade: null,

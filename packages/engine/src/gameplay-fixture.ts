@@ -363,7 +363,7 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
     contentHash: pack.hash,
     runId: 'run.gameplay-demo',
     hero: { actorId: IDS.hero, name: 'Ada', sightRadius: 12, backpackCapacity: 12,
-      currency: balance.startingCurrency },
+      currency: balance.startingCurrency, classTags: [], statModifiers: {} },
     actors,
     items,
     features,

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ACHIEVEMENT_CRITERIA_IDS } from '@woven-deep/content';
+import { ACHIEVEMENT_CRITERIA_IDS, DERIVED_STAT_NAMES } from '@woven-deep/content';
 import { validateKnowledgePacking } from './knowledge.js';
 import { tileIndex, type ActiveRun, type Direction } from './model.js';
 import { SaveLoadError } from './save-error.js';
@@ -9,6 +9,7 @@ import { ENGINE_GAME_VERSION, RECENT_COMMAND_LIMIT, RNG_STREAM_NAMES, SAVE_SCHEM
 const identifier = z.string().regex(/^[a-z0-9][a-z0-9._:-]{0,127}$/);
 const heroName = z.string().refine((name) => [...name].length >= 1 && [...name].length <= 40 && name.normalize('NFC') === name && !/[\p{Cc}\p{Cf}]/u.test(name));
 const safeNonNegative = z.number().int().safe().nonnegative();
+const safeInteger = z.number().int().safe();
 const uint8 = z.number().int().min(0).max(255);
 const uint32 = z.number().int().min(0).max(0xffff_ffff);
 const uint32Tuple = z.tuple([uint32, uint32, uint32, uint32]);
@@ -525,8 +526,12 @@ const identification = z.strictObject({
 });
 const legacyHero = z.strictObject({ actorId: identifier, name: heroName, sightRadius: safeNonNegative,
   backpackCapacity: safeNonNegative });
-const hero = z.strictObject({ actorId: identifier, name: heroName, sightRadius: safeNonNegative,
+const heroV6 = z.strictObject({ actorId: identifier, name: heroName, sightRadius: safeNonNegative,
   backpackCapacity: safeNonNegative, currency: safeNonNegative });
+const hero = heroV6.extend({
+  classTags: z.array(z.string().trim().min(1)).readonly(),
+  statModifiers: z.partialRecord(z.enum(DERIVED_STAT_NAMES), safeInteger),
+});
 const probability = z.number().finite().min(0).max(1);
 const encounterDecision = z.strictObject({
   encounterId: identifier, baseProbability: probability, protectionBonus: probability,
@@ -664,12 +669,33 @@ const activeRunSchema = z.strictObject({
   metrics: runMetrics, conclusion: runConclusionSchema.nullable(),
 });
 
+export const legacyActiveRunV6Schema = z.strictObject({
+  schemaVersion: z.literal(6), gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/), runId: identifier, runSeed: uint32Tuple,
+  rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
+  revision: safeNonNegative, turn: safeNonNegative, worldTime: safeNonNegative,
+  hero: heroV6, reputations: z.array(z.strictObject({ factionId: identifier, value: z.number().int().safe() })).readonly(),
+  activeTrade: z.strictObject({
+    merchantPopulationId: identifier, merchantActorId: identifier, openedByCommandId: identifier,
+    openedAtRevision: safeNonNegative, completedCommerce: z.boolean(),
+  }).nullable(),
+  actors: z.array(actor).min(1).readonly(), items: z.array(item).readonly(), features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(), survival, identification,
+  activeFloorId: identifier, activeFloorEnteredAt: safeNonNegative,
+  floors: z.array(floor).min(1).readonly(), recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(), populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+  metrics: runMetrics, conclusion: runConclusionSchema.nullable(),
+});
+
 export const legacyActiveRunV5Schema = z.strictObject({
   schemaVersion: z.literal(5), gameVersion: z.literal(ENGINE_GAME_VERSION),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/), runId: identifier, runSeed: uint32Tuple,
   rng: z.strictObject(legacyV5RngEntries as Record<(typeof LEGACY_V5_RNG_STREAM_NAMES)[number], typeof uint32State>),
   revision: safeNonNegative, turn: safeNonNegative, worldTime: safeNonNegative,
-  hero, reputations: z.array(z.strictObject({ factionId: identifier, value: z.number().int().safe() })).readonly(),
+  hero: heroV6, reputations: z.array(z.strictObject({ factionId: identifier, value: z.number().int().safe() })).readonly(),
   activeTrade: z.strictObject({
     merchantPopulationId: identifier, merchantActorId: identifier, openedByCommandId: identifier,
     openedAtRevision: safeNonNegative, completedCommerce: z.boolean(),

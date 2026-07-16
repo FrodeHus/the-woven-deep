@@ -92,7 +92,10 @@ const tiles = FLOOR_LINES.flatMap((line) => [...line].map<TileId>((glyph) => gly
 const seed = [1, 2, 3, 4] as const;
 
 export function createDemoRun(): ActiveRun {
-  const hero = { actorId: 'hero.demo', name: 'Ada', sightRadius: 12, backpackCapacity: 12, currency: 40 } as const;
+  const hero = {
+    actorId: 'hero.demo', name: 'Ada', sightRadius: 12, backpackCapacity: 12, currency: 40,
+    classTags: [], statModifiers: {},
+  } as const;
   const heroActor: ActorState = {
     actorId: hero.actorId,
     contentId: 'hero.adventurer',
