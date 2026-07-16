@@ -146,6 +146,20 @@ describe('server-admin content documentation', () => {
     }
   });
 
+  it('documents permanent merchants, the strongbox service, restock milestones, encounter density, and town vaults', async () => {
+    const reference = await readFile(resolve(
+      import.meta.dirname,
+      '../../../docs/server-admin/content-configuration.md',
+    ), 'utf8');
+    for (const identifier of [
+      'permanent', 'merchant-service.strongbox', 'restockMilestones',
+      'house', 'baseCapacity', 'strongboxIncrement', 'encounterDensity', 'cellsPerEncounter', 'town',
+    ]) {
+      expect(reference, `missing town documentation for ${identifier}`)
+        .toContain(`\`${identifier}\``);
+    }
+  });
+
   it('derives exhaustive encounter and fallen-template field coverage from the source schema', async () => {
     const reference = await readFile(resolve(
       import.meta.dirname,

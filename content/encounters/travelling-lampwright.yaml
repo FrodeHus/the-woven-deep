@@ -1,4 +1,4 @@
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: encounter
     id: encounter.travelling-lampwright
@@ -27,6 +27,7 @@ entries:
       acceptedCategories: [armor, food, fuel, light, potion, scroll, weapon]
       services:
         - { serviceId: merchant-service.identify, basePrice: 10, minimumUses: 1, maximumUses: 2, tierIds: [neutral, trusted] }
+      permanent: false
       minimumLifetime: 3000
       maximumLifetime: 5000
       departureWarningThresholds: [1000, 500, 100]

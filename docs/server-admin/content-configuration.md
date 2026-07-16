@@ -80,7 +80,7 @@ content/
 Every file is one strict document:
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: monster
     id: monster.example
@@ -93,7 +93,7 @@ Unknown fields are errors, including plausible misspellings.
 
 | Field | Type | Required/default | Rules and meaning |
 |---|---|---|---|
-| `schemaVersion` | integer | Required | Must be exactly `6`. |
+| `schemaVersion` | integer | Required | Must be exactly `7`. |
 | `entries` | array | Required, at least one | May contain any supported content kind. |
 | `kind` | enum | Required | One of `monster`, `npc`, `npc-faction`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, `condition`, `encounter`, `fallen-champion-template`, `achievement`, `class`, `background`, or `trait`. |
 | `id` | string | Required | Globally unique stable ID such as `monster.cave-rat`. |
@@ -132,6 +132,11 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `actionCosts` | registered-action-ID-to-integer map | Yes | Non-negative cost overrides. Unknown action IDs fail compilation. |
 | `score` | object | Yes | Run scoring coefficients described in the `score` table below. Every value is an integer; no floating point is accepted. |
 | `pointBuy` | object | Yes | Chargen point-buy attribute table described below. |
+| `restockMilestones` | array of positive safe integers | Yes | Strictly increasing world-time milestones at which town merchant stock restocks. The bundled value is `[5, 10, 15, 20]`. |
+| `house` | object | Yes | Player house sizing, described below. The bundled value is `{ baseCapacity: 6, strongboxIncrement: 4 }`. |
+| `encounterDensity` | object | Yes | Dungeon encounter density, described below. The bundled value is `{ cellsPerEncounter: 2000 }`. |
+
+`house` carries a positive safe integer `baseCapacity` (the player house's starting storage capacity) and a positive safe integer `strongboxIncrement` (additional capacity granted per purchased strongbox upgrade). `encounterDensity` carries a positive safe integer `cellsPerEncounter`, the average number of floor cells the generator budgets per placed encounter.
 
 ### Point-buy attribute table
 
@@ -154,7 +159,7 @@ pointBuy:
 ```
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: balance
     id: balance.core-gameplay
@@ -206,6 +211,9 @@ entries:
         - { value: 10, cost: 10 }
         - { value: 20, cost: 30 }
         - { value: 30, cost: 60 }
+    restockMilestones: [5, 10, 15, 20]
+    house: { baseCapacity: 6, strongboxIncrement: 4 }
+    encounterDensity: { cellsPerEncounter: 2000 }
 ```
 
 The closed action-cost IDs are `action.attack`, `action.cast`, `action.close-door`, `action.disarm`, `action.drop`, `action.equip`, `action.fire`, `action.move`, `action.open-door`, `action.pickup`, `action.refuel`, `action.search`, `action.spawn`, `action.split-stack`, `action.throw-item`, `action.toggle-light`, `action.unequip`, `action.use-item`, and `action.wait`. A pack may override any subset; `normalActionCost` supplies the normal fallback.
@@ -244,7 +252,7 @@ The `score` object supplies every coefficient used to compute a deterministic ru
 | `rarity` | enum | Yes | `common`, `uncommon`, `rare`, or `legendary`. |
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -338,8 +346,9 @@ The exact boundary is valid. Boundary plus one is rejected before selection, RNG
 | `minimumStockRolls`, `maximumStockRolls` | Merchant | Positive inclusive range; maximum is at least minimum. |
 | `merchantSaleBps`, `merchantPurchaseBps` | Merchant | Positive basis-point multipliers. |
 | `acceptedCategories` | Merchant | Non-empty item categories: `weapon`, `ammunition`, `armor`, `shield`, `light`, `fuel`, `food`, `potion`, `scroll`, `ring`, or `misc`. |
-| `services`, `serviceId`, `basePrice`, `minimumUses`, `maximumUses`, `tierIds` | Merchant | Unique `merchant-service.identify` offers have non-negative price/use bounds, maximum uses at least minimum uses, and reference tiers that enable the offered service in the NPC faction. |
-| `minimumLifetime`, `maximumLifetime`, `departureWarningThresholds` | Merchant | Positive lifetime range; warnings are unique, strictly descending, and below the minimum lifetime. |
+| `services`, `serviceId`, `basePrice`, `minimumUses`, `maximumUses`, `tierIds` | Merchant | Unique `merchant-service.identify` or `merchant-service.strongbox` offers have non-negative price/use bounds, maximum uses at least minimum uses, and reference tiers that enable the offered service in the NPC faction. A `merchant-service.strongbox` offer additionally requires `minimumUses` and `maximumUses` of exactly `1`. |
+| `permanent` | Merchant | Required boolean. `true` marks a fixed town shopkeeper that never departs; `false` marks an ordinary dungeon-wandering merchant. |
+| `minimumLifetime`, `maximumLifetime`, `departureWarningThresholds` | Merchant | Optional in the source schema, but conditionally required: `permanent: true` forbids all three; `permanent: false` requires all three. When present, lifetime is a positive range and warnings are unique, strictly descending, and below the minimum lifetime. |
 | `aggressionResponse` | Merchant | Closed to `flee` or `self-defense`. |
 | `commerceReputationDelta`, `aggressionReputationDelta`, `deathReputationDelta` | Merchant | Safe-integer reputation changes. |
 | `stockDropFraction` | Merchant | Probability from 0 through 1. |
@@ -357,7 +366,9 @@ A `swarm` source monster must carry the `swarm-source` tag. `spawnRoles` are wei
 
 A `boss` references one monster, strictly descending unique phase thresholds, registered phase behaviors/effects, recovery rate and cap, one `uniqueItemId`, one `enhancedLootTableId`, and optional vault tags. Boss phases use the closed safe subset `effect.damage`, `effect.heal`, `effect.condition.apply`, `effect.condition.remove`, `effect.reveal`, `effect.fuel.transfer`, `effect.light.toggle`, and `effect.feature.mutate`. Actor-context effects `effect.hunger.restore`, `effect.item.consume`, and `effect.force-move` are rejected in boss phases. Phases never reverse. Recovery is one bounded re-entry calculation, not off-floor turns. The bundled default boss chance is `0.08`, increment `0.03`, and cap `0.35`.
 
-A `merchant` resolves `minimumStockRolls..maximumStockRolls` from its stock loot table. Every reachable stock item must have a positive price and must not be boss-guaranteed unique or tagged `heirloom`, `quest`, `objective`, or `nontransferable`. The bundled travelling Lampwright appears at depths `1..10` with chance `0.25`, production rarity `uncommon`, discovery increment/cap `0`, and at most `2` instances. It resolves `1..2` stock rolls, uses sale/purchase multipliers `12000`/`6000`, offers `1..2` identify uses at base price `10`, lives `3000..5000`, warns at `[1000, 500, 100]`, uses `flee`, applies reputation deltas `25`, `-300`, and `-200`, and drops stock fraction `0.5`.
+A `merchant` resolves `minimumStockRolls..maximumStockRolls` from its stock loot table. Every reachable stock item must have a positive price and must not be boss-guaranteed unique or tagged `heirloom`, `quest`, `objective`, or `nontransferable`. The bundled travelling Lampwright appears at depths `1..10` with chance `0.25`, production rarity `uncommon`, discovery increment/cap `0`, and at most `2` instances. It resolves `1..2` stock rolls, uses sale/purchase multipliers `12000`/`6000`, offers `1..2` identify uses at base price `10`, is not `permanent`, lives `3000..5000`, warns at `[1000, 500, 100]`, uses `flee`, applies reputation deltas `25`, `-300`, and `-200`, and drops stock fraction `0.5`.
+
+A `permanent` merchant (`permanent: true`) is a fixed town shopkeeper: it never departs, so it must omit `minimumLifetime`, `maximumLifetime`, and `departureWarningThresholds` entirely. The three bundled town merchants — the Provisioner, the Armorer, and the Curios Dealer — are each `permanent: true`, each carries a distinct NPC faction and stock loot table, and each declares `requiredVaultTags: [town]` so placement resolves only against the `town` vault. The `merchant-service.strongbox` service, offered by the Town Provisioner at base price `120` across every faction tier, lets a hero rent house storage; because a strongbox purchase is one-time per merchant relationship, its offer requires `minimumUses` and `maximumUses` of exactly `1`. Restocking a permanent merchant's stock loot table is driven by the balance entry's `restockMilestones`.
 
 Merchant prices are exact integer arithmetic in basis points; quotes never round through floats:
 
@@ -374,10 +385,12 @@ Client contract: when a trade command resolves as invalid, any events attached t
 
 Runs persist with save schema version `5`, which adds faction `reputations`, the modal `activeTrade` session, merchant populations, and the dedicated `merchant-stock` and `merchant-runtime` RNG streams. Schema-v4 saves migrate to v5 automatically on load with empty merchant state; unknown save versions are rejected.
 
-Run records raise the current save format to schema version `6`, which adds the typed run `metrics` registry, the explicit run `conclusion` (completion type, cause, `concludedAtRevision`, `finalized`), and the derived `run-records` RNG stream that seeds heirloom selection. The single ordered v5→v6 migration preserves every v5 field byte-for-byte and adds zeroed metrics, a null conclusion, and the derived `run-records` stream; migrated saves re-validate through the strict v6 decoder, and every other version stays rejected. New runs start with zeroed metrics and no conclusion. On the content side, schema version `6` adds the `class`, `background`, and `trait` kinds and the balance `pointBuy` attribute table described below, on top of the `achievement` kind and the balance `score` coefficients added at v5; every bundled source file declares `schemaVersion: 6`, and the compiled pack hash covers the new entries.
+Run records raise the current save format to schema version `6`, which adds the typed run `metrics` registry, the explicit run `conclusion` (completion type, cause, `concludedAtRevision`, `finalized`), and the derived `run-records` RNG stream that seeds heirloom selection. The single ordered v5→v6 migration preserves every v5 field byte-for-byte and adds zeroed metrics, a null conclusion, and the derived `run-records` stream; migrated saves re-validate through the strict v6 decoder, and every other version stays rejected. New runs start with zeroed metrics and no conclusion. On the content side, schema version `6` added the `class`, `background`, and `trait` kinds and the balance `pointBuy` attribute table described above, on top of the `achievement` kind and the balance `score` coefficients added at v5.
+
+Content schema version `7` adds the town slice: a `permanent` merchant flag, the `merchant-service.strongbox` service, the balance `restockMilestones`, `house`, and `encounterDensity` blocks, and a tag-scoped `town` vault contract, all described in their respective sections below. Every bundled source file declares `schemaVersion: 7`, and the compiled pack hash covers the new entries.
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: encounter
     id: encounter.cave-rat-individuals
@@ -421,7 +434,7 @@ the entire pack.
 The Champion heirloom is selected once at the original death from unique equipped item instances only. Backpack items never qualify, and a multi-slot item is still one candidate. Better rarity and positive quality ranks raise its weight, but common equipment retains a non-zero chance. There is no minimum rarity and no reroll, so damaged, depleted, or mundane equipped gear remains possible. If nothing equipped is eligible, the fallback relic is recorded.
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: fallen-champion-template
     id: fallen-champion-template.core
@@ -477,7 +490,7 @@ Identification modes have distinct contracts:
 Items never contain their unidentified names. The generated mapping is saved with the run, so save/reload cannot reroll it, and a later run receives a new mapping. Items using the same pool must have the pool's category. The compiler requires at least as many unique verb–noun combinations as item definitions using the pool.
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: item
     id: item.brass-lantern
@@ -513,7 +526,7 @@ Identification pools are normal content-pack entries and may be placed in any `.
 The pool's `name` is an administrator-facing label. It is not shown as an unidentified item name.
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: identification-pool
     id: identification-pool.potions
@@ -543,7 +556,7 @@ identification: { mode: shuffled, poolId: identification-pool.potions }
 | `effects` | non-empty effect array | Yes | Applied in listed order. |
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: spell
     id: spell.mend
@@ -570,7 +583,7 @@ entries:
 | `effects` | non-empty effect array | Yes | Ordered trigger effects. |
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: trap
     id: trap.poison-dart
@@ -612,7 +625,7 @@ Boss guaranteed-unique content is forbidden anywhere in an ordinary loot graph, 
 | `minimumQuantity`, `maximumQuantity` | positive safe integers | Yes | Inclusive quantity range; maximum cannot be smaller, cannot exceed 256, and for a direct item cannot exceed its `stackLimit`. |
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: loot-table
     id: loot-table.basic-supplies
@@ -637,7 +650,7 @@ guaranteed boss-unique item item.warden-ember cannot appear in ordinary loot
 
 | Field | Type | Required/default | Rules and meaning |
 |---|---|---|---|
-| `minDepth`, `maxDepth` | positive safe integers | Required | Inclusive placement range. |
+| `minDepth`, `maxDepth` | safe integers | Required | Inclusive placement range. Positive for every ordinary vault; a vault tagged `town` is the sole exception and must declare exactly `0` and `0`. |
 | `rarity` | enum | Required | `common`, `uncommon`, `rare`, or `legendary`. |
 | `weight`, `maxPerFloor` | positive safe integers | Required | Selection weight and placement cap. |
 | `margin` | non-negative safe integer | Required | Required surrounding space. |
@@ -649,7 +662,7 @@ guaranteed boss-unique item item.warden-ember cannot appear in ordinary loot
 Terrain is `wall`, `floor`, `closed-door`, `pillar`, `stair-up`, `stair-down`, or `void`. A placement slot kind is `monster`, `item`, `trap`, `npc`, `fixture`, or `objective`. Slot IDs are vault-local slugs. Required slots must occur in the layout. Lights require a local suffix, one glyph, stable presentation token, RGB color, radius 1–32, strength 1–255, and optional enabled state (default true). Void terrain cannot contain lights or placement slots.
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: vault
     id: vault.small-cache
@@ -672,6 +685,17 @@ entries:
         slot: { id: item-cache, kind: item, required: true, tags: [cache] }
 ```
 
+### The `town` vault
+
+A vault tagged `town` carries additional structural requirements enforced on top of the ordinary rules above:
+
+- `minDepth` and `maxDepth` must both be `0`.
+- Its required placement slots must be exactly the five: `dungeon-entrance`, `house-door`, `merchant-provisioner`, `merchant-arms`, and `merchant-curios` — no more, no fewer.
+- The `dungeon-entrance` slot's legend entry must use `stair-down` terrain.
+- The legend must declare at least one light fixture, in addition to the ordinary requirement of at least one entrance.
+
+The bundled `content/vaults/town.yaml` is the complete copyable reference: a walled town square with three merchant stalls (each holding one of the three required merchant slots and a light fixture), an enclosed house with a single `house-door` closed-door slot, a `dungeon-entrance` slot on a stair-down tile, and additional walkway lights.
+
 ## Condition entries
 
 | Field | Type | Required/default | Rules and meaning |
@@ -688,7 +712,7 @@ entries:
 Replace and refresh produce one stack; intensify adds one up to the cap. Every reapplication refreshes source, application time, and deadline. Timed applications may omit duration to use the default or supply a positive override no greater than the maximum. Permanent conditions reject an override. Removal and expiration remove the complete condition instance.
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: condition
     id: condition.stunned
@@ -714,7 +738,7 @@ An `achievement` names a permanent account milestone. Beyond the common `id`, `n
 The closed achievement criteria registry contains exactly `first-champion-defeat` (first defeat of the Deep's Champion) and `first-echo-defeat` (first defeat of a fallen hero's Echo). New criteria require a code change; unknown criteria IDs fail compilation.
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: achievement
     id: achievement.defeated-the-deeps-champion
@@ -755,7 +779,7 @@ Each kit has a slug `kitId` unique within the class, a display `name`, an `equip
 | `backpack[].quantity` | positive safe integer | Defaults to `1` | Starting stack size. |
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: class
     id: class.wayfarer
@@ -796,7 +820,7 @@ entries:
 `background` and `trait` both carry a `modifiers` derived-stat integer map (non-zero safe-integer values, keys drawn from the same closed stat names as condition modifiers: `maxHealth`, `meleeAccuracy`, `meleeDamageBonus`, `rangedAccuracy`, `defense`, `search`, `disarm`). A `trait` must declare exactly one modifier key; a `background` may declare any number, including zero. A `background` additionally carries `extraItems`, an array of `{ contentId, quantity }` starting-inventory grants using the same shape as a class kit's `backpack`, each `contentId` resolving to an `item` entry.
 
 ```yaml
-schemaVersion: 6
+schemaVersion: 7
 entries:
   - kind: background
     id: background.caravan-guard
@@ -886,4 +910,4 @@ Never silently attach an active run to a different content hash. Keep old conten
 
 ## Complete examples
 
-Each content-kind section above contains a complete copyable `schemaVersion: 6` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.
+Each content-kind section above contains a complete copyable `schemaVersion: 7` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.

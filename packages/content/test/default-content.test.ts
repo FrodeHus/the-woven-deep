@@ -13,8 +13,8 @@ describe('bundled content', () => {
       'achievement', 'class', 'background', 'trait'] as const;
     expect(Object.fromEntries(kinds.map((kind) => [kind,
       pack.entries.filter((entry) => entry.kind === kind).length]))).toEqual({
-      monster: 4, item: 16, spell: 1, trap: 1, 'loot-table': 4, balance: 1, vault: 1,
-      'identification-pool': 2, encounter: 5, 'fallen-champion-template': 1, npc: 1, 'npc-faction': 1,
+      monster: 4, item: 16, spell: 1, trap: 1, 'loot-table': 7, balance: 1, vault: 2,
+      'identification-pool': 2, encounter: 8, 'fallen-champion-template': 1, npc: 4, 'npc-faction': 4,
       achievement: 2, class: 4, background: 3, trait: 5,
     });
     expect(pack.entries.filter((entry) => entry.kind === 'class' && (entry as any).playable)).toHaveLength(2);
@@ -48,9 +48,9 @@ describe('bundled content', () => {
     });
   });
 
-  it('ships schema-v6 run-record content: achievements, score coefficients, and monster threat', async () => {
+  it('ships schema-v7 run-record content: achievements, score coefficients, and monster threat', async () => {
     const pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
-    expect(pack.schemaVersion).toBe(6);
+    expect(pack.schemaVersion).toBe(7);
     const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
     expect(entries.get('achievement.defeated-the-deeps-champion')).toMatchObject({
       kind: 'achievement', name: "Defeated the Deep's Champion", criteriaId: 'first-champion-defeat',
@@ -69,6 +69,9 @@ describe('bundled content', () => {
         budget: 30,
         costs: expect.arrayContaining([{ value: 0, cost: 0 }, { value: 30, cost: 60 }]),
       },
+      restockMilestones: [5, 10, 15, 20],
+      house: { baseCapacity: 6, strongboxIncrement: 4 },
+      encounterDensity: { cellsPerEncounter: 2000 },
     });
     expect(entries.get('monster.cave-rat')).toMatchObject({ threat: 1 });
     expect(entries.get('monster.training-beetle')).toMatchObject({ threat: 2 });
@@ -109,6 +112,30 @@ describe('bundled content', () => {
     const torch = entries.get('item.pitch-torch');
     expect(lantern?.kind === 'item' ? lantern.light?.fuelTags : null).toEqual(['lamp-oil']);
     expect(torch?.kind === 'item' ? torch.light?.fuelTags : null).toEqual([]);
+  });
+
+  it('ships the town vault with three permanent merchants and the strongbox service', async () => {
+    const pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+    const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
+    expect(entries.get('vault.town')).toMatchObject({
+      kind: 'vault', tags: ['town'], minDepth: 0, maxDepth: 0,
+      requiredSlotIds: ['dungeon-entrance', 'house-door', 'merchant-arms', 'merchant-curios', 'merchant-provisioner'],
+    });
+    for (const id of ['encounter.town-provisioner', 'encounter.town-armorer', 'encounter.town-curios-dealer']) {
+      expect(entries.get(id)).toMatchObject({
+        kind: 'encounter', model: 'merchant',
+        definition: expect.objectContaining({ permanent: true }),
+      });
+      const definition = (entries.get(id) as any).definition;
+      expect(definition.minimumLifetime).toBeUndefined();
+      expect(definition.maximumLifetime).toBeUndefined();
+      expect(definition.departureWarningThresholds).toBeUndefined();
+    }
+    expect(entries.get('encounter.town-provisioner')).toMatchObject({
+      definition: {
+        services: [{ serviceId: 'merchant-service.strongbox', basePrice: 120, minimumUses: 1, maximumUses: 1 }],
+      },
+    });
   });
 
   it('revalidates condition references in a stored compiled pack', async () => {

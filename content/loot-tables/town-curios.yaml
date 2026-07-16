@@ -1,0 +1,12 @@
+schemaVersion: 7
+entries:
+  - kind: loot-table
+    id: loot-table.town-curios
+    name: Town Curios Dealer stock
+    tags: [town, curios]
+    rolls: 3
+    choices:
+      - { contentId: item.ashen-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.crimson-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.etched-ring, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.ember-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }

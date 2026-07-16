@@ -1,4 +1,4 @@
-export const CONTENT_SCHEMA_VERSION = 6 as const;
+export const CONTENT_SCHEMA_VERSION = 7 as const;
 
 export type ContentId = string;
 export const CONTENT_KIND_IDS = [
@@ -241,7 +241,7 @@ export interface BossEncounterDefinition {
   readonly vaultTags: readonly string[];
 }
 
-export type MerchantServiceId = 'merchant-service.identify';
+export type MerchantServiceId = 'merchant-service.identify' | 'merchant-service.strongbox';
 
 export interface ReputationTierDefinition {
   readonly tierId: string; readonly name: string; readonly minimum: number; readonly maximum: number;
@@ -264,7 +264,7 @@ export interface NpcContentEntry extends PresentedContentEntry {
 }
 
 export interface MerchantServiceOfferDefinition {
-  readonly serviceId: 'merchant-service.identify'; readonly basePrice: number;
+  readonly serviceId: MerchantServiceId; readonly basePrice: number;
   readonly minimumUses: number; readonly maximumUses: number; readonly tierIds: readonly string[];
 }
 
@@ -273,8 +273,11 @@ export interface MerchantEncounterDefinition {
   readonly minimumStockRolls: number; readonly maximumStockRolls: number;
   readonly merchantSaleBps: number; readonly merchantPurchaseBps: number;
   readonly acceptedCategories: readonly ItemCategory[]; readonly services: readonly MerchantServiceOfferDefinition[];
-  readonly minimumLifetime: number; readonly maximumLifetime: number;
-  readonly departureWarningThresholds: readonly number[]; readonly aggressionResponse: 'flee' | 'self-defense';
+  // `permanent` merchants (town shopkeepers) never depart and must omit every lifetime field below.
+  // Non-permanent (dungeon-wandering) merchants must declare all three.
+  readonly permanent: boolean;
+  readonly minimumLifetime?: number; readonly maximumLifetime?: number;
+  readonly departureWarningThresholds?: readonly number[]; readonly aggressionResponse: 'flee' | 'self-defense';
   readonly commerceReputationDelta: number; readonly aggressionReputationDelta: number;
   readonly deathReputationDelta: number; readonly stockDropFraction: number;
 }
@@ -466,6 +469,9 @@ export interface BalanceContentEntry extends BaseContentEntry {
   readonly actionCosts: Readonly<Record<string, number>>;
   readonly score: ScoreCoefficientsDefinition;
   readonly pointBuy: PointBuyDefinition;
+  readonly restockMilestones: readonly number[];
+  readonly house: Readonly<{ baseCapacity: number; strongboxIncrement: number }>;
+  readonly encounterDensity: Readonly<{ cellsPerEncounter: number }>;
 }
 
 export interface ConditionContentEntry extends BaseContentEntry {
