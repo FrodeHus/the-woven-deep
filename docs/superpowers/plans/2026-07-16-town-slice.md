@@ -247,7 +247,10 @@ NOTE: this changes `createNewRun`-based tests' floor layouts (160×50) — the 5
 export function restockMerchant(run: ActiveRun, input: Readonly<{ content: CompiledContentPack; populationId: OpaqueId }>):
   Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }>;
 // re-rolls stockItemIds from the encounter's loot table on rng['merchant-stock'], removing old merchant-stock items and
-// adding the new ones; preserves reputation/services/lifecycle/identity; emits a 'merchant.restocked' domain event
+// adding the new ones; preserves reputation/services/lifecycle/identity; PROJECTS the loot graph at
+// max(1, metrics.deepestDepth) — NOT the merchant's floor depth (town is 0) — and projectLootGraph additionally
+// honors the new per-choice minDepth/maxDepth bands from Task 1's fix round, so milestone restocks surface the
+// widened bands; emits a 'merchant.restocked' domain event
 // (new event type + save-schema entry + hero-visible only if the hero is in town — follow projectDomainEvents conventions).
 // floor-transition.ts descend path: after a successful descend, for each balance restockMilestone m not in
 // run.restockedMilestones with metrics.deepestDepth >= m: restock all permanent merchants, append m.
