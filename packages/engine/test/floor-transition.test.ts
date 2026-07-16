@@ -84,7 +84,7 @@ describe('descendToNextFloor', () => {
         finalized: false,
       },
     };
-    expect(() => descendToNextFloor(concluded, { content: pack })).toThrow();
+    expect(() => descendToNextFloor(concluded, { content: pack })).toThrow(/conclud/i);
   });
 
   it('descends cleanly after a walk-then-descend sequence, clearing stale command history', () => {

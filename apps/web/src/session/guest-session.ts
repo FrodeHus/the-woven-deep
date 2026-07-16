@@ -86,7 +86,16 @@ export class GuestSession {
   }
 
   private nextCommandId(): string {
-    return `command.guest-${String(this.run.revision + 1).padStart(6, '0')}`;
+    // Both components come from persisted run state, so a restored save re-seeds the exact
+    // counter. `revision + 1` alone is NOT enough: the engine records `invalid` results into
+    // `recentCommands` without advancing `revision` (reducer.ts's `recordInvalid`), so a plain
+    // revision-based id would collide with — and be rejected as `command_id_conflict` against —
+    // every subsequent distinct command until the run advances again. Appending
+    // `recentCommands.length` (which DOES grow on invalid results) keeps every id unique. A
+    // retained `recentCommands` entry can only share both components with a freshly built id if
+    // it is the exact same command being replayed (the reducer's own idempotent-replay branch),
+    // never a genuine conflict — see resolveCommand's `sameCommand` check in reducer.ts.
+    return `command.guest-${this.run.revision + 1}-${this.run.recentCommands.length}`;
   }
 
   private currentProjection(): GameplayProjection {

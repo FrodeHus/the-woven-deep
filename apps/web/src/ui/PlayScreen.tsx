@@ -219,13 +219,13 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
         onMouseOver={handleMouseOver}
         onMouseLeave={handleMouseLeave}
       >
-        <span ref={cellProbeRef} className="cell cell-probe" aria-hidden="true">0</span>
         {tier === 'minimal' && (
           <div className="vitals-overlay">
             <VitalsStrip snapshot={snapshot} />
           </div>
         )}
         <div className="playfield">
+          <span ref={cellProbeRef} className="cell cell-probe" aria-hidden="true">0</span>
           <GridRenderer projection={projection} camera={camera} viewport={viewport} />
           <EffectsLayer
             projection={projection} pack={pack} lastEvents={snapshot.lastEvents} camera={camera} viewport={viewport}

@@ -45,6 +45,15 @@ describe('reduced-motion stylesheet contract', () => {
     expect(glowRuleMatch, '.glow rule not found inside reduced-motion block').toBeTruthy();
     expect(glowRuleMatch![1]).toMatch(/animation\s*:\s*none\s*!important/);
   });
+
+  it('overrides .effect animation with !important so decorative effects stop under reduced motion', () => {
+    const blocks = extractReducedMotionBlocks(css);
+    const blockWithEffectOverride = blocks.find((block) => /\.effect\s*\{[^}]*animation\s*:/.test(block));
+    expect(blockWithEffectOverride, 'expected a @media (prefers-reduced-motion: reduce) block with an .effect animation override').toBeTruthy();
+    const effectRuleMatch = /\.effect\s*\{([^}]*)\}/.exec(blockWithEffectOverride!);
+    expect(effectRuleMatch, '.effect rule not found inside reduced-motion block').toBeTruthy();
+    expect(effectRuleMatch![1]).toMatch(/animation\s*:\s*none\s*!important/);
+  });
 });
 
 describe('landing page reduced-motion stylesheet contract', () => {

@@ -271,7 +271,7 @@ describe('GuestSession', () => {
     expect(session.getSnapshot()).toBe(second);
   });
 
-  it('derives command ids from the run revision so they stay unique and deterministic across reload', () => {
+  it('derives command ids from the run revision and recorded-command count so they stay unique and deterministic across reload', () => {
     const storage = fakeStorage();
     const session = new GuestSession({ pack, storage, seed: SEED });
     session.dispatch({ type: 'wait' });
@@ -280,6 +280,37 @@ describe('GuestSession', () => {
     const saved = storage.peek();
     const restored = decodeActiveRun(saved!);
     expect(restored.recentCommands.map((entry) => entry.command.commandId))
-      .toEqual(['command.guest-000001', 'command.guest-000002']);
+      .toEqual(['command.guest-1-0', 'command.guest-2-1']);
+  });
+
+  it('recovers from a wall bump instead of soft-locking on a reused command id', () => {
+    // Regression coverage for the final-review finding: deriving commandId from `revision + 1`
+    // alone collides forever after any `invalid` result, because the engine records invalid
+    // results into `recentCommands` WITHOUT advancing revision (reducer.ts recordInvalid), and
+    // rejects any later same-id/different-payload command as `command_id_conflict`. From this
+    // seed's start position, `north` is a wall (verified against the compiled floor's tiles), so
+    // it is guaranteed to produce an `invalid` result without moving the hero.
+    const storage = fakeStorage();
+    const session = new GuestSession({ pack, storage, seed: SEED });
+    const logBefore = session.getSnapshot().log.length;
+
+    session.dispatch({ type: 'move', direction: 'north' });
+
+    const afterBump = session.getSnapshot();
+    expect(afterBump.log.length).toBe(logBefore + 1);
+    expect(afterBump.log.at(-1)?.tone).toBe('system');
+    expect(afterBump.projection.metrics.turnsElapsed).toBe(0);
+
+    // With the old `revision + 1`-only id, this next, entirely different command reuses the
+    // wall-bump's id (revision didn't advance) and is rejected forever with `command_id_conflict`.
+    session.dispatch({ type: 'wait' });
+    const afterWait = session.getSnapshot();
+    expect(afterWait.projection.metrics.turnsElapsed).toBe(1);
+
+    // Persist + restore, then dispatch again: the restored counter must still be able to advance.
+    const saved = storage.peek();
+    const restoredSession = new GuestSession({ pack, storage: { ...storage, get: () => saved } });
+    restoredSession.dispatch({ type: 'wait' });
+    expect(restoredSession.getSnapshot().projection.metrics.turnsElapsed).toBe(2);
   });
 });
