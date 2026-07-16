@@ -1,14 +1,54 @@
-import { useEffect, useRef, useState, type CSSProperties, type JSX, type MouseEvent as ReactMouseEvent } from 'react';
+import {
+  useEffect, useRef, useState, type CSSProperties, type JSX, type MouseEvent as ReactMouseEvent,
+} from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection } from '@woven-deep/engine';
-import type { GuestSession } from '../session/guest-session.js';
+import { BackpackMenu, useDialogFocusTrap } from './BackpackMenu.js';
+import type { GuestSession, SessionSnapshot } from '../session/guest-session.js';
 import { useGuestSession } from '../session/store.js';
 import { computeCamera, type CameraOrigin } from './camera.js';
 import { EffectsLayer } from './EffectsLayer.js';
 import { GridRenderer } from './GridRenderer.js';
+import { createKeyDispatcher } from './KeyRouter.js';
 import { layoutTier, viewportForPane, type LayoutTier } from './layout.js';
 import { HeroPanel, LogPanel, StatusBar, ThreatPanel, VitalsStrip } from './panels.js';
 import { ThreatPopover, type ThreatPopoverActor } from './ThreatPopover.js';
+
+interface DecisionPromptProps {
+  readonly snapshot: SessionSnapshot;
+  readonly session: GuestSession;
+}
+
+/** The confirm-aggression prompt: reuses the same dialog primitives as `BackpackMenu` (focus trap,
+ * `role="dialog"`), answering with `y`/`n` (or Escape, which declines non-destructively). */
+function DecisionPrompt({ snapshot, session }: DecisionPromptProps): JSX.Element | null {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useDialogFocusTrap(containerRef);
+  const decision = snapshot.pendingDecision;
+  if (!decision) return null;
+
+  const answer = (confirmed: boolean): void => session.answerDecision(confirmed);
+
+  return (
+    <div
+      ref={containerRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Confirm attack"
+      className="decision-prompt"
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') { event.preventDefault(); answer(false); return; }
+        if (event.key === 'y' || event.key === 'Y') { event.preventDefault(); answer(true); return; }
+        if (event.key === 'n' || event.key === 'N') { event.preventDefault(); answer(false); }
+      }}
+    >
+      <p>Attack this target?</p>
+      <button type="button" onClick={() => answer(true)}>Yes (y)</button>
+      <button type="button" onClick={() => answer(false)}>No (n)</button>
+    </div>
+  );
+}
 
 export interface PlayScreenProps {
   readonly session: GuestSession;
@@ -71,6 +111,25 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
       window.removeEventListener('resize', measure);
     };
   }, []);
+
+  // The single global keydown listener: `createKeyDispatcher` translates keys to intents via the
+  // pure `routeKey` and forwards them to the session, dropping any keydown that arrives while a
+  // dispatch is already executing (see `KeyRouter.ts`'s input-flood guard).
+  useEffect(() => {
+    const dispatcher = createKeyDispatcher(
+      {
+        dispatch: (intent) => session.dispatch(intent),
+        openBackpack: () => session.setBackpackOpen(true),
+        closeOverlay: () => {
+          if (snapshot.backpackOpen) session.setBackpackOpen(false);
+          else if (snapshot.pendingDecision) session.answerDecision(false);
+        },
+      },
+      () => snapshot.backpackOpen || snapshot.pendingDecision !== null,
+    );
+    window.addEventListener('keydown', dispatcher);
+    return () => window.removeEventListener('keydown', dispatcher);
+  }, [session, snapshot.backpackOpen, snapshot.pendingDecision]);
 
   const tier = tierOverride ?? layoutTier(paneSize.width);
   const viewport = viewportForPane({ panePx: paneSize, cellPx: cellSize, floor: projection.floor });
@@ -178,6 +237,15 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
       <div className="log-slot" style={{ '--log-lines': logLines } as CSSProperties}>
         <LogPanel snapshot={snapshot} />
       </div>
+
+      {snapshot.backpackOpen && (
+        <BackpackMenu
+          snapshot={snapshot}
+          onDispatch={(intent) => session.dispatch(intent)}
+          onClose={() => session.setBackpackOpen(false)}
+        />
+      )}
+      {snapshot.pendingDecision && <DecisionPrompt snapshot={snapshot} session={session} />}
     </div>
   );
 }
