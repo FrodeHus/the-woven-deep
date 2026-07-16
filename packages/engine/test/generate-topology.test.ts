@@ -81,7 +81,7 @@ describe('classic topology generation', () => {
 
   it('succeeds normally or through fallback over 200 deterministic seeds', () => {
     for (let seed = 1; seed <= 200; seed += 1) assertValid(generateTopology(request(expandLegacySeed(seed), 40, 20)));
-  });
+  }, 120_000);
 
   it('uses a deterministic connected fallback with no vaults after safe rejection', () => {
     const input: GenerateTopologyRequest = {

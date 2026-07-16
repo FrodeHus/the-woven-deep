@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadContentSummary } from '../src/api.js';
+import { loadContentPack, loadContentSummary } from '../src/api.js';
 import { CONTENT_KIND_IDS, type ContentKind } from '@woven-deep/content';
 import { contentPack } from './content-pack-fixture.js';
 
@@ -38,5 +38,26 @@ describe('content summary counts', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', contentHash: hash, entries: 0 })))
       .mockResolvedValueOnce(new Response(JSON.stringify({ schemaVersion: 1, hash, entries: [] })));
     await expect(loadContentSummary(request as typeof fetch)).rejects.toThrow(/unsupported content schema version 1/i);
+  });
+});
+
+describe('loadContentPack', () => {
+  it('fetches and validates the guest content pack', async () => {
+    const hash = 'c'.repeat(64);
+    const pack = contentPack(hash, CONTENT_KIND_IDS);
+    const request = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(pack)));
+
+    const loaded = await loadContentPack(request as typeof fetch);
+
+    expect(loaded).toEqual(pack);
+    expect(request).toHaveBeenCalledWith('/api/content/guest');
+  });
+
+  it('rejects unsupported content before returning it', async () => {
+    const hash = 'c'.repeat(64);
+    const request = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ schemaVersion: 1, hash, entries: [] })));
+
+    await expect(loadContentPack(request as typeof fetch)).rejects.toThrow(/unsupported content schema version 1/i);
   });
 });

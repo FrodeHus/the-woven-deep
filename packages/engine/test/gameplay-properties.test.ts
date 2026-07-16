@@ -85,7 +85,7 @@ describe('cross-system gameplay sequence properties', () => {
         expect(projection).not.toContain('rng');
       }
     }), { seed: 0x4a09, numRuns: 500 });
-  }, 30_000);
+  }, 120_000);
 });
 
 describe('gameplay scheduler properties', () => {

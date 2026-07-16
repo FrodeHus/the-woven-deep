@@ -584,7 +584,7 @@ export function projectGameplayState(input: Readonly<{
       derived: Object.fromEntries(Object.entries(derived).map(([name, value]) => [name, {
         value, formula: { ...(rules.formulas[name] ?? {}) },
       }])),
-      health: hero.health, maxHealth: hero.maxHealth,
+      health: hero.health, maxHealth: hero.maxHealth, sightRadius: input.state.hero.sightRadius,
       hungerStage: input.state.survival.hungerStage, conditions, equipment, backpack,
       backpackCapacity: input.state.hero.backpackCapacity,
       knownAppearanceIds: [...input.state.identification.knownAppearanceIds],

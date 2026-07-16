@@ -127,7 +127,8 @@ export function projectItem(input: Readonly<{
   const projected: Record<string, unknown> = {
     itemId: item.itemId, contentId: entry.id, name: item.heirloom?.displayName ?? entry.name,
     ...(item.heirloom ? { glyph: item.heirloom.glyph, color: item.heirloom.color,
-      provenance: { originatingHallRecordId: item.heirloom.originatingHallRecordId } } : {}),
+      provenance: { originatingHallRecordId: item.heirloom.originatingHallRecordId } }
+      : { glyph: entry.glyph, color: entry.color }),
     category: entry.category,
     quantity: item.quantity, identified: item.identified, effects: entry.effects,
   };

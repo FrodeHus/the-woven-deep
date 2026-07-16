@@ -488,7 +488,7 @@ Expected: FAIL — modules do not exist.
 
 Dispatch pipeline inside `GuestSession.dispatch`:
 
-1. `commandId = \`command.guest-${String(run.revision + 1).padStart(6, '0')}\`` — revision-derived, so IDs stay unique and deterministic across reload.
+1. Command IDs must be unique across ALL recorded commands and deterministic across reload. (Amended after the final review: deriving from `revision + 1` alone is WRONG — the engine records `invalid` results into `recentCommands` WITHOUT advancing revision, so the next distinct command reuses the same id and is rejected as `command_id_conflict` forever, a persisted soft-lock. Derive from a counter that also advances on invalid results and is re-seedable from the restored save, e.g. `command.guest-<revision+1>-<recentCommands.length>`.)
 2. `buildIntent(...)`: `rejected` → append a system log line, notify; `descend` → `descendToNextFloor(run, { content })`, fold its events through `projectDomainEvents`-provided public events (the returned `events` are authoritative `DomainEvent[]`; project them with `projectDomainEvents({ state, content, heroId, events })` before logging); `command` → `resolveCommand(run, command, { content })`.
 3. On any new state: re-project (`projectGameplayState`), fold `resolution.events` (already public) into the log, stash them as `lastEvents`, persist `encodeActiveRun(state)` through the storage interface (catching and classifying failures as notices), bump the snapshot object identity, notify subscribers.
 4. `decision_required` results set `pendingDecision` (via `projectDecision` if extra presentation data is needed); `answerDecision(true)` re-dispatches the confirm per the engine's decision contract (copy the exact confirmation flow from `packages/engine/test/reducer.test.ts`'s confirm-aggression cases); `answerDecision(false)` clears the decision with a log line.
@@ -512,40 +512,68 @@ Also in this task: `loadContentPack(fetcher = fetch): Promise<CompiledContentPac
 ### Task 5: Grid renderer and effects layer
 
 **Files:**
+- Create: `apps/web/src/ui/camera.ts`
 - Create: `apps/web/src/ui/GridRenderer.tsx`
 - Create: `apps/web/src/ui/effects-map.ts`
 - Create: `apps/web/src/ui/EffectsLayer.tsx`
+- Create: `apps/web/test/camera.test.ts`
 - Create: `apps/web/test/grid-renderer.test.tsx`
 - Create: `apps/web/test/effects-map.test.ts`
 - Modify: `apps/web/src/styles.css`
 
 **Interfaces:**
 - Consumes: `GameplayProjection` (`floor.cells` with `glyph/token/knowledge/intensity/tint`, `actors`, `groundItems`, `hero`), `PublicEvent`, the pack (light definitions for glow radius/color via the hero's enabled equipped light).
-- Produces: `<GridRenderer projection={...} />`, `<EffectsLayer projection={...} pack={...} lastEvents={...} />`, and:
+- Produces: `<GridRenderer projection={...} camera={...} />`, `<EffectsLayer projection={...} pack={...} lastEvents={...} camera={...} />`, and:
 
 ```ts
+// camera.ts — pure deadzone camera so floors larger than the pane render as a scrolling viewport
+export interface CameraViewport { readonly width: number; readonly height: number }   // in cells
+export interface CameraOrigin { readonly x: number; readonly y: number }              // world coordinate of the viewport's top-left cell
+// Margin rule: the deadzone margin equals the hero's sight radius, clamped per axis to
+// floor((viewportAxis - 1) / 2) so it always leaves a deadzone. Sight-radius margin guarantees
+// every engine-visible actor is inside the viewport (nothing attacks from off-screen); on axes
+// where sight diameter approaches viewport size this degrades toward center-lock, which is fine.
+export function cameraMargin(sightRadius: number, viewport: CameraViewport): Readonly<{ x: number; y: number }>;
+export function computeCamera(input: Readonly<{
+  hero: Readonly<{ x: number; y: number }>;
+  sightRadius: number;             // from projection.hero
+  floor: Readonly<{ width: number; height: number }>;
+  viewport: CameraViewport;
+  previous: CameraOrigin | null;   // null on first render or floor change → center on hero
+}>): CameraOrigin;
+
 // effects-map.ts
 export interface TransientEffect { readonly key: string; readonly kind: 'hit-flash' | 'attack-streak' | 'death-burst'; readonly x: number; readonly y: number; readonly toX?: number; readonly toY?: number }
 export const MAX_TRANSIENT_EFFECTS = 12;
 export function effectsForEvents(events: readonly PublicEvent[], heroId: OpaqueId): readonly TransientEffect[];
 ```
 
+Camera rules (all in `computeCamera`, unit-tested in `camera.test.ts`): with `previous: null`, center the viewport on the hero, clamped to floor bounds. With a previous origin, keep it unchanged while the hero remains at least `cameraMargin(sightRadius, viewport)` cells from every viewport edge (per-axis margins); when the hero crosses a margin on an axis, scroll that axis by exactly the amount that restores the margin. Always clamp so the viewport never shows cells outside the floor; when the floor is smaller than the viewport on an axis, center the floor on that axis (origin may be negative in that case — the renderer pads with empty cells). Camera state lives in the `PlayScreen` component (a ref/previous-origin pair keyed by `floorId` so a descend recenters); `computeCamera` itself is stateless.
+
+Camera test cases for `camera.test.ts`: `cameraMargin` — equals sight radius when it fits, clamps to `floor((axis - 1) / 2)` when it doesn't (assert both axes of a 60×20 viewport with sight radius 8: x margin 8, y margin 8 → clamped to 9? no — floor((20-1)/2) = 9, so 8 fits and stays 8; use sight radius 12 to exercise the clamp); the visibility guarantee — for any hero position and any camera the rules produce, every cell within `sightRadius` (Chebyshev) of the hero lies inside the viewport (a small brute-force sweep over hero positions on an 80×25 floor); initial centering and clamping at each corner; no scroll while moving inside the deadzone; exact scroll amount when crossing each of the four margins; clamping at every floor edge; small-floor centering on one and both axes; the null-previous branch centers.
+
 - [ ] **Step 1: Write failing renderer and mapping tests**
 
 ```tsx
 // apps/web/test/grid-renderer.test.tsx — assert on the cell layer only
-it('renders one cell per floor cell with knowledge classes and light variables', () => {
-  render(<GridRenderer projection={projection} />);
+it('renders exactly the viewport window of cells, keyed by world coordinates', () => {
+  const camera = { x: 10, y: 3 };
+  render(<GridRenderer projection={projection} camera={camera} viewport={{ width: 40, height: 15 }} />);
   const grid = screen.getByRole('grid', { name: /dungeon/i });
   const cells = grid.querySelectorAll('[data-cell]');
-  expect(cells).toHaveLength(projection.floor.width * projection.floor.height);
+  expect(cells).toHaveLength(40 * 15);
+  expect(grid.querySelector('[data-cell="10,3"]')).not.toBeNull();   // top-left of the window, world coords
+  expect(grid.querySelector('[data-cell="9,3"]')).toBeNull();        // outside the window
   const visible = grid.querySelector('[data-cell="12,5"]')!;
   expect(visible).toHaveClass('cell-visible');
   expect(visible.getAttribute('style')).toContain('--light');
 });
 it('renders unknown cells empty, remembered cells dim, and overlays hero > actor > item > tile glyphs', () => { /* precedence table */ });
 it('marks the hero cell with the hero glyph @ and an accessible label', () => { /* aria-label on hero cell */ });
+it('pads with empty out-of-floor cells when the floor is smaller than the viewport', () => { /* negative-origin centering case */ });
 ```
+
+Camera unit tests (`camera.test.ts`) come first in this task's RED step — the case list is in the Interfaces section above.
 
 ```ts
 // apps/web/test/effects-map.test.ts
@@ -561,9 +589,13 @@ Expected: FAIL — components do not exist.
 
 - [ ] **Step 3: Implement renderer, mapping, and effects layer**
 
-`GridRenderer`: a `role="grid"` container with `display: grid; grid-template-columns: repeat(width, 1ch)`. One `<span data-cell="x,y">` per cell: class `cell-unknown|cell-remembered|cell-visible`, inline custom properties `--light: intensity/255` and `--fg: rgb(tint)` when present, text content by precedence hero `@` > actor glyph > ground-item glyph > `cell.fixture?.glyph` > `cell.glyph ?? ''`. Remembered cells always render the remembered tile glyph dim/desaturated via CSS, never actors or items. The grid is one tab stop; cells are not individually focusable.
+`camera.ts`: implement `computeCamera` exactly per the Interfaces section — pure, stateless, deadzone margin `CAMERA_MARGIN = 4`, axis-independent scrolling, floor-bounds clamping, small-floor centering.
 
-`EffectsLayer`: `aria-hidden`, `pointer-events: none`, absolutely positioned over the grid, cell coordinates converted with `calc(var(--cell-w) * x)` custom properties set by the shared playfield wrapper. Renders (a) one `.glow` div at the hero's cell while the hero has an enabled equipped light — radius/color read from the pack's light definition for that item's `contentId`, flicker profile selected by a `data-source` attribute (`pitch-torch` gutter vs `brass-lantern` steady), base intensity scaled by remaining fuel fraction; (b) transient effect divs from `effectsForEvents(lastEvents, heroId)`, removed on `animationend`. CSS keyframes in `styles.css`: `glow-drift` (2.6s ease-in-out infinite alternate scale/opacity), `glow-gutter` (irregular steps flicker), `hit-flash` (120ms), `attack-streak` (160ms translate along the line), `death-burst` (240ms expanding fade). All under `@media (prefers-reduced-motion: reduce) { animation: none; }` with the glow rendered static.
+`GridRenderer`: a `role="grid"` container with `display: grid; grid-template-columns: repeat(viewport.width, 1ch)`. It receives `camera: CameraOrigin` and `viewport: CameraViewport` and renders only the world cells inside `[camera.x, camera.x + viewport.width) × [camera.y, camera.y + viewport.height)`, indexing into `projection.floor.cells` by `y * floor.width + x`; world coordinates outside the floor render as empty padding cells (`data-cell` omitted). One `<span data-cell="x,y">` per in-floor cell using WORLD coordinates: class `cell-unknown|cell-remembered|cell-visible`, inline custom properties `--light: intensity/255` and `--fg: rgb(tint)` when present, text content by precedence hero `@` > actor glyph > ground-item glyph > `cell.fixture?.glyph` > `cell.glyph ?? ''`. Remembered cells always render the remembered tile glyph dim/desaturated via CSS, never actors or items. The grid is one tab stop; cells are not individually focusable.
+
+`EffectsLayer`: `aria-hidden`, `pointer-events: none`, absolutely positioned over the grid; it receives the same `camera` and stores live transient effects in WORLD coordinates, deriving each effect's screen position `(worldX - camera.x, worldY - camera.y)` from the CURRENT camera on every render — so a scroll mid-animation moves the effect with the world instead of stranding it at a stale viewport position. Effects whose world position falls outside the viewport are not rendered (but stay in the list until their animation lifetime ends). The live-effects list is cleared when `projection.floor.floorId` changes, so a burst from the previous floor never renders onto the new one. Screen positions use `calc(var(--cell-w) * x)` custom properties set by the shared playfield wrapper.
+
+React keying: cells are keyed by VIEWPORT SLOT index (row-major slot number), not world coordinates — a camera scroll then updates existing DOM nodes' content and variables instead of remounting all ~1,200 spans. The `data-cell` attribute still carries world coordinates for tests and debugging. Renders (a) one `.glow` div at the hero's cell while the hero has an enabled equipped light — radius/color read from the pack's light definition for that item's `contentId`, flicker profile selected by a `data-source` attribute (`pitch-torch` gutter vs `brass-lantern` steady), base intensity scaled by remaining fuel fraction; (b) transient effect divs from `effectsForEvents(lastEvents, heroId)`, removed on `animationend`. CSS keyframes in `styles.css`: `glow-drift` (2.6s ease-in-out infinite alternate scale/opacity), `glow-gutter` (irregular steps flicker), `hit-flash` (120ms), `attack-streak` (160ms translate along the line), `death-burst` (240ms expanding fade). All under `@media (prefers-reduced-motion: reduce) { animation: none; }` with the glow rendered static.
 
 - [ ] **Step 4: Run and verify GREEN, then commit**
 
@@ -580,8 +612,12 @@ git commit -m "feat: render playfield cells with effects layer"
 
 **Files:**
 - Create: `apps/web/src/ui/panels.tsx`
+- Create: `apps/web/src/ui/ThreatPopover.tsx`
+- Create: `apps/web/src/ui/layout.ts`
 - Create: `apps/web/src/ui/PlayScreen.tsx`
 - Create: `apps/web/test/panels.test.tsx`
+- Create: `apps/web/test/layout.test.ts`
+- Create: `apps/web/test/threat-popover.test.tsx`
 - Modify: `apps/web/src/styles.css`
 
 **Interfaces:**
@@ -607,14 +643,41 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement panels and layout**
 
-All four panels are pure functions of the snapshot — no session access, no effects. `PlayScreen` composes the Triptych with CSS grid areas:
+All four panels are pure functions of the snapshot — no session access, no effects.
+
+`layout.ts` is a pure module owning the responsive decisions so they are unit-testable without DOM measurement:
+
+```ts
+export type LayoutTier = 'full' | 'compact' | 'minimal';   // full triptych | threats collapsed | both collapsed
+export function layoutTier(containerWidthPx: number): LayoutTier;   // full ≥ 1100, compact ≥ 760, else minimal
+// Amended after e2e review: the tier MUST derive from a tier-independent measurement — the
+// triptych container (or window) width — never the map pane. The tier changes the pane's grid
+// column, so pane-derived tiers feed back into themselves and oscillate at mid-band widths.
+export const MIN_VIEWPORT: CameraViewport = { width: 30, height: 12 };
+export function viewportForPane(input: Readonly<{ panePx: { width: number; height: number }; cellPx: { width: number; height: number }; floor: { width: number; height: number } }>): CameraViewport;
+// floor(pane / cell) per axis, clamped to at least MIN_VIEWPORT and at most the floor size
+```
+
+`layout.test.ts` covers: tier thresholds at, above, and below each boundary; viewport arithmetic (exact floor division, MIN_VIEWPORT clamp, floor-size clamp on each axis independently).
+
+`PlayScreen` owns the camera and layout state: a `ResizeObserver` on the map pane (plus one measured cell's `getBoundingClientRect` for `cellPx`) feeds `viewportForPane`; the window resize also drives `layoutTier` off the pane width. Camera state is a previous-`CameraOrigin` ref keyed by `floorId` (null on first render or floor change, so a descend recenters); each render calls `computeCamera` with the hero position, the hero's sight radius from the projection, and the dynamic viewport, handing `camera`/`viewport` to `GridRenderer` and `EffectsLayer`. In tests, mock `ResizeObserver` (jsdom lacks it — a three-line stub in `test/setup.ts`) and assert the plumbing, not pixel math (that's `layout.test.ts`'s job).
+
+Tier behavior (assert in `panels.test.tsx` by rendering `PlayScreen` at forced tiers via a `tier` override prop used only in tests):
+- `full`: hero panel, map, threat panel, log at 6 visible lines.
+- `compact`: threat panel replaced by (a) `ThreatPopover` on actor-cell hover and (b) a keyboard-openable `<details>` drawer containing the full `ThreatPanel` content — the same information, never hover-only.
+- `minimal`: hero panel additionally collapses to an always-visible vitals strip (health, hunger stage, light state as text) with the full `HeroPanel` in its own drawer; log shrinks to 3 visible lines but never unmounts.
+
+`ThreatPopover`: `role="tooltip"`, non-focusable, rendered on `mouseenter` over a grid cell whose world coordinate holds a visible actor, dismissed on `mouseleave`/scroll/dispatch; shows the actor's name, glyph, health band, intent, and disposition — the same fields `ThreatPanel` lists. Positioned near the cell from the shared `--cell-w`/`--cell-h` custom properties; clamped to the pane. `threat-popover.test.tsx`: hover shows the card with the actor's name, unhover removes it, hovering an empty cell shows nothing.
+
+`PlayScreen` composes the Triptych with CSS grid areas:
 
 ```css
 .triptych { display: grid; grid-template: "status status status" auto "hero map threat" 1fr "log log log" minmax(6rem, 20vh) / minmax(14rem, 1fr) minmax(0, 4fr) minmax(14rem, 1fr); }
-@media (max-width: 60rem) { /* side panels collapse into keyboard-accessible drawers; map keeps primacy */ }
+.triptych[data-tier='compact'] { grid-template-columns: minmax(14rem, 1fr) minmax(0, 5fr) 0; }
+.triptych[data-tier='minimal'] { grid-template-columns: 0 1fr 0; }
 ```
 
-The narrow-width drawer is a `<details>` element per side panel (native keyboard toggle) — no new dependency, focus behaviour comes free. Health is text plus a bar; the accessibility rule is text-first (no color-only meaning). LogPanel is `role="log"` `aria-live="polite"` and auto-scrolls to the newest line. StatusBar renders the turn counter as `<span data-testid="turn-count">Turn {n}</span>` and the depth as text containing `Depth {n}` — Task 8's end-to-end spec asserts on both.
+The drawer is a `<details>` element per collapsed panel (native keyboard toggle) — no new dependency, focus behaviour comes free; the vitals strip overlays the map's top edge in `minimal` without stealing map rows. Health is text plus a bar; the accessibility rule is text-first (no color-only meaning). LogPanel is `role="log"` `aria-live="polite"` and auto-scrolls to the newest line. StatusBar renders the turn counter as `<span data-testid="turn-count">Turn {n}</span>` and the depth as text containing `Depth {n}` — Task 8's end-to-end spec asserts on both.
 
 - [ ] **Step 4: Run and verify GREEN, then commit**
 
@@ -680,7 +743,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement router, menu, and boot flow**
 
-`KeyRouter` is pure: the component layer (`PlayScreen`) owns the single `keydown` listener on `window`, calls `routeKey`, and forwards intents to `session.dispatch`, `open-backpack` to `session.setBackpackOpen(true)`, `close-overlay` to close menu/decision prompts. `BackpackMenu` renders when `snapshot.backpackOpen`: a `role="dialog"` with a focus trap (focus the list on open, wrap Tab at the edges, restore focus to the grid on close — hand-rolled, ~20 lines), items as a keyboard list (up/down + `e`/`u`/`d`/`l` action keys shown as hints). The pending-decision prompt (confirm-aggression) reuses the same dialog primitives with `y`/`n` handling. `App.tsx` boots: `loadContentPack` → construct `GuestSession` with `browserSessionStorage()` and the optional `?seed=` (dot-separated four numbers, test-only, documented in the file) → render `PlayScreen`; distinct error screens for fetch failure (retry button) and storage unavailability (play-unsaved warning per the design).
+`KeyRouter` is pure: the component layer (`PlayScreen`) owns the single `keydown` listener on `window`, calls `routeKey`, and forwards intents to `session.dispatch`, `open-backpack` to `session.setBackpackOpen(true)`, `close-overlay` to close menu/decision prompts. Input-flood guard (amended after review — the original in-flight-boolean premise was wrong: browser keydown dispatch is synchronous and non-reentrant, so a reentrancy guard can never fire under real auto-repeat): each dispatched command synchronously resolves, re-projects, and serializes the full run, so OS key auto-repeat (~30/sec) must not outpace what the player can perceive — the listener drops `event.repeat === true` keydowns that arrive within `REPEAT_INTERVAL_MS = 80` of the last accepted dispatch (first press always passes; a fake-timers test proves a rapid repeat burst dispatches at most one intent per interval while discrete presses all pass). `BackpackMenu` renders when `snapshot.backpackOpen`: a `role="dialog"` with a focus trap (focus the list on open, wrap Tab at the edges, restore focus to the grid on close — hand-rolled, ~20 lines), items as a keyboard list (up/down + `e`/`u`/`d`/`l` action keys shown as hints). The pending-decision prompt (confirm-aggression) reuses the same dialog primitives with `y`/`n` handling. `App.tsx` boots: `loadContentPack` → construct `GuestSession` with `browserSessionStorage()` and the optional `?seed=` (dot-separated four numbers, test-only, documented in the file) → render `PlayScreen`; distinct error screens for fetch failure (retry button) and storage unavailability (play-unsaved warning per the design).
 
 - [ ] **Step 4: Run and verify GREEN, then commit**
 
@@ -711,7 +774,7 @@ git commit -m "feat: wire keyboard play into the guest app"
 
 - [ ] **Step 1: Configure Playwright**
 
-`playwright.config.ts`: single chromium project, `webServer` block that runs the built server (`command: 'node ../server/dist/main.js'` with `PORT=4173` and the web dist path, `reuseExistingServer: false`) — check `apps/server/src/main.ts`/`config.ts` for the exact env names it reads and use those. `use: { baseURL: 'http://localhost:4173' }`. The root `guest:e2e` script builds first: `npm run build && npm run e2e --workspace @woven-deep/web`. Install browsers in the script via `npx playwright install --with-deps chromium` only in CI docs — locally document `npx playwright install chromium` once in the README of the e2e directory (a three-line `apps/web/e2e/README.md`).
+`playwright.config.ts`: single chromium project, `webServer` block that runs the built server (`command: 'node ../server/dist/main.js'` with `PORT=4173` and the web dist path, `reuseExistingServer: false`) — check `apps/server/src/main.ts`/`config.ts` for the exact env names it reads and use those. `use: { baseURL: 'http://localhost:4173', viewport: { width: 1440, height: 900 } }` — the browser viewport is pinned because the cell window is now responsive; 1440×900 lands in the `full` layout tier, and the scripted walk's camera positions depend on it. One additional e2e case: resize the page to a `compact`-tier width mid-run and assert the threat panel is replaced by its drawer while the grid remains, then hover an actor cell and assert the popover card appears. The root `guest:e2e` script builds first: `npm run build && npm run e2e --workspace @woven-deep/web`. Install browsers in the script via `npx playwright install --with-deps chromium` only in CI docs — locally document `npx playwright install chromium` once in the README of the e2e directory (a three-line `apps/web/e2e/README.md`).
 
 - [ ] **Step 2: Write the end-to-end spec**
 
@@ -782,3 +845,38 @@ git commit -m "feat: prove guest play core end to end"
 - [ ] **Step 7: Request final review**
 
 Run the `superpowers:requesting-code-review` workflow against the branch diff from its merge base; resolve confirmed issues with failing regression tests first, then rerun the affected suites and the full verification block before reporting 5A complete.
+
+---
+
+### Task 9: Marketing landing page from the design handoff
+
+*(Added 2026-07-16 by direction: deferred low-priority work, executed last. A high-fidelity design handoff exists — recreate it in the app, but rework the copy to sound human while keeping the epic register.)*
+
+**Files:**
+- Read first: `docs/design/landing-handoff/README.md` (the complete design spec: tokens, sections, interactions, ember particle system) and open `docs/design/landing-handoff/The Woven Deep.dc.html` in a browser for the living reference; screenshots in `docs/design/landing-handoff/screenshots/`.
+- Create: `apps/web/src/landing/LandingPage.tsx` (sections may be split into sibling files if it grows past ~300 lines — follow the handoff's section list)
+- Create: `apps/web/src/landing/EmberCanvas.tsx` (the particle system — component-local state, rAF, cleanup on unmount)
+- Create: `apps/web/src/landing/landing.css`
+- Create: `apps/web/test/landing.test.tsx`
+- Modify: `apps/web/src/main.tsx` or `App.tsx` (route: landing at `/`, the game behind the "Descend Now"/"Enter as guest" CTAs — a simple path check, no router dependency)
+- Modify: `apps/web/e2e/guest-play.spec.ts` (entry now flows through the landing CTA; keep the seeded-run entry working)
+
+**Interfaces:**
+- Consumes: the handoff's design tokens, section structure, and interaction specs verbatim (colors, type scale, spacing, reveal/parallax/accordion behavior, ember system); `images/woven-deep-cover.png` from the repo root (serve via the web app's asset pipeline).
+- Produces: the landing page at `/`, with CTAs routed to the guest game.
+
+**Constraints:**
+- Follow the handoff's fidelity note: recreate faithfully in React/Vite with plain CSS (this repo's convention — no Tailwind/styled-components), EXCEPT the copy. **The copy gets a humanizing pass:** keep the epic, mythic register, but strip AI-typical patterns — no "It's not just X, it's Y" constructions, no rule-of-three padding, no em dashes, no "stands as a testament" inflation, no generic upbeat closers. Short declarative lines carry the tone ("Many enter. Few return. All are woven in." is the register to match). Rewrite each section's copy in that voice; the structure, headings hierarchy, and CTA texts stay per the design unless they read as AI-typical.
+- All animation honors `prefers-reduced-motion` (the handoff specifies this; the repo's styles-contract test pattern from Task 5 can guard it).
+- FAQ toggles are real `<button>`s with `aria-expanded`, per the handoff's accessibility notes.
+- The "Be Woven In" registered-account card describes milestone-6 features that do not exist yet — keep the card (it sells the vision) but its CTA points to a "coming soon" anchor, not a dead registration route; note this in the code.
+- Fonts: self-host or system-fallback only if Google Fonts is unacceptable to the reviewer; otherwise load Marcellus + EB Garamond as the handoff specifies with the web-safe chains as fallback.
+- No new runtime dependencies.
+
+- [ ] **Step 1: Tests for structure and behavior** — render the landing page: nav, hero H1, all six section landmarks present; FAQ accordion single-open behavior (click toggles, opening one closes another, `aria-expanded` flips); CTAs link to the play route/anchors; reduced-motion contract test extended to the landing CSS.
+- [ ] **Step 2: Implement the page per the handoff** — sections, tokens, reveal/parallax/keyframes, ember canvas (sparks + motes, heat ramp, vertical falloff, streaks, resize re-seed, unmount cleanup).
+- [ ] **Step 3: Humanize the copy** — rewrite all section copy per the constraint above; read it aloud; no AI-isms.
+- [ ] **Step 4: Wire routing** — landing at `/`, game at the CTA target; the e2e's seeded entry updated; full web suite + typecheck + `npm run guest:e2e` green.
+- [ ] **Step 5: Commit** — `feat: add landing page from design handoff`
+
+---

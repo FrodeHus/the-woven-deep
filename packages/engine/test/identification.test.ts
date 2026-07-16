@@ -152,6 +152,21 @@ describe('per-run item identification', () => {
     expect(json).not.toContain('enchantment');
   });
 
+  it('projects an identified, non-heirloom item with the definition glyph and color', () => {
+    const definition: ItemContentEntry = { kind: 'item', id: 'item.sword', name: 'Iron Sword',
+      glyph: '/', color: '#c8c8d8', tags: [], category: 'weapon',
+      stackLimit: 1, price: 10, rarity: 'common', minDepth: 0, maxDepth: 20, actionCost: 100,
+      equipment: null, combat: null, light: null,
+      identification: { mode: 'known', poolId: null }, effects: [] };
+    const content = contentWith(definition);
+    const item: ItemInstance = { itemId: 'item.sword.1', contentId: definition.id, quantity: 1, condition: 100,
+      enchantment: null, identified: true, charges: null, fuel: null, enabled: null,
+      location: { type: 'backpack', actorId: 'hero.demo' } };
+    const run = { ...createDemoRun(), items: [item] };
+    const projected = projectItem({ run, content, itemId: item.itemId });
+    expect(projected).toMatchObject({ glyph: '/', color: '#c8c8d8' });
+  });
+
   it('projects an instance-identified item under its random run name until identified', () => {
     const definition = { ...potion('item.ring'), category: 'ring',
       identification: { mode: 'instance', poolId: 'identification-pool.rings' } } as ItemContentEntry;

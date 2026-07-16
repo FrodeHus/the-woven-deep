@@ -13,5 +13,180 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 .tapestry strong { color: #f1d898; font-size: 1.25rem; }
 .tapestry code { overflow-wrap: anywhere; color: #7783a4; }
 [role="alert"] { color: #db7f78; }
+.storage-warning-banner {
+  border: 1px solid #db7f78;
+  padding: 8px 12px;
+  background: color-mix(in srgb, #db7f78 12%, transparent);
+}
 :focus-visible { outline: 2px solid #e8c879; outline-offset: 4px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+
+/* Playfield: the grid renders gameplay truth, the effects layer is a purely decorative overlay
+   sharing its coordinate space via --cell-w/--cell-h set on the wrapper. */
+.playfield { position: relative; --cell-w: 1ch; --cell-h: 1lh; line-height: 1; }
+.playfield-grid {
+  display: grid;
+  grid-auto-rows: 1lh;
+  line-height: 1;
+  background: #0b0d15;
+}
+.playfield-grid:focus-visible { outline: 2px solid #e8c879; outline-offset: -2px; }
+.cell { display: block; text-align: center; }
+/* Measurement-only probe: lives inside .playfield so it shares its line-height: 1 context (an
+   in-flow probe outside that context measures ~15-20% too tall), and is hidden so it never
+   appears as a stray glyph. `visibility: hidden` (not `display: none`) keeps it laid out and
+   measurable via getBoundingClientRect. */
+.cell-probe { position: absolute; visibility: hidden; }
+.cell-empty { color: transparent; }
+.cell-unknown { color: transparent; background: #0b0d15; }
+.cell-remembered { color: #4b526b; filter: saturate(0.4); }
+.cell-visible { color: var(--fg, #aab3d1); opacity: calc(0.35 + 0.65 * var(--light, 1)); }
+
+.effects-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.glow, .effect {
+  position: absolute;
+  left: calc(var(--cell-w) * var(--x, 0));
+  top: calc(var(--cell-h) * var(--y, 0));
+  width: var(--cell-w);
+  height: var(--cell-h);
+  pointer-events: none;
+}
+
+.glow {
+  --glow-color: #e8c879;
+  --glow-radius: 5;
+  --glow-intensity: 1;
+  transform: translate(-50%, -50%);
+  width: calc(var(--cell-w) * var(--glow-radius) * 2);
+  height: calc(var(--cell-h) * var(--glow-radius) * 2);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--glow-color) calc(var(--glow-intensity) * 70%), transparent) 0%, transparent 70%);
+  animation: glow-drift 2.6s ease-in-out infinite alternate;
+}
+.glow[data-source*="torch"] { animation: glow-gutter 900ms steps(6, jump-none) infinite; }
+
+.effect { transform-origin: center; }
+.effect-hit-flash {
+  background: radial-gradient(circle, #ff8a7a 0%, transparent 70%);
+  animation: hit-flash 120ms ease-out;
+}
+.effect-attack-streak {
+  --dx: calc(var(--to-x, 0) - var(--x, 0));
+  --dy: calc(var(--to-y, 0) - var(--y, 0));
+  background: linear-gradient(90deg, #f1d898, transparent);
+  animation: attack-streak 160ms ease-out;
+}
+.effect-death-burst {
+  background: radial-gradient(circle, #db7f78 0%, transparent 70%);
+  animation: death-burst 240ms ease-out;
+}
+
+@keyframes glow-drift {
+  from { transform: translate(-50%, -50%) scale(0.94); opacity: 0.85; }
+  to { transform: translate(-50%, -50%) scale(1.04); opacity: 1; }
+}
+@keyframes glow-gutter {
+  0%, 100% { opacity: 0.75; }
+  20% { opacity: 0.9; }
+  40% { opacity: 0.6; }
+  60% { opacity: 1; }
+  80% { opacity: 0.7; }
+}
+@keyframes hit-flash {
+  from { opacity: 1; filter: brightness(1.6); }
+  to { opacity: 0; filter: brightness(1); }
+}
+@keyframes attack-streak {
+  from { transform: translate(0, 0); opacity: 1; }
+  to {
+    transform: translate(calc(var(--cell-w) * var(--dx)), calc(var(--cell-h) * var(--dy)));
+    opacity: 0;
+  }
+}
+@keyframes death-burst {
+  from { transform: scale(0.4); opacity: 1; }
+  to { transform: scale(2.2); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* !important is required here: .glow[data-source*="torch"] (specificity 0,2,0) otherwise
+     beats this bare .glow override (0,1,0) and the torch flicker keeps animating. */
+  .glow { animation: none !important; opacity: calc(var(--glow-intensity) * 0.7); }
+  .effect { animation: none !important; display: none; }
+}
+
+/* Tactical Triptych: hero / map / threat panels plus a status bar and log, arranged by a CSS
+   grid whose column tracks respond to `data-tier` (full/compact/minimal, from ui/layout.ts).
+   Collapsed panels move into native <details> drawers rather than unmounting, so their content
+   stays keyboard-reachable even when their grid track is squeezed to zero width. */
+.triptych {
+  display: grid;
+  grid-template:
+    "status status status" auto
+    "hero map threat" 1fr
+    "log log log" minmax(6rem, 20vh)
+    / minmax(14rem, 1fr) minmax(0, 4fr) minmax(14rem, 1fr);
+  gap: 8px;
+  height: 100%;
+  min-height: 100vh;
+  padding: 8px;
+}
+.triptych[data-tier='compact'] { grid-template-columns: minmax(14rem, 1fr) minmax(0, 5fr) 0; }
+.triptych[data-tier='minimal'] { grid-template-columns: 0 1fr 0; }
+
+.status-slot { grid-area: status; }
+.hero-slot { grid-area: hero; overflow: visible; }
+.map-pane { grid-area: map; position: relative; overflow: hidden; }
+.threat-slot { grid-area: threat; overflow: visible; }
+.log-slot { grid-area: log; min-height: 0; }
+
+.status-bar { display: flex; gap: 1.5em; align-items: baseline; }
+
+.hero-panel, .threat-panel { border: 1px solid #3d465f; padding: 12px; }
+.hero-panel h2 { margin: 0 0 .5em; font-size: 1rem; color: #f1d898; }
+.vital-text { margin: .25em 0; }
+.bar { height: 6px; background: #232a3d; border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; width: calc(var(--fill, 1) * 100%); background: #db7f78; }
+.equipment-list, .condition-list, .threat-list, .ground-item-list { list-style: none; margin: .5em 0; padding: 0; }
+.backpack-summary { margin-top: .5em; }
+.threat-panel .placeholder { color: #7d89a8; font-style: italic; }
+
+.vitals-strip {
+  display: flex; gap: 1em; padding: 4px 8px; background: color-mix(in srgb, #121521 80%, transparent);
+  border-bottom: 1px solid #3d465f; font-size: .85rem;
+}
+.vitals-overlay { position: absolute; inset: 0 0 auto 0; z-index: 2; }
+
+.hero-drawer, .threat-drawer { border: 1px solid #3d465f; padding: 4px 8px; }
+.hero-drawer summary, .threat-drawer summary { cursor: pointer; color: #7d89a8; }
+
+/* `--log-lines` is set inline by PlayScreen per tier (6 at full/compact, 3 at minimal); the log
+   region itself never unmounts, only its visible height changes, so it keeps the newest lines
+   scrolled into view (see LogPanel) even while collapsed. */
+.log-panel {
+  height: 100%;
+  max-height: calc(var(--log-lines, 6) * 1.6em);
+  overflow-y: auto;
+  border: 1px solid #3d465f;
+  padding: 4px 8px;
+}
+.log-line { margin: .15em 0; }
+.log-line--combat { color: #db7f78; }
+.log-line--warning { color: #e8c879; }
+.log-line--system { color: #7d89a8; font-style: italic; }
+
+.threat-popover {
+  position: absolute;
+  transform: translate(-25%, -110%);
+  z-index: 3;
+  background: #121521;
+  border: 1px solid #e8c879;
+  padding: 6px 10px;
+  font-size: .85rem;
+  pointer-events: none;
+  white-space: nowrap;
+}

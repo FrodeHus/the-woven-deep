@@ -61,6 +61,17 @@ Deliver this milestone through two independently reviewable slices:
 
 Implement profile-free session state, character generation, Tactical Triptych play, Living Tapestry visuals, inventory, character sheet, map, journal, codex, Hall of Records, town, merchants, house storage, run conclusion, keyboard routing, settings, accessibility, and contextual onboarding.
 
+Deliver this milestone through four independently reviewable slices:
+
+- **5A — guest play core:** engine run constructor, guest session layer, DOM-cell renderer with the glow treatment, Tactical Triptych layout, keyboard survival commands, event log, and session persistence. Exit demonstration: `npm run guest:e2e` green — a scripted guest kills a monster, picks up an item, eats, rests, and descends by keyboard alone, with reload-restore, keyboard reachability, and responsive-tier checks.
+- **5B — character generation and run lifecycle:** engine character generation (attribute roll and point buy, classes, backgrounds, traits, starting equipment), title screen, the seven-step generation flow, run conclusion screen, and the guest Hall of Records backed by a session `RunRecordRepository`. Exit demonstration: a guest generates a custom hero, dies or descends to a conclusion, and sees the run recorded in the session Hall of Records.
+- **5C — town slice:** engine town floor 0, the three town merchants, house storage, dungeon entrance, and their screens. Exit demonstration: a guest prepares in town — trades with all three merchants, stores items at home — and enters the dungeon.
+- **5D — full interface:** inventory, character sheet, map, journal, and codex overlays, settings, help, keyboard rebinding, the accessibility pass, contextual onboarding, and the Living Tapestry art pass. Includes fixing the compact-tier threat drawer deliberately deferred in 5A (renders as an ~18px sliver, and the opened panel overflows the map). Exit demonstration: every screen and overlay operates by keyboard with the completed accessibility and art passes.
+
+**5A design:** `docs/superpowers/specs/2026-07-15-guest-play-core-design.md`
+
+**5A guest play core — this plan's scope, e2e gate green:** `docs/superpowers/plans/2026-07-15-guest-play-core.md`
+
 **Exit demonstration:** a desktop browser can complete a representative five-floor guest campaign slice, lose session progress when the session closes, and operate every screen by keyboard.
 
 ### 6. Server-authoritative profiles
