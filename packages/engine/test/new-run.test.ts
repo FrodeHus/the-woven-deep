@@ -80,6 +80,25 @@ describe('createNewRun', () => {
     expect(run.hero.statModifiers).toEqual({ search: 1 });
   });
 
+  it('ignores an enabled:true override on a non-light equipped item instead of propagating it (content kits set enabled on every slot, light or not)', () => {
+    const run = createNewRun({
+      pack, seed: SEED,
+      hero: {
+        ...DEFAULT_GUEST_HERO,
+        equipped: [
+          { contentId: 'item.iron-sword', slot: 'main-hand', enabled: true },
+          { contentId: 'item.leather-armor', slot: 'body', enabled: true },
+        ],
+      },
+    });
+    const sword = run.items.find((item) => item.contentId === 'item.iron-sword')!;
+    const armor = run.items.find((item) => item.contentId === 'item.leather-armor')!;
+    expect(sword.enabled).toBeNull();
+    expect(sword.fuel).toBeNull();
+    expect(armor.enabled).toBeNull();
+    expect(() => validateActiveRun(run)).not.toThrow();
+  });
+
   it('rejects an all-zero seed and unknown equipment content', () => {
     expect(() => createNewRun({ pack, seed: [0, 0, 0, 0], hero: DEFAULT_GUEST_HERO })).toThrow(/seed/i);
     expect(() => createNewRun({

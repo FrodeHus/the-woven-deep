@@ -87,8 +87,13 @@ function instantiateHeroItem(
     enchantment: overrides.enchantment ?? null,
     identified: definition.identification.mode === 'known',
     charges: null,
-    fuel: overrides.fuel ?? (light ? light.fuelCapacity : null),
-    enabled: overrides.enabled ?? (light ? false : null),
+    // `fuel`/`enabled` overrides only apply to light items — content-bound validation rejects a
+    // non-light item carrying either. Kit definitions can (and, per the content schema's
+    // `enabled: z.boolean().default(true)`, always DO) carry an `enabled` override regardless of
+    // whether the item is a light source, so a non-light item must ignore it rather than
+    // propagate it, instead of merely defaulting when the override is absent.
+    fuel: light ? (overrides.fuel ?? light.fuelCapacity) : null,
+    enabled: light ? (overrides.enabled ?? false) : null,
     location,
   };
 }
