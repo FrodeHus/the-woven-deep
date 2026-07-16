@@ -25,8 +25,11 @@ beforeAll(async () => {
 });
 
 function fakeStorage(): SessionStorageLike {
-  let value: string | null = null;
-  return { get: () => value, set: (v: string) => { value = v; } };
+  const store = new Map<string, string>();
+  return {
+    get: (key: string) => store.get(key) ?? null,
+    set: (key: string, value: string) => { store.set(key, value); },
+  };
 }
 
 function session(): GuestSession {

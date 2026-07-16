@@ -72,6 +72,10 @@ Deliver this milestone through four independently reviewable slices:
 
 **5A guest play core — this plan's scope, e2e gate green:** `docs/superpowers/plans/2026-07-15-guest-play-core.md`
 
+**5B design:** `docs/superpowers/specs/2026-07-16-chargen-run-lifecycle-design.md`
+
+**5B chargen and run lifecycle — this plan's scope, e2e gate green:** `docs/superpowers/plans/2026-07-16-chargen-run-lifecycle.md` — the full title → seven-step chargen wizard → play → death → conclusion → session Hall lifecycle is proven end-to-end by `apps/web/e2e/run-lifecycle.spec.ts` (`npm run guest:e2e` green), alongside the re-verified 5A pinned walk.
+
 **Exit demonstration:** a desktop browser can complete a representative five-floor guest campaign slice, lose session progress when the session closes, and operate every screen by keyboard.
 
 ### 6. Server-authoritative profiles
