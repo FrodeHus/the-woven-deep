@@ -1463,7 +1463,11 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     if (commandIds.has(recordValue.command.commandId)) fail(`${path}.command.commandId`, 'command identifier is duplicated');
     commandIds.add(recordValue.command.commandId);
     if (recordValue.command.commandId !== recordValue.result.commandId) fail(`${path}.result.commandId`, 'result does not match command');
-    if (recordValue.events.length === 0) fail(`${path}.events`, 'processed commands require at least one event');
+    // House deposit/withdraw only relocate an item and emit no domain event by design (see
+    // `resolveHouseCommand`); they are still recorded for command-id dedup. Every other applied
+    // command must carry at least one event.
+    const eventFreeCommand = recordValue.command.type === 'house-deposit' || recordValue.command.type === 'house-withdraw';
+    if (recordValue.events.length === 0 && !eventFreeCommand) fail(`${path}.events`, 'processed commands require at least one event');
     if (recordValue.events.some((entry) => !('eventId' in entry) || entry.eventId !== recordValue.command.commandId)) fail(`${path}.events`, 'event identifier does not match command');
     if (recordValue.publicEvents.some((entry) => 'eventId' in entry && entry.eventId !== recordValue.command.commandId)) fail(`${path}.publicEvents`, 'public event identifier does not match command');
     const attackTargetActorId = recordValue.command.type === 'attack' ? recordValue.command.targetActorId : undefined;
@@ -1475,6 +1479,10 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     const commandFuelItemId = recordValue.command.type === 'refuel' ? recordValue.command.fuelItemId : undefined;
     const commandFeatureId = 'featureId' in recordValue.command ? recordValue.command.featureId : undefined;
     const commandTargetItemId = recordValue.command.type === 'trade-service' ? recordValue.command.targetItemId : undefined;
+    // An applied house command relocates an item and emits no event (see `resolveHouseCommand`), so
+    // there is no event to match or check consistency against. An *invalid* house command still
+    // carries its `action.invalid` event and is validated normally below.
+    if (!(eventFreeCommand && recordValue.result.status === 'applied')) {
     const eventValue = recordValue.result.status === 'invalid'
       ? recordValue.events.find((entry) => entry.type === 'action.invalid')
       : recordValue.command.type === 'wait'
@@ -1635,6 +1643,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         fail(`${path}.events`, 'trade-close command and event are inconsistent');
       }
     } else fail(`${path}.events`, 'applied command and event are inconsistent');
+    }
     if (recordValue.result.revision < previousRevision || recordValue.result.revision > run.revision) fail(`${path}.result.revision`, 'record revisions are not monotonic');
     if (recordValue.result.turn > run.turn) fail(`${path}.result.turn`, 'record turn exceeds current turn');
     if (recordValue.result.turn > recordValue.result.revision) fail(`${path}.result.turn`, 'result turn cannot exceed its revision');
@@ -1742,6 +1751,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       || recordValue.command.type === 'refuel' || recordValue.command.type === 'open-door'
       || recordValue.command.type === 'close-door' || recordValue.command.type === 'search'
       || recordValue.command.type === 'disarm' || recordValue.command.type === 'rest'
+      || recordValue.command.type === 'house-deposit' || recordValue.command.type === 'house-withdraw'
       || tradeCommand) continue;
     if (recordValue.command.type !== 'move') fail(`${path}.events`, 'move result and event are inconsistent');
     if (eventValue.type === 'attack.hit' || eventValue.type === 'attack.missed' || eventValue.type === 'reaction.triggered') continue;

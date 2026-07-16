@@ -3,8 +3,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  createNewRun, DEFAULT_GUEST_HERO, descendToNextFloor, heroActor, movementBlockReason, resolveCommand,
-  validateActiveRun, type ActiveRun, type FloorSnapshot, type ItemInstance,
+  createNewRun, DEFAULT_GUEST_HERO, descendToNextFloor, encodeActiveRun, heroActor, movementBlockReason,
+  resolveCommand, validateActiveRun, type ActiveRun, type FloorSnapshot, type ItemInstance,
 } from '../src/index.js';
 
 let pack: CompiledContentPack;
@@ -172,6 +172,21 @@ describe('house deposit/withdraw legality matrix', () => {
     const remaining = withdrawn.state.items.find((item) => item.itemId === carried!.itemId);
     expect(remaining?.location).toEqual({ type: 'house' });
     expect(remaining?.quantity).toBe(3);
+  });
+
+  it('encodes a run whose recentCommands include an applied (event-free) house command', () => {
+    // House deposit/withdraw are legitimately event-free (they only relocate an item), but they are
+    // still recorded in recentCommands for dedup. Persistence must accept an applied house command
+    // that carries zero events -- a real guest session encodes after every command.
+    const base = atHouseDoor(townRun());
+    const hero = heroActor(base);
+    const run = withItems(base, [backpackItem('item.house-test.stack', 'item.wooden-arrows', 10, hero.actorId)]);
+    const deposited = resolveCommand(run, {
+      type: 'house-deposit', commandId: 'command.deposit-persisted', expectedRevision: run.revision,
+      itemId: 'item.house-test.stack', quantity: 4,
+    }, context());
+    expect(deposited.result.status).toBe('applied');
+    expect(() => encodeActiveRun(deposited.state)).not.toThrow();
   });
 
   it('round-trips a whole enchanted stack through the house, preserving its identity exactly', () => {
