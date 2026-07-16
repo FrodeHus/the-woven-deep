@@ -2,9 +2,11 @@ import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
+import type { ClassContentEntry } from '@woven-deep/content';
 import {
   createNewRun, DEFAULT_GUEST_HERO, decodeActiveRun, encodeActiveRun,
-  heroActor, validateActiveRun,
+  heroActor, heroFromChoices, resolveCommand, validateActiveRun, validateContentBoundRun,
+  type HeroChoices, type ResolutionContext,
 } from '../src/index.js';
 
 let pack: CompiledContentPack;
@@ -80,7 +82,7 @@ describe('createNewRun', () => {
     expect(run.hero.statModifiers).toEqual({ search: 1 });
   });
 
-  it('ignores an enabled:true override on a non-light equipped item instead of propagating it (content kits set enabled on every slot, light or not)', () => {
+  it('ignores an enabled:true override on a non-light equipped item instead of propagating it (a hand-authored hero, or a stale kit, could still carry one)', () => {
     const run = createNewRun({
       pack, seed: SEED,
       hero: {
@@ -96,7 +98,11 @@ describe('createNewRun', () => {
     expect(sword.enabled).toBeNull();
     expect(sword.fuel).toBeNull();
     expect(armor.enabled).toBeNull();
-    expect(() => validateActiveRun(run)).not.toThrow();
+    // The real crash this guards against: content-bound validation (run by
+    // resolveCommand on a hero's first command) rejects a non-light item that
+    // carries fuel/enabled state. validateActiveRun alone does not catch this --
+    // it only checks save-schema shape, not cross-referenced content invariants.
+    expect(() => validateContentBoundRun(run, pack)).not.toThrow();
   });
 
   it('rejects an all-zero seed and unknown equipment content', () => {
@@ -105,5 +111,45 @@ describe('createNewRun', () => {
       pack, seed: SEED,
       hero: { ...DEFAULT_GUEST_HERO, equipped: [{ contentId: 'item.no-such-thing', slot: 'main-hand' }] },
     })).toThrow(/item\.no-such-thing/);
+  });
+
+  // Closes the gap that let the kit-created-hero-crashes-on-first-command regression slip
+  // through with only 1-of-4 bundled kits under test: every playable class's every kit must
+  // survive chargen -> createNewRun -> content-bound validation -> a first resolved command.
+  // Kits are discovered from the compiled pack (not hardcoded), so a future kit is covered
+  // automatically instead of silently falling through untested.
+  it('survives chargen, createNewRun, content-bound validation, and a first command for every playable class and kit', () => {
+    const backgroundId = 'background.caravan-guard';
+    const context: ResolutionContext = { content: pack };
+    const playableClasses = pack.entries
+      .filter((entry): entry is ClassContentEntry => entry.kind === 'class' && entry.playable);
+    expect(playableClasses.length).toBeGreaterThan(0);
+
+    let checked = 0;
+    for (const classEntry of playableClasses) {
+      for (const kit of classEntry.kits) {
+        const choices: HeroChoices = {
+          name: 'Coverage Hero',
+          method: 'roll',
+          attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
+          classId: classEntry.id,
+          kitId: kit.kitId,
+          backgroundId,
+          traitIds: [],
+        };
+        const hero = heroFromChoices({ pack, choices });
+        const run = createNewRun({ pack, seed: SEED, hero });
+        expect(() => validateContentBoundRun(run, pack)).not.toThrow();
+
+        const wait = resolveCommand(
+          run,
+          { type: 'wait', commandId: `command.coverage-${classEntry.id}-${kit.kitId}`, expectedRevision: run.revision },
+          context,
+        );
+        expect(wait.result.status).toBe('applied');
+        checked += 1;
+      }
+    }
+    expect(checked).toBeGreaterThanOrEqual(4);
   });
 });

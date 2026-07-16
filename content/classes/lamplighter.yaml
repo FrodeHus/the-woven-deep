@@ -14,8 +14,8 @@ entries:
         name: Lantern
         equipped:
           - { contentId: item.brass-lantern, slot: off-hand, enabled: true }
-          - { contentId: item.iron-sword, slot: main-hand, enabled: true }
-          - { contentId: item.leather-armor, slot: body, enabled: true }
+          - { contentId: item.iron-sword, slot: main-hand }
+          - { contentId: item.leather-armor, slot: body }
         backpack:
           - { contentId: item.lamp-oil, quantity: 2 }
           - { contentId: item.travel-ration, quantity: 3 }
@@ -23,8 +23,8 @@ entries:
         name: Torchbearer
         equipped:
           - { contentId: item.pitch-torch, slot: off-hand, enabled: true }
-          - { contentId: item.iron-sword, slot: main-hand, enabled: true }
-          - { contentId: item.leather-armor, slot: body, enabled: true }
+          - { contentId: item.iron-sword, slot: main-hand }
+          - { contentId: item.leather-armor, slot: body }
         backpack:
           - { contentId: item.pitch-torch, quantity: 1 }
           - { contentId: item.travel-ration, quantity: 4 }

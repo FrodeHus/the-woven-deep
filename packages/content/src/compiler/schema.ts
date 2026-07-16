@@ -226,7 +226,10 @@ const derivedStatModifiers = z.partialRecord(z.enum(DERIVED_STAT_NAMES), safeNon
 const classKitEquippedItem = z.strictObject({
   contentId: stableIdSchema,
   slot: z.enum(equipmentSlots),
-  enabled: z.boolean().default(true),
+  // Optional (not defaulted): only light items may carry `enabled` at all --
+  // content-validation's classIssues rule rejects it on any other item. Kit
+  // authors must omit it entirely for non-light equipped lines.
+  enabled: z.boolean().optional(),
 });
 const classKitBackpackItem = z.strictObject({
   contentId: stableIdSchema,

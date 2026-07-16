@@ -152,14 +152,22 @@ entries:
       - kitId: blade
         name: Blade
         equipped:
-          - { contentId: item.iron-sword, slot: main-hand, enabled: true }
+          - { contentId: item.pitch-torch, slot: off-hand, enabled: true }
+          - { contentId: item.iron-sword, slot: main-hand }
         backpack:
           - { contentId: item.travel-ration, quantity: 3 }
 `;
-    expect(parseContentFile({ path: 'classes/wayfarer.yaml', source: validClassYaml })[0]).toMatchObject({
+    const [parsedClass] = parseContentFile({ path: 'classes/wayfarer.yaml', source: validClassYaml });
+    expect(parsedClass).toMatchObject({
       kind: 'class', playable: true, classTags: ['wayfarer'],
       kits: [expect.objectContaining({ kitId: 'blade', equipped: expect.any(Array) })],
     });
+    // `enabled` is optional (not defaulted) -- an equipped line that omits it
+    // must parse with `enabled` left undefined, not silently defaulted to true.
+    const equipped = (parsedClass as { kits: readonly { equipped: readonly { contentId: string; enabled?: boolean }[] }[] })
+      .kits[0]!.equipped;
+    expect(equipped.find((item) => item.contentId === 'item.iron-sword')?.enabled).toBeUndefined();
+    expect(equipped.find((item) => item.contentId === 'item.pitch-torch')?.enabled).toBe(true);
 
     const lockedClassWithoutHint = validClassYaml
       .replace('playable: true', 'playable: false')

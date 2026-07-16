@@ -68,8 +68,17 @@ function itemContentEntry(pack: CompiledContentPack, contentId: OpaqueId): ItemC
   return entry;
 }
 
-function heroItemId(contentId: OpaqueId): OpaqueId {
-  return `item.hero.${contentId.slice('item.'.length)}`;
+// Discriminated by location, not just contentId: a kit can (and one bundled kit does, e.g. the
+// lamplighter's torchbearer spare torch) equip an item while also carrying another copy of the
+// same contentId in the backpack, and a background's extraItems can duplicate a kit's backpack
+// contentId too. Suffixing only the contentId would collide and violate the save schema's
+// strictly-increasing/unique itemId invariant.
+function heroEquippedItemId(contentId: OpaqueId, slot: EquipmentSlot): OpaqueId {
+  return `item.hero.equipped.${slot}.${contentId.slice('item.'.length)}`;
+}
+
+function heroBackpackItemId(contentId: OpaqueId, index: number): OpaqueId {
+  return `item.hero.backpack.${index}.${contentId.slice('item.'.length)}`;
 }
 
 function instantiateHeroItem(
@@ -145,7 +154,7 @@ export function createNewRun(input: Readonly<{
     if (!definition.equipment) {
       throw new Error(`createNewRun requires equippable item content ${equippedEntry.contentId}`);
     }
-    const itemId = heroItemId(equippedEntry.contentId);
+    const itemId = heroEquippedItemId(equippedEntry.contentId, equippedEntry.slot);
     equipment = { ...equipment, [equippedEntry.slot]: itemId };
     equippedItems.push(instantiateHeroItem(
       definition,
@@ -155,9 +164,9 @@ export function createNewRun(input: Readonly<{
     ));
   }
 
-  const backpackItems: ItemInstance[] = hero.backpack.map((backpackEntry) => {
+  const backpackItems: ItemInstance[] = hero.backpack.map((backpackEntry, index) => {
     const definition = itemContentEntry(pack, backpackEntry.contentId);
-    const itemId = heroItemId(backpackEntry.contentId);
+    const itemId = heroBackpackItemId(backpackEntry.contentId, index);
     return instantiateHeroItem(
       definition,
       itemId,

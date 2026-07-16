@@ -218,6 +218,23 @@ describe('compileContentDirectory', () => {
       .toThrow(/at least 2 kits/);
   });
 
+  it('rejects a class kit that sets enabled on a non-light equipped item', async () => {
+    const sword = compactItem
+      .replace('item.lantern', 'item.sword').replace('name: Lantern', 'name: Sword')
+      .replace('category: light', 'category: weapon')
+      .replace('equipment: {slots: [off-hand], handedness: one-handed, reservedSlots: []}',
+        'equipment: {slots: [main-hand], handedness: one-handed, reservedSlots: []}')
+      .replace('light: {color: [255, 200, 100], radius: 6, strength: 180, fuelCapacity: 1000, fuelPerTime: 1, warningThresholds: [100], fuelTags: [lamp-oil]}', 'light: null');
+    const kit1 = '{kitId: first, name: First, equipped: '
+      + '[{contentId: item.sword, slot: main-hand, enabled: true}], backpack: []}';
+    const kit2 = '{kitId: second, name: Second, equipped: [], backpack: []}';
+    const enabledOnNonLightClass = `{kind: class, id: class.wayfarer, name: Wayfarer, tags: [], description: A traveller., playable: true, silhouetteGlyph: W, unlockHint: null, classTags: [wayfarer], kits: [${kit1}, ${kit2}]}`;
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, sword, compactVault,
+      enabledOnNonLightClass) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects
+      .toThrow(/kit first sets enabled on non-light item item\.sword/);
+  });
+
   it('rejects a class kit that equips a missing item', async () => {
     const missingItemClass = playableClass(2).replace('item.lantern', 'item.missing');
     const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,

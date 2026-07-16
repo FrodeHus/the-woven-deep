@@ -13,9 +13,9 @@ entries:
       - kitId: blade
         name: Blade
         equipped:
-          - { contentId: item.iron-sword, slot: main-hand, enabled: true }
+          - { contentId: item.iron-sword, slot: main-hand }
           - { contentId: item.pitch-torch, slot: off-hand, enabled: true }
-          - { contentId: item.leather-armor, slot: body, enabled: true }
+          - { contentId: item.leather-armor, slot: body }
         backpack:
           - { contentId: item.travel-ration, quantity: 3 }
           - { contentId: item.wooden-shield, quantity: 1 }
@@ -25,8 +25,8 @@ entries:
         # torch cannot be equipped alongside it. It rides in the backpack as
         # an unlit spare instead -- a deliberate light-versus-bow trade-off.
         equipped:
-          - { contentId: item.hunting-bow, slot: main-hand, enabled: true }
-          - { contentId: item.leather-armor, slot: body, enabled: true }
+          - { contentId: item.hunting-bow, slot: main-hand }
+          - { contentId: item.leather-armor, slot: body }
         backpack:
           - { contentId: item.wooden-arrows, quantity: 20 }
           - { contentId: item.pitch-torch, quantity: 1 }

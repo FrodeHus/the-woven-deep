@@ -731,6 +731,10 @@ function classIssues(
           `item ${equipped.contentId} cannot be equipped in slot ${equipped.slot}`));
         return;
       }
+      if (equipped.enabled !== undefined && !target.light) {
+        issues.push(issue(file, `${equippedPath}.enabled`,
+          `kit ${kit.kitId} sets enabled on non-light item ${equipped.contentId}`));
+      }
       occupants.push({
         index,
         slot: equipped.slot,
