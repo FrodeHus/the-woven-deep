@@ -3,7 +3,7 @@ import type {
   MonsterContentEntry, IdentificationPoolContentEntry, EncounterContentEntry,
   FallenChampionTemplateContentEntry,
   NpcFactionContentEntry,
-  ClassContentEntry, BackgroundContentEntry, ClassKitBackpackItem,
+  ClassContentEntry, BackgroundContentEntry, ClassKitBackpackItem, EquipmentSlot,
 } from '../model.js';
 import type { ContentCompileIssue } from './error.js';
 import {
@@ -710,6 +710,7 @@ function classIssues(
   }
   cls.kits.forEach((kit, kitIndex) => {
     const kitPath = `${path}.kits.${kitIndex}`;
+    const occupants: { index: number; slot: EquipmentSlot; occupiedSlots: readonly EquipmentSlot[] }[] = [];
     kit.equipped.forEach((equipped, index) => {
       const equippedPath = `${kitPath}.equipped.${index}`;
       const target = byId.get(equipped.contentId);
@@ -728,8 +729,25 @@ function classIssues(
       if (!target.equipment.slots.includes(equipped.slot)) {
         issues.push(issue(file, `${equippedPath}.slot`,
           `item ${equipped.contentId} cannot be equipped in slot ${equipped.slot}`));
+        return;
       }
+      occupants.push({
+        index,
+        slot: equipped.slot,
+        occupiedSlots: [equipped.slot, ...target.equipment.reservedSlots],
+      });
     });
+    for (let left = 0; left < occupants.length; left += 1) {
+      for (let right = left + 1; right < occupants.length; right += 1) {
+        const a = occupants[left]!;
+        const b = occupants[right]!;
+        const collision = a.occupiedSlots.find((slot) => b.occupiedSlots.includes(slot));
+        if (collision) {
+          issues.push(issue(file, `${kitPath}.equipped.${b.index}.slot`,
+            `kit ${kit.kitId} reserved slot ${collision} conflicts between equipped.${a.index} and equipped.${b.index}`));
+        }
+      }
+    }
     issues.push(...backpackItemIssues(file, `${kitPath}.backpack`, kit.backpack, byId));
   });
   return issues;

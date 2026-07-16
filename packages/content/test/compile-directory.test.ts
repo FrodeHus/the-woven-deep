@@ -233,6 +233,21 @@ describe('compileContentDirectory', () => {
       .toThrow(/cannot be equipped in slot main-hand/);
   });
 
+  it('rejects a class kit that equips a two-handed item alongside something in its reserved slot', async () => {
+    const twoHandedBow = compactItem
+      .replace('item.lantern', 'item.bow').replace('name: Lantern', 'name: Bow')
+      .replace('equipment: {slots: [off-hand], handedness: one-handed, reservedSlots: []}',
+        'equipment: {slots: [main-hand], handedness: two-handed, reservedSlots: [off-hand]}');
+    const conflictingKit = '{kitId: first, name: First, equipped: '
+      + '[{contentId: item.bow, slot: main-hand, enabled: true}, {contentId: item.lantern, slot: off-hand, enabled: true}], backpack: []}';
+    const secondKit = '{kitId: second, name: Second, equipped: [], backpack: []}';
+    const conflictingClass = `{kind: class, id: class.wayfarer, name: Wayfarer, tags: [], description: A traveller., playable: true, silhouetteGlyph: W, unlockHint: null, classTags: [wayfarer], kits: [${conflictingKit}, ${secondKit}]}`;
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, twoHandedBow, compactVault,
+      conflictingClass) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects
+      .toThrow(/kit first.*reserved slot off-hand/i);
+  });
+
   it('rejects a background whose extraItems reference a missing item', async () => {
     const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
       backgroundEntry('item.missing')) });

@@ -21,10 +21,13 @@ entries:
           - { contentId: item.wooden-shield, quantity: 1 }
       - kitId: ranger
         name: Ranger
+        # The hunting bow is two-handed and reserves off-hand, so the pitch
+        # torch cannot be equipped alongside it. It rides in the backpack as
+        # an unlit spare instead -- a deliberate light-versus-bow trade-off.
         equipped:
           - { contentId: item.hunting-bow, slot: main-hand, enabled: true }
-          - { contentId: item.pitch-torch, slot: off-hand, enabled: true }
           - { contentId: item.leather-armor, slot: body, enabled: true }
         backpack:
           - { contentId: item.wooden-arrows, quantity: 20 }
+          - { contentId: item.pitch-torch, quantity: 1 }
           - { contentId: item.travel-ration, quantity: 3 }
