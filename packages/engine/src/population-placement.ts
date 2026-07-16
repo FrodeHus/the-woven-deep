@@ -8,7 +8,7 @@ import { emptyEquipment, type ActorState } from './actor-model.js';
 import { analyzeConnectivity, preservesRequiredRoutes } from './connectivity.js';
 import type { ItemInstance } from './item-model.js';
 import { materializeMerchant } from './merchant-stock.js';
-import type { ActiveRun, FloorSnapshot, OpaqueId, Point, Uint32State } from './model.js';
+import type { ActiveRun, DomainEvent, FloorSnapshot, OpaqueId, Point, Uint32State } from './model.js';
 import { emptyActorBehaviorState, type EncounterRunDecision, type PopulationInstance } from './population-model.js';
 import { nextUint32, rollDie } from './random.js';
 import { tileDefinition } from './terrain.js';
@@ -492,4 +492,99 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
     encounterDecisions, diagnostics: [], createdActors, population,
     floor: input.floor, createdItems: [], nextMerchantStockState: null,
   };
+}
+
+const MINIMUM_FLOOR_POPULATION_ATTEMPTS = 1;
+const MAXIMUM_FLOOR_POPULATION_ATTEMPTS = 8;
+
+/**
+ * How many `placePopulation` attempts a floor gets, from its cell count and the balance-defined
+ * encounter density: `floor((width * height) / cellsPerEncounter)`, clamped to [1, 8]. Checked
+ * integer division (floor of a non-negative integer quotient) -- never a float approximation.
+ */
+function floorPopulationAttempts(floor: Pick<FloorSnapshot, 'width' | 'height'>, cellsPerEncounter: number): number {
+  if (!Number.isSafeInteger(cellsPerEncounter) || cellsPerEncounter <= 0) {
+    throw new RangeError('balance encounterDensity.cellsPerEncounter must be a positive safe integer');
+  }
+  const cellCount = floor.width * floor.height;
+  if (!Number.isSafeInteger(cellCount)) throw new RangeError('floor cell count overflow computing population attempts');
+  const raw = Math.floor(cellCount / cellsPerEncounter);
+  return Math.min(MAXIMUM_FLOOR_POPULATION_ATTEMPTS, Math.max(MINIMUM_FLOOR_POPULATION_ATTEMPTS, raw));
+}
+
+function sortByActorId(items: readonly ActorState[]): ActorState[] {
+  return [...items].sort((left, right) => compareId(left.actorId, right.actorId));
+}
+
+function sortByItemId(items: readonly ItemInstance[]): ItemInstance[] {
+  return [...items].sort((left, right) => compareId(left.itemId, right.itemId));
+}
+
+function sortByPopulationId(items: readonly PopulationInstance[]): PopulationInstance[] {
+  return [...items].sort((left, right) => compareId(left.populationId, right.populationId));
+}
+
+export interface FloorPopulationsResult {
+  readonly state: ActiveRun;
+  readonly placements: readonly PopulationPlacementResult[];
+  readonly events: readonly DomainEvent[];
+}
+
+/**
+ * Fills a generated floor with encounters up to its density budget: repeatedly calls
+ * `placePopulation`, threading the RNG streams and encounter decisions from each attempt into the
+ * next so every attempt sees the cells and populations the previous ones committed (distinct
+ * populationIds, no double-booked cells). A `rejected` result (a required encounter with no legal
+ * placement) stops the loop immediately -- the floor is full, and the caller decides whether that
+ * means regenerating (as `generateFloor` does for its own guaranteed placements) or failing.
+ */
+export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulationsResult {
+  const maps = contentMaps(input.content);
+  const attempts = floorPopulationAttempts(input.floor, maps.balance.encounterDensity.cellsPerEncounter);
+  const eventId = `event.${input.floor.floorId}.population`;
+  let run = input.run;
+  const placements: PopulationPlacementResult[] = [];
+  const events: DomainEvent[] = [];
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const placement = placePopulation({
+      run, floor: input.floor, content: input.content,
+      ...(input.environmentTags === undefined ? {} : { environmentTags: input.environmentTags }),
+      ...(input.forcedEncounterId === undefined ? {} : { forcedEncounterId: input.forcedEncounterId }),
+    });
+    placements.push(placement);
+    run = {
+      ...run,
+      rng: {
+        ...run.rng,
+        encounters: placement.nextEncounterState,
+        ...(placement.status === 'placed' && placement.nextMerchantStockState !== null
+          ? { 'merchant-stock': placement.nextMerchantStockState } : {}),
+      },
+      encounterDecisions: placement.encounterDecisions,
+    };
+    if (placement.status === 'placed') {
+      run = {
+        ...run,
+        actors: sortByActorId([...run.actors, ...placement.createdActors]),
+        items: placement.createdItems.length === 0 ? run.items : sortByItemId([...run.items, ...placement.createdItems]),
+        populations: sortByPopulationId([...run.populations, placement.population]),
+      };
+      events.push({
+        type: 'population.created', eventId, populationId: placement.population.populationId,
+        encounterId: placement.population.encounterId, floorId: placement.population.floorId,
+        model: placement.population.model, actorIds: placement.population.livingMemberIds,
+      });
+      if (placement.population.model === 'group' && placement.population.leaderActorId !== null) {
+        const leaderActorId = placement.population.leaderActorId;
+        const roleId = placement.population.roleMembership.find((role) => role.actorId === leaderActorId)?.roleId;
+        if (roleId === undefined) throw new Error(`internal invariant: group leader ${leaderActorId} has no role`);
+        events.push({ type: 'group.leader-created', eventId, populationId: placement.population.populationId,
+          actorId: leaderActorId, roleId });
+      }
+    } else if (placement.status === 'skipped') {
+      for (const diagnostic of placement.diagnostics) events.push({ ...diagnostic, eventId, floorId: input.floor.floorId });
+    }
+    if (placement.status === 'rejected') break;
+  }
+  return { state: run, placements, events };
 }

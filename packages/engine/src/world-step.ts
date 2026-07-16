@@ -38,8 +38,9 @@ import {
   MERCHANT_BEHAVIOR_ID, prepareMerchantTurn, provokeMerchant, resolveMerchantCombatOutcomes,
 } from './merchant-behavior.js';
 import type { MerchantPopulation } from './merchant-model.js';
-import { advanceToNextReady, chargeActionEnergy, selectReadyActor } from './scheduler.js';
+import { advanceToNextReady, chargeActionEnergy, READINESS_THRESHOLD, selectReadyActor } from './scheduler.js';
 import { compareCodeUnits } from './stable-json.js';
+import { isTownFloorActive } from './town-floor.js';
 
 export interface WorldStepResult {
   readonly state: ActiveRun;
@@ -704,8 +705,18 @@ export function resolveWorldStep(input: Readonly<{
     throw new Error(`internal invariant: content hash ${input.content.hash} does not match run ${input.state.contentHash}`);
   }
   const heroId = input.state.hero.actorId;
+  // The town (depth 0) never advances worldTime -- see below -- so time-based energy recovery can
+  // never run there. Computed once up front: a world step never changes the active floor mid-step.
+  const isTownStep = isTownFloorActive(input.state);
   let resolved = applyAction({ state: input.state, action: input.action, content: input.content, eventId: input.eventId });
   let state = resolved.state;
+  if (isTownStep) {
+    // Hero-always-ready contract: worldTime is frozen in town, so the scheduler's normal
+    // time-based energy recovery can never restore the hero to the acting threshold. Restore it
+    // directly after the hero's action resolves so the hero can always act again immediately.
+    const actedHeroForTown = actorById(state, heroId);
+    if (actedHeroForTown) state = withActor(state, { ...actedHeroForTown, energy: READINESS_THRESHOLD });
+  }
   const events: DomainEvent[] = [];
   const publicEvents: PublicEvent[] = [];
   // Ranged/effect damage and deaths carry merchant consequences resolved from the action events.
@@ -742,6 +753,7 @@ export function resolveWorldStep(input: Readonly<{
   let internalActions = 0;
   while ((actorById(state, heroId)?.health ?? 0) > 0) {
     let selected = selectReadyActor(state.actors, input.content, state.activeFloorId);
+    if (!selected && isTownStep) break; // worldTime is frozen in town: nothing can ever become ready.
     if (!selected) {
       const previousWorldTime = state.worldTime;
       const advanced = advanceToNextReady({ worldTime: state.worldTime, actors: state.actors,
@@ -767,6 +779,11 @@ export function resolveWorldStep(input: Readonly<{
       if (!selected) break;
     }
     if (selected.actorId === heroId) break;
+    // Town step contract: no non-hero actor is ever scheduled on depth 0 (town merchants carry
+    // `behaviorId: null`, so they take no turns). This is a defense-in-depth invariant, not a
+    // reachable path -- with the hero always restored to the readiness threshold and no other
+    // ready actor able to out-race it, `selectReadyActor` should never surface anyone else here.
+    if (isTownStep) throw new Error(`internal invariant: town floor scheduled a non-hero actor ${selected.actorId}`);
     if (internalActions >= limit) throw new Error(`internal action safety limit ${limit} exceeded`);
     internalActions += 1;
     const prepared = prepareIndividualTurn({ state, actorId: selected.actorId, content: input.content, eventId: input.eventId });
@@ -813,11 +830,14 @@ export function resolveWorldStep(input: Readonly<{
     }], state, heroId, input.content);
   }
   // Global merchant deadlines resolve at every world-time boundary — including merchants on
-  // inactive floors, whose actors never take turns above.
-  const lifecycle = advanceMerchantLifecycle({
-    state, content: input.content, previousWorldTime: input.state.worldTime,
-    nextWorldTime: state.worldTime, eventId: input.eventId,
-  });
+  // inactive floors, whose actors never take turns above. In town, worldTime never moved this
+  // step (frozen by contract), so this would no-op anyway; skipped outright for clarity.
+  const lifecycle = isTownStep
+    ? { state, events: [] as readonly DomainEvent[] }
+    : advanceMerchantLifecycle({
+      state, content: input.content, previousWorldTime: input.state.worldTime,
+      nextWorldTime: state.worldTime, eventId: input.eventId,
+    });
   state = lifecycle.state;
   // A merchant departing within this same command may already have emitted intent events into
   // the in-flight arrays; drop them before they are recorded, exactly as saved commands are

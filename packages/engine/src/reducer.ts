@@ -14,6 +14,7 @@ import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import { projectDomainEvents } from './event-projection.js';
 import { foldRunMetrics } from './run-metrics.js';
 import { concludeRunOnHeroDeath } from './run-conclusion.js';
+import { isTownFloorActive } from './town-floor.js';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
   return stableJson(left) === stableJson(right);
@@ -80,6 +81,17 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
   // touches the modal-session normalization or world branches below.
   if (state.conclusion !== null) {
     return recordInvalid(state, context.content, command, 'run.concluded', [], []);
+  }
+
+  // The town (depth 0) is a truce zone with frozen worldTime: hostile actions and resting both
+  // consume no randomness here, so they are rejected before any stream touches, the same way a
+  // concluded run is above.
+  if (isTownFloorActive(state)
+    && (command.type === 'attack' || command.type === 'fire' || command.type === 'cast' || command.type === 'throw-item')) {
+    return recordInvalid(state, context.content, command, 'town.truce', [], []);
+  }
+  if (isTownFloorActive(state) && command.type === 'rest') {
+    return recordInvalid(state, context.content, command, 'town.rest', [], []);
   }
 
   // Normalize the modal session first: a session whose merchant no longer satisfies the

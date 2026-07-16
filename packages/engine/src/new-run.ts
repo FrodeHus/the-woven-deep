@@ -15,13 +15,16 @@ import { validateActiveRun } from './save-schema.js';
 import { generateTownFloor, TOWN_FLOOR_ID } from './town-floor.js';
 import { ENGINE_GAME_VERSION, SAVE_SCHEMA_VERSION } from './versions.js';
 
-// Dungeon generation settings (Task 5 changes these values); the town start below no longer uses
-// them directly, but `descendToNextFloor` still generates every floor below the town at this
-// width/height/theme so the whole run stays on one generation profile.
-export const NEW_RUN_FLOOR_WIDTH = 80;
-export const NEW_RUN_FLOOR_HEIGHT = 25;
+// Dungeon generation settings; the town start below no longer uses them directly, but
+// `descendToNextFloor` still generates every floor below the town at this width/height/theme so
+// the whole run stays on one generation profile. 160x50 (with a raised room floor) is the
+// larger-dungeon baseline: `createClassicTheme` caps width at 160 and height at 100, so this sits
+// at the width ceiling with headroom on height.
+export const NEW_RUN_FLOOR_WIDTH = 160;
+export const NEW_RUN_FLOOR_HEIGHT = 50;
 export const NEW_RUN_FLOOR_THEME_SETTINGS: ClassicThemeSettings = {
   ambient: { color: [19, 23, 31], strength: 7 },
+  minimumRooms: 14,
 };
 
 export interface NewRunHeroItem {

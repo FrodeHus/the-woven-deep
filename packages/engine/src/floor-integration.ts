@@ -5,7 +5,7 @@ import { allocateFloorSeed } from './generation-random.js';
 import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import type { ActiveRun, DomainEvent, Uint32State } from './model.js';
 import { refreshKnowledge } from './perception.js';
-import { placePopulation } from './population-placement.js';
+import { placeFloorPopulations } from './population-placement.js';
 import { isNonZeroState } from './random.js';
 import { validateActiveRun } from './save-schema.js';
 import { heroActor, heroPerception } from './actor-model.js';
@@ -89,32 +89,67 @@ export function integrateGeneratedFloor(
   if (generated.populationPlacement !== undefined && population !== undefined) {
     throw new TypeError('generated floor population must not be planned twice');
   }
-  const placement = generated.populationPlacement ?? (population === undefined ? null : placePopulation({
-    run, floor: generated.floor, content: population.content,
-    ...(population.environmentTags === undefined ? {} : { environmentTags: population.environmentTags }),
-    ...(population.forcedEncounterId === undefined ? {} : { forcedEncounterId: population.forcedEncounterId }),
-  }));
-  if (placement?.status === 'rejected') {
-    throw new RangeError(`required population placement rejected generated floor: ${placement.reason}`);
+  // Two distinct population mechanisms feed a floor: `generated.populationPlacement` is a single
+  // guaranteed encounter (e.g. a boss) already committed during `generateFloor`'s own retry loop,
+  // tied to that loop's regeneration-on-rejection contract; `population` (this function's own
+  // argument) fills the rest of the floor up to its density budget via `placeFloorPopulations`.
+  // The two never both apply to the same call (enforced above), so exactly one of the branches
+  // below runs, each producing an equivalent { run, events } outcome.
+  let outcome: Readonly<{ run: ActiveRun; events: readonly DomainEvent[] }> | null = null;
+  if (generated.populationPlacement !== undefined) {
+    const placement = generated.populationPlacement;
+    const updatedRun: ActiveRun = placement.status === 'placed'
+      ? {
+        ...run,
+        actors: [...run.actors, ...placement.createdActors]
+          .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0),
+        items: placement.createdItems.length === 0 ? run.items : [...run.items, ...placement.createdItems]
+          .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0),
+        populations: [...run.populations, placement.population]
+          .sort((left, right) => left.populationId < right.populationId ? -1 : left.populationId > right.populationId ? 1 : 0),
+        rng: {
+          ...run.rng, encounters: placement.nextEncounterState,
+          ...(placement.nextMerchantStockState === null ? {} : { 'merchant-stock': placement.nextMerchantStockState }),
+        },
+        encounterDecisions: placement.encounterDecisions,
+      }
+      : { ...run, rng: { ...run.rng, encounters: placement.nextEncounterState }, encounterDecisions: placement.encounterDecisions };
+    const placementEvents: DomainEvent[] = [];
+    if (placement.status === 'placed') {
+      placementEvents.push({ type: 'population.created', eventId, populationId: placement.population.populationId,
+        encounterId: placement.population.encounterId, floorId: placement.population.floorId,
+        model: placement.population.model, actorIds: placement.population.livingMemberIds });
+      if (placement.population.model === 'group' && placement.population.leaderActorId !== null) {
+        const leaderActorId = placement.population.leaderActorId;
+        const roleId = placement.population.roleMembership.find((role) => role.actorId === leaderActorId)?.roleId;
+        if (roleId === undefined) throw new Error(`internal invariant: group leader ${leaderActorId} has no role`);
+        placementEvents.push({ type: 'group.leader-created', eventId, populationId: placement.population.populationId,
+          actorId: leaderActorId, roleId });
+      }
+    } else {
+      for (const diagnostic of placement.diagnostics) placementEvents.push({ ...diagnostic, eventId, floorId: generated.floor.floorId });
+    }
+    outcome = { run: updatedRun, events: placementEvents };
+  } else if (population !== undefined) {
+    const result = placeFloorPopulations({
+      run, floor: generated.floor, content: population.content,
+      ...(population.environmentTags === undefined ? {} : { environmentTags: population.environmentTags }),
+      ...(population.forcedEncounterId === undefined ? {} : { forcedEncounterId: population.forcedEncounterId }),
+    });
+    const rejected = result.placements.find((candidate) => candidate.status === 'rejected');
+    if (rejected) throw new RangeError(`required population placement rejected generated floor: ${rejected.reason}`);
+    outcome = { run: result.state, events: result.events };
   }
-  let floor = placement?.status === 'placed' ? placement.floor : generated.floor;
-  const createdActors = placement?.status === 'placed' ? placement.createdActors : [];
-  const createdItems = placement?.status === 'placed' ? placement.createdItems : [];
-  const nextMerchantStockState = placement?.status === 'placed' ? placement.nextMerchantStockState : null;
-  const ordinaryPopulations = placement?.status === 'placed'
-    ? [...run.populations, placement.population]
-      .sort((left, right) => left.populationId < right.populationId ? -1 : left.populationId > right.populationId ? 1 : 0)
-    : run.populations;
+
+  const populatedRun = outcome?.run ?? run;
+  let floor = generated.floor;
   const fallen = population === undefined ? null : placeFallenHeroEncounters({
-    run: { ...run, actors: [...run.actors, ...createdActors]
-      .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0),
-    populations: ordinaryPopulations,
-    encounterDecisions: placement?.encounterDecisions ?? run.encounterDecisions },
-    floor, content: population.content,
+    run: populatedRun, floor, content: population.content,
   });
   if (fallen !== null) floor = fallen.floor;
-  const actorsAfterPlacement = [...run.actors, ...createdActors, ...(fallen?.actors ?? [])]
-    .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0);
+  const actorsAfterPlacement = fallen === null ? populatedRun.actors
+    : [...populatedRun.actors, ...fallen.actors]
+      .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0);
   if (transitioningToInsertedFloor) {
     const actors = new Map<string, Readonly<{ x: number; y: number }>>(
       floor.entities.map((entity) => [entity.entityId, entity] as const),
@@ -128,41 +163,18 @@ export function integrateGeneratedFloor(
   }
 
   const beforeValidation: ActiveRun = {
-    ...run,
-    rng: {
-      ...run.rng,
-      generation: [...allocation.nextGenerationState],
-      ...(placement === null ? {} : { encounters: [...placement.nextEncounterState] }),
-      ...(nextMerchantStockState === null ? {} : { 'merchant-stock': [...nextMerchantStockState] }),
-    },
+    ...populatedRun,
+    rng: { ...populatedRun.rng, generation: [...allocation.nextGenerationState] },
     actors: actorsAfterPlacement,
-    items: createdItems.length === 0 ? run.items : [...run.items, ...createdItems]
-      .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0),
-    encounterDecisions: placement?.encounterDecisions ?? run.encounterDecisions,
-    populations: fallen?.populations ?? ordinaryPopulations,
-    fallenHeroDecisions: fallen?.decisions ?? run.fallenHeroDecisions,
-    floors: [...run.floors, floor],
+    encounterDecisions: populatedRun.encounterDecisions,
+    populations: fallen?.populations ?? populatedRun.populations,
+    fallenHeroDecisions: fallen?.decisions ?? populatedRun.fallenHeroDecisions,
+    floors: [...populatedRun.floors, floor],
   };
   const state = validateActiveRun(transitioningToInsertedFloor
     ? recordFloorEntered(beforeValidation, generated.floor.depth)
     : beforeValidation);
-  const committed = state.populations.filter((candidate) => !run.populations.some((prior) =>
-    prior.populationId === candidate.populationId));
-  const events: DomainEvent[] = [...(lifecycle?.events ?? [])];
-  for (const created of committed) {
-    events.push({ type: 'population.created', eventId, populationId: created.populationId,
-      encounterId: created.encounterId, floorId: created.floorId, model: created.model,
-      actorIds: created.livingMemberIds });
-    if (created.model === 'group' && created.leaderActorId !== null) {
-      const roleId = created.roleMembership.find((role) => role.actorId === created.leaderActorId)?.roleId;
-      if (roleId === undefined) throw new Error(`internal invariant: group leader ${created.leaderActorId} has no role`);
-      events.push({ type: 'group.leader-created', eventId, populationId: created.populationId,
-        actorId: created.leaderActorId, roleId });
-    }
-  }
-  if (placement?.status === 'skipped') {
-    for (const diagnostic of placement.diagnostics) events.push({ ...diagnostic, eventId, floorId: floor.floorId });
-  }
+  const events: DomainEvent[] = [...(lifecycle?.events ?? []), ...(outcome?.events ?? [])];
   return { state, events };
 }
 

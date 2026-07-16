@@ -4,6 +4,7 @@ import { createUnknownKnowledge } from './knowledge.js';
 import type { AmbientLight, LightSource } from './light-model.js';
 import {
   assertOpaqueId,
+  type ActiveRun,
   type FloorPlacementSlot,
   type FloorSnapshot,
   type OpaqueId,
@@ -17,6 +18,18 @@ import { type TransformedVaultSlot, vaultTransforms } from './vault-transform.js
 
 /** The town is the sole depth-0 floor; `depthFloorId(0)` formats it as `floor.depth-000`. */
 export const TOWN_FLOOR_ID: OpaqueId = depthFloorId(0);
+
+/**
+ * True when the run's active floor is the depth-0 town: the sole floor where the town step
+ * contract applies (frozen worldTime, hero-always-ready, truce on hostile actions/rest, no
+ * idle-advance or merchant-lifecycle processing). Identified strictly by the active floor's
+ * `depth` field -- never by comparing floor identifiers -- so it stays correct even if the town's
+ * floorId ever changed shape.
+ */
+export function isTownFloorActive(run: Pick<ActiveRun, 'floors' | 'activeFloorId'>): boolean {
+  const floor = run.floors.find((candidate) => candidate.floorId === run.activeFloorId);
+  return floor !== undefined && floor.depth === 0;
+}
 
 const TOWN_VAULT_PLACEMENT_ID: OpaqueId = 'vault-placement.depth-000.0';
 
