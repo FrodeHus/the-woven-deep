@@ -133,7 +133,8 @@ export interface TradeServiceCommand extends CommandEnvelope {
   readonly type: 'trade-service';
   readonly merchantPopulationId: OpaqueId;
   readonly serviceId: 'merchant-service.identify';
-  readonly targetItemId: OpaqueId;
+  /** `null` for a service that has no single target item (e.g. a strongbox transaction). */
+  readonly targetItemId: OpaqueId | null;
 }
 export interface TradeCloseCommand extends CommandEnvelope {
   readonly type: 'trade-close'; readonly merchantPopulationId: OpaqueId;
@@ -142,10 +143,19 @@ export interface TradeCloseCommand extends CommandEnvelope {
 export type TradeCommand = TradeOpenCommand | TradeBuyCommand | TradeSellCommand
   | TradeServiceCommand | TradeCloseCommand;
 
+export interface HouseDepositCommand extends CommandEnvelope {
+  readonly type: 'house-deposit'; readonly itemId: OpaqueId; readonly quantity: number;
+}
+export interface HouseWithdrawCommand extends CommandEnvelope {
+  readonly type: 'house-withdraw'; readonly itemId: OpaqueId; readonly quantity: number;
+}
+
+export type HouseCommand = HouseDepositCommand | HouseWithdrawCommand;
+
 export type GameCommand = MoveCommand | WaitCommand | AttackCommand | FireCommand | CastCommand | ThrowItemCommand
   | UseItemCommand | EquipCommand | UnequipCommand | PickupCommand | DropCommand | SplitStackCommand | RefuelCommand
   | ToggleLightCommand | OpenDoorCommand | CloseDoorCommand | SearchCommand | DisarmCommand | RestCommand
-  | TradeCommand;
+  | TradeCommand | HouseCommand;
 
 export type MovementInvalidReason = 'blocked.bounds' | 'blocked.wall' | 'blocked.door' | 'blocked.pillar'
   | 'blocked.void' | 'blocked.corner' | 'blocked.actor';
@@ -153,7 +163,9 @@ export type TradeInvalidReason = 'trade.active' | 'trade.required' | 'merchant.u
   | 'merchant.out-of-range' | 'merchant.refuses' | 'trade.merchant-mismatch' | 'trade.insufficient-funds'
   | 'trade.stock-unavailable' | 'trade.item-unacceptable' | 'trade.capacity'
   | 'trade.service-unavailable' | 'trade.target-invalid';
-export type InvalidActionReason = MovementInvalidReason | TradeInvalidReason | 'action.unavailable' | 'inventory.full'
+export type TownInvalidReason = 'town.truce' | 'town.rest' | 'house.full';
+export type InvalidActionReason = MovementInvalidReason | TradeInvalidReason | TownInvalidReason
+  | 'action.unavailable' | 'inventory.full'
   | 'item.missing' | 'item.unavailable' | 'item.quantity' | 'item.incompatible' | 'item.id-conflict'
   | 'target.not_visible' | 'target.out_of_range' | 'target.blocked' | 'target.invalid' | 'run.concluded';
 
@@ -645,8 +657,13 @@ export interface RecordedCommand {
   readonly publicEvents: readonly PublicEvent[];
 }
 
+export interface HouseState {
+  readonly capacity: number;
+  readonly upgradesPurchased: number;
+}
+
 export interface ActiveRun {
-  readonly schemaVersion: 7;
+  readonly schemaVersion: 8;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly runId: OpaqueId;
@@ -675,6 +692,8 @@ export interface ActiveRun {
   readonly conqueredChampionRecordIds: readonly OpaqueId[];
   readonly metrics: RunMetrics;
   readonly conclusion: RunConclusion | null;
+  readonly house: HouseState;
+  readonly restockedMilestones: readonly number[];
 }
 
 export interface CommandResolution {

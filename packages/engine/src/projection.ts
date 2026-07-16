@@ -375,7 +375,9 @@ function visibleMerchantState(
     factionName: faction.name,
     reputationTier: tier.tierId,
     tradeAvailable: population.lifecycle === 'available' && tier.acceptsTrade
-      && population.departureAt > state.worldTime,
+      // `null` marks a permanent merchant, which never departs and so is always trade-available
+      // with respect to departure.
+      && (population.departureAt === null || population.departureAt > state.worldTime),
     ...(urgentWarning === undefined ? {} : { departureWarning: urgentWarning }),
   };
 }

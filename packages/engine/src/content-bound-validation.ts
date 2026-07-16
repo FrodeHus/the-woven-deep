@@ -217,8 +217,11 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         throw new Error(`content-bound validation: merchant population ${population.populationId} lifetime is invalid`);
       }
       const authoredWarnings = new Set(encounter.definition.departureWarningThresholds!);
+      // A non-permanent merchant (guarded above) always carries a numeric departureAt; `null`
+      // is reserved for the permanent merchants this validator has already rejected.
+      const departureAt = population.departureAt!;
       if (population.emittedWarningThresholds.some((threshold) => !authoredWarnings.has(threshold)
-        || population.departureAt - run.worldTime > threshold)) {
+        || departureAt - run.worldTime > threshold)) {
         throw new Error(`content-bound validation: merchant population ${population.populationId} warnings are invalid`);
       }
       const authoredServices = new Map(encounter.definition.services.map((service) => [service.serviceId, service]));

@@ -28,7 +28,8 @@ export interface MerchantPopulation extends PopulationBase {
   readonly npcId: OpaqueId;
   readonly factionId: OpaqueId;
   readonly rolledLifetime: number;
-  readonly departureAt: number;
+  /** `null` for a permanent (town) merchant, which never departs. */
+  readonly departureAt: number | null;
   readonly emittedWarningThresholds: readonly number[];
   readonly initialStockItemIds: readonly OpaqueId[];
   readonly stockItemIds: readonly OpaqueId[];

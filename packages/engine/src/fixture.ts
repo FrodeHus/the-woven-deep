@@ -168,5 +168,9 @@ export function createDemoRun(): ActiveRun {
     conqueredChampionRecordIds: [],
     metrics: emptyRunMetrics(),
     conclusion: null,
+    // Matches this fixture's bundled balance base (see createDemoContentPack); migrations never
+    // read content, so real saves derive this from the authored balance entry instead.
+    house: { capacity: 6, upgradesPurchased: 0 },
+    restockedMilestones: [],
   };
 }

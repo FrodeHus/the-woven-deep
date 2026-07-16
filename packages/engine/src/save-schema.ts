@@ -21,7 +21,7 @@ const positiveQuantity = z.number().int().safe().positive();
 const moveCommand = z.strictObject({ type: z.literal('move'), commandId: identifier, expectedRevision: safeNonNegative, direction });
 const waitCommand = z.strictObject({ type: z.literal('wait'), commandId: identifier, expectedRevision: safeNonNegative });
 const commandBase = { commandId: identifier, expectedRevision: safeNonNegative } as const;
-const command = z.discriminatedUnion('type', [
+const commandBaseOptions = [
   moveCommand, waitCommand,
   z.strictObject({ ...commandBase, type: z.literal('attack'), targetActorId: identifier }),
   z.strictObject({ ...commandBase, type: z.literal('fire'), itemId: identifier, target: point }),
@@ -46,9 +46,19 @@ const command = z.discriminatedUnion('type', [
     itemId: identifier, quantity: positiveQuantity }),
   z.strictObject({ ...commandBase, type: z.literal('trade-sell'), merchantPopulationId: identifier,
     itemId: identifier, quantity: positiveQuantity }),
-  z.strictObject({ ...commandBase, type: z.literal('trade-service'), merchantPopulationId: identifier,
-    serviceId: z.literal('merchant-service.identify'), targetItemId: identifier }),
   z.strictObject({ ...commandBase, type: z.literal('trade-close'), merchantPopulationId: identifier }),
+] as const;
+const tradeServiceCommandV7 = z.strictObject({ ...commandBase, type: z.literal('trade-service'),
+  merchantPopulationId: identifier, serviceId: z.literal('merchant-service.identify'), targetItemId: identifier });
+const tradeServiceCommand = z.strictObject({ ...commandBase, type: z.literal('trade-service'),
+  merchantPopulationId: identifier, serviceId: z.literal('merchant-service.identify'), targetItemId: identifier.nullable() });
+const houseDepositCommand = z.strictObject({ ...commandBase, type: z.literal('house-deposit'),
+  itemId: identifier, quantity: positiveQuantity });
+const houseWithdrawCommand = z.strictObject({ ...commandBase, type: z.literal('house-withdraw'),
+  itemId: identifier, quantity: positiveQuantity });
+const commandV7 = z.discriminatedUnion('type', [...commandBaseOptions, tradeServiceCommandV7]);
+const command = z.discriminatedUnion('type', [
+  ...commandBaseOptions, tradeServiceCommand, houseDepositCommand, houseWithdrawCommand,
 ]);
 const movedEvent = z.strictObject({ type: z.literal('hero.moved'), eventId: identifier, heroId: identifier, from: point, to: point });
 const waitedEvent = z.strictObject({ type: z.literal('hero.waited'), eventId: identifier, heroId: identifier, x: safeNonNegative, y: safeNonNegative });
@@ -61,6 +71,7 @@ const blockReason = z.enum([
   'merchant.refuses', 'trade.merchant-mismatch', 'trade.insufficient-funds',
   'trade.stock-unavailable', 'trade.item-unacceptable', 'trade.capacity',
   'trade.service-unavailable', 'trade.target-invalid', 'run.concluded',
+  'town.truce', 'town.rest', 'house.full',
 ]);
 const invalidEvent = z.strictObject({ type: z.literal('action.invalid'), eventId: identifier, commandId: identifier, reason: blockReason });
 const attackBase = { eventId: identifier, actorId: identifier, targetActorId: identifier,
@@ -334,8 +345,14 @@ const recorded = z.strictObject({
   events: z.array(authoritativeEvent).readonly(),
   publicEvents: z.array(publicEvent).readonly(),
 });
+const recordedV7 = z.strictObject({
+  command: commandV7,
+  result: processedResult,
+  events: z.array(authoritativeEvent).readonly(),
+  publicEvents: z.array(publicEvent).readonly(),
+});
 const legacyRecorded = z.strictObject({
-  command,
+  command: commandV7,
   result: processedResult,
   events: z.array(legacyAuthoritativeEvent).readonly(),
   publicEvents: z.array(legacyPublicEvent).readonly(),
@@ -460,9 +477,13 @@ const legacyItemLocation = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('equipped'), actorId: identifier, slot: z.enum(['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring']) }),
   z.strictObject({ type: z.literal('floor'), floorId: identifier, x: safeNonNegative, y: safeNonNegative }),
 ]);
-const itemLocation = z.discriminatedUnion('type', [
+const itemLocationV7 = z.discriminatedUnion('type', [
   ...legacyItemLocation.options,
   z.strictObject({ type: z.literal('merchant-stock'), populationId: identifier }),
+]);
+const itemLocation = z.discriminatedUnion('type', [
+  ...itemLocationV7.options,
+  z.strictObject({ type: z.literal('house') }),
 ]);
 const enchantment = z.strictObject({
   enchantmentId: identifier,
@@ -489,6 +510,7 @@ const itemFields = {
   heirloom: heirloomItemMetadata.optional(),
 } as const;
 const legacyItem = z.strictObject({ ...itemFields, location: legacyItemLocation });
+const itemV7 = z.strictObject({ ...itemFields, location: itemLocationV7 });
 const item = z.strictObject({ ...itemFields, location: itemLocation });
 const discovery = z.strictObject({
   discoveredByActorIds: z.array(identifier).readonly(),
@@ -574,16 +596,19 @@ const merchantService = z.strictObject({
   serviceId: z.literal('merchant-service.identify'), basePrice: safeNonNegative,
   remainingUses: safeNonNegative, tierIds: z.array(z.string().min(1).max(80)).readonly(),
 });
-const merchantPopulation = z.strictObject({
+const merchantPopulationFields = {
   ...populationBase, model: z.literal('merchant'), actorId: identifier, npcId: identifier, factionId: identifier,
-  rolledLifetime: safeNonNegative, departureAt: safeNonNegative,
+  rolledLifetime: safeNonNegative,
   emittedWarningThresholds: z.array(safeNonNegative).readonly(),
   initialStockItemIds: z.array(identifier).readonly(), stockItemIds: z.array(identifier).readonly(),
   services: z.array(merchantService).readonly(),
   lifecycle: z.enum(['available', 'fleeing', 'defending', 'departed', 'dead']),
   provoked: z.boolean(), aggressionPenaltyApplied: z.boolean(), deathPenaltyApplied: z.boolean(),
   stockLossResolved: z.boolean(), commerceBonusApplied: z.boolean(),
-});
+} as const;
+const merchantPopulationV7 = z.strictObject({ ...merchantPopulationFields, departureAt: safeNonNegative });
+const merchantPopulation = z.strictObject({ ...merchantPopulationFields, departureAt: safeNonNegative.nullable() });
+const populationV7 = z.discriminatedUnion('model', [...legacyPopulation.options, merchantPopulationV7]);
 const population = z.discriminatedUnion('model', [...legacyPopulation.options, merchantPopulation]);
 const heirloom = z.strictObject({
   contentId: identifier, sourceItemId: nullableIdentifier,
@@ -637,7 +662,7 @@ const legacyV5AuthoritativeEvent = legacyV5Event.refine((value) => !publicOnlyEv
 const legacyV5PublicEvent = legacyV5Event.refine((value) => !hiddenPublicEventTypes.has(value.type),
   'authoritative or roll-bearing event must be projected before public storage');
 const legacyV5Recorded = z.strictObject({
-  command,
+  command: commandV7,
   result: processedResult,
   events: z.array(legacyV5AuthoritativeEvent).readonly(),
   publicEvents: z.array(legacyV5PublicEvent).readonly(),
@@ -667,6 +692,29 @@ const activeRunSchema = z.strictObject({
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: runMetrics, conclusion: runConclusionSchema.nullable(),
+  house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
+  restockedMilestones: z.array(positiveQuantity).readonly(),
+});
+
+export const legacyActiveRunV7Schema = z.strictObject({
+  schemaVersion: z.literal(7), gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/), runId: identifier, runSeed: uint32Tuple,
+  rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
+  revision: safeNonNegative, turn: safeNonNegative, worldTime: safeNonNegative,
+  hero, reputations: z.array(z.strictObject({ factionId: identifier, value: z.number().int().safe() })).readonly(),
+  activeTrade: z.strictObject({
+    merchantPopulationId: identifier, merchantActorId: identifier, openedByCommandId: identifier,
+    openedAtRevision: safeNonNegative, completedCommerce: z.boolean(),
+  }).nullable(),
+  actors: z.array(actor).min(1).readonly(), items: z.array(itemV7).readonly(), features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(), survival, identification,
+  activeFloorId: identifier, activeFloorEnteredAt: safeNonNegative,
+  floors: z.array(floor).min(1).readonly(), recentCommands: z.array(recordedV7).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(), populations: z.array(populationV7).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+  metrics: runMetrics, conclusion: runConclusionSchema.nullable(),
 });
 
 export const legacyActiveRunV6Schema = z.strictObject({
@@ -679,11 +727,11 @@ export const legacyActiveRunV6Schema = z.strictObject({
     merchantPopulationId: identifier, merchantActorId: identifier, openedByCommandId: identifier,
     openedAtRevision: safeNonNegative, completedCommerce: z.boolean(),
   }).nullable(),
-  actors: z.array(actor).min(1).readonly(), items: z.array(item).readonly(), features: z.array(feature).readonly(),
+  actors: z.array(actor).min(1).readonly(), items: z.array(itemV7).readonly(), features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(), survival, identification,
   activeFloorId: identifier, activeFloorEnteredAt: safeNonNegative,
-  floors: z.array(floor).min(1).readonly(), recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
-  encounterDecisions: z.array(encounterDecision).readonly(), populations: z.array(population).readonly(),
+  floors: z.array(floor).min(1).readonly(), recentCommands: z.array(recordedV7).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(), populations: z.array(populationV7).readonly(),
   fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
@@ -700,11 +748,11 @@ export const legacyActiveRunV5Schema = z.strictObject({
     merchantPopulationId: identifier, merchantActorId: identifier, openedByCommandId: identifier,
     openedAtRevision: safeNonNegative, completedCommerce: z.boolean(),
   }).nullable(),
-  actors: z.array(actor).min(1).readonly(), items: z.array(item).readonly(), features: z.array(feature).readonly(),
+  actors: z.array(actor).min(1).readonly(), items: z.array(itemV7).readonly(), features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(), survival, identification,
   activeFloorId: identifier, activeFloorEnteredAt: safeNonNegative,
   floors: z.array(floor).min(1).readonly(), recentCommands: z.array(legacyV5Recorded).max(RECENT_COMMAND_LIMIT).readonly(),
-  encounterDecisions: z.array(encounterDecision).readonly(), populations: z.array(population).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(), populations: z.array(populationV7).readonly(),
   fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
@@ -1026,7 +1074,10 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       for (const [serviceIndex, service] of populationValue.services.entries()) {
         validateOrderedIds(service.tierIds, `${path}.services.${serviceIndex}.tierIds`, 'service tier');
       }
-      if (populationValue.departureAt !== populationValue.createdAt + populationValue.rolledLifetime) {
+      // `null` marks a permanent merchant, which never departs; a non-permanent merchant's
+      // departure must still equal its creation time plus its rolled lifetime.
+      if (populationValue.departureAt !== null
+        && populationValue.departureAt !== populationValue.createdAt + populationValue.rolledLifetime) {
         fail(`${path}.departureAt`, 'merchant departure must equal creation time plus rolled lifetime');
       }
       for (let warningIndex = 0; warningIndex < populationValue.emittedWarningThresholds.length; warningIndex += 1) {
@@ -1223,6 +1274,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       }
       continue;
     }
+    if (location.type === 'house') continue;
     if (location.type === 'floor') {
       const itemFloor = run.floors.find((candidate) => candidate.floorId === location.floorId);
       if (!itemFloor) fail(`${path}.location.floorId`, 'item floor does not exist');
@@ -1246,6 +1298,16 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         fail(`populations.${populationIndex}.stockItemIds.${stockIndex}`,
           'merchant stock item does not resolve bidirectionally');
       }
+    }
+  }
+
+  const houseStackCount = run.items.filter((entry) => entry.location.type === 'house').length;
+  if (houseStackCount > run.house.capacity) {
+    fail('house.capacity', 'house holds more item stacks than its capacity allows');
+  }
+  for (let index = 0; index < run.restockedMilestones.length; index += 1) {
+    if (index > 0 && run.restockedMilestones[index - 1]! >= run.restockedMilestones[index]!) {
+      fail(`restockedMilestones.${index}`, 'restocked milestones must be unique and strictly increasing');
     }
   }
 
@@ -1628,6 +1690,10 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           || recordValue.command.type === 'throw-item' || recordValue.command.type === 'use-item';
         const tradeReason = recordValue.result.reason.startsWith('trade.')
           || recordValue.result.reason.startsWith('merchant.');
+        const houseCommand = recordValue.command.type === 'house-deposit' || recordValue.command.type === 'house-withdraw';
+        const houseReason = recordValue.result.reason === 'house.full';
+        // A truce or rest rejection may reject any in-town command, not just a specific shape.
+        const townReason = recordValue.result.reason === 'town.truce' || recordValue.result.reason === 'town.rest';
         if (tradeReason) {
           // Modal rejection: any command may fail with trade.active; other trade reasons
           // require the trade command boundary.
@@ -1644,8 +1710,9 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           }
         }
         if (targetReason && !targetingCommand) fail(`${path}.result.reason`, 'target reason requires a targeting command');
-        if (!inventoryReason && !targetReason && recordValue.result.reason !== 'action.unavailable'
-          && recordValue.result.reason !== 'run.concluded') {
+        if (houseReason && !houseCommand) fail(`${path}.result.reason`, 'house reason requires a house command');
+        if (!inventoryReason && !targetReason && !houseReason && !townReason
+          && recordValue.result.reason !== 'action.unavailable' && recordValue.result.reason !== 'run.concluded') {
           fail(`${path}.result.reason`, 'non-movement command reason is inconsistent');
         }
         continue;

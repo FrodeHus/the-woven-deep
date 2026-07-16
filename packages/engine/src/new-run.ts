@@ -246,6 +246,8 @@ export function createNewRun(input: Readonly<{
     conqueredChampionRecordIds: [],
     metrics: emptyRunMetrics(),
     conclusion: null,
+    house: { capacity: balance.house.baseCapacity, upgradesPurchased: 0 },
+    restockedMilestones: [],
   };
 
   return addGeneratedFloor(skeleton, generated, allocation, { content: pack });

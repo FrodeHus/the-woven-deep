@@ -20,12 +20,14 @@ beforeAll(async () => {
 const SEED = [11, 22, 33, 44] as const;
 
 describe('createNewRun', () => {
-  it('builds a valid, deterministic schema-v7 run on a generated depth-1 floor', () => {
+  it('builds a valid, deterministic schema-v8 run on a generated depth-1 floor', () => {
     const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(7);
+    expect(first.schemaVersion).toBe(8);
+    expect(first.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
+    expect(first.restockedMilestones).toEqual([]);
     expect(first.floors).toHaveLength(1);
     expect(first.floors[0]?.depth).toBe(1);
     expect(first.activeFloorId).toBe(first.floors[0]?.floorId);

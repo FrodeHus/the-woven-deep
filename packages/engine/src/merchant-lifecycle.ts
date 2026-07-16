@@ -133,6 +133,8 @@ export function advanceMerchantLifecycle(input: Readonly<{
     const population = state.populations.find((candidate): candidate is MerchantPopulation =>
       candidate.model === 'merchant' && candidate.populationId === populationId)!;
     if (population.lifecycle === 'departed' || population.lifecycle === 'dead') continue;
+    // `null` marks a permanent merchant, which never departs and never warns.
+    if (population.departureAt === null) continue;
     const remaining = population.departureAt - input.nextWorldTime;
     if (remaining > 0) {
       const encounter = merchantEncounter(input.content, population.encounterId);

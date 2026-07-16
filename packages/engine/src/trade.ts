@@ -105,7 +105,8 @@ function merchantSession(
   if (population.lifecycle !== 'available') {
     return { ok: false, reason: 'merchant.unavailable', close: 'aggression' };
   }
-  if (!options.ignoreDue && population.departureAt <= state.worldTime) {
+  // `null` marks a permanent merchant, which never departs and so is never due.
+  if (!options.ignoreDue && population.departureAt !== null && population.departureAt <= state.worldTime) {
     return { ok: false, reason: 'merchant.unavailable', close: 'departure' };
   }
   if (relationshipBetween(state, hero.actorId, actor.actorId) === 'hostile') {
@@ -473,15 +474,18 @@ export function resolveTradeCommand(input: Readonly<{
       populations: replaceMerchantPopulation(state, { ...population, services }),
       activeTrade: { ...trade, completedCommerce: true },
     };
+    // The validated plan above (plan.ok) only succeeds for the identify service when
+    // targetItemId resolves to an existing, hero-owned item, so it is never null here.
+    const targetItemId = command.targetItemId!;
     const identified = identifyItemCompletely({
-      run: charged, content, itemId: command.targetItemId, eventId: command.commandId,
+      run: charged, content, itemId: targetItemId, eventId: command.commandId,
     });
     return {
       state: identified.state,
       events: [{
         type: 'trade.service-purchased', eventId: command.commandId,
         merchantPopulationId: trade.merchantPopulationId, serviceId: command.serviceId,
-        targetItemId: command.targetItemId, price: plan.plan.price,
+        targetItemId, price: plan.plan.price,
         currency: plan.plan.currency, remainingUses,
       }, ...identified.events],
     };
