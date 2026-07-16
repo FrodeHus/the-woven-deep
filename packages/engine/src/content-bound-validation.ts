@@ -78,7 +78,12 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
       throw new Error(`content-bound validation: population ${population.populationId} does not match encounter ${population.encounterId}`);
     }
     const floor = run.floors.find((entry) => entry.floorId === population.floorId)!;
-    if (floor.depth < encounter.minDepth || floor.depth > encounter.maxDepth) {
+    // A permanent (town) merchant is placed at depth 0, not through ordinary depth-eligible
+    // population placement -- its authored minDepth/maxDepth instead describes the dungeon-depth
+    // band its own stock projection widens against (see materializeMerchant/restockMerchant), so
+    // the floor-depth-range check below does not apply to it.
+    const permanentMerchant = encounter.model === 'merchant' && encounter.definition.permanent;
+    if (!permanentMerchant && (floor.depth < encounter.minDepth || floor.depth > encounter.maxDepth)) {
       throw new Error(`content-bound validation: population ${population.populationId} is outside encounter depth range`);
     }
     const memberActors = [...population.livingMemberIds, ...population.formerMemberIds]
@@ -207,22 +212,29 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         throw new Error(`content-bound validation: merchant population ${population.populationId} actor does not match its NPC`);
       }
       if (encounter.definition.permanent) {
-        throw new Error(`content-bound validation: merchant population ${population.populationId} is bound to a permanent encounter definition, which no population placement path materializes yet`);
-      }
-      // Content validation (packages/content schema.ts) guarantees a non-permanent merchant
-      // declares all three lifetime fields, so asserting them here is safe given the guard above.
-      const minimumLifetime = encounter.definition.minimumLifetime!;
-      const maximumLifetime = encounter.definition.maximumLifetime!;
-      if (population.rolledLifetime < minimumLifetime || population.rolledLifetime > maximumLifetime) {
-        throw new Error(`content-bound validation: merchant population ${population.populationId} lifetime is invalid`);
-      }
-      const authoredWarnings = new Set(encounter.definition.departureWarningThresholds!);
-      // A non-permanent merchant (guarded above) always carries a numeric departureAt; `null`
-      // is reserved for the permanent merchants this validator has already rejected.
-      const departureAt = population.departureAt!;
-      if (population.emittedWarningThresholds.some((threshold) => !authoredWarnings.has(threshold)
-        || departureAt - run.worldTime > threshold)) {
-        throw new Error(`content-bound validation: merchant population ${population.populationId} warnings are invalid`);
+        // A permanent (town) merchant never departs: it carries no lifetime, no departure
+        // deadline, and no warning thresholds -- materialized directly by `createNewRun`, not
+        // through population placement, and re-stocked in place by `restockMerchant`.
+        if (population.departureAt !== null || population.rolledLifetime !== 0
+          || population.emittedWarningThresholds.length > 0) {
+          throw new Error(`content-bound validation: permanent merchant population ${population.populationId} carries lifecycle-departure state`);
+        }
+      } else {
+        // Content validation (packages/content schema.ts) guarantees a non-permanent merchant
+        // declares all three lifetime fields, so asserting them here is safe given the guard above.
+        const minimumLifetime = encounter.definition.minimumLifetime!;
+        const maximumLifetime = encounter.definition.maximumLifetime!;
+        if (population.rolledLifetime < minimumLifetime || population.rolledLifetime > maximumLifetime) {
+          throw new Error(`content-bound validation: merchant population ${population.populationId} lifetime is invalid`);
+        }
+        const authoredWarnings = new Set(encounter.definition.departureWarningThresholds!);
+        // A non-permanent merchant (guarded above) always carries a numeric departureAt; `null`
+        // is reserved for permanent merchants, handled separately above.
+        const departureAt = population.departureAt!;
+        if (population.emittedWarningThresholds.some((threshold) => !authoredWarnings.has(threshold)
+          || departureAt - run.worldTime > threshold)) {
+          throw new Error(`content-bound validation: merchant population ${population.populationId} warnings are invalid`);
+        }
       }
       const authoredServices = new Map(encounter.definition.services.map((service) => [service.serviceId, service]));
       const savedServiceIds = new Set(population.services.map((service) => service.serviceId));

@@ -1,12 +1,15 @@
 import type { CompiledContentPack, VaultContentEntry } from '@woven-deep/content';
 import type { DomainEvent, OpaqueId, Point } from './model.js';
+import { balanceEntry } from './actions.js';
 import { heroActor } from './actor-model.js';
 import { generateFloor } from './generate-floor.js';
 import { createClassicTheme } from './generation-mask.js';
 import { allocateFloorSeed } from './generation-random.js';
 import { integrateGeneratedFloor, type FloorIntegrationResult } from './floor-integration.js';
+import { restockMerchant } from './merchant-stock.js';
 import type { ActiveRun } from './model.js';
 import { validateActiveRun } from './save-schema.js';
+import { compareCodeUnits } from './stable-json.js';
 import { tileDefinition } from './terrain.js';
 import { NEW_RUN_FLOOR_HEIGHT, NEW_RUN_FLOOR_THEME_SETTINGS, NEW_RUN_FLOOR_WIDTH } from './new-run.js';
 
@@ -25,6 +28,45 @@ export function depthFloorId(depth: number): OpaqueId {
 
 function nextFloorId(depth: number): string {
   return depthFloorId(depth);
+}
+
+/**
+ * Fires every un-fired balance restock milestone the run's dungeon high-water mark has now
+ * reached, restocking every permanent (town) merchant once per milestone and recording it in
+ * `restockedMilestones` so a later descend (to the same or a shallower/deeper floor) never
+ * re-fires it. Milestones are processed in ascending order; each restocks merchants in a fixed
+ * populationId order, so a given (seed, milestone) always restocks byte-identically.
+ */
+function applyMerchantRestocks(input: Readonly<{
+  state: ActiveRun;
+  content: CompiledContentPack;
+}>): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+  const balance = balanceEntry(input.content);
+  const dueMilestones = balance.restockMilestones
+    .filter((milestone) => !input.state.restockedMilestones.includes(milestone)
+      && input.state.metrics.deepestDepth >= milestone)
+    .sort((left, right) => left - right);
+  if (dueMilestones.length === 0) return { state: input.state, events: [] };
+  let state = input.state;
+  const events: DomainEvent[] = [];
+  for (const milestone of dueMilestones) {
+    const permanentMerchantIds = state.populations
+      .filter((population) => population.model === 'merchant')
+      .filter((population) => {
+        const encounter = input.content.entries.find((entry) => entry.id === population.encounterId);
+        return encounter !== undefined && encounter.kind === 'encounter' && encounter.model === 'merchant'
+          && encounter.definition.permanent;
+      })
+      .map((population) => population.populationId)
+      .sort(compareCodeUnits);
+    for (const populationId of permanentMerchantIds) {
+      const restocked = restockMerchant(state, { content: input.content, populationId });
+      state = restocked.state;
+      events.push(...restocked.events);
+    }
+    state = { ...state, restockedMilestones: [...state.restockedMilestones, milestone].sort((left, right) => left - right) };
+  }
+  return { state, events };
 }
 
 /**
@@ -65,7 +107,9 @@ export function descendToNextFloor(
     if (arrival === null) {
       throw new Error(`internal invariant: stored floor ${floorId} has no stair-up`);
     }
-    return { state: enterStoredFloor(run, { floorId, arrival }), events: [] };
+    const entered = enterStoredFloor(run, { floorId, arrival });
+    const restocked = applyMerchantRestocks({ state: entered, content: context.content });
+    return { state: restocked.state, events: restocked.events };
   }
 
   const allocation = allocateFloorSeed(run.rng.generation);
@@ -96,7 +140,9 @@ export function descendToNextFloor(
     recentCommands: [],
   };
 
-  return integrateGeneratedFloor(moved, generated, allocation, { content: context.content });
+  const integrated = integrateGeneratedFloor(moved, generated, allocation, { content: context.content });
+  const restocked = applyMerchantRestocks({ state: integrated.state, content: context.content });
+  return { state: restocked.state, events: [...integrated.events, ...restocked.events] };
 }
 
 /**

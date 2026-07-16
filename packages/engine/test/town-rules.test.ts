@@ -91,9 +91,12 @@ describe('town step contract', () => {
 
   it('never schedules a non-hero actor while the hero is in town', () => {
     const state = townRun();
-    // The town starts with only the hero actor; this is the structural guarantee the town step
-    // contract's scheduler invariant depends on until Task 6 gives merchants `behaviorId: null`.
-    expect(state.actors.filter((actor) => actor.actorId !== state.hero.actorId
-      && actor.floorId === state.activeFloorId)).toHaveLength(0);
+    // The town starts with the hero plus the three permanent shopkeepers; the town-step
+    // contract's scheduler invariant depends on every one of them carrying `behaviorId: null`,
+    // so none of them can ever be selected for a turn.
+    const townActors = state.actors.filter((actor) => actor.actorId !== state.hero.actorId
+      && actor.floorId === state.activeFloorId);
+    expect(townActors).toHaveLength(3);
+    expect(townActors.every((actor) => actor.behaviorId === null)).toBe(true);
   });
 });

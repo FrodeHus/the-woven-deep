@@ -180,16 +180,18 @@ export function projectDomainEvents(input: Readonly<{
       case 'trade.opened': case 'trade.bought': case 'trade.sold': case 'trade.service-purchased': case 'trade.closed':
         output.push(event); break;
       case 'merchant.departure-warning': case 'merchant.provoked':
-      case 'merchant.stock-dropped': case 'merchant.died': {
+      case 'merchant.stock-dropped': case 'merchant.died': case 'merchant.restocked': {
         // Merchant lifecycle transitions are observable only while the merchant itself is
         // legitimately visible, and even then only as a qualitative notice: exact remaining
         // time, dropped/destroyed stock identifiers, and killer identity stay hidden. The
         // hero's own trade auto-close and reputation change arrive separately as exact events.
+        // A restock fires from the descend boundary while the hero is deep in the dungeon, so
+        // it resolves to a notice only on the rare case the hero is standing in town to see it.
         if (!actorVisible(event.actorId)) break;
         const category = event.type === 'merchant.departure-warning' ? 'merchant-departure-warning' as const
           : event.type === 'merchant.provoked' ? 'merchant-provoked' as const
             : event.type === 'merchant.stock-dropped' ? 'merchant-stock-dropped' as const
-              : 'merchant-died' as const;
+              : event.type === 'merchant.died' ? 'merchant-died' as const : 'merchant-restocked' as const;
         const presentation = event.type === 'merchant.departure-warning'
           ? `merchant.departure-warning.${event.threshold}`
           : event.type === 'merchant.provoked' ? `merchant.provoked.${event.response}` : event.type;

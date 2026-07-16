@@ -1,4 +1,4 @@
-import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, ItemContentEntry, MerchantEncounterContentEntry } from '@woven-deep/content';
 import type { BaseAttributes, EquipmentSlot } from './actor-model.js';
 import { emptyEquipment, type ActorState } from './actor-model.js';
 import { balanceEntry } from './actions.js';
@@ -6,14 +6,38 @@ import { deriveActorStats, type DerivedStatModifier } from './attributes.js';
 import type { ClassicThemeSettings } from './generation-model.js';
 import { allocateIdentificationMap } from './identification.js';
 import type { ItemInstance } from './item-model.js';
-import type { ActiveRun, OpaqueId, Uint32State } from './model.js';
+import { materializeMerchant } from './merchant-stock.js';
+import type { ActiveRun, OpaqueId, Point, Uint32State } from './model.js';
 import { createEncounterRunDecisions } from './population-gates.js';
 import { deriveRngStreams, isNonZeroState } from './random.js';
 import { encodeRunSeed } from './run-records-model.js';
 import { emptyRunMetrics } from './run-metrics.js';
 import { validateActiveRun } from './save-schema.js';
+import { compareCodeUnits } from './stable-json.js';
 import { generateTownFloor, TOWN_FLOOR_ID } from './town-floor.js';
 import { ENGINE_GAME_VERSION, SAVE_SCHEMA_VERSION } from './versions.js';
+
+interface TownMerchantSpec {
+  readonly populationId: OpaqueId;
+  readonly encounterId: OpaqueId;
+  readonly position: Point;
+}
+
+function townMerchantSpecs(town: ReturnType<typeof generateTownFloor>): readonly TownMerchantSpec[] {
+  return [
+    { populationId: 'population.town-provisioner', encounterId: 'encounter.town-provisioner', position: town.merchantSlots.provisioner },
+    { populationId: 'population.town-armorer', encounterId: 'encounter.town-armorer', position: town.merchantSlots.arms },
+    { populationId: 'population.town-curios-dealer', encounterId: 'encounter.town-curios-dealer', position: town.merchantSlots.curios },
+  ];
+}
+
+function townMerchantEncounter(pack: CompiledContentPack, encounterId: OpaqueId): MerchantEncounterContentEntry {
+  const entry = pack.entries.find((candidate) => candidate.id === encounterId);
+  if (!entry || entry.kind !== 'encounter' || entry.model !== 'merchant' || !entry.definition.permanent) {
+    throw new Error(`createNewRun requires a permanent town merchant encounter ${encounterId}`);
+  }
+  return entry;
+}
 
 // Dungeon generation settings; the town start below no longer uses them directly, but
 // `descendToNextFloor` still generates every floor below the town at this width/height/theme so
@@ -242,5 +266,32 @@ export function createNewRun(input: Readonly<{
     restockedMilestones: [],
   };
 
-  return validateActiveRun(skeleton);
+  // Town shopkeepers are permanent merchants, materialized here (deterministically, in a fixed
+  // order) rather than through population placement: their stock is projected against the run's
+  // dungeon high-water mark (max(1, deepestDepth) === 1 for a fresh run), not the town's own
+  // depth 0. Each materialization consumes further `merchant-stock` RNG state in order.
+  let withMerchants: ActiveRun = skeleton;
+  for (const spec of townMerchantSpecs(town)) {
+    const encounter = townMerchantEncounter(pack, spec.encounterId);
+    const materialized = materializeMerchant({
+      run: withMerchants, content: pack, encounter, populationId: spec.populationId,
+      floorId: TOWN_FLOOR_ID, position: spec.position,
+    });
+    withMerchants = {
+      ...withMerchants,
+      rng: { ...withMerchants.rng, 'merchant-stock': materialized.nextMerchantStockState },
+      actors: [...withMerchants.actors, materialized.actor]
+        .sort((left, right) => compareCodeUnits(left.actorId, right.actorId)),
+      items: [...withMerchants.items, ...materialized.items]
+        .sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
+      populations: [...withMerchants.populations, materialized.population]
+        .sort((left, right) => compareCodeUnits(left.populationId, right.populationId)),
+      // Town merchants bypass ordinary population placement, so their encounter decision's
+      // instance count (content-bound validated against `run.populations`) is bumped here.
+      encounterDecisions: withMerchants.encounterDecisions.map((decision) =>
+        decision.encounterId === spec.encounterId ? { ...decision, instancesCreated: decision.instancesCreated + 1 } : decision),
+    };
+  }
+
+  return validateActiveRun(withMerchants);
 }

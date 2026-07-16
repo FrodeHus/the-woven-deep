@@ -50,8 +50,9 @@ const commandBaseOptions = [
 ] as const;
 const tradeServiceCommandV7 = z.strictObject({ ...commandBase, type: z.literal('trade-service'),
   merchantPopulationId: identifier, serviceId: z.literal('merchant-service.identify'), targetItemId: identifier });
+const merchantServiceId = z.enum(['merchant-service.identify', 'merchant-service.strongbox']);
 const tradeServiceCommand = z.strictObject({ ...commandBase, type: z.literal('trade-service'),
-  merchantPopulationId: identifier, serviceId: z.literal('merchant-service.identify'), targetItemId: identifier.nullable() });
+  merchantPopulationId: identifier, serviceId: merchantServiceId, targetItemId: identifier.nullable() });
 const houseDepositCommand = z.strictObject({ ...commandBase, type: z.literal('house-deposit'),
   itemId: identifier, quantity: positiveQuantity });
 const houseWithdrawCommand = z.strictObject({ ...commandBase, type: z.literal('house-withdraw'),
@@ -238,7 +239,7 @@ const populationNoticePublicEvent = z.strictObject({ type: z.literal('population
     'boss-defeated', 'boss-reward', 'champion-encountered', 'champion-defeated', 'champion-heirloom',
     'echo-encountered', 'echo-defeated', 'echo-loot',
     'merchant-departure-warning', 'merchant-departed', 'merchant-provoked',
-    'merchant-stock-dropped', 'merchant-died']),
+    'merchant-stock-dropped', 'merchant-died', 'merchant-restocked']),
   actorId: identifier.nullable(), presentation: z.string().min(1).max(120), displayName: z.string().min(1).max(120).optional() });
 const reputationChangedEvent = z.strictObject({ type: z.literal('reputation.changed'), eventId: identifier,
   factionId: identifier, previous: z.number().int().safe(), delta: z.number().int().safe(),
@@ -251,8 +252,8 @@ const tradeCommerceFields = { eventId: identifier, merchantPopulationId: identif
 const tradeBoughtEvent = z.strictObject({ type: z.literal('trade.bought'), ...tradeCommerceFields });
 const tradeSoldEvent = z.strictObject({ type: z.literal('trade.sold'), ...tradeCommerceFields });
 const tradeServicePurchasedEvent = z.strictObject({ type: z.literal('trade.service-purchased'),
-  eventId: identifier, merchantPopulationId: identifier, serviceId: z.literal('merchant-service.identify'),
-  targetItemId: identifier, price: safeNonNegative, currency: safeNonNegative, remainingUses: safeNonNegative });
+  eventId: identifier, merchantPopulationId: identifier, serviceId: merchantServiceId,
+  targetItemId: identifier.nullable(), price: safeNonNegative, currency: safeNonNegative, remainingUses: safeNonNegative });
 const tradeClosedEvent = z.strictObject({ type: z.literal('trade.closed'), eventId: identifier,
   merchantPopulationId: identifier, reason: z.enum(['player', 'aggression', 'death', 'unavailable', 'departure']),
   completedCommerce: z.boolean() });
@@ -270,6 +271,8 @@ const merchantStockDroppedEvent = z.strictObject({ type: z.literal('merchant.sto
 const merchantDiedEvent = z.strictObject({ type: z.literal('merchant.died'), eventId: identifier,
   populationId: identifier, actorId: identifier, killerActorId: identifier,
   destroyedStockItemIds: z.array(identifier).readonly() });
+const merchantRestockedEvent = z.strictObject({ type: z.literal('merchant.restocked'), eventId: identifier,
+  populationId: identifier, actorId: identifier, stockItemIds: z.array(identifier).readonly() });
 const restCompletedEvent = z.strictObject({ type: z.literal('rest.completed'), eventId: identifier,
   stopReason: z.enum(['full-health', 'maximum-duration', 'visible-danger', 'aware-hostile', 'damage',
     'meaningful-sound', 'hunger-warning', 'fuel-warning', 'condition-change', 'decision-required', 'hero-death']),
@@ -312,7 +315,7 @@ const eventOptions = [
 const event = z.discriminatedUnion('type', [...eventOptions, populationCreatedEvent, reputationChangedEvent,
   tradeOpenedEvent, tradeBoughtEvent, tradeSoldEvent, tradeServicePurchasedEvent, tradeClosedEvent,
   merchantDepartureWarningEvent, merchantDepartedEvent,
-  merchantProvokedEvent, merchantStockDroppedEvent, merchantDiedEvent,
+  merchantProvokedEvent, merchantStockDroppedEvent, merchantDiedEvent, merchantRestockedEvent,
   runConcludedEvent, runFinalizedEvent, achievementGrantedEvent]);
 const legacyEvent = z.discriminatedUnion('type', [...eventOptions, legacyPopulationCreatedEvent]);
 const hiddenPublicEventTypes = new Set([
@@ -322,7 +325,7 @@ const hiddenPublicEventTypes = new Set([
   'boss.phase-changed', 'boss.recovered', 'boss.defeated', 'boss.reward-created', 'champion.encountered',
   'champion.defeated', 'champion.heirloom-created', 'echo.encountered', 'echo.defeated', 'echo.loot-created',
   'merchant.departure-warning', 'merchant.departed', 'merchant.provoked', 'merchant.stock-dropped',
-  'merchant.died',
+  'merchant.died', 'merchant.restocked',
 ]);
 const publicOnlyEventTypes = new Set([
   'sound.heard', 'hero.damaged', 'combat.observed', 'actor.movement-observed', 'actor.damage-observed',
@@ -593,7 +596,7 @@ const legacyPopulation = z.discriminatedUnion('model', [
     equipmentContentIds: z.array(identifier).readonly(), abilityIds: z.array(identifier).readonly() }),
 ]);
 const merchantService = z.strictObject({
-  serviceId: z.literal('merchant-service.identify'), basePrice: safeNonNegative,
+  serviceId: merchantServiceId, basePrice: safeNonNegative,
   remainingUses: safeNonNegative, tierIds: z.array(z.string().min(1).max(80)).readonly(),
 });
 const merchantPopulationFields = {
@@ -1702,8 +1705,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           }
           continue;
         }
-        if (inventoryReason && !inventoryCommand) {
-          if (!inventoryCommand && recordValue.command.type !== 'fire' && recordValue.command.type !== 'throw-item'
+        if (inventoryReason && !inventoryCommand && !houseCommand) {
+          if (recordValue.command.type !== 'fire' && recordValue.command.type !== 'throw-item'
             && recordValue.command.type !== 'use-item' && recordValue.command.type !== 'trade-buy'
             && recordValue.command.type !== 'trade-sell') {
             fail(`${path}.result.reason`, 'inventory reasons require an item command');

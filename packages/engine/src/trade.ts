@@ -2,6 +2,7 @@ import type {
   CompiledContentPack, ItemContentEntry, MerchantEncounterContentEntry, NpcFactionContentEntry,
 } from '@woven-deep/content';
 import { heroActor, heroPerception, type ActorState } from './actor-model.js';
+import { balanceEntry } from './actions.js';
 import { actorHasConditionTrait } from './conditions.js';
 import {
   changeReputation, factionReputation, guaranteedUniqueItemIds, merchantAcceptsItem,
@@ -285,10 +286,16 @@ type ServicePlanResult = Readonly<{ ok: true; plan: ServicePlan }>
   | Readonly<{ ok: false; reason: InvalidActionReason }>;
 
 /**
- * Preflight-and-plan for the identification service. Tier gating requires BOTH directions: the
- * hero's current faction tier must allow the service, and the merchant's saved offer must list
- * that tier. The target must be hero-owned (backpack or equipped) and still have something to
- * identify (an unidentified instance, or an unrevealed shuffled appearance).
+ * Preflight-and-plan for a merchant service. Tier gating requires BOTH directions: the hero's
+ * current faction tier must allow the service, and the merchant's saved offer must list that
+ * tier -- shared by every service. The two services then diverge:
+ * - `merchant-service.identify` requires a `targetItemId` naming a hero-owned item (backpack or
+ *   equipped) that still has something to identify (an unidentified instance, or an unrevealed
+ *   shuffled appearance).
+ * - `merchant-service.strongbox` is a single, run-wide house-capacity upgrade: it requires no
+ *   target (`targetItemId` must be `null`) and is rejected once `house.upgradesPurchased` has
+ *   already reached 1, even if the offer's own remaining-uses count would otherwise still allow
+ *   it (authored as 1 anyway, but the house-state check is the honest, forward-compatible gate).
  */
 function planService(input: Readonly<{
   state: ActiveRun; content: CompiledContentPack; command: TradeServiceCommand; session: MerchantSession;
@@ -299,6 +306,18 @@ function planService(input: Readonly<{
     || !session.tier.serviceIds.includes(command.serviceId)
     || !service.tierIds.includes(session.tier.tierId)) {
     return { ok: false, reason: 'trade.service-unavailable' };
+  }
+  if (command.serviceId === 'merchant-service.strongbox') {
+    if (command.targetItemId !== null) return { ok: false, reason: 'trade.target-invalid' };
+    if (state.house.upgradesPurchased >= 1) return { ok: false, reason: 'trade.service-unavailable' };
+    let price: number;
+    try {
+      price = quoteMerchantService({ basePrice: service.basePrice, factionBps: session.tier.purchasePriceBps });
+    } catch {
+      return { ok: false, reason: 'trade.insufficient-funds' };
+    }
+    if (state.hero.currency < price) return { ok: false, reason: 'trade.insufficient-funds' };
+    return { ok: true, plan: { service, price, currency: state.hero.currency - price } };
   }
   const target = state.items.find((candidate) => candidate.itemId === command.targetItemId);
   const hero = heroActor(state);
@@ -474,6 +493,25 @@ export function resolveTradeCommand(input: Readonly<{
       populations: replaceMerchantPopulation(state, { ...population, services }),
       activeTrade: { ...trade, completedCommerce: true },
     };
+    if (command.serviceId === 'merchant-service.strongbox') {
+      const balance = balanceEntry(content);
+      const nextState: ActiveRun = {
+        ...charged,
+        house: {
+          capacity: charged.house.capacity + balance.house.strongboxIncrement,
+          upgradesPurchased: charged.house.upgradesPurchased + 1,
+        },
+      };
+      return {
+        state: nextState,
+        events: [{
+          type: 'trade.service-purchased', eventId: command.commandId,
+          merchantPopulationId: trade.merchantPopulationId, serviceId: command.serviceId,
+          targetItemId: null, price: plan.plan.price,
+          currency: plan.plan.currency, remainingUses,
+        }],
+      };
+    }
     // The validated plan above (plan.ok) only succeeds for the identify service when
     // targetItemId resolves to an existing, hero-owned item, so it is never null here.
     const targetItemId = command.targetItemId!;

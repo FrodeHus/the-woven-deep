@@ -5,7 +5,9 @@ import type { ActorState, EquipmentSlot, RelationshipOverride } from './actor-mo
 import type { DungeonFeature } from './feature-model.js';
 import type { IdentificationState, ItemInstance } from './item-model.js';
 import type { HungerStage, SurvivalState } from './survival-model.js';
-import type { AchievementCriteriaId, CompletionType, DamageType, LeaderDeathResponse } from '@woven-deep/content';
+import type {
+  AchievementCriteriaId, CompletionType, DamageType, LeaderDeathResponse, MerchantServiceId,
+} from '@woven-deep/content';
 import type {
   EncounterRunDecision, FallenHeroRunDecision, FallenHeroStandingSnapshot, PopulationInstance, PopulationIntent,
 } from './population-model.js';
@@ -132,7 +134,7 @@ export interface TradeSellCommand extends CommandEnvelope {
 export interface TradeServiceCommand extends CommandEnvelope {
   readonly type: 'trade-service';
   readonly merchantPopulationId: OpaqueId;
-  readonly serviceId: 'merchant-service.identify';
+  readonly serviceId: MerchantServiceId;
   /** `null` for a service that has no single target item (e.g. a strongbox transaction). */
   readonly targetItemId: OpaqueId | null;
 }
@@ -464,7 +466,7 @@ export interface PopulationNoticePublicEvent {
     | 'boss-recovery' | 'boss-defeated' | 'boss-reward' | 'champion-encountered' | 'champion-defeated'
     | 'champion-heirloom' | 'echo-encountered' | 'echo-defeated' | 'echo-loot'
     | 'merchant-departure-warning' | 'merchant-departed' | 'merchant-provoked'
-    | 'merchant-stock-dropped' | 'merchant-died';
+    | 'merchant-stock-dropped' | 'merchant-died' | 'merchant-restocked';
   readonly actorId: OpaqueId | null;
   readonly presentation: string;
   readonly displayName?: string;
@@ -510,8 +512,9 @@ export interface TradeServicePurchasedEvent {
   readonly type: 'trade.service-purchased';
   readonly eventId: OpaqueId;
   readonly merchantPopulationId: OpaqueId;
-  readonly serviceId: 'merchant-service.identify';
-  readonly targetItemId: OpaqueId;
+  readonly serviceId: MerchantServiceId;
+  /** `null` for a service with no single target item (e.g. a strongbox purchase). */
+  readonly targetItemId: OpaqueId | null;
   readonly price: number;
   readonly currency: number;
   readonly remainingUses: number;
@@ -565,8 +568,15 @@ export interface MerchantDiedEvent {
   readonly killerActorId: OpaqueId;
   readonly destroyedStockItemIds: readonly OpaqueId[];
 }
+export interface MerchantRestockedEvent {
+  readonly type: 'merchant.restocked';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly stockItemIds: readonly OpaqueId[];
+}
 export type MerchantLifecycleDomainEvent = MerchantDepartureWarningEvent | MerchantDepartedEvent
-  | MerchantProvokedEvent | MerchantStockDroppedEvent | MerchantDiedEvent;
+  | MerchantProvokedEvent | MerchantStockDroppedEvent | MerchantDiedEvent | MerchantRestockedEvent;
 export interface RestCompletedEvent {
   readonly type: 'rest.completed'; readonly eventId: OpaqueId;
   readonly stopReason: 'full-health' | 'maximum-duration' | 'visible-danger' | 'aware-hostile'
