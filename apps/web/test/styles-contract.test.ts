@@ -54,6 +54,35 @@ describe('reduced-motion stylesheet contract', () => {
     expect(effectRuleMatch, '.effect rule not found inside reduced-motion block').toBeTruthy();
     expect(effectRuleMatch![1]).toMatch(/animation\s*:\s*none\s*!important/);
   });
+
+  it('clips .playfield with overflow: hidden so the carried-light glow cannot bleed past the map pane', () => {
+    const playfieldRuleMatch = /\.playfield\s*\{([^}]*)\}/.exec(css);
+    expect(playfieldRuleMatch, '.playfield rule not found in stylesheet').toBeTruthy();
+    expect(playfieldRuleMatch![1]).toMatch(/overflow\s*:\s*hidden/);
+  });
+
+  it('sizes the .glow box off a single axis (--cell-h) so it is square and the radial gradient forms a true circle with no hard rim', () => {
+    const glowRuleMatch = /(?:^|\n)\.glow\s*\{([^}]*)\}/.exec(css);
+    expect(glowRuleMatch, '.glow rule not found in stylesheet').toBeTruthy();
+    const declarations: string = glowRuleMatch![1]!;
+    const widthMatch = /(?:^|;)\s*width\s*:\s*([^;]+);/.exec(declarations);
+    const heightMatch = /(?:^|;)\s*height\s*:\s*([^;]+);/.exec(declarations);
+    expect(widthMatch, '.glow width declaration not found').toBeTruthy();
+    expect(heightMatch, '.glow height declaration not found').toBeTruthy();
+    expect(widthMatch![1]!.trim()).toBe(heightMatch![1]!.trim());
+    expect(declarations).toMatch(/closest-side/);
+  });
+
+  it('centers .glow with a standalone translate property so keyframes can animate scale/opacity without overwriting it', () => {
+    const glowRuleMatch = /(?:^|\n)\.glow\s*\{([^}]*)\}/.exec(css);
+    expect(glowRuleMatch, '.glow rule not found in stylesheet').toBeTruthy();
+    expect(glowRuleMatch![1]).toMatch(/(?:^|[;\n])\s*translate\s*:\s*-50%\s+-50%/);
+    expect(glowRuleMatch![1]).not.toMatch(/transform\s*:\s*translate/);
+
+    const keyframesMatch = /@keyframes\s+glow-drift\s*\{([\s\S]*?)\n\}/.exec(css);
+    expect(keyframesMatch, '@keyframes glow-drift not found').toBeTruthy();
+    expect(keyframesMatch![1]).not.toMatch(/transform\s*:/);
+  });
 });
 
 describe('landing page reduced-motion stylesheet contract', () => {
