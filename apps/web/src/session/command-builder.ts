@@ -7,6 +7,8 @@ import type { PlayerIntent } from './intents.js';
 export type BuiltIntent =
   | { readonly kind: 'command'; readonly command: GameCommand }
   | { readonly kind: 'descend' }
+  | { readonly kind: 'ascend' }
+  | { readonly kind: 'house' }
   | { readonly kind: 'rejected'; readonly message: string };
 
 /**
@@ -97,6 +99,28 @@ function stairDownUnderHero(projection: GameplayProjection): boolean {
   const { x, y } = hero(projection);
   const cell = projection.floor.cells.find((candidate) => candidate.x === x && candidate.y === y);
   return cell?.tileId === 5;
+}
+
+function stairUpUnderHero(projection: GameplayProjection): boolean {
+  const { x, y } = hero(projection);
+  const cell = projection.floor.cells.find((candidate) => candidate.x === x && candidate.y === y);
+  return cell?.tileId === 4;
+}
+
+interface ProjectedPlacementSlot {
+  readonly tags: readonly string[];
+  readonly x: number;
+  readonly y: number;
+}
+
+/** True when the hero is Chebyshev-adjacent (but not standing on) the town's house-door slot --
+ * mirrors the engine's own `heroAtHouseDoor` adjacency rule in `house.ts`. */
+function heroAdjacentToHouseDoor(projection: GameplayProjection): boolean {
+  const door = (projection.slots as unknown as readonly ProjectedPlacementSlot[])
+    .find((slot) => slot.tags.includes('house-door'));
+  if (!door) return false;
+  const { x, y } = hero(projection);
+  return Math.max(Math.abs(x - door.x), Math.abs(y - door.y)) === 1;
 }
 
 function equipSlotFor(pack: CompiledContentPack, contentId: OpaqueId, occupiedSlots: ReadonlySet<EquipmentSlot>): EquipmentSlot | undefined {
@@ -203,6 +227,21 @@ export function buildIntent(input: Readonly<{
   }
   if (intent.type === 'descend') {
     return stairDownUnderHero(projection) ? { kind: 'descend' } : { kind: 'rejected', message: 'There are no stairs down here.' };
+  }
+  if (intent.type === 'ascend') {
+    return stairUpUnderHero(projection) ? { kind: 'ascend' } : { kind: 'rejected', message: 'There are no stairs up here.' };
+  }
+  if (intent.type === 'house') {
+    return heroAdjacentToHouseDoor(projection) ? { kind: 'house' } : { kind: 'rejected', message: 'You are not near the house.' };
+  }
+  if (intent.type === 'house-transfer') {
+    return {
+      kind: 'command',
+      command: {
+        type: intent.action === 'deposit' ? 'house-deposit' : 'house-withdraw',
+        itemId: intent.itemId, quantity: intent.quantity, commandId, expectedRevision,
+      },
+    };
   }
   return buildBackpackIntent({ projection, commandId, expectedRevision, action: intent.action, itemId: intent.itemId, pack });
 }

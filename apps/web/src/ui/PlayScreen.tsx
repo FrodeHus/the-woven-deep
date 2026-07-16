@@ -12,7 +12,9 @@ import { GridRenderer } from './GridRenderer.js';
 import { createKeyDispatcher } from './KeyRouter.js';
 import { layoutTier, viewportForPane, type LayoutTier } from './layout.js';
 import { HeroPanel, LogPanel, StatusBar, ThreatPanel, VitalsStrip } from './panels.js';
+import { HouseScreen } from './screens/HouseScreen.js';
 import { ThreatPopover, type ThreatPopoverActor } from './ThreatPopover.js';
+import { TownPanel } from './TownPanel.js';
 
 interface DecisionPromptProps {
   readonly snapshot: SessionSnapshot;
@@ -142,14 +144,15 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
         openBackpack: () => session.setBackpackOpen(true),
         closeOverlay: () => {
           if (snapshot.backpackOpen) session.setBackpackOpen(false);
+          else if (snapshot.houseOpen) session.setHouseOpen(false);
           else if (snapshot.pendingDecision) session.answerDecision(false);
         },
       },
-      () => snapshot.backpackOpen || snapshot.pendingDecision !== null,
+      () => snapshot.backpackOpen || snapshot.houseOpen || snapshot.pendingDecision !== null,
     );
     window.addEventListener('keydown', dispatcher);
     return () => window.removeEventListener('keydown', dispatcher);
-  }, [session, snapshot.backpackOpen, snapshot.pendingDecision]);
+  }, [session, snapshot.backpackOpen, snapshot.houseOpen, snapshot.pendingDecision]);
 
   const tier = tierOverride ?? layoutTier(containerWidth);
   const viewport = viewportForPane({ panePx: paneSize, cellPx: cellSize, floor: projection.floor });
@@ -245,11 +248,11 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
 
       <div className="threat-slot">
         {tier === 'full' ? (
-          <ThreatPanel snapshot={snapshot} />
+          projection.floor.town ? <TownPanel snapshot={snapshot} /> : <ThreatPanel snapshot={snapshot} />
         ) : (
           <details className="threat-drawer">
-            <summary>Threats</summary>
-            <ThreatPanel snapshot={snapshot} />
+            <summary>{projection.floor.town ? 'Town' : 'Threats'}</summary>
+            {projection.floor.town ? <TownPanel snapshot={snapshot} /> : <ThreatPanel snapshot={snapshot} />}
           </details>
         )}
       </div>
@@ -263,6 +266,13 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
           snapshot={snapshot}
           onDispatch={(intent) => session.dispatch(intent)}
           onClose={() => session.setBackpackOpen(false)}
+        />
+      )}
+      {snapshot.houseOpen && (
+        <HouseScreen
+          snapshot={snapshot}
+          onDispatch={(intent) => session.dispatch(intent)}
+          onClose={() => session.setHouseOpen(false)}
         />
       )}
       {snapshot.pendingDecision && <DecisionPrompt snapshot={snapshot} session={session} />}

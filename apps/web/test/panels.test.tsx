@@ -6,7 +6,7 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  DEFAULT_GUEST_HERO, createNewRun, emptyEquipment, encodeActiveRun, projectGameplayState,
+  DEFAULT_GUEST_HERO, createNewRun, descendToNextFloor, emptyEquipment, encodeActiveRun, projectGameplayState,
   type ActiveRun, type ActorState, type GameplayProjection,
 } from '@woven-deep/engine';
 import { GuestSession } from '../src/session/guest-session.js';
@@ -34,6 +34,7 @@ function snapshotOf(projection: GameplayProjection, overrides: Partial<SessionSn
     pendingDecision: null,
     notice: null,
     backpackOpen: false,
+    houseOpen: false,
     conclusion: null,
     ...overrides,
   };
@@ -127,22 +128,53 @@ describe('LogPanel', () => {
 });
 
 describe('StatusBar', () => {
-  it('shows depth, turn count, and hero identity', () => {
+  it('shows the active floor\'s depth (not the deepest-depth metric), turn count, and hero identity', () => {
     const projection: GameplayProjection = {
       ...baseProjection,
-      metrics: { ...baseProjection.metrics, turnsElapsed: 7, deepestDepth: 2 },
+      floor: { ...baseProjection.floor, depth: 2, town: false },
+      metrics: { ...baseProjection.metrics, turnsElapsed: 7, deepestDepth: 5 },
     };
     render(<StatusBar snapshot={snapshotOf(projection)} />);
     const hero = projection.hero as unknown as { name: string };
     expect(screen.getByTestId('turn-count')).toHaveTextContent('Turn 7');
     expect(screen.getByText(/Depth 2/)).toBeInTheDocument();
+    expect(screen.queryByText(/Depth 5/)).not.toBeInTheDocument();
     expect(screen.getByText(hero.name)).toBeInTheDocument();
+  });
+
+  it('shows "Town" instead of a depth number when the active floor is the town', () => {
+    const projection: GameplayProjection = {
+      ...baseProjection,
+      floor: { ...baseProjection.floor, depth: 0, town: true },
+    };
+    render(<StatusBar snapshot={snapshotOf(projection)} />);
+    expect(screen.getByText('Town')).toBeInTheDocument();
+    expect(screen.queryByText(/Depth/)).not.toBeInTheDocument();
   });
 });
 
 describe('PlayScreen tier behavior', () => {
+  // These tiers are about layout composition around whichever panel occupies the threat-slot --
+  // ThreatPanel on a dungeon floor -- not about the town/TownPanel swap covered elsewhere, so this
+  // boots straight into a real depth-1 floor (mirroring guest-session.test.ts's `depth1Run`)
+  // rather than the fresh session's town start.
   function session(): GuestSession {
-    return new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
+    const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const heroActor = fresh.actors.find((actor) => actor.playerControlled)!;
+    const town = fresh.floors.find((floor) => floor.floorId === heroActor.floorId)!;
+    const atStairDown: ActiveRun = {
+      ...fresh,
+      actors: fresh.actors.map((actor) => actor.actorId === heroActor.actorId
+        ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y } : actor),
+    };
+    const depth1 = descendToNextFloor(atStairDown, { content: pack }).state;
+    const storage = new Map<string, string>();
+    const keyedStorage: SessionStorageLike = {
+      get: (key) => storage.get(key) ?? null,
+      set: (key, value) => { storage.set(key, value); },
+    };
+    keyedStorage.set(SAVE_KEY, encodeActiveRun(depth1));
+    return new GuestSession({ pack, storage: keyedStorage });
   }
 
   it('full tier: renders hero panel, map grid, an always-visible threat panel, and a 6-line log', () => {
@@ -238,11 +270,22 @@ describe('PlayScreen keyboard routing', () => {
   }
 
   function decisionSession(): GuestSession {
-    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    // The fresh guest run boots into town, whose fixed layout is always fully (and permanently)
+    // lit -- douse-the-torch no longer hides a neighbor there. So this descends to the depth-1
+    // floor first (same trick as guest-session.test.ts's `depth1Run`): douse the torch and place
+    // a neutral actor next door, in the dark, so the hero's own projection never sees it — a
+    // plain `move` therefore resolves against the *actual* (neutral) occupant server-side, which
+    // raises `decision_required`.
+    const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const freshHero = fresh.actors.find((actor) => actor.playerControlled)!;
+    const town = fresh.floors.find((floor) => floor.floorId === freshHero.floorId)!;
+    const atStairDown: ActiveRun = {
+      ...fresh,
+      actors: fresh.actors.map((actor) => actor.actorId === freshHero.actorId
+        ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y } : actor),
+    };
+    const run = descendToNextFloor(atStairDown, { content: pack }).state;
     const heroActor = run.actors.find((actor) => actor.playerControlled)!;
-    // Same trick as guest-session.test.ts: douse the torch and place a neutral actor next door,
-    // in the dark, so the hero's own projection never sees it — a plain `move` therefore resolves
-    // against the *actual* (neutral) occupant server-side, which raises `decision_required`.
     const doused = run.items.map((item) => item.location.type === 'equipped' && item.location.slot === 'off-hand'
       ? { ...item, enabled: false } : item);
     const hiddenNeighbor: ActorState = {

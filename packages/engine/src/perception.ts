@@ -7,6 +7,7 @@ import { computeFieldOfView, isVisible } from './visibility.js';
 
 export interface PerceptionFloor {
   readonly floorId: OpaqueId;
+  readonly depth: number;
   readonly width: number;
   readonly height: number;
   readonly tiles: readonly TileId[];

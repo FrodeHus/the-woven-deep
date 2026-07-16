@@ -66,7 +66,9 @@ function deadRunSave(seed: Uint32State = SEED): string {
     actors: fresh.actors.map((actor) => (actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor)),
     conclusion: {
       completionType: 'died',
-      cause: { killerContentId: null, depth: 1, turn: fresh.turn, worldTime: fresh.worldTime },
+      // The fresh guest run starts in town (depth 0), and this fixture never moves the hero
+      // anywhere else before killing them.
+      cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
       concludedAtRevision: fresh.revision, finalized: false,
     },
   });
@@ -420,7 +422,7 @@ describe('App finalize-once (concluded run)', () => {
       actors: fresh.actors.map((actor) => (actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor)),
       conclusion: {
         completionType: 'died',
-        cause: { killerContentId: null, depth: 1, turn: fresh.turn, worldTime: fresh.worldTime },
+        cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
         concludedAtRevision: fresh.revision, finalized: true,
       },
     });

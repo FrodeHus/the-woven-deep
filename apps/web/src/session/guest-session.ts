@@ -1,6 +1,7 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
-  createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, deriveHallRecordId, descendToNextFloor, encodeActiveRun,
+  ascendToPreviousFloor, createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, deriveHallRecordId,
+  descendToNextFloor, encodeActiveRun,
   finalizeRun, projectDecision, projectDomainEvents, projectGameplayState, projectRunConclusion,
   RECENT_COMMAND_LIMIT, resolveCommand, SaveLoadError,
   type ActiveRun, type CommandResolution, type GameCommand, type GameplayProjection, type HallRecordEnrichment,
@@ -32,6 +33,7 @@ export interface SessionSnapshot {
   readonly pendingDecision: PublicDecision | null;
   readonly notice: SessionNotice | null;
   readonly backpackOpen: boolean;
+  readonly houseOpen: boolean;
   /** Cheap, pure projection of the run's ending once `run.conclusion !== null`: completion facts
    * and metrics are always safe to expose, but this is computed with `record: null` and
    * `achievements: []`, so `finalized` is always `false` here regardless of the engine's own
@@ -66,6 +68,7 @@ export class GuestSession {
   private pendingDecision: PublicDecision | null = null;
   private notice: SessionNotice | null;
   private backpackOpen = false;
+  private houseOpen = false;
   private snapshot: SessionSnapshot;
   private readonly listeners = new Set<() => void>();
 
@@ -184,6 +187,24 @@ export class GuestSession {
       return;
     }
 
+    if (built.kind === 'ascend') {
+      // Mirrors the descend branch above exactly: a session-level transition (not a reducer
+      // command), so it goes through `projectDomainEvents` on the returned events and the same
+      // persistence path -- ascending never emits any events (see `ascendToPreviousFloor`), but
+      // routing it identically keeps the two floor-change paths symmetric.
+      const transition = ascendToPreviousFloor(this.run, { content: this.pack });
+      const events = projectDomainEvents({
+        state: transition.state, content: this.pack, heroId: transition.state.hero.actorId, events: transition.events,
+      });
+      this.applyNewState(transition.state, events);
+      return;
+    }
+
+    if (built.kind === 'house') {
+      this.setHouseOpen(true);
+      return;
+    }
+
     this.handleResolution(resolveCommand(this.run, built.command, { content: this.pack }));
   }
 
@@ -261,6 +282,11 @@ export class GuestSession {
     this.publish();
   }
 
+  setHouseOpen(open: boolean): void {
+    this.houseOpen = open;
+    this.publish();
+  }
+
   /**
    * Finalizes this session's concluded run into the guest Hall exactly once. Throws if the run
    * has not concluded. If the engine's own `conclusion.finalized` flag is already `true` — a save
@@ -334,6 +360,7 @@ export class GuestSession {
       pendingDecision: this.pendingDecision,
       notice: this.notice,
       backpackOpen: this.backpackOpen,
+      houseOpen: this.houseOpen,
       conclusion: this.run.conclusion === null ? null
         : projectRunConclusion({ run: this.run, record: null, achievements: [] }),
     };

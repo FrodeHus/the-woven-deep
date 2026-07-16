@@ -1,8 +1,8 @@
 {
   "floor-state": "1d8565b7dc49978529144781a1aea39b0944afc753427690990fec985566b89a",
-  "projection absolute-darkness": "4f5f0d2f8985d770900756a476a585e6ab65af801fbe27a2c84e3f39bf1c05de",
-  "projection low-ambient": "264f04349a5ada613d50fd020b7ca0350b8b66edc9174a96b11ad341c44104c5",
-  "projection overlapping-color": "6da1635252cebc9f2de10c5647692f67fdc3f1cbb53282faec22dbac51fa2074",
-  "projection sealed-corner": "eb476f49ef5ead2844f21ae0a830bb4bc20c158ed6de7487db29eb98c366c931",
-  "projection remembered": "dc69044a235f0bbf33e589ce176e14c45a2d7faf45f72d4354ef3193d3d383bf"
+  "projection absolute-darkness": "502822ab97dc9aec33a3656d41eda5f338cb47ce0ec69235b0a5dc0bc31dd7a3",
+  "projection low-ambient": "2f100166e2f2a3cfb2820dbb7e1a443fbf3834b0487172e23b425dcaacdc3bb0",
+  "projection overlapping-color": "ee16fd597dbc85dd29eccae61d314ead35f3c351d84887515575e9488fc513c4",
+  "projection sealed-corner": "53b089954f8173f51322dbcbf82fa97f0a795da0e90d00e720c9b931fc7a2bbc",
+  "projection remembered": "ad3b4363bc4d2a25e3fc9de2a7d609954942865b9ea02ab56ae2321480e65239"
 }

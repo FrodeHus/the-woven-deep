@@ -32,6 +32,8 @@ export const KEYMAP: Readonly<Record<string, PlayerIntent>> = {
   R: { type: 'rest' },
   g: { type: 'pickup' },
   '>': { type: 'descend' },
+  '<': { type: 'ascend' },
+  H: { type: 'house' },
 };
 
 function isFormFieldTarget(target: EventTarget | null): boolean {
@@ -57,6 +59,9 @@ export function routeKey(input: Readonly<{
   if (event.key === 'i') return { type: 'open-backpack' };
   // `R` (rest) requires Shift so a caps-lock "R" (no Shift) doesn't rest by accident.
   if (event.key === 'R' && !event.shiftKey) return null;
+  // `H` (house) requires Shift for the same reason, and so it never collides with the bare `h`
+  // vi-key already bound to west movement (see `DIRECTION_KEYS`).
+  if (event.key === 'H' && !event.shiftKey) return null;
 
   return KEYMAP[event.key] ?? null;
 }

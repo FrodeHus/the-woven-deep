@@ -44,9 +44,9 @@ const fixture: LightSource = {
   presentation: { glyph: '*', token: 'fixture.blue' },
 };
 
-function baseFloor(lights: readonly LightSource[] = [torch, fixture]) {
+function baseFloor(lights: readonly LightSource[] = [torch, fixture], depth = 1) {
   return {
-    floorId: 'floor.test', width, height, tiles,
+    floorId: 'floor.test', depth, width, height, tiles,
     ambient: { color: [255, 255, 255] as const, strength: 0 },
     lights, knowledge: createUnknownKnowledge(width * height),
   };
@@ -85,6 +85,19 @@ describe('observable floor projection', () => {
     expect(stableJson(projection.cells[at(4, 3)])).not.toContain('fixture');
     expect(stableJson(projection.cells[at(4, 3)])).not.toContain('tint');
     expect(stableJson(projection.cells[at(4, 3)])).not.toContain('preview');
+  });
+
+  it('reports the floor depth and derives town strictly from depth 0', () => {
+    const dungeon = projectFloor(perceived());
+    expect(dungeon.depth).toBe(1);
+    expect(dungeon.town).toBe(false);
+
+    const townFloor = baseFloor([torch, fixture], 0);
+    const townPerception = refreshKnowledge({ floor: townFloor, hero, actors: new Map([[hero.heroId, hero]]) });
+    const town = projectFloor({ floor: { ...townFloor, knowledge: townPerception.knowledge }, hero,
+      visibilityWords: townPerception.visibilityWords, illumination: townPerception.illumination });
+    expect(town.depth).toBe(0);
+    expect(town.town).toBe(true);
   });
 
   it('exposes only visible fixed presented fixtures, including disabled fixtures', () => {
@@ -287,6 +300,29 @@ describe('gameplay projection', () => {
     expect(json).not.toContain('rng');
     expect(json).not.toContain('energy');
     expect(json).not.toContain('merchant-stock');
+  });
+
+  it('exposes house capacity/upgrades/items, and only projects placement slots on the town floor', () => {
+    const base = createDemoRun();
+    const content = createDemoContentPack();
+    const dungeon = projectGameplayState({ state: base, content });
+    expect(dungeon.floor.town).toBe(false);
+    expect(dungeon.slots).toEqual([]);
+    expect(dungeon.house).toEqual({ capacity: base.house.capacity, upgradesPurchased: base.house.upgradesPurchased, items: [] });
+
+    const townFloor = { ...base.floors[0]!, floorId: 'floor.town-test', depth: 0,
+      placementSlots: [{ slotId: 'slot.town-test.house-door', vaultPlacementId: 'vault-placement.town-test',
+        kind: 'fixture' as const, required: true, tags: ['town', 'house-door'], x: 1, y: 1 }] };
+    const town = {
+      ...base,
+      floors: [townFloor],
+      activeFloorId: townFloor.floorId,
+      actors: base.actors.map((actor) => actor.actorId === base.actors[0]!.actorId
+        ? { ...actor, floorId: townFloor.floorId } : actor),
+    };
+    const projected = projectGameplayState({ state: town, content });
+    expect(projected.floor.town).toBe(true);
+    expect(projected.slots).toEqual([{ slotId: 'slot.town-test.house-door', tags: ['town', 'house-door'], x: 1, y: 1 }]);
   });
 
   it('projects the hero\'s sight radius', () => {

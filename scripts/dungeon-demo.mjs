@@ -159,7 +159,7 @@ function sealedCornerView() {
     falloff: 'linear', vaultPlacementId: null, presentation: null,
   };
   const floor = {
-    floorId: 'floor.sealed-corner', width, height, tiles,
+    floorId: 'floor.sealed-corner', depth: 1, width, height, tiles,
     ambient: { color: [0, 0, 0], strength: 0 }, lights: [light],
     knowledge: createUnknownKnowledge(width * height),
   };

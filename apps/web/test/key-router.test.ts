@@ -38,6 +38,13 @@ describe('routeKey', () => {
     expect(routeKey({ event: keyEvent('R', { shiftKey: false }), overlayOpen: false })).toBeNull();
   });
 
+  it('maps < to ascend and (Shift+)H to house -- bare "h" stays bound to west movement', () => {
+    expect(routeKey({ event: keyEvent('<'), overlayOpen: false })).toEqual({ type: 'ascend' });
+    expect(routeKey({ event: keyEvent('H', { shiftKey: true }), overlayOpen: false })).toEqual({ type: 'house' });
+    expect(routeKey({ event: keyEvent('H', { shiftKey: false }), overlayOpen: false })).toBeNull();
+    expect(routeKey({ event: keyEvent('h'), overlayOpen: false })).toEqual({ type: 'move', direction: 'west' });
+  });
+
   it('returns null for any movement or action key while an overlay is open (except Escape)', () => {
     const keysToBlock = ['ArrowUp', 'h', '.', 'g', '>', 'i'];
     for (const key of keysToBlock) {

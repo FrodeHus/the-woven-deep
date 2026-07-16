@@ -52,6 +52,8 @@ export interface ObservableCell {
 
 export interface ObservableFloorProjection {
   readonly floorId: OpaqueId;
+  readonly depth: number;
+  readonly town: boolean;
   readonly width: number;
   readonly height: number;
   readonly cells: readonly ObservableCell[];
@@ -286,7 +288,10 @@ export function projectFloor(input: ProjectFloorInput): ObservableFloorProjectio
     });
   }
 
-  return { floorId: input.floor.floorId, width: input.floor.width, height: input.floor.height, cells };
+  return {
+    floorId: input.floor.floorId, depth: input.floor.depth, town: input.floor.depth === 0,
+    width: input.floor.width, height: input.floor.height, cells,
+  };
 }
 
 export interface ObservableTradeProjection {
@@ -304,6 +309,19 @@ export interface ObservableTradeProjection {
   }>[];
 }
 
+export interface ObservablePlacementSlot {
+  readonly slotId: OpaqueId;
+  readonly tags: readonly string[];
+  readonly x: number;
+  readonly y: number;
+}
+
+export interface ObservableHouse {
+  readonly capacity: number;
+  readonly upgradesPurchased: number;
+  readonly items: readonly Readonly<Record<string, unknown>>[];
+}
+
 export interface GameplayProjection {
   readonly floor: ObservableFloorProjection;
   readonly hero: Readonly<Record<string, unknown>>;
@@ -314,6 +332,15 @@ export interface GameplayProjection {
   readonly trade?: ObservableTradeProjection;
   readonly metrics: RunMetrics;
   readonly conclusion: Readonly<{ completionType: CompletionType; cause: RunConclusion['cause'] }> | null;
+  /**
+   * The active floor's authored placement slots -- only ever populated on the town floor (depth
+   * 0). Dungeon-floor placement slots can mark not-yet-discovered monster/item/trap/objective
+   * locations, so exposing them there would leak unexplored content; the town's slots are fixed,
+   * authored fixtures (house door, merchant stalls) that are already visible the moment they're
+   * lit, so there is nothing to spoil.
+   */
+  readonly slots: readonly ObservablePlacementSlot[];
+  readonly house: ObservableHouse;
 }
 
 /**
@@ -577,6 +604,19 @@ export function projectGameplayState(input: Readonly<{
       x: item.location.type === 'floor' ? item.location.x : 0,
       y: item.location.type === 'floor' ? item.location.y : 0 }));
   const trade = projectActiveTrade(input.state, input.content);
+  const slots: readonly ObservablePlacementSlot[] = observed.floor.depth === 0
+    ? observed.floor.placementSlots.map((slot) => ({
+      slotId: slot.slotId, tags: [...slot.tags], x: slot.x, y: slot.y,
+    }))
+    : [];
+  const house: ObservableHouse = {
+    capacity: input.state.house.capacity,
+    upgradesPurchased: input.state.house.upgradesPurchased,
+    items: input.state.items
+      .filter((item) => item.location.type === 'house')
+      .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)
+      .map((item) => projectedOwnedItem(input.state, input.content, item.itemId)),
+  };
   return {
     ...(trade === undefined ? {} : { trade }),
     floor: projectFloor({ floor: observed.floor, hero: heroPerception(input.state.hero, hero),
@@ -592,7 +632,7 @@ export function projectGameplayState(input: Readonly<{
       backpackCapacity: input.state.hero.backpackCapacity,
       knownAppearanceIds: [...input.state.identification.knownAppearanceIds],
     },
-    actors, features, groundItems,
+    actors, features, groundItems, slots, house,
     actions: ['move', 'wait', 'attack', 'pickup', 'use-item', 'equip', 'rest'].map((type) => ({
       type, cost: type === 'rest' ? rules.actionCosts['action.wait'] ?? rules.normalActionCost
         : rules.actionCosts[`action.${type}`] ?? rules.normalActionCost,
