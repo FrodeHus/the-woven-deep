@@ -133,7 +133,7 @@ describe('bundled content', () => {
     }
     expect(entries.get('encounter.town-provisioner')).toMatchObject({
       definition: {
-        services: [{ serviceId: 'merchant-service.strongbox', basePrice: 120, minimumUses: 1, maximumUses: 1 }],
+        services: [{ serviceId: 'merchant-service.strongbox', basePrice: 45, minimumUses: 1, maximumUses: 1 }],
       },
     });
   });

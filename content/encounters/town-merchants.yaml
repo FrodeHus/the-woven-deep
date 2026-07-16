@@ -24,7 +24,7 @@ entries:
       merchantPurchaseBps: 6000
       acceptedCategories: [food, fuel, light]
       services:
-        - { serviceId: merchant-service.strongbox, basePrice: 120, minimumUses: 1, maximumUses: 1, tierIds: [neutral, refused, trusted, wary] }
+        - { serviceId: merchant-service.strongbox, basePrice: 45, minimumUses: 1, maximumUses: 1, tierIds: [neutral, refused, trusted, wary] }
       permanent: true
       aggressionResponse: flee
       commerceReputationDelta: 25
