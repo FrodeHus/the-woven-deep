@@ -13,7 +13,7 @@ export async function verifyContentStartupGate(runtime) {
   const before = await runtime.snapshotPublications();
   const invalid = await runtime.runInvalid();
   if (invalid.exitCode === 0) {
-    throw new Error('invalid schema-v3 replacement unexpectedly started');
+    throw new Error('invalid content pack unexpectedly started');
   }
   if (!/schemaVersion|schema version/i.test(invalid.output)) {
     throw new Error(`invalid startup did not report a schema rejection: ${invalid.output}`);

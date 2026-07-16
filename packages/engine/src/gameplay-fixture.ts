@@ -212,8 +212,12 @@ function item(
     enchantment: overrides.enchantment ?? null,
     identified: definition.identification.mode === 'known',
     charges: null,
-    fuel: overrides.fuel ?? (light ? light.fuelCapacity : null),
-    enabled: overrides.enabled ?? (light ? false : null),
+    // `fuel`/`enabled` overrides only apply to light items -- content-bound validation rejects a
+    // non-light item carrying either. Gate the override on `light` itself (mirrors
+    // `instantiateHeroItem` in new-run.ts), not just its absence, so a caller that mistakenly
+    // passes an override for a non-light item still gets ignored rather than propagated.
+    fuel: light ? (overrides.fuel ?? light.fuelCapacity) : null,
+    enabled: light ? (overrides.enabled ?? false) : null,
     location,
   };
 }
@@ -363,7 +367,7 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
     contentHash: pack.hash,
     runId: 'run.gameplay-demo',
     hero: { actorId: IDS.hero, name: 'Ada', sightRadius: 12, backpackCapacity: 12,
-      currency: balance.startingCurrency },
+      currency: balance.startingCurrency, classTags: [], statModifiers: {} },
     actors,
     items,
     features,

@@ -1,0 +1,30 @@
+schemaVersion: 6
+entries:
+  - kind: class
+    id: class.lamplighter
+    name: Lamplighter
+    tags: [chargen, playable]
+    description: Never lets the dark win, and never runs short of fuel.
+    playable: true
+    silhouetteGlyph: "L"
+    unlockHint: null
+    classTags: [lamplighter]
+    kits:
+      - kitId: lantern
+        name: Lantern
+        equipped:
+          - { contentId: item.brass-lantern, slot: off-hand, enabled: true }
+          - { contentId: item.iron-sword, slot: main-hand }
+          - { contentId: item.leather-armor, slot: body }
+        backpack:
+          - { contentId: item.lamp-oil, quantity: 2 }
+          - { contentId: item.travel-ration, quantity: 3 }
+      - kitId: torchbearer
+        name: Torchbearer
+        equipped:
+          - { contentId: item.pitch-torch, slot: off-hand, enabled: true }
+          - { contentId: item.iron-sword, slot: main-hand }
+          - { contentId: item.leather-armor, slot: body }
+        backpack:
+          - { contentId: item.pitch-torch, quantity: 1 }
+          - { contentId: item.travel-ration, quantity: 4 }

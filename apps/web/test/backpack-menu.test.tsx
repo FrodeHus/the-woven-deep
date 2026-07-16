@@ -31,6 +31,7 @@ function snapshotWithBackpack(items: readonly Readonly<{ itemId: string; name: s
     pendingDecision: null,
     notice: null,
     backpackOpen: true,
+    conclusion: null,
   };
 }
 

@@ -8,6 +8,7 @@ const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const safeInteger = z.number().int().safe();
 const safeNonNegative = safeInteger.nonnegative();
 const safePositive = safeInteger.positive();
+const safeNonZeroInteger = safeInteger.refine((value) => value !== 0, 'must be non-zero');
 const probability = z.number().finite().min(0).max(1);
 const jsonObject = z.record(z.string(), z.json());
 const tags = z.array(slugSchema).default([]);
@@ -220,6 +221,65 @@ const achievementEntry = z.strictObject({
   criteriaId: z.enum(ACHIEVEMENT_CRITERIA_IDS),
 });
 
+const derivedStatModifiers = z.partialRecord(z.enum(DERIVED_STAT_NAMES), safeNonZeroInteger);
+
+const classKitEquippedItem = z.strictObject({
+  contentId: stableIdSchema,
+  slot: z.enum(equipmentSlots),
+  // Optional (not defaulted): only light items may carry `enabled` at all --
+  // content-validation's classIssues rule rejects it on any other item. Kit
+  // authors must omit it entirely for non-light equipped lines.
+  enabled: z.boolean().optional(),
+});
+const classKitBackpackItem = z.strictObject({
+  contentId: stableIdSchema,
+  quantity: safePositive.default(1),
+});
+const classKitDefinition = z.strictObject({
+  kitId: slugSchema,
+  name: z.string().trim().min(1).max(80),
+  equipped: z.array(classKitEquippedItem),
+  backpack: z.array(classKitBackpackItem),
+});
+
+const classEntry = z.strictObject({
+  ...base,
+  kind: z.literal('class'),
+  description: z.string().trim().min(1).max(300),
+  playable: z.boolean(),
+  silhouetteGlyph: glyph,
+  unlockHint: z.string().trim().min(1).max(200).nullable(),
+  classTags: z.array(slugSchema).min(1),
+  kits: z.array(classKitDefinition).max(3),
+}).superRefine((entry, context) => {
+  if (entry.playable) {
+    if (entry.unlockHint !== null) {
+      context.addIssue({ code: 'custom', path: ['unlockHint'], message: 'a playable class must not declare an unlockHint' });
+    }
+  } else if (entry.unlockHint === null) {
+    context.addIssue({ code: 'custom', path: ['unlockHint'], message: 'a locked class requires a non-empty unlockHint' });
+  }
+});
+
+const backgroundEntry = z.strictObject({
+  ...base,
+  kind: z.literal('background'),
+  description: z.string().trim().min(1).max(300),
+  modifiers: derivedStatModifiers,
+  extraItems: z.array(classKitBackpackItem),
+});
+
+const traitEntry = z.strictObject({
+  ...base,
+  kind: z.literal('trait'),
+  description: z.string().trim().min(1).max(300),
+  modifiers: derivedStatModifiers,
+}).superRefine((entry, context) => {
+  if (Object.keys(entry.modifiers).length !== 1) {
+    context.addIssue({ code: 'custom', path: ['modifiers'], message: 'a trait must declare exactly one modifier' });
+  }
+});
+
 const balanceEntry = z.strictObject({
   ...base,
   kind: z.literal('balance'),
@@ -252,11 +312,33 @@ const balanceEntry = z.strictObject({
   formulas: z.record(z.string(), z.record(z.string(), safeInteger)),
   actionCosts: z.record(stableIdSchema, safeNonNegative),
   score: scoreCoefficients,
+  pointBuy: z.strictObject({
+    budget: safePositive,
+    costs: z.array(z.strictObject({ value: safeInteger, cost: safeNonNegative })),
+  }),
 }).superRefine((entry, context) => {
   const { starving, weak, hungry } = entry.hungerThresholds;
   if (!(starving <= weak && weak <= hungry && hungry < entry.hungerMaximum)) {
     context.addIssue({ code: 'custom', path: ['hungerThresholds'],
       message: 'hunger thresholds must satisfy starving <= weak <= hungry < hungerMaximum' });
+  }
+  const costs = entry.pointBuy.costs;
+  const expectedValues: number[] = [];
+  for (let value = entry.attributeMinimum; value <= entry.attributeMaximum; value += 1) expectedValues.push(value);
+  const actualValues = costs.map((row) => row.value);
+  const coversRange = expectedValues.length === actualValues.length
+    && expectedValues.every((value, index) => value === actualValues[index]);
+  if (!coversRange) {
+    context.addIssue({ code: 'custom', path: ['pointBuy', 'costs'],
+      message: `point-buy costs must cover every value from attributeMinimum to attributeMaximum without gaps or duplicates` });
+  } else {
+    for (let index = 1; index < costs.length; index += 1) {
+      if (costs[index]!.cost < costs[index - 1]!.cost) {
+        context.addIssue({ code: 'custom', path: ['pointBuy', 'costs', index, 'cost'],
+          message: 'point-buy costs must be non-decreasing across the attribute value range' });
+        break;
+      }
+    }
   }
 });
 
@@ -601,6 +683,9 @@ export const contentSourceEntrySchema = z.discriminatedUnion('kind', [
   npcEntry,
   npcFactionEntry,
   achievementEntry,
+  classEntry,
+  backgroundEntry,
+  traitEntry,
 ]);
 
 export const contentEntrySchema = contentSourceEntrySchema.transform((entry) => {

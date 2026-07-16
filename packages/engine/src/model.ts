@@ -12,6 +12,7 @@ import type {
 import type { ActiveTrade, FactionReputation } from './merchant-model.js';
 import type { RunConclusion, RunConclusionCause } from './run-conclusion.js';
 import type { RunMetrics } from './run-metrics.js';
+import type { DerivedStatModifier } from './attributes.js';
 
 export type OpaqueId = string;
 export type Uint32State = readonly [number, number, number, number];
@@ -73,6 +74,8 @@ export interface HeroState {
   readonly sightRadius: number;
   readonly backpackCapacity: number;
   readonly currency: number;
+  readonly classTags: readonly string[];
+  readonly statModifiers: DerivedStatModifier;
 }
 
 export interface CommandEnvelope {
@@ -643,7 +646,7 @@ export interface RecordedCommand {
 }
 
 export interface ActiveRun {
-  readonly schemaVersion: 6;
+  readonly schemaVersion: 7;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly runId: OpaqueId;

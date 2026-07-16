@@ -15,7 +15,8 @@ import { identifyAppearance } from './identification.js';
 import { advanceSurvival, hungerModifiers } from './survival.js';
 import { applyPassiveDiscovery, closeDoor, disarmTrap, featureTiles, openDoor, searchFeatures, triggerTrap } from './features.js';
 import {
-  tileIndex, type ActiveRun, type Direction, type DomainEvent, type OpaqueId, type Point, type PublicEvent, type Uint32State,
+  tileIndex, type ActiveRun, type Direction, type DomainEvent, type HeroState, type OpaqueId, type Point,
+  type PublicEvent, type Uint32State,
 } from './model.js';
 import { movementAction } from './movement.js';
 import { refreshKnowledge } from './perception.js';
@@ -81,6 +82,7 @@ function profile(
   populations: ActiveRun['populations'] = [],
   fallenHeroStandings: ActiveRun['fallenHeroStandings'] = [],
   worldTime = 0,
+  hero: HeroState | undefined = undefined,
 ): CombatProfile {
   const monster = monsterDefinition(content, actor);
   const groupModifiers = groupCombatModifiers({ state: { actors, populations, worldTime }, content, actorId: actor.actorId });
@@ -118,6 +120,7 @@ function profile(
       ...conditionModifiers(actor, content),
       hungerModifiers({ stage: survival?.hungerStage ?? 'sated', balance: balanceEntry(content) }),
     ],
+    heroModifiers: hero && actor.actorId === hero.actorId ? [hero.statModifiers] : [],
   });
   const equipped = items.filter((item) => item.location.type === 'equipped'
     && item.location.actorId === actor.actorId);
@@ -151,14 +154,15 @@ function combat(input: Readonly<{
   populations: ActiveRun['populations'];
   fallenHeroStandings: ActiveRun['fallenHeroStandings'];
   worldTime: number;
+  hero: HeroState;
 }>): ReactionAttackResult {
   const attacker = input.actors.find((candidate) => candidate.actorId === input.attackerId);
   const target = input.actors.find((candidate) => candidate.actorId === input.targetActorId);
   if (!attacker || !target) throw new Error('internal invariant: combat actors must exist');
   const attack = profile(attacker, input.content, input.items, input.actors, input.survival,
-    input.populations, input.fallenHeroStandings, input.worldTime);
+    input.populations, input.fallenHeroStandings, input.worldTime, input.hero);
   const defense = profile(target, input.content, input.items, input.actors, input.survival,
-    input.populations, input.fallenHeroStandings, input.worldTime);
+    input.populations, input.fallenHeroStandings, input.worldTime, input.hero);
   return resolveAttack({
     ...input,
     accuracy: attack.accuracy,
@@ -306,6 +310,7 @@ function applyAction(input: Readonly<{
         ...conditionModifiers(actor, input.content),
         hungerModifiers({ stage: state.survival.hungerStage, balance: balanceEntry(input.content) }),
       ],
+      heroModifiers: actor.actorId === state.hero.actorId ? [state.hero.statModifiers] : [],
     });
     const target = actorById(state, action.targetActorId);
     if (!target) throw new Error(`internal invariant: target ${action.targetActorId} disappeared`);
@@ -313,7 +318,7 @@ function applyAction(input: Readonly<{
     const ranged = applyPopulationCombatModifiers({ accuracy: attackerStats.rangedAccuracy, defense: 0,
       damage: definition.combat.damage }, modifiers);
     const defense = profile(target, input.content, state.items, state.actors, state.survival,
-      state.populations, state.fallenHeroStandings, state.worldTime);
+      state.populations, state.fallenHeroStandings, state.worldTime, state.hero);
     const shot = resolveAttack({
       eventId: input.eventId, attackerId: actor.actorId, targetActorId: target.actorId,
       actors: state.actors, combatState: state.rng.combat,
@@ -395,7 +400,7 @@ function applyAction(input: Readonly<{
       from: { x: actor.x, y: actor.y }, to: action.to, eventId: input.eventId,
       resolveAttack: (attack) => combat({ ...attack, content: input.content, items: state.items,
         survival: state.survival, populations: state.populations,
-        fallenHeroStandings: state.fallenHeroStandings, worldTime: state.worldTime }),
+        fallenHeroStandings: state.fallenHeroStandings, worldTime: state.worldTime, hero: state.hero }),
     });
     state = reactions.state;
     events.push(...reactions.events);
@@ -454,7 +459,7 @@ function applyAction(input: Readonly<{
       actors: state.actors, combatState: state.rng.combat, attackerId: actor.actorId,
       targetActorId: action.targetActorId, eventId: input.eventId, content: input.content,
       items: state.items, survival: state.survival, populations: state.populations,
-      fallenHeroStandings: state.fallenHeroStandings, worldTime: state.worldTime,
+      fallenHeroStandings: state.fallenHeroStandings, worldTime: state.worldTime, hero: state.hero,
     });
     state = { ...state, actors: resolved.actors, rng: { ...state.rng, combat: resolved.combatState } };
     events.push(...resolved.events);

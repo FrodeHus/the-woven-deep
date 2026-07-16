@@ -1,6 +1,8 @@
 import type { ActiveRun } from './model.js';
 import { SaveLoadError } from './save-error.js';
-import { legacyActiveRunV4Schema, legacyActiveRunV5Schema, validateActiveRun } from './save-schema.js';
+import {
+  legacyActiveRunV4Schema, legacyActiveRunV5Schema, legacyActiveRunV6Schema, validateActiveRun,
+} from './save-schema.js';
 import { deriveRngStreams } from './random.js';
 import { emptyRunMetrics } from './run-metrics.js';
 import { stableJson } from './stable-json.js';
@@ -39,9 +41,23 @@ function migrateV5ToV6(input: unknown): unknown {
   };
 }
 
-function migrateLegacy(input: unknown, schemaVersion: 4 | 5): ActiveRun {
+function migrateV6ToV7(input: unknown): unknown {
+  const v6 = legacyActiveRunV6Schema.parse(input);
+  return {
+    ...v6,
+    schemaVersion: 7,
+    hero: { ...v6.hero, classTags: [], statModifiers: {} },
+  };
+}
+
+function migrateLegacy(input: unknown, schemaVersion: 4 | 5 | 6): ActiveRun {
   try {
-    return validateActiveRun(schemaVersion === 4 ? migrateV5ToV6(migrateV4ToV5(input)) : migrateV5ToV6(input));
+    const migrated = schemaVersion === 4
+      ? migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input)))
+      : schemaVersion === 5
+        ? migrateV6ToV7(migrateV5ToV6(input))
+        : migrateV6ToV7(input);
+    return validateActiveRun(migrated);
   } catch (cause) {
     if (cause instanceof SaveLoadError) throw cause;
     const issue = (cause as { issues?: readonly { path: readonly PropertyKey[]; message: string }[] }).issues?.[0];
@@ -58,7 +74,7 @@ export function decodeActiveRun(json: string): ActiveRun {
   const schemaVersion = typeof input === 'object' && input !== null
     ? (input as Readonly<Record<string, unknown>>).schemaVersion
     : undefined;
-  if (schemaVersion === 4 || schemaVersion === 5) return migrateLegacy(input, schemaVersion);
+  if (schemaVersion === 4 || schemaVersion === 5 || schemaVersion === 6) return migrateLegacy(input, schemaVersion);
   if (schemaVersion !== SAVE_SCHEMA_VERSION) {
     throw new SaveLoadError(
       'unsupported_version',

@@ -76,6 +76,20 @@ describe('atomic world steps', () => {
     expect(JSON.stringify(result.publicEvents)).not.toMatch(/naturalRoll|rolledDice|rolledDamage|defense/);
   });
 
+  it('folds the hero\'s statModifiers into their combat defense', () => {
+    const state = createDemoRun();
+    const enemy = monster('monster.equal', { energy: 100 });
+    const content = contentWithMonster(enemy.contentId);
+    const boosted = { ...state, hero: { ...state.hero, statModifiers: { defense: 1000 } } };
+    const result = resolveWorldStep({
+      state: { ...boosted, actors: [boosted.actors[0]!, enemy] }, content,
+      eventId: 'command.move',
+      action: { type: 'move', actorId: 'hero.demo', to: { x: 2, y: 1 }, cost: 100 },
+    });
+    expect(result.events.some((event) => event.type === 'attack.missed')).toBe(true);
+    expect(result.events.some((event) => event.type === 'actor.damaged')).toBe(false);
+  });
+
   it('throws before returning when the internal action safety limit is reached', () => {
     const state = createDemoRun();
     const enemy = monster('monster.loop', { energy: 100 });

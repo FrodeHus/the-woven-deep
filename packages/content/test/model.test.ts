@@ -18,36 +18,37 @@ describe('content model', () => {
       generationReport: { foundationalCategories: [] },
     };
 
-    expect(pack.schemaVersion).toBe(5);
-    expect(CONTENT_SCHEMA_VERSION).toBe(5);
+    expect(pack.schemaVersion).toBe(6);
+    expect(CONTENT_SCHEMA_VERSION).toBe(6);
     expect(pack.hash).toHaveLength(64);
   });
 
-  it('exposes every schema-v5 content kind', () => {
+  it('exposes every schema-v6 content kind', () => {
     const kinds: ContentKind[] = [...CONTENT_KIND_IDS];
 
-    expect(kinds).toHaveLength(14);
+    expect(kinds).toHaveLength(17);
     expect(kinds).toEqual(expect.arrayContaining(['npc', 'npc-faction']));
     expect(kinds).toContain('condition');
     expect(kinds).toContain('identification-pool');
     expect(kinds).toContain('encounter');
     expect(kinds).toContain('fallen-champion-template');
     expect(kinds).toContain('achievement');
+    expect(CONTENT_KIND_IDS).toEqual(expect.arrayContaining(['class', 'background', 'trait']));
   });
 
   it('publishes the closed achievement criteria registry', () => {
     expect(ACHIEVEMENT_CRITERIA_IDS).toEqual(['first-champion-defeat', 'first-echo-defeat']);
   });
 
-  it('rejects a stored schema-v4 pack before exposing entries', async () => {
+  it('rejects a stored schema-v5 pack before exposing entries', async () => {
     const content = await import('../src/index.js');
 
     expect(() => content.validateCompiledContentPack({
-      schemaVersion: 4,
+      schemaVersion: 5,
       hash: '0'.repeat(64),
       entries: [],
       generationReport: { foundationalCategories: [] },
-    })).toThrow(/Unsupported content schema version 4; expected 5/);
+    })).toThrow(/Unsupported content schema version 5; expected 6/);
   });
 
   it('rejects a stored schema-v1 pack before exposing entries', async () => {
@@ -63,7 +64,7 @@ describe('content model', () => {
   it('does not fill source defaults while validating a stored pack', async () => {
     const { validateCompiledContentPack } = await import('../src/index.js');
     expect(() => validateCompiledContentPack({
-      schemaVersion: 5,
+      schemaVersion: 6,
       hash: '0'.repeat(64),
       entries: [{
         kind: 'spell', id: 'spell.bad', name: 'Bad', tags: [], targetingId: 'target.self', range: 0,

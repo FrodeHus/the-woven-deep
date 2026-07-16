@@ -131,6 +131,21 @@ describe('server-admin content documentation', () => {
     }
   });
 
+  it('documents the class, background, trait kinds and the point-buy table', async () => {
+    const reference = await readFile(resolve(
+      import.meta.dirname,
+      '../../../docs/server-admin/content-configuration.md',
+    ), 'utf8');
+    for (const identifier of [
+      'class', 'background', 'trait', 'pointBuy', 'unlockHint',
+      'playable', 'silhouetteGlyph', 'classTags', 'kits', 'kitId', 'equipped', 'backpack',
+      'modifiers', 'extraItems', 'budget', 'costs',
+    ]) {
+      expect(reference, `missing chargen documentation for ${identifier}`)
+        .toContain(`\`${identifier}\``);
+    }
+  });
+
   it('derives exhaustive encounter and fallen-template field coverage from the source schema', async () => {
     const reference = await readFile(resolve(
       import.meta.dirname,

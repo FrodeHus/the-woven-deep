@@ -1,6 +1,8 @@
 import type { CompiledContentPack, ItemContentEntry, VaultContentEntry } from '@woven-deep/content';
 import type { BaseAttributes, EquipmentSlot } from './actor-model.js';
 import { emptyEquipment, type ActorState } from './actor-model.js';
+import { balanceEntry } from './actions.js';
+import { deriveActorStats, type DerivedStatModifier } from './attributes.js';
 import { addGeneratedFloor } from './floor-integration.js';
 import { depthFloorId } from './floor-transition.js';
 import { generateFloor } from './generate-floor.js';
@@ -41,6 +43,8 @@ export interface NewRunHero {
   readonly attributes: BaseAttributes;
   readonly equipped: readonly NewRunHeroItem[];
   readonly backpack: readonly NewRunBackpackItem[];
+  readonly classTags: readonly string[];
+  readonly statModifiers: DerivedStatModifier;
 }
 
 export const DEFAULT_GUEST_HERO: NewRunHero = {
@@ -52,6 +56,8 @@ export const DEFAULT_GUEST_HERO: NewRunHero = {
     { contentId: 'item.pitch-torch', slot: 'off-hand', enabled: true },
   ],
   backpack: [{ contentId: 'item.travel-ration', quantity: 3 }],
+  classTags: ['wayfarer'],
+  statModifiers: {},
 };
 
 function itemContentEntry(pack: CompiledContentPack, contentId: OpaqueId): ItemContentEntry {
@@ -62,8 +68,17 @@ function itemContentEntry(pack: CompiledContentPack, contentId: OpaqueId): ItemC
   return entry;
 }
 
-function heroItemId(contentId: OpaqueId): OpaqueId {
-  return `item.hero.${contentId.slice('item.'.length)}`;
+// Discriminated by location, not just contentId: a kit can (and one bundled kit does, e.g. the
+// lamplighter's torchbearer spare torch) equip an item while also carrying another copy of the
+// same contentId in the backpack, and a background's extraItems can duplicate a kit's backpack
+// contentId too. Suffixing only the contentId would collide and violate the save schema's
+// strictly-increasing/unique itemId invariant.
+function heroEquippedItemId(contentId: OpaqueId, slot: EquipmentSlot): OpaqueId {
+  return `item.hero.equipped.${slot}.${contentId.slice('item.'.length)}`;
+}
+
+function heroBackpackItemId(contentId: OpaqueId, index: number): OpaqueId {
+  return `item.hero.backpack.${index}.${contentId.slice('item.'.length)}`;
 }
 
 function instantiateHeroItem(
@@ -81,8 +96,13 @@ function instantiateHeroItem(
     enchantment: overrides.enchantment ?? null,
     identified: definition.identification.mode === 'known',
     charges: null,
-    fuel: overrides.fuel ?? (light ? light.fuelCapacity : null),
-    enabled: overrides.enabled ?? (light ? false : null),
+    // `fuel`/`enabled` overrides only apply to light items — content-bound validation rejects a
+    // non-light item carrying either. The content schema keeps kit `enabled` optional and content
+    // validation rejects it on non-light kit lines, so validated packs can never deliver one here;
+    // this light-gating is defense-in-depth for hand-built `NewRunHero` inputs that bypass
+    // content validation.
+    fuel: light ? (overrides.fuel ?? light.fuelCapacity) : null,
+    enabled: light ? (overrides.enabled ?? false) : null,
     location,
   };
 }
@@ -94,6 +114,11 @@ export function createNewRun(input: Readonly<{
 }>): ActiveRun {
   const { pack, seed, hero } = input;
   if (!isNonZeroState(seed)) throw new RangeError('run seed must not be all zero');
+  const balance = balanceEntry(pack);
+  const maxHealth = deriveActorStats({
+    attributes: hero.attributes, formulas: balance.formulas,
+    equipmentModifiers: [], conditionModifiers: [], heroModifiers: [hero.statModifiers],
+  }).maxHealth;
 
   const runId = `run.guest.${encodeRunSeed(seed)}`;
   const rng = deriveRngStreams(seed);
@@ -129,7 +154,7 @@ export function createNewRun(input: Readonly<{
     if (!definition.equipment) {
       throw new Error(`createNewRun requires equippable item content ${equippedEntry.contentId}`);
     }
-    const itemId = heroItemId(equippedEntry.contentId);
+    const itemId = heroEquippedItemId(equippedEntry.contentId, equippedEntry.slot);
     equipment = { ...equipment, [equippedEntry.slot]: itemId };
     equippedItems.push(instantiateHeroItem(
       definition,
@@ -139,9 +164,9 @@ export function createNewRun(input: Readonly<{
     ));
   }
 
-  const backpackItems: ItemInstance[] = hero.backpack.map((backpackEntry) => {
+  const backpackItems: ItemInstance[] = hero.backpack.map((backpackEntry, index) => {
     const definition = itemContentEntry(pack, backpackEntry.contentId);
-    const itemId = heroItemId(backpackEntry.contentId);
+    const itemId = heroBackpackItemId(backpackEntry.contentId, index);
     return instantiateHeroItem(
       definition,
       itemId,
@@ -161,8 +186,8 @@ export function createNewRun(input: Readonly<{
     x: stairUp.x,
     y: stairUp.y,
     attributes: hero.attributes,
-    health: 20,
-    maxHealth: 20,
+    health: maxHealth,
+    maxHealth,
     energy: 100,
     speed: 100,
     reactionReady: true,
@@ -193,6 +218,8 @@ export function createNewRun(input: Readonly<{
       sightRadius: 12,
       backpackCapacity: 12,
       currency: 0,
+      classTags: hero.classTags,
+      statModifiers: hero.statModifiers,
     },
     reputations: [],
     activeTrade: null,

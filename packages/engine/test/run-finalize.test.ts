@@ -145,6 +145,16 @@ describe('finalizeRun', () => {
     expect(finalized.record.score.total).toEqual(scoreRun({ run, content }).total);
   });
 
+  it('records the hero class tags, sorted', () => {
+    const content = pack([itemDef('item.sword')]);
+    const run = concludedRun({
+      items: [equippedItem('item.hero.sword', 'item.sword')],
+      hero: { ...createDemoRun().hero, classTags: ['wayfarer', 'warden'] },
+    });
+    const finalized = finalizeRun({ run, content, lifetime: emptyLifetime() });
+    expect(finalized.record.classTags).toEqual(['warden', 'wayfarer']);
+  });
+
   it('deduplicates and sorts equipped item content IDs in the build snapshot', () => {
     const content = pack([itemDef('item.dagger', { stackLimit: 2,
       equipment: { slots: ['main-hand', 'off-hand'], handedness: 'one-handed', reservedSlots: [] } })]);

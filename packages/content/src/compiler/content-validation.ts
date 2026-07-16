@@ -3,6 +3,7 @@ import type {
   MonsterContentEntry, IdentificationPoolContentEntry, EncounterContentEntry,
   FallenChampionTemplateContentEntry,
   NpcFactionContentEntry,
+  ClassContentEntry, BackgroundContentEntry, ClassKitBackpackItem, EquipmentSlot,
 } from '../model.js';
 import type { ContentCompileIssue } from './error.js';
 import {
@@ -681,6 +682,90 @@ function achievementIssues(locatedEntries: readonly LocatedContentEntry[]): Cont
   return issues;
 }
 
+function backpackItemIssues(
+  file: string,
+  path: string,
+  items: readonly ClassKitBackpackItem[],
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  return items.flatMap((backpackItem, index) => {
+    const target = byId.get(backpackItem.contentId);
+    if (!target) return [issue(file, `${path}.${index}.contentId`, `unknown item reference ${backpackItem.contentId}`)];
+    if (target.kind !== 'item') {
+      return [issue(file, `${path}.${index}.contentId`, `item reference ${backpackItem.contentId} resolves to ${target.kind}`)];
+    }
+    return [];
+  });
+}
+
+function classIssues(
+  located: LocatedContentEntry & { entry: ClassContentEntry },
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  const { entry: cls, file } = located;
+  const path = `$.entries.${cls.id}`;
+  const issues: ContentCompileIssue[] = [];
+  if (cls.playable && cls.kits.length < 2) {
+    issues.push(issue(file, `${path}.kits`, 'a playable class requires at least 2 kits'));
+  }
+  cls.kits.forEach((kit, kitIndex) => {
+    const kitPath = `${path}.kits.${kitIndex}`;
+    const occupants: { index: number; slot: EquipmentSlot; occupiedSlots: readonly EquipmentSlot[] }[] = [];
+    kit.equipped.forEach((equipped, index) => {
+      const equippedPath = `${kitPath}.equipped.${index}`;
+      const target = byId.get(equipped.contentId);
+      if (!target) {
+        issues.push(issue(file, `${equippedPath}.contentId`, `unknown item reference ${equipped.contentId}`));
+        return;
+      }
+      if (target.kind !== 'item') {
+        issues.push(issue(file, `${equippedPath}.contentId`, `item reference ${equipped.contentId} resolves to ${target.kind}`));
+        return;
+      }
+      if (!target.equipment) {
+        issues.push(issue(file, `${equippedPath}.slot`, `item ${equipped.contentId} cannot be equipped in any slot`));
+        return;
+      }
+      if (!target.equipment.slots.includes(equipped.slot)) {
+        issues.push(issue(file, `${equippedPath}.slot`,
+          `item ${equipped.contentId} cannot be equipped in slot ${equipped.slot}`));
+        return;
+      }
+      if (equipped.enabled !== undefined && !target.light) {
+        issues.push(issue(file, `${equippedPath}.enabled`,
+          `kit ${kit.kitId} sets enabled on non-light item ${equipped.contentId}`));
+      }
+      occupants.push({
+        index,
+        slot: equipped.slot,
+        occupiedSlots: [equipped.slot, ...target.equipment.reservedSlots],
+      });
+    });
+    for (let left = 0; left < occupants.length; left += 1) {
+      for (let right = left + 1; right < occupants.length; right += 1) {
+        const a = occupants[left]!;
+        const b = occupants[right]!;
+        const collision = a.occupiedSlots.find((slot) => b.occupiedSlots.includes(slot));
+        if (collision) {
+          issues.push(issue(file, `${kitPath}.equipped.${b.index}.slot`,
+            `kit ${kit.kitId} reserved slot ${collision} conflicts between equipped.${a.index} and equipped.${b.index}`));
+        }
+      }
+    }
+    issues.push(...backpackItemIssues(file, `${kitPath}.backpack`, kit.backpack, byId));
+  });
+  return issues;
+}
+
+function backgroundIssues(
+  located: LocatedContentEntry & { entry: BackgroundContentEntry },
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  const { entry: background, file } = located;
+  const path = `$.entries.${background.id}`;
+  return backpackItemIssues(file, `${path}.extraItems`, background.extraItems, byId);
+}
+
 export function validateContentEntries(locatedEntries: readonly LocatedContentEntry[]): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
   issues.push(...achievementIssues(locatedEntries));
@@ -712,6 +797,8 @@ export function validateContentEntries(locatedEntries: readonly LocatedContentEn
       issues.push(...equipmentIssues(file, entry), ...itemCompatibilityIssues(file, entry, allItems),
         ...effectIssues(file, entry.id, entry.effects, byId));
     }
+    if (entry.kind === 'class') issues.push(...classIssues({ entry, file }, byId));
+    if (entry.kind === 'background') issues.push(...backgroundIssues({ entry, file }, byId));
     if (entry.kind === 'spell' || entry.kind === 'trap') issues.push(...effectIssues(file, entry.id, entry.effects, byId));
     if (entry.kind === 'encounter') issues.push(...encounterIssues(file, entry, byId));
     if (entry.kind === 'encounter') {

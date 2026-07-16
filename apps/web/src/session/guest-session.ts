@@ -1,10 +1,11 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
-  createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, descendToNextFloor, encodeActiveRun,
-  projectDecision, projectDomainEvents, projectGameplayState, RECENT_COMMAND_LIMIT, resolveCommand,
-  SaveLoadError,
-  type ActiveRun, type CommandResolution, type GameCommand, type GameplayProjection,
-  type PublicDecision, type PublicEvent, type Uint32State,
+  createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, deriveHallRecordId, descendToNextFloor, encodeActiveRun,
+  finalizeRun, projectDecision, projectDomainEvents, projectGameplayState, projectRunConclusion,
+  RECENT_COMMAND_LIMIT, resolveCommand, SaveLoadError,
+  type ActiveRun, type CommandResolution, type GameCommand, type GameplayProjection, type HallRecordEnrichment,
+  type NewRunHero, type PublicDecision, type PublicEvent, type RunConclusionProjection, type RunRecordRepository,
+  type StoredHallRecord, type Uint32State,
 } from '@woven-deep/engine';
 import { buildIntent } from './command-builder.js';
 import { foldEventsIntoLog, LOG_CAPACITY, type LogLine } from './event-log.js';
@@ -31,6 +32,12 @@ export interface SessionSnapshot {
   readonly pendingDecision: PublicDecision | null;
   readonly notice: SessionNotice | null;
   readonly backpackOpen: boolean;
+  /** Cheap, pure projection of the run's ending once `run.conclusion !== null`: completion facts
+   * and metrics are always safe to expose, but this is computed with `record: null` and
+   * `achievements: []`, so `finalized` is always `false` here regardless of the engine's own
+   * `conclusion.finalized` flag — the full score/heirloom/achievements only ever come from
+   * `finalizeConcludedRun`. `null` while the run is still in progress. */
+  readonly conclusion: RunConclusionProjection | null;
 }
 
 function randomSeed(): Uint32State {
@@ -50,6 +57,7 @@ function randomSeed(): Uint32State {
 export class GuestSession {
   private readonly pack: CompiledContentPack;
   private readonly storage: SessionStorageLike;
+  private readonly hero: NewRunHero;
   private run: ActiveRun;
   private commandSequence: number;
   private log: readonly LogLine[] = [];
@@ -61,18 +69,31 @@ export class GuestSession {
   private snapshot: SessionSnapshot;
   private readonly listeners = new Set<() => void>();
 
-  constructor(input: Readonly<{ pack: CompiledContentPack; storage: SessionStorageLike; seed?: Uint32State }>) {
+  constructor(
+    input: Readonly<{
+      pack: CompiledContentPack; storage: SessionStorageLike; seed?: Uint32State; hero?: NewRunHero;
+      /** When `true`, `boot()` never looks at any existing save — it always starts a brand-new run
+       * from this constructor's `hero`/`seed`, exactly like an empty storage boot would. This is the
+       * seam chargen's "confirm"/"new hero" flows use: without it, any live save in storage would
+       * silently win over the wizard's just-confirmed hero (see App.tsx's chargen `onConfirm`).
+       * "Continue" and quickstart callers must NOT set this — they rely on restore semantics. */
+      startFresh?: boolean;
+    }>,
+  ) {
     this.pack = input.pack;
     this.storage = input.storage;
-    const booted = this.boot(input.seed);
+    this.hero = input.hero ?? DEFAULT_GUEST_HERO;
+    const booted = this.boot(input.seed, input.startFresh ?? false);
     this.run = booted.run;
     this.notice = booted.notice;
     this.commandSequence = booted.commandSequence;
     this.snapshot = this.buildSnapshot();
   }
 
-  private boot(seed?: Uint32State): Readonly<{ run: ActiveRun; notice: SessionNotice; commandSequence: number }> {
-    const raw = this.storage.get(SAVE_KEY);
+  private boot(
+    seed: Uint32State | undefined, startFresh: boolean,
+  ): Readonly<{ run: ActiveRun; notice: SessionNotice; commandSequence: number }> {
+    const raw = startFresh ? null : this.storage.get(SAVE_KEY);
     if (raw === null) {
       return { run: this.freshRun(seed), notice: { kind: 'fresh' }, commandSequence: 0 };
     }
@@ -110,7 +131,7 @@ export class GuestSession {
   }
 
   private freshRun(seed?: Uint32State): ActiveRun {
-    return createNewRun({ pack: this.pack, seed: seed ?? randomSeed(), hero: DEFAULT_GUEST_HERO });
+    return createNewRun({ pack: this.pack, seed: seed ?? randomSeed(), hero: this.hero });
   }
 
   private nextCommandId(): string {
@@ -240,6 +261,62 @@ export class GuestSession {
     this.publish();
   }
 
+  /**
+   * Finalizes this session's concluded run into the guest Hall exactly once. Throws if the run
+   * has not concluded. If the engine's own `conclusion.finalized` flag is already `true` — a save
+   * restored from a run that was finalized in a previous page life (Continue into a dead run) —
+   * this does NOT re-finalize: it looks the existing record up in `repository` by this run's
+   * deterministic hall-record ID and projects from that, so a repeated call (or a reload) never
+   * re-appends. If the Hall has no matching record — e.g. the guest's Hall storage was reset
+   * (corrupt blob) while the save survived — this degrades to a `record: null` projection (score
+   * and heirloom `null`, `finalized: false`) rather than throwing: the conclusion screen already
+   * knows how to render that shape, exactly like the in-progress-run projection in
+   * `buildSnapshot` below. Otherwise it runs `finalizeRun`, appends the new record (with the
+   * caller-supplied `enrichment`) and lifetime deltas into `repository`, persists the now-finalized
+   * run through the usual codec, folds the finalize events into the log, republishes the snapshot,
+   * and returns the full projection (score, heirloom, achievement grants).
+   */
+  finalizeConcludedRun(repository: RunRecordRepository, enrichment: HallRecordEnrichment): RunConclusionProjection {
+    const { conclusion } = this.run;
+    if (conclusion === null) {
+      throw new Error('finalizeConcludedRun requires a concluded run');
+    }
+
+    if (conclusion.finalized) {
+      const recordId = deriveHallRecordId(this.run.runSeed, this.run.contentHash);
+      const record = repository.records().find((candidate) => candidate.recordId === recordId) ?? null;
+      const projection = projectRunConclusion({ run: this.run, record, achievements: [] });
+      if (projection === null) {
+        throw new Error('internal invariant: an already-concluded run projected to null');
+      }
+      return projection;
+    }
+
+    const finalized = finalizeRun({ run: this.run, content: this.pack, lifetime: repository.lifetime() });
+    const stored: StoredHallRecord = { ...finalized.record, enrichment };
+    repository.appendRecord(stored);
+    repository.applyDeltas(finalized.deltas);
+
+    this.run = finalized.run;
+    // `finalizeRun` only ever emits `run.finalized`/`achievement.granted` (see run-finalize.ts),
+    // both members of `PublicEvent` too — but their shared static type is the broader
+    // `DomainEvent`, which also covers variants `PublicEvent` excludes (e.g. `AttackMissedEvent`).
+    const events = finalized.events as readonly PublicEvent[];
+    const folded = foldEventsIntoLog(this.log, events, this.nextLogId);
+    this.log = folded.log;
+    this.nextLogId = folded.nextId;
+    this.persist();
+
+    const projection = projectRunConclusion({
+      run: this.run, record: stored, achievements: finalized.deltas.achievementGrants,
+    });
+    if (projection === null) {
+      throw new Error('internal invariant: a just-finalized run projected to null');
+    }
+    this.publish();
+    return projection;
+  }
+
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
@@ -257,6 +334,8 @@ export class GuestSession {
       pendingDecision: this.pendingDecision,
       notice: this.notice,
       backpackOpen: this.backpackOpen,
+      conclusion: this.run.conclusion === null ? null
+        : projectRunConclusion({ run: this.run, record: null, achievements: [] }),
     };
   }
 

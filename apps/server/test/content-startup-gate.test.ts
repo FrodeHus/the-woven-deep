@@ -54,7 +54,7 @@ describe('content startup integration gate orchestration', () => {
   it('fails when the invalid schema starts', async () => {
     const fake = runtime({ runInvalid: async () => ({ exitCode: 0, output: '' }) });
     await expect(verifyContentStartupGate(fake.implementation))
-      .rejects.toThrow('invalid schema-v3 replacement unexpectedly started');
+      .rejects.toThrow('invalid content pack unexpectedly started');
   });
 
   it('fails when rejected content changes immutable publication', async () => {

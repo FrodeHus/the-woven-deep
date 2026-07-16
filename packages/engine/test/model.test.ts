@@ -13,15 +13,15 @@ import {
 
 describe('engine model boundary', () => {
   it('publishes the active schema constants', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(6);
+    expect(SAVE_SCHEMA_VERSION).toBe(7);
     expect(ENGINE_GAME_VERSION).toBe('0.1.0');
     expect(RECENT_COMMAND_LIMIT).toBe(128);
   });
 
-  it('stores merchant-ready population state in schema v6', () => {
+  it('stores merchant-ready population state in schema v7', () => {
     const run = createDemoRun();
 
-    expect(run.schemaVersion).toBe(6);
+    expect(run.schemaVersion).toBe(7);
     expect(run.worldTime).toBe(0);
     expect(run.actors.map((actor) => actor.actorId)).toEqual(['hero.demo']);
     expect(run.items).toEqual([]);
@@ -29,6 +29,8 @@ describe('engine model boundary', () => {
     expect(run.identification.appearanceByContentId).toEqual({});
     expect(run.hero.actorId).toBe('hero.demo');
     expect(run.hero.currency).toBe(40);
+    expect(run.hero.classTags).toEqual([]);
+    expect(run.hero.statModifiers).toEqual({});
     expect(run.reputations).toEqual([]);
     expect(run.activeTrade).toBeNull();
     expect(run.encounterDecisions).toEqual([]);

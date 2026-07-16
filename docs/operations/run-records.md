@@ -77,9 +77,40 @@ engine types. The server never accepts records or scores from the browser.
 ## Host enrichment
 
 Host-enriched display fields are **not** engine fields. The enrichment vocabulary is closed to exactly
-the achieved-at date and the portrait/appearance glyph, attached at persistence time
+the achieved-at label and the portrait/appearance glyph, attached at persistence time
 (`StoredHallRecord = HallRecord + enrichment`). The engine is clock-free and never produces either
-value. Free-text player messages are deliberately excluded from records and lineage everywhere:
-user-authored text shown to other players would require moderation and output sanitization pipelines
-that do not exist. Lineage display uses only engine-validated fields (hero name, class tags) plus the
-closed host enrichment.
+value. `achievedAt` is a host-supplied **display string**, not a validated timestamp: the guest client
+(milestone 5) writes `"Run #N"` — the record's 1-based position in the session Hall — while the server
+profile (milestone 6) will write a real date. Consumers render it verbatim and never parse it.
+Free-text player messages are deliberately excluded from records and lineage everywhere: user-authored
+text shown to other players would require moderation and output sanitization pipelines that do not
+exist. Lineage display uses only engine-validated fields (hero name, class tags) plus the closed host
+enrichment.
+
+## The guest Hall (milestone 5B)
+
+The guest client implements `RunRecordRepository` over the browser's `sessionStorage`
+(`apps/web/src/session/run-records-storage.ts`, keyed at `woven-deep.guest-hall`). It behaviourally
+mirrors the engine's in-memory repository — append-only immutability via deep-freeze, duplicate-ID
+rejection, and delta idempotence keyed on the delta `recordId` — and differs only at the persistence
+boundary: every mutation re-serializes the whole `{ records, heart, lifetime, appliedDeltaRecordIds }`
+blob (a single guest session's Hall stays small, so full rewrites are cheap). A corrupt or
+foreign-shaped blob is rejected at construction with `SessionHallCorruptError`; the module first resets
+the key to a fresh empty Hall, so the retry the client immediately performs always succeeds, and the
+active run — a separate storage key — is never touched.
+
+Finalization is automatic and exactly-once. When a run's `conclusion` first becomes non-null (the hero
+died), `GuestSession.finalizeConcludedRun` runs `finalizeRun`, appends the resulting record with its
+enrichment, applies the lifetime deltas, and projects the conclusion screen. The enrichment it supplies
+uses the closed vocabulary above: `portraitGlyph` from the chargen wizard's cosmetic side-state (`'@'`
+default), and `achievedAt` set to `"Run #" + (repository.records().length + 1)` — the run's ordinal in
+the Hall at the moment it is recorded. An already-finalized run restored from storage (Continue into a
+dead run) is **not** re-finalized: its existing record is looked up by the deterministic hall-record ID
+and re-projected, so reloads never double-append.
+
+Both the conclusion and Hall screens mark everything they show as *unverified · this session only* —
+the guest client has no server-side confirmation of any standing. Server-backed persistence and
+verification land in milestone 6.
+
+The full chargen → play → death → conclusion → Hall lifecycle is exercised end-to-end, in a real
+browser, by `apps/web/e2e/run-lifecycle.spec.ts`.

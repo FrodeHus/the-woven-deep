@@ -35,7 +35,8 @@ export interface HallRecord {
  * exactly the achieved-at date and portrait/appearance. The engine never produces either value.
  */
 export interface HallRecordEnrichment {
-  readonly achievedAt: string;            // host-supplied ISO date; never engine-produced
+  readonly achievedAt: string;            // host-supplied display string, never engine-produced:
+                                          // the guest client uses "Run #N"; the server (M6) uses a date
   readonly portraitGlyph: string;         // host-supplied appearance; '@' default
 }
 

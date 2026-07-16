@@ -1,10 +1,18 @@
-import { useEffect, useMemo, useState, type JSX } from 'react';
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
-import type { Uint32State } from '@woven-deep/engine';
+import {
+  heroFromChoices, type HeroChoices, type RunConclusionProjection, type RunRecordRepository, type Uint32State,
+} from '@woven-deep/engine';
 import { loadContentPack } from './api.js';
+import type { LogLine } from './session/event-log.js';
 import { GuestSession, type SessionNotice } from './session/guest-session.js';
+import { createSessionRunRecordRepository, SessionHallCorruptError } from './session/run-records-storage.js';
 import { useGuestSession } from './session/store.js';
-import { browserSessionStorage, type SessionStorageLike } from './session/storage.js';
+import { browserSessionStorage, classifyStorageFailure, type SessionStorageLike } from './session/storage.js';
+import { ChargenScreen } from './ui/screens/ChargenScreen.js';
+import { ConclusionScreen } from './ui/screens/ConclusionScreen.js';
+import { HallScreen } from './ui/screens/HallScreen.js';
+import { TitleScreen } from './ui/screens/TitleScreen.js';
 import { PlayScreen } from './ui/PlayScreen.js';
 import './styles.css';
 
@@ -16,16 +24,55 @@ export interface AppProps {
 }
 
 /**
+ * The client-side screen state machine: title (the landing menu) -> chargen (the wizard) -> play
+ * (the live run) -> conclusion (payload wiring lands in a later task) -> hall (the Hall of
+ * Records, reachable from either title or conclusion, hence `returnTo`).
+ */
+export type ScreenState =
+  | { readonly screen: 'title' }
+  | { readonly screen: 'chargen' }
+  | { readonly screen: 'play' }
+  | { readonly screen: 'conclusion' }
+  | { readonly screen: 'hall'; readonly returnTo: 'title' | 'conclusion' };
+
+/** Where the confirmed portrait glyph is persisted: client-only cosmetic side-state, never engine
+ * data, saved at chargen confirm and read back on Continue. */
+export const PORTRAIT_KEY = 'woven-deep.guest-portrait';
+
+/**
  * Test-only seed override: `?seed=11.22.33.44` (four dot-separated `Uint32` words) pins the
  * fresh run's RNG instead of the ambient `crypto.getRandomValues` seed `GuestSession` otherwise
  * generates. Never a real feature — no UI links to it, and it's parsed straight out of
  * `location.search`, so it only ever matters to a test (or a developer poking at the URL bar).
+ * When chargen is reached, the SAME seed also drives the wizard's attribute rolls (see
+ * `chargenSeed` below), so this one query parameter pins both.
  */
 function parseSeedFromQuery(search: string): Uint32State | undefined {
   const raw = new URLSearchParams(search).get('seed');
   if (!raw) return undefined;
   const words = raw.split('.').map(Number);
   if (words.length !== 4 || words.some((word) => !Number.isFinite(word))) return undefined;
+  return [words[0]!, words[1]!, words[2]!, words[3]!];
+}
+
+/**
+ * Test-only escape hatch (documented, not a real feature): `?quickstart=1` skips the title and
+ * chargen screens entirely and boots straight into play with `DEFAULT_GUEST_HERO`, exactly like
+ * the pre-5B boot behaviour. It exists so the pre-existing e2e specs (recorded against a fixed
+ * keypress walk over the default hero's stats) keep passing unmodified apart from their boot URL.
+ */
+function isQuickstart(search: string): boolean {
+  return new URLSearchParams(search).get('quickstart') === '1';
+}
+
+/** Client-only ambient randomness for the chargen wizard's seed when no `?seed=` override is
+ * present — mirrors `GuestSession`'s own `randomSeed` (guest-session.ts), duplicated here rather
+ * than exported/shared because the chargen screen needs the seed BEFORE any `GuestSession`
+ * exists (chargen constructs its session lazily, at confirm — see `App`'s doc comment). */
+function randomSeed(): Uint32State {
+  const words = new Uint32Array(4);
+  crypto.getRandomValues(words);
+  if (words.every((word) => word === 0)) words[0] = 1;
   return [words[0]!, words[1]!, words[2]!, words[3]!];
 }
 
@@ -54,9 +101,19 @@ function storageWarningMessage(notice: StorageNotice): string {
     : 'Saving is unavailable in this browser — play continues, but your progress will not persist.';
 }
 
+/** How much of the adventure log the conclusion screen's "last moments" recap keeps. */
+const CONCLUSION_LOG_TAIL = 8;
+
 interface GameRootProps {
   readonly session: GuestSession;
   readonly pack: CompiledContentPack;
+  readonly repository: RunRecordRepository;
+  readonly portraitGlyph: string | undefined;
+  readonly onConcluded: (projection: RunConclusionProjection, logTail: readonly LogLine[]) => void;
+  /** Called if `finalizeConcludedRun` itself throws (e.g. the Hall write hit a storage quota) --
+   * surfaces a persistent, non-dismissible warning while the conclusion screen still shows the
+   * in-memory (unfinalized) projection instead of leaving the player on a white screen. */
+  readonly onFinalizeError: (message: string) => void;
 }
 
 /** Everything that needs a live `GuestSession` snapshot: the notice banners and the play screen
@@ -65,15 +122,47 @@ interface GameRootProps {
  *
  * Storage notices (unavailable/full) get their own persistent, non-dismissible `role="alert"`
  * warning per the design spec — play continues unsaved, but the player must keep seeing that.
- * Every other notice (fresh/restored/save-discarded) stays a dismissible `role="status"` banner. */
-function GameRoot({ session, pack }: GameRootProps): JSX.Element {
+ * Every other notice (fresh/restored/save-discarded) stays a dismissible `role="status"` banner.
+ *
+ * Once the snapshot's `conclusion` first becomes non-null (the hero died, or a save restored an
+ * already-concluded run), this finalizes the run into the Hall exactly once — `finalizeRun`'s own
+ * `finalized` flag makes a repeat call safe, but `finalizedRef` also stops this component from
+ * calling it again on every subsequent render before `onConcluded` swaps the screen away. */
+function GameRoot({ session, pack, repository, portraitGlyph, onConcluded, onFinalizeError }: GameRootProps): JSX.Element {
   const snapshot = useGuestSession(session);
   const [dismissed, setDismissed] = useState(false);
-  const { notice } = snapshot;
+  const { notice, conclusion } = snapshot;
+  const finalizedRef = useRef(false);
 
   useEffect(() => {
     setDismissed(false);
   }, [notice]);
+
+  useEffect(() => {
+    if (conclusion === null || finalizedRef.current) return;
+    finalizedRef.current = true;
+    try {
+      const projection = session.finalizeConcludedRun(repository, {
+        achievedAt: `Run #${repository.records().length + 1}`,
+        portraitGlyph: portraitGlyph ?? '@',
+      });
+      onConcluded(projection, session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL));
+    } catch (thrown) {
+      // The Hall write itself failed (quota/unavailable) -- this is not a bug in the run, so
+      // don't let it crash out of the effect into a white screen. Surface the same persistent
+      // storage-warning wording the rest of the app uses, and still move to the conclusion
+      // screen with whatever the session can already project in-memory (score/heirloom null,
+      // since the record never made it into the Hall).
+      const failure = classifyStorageFailure(thrown);
+      onFinalizeError(
+        failure === 'full'
+          ? 'Your browser storage is full, so this run could not be saved to the Hall of Records.'
+          : 'The Hall of Records is unavailable, so this run could not be saved.',
+      );
+      const fallback = session.getSnapshot().conclusion;
+      if (fallback) onConcluded(fallback, session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL));
+    }
+  }, [conclusion, onConcluded, onFinalizeError, portraitGlyph, repository, session]);
 
   const dismissibleNotice = notice && !isStorageNotice(notice) ? notice : null;
   const storageNotice = notice && isStorageNotice(notice) ? notice : null;
@@ -97,9 +186,12 @@ function GameRoot({ session, pack }: GameRootProps): JSX.Element {
 }
 
 /**
- * Boots the guest client: fetches the compiled content pack, then constructs the single
- * `GuestSession` for this browser tab (restoring from storage if a save is present) and hands off
- * to `PlayScreen`. Distinct screens for the two ways boot can go wrong: the pack fetch failing
+ * Boots the guest client: fetches the compiled content pack, then walks the screen state machine
+ * (title -> chargen -> play, plus a stub hall placeholder and a `?quickstart=1` shortcut that
+ * skips straight to play). Unlike the pre-5B boot, the `GuestSession` is now created LAZILY —
+ * quickstart and Continue construct it as soon as they're selected/available, while entering
+ * chargen defers construction until the wizard is confirmed (its hero choices need to reach
+ * `createNewRun`). Distinct screens for the two ways boot can go wrong: the pack fetch failing
  * (retry button) vs. anything the session itself surfaces once it's running (a dismissible
  * banner in `GameRoot`, covering storage being unavailable/full and save-discard notices alike).
  */
@@ -126,11 +218,64 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
   }, [fetcher, attempt]);
 
   const storage = useMemo(() => storageOverride ?? browserSessionStorage(), [storageOverride]);
-  const session = useMemo(() => {
-    if (!pack) return undefined;
+
+  // The session-scoped Hall of Records repository. A corrupt blob throws `SessionHallCorruptError`
+  // at construction; the module itself clears the storage key back to a fresh, empty Hall before
+  // throwing, so retrying the SAME construction immediately below always succeeds. The active run
+  // (an entirely separate storage key) is untouched either way — only a notice is surfaced.
+  const [repository, hallNotice] = useMemo((): readonly [RunRecordRepository, string | null] => {
+    try {
+      return [createSessionRunRecordRepository(storage), null] as const;
+    } catch (thrown) {
+      if (thrown instanceof SessionHallCorruptError) {
+        return [createSessionRunRecordRepository(storage), thrown.message] as const;
+      }
+      throw thrown;
+    }
+  }, [storage]);
+
+  const [screen, setScreen] = useState<ScreenState>(
+    () => (isQuickstart(window.location.search) ? { screen: 'play' } : { screen: 'title' }),
+  );
+  const [session, setSession] = useState<GuestSession>();
+  const [chargenSeed, setChargenSeed] = useState<Uint32State>();
+  const [portraitGlyph, setPortraitGlyph] = useState<string>();
+  const [conclusion, setConclusion] = useState<{
+    projection: RunConclusionProjection; logTail: readonly LogLine[];
+  }>();
+  const [finalizeWarning, setFinalizeWarning] = useState<string>();
+  const [chargenError, setChargenError] = useState<string>();
+
+  /** Wraps every post-boot screen with any persistent, non-dismissible warnings pending —
+   * Hall-corruption-on-boot and finalize-write failures alike. The active run survives regardless
+   * of either: only the Hall write (or, on boot, the Hall itself) was affected. */
+  function withHallNotice(children: JSX.Element): JSX.Element {
+    if (!hallNotice && !finalizeWarning) return children;
+    return (
+      <>
+        {hallNotice && (
+          <div role="alert" aria-label="Hall notice" className="storage-warning-banner" data-kind="hall-corrupt">
+            <p>Your Hall of Records could not be read and has been reset. ({hallNotice})</p>
+          </div>
+        )}
+        {finalizeWarning && (
+          <div role="alert" aria-label="Storage warning" className="storage-warning-banner" data-kind="finalize-failed">
+            <p>{finalizeWarning}</p>
+          </div>
+        )}
+        {children}
+      </>
+    );
+  }
+
+  // Quickstart's session is constructed once the pack is ready (it can't be constructed at the
+  // `useState` initializer above — the pack isn't loaded yet at first render).
+  useEffect(() => {
+    if (!pack || session) return;
+    if (!isQuickstart(window.location.search)) return;
     const seed = parseSeedFromQuery(window.location.search);
-    return seed ? new GuestSession({ pack, storage, seed }) : new GuestSession({ pack, storage });
-  }, [pack, storage]);
+    setSession(seed ? new GuestSession({ pack, storage, seed }) : new GuestSession({ pack, storage }));
+  }, [pack, storage, session]);
 
   if (error) {
     return (
@@ -143,7 +288,7 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
     );
   }
 
-  if (!session || !pack) {
+  if (!pack) {
     return (
       <main className="shell boot-loading">
         <p className="eyebrow">The Woven Deep</p>
@@ -152,5 +297,128 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
     );
   }
 
-  return <GameRoot session={session} pack={pack} />;
+  if (screen.screen === 'title') {
+    return withHallNotice(
+      <main className="shell">
+        <TitleScreen
+          storage={storage}
+          onEnterTheDeep={() => {
+            setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
+            setScreen({ screen: 'chargen' });
+          }}
+          onContinue={() => {
+            setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
+            setSession(new GuestSession({ pack, storage }));
+            setScreen({ screen: 'play' });
+          }}
+          onHall={() => setScreen({ screen: 'hall', returnTo: 'title' })}
+        />
+      </main>,
+    );
+  }
+
+  if (screen.screen === 'chargen') {
+    if (chargenError) {
+      return withHallNotice(
+        <main className="shell boot-error">
+          <p className="eyebrow">The Woven Deep</p>
+          <h1>Something went wrong building your hero.</h1>
+          <p role="alert">{chargenError}</p>
+          <button type="button" onClick={() => setChargenError(undefined)}>Back</button>
+        </main>,
+      );
+    }
+    // `chargenSeed` is always set before this screen is reached (see `onEnterTheDeep` above).
+    const seed = chargenSeed!;
+    return withHallNotice(
+      <ChargenScreen
+        pack={pack}
+        seed={seed}
+        onConfirm={(choices: HeroChoices, glyph: string) => {
+          let hero: ReturnType<typeof heroFromChoices>;
+          try {
+            hero = heroFromChoices({ pack, choices });
+          } catch (thrown) {
+            // A client bug (a malformed choice heroFromChoices' own validation somehow missed
+            // upstream) must never fail silently -- surface it visibly rather than only logging.
+            setChargenError(thrown instanceof Error ? thrown.message : 'Hero creation failed unexpectedly.');
+            return;
+          }
+          try {
+            storage.set(PORTRAIT_KEY, glyph);
+          } catch {
+            // Best-effort, same as every other portrait/cosmetic persistence attempt in this app —
+            // the run itself is unaffected if this particular write fails.
+          }
+          setPortraitGlyph(glyph);
+          setSession(new GuestSession({ pack, storage, seed, hero, startFresh: true }));
+          setScreen({ screen: 'play' });
+        }}
+      />,
+    );
+  }
+
+  if (screen.screen === 'hall') {
+    const { returnTo } = screen;
+    return withHallNotice(
+      <main className="shell">
+        <HallScreen repository={repository} onBack={() => setScreen({ screen: returnTo })} />
+      </main>,
+    );
+  }
+
+  if (screen.screen === 'conclusion') {
+    // `conclusion` is always set before this screen is reached — `GameRoot`'s `onConcluded`
+    // (below) sets both together, in the same event.
+    if (!conclusion) {
+      return withHallNotice(
+        <main className="shell boot-loading">
+          <p className="eyebrow">The Woven Deep</p>
+          <p role="status">The run has ended.</p>
+        </main>,
+      );
+    }
+    return withHallNotice(
+      <ConclusionScreen
+        projection={conclusion.projection}
+        pack={pack}
+        logTail={conclusion.logTail}
+        onHall={() => setScreen({ screen: 'hall', returnTo: 'conclusion' })}
+        onNewHero={() => {
+          setSession(undefined);
+          setConclusion(undefined);
+          setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
+          setScreen({ screen: 'chargen' });
+        }}
+        onTitle={() => {
+          setSession(undefined);
+          setConclusion(undefined);
+          setScreen({ screen: 'title' });
+        }}
+      />,
+    );
+  }
+
+  if (!session) {
+    return withHallNotice(
+      <main className="shell boot-loading">
+        <p className="eyebrow">The Woven Deep</p>
+        <p role="status">Binding the current content pack…</p>
+      </main>,
+    );
+  }
+
+  return withHallNotice(
+    <GameRoot
+      session={session}
+      pack={pack}
+      repository={repository}
+      portraitGlyph={portraitGlyph}
+      onConcluded={(projection, logTail) => {
+        setConclusion({ projection, logTail });
+        setScreen({ screen: 'conclusion' });
+      }}
+      onFinalizeError={setFinalizeWarning}
+    />,
+  );
 }

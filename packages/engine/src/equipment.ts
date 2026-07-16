@@ -165,7 +165,12 @@ export function itemLightSources(input: Readonly<{
       location = { type: 'fixed', x: item.location.x, y: item.location.y };
     } else if (item.location.type === 'equipped') {
       const actor = actorById(input.run, item.location.actorId);
-      if (!actor || actor.floorId !== input.floorId) continue;
+      // A dead wielder stays in `run.actors` but is filtered out of every turn-preparation
+      // position map (which only tracks `health > 0` actors). Without this check, a dead
+      // actor's still-enabled light would emit a source the lighting resolver can never
+      // locate, throwing a RangeError deep inside illumination. Skip it at the source so no
+      // caller of itemLightSources needs to know about this asymmetry.
+      if (!actor || actor.floorId !== input.floorId || actor.health <= 0) continue;
       location = { type: 'actor', actorId: actor.actorId };
     } else continue;
     lights.push({

@@ -1,0 +1,25 @@
+schemaVersion: 6
+entries:
+  - kind: background
+    id: background.caravan-guard
+    name: Caravan guard
+    tags: [chargen]
+    description: Years spent warding merchant caravans against opportunists.
+    modifiers: { defense: 1 }
+    extraItems: []
+  - kind: background
+    id: background.deep-miner
+    name: Deep miner
+    tags: [chargen]
+    description: An eye trained to spot ore veins spots hidden things just as easily.
+    modifiers: { search: 1 }
+    extraItems:
+      - { contentId: item.lamp-oil, quantity: 1 }
+  - kind: background
+    id: background.ratcatcher
+    name: Ratcatcher
+    tags: [chargen]
+    description: A steady hand honed on vermin far meaner than they look.
+    modifiers: { meleeAccuracy: 1 }
+    extraItems:
+      - { contentId: item.travel-ration, quantity: 2 }

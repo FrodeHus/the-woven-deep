@@ -7,6 +7,7 @@ import {
   RECENT_COMMAND_LIMIT, type ActiveRun, type ActorState, type Uint32State,
 } from '@woven-deep/engine';
 import { GuestSession } from '../src/session/guest-session.js';
+import { createSessionRunRecordRepository } from '../src/session/run-records-storage.js';
 import { COMMAND_SEQUENCE_KEY, SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 
 let pack: CompiledContentPack;
@@ -55,6 +56,21 @@ describe('GuestSession', () => {
     expect(session.getSnapshot().projection.metrics.turnsElapsed).toBe(1);
   });
 
+  it('forwards an optional hero override into createNewRun for a fresh run', () => {
+    const storage = fakeStorage();
+    const customHero = { ...DEFAULT_GUEST_HERO, name: 'Rin' };
+    const session = new GuestSession({ pack, storage, seed: SEED, hero: customHero });
+
+    expect(session.getSnapshot().projection.hero.name).toBe('Rin');
+  });
+
+  it('defaults to DEFAULT_GUEST_HERO when no hero override is given', () => {
+    const storage = fakeStorage();
+    const session = new GuestSession({ pack, storage, seed: SEED });
+
+    expect(session.getSnapshot().projection.hero.name).toBe(DEFAULT_GUEST_HERO.name);
+  });
+
   it('restores a stored run byte-for-byte', () => {
     const storage = fakeStorage();
     const first = new GuestSession({ pack, storage, seed: SEED });
@@ -76,6 +92,26 @@ describe('GuestSession', () => {
     // Still gets a playable run even though the save was discarded.
     session.dispatch({ type: 'wait' });
     expect(session.getSnapshot().projection.metrics.turnsElapsed).toBe(1);
+  });
+
+  it('startFresh skips restoring a decodable save for a DIFFERENT hero and overwrites it on first persist', () => {
+    // Regression coverage for the final-review finding: `boot()` used to unconditionally restore
+    // any decodable, hash-matching save, so entering the wizard for a brand-new hero while a live
+    // save existed silently discarded the wizard's choices and resumed the OLD run instead.
+    const storage = fakeStorage();
+    const oldHero = { ...DEFAULT_GUEST_HERO, name: 'Old Hero' };
+    const oldRun = createNewRun({ pack, seed: SEED, hero: oldHero });
+    storage.set(SAVE_KEY, encodeActiveRun(oldRun));
+
+    const newHero = { ...DEFAULT_GUEST_HERO, name: 'New Hero' };
+    const session = new GuestSession({ pack, storage, seed: SEED, hero: newHero, startFresh: true });
+
+    expect(session.getSnapshot().projection.hero.name).toBe('New Hero');
+    expect(session.getSnapshot().notice).toEqual({ kind: 'fresh' });
+
+    session.dispatch({ type: 'wait' });
+    const overwritten = decodeActiveRun(storage.peek()!);
+    expect(overwritten.hero.name).toBe('New Hero');
   });
 
   it('discards a restored save whose content hash no longer matches the served pack', () => {
@@ -368,5 +404,111 @@ describe('GuestSession', () => {
     expect(session.getSnapshot().projection.metrics.turnsElapsed).toBe(1);
     // Seeded at `revision (0) + RECENT_COMMAND_LIMIT + 1`, then incremented once.
     expect(storage.peek(COMMAND_SEQUENCE_KEY)).toBe(String(RECENT_COMMAND_LIMIT + 2));
+  });
+
+  describe('death and finalization', () => {
+    /** A run already concluded by hero death (`health: 0`, a `died` conclusion at the fresh run's
+     * own revision/turn), built from the real compiled content pack this suite already loads.
+     * Constructed directly (rather than driven to death by dispatching commands) because this
+     * pack's fresh run spawns population actors alongside the hero, and forcing a natural
+     * mid-transition starvation death drags in unrelated multi-actor world-step machinery that
+     * has nothing to do with what this suite is testing; the engine's own `resolveCommand`-driven
+     * death path is covered by `run-finalize.test.ts`/`reducer.test.ts` in the engine package, and
+     * by `run-records-storage.test.ts`'s genuine death-and-finalize fixture. */
+    function deadRun(seed: Uint32State): ActiveRun {
+      const fresh = createNewRun({ pack, seed, hero: DEFAULT_GUEST_HERO });
+      const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+      return {
+        ...fresh,
+        actors: fresh.actors.map((actor) => (actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor)),
+        conclusion: {
+          completionType: 'died',
+          cause: { killerContentId: null, depth: 1, turn: fresh.turn, worldTime: fresh.worldTime },
+          concludedAtRevision: fresh.revision, finalized: false,
+        },
+      };
+    }
+
+    it('is null for a living run, and a non-finalized projection once restored into an already-died run', () => {
+      const storage = fakeStorage();
+      const living = new GuestSession({ pack, storage, seed: SEED });
+      expect(living.getSnapshot().conclusion).toBeNull();
+
+      storage.set(SAVE_KEY, encodeActiveRun(deadRun(SEED)));
+      const session = new GuestSession({ pack, storage });
+
+      const conclusion = session.getSnapshot().conclusion;
+      expect(conclusion).not.toBeNull();
+      expect(conclusion?.completionType).toBe('died');
+      expect(conclusion?.finalized).toBe(false);
+      expect(conclusion?.score).toBeNull();
+      expect(conclusion?.heirloom).toBeNull();
+    });
+
+    it('finalizeConcludedRun produces the full projection, appends exactly one record, and is idempotent on a second call', () => {
+      const storage = fakeStorage();
+      storage.set(SAVE_KEY, encodeActiveRun(deadRun(SEED)));
+      const session = new GuestSession({ pack, storage });
+
+      const repository = createSessionRunRecordRepository(storage);
+      const projection = session.finalizeConcludedRun(repository, { achievedAt: 'Run #1', portraitGlyph: '@' });
+
+      expect(projection.finalized).toBe(true);
+      expect(projection.score).not.toBeNull();
+      expect(projection.heirloom).not.toBeNull();
+      expect(repository.records()).toHaveLength(1);
+
+      const second = session.finalizeConcludedRun(repository, { achievedAt: 'Run #2', portraitGlyph: '&' });
+      expect(repository.records()).toHaveLength(1);
+      expect(second).toEqual(projection);
+    });
+
+    it('persists the finalized run (reload sees the engine finalized flag) and does not re-append on finalizeConcludedRun after reload', () => {
+      const storage = fakeStorage();
+      storage.set(SAVE_KEY, encodeActiveRun(deadRun(SEED)));
+      const session = new GuestSession({ pack, storage });
+
+      const repository = createSessionRunRecordRepository(storage);
+      const projection = session.finalizeConcludedRun(repository, { achievedAt: 'Run #1', portraitGlyph: '@' });
+
+      const reloadedRun = decodeActiveRun(storage.peek()!);
+      expect(reloadedRun.conclusion?.finalized).toBe(true);
+
+      const reloadedSession = new GuestSession({ pack, storage });
+      const reloadedRepository = createSessionRunRecordRepository(storage);
+      const reloadedProjection = reloadedSession.finalizeConcludedRun(
+        reloadedRepository, { achievedAt: 'Run #2', portraitGlyph: '&' },
+      );
+
+      expect(reloadedRepository.records()).toHaveLength(1);
+      expect(reloadedProjection).toEqual(projection);
+    });
+
+    it('degrades to a null-record projection instead of throwing when an already-finalized run has no matching Hall record (e.g. after a Hall reset)', () => {
+      // Regression coverage: App's corrupt-Hall handling resets the Hall while the save survives,
+      // so Continue into a dead run whose engine `conclusion.finalized` flag is already `true`
+      // must not crash with an "internal invariant" error just because the record is gone.
+      const storage = fakeStorage();
+      const deadFinalizedRun: ActiveRun = {
+        ...deadRun(SEED),
+        conclusion: {
+          completionType: 'died',
+          cause: { killerContentId: null, depth: 1, turn: 0, worldTime: 0 },
+          concludedAtRevision: 0, finalized: true,
+        },
+      };
+      storage.set(SAVE_KEY, encodeActiveRun(deadFinalizedRun));
+      const session = new GuestSession({ pack, storage });
+      const emptyRepository = createSessionRunRecordRepository(storage);
+
+      let projection: ReturnType<typeof session.finalizeConcludedRun>;
+      expect(() => {
+        projection = session.finalizeConcludedRun(emptyRepository, { achievedAt: 'Run #1', portraitGlyph: '@' });
+      }).not.toThrow();
+
+      expect(projection!.finalized).toBe(false);
+      expect(projection!.score).toBeNull();
+      expect(projection!.heirloom).toBeNull();
+    });
   });
 });
