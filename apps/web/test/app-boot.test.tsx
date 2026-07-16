@@ -7,12 +7,18 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, encodeActiveRun, type ActiveRun, type Uint32State,
+  createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, encodeActiveRun, heroFromChoices,
+  type ActiveRun, type Uint32State,
 } from '@woven-deep/engine';
 import { App, PORTRAIT_KEY } from '../src/App.js';
-import { createSessionRunRecordRepository } from '../src/session/run-records-storage.js';
+import { createSessionRunRecordRepository, RECORDS_KEY } from '../src/session/run-records-storage.js';
 import { PORTRAIT_GLYPHS } from '../src/session/wizard-reducer.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
+
+vi.mock('@woven-deep/engine', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@woven-deep/engine')>();
+  return { ...actual, heroFromChoices: vi.fn(actual.heroFromChoices) };
+});
 
 let pack: CompiledContentPack;
 
@@ -286,6 +292,23 @@ describe('App boot flow', () => {
     expect(screen.getByRole('status', { name: /session/i })).toHaveTextContent(/restored/i);
   });
 
+  it('surfaces a visible client-bug error state when heroFromChoices throws at chargen confirm, instead of crashing silently', async () => {
+    const user = userEvent.setup();
+    vi.mocked(heroFromChoices).mockImplementationOnce(() => {
+      throw new Error('poisoned choices: boom');
+    });
+
+    render(<App fetcher={packFetcher()} storage={fakeStorage()} />);
+    await user.click(await screen.findByRole('option', { name: /enter the deep/i }));
+    await screen.findByLabelText(/Step 1 of 7/);
+    await driveWizardToSummary(user);
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/poisoned choices: boom/);
+    expect(screen.queryByRole('grid', { name: /dungeon/i })).not.toBeInTheDocument();
+  });
+
   it('does not offer Continue when the stored save is corrupt', async () => {
     const storage = fakeStorage('{"not": "a save"}');
     render(<App fetcher={packFetcher()} storage={storage} />);
@@ -341,5 +364,75 @@ describe('App finalize-once (concluded run)', () => {
 
     expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
     expect(createSessionRunRecordRepository(storage).records()).toHaveLength(1);
+  });
+
+  it('New Hero -> wizard -> Confirm starts the NEW hero fresh instead of restoring the dead save (regression: stale-save restore hijacking new-hero confirmation)', async () => {
+    const user = userEvent.setup();
+    const storage = fakeStorage(deadRunSave());
+
+    render(<App fetcher={strictModeSafePackFetcher()} storage={storage} />);
+
+    const continueOption = await screen.findByRole('option', { name: /continue/i });
+    await user.click(continueOption);
+    expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('option', { name: 'New Hero' }));
+    await screen.findByLabelText(/Step 1 of 7/);
+    await driveWizardToSummary(user);
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    // The PLAY screen mounts with the new hero, at turn 0 -- NOT the conclusion screen again.
+    expect(await screen.findByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
+    expect(screen.queryByText(/you have fallen/i)).not.toBeInTheDocument();
+    const heroPanel = screen.getByRole('region', { name: 'Hero' });
+    expect(heroPanel).toHaveTextContent('Rin');
+  });
+
+  it('surfaces a persistent storage warning and still shows the conclusion screen (not a white screen) when the Hall write throws quota-style during finalize', async () => {
+    const user = userEvent.setup();
+    const backing = fakeStorage(deadRunSave());
+    const storage: SessionStorageLike = {
+      get: backing.get,
+      set: (key: string, value: string) => {
+        if (key === RECORDS_KEY) {
+          throw new DOMException('quota', 'QuotaExceededError');
+        }
+        backing.set(key, value);
+      },
+    };
+
+    render(<App fetcher={strictModeSafePackFetcher()} storage={storage} />);
+    const continueOption = await screen.findByRole('option', { name: /continue/i });
+    await user.click(continueOption);
+
+    // No exception escapes, no white screen: the conclusion screen renders regardless.
+    expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
+    const warning = await screen.findByRole('alert', { name: /storage/i });
+    expect(warning).toBeInTheDocument();
+  });
+
+  it('renders the conclusion screen with null score/heirloom (no throw) when Continue restores an already-finalized save whose Hall record is missing (empty Hall)', async () => {
+    const user = userEvent.setup();
+    const fresh: ActiveRun = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+    const alreadyFinalizedSave = encodeActiveRun({
+      ...fresh,
+      actors: fresh.actors.map((actor) => (actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor)),
+      conclusion: {
+        completionType: 'died',
+        cause: { killerContentId: null, depth: 1, turn: fresh.turn, worldTime: fresh.worldTime },
+        concludedAtRevision: fresh.revision, finalized: true,
+      },
+    });
+    const storage = fakeStorage(alreadyFinalizedSave);
+    // The Hall itself is empty (never populated with a matching record) -- e.g. after a Hall reset.
+
+    render(<App fetcher={strictModeSafePackFetcher()} storage={storage} />);
+    const continueOption = await screen.findByRole('option', { name: /continue/i });
+    await user.click(continueOption);
+
+    expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'Score' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Heirloom' })).not.toBeInTheDocument();
   });
 });

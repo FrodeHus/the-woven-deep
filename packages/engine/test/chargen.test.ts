@@ -228,4 +228,28 @@ describe('heroFromChoices', () => {
       { numRuns: 200 },
     );
   });
+
+  // Regression lock for the checked-integer guard on the modifier merge (`mergeModifiers` in
+  // chargen.ts, via its shared `checkedAdd`/`safeInteger` helpers): a background and a trait each
+  // poisoned with a near-MAX_SAFE_INTEGER value on the SAME derived stat must throw a RangeError
+  // rather than silently overflowing into an unsafe/incorrect merged modifier.
+  it('throws a RangeError instead of silently overflowing when merged background+trait modifiers exceed safe integer arithmetic', () => {
+    const poisonedPack: CompiledContentPack = {
+      ...pack,
+      entries: pack.entries.map((entry) => {
+        if (entry.kind === 'background' && entry.id === 'background.caravan-guard') {
+          return { ...entry, modifiers: { search: Number.MAX_SAFE_INTEGER } };
+        }
+        if (entry.kind === 'trait' && entry.id === 'trait.keen-eyed') {
+          return { ...entry, modifiers: { search: Number.MAX_SAFE_INTEGER } };
+        }
+        return entry;
+      }),
+    };
+    const choices = wayfarerBladeChoices({
+      backgroundId: 'background.caravan-guard', traitIds: ['trait.keen-eyed'],
+    });
+
+    expect(() => heroFromChoices({ pack: poisonedPack, choices })).toThrow(RangeError);
+  });
 });

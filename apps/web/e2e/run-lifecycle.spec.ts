@@ -162,4 +162,35 @@ test('a death finalizes into the Hall and the conclusion closes the loop', async
   await expect(page.getByRole('heading', { name: /you have fallen/i })).toBeVisible();
   await page.getByRole('option', { name: 'New Hero' }).click();
   await expect(page.getByLabel(/Step 1 of 7/)).toBeVisible();
+
+  // Regression: New Hero -> wizard -> Confirm must start the NEW hero fresh, not restore the
+  // just-finalized dead run (whose non-null conclusion would otherwise bounce straight back to
+  // this same conclusion screen forever). Complete a minimal wizard run-through and arrive in the
+  // dungeon at Turn 0 with the new hero's name visible.
+  await page.getByRole('textbox', { name: 'Name' }).fill('Nova');
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  await page.getByRole('option', { name: /Roll/ }).click();
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  await page.getByRole('button', { name: 'Roll attributes' }).click();
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  await page.getByRole('option', { name: /Wayfarer/ }).click();
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  await page.getByRole('option').first().click();
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  await page.getByRole('option', { name: 'Caravan guard' }).click();
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  await expect(page.getByLabel(/Step 7 of 7/)).toBeVisible();
+  await page.getByRole('button', { name: 'Confirm' }).click();
+
+  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /you have fallen/i })).not.toBeVisible();
+  const heroPanel = page.getByRole('region', { name: 'Hero' });
+  await expect(heroPanel).toContainText('Nova');
+  await expect(page.getByTestId('turn-count')).toHaveText('Turn 0');
 });

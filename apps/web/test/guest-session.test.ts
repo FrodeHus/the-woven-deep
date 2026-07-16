@@ -94,6 +94,26 @@ describe('GuestSession', () => {
     expect(session.getSnapshot().projection.metrics.turnsElapsed).toBe(1);
   });
 
+  it('startFresh skips restoring a decodable save for a DIFFERENT hero and overwrites it on first persist', () => {
+    // Regression coverage for the final-review finding: `boot()` used to unconditionally restore
+    // any decodable, hash-matching save, so entering the wizard for a brand-new hero while a live
+    // save existed silently discarded the wizard's choices and resumed the OLD run instead.
+    const storage = fakeStorage();
+    const oldHero = { ...DEFAULT_GUEST_HERO, name: 'Old Hero' };
+    const oldRun = createNewRun({ pack, seed: SEED, hero: oldHero });
+    storage.set(SAVE_KEY, encodeActiveRun(oldRun));
+
+    const newHero = { ...DEFAULT_GUEST_HERO, name: 'New Hero' };
+    const session = new GuestSession({ pack, storage, seed: SEED, hero: newHero, startFresh: true });
+
+    expect(session.getSnapshot().projection.hero.name).toBe('New Hero');
+    expect(session.getSnapshot().notice).toEqual({ kind: 'fresh' });
+
+    session.dispatch({ type: 'wait' });
+    const overwritten = decodeActiveRun(storage.peek()!);
+    expect(overwritten.hero.name).toBe('New Hero');
+  });
+
   it('discards a restored save whose content hash no longer matches the served pack', () => {
     const storage = fakeStorage();
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
@@ -462,6 +482,33 @@ describe('GuestSession', () => {
 
       expect(reloadedRepository.records()).toHaveLength(1);
       expect(reloadedProjection).toEqual(projection);
+    });
+
+    it('degrades to a null-record projection instead of throwing when an already-finalized run has no matching Hall record (e.g. after a Hall reset)', () => {
+      // Regression coverage: App's corrupt-Hall handling resets the Hall while the save survives,
+      // so Continue into a dead run whose engine `conclusion.finalized` flag is already `true`
+      // must not crash with an "internal invariant" error just because the record is gone.
+      const storage = fakeStorage();
+      const deadFinalizedRun: ActiveRun = {
+        ...deadRun(SEED),
+        conclusion: {
+          completionType: 'died',
+          cause: { killerContentId: null, depth: 1, turn: 0, worldTime: 0 },
+          concludedAtRevision: 0, finalized: true,
+        },
+      };
+      storage.set(SAVE_KEY, encodeActiveRun(deadFinalizedRun));
+      const session = new GuestSession({ pack, storage });
+      const emptyRepository = createSessionRunRecordRepository(storage);
+
+      let projection: ReturnType<typeof session.finalizeConcludedRun>;
+      expect(() => {
+        projection = session.finalizeConcludedRun(emptyRepository, { achievedAt: 'Run #1', portraitGlyph: '@' });
+      }).not.toThrow();
+
+      expect(projection!.finalized).toBe(false);
+      expect(projection!.score).toBeNull();
+      expect(projection!.heirloom).toBeNull();
     });
   });
 });

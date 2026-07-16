@@ -152,6 +152,32 @@ describe('createNewRun', () => {
     }
     expect(checked).toBeGreaterThanOrEqual(4);
   });
+
+  // Regression lock for the itemId-collision fix in new-run.ts (`heroEquippedItemId`/
+  // `heroBackpackItemId` discriminate by slot/index, not contentId alone): the lamplighter's
+  // torchbearer kit deliberately equips item.pitch-torch AND carries a second item.pitch-torch in
+  // the backpack. Before that fix, both instances would derive the SAME itemId from contentId
+  // alone, violating the save schema's strictly-increasing/unique itemId invariant that
+  // `validateOrderedIds` (save-schema.ts) enforces — `encodeActiveRun` would throw.
+  it('encodes a torchbearer-kit run without an itemId collision on its duplicated pitch-torch contentId', () => {
+    const choices: HeroChoices = {
+      name: 'Torchbearer',
+      method: 'roll',
+      attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
+      classId: 'class.lamplighter',
+      kitId: 'torchbearer',
+      backgroundId: 'background.caravan-guard',
+      traitIds: [],
+    };
+    const hero = heroFromChoices({ pack, choices });
+    const run = createNewRun({ pack, seed: SEED, hero });
+
+    const torchItems = run.items.filter((item) => item.contentId === 'item.pitch-torch');
+    expect(torchItems).toHaveLength(2);
+    expect(new Set(torchItems.map((item) => item.itemId)).size).toBe(2);
+    expect(() => validateActiveRun(run)).not.toThrow();
+    expect(() => encodeActiveRun(run)).not.toThrow();
+  });
 });
 
 // Regression: a guest hero always starts with a lit, equipped torch. If the hero dies from

@@ -111,6 +111,43 @@ describe('wizardReduce', () => {
     expect(secondReroll.attributes).toEqual(expectedReroll.attributes);
   });
 
+  it('ignores roll when the method is not roll (no rollState to misbehave against)', () => {
+    const state = dispatchAll(initialWizardState(SEED), [
+      { type: 'set-name', name: 'Rin' }, { type: 'next' },
+      { type: 'choose-method', method: 'point-buy' },
+    ]);
+    expect(state.rollState).toBeNull();
+
+    const rejected = wizardReduce(state, { type: 'roll' }, context());
+    expect(rejected).toBe(state);
+    expect(rejected.rollState).toBeNull();
+  });
+
+  it('treats reroll as a no-op when there is no active roll state yet', () => {
+    const state = dispatchAll(initialWizardState(SEED), [
+      { type: 'set-name', name: 'Rin' }, { type: 'next' },
+      { type: 'choose-method', method: 'roll' }, { type: 'next' },
+    ]);
+    expect(state.rollState).toBeNull();
+
+    const rejected = wizardReduce(state, { type: 'reroll' }, context());
+    expect(rejected).toBe(state);
+  });
+
+  it('does not reset a used reroll when the method is switched away and back (one reroll means one)', () => {
+    const state = dispatchAll(initialWizardState(SEED), [
+      { type: 'set-name', name: 'Rin' }, { type: 'next' },
+      { type: 'choose-method', method: 'roll' }, { type: 'next' },
+      { type: 'roll' },
+    ]);
+    const rerolled = wizardReduce(state, { type: 'reroll' }, context());
+    expect(rerolled.rerollUsed).toBe(true);
+
+    const switchedAway = wizardReduce(rerolled, { type: 'choose-method', method: 'point-buy' }, context());
+    const switchedBack = wizardReduce(switchedAway, { type: 'choose-method', method: 'roll' }, context());
+    expect(switchedBack.rerollUsed).toBe(true);
+  });
+
   it('rejects choosing a locked class as a no-op', () => {
     const state = dispatchAll(initialWizardState(SEED), [
       { type: 'set-name', name: 'Rin' }, { type: 'next' },

@@ -121,6 +121,11 @@ export function wizardReduce(state: WizardState, action: WizardAction, context: 
     }
 
     case 'choose-method': {
+      // `rerollUsed` is intentionally NOT reset here: switching methods clears `rollState`
+      // (there's nothing left to reroll), but "one reroll means one" is a whole-wizard-session
+      // limit, enforced by the reducer itself — a player must not be able to regain a spent
+      // reroll just by toggling the method away and back. A fresh `roll` dispatch, which starts
+      // an entirely new roll, is what legitimately resets it (see the `roll` case below).
       if (state.method === action.method) return state;
       if (action.method === 'point-buy') {
         const balance = balanceOf(context.pack);
@@ -128,9 +133,9 @@ export function wizardReduce(state: WizardState, action: WizardAction, context: 
         const attributes = Object.fromEntries(
           ATTRIBUTE_ORDER.map((attributeName) => [attributeName, balance.attributeMinimum]),
         ) as unknown as BaseAttributes;
-        return { ...state, method: action.method, attributes, rollState: null, rerollUsed: false };
+        return { ...state, method: action.method, attributes, rollState: null };
       }
-      return { ...state, method: action.method, attributes: null, rollState: null, rerollUsed: false };
+      return { ...state, method: action.method, attributes: null, rollState: null };
     }
 
     case 'roll': {

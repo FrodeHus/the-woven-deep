@@ -8,7 +8,7 @@ import type { LogLine } from './session/event-log.js';
 import { GuestSession, type SessionNotice } from './session/guest-session.js';
 import { createSessionRunRecordRepository, SessionHallCorruptError } from './session/run-records-storage.js';
 import { useGuestSession } from './session/store.js';
-import { browserSessionStorage, type SessionStorageLike } from './session/storage.js';
+import { browserSessionStorage, classifyStorageFailure, type SessionStorageLike } from './session/storage.js';
 import { ChargenScreen } from './ui/screens/ChargenScreen.js';
 import { ConclusionScreen } from './ui/screens/ConclusionScreen.js';
 import { HallScreen } from './ui/screens/HallScreen.js';
@@ -110,6 +110,10 @@ interface GameRootProps {
   readonly repository: RunRecordRepository;
   readonly portraitGlyph: string | undefined;
   readonly onConcluded: (projection: RunConclusionProjection, logTail: readonly LogLine[]) => void;
+  /** Called if `finalizeConcludedRun` itself throws (e.g. the Hall write hit a storage quota) --
+   * surfaces a persistent, non-dismissible warning while the conclusion screen still shows the
+   * in-memory (unfinalized) projection instead of leaving the player on a white screen. */
+  readonly onFinalizeError: (message: string) => void;
 }
 
 /** Everything that needs a live `GuestSession` snapshot: the notice banners and the play screen
@@ -124,7 +128,7 @@ interface GameRootProps {
  * already-concluded run), this finalizes the run into the Hall exactly once — `finalizeRun`'s own
  * `finalized` flag makes a repeat call safe, but `finalizedRef` also stops this component from
  * calling it again on every subsequent render before `onConcluded` swaps the screen away. */
-function GameRoot({ session, pack, repository, portraitGlyph, onConcluded }: GameRootProps): JSX.Element {
+function GameRoot({ session, pack, repository, portraitGlyph, onConcluded, onFinalizeError }: GameRootProps): JSX.Element {
   const snapshot = useGuestSession(session);
   const [dismissed, setDismissed] = useState(false);
   const { notice, conclusion } = snapshot;
@@ -137,12 +141,28 @@ function GameRoot({ session, pack, repository, portraitGlyph, onConcluded }: Gam
   useEffect(() => {
     if (conclusion === null || finalizedRef.current) return;
     finalizedRef.current = true;
-    const projection = session.finalizeConcludedRun(repository, {
-      achievedAt: `Run #${repository.records().length + 1}`,
-      portraitGlyph: portraitGlyph ?? '@',
-    });
-    onConcluded(projection, session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL));
-  }, [conclusion, onConcluded, portraitGlyph, repository, session]);
+    try {
+      const projection = session.finalizeConcludedRun(repository, {
+        achievedAt: `Run #${repository.records().length + 1}`,
+        portraitGlyph: portraitGlyph ?? '@',
+      });
+      onConcluded(projection, session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL));
+    } catch (thrown) {
+      // The Hall write itself failed (quota/unavailable) -- this is not a bug in the run, so
+      // don't let it crash out of the effect into a white screen. Surface the same persistent
+      // storage-warning wording the rest of the app uses, and still move to the conclusion
+      // screen with whatever the session can already project in-memory (score/heirloom null,
+      // since the record never made it into the Hall).
+      const failure = classifyStorageFailure(thrown);
+      onFinalizeError(
+        failure === 'full'
+          ? 'Your browser storage is full, so this run could not be saved to the Hall of Records.'
+          : 'The Hall of Records is unavailable, so this run could not be saved.',
+      );
+      const fallback = session.getSnapshot().conclusion;
+      if (fallback) onConcluded(fallback, session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL));
+    }
+  }, [conclusion, onConcluded, onFinalizeError, portraitGlyph, repository, session]);
 
   const dismissibleNotice = notice && !isStorageNotice(notice) ? notice : null;
   const storageNotice = notice && isStorageNotice(notice) ? notice : null;
@@ -223,16 +243,26 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
   const [conclusion, setConclusion] = useState<{
     projection: RunConclusionProjection; logTail: readonly LogLine[];
   }>();
+  const [finalizeWarning, setFinalizeWarning] = useState<string>();
+  const [chargenError, setChargenError] = useState<string>();
 
-  /** Wraps every post-boot screen with the persistent Hall-corruption notice, when one is
-   * pending — the active run survives regardless; only the Hall itself was reset. */
+  /** Wraps every post-boot screen with any persistent, non-dismissible warnings pending —
+   * Hall-corruption-on-boot and finalize-write failures alike. The active run survives regardless
+   * of either: only the Hall write (or, on boot, the Hall itself) was affected. */
   function withHallNotice(children: JSX.Element): JSX.Element {
-    if (!hallNotice) return children;
+    if (!hallNotice && !finalizeWarning) return children;
     return (
       <>
-        <div role="alert" aria-label="Hall notice" className="storage-warning-banner" data-kind="hall-corrupt">
-          <p>Your Hall of Records could not be read and has been reset. ({hallNotice})</p>
-        </div>
+        {hallNotice && (
+          <div role="alert" aria-label="Hall notice" className="storage-warning-banner" data-kind="hall-corrupt">
+            <p>Your Hall of Records could not be read and has been reset. ({hallNotice})</p>
+          </div>
+        )}
+        {finalizeWarning && (
+          <div role="alert" aria-label="Storage warning" className="storage-warning-banner" data-kind="finalize-failed">
+            <p>{finalizeWarning}</p>
+          </div>
+        )}
         {children}
       </>
     );
@@ -288,6 +318,16 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
   }
 
   if (screen.screen === 'chargen') {
+    if (chargenError) {
+      return withHallNotice(
+        <main className="shell boot-error">
+          <p className="eyebrow">The Woven Deep</p>
+          <h1>Something went wrong building your hero.</h1>
+          <p role="alert">{chargenError}</p>
+          <button type="button" onClick={() => setChargenError(undefined)}>Back</button>
+        </main>,
+      );
+    }
     // `chargenSeed` is always set before this screen is reached (see `onEnterTheDeep` above).
     const seed = chargenSeed!;
     return withHallNotice(
@@ -295,7 +335,15 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
         pack={pack}
         seed={seed}
         onConfirm={(choices: HeroChoices, glyph: string) => {
-          const hero = heroFromChoices({ pack, choices });
+          let hero: ReturnType<typeof heroFromChoices>;
+          try {
+            hero = heroFromChoices({ pack, choices });
+          } catch (thrown) {
+            // A client bug (a malformed choice heroFromChoices' own validation somehow missed
+            // upstream) must never fail silently -- surface it visibly rather than only logging.
+            setChargenError(thrown instanceof Error ? thrown.message : 'Hero creation failed unexpectedly.');
+            return;
+          }
           try {
             storage.set(PORTRAIT_KEY, glyph);
           } catch {
@@ -303,7 +351,7 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
             // the run itself is unaffected if this particular write fails.
           }
           setPortraitGlyph(glyph);
-          setSession(new GuestSession({ pack, storage, seed, hero }));
+          setSession(new GuestSession({ pack, storage, seed, hero, startFresh: true }));
           setScreen({ screen: 'play' });
         }}
       />,
@@ -370,6 +418,7 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
         setConclusion({ projection, logTail });
         setScreen({ screen: 'conclusion' });
       }}
+      onFinalizeError={setFinalizeWarning}
     />,
   );
 }

@@ -72,20 +72,28 @@ export class GuestSession {
   constructor(
     input: Readonly<{
       pack: CompiledContentPack; storage: SessionStorageLike; seed?: Uint32State; hero?: NewRunHero;
+      /** When `true`, `boot()` never looks at any existing save — it always starts a brand-new run
+       * from this constructor's `hero`/`seed`, exactly like an empty storage boot would. This is the
+       * seam chargen's "confirm"/"new hero" flows use: without it, any live save in storage would
+       * silently win over the wizard's just-confirmed hero (see App.tsx's chargen `onConfirm`).
+       * "Continue" and quickstart callers must NOT set this — they rely on restore semantics. */
+      startFresh?: boolean;
     }>,
   ) {
     this.pack = input.pack;
     this.storage = input.storage;
     this.hero = input.hero ?? DEFAULT_GUEST_HERO;
-    const booted = this.boot(input.seed);
+    const booted = this.boot(input.seed, input.startFresh ?? false);
     this.run = booted.run;
     this.notice = booted.notice;
     this.commandSequence = booted.commandSequence;
     this.snapshot = this.buildSnapshot();
   }
 
-  private boot(seed?: Uint32State): Readonly<{ run: ActiveRun; notice: SessionNotice; commandSequence: number }> {
-    const raw = this.storage.get(SAVE_KEY);
+  private boot(
+    seed: Uint32State | undefined, startFresh: boolean,
+  ): Readonly<{ run: ActiveRun; notice: SessionNotice; commandSequence: number }> {
+    const raw = startFresh ? null : this.storage.get(SAVE_KEY);
     if (raw === null) {
       return { run: this.freshRun(seed), notice: { kind: 'fresh' }, commandSequence: 0 };
     }
@@ -259,10 +267,14 @@ export class GuestSession {
    * restored from a run that was finalized in a previous page life (Continue into a dead run) —
    * this does NOT re-finalize: it looks the existing record up in `repository` by this run's
    * deterministic hall-record ID and projects from that, so a repeated call (or a reload) never
-   * re-appends. Otherwise it runs `finalizeRun`, appends the new record (with the caller-supplied
-   * `enrichment`) and lifetime deltas into `repository`, persists the now-finalized run through the
-   * usual codec, folds the finalize events into the log, republishes the snapshot, and returns the
-   * full projection (score, heirloom, achievement grants).
+   * re-appends. If the Hall has no matching record — e.g. the guest's Hall storage was reset
+   * (corrupt blob) while the save survived — this degrades to a `record: null` projection (score
+   * and heirloom `null`, `finalized: false`) rather than throwing: the conclusion screen already
+   * knows how to render that shape, exactly like the in-progress-run projection in
+   * `buildSnapshot` below. Otherwise it runs `finalizeRun`, appends the new record (with the
+   * caller-supplied `enrichment`) and lifetime deltas into `repository`, persists the now-finalized
+   * run through the usual codec, folds the finalize events into the log, republishes the snapshot,
+   * and returns the full projection (score, heirloom, achievement grants).
    */
   finalizeConcludedRun(repository: RunRecordRepository, enrichment: HallRecordEnrichment): RunConclusionProjection {
     const { conclusion } = this.run;
@@ -272,10 +284,7 @@ export class GuestSession {
 
     if (conclusion.finalized) {
       const recordId = deriveHallRecordId(this.run.runSeed, this.run.contentHash);
-      const record = repository.records().find((candidate) => candidate.recordId === recordId);
-      if (!record) {
-        throw new Error(`internal invariant: the Hall is missing record ${recordId} for an already-finalized run`);
-      }
+      const record = repository.records().find((candidate) => candidate.recordId === recordId) ?? null;
       const projection = projectRunConclusion({ run: this.run, record, achievements: [] });
       if (projection === null) {
         throw new Error('internal invariant: an already-concluded run projected to null');
