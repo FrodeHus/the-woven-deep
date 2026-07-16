@@ -20,11 +20,14 @@ beforeAll(async () => {
   baseProjection = projectGameplayState({ state: run, content: pack });
 });
 
-function snapshotWithBackpack(items: readonly Readonly<{ itemId: string; name: string }>[]): SessionSnapshot {
+function snapshotWithBackpack(
+  items: readonly Readonly<{ itemId: string; name: string }>[],
+  equipment: Readonly<Record<string, Readonly<{ itemId: string; name: string }> | null>> = {},
+): SessionSnapshot {
   return {
     projection: {
       ...baseProjection,
-      hero: { ...baseProjection.hero, backpack: items },
+      hero: { ...baseProjection.hero, backpack: items, equipment },
     } as unknown as GameplayProjection,
     log: [],
     lastEvents: [],
@@ -85,6 +88,32 @@ describe('BackpackMenu', () => {
     expect(onClose).toHaveBeenCalledOnce();
 
     void dialog;
+  });
+
+  it('lists equipped gear after backpack stacks and dispatches unequip when e is pressed on it', async () => {
+    const user = userEvent.setup();
+    const onDispatch = vi.fn();
+    const snapshot = snapshotWithBackpack(
+      [{ itemId: 'item.ration', name: 'Travel ration' }],
+      { 'main-hand': { itemId: 'item.sword', name: 'Iron sword' }, body: null },
+    );
+
+    render(<BackpackMenu snapshot={snapshot} onDispatch={onDispatch} onClose={vi.fn()} />);
+
+    // The backpack stack lists first; the equipped item renders after it with an "(equipped)" tag.
+    const rationButton = screen.getByRole('button', { name: 'Travel ration' });
+    const swordButton = screen.getByRole('button', { name: /Iron sword \(equipped\)/ });
+    expect(rationButton).toHaveFocus();
+
+    // e on the backpack stack still equips.
+    await user.keyboard('e');
+    expect(onDispatch).toHaveBeenCalledWith({ type: 'backpack', action: 'equip', itemId: 'item.ration' });
+
+    // Select the equipped sword; e now unequips it.
+    await user.keyboard('{ArrowDown}');
+    expect(swordButton).toHaveFocus();
+    await user.keyboard('e');
+    expect(onDispatch).toHaveBeenCalledWith({ type: 'backpack', action: 'unequip', itemId: 'item.sword' });
   });
 
   it('shows a placeholder when the backpack is empty', () => {

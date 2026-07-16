@@ -25,7 +25,7 @@ export type PlayerIntent =
   }
   | {
     readonly type: 'backpack';
-    readonly action: 'equip' | 'use' | 'drop' | 'toggle-light';
+    readonly action: 'equip' | 'unequip' | 'use' | 'drop' | 'toggle-light';
     readonly itemId: OpaqueId;
   }
   // Opens a trade session with the merchant actor the hero is Chebyshev-adjacent to (see

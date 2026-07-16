@@ -10,8 +10,30 @@ interface ProjectedBackpackItem {
   readonly name: string;
 }
 
-function backpackItems(snapshot: SessionSnapshot): readonly ProjectedBackpackItem[] {
-  return (snapshot.projection.hero as unknown as { backpack: readonly ProjectedBackpackItem[] }).backpack;
+interface MenuItem {
+  readonly itemId: OpaqueId;
+  readonly name: string;
+  /** `true` for a currently-equipped item: it renders with an "(equipped)" suffix and `e`
+   * unequips it (moving it into the backpack) rather than equipping. */
+  readonly equipped: boolean;
+}
+
+/**
+ * Everything the menu can act on: the hero's backpack stacks first (so the pinned e2e walks that
+ * act on "the first backpack item" are unaffected), then each equipped item. Listing equipped gear
+ * here is the only keyboard path to `unequip` -- required to move starting gear into the backpack
+ * before it can be sold to a merchant (merchant sale accepts backpack-located items only).
+ */
+function menuItems(snapshot: SessionSnapshot): readonly MenuItem[] {
+  const heroData = snapshot.projection.hero as unknown as {
+    backpack: readonly ProjectedBackpackItem[];
+    equipment: Readonly<Record<string, ProjectedBackpackItem | null>>;
+  };
+  const backpack = heroData.backpack.map((item) => ({ itemId: item.itemId, name: item.name, equipped: false }));
+  const equipped = Object.values(heroData.equipment)
+    .filter((item): item is ProjectedBackpackItem => item !== null)
+    .map((item) => ({ itemId: item.itemId, name: item.name, equipped: true }));
+  return [...backpack, ...equipped];
 }
 
 function focusableElements(container: HTMLElement): readonly HTMLElement[] {
@@ -74,7 +96,7 @@ export interface BackpackMenuProps {
 export function BackpackMenu({ snapshot, onDispatch, onClose }: BackpackMenuProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const items = backpackItems(snapshot);
+  const items = menuItems(snapshot);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   useDialogFocusTrap(containerRef);
@@ -108,8 +130,9 @@ export function BackpackMenu({ snapshot, onDispatch, onClose }: BackpackMenuProp
     const selected = items[selectedIndex];
     if (!selected) return;
     const key = event.key.toLowerCase();
-    if (key === 'e') onDispatch({ type: 'backpack', action: 'equip', itemId: selected.itemId });
-    else if (key === 'u') onDispatch({ type: 'backpack', action: 'use', itemId: selected.itemId });
+    if (key === 'e') {
+      onDispatch({ type: 'backpack', action: selected.equipped ? 'unequip' : 'equip', itemId: selected.itemId });
+    } else if (key === 'u') onDispatch({ type: 'backpack', action: 'use', itemId: selected.itemId });
     else if (key === 'd') onDispatch({ type: 'backpack', action: 'drop', itemId: selected.itemId });
     else if (key === 'l') onDispatch({ type: 'backpack', action: 'toggle-light', itemId: selected.itemId });
   };
@@ -136,13 +159,13 @@ export function BackpackMenu({ snapshot, onDispatch, onClose }: BackpackMenuProp
                 className={index === selectedIndex ? 'backpack-item backpack-item--selected' : 'backpack-item'}
                 onClick={() => setSelectedIndex(index)}
               >
-                {item.name}
+                {item.equipped ? `${item.name} (equipped)` : item.name}
               </button>
             </li>
           ))}
         </ul>
       )}
-      <p className="backpack-hints">↑↓ select · e equip · u use · d drop · l toggle light · Esc close</p>
+      <p className="backpack-hints">↑↓ select · e (un)equip · u use · d drop · l toggle light · Esc close</p>
     </div>
   );
 }

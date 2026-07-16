@@ -184,12 +184,19 @@ function buildPickupIntent(input: Readonly<{
 
 function buildBackpackIntent(input: Readonly<{
   projection: GameplayProjection; commandId: OpaqueId; expectedRevision: number;
-  action: 'equip' | 'use' | 'drop' | 'toggle-light'; itemId: OpaqueId; pack?: CompiledContentPack | undefined;
+  action: 'equip' | 'unequip' | 'use' | 'drop' | 'toggle-light'; itemId: OpaqueId; pack?: CompiledContentPack | undefined;
 }>): BuiltIntent {
   const { projection, commandId, expectedRevision, action, itemId, pack } = input;
   const item = ownedItem(projection, itemId);
   if (!item) return { kind: 'rejected', message: 'That item is no longer in your backpack.' };
 
+  if (action === 'unequip') {
+    const equipment = hero(projection).equipment;
+    const slot = Object.entries(equipment)
+      .find(([, equipped]) => (equipped as { itemId?: OpaqueId } | null)?.itemId === itemId)?.[0] as EquipmentSlot | undefined;
+    if (!slot) return { kind: 'rejected', message: `${item.name} is not equipped.` };
+    return { kind: 'command', command: { type: 'unequip', slot, commandId, expectedRevision } };
+  }
   if (action === 'use') {
     return { kind: 'command', command: { type: 'use-item', itemId, target: null, commandId, expectedRevision } };
   }

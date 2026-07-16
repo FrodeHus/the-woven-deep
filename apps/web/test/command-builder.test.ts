@@ -282,6 +282,24 @@ describe('buildIntent', () => {
     });
   });
 
+  it('builds an unequip command for an equipped item, finding its slot from the projection', () => {
+    const equipment = (baseProjection.hero as unknown as {
+      equipment: Readonly<Record<string, Readonly<{ itemId: string }> | null>>;
+    }).equipment;
+    const sword = equipment['main-hand']!;
+    const built = buildIntent({
+      intent: { type: 'backpack', action: 'unequip', itemId: sword.itemId },
+      projection: baseProjection,
+      commandId: 'command.guest-000099',
+      expectedRevision: 42,
+      pack,
+    });
+    expect(built).toEqual({
+      kind: 'command',
+      command: { type: 'unequip', slot: 'main-hand', commandId: 'command.guest-000099', expectedRevision: 42 },
+    });
+  });
+
   it('rejects equip of a non-equipment item with the item name in the message', () => {
     const backpack = baseProjection.hero as unknown as { backpack: readonly Readonly<Record<string, unknown>>[] };
     const ration = backpack.backpack.find((item) => item.contentId === 'item.travel-ration')!;
