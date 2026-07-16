@@ -20,8 +20,11 @@ import { expect, test, type Page } from '@playwright/test';
  */
 // The landing page now owns `/`; the guest game lives behind the `/play` path (see
 // `src/main.tsx`'s path check). The seed override still parses out of the query string exactly
-// as before (see `App.tsx`'s `parseSeedFromQuery`).
-const SEED_QUERY = '/play?seed=11.22.33.44';
+// as before (see `App.tsx`'s `parseSeedFromQuery`). `?quickstart=1` is the test-only escape hatch
+// that skips the title screen and chargen wizard (added alongside `ScreenState`) and boots
+// straight into play with `DEFAULT_GUEST_HERO`, so this pinned walk (recorded against that exact
+// hero) still applies unmodified.
+const SEED_QUERY = '/play?quickstart=1&seed=11.22.33.44';
 
 /** Keys 1–40: walk from the stair-up to the cave rats and bump-attack until one dies. */
 const KILL_PHASE = [

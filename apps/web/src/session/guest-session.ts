@@ -3,7 +3,7 @@ import {
   createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, descendToNextFloor, encodeActiveRun,
   projectDecision, projectDomainEvents, projectGameplayState, RECENT_COMMAND_LIMIT, resolveCommand,
   SaveLoadError,
-  type ActiveRun, type CommandResolution, type GameCommand, type GameplayProjection,
+  type ActiveRun, type CommandResolution, type GameCommand, type GameplayProjection, type NewRunHero,
   type PublicDecision, type PublicEvent, type Uint32State,
 } from '@woven-deep/engine';
 import { buildIntent } from './command-builder.js';
@@ -50,6 +50,7 @@ function randomSeed(): Uint32State {
 export class GuestSession {
   private readonly pack: CompiledContentPack;
   private readonly storage: SessionStorageLike;
+  private readonly hero: NewRunHero;
   private run: ActiveRun;
   private commandSequence: number;
   private log: readonly LogLine[] = [];
@@ -61,9 +62,14 @@ export class GuestSession {
   private snapshot: SessionSnapshot;
   private readonly listeners = new Set<() => void>();
 
-  constructor(input: Readonly<{ pack: CompiledContentPack; storage: SessionStorageLike; seed?: Uint32State }>) {
+  constructor(
+    input: Readonly<{
+      pack: CompiledContentPack; storage: SessionStorageLike; seed?: Uint32State; hero?: NewRunHero;
+    }>,
+  ) {
     this.pack = input.pack;
     this.storage = input.storage;
+    this.hero = input.hero ?? DEFAULT_GUEST_HERO;
     const booted = this.boot(input.seed);
     this.run = booted.run;
     this.notice = booted.notice;
@@ -110,7 +116,7 @@ export class GuestSession {
   }
 
   private freshRun(seed?: Uint32State): ActiveRun {
-    return createNewRun({ pack: this.pack, seed: seed ?? randomSeed(), hero: DEFAULT_GUEST_HERO });
+    return createNewRun({ pack: this.pack, seed: seed ?? randomSeed(), hero: this.hero });
   }
 
   private nextCommandId(): string {

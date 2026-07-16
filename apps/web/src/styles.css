@@ -13,6 +13,21 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 .tapestry strong { color: #f1d898; font-size: 1.25rem; }
 .tapestry code { overflow-wrap: anywhere; color: #7783a4; }
 [role="alert"] { color: #db7f78; }
+
+/* Title screen: a keyboard-first menu (Enter the Deep / Continue / Hall of Records) reusing the
+   same option-list convention as the chargen wizard's lists (`.chargen-option`). */
+.title-screen { display: flex; flex-direction: column; gap: 16px; }
+.title-menu { display: flex; flex-direction: column; gap: 6px; max-width: 320px; }
+.title-option {
+  text-align: left;
+  border: 1px solid #3d465f;
+  background: #121521;
+  color: inherit;
+  padding: 10px 14px;
+  font-size: 1rem;
+}
+.title-option--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
+.title-option[aria-selected="true"] { border-color: #e8c879; }
 .storage-warning-banner {
   border: 1px solid #db7f78;
   padding: 8px 12px;

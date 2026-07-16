@@ -55,6 +55,21 @@ describe('GuestSession', () => {
     expect(session.getSnapshot().projection.metrics.turnsElapsed).toBe(1);
   });
 
+  it('forwards an optional hero override into createNewRun for a fresh run', () => {
+    const storage = fakeStorage();
+    const customHero = { ...DEFAULT_GUEST_HERO, name: 'Rin' };
+    const session = new GuestSession({ pack, storage, seed: SEED, hero: customHero });
+
+    expect(session.getSnapshot().projection.hero.name).toBe('Rin');
+  });
+
+  it('defaults to DEFAULT_GUEST_HERO when no hero override is given', () => {
+    const storage = fakeStorage();
+    const session = new GuestSession({ pack, storage, seed: SEED });
+
+    expect(session.getSnapshot().projection.hero.name).toBe(DEFAULT_GUEST_HERO.name);
+  });
+
   it('restores a stored run byte-for-byte', () => {
     const storage = fakeStorage();
     const first = new GuestSession({ pack, storage, seed: SEED });

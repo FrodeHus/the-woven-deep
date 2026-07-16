@@ -11,7 +11,9 @@ import {
 export interface ChargenScreenProps {
   readonly pack: CompiledContentPack;
   readonly seed: Uint32State;
-  readonly onConfirm: (choices: HeroChoices) => void;
+  /** The portrait glyph is client-only cosmetic state (never engine data — see `PORTRAIT_GLYPHS`),
+   * so it rides beside `HeroChoices` here rather than inside it. */
+  readonly onConfirm: (choices: HeroChoices, portraitGlyph: string) => void;
 }
 
 const STEP_LABELS: Readonly<Record<WizardState['step'], string>> = {
@@ -71,7 +73,7 @@ export function ChargenScreen({ pack, seed, onConfirm }: ChargenScreenProps): JS
           <button
             type="button"
             disabled={choices === null}
-            onClick={() => { if (choices) onConfirm(choices); }}
+            onClick={() => { if (choices) onConfirm(choices, state.portraitGlyph); }}
           >
             Confirm
           </button>

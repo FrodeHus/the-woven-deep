@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
-import type { Uint32State } from '@woven-deep/engine';
+import { heroFromChoices, type HeroChoices, type Uint32State } from '@woven-deep/engine';
 import { loadContentPack } from './api.js';
 import { GuestSession, type SessionNotice } from './session/guest-session.js';
 import { useGuestSession } from './session/store.js';
 import { browserSessionStorage, type SessionStorageLike } from './session/storage.js';
+import { ChargenScreen } from './ui/screens/ChargenScreen.js';
+import { TitleScreen } from './ui/screens/TitleScreen.js';
 import { PlayScreen } from './ui/PlayScreen.js';
 import './styles.css';
 
@@ -16,16 +18,55 @@ export interface AppProps {
 }
 
 /**
+ * The client-side screen state machine: title (the landing menu) -> chargen (the wizard) -> play
+ * (the live run) -> conclusion (payload wiring lands in a later task) -> hall (the Hall of
+ * Records, reachable from either title or conclusion, hence `returnTo`).
+ */
+export type ScreenState =
+  | { readonly screen: 'title' }
+  | { readonly screen: 'chargen' }
+  | { readonly screen: 'play' }
+  | { readonly screen: 'conclusion' }
+  | { readonly screen: 'hall'; readonly returnTo: 'title' | 'conclusion' };
+
+/** Where the confirmed portrait glyph is persisted: client-only cosmetic side-state, never engine
+ * data, saved at chargen confirm and read back on Continue. */
+export const PORTRAIT_KEY = 'woven-deep.guest-portrait';
+
+/**
  * Test-only seed override: `?seed=11.22.33.44` (four dot-separated `Uint32` words) pins the
  * fresh run's RNG instead of the ambient `crypto.getRandomValues` seed `GuestSession` otherwise
  * generates. Never a real feature — no UI links to it, and it's parsed straight out of
  * `location.search`, so it only ever matters to a test (or a developer poking at the URL bar).
+ * When chargen is reached, the SAME seed also drives the wizard's attribute rolls (see
+ * `chargenSeed` below), so this one query parameter pins both.
  */
 function parseSeedFromQuery(search: string): Uint32State | undefined {
   const raw = new URLSearchParams(search).get('seed');
   if (!raw) return undefined;
   const words = raw.split('.').map(Number);
   if (words.length !== 4 || words.some((word) => !Number.isFinite(word))) return undefined;
+  return [words[0]!, words[1]!, words[2]!, words[3]!];
+}
+
+/**
+ * Test-only escape hatch (documented, not a real feature): `?quickstart=1` skips the title and
+ * chargen screens entirely and boots straight into play with `DEFAULT_GUEST_HERO`, exactly like
+ * the pre-5B boot behaviour. It exists so the pre-existing e2e specs (recorded against a fixed
+ * keypress walk over the default hero's stats) keep passing unmodified apart from their boot URL.
+ */
+function isQuickstart(search: string): boolean {
+  return new URLSearchParams(search).get('quickstart') === '1';
+}
+
+/** Client-only ambient randomness for the chargen wizard's seed when no `?seed=` override is
+ * present — mirrors `GuestSession`'s own `randomSeed` (guest-session.ts), duplicated here rather
+ * than exported/shared because the chargen screen needs the seed BEFORE any `GuestSession`
+ * exists (chargen constructs its session lazily, at confirm — see `App`'s doc comment). */
+function randomSeed(): Uint32State {
+  const words = new Uint32Array(4);
+  crypto.getRandomValues(words);
+  if (words.every((word) => word === 0)) words[0] = 1;
   return [words[0]!, words[1]!, words[2]!, words[3]!];
 }
 
@@ -97,9 +138,12 @@ function GameRoot({ session, pack }: GameRootProps): JSX.Element {
 }
 
 /**
- * Boots the guest client: fetches the compiled content pack, then constructs the single
- * `GuestSession` for this browser tab (restoring from storage if a save is present) and hands off
- * to `PlayScreen`. Distinct screens for the two ways boot can go wrong: the pack fetch failing
+ * Boots the guest client: fetches the compiled content pack, then walks the screen state machine
+ * (title -> chargen -> play, plus a stub hall placeholder and a `?quickstart=1` shortcut that
+ * skips straight to play). Unlike the pre-5B boot, the `GuestSession` is now created LAZILY —
+ * quickstart and Continue construct it as soon as they're selected/available, while entering
+ * chargen defers construction until the wizard is confirmed (its hero choices need to reach
+ * `createNewRun`). Distinct screens for the two ways boot can go wrong: the pack fetch failing
  * (retry button) vs. anything the session itself surfaces once it's running (a dismissible
  * banner in `GameRoot`, covering storage being unavailable/full and save-discard notices alike).
  */
@@ -126,11 +170,22 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
   }, [fetcher, attempt]);
 
   const storage = useMemo(() => storageOverride ?? browserSessionStorage(), [storageOverride]);
-  const session = useMemo(() => {
-    if (!pack) return undefined;
+
+  const [screen, setScreen] = useState<ScreenState>(
+    () => (isQuickstart(window.location.search) ? { screen: 'play' } : { screen: 'title' }),
+  );
+  const [session, setSession] = useState<GuestSession>();
+  const [chargenSeed, setChargenSeed] = useState<Uint32State>();
+  const [, setPortraitGlyph] = useState<string>();
+
+  // Quickstart's session is constructed once the pack is ready (it can't be constructed at the
+  // `useState` initializer above — the pack isn't loaded yet at first render).
+  useEffect(() => {
+    if (!pack || session) return;
+    if (!isQuickstart(window.location.search)) return;
     const seed = parseSeedFromQuery(window.location.search);
-    return seed ? new GuestSession({ pack, storage, seed }) : new GuestSession({ pack, storage });
-  }, [pack, storage]);
+    setSession(seed ? new GuestSession({ pack, storage, seed }) : new GuestSession({ pack, storage }));
+  }, [pack, storage, session]);
 
   if (error) {
     return (
@@ -143,7 +198,79 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
     );
   }
 
-  if (!session || !pack) {
+  if (!pack) {
+    return (
+      <main className="shell boot-loading">
+        <p className="eyebrow">The Woven Deep</p>
+        <p role="status">Binding the current content pack…</p>
+      </main>
+    );
+  }
+
+  if (screen.screen === 'title') {
+    return (
+      <main className="shell">
+        <TitleScreen
+          storage={storage}
+          onEnterTheDeep={() => {
+            setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
+            setScreen({ screen: 'chargen' });
+          }}
+          onContinue={() => {
+            setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
+            setSession(new GuestSession({ pack, storage }));
+            setScreen({ screen: 'play' });
+          }}
+          onHall={() => setScreen({ screen: 'hall', returnTo: 'title' })}
+        />
+      </main>
+    );
+  }
+
+  if (screen.screen === 'chargen') {
+    // `chargenSeed` is always set before this screen is reached (see `onEnterTheDeep` above).
+    const seed = chargenSeed!;
+    return (
+      <ChargenScreen
+        pack={pack}
+        seed={seed}
+        onConfirm={(choices: HeroChoices, portraitGlyph: string) => {
+          const hero = heroFromChoices({ pack, choices });
+          try {
+            storage.set(PORTRAIT_KEY, portraitGlyph);
+          } catch {
+            // Best-effort, same as every other portrait/cosmetic persistence attempt in this app —
+            // the run itself is unaffected if this particular write fails.
+          }
+          setPortraitGlyph(portraitGlyph);
+          setSession(new GuestSession({ pack, storage, seed, hero }));
+          setScreen({ screen: 'play' });
+        }}
+      />
+    );
+  }
+
+  if (screen.screen === 'hall') {
+    const { returnTo } = screen;
+    return (
+      <main className="shell">
+        <h1>Hall of Records</h1>
+        <p role="status">Coming soon.</p>
+        <button type="button" onClick={() => setScreen({ screen: returnTo })}>Back</button>
+      </main>
+    );
+  }
+
+  if (screen.screen === 'conclusion') {
+    // Payload wiring lands in a later task; this stub only exists so `ScreenState` type-checks.
+    return (
+      <main className="shell">
+        <p role="status">The run has ended.</p>
+      </main>
+    );
+  }
+
+  if (!session) {
     return (
       <main className="shell boot-loading">
         <p className="eyebrow">The Woven Deep</p>
