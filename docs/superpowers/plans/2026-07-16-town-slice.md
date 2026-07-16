@@ -296,7 +296,20 @@ NOTE: the 5B e2e specs assume a depth-1 boot — Task 9 re-bases them; keep unit
 
 ---
 
-### Task 8: Rendering fixes — visible-dim inversion and the town zoom
+### Task 7b: The trade screen (amendment, 2026-07-17)
+
+**Why amended:** Task 9 blocked on a false spec assumption. The design says "Trade in town reuses the existing trade screen," but no trade UI was ever built — 5A deferred it, and no later task delivered it. The engine side is complete (commands `trade-open { merchantActorId }`, `trade-buy`/`trade-sell { merchantPopulationId, ... }`, `trade-service`, `trade-close`; `GameplayProjection.trade` carries the active session). This task is web wiring only; any engine change is BLOCKED-report territory.
+
+**Files:**
+- Modify: `apps/web/src/session/intents.ts`, `command-builder.ts` (trade intents legal only when adjacent to a merchant actor / a trade session is open — mirror the house-intent gating), `KeyRouter.ts` (Shift+T to open trade when adjacent, following the Shift+H precedent; check for collisions and disclose the final binding)
+- Create: `apps/web/src/ui/screens/TradeScreen.tsx`, `apps/web/test/trade-screen.test.tsx`
+- Modify: `apps/web/src/ui/PlayScreen.tsx` (render TradeScreen when `projection.trade` is non-null), `TownPanel.tsx` (merchant proximity hint gains the open-trade key)
+
+**Interfaces:**
+- Consumes: engine trade commands and `projection.trade` exactly as projected — the projection is the source of truth for stock, prices, services, and currency; no client-side price math.
+- Produces: a keyboard-first dialog following the HouseScreen/BackpackMenu conventions (`useDialogFocusTrap`, `role="dialog"`, ArrowUp/ArrowDown roving selection, Tab to switch buy/sell/service lists, Enter to execute, Esc closes via `trade-close`). Currency readout visible at all times; invalid results surface as the standard log lines. Hover/mouse selection remains first-class per the established panel conventions.
+
+- [ ] RED-first: command-builder table tests (trade-open only when adjacent to a merchant; buy/sell/service/close only while `projection.trade` matches the merchant; all through the normal command path with `expectedRevision`); TradeScreen component tests (buy updates currency + backpack, sell mirrors, service purchase, keyboard-only full pass, closed-session unmount). Then implement → web suite + typecheck green (engine untouched) → commit `feat: surface trade in the client`.
 
 **Files:**
 - Modify: `apps/web/src/styles.css`, `src/ui/PlayScreen.tsx` (zoom application), `src/ui/layout.ts` (if the zoom factor lives there as a pure helper: `zoomForFloor(panePx, cellPx, floor) → 1 | 1.25 | 1.5 | 1.75 | 2`)
