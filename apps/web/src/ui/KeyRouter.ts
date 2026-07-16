@@ -34,6 +34,7 @@ export const KEYMAP: Readonly<Record<string, PlayerIntent>> = {
   '>': { type: 'descend' },
   '<': { type: 'ascend' },
   H: { type: 'house' },
+  T: { type: 'trade-open' },
 };
 
 function isFormFieldTarget(target: EventTarget | null): boolean {
@@ -62,6 +63,9 @@ export function routeKey(input: Readonly<{
   // `H` (house) requires Shift for the same reason, and so it never collides with the bare `h`
   // vi-key already bound to west movement (see `DIRECTION_KEYS`).
   if (event.key === 'H' && !event.shiftKey) return null;
+  // `T` (trade) requires Shift too. Bare `t` is unbound (not a vi movement key), but requiring
+  // Shift keeps it consistent with `H`/`R` and immune to caps-lock false positives.
+  if (event.key === 'T' && !event.shiftKey) return null;
 
   return KEYMAP[event.key] ?? null;
 }

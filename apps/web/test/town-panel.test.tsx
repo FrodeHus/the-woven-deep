@@ -67,6 +67,14 @@ describe('TownPanel', () => {
     expect(nearby[0]?.textContent).toContain('Provisioner');
   });
 
+  it('shows a trade-key hint only for a nearby merchant that is actually trade-available', () => {
+    render(<TownPanel snapshot={snapshotOf(withMerchants(townProjection))} />);
+    // The provisioner is nearby and trade-available; the curios dealer is neither nearby nor
+    // trade-available (see `withMerchants`).
+    expect(screen.getByText(/press shift\+t to trade/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/press shift\+t to trade/i)).toHaveLength(1);
+  });
+
   it('shows a house-door proximity hint only when the hero is Chebyshev-adjacent to it', () => {
     const door = houseDoor(townProjection);
     const farProjection: GameplayProjection = {

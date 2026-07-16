@@ -41,6 +41,9 @@ interface ProjectedActor {
   readonly x: number;
   readonly y: number;
   readonly disposition?: string;
+  /** Present (via the engine's `visibleMerchantState`) only on merchant actors -- the honest
+   * signal that this actor can be traded with, mirrored from `TownPanel`'s own use of the field. */
+  readonly factionName?: string;
 }
 
 interface ProjectedFeature {
@@ -121,6 +124,18 @@ function heroAdjacentToHouseDoor(projection: GameplayProjection): boolean {
   if (!door) return false;
   const { x, y } = hero(projection);
   return Math.max(Math.abs(x - door.x), Math.abs(y - door.y)) === 1;
+}
+
+/** The merchant actor the hero is Chebyshev-adjacent to (but not standing on), if any -- mirrors
+ * `heroAdjacentToHouseDoor` above. When more than one merchant is adjacent, the nearest by
+ * actor-id ordering wins; the town's authored merchant stalls never place two merchants close
+ * enough for this to matter in practice. */
+function heroAdjacentMerchant(projection: GameplayProjection): ProjectedActor | undefined {
+  const origin = hero(projection);
+  return (projection.actors as unknown as readonly ProjectedActor[])
+    .filter((actor) => typeof actor.factionName === 'string')
+    .filter((actor) => Math.max(Math.abs(actor.x - origin.x), Math.abs(actor.y - origin.y)) === 1)
+    .sort((left, right) => (left.actorId < right.actorId ? -1 : 1))[0];
 }
 
 function equipSlotFor(pack: CompiledContentPack, contentId: OpaqueId, occupiedSlots: ReadonlySet<EquipmentSlot>): EquipmentSlot | undefined {
@@ -240,6 +255,50 @@ export function buildIntent(input: Readonly<{
       command: {
         type: intent.action === 'deposit' ? 'house-deposit' : 'house-withdraw',
         itemId: intent.itemId, quantity: intent.quantity, commandId, expectedRevision,
+      },
+    };
+  }
+  if (intent.type === 'trade-open') {
+    const merchant = heroAdjacentMerchant(projection);
+    if (!merchant) return { kind: 'rejected', message: 'There is no merchant nearby to trade with.' };
+    return {
+      kind: 'command',
+      command: { type: 'trade-open', merchantActorId: merchant.actorId, commandId, expectedRevision },
+    };
+  }
+  if (intent.type === 'trade-close' || intent.type === 'trade-buy' || intent.type === 'trade-sell'
+    || intent.type === 'trade-service') {
+    const { trade } = projection;
+    if (!trade) return { kind: 'rejected', message: 'There is no open trade session.' };
+    if (intent.type === 'trade-close') {
+      return {
+        kind: 'command',
+        command: { type: 'trade-close', merchantPopulationId: trade.merchantPopulationId, commandId, expectedRevision },
+      };
+    }
+    if (intent.type === 'trade-buy') {
+      return {
+        kind: 'command',
+        command: {
+          type: 'trade-buy', merchantPopulationId: trade.merchantPopulationId,
+          itemId: intent.itemId, quantity: intent.quantity, commandId, expectedRevision,
+        },
+      };
+    }
+    if (intent.type === 'trade-sell') {
+      return {
+        kind: 'command',
+        command: {
+          type: 'trade-sell', merchantPopulationId: trade.merchantPopulationId,
+          itemId: intent.itemId, quantity: intent.quantity, commandId, expectedRevision,
+        },
+      };
+    }
+    return {
+      kind: 'command',
+      command: {
+        type: 'trade-service', merchantPopulationId: trade.merchantPopulationId,
+        serviceId: intent.serviceId, targetItemId: intent.targetItemId, commandId, expectedRevision,
       },
     };
   }

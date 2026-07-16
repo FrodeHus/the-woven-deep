@@ -15,6 +15,7 @@ import {
 } from './layout.js';
 import { HeroPanel, LogPanel, StatusBar, ThreatPanel, VitalsStrip } from './panels.js';
 import { HouseScreen } from './screens/HouseScreen.js';
+import { TradeScreen } from './screens/TradeScreen.js';
 import { ThreatPopover, type ThreatPopoverActor } from './ThreatPopover.js';
 import { TownPanel } from './TownPanel.js';
 
@@ -191,14 +192,20 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
         closeOverlay: () => {
           if (snapshot.backpackOpen) session.setBackpackOpen(false);
           else if (snapshot.houseOpen) session.setHouseOpen(false);
+          // Unlike the backpack/house overlays (pure client-side toggles), an open trade session
+          // is engine state (`projection.trade`): closing it means dispatching `trade-close`, not
+          // flipping a local flag -- the screen unmounts once the resulting projection clears
+          // `trade`.
+          else if (projection.trade) session.dispatch({ type: 'trade-close' });
           else if (snapshot.pendingDecision) session.answerDecision(false);
         },
       },
-      () => snapshot.backpackOpen || snapshot.houseOpen || snapshot.pendingDecision !== null,
+      () => snapshot.backpackOpen || snapshot.houseOpen || projection.trade !== undefined
+        || snapshot.pendingDecision !== null,
     );
     window.addEventListener('keydown', dispatcher);
     return () => window.removeEventListener('keydown', dispatcher);
-  }, [session, snapshot.backpackOpen, snapshot.houseOpen, snapshot.pendingDecision]);
+  }, [session, snapshot.backpackOpen, snapshot.houseOpen, projection.trade, snapshot.pendingDecision]);
 
   const tier = tierOverride ?? layoutTier(containerWidth);
   const viewport = viewportForPane({ panePx: paneSize, cellPx: cellSize, floor: projection.floor });
@@ -320,6 +327,13 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
           snapshot={snapshot}
           onDispatch={(intent) => session.dispatch(intent)}
           onClose={() => session.setHouseOpen(false)}
+        />
+      )}
+      {projection.trade && (
+        <TradeScreen
+          snapshot={snapshot}
+          onDispatch={(intent) => session.dispatch(intent)}
+          onClose={() => session.dispatch({ type: 'trade-close' })}
         />
       )}
       {snapshot.pendingDecision && <DecisionPrompt snapshot={snapshot} session={session} />}

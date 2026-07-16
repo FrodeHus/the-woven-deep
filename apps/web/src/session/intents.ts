@@ -1,4 +1,5 @@
 import type { Direction, OpaqueId } from '@woven-deep/engine';
+import type { MerchantServiceId } from '@woven-deep/content';
 
 /**
  * The finite set of things a guest player can express through the UI. These are intentionally
@@ -26,4 +27,20 @@ export type PlayerIntent =
     readonly type: 'backpack';
     readonly action: 'equip' | 'use' | 'drop' | 'toggle-light';
     readonly itemId: OpaqueId;
+  }
+  // Opens a trade session with the merchant actor the hero is Chebyshev-adjacent to (see
+  // command-builder.ts); dispatches an engine `trade-open` command directly, so the resulting
+  // `projection.trade` is what actually drives `TradeScreen`'s presence -- there is no separate
+  // client-side "trade open" boolean to track (contrast `house`, which only toggles local UI
+  // state).
+  | { readonly type: 'trade-open' }
+  // Closes the active trade session for whichever merchant `projection.trade` currently names.
+  | { readonly type: 'trade-close' }
+  | { readonly type: 'trade-buy'; readonly itemId: OpaqueId; readonly quantity: number }
+  | { readonly type: 'trade-sell'; readonly itemId: OpaqueId; readonly quantity: number }
+  | {
+    readonly type: 'trade-service';
+    readonly serviceId: MerchantServiceId;
+    /** `null` for a targetless service (e.g. the strongbox). */
+    readonly targetItemId: OpaqueId | null;
   };

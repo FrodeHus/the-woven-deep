@@ -62,11 +62,13 @@ export function TownPanel({ snapshot }: TownPanelProps): JSX.Element {
         <ul className="town-merchant-list">
           {merchants.map((merchant) => {
             const adjacent = chebyshevDistance(hero.x, hero.y, merchant.x, merchant.y) === 1;
+            const canTrade = adjacent && merchant.tradeAvailable !== false;
             return (
               <li key={merchant.actorId} className={adjacent ? 'town-merchant town-merchant--nearby' : 'town-merchant'}>
                 <span>{merchant.name ?? merchant.factionName}</span>
                 {merchant.reputationTier !== undefined && <span className="town-merchant-reputation">{merchant.reputationTier}</span>}
                 {merchant.tradeAvailable === false && <span className="town-merchant-unavailable">unavailable</span>}
+                {canTrade && <span className="town-merchant-trade-hint">press Shift+T to trade</span>}
               </li>
             );
           })}
