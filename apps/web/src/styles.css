@@ -207,3 +207,74 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   pointer-events: none;
   white-space: nowrap;
 }
+
+/* Character-generation wizard: step shell, keyboard-first option lists, and the portrait picker.
+   Portrait accent colors are keyed off the `data-glyph` id (`ChargenScreen`'s `PORTRAIT_GLYPHS`),
+   not the glyph's rendered character. */
+.chargen-screen {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.chargen-progress { color: #7d89a8; }
+.chargen-step-label { margin: 0; font-size: .9rem; letter-spacing: .04em; text-transform: uppercase; }
+.chargen-main { display: flex; flex-direction: column; gap: 12px; }
+.chargen-nav { display: flex; gap: 8px; justify-content: flex-end; }
+
+.chargen-option-list, .chargen-portrait-list, .chargen-attribute-adjust-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chargen-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  border: 1px solid #3d465f;
+  background: #121521;
+  color: inherit;
+  padding: 8px 10px;
+}
+.chargen-option--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
+.chargen-option[aria-selected="true"] { border-color: #e8c879; }
+.chargen-option--locked { opacity: .55; cursor: not-allowed; }
+.chargen-class-glyph { font-weight: bold; }
+.chargen-class-unlock-hint { font-size: .8rem; color: #7d89a8; font-style: italic; }
+
+.chargen-portrait-list { flex-direction: row; flex-wrap: wrap; }
+.chargen-portrait {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid #3d465f;
+  background: #121521;
+  color: var(--portrait-accent, #dfe3ef);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chargen-portrait--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
+.chargen-portrait[aria-selected="true"] { border-color: #e8c879; }
+.chargen-portrait[data-glyph="@"] { --portrait-accent: #dfe3ef; }
+.chargen-portrait[data-glyph="@·gold"] { --portrait-accent: #e8c879; }
+.chargen-portrait[data-glyph="@·ember"] { --portrait-accent: #db7f78; }
+.chargen-portrait[data-glyph="@·mist"] { --portrait-accent: #7d89a8; }
+.chargen-portrait[data-glyph="@·moss"] { --portrait-accent: #7fa87d; }
+
+.chargen-attribute-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chargen-attribute-row--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
+.chargen-attribute-name { width: 6em; text-transform: capitalize; }
+.chargen-point-buy-budget { color: #7d89a8; }
+.chargen-hints, .chargen-summary-list, .chargen-preview-list, .chargen-attribute-list {
+  font-size: .85rem;
+  color: #7d89a8;
+}
+.chargen-preview { border-top: 1px solid #3d465f; padding-top: 8px; }
