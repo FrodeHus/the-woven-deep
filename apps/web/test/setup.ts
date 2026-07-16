@@ -55,6 +55,12 @@ export function triggerResize(element: Element): void {
   for (const stub of stubs) stub.notify(element);
 }
 
+// jsdom logs "Not implemented: getContext" to stderr; stub it (returning null) so test output is clean.
+Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+  configurable: true,
+  value: () => null,
+});
+
 afterEach(() => {
   cleanup();
 });

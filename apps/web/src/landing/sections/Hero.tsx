@@ -15,8 +15,9 @@ export function Hero({ coverRef, heartRef }: HeroProps): JSX.Element {
           Few return<br />from the Deep.<br /><span className="wd-h1-accent">None are forgotten.</span>
         </h1>
         <p className="wd-lead">
-          The gods wove a labyrinth to cage an ancient horror. Now the weave is failing. The{' '}
-          <em className="wd-heart-em">Heart of the Deep</em> must be recovered before the prison unravels.
+          {HERO.lead.before}
+          <em className="wd-heart-em">{HERO.lead.emphasis}</em>
+          {HERO.lead.after}
         </p>
         <p className="wd-hero-tagline">{HERO.italicTagline}</p>
         <div className="wd-hero-ctas">

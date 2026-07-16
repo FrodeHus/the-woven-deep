@@ -7,7 +7,7 @@ export function FinalCta(): JSX.Element {
       <div data-reveal className="wd-final-cta-panel">
         <p className="wd-eyebrow">{FINAL_CTA.eyebrow}</p>
         <h2 id="final-cta-heading" className="wd-final-cta-heading">
-          Will you answer<br />the descent?
+          {FINAL_CTA.heading[0]}<br />{FINAL_CTA.heading[1]}
         </h2>
         <p className="wd-final-cta-supporting">{FINAL_CTA.supporting}</p>
         <div className="wd-final-cta-ctas">

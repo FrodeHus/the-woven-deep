@@ -27,15 +27,10 @@ interface Particle {
   tw: number;
   twF: number;
   peak: number;
-  col: string;
   age: number;
   life: number;
 }
 
-// Warm ember palette (hot core -> deep coal), picked per spark.
-const EMBER = ['255,214,150', '255,176,86', '245,138,54', '214,96,34'];
-// Even the calm, slow-drifting motes glow warm like dim embers.
-const MOTE = ['224,158,92', '210,138,74', '232,180,110'];
 // Real embers cool as they rise: white-hot -> yellow -> orange -> deep red.
 const RAMP: readonly [number, number, number, number][] = [
   [0, 255, 247, 222],
@@ -103,7 +98,6 @@ export function EmberCanvas({ emberStyle = 'both', motion }: EmberCanvasProps): 
         tw: Math.random() * Math.PI * 2,
         twF: spark ? 0.05 + Math.random() * 0.1 : 0.006 + Math.random() * 0.014,
         peak: spark ? Math.random() * 0.42 + 0.45 : Math.random() * 0.14 + 0.09,
-        col: spark ? EMBER[(Math.random() * EMBER.length) | 0]! : MOTE[(Math.random() * MOTE.length) | 0]!,
         age: seeded ? Math.random() * life : 0,
         life,
       };

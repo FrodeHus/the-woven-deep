@@ -25,7 +25,11 @@ export const NAV_LINKS = [
 
 export const HERO = {
   eyebrow: 'An endless descent · Free in your browser',
-  lead: "The gods wove a labyrinth to cage an ancient horror. Now the weave is failing. The Heart of the Deep must be recovered before the prison unravels.",
+  lead: {
+    before: 'The gods wove a labyrinth to cage an ancient horror. Now the weave is failing. The ',
+    emphasis: 'Heart of the Deep',
+    after: ' must be recovered before the prison unravels.',
+  },
   italicTagline: 'Descend into the depths. Recover the Heart. Escape alive.',
   coverAlt: 'The Woven Deep: an adventurer stands at the lantern-lit edge of a vast woven labyrinth, a glowing Heart in its depths',
 };
@@ -168,7 +172,7 @@ export const FAQS = [
 
 export const FINAL_CTA = {
   eyebrow: 'The weave is failing',
-  heading: 'Will you answer\nthe descent?',
+  heading: ['Will you answer', 'the descent?'],
   supporting: 'No download. No cost. Open the Deep in your browser and take your first step into the dark.',
   primaryCta: 'Play Free: Descend Now',
   secondaryCta: 'Or register to be remembered',
