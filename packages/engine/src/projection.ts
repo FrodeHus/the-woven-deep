@@ -1,5 +1,5 @@
 import type {
-  CompiledContentPack, CompletionType, ItemContentEntry, MerchantEncounterContentEntry,
+  CompiledContentPack, CompletionType, ItemContentEntry, MerchantEncounterContentEntry, MerchantServiceId,
 } from '@woven-deep/content';
 import { heroActor, heroPerception } from './actor-model.js';
 import { deriveActorStats } from './attributes.js';
@@ -299,7 +299,7 @@ export interface ObservableTradeProjection {
   readonly stock: readonly Readonly<{ item: Readonly<Record<string, unknown>>; quantity: number; unitPrice: number }>[];
   readonly saleOffers: readonly Readonly<{ itemId: OpaqueId; quantity: number; unitPrice: number }>[];
   readonly services: readonly Readonly<{
-    serviceId: 'merchant-service.identify'; unitPrice: number; remainingUses: number;
+    serviceId: MerchantServiceId; unitPrice: number; remainingUses: number;
     targetItemIds: readonly OpaqueId[];
   }>[];
 }

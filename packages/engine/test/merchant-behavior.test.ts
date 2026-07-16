@@ -50,7 +50,7 @@ const BEETLE_ID = 'monster.threat-01';
 beforeAll(async () => {
   content = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
   encounter = content.entries.find((entry): entry is MerchantEncounterContentEntry =>
-    entry.kind === 'encounter' && entry.model === 'merchant')!;
+    entry.kind === 'encounter' && entry.model === 'merchant' && !entry.definition.permanent)!;
   npc = content.entries.find((entry): entry is NpcContentEntry => entry.kind === 'npc')!;
   faction = content.entries.find((entry): entry is NpcFactionContentEntry => entry.kind === 'npc-faction')!;
 });

@@ -46,6 +46,9 @@ export function createDemoContentPack(): CompiledContentPack {
           { value: 28, cost: 54 }, { value: 29, cost: 57 }, { value: 30, cost: 60 },
         ],
       },
+      restockMilestones: [5, 10, 15, 20],
+      house: { baseCapacity: 6, strongboxIncrement: 4 },
+      encounterDensity: { cellsPerEncounter: 2000 },
     }, {
       kind: 'condition', id: 'condition.disengaged', name: 'Disengaged',
       description: 'Avoids opportunity attacks', tags: ['beneficial'], color: '#78c8dc',

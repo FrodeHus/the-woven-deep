@@ -32,7 +32,7 @@ beforeAll(async () => {
   content = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
   faction = content.entries.find((entry): entry is NpcFactionContentEntry => entry.kind === 'npc-faction')!;
   encounter = content.entries.find((entry): entry is MerchantEncounterContentEntry =>
-    entry.kind === 'encounter' && entry.model === 'merchant')!;
+    entry.kind === 'encounter' && entry.model === 'merchant' && !entry.definition.permanent)!;
   sword = content.entries.find((entry): entry is ItemContentEntry =>
     entry.kind === 'item' && entry.id === 'item.iron-sword')!;
   ring = content.entries.find((entry): entry is ItemContentEntry =>

@@ -38,7 +38,7 @@ const HERO_ID = 'hero.demo';
 beforeAll(async () => {
   content = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
   encounter = content.entries.find((entry): entry is MerchantEncounterContentEntry =>
-    entry.kind === 'encounter' && entry.model === 'merchant')!;
+    entry.kind === 'encounter' && entry.model === 'merchant' && !entry.definition.permanent)!;
   faction = content.entries.find((entry): entry is NpcFactionContentEntry => entry.kind === 'npc-faction')!;
   lampOil = content.entries.find((entry): entry is ItemContentEntry => entry.kind === 'item' && entry.id === 'item.lamp-oil')!;
   ration = content.entries.find((entry): entry is ItemContentEntry => entry.kind === 'item' && entry.id === 'item.travel-ration')!;

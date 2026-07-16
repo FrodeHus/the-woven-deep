@@ -46,9 +46,16 @@ export function materializeMerchant(input: Readonly<{
   const floor = input.run.floors.find((candidate) => candidate.floorId === input.floorId);
   if (!floor) throw new Error(`internal invariant: merchant floor ${input.floorId} does not exist`);
   const definition = input.encounter.definition;
+  if (definition.permanent) {
+    throw new Error('internal invariant: permanent merchants are not materialized through population placement');
+  }
+  // Content validation (packages/content schema.ts) guarantees a non-permanent merchant
+  // declares all three lifetime fields, so asserting them here is safe given the guard above.
+  const minimumLifetime = definition.minimumLifetime!;
+  const maximumLifetime = definition.maximumLifetime!;
   const npc = npcDefinition(input.content, definition.npcId);
   const balance = balanceDefinition(input.content);
-  if (!Number.isSafeInteger(input.run.worldTime + definition.maximumLifetime)) {
+  if (!Number.isSafeInteger(input.run.worldTime + maximumLifetime)) {
     throw new RangeError('merchant lifetime would exceed safe world time');
   }
   if (!Number.isSafeInteger(definition.maximumStockRolls) || definition.maximumStockRolls <= 0) {
@@ -72,9 +79,9 @@ export function materializeMerchant(input: Readonly<{
   }
 
   let state = input.run.rng['merchant-stock'];
-  const lifetimeRoll = rollDie(state, definition.maximumLifetime - definition.minimumLifetime + 1);
+  const lifetimeRoll = rollDie(state, maximumLifetime - minimumLifetime + 1);
   state = lifetimeRoll.state;
-  const rolledLifetime = definition.minimumLifetime + lifetimeRoll.value - 1;
+  const rolledLifetime = minimumLifetime + lifetimeRoll.value - 1;
   const stockRoll = rollDie(state, definition.maximumStockRolls - definition.minimumStockRolls + 1);
   state = stockRoll.state;
   const stockRolls = definition.minimumStockRolls + stockRoll.value - 1;

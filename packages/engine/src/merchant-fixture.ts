@@ -54,8 +54,10 @@ export interface MerchantDemoInput {
 }
 
 function merchantEncounterEntry(pack: CompiledContentPack): MerchantEncounterContentEntry {
+  // Permanent (town) merchants are never materialized through population placement, so this
+  // fixture only ever selects a non-permanent, dungeon-wandering merchant encounter.
   const entry = pack.entries.find((candidate): candidate is MerchantEncounterContentEntry =>
-    candidate.kind === 'encounter' && candidate.model === 'merchant');
+    candidate.kind === 'encounter' && candidate.model === 'merchant' && !candidate.definition.permanent);
   if (!entry) throw new Error('merchant fixture requires a merchant encounter');
   return entry;
 }

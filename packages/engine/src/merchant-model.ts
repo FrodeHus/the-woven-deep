@@ -1,3 +1,4 @@
+import type { MerchantServiceId } from '@woven-deep/content';
 import type { OpaqueId } from './model.js';
 import type { PopulationBase } from './population-model.js';
 
@@ -15,7 +16,7 @@ export interface ActiveTrade {
 }
 
 export interface MerchantServiceState {
-  readonly serviceId: 'merchant-service.identify';
+  readonly serviceId: MerchantServiceId;
   readonly basePrice: number;
   readonly remainingUses: number;
   readonly tierIds: readonly string[];

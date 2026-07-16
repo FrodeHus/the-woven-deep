@@ -44,7 +44,7 @@ function scenarioRun(scenario: MerchantPropertyScenario, pack: CompiledContentPa
   const materialized = materializeMerchant({
     run, content: pack,
     encounter: pack.entries.find((entry): entry is MerchantEncounterContentEntry =>
-      entry.kind === 'encounter' && entry.model === 'merchant')!,
+      entry.kind === 'encounter' && entry.model === 'merchant' && !entry.definition.permanent)!,
     populationId: POPULATION_ID, floorId: 'floor.demo', position: { x: 2, y: 1 },
   });
   const stockDefinition = pack.entries.find((entry) =>

@@ -48,7 +48,7 @@ function allocation(run: ActiveRun = createDemoRun()): FloorSeedAllocation {
 describe('addGeneratedFloor', () => {
   it('atomically commits merchant actor, population, stock, decisions, and both owned RNG streams', () => {
     const encounter = content.entries.find((entry): entry is MerchantEncounterContentEntry =>
-      entry.kind === 'encounter' && entry.model === 'merchant')!;
+      entry.kind === 'encounter' && entry.model === 'merchant' && !entry.definition.permanent)!;
     const base = createDemoRun();
     const run: ActiveRun = { ...base, contentHash: content.hash, encounterDecisions: [{
       encounterId: encounter.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1,
@@ -76,7 +76,7 @@ describe('addGeneratedFloor', () => {
 
   it('preserves merchant lifetime, stock, and service uses across save/load without re-rolling', () => {
     const encounter = content.entries.find((entry): entry is MerchantEncounterContentEntry =>
-      entry.kind === 'encounter' && entry.model === 'merchant')!;
+      entry.kind === 'encounter' && entry.model === 'merchant' && !entry.definition.permanent)!;
     const base = createDemoRun();
     const run: ActiveRun = { ...base, contentHash: content.hash, encounterDecisions: [{
       encounterId: encounter.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1,
@@ -109,7 +109,7 @@ describe('addGeneratedFloor', () => {
 
   it('does not advance merchant stock or create items when merchant placement is skipped', () => {
     const source = content.entries.find((entry): entry is MerchantEncounterContentEntry =>
-      entry.kind === 'encounter' && entry.model === 'merchant')!;
+      entry.kind === 'encounter' && entry.model === 'merchant' && !entry.definition.permanent)!;
     const impossible = { ...source, placement: { ...source.placement, minimumStairDistance: 10_000 } };
     const pack = { ...content, entries: content.entries.map((entry) => entry.id === source.id ? impossible : entry) };
     const base = createDemoRun();

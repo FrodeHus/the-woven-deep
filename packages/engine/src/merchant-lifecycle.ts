@@ -136,7 +136,12 @@ export function advanceMerchantLifecycle(input: Readonly<{
     const remaining = population.departureAt - input.nextWorldTime;
     if (remaining > 0) {
       const encounter = merchantEncounter(input.content, population.encounterId);
-      const crossed = encounter.definition.departureWarningThresholds
+      if (encounter.definition.permanent) {
+        throw new Error(`internal invariant: merchant population ${populationId} is bound to a permanent encounter definition, which never departs and should not reach the lifecycle boundary`);
+      }
+      // Content validation (packages/content schema.ts) guarantees a non-permanent merchant
+      // declares departureWarningThresholds, so asserting it here is safe given the guard above.
+      const crossed = encounter.definition.departureWarningThresholds!
         .filter((threshold) => remaining <= threshold
           && !population.emittedWarningThresholds.includes(threshold))
         .sort((left, right) => right - left);

@@ -206,11 +206,17 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
       if (actor && (actor.contentId !== npc.id || actor.populationId !== population.populationId)) {
         throw new Error(`content-bound validation: merchant population ${population.populationId} actor does not match its NPC`);
       }
-      if (population.rolledLifetime < encounter.definition.minimumLifetime
-        || population.rolledLifetime > encounter.definition.maximumLifetime) {
+      if (encounter.definition.permanent) {
+        throw new Error(`content-bound validation: merchant population ${population.populationId} is bound to a permanent encounter definition, which no population placement path materializes yet`);
+      }
+      // Content validation (packages/content schema.ts) guarantees a non-permanent merchant
+      // declares all three lifetime fields, so asserting them here is safe given the guard above.
+      const minimumLifetime = encounter.definition.minimumLifetime!;
+      const maximumLifetime = encounter.definition.maximumLifetime!;
+      if (population.rolledLifetime < minimumLifetime || population.rolledLifetime > maximumLifetime) {
         throw new Error(`content-bound validation: merchant population ${population.populationId} lifetime is invalid`);
       }
-      const authoredWarnings = new Set(encounter.definition.departureWarningThresholds);
+      const authoredWarnings = new Set(encounter.definition.departureWarningThresholds!);
       if (population.emittedWarningThresholds.some((threshold) => !authoredWarnings.has(threshold)
         || population.departureAt - run.worldTime > threshold)) {
         throw new Error(`content-bound validation: merchant population ${population.populationId} warnings are invalid`);
