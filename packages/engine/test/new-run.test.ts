@@ -66,6 +66,14 @@ describe('createNewRun', () => {
     expect(rations.quantity).toBe(3);
   });
 
+  it('grants the hero the balance entry\'s startingCurrency, not zero', () => {
+    const balance = pack.entries.find((entry) => entry.id === 'balance.core-gameplay');
+    if (balance?.kind !== 'balance') throw new Error('expected balance.core-gameplay content entry');
+    expect(balance.startingCurrency).toBeGreaterThan(0);
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    expect(run.hero.currency).toBe(balance.startingCurrency);
+  });
+
   it('derives different runs from different seeds and round-trips the codec', () => {
     const a = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const b = createNewRun({ pack, seed: [5, 6, 7, 8], hero: DEFAULT_GUEST_HERO });

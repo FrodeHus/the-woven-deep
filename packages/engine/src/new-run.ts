@@ -231,7 +231,7 @@ export function createNewRun(input: Readonly<{
       name: hero.name,
       sightRadius: 12,
       backpackCapacity: 12,
-      currency: 0,
+      currency: balance.startingCurrency,
       classTags: hero.classTags,
       statModifiers: hero.statModifiers,
     },
