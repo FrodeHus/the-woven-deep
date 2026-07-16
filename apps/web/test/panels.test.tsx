@@ -10,7 +10,7 @@ import {
   type ActiveRun, type ActorState, type GameplayProjection,
 } from '@woven-deep/engine';
 import { GuestSession } from '../src/session/guest-session.js';
-import type { SessionStorageLike } from '../src/session/storage.js';
+import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 import type { SessionSnapshot } from '../src/session/guest-session.js';
 import { HeroPanel, LogPanel, StatusBar, ThreatPanel } from '../src/ui/panels.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
@@ -229,8 +229,11 @@ describe('PlayScreen camera wiring', () => {
 
 describe('PlayScreen keyboard routing', () => {
   function fakeStorage(): SessionStorageLike {
-    let value: string | null = null;
-    return { get: () => value, set: (v: string) => { value = v; } };
+    const values = new Map<string, string>();
+    return {
+      get: (key: string) => values.get(key) ?? null,
+      set: (key: string, value: string) => { values.set(key, value); },
+    };
   }
 
   function decisionSession(): GuestSession {
@@ -259,7 +262,7 @@ describe('PlayScreen keyboard routing', () => {
       actors: [...run.actors, hiddenNeighbor].sort((left, right) => (left.actorId < right.actorId ? -1 : 1)),
     };
     const storage = fakeStorage();
-    storage.set(encodeActiveRun(withHiddenNeighbor));
+    storage.set(SAVE_KEY, encodeActiveRun(withHiddenNeighbor));
     return new GuestSession({ pack, storage });
   }
 

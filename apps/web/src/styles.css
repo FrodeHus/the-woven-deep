@@ -23,7 +23,7 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 
 /* Playfield: the grid renders gameplay truth, the effects layer is a purely decorative overlay
    sharing its coordinate space via --cell-w/--cell-h set on the wrapper. */
-.playfield { position: relative; --cell-w: 1ch; --cell-h: 1lh; line-height: 1; }
+.playfield { position: relative; overflow: hidden; --cell-w: 1ch; --cell-h: 1lh; line-height: 1; }
 .playfield-grid {
   display: grid;
   grid-auto-rows: 1lh;
@@ -60,14 +60,33 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   --glow-color: #e8c879;
   --glow-radius: 5;
   --glow-intensity: 1;
-  transform: translate(-50%, -50%);
-  width: calc(var(--cell-w) * var(--glow-radius) * 2);
-  height: calc(var(--cell-h) * var(--glow-radius) * 2);
+  /* Both axes derive from --cell-h (not --cell-w): the box must be square so the radial gradient
+     below is a true circle with `closest-side` reaching full transparency exactly at every edge —
+     mixing --cell-w (narrow) and --cell-h (tall) here produced an ellipse whose gradient got
+     clipped by border-radius: 50% along the short axis before it faded out, i.e. a hard rim. Rows
+     are the bigger screen unit for a monospace grid, so sizing off --cell-h also means the glow
+     reads as visually round (spanning more columns than rows), matching how a round shape looks
+     on a grid of tall-narrow cells. */
+  --glow-diameter: calc(var(--cell-h) * var(--glow-radius) * 2);
+  /* Position the glow's anchor point at the CENTER of the hero cell (+0.5 cell), not its top-left
+     corner (the shared `.glow, .effect` left/top rule below is corner-anchored, which is correct
+     for `.effect` — a 1-cell box that should align exactly with its cell — but wrong for `.glow`,
+     a many-cell box that must be centered on its cell). */
+  left: calc(var(--cell-w) * (var(--x, 0) + 0.5));
+  top: calc(var(--cell-h) * (var(--y, 0) + 0.5));
+  /* Centering lives in the standalone `translate` property (not the `transform` shorthand) so the
+     `glow-drift`/`glow-gutter` keyframes below can animate the standalone `scale`/`opacity`
+     properties without needing to repeat `translate(-50%, -50%)` in every keyframe — composable
+     transforms compose instead of overwriting each other. */
+  translate: -50% -50%;
+  width: var(--glow-diameter);
+  height: var(--glow-diameter);
   border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--glow-color) calc(var(--glow-intensity) * 70%), transparent) 0%, transparent 70%);
+  background: radial-gradient(circle closest-side, color-mix(in srgb, var(--glow-color) calc(var(--glow-intensity) * 30%), transparent) 0%, transparent 100%);
+  mix-blend-mode: screen;
   animation: glow-drift 2.6s ease-in-out infinite alternate;
 }
-.glow[data-source*="torch"] { animation: glow-gutter 900ms steps(6, jump-none) infinite; }
+.glow[data-source*="torch"] { animation: glow-gutter 2.2s ease-in-out infinite; }
 
 .effect { transform-origin: center; }
 .effect-hit-flash {
@@ -86,15 +105,13 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 }
 
 @keyframes glow-drift {
-  from { transform: translate(-50%, -50%) scale(0.94); opacity: 0.85; }
-  to { transform: translate(-50%, -50%) scale(1.04); opacity: 1; }
+  from { scale: 0.94; opacity: 0.85; }
+  to { scale: 1.04; opacity: 1; }
 }
 @keyframes glow-gutter {
-  0%, 100% { opacity: 0.75; }
-  20% { opacity: 0.9; }
-  40% { opacity: 0.6; }
-  60% { opacity: 1; }
-  80% { opacity: 0.7; }
+  0%, 100% { opacity: 0.88; scale: 0.98; }
+  45% { opacity: 1; scale: 1.02; }
+  70% { opacity: 0.92; scale: 0.99; }
 }
 @keyframes hit-flash {
   from { opacity: 1; filter: brightness(1.6); }

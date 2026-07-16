@@ -4,10 +4,10 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, emptyEquipment, encodeActiveRun,
-  type ActiveRun, type ActorState, type Uint32State,
+  RECENT_COMMAND_LIMIT, type ActiveRun, type ActorState, type Uint32State,
 } from '@woven-deep/engine';
 import { GuestSession } from '../src/session/guest-session.js';
-import type { SessionStorageLike } from '../src/session/storage.js';
+import { COMMAND_SEQUENCE_KEY, SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 
 let pack: CompiledContentPack;
 
@@ -28,15 +28,17 @@ beforeAll(async () => {
 });
 
 interface FakeStorage extends SessionStorageLike {
-  peek(): string | null;
+  /** Reads back the save by default; pass a key to inspect anything else stored beside it
+   * (e.g. `COMMAND_SEQUENCE_KEY`). */
+  peek(key?: string): string | null;
 }
 
 function fakeStorage(): FakeStorage {
-  let value: string | null = null;
+  const values = new Map<string, string>();
   return {
-    get: () => value,
-    set: (v: string) => { value = v; },
-    peek: () => value,
+    get: (key: string) => values.get(key) ?? null,
+    set: (key: string, value: string) => { values.set(key, value); },
+    peek: (key: string = SAVE_KEY) => values.get(key) ?? null,
   };
 }
 
@@ -67,7 +69,7 @@ describe('GuestSession', () => {
 
   it('falls back to a fresh run with a save-discarded notice on corrupt saves', () => {
     const storage = fakeStorage();
-    storage.set('{"not": "a save"}');
+    storage.set(SAVE_KEY, '{"not": "a save"}');
 
     const session = new GuestSession({ pack, storage, seed: SEED });
     expect(session.getSnapshot().notice?.kind).toBe('save-discarded');
@@ -79,7 +81,7 @@ describe('GuestSession', () => {
   it('discards a restored save whose content hash no longer matches the served pack', () => {
     const storage = fakeStorage();
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
-    storage.set(encodeActiveRun(run));
+    storage.set(SAVE_KEY, encodeActiveRun(run));
     const mismatchedPack: CompiledContentPack = { ...pack, hash: 'f'.repeat(64) };
 
     const session = new GuestSession({ pack: mismatchedPack, storage, seed: SEED });
@@ -147,7 +149,7 @@ describe('GuestSession', () => {
       items: doused,
       actors: [...run.actors, hiddenNeighbor].sort((left, right) => (left.actorId < right.actorId ? -1 : 1)),
     };
-    storage.set(encodeActiveRun(withHiddenNeighbor));
+    storage.set(SAVE_KEY, encodeActiveRun(withHiddenNeighbor));
 
     const session = new GuestSession({ pack, storage });
     session.dispatch({ type: 'move', direction: 'east' });
@@ -190,7 +192,7 @@ describe('GuestSession', () => {
       items: doused,
       actors: [...run.actors, hiddenNeighbor].sort((left, right) => (left.actorId < right.actorId ? -1 : 1)),
     };
-    storage.set(encodeActiveRun(withHiddenNeighbor));
+    storage.set(SAVE_KEY, encodeActiveRun(withHiddenNeighbor));
 
     const session = new GuestSession({ pack, storage });
     session.dispatch({ type: 'move', direction: 'east' });
@@ -207,12 +209,12 @@ describe('GuestSession', () => {
     let failNextWrite = false;
     const failingStorage: SessionStorageLike = {
       get: storage.get,
-      set: (value: string) => {
+      set: (key: string, value: string) => {
         if (failNextWrite) {
           const quota = new DOMException('The quota has been exceeded.', 'QuotaExceededError');
           throw quota;
         }
-        storage.set(value);
+        storage.set(key, value);
       },
     };
 
@@ -239,7 +241,7 @@ describe('GuestSession', () => {
     let setCalls = 0;
     const countingStorage: SessionStorageLike = {
       get: storage.get,
-      set: (value: string) => { setCalls += 1; storage.set(value); },
+      set: (key: string, value: string) => { setCalls += 1; storage.set(key, value); },
     };
     const session = new GuestSession({ pack, storage: countingStorage, seed: SEED });
     const sessionInternals = session as unknown as { run: ActiveRun; persist(): void };
@@ -271,7 +273,7 @@ describe('GuestSession', () => {
     expect(session.getSnapshot()).toBe(second);
   });
 
-  it('derives command ids from the run revision and recorded-command count so they stay unique and deterministic across reload', () => {
+  it('derives command ids from a session-owned monotonic counter, persisted beside the save', () => {
     const storage = fakeStorage();
     const session = new GuestSession({ pack, storage, seed: SEED });
     session.dispatch({ type: 'wait' });
@@ -280,16 +282,18 @@ describe('GuestSession', () => {
     const saved = storage.peek();
     const restored = decodeActiveRun(saved!);
     expect(restored.recentCommands.map((entry) => entry.command.commandId))
-      .toEqual(['command.guest-1-0', 'command.guest-2-1']);
+      .toEqual(['command.guest-0000000000', 'command.guest-0000000001']);
+    expect(storage.peek(COMMAND_SEQUENCE_KEY)).toBe('2');
   });
 
   it('recovers from a wall bump instead of soft-locking on a reused command id', () => {
-    // Regression coverage for the final-review finding: deriving commandId from `revision + 1`
-    // alone collides forever after any `invalid` result, because the engine records invalid
-    // results into `recentCommands` WITHOUT advancing revision (reducer.ts recordInvalid), and
-    // rejects any later same-id/different-payload command as `command_id_conflict`. From this
-    // seed's start position, `north` is a wall (verified against the compiled floor's tiles), so
-    // it is guaranteed to produce an `invalid` result without moving the hero.
+    // Regression coverage for the final-review finding that motivated the first fix attempt:
+    // deriving commandId from `revision + 1` alone collides forever after any `invalid` result,
+    // because the engine records invalid results into `recentCommands` WITHOUT advancing revision
+    // (reducer.ts recordInvalid), and rejects any later same-id/different-payload command as
+    // `command_id_conflict`. From this seed's start position, `north` is a wall (verified against
+    // the compiled floor's tiles), so it is guaranteed to produce an `invalid` result without
+    // moving the hero.
     const storage = fakeStorage();
     const session = new GuestSession({ pack, storage, seed: SEED });
     const logBefore = session.getSnapshot().log.length;
@@ -301,8 +305,6 @@ describe('GuestSession', () => {
     expect(afterBump.log.at(-1)?.tone).toBe('system');
     expect(afterBump.projection.metrics.turnsElapsed).toBe(0);
 
-    // With the old `revision + 1`-only id, this next, entirely different command reuses the
-    // wall-bump's id (revision didn't advance) and is rejected forever with `command_id_conflict`.
     session.dispatch({ type: 'wait' });
     const afterWait = session.getSnapshot();
     expect(afterWait.projection.metrics.turnsElapsed).toBe(1);
@@ -312,5 +314,59 @@ describe('GuestSession', () => {
     const restoredSession = new GuestSession({ pack, storage: { ...storage, get: () => saved } });
     restoredSession.dispatch({ type: 'wait' });
     expect(restoredSession.getSnapshot().projection.metrics.turnsElapsed).toBe(2);
+  });
+
+  it('keeps applying valid commands after the engine prunes recentCommands past RECENT_COMMAND_LIMIT', () => {
+    // This is the production soft-lock: once the run has recorded RECENT_COMMAND_LIMIT commands,
+    // the engine's `recentCommands.slice(-RECENT_COMMAND_LIMIT)` (reducer.ts) keeps its length
+    // CONSTANT forever after. The previous commandId scheme derived ids from
+    // `revision + 1` and `recentCommands.length` — once length is pinned, two consecutive
+    // `invalid` dispatches (which don't advance revision either) produce IDENTICAL ids, so the
+    // next, entirely different command collides with one of them and is rejected forever as
+    // `command_id_conflict`. A session-owned monotonic counter never repeats, so it must survive
+    // this scenario.
+    const storage = fakeStorage();
+    const session = new GuestSession({ pack, storage, seed: SEED });
+
+    for (let i = 0; i < RECENT_COMMAND_LIMIT; i += 1) {
+      session.dispatch({ type: 'wait' });
+    }
+    expect(session.getSnapshot().projection.metrics.turnsElapsed).toBe(RECENT_COMMAND_LIMIT);
+
+    // From this seed's spawn tile, `north` is a wall (see the wall-bump test above), so both
+    // dispatches below produce `invalid` results without moving the hero or advancing revision.
+    session.dispatch({ type: 'move', direction: 'north' });
+    session.dispatch({ type: 'move', direction: 'north' });
+
+    session.dispatch({ type: 'wait' });
+    expect(session.getSnapshot().projection.metrics.turnsElapsed).toBe(RECENT_COMMAND_LIMIT + 1);
+  });
+
+  it('restores the persisted command-sequence counter on reload, so ids keep advancing past what a fresh counter would produce', () => {
+    const storage = fakeStorage();
+    const first = new GuestSession({ pack, storage, seed: SEED });
+    for (let i = 0; i < 5; i += 1) first.dispatch({ type: 'wait' });
+    expect(storage.peek(COMMAND_SEQUENCE_KEY)).toBe('5');
+
+    const second = new GuestSession({ pack, storage });
+    second.dispatch({ type: 'wait' });
+
+    const restored = decodeActiveRun(storage.peek()!);
+    expect(restored.recentCommands.at(-1)?.command.commandId).toBe('command.guest-0000000005');
+    expect(storage.peek(COMMAND_SEQUENCE_KEY)).toBe('6');
+  });
+
+  it('falls back to a safe counter floor when a save exists but its counter is missing (an older session)', () => {
+    const storage = fakeStorage();
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    storage.set(SAVE_KEY, encodeActiveRun(run));
+    // No COMMAND_SEQUENCE_KEY entry at all — simulates a save persisted before this counter existed.
+
+    const session = new GuestSession({ pack, storage });
+    session.dispatch({ type: 'wait' });
+
+    expect(session.getSnapshot().projection.metrics.turnsElapsed).toBe(1);
+    // Seeded at `revision (0) + RECENT_COMMAND_LIMIT + 1`, then incremented once.
+    expect(storage.peek(COMMAND_SEQUENCE_KEY)).toBe(String(RECENT_COMMAND_LIMIT + 2));
   });
 });

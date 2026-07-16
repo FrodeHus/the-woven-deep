@@ -7,7 +7,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import { decodeActiveRun } from '@woven-deep/engine';
 import { App } from '../src/App.js';
-import type { SessionStorageLike } from '../src/session/storage.js';
+import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 
 let pack: CompiledContentPack;
 
@@ -24,8 +24,13 @@ function packFetcher(): typeof fetch {
 }
 
 function fakeStorage(initial: string | null = null): SessionStorageLike & { peek(): string | null } {
-  let value = initial;
-  return { get: () => value, set: (v: string) => { value = v; }, peek: () => value };
+  const values = new Map<string, string>();
+  if (initial !== null) values.set(SAVE_KEY, initial);
+  return {
+    get: (key: string) => values.get(key) ?? null,
+    set: (key: string, value: string) => { values.set(key, value); },
+    peek: () => values.get(SAVE_KEY) ?? null,
+  };
 }
 
 describe('App boot flow', () => {
@@ -69,7 +74,7 @@ describe('App boot flow', () => {
   it('shows a persistent, non-dismissible warning (not the dismissible banner) when storage is unavailable, and play continues', async () => {
     const storage: SessionStorageLike = {
       get: () => null,
-      set: () => {
+      set: (): void => {
         throw new DOMException('nope', 'SecurityError');
       },
     };
