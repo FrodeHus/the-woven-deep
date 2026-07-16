@@ -499,6 +499,34 @@ entries:
     expect(entries[1]).toMatchObject({ effects: [{ requiresLivingTarget: false }] });
   });
 
+  it('parses optional per-choice loot-table depth bands, leaving them absent by default', () => {
+    const source = `schemaVersion: 7
+entries:
+  - { kind: loot-table, id: loot-table.banded, name: Banded loot, tags: [], rolls: 1, choices: [
+      { contentId: item.sword, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 },
+      { contentId: item.sword, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, minDepth: 5, maxDepth: 10 }
+    ] }
+`;
+    const entries = parseContentFile({ path: 'gameplay.yaml', source });
+    const table = entries[0] as { choices: readonly Record<string, unknown>[] };
+    expect(table.choices[0].minDepth).toBeUndefined();
+    expect(table.choices[0].maxDepth).toBeUndefined();
+    expect(table.choices[1]).toMatchObject({ minDepth: 5, maxDepth: 10 });
+  });
+
+  it.each([
+    ['negative minDepth', 'minDepth: -1, maxDepth: 10'],
+    ['maxDepth beyond bound', 'minDepth: 0, maxDepth: 1000'],
+  ])('rejects an out-of-range loot-table choice depth band (%s)', (_label, band) => {
+    const source = `schemaVersion: 7
+entries:
+  - { kind: loot-table, id: loot-table.banded, name: Banded loot, tags: [], rolls: 1, choices: [
+      { contentId: item.sword, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, ${band} }
+    ] }
+`;
+    expect(() => parseContentFile({ path: 'gameplay.yaml', source })).toThrow();
+  });
+
   it.each([
     ['dice count', 'damage: { count: 0, sides: 3, bonus: 0 }', /entries\.monster\.cave-rat\.damage\.count/],
     ['non-positive speed', 'speed: 100', /entries\.monster\.cave-rat\.speed/],

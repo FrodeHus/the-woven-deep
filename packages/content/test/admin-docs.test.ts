@@ -160,6 +160,19 @@ describe('server-admin content documentation', () => {
     }
   });
 
+  it('documents the optional per-choice loot-table depth band', async () => {
+    const reference = await readFile(resolve(
+      import.meta.dirname,
+      '../../../docs/server-admin/content-configuration.md',
+    ), 'utf8');
+    for (const identifier of ['choices[].minDepth', 'choices[].maxDepth']) {
+      expect(reference, `missing loot-table depth band documentation for ${identifier}`)
+        .toContain(`\`${identifier}\``);
+    }
+    expect(reference, 'missing loot-table depth band absent-means-unbanded contract')
+      .toContain('Absent means unbanded');
+  });
+
   it('derives exhaustive encounter and fallen-template field coverage from the source schema', async () => {
     const reference = await readFile(resolve(
       import.meta.dirname,

@@ -190,6 +190,8 @@ const lootChoice = z.strictObject({
   weight: safePositive,
   minimumQuantity: safePositive,
   maximumQuantity: safePositive,
+  minDepth: safeNonNegative.max(999).optional(),
+  maxDepth: safeNonNegative.max(999).optional(),
 });
 
 const lootTableEntry = z.strictObject({

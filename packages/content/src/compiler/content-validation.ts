@@ -562,6 +562,9 @@ function lootIssues(locatedEntries: readonly LocatedContentEntry[], byId: Readon
       if (choice.minimumQuantity > choice.maximumQuantity) {
         issues.push(issue(file, `${path}.maximumQuantity`, 'maximum quantity must be at least minimum quantity'));
       }
+      if (choice.minDepth !== undefined && choice.maxDepth !== undefined && choice.minDepth > choice.maxDepth) {
+        issues.push(issue(file, `${path}.maxDepth`, 'loot choice maxDepth must be at least minDepth'));
+      }
       if (choice.maximumQuantity > MAX_LOOT_CHOICE_QUANTITY) {
         issues.push(issue(file, `${path}.maximumQuantity`,
           `loot choice quantity exceeds runtime-safe limit ${MAX_LOOT_CHOICE_QUANTITY}`));

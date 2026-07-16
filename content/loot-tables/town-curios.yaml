@@ -5,8 +5,13 @@ entries:
     name: Town Curios Dealer stock
     tags: [town, curios]
     rolls: 3
+    # Base band (no minDepth/maxDepth) is always available. This table has the richest bundled
+    # pool (potions, a ring, a scroll, and an ordinary-loot curio), so it widens at all four
+    # restock milestones: ashen potion at depth 5, ember scroll at depth 10, etched ring at
+    # depth 15, and the rarer echo remnant curio at depth 20.
     choices:
-      - { contentId: item.ashen-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
       - { contentId: item.crimson-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
-      - { contentId: item.etched-ring, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
-      - { contentId: item.ember-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.ashen-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2, minDepth: 5 }
+      - { contentId: item.ember-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1, minDepth: 10 }
+      - { contentId: item.etched-ring, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, minDepth: 15 }
+      - { contentId: item.echo-remnant, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, minDepth: 20 }

@@ -623,6 +623,7 @@ Boss guaranteed-unique content is forbidden anywhere in an ordinary loot graph, 
 | `choices[].lootTableId` | loot-table ID or null | Yes | Nested result; cycles are rejected. |
 | `choices[].weight` | positive safe integer | Yes | Relative selection weight; the checked table sum cannot exceed `2^32`. |
 | `minimumQuantity`, `maximumQuantity` | positive safe integers | Yes | Inclusive quantity range; maximum cannot be smaller, cannot exceed 256, and for a direct item cannot exceed its `stackLimit`. |
+| `choices[].minDepth`, `choices[].maxDepth` | safe integers 0–999 | No | Optional per-choice depth band. Absent means unbanded: the choice is always available, matching prior behavior. When present, `0 <= minDepth <= maxDepth <= 999`; `minDepth` may be given alone to mean "available from this depth onward." Town merchant restocks use these bands to widen their stock at `balance.restockMilestones` so deeper runs surface new goods. Honoring the band during loot and stock rolls is engine work tracked separately from this content-layer authoring and validation. |
 
 ```yaml
 schemaVersion: 7

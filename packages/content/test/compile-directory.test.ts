@@ -486,6 +486,16 @@ describe('compileContentDirectory', () => {
     );
   });
 
+  it('accepts an unbanded loot choice and a valid depth band, rejecting an inverted band', async () => {
+    const banded = '{kind: loot-table, id: loot-table.banded, name: Banded, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, minDepth: 5, maxDepth: 10}]}';
+    const validRoot = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, banded) });
+    await expect(compileContentDirectory({ rootDir: validRoot })).resolves.toBeDefined();
+
+    const inverted = banded.replace('minDepth: 5, maxDepth: 10', 'minDepth: 10, maxDepth: 5');
+    const invalidRoot = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, inverted) });
+    await expect(compileContentDirectory({ rootDir: invalidRoot })).rejects.toThrow(/minDepth.*maxDepth|maxDepth.*minDepth/i);
+  });
+
   it('requires direct loot choices to reference items', async () => {
     const table = '{kind: loot-table, id: loot-table.invalid, name: Invalid, tags: [], rolls: 1, choices: [{contentId: monster.rat, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
     const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault, table) });

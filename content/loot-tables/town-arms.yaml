@@ -5,9 +5,13 @@ entries:
     name: Town Armorer stock
     tags: [town, arms]
     rolls: 3
+    # Base band (no minDepth/maxDepth) is always available. Depth bands widen the pool at two
+    # of the four restock milestones - the bundled weapon/armor pool is thin (five items total),
+    # so the hunting bow unlocks at depth 5 and leather armor at depth 10, rather than forcing
+    # a distinct item onto every milestone.
     choices:
       - { contentId: item.iron-sword, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.wooden-shield, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
-      - { contentId: item.hunting-bow, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.wooden-arrows, lootTableId: null, weight: 4, minimumQuantity: 4, maximumQuantity: 12 }
-      - { contentId: item.leather-armor, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.hunting-bow, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1, minDepth: 5 }
+      - { contentId: item.leather-armor, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1, minDepth: 10 }
