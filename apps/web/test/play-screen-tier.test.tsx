@@ -4,9 +4,11 @@ import { act, render } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
-import { DEFAULT_GUEST_HERO, createNewRun } from '@woven-deep/engine';
+import {
+  DEFAULT_GUEST_HERO, createNewRun, encodeActiveRun, type ActiveRun,
+} from '@woven-deep/engine';
 import { GuestSession } from '../src/session/guest-session.js';
-import type { SessionStorageLike } from '../src/session/storage.js';
+import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
 import { triggerResize } from './setup.js';
 
@@ -34,6 +36,22 @@ function fakeStorage(): SessionStorageLike {
 
 function session(): GuestSession {
   return new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
+}
+
+/** A fresh session with the hero already standing on the town's stairs down, so a test can
+ * dispatch `{ type: 'descend' }` directly without walking there first. */
+function sessionAtTownStairs(): GuestSession {
+  const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+  const heroActor = fresh.actors.find((actor) => actor.playerControlled)!;
+  const town = fresh.floors.find((floor) => floor.floorId === heroActor.floorId)!;
+  const atStairDown: ActiveRun = {
+    ...fresh,
+    actors: fresh.actors.map((actor) => actor.actorId === heroActor.actorId
+      ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y } : actor),
+  };
+  const storage = fakeStorage();
+  storage.set(SAVE_KEY, encodeActiveRun(atStairDown));
+  return new GuestSession({ pack, storage });
 }
 
 /** Stubs `getBoundingClientRect` so a given element reports a fixed width/height, independent of
@@ -121,10 +139,15 @@ describe('PlayScreen playfield zoom', () => {
     const triptych = container.querySelector('.triptych')!;
     const mapPane = container.querySelector('.map-pane')!;
     const probe = container.querySelector('.cell-probe')!;
+    // `.cell-probe-base` is what `zoomForFloor` is actually fed (see PlayScreen's measure effect):
+    // it reports the base (1x) cell size regardless of the applied zoom, so it must be stubbed
+    // with the SAME unzoomed size as `.cell-probe`'s initial (zoom=1) reading.
+    const probeBase = container.querySelector('.cell-probe-base')!;
 
     stubRect(triptych, 1400);
     stubRect(mapPane, 2000, 2000);
     stubRect(probe, 8, 16);
+    stubRect(probeBase, 8, 16);
     act(() => {
       triggerResize(triptych);
       triggerResize(mapPane);
@@ -141,10 +164,12 @@ describe('PlayScreen playfield zoom', () => {
     const triptych = container.querySelector('.triptych')!;
     const mapPane = container.querySelector('.map-pane')!;
     const probe = container.querySelector('.cell-probe')!;
+    const probeBase = container.querySelector('.cell-probe-base')!;
 
     stubRect(triptych, 1400);
     stubRect(mapPane, 400, 300);
     stubRect(probe, 8, 16);
+    stubRect(probeBase, 8, 16);
     act(() => {
       triggerResize(triptych);
       triggerResize(mapPane);
@@ -152,5 +177,43 @@ describe('PlayScreen playfield zoom', () => {
 
     const playfield = container.querySelector('.playfield') as HTMLDivElement;
     expect(Number(playfield.style.getPropertyValue('--zoom'))).toBe(1);
+  });
+
+  // Regression for the bug caught during Task 8's browser verification: the map-pane measure
+  // effect originally had `[]` deps and closed over `projection.floor` from mount time, so
+  // descending/ascending stairs (which changes the floor's dimensions but fires no pane resize)
+  // left the PREVIOUS floor's zoom applied to the new floor. This must FAIL if the effect's
+  // dependency array loses `projection.floor.floorId` — verified by temporarily reverting that
+  // dependency to `[]` and confirming this test goes red, then restoring it.
+  it('re-derives --zoom when the floor changes (a descend), without any new pane resize event', () => {
+    const guestSession = sessionAtTownStairs();
+    const { container } = render(<PlayScreen session={guestSession} pack={pack} />);
+    const triptych = container.querySelector('.triptych')!;
+    const mapPane = container.querySelector('.map-pane')!;
+    const probe = container.querySelector('.cell-probe')!;
+    const probeBase = container.querySelector('.cell-probe-base')!;
+
+    // A pane roomy enough that the compact town floor (34x16) reaches the max 2x zoom step, but a
+    // dungeon floor (160x50) can only reach 1.5x — two different, both non-trivial answers, so a
+    // stale zoom left over from the town would be visibly wrong rather than accidentally correct.
+    stubRect(triptych, 1400);
+    stubRect(mapPane, 2000, 2000);
+    stubRect(probe, 8, 16);
+    stubRect(probeBase, 8, 16);
+    act(() => {
+      triggerResize(triptych);
+      triggerResize(mapPane);
+    });
+
+    const playfield = container.querySelector('.playfield') as HTMLDivElement;
+    expect(Number(playfield.style.getPropertyValue('--zoom'))).toBe(2);
+
+    // Descend — this changes `projection.floor.floorId` (town -> a depth-1 dungeon floor) but
+    // does not touch the map pane's own box, so no ResizeObserver notification fires on its own.
+    act(() => {
+      guestSession.dispatch({ type: 'descend' });
+    });
+
+    expect(Number(playfield.style.getPropertyValue('--zoom'))).toBe(1.5);
   });
 });

@@ -95,11 +95,31 @@ describe('reduced-motion stylesheet contract', () => {
     expect(visibleFloor).toBeGreaterThanOrEqual(rememberedOpacity);
   });
 
-  it('drives the playfield grid track size from --cell-w/--cell-h (not a literal 1ch/1lh) so the zoom custom property actually resizes the rendered grid', () => {
+  it('scales font-size (not --cell-w/--cell-h) on .playfield with --zoom, so glyphs grow with the cell box instead of leaving whitespace at zoom', () => {
+    // `.cell` inherits font-size from `.playfield`, and `1ch`/`1lh` are relative to the element
+    // they're used on — so scaling font-size here (rather than multiplying --cell-w/--cell-h by
+    // --zoom directly) grows both the rendered glyph AND the cell box in lockstep from one
+    // number. Multiplying --cell-w/--cell-h by --zoom directly, on top of a font-size that is
+    // ALSO scaled by --zoom, would double-scale the box relative to the glyph — this pins that it
+    // is one or the other, never both.
     const playfieldRuleMatch = /(?:^|\n)\.playfield\s*\{([^}]*)\}/.exec(css);
     expect(playfieldRuleMatch, '.playfield rule not found').toBeTruthy();
-    expect(playfieldRuleMatch![1]).toMatch(/--cell-w\s*:\s*calc\(\s*1ch\s*\*\s*var\(--zoom/);
-    expect(playfieldRuleMatch![1]).toMatch(/--cell-h\s*:\s*calc\(\s*1lh\s*\*\s*var\(--zoom/);
+    const playfieldDecls = playfieldRuleMatch![1]!;
+
+    const fontSizeMatch = /font-size\s*:\s*([^;]+);/.exec(playfieldDecls);
+    expect(fontSizeMatch, '.playfield has no font-size declaration').toBeTruthy();
+    expect(fontSizeMatch![1]).toMatch(/var\(--zoom/);
+
+    const cellWMatch = /--cell-w\s*:\s*([^;]+);/.exec(playfieldDecls);
+    const cellHMatch = /--cell-h\s*:\s*([^;]+);/.exec(playfieldDecls);
+    expect(cellWMatch, '.playfield has no --cell-w declaration').toBeTruthy();
+    expect(cellHMatch, '.playfield has no --cell-h declaration').toBeTruthy();
+    // --cell-w/--cell-h must be plain 1ch/1lh — NOT also multiplied by --zoom — since font-size
+    // above already carries the zoom scale into these units.
+    expect(cellWMatch![1]!.trim()).toBe('1ch');
+    expect(cellHMatch![1]!.trim()).toBe('1lh');
+    expect(cellWMatch![1]).not.toMatch(/var\(--zoom/);
+    expect(cellHMatch![1]).not.toMatch(/var\(--zoom/);
 
     const gridRuleMatch = /(?:^|\n)\.playfield-grid\s*\{([^}]*)\}/.exec(css);
     expect(gridRuleMatch, '.playfield-grid rule not found').toBeTruthy();
@@ -109,6 +129,16 @@ describe('reduced-motion stylesheet contract', () => {
     expect(probeRuleMatch, '.cell-probe rule not found').toBeTruthy();
     expect(probeRuleMatch![1]).toMatch(/width\s*:\s*var\(--cell-w\)/);
     expect(probeRuleMatch![1]).toMatch(/height\s*:\s*var\(--cell-h\)/);
+  });
+
+  it('gives .cell-probe-base a fixed base font-size (not tied to --zoom), so PlayScreen can measure the 1x cell size directly instead of dividing the zoomed probe by the applied zoom', () => {
+    const probeBaseRuleMatch = /(?:^|\n)\.cell-probe-base\s*\{([^}]*)\}/.exec(css);
+    expect(probeBaseRuleMatch, '.cell-probe-base rule not found').toBeTruthy();
+    const decls = probeBaseRuleMatch![1]!;
+    expect(decls).toMatch(/font-size\s*:\s*1rem/);
+    expect(decls).not.toMatch(/var\(--zoom/);
+    expect(decls).toMatch(/width\s*:\s*1ch/);
+    expect(decls).toMatch(/height\s*:\s*1lh/);
   });
 
   it('centers .glow with a standalone translate property so keyframes can animate scale/opacity without overwriting it', () => {

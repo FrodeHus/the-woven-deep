@@ -39,16 +39,21 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 /* Playfield: the grid renders gameplay truth, the effects layer is a purely decorative overlay
    sharing its coordinate space via --cell-w/--cell-h set on the wrapper. `--zoom` is the single
    source of truth for the bounded playfield zoom (see `zoomForFloor` in layout.ts): it is set as
-   an inline custom property by PlayScreen and multiplies BOTH the grid's actual track size
-   (`.playfield-grid` below reads the same `--cell-w`/`--cell-h`, not a literal `1ch`/`1lh`) and
-   the measurement probe's own box (`.cell-probe` below), so there is exactly one number driving
-   the rendered grid, the effects overlay, and everything the JS measurement pipeline reads back —
-   never a value computed in parallel. */
+   an inline custom property by PlayScreen and scales `font-size` here, on `.playfield` itself.
+   `--cell-w`/`--cell-h` are then plain `1ch`/`1lh` (NOT `* var(--zoom)` — that would double-scale,
+   since `1ch`/`1lh` are already relative to THIS element's own font-size): growing the font grows
+   both the glyphs actually painted in each `.cell` (which inherits font-size from here) AND the
+   `ch`/`lh` units cell-w/cell-h are measured in, in lockstep, with exactly one number (`--zoom`)
+   driving all of it. `.playfield-grid` below reads the same `--cell-w`/`--cell-h`, and the
+   measurement probe's own box (`.cell-probe` below) is pinned to them too, so there is exactly one
+   number driving the rendered grid, the glyph size, the effects overlay, and everything the JS
+   measurement pipeline reads back — never a value computed in parallel. */
 .playfield {
   position: relative;
   overflow: hidden;
-  --cell-w: calc(1ch * var(--zoom, 1));
-  --cell-h: calc(1lh * var(--zoom, 1));
+  font-size: calc(1rem * var(--zoom, 1));
+  --cell-w: 1ch;
+  --cell-h: 1lh;
   line-height: 1;
 }
 .playfield-grid {
@@ -66,6 +71,15 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
    relying on the "0" glyph's own intrinsic size) so a probe measurement always reports exactly the
    zoomed cell size the grid and effects overlay are actually rendered at. */
 .cell-probe { position: absolute; visibility: hidden; width: var(--cell-w); height: var(--cell-h); }
+/* A second, UN-zoomed probe purely for `zoomForFloor`'s input: it fixes font-size back to the base
+   `1rem` (undoing `.playfield`'s `--zoom` scale) so its `1ch`/`1lh` box reports the 1x cell size
+   directly. This exists because font metrics don't necessarily scale perfectly linearly with
+   font-size (subpixel/hinting rounding differs per size, especially at the non-power-of-two
+   `ZOOM_STEPS` like 1.25/1.75) — recovering the base size by DIVIDING `.cell-probe`'s zoomed
+   measurement by the applied zoom would silently accumulate that rounding error into the zoom
+   decision. Measuring the base size directly, from a second probe, avoids that arithmetic
+   entirely. */
+.cell-probe-base { position: absolute; visibility: hidden; width: 1ch; height: 1lh; font-size: 1rem; }
 .cell-empty { color: transparent; }
 .cell-unknown { color: transparent; background: #0b0d15; }
 /* A remembered cell must never render brighter than the darkest a visible cell can get — otherwise

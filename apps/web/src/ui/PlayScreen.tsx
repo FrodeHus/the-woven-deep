@@ -93,15 +93,19 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
   const triptychRef = useRef<HTMLDivElement>(null);
   const mapPaneRef = useRef<HTMLDivElement>(null);
   const cellProbeRef = useRef<HTMLSpanElement>(null);
+  // A second, un-zoomed probe (fixed at the base font-size, see `.cell-probe-base` in styles.css)
+  // used only to feed `zoomForFloor` the 1x cell size — see the effect below for why this is a
+  // second measured element rather than dividing `cellProbeRef`'s zoomed measurement by the
+  // applied zoom.
+  const cellProbeBaseRef = useRef<HTMLSpanElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [paneSize, setPaneSize] = useState({ width: 0, height: 0 });
   const [cellSize, setCellSize] = useState(FALLBACK_CELL_PX);
   const [zoom, setZoom] = useState<ZoomFactor>(1);
-  // The zoom actually applied to the DOM right now (mirrors `zoom` state but read synchronously
-  // inside the measure callback, which closes over it once on mount) — needed to back the
-  // UN-zoomed (1x) cell size out of the probe's live (zoomed) measurement, since `zoomForFloor`
-  // must be fed the same base unit it is about to scale, never a value computed independently of
-  // what the probe actually reports.
+  // Mirrors `zoom` state but read synchronously inside the measure callback below (which closes
+  // over it once per floor, via the `floorId`-keyed effect), so the callback can compare against
+  // the zoom actually applied to the DOM right now without adding `zoom` to that effect's own
+  // dependency array (which would tear down/re-attach the pane observer on every zoom change).
   const zoomRef = useRef<ZoomFactor>(1);
 
   // Tier derivation MUST watch a tier-independent measurement. The triptych container's width
@@ -137,18 +141,20 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
     const measure = (): void => {
       const paneRect = node.getBoundingClientRect();
       setPaneSize({ width: paneRect.width, height: paneRect.height });
+      // `cellProbeRef` reports the CURRENTLY zoomed cell size — this is what the grid/effects
+      // layer/popover math are actually rendered at, so it feeds `cellSize` directly.
       const cellRect = cellProbeRef.current?.getBoundingClientRect();
       if (cellRect && cellRect.width > 0 && cellRect.height > 0) {
         setCellSize({ width: cellRect.width, height: cellRect.height });
-        // The probe reports the CURRENTLY zoomed cell size; divide out the zoom already applied
-        // (rather than measuring some separate unzoomed element) to recover the 1x base size
-        // `zoomForFloor` needs, then feed the SAME panePx/floor this render is about to use for
-        // `viewportForPane` — one measurement, one derived base, no parallel math.
-        const currentZoom = zoomRef.current;
-        const baseCellPx = {
-          width: cellRect.width / currentZoom,
-          height: cellRect.height / currentZoom,
-        };
+      }
+      // `cellProbeBaseRef` is pinned to the base (1x) font-size regardless of the applied zoom
+      // (see `.cell-probe-base` in styles.css), so it reports the 1x cell size `zoomForFloor`
+      // needs directly — no algebra recovering it from the zoomed measurement, which would assume
+      // font metrics scale perfectly linearly across font-sizes (they don't always, due to
+      // hinting/subpixel rounding).
+      const baseCellRect = cellProbeBaseRef.current?.getBoundingClientRect();
+      if (baseCellRect && baseCellRect.width > 0 && baseCellRect.height > 0) {
+        const baseCellPx = { width: baseCellRect.width, height: baseCellRect.height };
         const nextZoom = zoomForFloor({ panePx: paneRect, cellPx: baseCellPx, floor: projection.floor });
         if (nextZoom !== zoomRef.current) {
           zoomRef.current = nextZoom;
@@ -269,6 +275,7 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
         )}
         <div className="playfield" style={{ '--zoom': zoom } as CSSProperties}>
           <span ref={cellProbeRef} className="cell cell-probe" aria-hidden="true">0</span>
+          <span ref={cellProbeBaseRef} className="cell cell-probe-base" aria-hidden="true">0</span>
           <GridRenderer projection={projection} camera={camera} viewport={viewport} />
           <EffectsLayer
             projection={projection} pack={pack} lastEvents={snapshot.lastEvents} camera={camera} viewport={viewport}
