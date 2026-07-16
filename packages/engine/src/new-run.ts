@@ -1,14 +1,9 @@
-import type { CompiledContentPack, ItemContentEntry, VaultContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
 import type { BaseAttributes, EquipmentSlot } from './actor-model.js';
 import { emptyEquipment, type ActorState } from './actor-model.js';
 import { balanceEntry } from './actions.js';
 import { deriveActorStats, type DerivedStatModifier } from './attributes.js';
-import { addGeneratedFloor } from './floor-integration.js';
-import { depthFloorId } from './floor-transition.js';
-import { generateFloor } from './generate-floor.js';
 import type { ClassicThemeSettings } from './generation-model.js';
-import { createClassicTheme } from './generation-mask.js';
-import { allocateFloorSeed } from './generation-random.js';
 import { allocateIdentificationMap } from './identification.js';
 import type { ItemInstance } from './item-model.js';
 import type { ActiveRun, OpaqueId, Uint32State } from './model.js';
@@ -16,16 +11,18 @@ import { createEncounterRunDecisions } from './population-gates.js';
 import { deriveRngStreams, isNonZeroState } from './random.js';
 import { encodeRunSeed } from './run-records-model.js';
 import { emptyRunMetrics } from './run-metrics.js';
+import { validateActiveRun } from './save-schema.js';
+import { generateTownFloor, TOWN_FLOOR_ID } from './town-floor.js';
 import { ENGINE_GAME_VERSION, SAVE_SCHEMA_VERSION } from './versions.js';
 
+// Dungeon generation settings (Task 5 changes these values); the town start below no longer uses
+// them directly, but `descendToNextFloor` still generates every floor below the town at this
+// width/height/theme so the whole run stays on one generation profile.
 export const NEW_RUN_FLOOR_WIDTH = 80;
 export const NEW_RUN_FLOOR_HEIGHT = 25;
 export const NEW_RUN_FLOOR_THEME_SETTINGS: ClassicThemeSettings = {
   ambient: { color: [19, 23, 31], strength: 7 },
 };
-const WIDTH = NEW_RUN_FLOOR_WIDTH;
-const HEIGHT = NEW_RUN_FLOOR_HEIGHT;
-const FIRST_FLOOR_ID = depthFloorId(1);
 
 export interface NewRunHeroItem {
   readonly contentId: OpaqueId;
@@ -132,19 +129,9 @@ export function createNewRun(input: Readonly<{
   });
   const initializedRng = { ...identified.rng, 'population-gates': gates.state };
 
-  const allocation = allocateFloorSeed(initializedRng.generation);
-  const vaults = pack.entries.filter((entry): entry is VaultContentEntry => entry.kind === 'vault');
-  const generated = generateFloor({
-    floorId: FIRST_FLOOR_ID,
-    floorSeed: allocation.floorSeed,
-    depth: 1,
-    width: WIDTH,
-    height: HEIGHT,
-    theme: createClassicTheme(WIDTH, HEIGHT, NEW_RUN_FLOOR_THEME_SETTINGS),
-    vaults,
-  });
-  const stairUp = generated.floor.stairUp;
-  if (stairUp === null) throw new Error('internal invariant: generated first floor must have a stair-up');
+  // The town is authored, not generated: it consumes no randomness, so the RNG streams above stay
+  // untouched at their post-identification/post-gates values -- no floor-seed allocation happens.
+  const town = generateTownFloor(pack);
 
   const heroActorId: OpaqueId = 'hero.guest';
   let equipment = emptyEquipment();
@@ -182,9 +169,9 @@ export function createNewRun(input: Readonly<{
     actorId: heroActorId,
     contentId: 'hero.adventurer',
     playerControlled: true,
-    floorId: FIRST_FLOOR_ID,
-    x: stairUp.x,
-    y: stairUp.y,
+    floorId: TOWN_FLOOR_ID,
+    x: town.entrancePlaza.x,
+    y: town.entrancePlaza.y,
     attributes: hero.attributes,
     health: maxHealth,
     maxHealth,
@@ -235,20 +222,22 @@ export function createNewRun(input: Readonly<{
       emittedFuelWarnings: [],
     },
     identification: identified.identification,
-    activeFloorId: FIRST_FLOOR_ID,
+    activeFloorId: TOWN_FLOOR_ID,
     activeFloorEnteredAt: 0,
-    floors: [],
+    floors: [town.floor],
     recentCommands: [],
     encounterDecisions: gates.decisions,
     populations: [],
     fallenHeroStandings: [],
     fallenHeroDecisions: [],
     conqueredChampionRecordIds: [],
+    // The town never counts toward floorsEntered/deepestDepth: those track dungeon progress, and
+    // the hero starts in town without ever "entering" it via a transition.
     metrics: emptyRunMetrics(),
     conclusion: null,
     house: { capacity: balance.house.baseCapacity, upgradesPurchased: 0 },
     restockedMilestones: [],
   };
 
-  return addGeneratedFloor(skeleton, generated, allocation, { content: pack });
+  return validateActiveRun(skeleton);
 }

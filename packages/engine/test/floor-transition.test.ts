@@ -30,6 +30,7 @@ function teleportHeroTo(run: ActiveRun, position: Readonly<{ x: number; y: numbe
 
 describe('depthFloorId', () => {
   it('formats floor IDs with 3-digit zero-padding for proper lexicographic sorting', () => {
+    expect(depthFloorId(0)).toBe('floor.depth-000');
     expect(depthFloorId(1)).toBe('floor.depth-001');
     expect(depthFloorId(99)).toBe('floor.depth-099');
     expect(depthFloorId(100)).toBe('floor.depth-100');
@@ -37,12 +38,14 @@ describe('depthFloorId', () => {
   });
 
   it('ensures correct string comparison ordering at deep depths', () => {
+    expect(depthFloorId(0) < depthFloorId(1)).toBe(true);
     expect(depthFloorId(1) < depthFloorId(2)).toBe(true);
     expect(depthFloorId(99) < depthFloorId(100)).toBe(true);
     expect(depthFloorId(999) > depthFloorId(100)).toBe(true);
   });
 
-  it('throws RangeError for depths beyond 999', () => {
+  it('throws RangeError for depths below 0 and beyond 999', () => {
+    expect(() => depthFloorId(-1)).toThrow(RangeError);
     expect(() => depthFloorId(1000)).toThrow(RangeError);
   });
 });
@@ -54,12 +57,14 @@ describe('descendToNextFloor', () => {
     const onStairs = teleportHeroTo(run, stairDown);
     const descended = descendToNextFloor(onStairs, { content: pack });
     expect(descended.state.floors).toHaveLength(2);
-    expect(descended.state.floors[1]?.depth).toBe(2);
+    expect(descended.state.floors[1]?.depth).toBe(1);
     expect(descended.state.activeFloorId).toBe(descended.state.floors[1]?.floorId);
     const hero = heroActor(descended.state);
     expect({ x: hero.x, y: hero.y }).toEqual(descended.state.floors[1]?.stairUp);
-    expect(descended.state.metrics.floorsEntered).toBe(2);
-    expect(descended.state.metrics.deepestDepth).toBe(2);
+    // The town (depth 0) never counts toward floorsEntered/deepestDepth; this first descent is the
+    // hero's first recorded floor entry.
+    expect(descended.state.metrics.floorsEntered).toBe(1);
+    expect(descended.state.metrics.deepestDepth).toBe(1);
   });
 
   it('is deterministic and byte-stable across a save/reload boundary', () => {
