@@ -15,6 +15,7 @@ export interface ActorDerivationInput {
   readonly formulas: BalanceContentEntry['formulas'];
   readonly equipmentModifiers: readonly DerivedStatModifier[];
   readonly conditionModifiers: readonly DerivedStatModifier[];
+  readonly heroModifiers?: readonly DerivedStatModifier[];
 }
 
 export type DerivedActorStats = Readonly<Record<DerivedStatName, number>>;
@@ -61,7 +62,9 @@ export function deriveActorStats(input: ActorDerivationInput): DerivedActorStats
         value = checkedAdd(statName, value, checkedMultiply(statName, coefficient, attribute));
       } else throw new TypeError(`${statName} formula contains unknown operand ${operand}`);
     }
-    for (const [sourceIndex, modifier] of [...input.equipmentModifiers, ...input.conditionModifiers].entries()) {
+    for (const [sourceIndex, modifier] of [
+      ...input.equipmentModifiers, ...input.conditionModifiers, ...(input.heroModifiers ?? []),
+    ].entries()) {
       for (const key of Object.keys(modifier)) {
         if (!DERIVED_NAMES.has(key as DerivedStatName)) throw new TypeError(`modifier ${sourceIndex} contains unknown stat ${key}`);
       }

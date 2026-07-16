@@ -511,6 +511,7 @@ export function projectGameplayState(input: Readonly<{
       ...conditionModifiers(hero, input.content),
       hungerModifiers({ stage: input.state.survival.hungerStage, balance: rules }),
     ],
+    heroModifiers: [input.state.hero.statModifiers],
   });
   const backpack = input.state.items
     .filter((item) => item.location.type === 'backpack' && item.location.actorId === hero.actorId)

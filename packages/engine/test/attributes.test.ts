@@ -24,6 +24,8 @@ function fixture(): ActorDerivationInput {
   };
 }
 
+const TENS = { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 };
+
 describe('deriveActorStats', () => {
   it('derives stats from attributes, equipment, and conditions without mutating input', () => {
     const input = fixture();
@@ -63,6 +65,18 @@ describe('deriveActorStats', () => {
       conditions: [{ conditionId: condition.id, sourceActorId: null, appliedAt: 0, expiresAt: 10, stacks: 2 }],
     };
     expect(deriveActorStats({ ...fixture(), conditionModifiers: conditionModifiers(actor, content) }).defense).toBe(8);
+  });
+
+  it('folds hero modifiers after condition modifiers and still guards unknown keys', () => {
+    const formulas = fixture().formulas;
+    expect(deriveActorStats({
+      attributes: TENS, formulas, equipmentModifiers: [], conditionModifiers: [],
+      heroModifiers: [{ search: 2 }],
+    }).search).toBe(12);
+    expect(() => deriveActorStats({
+      attributes: TENS, formulas, equipmentModifiers: [], conditionModifiers: [],
+      heroModifiers: [{ notAStat: 1 } as unknown as Partial<Record<'search', number>>],
+    })).toThrow(/unknown stat/i);
   });
 
   it('maps group combat bonuses into derived actor stats without hidden mutation', () => {

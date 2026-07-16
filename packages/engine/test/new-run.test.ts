@@ -61,6 +61,25 @@ describe('createNewRun', () => {
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(a)))).toBe(encodeActiveRun(a));
   });
 
+  it('derives hero maxHealth from attributes and starts at full health', () => {
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    expect(heroActor(run).maxHealth).toBe(20); // 10 + 10*1 with the retuned formula
+    expect(heroActor(run).health).toBe(20);
+    const tough = { ...DEFAULT_GUEST_HERO, attributes: { ...DEFAULT_GUEST_HERO.attributes, vitality: 14 } };
+    const toughRun = createNewRun({ pack, seed: SEED, hero: tough });
+    expect(heroActor(toughRun).maxHealth).toBe(24);
+    expect(heroActor(toughRun).health).toBe(24);
+  });
+
+  it('carries classTags and statModifiers onto the hero state', () => {
+    const run = createNewRun({
+      pack, seed: SEED,
+      hero: { ...DEFAULT_GUEST_HERO, classTags: ['wayfarer'], statModifiers: { search: 1 } },
+    });
+    expect(run.hero.classTags).toEqual(['wayfarer']);
+    expect(run.hero.statModifiers).toEqual({ search: 1 });
+  });
+
   it('rejects an all-zero seed and unknown equipment content', () => {
     expect(() => createNewRun({ pack, seed: [0, 0, 0, 0], hero: DEFAULT_GUEST_HERO })).toThrow(/seed/i);
     expect(() => createNewRun({

@@ -193,7 +193,8 @@ export function disarmTrap(input: Readonly<{
   const balance = input.content.entries.find((entry) => entry.kind === 'balance')!;
   const stats = deriveActorStats({ attributes: actor.attributes, formulas: balance.formulas,
     equipmentModifiers: equipmentModifiers({ run: input.run, content: input.content, actorId: actor.actorId }).map((source) => source.modifiers),
-    conditionModifiers: conditionModifiers(actor, input.content) });
+    conditionModifiers: conditionModifiers(actor, input.content),
+    heroModifiers: actor.actorId === input.run.hero.actorId ? [input.run.hero.statModifiers] : [] });
   const rolled = rollDie(input.run.rng.effects, 20);
   const failed = rolled.value + stats.disarm < definition.disarmDifficulty;
   if (rolled.value === 1 || failed) {

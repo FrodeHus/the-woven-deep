@@ -27,7 +27,7 @@ entries:
       weak: { meleeAccuracy: -1, meleeDamageBonus: -1, defense: -1 }
       starving: { meleeAccuracy: -2, meleeDamageBonus: -2, defense: -2 }
     formulas:
-      maxHealth: { base: 8, vitality: 2 }
+      maxHealth: { base: 10, vitality: 1 }
       meleeAccuracy: { might: 1 }
       meleeDamageBonus: { might: 1 }
       rangedAccuracy: { agility: 1 }

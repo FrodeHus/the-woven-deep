@@ -93,7 +93,7 @@ export function finalizeRun(input: Readonly<{
   const record: HallRecord = {
     recordId,
     heroName: run.hero.name,
-    classTags: [], // heroes carry no class tags until character generation
+    classTags: [...run.hero.classTags].sort(),
     completionType: conclusion.completionType,
     cause: conclusion.cause,
     deepestDepth: run.metrics.deepestDepth,

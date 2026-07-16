@@ -295,6 +295,14 @@ describe('gameplay projection', () => {
     expect(projected.hero.sightRadius).toBe(base.hero.sightRadius);
   });
 
+  it('folds hero statModifiers into the character-sheet derived block', () => {
+    const base = createDemoRun();
+    const boosted = { ...base, hero: { ...base.hero, statModifiers: { search: 1 } } };
+    const baseline = projectGameplayState({ state: base, content: createDemoContentPack() });
+    const projected = projectGameplayState({ state: boosted, content: createDemoContentPack() });
+    expect(projected.hero.derived.search?.value).toBe((baseline.hero.derived.search?.value ?? 0) + 1);
+  });
+
   it('exposes read-only metrics and a null conclusion for a living run', () => {
     const base = createDemoRun();
     const projected = projectGameplayState({ state: base, content: createDemoContentPack() });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  closeDoor, createDemoRun, featureBlocksMovement, featureTiles, openDoor, refreshKnowledge,
+  closeDoor, createDemoRun, disarmTrap, featureBlocksMovement, featureTiles, openDoor, refreshKnowledge,
   type DoorFeature, applyPassiveDiscovery, decodeActiveRun, encodeActiveRun, projectFeature,
   stableJson, triggerTrap, createDemoContentPack,
   resolveCommand,
@@ -102,6 +102,27 @@ describe('mutable dungeon features', () => {
     const result = triggerTrap({ run: { ...base, features: [feature] }, content, actorId: 'hero.demo',
       featureId: feature.featureId, eventId: 'event.trigger' });
     expect(result.events.slice(0, 2).map((event) => event.type)).toEqual(['feature.revealed', 'trap.triggered']);
+  });
+
+  it('folds the hero\'s statModifiers into disarm rolls', () => {
+    const definition: TrapContentEntry = { kind: 'trap', id: 'trap.dart', name: 'Dart trap', glyph: '^',
+      color: '#ffffff', tags: [], targetingId: 'target.actor', discoveryDifficulty: 10, disarmDifficulty: 100,
+      disarmOutcomes: { failure: 'safe', criticalFailure: 'trigger', toolDamage: 10 },
+      resetMode: 'once', effects: [{ effectId: 'effect.damage', parameters: {
+        damageType: 'physical', dice: { count: 1, sides: 1, bonus: 0 } }, requiresLivingTarget: true }] };
+    const base = createDemoRun();
+    const feature = { featureId: 'trap.1', type: 'trap' as const, floorId: 'floor.demo', x: 1, y: 1,
+      contentId: definition.id, coverTileId: 1 as const, state: 'armed' as const, discoveryDifficulty: 10,
+      discovery: { discoveredByActorIds: ['hero.demo'], progressByActorId: {}, attemptedContextKeys: [] } };
+    const content = { ...createDemoContentPack(), entries: [...createDemoContentPack().entries, definition] };
+    const baseline = disarmTrap({ run: { ...base, features: [feature] }, content, actorId: 'hero.demo',
+      featureId: feature.featureId, eventId: 'event.disarm-baseline' });
+    expect(baseline.events.some((event) => event.type === 'trap.disarmed')).toBe(false);
+    const boosted = disarmTrap({
+      run: { ...base, features: [feature], hero: { ...base.hero, statModifiers: { disarm: 100 } } },
+      content, actorId: 'hero.demo', featureId: feature.featureId, eventId: 'event.disarm-boosted',
+    });
+    expect(boosted.events.some((event) => event.type === 'trap.disarmed')).toBe(true);
   });
 
   it('projects an undiscovered secret as cover terrain without its identifier', () => {
