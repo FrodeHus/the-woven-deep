@@ -1,0 +1,22 @@
+schemaVersion: 6
+entries:
+  - kind: class
+    id: class.archivist
+    name: Archivist
+    tags: [chargen, locked]
+    description: A keeper of forbidden lore, still bound to the surface until proven worthy.
+    playable: false
+    silhouetteGlyph: "A"
+    unlockHint: Read three lore fragments recovered from fallen champions to unlock the Archivist.
+    classTags: [archivist]
+    kits: []
+  - kind: class
+    id: class.warden
+    name: Warden
+    tags: [chargen, locked]
+    description: A stalwart defender who has not yet earned the right to descend.
+    playable: false
+    silhouetteGlyph: "W"
+    unlockHint: Survive to depth ten without a single death to unlock the Warden.
+    classTags: [warden]
+    kits: []

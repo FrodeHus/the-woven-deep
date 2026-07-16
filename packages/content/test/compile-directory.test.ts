@@ -12,7 +12,7 @@ const compactVault = '{kind: vault, id: vault.test-room, name: Test room, tags: 
 
 const compactMonster = '{kind: monster, id: monster.rat, name: Rat, glyph: r, color: "#aaaaaa", tags: [defense, food, healing, identification, light, offense], minDepth: 1, maxDepth: 5, attributes: {might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2}, health: 4, speed: 110, accuracy: 1, defense: 10, perception: 6, damage: {count: 1, sides: 3, bonus: 0}, armor: 0, resistances: {physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0}, disposition: hostile, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, threat: 2, rarity: common}';
 const compactItem = '{kind: item, id: item.lantern, name: Lantern, glyph: "¤", color: "#eeeeaa", tags: [defense, food, healing, identification, light, offense], minDepth: 1, maxDepth: 20, category: light, stackLimit: 1, price: 4, rarity: common, actionCost: 100, equipment: {slots: [off-hand], handedness: one-handed, reservedSlots: []}, combat: null, light: {color: [255, 200, 100], radius: 6, strength: 180, fuelCapacity: 1000, fuelPerTime: 1, warningThresholds: [100], fuelTags: [lamp-oil]}, identification: {mode: known, poolId: null}, effects: []}';
-const compactBalance = '{kind: balance, startingCurrency: 40, id: balance.core, name: Core, tags: [core], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000, hungerThresholds: {hungry: 3000, weak: 1000, starving: 0}, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, restMaximumDuration: 5000, recoveryByHungerStage: {sated: 100, hungry: 50, weak: 0, starving: 0}, hungerStageModifiers: {sated: {}, hungry: {}, weak: {}, starving: {}}, formulas: {health: {base: 8, vitality: 2}}, actionCosts: {action.move: 100}, score: {depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: {died: 0, refused: 400, became-heart: 800, broke-cycle: 1500}, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200}}';
+const compactBalance = '{kind: balance, startingCurrency: 40, id: balance.core, name: Core, tags: [core], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000, hungerThresholds: {hungry: 3000, weak: 1000, starving: 0}, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, restMaximumDuration: 5000, recoveryByHungerStage: {sated: 100, hungry: 50, weak: 0, starving: 0}, hungerStageModifiers: {sated: {}, hungry: {}, weak: {}, starving: {}}, formulas: {health: {base: 8, vitality: 2}}, actionCosts: {action.move: 100}, score: {depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: {died: 0, refused: 400, became-heart: 800, broke-cycle: 1500}, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200}, pointBuy: {budget: 1, costs: [{value: 0, cost: 0}, {value: 1, cost: 0}, {value: 2, cost: 0}, {value: 3, cost: 0}, {value: 4, cost: 0}, {value: 5, cost: 0}, {value: 6, cost: 0}, {value: 7, cost: 0}, {value: 8, cost: 0}, {value: 9, cost: 0}, {value: 10, cost: 0}, {value: 11, cost: 0}, {value: 12, cost: 0}, {value: 13, cost: 0}, {value: 14, cost: 0}, {value: 15, cost: 0}, {value: 16, cost: 0}, {value: 17, cost: 0}, {value: 18, cost: 0}, {value: 19, cost: 0}, {value: 20, cost: 0}, {value: 21, cost: 0}, {value: 22, cost: 0}, {value: 23, cost: 0}, {value: 24, cost: 0}, {value: 25, cost: 0}, {value: 26, cost: 0}, {value: 27, cost: 0}, {value: 28, cost: 0}, {value: 29, cost: 0}, {value: 30, cost: 0}]}}';
 const compactTimedCondition = '{kind: condition, id: condition.stunned, name: Stunned, description: Cannot act, tags: [control], color: "#d8c46a", duration: {mode: timed, default: 100, maximum: 500}, stacking: {mode: refresh, maximumStacks: 1}, modifiersPerStack: {defense: -2}, traits: [condition-trait.incapacitated]}';
 const compactPermanentCondition = '{kind: condition, id: condition.warded, name: Warded, description: Remains until removed, tags: [beneficial], color: "#80b8ff", duration: {mode: permanent, default: null, maximum: null}, stacking: {mode: refresh, maximumStacks: 1}, modifiersPerStack: {}, traits: []}';
 const compactIndividualEncounter = '{kind: encounter, id: encounter.rat, name: Rat encounter, tags: [], model: individual, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: common, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 3, placement: {minimumStairDistance: 2, minimumObjectiveDistance: 2, maximumMemberDistance: 2, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, minimumQuantity: 1, maximumQuantity: 2}}';
@@ -25,8 +25,20 @@ function achievement(id: string, criteriaId: string): string {
   return `{kind: achievement, id: ${id}, name: Achievement, tags: [], description: Do the thing first., criteriaId: ${criteriaId}}`;
 }
 
+function playableClass(kitCount: 1 | 2, equippedSlot = 'off-hand'): string {
+  const kit1 = `{kitId: first, name: First, equipped: [{contentId: item.lantern, slot: ${equippedSlot}, enabled: true}], backpack: []}`;
+  const kit2 = '{kitId: second, name: Second, equipped: [], backpack: []}';
+  const kits = kitCount === 1 ? kit1 : `${kit1}, ${kit2}`;
+  return `{kind: class, id: class.wayfarer, name: Wayfarer, tags: [], description: A traveller., playable: true, silhouetteGlyph: W, unlockHint: null, classTags: [wayfarer], kits: [${kits}]}`;
+}
+
+function backgroundEntry(extraItemContentId: string | null): string {
+  const extraItems = extraItemContentId === null ? '[]' : `[{contentId: ${extraItemContentId}, quantity: 1}]`;
+  return `{kind: background, id: background.caravan-guard, name: Caravan guard, tags: [], description: Wards caravans., modifiers: {defense: 1}, extraItems: ${extraItems}}`;
+}
+
 function contentFile(...entries: readonly string[]): string {
-  return `schemaVersion: 5\nentries: [${entries.join(', ')}]\n`;
+  return `schemaVersion: 6\nentries: [${entries.join(', ')}]\n`;
 }
 
 async function fixture(files: Record<string, string>): Promise<string> {
@@ -190,6 +202,49 @@ describe('compileContentDirectory', () => {
       achievement('achievement.b', 'first-champion-defeat')) });
     await expect(compileContentDirectory({ rootDir: duplicateRoot })).rejects
       .toThrow(/at most one achievement per criterion/);
+  });
+
+  it('compiles a playable class whose kits reference real items in allowed slots', async () => {
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      playableClass(2)) });
+    const pack = await compileContentDirectory({ rootDir: root });
+    expect(pack.entries.filter((entry) => entry.kind === 'class')).toHaveLength(1);
+  });
+
+  it('rejects a playable class with only one kit', async () => {
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      playableClass(1)) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects
+      .toThrow(/at least 2 kits/);
+  });
+
+  it('rejects a class kit that equips a missing item', async () => {
+    const missingItemClass = playableClass(2).replace('item.lantern', 'item.missing');
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      missingItemClass) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects
+      .toThrow(/unknown item reference item\.missing/);
+  });
+
+  it('rejects a class kit that equips an item in a slot it does not allow', async () => {
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      playableClass(2, 'main-hand')) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects
+      .toThrow(/cannot be equipped in slot main-hand/);
+  });
+
+  it('rejects a background whose extraItems reference a missing item', async () => {
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      backgroundEntry('item.missing')) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects
+      .toThrow(/unknown item reference item\.missing/);
+  });
+
+  it('compiles a background whose extraItems reference a real item', async () => {
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, compactItem, compactVault,
+      backgroundEntry('item.lantern')) });
+    const pack = await compileContentDirectory({ rootDir: root });
+    expect(pack.entries.filter((entry) => entry.kind === 'background')).toHaveLength(1);
   });
 
   it('produces the same hash regardless of YAML formatting and filenames', async () => {
@@ -666,7 +721,7 @@ describe('compileContentDirectory', () => {
     const root = await fixture({ 'content.yaml': contentFile(
       compactMonster, compactItem, ordinary, compactVault, compactTimedCondition, loot, boss,
     ) });
-    await expect(compileContentDirectory({ rootDir: root })).resolves.toMatchObject({ schemaVersion: 5 });
+    await expect(compileContentDirectory({ rootDir: root })).resolves.toMatchObject({ schemaVersion: 6 });
   });
 
   it('validates Champion and Echo template references and weaker limits', async () => {

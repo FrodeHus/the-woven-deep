@@ -10,13 +10,14 @@ describe('bundled content', () => {
     });
     const kinds = ['monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault',
       'identification-pool', 'encounter', 'fallen-champion-template', 'npc', 'npc-faction',
-      'achievement'] as const;
+      'achievement', 'class', 'background', 'trait'] as const;
     expect(Object.fromEntries(kinds.map((kind) => [kind,
       pack.entries.filter((entry) => entry.kind === kind).length]))).toEqual({
       monster: 4, item: 16, spell: 1, trap: 1, 'loot-table': 4, balance: 1, vault: 1,
       'identification-pool': 2, encounter: 5, 'fallen-champion-template': 1, npc: 1, 'npc-faction': 1,
-      achievement: 2,
+      achievement: 2, class: 4, background: 3, trait: 5,
     });
+    expect(pack.entries.filter((entry) => entry.kind === 'class' && (entry as any).playable)).toHaveLength(2);
     expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(5);
     expect(pack.entries.map((entry) => entry.id)).toEqual([...pack.entries.map((entry) => entry.id)].sort());
     expect(validateCompiledContentPack(JSON.parse(JSON.stringify(pack)))).toEqual(pack);
@@ -47,9 +48,9 @@ describe('bundled content', () => {
     });
   });
 
-  it('ships schema-v5 run-record content: achievements, score coefficients, and monster threat', async () => {
+  it('ships schema-v6 run-record content: achievements, score coefficients, and monster threat', async () => {
     const pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
-    expect(pack.schemaVersion).toBe(5);
+    expect(pack.schemaVersion).toBe(6);
     const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
     expect(entries.get('achievement.defeated-the-deeps-champion')).toMatchObject({
       kind: 'achievement', name: "Defeated the Deep's Champion", criteriaId: 'first-champion-defeat',
@@ -63,6 +64,10 @@ describe('bundled content', () => {
         discoveryCoefficient: 25,
         completionBonus: { died: 0, refused: 400, 'became-heart': 800, 'broke-cycle': 1500 },
         turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200,
+      },
+      pointBuy: {
+        budget: 30,
+        costs: expect.arrayContaining([{ value: 0, cost: 0 }, { value: 30, cost: 60 }]),
       },
     });
     expect(entries.get('monster.cave-rat')).toMatchObject({ threat: 1 });

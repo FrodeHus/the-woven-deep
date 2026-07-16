@@ -1,10 +1,11 @@
-export const CONTENT_SCHEMA_VERSION = 5 as const;
+export const CONTENT_SCHEMA_VERSION = 6 as const;
 
 export type ContentId = string;
 export const CONTENT_KIND_IDS = [
   'monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault', 'condition',
   'identification-pool',
   'encounter', 'fallen-champion-template', 'npc', 'npc-faction', 'achievement',
+  'class', 'background', 'trait',
 ] as const;
 export type ContentKind = typeof CONTENT_KIND_IDS[number];
 export const DERIVED_STAT_NAMES = [
@@ -93,6 +94,46 @@ export interface AchievementContentEntry extends BaseContentEntry {
   readonly kind: 'achievement';
   readonly description: string;
   readonly criteriaId: AchievementCriteriaId;
+}
+
+export interface ClassKitEquippedItem {
+  readonly contentId: ContentId;
+  readonly slot: EquipmentSlot;
+  readonly enabled?: boolean;
+}
+export interface ClassKitBackpackItem {
+  readonly contentId: ContentId;
+  readonly quantity?: number;
+}
+export interface ClassKitDefinition {
+  readonly kitId: string;
+  readonly name: string;
+  readonly equipped: readonly ClassKitEquippedItem[];
+  readonly backpack: readonly ClassKitBackpackItem[];
+}
+export interface ClassContentEntry extends BaseContentEntry {
+  readonly kind: 'class';
+  readonly description: string;
+  readonly playable: boolean;
+  readonly silhouetteGlyph: string;
+  readonly unlockHint: string | null;
+  readonly classTags: readonly string[];
+  readonly kits: readonly ClassKitDefinition[];
+}
+export interface BackgroundContentEntry extends BaseContentEntry {
+  readonly kind: 'background';
+  readonly description: string;
+  readonly modifiers: Readonly<Partial<Record<DerivedStatName, number>>>;
+  readonly extraItems: readonly ClassKitBackpackItem[];
+}
+export interface TraitContentEntry extends BaseContentEntry {
+  readonly kind: 'trait';
+  readonly description: string;
+  readonly modifiers: Readonly<Partial<Record<DerivedStatName, number>>>;
+}
+export interface PointBuyDefinition {
+  readonly budget: number;
+  readonly costs: readonly { readonly value: number; readonly cost: number }[];
 }
 
 export interface ScoreCoefficientsDefinition {
@@ -424,6 +465,7 @@ export interface BalanceContentEntry extends BaseContentEntry {
   readonly formulas: Readonly<Record<string, Readonly<Record<string, number>>>>;
   readonly actionCosts: Readonly<Record<string, number>>;
   readonly score: ScoreCoefficientsDefinition;
+  readonly pointBuy: PointBuyDefinition;
 }
 
 export interface ConditionContentEntry extends BaseContentEntry {
@@ -486,7 +528,8 @@ export interface VaultContentEntry extends BaseContentEntry {
 export type ContentEntry = MonsterContentEntry | ItemContentEntry | SpellContentEntry | TrapContentEntry
   | LootTableContentEntry | BalanceContentEntry | VaultContentEntry | ConditionContentEntry
   | IdentificationPoolContentEntry | EncounterContentEntry | FallenChampionTemplateContentEntry
-  | NpcContentEntry | NpcFactionContentEntry | AchievementContentEntry;
+  | NpcContentEntry | NpcFactionContentEntry | AchievementContentEntry
+  | ClassContentEntry | BackgroundContentEntry | TraitContentEntry;
 
 export interface ContentGenerationReport {
   readonly foundationalCategories: readonly string[];

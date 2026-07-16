@@ -1,0 +1,32 @@
+schemaVersion: 6
+entries:
+  - kind: trait
+    id: trait.keen-eyed
+    name: Keen-eyed
+    tags: [chargen]
+    description: Sharp senses spot hidden things others would walk past.
+    modifiers: { search: 2 }
+  - kind: trait
+    id: trait.sure-footed
+    name: Sure-footed
+    tags: [chargen]
+    description: Steady balance turns aside blows that would fell a less careful traveller.
+    modifiers: { defense: 1 }
+  - kind: trait
+    id: trait.steady-hands
+    name: Steady hands
+    tags: [chargen]
+    description: A gift for delicate work makes traps and locks yield easily.
+    modifiers: { disarm: 2 }
+  - kind: trait
+    id: trait.brawler
+    name: Brawler
+    tags: [chargen]
+    description: A lifetime of close-quarters scrapping hits harder than most.
+    modifiers: { meleeDamageBonus: 1 }
+  - kind: trait
+    id: trait.sharpshooter
+    name: Sharpshooter
+    tags: [chargen]
+    description: A practiced eye keeps arrows flying true at range.
+    modifiers: { rangedAccuracy: 1 }
