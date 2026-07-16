@@ -39,6 +39,10 @@ Replace glyph portraits with a curated set of pre-generated AI images the player
 
 Presentation-layer upgrade to the light rendering: cast rays from each light source to wall corners, build a 2D visibility polygon, and draw it as a smooth gradient on a canvas/WebGL overlay behind the glyphs — soft penumbras, crisp diagonal shadow edges that slide across cells as the hero moves, colored light mixing. The engine already occludes light correctly (each source runs shadowcasting in `computeIllumination`), so this changes nothing about gameplay: the integer illumination field stays the authority on what counts as lit for perception, replays, and hashes, and the overlay may only render the same inputs more richly, never disagree with them. Achievable dependency-free with plain canvas; fits the "old-school ASCII + modern effects" direction and slots naturally next to the 5D art pass. Full GPU raytracing/global illumination was considered and rejected as overkill at tile resolution.
 
+## Monster drop loot
+
+Ordinary monsters currently drop nothing — loot tables attach only to bosses (`enhancedLootTableId`) and champions (`echoLootTableId`). A drop system needs a per-monster (or per-population) loot table field in content, defeat-drop wiring in the engine, and economy balancing so early-floor income doesn't trivialize merchant pricing. Surfaced during 5C when the town-loop e2e found nothing sellable at depth 1; 5C sidestepped it (the loop sells surplus starting gear) rather than smuggling in an unbalanced drop system.
+
 ## Post-campaign deeper levels
 
 Once a player completes the 20-floor campaign, unlock depths below the standard range with higher difficulty. Monster content already carries `minDepth`/`maxDepth`, so deep-only monsters are cheap to author; needs an unlock gate (profile progression), depth-scaling balance, and probably its own standings tier or score treatment.
