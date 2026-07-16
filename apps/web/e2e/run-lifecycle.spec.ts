@@ -16,24 +16,28 @@ import { expect, test, type Page } from '@playwright/test';
  *    off-hand — both asserted in the hero panel.
  *
  * 2. The death loop (`/play?quickstart=1&seed=11.22.33.44`, the same pinned seed + `DEFAULT_GUEST_HERO`
- *    as the 5A walk). Derivation: replay the 5A `KILL_PHASE` — 40 pinned keys that walk from the
- *    stair-up to the two cave rats and bump-attack until ONE dies, leaving the survivor at world cell
- *    (35,4) beside the hero at (36,5) (pinned by the 5A derivation run; see `guest-play.spec.ts`).
- *    From there the hero simply WAITS (`.`): each wait passes the turn to the adjacent survivor, which
- *    attacks with no retaliation. The armoured default hero shrugs off most swings, so this takes 85
- *    waits for this pinned seed (engine-deterministic). That count is deliberately NOT hardcoded as an
- *    assertion — we poll the conclusion screen with an immediate `isVisible()` under a generous cap —
- *    because a pinned wait-count would be brittle test data with no reader value, unlike the movement
- *    walk it builds on.
+ *    as the 5A walk). Town start (5C): quickstart now boots into the town, so the walk gains a
+ *    one-step descend prefix (`3` then `>`, spawn (5,9) -> dungeon entrance (6,10) -> depth 1). On
+ *    the 160x50 depth-1 floor the hero then marches into the far monster room and bump-attacks until
+ *    ONE of the packed group dies (`CLUSTER_KILL`), leaving a live cave rat adjacent at (9,2) with the
+ *    hero at (10,2). From there the hero simply WAITS (`.`): each wait passes the turn to the adjacent
+ *    hostiles, which attack with no retaliation, and the hero dies (a cave rat lands the blow — 36
+ *    waits for this pinned seed, engine-deterministic). That count is deliberately NOT hardcoded — we
+ *    poll the conclusion screen with an immediate `isVisible()` under a generous cap — because a pinned
+ *    wait-count would be brittle test data with no reader value, unlike the movement walk it builds on.
  */
 const WIZARD_SEED_QUERY = '/play?seed=11.22.33.44';
 const QUICKSTART_QUERY = '/play?quickstart=1&seed=11.22.33.44';
 
-/** The 5A kill phase: walk from the stair-up to the cave rats and bump-attack until one dies. */
-const KILL_PHASE = [
-  '6', '6', '9', '7', '4', '4', '4', '4', '7', '7', '7', '8', '8', '8', '8', '8', '8', '8',
-  '8', '8', '7', '4', '4', '7', '7', '4', '4', '4', '4', '1', '2', '2', '2', '1', '4', '4',
-  '4', '4', '7', '7',
+/** Town spawn (5,9) -> dungeon entrance / stair-down (6,10): one southeast step, then `>`. */
+const DESCEND_PREFIX = ['3'];
+
+/** Depth 1: march into the far monster room and kill one of the packed group, leaving a live cave
+ * rat adjacent at (9,2) with the hero at (10,2) (see `guest-play.spec.ts`'s derivation notes). */
+const CLUSTER_KILL = [
+  '4', '7', '8', '8', '8', '8', '8', '8', '8', '7', '7', '7', '8', '8', '8', '8', '8', '8', '8',
+  '8', '8', '8', '7', '4', '4', '1', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4',
+  '4', '4', '4', '4', '4', '4', '4',
 ];
 
 async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
@@ -125,9 +129,12 @@ test('a death finalizes into the Hall and the conclusion closes the loop', async
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
   await awaitKeyboardReady(page);
 
-  // Walk to the rats and kill one (5A pinned walk), then wait beside the survivor until it kills
-  // the wounded hero.
-  await pressAll(page, KILL_PHASE);
+  // Descend from town, march into the monster room and kill one of the group, then wait beside the
+  // survivors until they kill the wounded hero.
+  await pressAll(page, DESCEND_PREFIX);
+  await page.keyboard.press('>');
+  await expect(page.locator('.status-depth')).toHaveText('Depth 1');
+  await pressAll(page, CLUSTER_KILL);
   await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(/dies/i);
 
   // The armoured hero shrugs off most of the survivor's swings, so death takes many waits (85 for
