@@ -21,9 +21,14 @@ export function useListNavigation(length: number): {
     if (selectedIndex >= length && length > 0) setSelectedIndexState(length - 1);
   }, [length, selectedIndex]);
 
+  // Refocus the current option whenever the selection moves OR the list itself changes. The
+  // `length` dependency matters when an action removes the focused option (e.g. selling the
+  // selected offer): the surviving option slides into the same index, so `selectedIndex` does not
+  // change, but focus would otherwise be stranded on the now-removed node and the dialog would stop
+  // receiving keys. Re-running on `length` restores focus to the option now at `selectedIndex`.
   useEffect(() => {
     itemRefs.current[selectedIndex]?.focus();
-  }, [selectedIndex]);
+  }, [selectedIndex, length]);
 
   const setSelectedIndex = (index: number): void => setSelectedIndexState(index);
 
