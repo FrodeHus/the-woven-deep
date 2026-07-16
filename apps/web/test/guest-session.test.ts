@@ -7,6 +7,7 @@ import {
   RECENT_COMMAND_LIMIT, type ActiveRun, type ActorState, type Uint32State,
 } from '@woven-deep/engine';
 import { GuestSession } from '../src/session/guest-session.js';
+import { createSessionRunRecordRepository } from '../src/session/run-records-storage.js';
 import { COMMAND_SEQUENCE_KEY, SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 
 let pack: CompiledContentPack;
@@ -383,5 +384,84 @@ describe('GuestSession', () => {
     expect(session.getSnapshot().projection.metrics.turnsElapsed).toBe(1);
     // Seeded at `revision (0) + RECENT_COMMAND_LIMIT + 1`, then incremented once.
     expect(storage.peek(COMMAND_SEQUENCE_KEY)).toBe(String(RECENT_COMMAND_LIMIT + 2));
+  });
+
+  describe('death and finalization', () => {
+    /** A run already concluded by hero death (`health: 0`, a `died` conclusion at the fresh run's
+     * own revision/turn), built from the real compiled content pack this suite already loads.
+     * Constructed directly (rather than driven to death by dispatching commands) because this
+     * pack's fresh run spawns population actors alongside the hero, and forcing a natural
+     * mid-transition starvation death drags in unrelated multi-actor world-step machinery that
+     * has nothing to do with what this suite is testing; the engine's own `resolveCommand`-driven
+     * death path is covered by `run-finalize.test.ts`/`reducer.test.ts` in the engine package, and
+     * by `run-records-storage.test.ts`'s genuine death-and-finalize fixture. */
+    function deadRun(seed: Uint32State): ActiveRun {
+      const fresh = createNewRun({ pack, seed, hero: DEFAULT_GUEST_HERO });
+      const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+      return {
+        ...fresh,
+        actors: fresh.actors.map((actor) => (actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor)),
+        conclusion: {
+          completionType: 'died',
+          cause: { killerContentId: null, depth: 1, turn: fresh.turn, worldTime: fresh.worldTime },
+          concludedAtRevision: fresh.revision, finalized: false,
+        },
+      };
+    }
+
+    it('is null for a living run, and a non-finalized projection once restored into an already-died run', () => {
+      const storage = fakeStorage();
+      const living = new GuestSession({ pack, storage, seed: SEED });
+      expect(living.getSnapshot().conclusion).toBeNull();
+
+      storage.set(SAVE_KEY, encodeActiveRun(deadRun(SEED)));
+      const session = new GuestSession({ pack, storage });
+
+      const conclusion = session.getSnapshot().conclusion;
+      expect(conclusion).not.toBeNull();
+      expect(conclusion?.completionType).toBe('died');
+      expect(conclusion?.finalized).toBe(false);
+      expect(conclusion?.score).toBeNull();
+      expect(conclusion?.heirloom).toBeNull();
+    });
+
+    it('finalizeConcludedRun produces the full projection, appends exactly one record, and is idempotent on a second call', () => {
+      const storage = fakeStorage();
+      storage.set(SAVE_KEY, encodeActiveRun(deadRun(SEED)));
+      const session = new GuestSession({ pack, storage });
+
+      const repository = createSessionRunRecordRepository(storage);
+      const projection = session.finalizeConcludedRun(repository, { achievedAt: 'Run #1', portraitGlyph: '@' });
+
+      expect(projection.finalized).toBe(true);
+      expect(projection.score).not.toBeNull();
+      expect(projection.heirloom).not.toBeNull();
+      expect(repository.records()).toHaveLength(1);
+
+      const second = session.finalizeConcludedRun(repository, { achievedAt: 'Run #2', portraitGlyph: '&' });
+      expect(repository.records()).toHaveLength(1);
+      expect(second).toEqual(projection);
+    });
+
+    it('persists the finalized run (reload sees the engine finalized flag) and does not re-append on finalizeConcludedRun after reload', () => {
+      const storage = fakeStorage();
+      storage.set(SAVE_KEY, encodeActiveRun(deadRun(SEED)));
+      const session = new GuestSession({ pack, storage });
+
+      const repository = createSessionRunRecordRepository(storage);
+      const projection = session.finalizeConcludedRun(repository, { achievedAt: 'Run #1', portraitGlyph: '@' });
+
+      const reloadedRun = decodeActiveRun(storage.peek()!);
+      expect(reloadedRun.conclusion?.finalized).toBe(true);
+
+      const reloadedSession = new GuestSession({ pack, storage });
+      const reloadedRepository = createSessionRunRecordRepository(storage);
+      const reloadedProjection = reloadedSession.finalizeConcludedRun(
+        reloadedRepository, { achievedAt: 'Run #2', portraitGlyph: '&' },
+      );
+
+      expect(reloadedRepository.records()).toHaveLength(1);
+      expect(reloadedProjection).toEqual(projection);
+    });
   });
 });

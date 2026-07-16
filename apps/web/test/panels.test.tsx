@@ -34,6 +34,7 @@ function snapshotOf(projection: GameplayProjection, overrides: Partial<SessionSn
     pendingDecision: null,
     notice: null,
     backpackOpen: false,
+    conclusion: null,
     ...overrides,
   };
 }

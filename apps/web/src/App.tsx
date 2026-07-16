@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useState, type JSX } from 'react';
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
-import { heroFromChoices, type HeroChoices, type Uint32State } from '@woven-deep/engine';
+import {
+  heroFromChoices, type HeroChoices, type RunConclusionProjection, type RunRecordRepository, type Uint32State,
+} from '@woven-deep/engine';
 import { loadContentPack } from './api.js';
+import type { LogLine } from './session/event-log.js';
 import { GuestSession, type SessionNotice } from './session/guest-session.js';
+import { createSessionRunRecordRepository, SessionHallCorruptError } from './session/run-records-storage.js';
 import { useGuestSession } from './session/store.js';
 import { browserSessionStorage, type SessionStorageLike } from './session/storage.js';
 import { ChargenScreen } from './ui/screens/ChargenScreen.js';
+import { ConclusionScreen } from './ui/screens/ConclusionScreen.js';
 import { TitleScreen } from './ui/screens/TitleScreen.js';
 import { PlayScreen } from './ui/PlayScreen.js';
 import './styles.css';
@@ -95,9 +100,15 @@ function storageWarningMessage(notice: StorageNotice): string {
     : 'Saving is unavailable in this browser — play continues, but your progress will not persist.';
 }
 
+/** How much of the adventure log the conclusion screen's "last moments" recap keeps. */
+const CONCLUSION_LOG_TAIL = 8;
+
 interface GameRootProps {
   readonly session: GuestSession;
   readonly pack: CompiledContentPack;
+  readonly repository: RunRecordRepository;
+  readonly portraitGlyph: string | undefined;
+  readonly onConcluded: (projection: RunConclusionProjection, logTail: readonly LogLine[]) => void;
 }
 
 /** Everything that needs a live `GuestSession` snapshot: the notice banners and the play screen
@@ -106,15 +117,31 @@ interface GameRootProps {
  *
  * Storage notices (unavailable/full) get their own persistent, non-dismissible `role="alert"`
  * warning per the design spec — play continues unsaved, but the player must keep seeing that.
- * Every other notice (fresh/restored/save-discarded) stays a dismissible `role="status"` banner. */
-function GameRoot({ session, pack }: GameRootProps): JSX.Element {
+ * Every other notice (fresh/restored/save-discarded) stays a dismissible `role="status"` banner.
+ *
+ * Once the snapshot's `conclusion` first becomes non-null (the hero died, or a save restored an
+ * already-concluded run), this finalizes the run into the Hall exactly once — `finalizeRun`'s own
+ * `finalized` flag makes a repeat call safe, but `finalizedRef` also stops this component from
+ * calling it again on every subsequent render before `onConcluded` swaps the screen away. */
+function GameRoot({ session, pack, repository, portraitGlyph, onConcluded }: GameRootProps): JSX.Element {
   const snapshot = useGuestSession(session);
   const [dismissed, setDismissed] = useState(false);
-  const { notice } = snapshot;
+  const { notice, conclusion } = snapshot;
+  const finalizedRef = useRef(false);
 
   useEffect(() => {
     setDismissed(false);
   }, [notice]);
+
+  useEffect(() => {
+    if (conclusion === null || finalizedRef.current) return;
+    finalizedRef.current = true;
+    const projection = session.finalizeConcludedRun(repository, {
+      achievedAt: `Run #${repository.records().length + 1}`,
+      portraitGlyph: portraitGlyph ?? '@',
+    });
+    onConcluded(projection, session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL));
+  }, [conclusion, onConcluded, portraitGlyph, repository, session]);
 
   const dismissibleNotice = notice && !isStorageNotice(notice) ? notice : null;
   const storageNotice = notice && isStorageNotice(notice) ? notice : null;
@@ -171,12 +198,44 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
 
   const storage = useMemo(() => storageOverride ?? browserSessionStorage(), [storageOverride]);
 
+  // The session-scoped Hall of Records repository. A corrupt blob throws `SessionHallCorruptError`
+  // at construction; the module itself clears the storage key back to a fresh, empty Hall before
+  // throwing, so retrying the SAME construction immediately below always succeeds. The active run
+  // (an entirely separate storage key) is untouched either way — only a notice is surfaced.
+  const [repository, hallNotice] = useMemo((): readonly [RunRecordRepository, string | null] => {
+    try {
+      return [createSessionRunRecordRepository(storage), null] as const;
+    } catch (thrown) {
+      if (thrown instanceof SessionHallCorruptError) {
+        return [createSessionRunRecordRepository(storage), thrown.message] as const;
+      }
+      throw thrown;
+    }
+  }, [storage]);
+
   const [screen, setScreen] = useState<ScreenState>(
     () => (isQuickstart(window.location.search) ? { screen: 'play' } : { screen: 'title' }),
   );
   const [session, setSession] = useState<GuestSession>();
   const [chargenSeed, setChargenSeed] = useState<Uint32State>();
-  const [, setPortraitGlyph] = useState<string>();
+  const [portraitGlyph, setPortraitGlyph] = useState<string>();
+  const [conclusion, setConclusion] = useState<{
+    projection: RunConclusionProjection; logTail: readonly LogLine[];
+  }>();
+
+  /** Wraps every post-boot screen with the persistent Hall-corruption notice, when one is
+   * pending — the active run survives regardless; only the Hall itself was reset. */
+  function withHallNotice(children: JSX.Element): JSX.Element {
+    if (!hallNotice) return children;
+    return (
+      <>
+        <div role="alert" aria-label="Hall notice" className="storage-warning-banner" data-kind="hall-corrupt">
+          <p>Your Hall of Records could not be read and has been reset. ({hallNotice})</p>
+        </div>
+        {children}
+      </>
+    );
+  }
 
   // Quickstart's session is constructed once the pack is ready (it can't be constructed at the
   // `useState` initializer above — the pack isn't loaded yet at first render).
@@ -208,7 +267,7 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
   }
 
   if (screen.screen === 'title') {
-    return (
+    return withHallNotice(
       <main className="shell">
         <TitleScreen
           storage={storage}
@@ -223,61 +282,95 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
           }}
           onHall={() => setScreen({ screen: 'hall', returnTo: 'title' })}
         />
-      </main>
+      </main>,
     );
   }
 
   if (screen.screen === 'chargen') {
     // `chargenSeed` is always set before this screen is reached (see `onEnterTheDeep` above).
     const seed = chargenSeed!;
-    return (
+    return withHallNotice(
       <ChargenScreen
         pack={pack}
         seed={seed}
-        onConfirm={(choices: HeroChoices, portraitGlyph: string) => {
+        onConfirm={(choices: HeroChoices, glyph: string) => {
           const hero = heroFromChoices({ pack, choices });
           try {
-            storage.set(PORTRAIT_KEY, portraitGlyph);
+            storage.set(PORTRAIT_KEY, glyph);
           } catch {
             // Best-effort, same as every other portrait/cosmetic persistence attempt in this app —
             // the run itself is unaffected if this particular write fails.
           }
-          setPortraitGlyph(portraitGlyph);
+          setPortraitGlyph(glyph);
           setSession(new GuestSession({ pack, storage, seed, hero }));
           setScreen({ screen: 'play' });
         }}
-      />
+      />,
     );
   }
 
   if (screen.screen === 'hall') {
     const { returnTo } = screen;
-    return (
+    return withHallNotice(
       <main className="shell">
         <h1>Hall of Records</h1>
         <p role="status">Coming soon.</p>
         <button type="button" onClick={() => setScreen({ screen: returnTo })}>Back</button>
-      </main>
+      </main>,
     );
   }
 
   if (screen.screen === 'conclusion') {
-    // Payload wiring lands in a later task; this stub only exists so `ScreenState` type-checks.
-    return (
-      <main className="shell">
-        <p role="status">The run has ended.</p>
-      </main>
+    // `conclusion` is always set before this screen is reached — `GameRoot`'s `onConcluded`
+    // (below) sets both together, in the same event.
+    if (!conclusion) {
+      return withHallNotice(
+        <main className="shell boot-loading">
+          <p className="eyebrow">The Woven Deep</p>
+          <p role="status">The run has ended.</p>
+        </main>,
+      );
+    }
+    return withHallNotice(
+      <ConclusionScreen
+        projection={conclusion.projection}
+        pack={pack}
+        logTail={conclusion.logTail}
+        onHall={() => setScreen({ screen: 'hall', returnTo: 'conclusion' })}
+        onNewHero={() => {
+          setSession(undefined);
+          setConclusion(undefined);
+          setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
+          setScreen({ screen: 'chargen' });
+        }}
+        onTitle={() => {
+          setSession(undefined);
+          setConclusion(undefined);
+          setScreen({ screen: 'title' });
+        }}
+      />,
     );
   }
 
   if (!session) {
-    return (
+    return withHallNotice(
       <main className="shell boot-loading">
         <p className="eyebrow">The Woven Deep</p>
         <p role="status">Binding the current content pack…</p>
-      </main>
+      </main>,
     );
   }
 
-  return <GameRoot session={session} pack={pack} />;
+  return withHallNotice(
+    <GameRoot
+      session={session}
+      pack={pack}
+      repository={repository}
+      portraitGlyph={portraitGlyph}
+      onConcluded={(projection, logTail) => {
+        setConclusion({ projection, logTail });
+        setScreen({ screen: 'conclusion' });
+      }}
+    />,
+  );
 }
