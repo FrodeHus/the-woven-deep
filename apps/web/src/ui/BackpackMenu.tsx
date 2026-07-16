@@ -86,6 +86,11 @@ export function BackpackMenu({ snapshot, onDispatch, onClose }: BackpackMenuProp
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (event.key === 'Escape') {
       event.preventDefault();
+      // Stop the native keydown from bubbling to `PlayScreen`'s window-level key dispatcher, which
+      // also routes Escape for open overlays -- see the identical fix (and its rationale) in
+      // `TradeScreen`. Harmless here today (`setBackpackOpen(false)` twice is a no-op) but the same
+      // dual-dispatch shape, so it's fixed the same way for consistency.
+      event.stopPropagation();
       onClose();
       return;
     }

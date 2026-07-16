@@ -113,6 +113,12 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (event.key === 'Escape') {
       event.preventDefault();
+      // Stop the native keydown from bubbling to `PlayScreen`'s window-level key dispatcher: that
+      // listener also routes Escape for open overlays (it has to, for the `pendingDecision` prompt,
+      // which owns no keydown handler of its own) and would otherwise dispatch a second
+      // `trade-close` against the now-stale (trade already closed) projection, surfacing as a
+      // spurious "There is no open trade session." log line on every ordinary Escape-close.
+      event.stopPropagation();
       onClose();
       return;
     }
