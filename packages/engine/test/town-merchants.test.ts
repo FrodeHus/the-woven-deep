@@ -4,7 +4,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   advanceMerchantLifecycle, createNewRun, DEFAULT_GUEST_HERO, descendToNextFloor, encodeActiveRun,
-  heroActor, heroPerception, refreshKnowledge, resolveCommand, restockMerchant, validateActiveRun,
+  heroActor, heroPerception, projectDomainEvents, refreshKnowledge, resolveCommand, restockMerchant, validateActiveRun,
   type ActiveRun, type FloorSnapshot, type MerchantPopulation,
 } from '../src/index.js';
 
@@ -257,6 +257,54 @@ describe('milestone restock', () => {
     expect(redescended.state.restockedMilestones).toEqual([5]);
     expect(townMerchants(redescended.state).map((m) => m.stockItemIds)).toEqual(stockAfterFirst);
     expect(redescended.events).toEqual([]);
+  });
+
+  it('fires every milestone the dungeon high-water mark has already passed in a single descend, in ascending order, exactly once', () => {
+    const started = townRun();
+    const atDepth4 = descendRepeatedly(started, 4);
+    expect(atDepth4.metrics.deepestDepth).toBe(4);
+    expect(atDepth4.restockedMilestones).toEqual([]);
+
+    // Hand-construct a state where the dungeon high-water mark is already far past milestones 5
+    // and 10 (as could happen with a state imported before either milestone was ever recorded),
+    // so the next real descend -- into a brand-new floor -- must fire both in the same pass.
+    // `descendToNextFloor`'s stored-re-entry branch never touches `metrics.deepestDepth` (see its
+    // docstring), so this only exercises the multi-milestone loop in `applyMerchantRestocks`, not
+    // metrics bookkeeping.
+    const primed = validateActiveRun({ ...atDepth4, metrics: { ...atDepth4.metrics, deepestDepth: 14 } });
+    const floor = primed.floors.find((candidate) => candidate.floorId === primed.activeFloorId)!;
+    const onStairDown = teleportHero(primed, floor.stairDown!);
+    const descended = descendToNextFloor(onStairDown, context());
+
+    expect(descended.state.metrics.deepestDepth).toBe(14);
+    expect(descended.state.restockedMilestones).toEqual([5, 10]);
+    const restockEvents = descended.events.filter((event) => event.type === 'merchant.restocked');
+    expect(restockEvents).toHaveLength(6); // 3 permanent merchants x 2 milestones (5 and 10)
+
+    // A further descend (into yet another brand-new floor) must not re-fire either milestone.
+    const nextFloor = descended.state.floors.find((candidate) => candidate.floorId === descended.state.activeFloorId)!;
+    const onNextStairDown = teleportHero(descended.state, nextFloor.stairDown!);
+    const further = descendToNextFloor(onNextStairDown, context());
+    expect(further.state.restockedMilestones).toEqual([5, 10]);
+    expect(further.events.filter((event) => event.type === 'merchant.restocked')).toEqual([]);
+  });
+});
+
+describe('milestone restock event visibility', () => {
+  it('produces no hero-visible public event when a milestone fires at the descend boundary (hero not in town)', () => {
+    const started = townRun();
+    const atDepth4 = descendRepeatedly(started, 4);
+    const floor = atDepth4.floors.find((candidate) => candidate.floorId === atDepth4.activeFloorId)!;
+    const onStairDown = teleportHero(atDepth4, floor.stairDown!);
+    const descended = descendToNextFloor(onStairDown, context());
+    const restockEvents = descended.events.filter((event) => event.type === 'merchant.restocked');
+    expect(restockEvents.length).toBeGreaterThan(0);
+
+    const hero = heroActor(descended.state);
+    const publicEvents = projectDomainEvents({
+      state: descended.state, content: pack, heroId: hero.actorId, events: restockEvents,
+    });
+    expect(publicEvents).toEqual([]);
   });
 });
 
