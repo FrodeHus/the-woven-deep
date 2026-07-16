@@ -18,7 +18,10 @@ import { expect, test, type Page } from '@playwright/test';
  * requirement is met by dropping one of the hero's three travel rations (a real ground item),
  * stepping off it, stepping back onto it, and picking it up.
  */
-const SEED_QUERY = '/?seed=11.22.33.44';
+// The landing page now owns `/`; the guest game lives behind the `/play` path (see
+// `src/main.tsx`'s path check). The seed override still parses out of the query string exactly
+// as before (see `App.tsx`'s `parseSeedFromQuery`).
+const SEED_QUERY = '/play?seed=11.22.33.44';
 
 /** Keys 1–40: walk from the stair-up to the cave rats and bump-attack until one dies. */
 const KILL_PHASE = [

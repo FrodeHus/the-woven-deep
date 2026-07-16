@@ -9,8 +9,9 @@ import { fileURLToPath } from 'node:url';
 // `!important`, because `.glow[data-source*="torch"]` has higher specificity (0,2,0) than a bare
 // `.glow` override (0,1,0) and would otherwise keep the torch flicker animating even when the
 // user has asked to reduce motion.
-const stylesPath = join(dirname(fileURLToPath(import.meta.url)), '../src/styles.css');
-const css = readFileSync(stylesPath, 'utf8');
+const testDir = dirname(fileURLToPath(import.meta.url));
+const css = readFileSync(join(testDir, '../src/styles.css'), 'utf8');
+const landingCss = readFileSync(join(testDir, '../src/landing/landing.css'), 'utf8');
 
 function extractReducedMotionBlocks(source: string): readonly string[] {
   const blocks: string[] = [];
@@ -43,5 +44,28 @@ describe('reduced-motion stylesheet contract', () => {
     const glowRuleMatch = /\.glow\s*\{([^}]*)\}/.exec(blockWithGlowOverride!);
     expect(glowRuleMatch, '.glow rule not found inside reduced-motion block').toBeTruthy();
     expect(glowRuleMatch![1]).toMatch(/animation\s*:\s*none\s*!important/);
+  });
+});
+
+describe('landing page reduced-motion stylesheet contract', () => {
+  const blocks = extractReducedMotionBlocks(landingCss);
+
+  it('has at least one @media (prefers-reduced-motion: reduce) block', () => {
+    expect(blocks.length).toBeGreaterThan(0);
+  });
+
+  it('kills every landing animation and transition with !important, beating any per-element rule', () => {
+    const blockWithGlobalKill = blocks.find((block) => /\*[^{}]*\{[^}]*animation\s*:\s*none\s*!important/.test(block));
+    expect(blockWithGlobalKill, 'expected a reduced-motion block that forces animation:none !important on all landing elements').toBeTruthy();
+    expect(blockWithGlobalKill!).toMatch(/transition\s*:\s*none\s*!important/);
+  });
+
+  it('forces [data-reveal] elements fully visible with !important, so a missed reveal can never hide content', () => {
+    const blockWithRevealOverride = blocks.find((block) => /\[data-reveal\]\s*\{[^}]*opacity\s*:/.test(block));
+    expect(blockWithRevealOverride, 'expected a reduced-motion block overriding [data-reveal] visibility').toBeTruthy();
+    const revealRuleMatch = /\[data-reveal\]\s*\{([^}]*)\}/.exec(blockWithRevealOverride!);
+    expect(revealRuleMatch, '[data-reveal] rule not found inside reduced-motion block').toBeTruthy();
+    expect(revealRuleMatch![1]).toMatch(/opacity\s*:\s*1\s*!important/);
+    expect(revealRuleMatch![1]).toMatch(/transform\s*:\s*none\s*!important/);
   });
 });
