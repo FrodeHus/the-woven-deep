@@ -90,6 +90,29 @@ describe('BackpackMenu', () => {
     expect(screen.getByText(/backpack is empty/i)).toBeInTheDocument();
   });
 
+  it('focuses the dialog container itself when opened with an empty backpack (no focusable items to fall back to)', () => {
+    render(<BackpackMenu snapshot={snapshotWithBackpack([])} onDispatch={vi.fn()} onClose={vi.fn()} />);
+    const dialog = screen.getByRole('dialog', { name: /backpack/i });
+    expect(dialog).toHaveFocus();
+  });
+
+  it('accepts uppercase action-key hints (e/u/d/l) the same as lowercase', async () => {
+    const user = userEvent.setup();
+    const onDispatch = vi.fn();
+    const snapshot = snapshotWithBackpack([{ itemId: 'item.torch', name: 'Torch' }]);
+
+    render(<BackpackMenu snapshot={snapshot} onDispatch={onDispatch} onClose={vi.fn()} />);
+
+    await user.keyboard('E');
+    expect(onDispatch).toHaveBeenCalledWith({ type: 'backpack', action: 'equip', itemId: 'item.torch' });
+    await user.keyboard('U');
+    expect(onDispatch).toHaveBeenCalledWith({ type: 'backpack', action: 'use', itemId: 'item.torch' });
+    await user.keyboard('D');
+    expect(onDispatch).toHaveBeenCalledWith({ type: 'backpack', action: 'drop', itemId: 'item.torch' });
+    await user.keyboard('L');
+    expect(onDispatch).toHaveBeenCalledWith({ type: 'backpack', action: 'toggle-light', itemId: 'item.torch' });
+  });
+
   it('restores focus to whatever had it before the dialog opened, on close/unmount', () => {
     const opener = document.createElement('button');
     opener.textContent = 'Open backpack';

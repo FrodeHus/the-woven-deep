@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { beforeAll, afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
@@ -59,11 +59,52 @@ describe('App boot flow', () => {
     render(<App fetcher={packFetcher()} storage={storage} />);
 
     await screen.findByRole('grid', { name: /dungeon/i });
-    const banner = screen.getByRole('status', { name: /session/i }) ?? screen.getByText(/previous save/i);
-    expect(banner).toBeTruthy();
+    const banner = screen.getByRole('status', { name: /session/i });
+    expect(banner).toHaveTextContent(/previous save/i);
     const dismiss = screen.getByRole('button', { name: /dismiss/i });
     await user.click(dismiss);
     expect(screen.queryByText(/previous save/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a persistent, non-dismissible warning (not the dismissible banner) when storage is unavailable, and play continues', async () => {
+    const storage: SessionStorageLike = {
+      get: () => null,
+      set: () => {
+        throw new DOMException('nope', 'SecurityError');
+      },
+    };
+
+    render(<App fetcher={packFetcher()} storage={storage} />);
+    await screen.findByRole('grid', { name: /dungeon/i });
+
+    // Force a persistence attempt (a harmless wait), which the throwing storage rejects.
+    fireEvent.keyDown(window, { key: '.' });
+
+    const warning = await screen.findByRole('alert', { name: /storage/i });
+    expect(warning).toHaveTextContent(/saving is unavailable/i);
+    expect(within(warning).queryByRole('button', { name: /dismiss/i })).not.toBeInTheDocument();
+
+    // The warning persists — nothing dismisses it — and play continues underneath it.
+    expect(screen.getByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
+    expect(screen.getByRole('alert', { name: /storage/i })).toBeInTheDocument();
+  });
+
+  it('shows the storage-full wording (distinct from unavailable) when a write throws a quota error', async () => {
+    const storage: SessionStorageLike = {
+      get: () => null,
+      set: () => {
+        const error = new DOMException('quota', 'QuotaExceededError');
+        throw error;
+      },
+    };
+
+    render(<App fetcher={packFetcher()} storage={storage} />);
+    await screen.findByRole('grid', { name: /dungeon/i });
+
+    fireEvent.keyDown(window, { key: '.' });
+
+    const warning = await screen.findByRole('alert', { name: /storage/i });
+    expect(warning).toHaveTextContent(/storage is full/i);
   });
 
   it('reads a test-only seed from the query string (?seed=11.22.33.44) and passes it to the session', async () => {

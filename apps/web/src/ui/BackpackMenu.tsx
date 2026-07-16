@@ -102,10 +102,11 @@ export function BackpackMenu({ snapshot, onDispatch, onClose }: BackpackMenuProp
     }
     const selected = items[selectedIndex];
     if (!selected) return;
-    if (event.key === 'e') onDispatch({ type: 'backpack', action: 'equip', itemId: selected.itemId });
-    else if (event.key === 'u') onDispatch({ type: 'backpack', action: 'use', itemId: selected.itemId });
-    else if (event.key === 'd') onDispatch({ type: 'backpack', action: 'drop', itemId: selected.itemId });
-    else if (event.key === 'l') onDispatch({ type: 'backpack', action: 'toggle-light', itemId: selected.itemId });
+    const key = event.key.toLowerCase();
+    if (key === 'e') onDispatch({ type: 'backpack', action: 'equip', itemId: selected.itemId });
+    else if (key === 'u') onDispatch({ type: 'backpack', action: 'use', itemId: selected.itemId });
+    else if (key === 'd') onDispatch({ type: 'backpack', action: 'drop', itemId: selected.itemId });
+    else if (key === 'l') onDispatch({ type: 'backpack', action: 'toggle-light', itemId: selected.itemId });
   };
 
   return (
@@ -115,6 +116,7 @@ export function BackpackMenu({ snapshot, onDispatch, onClose }: BackpackMenuProp
       aria-modal="true"
       aria-label="Backpack"
       className="backpack-menu"
+      tabIndex={-1}
       onKeyDown={handleKeyDown}
     >
       <h2>Backpack</h2>

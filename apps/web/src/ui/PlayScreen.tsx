@@ -113,8 +113,8 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
   }, []);
 
   // The single global keydown listener: `createKeyDispatcher` translates keys to intents via the
-  // pure `routeKey` and forwards them to the session, dropping any keydown that arrives while a
-  // dispatch is already executing (see `KeyRouter.ts`'s input-flood guard).
+  // pure `routeKey` and forwards them to the session, rate-limiting OS key auto-repeat so it
+  // can't outpace what the player can perceive (see `KeyRouter.ts`'s input-flood guard).
   useEffect(() => {
     const dispatcher = createKeyDispatcher(
       {

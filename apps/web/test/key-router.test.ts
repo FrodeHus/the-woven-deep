@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Direction } from '@woven-deep/engine';
 import { createKeyDispatcher, KEYMAP, routeKey } from '../src/ui/KeyRouter.js';
 
-function keyEvent(key: string, options: Readonly<{ shiftKey?: boolean; target?: EventTarget | null }> = {}) {
-  return { key, shiftKey: options.shiftKey ?? false, target: options.target ?? null };
+function keyEvent(
+  key: string,
+  options: Readonly<{ shiftKey?: boolean; target?: EventTarget | null; repeat?: boolean }> = {},
+) {
+  return { key, shiftKey: options.shiftKey ?? false, target: options.target ?? null, repeat: options.repeat ?? false };
 }
 
 describe('routeKey', () => {
@@ -56,33 +59,42 @@ describe('routeKey', () => {
   });
 });
 
-describe('createKeyDispatcher (input-flood guard)', () => {
-  it('drops a burst of synchronous keydowns that arrive while a dispatch is already executing', () => {
-    let dispatchCount = 0;
-    let handler: (event: ReturnType<typeof keyEvent>) => void;
-    const dispatch = vi.fn(() => {
-      dispatchCount += 1;
-      // Simulate auto-repeat: a burst of further keydowns arrives *during* this dispatch, before
-      // it returns. Only the first should ever have made it through; all of these must be dropped.
-      for (let i = 0; i < 5; i += 1) handler(keyEvent('.'));
-    });
-    handler = createKeyDispatcher({ dispatch, openBackpack: vi.fn(), closeOverlay: vi.fn() }, () => false);
+describe('createKeyDispatcher (repeat rate-limit guard)', () => {
+  it('drops a rapid repeat:true burst, dispatching at most one intent per 80ms window', () => {
+    let time = 0;
+    const now = () => time;
+    const dispatch = vi.fn();
+    const handler = createKeyDispatcher({ dispatch, openBackpack: vi.fn(), closeOverlay: vi.fn() }, () => false, now);
 
-    handler(keyEvent('.'));
-
-    expect(dispatchCount).toBe(1);
+    // First (non-repeat) press always passes.
+    handler(keyEvent('.', { repeat: false }));
     expect(dispatch).toHaveBeenCalledTimes(1);
+
+    // OS auto-repeat: a burst of `repeat: true` keydowns arriving well within the 80ms window —
+    // all but the first accepted dispatch must be dropped.
+    for (let i = 0; i < 5; i += 1) {
+      time += 10;
+      handler(keyEvent('.', { repeat: true }));
+    }
+    expect(dispatch).toHaveBeenCalledTimes(1);
+
+    // Once 80ms have elapsed since the last accepted dispatch, a repeat keydown passes again.
+    time += 80;
+    handler(keyEvent('.', { repeat: true }));
+    expect(dispatch).toHaveBeenCalledTimes(2);
   });
 
-  it('resumes dispatching once the in-flight dispatch has completed', () => {
-    let handler: (event: ReturnType<typeof keyEvent>) => void;
+  it('always accepts discrete (non-repeat) presses, even in rapid succession', () => {
+    let time = 0;
+    const now = () => time;
     const dispatch = vi.fn();
-    handler = createKeyDispatcher({ dispatch, openBackpack: vi.fn(), closeOverlay: vi.fn() }, () => false);
+    const handler = createKeyDispatcher({ dispatch, openBackpack: vi.fn(), closeOverlay: vi.fn() }, () => false, now);
 
-    handler(keyEvent('.'));
-    handler(keyEvent('.'));
-
-    expect(dispatch).toHaveBeenCalledTimes(2);
+    for (let i = 0; i < 5; i += 1) {
+      time += 1;
+      handler(keyEvent('.', { repeat: false }));
+    }
+    expect(dispatch).toHaveBeenCalledTimes(5);
   });
 
   it('routes open-backpack and close-overlay outcomes to their handlers instead of dispatch', () => {

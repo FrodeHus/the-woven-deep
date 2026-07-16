@@ -67,21 +67,36 @@ export interface KeyDispatchHandlers {
   readonly closeOverlay: () => void;
 }
 
-export type KeyDispatcher = (event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'target'>) => void;
+export type KeyDispatcher = (event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'target' | 'repeat'>) => void;
+
+/** OS key auto-repeat fires at roughly 30/sec; this is the minimum gap enforced between two
+ * accepted `repeat: true` keydowns (see `createKeyDispatcher`). */
+export const REPEAT_INTERVAL_MS = 80;
 
 /**
  * Wraps `routeKey` with the input-flood guard: dispatching a command is synchronous and expensive
- * enough (re-project the whole run, serialize it to storage) that a burst of keydowns arriving
- * while one is already in flight — key auto-repeat fires at roughly 30/sec — must not queue up a
- * second dispatch on top of the first. `isOverlayOpen` is read fresh on every keydown (a function,
- * not a snapshot) so the guard always sees the latest overlay state.
+ * enough (re-project the whole run, serialize it to storage) that OS key auto-repeat must not
+ * outpace what the player can perceive. Browser keydown dispatch is synchronous and
+ * non-reentrant, so a reentrancy guard (an in-flight boolean) can never actually fire — instead
+ * this rate-limits `event.repeat === true` keydowns, dropping any that arrive within
+ * `REPEAT_INTERVAL_MS` of the last accepted dispatch. The first (non-repeat) press, and any
+ * discrete non-repeat press, always passes regardless of timing. `isOverlayOpen` is read fresh on
+ * every keydown (a function, not a snapshot) so the guard always sees the latest overlay state.
+ * `now` is injectable so tests can drive the rate limit with a controllable clock instead of the
+ * ambient `performance.now`.
  */
-export function createKeyDispatcher(handlers: KeyDispatchHandlers, isOverlayOpen: () => boolean): KeyDispatcher {
-  let dispatching = false;
+export function createKeyDispatcher(
+  handlers: KeyDispatchHandlers,
+  isOverlayOpen: () => boolean,
+  now: () => number = () => performance.now(),
+): KeyDispatcher {
+  let lastAcceptedAt = -Infinity;
   return (event) => {
-    if (dispatching) return;
+    const timestamp = now();
+    if (event.repeat && timestamp - lastAcceptedAt < REPEAT_INTERVAL_MS) return;
     const outcome = routeKey({ event, overlayOpen: isOverlayOpen() });
     if (outcome === null) return;
+    lastAcceptedAt = timestamp;
     if (outcome.type === 'open-backpack') {
       handlers.openBackpack();
       return;
@@ -90,11 +105,6 @@ export function createKeyDispatcher(handlers: KeyDispatchHandlers, isOverlayOpen
       handlers.closeOverlay();
       return;
     }
-    dispatching = true;
-    try {
-      handlers.dispatch(outcome);
-    } finally {
-      dispatching = false;
-    }
+    handlers.dispatch(outcome);
   };
 }

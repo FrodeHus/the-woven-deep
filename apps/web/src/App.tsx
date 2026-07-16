@@ -29,12 +29,26 @@ function parseSeedFromQuery(search: string): Uint32State | undefined {
   return [words[0]!, words[1]!, words[2]!, words[3]!];
 }
 
-function noticeMessage(notice: SessionNotice): string {
+type DismissibleNotice = Exclude<SessionNotice, { kind: 'storage' }>;
+type StorageNotice = Extract<SessionNotice, { kind: 'storage' }>;
+
+function isStorageNotice(notice: SessionNotice): notice is StorageNotice {
+  return notice.kind === 'storage';
+}
+
+/** Wording for the dismissible fresh/restored/save-discarded banner. Storage notices never reach
+ * this — they get their own persistent, non-dismissible warning (see `storageWarningMessage`). */
+function noticeMessage(notice: DismissibleNotice): string {
   if (notice.kind === 'fresh') return 'A new run has begun.';
   if (notice.kind === 'restored') return 'Welcome back — your run was restored.';
-  if (notice.kind === 'save-discarded') {
-    return `Your previous save could not be loaded (${notice.reason}) — a new run has begun.`;
-  }
+  return `Your previous save could not be loaded (${notice.reason}) — a new run has begun.`;
+}
+
+/**
+ * Wording for storage-unavailable vs storage-full, per the design spec's requirement that the two
+ * failures produce distinct, actionable messages.
+ */
+function storageWarningMessage(notice: StorageNotice): string {
   return notice.failure === 'full'
     ? 'Your browser storage is full, so this run cannot be saved — play continues unsaved.'
     : 'Saving is unavailable in this browser — play continues, but your progress will not persist.';
@@ -45,9 +59,13 @@ interface GameRootProps {
   readonly pack: CompiledContentPack;
 }
 
-/** Everything that needs a live `GuestSession` snapshot: the dismissible session-notice banner,
- * and the play screen itself. Split out from `App` so `useGuestSession` (a hook) is only ever
- * called once a session actually exists — `App` renders this conditionally, not the hook. */
+/** Everything that needs a live `GuestSession` snapshot: the notice banners and the play screen
+ * itself. Split out from `App` so `useGuestSession` (a hook) is only ever called once a session
+ * actually exists — `App` renders this conditionally, not the hook.
+ *
+ * Storage notices (unavailable/full) get their own persistent, non-dismissible `role="alert"`
+ * warning per the design spec — play continues unsaved, but the player must keep seeing that.
+ * Every other notice (fresh/restored/save-discarded) stays a dismissible `role="status"` banner. */
 function GameRoot({ session, pack }: GameRootProps): JSX.Element {
   const snapshot = useGuestSession(session);
   const [dismissed, setDismissed] = useState(false);
@@ -57,11 +75,19 @@ function GameRoot({ session, pack }: GameRootProps): JSX.Element {
     setDismissed(false);
   }, [notice]);
 
+  const dismissibleNotice = notice && !isStorageNotice(notice) ? notice : null;
+  const storageNotice = notice && isStorageNotice(notice) ? notice : null;
+
   return (
     <div className="app-root">
-      {notice && !dismissed && (
-        <div role="status" aria-label="Session notice" className="session-banner" data-kind={notice.kind}>
-          <p>{noticeMessage(notice)}</p>
+      {storageNotice && (
+        <div role="alert" aria-label="Storage warning" className="storage-warning-banner" data-kind="storage">
+          <p>{storageWarningMessage(storageNotice)}</p>
+        </div>
+      )}
+      {dismissibleNotice && !dismissed && (
+        <div role="status" aria-label="Session notice" className="session-banner" data-kind={dismissibleNotice.kind}>
+          <p>{noticeMessage(dismissibleNotice)}</p>
           <button type="button" onClick={() => setDismissed(true)}>Dismiss</button>
         </div>
       )}
