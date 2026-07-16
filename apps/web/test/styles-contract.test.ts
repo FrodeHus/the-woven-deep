@@ -73,6 +73,44 @@ describe('reduced-motion stylesheet contract', () => {
     expect(declarations).toMatch(/closest-side/);
   });
 
+  it('never lets a visible cell render darker than a remembered one, even at minimum light', () => {
+    // Regression for the "dark circle" bug: `.cell-visible`'s opacity floor (its value at
+    // `--light: 0`) must be >= `.cell-remembered`'s (static) opacity, so a dim-but-visible cell at
+    // the edge of a torch's radius never renders darker than the remembered floor beyond it.
+    const rememberedMatch = /(?:^|\n)\.cell-remembered\s*\{([^}]*)\}/.exec(css);
+    const visibleMatch = /(?:^|\n)\.cell-visible\s*\{([^}]*)\}/.exec(css);
+    expect(rememberedMatch, '.cell-remembered rule not found').toBeTruthy();
+    expect(visibleMatch, '.cell-visible rule not found').toBeTruthy();
+
+    const rememberedOpacityMatch = /opacity\s*:\s*([\d.]+)/.exec(rememberedMatch![1]!);
+    expect(rememberedOpacityMatch, '.cell-remembered has no explicit opacity').toBeTruthy();
+    const rememberedOpacity = Number(rememberedOpacityMatch![1]);
+
+    // `.cell-visible`'s opacity is `calc(FLOOR + SPAN * var(--light, 1))`; its minimum (at
+    // `--light: 0`) is FLOOR.
+    const visibleCalcMatch = /opacity\s*:\s*calc\(\s*([\d.]+)\s*\+\s*[\d.]+\s*\*\s*var\(--light/.exec(visibleMatch![1]!);
+    expect(visibleCalcMatch, '.cell-visible opacity is not the expected calc(FLOOR + SPAN * var(--light)) shape').toBeTruthy();
+    const visibleFloor = Number(visibleCalcMatch![1]);
+
+    expect(visibleFloor).toBeGreaterThanOrEqual(rememberedOpacity);
+  });
+
+  it('drives the playfield grid track size from --cell-w/--cell-h (not a literal 1ch/1lh) so the zoom custom property actually resizes the rendered grid', () => {
+    const playfieldRuleMatch = /(?:^|\n)\.playfield\s*\{([^}]*)\}/.exec(css);
+    expect(playfieldRuleMatch, '.playfield rule not found').toBeTruthy();
+    expect(playfieldRuleMatch![1]).toMatch(/--cell-w\s*:\s*calc\(\s*1ch\s*\*\s*var\(--zoom/);
+    expect(playfieldRuleMatch![1]).toMatch(/--cell-h\s*:\s*calc\(\s*1lh\s*\*\s*var\(--zoom/);
+
+    const gridRuleMatch = /(?:^|\n)\.playfield-grid\s*\{([^}]*)\}/.exec(css);
+    expect(gridRuleMatch, '.playfield-grid rule not found').toBeTruthy();
+    expect(gridRuleMatch![1]).toMatch(/grid-auto-rows\s*:\s*var\(--cell-h\)/);
+
+    const probeRuleMatch = /(?:^|\n)\.cell-probe\s*\{([^}]*)\}/.exec(css);
+    expect(probeRuleMatch, '.cell-probe rule not found').toBeTruthy();
+    expect(probeRuleMatch![1]).toMatch(/width\s*:\s*var\(--cell-w\)/);
+    expect(probeRuleMatch![1]).toMatch(/height\s*:\s*var\(--cell-h\)/);
+  });
+
   it('centers .glow with a standalone translate property so keyframes can animate scale/opacity without overwriting it', () => {
     const glowRuleMatch = /(?:^|\n)\.glow\s*\{([^}]*)\}/.exec(css);
     expect(glowRuleMatch, '.glow rule not found in stylesheet').toBeTruthy();

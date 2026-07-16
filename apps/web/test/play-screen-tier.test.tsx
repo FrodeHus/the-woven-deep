@@ -108,3 +108,49 @@ describe('PlayScreen tier derivation', () => {
     expect(triptych).toHaveAttribute('data-tier', 'minimal');
   });
 });
+
+// Regression coverage for the bounded playfield zoom (see `zoomForFloor` in layout.ts): a fresh
+// run boots straight into the compact 34x16 town floor. This asserts the SAME plumbing the
+// dark-circle/zoom brief requires — `--zoom` is derived from a real probe measurement and applied
+// to `.playfield`, not computed in parallel — by stubbing the probe to report an unzoomed cell
+// size and asserting the pane picks a zoom step (rather than asserting a raw pixel viewport count,
+// which is layout.test.ts's job for the pure function itself).
+describe('PlayScreen playfield zoom', () => {
+  it('applies a --zoom > 1 to .playfield when a small floor (town) sits in a spacious pane', () => {
+    const { container } = render(<PlayScreen session={session()} pack={pack} />);
+    const triptych = container.querySelector('.triptych')!;
+    const mapPane = container.querySelector('.map-pane')!;
+    const probe = container.querySelector('.cell-probe')!;
+
+    stubRect(triptych, 1400);
+    stubRect(mapPane, 2000, 2000);
+    stubRect(probe, 8, 16);
+    act(() => {
+      triggerResize(triptych);
+      triggerResize(mapPane);
+    });
+
+    const playfield = container.querySelector('.playfield') as HTMLDivElement;
+    const zoom = Number(playfield.style.getPropertyValue('--zoom'));
+    expect(zoom).toBeGreaterThan(1);
+    expect(zoom).toBeLessThanOrEqual(2);
+  });
+
+  it('leaves --zoom at 1 when the floor already fills the pane at 1x (dungeon-sized floor case)', () => {
+    const { container } = render(<PlayScreen session={session()} pack={pack} />);
+    const triptych = container.querySelector('.triptych')!;
+    const mapPane = container.querySelector('.map-pane')!;
+    const probe = container.querySelector('.cell-probe')!;
+
+    stubRect(triptych, 1400);
+    stubRect(mapPane, 400, 300);
+    stubRect(probe, 8, 16);
+    act(() => {
+      triggerResize(triptych);
+      triggerResize(mapPane);
+    });
+
+    const playfield = container.querySelector('.playfield') as HTMLDivElement;
+    expect(Number(playfield.style.getPropertyValue('--zoom'))).toBe(1);
+  });
+});

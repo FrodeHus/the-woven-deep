@@ -37,11 +37,23 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
 
 /* Playfield: the grid renders gameplay truth, the effects layer is a purely decorative overlay
-   sharing its coordinate space via --cell-w/--cell-h set on the wrapper. */
-.playfield { position: relative; overflow: hidden; --cell-w: 1ch; --cell-h: 1lh; line-height: 1; }
+   sharing its coordinate space via --cell-w/--cell-h set on the wrapper. `--zoom` is the single
+   source of truth for the bounded playfield zoom (see `zoomForFloor` in layout.ts): it is set as
+   an inline custom property by PlayScreen and multiplies BOTH the grid's actual track size
+   (`.playfield-grid` below reads the same `--cell-w`/`--cell-h`, not a literal `1ch`/`1lh`) and
+   the measurement probe's own box (`.cell-probe` below), so there is exactly one number driving
+   the rendered grid, the effects overlay, and everything the JS measurement pipeline reads back —
+   never a value computed in parallel. */
+.playfield {
+  position: relative;
+  overflow: hidden;
+  --cell-w: calc(1ch * var(--zoom, 1));
+  --cell-h: calc(1lh * var(--zoom, 1));
+  line-height: 1;
+}
 .playfield-grid {
   display: grid;
-  grid-auto-rows: 1lh;
+  grid-auto-rows: var(--cell-h);
   line-height: 1;
   background: #0b0d15;
 }
@@ -50,12 +62,21 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 /* Measurement-only probe: lives inside .playfield so it shares its line-height: 1 context (an
    in-flow probe outside that context measures ~15-20% too tall), and is hidden so it never
    appears as a stray glyph. `visibility: hidden` (not `display: none`) keeps it laid out and
-   measurable via getBoundingClientRect. */
-.cell-probe { position: absolute; visibility: hidden; }
+   measurable via getBoundingClientRect. Its box is pinned to --cell-w/--cell-h (rather than
+   relying on the "0" glyph's own intrinsic size) so a probe measurement always reports exactly the
+   zoomed cell size the grid and effects overlay are actually rendered at. */
+.cell-probe { position: absolute; visibility: hidden; width: var(--cell-w); height: var(--cell-h); }
 .cell-empty { color: transparent; }
 .cell-unknown { color: transparent; background: #0b0d15; }
-.cell-remembered { color: #4b526b; filter: saturate(0.4); }
-.cell-visible { color: var(--fg, #aab3d1); opacity: calc(0.35 + 0.65 * var(--light, 1)); }
+/* A remembered cell must never render brighter than the darkest a visible cell can get — otherwise
+   the player's remembered floor plan would out-shine what their torch is actually illuminating
+   right now. Kept slightly below `.cell-visible`'s floor term (0.62) below. */
+.cell-remembered { color: #4b526b; filter: saturate(0.4); opacity: 0.55; }
+/* The floor term (0.62) is deliberately high: a visible-but-dim cell (low --light, e.g. at the
+   edge of a torch's radius) must still read as brighter than any remembered cell, never darker —
+   the earlier `0.35 +` floor let a dim-but-visible ring around the carried light render darker
+   than the remembered floor beyond it, an inverted "dark circle" around the player's own torch. */
+.cell-visible { color: var(--fg, #aab3d1); opacity: calc(0.62 + 0.38 * var(--light, 1)); }
 
 .effects-layer {
   position: absolute;

@@ -10,7 +10,9 @@ import { computeCamera, type CameraOrigin } from './camera.js';
 import { EffectsLayer } from './EffectsLayer.js';
 import { GridRenderer } from './GridRenderer.js';
 import { createKeyDispatcher } from './KeyRouter.js';
-import { layoutTier, viewportForPane, type LayoutTier } from './layout.js';
+import {
+  layoutTier, viewportForPane, zoomForFloor, type LayoutTier, type ZoomFactor,
+} from './layout.js';
 import { HeroPanel, LogPanel, StatusBar, ThreatPanel, VitalsStrip } from './panels.js';
 import { HouseScreen } from './screens/HouseScreen.js';
 import { ThreatPopover, type ThreatPopoverActor } from './ThreatPopover.js';
@@ -94,6 +96,13 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
   const [containerWidth, setContainerWidth] = useState(0);
   const [paneSize, setPaneSize] = useState({ width: 0, height: 0 });
   const [cellSize, setCellSize] = useState(FALLBACK_CELL_PX);
+  const [zoom, setZoom] = useState<ZoomFactor>(1);
+  // The zoom actually applied to the DOM right now (mirrors `zoom` state but read synchronously
+  // inside the measure callback, which closes over it once on mount) — needed to back the
+  // UN-zoomed (1x) cell size out of the probe's live (zoomed) measurement, since `zoomForFloor`
+  // must be fed the same base unit it is about to scale, never a value computed independently of
+  // what the probe actually reports.
+  const zoomRef = useRef<ZoomFactor>(1);
 
   // Tier derivation MUST watch a tier-independent measurement. The triptych container's width
   // does not depend on `data-tier` (only its children's grid columns do), so this observer never
@@ -115,8 +124,13 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
     };
   }, []);
 
-  // The map pane observer only ever feeds `viewportForPane` (cell math for the camera/grid), and
-  // never the tier — see above.
+  // The map pane observer feeds `viewportForPane` (cell math for the camera/grid) and the zoom
+  // decision — never the tier — see above. Re-runs (tearing down and re-attaching the observer,
+  // then measuring immediately) whenever the floor identity changes, not only on a real resize:
+  // `zoomForFloor`'s answer depends on the floor's own dimensions (a 34x16 town and a 160x50
+  // dungeon floor pick very different zooms in the same pane), and descending/ascending stairs
+  // does not itself fire a ResizeObserver notification, so without this dependency the zoom
+  // chosen for the PREVIOUS floor would silently keep applying to the new one.
   useEffect(() => {
     const node = mapPaneRef.current;
     if (!node) return undefined;
@@ -126,13 +140,39 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
       const cellRect = cellProbeRef.current?.getBoundingClientRect();
       if (cellRect && cellRect.width > 0 && cellRect.height > 0) {
         setCellSize({ width: cellRect.width, height: cellRect.height });
+        // The probe reports the CURRENTLY zoomed cell size; divide out the zoom already applied
+        // (rather than measuring some separate unzoomed element) to recover the 1x base size
+        // `zoomForFloor` needs, then feed the SAME panePx/floor this render is about to use for
+        // `viewportForPane` — one measurement, one derived base, no parallel math.
+        const currentZoom = zoomRef.current;
+        const baseCellPx = {
+          width: cellRect.width / currentZoom,
+          height: cellRect.height / currentZoom,
+        };
+        const nextZoom = zoomForFloor({ panePx: paneRect, cellPx: baseCellPx, floor: projection.floor });
+        if (nextZoom !== zoomRef.current) {
+          zoomRef.current = nextZoom;
+          setZoom(nextZoom);
+        }
       }
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, []);
+  }, [projection.floor.floorId]);
+
+  // Applying `--zoom` (below, on `.playfield`) changes the probe's OWN box size (it is pinned to
+  // `var(--cell-w)`/`var(--cell-h)`, see styles.css), but that never changes the map pane's own
+  // box size, so the ResizeObserver above — which only watches the pane — does not re-fire. This
+  // effect re-measures the probe specifically after a zoom change lands, so `cellSize` (read by
+  // `viewportForPane` and the popover pixel math) always reflects what is actually on screen.
+  useEffect(() => {
+    const cellRect = cellProbeRef.current?.getBoundingClientRect();
+    if (cellRect && cellRect.width > 0 && cellRect.height > 0) {
+      setCellSize({ width: cellRect.width, height: cellRect.height });
+    }
+  }, [zoom]);
 
   // The single global keydown listener: `createKeyDispatcher` translates keys to intents via the
   // pure `routeKey` and forwards them to the session, rate-limiting OS key auto-repeat so it
@@ -227,7 +267,7 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
             <VitalsStrip snapshot={snapshot} />
           </div>
         )}
-        <div className="playfield">
+        <div className="playfield" style={{ '--zoom': zoom } as CSSProperties}>
           <span ref={cellProbeRef} className="cell cell-probe" aria-hidden="true">0</span>
           <GridRenderer projection={projection} camera={camera} viewport={viewport} />
           <EffectsLayer

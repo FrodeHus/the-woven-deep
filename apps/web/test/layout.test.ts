@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { layoutTier, MIN_VIEWPORT, viewportForPane } from '../src/ui/layout.js';
+import {
+  layoutTier, MIN_VIEWPORT, viewportForPane, ZOOM_STEPS, zoomForFloor,
+} from '../src/ui/layout.js';
 
 describe('layoutTier', () => {
   it('is full at exactly the full threshold and above', () => {
@@ -80,5 +82,56 @@ describe('viewportForPane', () => {
     });
     expect(viewport.width).toBe(100);
     expect(viewport.height).toBe(8);
+  });
+});
+
+describe('zoomForFloor', () => {
+  const CELL_PX = { width: 8, height: 16 };
+
+  it('never exceeds the top step even when the floor is tiny relative to the pane', () => {
+    const zoom = zoomForFloor({
+      panePx: { width: 4000, height: 4000 },
+      cellPx: CELL_PX,
+      floor: { width: 4, height: 4 },
+    });
+    expect(zoom).toBe(ZOOM_STEPS.at(-1));
+    expect(zoom).toBe(2);
+  });
+
+  it('stays at 1x when the floor already fills or exceeds the pane at 1x (dungeon-sized floor)', () => {
+    const zoom = zoomForFloor({
+      panePx: { width: 800, height: 400 },
+      cellPx: CELL_PX,
+      floor: { width: 160, height: 50 },
+    });
+    expect(zoom).toBe(1);
+  });
+
+  it('picks the highest step that still fits both axes for a compact town-sized floor in a big pane', () => {
+    // A 34x16 floor at 8x16 cell px needs 272x256 raw px. In a pane comfortably bigger than that
+    // but not big enough for the full 2x step (544x512), the highest step that fits both axes wins.
+    const zoom = zoomForFloor({
+      panePx: { width: 400, height: 380 },
+      cellPx: CELL_PX,
+      floor: { width: 34, height: 16 },
+    });
+    // 1.25x -> 340x320 (fits); 1.5x -> 408x384 (width overflows) -> highest fitting step is 1.25.
+    expect(zoom).toBe(1.25);
+  });
+
+  it('never goes below 1x even when nothing above 1x fits', () => {
+    const zoom = zoomForFloor({
+      panePx: { width: 100, height: 100 },
+      cellPx: CELL_PX,
+      floor: { width: 34, height: 16 },
+    });
+    expect(zoom).toBe(1);
+  });
+
+  it('is monotonic: every step in ZOOM_STEPS is between 1 and 2 inclusive', () => {
+    for (const step of ZOOM_STEPS) {
+      expect(step).toBeGreaterThanOrEqual(1);
+      expect(step).toBeLessThanOrEqual(2);
+    }
   });
 });

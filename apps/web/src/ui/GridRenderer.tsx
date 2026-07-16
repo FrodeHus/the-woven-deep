@@ -85,7 +85,7 @@ export function GridRenderer({ projection, camera, viewport }: GridRendererProps
       aria-label="Dungeon floor"
       tabIndex={0}
       className="playfield-grid"
-      style={{ gridTemplateColumns: `repeat(${viewport.width}, 1ch)` }}
+      style={{ gridTemplateColumns: `repeat(${viewport.width}, var(--cell-w))` }}
     >
       {slots}
     </div>
