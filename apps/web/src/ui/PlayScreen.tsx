@@ -20,26 +20,6 @@ export interface PlayScreenProps {
 
 interface PositionedActor extends ThreatPopoverActor { readonly x: number; readonly y: number }
 
-/**
- * `GameplayProjection` does not expose the hero's sight radius — it lives only on the engine's
- * internal `HeroState`, never projected out (see `heroPerception`/`ActorState`). The honest
- * projected substitute is the Chebyshev distance from the hero to the farthest cell the projection
- * currently reports as `visible`: `computeFieldOfView` guarantees no visible cell exceeds the true
- * sight radius, and in open terrain (no blocking walls between the hero and the FOV boundary) it
- * equals it exactly. When nothing is visible yet (e.g. a first render before knowledge refresh) this
- * falls back to 0, which only affects the deadzone margin's size, never correctness.
- */
-function deriveSightRadius(projection: GameplayProjection): number {
-  const heroPosition = projection.hero as unknown as { x: number; y: number };
-  let max = 0;
-  for (const cell of projection.floor.cells) {
-    if (cell.knowledge !== 'visible') continue;
-    const distance = Math.max(Math.abs(cell.x - heroPosition.x), Math.abs(cell.y - heroPosition.y));
-    if (distance > max) max = distance;
-  }
-  return max;
-}
-
 function actorAtCell(projection: GameplayProjection, x: number, y: number): PositionedActor | undefined {
   return (projection.actors as unknown as readonly PositionedActor[])
     .find((actor) => actor.x === x && actor.y === y);
@@ -96,11 +76,11 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
   const viewport = viewportForPane({ panePx: paneSize, cellPx: cellSize, floor: projection.floor });
 
   const cameraRef = useRef<Readonly<{ floorId: string; origin: CameraOrigin }> | null>(null);
-  const heroPosition = projection.hero as unknown as { x: number; y: number };
+  const heroPosition = projection.hero as unknown as { x: number; y: number; sightRadius: number };
   const previousOrigin = cameraRef.current?.floorId === projection.floor.floorId ? cameraRef.current.origin : null;
   const camera = computeCamera({
     hero: heroPosition,
-    sightRadius: deriveSightRadius(projection),
+    sightRadius: heroPosition.sightRadius,
     floor: projection.floor,
     viewport,
     previous: previousOrigin,
@@ -179,6 +159,7 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
             row={hover.actor.y - camera.y}
             paneCols={viewport.width}
             paneRows={viewport.height}
+            cellPx={cellSize}
           />
         )}
       </div>

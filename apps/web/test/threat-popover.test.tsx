@@ -34,7 +34,7 @@ describe('ThreatPopover', () => {
           name: 'Cave rat', glyph: 'r', disposition: 'hostile',
           healthPresentation: { band: 'wounded' }, intentPresentation: 'intent.approach',
         }}
-        col={2} row={3} paneCols={20} paneRows={10}
+        col={2} row={3} paneCols={20} paneRows={10} cellPx={{ width: 8, height: 16 }}
       />,
     );
     const tooltip = screen.getByRole('tooltip');
@@ -45,16 +45,31 @@ describe('ThreatPopover', () => {
     expect(tooltip).not.toHaveAttribute('tabindex');
   });
 
+  it('positions itself in pixels derived from the measured cell size, not a CSS custom property', () => {
+    render(
+      <ThreatPopover
+        actor={{ name: 'Cave rat', disposition: 'hostile', healthPresentation: { band: 'healthy' } }}
+        col={2} row={3} paneCols={20} paneRows={10} cellPx={{ width: 10, height: 18 }}
+      />,
+    );
+    const style = screen.getByRole('tooltip').getAttribute('style')!;
+    expect(style).toContain('left: 20px');
+    expect(style).toContain('top: 54px');
+    expect(style).not.toContain('--x');
+    expect(style).not.toContain('--y');
+  });
+
   it('clamps its position so it never renders past the pane bounds', () => {
     render(
       <ThreatPopover
         actor={{ name: 'Cave rat', disposition: 'hostile', healthPresentation: { band: 'healthy' } }}
-        col={999} row={-5} paneCols={20} paneRows={10}
+        col={999} row={-5} paneCols={20} paneRows={10} cellPx={{ width: 8, height: 16 }}
       />,
     );
     const style = screen.getByRole('tooltip').getAttribute('style')!;
-    expect(style).toContain('--x: 19');
-    expect(style).toContain('--y: 0');
+    // clamped col 19 (paneCols - 1) * width 8, clamped row 0 * height 16.
+    expect(style).toContain('left: 152px');
+    expect(style).toContain('top: 0px');
   });
 });
 

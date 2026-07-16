@@ -118,9 +118,12 @@ export function ThreatPanel({ snapshot }: PanelProps): JSX.Element {
         </ul>
       )}
       {items.length > 0 && (
-        <ul className="ground-item-list">
-          {items.map((item) => <li key={item.itemId}>{item.name}</li>)}
-        </ul>
+        <>
+          <p className="ground-item-label">On the ground nearby</p>
+          <ul className="ground-item-list">
+            {items.map((item) => <li key={item.itemId}>{item.name}</li>)}
+          </ul>
+        </>
       )}
     </section>
   );

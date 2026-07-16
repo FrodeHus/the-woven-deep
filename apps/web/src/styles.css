@@ -171,8 +171,6 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 
 .threat-popover {
   position: absolute;
-  left: calc(var(--cell-w, 1ch) * var(--x, 0));
-  top: calc(var(--cell-h, 1lh) * var(--y, 0));
   transform: translate(-25%, -110%);
   z-index: 3;
   background: #121521;

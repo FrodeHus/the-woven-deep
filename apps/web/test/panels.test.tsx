@@ -75,6 +75,7 @@ describe('ThreatPanel', () => {
     expect(screen.getByText(/wounded/)).toBeInTheDocument();
     expect(screen.getByText(/intent\.approach/)).toBeInTheDocument();
     expect(screen.getByText('Iron sword')).toBeInTheDocument();
+    expect(screen.getByText('On the ground nearby')).toBeInTheDocument();
   });
 
   it('renders a "nothing nearby" placeholder on an empty-threat snapshot', () => {
@@ -169,9 +170,9 @@ describe('PlayScreen tier behavior', () => {
 
 describe('PlayScreen camera wiring', () => {
   // jsdom's zero-size measurements clamp the viewport to MIN_VIEWPORT (30x12, see layout.ts), so
-  // this floor is generously larger than that on both axes and has no visible cells (sightRadius
-  // derives to 0, giving a wide, easily-reasoned-about deadzone — see PlayScreen's
-  // `deriveSightRadius` and camera.ts's `scrolledAxis`).
+  // this floor is generously larger than that on both axes — see camera.ts's `scrolledAxis` for
+  // how the projected hero's `sightRadius` (now read straight off the projection) sizes the
+  // deadzone margin.
   function unknownCell(index: number, x: number, y: number): GameplayProjection['floor']['cells'][number] {
     return { index, x, y, knowledge: 'unknown', intensity: 0 };
   }

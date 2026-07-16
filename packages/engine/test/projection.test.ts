@@ -289,6 +289,12 @@ describe('gameplay projection', () => {
     expect(json).not.toContain('merchant-stock');
   });
 
+  it('projects the hero\'s sight radius', () => {
+    const base = createDemoRun();
+    const projected = projectGameplayState({ state: base, content: createDemoContentPack() });
+    expect(projected.hero.sightRadius).toBe(base.hero.sightRadius);
+  });
+
   it('exposes read-only metrics and a null conclusion for a living run', () => {
     const base = createDemoRun();
     const projected = projectGameplayState({ state: base, content: createDemoContentPack() });
