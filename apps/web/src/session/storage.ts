@@ -1,14 +1,23 @@
 /**
- * The narrow storage surface `GuestSession` depends on. Keeping it to two methods lets tests
- * swap in an in-memory fake without any DOM, and lets `GuestSession` stay framework- and
+ * The narrow storage surface `GuestSession` depends on. Keyed like the browser's own
+ * `sessionStorage` (rather than bound to one implicit key) so a single instance can hold both the
+ * run save and the command-sequence counter beside it. Keeping it to two methods lets tests swap
+ * in an in-memory fake without any DOM, and lets `GuestSession` stay framework- and
  * browser-API-free beyond this seam.
  */
 export interface SessionStorageLike {
-  get(): string | null;
-  set(value: string): void;
+  get(key: string): string | null;
+  set(key: string, value: string): void;
 }
 
 export const SAVE_KEY = 'woven-deep.guest-run';
+
+/**
+ * Persists `GuestSession`'s monotonic command-id counter, kept separate from the run save so it
+ * survives independently of whether a given dispatch actually changed (and re-persisted) the run
+ * itself — see `GuestSession.nextCommandId`.
+ */
+export const COMMAND_SEQUENCE_KEY = 'woven-deep.guest-command-seq';
 
 /** Why a persistence attempt (or the storage backend itself) could not be used. */
 export type StorageFailure = 'unavailable' | 'full';
@@ -35,15 +44,15 @@ export function classifyStorageFailure(error: unknown): StorageFailure {
  */
 export function browserSessionStorage(): SessionStorageLike {
   return {
-    get(): string | null {
+    get(key: string): string | null {
       try {
-        return window.sessionStorage.getItem(SAVE_KEY);
+        return window.sessionStorage.getItem(key);
       } catch {
         return null;
       }
     },
-    set(value: string): void {
-      window.sessionStorage.setItem(SAVE_KEY, value);
+    set(key: string, value: string): void {
+      window.sessionStorage.setItem(key, value);
     },
   };
 }

@@ -1,14 +1,21 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
   createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, descendToNextFloor, encodeActiveRun,
-  projectDecision, projectDomainEvents, projectGameplayState, resolveCommand, SaveLoadError,
+  projectDecision, projectDomainEvents, projectGameplayState, RECENT_COMMAND_LIMIT, resolveCommand,
+  SaveLoadError,
   type ActiveRun, type CommandResolution, type GameCommand, type GameplayProjection,
   type PublicDecision, type PublicEvent, type Uint32State,
 } from '@woven-deep/engine';
 import { buildIntent } from './command-builder.js';
 import { foldEventsIntoLog, LOG_CAPACITY, type LogLine } from './event-log.js';
 import type { PlayerIntent } from './intents.js';
-import { classifyStorageFailure, type SessionStorageLike, type StorageFailure } from './storage.js';
+import {
+  classifyStorageFailure, COMMAND_SEQUENCE_KEY, SAVE_KEY, type SessionStorageLike, type StorageFailure,
+} from './storage.js';
+
+/** Width of the zero-padded counter component of a command id — comfortably above what any
+ * single guest session could produce, so ids stay a fixed, easy-to-scan shape. */
+const COMMAND_SEQUENCE_WIDTH = 10;
 
 export type SessionNotice =
   | { readonly kind: 'restored' }
@@ -44,6 +51,7 @@ export class GuestSession {
   private readonly pack: CompiledContentPack;
   private readonly storage: SessionStorageLike;
   private run: ActiveRun;
+  private commandSequence: number;
   private log: readonly LogLine[] = [];
   private nextLogId = 0;
   private lastEvents: readonly PublicEvent[] = [];
@@ -59,26 +67,46 @@ export class GuestSession {
     const booted = this.boot(input.seed);
     this.run = booted.run;
     this.notice = booted.notice;
+    this.commandSequence = booted.commandSequence;
     this.snapshot = this.buildSnapshot();
   }
 
-  private boot(seed?: Uint32State): Readonly<{ run: ActiveRun; notice: SessionNotice }> {
-    const raw = this.storage.get();
+  private boot(seed?: Uint32State): Readonly<{ run: ActiveRun; notice: SessionNotice; commandSequence: number }> {
+    const raw = this.storage.get(SAVE_KEY);
     if (raw === null) {
-      return { run: this.freshRun(seed), notice: { kind: 'fresh' } };
+      return { run: this.freshRun(seed), notice: { kind: 'fresh' }, commandSequence: 0 };
     }
     try {
       const restored = decodeActiveRun(raw);
       if (restored.contentHash !== this.pack.hash) {
-        return { run: this.freshRun(seed), notice: { kind: 'save-discarded', reason: 'content_hash_mismatch' } };
+        return {
+          run: this.freshRun(seed), notice: { kind: 'save-discarded', reason: 'content_hash_mismatch' },
+          commandSequence: 0,
+        };
       }
-      return { run: restored, notice: { kind: 'restored' } };
+      return { run: restored, notice: { kind: 'restored' }, commandSequence: this.readCommandSequence(restored) };
     } catch (error) {
       if (error instanceof SaveLoadError) {
-        return { run: this.freshRun(seed), notice: { kind: 'save-discarded', reason: error.kind } };
+        return { run: this.freshRun(seed), notice: { kind: 'save-discarded', reason: error.kind }, commandSequence: 0 };
       }
       throw error;
     }
+  }
+
+  /**
+   * Reads the persisted command-sequence counter beside a restored save. If it's missing or
+   * corrupt — an older session saved before this counter existed, or storage tampering — it must
+   * be reseeded ABOVE anything the engine's pruned `recentCommands` could still remember, or a
+   * freshly-derived id could collide with a retained entry and be rejected as
+   * `command_id_conflict`. `revision + RECENT_COMMAND_LIMIT + 1` is a safe floor: the engine never
+   * retains more than `RECENT_COMMAND_LIMIT` recorded commands, and every one of them was recorded
+   * at or before the restored revision.
+   */
+  private readCommandSequence(restored: ActiveRun): number {
+    const raw = this.storage.get(COMMAND_SEQUENCE_KEY);
+    const parsed = raw === null ? Number.NaN : Number(raw);
+    if (Number.isSafeInteger(parsed) && parsed >= 0) return parsed;
+    return restored.revision + RECENT_COMMAND_LIMIT + 1;
   }
 
   private freshRun(seed?: Uint32State): ActiveRun {
@@ -86,16 +114,23 @@ export class GuestSession {
   }
 
   private nextCommandId(): string {
-    // Both components come from persisted run state, so a restored save re-seeds the exact
-    // counter. `revision + 1` alone is NOT enough: the engine records `invalid` results into
-    // `recentCommands` without advancing `revision` (reducer.ts's `recordInvalid`), so a plain
-    // revision-based id would collide with — and be rejected as `command_id_conflict` against —
-    // every subsequent distinct command until the run advances again. Appending
-    // `recentCommands.length` (which DOES grow on invalid results) keeps every id unique. A
-    // retained `recentCommands` entry can only share both components with a freshly built id if
-    // it is the exact same command being replayed (the reducer's own idempotent-replay branch),
-    // never a genuine conflict — see resolveCommand's `sameCommand` check in reducer.ts.
-    return `command.guest-${this.run.revision + 1}-${this.run.recentCommands.length}`;
+    // A session-owned monotonic counter, immune to the engine's pruning of `recentCommands`
+    // (reducer.ts caps it at `RECENT_COMMAND_LIMIT`). Deriving ids from `run.revision` and/or
+    // `recentCommands.length` (the previous approach) breaks once that cap is reached: `length`
+    // goes constant, and invalid results — which don't advance `revision` — then produce IDENTICAL
+    // ids across consecutive invalid dispatches, so the next distinct command collides with one of
+    // them and is rejected forever as `command_id_conflict`. This counter never repeats a value
+    // for the life of the (persisted) session, applied/invalid/rejected alike.
+    const id = `command.guest-${String(this.commandSequence).padStart(COMMAND_SEQUENCE_WIDTH, '0')}`;
+    this.commandSequence += 1;
+    try {
+      this.storage.set(COMMAND_SEQUENCE_KEY, String(this.commandSequence));
+    } catch {
+      // Best-effort: the in-memory counter already advanced correctly for the rest of this
+      // session. `persist()` below is what surfaces storage-failure notices to the player; doing
+      // it again here for the same underlying failure would be redundant.
+    }
+    return id;
   }
 
   private currentProjection(): GameplayProjection {
@@ -194,7 +229,7 @@ export class GuestSession {
     // misreported as a storage failure. Only the storage write itself is classified below.
     const encoded = encodeActiveRun(this.run);
     try {
-      this.storage.set(encoded);
+      this.storage.set(SAVE_KEY, encoded);
     } catch (error) {
       this.notice = { kind: 'storage', failure: classifyStorageFailure(error) };
     }
