@@ -1,10 +1,14 @@
 import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
-import { DEFAULT_GUEST_HERO, createNewRun, projectGameplayState, type GameplayProjection } from '@woven-deep/engine';
+import {
+  DEFAULT_GUEST_HERO, createNewRun, emptyEquipment, encodeActiveRun, projectGameplayState,
+  type ActiveRun, type ActorState, type GameplayProjection,
+} from '@woven-deep/engine';
 import { GuestSession } from '../src/session/guest-session.js';
 import type { SessionStorageLike } from '../src/session/storage.js';
 import type { SessionSnapshot } from '../src/session/guest-session.js';
@@ -220,5 +224,83 @@ describe('PlayScreen camera wiring', () => {
     // Centered afresh on the new hero position (5,5) inside a 100x60 floor with a >=30x12
     // viewport clamps to the top-left floor corner, same as computeCamera's own corner-clamp test.
     expect(topLeftDataCell()).toBe('0,0');
+  });
+});
+
+describe('PlayScreen keyboard routing', () => {
+  function fakeStorage(): SessionStorageLike {
+    let value: string | null = null;
+    return { get: () => value, set: (v: string) => { value = v; } };
+  }
+
+  function decisionSession(): GuestSession {
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const heroActor = run.actors.find((actor) => actor.playerControlled)!;
+    // Same trick as guest-session.test.ts: douse the torch and place a neutral actor next door,
+    // in the dark, so the hero's own projection never sees it — a plain `move` therefore resolves
+    // against the *actual* (neutral) occupant server-side, which raises `decision_required`.
+    const doused = run.items.map((item) => item.location.type === 'equipped' && item.location.slot === 'off-hand'
+      ? { ...item, enabled: false } : item);
+    const hiddenNeighbor: ActorState = {
+      ...heroActor,
+      actorId: 'npc.hidden-bystander',
+      contentId: 'monster.cave-rat',
+      playerControlled: false,
+      x: heroActor.x + 1,
+      y: heroActor.y,
+      disposition: 'neutral',
+      energy: 0,
+      equipment: emptyEquipment(),
+      behaviorId: null,
+    };
+    const withHiddenNeighbor: ActiveRun = {
+      ...run,
+      items: doused,
+      actors: [...run.actors, hiddenNeighbor].sort((left, right) => (left.actorId < right.actorId ? -1 : 1)),
+    };
+    const storage = fakeStorage();
+    storage.set(encodeActiveRun(withHiddenNeighbor));
+    return new GuestSession({ pack, storage });
+  }
+
+  it('opens the backpack on "i", moves the game keys through a focus trap, and closes on Escape', async () => {
+    const user = userEvent.setup();
+    const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
+    render(<PlayScreen session={session} pack={pack} tier="full" />);
+
+    expect(screen.queryByRole('dialog', { name: /backpack/i })).not.toBeInTheDocument();
+    await user.keyboard('i');
+    expect(await screen.findByRole('dialog', { name: /backpack/i })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: /backpack/i })).not.toBeInTheDocument();
+  });
+
+  it('answers a pending confirm-aggression decision with y/n via the decision prompt', async () => {
+    const user = userEvent.setup();
+    const session = decisionSession();
+    render(<PlayScreen session={session} pack={pack} tier="full" />);
+
+    // A plain "move" into the hidden neighbor's cell (east) raises the decision.
+    await user.keyboard('l');
+    expect(await screen.findByRole('dialog', { name: /confirm attack/i })).toBeInTheDocument();
+    expect(session.getSnapshot().pendingDecision).not.toBeNull();
+
+    await user.keyboard('y');
+    await waitFor(() => expect(session.getSnapshot().pendingDecision).toBeNull());
+    expect(screen.queryByRole('dialog', { name: /confirm attack/i })).not.toBeInTheDocument();
+  });
+
+  it('declines a pending decision on "n"', async () => {
+    const user = userEvent.setup();
+    const session = decisionSession();
+    render(<PlayScreen session={session} pack={pack} tier="full" />);
+
+    await user.keyboard('l');
+    await screen.findByRole('dialog', { name: /confirm attack/i });
+
+    await user.keyboard('n');
+    await waitFor(() => expect(session.getSnapshot().pendingDecision).toBeNull());
+    expect(session.getSnapshot().log.at(-1)?.tone).toBe('system');
   });
 });
