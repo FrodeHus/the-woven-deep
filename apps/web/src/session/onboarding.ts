@@ -147,18 +147,25 @@ function isOnboardingState(value: unknown): value is OnboardingState {
  * Loads the mastery ledger from `storage`, tolerating a missing or corrupted blob: a fresh
  * (empty) state either way, mirroring `loadSettings`/`loadSightings`'s own forgiving contract for
  * every other piece of cross-reload state.
+ *
+ * Returns `{ state, corrupted }` -- mirroring `loadSettings`/`loadSightings`'s own wrapped shape --
+ * rather than the brief's literal bare-`OnboardingState` signature: the plan's error-handling
+ * section promises a standard dismissible notice for every one of these three corrupt-blob resets,
+ * and a caller can't surface that notice without first being told a reset actually happened. `raw
+ * === null` (no stored value at all -- a fresh device/session) is deliberately NOT `corrupted`,
+ * exactly like the other two loaders: only a JSON-parse or shape failure counts.
  */
-export function loadOnboarding(storage: SessionStorageLike): OnboardingState {
+export function loadOnboarding(storage: SessionStorageLike): Readonly<{ state: OnboardingState; corrupted: boolean }> {
   const raw = storage.get(ONBOARDING_KEY);
-  if (raw === null) return EMPTY_ONBOARDING;
+  if (raw === null) return { state: EMPTY_ONBOARDING, corrupted: false };
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return EMPTY_ONBOARDING;
+    return { state: EMPTY_ONBOARDING, corrupted: true };
   }
-  if (!isOnboardingState(parsed)) return EMPTY_ONBOARDING;
-  return parsed;
+  if (!isOnboardingState(parsed)) return { state: EMPTY_ONBOARDING, corrupted: true };
+  return { state: parsed, corrupted: false };
 }
 
 /** Persists the mastery ledger. Throws exactly like `SessionStorageLike.set` itself -- callers

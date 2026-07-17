@@ -99,11 +99,17 @@ function isStorageNotice(notice: SessionNotice): notice is StorageNotice {
   return notice.kind === 'storage';
 }
 
-/** Wording for the dismissible fresh/restored/save-discarded banner. Storage notices never reach
- * this — they get their own persistent, non-dismissible warning (see `storageWarningMessage`). */
+/** Wording for the dismissible fresh/restored/save-discarded/data-reset banner. Storage notices
+ * never reach this — they get their own persistent, non-dismissible warning (see
+ * `storageWarningMessage`). */
 function noticeMessage(notice: DismissibleNotice): string {
   if (notice.kind === 'fresh') return 'A new run has begun.';
   if (notice.kind === 'restored') return 'Welcome back — your run was restored.';
+  if (notice.kind === 'data-reset') {
+    return notice.source === 'sightings'
+      ? 'Your discovery log was unreadable and has been reset.'
+      : 'Your guidance progress was unreadable and has been reset.';
+  }
   return `Your previous save could not be loaded (${notice.reason}) — a new run has begun.`;
 }
 
@@ -264,9 +270,16 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
   // Settings are read once at boot; from here on `setSettings` is the single source of truth --
   // every mutation (font scale, motion, a rebind, a reset) flows through `handleSettingsChange`
   // below, which persists via `saveSettings` before applying the change in-memory.
-  const [settings, setSettings] = useState(() => loadSettings(localStorageInstance).settings);
+  const [settingsLoad] = useState(() => loadSettings(localStorageInstance));
+  const [settings, setSettings] = useState(() => settingsLoad.settings);
   const keymap = useMemo(() => resolveKeymap(settings.bindings), [settings.bindings]);
   const [settingsWriteWarning, setSettingsWriteWarning] = useState<string>();
+  // Task 8 review Finding 3 (milestone-wide error-handling debt): `loadSettings` already detects a
+  // corrupt blob and resets to `DEFAULT_SETTINGS`, but that reset used to happen silently -- the
+  // plan's error-handling section promises the standard dismissible notice for exactly this case.
+  // Read once, at the same boot moment as `settingsLoad` above; dismissing it never re-shows it
+  // (a corrupt blob is a one-time boot fact, not an ongoing condition).
+  const [settingsCorruptedDismissed, setSettingsCorruptedDismissed] = useState(false);
 
   /**
    * The settings overlay's `onChange`. Persists first (`saveSettings` re-validates
@@ -443,9 +456,16 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
    * survives regardless of any of these: only the affected write (or, on boot, the Hall itself)
    * was affected. */
   function withHallNotice(children: JSX.Element): JSX.Element {
-    if (!hallNotice && !finalizeWarning && !settingsWriteWarning) return children;
+    const showSettingsCorrupted = settingsLoad.corrupted && !settingsCorruptedDismissed;
+    if (!hallNotice && !finalizeWarning && !settingsWriteWarning && !showSettingsCorrupted) return children;
     return (
       <>
+        {showSettingsCorrupted && (
+          <div role="status" aria-label="Settings notice" className="session-banner" data-kind="settings-corrupted">
+            <p>Stored settings were unreadable and have been reset.</p>
+            <button type="button" onClick={() => setSettingsCorruptedDismissed(true)}>Dismiss</button>
+          </div>
+        )}
         {hallNotice && (
           <div role="alert" aria-label="Hall notice" className="storage-warning-banner" data-kind="hall-corrupt">
             <p>Your Hall of Records could not be read and has been reset. ({hallNotice})</p>

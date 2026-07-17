@@ -25,7 +25,14 @@ export type SessionNotice =
   | { readonly kind: 'restored' }
   | { readonly kind: 'fresh' }
   | { readonly kind: 'save-discarded'; readonly reason: string }
-  | { readonly kind: 'storage'; readonly failure: StorageFailure };
+  | { readonly kind: 'storage'; readonly failure: StorageFailure }
+  /** A corrupted cross-reload blob (the sighting cache or the onboarding mastery ledger) was
+   * silently reset to its fresh/empty state -- per the plan's error-handling section, this must
+   * still surface the standard dismissible notice rather than resetting invisibly. Dismissible
+   * (not a `storage` failure -- the write itself succeeded; it's the previously-stored READ that
+   * was unreadable), so it flows through the exact same `role="status"` session-banner every other
+   * dismissible notice here uses. */
+  | { readonly kind: 'data-reset'; readonly source: 'sightings' | 'onboarding' };
 
 export interface SessionSnapshot {
   readonly projection: GameplayProjection;
@@ -120,6 +127,13 @@ export class GuestSession {
   private onboarding: OnboardingState;
   private snapshot: SessionSnapshot;
   private readonly listeners = new Set<() => void>();
+  /** Guards the `data-reset` notice (see `SessionNotice`) so a corrupted sighting-cache or
+   * onboarding-ledger blob is announced exactly once per session, never re-fired on every
+   * subsequent `publish()` -- `syncSightings` re-reads storage on every publish, and once its own
+   * best-effort write below succeeds the blob is no longer corrupt on the next read anyway, but
+   * these flags make that guarantee explicit rather than incidental. */
+  private sightingsCorruptionNotified = false;
+  private onboardingCorruptionNotified = false;
 
   constructor(
     input: Readonly<{
@@ -138,12 +152,18 @@ export class GuestSession {
     this.pack = input.pack;
     this.storage = input.storage;
     this.localStorage = input.localStorage ?? inMemoryLocalStorage();
-    this.onboarding = loadOnboarding(this.localStorage);
+    const onboardingLoad = loadOnboarding(this.localStorage);
+    this.onboarding = onboardingLoad.state;
     this.hero = input.hero ?? DEFAULT_GUEST_HERO;
     const booted = this.boot(input.seed, input.startFresh ?? false);
     this.run = booted.run;
     this.notice = booted.notice;
     this.commandSequence = booted.commandSequence;
+    // Surfaced AFTER the boot notice is assigned above, so a corrupted onboarding blob's
+    // dismissible reset notice wins over the (less urgent) plain fresh/restored boot notice --
+    // both are one-time facts about this construction, but losing device-persistent mastery
+    // progress is the more actionable one to tell the guest about.
+    if (onboardingLoad.corrupted) this.markOnboardingCorrupted();
     // "Accumulates ... on boot restore" -- a restored (or freshly-created) run's initial
     // projection may already show visible actors/identified items (e.g. a save restored mid-fight),
     // so the cache must sync once here too, not only after a subsequent dispatch.
@@ -361,6 +381,7 @@ export class GuestSession {
    */
   private syncSightings(): void {
     const loaded = loadSightings(this.storage);
+    if (loaded.corrupted) this.markSightingsCorrupted();
     this.sightings = accumulateSightings(loaded.sightings, this.currentProjection());
     try {
       saveSightings(this.storage, this.sightings);
@@ -369,6 +390,24 @@ export class GuestSession {
         this.notice = { kind: 'storage', failure: classifyStorageFailure(error) };
       }
     }
+  }
+
+  /** Surfaces the standard dismissible `data-reset` notice for a corrupted sighting-cache blob --
+   * exactly once per session (see `sightingsCorruptionNotified`'s doc comment), and never over an
+   * in-progress `storage` (write) failure, which is the more urgent, ongoing condition. */
+  private markSightingsCorrupted(): void {
+    if (this.sightingsCorruptionNotified) return;
+    this.sightingsCorruptionNotified = true;
+    if (this.notice !== null && this.notice.kind === 'storage') return;
+    this.notice = { kind: 'data-reset', source: 'sightings' };
+  }
+
+  /** Same posture as `markSightingsCorrupted` above, for the onboarding mastery ledger. */
+  private markOnboardingCorrupted(): void {
+    if (this.onboardingCorruptionNotified) return;
+    this.onboardingCorruptionNotified = true;
+    if (this.notice !== null && this.notice.kind === 'storage') return;
+    this.notice = { kind: 'data-reset', source: 'onboarding' };
   }
 
   /** Folds `intentType` into the onboarding mastery ledger and best-effort persists it -- does NOT
