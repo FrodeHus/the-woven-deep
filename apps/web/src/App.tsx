@@ -302,8 +302,9 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
   function withRootStyling(children: JSX.Element): JSX.Element {
     const motionClass = settings.reducedMotion === 'on' ? ' motion-reduced'
       : settings.reducedMotion === 'off' ? ' motion-full' : '';
+    const themeClass = settings.theme === 'high-contrast' ? ' theme-high-contrast' : '';
     return (
-      <div className={`guest-app-root${motionClass}`} style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}>
+      <div className={`guest-app-root${motionClass}${themeClass}`} style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}>
         {children}
       </div>
     );

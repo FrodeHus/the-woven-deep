@@ -132,6 +132,30 @@ export function SettingsOverlay({ settings, onChange, onClearGuestSession, keyma
         </p>
       </section>
 
+      <section aria-labelledby="settings-display-heading">
+        <h3 id="settings-display-heading">Display</h3>
+        <div role="radiogroup" aria-label="Theme">
+          <label>
+            <input
+              type="radio"
+              name="settings-theme"
+              checked={settings.theme === 'tapestry'}
+              onChange={() => onChange({ ...settings, theme: 'tapestry' })}
+            />
+            Tapestry (dark fantasy)
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="settings-theme"
+              checked={settings.theme === 'high-contrast'}
+              onChange={() => onChange({ ...settings, theme: 'high-contrast' })}
+            />
+            High contrast
+          </label>
+        </div>
+      </section>
+
       <section aria-labelledby="settings-motion-heading">
         <h3 id="settings-motion-heading">Reduce motion</h3>
         <div role="radiogroup" aria-label="Reduce motion">

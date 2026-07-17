@@ -180,6 +180,59 @@ describe('visibleForeground floor + monotonicity (all material bases)', () => {
   });
 });
 
+/**
+ * The bounded material floor (Task 2's browser-pass fix): a wall/floor/door/stair cell right
+ * beside a carried torch must never wash all the way to the tint's own color, losing its material
+ * hue entirely -- a plain linear blend reaches exact tint identity at `intensity` 255 for ANY base,
+ * which read badly in-browser for the mineral-blue wall specifically (it converged on the same
+ * warm torch orange as the floor beside it). `MATERIAL_MAX_BLEND_T` caps the blend fraction at 85%
+ * for an explicit material base, so >= 15% of the base's own color always survives -- but the
+ * PLAIN (no-material) floor path is exempt, preserving the pre-existing exact-identity-at-255
+ * contract asserted elsewhere in this file for an un-parameterized call.
+ */
+describe('visibleForeground material floor (bounded blend, Task 2)', () => {
+  it('does NOT reach the tint verbatim at intensity 255 for a material base whose own color differs from the tint', () => {
+    for (const [materialName, base] of Object.entries(MATERIAL_BASE_RGB)) {
+      const output = parseRgb(visibleForeground(TORCH_TINT, 255, base));
+      expect(output, materialName).not.toEqual(TORCH_TINT);
+    }
+  });
+
+  it('retains at least 15% of the material base color at intensity 255 (matches the t=0.85-capped blend, pre-floor-lift)', () => {
+    for (const [materialName, base] of Object.entries(MATERIAL_BASE_RGB)) {
+      const expected = base.map((channel, index) => Math.round(channel + 0.85 * (TORCH_TINT[index]! - channel)));
+      const output = parseRgb(visibleForeground(TORCH_TINT, 255, base));
+      // liftToFloor may adjust channels further upward if the capped blend still falls under the
+      // remembered floor -- allow for that, but the un-lifted target is the capped blend itself.
+      for (let i = 0; i < 3; i += 1) {
+        expect(output[i]!, `${materialName} channel ${i}`).toBeGreaterThanOrEqual(expected[i]! - 1);
+      }
+    }
+  });
+
+  it('still holds the luminance floor at intensity 255 for every material base, even with the blend capped', () => {
+    for (const [materialName, base] of Object.entries(MATERIAL_BASE_RGB)) {
+      const output = parseRgb(visibleForeground(TORCH_TINT, 255, base));
+      expect(relativeLuminance(output), materialName).toBeGreaterThanOrEqual(FLOOR_LUMINANCE - 1e-9);
+    }
+  });
+
+  it('is unaffected for the plain (no-material) default base -- exact tint identity at 255 still holds', () => {
+    expect(parseRgb(visibleForeground(TORCH_TINT, 255))).toEqual(TORCH_TINT);
+    expect(parseRgb(visibleForeground(TORCH_TINT, 255, FLOOR_RGB))).toEqual(TORCH_TINT);
+  });
+
+  it('remains monotone non-decreasing in intensity for every material base up to and including the cap', () => {
+    const QUANTIZATION_NOISE = 0.004;
+    for (const base of Object.values(MATERIAL_BASE_RGB)) {
+      const luminances = INTENSITY_GRID.map((intensity) => relativeLuminance(parseRgb(visibleForeground(TORCH_TINT, intensity, base))));
+      for (let i = 1; i < luminances.length; i += 1) {
+        expect(luminances[i]).toBeGreaterThanOrEqual(luminances[i - 1]! - QUANTIZATION_NOISE);
+      }
+    }
+  });
+});
+
 function parseRgb(css: string): readonly [number, number, number] {
   const match = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(css);
   if (!match) throw new Error(`not an rgb(...) string: ${css}`);

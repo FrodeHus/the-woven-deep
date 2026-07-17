@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { relativeLuminance, visibleForeground } from '../src/ui/cell-color.js';
+import { contrastRatio, relativeLuminance, visibleForeground } from '../src/ui/cell-color.js';
 
 // jsdom (our test environment) never evaluates @media queries, so we cannot assert the
 // reduced-motion behaviour by rendering and reading computed styles. Instead this is a static,
@@ -317,6 +317,85 @@ describe('named palette stylesheet contract', () => {
     expect(decls, 'the town tint must be pre-mixed into the grid\'s own background via color-mix').toMatch(
       /background\s*:\s*color-mix\(in srgb,\s*var\(--gold\)\s*4%,\s*var\(--void-bg\)\)/,
     );
+  });
+});
+
+/** Reads a `--name: #hex;` declaration's hex value out of an already-extracted block's inner text
+ * (e.g. the `.theme-high-contrast { ... }` block body). */
+function blockVariable(block: string, name: string): string {
+  const decl = new RegExp(`--${name}\\s*:\\s*(#[0-9a-fA-F]{3,6})\\s*;`).exec(block);
+  expect(decl, `--${name} not declared in this block`).toBeTruthy();
+  return decl![1]!;
+}
+
+const AA_NORMAL_TEXT = 4.5;
+const AA_LARGE_OR_GLYPH = 3;
+
+describe('high-contrast theme stylesheet contract', () => {
+  const ALL_PALETTE_COLORS = [
+    'ink', 'ground', 'gold', 'gold-bright', 'line', 'muted', 'alert', 'panel',
+    'remembered', 'void-bg', 'portrait-default',
+    'mat-wall', 'mat-floor', 'mat-door', 'mat-stair', 'mat-void',
+  ] as const;
+
+  function highContrastBlock(): string {
+    const blocks = extractBlocksAfterMarker(css, '.theme-high-contrast {');
+    expect(blocks.length, 'expected a top-level .theme-high-contrast { ... } block').toBeGreaterThan(0);
+    return blocks[0]!;
+  }
+
+  it('re-declares EVERY named palette variable under .theme-high-contrast', () => {
+    const block = highContrastBlock();
+    for (const name of ALL_PALETTE_COLORS) {
+      expect(() => blockVariable(block, name), `--${name}`).not.toThrow();
+    }
+  });
+
+  it('declares ONLY palette-variable custom properties in .theme-high-contrast -- no per-component overrides', () => {
+    // The brief requires the theme block to be a pure palette re-declaration: every declaration
+    // inside it must be one of the named `--*` custom properties, never a component selector's own
+    // property (e.g. `.hero-panel { border-color: ... }` layered on top of the palette swap).
+    const block = highContrastBlock();
+    const declarationLines = block
+      .replace(/^\s*\{/, '')
+      .replace(/\}\s*$/, '')
+      .split(';')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    for (const line of declarationLines) {
+      expect(line, `unexpected non-palette declaration in .theme-high-contrast: "${line}"`).toMatch(/^--(?:mat-)?[a-z-]+\s*:/);
+    }
+  });
+
+  function hc(name: string): readonly [number, number, number] {
+    return hexToRgb(blockVariable(highContrastBlock(), name)) as unknown as readonly [number, number, number];
+  }
+
+  it('text on ground clears AA normal-text contrast (4.5:1)', () => {
+    expect(contrastRatio(hc('ink'), hc('ground'))).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+  });
+
+  it('gold accents on panel clear AA large/glyph contrast (3:1)', () => {
+    expect(contrastRatio(hc('gold'), hc('panel'))).toBeGreaterThanOrEqual(AA_LARGE_OR_GLYPH);
+    expect(contrastRatio(hc('gold-bright'), hc('panel'))).toBeGreaterThanOrEqual(AA_LARGE_OR_GLYPH);
+  });
+
+  it('every material color clears AA glyph contrast (3:1) against the void background', () => {
+    for (const material of ['mat-wall', 'mat-floor', 'mat-door', 'mat-stair'] as const) {
+      expect(contrastRatio(hc(material), hc('void-bg')), material).toBeGreaterThanOrEqual(AA_LARGE_OR_GLYPH);
+      expect(contrastRatio(hc(material), hc('mat-void')), material).toBeGreaterThanOrEqual(AA_LARGE_OR_GLYPH);
+    }
+  });
+
+  it('every log tone clears AA normal-text contrast (4.5:1) against ground (the log panel background)', () => {
+    expect(contrastRatio(hc('alert'), hc('ground'))).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+    expect(contrastRatio(hc('gold'), hc('ground'))).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+    expect(contrastRatio(hc('muted'), hc('ground'))).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+  });
+
+  it('remembered cells clear AA glyph contrast (3:1) against ground, and stay visibly dimmer than the ink used for visible text', () => {
+    expect(contrastRatio(hc('remembered'), hc('ground'))).toBeGreaterThanOrEqual(AA_LARGE_OR_GLYPH);
+    expect(relativeLuminance(hc('remembered'))).toBeLessThan(relativeLuminance(hc('ink')));
   });
 });
 

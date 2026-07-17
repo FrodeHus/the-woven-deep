@@ -21,6 +21,11 @@ export type KeyChord = Readonly<{ key: string; shift: boolean }>;
 export interface Settings {
   readonly fontScale: 1 | 1.15 | 1.3 | 1.5;
   readonly reducedMotion: 'system' | 'on' | 'off';
+  /** Which named palette (`styles.css`'s `:root` vs. `.theme-high-contrast`) renders the world.
+   * `'tapestry'` is the default dark-fantasy palette (the browser-tuned one); `'high-contrast'`
+   * re-declares every palette variable for WCAG AA legibility, applied by `App` as the root class
+   * `theme-high-contrast` -- see `styles.css`'s `.theme-high-contrast` block. */
+  readonly theme: 'tapestry' | 'high-contrast';
   /** Overrides only -- any `ActionId` absent here uses its `DEFAULT_BINDINGS` chord. */
   readonly bindings: Readonly<Partial<Record<ActionId, KeyChord>>>;
 }
@@ -30,6 +35,7 @@ export const SETTINGS_KEY = 'woven-deep.settings.v1';
 export const DEFAULT_SETTINGS: Settings = {
   fontScale: 1,
   reducedMotion: 'system',
+  theme: 'tapestry',
   bindings: {},
 };
 
@@ -153,6 +159,7 @@ export function chordReserved(chordCandidate: KeyChord): boolean {
 
 const FONT_SCALES: readonly Settings['fontScale'][] = [1, 1.15, 1.3, 1.5];
 const REDUCED_MOTION_VALUES: readonly Settings['reducedMotion'][] = ['system', 'on', 'off'];
+const THEME_VALUES: readonly Settings['theme'][] = ['tapestry', 'high-contrast'];
 
 function isValidChord(value: unknown): value is KeyChord {
   return typeof value === 'object' && value !== null
@@ -203,6 +210,9 @@ export function loadSettings(
   const reducedMotion = REDUCED_MOTION_VALUES.includes(record.reducedMotion as Settings['reducedMotion'])
     ? (record.reducedMotion as Settings['reducedMotion'])
     : DEFAULT_SETTINGS.reducedMotion;
+  const theme = THEME_VALUES.includes(record.theme as Settings['theme'])
+    ? (record.theme as Settings['theme'])
+    : DEFAULT_SETTINGS.theme;
 
   const rawBindings = typeof record.bindings === 'object' && record.bindings !== null
     ? record.bindings as Record<string, unknown>
@@ -228,7 +238,7 @@ export function loadSettings(
     accepted[actionId] = candidate;
   }
 
-  const settings: Settings = { fontScale, reducedMotion, bindings: accepted };
+  const settings: Settings = { fontScale, reducedMotion, theme, bindings: accepted };
   return { settings, corrupted: false, droppedOverrides };
 }
 

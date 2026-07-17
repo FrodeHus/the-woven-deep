@@ -115,10 +115,33 @@ describe('loadSettings / saveSettings round-trip', () => {
     const settings: Settings = {
       fontScale: 1.3,
       reducedMotion: 'on',
+      theme: 'high-contrast',
       bindings: { wait: { key: 'z', shift: false } },
     };
     expect(saveSettings(storage, settings)).toEqual({ ok: true });
     expect(loadSettings(storage)).toEqual({ settings, corrupted: false, droppedOverrides: [] });
+  });
+
+  it('defaults theme to "tapestry" when nothing is stored', () => {
+    expect(loadSettings(fakeStorage()).settings.theme).toBe('tapestry');
+  });
+
+  it('falls back to "tapestry" for an invalid stored theme value, without marking corrupted', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({ fontScale: 1, reducedMotion: 'system', theme: 'nonsense', bindings: {} }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.settings.theme).toBe('tapestry');
+  });
+
+  it('forward-tolerates a stored blob with no theme field at all (pre-Task-2 blob), defaulting to "tapestry"', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({ fontScale: 1, reducedMotion: 'system', bindings: {} }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.settings.theme).toBe('tapestry');
   });
 
   it('saveSettings reports ok:false with the classified reason (without throwing) when the storage write fails', () => {
@@ -185,6 +208,7 @@ describe('loadSettings / saveSettings round-trip', () => {
     expect(result.settings).toEqual({
       fontScale: 1.15,
       reducedMotion: 'off',
+      theme: 'tapestry',
       bindings: { wait: { key: 'z', shift: false } },
     });
   });

@@ -37,6 +37,21 @@ export function relativeLuminance([r, g, b]: RgbTuple): number {
 }
 
 /**
+ * WCAG 2.x contrast ratio between two sRGB colors, from 1 (identical) to 21 (black on white).
+ * Order of the two arguments doesn't matter -- the formula always divides the lighter relative
+ * luminance by the darker. Shared by `styles-contract.test.ts`'s AA assertions (computed from the
+ * REAL parsed `:root`/`.theme-high-contrast` values, never a copied number) and available for any
+ * future caller that needs the same ratio.
+ */
+export function contrastRatio(a: RgbTuple, b: RgbTuple): number {
+  const lumA = relativeLuminance(a);
+  const lumB = relativeLuminance(b);
+  const lighter = Math.max(lumA, lumB);
+  const darker = Math.min(lumA, lumB);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/**
  * `relativeLuminance(FLOOR_RGB)` -- the luminance a visible cell's color must never drop below,
  * for ANY tint. `FLOOR_RGB` itself sits exactly at this floor (it's what a cell renders at
  * `intensity` 0), so re-deriving the constant from it keeps the two from drifting apart.
@@ -117,8 +132,31 @@ function liftToFloor(rgb: RgbTuple): RgbTuple {
  * Pure presentation only: the engine's `tint`/`intensity` fields are read, never written or
  * reinterpreted -- this is strictly how they get painted.
  */
+/**
+ * The maximum blend fraction toward `tint` for an explicit MATERIAL base -- caps `t` so at least
+ * `1 - MATERIAL_MAX_BLEND_T` (15%) of the material's own base color always survives, even at a
+ * torch's brightest rim (`intensity` 255). Added after Task 2's browser pass: without this cap, a
+ * wall cell right beside a carried torch rendered nearly indistinguishable from the warm floor
+ * beside it -- at `intensity` 255 the blend is (by design) the tint verbatim, so ANY base washes
+ * out completely at the light's core, and a wall/door/stair one cell from the hero sits well into
+ * that washout zone. The generic (no-material) floor path is deliberately exempt -- see
+ * `isDefaultFloorBase` below -- so the pre-existing identity-at-255 contract for a plain call
+ * (`cell-color.test.ts`'s "renders the tint verbatim... so a gold torch rim stays gold") still
+ * holds unchanged; only an explicit, distinct material base is capped.
+ */
+const MATERIAL_MAX_BLEND_T = 0.85;
+
+/** True if `base` is exactly `FLOOR_RGB` (the generic, no-material default) -- the one case
+ * `visibleForeground` does NOT apply {@link MATERIAL_MAX_BLEND_T} to, so an un-parameterized call
+ * (or an explicit `FLOOR_RGB` base, per the "no-op" contract test) keeps its exact tint-at-255
+ * identity. */
+function isDefaultFloorBase(base: RgbTuple): boolean {
+  return base[0] === FLOOR_RGB[0] && base[1] === FLOOR_RGB[1] && base[2] === FLOOR_RGB[2];
+}
+
 export function visibleForeground(tint: RgbTuple, intensity: number, base: RgbTuple = FLOOR_RGB): string {
-  const t = Math.max(0, Math.min(255, intensity)) / 255;
+  const rawT = Math.max(0, Math.min(255, intensity)) / 255;
+  const t = isDefaultFloorBase(base) ? rawT : Math.min(rawT, MATERIAL_MAX_BLEND_T);
   const blended = [0, 1, 2].map((index) => base[index]! + t * (tint[index]! - base[index]!)) as unknown as RgbTuple;
   const [r, g, b] = liftToFloor(blended);
   return `rgb(${r}, ${g}, ${b})`;
