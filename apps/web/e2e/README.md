@@ -8,3 +8,4 @@ Specs (all seeded on `[11,22,33,44]`, keyboard-driven):
 - `run-lifecycle.spec.ts` (5B) — the seven-step chargen wizard, play, death, conclusion, session Hall.
 - `town-loop.spec.ts` (5C) — buy, store, descend, kill, return, sell, upgrade, retrieve, descend.
 - `interface.spec.ts` (5D-1) — every registry overlay by key, key rebinding, font scale, codex discovery before/after a kill, identify via the inline picker, and clear-guest-session back to the title.
+- `polish.spec.ts` (5D-2) — the onboarding hint sequence (movement → inspection → inventory, with mastery and manual dismissal), disabling onboarding, the lighting canvas toggle, the high-contrast theme, the descend fade, and a clean session reset including the onboarding ledger. Builds a hero through the wizard (not `?quickstart=1`, which forces onboarding off) and seeds settings before boot via `page.addInitScript`.
