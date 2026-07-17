@@ -146,10 +146,12 @@ export function LogPanel({ snapshot }: PanelProps): JSX.Element {
   }, [log]);
 
   return (
-    <div ref={containerRef} role="log" aria-live="polite" aria-label="Adventure log" className="log-panel framed">
-      {log.map((line) => (
-        <p key={line.id} className={`log-line ${TONE_CLASS[line.tone]}`}>{line.text}</p>
-      ))}
+    <div className="log-panel framed">
+      <div ref={containerRef} role="log" aria-live="polite" aria-label="Adventure log" className="log-panel-scroll">
+        {log.map((line) => (
+          <p key={line.id} className={`log-line ${TONE_CLASS[line.tone]}`}>{line.text}</p>
+        ))}
+      </div>
     </div>
   );
 }

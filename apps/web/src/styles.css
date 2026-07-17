@@ -432,13 +432,22 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 
 /* `--log-lines` is set inline by PlayScreen per tier (6 at full/compact, 3 at minimal); the log
    region itself never unmounts, only its visible height changes, so it keeps the newest lines
-   scrolled into view (see LogPanel) even while collapsed. */
+   scrolled into view (see LogPanel) even while collapsed.
+   `.log-panel` itself stays `overflow: visible` (the `.framed` default) so its corner marks --
+   painted `--frame-inset` OUTSIDE the padding box -- aren't clipped by the scrollbox's own overflow
+   (a pseudo-element is always clipped by its own element's overflow). The actual scrolling/height
+   clamp lives on the inner `.log-panel-scroll` wrapper instead; `role="log"`/`aria-live="polite"`
+   stay on that same inner element, since it's still the element whose content actually scrolls and
+   gains new lines -- unchanged from before this split, just moved one level in. */
 .log-panel {
+  height: 100%;
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+}
+.log-panel-scroll {
   height: 100%;
   max-height: calc(var(--log-lines, 6) * 1.6em);
   overflow-y: auto;
-  border: 1px solid var(--line);
-  padding: 4px 8px;
 }
 .log-line { margin: .15em 0; }
 .log-line--combat { color: var(--alert); }

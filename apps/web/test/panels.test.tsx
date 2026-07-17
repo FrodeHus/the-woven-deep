@@ -65,7 +65,7 @@ describe('HeroPanel', () => {
     expect(screen.getByText(`Backpack: ${hero.backpack.length}/${hero.backpackCapacity}`)).toBeInTheDocument();
   });
 
-  it('carries the shared .framed corner class (Task 3 ornamental framing) and keeps the panel\'s accessible name/description unchanged -- the decorative corner glyphs are painted by CSS pseudo-elements, which never appear in React\'s rendered markup at all, so no accessibility-tree node can carry them', () => {
+  it('carries the shared .framed corner class (Task 3 ornamental framing) and keeps the panel\'s accessible name/description unchanged in the DOM -- this is a DOM-level regression guard, not a real accessibility-tree assertion: the decorative corner glyphs are painted by CSS pseudo-elements, which never appear in React\'s rendered markup at all, so no DOM node (and therefore no accessibility-tree node) can carry them', () => {
     render(<HeroPanel snapshot={snapshotOf(baseProjection)} />);
     const hero = baseProjection.hero as unknown as { name: string };
 
