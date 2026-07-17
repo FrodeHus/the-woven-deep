@@ -209,6 +209,25 @@ describe('profile routes', () => {
     expect(response.json()).toEqual({ error: 'not-json-object' });
   });
 
+  it('PUT with a non-integer settingsVersion returns 400 invalid_body', async () => {
+    const sessionCookies = await verifyAndGetCookies(app, database, 'non-integer-version@example.com');
+    const { csrfToken, cookies } = await getCsrfToken(app, sessionCookies);
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/profile/settings',
+      headers: {
+        origin: PUBLIC_URL,
+        cookie: cookieHeader(cookies),
+        'x-csrf-token': csrfToken,
+        'content-type': 'application/json',
+      },
+      payload: { settingsJson: '{}', settingsVersion: 1.5 },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'invalid_body' });
+  });
+
   it('dev-link endpoint returns the stored link in dev mode (mailgun: null)', async () => {
     await app.inject({
       method: 'POST',

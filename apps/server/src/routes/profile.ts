@@ -54,7 +54,11 @@ export function registerProfileRoutes(app: FastifyInstance, auth: AuthBundle): v
       }
 
       const body = request.body as { settingsJson?: unknown; settingsVersion?: unknown } | undefined;
-      if (typeof body?.settingsJson !== 'string' || typeof body?.settingsVersion !== 'number') {
+      if (
+        typeof body?.settingsJson !== 'string' ||
+        typeof body?.settingsVersion !== 'number' ||
+        !Number.isInteger(body.settingsVersion)
+      ) {
         reply.code(400).send({ error: 'invalid_body' });
         return;
       }

@@ -32,6 +32,14 @@ export function createAuthBundle(
   const sessions = new SessionRepository(db);
   const transport = createMailTransport(config, fetchImpl);
 
+  // One-off sweep of already-expired login tokens/sessions at boot, so the tables don't
+  // grow forever across restarts. This is boot-only: a periodic (interval-based) sweep
+  // is out of scope here since it would touch the shutdown/lifecycle path — tracked as a
+  // 6B follow-up.
+  const bootNowIso = realClock.now().toISOString();
+  tokens.deleteExpired(bootNowIso);
+  sessions.deleteExpired(bootNowIso);
+
   const login = createLoginService({
     clock: realClock,
     tokens,

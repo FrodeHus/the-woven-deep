@@ -59,4 +59,22 @@ describe('RateLimiter', () => {
     expect(limiter.check('key', 2)).toBe(true);
     expect(limiter.check('key', 2)).toBe(false);
   });
+
+  it('evicts keys whose hits have all expired, bounding map growth', () => {
+    const clock = new FakeClock('2026-07-17T00:00:00.000Z');
+    const limiter = new RateLimiter({ clock, windowMs: 1000 });
+
+    // Simulate an attacker forging a unique key per request (e.g. one-off emails).
+    for (let i = 0; i < 500; i += 1) {
+      expect(limiter.check(`attacker-${i}@example.com`, 5)).toBe(true);
+    }
+    expect(limiter.size()).toBe(500);
+
+    // All of those hits age out of the window.
+    clock.advance(1001);
+
+    // A single subsequent call (for any key) should sweep the whole map, not just grow it.
+    expect(limiter.check('probe', 5)).toBe(true);
+    expect(limiter.size()).toBe(1);
+  });
 });

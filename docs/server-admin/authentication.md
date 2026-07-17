@@ -69,7 +69,9 @@ unconfigured**, so it never exists in a correctly configured production deployme
   likewise invariant.
 - **Tokens stored only as hashes.** Both magic-link tokens and session tokens are 256-bit random
   values persisted only as SHA-256 hashes; the plaintext exists only in the emailed link / the
-  cookie. Token comparison is timing-safe.
+  cookie. A presented token is looked up by its hash via a keyed SQL query (not compared byte-by-byte
+  against a stored value), so guessing a valid token requires defeating SHA-256 pre-image resistance,
+  not winning a timing race.
 - **Single-use, short-lived links.** Magic-link tokens expire after 15 minutes and are consumed on
   first successful verification.
 - **Session cookie flags.** The session cookie is `HttpOnly`, `SameSite=Lax`, signed with
