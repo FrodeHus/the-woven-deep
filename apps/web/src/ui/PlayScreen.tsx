@@ -9,6 +9,7 @@ import { useGuestSession } from '../session/store.js';
 import { computeCamera, type CameraOrigin } from './camera.js';
 import { EffectsLayer } from './EffectsLayer.js';
 import { GridRenderer } from './GridRenderer.js';
+import { canvas2dAvailable, LightCanvas } from './LightCanvas.js';
 import { createKeyDispatcher, type OverlayActionId } from './KeyRouter.js';
 import { DEFAULT_SETTINGS, resolveKeymap, type ResolvedKeymap, type Settings } from '../session/settings.js';
 import {
@@ -150,6 +151,12 @@ export function PlayScreen({
   // the zoom actually applied to the DOM right now without adding `zoom` to that effect's own
   // dependency array (which would tear down/re-attach the pane observer on every zoom change).
   const zoomRef = useRef<ZoomFactor>(1);
+  // Computed once (lazy ref-init, mirroring `LightCanvas`'s own detection): whether the
+  // `.lighting-smooth` playfield class should apply. It must track whether `LightCanvas` is
+  // ACTUALLY rendering a canvas, not just the raw settings value -- see `canvas2dAvailable`'s doc
+  // comment for why (the flattened CSS would look wrong with no canvas underneath it).
+  const canvasAvailableRef = useRef<boolean | null>(null);
+  if (canvasAvailableRef.current === null) canvasAvailableRef.current = canvas2dAvailable();
 
   // Tier derivation MUST watch a tier-independent measurement. The triptych container's width
   // does not depend on `data-tier` (only its children's grid columns do), so this observer never
@@ -333,11 +340,19 @@ export function PlayScreen({
             </div>
           )}
           <div
-            className={`playfield${projection.floor.town ? ' playfield-town' : ''}`}
+            className={[
+              'playfield',
+              projection.floor.town ? 'playfield-town' : '',
+              settings.lighting === 'smooth' && canvasAvailableRef.current ? 'lighting-smooth' : '',
+            ].filter(Boolean).join(' ')}
             style={{ '--zoom': zoom } as CSSProperties}
           >
             <span ref={cellProbeRef} className="cell cell-probe" aria-hidden="true">0</span>
             <span ref={cellProbeBaseRef} className="cell cell-probe-base" aria-hidden="true">0</span>
+            <LightCanvas
+              projection={projection} pack={pack} camera={camera} viewport={viewport}
+              cellSize={cellSize} lighting={settings.lighting}
+            />
             <GridRenderer projection={projection} camera={camera} viewport={viewport} />
             <EffectsLayer
               projection={projection} pack={pack} lastEvents={snapshot.lastEvents} camera={camera} viewport={viewport}

@@ -116,6 +116,7 @@ describe('loadSettings / saveSettings round-trip', () => {
       fontScale: 1.3,
       reducedMotion: 'on',
       theme: 'high-contrast',
+      lighting: 'classic',
       bindings: { wait: { key: 'z', shift: false } },
     };
     expect(saveSettings(storage, settings)).toEqual({ ok: true });
@@ -142,6 +143,39 @@ describe('loadSettings / saveSettings round-trip', () => {
     const result = loadSettings(storage);
     expect(result.corrupted).toBe(false);
     expect(result.settings.theme).toBe('tapestry');
+  });
+
+  it('defaults lighting to "smooth" when nothing is stored', () => {
+    expect(loadSettings(fakeStorage()).settings.lighting).toBe('smooth');
+  });
+
+  it('falls back to "smooth" for an invalid stored lighting value, without marking corrupted', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({
+        fontScale: 1, reducedMotion: 'system', theme: 'tapestry', lighting: 'nonsense', bindings: {},
+      }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.settings.lighting).toBe('smooth');
+  });
+
+  it('forward-tolerates a stored blob with no lighting field at all (pre-Task-6 blob), defaulting to "smooth"', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({
+        fontScale: 1, reducedMotion: 'system', theme: 'tapestry', bindings: {},
+      }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.settings.lighting).toBe('smooth');
+  });
+
+  it('round-trips an explicit "classic" lighting setting', () => {
+    const storage = fakeStorage();
+    const settings: Settings = { ...DEFAULT_SETTINGS, lighting: 'classic' };
+    expect(saveSettings(storage, settings)).toEqual({ ok: true });
+    expect(loadSettings(storage).settings.lighting).toBe('classic');
   });
 
   it('saveSettings reports ok:false with the classified reason (without throwing) when the storage write fails', () => {
@@ -209,6 +243,7 @@ describe('loadSettings / saveSettings round-trip', () => {
       fontScale: 1.15,
       reducedMotion: 'off',
       theme: 'tapestry',
+      lighting: 'smooth',
       bindings: { wait: { key: 'z', shift: false } },
     });
   });

@@ -3,6 +3,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection, OpaqueId, PublicEvent } from '@woven-deep/engine';
 import type { CameraOrigin, CameraViewport } from './camera.js';
 import { effectsForEvents, MAX_TRANSIENT_EFFECTS, type TransientEffect } from './effects-map.js';
+import { equippedLightSource } from './light-sources.js';
 
 /**
  * NOTE: `viewport` is not part of the abbreviated JSX example in the task brief's Interfaces
@@ -30,33 +31,6 @@ const EFFECT_LIFETIME_MS: Record<TransientEffect['kind'], number> = {
   'attack-streak': 240,
   'death-burst': 320,
 };
-
-interface EquippedLight {
-  readonly contentId: OpaqueId;
-  readonly color: readonly [number, number, number];
-  readonly radius: number;
-  readonly fuelFraction: number;
-}
-
-function equippedLightSource(
-  projection: GameplayProjection, pack: CompiledContentPack,
-): EquippedLight | undefined {
-  const hero = projection.hero as unknown as {
-    equipment: Readonly<Record<string, Readonly<{
-      contentId?: OpaqueId; enabled?: boolean; fuel?: number;
-    }> | null>>;
-  };
-  for (const item of Object.values(hero.equipment)) {
-    if (!item || !item.enabled || item.contentId === undefined) continue;
-    const entry = pack.entries.find((candidate) => candidate.id === item.contentId);
-    if (entry?.kind !== 'item' || !entry.light) continue;
-    const fuelFraction = entry.light.fuelCapacity > 0
-      ? Math.max(0, Math.min(1, (item.fuel ?? 0) / entry.light.fuelCapacity))
-      : 0;
-    return { contentId: item.contentId, color: entry.light.color, radius: entry.light.radius, fuelFraction };
-  }
-  return undefined;
-}
 
 /**
  * Purely decorative overlay: `aria-hidden`, `pointer-events: none`, animates only

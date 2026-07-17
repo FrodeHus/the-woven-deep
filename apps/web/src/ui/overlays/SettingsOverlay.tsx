@@ -154,6 +154,26 @@ export function SettingsOverlay({ settings, onChange, onClearGuestSession, keyma
             High contrast
           </label>
         </div>
+        <div role="radiogroup" aria-label="Lighting">
+          <label>
+            <input
+              type="radio"
+              name="settings-lighting"
+              checked={settings.lighting === 'smooth'}
+              onChange={() => onChange({ ...settings, lighting: 'smooth' })}
+            />
+            Smooth (visibility-polygon canvas lighting)
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="settings-lighting"
+              checked={settings.lighting === 'classic'}
+              onChange={() => onChange({ ...settings, lighting: 'classic' })}
+            />
+            Classic (flat per-cell lighting, no canvas)
+          </label>
+        </div>
       </section>
 
       <section aria-labelledby="settings-motion-heading">
