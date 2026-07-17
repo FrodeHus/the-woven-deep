@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { GameplayProjection, ObservableCell } from '@woven-deep/engine';
-import { GridRenderer } from '../src/ui/GridRenderer.js';
+import { GridRenderer, materialClass } from '../src/ui/GridRenderer.js';
 
 function unknownCell(index: number, x: number, y: number): ObservableCell {
   return { index, x, y, knowledge: 'unknown', intensity: 0 };
@@ -125,5 +125,51 @@ describe('GridRenderer', () => {
     expect(grid.querySelector('[data-cell="0,0"]')).not.toBeNull();
     // The container itself must still expose viewport.width * viewport.height slots.
     expect(grid.children).toHaveLength(25);
+  });
+
+  it('applies the material class beside cell-visible/cell-remembered on the DOM', () => {
+    let floor = makeFloor(3, 1);
+    floor = withCell(floor, 0, 0, { knowledge: 'visible', glyph: '.', token: 'terrain.floor', intensity: 180 });
+    floor = withCell(floor, 1, 0, { knowledge: 'remembered', glyph: '#', token: 'terrain.wall', intensity: 10 });
+    const projection = baseProjection(floor, { x: 2, y: 0 });
+
+    render(<GridRenderer projection={projection} camera={{ x: 0, y: 0 }} viewport={{ width: 3, height: 1 }} />);
+    const grid = screen.getByRole('grid', { name: /dungeon/i });
+
+    expect(grid.querySelector('[data-cell="0,0"]')).toHaveClass('cell-visible', 'mat-floor');
+    expect(grid.querySelector('[data-cell="1,0"]')).toHaveClass('cell-remembered', 'mat-wall');
+  });
+
+  it('never applies a material class to an unknown cell (it carries no terrain token)', () => {
+    const floor = makeFloor(2, 1);
+    const projection = baseProjection(floor, { x: 0, y: 0 });
+    render(<GridRenderer projection={projection} camera={{ x: 0, y: 0 }} viewport={{ width: 2, height: 1 }} />);
+    const grid = screen.getByRole('grid', { name: /dungeon/i });
+    const cell = grid.querySelector('[data-cell="0,0"]')!;
+    expect(cell.className).toBe('cell cell-unknown');
+  });
+});
+
+describe('materialClass', () => {
+  const cases: ReadonlyArray<readonly [string, { token?: string; tileId?: number }, string]> = [
+    ['wall', { token: 'terrain.wall' }, 'mat-wall'],
+    ['floor', { token: 'terrain.floor' }, 'mat-floor'],
+    ['door', { token: 'terrain.door' }, 'mat-door'],
+    ['pillar', { token: 'terrain.pillar' }, 'mat-pillar'],
+    ['stair-up (tileId 4)', { token: 'terrain.stair', tileId: 4 }, 'mat-stair-up'],
+    ['stair-down (tileId 5)', { token: 'terrain.stair', tileId: 5 }, 'mat-stair-down'],
+    ['void', { token: 'terrain.void' }, 'mat-void'],
+    ['no token', {}, ''],
+    ['unrecognized token', { token: 'terrain.bogus' }, ''],
+  ];
+
+  for (const [label, cell, expected] of cases) {
+    it(`maps ${label} to '${expected}'`, () => {
+      expect(materialClass(cell)).toBe(expected);
+    });
+  }
+
+  it('defaults an ambiguous stair tileId (neither 4 nor 5) to stair-up rather than throwing', () => {
+    expect(materialClass({ token: 'terrain.stair', tileId: 99 })).toBe('mat-stair-up');
   });
 });

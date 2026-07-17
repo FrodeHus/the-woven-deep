@@ -327,7 +327,10 @@ export function PlayScreen({
             <VitalsStrip snapshot={snapshot} />
           </div>
         )}
-        <div className="playfield" style={{ '--zoom': zoom } as CSSProperties}>
+        <div
+          className={`playfield${projection.floor.town ? ' playfield-town' : ''}`}
+          style={{ '--zoom': zoom } as CSSProperties}
+        >
           <span ref={cellProbeRef} className="cell cell-probe" aria-hidden="true">0</span>
           <span ref={cellProbeBaseRef} className="cell cell-probe-base" aria-hidden="true">0</span>
           <GridRenderer projection={projection} camera={camera} viewport={viewport} />

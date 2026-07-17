@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { relativeLuminance, visibleForeground } from '../src/ui/cell-color.js';
+import { MATERIAL_BASE_RGB, relativeLuminance, visibleForeground } from '../src/ui/cell-color.js';
 
 /**
  * `.cell-remembered`'s static color in `styles.css` -- reproduced as a literal here (not imported,
@@ -119,6 +119,10 @@ describe('visibleForeground floor + monotonicity (all hues)', () => {
     expect(output).toEqual(TORCH_TINT);
   });
 
+  it('is a no-op change for the default (no base argument) call site vs. an explicit FLOOR_RGB base', () => {
+    expect(visibleForeground(TORCH_TINT, 160)).toBe(visibleForeground(TORCH_TINT, 160, FLOOR_RGB));
+  });
+
   it('stays close to the previous (unfloored) blend for warm tints at sub-max intensity', () => {
     // The warm domain was just eyeballed in-browser per the Task 10 recipe -- the fix must not
     // perceptibly shift it. Compare against the plain linear blend (the pre-fix formula) at a mid
@@ -132,6 +136,47 @@ describe('visibleForeground floor + monotonicity (all hues)', () => {
     for (let i = 0; i < 3; i += 1) {
       expect(Math.abs(newOutput[i]! - oldBlend[i]!)).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+/**
+ * Extends the "floor + monotone, ALL tints" property tests above over every material base
+ * (`MATERIAL_BASE_RGB`, `cell-color.ts` -- mirrored from `styles.css`'s `--mat-*` custom
+ * properties). `wall` is the adversarial case here: it is deliberately blue-leaning (mineral
+ * blue-grey, per the Living Tapestry direction), and blue contributes only 7.22% to relative
+ * luminance, so it is the material most likely to expose a regression in the floor guarantee if a
+ * future change ever special-cased `FLOOR_RGB` instead of the generic `base` parameter.
+ */
+describe('visibleForeground floor + monotonicity (all material bases)', () => {
+  for (const [materialName, base] of Object.entries(MATERIAL_BASE_RGB)) {
+    for (const [tintLabel, tint] of TINT_GRID) {
+      it(`holds the luminance floor for every intensity: material=${materialName}, tint=${tintLabel}`, () => {
+        for (const intensity of INTENSITY_GRID) {
+          const output = parseRgb(visibleForeground(tint, intensity, base));
+          expect(relativeLuminance(output)).toBeGreaterThanOrEqual(FLOOR_LUMINANCE - 1e-9);
+        }
+      });
+    }
+
+    it(`is monotone non-decreasing in intensity for material=${materialName} with its own base as the "tint" (zero-light limit)`, () => {
+      const QUANTIZATION_NOISE = 0.004;
+      const luminances = INTENSITY_GRID.map((intensity) => relativeLuminance(parseRgb(visibleForeground(TORCH_TINT, intensity, base))));
+      for (let i = 1; i < luminances.length; i += 1) {
+        expect(luminances[i]).toBeGreaterThanOrEqual(luminances[i - 1]! - QUANTIZATION_NOISE);
+      }
+    });
+
+    it(`a fully-dark cell (intensity 0) of material=${materialName} still clears the remembered floor`, () => {
+      const output = parseRgb(visibleForeground(TORCH_TINT, 0, base));
+      expect(relativeLuminance(output)).toBeGreaterThan(REMEMBERED_LUMINANCE);
+    });
+  }
+
+  it('the blue-leaning wall material specifically holds the floor even at minimum intensity with a near-black tint', () => {
+    const rimTint: readonly [number, number, number] = [4, 3, 2];
+    const output = parseRgb(visibleForeground(rimTint, 1, MATERIAL_BASE_RGB.wall));
+    expect(relativeLuminance(output)).toBeGreaterThanOrEqual(FLOOR_LUMINANCE - 1e-9);
+    expect(relativeLuminance(output)).toBeGreaterThan(REMEMBERED_LUMINANCE);
   });
 });
 

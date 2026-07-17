@@ -98,21 +98,46 @@ function liftToFloor(rgb: RgbTuple): RgbTuple {
 
 /**
  * A visible cell's rendered foreground color (the `--fg` custom property `GridRenderer` and
- * `MapJournalOverlay` set on `.cell-visible`/`.map-cell-visible`). Blends `FLOOR_RGB` toward the
- * engine's own `tint` as `intensity` climbs from 0 to 255 (clamped), then, since that blend alone
- * only holds the luminance floor for tints already at or above it (see {@link liftToFloor}), lifts
- * the result back up to `FLOOR_LUMINANCE` whenever the blend dipped under it. At `intensity` 255 a
- * tint whose own luminance already clears the floor renders verbatim (identity -- a gold torch rim
- * still reads gold); a tint that doesn't (e.g. a hypothetical pure-blue light) gets lifted even at
- * full intensity, so a visible cell can never render darker-than-remembered before `knowledge`
- * flips it to the (also-floored) remembered rendering one cell further out, for any hue.
+ * `MapJournalOverlay` set on `.cell-visible`/`.map-cell-visible`). Blends `base` (defaulting to
+ * `FLOOR_RGB`, the generic pre-material floor) toward the engine's own `tint` as `intensity` climbs
+ * from 0 to 255 (clamped), then, since that blend alone only holds the luminance floor for tints
+ * already at or above it (see {@link liftToFloor}), lifts the result back up to `FLOOR_LUMINANCE`
+ * whenever the blend dipped under it. At `intensity` 255 a tint whose own luminance already clears
+ * the floor renders verbatim (identity -- a gold torch rim still reads gold); a tint that doesn't
+ * (e.g. a hypothetical pure-blue light) gets lifted even at full intensity, so a visible cell can
+ * never render darker-than-remembered before `knowledge` flips it to the (also-floored) remembered
+ * rendering one cell further out, for any hue -- and, since the floor lift is unconditional on
+ * `base`, this holds for ANY material base too (see `MATERIAL_BASE_RGB` below and its property
+ * tests in `cell-color.test.ts`), not just the generic floor.
+ *
+ * `base` is `GridRenderer`'s hook for material coloring (Task 1): passing a cell's material base
+ * color (e.g. `MATERIAL_BASE_RGB.wall`) makes a lit wall read mineral blue-grey at low intensity
+ * instead of the old one-size-fits-all `FLOOR_RGB` gray, while still guaranteeing the same floor.
  *
  * Pure presentation only: the engine's `tint`/`intensity` fields are read, never written or
  * reinterpreted -- this is strictly how they get painted.
  */
-export function visibleForeground(tint: RgbTuple, intensity: number): string {
+export function visibleForeground(tint: RgbTuple, intensity: number, base: RgbTuple = FLOOR_RGB): string {
   const t = Math.max(0, Math.min(255, intensity)) / 255;
-  const blended = [0, 1, 2].map((index) => FLOOR_RGB[index]! + t * (tint[index]! - FLOOR_RGB[index]!)) as unknown as RgbTuple;
+  const blended = [0, 1, 2].map((index) => base[index]! + t * (tint[index]! - base[index]!)) as unknown as RgbTuple;
   const [r, g, b] = liftToFloor(blended);
   return `rgb(${r}, ${g}, ${b})`;
 }
+
+/**
+ * The five material identities `materialClass` (`GridRenderer.tsx`) can derive from a cell's
+ * terrain token: a pillar reuses `wall`'s base (structural mineral stone) and both stair
+ * directions reuse `stair`'s, matching `styles.css`'s `--mat-*` custom properties one-to-one --
+ * `wall`/`floor`/`door`/`stair`/`void` are the only distinct bases, mirroring the CSS file having
+ * only `--mat-wall`/`--mat-floor`/`--mat-door`/`--mat-stair`/`--mat-void` (no separate
+ * `--mat-pillar`). Do not let these hex values drift from `styles.css`'s `--mat-*` declarations.
+ */
+export type MaterialBaseName = 'wall' | 'floor' | 'door' | 'stair' | 'void';
+
+export const MATERIAL_BASE_RGB: Readonly<Record<MaterialBaseName, RgbTuple>> = {
+  wall: [0x5b, 0x64, 0x78],
+  floor: [0x8a, 0x7f, 0x6e],
+  door: [0x8b, 0x5a, 0x3c],
+  stair: [0xc9, 0xa2, 0x27],
+  void: [0x23, 0x27, 0x33],
+};

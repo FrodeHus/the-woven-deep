@@ -1,18 +1,44 @@
 :root {
-  color: #aab3d1;
-  background: #121521;
+  /* Named palette: the recurring hex literals that used to be scattered across every rule below,
+     collected here as custom properties -- a pure rename, same values, zero visual change. Colors
+     that appear only once (e.g. the hit-flash/death-burst gradients' own accent reds) are left as
+     literals; only recurring ones earn a name. */
+  --ink: #aab3d1;
+  --ground: #121521;
+  --gold: #e8c879;
+  --gold-bright: #f1d898;
+  --line: #3d465f;
+  --muted: #7d89a8;
+  --alert: #db7f78;
+  --panel: #232a3d;
+  --remembered: #4b526b;
+  --void-bg: #0b0d15;
+  --portrait-default: #dfe3ef;
+
+  /* Material palette (Living Tapestry direction): the base color a lit cell's tint blends FROM
+     (see `visibleForeground`'s `base` parameter in `cell-color.ts`) and a remembered cell's own hue
+     before it is desaturated toward `--remembered`. Starting values only -- Task 2's browser pass
+     tunes these by eye; the luminance floor in `cell-color.ts` holds for any value here. */
+  --mat-wall: #5b6478;
+  --mat-floor: #8a7f6e;
+  --mat-door: #8b5a3c;
+  --mat-stair: #c9a227;
+  --mat-void: #232733;
+
+  color: var(--ink);
+  background: var(--ground);
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   font-synthesis: none;
 }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
 .shell { width: min(760px, calc(100% - 40px)); margin: 0 auto; padding: 12vh 0 48px; }
-.eyebrow { color: #7d89a8; font-size: .75rem; letter-spacing: .14em; text-transform: uppercase; }
-h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line-height: .95; }
-.tapestry { display: grid; gap: 12px; border: 1px solid #3d465f; padding: 24px; box-shadow: inset 0 0 40px #20263a; }
-.tapestry strong { color: #f1d898; font-size: 1.25rem; }
+.eyebrow { color: var(--muted); font-size: .75rem; letter-spacing: .14em; text-transform: uppercase; }
+h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line-height: .95; }
+.tapestry { display: grid; gap: 12px; border: 1px solid var(--line); padding: 24px; box-shadow: inset 0 0 40px #20263a; }
+.tapestry strong { color: var(--gold-bright); font-size: 1.25rem; }
 .tapestry code { overflow-wrap: anywhere; color: #7783a4; }
-[role="alert"] { color: #db7f78; }
+[role="alert"] { color: var(--alert); }
 
 /* Title screen: a keyboard-first menu (Enter the Deep / Continue / Hall of Records) reusing the
    same option-list convention as the chargen wizard's lists (`.chargen-option`). */
@@ -20,20 +46,20 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 .title-menu { display: flex; flex-direction: column; gap: 6px; max-width: 320px; }
 .title-option {
   text-align: left;
-  border: 1px solid #3d465f;
-  background: #121521;
+  border: 1px solid var(--line);
+  background: var(--ground);
   color: inherit;
   padding: 10px 14px;
   font-size: 1rem;
 }
-.title-option--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
-.title-option[aria-selected="true"] { border-color: #e8c879; }
+.title-option--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
+.title-option[aria-selected="true"] { border-color: var(--gold); }
 .storage-warning-banner {
-  border: 1px solid #db7f78;
+  border: 1px solid var(--alert);
   padding: 8px 12px;
-  background: color-mix(in srgb, #db7f78 12%, transparent);
+  background: color-mix(in srgb, var(--alert) 12%, transparent);
 }
-:focus-visible { outline: 2px solid #e8c879; outline-offset: 4px; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
 
 /* Playfield: the grid renders gameplay truth, the effects layer is a purely decorative overlay
@@ -56,13 +82,21 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   --cell-h: 1lh;
   line-height: 1;
 }
+/* Town floors read slightly warmer than the dungeon proper -- PlayScreen adds this class to the
+   same `.playfield` element whenever `projection.floor.town` is true. A gentle warm-white overlay
+   (screen blend, low opacity) rather than a hue shift on the materials themselves, so the dungeon's
+   own material palette isn't duplicated per-floor-kind. */
+.playfield-town {
+  background: color-mix(in srgb, var(--gold) 4%, transparent);
+  background-blend-mode: screen;
+}
 .playfield-grid {
   display: grid;
   grid-auto-rows: var(--cell-h);
   line-height: 1;
-  background: #0b0d15;
+  background: var(--void-bg);
 }
-.playfield-grid:focus-visible { outline: 2px solid #e8c879; outline-offset: -2px; }
+.playfield-grid:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
 .cell { display: block; text-align: center; }
 /* Measurement-only probe: lives inside .playfield so it shares its line-height: 1 context (an
    in-flow probe outside that context measures ~15-20% too tall), and is hidden so it never
@@ -81,16 +115,44 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
    entirely. */
 .cell-probe-base { position: absolute; visibility: hidden; width: 1ch; height: 1lh; font-size: 1rem; }
 .cell-empty { color: transparent; }
-.cell-unknown { color: transparent; background: #0b0d15; }
+.cell-unknown { color: transparent; background: var(--void-bg); }
 /* A remembered cell must never render brighter than the darkest a visible cell can get — otherwise
    the player's remembered floor plan would out-shine what their torch is actually illuminating
    right now. Kept slightly below `.cell-visible`'s floor term (0.62) below. */
-.cell-remembered { color: #4b526b; filter: saturate(0.4); opacity: 0.55; }
+.cell-remembered { color: var(--remembered); filter: saturate(0.4); opacity: 0.55; }
 /* The floor term (0.62) is deliberately high: a visible-but-dim cell (low --light, e.g. at the
    edge of a torch's radius) must still read as brighter than any remembered cell, never darker —
    the earlier `0.35 +` floor let a dim-but-visible ring around the carried light render darker
    than the remembered floor beyond it, an inverted "dark circle" around the player's own torch. */
-.cell-visible { color: var(--fg, #aab3d1); opacity: calc(0.62 + 0.38 * var(--light, 1)); }
+.cell-visible { color: var(--fg, var(--mat, var(--ink))); opacity: calc(0.62 + 0.38 * var(--light, 1)); }
+
+/* Material coloring (Task 1): `materialClass` (`GridRenderer.tsx`) adds one of these classes,
+   derived from the cell's terrain token (stairs split further by tileId), beside the knowledge
+   class. `--mat` is consumed two ways: here, as a fallback color for a visible cell that has no
+   `tint` yet (rare, but keeps a material-flavored cell from ever falling back all the way to plain
+   `--ink`); and by `GridRenderer`, which reads the SAME hex value (mirrored in `cell-color.ts` as
+   `MATERIAL_BASE_RGB` -- do not let the two drift) as the BASE color a lit cell's tint blends from,
+   via `visibleForeground`'s optional `base` parameter, so a wall reads mineral blue-grey even in
+   dim torchlight rather than the old one-size floor gray. A pillar is structural stone like a wall
+   and both stair directions share one accent -- so `mat-pillar` and `mat-stair-up`/`mat-stair-down`
+   intentionally reuse `--mat-wall`/`--mat-stair` rather than each getting a dedicated variable. */
+.cell-visible.mat-wall, .cell-visible.mat-pillar { --mat: var(--mat-wall); }
+.cell-visible.mat-floor { --mat: var(--mat-floor); }
+.cell-visible.mat-door { --mat: var(--mat-door); }
+.cell-visible.mat-stair-up, .cell-visible.mat-stair-down { --mat: var(--mat-stair); }
+.cell-visible.mat-void { --mat: var(--mat-void); }
+
+/* Remembered cells keep their material hue, still funneled through the SAME `saturate(0.4)` filter
+   `.cell-remembered` already applies -- pulling every material toward the established
+   `--remembered` (#4b526b) family rather than each material's own fully-saturated color, so a
+   remembered wall and a remembered door read as close cousins of the same dim gray-blue memory,
+   never as bright or as legible as anything currently visible (the class-level `opacity: 0.55`
+   above stays the dimmer-than-any-visible guarantee; it is unchanged by material). */
+.cell-remembered.mat-wall, .cell-remembered.mat-pillar { color: var(--mat-wall); }
+.cell-remembered.mat-floor { color: var(--mat-floor); }
+.cell-remembered.mat-door { color: var(--mat-door); }
+.cell-remembered.mat-stair-up, .cell-remembered.mat-stair-down { color: var(--mat-stair); }
+.cell-remembered.mat-void { color: var(--mat-void); }
 
 .effects-layer {
   position: absolute;
@@ -107,7 +169,7 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 }
 
 .glow {
-  --glow-color: #e8c879;
+  --glow-color: var(--gold);
   --glow-radius: 5;
   --glow-intensity: 1;
   /* Both axes derive from --cell-h (not --cell-w): the box must be square so the radial gradient
@@ -146,11 +208,11 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 .effect-attack-streak {
   --dx: calc(var(--to-x, 0) - var(--x, 0));
   --dy: calc(var(--to-y, 0) - var(--y, 0));
-  background: linear-gradient(90deg, #f1d898, transparent);
+  background: linear-gradient(90deg, var(--gold-bright), transparent);
   animation: attack-streak 160ms ease-out;
 }
 .effect-death-burst {
-  background: radial-gradient(circle, #db7f78 0%, transparent 70%);
+  background: radial-gradient(circle, var(--alert) 0%, transparent 70%);
   animation: death-burst 240ms ease-out;
 }
 
@@ -249,23 +311,23 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 
 .status-bar { display: flex; gap: 1.5em; align-items: baseline; }
 
-.hero-panel, .threat-panel { border: 1px solid #3d465f; padding: 12px; }
-.hero-panel h2 { margin: 0 0 .5em; font-size: 1rem; color: #f1d898; }
+.hero-panel, .threat-panel { border: 1px solid var(--line); padding: 12px; }
+.hero-panel h2 { margin: 0 0 .5em; font-size: 1rem; color: var(--gold-bright); }
 .vital-text { margin: .25em 0; }
-.bar { height: 6px; background: #232a3d; border-radius: 3px; overflow: hidden; }
-.bar-fill { height: 100%; width: calc(var(--fill, 1) * 100%); background: #db7f78; }
+.bar { height: 6px; background: var(--panel); border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; width: calc(var(--fill, 1) * 100%); background: var(--alert); }
 .equipment-list, .condition-list, .threat-list, .ground-item-list { list-style: none; margin: .5em 0; padding: 0; }
 .backpack-summary { margin-top: .5em; }
-.threat-panel .placeholder { color: #7d89a8; font-style: italic; }
+.threat-panel .placeholder { color: var(--muted); font-style: italic; }
 
 .vitals-strip {
-  display: flex; gap: 1em; padding: 4px 8px; background: color-mix(in srgb, #121521 80%, transparent);
-  border-bottom: 1px solid #3d465f; font-size: .85rem;
+  display: flex; gap: 1em; padding: 4px 8px; background: color-mix(in srgb, var(--ground) 80%, transparent);
+  border-bottom: 1px solid var(--line); font-size: .85rem;
 }
 .vitals-overlay { position: absolute; inset: 0 0 auto 0; z-index: 2; }
 
-.hero-drawer, .threat-drawer { border: 1px solid #3d465f; padding: 4px 8px; }
-.hero-drawer summary, .threat-drawer summary { cursor: pointer; color: #7d89a8; }
+.hero-drawer, .threat-drawer { border: 1px solid var(--line); padding: 4px 8px; }
+.hero-drawer summary, .threat-drawer summary { cursor: pointer; color: var(--muted); }
 
 /* `--log-lines` is set inline by PlayScreen per tier (6 at full/compact, 3 at minimal); the log
    region itself never unmounts, only its visible height changes, so it keeps the newest lines
@@ -274,20 +336,20 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   height: 100%;
   max-height: calc(var(--log-lines, 6) * 1.6em);
   overflow-y: auto;
-  border: 1px solid #3d465f;
+  border: 1px solid var(--line);
   padding: 4px 8px;
 }
 .log-line { margin: .15em 0; }
-.log-line--combat { color: #db7f78; }
-.log-line--warning { color: #e8c879; }
-.log-line--system { color: #7d89a8; font-style: italic; }
+.log-line--combat { color: var(--alert); }
+.log-line--warning { color: var(--gold); }
+.log-line--system { color: var(--muted); font-style: italic; }
 
 .threat-popover {
   position: absolute;
   transform: translate(-25%, -110%);
   z-index: 3;
-  background: #121521;
-  border: 1px solid #e8c879;
+  background: var(--ground);
+  border: 1px solid var(--gold);
   padding: 6px 10px;
   font-size: .85rem;
   pointer-events: none;
@@ -305,7 +367,7 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   flex-direction: column;
   gap: 12px;
 }
-.chargen-progress { color: #7d89a8; }
+.chargen-progress { color: var(--muted); }
 .chargen-step-label { margin: 0; font-size: .9rem; letter-spacing: .04em; text-transform: uppercase; }
 .chargen-main { display: flex; flex-direction: column; gap: 12px; }
 .chargen-nav { display: flex; gap: 8px; justify-content: flex-end; }
@@ -320,35 +382,35 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   align-items: center;
   gap: 8px;
   text-align: left;
-  border: 1px solid #3d465f;
-  background: #121521;
+  border: 1px solid var(--line);
+  background: var(--ground);
   color: inherit;
   padding: 8px 10px;
 }
-.chargen-option--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
-.chargen-option[aria-selected="true"] { border-color: #e8c879; }
+.chargen-option--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
+.chargen-option[aria-selected="true"] { border-color: var(--gold); }
 .chargen-option--locked { opacity: .55; cursor: not-allowed; }
 .chargen-class-glyph { font-weight: bold; }
-.chargen-class-unlock-hint { font-size: .8rem; color: #7d89a8; font-style: italic; }
+.chargen-class-unlock-hint { font-size: .8rem; color: var(--muted); font-style: italic; }
 
 .chargen-portrait-list { flex-direction: row; flex-wrap: wrap; }
 .chargen-portrait {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 1px solid #3d465f;
-  background: #121521;
-  color: var(--portrait-accent, #dfe3ef);
+  border: 1px solid var(--line);
+  background: var(--ground);
+  color: var(--portrait-accent, var(--portrait-default));
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.chargen-portrait--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
-.chargen-portrait[aria-selected="true"] { border-color: #e8c879; }
-.chargen-portrait[data-glyph="@"] { --portrait-accent: #dfe3ef; }
-.chargen-portrait[data-glyph="@·gold"] { --portrait-accent: #e8c879; }
-.chargen-portrait[data-glyph="@·ember"] { --portrait-accent: #db7f78; }
-.chargen-portrait[data-glyph="@·mist"] { --portrait-accent: #7d89a8; }
+.chargen-portrait--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
+.chargen-portrait[aria-selected="true"] { border-color: var(--gold); }
+.chargen-portrait[data-glyph="@"] { --portrait-accent: var(--portrait-default); }
+.chargen-portrait[data-glyph="@·gold"] { --portrait-accent: var(--gold); }
+.chargen-portrait[data-glyph="@·ember"] { --portrait-accent: var(--alert); }
+.chargen-portrait[data-glyph="@·mist"] { --portrait-accent: var(--muted); }
 .chargen-portrait[data-glyph="@·moss"] { --portrait-accent: #7fa87d; }
 
 .chargen-attribute-row {
@@ -356,27 +418,27 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   align-items: center;
   gap: 8px;
 }
-.chargen-attribute-row--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
+.chargen-attribute-row--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
 .chargen-attribute-name { width: 6em; text-transform: capitalize; }
-.chargen-point-buy-budget { color: #7d89a8; }
+.chargen-point-buy-budget { color: var(--muted); }
 .chargen-hints, .chargen-summary-list, .chargen-preview-list, .chargen-attribute-list {
   font-size: .85rem;
-  color: #7d89a8;
+  color: var(--muted);
 }
-.chargen-preview { border-top: 1px solid #3d465f; padding-top: 8px; }
+.chargen-preview { border-top: 1px solid var(--line); padding-top: 8px; }
 
 /* Hall of Records: outcome/class filters (native selects — keyboard-reachable for free) above a
    keyboard-first option list of rows, reusing the same roving-focus/option-list convention as
    `.title-option`/`.chargen-option`. Row expansion (Enter) reveals a `.hall-breakdown` table of
    the engine's itemized `ScoreBreakdown` lines. */
 .hall-screen { display: flex; flex-direction: column; gap: 12px; }
-.hall-provenance { color: #7d89a8; font-style: italic; }
+.hall-provenance { color: var(--muted); font-style: italic; }
 .hall-filters { display: flex; gap: 16px; }
-.hall-filter { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: #7d89a8; }
+.hall-filter { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); }
 .hall-filter select {
-  background: #121521;
+  background: var(--ground);
   color: inherit;
-  border: 1px solid #3d465f;
+  border: 1px solid var(--line);
   padding: 6px 8px;
   font-family: inherit;
 }
@@ -386,19 +448,19 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   align-items: center;
   gap: 12px;
   text-align: left;
-  border: 1px solid #3d465f;
-  background: #121521;
+  border: 1px solid var(--line);
+  background: var(--ground);
   color: inherit;
   padding: 8px 10px;
   cursor: pointer;
 }
-.hall-row--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
-.hall-row[aria-selected="true"] { border-color: #e8c879; }
+.hall-row--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
+.hall-row[aria-selected="true"] { border-color: var(--gold); }
 .hall-glyph { font-weight: bold; width: 1.5em; text-align: center; }
 .hall-name { min-width: 8em; }
-.hall-classes { color: #7d89a8; }
-.hall-run { margin-left: auto; color: #7d89a8; font-size: .85rem; }
-.hall-breakdown { margin: 4px 0 4px 2.5em; font-size: .85rem; color: #7d89a8; }
+.hall-classes { color: var(--muted); }
+.hall-run { margin-left: auto; color: var(--muted); font-size: .85rem; }
+.hall-breakdown { margin: 4px 0 4px 2.5em; font-size: .85rem; color: var(--muted); }
 
 /* Map & journal overlay (Task 7). `.map-journal-map-pane` scrolls the full floor at a FIXED
    compact cell size (`--map-cell`, set inline per render) -- deliberately its own custom property,
@@ -407,24 +469,24 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
    `map-pane` -- `PlayScreen.tsx` already owns that class name for its own live playfield wrapper. */
 .map-journal-tablist { display: flex; gap: 8px; margin-bottom: 8px; }
 .map-journal-tab {
-  background: #121521;
+  background: var(--ground);
   color: inherit;
-  border: 1px solid #3d465f;
+  border: 1px solid var(--line);
   padding: 6px 12px;
   font-family: inherit;
   cursor: pointer;
 }
-.map-journal-tab--active { border-color: #e8c879; color: #e8c879; }
+.map-journal-tab--active { border-color: var(--gold); color: var(--gold); }
 .map-journal-map-pane { overflow: auto; max-height: 60vh; }
 .map-grid { display: grid; grid-auto-rows: var(--map-cell); line-height: 1; font-size: var(--map-cell); }
 .map-cell { display: block; width: var(--map-cell); height: var(--map-cell); text-align: center; }
 .map-cell-unknown { color: transparent; }
-.map-cell-remembered { color: #4b526b; filter: saturate(0.4); opacity: 0.55; }
-.map-cell-visible { color: var(--fg, #aab3d1); opacity: calc(0.62 + 0.38 * var(--light, 1)); }
+.map-cell-remembered { color: var(--remembered); filter: saturate(0.4); opacity: 0.55; }
+.map-cell-visible { color: var(--fg, var(--ink)); opacity: calc(0.62 + 0.38 * var(--light, 1)); }
 .journal-pane { display: flex; flex-direction: column; gap: 12px; }
-.journal-objective { color: #e8c879; font-style: italic; }
+.journal-objective { color: var(--gold); font-style: italic; }
 .journal-landmarks, .journal-log { list-style: none; margin: 0; padding: 0; }
 .journal-log { max-height: 40vh; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
-.journal-log-line--warning { color: #db7f78; }
-.journal-log-line--combat { color: #e8c879; }
-.journal-log-line--system { color: #7d89a8; }
+.journal-log-line--warning { color: var(--alert); }
+.journal-log-line--combat { color: var(--gold); }
+.journal-log-line--system { color: var(--muted); }

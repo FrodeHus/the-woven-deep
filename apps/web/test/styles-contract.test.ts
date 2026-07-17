@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { relativeLuminance, visibleForeground } from '../src/ui/cell-color.js';
 
 // jsdom (our test environment) never evaluates @media queries, so we cannot assert the
 // reduced-motion behaviour by rendering and reading computed styles. Instead this is a static,
@@ -235,6 +236,69 @@ describe('reduced-motion stylesheet contract', () => {
     expect(duration(fullHitFlashMatch![1]!)).toBe(duration(originalHitFlash![0]!));
     expect(duration(fullAttackStreakMatch![1]!)).toBe(duration(originalAttackStreak![0]!));
     expect(duration(fullDeathBurstMatch![1]!)).toBe(duration(originalDeathBurst![0]!));
+  });
+});
+
+/** Parses a `#rrggbb`/`#rgb` literal into an `[r, g, b]` triple (0..255 each). */
+function hexToRgb(hex: string): readonly [number, number, number] {
+  const normalized = hex.length === 4
+    ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+    : hex;
+  const match = /^#([0-9a-fA-F]{6})$/.exec(normalized);
+  if (!match) throw new Error(`not a hex color: ${hex}`);
+  const value = match[1]!;
+  return [parseInt(value.slice(0, 2), 16), parseInt(value.slice(2, 4), 16), parseInt(value.slice(4, 6), 16)];
+}
+
+/** Reads a `--name: #hex;` declaration's hex value out of the real `:root { ... }` block. */
+function rootVariable(name: string): string {
+  const rootMatch = /:root\s*\{([\s\S]*?)\n\}/.exec(css);
+  expect(rootMatch, ':root block not found').toBeTruthy();
+  const decl = new RegExp(`--${name}\\s*:\\s*(#[0-9a-fA-F]{3,6})\\s*;`).exec(rootMatch![1]!);
+  expect(decl, `--${name} not declared in :root`).toBeTruthy();
+  return decl![1]!;
+}
+
+const REMEMBERED_LUMINANCE = relativeLuminance(hexToRgb('#4b526b'));
+
+describe('named palette stylesheet contract', () => {
+  const NAMED_COLORS = [
+    'ink', 'ground', 'gold', 'gold-bright', 'line', 'muted', 'alert', 'panel',
+  ] as const;
+  const MATERIAL_COLORS = ['mat-wall', 'mat-floor', 'mat-door', 'mat-stair', 'mat-void'] as const;
+
+  it('declares every named palette variable in :root with a valid hex value', () => {
+    for (const name of [...NAMED_COLORS, ...MATERIAL_COLORS]) {
+      expect(() => hexToRgb(rootVariable(name)), `--${name}`).not.toThrow();
+    }
+  });
+
+  it('leaves no raw hex literal for a recurring named color outside its own :root declaration', () => {
+    // Every rule that used to spell out one of these hex literals directly must now reference the
+    // variable instead -- the literal itself should appear exactly once in the whole file (the
+    // :root declaration line), never again as a copy-pasted value elsewhere.
+    for (const name of NAMED_COLORS) {
+      const hex = rootVariable(name);
+      const occurrences = css.split(hex).length - 1;
+      expect(occurrences, `--${name} (${hex}) should only appear once, in :root`).toBe(1);
+    }
+  });
+
+  it('holds the visible-vs-remembered luminance floor for every material color, at the darkest visible intensity', () => {
+    // Reuses the same floor guarantee `cell-color.test.ts` asserts in isolation, but sourced from
+    // the REAL CSS hex values (not a copy) -- a regression here means styles.css and cell-color.ts
+    // have drifted apart, or a material's base color itself broke the floor.
+    for (const name of MATERIAL_COLORS) {
+      const base = hexToRgb(rootVariable(name));
+      const nearBlackTint: readonly [number, number, number] = [4, 3, 2];
+      const output = visibleForeground(nearBlackTint, 1, base);
+      const [r, g, b] = /^rgb\((\d+), (\d+), (\d+)\)$/.exec(output)!.slice(1).map(Number) as [number, number, number];
+      expect(relativeLuminance([r, g, b]), `${name} at minimum visible intensity`).toBeGreaterThan(REMEMBERED_LUMINANCE);
+    }
+  });
+
+  it('gives .playfield-town a modifier rule (fed from projection.floor.town by PlayScreen)', () => {
+    expect(css).toMatch(/\.playfield-town\s*\{/);
   });
 });
 
