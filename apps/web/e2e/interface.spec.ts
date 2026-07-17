@@ -191,6 +191,13 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await expect(trade).toBeHidden();
 
   // --- Clear the guest session from settings; the app lands on a fresh title screen. ---
+  // Strip the quickstart query first (no reload; React state intact): with `?quickstart=1` still
+  // in the URL, App.tsx's quickstart boot effect re-fires the instant clearing sets `session`
+  // back to undefined and constructs a fresh hidden GuestSession, whose constructor re-persists
+  // the sightings cache (`syncSightings`) -- re-creating `woven-deep.guest-codex` right after the
+  // wipe. Real users clearing their session are never on a quickstart URL, so the storage-empty
+  // assertion below targets the real flow.
+  await page.evaluate(() => window.history.replaceState(null, '', '/'));
   await page.keyboard.press('o');
   await expect(settings).toBeVisible();
   await settings.locator('#settings-clear-confirm').fill('clear');
@@ -200,4 +207,23 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await expect(page.getByRole('listbox', { name: 'Title menu' })).toBeVisible();
   await expect(page.getByRole('option', { name: 'Enter the Deep' })).toBeVisible();
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeHidden();
+
+  // The fresh title alone doesn't prove the clear itself worked -- routing decouples the title
+  // transition from the storage wipe, so a broken clear could still land here. Prove storage is
+  // actually empty: every key named by `clear-guest-session.ts`'s GUEST_SESSION_STORAGE_KEYS
+  // (sessionStorage) and GUEST_LOCAL_STORAGE_KEYS (localStorage).
+  await expect(async () => {
+    const remaining = await page.evaluate(() => ({
+      session: [
+        'woven-deep.guest-run',
+        'woven-deep.guest-command-seq',
+        'woven-deep.guest-hall',
+        'woven-deep.guest-portrait',
+        'woven-deep.guest-codex',
+      ].filter((key) => sessionStorage.getItem(key) !== null),
+      local: ['woven-deep.settings.v1'].filter((key) => localStorage.getItem(key) !== null),
+    }));
+    expect(remaining.session).toEqual([]);
+    expect(remaining.local).toEqual([]);
+  }).toPass();
 });
