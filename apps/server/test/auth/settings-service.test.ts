@@ -85,4 +85,27 @@ describe('createSettingsService', () => {
     const result = service.write({ profileId, settingsJson: '{not valid json', settingsVersion: 1 });
     expect(result).toEqual({ ok: false, reason: 'not-json-object' });
   });
+
+  it('rejects a bare number and a literal null payload', () => {
+    const service = makeService();
+    expect(service.write({ profileId, settingsJson: '5', settingsVersion: 1 }))
+      .toEqual({ ok: false, reason: 'not-json-object' });
+    expect(service.write({ profileId, settingsJson: 'null', settingsVersion: 1 }))
+      .toEqual({ ok: false, reason: 'not-json-object' });
+  });
+
+  it('accepts an empty object', () => {
+    const service = makeService();
+    expect(service.write({ profileId, settingsJson: '{}', settingsVersion: 1 })).toEqual({ ok: true });
+    expect(service.read(profileId)).toEqual({ settingsJson: '{}', settingsVersion: 1 });
+  });
+
+  it('measures the size limit in bytes, not characters', () => {
+    const service = makeService();
+    // A multi-byte string that is well under 8192 CHARS but over 8192 BYTES (each 'あ' is 3 UTF-8 bytes).
+    const multiByte = JSON.stringify({ padding: 'あ'.repeat(3000) });
+    expect(multiByte.length).toBeLessThan(SETTINGS_MAX_BYTES);
+    const result = service.write({ profileId, settingsJson: multiByte, settingsVersion: 1 });
+    expect(result).toEqual({ ok: false, reason: 'too-large' });
+  });
 });
