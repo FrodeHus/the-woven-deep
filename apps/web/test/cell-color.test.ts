@@ -158,7 +158,7 @@ describe('visibleForeground floor + monotonicity (all material bases)', () => {
       });
     }
 
-    it(`is monotone non-decreasing in intensity for material=${materialName} with its own base as the "tint" (zero-light limit)`, () => {
+    it(`is monotone non-decreasing in intensity for material=${materialName} under the torch tint`, () => {
       const QUANTIZATION_NOISE = 0.004;
       const luminances = INTENSITY_GRID.map((intensity) => relativeLuminance(parseRgb(visibleForeground(TORCH_TINT, intensity, base))));
       for (let i = 1; i < luminances.length; i += 1) {
