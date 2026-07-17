@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { LightSource } from '../src/light-model.js';
-import type { TileId } from '../src/model.js';
+import type { ActiveRun, TileId } from '../src/model.js';
 import {
   createDemoContentPack,
   createDemoRun,
@@ -323,6 +323,51 @@ describe('gameplay projection', () => {
     const projected = projectGameplayState({ state: town, content });
     expect(projected.floor.town).toBe(true);
     expect(projected.slots).toEqual([{ slotId: 'slot.town-test.house-door', tags: ['town', 'house-door'], x: 1, y: 1 }]);
+  });
+
+  it('projects a timed condition\'s remaining world-time as expiresAt minus current worldTime, and drops expiresAt', () => {
+    const base = createDemoRun();
+    const dungeon: ActiveRun = {
+      ...base, worldTime: 30,
+      actors: base.actors.map((actor) => actor.actorId === base.actors[0]!.actorId
+        ? { ...actor, conditions: [{ conditionId: 'condition.disengaged', sourceActorId: null,
+          appliedAt: 20, expiresAt: 130, stacks: 1 }] } : actor),
+    };
+    const projected = projectGameplayState({ state: dungeon, content: createDemoContentPack() });
+    expect(projected.floor.town).toBe(false);
+    const condition = projected.hero.conditions[0] as Readonly<{ remaining: number | null }>;
+    expect(condition.remaining).toBe(100);
+    expect(condition).not.toHaveProperty('expiresAt');
+    expect(stableJson(projected)).not.toContain('expiresAt');
+  });
+
+  it('projects a permanent condition\'s remaining as null regardless of worldTime', () => {
+    const base = createDemoRun();
+    const dungeon: ActiveRun = {
+      ...base, worldTime: 30,
+      actors: base.actors.map((actor) => actor.actorId === base.actors[0]!.actorId
+        ? { ...actor, conditions: [{ conditionId: 'condition.incapacitated', sourceActorId: null,
+          appliedAt: 20, expiresAt: null, stacks: 1 }] } : actor),
+    };
+    const projected = projectGameplayState({ state: dungeon, content: createDemoContentPack() });
+    expect(projected.floor.town).toBe(false);
+    const condition = projected.hero.conditions[0] as Readonly<{ remaining: number | null }>;
+    expect(condition.remaining).toBeNull();
+  });
+
+  it('projects a timed condition\'s remaining as null while in the frozen-time town floor', () => {
+    const base = createDemoRun();
+    const townFloor = { ...base.floors[0]!, floorId: 'floor.town-remaining', depth: 0 };
+    const town: ActiveRun = {
+      ...base, worldTime: 30, floors: [townFloor], activeFloorId: townFloor.floorId,
+      actors: base.actors.map((actor) => actor.actorId === base.actors[0]!.actorId
+        ? { ...actor, floorId: townFloor.floorId, conditions: [{ conditionId: 'condition.disengaged',
+          sourceActorId: null, appliedAt: 20, expiresAt: 130, stacks: 1 }] } : actor),
+    };
+    const projected = projectGameplayState({ state: town, content: createDemoContentPack() });
+    expect(projected.floor.town).toBe(true);
+    const condition = projected.hero.conditions[0] as Readonly<{ remaining: number | null }>;
+    expect(condition.remaining).toBeNull();
   });
 
   it('projects the hero\'s sight radius', () => {

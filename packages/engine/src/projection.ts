@@ -549,10 +549,14 @@ export function projectGameplayState(input: Readonly<{
   const equipment = Object.fromEntries(Object.entries(hero.equipment).map(([slot, itemId]) => [
     slot, itemId === null ? null : projectedOwnedItem(input.state, input.content, itemId),
   ]));
+  const townFrozen = observed.floor.depth === 0;
   const conditions = hero.conditions.map((condition) => {
     const definition = conditionDefinition(input.content, condition.conditionId);
+    const remaining = condition.expiresAt === null || townFrozen
+      ? null
+      : condition.expiresAt - input.state.worldTime;
     return { conditionId: definition.id, name: definition.name, color: definition.color,
-      stacks: condition.stacks, expiresAt: condition.expiresAt };
+      stacks: condition.stacks, remaining };
   });
   const actors = input.state.actors.filter((actor) => actor.actorId !== hero.actorId
     && actor.floorId === hero.floorId && actor.health > 0 && visiblyOccupied(observed, actor.x, actor.y))
