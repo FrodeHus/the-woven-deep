@@ -135,10 +135,14 @@ function isValidChord(value: unknown): value is KeyChord {
  *   `corrupted: true` only for the JSON-parse/shape failure (a plain missing key is not corrupt).
  * - Unknown top-level fields, and unknown/malformed `bindings` entries, are dropped silently
  *   (forward tolerance) -- they do not mark the load as corrupted.
- * - A stored override whose chord collides with another action's *default* chord is dropped (it
- *   can never have been saved by `saveSettings`, which rejects conflicts at write time -- this
- *   only guards a hand-edited or foreign-version blob) and reported in `droppedOverrides`; this
- *   does not mark the load as corrupted either.
+ * - Conflict-free storage is enforced in two layers: `saveSettings` rejects a colliding write
+ *   outright (see its doc comment), so anything written through this module's own API is already
+ *   conflict-free by construction. This function's per-override `bindingConflict` check is the
+ *   second layer, guarding a hand-edited or foreign-version blob that reached storage some other
+ *   way. Entries are accepted in `ACTION_IDS` order, so of two stored overrides that collide with
+ *   *each other* the earlier one (by that order) wins and the later one is dropped; a conflict
+ *   with another action's default chord drops the override outright. Either way the loser is
+ *   reported in `droppedOverrides`, and this does not mark the load as corrupted.
  */
 export function loadSettings(
   storage: SessionStorageLike,
@@ -193,12 +197,36 @@ export function loadSettings(
 }
 
 /**
- * Persists `settings` to `storage` as JSON. `storage.set` can throw (quota exceeded, storage
- * disabled/unavailable); the failure is classified via `classifyStorageFailure` so a future caller
- * can surface a specific notice, and `{ ok: false }` is returned rather than letting the error
- * propagate.
+ * True if any override in `bindings` collides with another action's effective chord -- either
+ * another override, or a default left un-overridden. Checked via the same `bindingConflict` used
+ * for the settings screen's live conflict feedback, so write-time rejection and on-screen warnings
+ * can never disagree about what counts as a conflict.
+ */
+function hasBindingConflict(bindings: Settings['bindings']): boolean {
+  for (const actionId of Object.keys(bindings) as ActionId[]) {
+    const candidate = bindings[actionId];
+    if (candidate === undefined) continue;
+    if (bindingConflict(bindings, actionId, candidate) !== null) return true;
+  }
+  return false;
+}
+
+/**
+ * Persists `settings` to `storage` as JSON -- but only if `settings.bindings` is conflict-free.
+ * This is the first line of defense promised by `loadSettings`'s doc comment: every override is
+ * checked with `bindingConflict` against the resolved map of the other overrides plus defaults,
+ * and if any collision exists, nothing is written and `{ ok: false }` is returned. (The brief for
+ * this shape keeps `{ ok: boolean }` rather than a discriminated result carrying the conflicting
+ * `ActionId`s -- surfacing *which* action(s) conflict is Task 3's settings-UI concern.)
+ *
+ * Beyond that, `storage.set` can throw (quota exceeded, storage disabled/unavailable); that
+ * failure is classified via `classifyStorageFailure` so a future caller can surface a specific
+ * notice, and `{ ok: false }` is returned rather than letting the error propagate.
  */
 export function saveSettings(storage: SessionStorageLike, settings: Settings): Readonly<{ ok: boolean }> {
+  if (hasBindingConflict(settings.bindings)) {
+    return { ok: false };
+  }
   try {
     storage.set(SETTINGS_KEY, JSON.stringify(settings));
     return { ok: true };

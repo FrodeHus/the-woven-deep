@@ -109,6 +109,30 @@ describe('loadSettings / saveSettings round-trip', () => {
     expect(saveSettings(storage, DEFAULT_SETTINGS)).toEqual({ ok: false });
   });
 
+  it('saveSettings rejects bindings colliding with another action\'s default, writing nothing', () => {
+    const storage = fakeStorage();
+    const settings: Settings = {
+      ...DEFAULT_SETTINGS,
+      // `pickup`'s default is bound to "g"; overriding `wait` onto "g" collides with it.
+      bindings: { wait: { key: 'g', shift: false } },
+    };
+    expect(saveSettings(storage, settings)).toEqual({ ok: false });
+    expect(storage.get(SETTINGS_KEY)).toBeNull();
+  });
+
+  it('saveSettings rejects two overrides colliding with EACH OTHER, writing nothing', () => {
+    const storage = fakeStorage();
+    const settings: Settings = {
+      ...DEFAULT_SETTINGS,
+      bindings: {
+        trade: { key: 'z', shift: false },
+        settings: { key: 'z', shift: false },
+      },
+    };
+    expect(saveSettings(storage, settings)).toEqual({ ok: false });
+    expect(storage.get(SETTINGS_KEY)).toBeNull();
+  });
+
   it('treats a corrupted (non-JSON) blob as DEFAULT_SETTINGS with corrupted: true', () => {
     const storage = fakeStorage({ [SETTINGS_KEY]: 'not json{{{' });
     expect(loadSettings(storage)).toEqual({ settings: DEFAULT_SETTINGS, corrupted: true, droppedOverrides: [] });
@@ -175,6 +199,26 @@ describe('loadSettings / saveSettings round-trip', () => {
     expect(result.corrupted).toBe(false);
     expect(result.droppedOverrides).toEqual(['wait']);
     expect(result.settings.bindings).toEqual({});
+  });
+
+  it('resolves two stored overrides colliding with EACH OTHER (not a default) deterministically by ACTION_IDS order, dropping the later one', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({
+        fontScale: 1,
+        reducedMotion: 'system',
+        // Neither `trade` nor `settings` collides with any default chord; they collide with each
+        // other. `trade` precedes `settings` in ACTION_IDS, so it is accepted first and wins;
+        // `settings` is the one dropped.
+        bindings: {
+          trade: { key: 'z', shift: false },
+          settings: { key: 'z', shift: false },
+        },
+      }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.droppedOverrides).toEqual(['settings']);
+    expect(result.settings.bindings).toEqual({ trade: { key: 'z', shift: false } });
   });
 
   it('keeps a valid override alongside a dropped colliding one', () => {
