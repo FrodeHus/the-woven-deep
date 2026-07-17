@@ -1,7 +1,8 @@
-import { useEffect, useRef, type CSSProperties, type JSX } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type JSX } from 'react';
 import type { SessionSnapshot } from '../session/guest-session.js';
 import type { LogLine } from '../session/event-log.js';
 import { pickPrimaryCondition } from './effects-map.js';
+import { heroAnnouncements, type HeroAnnounceSnapshot } from './hero-announce.js';
 
 export interface PanelProps {
   readonly snapshot: SessionSnapshot;
@@ -172,7 +173,7 @@ export function StatusBar({ snapshot }: PanelProps): JSX.Element {
   const { metrics, floor } = snapshot.projection;
   const primaryCondition = pickPrimaryCondition(heroData.conditions);
   return (
-    <div className="status-bar" role="status">
+    <div className="status-bar" role="group" aria-label="Status">
       <span className="status-hero">{heroData.name}</span>
       <span className="status-depth">{floor.town ? 'Town' : `Depth ${floor.depth}`}</span>
       <span data-testid="turn-count">{`Turn ${metrics.turnsElapsed}`}</span>
@@ -187,5 +188,47 @@ export function StatusBar({ snapshot }: PanelProps): JSX.Element {
         </span>
       )}
     </div>
+  );
+}
+
+function announceSnapshot(heroData: ProjectedHero): HeroAnnounceSnapshot {
+  return {
+    health: heroData.health,
+    maxHealth: heroData.maxHealth,
+    hungerStage: heroData.hungerStage,
+    conditions: heroData.conditions.map((condition) => ({ conditionId: condition.conditionId, name: condition.name })),
+  };
+}
+
+/**
+ * A visually-hidden `role="status"` / `aria-live="polite"` region that speaks ONLY the hero's own
+ * significant transitions -- health crossing 50%/25%, a hunger stage change, a condition gained or
+ * faded (see `heroAnnouncements`). It deliberately does NOT mirror every projection tick: the
+ * visible `StatusBar` is no longer a live region (its turn counter would otherwise announce on every
+ * step), so this is the single, debounced spoken channel for hero state. Mounts once and stays
+ * mounted for the whole play session, holding the previous snapshot in a ref; the first snapshot
+ * only establishes the baseline and announces nothing, so entering the screen is silent.
+ */
+export function HeroStatusAnnouncer({ snapshot }: PanelProps): JSX.Element {
+  const current = announceSnapshot(hero(snapshot));
+  const prevRef = useRef<HeroAnnounceSnapshot | null>(null);
+  const [message, setMessage] = useState('');
+
+  const conditionKey = current.conditions.map((condition) => condition.conditionId).join(',');
+  useEffect(() => {
+    const prev = prevRef.current;
+    prevRef.current = current;
+    if (prev === null) return;
+    const messages = heroAnnouncements(prev, current);
+    // Non-empty guard: pushing '' would clear the region; only overwrite it when there is something
+    // new to say, so a repeated identical message is re-announced by toggling through a space.
+    if (messages.length === 0) return;
+    const next = messages.join(' ');
+    setMessage((previous) => (previous === next ? `${next} ` : next));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current.health, current.maxHealth, current.hungerStage, conditionKey]);
+
+  return (
+    <div className="sr-only" role="status" aria-live="polite" aria-label="Hero status">{message}</div>
   );
 }

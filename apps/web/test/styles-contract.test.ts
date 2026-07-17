@@ -581,3 +581,29 @@ describe('landing page reduced-motion stylesheet contract', () => {
     expect(revealRuleMatch![1]).toMatch(/transform\s*:\s*none\s*!important/);
   });
 });
+
+describe('colorblind reinforcement stylesheet contract (Task 9)', () => {
+  it('gives each colored log tone a non-color leading glyph via a silent ::before', () => {
+    for (const tone of ['combat', 'warning', 'system']) {
+      const rule = new RegExp(`\\.log-line--${tone}::before\\s*\\{([^}]*)\\}`).exec(css);
+      expect(rule, `expected a ::before glyph for .log-line--${tone}`).toBeTruthy();
+      // CSS alt-text syntax `content: "..." / ""` keeps the glyph out of the accessibility tree.
+      expect(rule![1]).toMatch(/content\s*:\s*"[^"]+"\s*\/\s*""/);
+    }
+  });
+
+  it('gives each colored journal log tone the same silent reinforcement glyph', () => {
+    for (const tone of ['combat', 'warning', 'system']) {
+      const rule = new RegExp(`\\.journal-log-line--${tone}::before\\s*\\{([^}]*)\\}`).exec(css);
+      expect(rule, `expected a ::before glyph for .journal-log-line--${tone}`).toBeTruthy();
+      expect(rule![1]).toMatch(/content\s*:\s*"[^"]+"\s*\/\s*""/);
+    }
+  });
+
+  it('defines an .sr-only visually-hidden utility for the hero-status live region', () => {
+    const rule = /\.sr-only\s*\{([^}]*)\}/.exec(css);
+    expect(rule, 'expected an .sr-only utility class').toBeTruthy();
+    expect(rule![1]).toMatch(/position\s*:\s*absolute/);
+    expect(rule![1]).toMatch(/clip-path\s*:\s*inset\(50%\)/);
+  });
+});

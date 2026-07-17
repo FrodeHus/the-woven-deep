@@ -17,7 +17,7 @@ import { DEFAULT_SETTINGS, resolveKeymap, type ResolvedKeymap, type Settings } f
 import {
   layoutTier, viewportForPane, zoomForFloor, type LayoutTier, type ZoomFactor,
 } from './layout.js';
-import { HeroPanel, LogPanel, StatusBar, ThreatPanel, VitalsStrip } from './panels.js';
+import { HeroPanel, HeroStatusAnnouncer, LogPanel, StatusBar, ThreatPanel, VitalsStrip } from './panels.js';
 import { useDialogFocusTrap } from './overlays/focus-trap.js';
 import { OVERLAY_REGISTRY, type OverlayId } from './overlays/registry.js';
 import { OVERLAY_COMPONENTS } from './overlays/overlay-components.js';
@@ -344,6 +344,7 @@ export function PlayScreen({
       <div className="triptych" data-tier={tier} ref={triptychRef}>
         <div className="status-slot">
           <StatusBar snapshot={snapshot} />
+          <HeroStatusAnnouncer snapshot={snapshot} />
         </div>
 
         <div className="hero-slot">

@@ -13,7 +13,7 @@ import {
 import { GuestSession } from '../src/session/guest-session.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 import type { SessionSnapshot } from '../src/session/guest-session.js';
-import { HeroPanel, LogPanel, StatusBar, ThreatPanel } from '../src/ui/panels.js';
+import { HeroPanel, HeroStatusAnnouncer, LogPanel, StatusBar, ThreatPanel } from '../src/ui/panels.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
 import type { OverlayId } from '../src/ui/overlays/registry.js';
 
@@ -427,5 +427,58 @@ describe('PlayScreen keyboard routing', () => {
     await user.keyboard('n');
     await waitFor(() => expect(session.getSnapshot().pendingDecision).toBeNull());
     expect(session.getSnapshot().log.at(-1)?.tone).toBe('system');
+  });
+});
+
+describe('StatusBar live-region demotion (Task 9)', () => {
+  it('is a labeled group, not a live region, so the per-turn turn counter never spams a screen reader', () => {
+    render(<StatusBar snapshot={snapshotOf(baseProjection)} />);
+    const bar = document.querySelector('.status-bar')!;
+    expect(bar.getAttribute('role')).toBe('group');
+    expect(bar.getAttribute('aria-live')).toBeNull();
+  });
+});
+
+describe('HeroStatusAnnouncer (Task 9)', () => {
+  function heroWith(overrides: Record<string, unknown>): GameplayProjection {
+    const heroData = baseProjection.hero as unknown as Record<string, unknown>;
+    return { ...baseProjection, hero: { ...heroData, ...overrides } } as unknown as GameplayProjection;
+  }
+
+  it('renders a visually-hidden polite status region that is silent on first mount', () => {
+    render(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 100, maxHealth: 100 }))} />);
+    const region = screen.getByRole('status');
+    expect(region).toHaveClass('sr-only');
+    expect(region).toHaveAttribute('aria-live', 'polite');
+    expect(region.textContent).toBe('');
+  });
+
+  it('announces a health band crossing when the hero worsens', () => {
+    const { rerender } = render(
+      <HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 100, maxHealth: 100 }))} />,
+    );
+    const region = screen.getByRole('status');
+    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 40, maxHealth: 100 }))} />);
+    expect(region.textContent).toContain('Health low.');
+  });
+
+  it('stays silent on a health drop that does not cross a band (no spam)', () => {
+    const { rerender } = render(
+      <HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 100, maxHealth: 100 }))} />,
+    );
+    const region = screen.getByRole('status');
+    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 60, maxHealth: 100 }))} />);
+    expect(region.textContent).toBe('');
+  });
+
+  it('announces a newly gained condition by name', () => {
+    const { rerender } = render(
+      <HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ conditions: [] }))} />,
+    );
+    const region = screen.getByRole('status');
+    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({
+      conditions: [{ conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50 }],
+    }))} />);
+    expect(region.textContent).toContain('Afflicted: Poisoned.');
   });
 });
