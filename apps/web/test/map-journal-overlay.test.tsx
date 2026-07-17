@@ -25,6 +25,7 @@ beforeAll(async () => {
 });
 
 interface FloorOverrides {
+  readonly floorId?: string;
   readonly town?: boolean;
   readonly width: number;
   readonly height: number;
@@ -35,12 +36,21 @@ interface FloorOverrides {
   }>[];
 }
 
+interface PersistedLandmarkOverride {
+  readonly floorId: string;
+  readonly kind: 'merchant' | 'stair-up' | 'stair-down' | 'house';
+  readonly name: string;
+  readonly x: number;
+  readonly y: number;
+}
+
 interface SnapshotOverrides {
   readonly floor?: FloorOverrides;
   readonly hero?: Readonly<{ x: number; y: number }>;
   readonly actors?: readonly Readonly<Record<string, unknown>>[];
   readonly slots?: readonly Readonly<{ slotId: string; tags: readonly string[]; x: number; y: number }>[];
   readonly log?: readonly LogLine[];
+  readonly landmarks?: readonly PersistedLandmarkOverride[];
 }
 
 function snapshotWith(overrides: SnapshotOverrides): SessionSnapshot {
@@ -57,7 +67,10 @@ function snapshotWith(overrides: SnapshotOverrides): SessionSnapshot {
     pendingDecision: null,
     notice: null,
     houseOpen: false,
-    conclusion: null, sightings: { monsterIds: [], itemIds: [] }, heroClassTags: [],
+    conclusion: null,
+    sightings: { monsterIds: [], itemIds: [], landmarks: overrides.landmarks ?? [] },
+    heroClassTags: [],
+    onboarding: { counts: {}, dismissed: [] },
   };
 }
 
@@ -263,6 +276,91 @@ describe('MapJournalOverlay', () => {
       const landmarks = within(screen.getByRole('list', { name: /landmarks/i }));
       expect(landmarks.getByText(/stairs down/i)).toBeInTheDocument();
       expect(landmarks.queryByText(/stairs up/i)).not.toBeInTheDocument();
+    });
+
+    it('shows a persisted merchant landmark on the current floor even though no actor is currently visible', async () => {
+      const user = userEvent.setup();
+      const dungeonFloor: FloorOverrides = { floorId: 'floor.dungeon-1', town: false, width: 1, height: 1, cells: [] };
+      const snapshot = snapshotWith({
+        floor: dungeonFloor,
+        landmarks: [{ floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Wandering Peddler', x: 5, y: 5 }],
+      });
+      render(<MapJournalOverlay snapshot={snapshot} />);
+      await user.click(screen.getByRole('tab', { name: 'Journal' }));
+
+      const landmarks = within(screen.getByRole('list', { name: /landmarks/i }));
+      expect(landmarks.getByText(/wandering peddler/i)).toBeInTheDocument();
+    });
+
+    it('does not duplicate a landmark that is both currently live and already persisted', async () => {
+      const user = userEvent.setup();
+      const dungeonFloor: FloorOverrides = {
+        floorId: 'floor.dungeon-1', town: false, width: 1, height: 1,
+        cells: [{ index: 0, x: 5, y: 5, knowledge: 'visible', tileId: 1, glyph: '.', intensity: 200 }],
+      };
+      const snapshot = snapshotWith({
+        floor: dungeonFloor,
+        hero: { x: 0, y: 0 },
+        actors: [{ x: 5, y: 5, name: 'Wandering Peddler', factionName: 'faction.lampwrights' }],
+        landmarks: [{ floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Wandering Peddler', x: 5, y: 5 }],
+      });
+      render(<MapJournalOverlay snapshot={snapshot} />);
+      await user.click(screen.getByRole('tab', { name: 'Journal' }));
+
+      const landmarks = within(screen.getByRole('list', { name: /landmarks/i }));
+      expect(landmarks.getAllByText(/wandering peddler/i)).toHaveLength(1);
+    });
+
+    it('dedupes a moving merchant by identity, not position -- a persisted landmark frozen at first-seen (x,y) collapses into the live entry at the merchant\'s current position', async () => {
+      const user = userEvent.setup();
+      const dungeonFloor: FloorOverrides = {
+        floorId: 'floor.dungeon-1', town: false, width: 1, height: 1,
+        cells: [{ index: 0, x: 12, y: 10, knowledge: 'visible', tileId: 1, glyph: '.', intensity: 200 }],
+      };
+      const snapshot = snapshotWith({
+        floor: dungeonFloor,
+        hero: { x: 0, y: 0 },
+        // The merchant fled from (10,10) -- where it was first captured -- to (12,10), its
+        // current, live position.
+        actors: [{ x: 12, y: 10, name: 'Weary Lampwright', factionName: 'faction.lampwrights' }],
+        landmarks: [{ floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Weary Lampwright', x: 10, y: 10 }],
+      });
+      render(<MapJournalOverlay snapshot={snapshot} />);
+      await user.click(screen.getByRole('tab', { name: 'Journal' }));
+
+      const landmarks = within(screen.getByRole('list', { name: /landmarks/i }));
+      expect(landmarks.getAllByText(/weary lampwright/i)).toHaveLength(1);
+    });
+
+    it('keeps two rows for two different merchants at two different positions', async () => {
+      const user = userEvent.setup();
+      const dungeonFloor: FloorOverrides = { floorId: 'floor.dungeon-1', town: false, width: 1, height: 1, cells: [] };
+      const snapshot = snapshotWith({
+        floor: dungeonFloor,
+        actors: [{ x: 12, y: 10, name: 'Weary Lampwright', factionName: 'faction.lampwrights' }],
+        landmarks: [{ floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Wandering Peddler', x: 5, y: 5 }],
+      });
+      render(<MapJournalOverlay snapshot={snapshot} />);
+      await user.click(screen.getByRole('tab', { name: 'Journal' }));
+
+      const landmarks = within(screen.getByRole('list', { name: /landmarks/i }));
+      expect(landmarks.getByText(/weary lampwright/i)).toBeInTheDocument();
+      expect(landmarks.getByText(/wandering peddler/i)).toBeInTheDocument();
+    });
+
+    it('does not show a persisted landmark captured on a DIFFERENT floor', async () => {
+      const user = userEvent.setup();
+      const dungeonFloor: FloorOverrides = { floorId: 'floor.dungeon-2', town: false, width: 1, height: 1, cells: [] };
+      const snapshot = snapshotWith({
+        floor: dungeonFloor,
+        landmarks: [{ floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Wandering Peddler', x: 5, y: 5 }],
+      });
+      render(<MapJournalOverlay snapshot={snapshot} />);
+      await user.click(screen.getByRole('tab', { name: 'Journal' }));
+
+      expect(screen.queryByRole('list', { name: /landmarks/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/wandering peddler/i)).not.toBeInTheDocument();
+      expect(screen.getByText('Nothing landmark-worthy seen yet.')).toBeInTheDocument();
     });
   });
 });

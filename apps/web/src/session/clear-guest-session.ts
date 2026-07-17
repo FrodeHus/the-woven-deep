@@ -1,4 +1,5 @@
 import { SIGHTINGS_KEY } from './codex.js';
+import { ONBOARDING_KEY } from './onboarding.js';
 import { RECORDS_KEY } from './run-records-storage.js';
 import { SETTINGS_KEY } from './settings.js';
 import { COMMAND_SEQUENCE_KEY, PORTRAIT_KEY, SAVE_KEY, type SessionStorageLike } from './storage.js';
@@ -12,8 +13,9 @@ export const GUEST_SESSION_STORAGE_KEYS: readonly string[] = [
   SAVE_KEY, COMMAND_SEQUENCE_KEY, RECORDS_KEY, PORTRAIT_KEY, SIGHTINGS_KEY,
 ];
 
-/** The one `localStorage` key wiped alongside the above: the guest's settings. */
-export const GUEST_LOCAL_STORAGE_KEYS: readonly string[] = [SETTINGS_KEY];
+/** The `localStorage` keys wiped alongside the above: the guest's settings and (Task 8) the
+ * device-persistent onboarding mastery ledger. */
+export const GUEST_LOCAL_STORAGE_KEYS: readonly string[] = [SETTINGS_KEY, ONBOARDING_KEY];
 
 /**
  * Wipes every guest-session storage key, `sessionStorage` and `localStorage` alike -- the settings

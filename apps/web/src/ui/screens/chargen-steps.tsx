@@ -88,6 +88,14 @@ export function NameStep({ state, dispatch }: StepProps): JSX.Element {
           ))}
         </div>
       </fieldset>
+      <label className="chargen-onboarding-toggle">
+        <input
+          type="checkbox"
+          checked={state.onboardingEnabled}
+          onChange={(event) => dispatch({ type: 'set-onboarding-enabled', enabled: event.target.checked })}
+        />
+        Show guidance on your first delve
+      </label>
     </section>
   );
 }

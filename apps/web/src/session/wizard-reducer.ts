@@ -24,6 +24,11 @@ export interface WizardState {
   readonly kitId: string | null;
   readonly backgroundId: OpaqueId | null;
   readonly traitIds: readonly OpaqueId[];
+  /** Step 1's "Show guidance on your first delve" checkbox -- seeded from `Settings.onboarding`
+   * (Task 8) and written back to it at confirm (see `ChargenScreen`'s `onConfirm`). Lives on the
+   * wizard itself, not read live from settings, so toggling it mid-wizard doesn't require a round
+   * trip through `App`'s settings state. */
+  readonly onboardingEnabled: boolean;
 }
 
 export type WizardAction =
@@ -37,6 +42,7 @@ export type WizardAction =
   | { type: 'choose-kit'; kitId: string }
   | { type: 'choose-background'; backgroundId: OpaqueId }
   | { type: 'toggle-trait'; traitId: OpaqueId }
+  | { type: 'set-onboarding-enabled'; enabled: boolean }
   | { type: 'next' }
   | { type: 'back' };
 
@@ -51,7 +57,7 @@ export interface WizardContext {
  * in a `useMemo`/`useRef`. `initialWizardState` still takes `seed` so its signature mirrors
  * `wizardReduce`'s and callers can construct both from the same value.
  */
-export function initialWizardState(seed: Uint32State): WizardState {
+export function initialWizardState(seed: Uint32State, onboardingEnabled = true): WizardState {
   void seed;
   return {
     step: 1,
@@ -65,6 +71,7 @@ export function initialWizardState(seed: Uint32State): WizardState {
     kitId: null,
     backgroundId: null,
     traitIds: [],
+    onboardingEnabled,
   };
 }
 
@@ -197,6 +204,9 @@ export function wizardReduce(state: WizardState, action: WizardAction, context: 
       if (state.traitIds.length >= MAX_TRAITS) return state;
       return { ...state, traitIds: [...state.traitIds, action.traitId] };
     }
+
+    case 'set-onboarding-enabled':
+      return { ...state, onboardingEnabled: action.enabled };
 
     case 'next': {
       if (state.step >= 7 || !stepSatisfied(state)) return state;

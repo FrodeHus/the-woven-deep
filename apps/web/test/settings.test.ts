@@ -115,10 +115,101 @@ describe('loadSettings / saveSettings round-trip', () => {
     const settings: Settings = {
       fontScale: 1.3,
       reducedMotion: 'on',
+      theme: 'high-contrast',
+      lighting: 'classic',
+      onboarding: 'off',
       bindings: { wait: { key: 'z', shift: false } },
     };
     expect(saveSettings(storage, settings)).toEqual({ ok: true });
     expect(loadSettings(storage)).toEqual({ settings, corrupted: false, droppedOverrides: [] });
+  });
+
+  it('defaults onboarding to "on" when nothing is stored', () => {
+    expect(loadSettings(fakeStorage()).settings.onboarding).toBe('on');
+  });
+
+  it('falls back to "on" for an invalid stored onboarding value, without marking corrupted', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({
+        fontScale: 1, reducedMotion: 'system', theme: 'tapestry', lighting: 'smooth', onboarding: 'nonsense', bindings: {},
+      }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.settings.onboarding).toBe('on');
+  });
+
+  it('forward-tolerates a stored blob with no onboarding field at all (pre-Task-8 blob), defaulting to "on"', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({
+        fontScale: 1, reducedMotion: 'system', theme: 'tapestry', lighting: 'smooth', bindings: {},
+      }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.settings.onboarding).toBe('on');
+  });
+
+  it('round-trips an explicit "off" onboarding setting', () => {
+    const storage = fakeStorage();
+    const settings: Settings = { ...DEFAULT_SETTINGS, onboarding: 'off' };
+    expect(saveSettings(storage, settings)).toEqual({ ok: true });
+    expect(loadSettings(storage).settings.onboarding).toBe('off');
+  });
+
+  it('defaults theme to "tapestry" when nothing is stored', () => {
+    expect(loadSettings(fakeStorage()).settings.theme).toBe('tapestry');
+  });
+
+  it('falls back to "tapestry" for an invalid stored theme value, without marking corrupted', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({ fontScale: 1, reducedMotion: 'system', theme: 'nonsense', bindings: {} }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.settings.theme).toBe('tapestry');
+  });
+
+  it('forward-tolerates a stored blob with no theme field at all (pre-Task-2 blob), defaulting to "tapestry"', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({ fontScale: 1, reducedMotion: 'system', bindings: {} }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.settings.theme).toBe('tapestry');
+  });
+
+  it('defaults lighting to "smooth" when nothing is stored', () => {
+    expect(loadSettings(fakeStorage()).settings.lighting).toBe('smooth');
+  });
+
+  it('falls back to "smooth" for an invalid stored lighting value, without marking corrupted', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({
+        fontScale: 1, reducedMotion: 'system', theme: 'tapestry', lighting: 'nonsense', bindings: {},
+      }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.settings.lighting).toBe('smooth');
+  });
+
+  it('forward-tolerates a stored blob with no lighting field at all (pre-Task-6 blob), defaulting to "smooth"', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({
+        fontScale: 1, reducedMotion: 'system', theme: 'tapestry', bindings: {},
+      }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.settings.lighting).toBe('smooth');
+  });
+
+  it('round-trips an explicit "classic" lighting setting', () => {
+    const storage = fakeStorage();
+    const settings: Settings = { ...DEFAULT_SETTINGS, lighting: 'classic' };
+    expect(saveSettings(storage, settings)).toEqual({ ok: true });
+    expect(loadSettings(storage).settings.lighting).toBe('classic');
   });
 
   it('saveSettings reports ok:false with the classified reason (without throwing) when the storage write fails', () => {
@@ -185,6 +276,9 @@ describe('loadSettings / saveSettings round-trip', () => {
     expect(result.settings).toEqual({
       fontScale: 1.15,
       reducedMotion: 'off',
+      theme: 'tapestry',
+      lighting: 'smooth',
+      onboarding: 'on',
       bindings: { wait: { key: 'z', shift: false } },
     });
   });

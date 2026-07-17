@@ -13,6 +13,7 @@ import {
 import { App, PORTRAIT_KEY } from '../src/App.js';
 import { createSessionRunRecordRepository, RECORDS_KEY } from '../src/session/run-records-storage.js';
 import { PORTRAIT_GLYPHS } from '../src/session/wizard-reducer.js';
+import { SETTINGS_KEY } from '../src/session/settings.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 
 vi.mock('@woven-deep/engine', async (importOriginal) => {
@@ -50,6 +51,19 @@ function fakeStorage(initial: string | null = null): SessionStorageLike & { peek
 
 function decodableSave(seed: Uint32State = SEED): string {
   return encodeActiveRun(createNewRun({ pack, seed, hero: DEFAULT_GUEST_HERO }));
+}
+
+/** A `localStorage`-shaped fake, keyed like `fakeStorage` above but distinct (settings and the
+ * onboarding ledger live in `localStorage`, never the run-save `sessionStorage`). `peek` defaults
+ * to `SETTINGS_KEY` since that's this file's only `localStorage` fixture need today. */
+function fakeLocalStorage(initial?: Readonly<{ key: string; value: string }>): SessionStorageLike & { peek(key?: string): string | null } {
+  const values = new Map<string, string>();
+  if (initial) values.set(initial.key, initial.value);
+  return {
+    get: (key: string) => values.get(key) ?? null,
+    set: (key: string, value: string) => { values.set(key, value); },
+    peek: (key: string = SETTINGS_KEY) => values.get(key) ?? null,
+  };
 }
 
 /** A run already concluded by hero death, exactly like `guest-session.test.ts`'s `deadRun`
@@ -356,6 +370,57 @@ describe('App boot flow', () => {
 
     await screen.findByRole('option', { name: /enter the deep/i });
     expect(screen.queryByRole('option', { name: /continue/i })).not.toBeInTheDocument();
+  });
+
+  describe('quickstart forces onboarding off (Task 8 review Finding 1)', () => {
+    it('?quickstart=1 never shows the onboarding hint strip, even with settings onboarding stored "on"', async () => {
+      window.history.pushState({}, '', '/play?quickstart=1');
+      const storage = fakeStorage();
+      const localStorage = fakeLocalStorage({
+        key: SETTINGS_KEY,
+        value: JSON.stringify({
+          fontScale: 1, reducedMotion: 'system', theme: 'tapestry', lighting: 'smooth',
+          onboarding: 'on', bindings: {},
+        }),
+      });
+
+      render(<App fetcher={packFetcher()} storage={storage} localStorage={localStorage} />);
+      await screen.findByRole('grid', { name: /dungeon/i });
+
+      expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    });
+
+    it('contrast: a non-quickstart boot into a fresh town run shows the movement hint', async () => {
+      const user = userEvent.setup();
+      const storage = fakeStorage();
+      render(<App fetcher={packFetcher()} storage={storage} />);
+
+      await user.click(await screen.findByRole('option', { name: /enter the deep/i }));
+      await screen.findByLabelText(/Step 1 of 7/);
+      await driveWizardToSummary(user);
+      await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+      await screen.findByRole('grid', { name: /dungeon/i });
+      expect(screen.getByRole('note')).toHaveTextContent(/move/i);
+    });
+  });
+
+  describe('corrupted storage surfaces the standard dismissible notice (Task 8 review Finding 3)', () => {
+    it('a corrupted settings blob resets to defaults AND shows a dismissible "Session notice" banner', async () => {
+      const user = userEvent.setup();
+      const storage = fakeStorage();
+      const localStorage = fakeLocalStorage({ key: SETTINGS_KEY, value: 'not json{{{' });
+
+      render(<App fetcher={packFetcher()} storage={storage} localStorage={localStorage} />);
+
+      await screen.findByRole('option', { name: /enter the deep/i });
+      const banner = screen.getByRole('status', { name: /settings/i });
+      expect(banner).toHaveTextContent(/settings.*unreadable.*reset/i);
+
+      const dismiss = within(banner).getByRole('button', { name: /dismiss/i });
+      await user.click(dismiss);
+      expect(screen.queryByText(/settings.*unreadable/i)).not.toBeInTheDocument();
+    });
   });
 });
 

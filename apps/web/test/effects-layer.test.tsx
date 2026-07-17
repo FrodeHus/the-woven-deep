@@ -23,6 +23,7 @@ function makeProjection(input: Readonly<{
   floorId?: string; heroX: number; heroY: number;
   equipment?: Record<string, unknown>;
   actors?: readonly Record<string, unknown>[];
+  conditions?: readonly Record<string, unknown>[];
 }>): GameplayProjection {
   const width = 20; const height = 10;
   const cells: ObservableCell[] = [];
@@ -32,6 +33,7 @@ function makeProjection(input: Readonly<{
     hero: {
       actorId: 'actor.hero', name: 'Ada', x: input.heroX, y: input.heroY,
       equipment: input.equipment ?? {},
+      conditions: input.conditions ?? [],
     },
     actors: input.actors ?? [],
     features: [], groundItems: [], actions: [],
@@ -155,6 +157,62 @@ describe('EffectsLayer', () => {
     const effect = container.querySelector('.effect-hit-flash')!;
     fireEvent.animationEnd(effect);
     expect(container.querySelector('.effect-hit-flash')).toBeNull();
+  });
+
+  it('renders a tinted aura at the hero cell while a condition is active, colored from the condition\'s projected color', () => {
+    const projection = makeProjection({
+      heroX: 5, heroY: 5,
+      conditions: [{ conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50 }],
+    });
+    const { container } = render(
+      <EffectsLayer projection={projection} pack={pack([])} lastEvents={[]} camera={CAMERA} viewport={VIEWPORT} />,
+    );
+    const aura = container.querySelector('.condition-aura');
+    expect(aura).not.toBeNull();
+    expect(aura!.getAttribute('data-condition')).toBe('condition.poisoned');
+    const style = aura!.getAttribute('style')!;
+    expect(style).toContain('--aura-color: #7ac86a');
+    expect(style).toContain('--x: 5');
+    expect(style).toContain('--y: 5');
+  });
+
+  it('renders no aura while no condition is active', () => {
+    const projection = makeProjection({ heroX: 5, heroY: 5, conditions: [] });
+    const { container } = render(
+      <EffectsLayer projection={projection} pack={pack([])} lastEvents={[]} camera={CAMERA} viewport={VIEWPORT} />,
+    );
+    expect(container.querySelector('.condition-aura')).toBeNull();
+  });
+
+  it('removes the aura once the condition list empties on a later snapshot (expiry)', () => {
+    const withCondition = makeProjection({
+      heroX: 5, heroY: 5,
+      conditions: [{ conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 1 }],
+    });
+    const { container, rerender } = render(
+      <EffectsLayer projection={withCondition} pack={pack([])} lastEvents={[]} camera={CAMERA} viewport={VIEWPORT} />,
+    );
+    expect(container.querySelector('.condition-aura')).not.toBeNull();
+
+    const expired = makeProjection({ heroX: 5, heroY: 5, conditions: [] });
+    rerender(
+      <EffectsLayer projection={expired} pack={pack([])} lastEvents={[]} camera={CAMERA} viewport={VIEWPORT} />,
+    );
+    expect(container.querySelector('.condition-aura')).toBeNull();
+  });
+
+  it('picks the highest-stacks condition for the aura when several are active', () => {
+    const projection = makeProjection({
+      heroX: 5, heroY: 5,
+      conditions: [
+        { conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50 },
+        { conditionId: 'condition.bleeding', name: 'Bleeding', color: '#c85a5a', stacks: 3, remaining: 20 },
+      ],
+    });
+    const { container } = render(
+      <EffectsLayer projection={projection} pack={pack([])} lastEvents={[]} camera={CAMERA} viewport={VIEWPORT} />,
+    );
+    expect(container.querySelector('.condition-aura')!.getAttribute('data-condition')).toBe('condition.bleeding');
   });
 
   it('is entirely decorative: aria-hidden and non-interactive', () => {

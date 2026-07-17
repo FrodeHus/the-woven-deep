@@ -70,6 +70,18 @@ describe('SettingsOverlay (component-level)', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ fontScale: 1.3 }));
   });
 
+  it('Display: theme defaults to Tapestry selected, and selecting High contrast calls onChange', () => {
+    const { onChange } = harness();
+    expect(screen.getByRole('radio', { name: /tapestry/i })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: /high contrast/i }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ theme: 'high-contrast' }));
+  });
+
+  it('Display: theme "high-contrast" starts with that radio checked', () => {
+    harness({ theme: 'high-contrast' });
+    expect(screen.getByRole('radio', { name: /high contrast/i })).toBeChecked();
+  });
+
   it('reduced motion "Always" reports reducedMotion: on', () => {
     const { onChange } = harness();
     fireEvent.click(screen.getByRole('radio', { name: /always/i }));

@@ -23,6 +23,7 @@ import { ConclusionScreen } from './ui/screens/ConclusionScreen.js';
 import { HallScreen } from './ui/screens/HallScreen.js';
 import { TitleScreen } from './ui/screens/TitleScreen.js';
 import { PlayScreen } from './ui/PlayScreen.js';
+import { effectiveReducedMotion, ScreenFade } from './ui/ScreenFade.js';
 import './styles.css';
 
 export interface AppProps {
@@ -98,11 +99,17 @@ function isStorageNotice(notice: SessionNotice): notice is StorageNotice {
   return notice.kind === 'storage';
 }
 
-/** Wording for the dismissible fresh/restored/save-discarded banner. Storage notices never reach
- * this — they get their own persistent, non-dismissible warning (see `storageWarningMessage`). */
+/** Wording for the dismissible fresh/restored/save-discarded/data-reset banner. Storage notices
+ * never reach this — they get their own persistent, non-dismissible warning (see
+ * `storageWarningMessage`). */
 function noticeMessage(notice: DismissibleNotice): string {
   if (notice.kind === 'fresh') return 'A new run has begun.';
   if (notice.kind === 'restored') return 'Welcome back — your run was restored.';
+  if (notice.kind === 'data-reset') {
+    return notice.source === 'sightings'
+      ? 'Your discovery log was unreadable and has been reset.'
+      : 'Your guidance progress was unreadable and has been reset.';
+  }
   return `Your previous save could not be loaded (${notice.reason}) — a new run has begun.`;
 }
 
@@ -146,6 +153,10 @@ interface GameRootProps {
   readonly settings: Settings;
   readonly onChangeSettings: (next: Settings) => void;
   readonly onClearGuestSession: () => void;
+  /** Whether the contextual onboarding hint strip may show at all: `settings.onboarding === 'on'`
+   * AND not a quickstart boot -- quickstart always forces it off regardless of the stored setting,
+   * protecting every pinned e2e walk (see `isQuickstart`'s doc comment). */
+  readonly onboardingEnabled: boolean;
 }
 
 /** Everything that needs a live `GuestSession` snapshot: the notice banners and the play screen
@@ -163,7 +174,7 @@ interface GameRootProps {
 function GameRoot({
   session, pack, repository, storage, portraitGlyph, onConcluded, onFinalizeError,
   overlay, onOpenOverlay, onCloseOverlay, keymap,
-  settings, onChangeSettings, onClearGuestSession,
+  settings, onChangeSettings, onClearGuestSession, onboardingEnabled,
 }: GameRootProps): JSX.Element {
   const snapshot = useGuestSession(session);
   // Re-read on every render (every session publish, since this component only re-renders via the
@@ -231,6 +242,7 @@ function GameRoot({
         onClearGuestSession={onClearGuestSession}
         records={repository.records()}
         sightings={sightings}
+        onboardingEnabled={onboardingEnabled}
       />
     </div>
   );
@@ -258,9 +270,16 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
   // Settings are read once at boot; from here on `setSettings` is the single source of truth --
   // every mutation (font scale, motion, a rebind, a reset) flows through `handleSettingsChange`
   // below, which persists via `saveSettings` before applying the change in-memory.
-  const [settings, setSettings] = useState(() => loadSettings(localStorageInstance).settings);
+  const [settingsLoad] = useState(() => loadSettings(localStorageInstance));
+  const [settings, setSettings] = useState(() => settingsLoad.settings);
   const keymap = useMemo(() => resolveKeymap(settings.bindings), [settings.bindings]);
   const [settingsWriteWarning, setSettingsWriteWarning] = useState<string>();
+  // Task 8 review Finding 3 (milestone-wide error-handling debt): `loadSettings` already detects a
+  // corrupt blob and resets to `DEFAULT_SETTINGS`, but that reset used to happen silently -- the
+  // plan's error-handling section promises the standard dismissible notice for exactly this case.
+  // Read once, at the same boot moment as `settingsLoad` above; dismissing it never re-shows it
+  // (a corrupt blob is a one-time boot fact, not an ongoing condition).
+  const [settingsCorruptedDismissed, setSettingsCorruptedDismissed] = useState(false);
 
   /**
    * The settings overlay's `onChange`. Persists first (`saveSettings` re-validates
@@ -293,18 +312,34 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
 
   const [overlay, setOverlay] = useState<OverlayId | null>(null);
 
+  /** Bumped exactly at the three screen-level transitions the design calls out for a fade-through-
+   * dark (title->play via Continue, chargen->play via Confirm, play->conclusion on death) --
+   * `ScreenFade` (below, inside `withRootStyling`) fades whenever this changes, since every branch
+   * of the screen switch (title/chargen/hall/conclusion/play) shares that one wrapper and never
+   * touches this token on its own. Every OTHER screen switch (title->chargen, hall in and out of
+   * either direction, conclusion->title/chargen for a new hero) stays the instant conditional
+   * return it always was, exactly per the brief. */
+  const [fadeToken, setFadeToken] = useState(0);
+  const bumpFadeToken = (): void => setFadeToken((token) => token + 1);
+
   /** `fontScale` as an inline `calc(1rem * scale)` on the app root, and `reducedMotion` as at most
    * one root class -- the three-way contract (see `styles.css`'s comment beside `.motion-full`):
    * "system" applies neither class (the `@media (prefers-reduced-motion: reduce)` query alone
    * decides), "on" applies `.motion-reduced` (forces animations off regardless of the OS setting),
    * "off" applies `.motion-full` (forces animations back on regardless of the OS setting -- the
-   * one case a media query alone cannot serve, since it never sees the in-app setting). */
+   * one case a media query alone cannot serve, since it never sees the in-app setting). The SAME
+   * three-way value, resolved to a plain boolean via `effectiveReducedMotion`, gates `ScreenFade`
+   * below -- reduced motion must render NO fade element at all, which only a JS-side decision can
+   * express (a CSS class alone cannot suppress an element's existence). */
   function withRootStyling(children: JSX.Element): JSX.Element {
     const motionClass = settings.reducedMotion === 'on' ? ' motion-reduced'
       : settings.reducedMotion === 'off' ? ' motion-full' : '';
+    const themeClass = settings.theme === 'high-contrast' ? ' theme-high-contrast' : '';
     return (
-      <div className={`guest-app-root${motionClass}`} style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}>
-        {children}
+      <div className={`guest-app-root${motionClass}${themeClass}`} style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}>
+        <ScreenFade transitionKey={fadeToken} reducedMotion={effectiveReducedMotion(settings.reducedMotion)}>
+          {children}
+        </ScreenFade>
       </div>
     );
   }
@@ -348,8 +383,11 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
     // reconstruction trigger, not a value read inside the memo.
   }, [storage, storageEpoch]);
 
+  // Read once at boot -- `window.location.search` never changes for the life of this component
+  // (the app never navigates), so this is the one place `isQuickstart` needs calling repeatedly.
+  const [quickstart] = useState(() => isQuickstart(window.location.search));
   const [screen, setScreen] = useState<ScreenState>(
-    () => (isQuickstart(window.location.search) ? { screen: 'play' } : { screen: 'title' }),
+    () => (quickstart ? { screen: 'play' } : { screen: 'title' }),
   );
   const [session, setSession] = useState<GuestSession>();
   const [chargenSeed, setChargenSeed] = useState<Uint32State>();
@@ -418,9 +456,16 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
    * survives regardless of any of these: only the affected write (or, on boot, the Hall itself)
    * was affected. */
   function withHallNotice(children: JSX.Element): JSX.Element {
-    if (!hallNotice && !finalizeWarning && !settingsWriteWarning) return children;
+    const showSettingsCorrupted = settingsLoad.corrupted && !settingsCorruptedDismissed;
+    if (!hallNotice && !finalizeWarning && !settingsWriteWarning && !showSettingsCorrupted) return children;
     return (
       <>
+        {showSettingsCorrupted && (
+          <div role="status" aria-label="Settings notice" className="session-banner" data-kind="settings-corrupted">
+            <p>Stored settings were unreadable and have been reset.</p>
+            <button type="button" onClick={() => setSettingsCorruptedDismissed(true)}>Dismiss</button>
+          </div>
+        )}
         {hallNotice && (
           <div role="alert" aria-label="Hall notice" className="storage-warning-banner" data-kind="hall-corrupt">
             <p>Your Hall of Records could not be read and has been reset. ({hallNotice})</p>
@@ -453,8 +498,12 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
     if (screen.screen !== 'play') return;
     if (!isQuickstart(window.location.search)) return;
     const seed = parseSeedFromQuery(window.location.search);
-    setSession(seed ? new GuestSession({ pack, storage, seed }) : new GuestSession({ pack, storage }));
-  }, [pack, storage, session, screen]);
+    setSession(
+      seed
+        ? new GuestSession({ pack, storage, seed, localStorage: localStorageInstance })
+        : new GuestSession({ pack, storage, localStorage: localStorageInstance }),
+    );
+  }, [pack, storage, session, screen, localStorageInstance]);
 
   if (error) {
     return withRootStyling(
@@ -489,8 +538,9 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
           onContinue={() => {
             closeOverlay();
             setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
-            setSession(new GuestSession({ pack, storage }));
+            setSession(new GuestSession({ pack, storage, localStorage: localStorageInstance }));
             setScreen({ screen: 'play' });
+            bumpFadeToken();
           }}
           onHall={() => setScreen({ screen: 'hall', returnTo: 'title' })}
           onOpenOverlay={openOverlay}
@@ -517,6 +567,8 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
       <ChargenScreen
         pack={pack}
         seed={seed}
+        settings={settings}
+        onChangeSettings={handleSettingsChange}
         onConfirm={(choices: HeroChoices, glyph: string) => {
           let hero: ReturnType<typeof heroFromChoices>;
           try {
@@ -534,8 +586,9 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
             // the run itself is unaffected if this particular write fails.
           }
           setPortraitGlyph(glyph);
-          setSession(new GuestSession({ pack, storage, seed, hero, startFresh: true }));
+          setSession(new GuestSession({ pack, storage, seed, hero, startFresh: true, localStorage: localStorageInstance }));
           setScreen({ screen: 'play' });
+          bumpFadeToken();
         }}
       />,
     ));
@@ -605,9 +658,11 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
       settings={settings}
       onChangeSettings={handleSettingsChange}
       onClearGuestSession={handleClearGuestSession}
+      onboardingEnabled={settings.onboarding === 'on' && !quickstart}
       onConcluded={(projection, logTail) => {
         setConclusion({ projection, logTail });
         setScreen({ screen: 'conclusion' });
+        bumpFadeToken();
       }}
       onFinalizeError={setFinalizeWarning}
     />,

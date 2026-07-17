@@ -37,7 +37,7 @@ export function ThreatPopover({ actor, col, row, paneCols, paneRows, cellPx }: T
   const style: CSSProperties = { left: `${clampedCol * cellPx.width}px`, top: `${clampedRow * cellPx.height}px` };
 
   return (
-    <div role="tooltip" className="threat-popover" style={style}>
+    <div role="tooltip" className="threat-popover framed" style={style}>
       <strong>{actor.name ?? 'Something'}</strong>
       {actor.glyph && <span aria-hidden="true">{actor.glyph}</span>}
       <div>{`Health: ${actor.healthPresentation.band}`}</div>

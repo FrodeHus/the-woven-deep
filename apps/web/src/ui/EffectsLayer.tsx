@@ -2,7 +2,10 @@ import { useEffect, useRef, useState, type CSSProperties, type JSX } from 'react
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection, OpaqueId, PublicEvent } from '@woven-deep/engine';
 import type { CameraOrigin, CameraViewport } from './camera.js';
-import { effectsForEvents, MAX_TRANSIENT_EFFECTS, type TransientEffect } from './effects-map.js';
+import {
+  effectsForEvents, MAX_TRANSIENT_EFFECTS, pickPrimaryCondition, type ProjectedCondition, type TransientEffect,
+} from './effects-map.js';
+import { equippedLightSource } from './light-sources.js';
 
 /**
  * NOTE: `viewport` is not part of the abbreviated JSX example in the task brief's Interfaces
@@ -31,33 +34,6 @@ const EFFECT_LIFETIME_MS: Record<TransientEffect['kind'], number> = {
   'death-burst': 320,
 };
 
-interface EquippedLight {
-  readonly contentId: OpaqueId;
-  readonly color: readonly [number, number, number];
-  readonly radius: number;
-  readonly fuelFraction: number;
-}
-
-function equippedLightSource(
-  projection: GameplayProjection, pack: CompiledContentPack,
-): EquippedLight | undefined {
-  const hero = projection.hero as unknown as {
-    equipment: Readonly<Record<string, Readonly<{
-      contentId?: OpaqueId; enabled?: boolean; fuel?: number;
-    }> | null>>;
-  };
-  for (const item of Object.values(hero.equipment)) {
-    if (!item || !item.enabled || item.contentId === undefined) continue;
-    const entry = pack.entries.find((candidate) => candidate.id === item.contentId);
-    if (entry?.kind !== 'item' || !entry.light) continue;
-    const fuelFraction = entry.light.fuelCapacity > 0
-      ? Math.max(0, Math.min(1, (item.fuel ?? 0) / entry.light.fuelCapacity))
-      : 0;
-    return { contentId: item.contentId, color: entry.light.color, radius: entry.light.radius, fuelFraction };
-  }
-  return undefined;
-}
-
 /**
  * Purely decorative overlay: `aria-hidden`, `pointer-events: none`, animates only
  * transform/opacity/filter, and never influences gameplay truth (that lives in `GridRenderer`).
@@ -67,7 +43,9 @@ function equippedLightSource(
  */
 export function EffectsLayer({ projection, pack, lastEvents, camera, viewport }: EffectsLayerProps): JSX.Element {
   const heroId = (projection.hero as unknown as { actorId: OpaqueId }).actorId;
-  const hero = projection.hero as unknown as { x: number; y: number };
+  const hero = projection.hero as unknown as {
+    x: number; y: number; conditions?: readonly ProjectedCondition[];
+  };
 
   const positionsRef = useRef(new Map<OpaqueId, Readonly<{ x: number; y: number }>>());
   const floorIdRef = useRef(projection.floor.floorId);
@@ -115,8 +93,31 @@ export function EffectsLayer({ projection, pack, lastEvents, camera, viewport }:
 
   const light = equippedLightSource(projection, pack);
 
+  /*
+   * Hero condition aura (Task 7): `projection.hero.conditions` is the ONLY conditions field the
+   * client receives -- actor (non-hero) conditions are NOT projected at all (confirmed against
+   * `packages/engine/src/projection.ts`), so this aura can only ever represent the HERO's own
+   * active conditions, never an NPC's; that is a disclosed limitation, not an oversight.
+   * Unlike hit-flash/attack-streak/death-burst, this is NOT a `TransientEffect` with its own
+   * timer-based cleanup: it is derived fresh from `projection.hero.conditions` on every render, so
+   * it appears the instant a condition is applied and disappears the instant the condition list
+   * empties (expiry, cure, etc.) with no separate removal logic to keep in sync.
+   */
+  const primaryCondition = pickPrimaryCondition(hero.conditions ?? []);
+
   return (
     <div aria-hidden="true" className="effects-layer">
+      {primaryCondition && withinViewport(hero.x, hero.y) && (
+        <div
+          className="condition-aura"
+          data-condition={primaryCondition.conditionId}
+          style={{
+            '--x': hero.x - camera.x,
+            '--y': hero.y - camera.y,
+            '--aura-color': primaryCondition.color,
+          } as CSSProperties}
+        />
+      )}
       {light && withinViewport(hero.x, hero.y) && (
         <div
           className="glow"

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { contrastRatio, relativeLuminance, visibleForeground } from '../src/ui/cell-color.js';
 
 // jsdom (our test environment) never evaluates @media queries, so we cannot assert the
 // reduced-motion behaviour by rendering and reading computed styles. Instead this is a static,
@@ -100,6 +101,30 @@ describe('reduced-motion stylesheet contract', () => {
     const visibleFloor = Number(visibleCalcMatch![1]);
 
     expect(visibleFloor).toBeGreaterThanOrEqual(rememberedOpacity);
+  });
+
+  it('flattens .cell-visible brightness in smooth-lighting mode without breaking the visible-vs-remembered floor', () => {
+    // Task 6: `.lighting-smooth` (applied to `.playfield` when `settings.lighting === 'smooth'`
+    // AND a canvas is actually rendering) flattens `.cell-visible`'s own per-cell brightness
+    // contribution -- the canvas now carries the falloff. The flattened value must still sit at
+    // or above `.cell-remembered`'s opacity, preserving the SAME guarantee the un-flattened
+    // `.cell-visible` floor term protects (a visible cell never renders darker than a remembered
+    // one), and it must be an unconditional flat number -- not itself scaled by `--light` --
+    // otherwise smooth mode would double-apply falloff (once via the canvas gradient, once via
+    // the glyph's own opacity).
+    const rememberedMatch = /(?:^|\n)\.cell-remembered\s*\{([^}]*)\}/.exec(css);
+    expect(rememberedMatch, '.cell-remembered rule not found').toBeTruthy();
+    const rememberedOpacity = Number(/opacity\s*:\s*([\d.]+)/.exec(rememberedMatch![1]!)![1]);
+
+    const smoothMatch = /\.lighting-smooth\s+\.cell-visible\s*\{([^}]*)\}/.exec(css);
+    expect(smoothMatch, '.lighting-smooth .cell-visible rule not found').toBeTruthy();
+    const smoothDecls = smoothMatch![1]!;
+
+    const opacityMatch = /opacity\s*:\s*([\d.]+)\s*;/.exec(smoothDecls);
+    expect(opacityMatch, '.lighting-smooth .cell-visible opacity is not a flat number (still scales with --light?)').toBeTruthy();
+    const smoothOpacity = Number(opacityMatch![1]);
+
+    expect(smoothOpacity).toBeGreaterThanOrEqual(rememberedOpacity);
   });
 
   it('scales font-size (not --cell-w/--cell-h) on .playfield with --zoom, so glyphs grow with the cell box instead of leaving whitespace at zoom', () => {
@@ -236,6 +261,302 @@ describe('reduced-motion stylesheet contract', () => {
     expect(duration(fullAttackStreakMatch![1]!)).toBe(duration(originalAttackStreak![0]!));
     expect(duration(fullDeathBurstMatch![1]!)).toBe(duration(originalDeathBurst![0]!));
   });
+
+  it('never lets the screen-fade overlay block input, and declares its motion behavior in all four motion blocks', () => {
+    const fadeRuleMatch = /(?:^|\n)\.screen-fade\s*\{([^}]*)\}/.exec(css);
+    expect(fadeRuleMatch, '.screen-fade rule not found in stylesheet').toBeTruthy();
+    const fadeDecls = fadeRuleMatch![1]!;
+    expect(fadeDecls).toMatch(/pointer-events\s*:\s*none/);
+    expect(fadeDecls).toMatch(/position\s*:\s*fixed/);
+
+    const originalAnimationMatch = /animation\s*:\s*([^;]+);/.exec(fadeDecls);
+    expect(originalAnimationMatch, '.screen-fade has no animation declaration').toBeTruthy();
+
+    // Global @media (prefers-reduced-motion: reduce) block.
+    const globalReducedBlocks = extractReducedMotionBlocks(css);
+    const globalFadeOverride = globalReducedBlocks.find((block) => /\.screen-fade\s*\{[^}]*\}/.test(block));
+    expect(globalFadeOverride, 'expected a .screen-fade override in the global reduced-motion media block').toBeTruthy();
+
+    // Effects @media (prefers-reduced-motion: reduce) block (the one with .glow/.effect overrides).
+    const effectsReducedBlock = globalReducedBlocks.find((block) => /\.glow\s*\{[^}]*animation\s*:/.test(block));
+    expect(effectsReducedBlock, 'expected the effects reduced-motion media block').toBeTruthy();
+    expect(effectsReducedBlock).toMatch(/\.screen-fade\s*\{[^}]*animation\s*:\s*none\s*!important/);
+
+    // .motion-reduced class block.
+    const motionReducedBlocks = extractBlocksAfterMarker(css, '.motion-reduced {');
+    expect(motionReducedBlocks[0]).toMatch(/\.screen-fade\s*\{[^}]*animation\s*:\s*none\s*!important/);
+
+    // .motion-full class block -- restored duration must match the original declaration.
+    const motionFullBlocks = extractBlocksAfterMarker(css, '.motion-full {');
+    const fullFadeMatch = /\.screen-fade\s*\{([^}]*)\}/.exec(motionFullBlocks[0]!);
+    expect(fullFadeMatch, '.screen-fade rule not found inside .motion-full').toBeTruthy();
+    expect(fullFadeMatch![1]).toMatch(/!important/);
+    function duration(declBlock: string): string {
+      const match = /animation\s*:\s*[\w-]+\s+([\d.]+m?s)/.exec(declBlock);
+      expect(match, `no animation duration found in: ${declBlock}`).toBeTruthy();
+      return match![1]!;
+    }
+    expect(duration(fullFadeMatch![1]!)).toBe(duration(originalAnimationMatch![0]!));
+  });
+
+  // Task 7 (effects vocabulary): three new continuous, CSS-only animations -- fixture flicker
+  // jitter, stair/entrance shimmer, and the hero condition aura pulse. Unlike .screen-fade, none
+  // of these are JS-gated, so the global @media (prefers-reduced-motion: reduce) block is not
+  // "belt and suspenders" here -- it is the ONLY thing that honors an OS-level reduced-motion
+  // preference for them, exactly like .glow/.effect. Every one still needs the full four-block
+  // treatment per the milestone's motion-completeness constraint.
+  it('declares fixture-flicker, stair-shimmer, and condition-aura motion behavior in all four motion blocks', () => {
+    function assertAllFourBlocks(selector: string, escapedSelector: string, originalRuleRegex: RegExp): void {
+      const originalMatch = originalRuleRegex.exec(css);
+      expect(originalMatch, `${selector} rule not found in stylesheet`).toBeTruthy();
+      const originalAnimation = /animation\s*:\s*([^;]+);/.exec(originalMatch![1]!);
+      expect(originalAnimation, `${selector} has no animation declaration`).toBeTruthy();
+
+      const globalReducedBlocks = extractReducedMotionBlocks(css);
+      const globalOverride = globalReducedBlocks.find((block) => new RegExp(`${escapedSelector}\\s*\\{[^}]*animation\\s*:`).test(block));
+      expect(globalOverride, `expected a ${selector} override in the global reduced-motion media block`).toBeTruthy();
+      const globalRuleMatch = new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`).exec(globalOverride!);
+      expect(globalRuleMatch![1]).toMatch(/animation\s*:\s*none\s*!important/);
+
+      const effectsReducedBlock = globalReducedBlocks.find((block) => /\.glow\s*\{[^}]*animation\s*:/.test(block));
+      expect(effectsReducedBlock, 'expected the effects reduced-motion media block').toBeTruthy();
+      const effectsRuleMatch = new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`).exec(effectsReducedBlock!);
+      expect(effectsRuleMatch, `${selector} not found inside the effects reduced-motion media block`).toBeTruthy();
+      expect(effectsRuleMatch![1]).toMatch(/animation\s*:\s*none\s*!important/);
+
+      const motionReducedBlocks = extractBlocksAfterMarker(css, '.motion-reduced {');
+      const reducedClassMatch = new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`).exec(motionReducedBlocks[0]!);
+      expect(reducedClassMatch, `${selector} not found inside .motion-reduced`).toBeTruthy();
+      expect(reducedClassMatch![1]).toMatch(/animation\s*:\s*none\s*!important/);
+
+      const motionFullBlocks = extractBlocksAfterMarker(css, '.motion-full {');
+      const fullClassMatch = new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`).exec(motionFullBlocks[0]!);
+      expect(fullClassMatch, `${selector} not found inside .motion-full`).toBeTruthy();
+      expect(fullClassMatch![1]).toMatch(/!important/);
+      // The restored .motion-full declaration must match the ORIGINAL, un-overridden animation
+      // shorthand exactly (aside from the trailing !important) -- proves it truly re-enables the
+      // same animation rather than merely present-but-different.
+      const fullAnimation = /animation\s*:\s*([^;]+?)\s*!important/.exec(fullClassMatch![1]!);
+      expect(fullAnimation, `${selector} .motion-full declaration has no animation`).toBeTruthy();
+      expect(fullAnimation![1]!.replace(/\s+/g, ' ')).toBe(originalAnimation![1]!.trim().replace(/\s+/g, ' '));
+    }
+
+    assertAllFourBlocks(
+      '.fixture-flicker', '\\.fixture-flicker',
+      /(?:^|\n)\.cell-visible\.fixture-flicker\s*\{([^}]*)\}/,
+    );
+    assertAllFourBlocks(
+      '.mat-stair (shimmer)', '\\.cell-visible\\.mat-stair-up,\\s*\\.cell-visible\\.mat-stair-down',
+      /(?:^|\n)\.cell-visible\.mat-stair-up,\s*\.cell-visible\.mat-stair-down\s*\{([^}]*animation[^}]*)\}/,
+    );
+    assertAllFourBlocks(
+      '.condition-aura', '\\.condition-aura',
+      /(?:^|\n)\.condition-aura\s*\{([^}]*)\}/,
+    );
+  });
+
+  it('keeps the .condition-aura keyframe purely opacity-driven (no layout-affecting properties), same discipline as glow-drift', () => {
+    const keyframesMatch = /@keyframes\s+condition-aura-pulse\s*\{([\s\S]*?)\n\}/.exec(css);
+    expect(keyframesMatch, '@keyframes condition-aura-pulse not found').toBeTruthy();
+    expect(keyframesMatch![1]).toMatch(/opacity\s*:/);
+  });
+});
+
+/** Parses a `#rrggbb`/`#rgb` literal into an `[r, g, b]` triple (0..255 each). */
+function hexToRgb(hex: string): readonly [number, number, number] {
+  const normalized = hex.length === 4
+    ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+    : hex;
+  const match = /^#([0-9a-fA-F]{6})$/.exec(normalized);
+  if (!match) throw new Error(`not a hex color: ${hex}`);
+  const value = match[1]!;
+  return [parseInt(value.slice(0, 2), 16), parseInt(value.slice(2, 4), 16), parseInt(value.slice(4, 6), 16)];
+}
+
+/** Reads a `--name: #hex;` declaration's hex value out of the real `:root { ... }` block. */
+function rootVariable(name: string): string {
+  const rootMatch = /:root\s*\{([\s\S]*?)\n\}/.exec(css);
+  expect(rootMatch, ':root block not found').toBeTruthy();
+  const decl = new RegExp(`--${name}\\s*:\\s*(#[0-9a-fA-F]{3,6})\\s*;`).exec(rootMatch![1]!);
+  expect(decl, `--${name} not declared in :root`).toBeTruthy();
+  return decl![1]!;
+}
+
+const REMEMBERED_LUMINANCE = relativeLuminance(hexToRgb('#4b526b'));
+
+describe('named palette stylesheet contract', () => {
+  const NAMED_COLORS = [
+    'ink', 'ground', 'gold', 'gold-bright', 'line', 'muted', 'alert', 'panel',
+    'remembered', 'void-bg', 'portrait-default',
+  ] as const;
+  const MATERIAL_COLORS = ['mat-wall', 'mat-floor', 'mat-door', 'mat-stair', 'mat-void'] as const;
+
+  it('declares every named palette variable in :root with a valid hex value', () => {
+    for (const name of [...NAMED_COLORS, ...MATERIAL_COLORS]) {
+      expect(() => hexToRgb(rootVariable(name)), `--${name}`).not.toThrow();
+    }
+  });
+
+  it('leaves no raw hex literal for a recurring named color outside its own :root declaration', () => {
+    // Every rule that used to spell out one of these hex literals directly must now reference the
+    // variable instead -- the literal itself should appear exactly once in the whole file (the
+    // :root declaration line), never again as a copy-pasted value elsewhere. Swept over EVERY named
+    // color (including the material palette) -- not just the original 8 -- so a re-introduced
+    // copy-pasted literal for `--remembered`/`--void-bg`/`--portrait-default`/`--mat-*` fails this
+    // just as loudly as one of the original set would.
+    for (const name of [...NAMED_COLORS, ...MATERIAL_COLORS]) {
+      const hex = rootVariable(name);
+      const occurrences = css.split(hex).length - 1;
+      expect(occurrences, `--${name} (${hex}) should only appear once, in :root`).toBe(1);
+    }
+  });
+
+  it('holds the visible-vs-remembered luminance floor for every material color, at the darkest visible intensity', () => {
+    // Reuses the same floor guarantee `cell-color.test.ts` asserts in isolation, but sourced from
+    // the REAL CSS hex values (not a copy) -- a regression here means styles.css and cell-color.ts
+    // have drifted apart, or a material's base color itself broke the floor.
+    for (const name of MATERIAL_COLORS) {
+      const base = hexToRgb(rootVariable(name));
+      const nearBlackTint: readonly [number, number, number] = [4, 3, 2];
+      const output = visibleForeground(nearBlackTint, 1, base);
+      const [r, g, b] = /^rgb\((\d+), (\d+), (\d+)\)$/.exec(output)!.slice(1).map(Number) as [number, number, number];
+      expect(relativeLuminance([r, g, b]), `${name} at minimum visible intensity`).toBeGreaterThan(REMEMBERED_LUMINANCE);
+    }
+  });
+
+  it('composites the town tint into .playfield-grid\'s OWN background, not onto .playfield', () => {
+    // `.playfield-grid` paints an opaque `background: var(--void-bg)` and is a child of
+    // `.playfield` that covers essentially the same box -- a tint painted as a `background` on
+    // `.playfield` itself is fully occluded by its child and never actually renders (jsdom can't
+    // catch this via paint order, since it doesn't paint at all, so this test parses the real rule
+    // shape instead: the tint must live on a `.playfield-town .playfield-grid` rule, mixed
+    // straight into the grid's own background, not on a bare `.playfield-town` rule).
+    expect(css, 'a bare `.playfield-town { background: ... }` rule is occluded by .playfield-grid and must not exist')
+      .not.toMatch(/\.playfield-town\s*\{[^}]*background/);
+
+    const townGridRuleMatch = /\.playfield-town\s+\.playfield-grid\s*\{([^}]*)\}/.exec(css);
+    expect(townGridRuleMatch, 'expected a `.playfield-town .playfield-grid { ... }` rule').toBeTruthy();
+    const decls = townGridRuleMatch![1]!;
+    expect(decls, 'the town tint must be pre-mixed into the grid\'s own background via color-mix').toMatch(
+      /background\s*:\s*color-mix\(in srgb,\s*var\(--gold\)\s*4%,\s*var\(--void-bg\)\)/,
+    );
+  });
+});
+
+/** Reads a `--name: #hex;` declaration's hex value out of an already-extracted block's inner text
+ * (e.g. the `.theme-high-contrast { ... }` block body). */
+function blockVariable(block: string, name: string): string {
+  const decl = new RegExp(`--${name}\\s*:\\s*(#[0-9a-fA-F]{3,6})\\s*;`).exec(block);
+  expect(decl, `--${name} not declared in this block`).toBeTruthy();
+  return decl![1]!;
+}
+
+const AA_NORMAL_TEXT = 4.5;
+const AA_LARGE_OR_GLYPH = 3;
+
+describe('high-contrast theme stylesheet contract', () => {
+  const ALL_PALETTE_COLORS = [
+    'ink', 'ground', 'gold', 'gold-bright', 'line', 'muted', 'alert', 'panel',
+    'remembered', 'void-bg', 'portrait-default',
+    'mat-wall', 'mat-floor', 'mat-door', 'mat-stair', 'mat-void',
+  ] as const;
+
+  function highContrastBlock(): string {
+    const blocks = extractBlocksAfterMarker(css, '.theme-high-contrast {');
+    expect(blocks.length, 'expected a top-level .theme-high-contrast { ... } block').toBeGreaterThan(0);
+    return blocks[0]!;
+  }
+
+  it('re-declares EVERY named palette variable under .theme-high-contrast', () => {
+    const block = highContrastBlock();
+    for (const name of ALL_PALETTE_COLORS) {
+      expect(() => blockVariable(block, name), `--${name}`).not.toThrow();
+    }
+  });
+
+  it('declares ONLY palette-variable custom properties in .theme-high-contrast -- no per-component overrides', () => {
+    // The brief requires the theme block to be a pure palette re-declaration: every declaration
+    // inside it must be one of the named `--*` custom properties, never a component selector's own
+    // property (e.g. `.hero-panel { border-color: ... }` layered on top of the palette swap).
+    const block = highContrastBlock();
+    const declarationLines = block
+      .replace(/^\s*\{/, '')
+      .replace(/\}\s*$/, '')
+      .split(';')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    for (const line of declarationLines) {
+      expect(line, `unexpected non-palette declaration in .theme-high-contrast: "${line}"`).toMatch(/^--(?:mat-)?[a-z-]+\s*:/);
+    }
+  });
+
+  function hc(name: string): readonly [number, number, number] {
+    return hexToRgb(blockVariable(highContrastBlock(), name)) as unknown as readonly [number, number, number];
+  }
+
+  it('text on ground clears AA normal-text contrast (4.5:1)', () => {
+    expect(contrastRatio(hc('ink'), hc('ground'))).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+  });
+
+  it('gold accents on panel clear AA large/glyph contrast (3:1)', () => {
+    expect(contrastRatio(hc('gold'), hc('panel'))).toBeGreaterThanOrEqual(AA_LARGE_OR_GLYPH);
+    expect(contrastRatio(hc('gold-bright'), hc('panel'))).toBeGreaterThanOrEqual(AA_LARGE_OR_GLYPH);
+  });
+
+  it('every material color clears AA glyph contrast (3:1) against the void background', () => {
+    for (const material of ['mat-wall', 'mat-floor', 'mat-door', 'mat-stair'] as const) {
+      expect(contrastRatio(hc(material), hc('void-bg')), material).toBeGreaterThanOrEqual(AA_LARGE_OR_GLYPH);
+      expect(contrastRatio(hc(material), hc('mat-void')), material).toBeGreaterThanOrEqual(AA_LARGE_OR_GLYPH);
+    }
+  });
+
+  it('every log tone clears AA normal-text contrast (4.5:1) against ground (the log panel background)', () => {
+    expect(contrastRatio(hc('alert'), hc('ground'))).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+    expect(contrastRatio(hc('gold'), hc('ground'))).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+    expect(contrastRatio(hc('muted'), hc('ground'))).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+  });
+
+  it('remembered cells clear AA glyph contrast (3:1) against ground, and stay visibly dimmer than the ink used for visible text', () => {
+    expect(contrastRatio(hc('remembered'), hc('ground'))).toBeGreaterThanOrEqual(AA_LARGE_OR_GLYPH);
+    expect(relativeLuminance(hc('remembered'))).toBeLessThan(relativeLuminance(hc('ink')));
+  });
+});
+
+describe('ornamental framing stylesheet contract', () => {
+  function ruleBody(selector: string): string {
+    const match = new RegExp(`(?:^|\\n)${selector.replace(/[.[\]]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(css);
+    expect(match, `${selector} rule not found`).toBeTruthy();
+    return match![1]!;
+  }
+
+  it('declares a --frame-* vocabulary in :root, with the corner color a REFERENCE to --gold (never a raw hex), so the high-contrast theme inherits it automatically', () => {
+    const rootMatch = /:root\s*\{([\s\S]*?)\n\}/.exec(css);
+    expect(rootMatch, ':root block not found').toBeTruthy();
+    const root = rootMatch![1]!;
+    expect(root).toMatch(/--frame-corner\s*:\s*"[^"]+"/);
+    expect(root).toMatch(/--frame-corner-color\s*:\s*var\(--gold\)/);
+    expect(root).toMatch(/--frame-corner-size\s*:/);
+    expect(root).toMatch(/--frame-inset\s*:/);
+  });
+
+  it('never re-declares a --frame-* variable inside .theme-high-contrast -- the frame inherits through the cascade, no theme-specific frame rule exists', () => {
+    const blocks = extractBlocksAfterMarker(css, '.theme-high-contrast {');
+    expect(blocks.length).toBeGreaterThan(0);
+    expect(blocks[0]!).not.toMatch(/--frame-/);
+  });
+
+  it('gives .framed relative positioning and two corner pseudo-elements using the CSS alt-text syntax (content: ... / "") so the glyph never enters the accessibility tree', () => {
+    expect(ruleBody('.framed')).toMatch(/position\s*:\s*relative/);
+    const before = ruleBody('.framed::before,\n.framed::after');
+    expect(before).toMatch(/content\s*:\s*var\(--frame-corner\)\s*\/\s*""/);
+    expect(before).not.toMatch(/#[0-9a-fA-F]{3,6}/);
+  });
+
+  it('gives .framed-title a trailing ornament, also via the alt-text content syntax, consuming only frame/palette variables (no raw hex)', () => {
+    const after = ruleBody('.framed-title::after');
+    expect(after).toMatch(/content\s*:\s*var\(--frame-corner\)\s*\/\s*""/);
+    expect(after).not.toMatch(/#[0-9a-fA-F]{3,6}/);
+  });
 });
 
 describe('landing page reduced-motion stylesheet contract', () => {
@@ -258,5 +579,31 @@ describe('landing page reduced-motion stylesheet contract', () => {
     expect(revealRuleMatch, '[data-reveal] rule not found inside reduced-motion block').toBeTruthy();
     expect(revealRuleMatch![1]).toMatch(/opacity\s*:\s*1\s*!important/);
     expect(revealRuleMatch![1]).toMatch(/transform\s*:\s*none\s*!important/);
+  });
+});
+
+describe('colorblind reinforcement stylesheet contract (Task 9)', () => {
+  it('gives each colored log tone a non-color leading glyph via a silent ::before', () => {
+    for (const tone of ['combat', 'warning', 'system']) {
+      const rule = new RegExp(`\\.log-line--${tone}::before\\s*\\{([^}]*)\\}`).exec(css);
+      expect(rule, `expected a ::before glyph for .log-line--${tone}`).toBeTruthy();
+      // CSS alt-text syntax `content: "..." / ""` keeps the glyph out of the accessibility tree.
+      expect(rule![1]).toMatch(/content\s*:\s*"[^"]+"\s*\/\s*""/);
+    }
+  });
+
+  it('gives each colored journal log tone the same silent reinforcement glyph', () => {
+    for (const tone of ['combat', 'warning', 'system']) {
+      const rule = new RegExp(`\\.journal-log-line--${tone}::before\\s*\\{([^}]*)\\}`).exec(css);
+      expect(rule, `expected a ::before glyph for .journal-log-line--${tone}`).toBeTruthy();
+      expect(rule![1]).toMatch(/content\s*:\s*"[^"]+"\s*\/\s*""/);
+    }
+  });
+
+  it('defines an .sr-only visually-hidden utility for the hero-status live region', () => {
+    const rule = /\.sr-only\s*\{([^}]*)\}/.exec(css);
+    expect(rule, 'expected an .sr-only utility class').toBeTruthy();
+    expect(rule![1]).toMatch(/position\s*:\s*absolute/);
+    expect(rule![1]).toMatch(/clip-path\s*:\s*inset\(50%\)/);
   });
 });

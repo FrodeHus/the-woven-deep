@@ -161,15 +161,25 @@ function MapPane({ floor, hero, actors, panelId, tabId }: Readonly<{
 }
 
 /** A single landmark row: `label` is the disclosed, human-readable name; `key` is a stable React
- * key (slot/actor id, or a fixed literal for the two stair rows). */
+ * key -- `${kind}:${x}:${y}`, the SAME key scheme `PersistedLandmark`s below convert to, so a
+ * landmark that is both currently live AND already persisted collapses to one row instead of two
+ * (`mergeLandmarks`'s whole job). */
 interface Landmark {
   readonly key: string;
   readonly label: string;
+  /** Set only for merchant landmarks -- their disclosed name, used by `mergeLandmarks` to dedupe
+   * by IDENTITY rather than position. Stairs and the house never move, so their `key` alone
+   * (which already encodes position) is identity enough; a dungeon merchant can flee/defend once
+   * provoked (`merchant-behavior`), so its position is not a stable identity. */
+  readonly merchantName?: string;
 }
 
 /**
  * Landmarks are derived fresh on every render from fields the projection already exposes -- no new
- * engine state, no new projection fields (per the plan's Global Constraints):
+ * engine state, no new projection fields (per the plan's Global Constraints). This is the LIVE half
+ * (Task 10's brief); `JournalPane` unions it with the PERSISTED half (`persistedLandmarksFor`,
+ * fed by `session/codex.ts`'s `accumulateLandmarks`) so a landmark survives even once it leaves the
+ * current projection entirely (a merchant who has since departed, a floor left behind).
  *
  * - **Stairs seen**: any floor cell whose `knowledge` is `remembered` or `visible` and whose
  *   `tileId` is the stair-up/stair-down id. Works identically in town or a dungeon floor.
@@ -186,22 +196,24 @@ interface Landmark {
 function landmarksFor(floor: ProjectedFloor, actors: readonly ProjectedActor[], slots: readonly ProjectedPlacementSlot[]): readonly Landmark[] {
   const landmarks: Landmark[] = [];
 
-  const stairUpSeen = floor.cells.some((cell) => cell.knowledge !== 'unknown' && cell.tileId === STAIR_UP_TILE_ID);
-  if (stairUpSeen) landmarks.push({ key: 'stair-up', label: 'Stairs up (seen)' });
-  const stairDownSeen = floor.cells.some((cell) => cell.knowledge !== 'unknown' && cell.tileId === STAIR_DOWN_TILE_ID);
-  if (stairDownSeen) landmarks.push({ key: 'stair-down', label: 'Stairs down (seen)' });
+  const stairUpCell = floor.cells.find((cell) => cell.knowledge !== 'unknown' && cell.tileId === STAIR_UP_TILE_ID);
+  if (stairUpCell) landmarks.push({ key: `stair-up:${stairUpCell.x}:${stairUpCell.y}`, label: 'Stairs up (seen)' });
+  const stairDownCell = floor.cells.find((cell) => cell.knowledge !== 'unknown' && cell.tileId === STAIR_DOWN_TILE_ID);
+  if (stairDownCell) landmarks.push({ key: `stair-down:${stairDownCell.x}:${stairDownCell.y}`, label: 'Stairs down (seen)' });
 
   if (floor.town) {
     for (const slot of slots) {
       if (slot.tags.includes('house-door')) {
-        landmarks.push({ key: slot.slotId, label: 'The house' });
+        landmarks.push({ key: `house:${slot.x}:${slot.y}`, label: 'The house' });
         continue;
       }
       if (slot.tags.includes('merchant')) {
         // The third tag beyond `town`/`merchant` names the trade (e.g. `provisioner`, `arms`,
         // `curios`) -- see `content/vaults/town.yaml`'s merchant slot tags.
         const trade = slot.tags.find((tag) => tag !== 'town' && tag !== 'merchant') ?? 'merchant';
-        landmarks.push({ key: slot.slotId, label: `${trade.charAt(0).toUpperCase()}${trade.slice(1)} (met)` });
+        landmarks.push({
+          key: `merchant:${slot.x}:${slot.y}`, label: `${trade.charAt(0).toUpperCase()}${trade.slice(1)} (met)`,
+        });
       }
     }
     return landmarks;
@@ -209,9 +221,72 @@ function landmarksFor(floor: ProjectedFloor, actors: readonly ProjectedActor[], 
 
   for (const actor of actors) {
     if (typeof actor.factionName !== 'string') continue;
-    landmarks.push({ key: `${actor.name ?? actor.factionName}`, label: `${actor.name ?? actor.factionName} (met)` });
+    const name = actor.name ?? actor.factionName;
+    landmarks.push({ key: `merchant:${actor.x}:${actor.y}`, label: `${name} (met)`, merchantName: name });
   }
   return landmarks;
+}
+
+/** The narrow slice of `session/codex.ts`'s `Landmark` (the PERSISTED shape) this overlay reads --
+ * duck-typed rather than imported to keep this file's existing narrow-projection-slice convention
+ * (see every other `Projected*` interface above). */
+interface PersistedLandmark {
+  readonly floorId: string;
+  readonly kind: 'merchant' | 'stair-up' | 'stair-down' | 'house';
+  readonly name: string;
+  readonly x: number;
+  readonly y: number;
+}
+
+const PERSISTED_LANDMARK_LABEL: Readonly<Record<PersistedLandmark['kind'], (name: string) => string>> = {
+  'stair-up': () => 'Stairs up (seen)',
+  'stair-down': () => 'Stairs down (seen)',
+  house: () => 'The house',
+  merchant: (name) => `${name} (met)`,
+};
+
+/** Converts the persisted, cross-render landmark cache (filtered to the CURRENT floor -- a
+ * landmark from a floor the guest has since left is not shown here; it is still safely retained in
+ * storage for when Milestone 6's cross-run codex wants it) into the same `Landmark` row shape
+ * `landmarksFor` produces, using the identical `${kind}:${x}:${y}` key so `mergeLandmarks` can tell
+ * a persisted row apart from its still-live twin. */
+function persistedLandmarksFor(floorId: string, persisted: readonly PersistedLandmark[]): readonly Landmark[] {
+  return persisted
+    .filter((landmark) => landmark.floorId === floorId)
+    .map((landmark) => ({
+      key: `${landmark.kind}:${landmark.x}:${landmark.y}`,
+      label: PERSISTED_LANDMARK_LABEL[landmark.kind](landmark.name),
+      ...(landmark.kind === 'merchant' ? { merchantName: landmark.name } : {}),
+    }));
+}
+
+/** Live ∪ persisted, deduped by key -- the live row wins when both exist for the same key (it is
+ * always at least as current as the persisted one), so a persisted twin of a still-visible
+ * landmark never renders as a second, redundant row.
+ *
+ * Merchant landmarks get a SECOND dedup pass, by identity (`merchantName`) rather than position:
+ * a dungeon merchant can flee/defend once provoked (`merchant-behavior`), so a persisted entry
+ * frozen at its first-seen (x,y) and a live entry at the merchant's current (x,y) have different
+ * keys and would otherwise both survive the position-keyed pass above as two rows for the same
+ * merchant. Live wins here too, being the fresher position. Stairs and the house are exempt --
+ * they never move, so position IS their identity, and this pass only ever touches entries carrying
+ * `merchantName` (town's slot-derived merchant landmarks never set it, so town's already-safe
+ * position dedup is untouched). */
+function mergeLandmarks(live: readonly Landmark[], persisted: readonly Landmark[]): readonly Landmark[] {
+  const byKey = new Map<string, Landmark>();
+  for (const landmark of live) byKey.set(landmark.key, landmark);
+  for (const landmark of persisted) if (!byKey.has(landmark.key)) byKey.set(landmark.key, landmark);
+
+  const liveKeys = new Set(live.map((landmark) => landmark.key));
+  const liveMerchantNames = new Set(
+    live.flatMap((landmark) => (landmark.merchantName !== undefined ? [landmark.merchantName] : [])),
+  );
+
+  return [...byKey.values()].filter((landmark) => {
+    if (landmark.merchantName === undefined) return true;
+    if (liveKeys.has(landmark.key)) return true; // this IS the live row for its key -- always kept
+    return !liveMerchantNames.has(landmark.merchantName); // a stale persisted twin of a live merchant -- drop it
+  });
 }
 
 function JournalPane({ snapshot, panelId, tabId }: Readonly<{
@@ -222,7 +297,9 @@ function JournalPane({ snapshot, panelId, tabId }: Readonly<{
   const floor = snapshot.projection.floor as unknown as ProjectedFloor;
   const actors = snapshot.projection.actors as unknown as readonly ProjectedActor[];
   const slots = snapshot.projection.slots as unknown as readonly ProjectedPlacementSlot[];
-  const landmarks = landmarksFor(floor, actors, slots);
+  const liveLandmarks = landmarksFor(floor, actors, slots);
+  const persistedLandmarks = persistedLandmarksFor(floor.floorId, snapshot.sightings.landmarks);
+  const landmarks = mergeLandmarks(liveLandmarks, persistedLandmarks);
 
   return (
     <div className="journal-pane" role="tabpanel" id={panelId} aria-labelledby={tabId} tabIndex={0}>

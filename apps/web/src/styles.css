@@ -1,18 +1,127 @@
 :root {
-  color: #aab3d1;
-  background: #121521;
+  /* Named palette: the recurring hex literals that used to be scattered across every rule below,
+     collected here as custom properties -- a pure rename, same values, zero visual change. Colors
+     that appear only once (e.g. the hit-flash/death-burst gradients' own accent reds) are left as
+     literals; only recurring ones earn a name. */
+  --ink: #aab3d1;
+  --ground: #121521;
+  --gold: #e8c879;
+  --gold-bright: #f1d898;
+  --line: #3d465f;
+  --muted: #7d89a8;
+  --alert: #db7f78;
+  --panel: #232a3d;
+  --remembered: #4b526b;
+  --void-bg: #0b0d15;
+  --portrait-default: #dfe3ef;
+
+  /* Material palette (Living Tapestry direction): the base color a lit cell's tint blends FROM
+     (see `visibleForeground`'s `base` parameter in `cell-color.ts`) and a remembered cell's own hue
+     before it is desaturated toward `--remembered`. Starting values only -- Task 2's browser pass
+     tunes these by eye; the luminance floor in `cell-color.ts` holds for any value here. */
+  --mat-wall: #5b6478;
+  --mat-floor: #8a7f6e;
+  --mat-door: #8b5a3c;
+  --mat-stair: #c9a227;
+  --mat-void: #232733;
+
+  /* Frame vocabulary (Task 3): a single diamond-corner ornament reused by `.framed`/
+     `.framed-title` below. `--frame-corner-color` is a REFERENCE to `--gold`, never a literal --
+     so the high-contrast theme inherits the frame automatically through the normal custom-property
+     cascade, and needs no re-declaration of its own in `.theme-high-contrast`. */
+  --frame-corner: "◆";
+  --frame-corner-color: var(--gold);
+  --frame-corner-size: .6em;
+  --frame-inset: -.5em;
+  --frame-title-size: .55em;
+
+  color: var(--ink);
+  background: var(--ground);
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   font-synthesis: none;
 }
+/* High-contrast theme (Task 2): set by `App` as the root class `theme-high-contrast` when
+   `Settings.theme === 'high-contrast'` -- re-declares EVERY named palette variable above with
+   values chosen for legibility (WCAG AA, per `styles-contract.test.ts`'s "high-contrast theme
+   stylesheet contract"), never a per-component override. Deliberately near-monochrome (near-black
+   ground/void, near-white ink, saturated but bright material accents) rather than a hue-matched
+   retint of the tapestry palette -- AA at both normal-text (4.5:1) and large/glyph (3:1) sizes
+   was the only design constraint here, not mood. */
+.theme-high-contrast {
+  --ink: #ffffff;
+  --ground: #000000;
+  --gold: #ffd24d;
+  --gold-bright: #ffe28a;
+  --line: #8a8fa3;
+  --muted: #c9c9d6;
+  --alert: #ff6b5c;
+  --panel: #1a1a1a;
+  --remembered: #8a8fa3;
+  --void-bg: #000000;
+  --portrait-default: #ffffff;
+
+  --mat-wall: #9fb4ff;
+  --mat-floor: #e3c583;
+  --mat-door: #ff9d5c;
+  --mat-stair: #ffe066;
+  --mat-void: #0a0a0a;
+}
+/* Ornamental framing (Task 3): one shared frame vocabulary for the panel/dialog/drawer/log border
+   sites -- a single diamond glyph (`--frame-corner`) marking two diagonal corners (top-left,
+   bottom-right) of a `.framed` container, plus a smaller trailing diamond (`.framed-title`) for a
+   section header. Deliberately restrained to container-level chrome (hero/threat panels and
+   drawers, the log, the threat popover, and page titles) rather than every repeated list row
+   (chargen options, hall records, title-menu entries, map-journal tabs keep their plain
+   `1px solid var(--line)` border unchanged) -- corner marks on every row in a list read busy under
+   the browser pass; two accents on a handful of standalone panels do not.
+   The glyph is painted via `content: "◆" / ""` (the CSS alt-text syntax): the string after `/` is
+   what an accessibility tree sees for this generated content -- empty, i.e. nothing -- so the
+   ornament can never be announced or enter an accessible name, with no `aria-hidden` wrapper span
+   needed. Both classes consume only `var(--frame-*)`/`var(--gold)` custom properties, so the
+   high-contrast theme inherits them automatically; no theme-specific frame rule exists here. */
+.framed { position: relative; }
+.framed::before,
+.framed::after {
+  content: var(--frame-corner) / "";
+  position: absolute;
+  color: var(--frame-corner-color);
+  font-size: var(--frame-corner-size);
+  line-height: 1;
+  pointer-events: none;
+}
+.framed::before { top: var(--frame-inset); left: var(--frame-inset); }
+.framed::after { bottom: var(--frame-inset); right: var(--frame-inset); }
+
+.framed-title { display: inline-flex; align-items: center; gap: .4em; }
+.framed-title::after {
+  content: var(--frame-corner) / "";
+  color: var(--frame-corner-color);
+  font-size: var(--frame-title-size);
+  line-height: 1;
+}
+
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
+/* Repaints the actual page background AND base text color from `.guest-app-root` (the app's own
+   root div, set by `App.tsx`'s `withRootStyling`), not just `:root` -- `:root`'s own
+   `background`/`color: var(--ground)`/`var(--ink)` above are resolved against `:root`'s (the
+   <html> element's) OWN custom-property values, which a theme class applied to a DESCENDANT div
+   (`.theme-high-contrast`) can never reach: CSS custom properties cascade downward from where
+   they're declared, and `:root` sits ABOVE `.guest-app-root` in the tree, not below it. `color` is
+   an INHERITED property, but inheritance passes the parent's already-COMPUTED value down, not a
+   live re-evaluation of `var(--ink)` per descendant -- so every un-styled descendant text node
+   would otherwise inherit `:root`'s frozen tapestry ink color forever, even while `--ink` itself
+   correctly reads `#ffffff` on every element (confirmed via getComputedStyle while chasing this).
+   Re-declaring both here, on the actual themed root, is what lets the whole page (not just the
+   playfield's own `--fg`-driven glyphs) recompute under `.theme-high-contrast`. */
+.guest-app-root { background: var(--ground); color: var(--ink); min-height: 100vh; }
 .shell { width: min(760px, calc(100% - 40px)); margin: 0 auto; padding: 12vh 0 48px; }
-.eyebrow { color: #7d89a8; font-size: .75rem; letter-spacing: .14em; text-transform: uppercase; }
-h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line-height: .95; }
-.tapestry { display: grid; gap: 12px; border: 1px solid #3d465f; padding: 24px; box-shadow: inset 0 0 40px #20263a; }
-.tapestry strong { color: #f1d898; font-size: 1.25rem; }
+.eyebrow { color: var(--muted); font-size: .75rem; letter-spacing: .14em; text-transform: uppercase; }
+h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line-height: .95; }
+.tapestry { display: grid; gap: 12px; border: 1px solid var(--line); padding: 24px; box-shadow: inset 0 0 40px #20263a; }
+.tapestry strong { color: var(--gold-bright); font-size: 1.25rem; }
 .tapestry code { overflow-wrap: anywhere; color: #7783a4; }
-[role="alert"] { color: #db7f78; }
+[role="alert"] { color: var(--alert); }
 
 /* Title screen: a keyboard-first menu (Enter the Deep / Continue / Hall of Records) reusing the
    same option-list convention as the chargen wizard's lists (`.chargen-option`). */
@@ -20,21 +129,63 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 .title-menu { display: flex; flex-direction: column; gap: 6px; max-width: 320px; }
 .title-option {
   text-align: left;
-  border: 1px solid #3d465f;
-  background: #121521;
+  border: 1px solid var(--line);
+  background: var(--ground);
   color: inherit;
   padding: 10px 14px;
   font-size: 1rem;
 }
-.title-option--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
-.title-option[aria-selected="true"] { border-color: #e8c879; }
+.title-option--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
+.title-option[aria-selected="true"] { border-color: var(--gold); }
 .storage-warning-banner {
-  border: 1px solid #db7f78;
+  border: 1px solid var(--alert);
   padding: 8px 12px;
-  background: color-mix(in srgb, #db7f78 12%, transparent);
+  background: color-mix(in srgb, var(--alert) 12%, transparent);
 }
-:focus-visible { outline: 2px solid #e8c879; outline-offset: 4px; }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+  /* Belt-and-suspenders: `ScreenFade` (ScreenFade.tsx) already resolves the three-way motion
+     contract in JS and never MOUNTS this element under reduced motion, so this rule should never
+     actually need to fire in practice -- kept here anyway so every new animation this milestone
+     adds declares behavior in all four motion blocks (see the Global Constraints), and so a
+     consumer that somehow renders the element anyway (e.g. a future caller that forgets the JS
+     gate) still degrades safely to no animation, no paint. */
+  .screen-fade { display: none; }
+  /* Unlike .screen-fade above, `fixture-flicker`/`mat-stair-*` shimmer/`.condition-aura` are pure
+     CSS animations with no JS-side reduced-motion gate at all -- this global media block is the
+     ONLY thing that honors an OS-level "reduce motion" preference for them (the `.motion-reduced`/
+     `.motion-full` blocks further below only fire from the EXPLICIT in-game setting). `!important`
+     is required on all three: each has a higher- or equal-specificity unconditional rule declared
+     LATER in this file (`.cell-visible.fixture-flicker`, `.cell-visible.mat-stair-up`/
+     `-down`, `.condition-aura`) that would otherwise win by source order despite this block's
+     earlier position. */
+  .fixture-flicker { animation: none !important; }
+  .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: none !important; }
+  .condition-aura { animation: none !important; opacity: 0.4; }
+}
+
+/* Screen transitions (Task 4): a short fade-through-dark wrapping title->play, chargen->play, a
+   floor change within play (descend/ascend), and play->conclusion -- see `ScreenFade.tsx`. Purely
+   visual (`aria-hidden`, `pointer-events: none` here): the wrapped screen/floor already renders
+   the NEW state instantly underneath (App's screen switching stays the instant conditional-return
+   it always was) -- this overlay only cloaks the swap by fading itself in then back out over the
+   keyframes' duration. `position: fixed` so it covers the full viewport regardless of where
+   `ScreenFade` mounts in the tree (inside `PlayScreen`'s own subtree for the floor-change case, or
+   at `App`'s root for the screen-level cases). */
+.screen-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--ground);
+  pointer-events: none;
+  animation: screen-fade 440ms linear;
+}
+@keyframes screen-fade {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
 
 /* Playfield: the grid renders gameplay truth, the effects layer is a purely decorative overlay
    sharing its coordinate space via --cell-w/--cell-h set on the wrapper. `--zoom` is the single
@@ -56,13 +207,69 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   --cell-h: 1lh;
   line-height: 1;
 }
+/* Town floors read slightly warmer than the dungeon proper -- PlayScreen adds this class to the
+   same `.playfield` element whenever `projection.floor.town` is true. A gentle warm-gold tint
+   (4%) rather than a hue shift on the materials themselves, so the dungeon's own material palette
+   isn't duplicated per-floor-kind.
+   IMPORTANT: this can NOT be painted as a `background` on `.playfield` itself (as an earlier
+   version of this rule did) -- `.playfield-grid`, its child, paints its OWN opaque
+   `background: var(--void-bg)` over essentially the same box, so a `.playfield` background never
+   actually composites into anything visible; it is fully occluded. (A `background-blend-mode` on
+   `.playfield` doesn't rescue this either -- blend modes mix multiple background LAYERS on the
+   SAME element, and `.playfield` only ever had the one layer here; the two elements' separate
+   backgrounds simply stack in paint order, they never blend.) It also cannot become a second layer
+   painted onto `.playfield-grid`'s own background (e.g. two `background` layers on `.playfield-grid`
+   itself) or an inserted overlay element, because Task 6 slots a `<canvas>` into `.playfield`,
+   between it and `.playfield-grid`, and any layer occupying that space would compete with the
+   canvas for the same box. The one place left that (a) actually composites and (b) claims no
+   layer/element Task 6 needs is `.playfield-grid`'s OWN background declaration: pre-mix the 4% gold
+   into `--void-bg` itself, once, as a single flat color. */
+.playfield-town .playfield-grid {
+  background: color-mix(in srgb, var(--gold) 4%, var(--void-bg));
+}
 .playfield-grid {
   display: grid;
   grid-auto-rows: var(--cell-h);
   line-height: 1;
-  background: #0b0d15;
+  background: var(--void-bg);
 }
-.playfield-grid:focus-visible { outline: 2px solid #e8c879; outline-offset: -2px; }
+.playfield-grid:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+/* Task 6's visibility-polygon light layer: a plain `<canvas>` slotted into `.playfield` BEFORE
+   `.playfield-grid` in DOM order (the slot the town tint's pre-mix, above, was deliberately kept
+   free for) but painted ON TOP of it visually: `.light-canvas` is `position: absolute` while
+   `.playfield-grid` is a plain in-flow (non-positioned) box, and within a stacking context
+   positioned descendants always paint after in-flow non-positioned ones, regardless of DOM/source
+   order -- so this canvas's pixels are the LAST thing composited here, over the grid's own glyphs
+   and backgrounds, not the reverse. `mix-blend-mode: screen` then lets its additive glow blend
+   into whatever the grid already painted without ever darkening it (canvas internal compositing
+   already uses `globalCompositeOperation: 'lighter'` between light sources; this is the SEPARATE
+   question of how the canvas's own final pixels blend with the DOM behind it).
+   IMPORTANT -- this is NOT a spoiler guard: `screen` blending brightens whatever is underneath
+   regardless of that backdrop's opacity (`result = 1-(1-b)(1-s)`; an opaque `.cell-unknown`
+   background composites no differently than a transparent one here), and this canvas paints ON
+   TOP of the grid besides. An earlier version of this comment claimed `.cell-unknown`'s opaque
+   background occludes the canvas's spill into unexplored cells -- that was never true. The actual
+   guarantee is a JS-side clip: `LightCanvas.tsx`'s `traceVisibleCellClip` restricts every source's
+   drawing to the union of viewport cells whose `knowledge === 'visible'` before any source is
+   painted, so light can never reach a remembered or unknown cell no matter what this stylesheet
+   does. `pointer-events: none` and `aria-hidden` (set in JSX) keep it fully out of interaction and
+   the accessibility tree -- purely decorative, exactly like `.effects-layer`. */
+.light-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+/* Smooth-lighting mode (`settings.lighting === 'smooth'`, the default): the canvas now carries the
+   light falloff, so `.cell-visible`'s own per-cell brightness contribution is flattened to a flat
+   floor rather than scaling with `--light` -- avoids double-applying falloff (once via the canvas
+   gradient, once via the glyph's own opacity). The floor value matches `.cell-visible`'s own
+   un-flattened floor term (0.62) exactly, so the visible-vs-remembered brightness guarantee (a
+   visible cell must never render darker than `.cell-remembered`'s 0.55) still holds -- see
+   `styles-contract.test.ts`'s `.lighting-smooth` contract. Classic mode (no `.lighting-smooth`
+   class) is entirely unaffected -- `.cell-visible`'s original `--light`-scaled rule above still
+   applies verbatim. */
+.lighting-smooth .cell-visible { opacity: 0.62; }
 .cell { display: block; text-align: center; }
 /* Measurement-only probe: lives inside .playfield so it shares its line-height: 1 context (an
    in-flow probe outside that context measures ~15-20% too tall), and is hidden so it never
@@ -81,16 +288,78 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
    entirely. */
 .cell-probe-base { position: absolute; visibility: hidden; width: 1ch; height: 1lh; font-size: 1rem; }
 .cell-empty { color: transparent; }
-.cell-unknown { color: transparent; background: #0b0d15; }
+.cell-unknown { color: transparent; background: var(--void-bg); }
 /* A remembered cell must never render brighter than the darkest a visible cell can get — otherwise
    the player's remembered floor plan would out-shine what their torch is actually illuminating
-   right now. Kept slightly below `.cell-visible`'s floor term (0.62) below. */
-.cell-remembered { color: #4b526b; filter: saturate(0.4); opacity: 0.55; }
+   right now. Kept slightly below `.cell-visible`'s floor term (0.62) below.
+   `saturate(0.4)` desaturates whatever hue is already set on `color` IN PLACE -- it does not pull
+   different hues toward a shared `--remembered` family or toward each other; a desaturated gold
+   and a desaturated blue-grey remain visibly distinct hues, just muted versions of themselves. The
+   actual "never brighter than visible" guarantee here comes entirely from the unconditional
+   `opacity: 0.55`, not from the filter. */
+.cell-remembered { color: var(--remembered); filter: saturate(0.4); opacity: 0.55; }
 /* The floor term (0.62) is deliberately high: a visible-but-dim cell (low --light, e.g. at the
    edge of a torch's radius) must still read as brighter than any remembered cell, never darker —
    the earlier `0.35 +` floor let a dim-but-visible ring around the carried light render darker
    than the remembered floor beyond it, an inverted "dark circle" around the player's own torch. */
-.cell-visible { color: var(--fg, #aab3d1); opacity: calc(0.62 + 0.38 * var(--light, 1)); }
+.cell-visible { color: var(--fg, var(--mat, var(--ink))); opacity: calc(0.62 + 0.38 * var(--light, 1)); }
+
+/* Material coloring (Task 1): `materialClass` (`GridRenderer.tsx`) adds one of these classes,
+   derived from the cell's terrain token (stairs split further by tileId), beside the knowledge
+   class. `--mat` is consumed two ways: here, as a fallback color for a visible cell that has no
+   `tint` yet (rare, but keeps a material-flavored cell from ever falling back all the way to plain
+   `--ink`); and by `GridRenderer`, which reads the SAME hex value (mirrored in `cell-color.ts` as
+   `MATERIAL_BASE_RGB` -- do not let the two drift) as the BASE color a lit cell's tint blends from,
+   via `visibleForeground`'s optional `base` parameter, so a wall reads mineral blue-grey even in
+   dim torchlight rather than the old one-size floor gray. A pillar is structural stone like a wall
+   and both stair directions share one accent -- so `mat-pillar` and `mat-stair-up`/`mat-stair-down`
+   intentionally reuse `--mat-wall`/`--mat-stair` rather than each getting a dedicated variable. */
+.cell-visible.mat-wall, .cell-visible.mat-pillar { --mat: var(--mat-wall); }
+.cell-visible.mat-floor { --mat: var(--mat-floor); }
+.cell-visible.mat-door { --mat: var(--mat-door); }
+.cell-visible.mat-stair-up, .cell-visible.mat-stair-down { --mat: var(--mat-stair); }
+.cell-visible.mat-void { --mat: var(--mat-void); }
+
+/* Remembered cells keep their material hue, still run through the SAME `saturate(0.4)` filter
+   `.cell-remembered` already applies -- but that filter only desaturates each material's own hue
+   in place, it does NOT converge different materials toward a shared `--remembered` color
+   family or toward each other; a remembered wall and a remembered door stay visibly distinct,
+   muted versions of their own colors, not close cousins of one gray-blue memory. What DOES hold
+   regardless of material is the dimmer-than-any-visible guarantee: the class-level
+   `opacity: 0.55` above is unconditional and unchanged by material. */
+.cell-remembered.mat-wall, .cell-remembered.mat-pillar { color: var(--mat-wall); }
+.cell-remembered.mat-floor { color: var(--mat-floor); }
+.cell-remembered.mat-door { color: var(--mat-door); }
+.cell-remembered.mat-stair-up, .cell-remembered.mat-stair-down { color: var(--mat-stair); }
+.cell-remembered.mat-void { color: var(--mat-void); }
+
+/* Fixture flicker variation (Task 7): every wall/floor light fixture (`cell.fixture`) flickers
+   with its OWN delay/duration, derived deterministically from its `lightId` hash
+   (`fixtureFlickerStyle`, GridRenderer.tsx) -- never `Math.random`, so the SAME fixture always
+   flickers the SAME way across renders/remounts, while two different fixtures desynchronize into
+   independent-looking flames rather than one fixture-wide strobe. `--flicker-delay`/
+   `--flicker-duration` are set inline per-cell; the keyframe itself is shared. Applies to VISIBLE
+   fixture cells only -- a remembered fixture is dim memory, not an active light source. */
+.cell-visible.fixture-flicker {
+  animation: fixture-flicker var(--flicker-duration, 2.2s) ease-in-out var(--flicker-delay, 0s) infinite;
+}
+@keyframes fixture-flicker {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.18); }
+}
+
+/* Stair/entrance shimmer (Task 7): a subtle periodic brightness sheen on VISIBLE stair cells --
+   an ambient "this is the way out/down" cue, layered onto the existing `mat-stair-up`/
+   `mat-stair-down` material classes (Task 1) rather than a new glyph or color. Kept as a plain
+   `filter: brightness()` pulse (same technique as `fixture-flicker` above) so it composes cleanly
+   with whichever `--fg`/`--mat` color the cell already resolved to. */
+.cell-visible.mat-stair-up, .cell-visible.mat-stair-down {
+  animation: stair-shimmer 3.4s ease-in-out infinite;
+}
+@keyframes stair-shimmer {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.4); }
+}
 
 .effects-layer {
   position: absolute;
@@ -107,7 +376,7 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 }
 
 .glow {
-  --glow-color: #e8c879;
+  --glow-color: var(--gold);
   --glow-radius: 5;
   --glow-intensity: 1;
   /* Both axes derive from --cell-h (not --cell-w): the box must be square so the radial gradient
@@ -138,6 +407,29 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 }
 .glow[data-source*="torch"] { animation: glow-gutter 2.2s ease-in-out infinite; }
 
+/* Hero condition aura (Task 7): a faint tinted pulse on the hero's OWN cell while any condition
+   from `projection.hero.conditions` is active, colored from that condition's projected `color`
+   (`pickPrimaryCondition`, effects-map.ts, picks the highest-stacks condition when several are
+   active -- see that function's own doc comment for the tie-break rule). Positioned like `.effect`
+   (single-cell, corner-anchored) rather than like the many-cell `.glow`, since it marks exactly
+   one cell. This is a colored SUPPLEMENT to the glyph-plus-name condition badge in `StatusBar`
+   (panels.tsx) -- never the only signal a condition is active, so meaning is never color-only. */
+.condition-aura {
+  position: absolute;
+  left: calc(var(--cell-w) * var(--x, 0));
+  top: calc(var(--cell-h) * var(--y, 0));
+  width: var(--cell-w);
+  height: var(--cell-h);
+  pointer-events: none;
+  background: radial-gradient(circle, var(--aura-color, var(--gold)) 0%, transparent 75%);
+  mix-blend-mode: screen;
+  animation: condition-aura-pulse 1.8s ease-in-out infinite;
+}
+@keyframes condition-aura-pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.55; }
+}
+
 .effect { transform-origin: center; }
 .effect-hit-flash {
   background: radial-gradient(circle, #ff8a7a 0%, transparent 70%);
@@ -146,11 +438,11 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 .effect-attack-streak {
   --dx: calc(var(--to-x, 0) - var(--x, 0));
   --dy: calc(var(--to-y, 0) - var(--y, 0));
-  background: linear-gradient(90deg, #f1d898, transparent);
+  background: linear-gradient(90deg, var(--gold-bright), transparent);
   animation: attack-streak 160ms ease-out;
 }
 .effect-death-burst {
-  background: radial-gradient(circle, #db7f78 0%, transparent 70%);
+  background: radial-gradient(circle, var(--alert) 0%, transparent 70%);
   animation: death-burst 240ms ease-out;
 }
 
@@ -184,6 +476,10 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
      beats this bare .glow override (0,1,0) and the torch flicker keeps animating. */
   .glow { animation: none !important; opacity: calc(var(--glow-intensity) * 0.7); }
   .effect { animation: none !important; display: none; }
+  .screen-fade { animation: none !important; display: none; }
+  .fixture-flicker { animation: none !important; }
+  .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: none !important; }
+  .condition-aura { animation: none !important; opacity: 0.4; }
 }
 
 /* Same overrides as the `@media (prefers-reduced-motion: reduce)` block above, applied instead by
@@ -199,6 +495,10 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 .motion-reduced {
   .glow { animation: none !important; opacity: calc(var(--glow-intensity) * 0.7); }
   .effect { animation: none !important; display: none; }
+  .screen-fade { animation: none !important; display: none; }
+  .fixture-flicker { animation: none !important; }
+  .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: none !important; }
+  .condition-aura { animation: none !important; opacity: 0.4; }
 }
 
 /* The three-way motion contract (`Settings.reducedMotion`, see `App.tsx`'s `withRootStyling`):
@@ -220,6 +520,10 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   .effect-hit-flash { animation: hit-flash 120ms ease-out !important; }
   .effect-attack-streak { animation: attack-streak 160ms ease-out !important; }
   .effect-death-burst { animation: death-burst 240ms ease-out !important; }
+  .screen-fade { display: block !important; animation: screen-fade 440ms linear !important; }
+  .fixture-flicker { animation: fixture-flicker var(--flicker-duration, 2.2s) ease-in-out var(--flicker-delay, 0s) infinite !important; }
+  .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: stair-shimmer 3.4s ease-in-out infinite !important; }
+  .condition-aura { animation: condition-aura-pulse 1.8s ease-in-out infinite !important; }
 }
 
 /* Tactical Triptych: hero / map / threat panels plus a status bar and log, arranged by a CSS
@@ -247,47 +551,109 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 .threat-slot { grid-area: threat; overflow: visible; }
 .log-slot { grid-area: log; min-height: 0; }
 
-.status-bar { display: flex; gap: 1.5em; align-items: baseline; }
+/* Contextual onboarding hint strip (Task 8) -- above the log within its own slot, never a live
+   region (see `HintStrip.tsx`'s doc comment for why `role="note"`, not `alert`/`status`). */
+.hint-strip {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: .4em .6em;
+  margin-bottom: .4em;
+  display: flex;
+  justify-content: space-between;
+  gap: 1em;
+  font-size: .9em;
+}
+.hint-strip-dismiss { color: var(--muted); white-space: nowrap; }
 
-.hero-panel, .threat-panel { border: 1px solid #3d465f; padding: 12px; }
-.hero-panel h2 { margin: 0 0 .5em; font-size: 1rem; color: #f1d898; }
+.status-bar { display: flex; gap: 1.5em; align-items: baseline; }
+/* Condition badge (Task 7): the colorblind-safe reinforcement Task 9 verifies -- a generic
+   status-effect glyph plus the condition's NAME as text, so meaning never rests on
+   `--condition-color` alone; the tinted border is a supplement for a sighted-color reader, not the
+   only signal. Lives in `.status-bar` because that panel renders at every layout tier. */
+.condition-badge {
+  border: 1px solid var(--condition-color, var(--line));
+  border-radius: 3px;
+  padding: 0 .4em;
+  font-size: .85em;
+}
+
+.hero-panel, .threat-panel { border: 1px solid var(--line); padding: 12px; }
+.hero-panel h2 { margin: 0 0 .5em; font-size: 1rem; color: var(--gold-bright); }
 .vital-text { margin: .25em 0; }
-.bar { height: 6px; background: #232a3d; border-radius: 3px; overflow: hidden; }
-.bar-fill { height: 100%; width: calc(var(--fill, 1) * 100%); background: #db7f78; }
+.bar { height: 6px; background: var(--panel); border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; width: calc(var(--fill, 1) * 100%); background: var(--alert); }
 .equipment-list, .condition-list, .threat-list, .ground-item-list { list-style: none; margin: .5em 0; padding: 0; }
 .backpack-summary { margin-top: .5em; }
-.threat-panel .placeholder { color: #7d89a8; font-style: italic; }
+.threat-panel .placeholder { color: var(--muted); font-style: italic; }
 
 .vitals-strip {
-  display: flex; gap: 1em; padding: 4px 8px; background: color-mix(in srgb, #121521 80%, transparent);
-  border-bottom: 1px solid #3d465f; font-size: .85rem;
+  display: flex; gap: 1em; padding: 4px 8px; background: color-mix(in srgb, var(--ground) 80%, transparent);
+  border-bottom: 1px solid var(--line); font-size: .85rem;
 }
 .vitals-overlay { position: absolute; inset: 0 0 auto 0; z-index: 2; }
 
-.hero-drawer, .threat-drawer { border: 1px solid #3d465f; padding: 4px 8px; }
-.hero-drawer summary, .threat-drawer summary { cursor: pointer; color: #7d89a8; }
+.hero-drawer, .threat-drawer { border: 1px solid var(--line); padding: 4px 8px; }
+.hero-drawer summary, .threat-drawer summary { cursor: pointer; color: var(--muted); }
 
 /* `--log-lines` is set inline by PlayScreen per tier (6 at full/compact, 3 at minimal); the log
    region itself never unmounts, only its visible height changes, so it keeps the newest lines
-   scrolled into view (see LogPanel) even while collapsed. */
+   scrolled into view (see LogPanel) even while collapsed.
+   `.log-panel` itself stays `overflow: visible` (the `.framed` default) so its corner marks --
+   painted `--frame-inset` OUTSIDE the padding box -- aren't clipped by the scrollbox's own overflow
+   (a pseudo-element is always clipped by its own element's overflow). The actual scrolling/height
+   clamp lives on the inner `.log-panel-scroll` wrapper instead; `role="log"`/`aria-live="polite"`
+   stay on that same inner element, since it's still the element whose content actually scrolls and
+   gains new lines -- unchanged from before this split, just moved one level in. */
 .log-panel {
+  height: 100%;
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+}
+.log-panel-scroll {
   height: 100%;
   max-height: calc(var(--log-lines, 6) * 1.6em);
   overflow-y: auto;
-  border: 1px solid #3d465f;
-  padding: 4px 8px;
 }
 .log-line { margin: .15em 0; }
-.log-line--combat { color: #db7f78; }
-.log-line--warning { color: #e8c879; }
-.log-line--system { color: #7d89a8; font-style: italic; }
+.log-line--combat { color: var(--alert); }
+.log-line--warning { color: var(--gold); }
+.log-line--system { color: var(--muted); font-style: italic; }
+/* Colorblind reinforcement (Task 9): a log line's tone is carried by color today (combat red,
+   warning gold, system muted) -- a channel a colorblind reader cannot rely on. Each toned line now
+   also gets a leading glyph, so tone is legible without color. Painted as a `::before` with the CSS
+   alt-text syntax (`content: "⚔ " / ""`, the same silent-to-the-a11y-tree trick `.framed` uses):
+   the string after `/` is what a screen reader sees -- nothing -- because the line's own text
+   already describes the event, so the glyph is a purely visual reinforcement and never spoken. The
+   `info` tone is the uncolored default and gets no glyph. */
+.log-line--combat::before { content: "\2694  " / ""; }
+.log-line--warning::before { content: "\26A0  " / ""; }
+.log-line--system::before { content: "\2699  " / ""; }
+.journal-log-line--warning::before { content: "\26A0  " / ""; }
+.journal-log-line--combat::before { content: "\2694  " / ""; }
+.journal-log-line--system::before { content: "\2699  " / ""; }
+
+/* Visually-hidden but screen-reader-available (the standard clip-rect pattern). Used by
+   `HeroStatusAnnouncer` (panels.tsx) for its off-screen `role="status"` live region -- present in
+   the accessibility tree and spoken, but never painted or laid out on screen. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 
 .threat-popover {
   position: absolute;
   transform: translate(-25%, -110%);
   z-index: 3;
-  background: #121521;
-  border: 1px solid #e8c879;
+  background: var(--ground);
+  border: 1px solid var(--gold);
   padding: 6px 10px;
   font-size: .85rem;
   pointer-events: none;
@@ -305,7 +671,7 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   flex-direction: column;
   gap: 12px;
 }
-.chargen-progress { color: #7d89a8; }
+.chargen-progress { color: var(--muted); }
 .chargen-step-label { margin: 0; font-size: .9rem; letter-spacing: .04em; text-transform: uppercase; }
 .chargen-main { display: flex; flex-direction: column; gap: 12px; }
 .chargen-nav { display: flex; gap: 8px; justify-content: flex-end; }
@@ -320,35 +686,35 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   align-items: center;
   gap: 8px;
   text-align: left;
-  border: 1px solid #3d465f;
-  background: #121521;
+  border: 1px solid var(--line);
+  background: var(--ground);
   color: inherit;
   padding: 8px 10px;
 }
-.chargen-option--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
-.chargen-option[aria-selected="true"] { border-color: #e8c879; }
+.chargen-option--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
+.chargen-option[aria-selected="true"] { border-color: var(--gold); }
 .chargen-option--locked { opacity: .55; cursor: not-allowed; }
 .chargen-class-glyph { font-weight: bold; }
-.chargen-class-unlock-hint { font-size: .8rem; color: #7d89a8; font-style: italic; }
+.chargen-class-unlock-hint { font-size: .8rem; color: var(--muted); font-style: italic; }
 
 .chargen-portrait-list { flex-direction: row; flex-wrap: wrap; }
 .chargen-portrait {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 1px solid #3d465f;
-  background: #121521;
-  color: var(--portrait-accent, #dfe3ef);
+  border: 1px solid var(--line);
+  background: var(--ground);
+  color: var(--portrait-accent, var(--portrait-default));
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.chargen-portrait--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
-.chargen-portrait[aria-selected="true"] { border-color: #e8c879; }
-.chargen-portrait[data-glyph="@"] { --portrait-accent: #dfe3ef; }
-.chargen-portrait[data-glyph="@·gold"] { --portrait-accent: #e8c879; }
-.chargen-portrait[data-glyph="@·ember"] { --portrait-accent: #db7f78; }
-.chargen-portrait[data-glyph="@·mist"] { --portrait-accent: #7d89a8; }
+.chargen-portrait--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
+.chargen-portrait[aria-selected="true"] { border-color: var(--gold); }
+.chargen-portrait[data-glyph="@"] { --portrait-accent: var(--portrait-default); }
+.chargen-portrait[data-glyph="@·gold"] { --portrait-accent: var(--gold); }
+.chargen-portrait[data-glyph="@·ember"] { --portrait-accent: var(--alert); }
+.chargen-portrait[data-glyph="@·mist"] { --portrait-accent: var(--muted); }
 .chargen-portrait[data-glyph="@·moss"] { --portrait-accent: #7fa87d; }
 
 .chargen-attribute-row {
@@ -356,27 +722,27 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   align-items: center;
   gap: 8px;
 }
-.chargen-attribute-row--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
+.chargen-attribute-row--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
 .chargen-attribute-name { width: 6em; text-transform: capitalize; }
-.chargen-point-buy-budget { color: #7d89a8; }
+.chargen-point-buy-budget { color: var(--muted); }
 .chargen-hints, .chargen-summary-list, .chargen-preview-list, .chargen-attribute-list {
   font-size: .85rem;
-  color: #7d89a8;
+  color: var(--muted);
 }
-.chargen-preview { border-top: 1px solid #3d465f; padding-top: 8px; }
+.chargen-preview { border-top: 1px solid var(--line); padding-top: 8px; }
 
 /* Hall of Records: outcome/class filters (native selects — keyboard-reachable for free) above a
    keyboard-first option list of rows, reusing the same roving-focus/option-list convention as
    `.title-option`/`.chargen-option`. Row expansion (Enter) reveals a `.hall-breakdown` table of
    the engine's itemized `ScoreBreakdown` lines. */
 .hall-screen { display: flex; flex-direction: column; gap: 12px; }
-.hall-provenance { color: #7d89a8; font-style: italic; }
+.hall-provenance { color: var(--muted); font-style: italic; }
 .hall-filters { display: flex; gap: 16px; }
-.hall-filter { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: #7d89a8; }
+.hall-filter { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); }
 .hall-filter select {
-  background: #121521;
+  background: var(--ground);
   color: inherit;
-  border: 1px solid #3d465f;
+  border: 1px solid var(--line);
   padding: 6px 8px;
   font-family: inherit;
 }
@@ -386,19 +752,19 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   align-items: center;
   gap: 12px;
   text-align: left;
-  border: 1px solid #3d465f;
-  background: #121521;
+  border: 1px solid var(--line);
+  background: var(--ground);
   color: inherit;
   padding: 8px 10px;
   cursor: pointer;
 }
-.hall-row--focused { outline: 2px solid #e8c879; outline-offset: 2px; }
-.hall-row[aria-selected="true"] { border-color: #e8c879; }
+.hall-row--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
+.hall-row[aria-selected="true"] { border-color: var(--gold); }
 .hall-glyph { font-weight: bold; width: 1.5em; text-align: center; }
 .hall-name { min-width: 8em; }
-.hall-classes { color: #7d89a8; }
-.hall-run { margin-left: auto; color: #7d89a8; font-size: .85rem; }
-.hall-breakdown { margin: 4px 0 4px 2.5em; font-size: .85rem; color: #7d89a8; }
+.hall-classes { color: var(--muted); }
+.hall-run { margin-left: auto; color: var(--muted); font-size: .85rem; }
+.hall-breakdown { margin: 4px 0 4px 2.5em; font-size: .85rem; color: var(--muted); }
 
 /* Map & journal overlay (Task 7). `.map-journal-map-pane` scrolls the full floor at a FIXED
    compact cell size (`--map-cell`, set inline per render) -- deliberately its own custom property,
@@ -407,24 +773,24 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
    `map-pane` -- `PlayScreen.tsx` already owns that class name for its own live playfield wrapper. */
 .map-journal-tablist { display: flex; gap: 8px; margin-bottom: 8px; }
 .map-journal-tab {
-  background: #121521;
+  background: var(--ground);
   color: inherit;
-  border: 1px solid #3d465f;
+  border: 1px solid var(--line);
   padding: 6px 12px;
   font-family: inherit;
   cursor: pointer;
 }
-.map-journal-tab--active { border-color: #e8c879; color: #e8c879; }
+.map-journal-tab--active { border-color: var(--gold); color: var(--gold); }
 .map-journal-map-pane { overflow: auto; max-height: 60vh; }
 .map-grid { display: grid; grid-auto-rows: var(--map-cell); line-height: 1; font-size: var(--map-cell); }
 .map-cell { display: block; width: var(--map-cell); height: var(--map-cell); text-align: center; }
 .map-cell-unknown { color: transparent; }
-.map-cell-remembered { color: #4b526b; filter: saturate(0.4); opacity: 0.55; }
-.map-cell-visible { color: var(--fg, #aab3d1); opacity: calc(0.62 + 0.38 * var(--light, 1)); }
+.map-cell-remembered { color: var(--remembered); filter: saturate(0.4); opacity: 0.55; }
+.map-cell-visible { color: var(--fg, var(--ink)); opacity: calc(0.62 + 0.38 * var(--light, 1)); }
 .journal-pane { display: flex; flex-direction: column; gap: 12px; }
-.journal-objective { color: #e8c879; font-style: italic; }
+.journal-objective { color: var(--gold); font-style: italic; }
 .journal-landmarks, .journal-log { list-style: none; margin: 0; padding: 0; }
 .journal-log { max-height: 40vh; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
-.journal-log-line--warning { color: #db7f78; }
-.journal-log-line--combat { color: #e8c879; }
-.journal-log-line--system { color: #7d89a8; }
+.journal-log-line--warning { color: var(--alert); }
+.journal-log-line--combat { color: var(--gold); }
+.journal-log-line--system { color: var(--muted); }

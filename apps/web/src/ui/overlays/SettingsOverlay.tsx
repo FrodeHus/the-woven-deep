@@ -132,6 +132,74 @@ export function SettingsOverlay({ settings, onChange, onClearGuestSession, keyma
         </p>
       </section>
 
+      <section aria-labelledby="settings-display-heading">
+        <h3 id="settings-display-heading">Display</h3>
+        <div role="radiogroup" aria-label="Theme">
+          <label>
+            <input
+              type="radio"
+              name="settings-theme"
+              checked={settings.theme === 'tapestry'}
+              onChange={() => onChange({ ...settings, theme: 'tapestry' })}
+            />
+            Tapestry (dark fantasy)
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="settings-theme"
+              checked={settings.theme === 'high-contrast'}
+              onChange={() => onChange({ ...settings, theme: 'high-contrast' })}
+            />
+            High contrast
+          </label>
+        </div>
+        <div role="radiogroup" aria-label="Lighting">
+          <label>
+            <input
+              type="radio"
+              name="settings-lighting"
+              checked={settings.lighting === 'smooth'}
+              onChange={() => onChange({ ...settings, lighting: 'smooth' })}
+            />
+            Smooth (visibility-polygon canvas lighting)
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="settings-lighting"
+              checked={settings.lighting === 'classic'}
+              onChange={() => onChange({ ...settings, lighting: 'classic' })}
+            />
+            Classic (flat per-cell lighting, no canvas)
+          </label>
+        </div>
+      </section>
+
+      <section aria-labelledby="settings-onboarding-heading">
+        <h3 id="settings-onboarding-heading">Onboarding hints</h3>
+        <div role="radiogroup" aria-label="Onboarding hints">
+          <label>
+            <input
+              type="radio"
+              name="settings-onboarding"
+              checked={settings.onboarding === 'on'}
+              onChange={() => onChange({ ...settings, onboarding: 'on' })}
+            />
+            On (show contextual guidance while learning the ropes)
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="settings-onboarding"
+              checked={settings.onboarding === 'off'}
+              onChange={() => onChange({ ...settings, onboarding: 'off' })}
+            />
+            Off
+          </label>
+        </div>
+      </section>
+
       <section aria-labelledby="settings-motion-heading">
         <h3 id="settings-motion-heading">Reduce motion</h3>
         <div role="radiogroup" aria-label="Reduce motion">
@@ -218,8 +286,8 @@ export function SettingsOverlay({ settings, onChange, onClearGuestSession, keyma
       <section aria-labelledby="settings-clear-heading">
         <h3 id="settings-clear-heading">Clear guest session</h3>
         <p>
-          Wipes your active run, Hall of Records, and settings on this device, then returns to the
-          title screen. This cannot be undone.
+          Wipes your active run, Hall of Records, discovery log, guidance progress, and settings on
+          this device, then returns to the title screen. This cannot be undone.
         </p>
         <label htmlFor="settings-clear-confirm">Type &quot;clear&quot; to confirm</label>
         <input

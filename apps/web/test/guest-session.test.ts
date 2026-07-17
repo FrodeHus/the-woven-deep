@@ -6,7 +6,9 @@ import {
   createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, descendToNextFloor, emptyEquipment, encodeActiveRun,
   RECENT_COMMAND_LIMIT, type ActiveRun, type ActorState, type Uint32State,
 } from '@woven-deep/engine';
+import { SIGHTINGS_KEY } from '../src/session/codex.js';
 import { GuestSession } from '../src/session/guest-session.js';
+import { ONBOARDING_KEY } from '../src/session/onboarding.js';
 import { createSessionRunRecordRepository } from '../src/session/run-records-storage.js';
 import { COMMAND_SEQUENCE_KEY, SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 
@@ -491,6 +493,105 @@ describe('GuestSession', () => {
     expect(session.getSnapshot().projection.metrics.turnsElapsed).toBe(1);
     // Seeded at `revision (0) + RECENT_COMMAND_LIMIT + 1`, then incremented once.
     expect(storage.peek(COMMAND_SEQUENCE_KEY)).toBe(String(RECENT_COMMAND_LIMIT + 2));
+  });
+
+  describe('onboarding wiring (Task 8 review Finding 2)', () => {
+    it('(a) an applied "move" command increments the movement mastery count and persists to the provided localStorage', () => {
+      const storage = fakeStorage();
+      const localStorage = fakeStorage();
+      const session = new GuestSession({ pack, storage, seed: SEED, localStorage });
+
+      expect(session.getSnapshot().onboarding.counts.move ?? 0).toBe(0);
+      session.dispatch({ type: 'move', direction: 'west' }); // valid: no wall/occupant this direction (see wall-bump test above)
+
+      expect(session.getSnapshot().onboarding.counts.move).toBe(1);
+      const stored = localStorage.peek(ONBOARDING_KEY);
+      expect(stored).not.toBeNull();
+      expect(JSON.parse(stored!)).toEqual({ counts: { move: 1 }, dismissed: [] });
+    });
+
+    it('(b) a client-side REJECTED command (occupied by a visible non-hostile actor) does NOT increment mastery', () => {
+      const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+      const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+      const neighbor: ActorState = {
+        ...hero,
+        actorId: 'npc.visible-bystander',
+        contentId: 'monster.cave-rat',
+        playerControlled: false,
+        x: hero.x + 1,
+        y: hero.y,
+        disposition: 'neutral',
+        energy: 0,
+        equipment: emptyEquipment(),
+        behaviorId: null,
+      };
+      const withNeighbor: ActiveRun = {
+        ...fresh,
+        actors: [...fresh.actors, neighbor].sort((left, right) => (left.actorId < right.actorId ? -1 : 1)),
+      };
+      const storage = fakeStorage();
+      storage.set(SAVE_KEY, encodeActiveRun(withNeighbor));
+      const localStorage = fakeStorage();
+      const session = new GuestSession({ pack, storage, localStorage });
+
+      session.dispatch({ type: 'move', direction: 'east' });
+
+      expect(session.getSnapshot().log.at(-1)?.text).toBe('Something is in the way.');
+      expect(session.getSnapshot().onboarding.counts.move ?? 0).toBe(0);
+      expect(localStorage.peek(ONBOARDING_KEY)).toBeNull();
+    });
+
+    it('(c) dismissOnboardingHint persists the dismissal', () => {
+      const storage = fakeStorage();
+      const localStorage = fakeStorage();
+      const session = new GuestSession({ pack, storage, seed: SEED, localStorage });
+
+      session.dismissOnboardingHint('movement');
+
+      expect(session.getSnapshot().onboarding.dismissed).toEqual(['movement']);
+      const stored = localStorage.peek(ONBOARDING_KEY);
+      expect(stored).not.toBeNull();
+      expect(JSON.parse(stored!).dismissed).toEqual(['movement']);
+    });
+
+    it('(d) constructing WITHOUT the optional localStorage falls back to in-memory: counts still work in-session, nothing thrown', () => {
+      const storage = fakeStorage();
+
+      expect(() => {
+        const session = new GuestSession({ pack, storage, seed: SEED });
+        session.dispatch({ type: 'move', direction: 'west' });
+        expect(session.getSnapshot().onboarding.counts.move).toBe(1);
+      }).not.toThrow();
+    });
+  });
+
+  describe('corruption notices (Task 8 review Finding 3 -- milestone-wide error-handling debt)', () => {
+    it('a corrupted onboarding blob resets to the empty ledger AND surfaces a dismissible data-reset notice, once', () => {
+      const storage = fakeStorage();
+      const localStorage = fakeStorage();
+      localStorage.set(ONBOARDING_KEY, 'not json{{{');
+
+      const session = new GuestSession({ pack, storage, seed: SEED, localStorage });
+
+      expect(session.getSnapshot().onboarding).toEqual({ counts: {}, dismissed: [] });
+      expect(session.getSnapshot().notice).toEqual({ kind: 'data-reset', source: 'onboarding' });
+
+      // Guarded, not re-fired on a subsequent publish (dispatch resets `notice` to null first).
+      session.dispatch({ type: 'wait' });
+      expect(session.getSnapshot().notice).not.toEqual({ kind: 'data-reset', source: 'onboarding' });
+    });
+
+    it('a corrupted sighting-cache blob resets to the empty cache AND surfaces a dismissible data-reset notice', () => {
+      const storage = fakeStorage();
+      storage.set(SIGHTINGS_KEY, 'not json{{{');
+
+      const session = new GuestSession({ pack, storage, seed: SEED });
+
+      // The corrupted cache resets to empty, then re-accumulates from THIS boot's own fresh
+      // projection (per `syncSightings`'s "accumulates on boot restore" contract) -- it is not
+      // expected to stay empty, only to have discarded whatever was in the corrupted blob.
+      expect(session.getSnapshot().notice).toEqual({ kind: 'data-reset', source: 'sightings' });
+    });
   });
 
   describe('death and finalization', () => {

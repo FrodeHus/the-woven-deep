@@ -13,7 +13,7 @@ import {
 import { GuestSession } from '../src/session/guest-session.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 import type { SessionSnapshot } from '../src/session/guest-session.js';
-import { HeroPanel, LogPanel, StatusBar, ThreatPanel } from '../src/ui/panels.js';
+import { HeroPanel, HeroStatusAnnouncer, LogPanel, StatusBar, ThreatPanel } from '../src/ui/panels.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
 import type { OverlayId } from '../src/ui/overlays/registry.js';
 
@@ -37,8 +37,9 @@ function snapshotOf(projection: GameplayProjection, overrides: Partial<SessionSn
     notice: null,
     houseOpen: false,
     conclusion: null,
-    sightings: { monsterIds: [], itemIds: [] },
+    sightings: { monsterIds: [], itemIds: [], landmarks: [] },
     heroClassTags: [],
+    onboarding: { counts: {}, dismissed: [] },
     ...overrides,
   };
 }
@@ -63,6 +64,26 @@ describe('HeroPanel', () => {
     expect(mainHand).not.toBeNull();
     expect(screen.getByText(`main-hand: ${mainHand!.name}`)).toBeInTheDocument();
     expect(screen.getByText(`Backpack: ${hero.backpack.length}/${hero.backpackCapacity}`)).toBeInTheDocument();
+  });
+
+  it('carries the shared .framed corner class (Task 3 ornamental framing) and keeps the panel\'s accessible name/description unchanged in the DOM -- this is a DOM-level regression guard, not a real accessibility-tree assertion: the decorative corner glyphs are painted by CSS pseudo-elements, which never appear in React\'s rendered markup at all, so no DOM node (and therefore no accessibility-tree node) can carry them', () => {
+    render(<HeroPanel snapshot={snapshotOf(baseProjection)} />);
+    const hero = baseProjection.hero as unknown as { name: string };
+
+    const region = screen.getByRole('region', { name: 'Hero' });
+    expect(region).toHaveClass('framed');
+    // The accessible name is exactly "Hero" (from aria-label) -- proves the framing didn't leak
+    // any ornamental text into the name via e.g. an aria-label change or an extra labelled child.
+    expect(region).toHaveAccessibleName('Hero');
+
+    const title = screen.getByText(hero.name);
+    expect(title.tagName).toBe('H2');
+    expect(title).toHaveClass('framed-title');
+    // The <h2> element's only text content is the hero's name -- the `.framed-title::after`
+    // ornament is pure generated CSS content (`content: "◆" / ""`), never a DOM text node, so it
+    // can neither change this element's textContent nor its accessible name.
+    expect(title).toHaveTextContent(hero.name);
+    expect(title.textContent).toBe(hero.name);
   });
 });
 
@@ -153,6 +174,43 @@ describe('StatusBar', () => {
     render(<StatusBar snapshot={snapshotOf(projection)} />);
     expect(screen.getByText('Town')).toBeInTheDocument();
     expect(screen.queryByText(/Depth/)).not.toBeInTheDocument();
+  });
+
+  it('renders no condition badge when the hero has no active conditions', () => {
+    render(<StatusBar snapshot={snapshotOf(baseProjection)} />);
+    expect(document.querySelector('.condition-badge')).toBeNull();
+  });
+
+  it('renders a glyph-plus-name condition badge (not color-only) tinted from the condition\'s projected color', () => {
+    const heroData = baseProjection.hero as unknown as Record<string, unknown>;
+    const projection: GameplayProjection = {
+      ...baseProjection,
+      hero: {
+        ...heroData,
+        conditions: [{ conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50 }],
+      },
+    } as unknown as GameplayProjection;
+    render(<StatusBar snapshot={snapshotOf(projection)} />);
+    const badge = document.querySelector('.condition-badge')!;
+    expect(badge).not.toBeNull();
+    expect(badge.textContent).toMatch(/Poisoned/);
+    expect(badge.getAttribute('style')).toContain('--condition-color: #7ac86a');
+  });
+
+  it('picks the highest-stacks condition for the badge when several are active', () => {
+    const heroData = baseProjection.hero as unknown as Record<string, unknown>;
+    const projection: GameplayProjection = {
+      ...baseProjection,
+      hero: {
+        ...heroData,
+        conditions: [
+          { conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50 },
+          { conditionId: 'condition.bleeding', name: 'Bleeding', color: '#c85a5a', stacks: 3, remaining: 20 },
+        ],
+      },
+    } as unknown as GameplayProjection;
+    render(<StatusBar snapshot={snapshotOf(projection)} />);
+    expect(document.querySelector('.condition-badge')!.textContent).toMatch(/Bleeding/);
   });
 });
 
@@ -369,5 +427,102 @@ describe('PlayScreen keyboard routing', () => {
     await user.keyboard('n');
     await waitFor(() => expect(session.getSnapshot().pendingDecision).toBeNull());
     expect(session.getSnapshot().log.at(-1)?.tone).toBe('system');
+  });
+});
+
+describe('StatusBar live-region demotion (Task 9)', () => {
+  it('is a labeled group, not a live region, so the per-turn turn counter never spams a screen reader', () => {
+    render(<StatusBar snapshot={snapshotOf(baseProjection)} />);
+    const bar = document.querySelector('.status-bar')!;
+    expect(bar.getAttribute('role')).toBe('group');
+    expect(bar.getAttribute('aria-live')).toBeNull();
+  });
+});
+
+describe('HeroStatusAnnouncer (Task 9)', () => {
+  function heroWith(overrides: Record<string, unknown>): GameplayProjection {
+    const heroData = baseProjection.hero as unknown as Record<string, unknown>;
+    return { ...baseProjection, hero: { ...heroData, ...overrides } } as unknown as GameplayProjection;
+  }
+
+  it('renders a visually-hidden polite status region that is silent on first mount', () => {
+    render(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 100, maxHealth: 100 }))} />);
+    const region = screen.getByRole('status');
+    expect(region).toHaveClass('sr-only');
+    expect(region).toHaveAttribute('aria-live', 'polite');
+    expect(region.textContent).toBe('');
+  });
+
+  it('announces a health band crossing when the hero worsens', () => {
+    const { rerender } = render(
+      <HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 100, maxHealth: 100 }))} />,
+    );
+    const region = screen.getByRole('status');
+    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 40, maxHealth: 100 }))} />);
+    expect(region.textContent).toContain('Health low.');
+  });
+
+  it('stays silent on a health drop that does not cross a band (no spam)', () => {
+    const { rerender } = render(
+      <HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 100, maxHealth: 100 }))} />,
+    );
+    const region = screen.getByRole('status');
+    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 60, maxHealth: 100 }))} />);
+    expect(region.textContent).toBe('');
+  });
+
+  it('announces a newly gained condition by name', () => {
+    const { rerender } = render(
+      <HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ conditions: [] }))} />,
+    );
+    const region = screen.getByRole('status');
+    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({
+      conditions: [{ conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50 }],
+    }))} />);
+    expect(region.textContent).toContain('Afflicted: Poisoned.');
+  });
+
+  it('stays silent on mount even when the hero boots in at low/critical health (no announce-on-restore)', () => {
+    render(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 10, maxHealth: 100 }))} />);
+    const region = screen.getByRole('status');
+    expect(region.textContent).toBe('');
+  });
+
+  function floorWith(overrides: Record<string, unknown>): GameplayProjection {
+    const floorData = baseProjection.floor as unknown as Record<string, unknown>;
+    return { ...baseProjection, floor: { ...floorData, ...overrides } } as unknown as GameplayProjection;
+  }
+
+  it('stays silent on mount even when booting directly into a dungeon depth (no announce-on-restore)', () => {
+    render(<HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-003', depth: 3, town: false }))} />);
+    const region = screen.getByRole('status');
+    expect(region.textContent).toBe('');
+  });
+
+  it('announces descending from town into depth 1', () => {
+    const { rerender } = render(
+      <HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.town', depth: 0, town: true }))} />,
+    );
+    const region = screen.getByRole('status');
+    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))} />);
+    expect(region.textContent).toContain('Depth 1.');
+  });
+
+  it('announces returning to town from a depth', () => {
+    const { rerender } = render(
+      <HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))} />,
+    );
+    const region = screen.getByRole('status');
+    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.town', depth: 0, town: true }))} />);
+    expect(region.textContent).toContain('Returned to the town.');
+  });
+
+  it('stays silent when the floor is unchanged across projection churn', () => {
+    const { rerender } = render(
+      <HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))} />,
+    );
+    const region = screen.getByRole('status');
+    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))} />);
+    expect(region.textContent).toBe('');
   });
 });

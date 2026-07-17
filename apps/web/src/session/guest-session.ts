@@ -12,6 +12,7 @@ import { buildIntent } from './command-builder.js';
 import { accumulateSightings, loadSightings, saveSightings, type Sightings } from './codex.js';
 import { foldEventsIntoLog, LOG_CAPACITY, type LogLine } from './event-log.js';
 import type { PlayerIntent } from './intents.js';
+import { dismissHint, loadOnboarding, recordIntent, saveOnboarding, type OnboardingState } from './onboarding.js';
 import {
   classifyStorageFailure, COMMAND_SEQUENCE_KEY, SAVE_KEY, type SessionStorageLike, type StorageFailure,
 } from './storage.js';
@@ -24,7 +25,14 @@ export type SessionNotice =
   | { readonly kind: 'restored' }
   | { readonly kind: 'fresh' }
   | { readonly kind: 'save-discarded'; readonly reason: string }
-  | { readonly kind: 'storage'; readonly failure: StorageFailure };
+  | { readonly kind: 'storage'; readonly failure: StorageFailure }
+  /** A corrupted cross-reload blob (the sighting cache or the onboarding mastery ledger) was
+   * silently reset to its fresh/empty state -- per the plan's error-handling section, this must
+   * still surface the standard dismissible notice rather than resetting invisibly. Dismissible
+   * (not a `storage` failure -- the write itself succeeded; it's the previously-stored READ that
+   * was unreadable), so it flows through the exact same `role="status"` session-banner every other
+   * dismissible notice here uses. */
+  | { readonly kind: 'data-reset'; readonly source: 'sightings' | 'onboarding' };
 
 export interface SessionSnapshot {
   readonly projection: GameplayProjection;
@@ -53,6 +61,39 @@ export interface SessionSnapshot {
    * `StoredHallRecord`/Hall-of-Records row. Feeds the unlock codex's "active hero's class"
    * discovery source (`deriveCodexState`, `codex.ts`). */
   readonly heroClassTags: readonly string[];
+  /** The guest's contextual-onboarding mastery ledger (`onboarding.ts`'s `OnboardingState`) --
+   * device-persistent (`localStorage`, not `sessionStorage`), unlike every other field on this
+   * snapshot. Kept in-memory here as the authoritative value; a persistence failure downgrades to
+   * session-memory only, exactly like `sightings` above. */
+  readonly onboarding: OnboardingState;
+}
+
+/** A private, ephemeral `SessionStorageLike` fallback for the constructor's optional
+ * `localStorage` field -- every pre-existing `GuestSession` caller (this session layer's own
+ * extensive test suite included) constructs the session with no notion of a device-persistent
+ * store at all, and requiring one outright would force touching every one of those unrelated call
+ * sites. Onboarding mastery for a session built this way simply never survives past this object's
+ * lifetime -- correct for a caller that never asked for persistence in the first place. */
+function inMemoryLocalStorage(): SessionStorageLike {
+  const values = new Map<string, string>();
+  return {
+    get: (key: string) => values.get(key) ?? null,
+    set: (key: string, value: string) => { values.set(key, value); },
+    remove: (key: string) => { values.delete(key); },
+  };
+}
+
+/**
+ * Maps an applied `PlayerIntent` to the onboarding mastery vocabulary (`onboarding.ts`'s `HINTS`),
+ * or `null` for intents no hint cares about. Deliberately synthetic, not a passthrough of
+ * `PlayerIntent['type']` -- `'trade-complete'` in particular folds both `trade-buy` and
+ * `trade-sell` into the same mastery count, since either one demonstrates "you traded".
+ */
+function onboardingIntentType(intent: PlayerIntent): string | null {
+  if (intent.type === 'move') return 'move';
+  if (intent.type === 'backpack' && intent.action === 'toggle-light') return 'toggle-light';
+  if (intent.type === 'trade-buy' || intent.type === 'trade-sell') return 'trade-complete';
+  return null;
 }
 
 function randomSeed(): Uint32State {
@@ -81,13 +122,25 @@ export class GuestSession {
   private pendingDecision: PublicDecision | null = null;
   private notice: SessionNotice | null;
   private houseOpen = false;
-  private sightings: Sightings = { monsterIds: [], itemIds: [] };
+  private sightings: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
+  private readonly localStorage: SessionStorageLike;
+  private onboarding: OnboardingState;
   private snapshot: SessionSnapshot;
   private readonly listeners = new Set<() => void>();
+  /** Guards the `data-reset` notice (see `SessionNotice`) so a corrupted sighting-cache or
+   * onboarding-ledger blob is announced exactly once per session, never re-fired on every
+   * subsequent `publish()` -- `syncSightings` re-reads storage on every publish, and once its own
+   * best-effort write below succeeds the blob is no longer corrupt on the next read anyway, but
+   * these flags make that guarantee explicit rather than incidental. */
+  private sightingsCorruptionNotified = false;
+  private onboardingCorruptionNotified = false;
 
   constructor(
     input: Readonly<{
       pack: CompiledContentPack; storage: SessionStorageLike; seed?: Uint32State; hero?: NewRunHero;
+      /** Device-persistent (`localStorage`) store for the onboarding mastery ledger only -- see
+       * `inMemoryLocalStorage`'s doc comment above for why this is optional rather than required. */
+      localStorage?: SessionStorageLike;
       /** When `true`, `boot()` never looks at any existing save — it always starts a brand-new run
        * from this constructor's `hero`/`seed`, exactly like an empty storage boot would. This is the
        * seam chargen's "confirm"/"new hero" flows use: without it, any live save in storage would
@@ -98,11 +151,19 @@ export class GuestSession {
   ) {
     this.pack = input.pack;
     this.storage = input.storage;
+    this.localStorage = input.localStorage ?? inMemoryLocalStorage();
+    const onboardingLoad = loadOnboarding(this.localStorage);
+    this.onboarding = onboardingLoad.state;
     this.hero = input.hero ?? DEFAULT_GUEST_HERO;
     const booted = this.boot(input.seed, input.startFresh ?? false);
     this.run = booted.run;
     this.notice = booted.notice;
     this.commandSequence = booted.commandSequence;
+    // Surfaced AFTER the boot notice is assigned above, so a corrupted onboarding blob's
+    // dismissible reset notice wins over the (less urgent) plain fresh/restored boot notice --
+    // both are one-time facts about this construction, but losing device-persistent mastery
+    // progress is the more actionable one to tell the guest about.
+    if (onboardingLoad.corrupted) this.markOnboardingCorrupted();
     // "Accumulates ... on boot restore" -- a restored (or freshly-created) run's initial
     // projection may already show visible actors/identified items (e.g. a save restored mid-fight),
     // so the cache must sync once here too, not only after a subsequent dispatch.
@@ -200,6 +261,7 @@ export class GuestSession {
       const events = projectDomainEvents({
         state: transition.state, content: this.pack, heroId: transition.state.hero.actorId, events: transition.events,
       });
+      this.noteOnboardingIntent('descend');
       this.applyNewState(transition.state, events);
       return;
     }
@@ -222,7 +284,8 @@ export class GuestSession {
       return;
     }
 
-    this.handleResolution(resolveCommand(this.run, built.command, { content: this.pack }));
+    const masteryIntentType = onboardingIntentType(intent);
+    this.handleResolution(resolveCommand(this.run, built.command, { content: this.pack }), masteryIntentType);
   }
 
   answerDecision(confirmed: boolean): void {
@@ -244,7 +307,13 @@ export class GuestSession {
     this.handleResolution(resolveCommand(this.run, command, { content: this.pack }));
   }
 
-  private handleResolution(resolution: CommandResolution): void {
+  /**
+   * `masteryIntentType`, when given, is folded into the onboarding ledger ONLY on the success
+   * path below (`applyNewState`) -- a decision-required prompt or an outright rejection never
+   * "applies" the underlying intent, so neither counts toward mastery (per the design rule: only
+   * applied results teach).
+   */
+  private handleResolution(resolution: CommandResolution, masteryIntentType?: string | null): void {
     const { result } = resolution;
     if (result.status === 'decision_required') {
       this.pendingDecision = projectDecision({ state: this.run, content: this.pack, decision: result.decision })
@@ -260,6 +329,7 @@ export class GuestSession {
       this.publish();
       return;
     }
+    if (masteryIntentType) this.noteOnboardingIntent(masteryIntentType);
     this.applyNewState(resolution.state, resolution.events);
   }
 
@@ -311,6 +381,7 @@ export class GuestSession {
    */
   private syncSightings(): void {
     const loaded = loadSightings(this.storage);
+    if (loaded.corrupted) this.markSightingsCorrupted();
     this.sightings = accumulateSightings(loaded.sightings, this.currentProjection());
     try {
       saveSightings(this.storage, this.sightings);
@@ -319,6 +390,58 @@ export class GuestSession {
         this.notice = { kind: 'storage', failure: classifyStorageFailure(error) };
       }
     }
+  }
+
+  /** Surfaces the standard dismissible `data-reset` notice for a corrupted sighting-cache blob --
+   * exactly once per session (see `sightingsCorruptionNotified`'s doc comment), and never over an
+   * in-progress `storage` (write) failure, which is the more urgent, ongoing condition. */
+  private markSightingsCorrupted(): void {
+    if (this.sightingsCorruptionNotified) return;
+    this.sightingsCorruptionNotified = true;
+    if (this.notice !== null && this.notice.kind === 'storage') return;
+    this.notice = { kind: 'data-reset', source: 'sightings' };
+  }
+
+  /** Same posture as `markSightingsCorrupted` above, for the onboarding mastery ledger. */
+  private markOnboardingCorrupted(): void {
+    if (this.onboardingCorruptionNotified) return;
+    this.onboardingCorruptionNotified = true;
+    if (this.notice !== null && this.notice.kind === 'storage') return;
+    this.notice = { kind: 'data-reset', source: 'onboarding' };
+  }
+
+  /** Folds `intentType` into the onboarding mastery ledger and best-effort persists it -- does NOT
+   * publish itself (every caller already publishes right after, via `applyNewState` or its own
+   * public wrapper below), so this never causes a redundant extra notification. */
+  private noteOnboardingIntent(intentType: string): void {
+    this.onboarding = recordIntent(this.onboarding, intentType);
+    try {
+      saveOnboarding(this.localStorage, this.onboarding);
+    } catch {
+      // Best-effort, same posture as every other cosmetic/secondary write in this session layer
+      // (the sighting cache, the command-sequence counter) -- the in-memory ledger is already
+      // correct for the rest of this session regardless of whether the write itself succeeds.
+    }
+  }
+
+  /** Records a UI-only onboarding milestone that never goes through `dispatch` at all -- opening
+   * the character-sheet or inventory overlay (`PlayScreen`'s key dispatcher calls this alongside
+   * forwarding the open to `App`). Public because these events originate outside this class,
+   * unlike `noteOnboardingIntent` above (folded from `dispatch`'s own applied-intent path). */
+  recordOnboardingIntent(intentType: string): void {
+    this.noteOnboardingIntent(intentType);
+    this.publish();
+  }
+
+  /** Retires a hint for good -- the strip's dedicated dismiss key. */
+  dismissOnboardingHint(hintId: string): void {
+    this.onboarding = dismissHint(this.onboarding, hintId);
+    try {
+      saveOnboarding(this.localStorage, this.onboarding);
+    } catch {
+      // Best-effort, same posture as `noteOnboardingIntent` above.
+    }
+    this.publish();
   }
 
   setHouseOpen(open: boolean): void {
@@ -403,6 +526,7 @@ export class GuestSession {
         : projectRunConclusion({ run: this.run, record: null, achievements: [] }),
       sightings: this.sightings,
       heroClassTags: [...this.run.hero.classTags],
+      onboarding: this.onboarding,
     };
   }
 

@@ -62,12 +62,17 @@ function snapshotWithClassTags(classTags: readonly string[]): SessionSnapshot {
   return {
     projection: {} as GameplayProjection,
     log: [], lastEvents: [], pendingDecision: null, notice: null, houseOpen: false, conclusion: null,
-    sightings: { monsterIds: [], itemIds: [] },
+    sightings: { monsterIds: [], itemIds: [], landmarks: [] },
     heroClassTags: classTags,
+    onboarding: { counts: {}, dismissed: [] },
   };
 }
 
-const EMPTY_SIGHTINGS: Sightings = { monsterIds: [], itemIds: [] };
+const EMPTY_SIGHTINGS: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
+
+/** A minimal floor projection with no cells/slots -- landmark capture then contributes nothing,
+ * so tests that don't care about landmarks can ignore them entirely. */
+const EMPTY_FLOOR = { floorId: 'floor.town', town: false, cells: [] };
 
 describe('loadSightings', () => {
   it('returns the empty cache, uncorrupted, when the key is absent', () => {
@@ -76,9 +81,24 @@ describe('loadSightings', () => {
 
   it('round-trips a saved cache', () => {
     const storage = fakeStorage();
-    saveSightings(storage, { monsterIds: ['monster.cave-rat'], itemIds: ['item.iron-sword'] });
+    saveSightings(storage, {
+      monsterIds: ['monster.cave-rat'], itemIds: ['item.iron-sword'],
+      landmarks: [{ floorId: 'floor.town', kind: 'house', name: 'The house', x: 1, y: 1 }],
+    });
     expect(loadSightings(storage)).toEqual({
-      sightings: { monsterIds: ['monster.cave-rat'], itemIds: ['item.iron-sword'] }, corrupted: false,
+      sightings: {
+        monsterIds: ['monster.cave-rat'], itemIds: ['item.iron-sword'],
+        landmarks: [{ floorId: 'floor.town', kind: 'house', name: 'The house', x: 1, y: 1 }],
+      },
+      corrupted: false,
+    });
+  });
+
+  it('is forward-tolerant of an OLD blob written before landmarks existed -- loads with [] landmarks, NOT corrupted', () => {
+    const storage = fakeStorage();
+    storage.set(SIGHTINGS_KEY, JSON.stringify({ monsterIds: ['monster.cave-rat'], itemIds: [] }));
+    expect(loadSightings(storage)).toEqual({
+      sightings: { monsterIds: ['monster.cave-rat'], itemIds: [], landmarks: [] }, corrupted: false,
     });
   });
 
@@ -93,19 +113,32 @@ describe('loadSightings', () => {
     storage.set(SIGHTINGS_KEY, JSON.stringify({ monsterIds: 'not-an-array', itemIds: [] }));
     expect(loadSightings(storage)).toEqual({ sightings: EMPTY_SIGHTINGS, corrupted: true });
   });
+
+  it('falls back to the empty cache and reports corrupted for a present but malformed landmarks field', () => {
+    const storage = fakeStorage();
+    storage.set(SIGHTINGS_KEY, JSON.stringify({ monsterIds: [], itemIds: [], landmarks: 'not-an-array' }));
+    expect(loadSightings(storage)).toEqual({ sightings: EMPTY_SIGHTINGS, corrupted: true });
+  });
 });
 
 function projectionWith(overrides: Partial<{
-  actors: readonly Readonly<{ contentId: string | null }>[];
+  actors: readonly Readonly<{ contentId: string | null; x?: number; y?: number; name?: string; factionName?: string }>[];
   backpack: readonly Readonly<{ contentId?: string }>[];
   equipment: Readonly<Record<string, Readonly<{ contentId?: string }> | null>>;
   groundItems: readonly Readonly<{ contentId?: string }>[];
   trade: Readonly<{ stock: readonly Readonly<{ item: Readonly<{ contentId?: string }> }>[] }>;
+  floor: Readonly<{
+    floorId: string; town: boolean;
+    cells: readonly Readonly<{ knowledge: 'unknown' | 'remembered' | 'visible'; tileId?: number; x: number; y: number }>[];
+  }>;
+  slots: readonly Readonly<{ tags: readonly string[]; x: number; y: number }>[];
 }>): GameplayProjection {
   return {
     actors: overrides.actors ?? [],
     hero: { backpack: overrides.backpack ?? [], equipment: overrides.equipment ?? {} },
     groundItems: overrides.groundItems ?? [],
+    floor: overrides.floor ?? EMPTY_FLOOR,
+    slots: overrides.slots ?? [],
     ...(overrides.trade ? { trade: overrides.trade } : {}),
   } as unknown as GameplayProjection;
 }
@@ -113,12 +146,12 @@ function projectionWith(overrides: Partial<{
 describe('accumulateSightings', () => {
   it('adds a visible actor\'s contentId', () => {
     const projection = projectionWith({ actors: [{ contentId: 'monster.cave-rat' }] });
-    expect(accumulateSightings(EMPTY_SIGHTINGS, projection)).toEqual({ monsterIds: ['monster.cave-rat'], itemIds: [] });
+    expect(accumulateSightings(EMPTY_SIGHTINGS, projection)).toEqual({ monsterIds: ['monster.cave-rat'], itemIds: [], landmarks: [] });
   });
 
   it('ignores a null actor contentId (hero/fallen-champion/echo)', () => {
     const projection = projectionWith({ actors: [{ contentId: null }, { contentId: 'monster.cave-rat' }] });
-    expect(accumulateSightings(EMPTY_SIGHTINGS, projection)).toEqual({ monsterIds: ['monster.cave-rat'], itemIds: [] });
+    expect(accumulateSightings(EMPTY_SIGHTINGS, projection)).toEqual({ monsterIds: ['monster.cave-rat'], itemIds: [], landmarks: [] });
   });
 
   it('adds identified items from backpack, equipment, ground, and merchant stock', () => {
@@ -134,15 +167,100 @@ describe('accumulateSightings', () => {
   });
 
   it('is monotone: never drops a previously accumulated id', () => {
-    const prev: Sightings = { monsterIds: ['monster.cave-rat'], itemIds: ['item.iron-sword'] };
+    const prev: Sightings = { monsterIds: ['monster.cave-rat'], itemIds: ['item.iron-sword'], landmarks: [] };
     const projection = projectionWith({ actors: [], backpack: [] });
     expect(accumulateSightings(prev, projection)).toEqual(prev);
   });
 
   it('dedupes and sorts', () => {
-    const prev: Sightings = { monsterIds: ['monster.cave-rat'], itemIds: [] };
+    const prev: Sightings = { monsterIds: ['monster.cave-rat'], itemIds: [], landmarks: [] };
     const projection = projectionWith({ actors: [{ contentId: 'monster.cave-rat' }, { contentId: 'monster.training-beetle' }] });
     expect(accumulateSightings(prev, projection).monsterIds).toEqual(['monster.cave-rat', 'monster.training-beetle']);
+  });
+
+  describe('landmarks', () => {
+    it('captures a stair-up and a stair-down landmark once their cells are non-unknown', () => {
+      const projection = projectionWith({
+        floor: {
+          floorId: 'floor.dungeon-1', town: false,
+          cells: [
+            { knowledge: 'remembered', tileId: 4, x: 3, y: 1 },
+            { knowledge: 'visible', tileId: 5, x: 7, y: 2 },
+            { knowledge: 'unknown', tileId: 4, x: 9, y: 9 },
+          ],
+        },
+      });
+      const { landmarks } = accumulateSightings(EMPTY_SIGHTINGS, projection);
+      expect(landmarks).toEqual([
+        { floorId: 'floor.dungeon-1', kind: 'stair-up', name: 'Stairs up', x: 3, y: 1 },
+        { floorId: 'floor.dungeon-1', kind: 'stair-down', name: 'Stairs down', x: 7, y: 2 },
+      ]);
+    });
+
+    it('captures the house landmark from the town\'s house-door slot', () => {
+      const projection = projectionWith({
+        floor: { floorId: 'floor.town', town: true, cells: [] },
+        slots: [{ tags: ['town', 'house-door'], x: 4, y: 4 }],
+      });
+      const { landmarks } = accumulateSightings(EMPTY_SIGHTINGS, projection);
+      expect(landmarks).toEqual([{ floorId: 'floor.town', kind: 'house', name: 'The house', x: 4, y: 4 }]);
+    });
+
+    it('captures a merchant landmark from a visible actor\'s factionName, naming it from the actor at sighting time', () => {
+      const projection = projectionWith({
+        floor: { floorId: 'floor.town', town: true, cells: [] },
+        actors: [{ contentId: null, x: 2, y: 2, name: 'Old Marta', factionName: 'faction.provisioners' }],
+      });
+      const { landmarks } = accumulateSightings(EMPTY_SIGHTINGS, projection);
+      expect(landmarks).toEqual([{ floorId: 'floor.town', kind: 'merchant', name: 'Old Marta', x: 2, y: 2 }]);
+    });
+
+    it('falls back to factionName when the merchant actor discloses no name', () => {
+      const projection = projectionWith({
+        floor: { floorId: 'floor.town', town: true, cells: [] },
+        actors: [{ contentId: null, x: 2, y: 2, factionName: 'faction.provisioners' }],
+      });
+      const { landmarks } = accumulateSightings(EMPTY_SIGHTINGS, projection);
+      expect(landmarks).toEqual([{ floorId: 'floor.town', kind: 'merchant', name: 'faction.provisioners', x: 2, y: 2 }]);
+    });
+
+    it('persists a merchant landmark met on a floor that is later left -- a later projection without that actor keeps it', () => {
+      const met = projectionWith({
+        floor: { floorId: 'floor.dungeon-1', town: false, cells: [] },
+        actors: [{ contentId: null, x: 5, y: 5, name: 'Wandering Peddler', factionName: 'faction.lampwrights' }],
+      });
+      const afterMeeting = accumulateSightings(EMPTY_SIGHTINGS, met);
+
+      const gone = projectionWith({ floor: { floorId: 'floor.dungeon-1', town: false, cells: [] }, actors: [] });
+      const afterLeaving = accumulateSightings(afterMeeting, gone);
+
+      expect(afterLeaving.landmarks).toEqual([
+        { floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Wandering Peddler', x: 5, y: 5 },
+      ]);
+    });
+
+    it('dedupes by (floorId, kind, x, y), keeping the first-captured name', () => {
+      const first = projectionWith({
+        floor: { floorId: 'floor.town', town: true, cells: [] },
+        actors: [{ contentId: null, x: 2, y: 2, name: 'Old Marta', factionName: 'faction.provisioners' }],
+      });
+      const afterFirst = accumulateSightings(EMPTY_SIGHTINGS, first);
+
+      // A different actor object, but the SAME floor/kind/position -- the persisted name must not change.
+      const second = projectionWith({
+        floor: { floorId: 'floor.town', town: true, cells: [] },
+        actors: [{ contentId: null, x: 2, y: 2, name: 'Someone Else', factionName: 'faction.provisioners' }],
+      });
+      const afterSecond = accumulateSightings(afterFirst, second);
+
+      expect(afterSecond.landmarks).toEqual([{ floorId: 'floor.town', kind: 'merchant', name: 'Old Marta', x: 2, y: 2 }]);
+    });
+
+    it('is forward-tolerant: accumulating onto a prior Sightings with no landmarks field works (loadSightings already defaults it to [])', () => {
+      const prev: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
+      const projection = projectionWith({});
+      expect(accumulateSightings(prev, projection).landmarks).toEqual([]);
+    });
   });
 });
 
@@ -166,7 +284,7 @@ describe('deriveCodexState', () => {
   });
 
   it('discovers a monster from a sighting alone, with a null firstSeenRun (active-run/sighting-only)', () => {
-    const sightings: Sightings = { monsterIds: ['monster.training-beetle'], itemIds: [] };
+    const sightings: Sightings = { monsterIds: ['monster.training-beetle'], itemIds: [], landmarks: [] };
     const state = deriveCodexState({ records: [], snapshot: null, sightings, pack });
     const monsters = state.categories.find((category) => category.kind === 'monster')!;
     const beetle = findEntry(monsters.entries, 'monster.training-beetle');
@@ -194,7 +312,7 @@ describe('deriveCodexState', () => {
   });
 
   it('discovers an item from an identified sighting alone', () => {
-    const sightings: Sightings = { monsterIds: [], itemIds: ['item.wooden-shield'] };
+    const sightings: Sightings = { monsterIds: [], itemIds: ['item.wooden-shield'], landmarks: [] };
     const state = deriveCodexState({ records: [], snapshot: null, sightings, pack });
     const items = state.categories.find((category) => category.kind === 'item')!;
     expect(findEntry(items.entries, 'item.wooden-shield')).toMatchObject({ discovered: true, firstSeenRun: null });

@@ -86,7 +86,7 @@ export function HallScreen({ repository, onBack }: HallScreenProps): JSX.Element
   return (
     <section aria-label="Hall of Records" className="hall-screen">
       <p className="eyebrow">The Woven Deep</p>
-      <h1>Hall of Records</h1>
+      <h1 className="framed-title">Hall of Records</h1>
       <p role="note" className="hall-provenance">
         Unverified · this session only — nothing here is confirmed by a server yet.
       </p>
