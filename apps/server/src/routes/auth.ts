@@ -23,7 +23,7 @@ export interface AuthBundle {
  * configured publicUrl's origin. On mismatch (or missing) it replies 403 and returns
  * true so the caller can stop handling the request.
  */
-function assertOrigin(request: FastifyRequest, reply: FastifyReply, publicUrl: string): boolean {
+export function assertOrigin(request: FastifyRequest, reply: FastifyReply, publicUrl: string): boolean {
   const expectedOrigin = new URL(publicUrl).origin;
   const originHeader = request.headers.origin;
   const refererHeader = request.headers.referer;
@@ -47,13 +47,30 @@ function assertOrigin(request: FastifyRequest, reply: FastifyReply, publicUrl: s
   return false;
 }
 
-function readSessionToken(request: FastifyRequest): string | null {
+/**
+ * Reads and unsigns the `wd_session` cookie. Exported so routes outside auth.ts (Task 9's
+ * profile routes) can authenticate requests using the identical cookie contract.
+ */
+export function readSessionToken(request: FastifyRequest): string | null {
   const raw = (request.cookies as Record<string, string | undefined>)[SESSION_COOKIE_NAME];
   if (!raw) {
     return null;
   }
   const unsigned = request.unsignCookie(raw);
   return unsigned.valid ? unsigned.value : null;
+}
+
+/**
+ * Builds the deferred `app.csrfProtection` preHandler (see the comment at its call site
+ * below for why it must be a closure). Exported so other route modules (Task 9's profile
+ * routes) reuse the identical CSRF-check pattern instead of re-deriving it.
+ */
+export function makeCsrfPreHandler(
+  app: FastifyInstance,
+): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
+  return async (request, reply) => {
+    await app.csrfProtection(request, reply, () => undefined);
+  };
 }
 
 export function registerAuthRoutes(app: FastifyInstance, auth: AuthBundle): void {
@@ -116,9 +133,7 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthBundle): void
   // registered with `void app.register(...)` in app.ts and not yet available at this point
   // in the synchronous call stack. Wrapping the lookup in a closure defers it until the
   // route actually handles a request (by then Fastify has resolved the plugin tree).
-  const csrfPreHandler = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    await app.csrfProtection(request, reply, () => undefined);
-  };
+  const csrfPreHandler = makeCsrfPreHandler(app);
 
   app.post(
     '/api/auth/logout',
