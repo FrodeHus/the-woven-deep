@@ -197,7 +197,7 @@ describe('registry overlay infrastructure', () => {
 
   describe('font-scale and reduced-motion settings applied at the app root', () => {
     it('applies fontScale as an inline calc(1rem * scale) style, and reducedMotion "on" as a motion-reduced class', async () => {
-      const settings: Settings = { fontScale: 1.3, reducedMotion: 'on', theme: 'tapestry', lighting: 'smooth', bindings: {} };
+      const settings: Settings = { fontScale: 1.3, reducedMotion: 'on', theme: 'tapestry', lighting: 'smooth', onboarding: 'on', bindings: {} };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
 
       const { container } = render(
@@ -214,7 +214,7 @@ describe('registry overlay infrastructure', () => {
     });
 
     it('applies neither motion class when reducedMotion is "system" (defers to the OS media query)', async () => {
-      const settings: Settings = { fontScale: 1, reducedMotion: 'system', theme: 'tapestry', lighting: 'smooth', bindings: {} };
+      const settings: Settings = { fontScale: 1, reducedMotion: 'system', theme: 'tapestry', lighting: 'smooth', onboarding: 'on', bindings: {} };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
 
       const { container } = render(
@@ -228,7 +228,7 @@ describe('registry overlay infrastructure', () => {
     });
 
     it('applies no theme class when theme is "tapestry" (the default palette needs no override)', async () => {
-      const settings: Settings = { fontScale: 1, reducedMotion: 'system', theme: 'tapestry', lighting: 'smooth', bindings: {} };
+      const settings: Settings = { fontScale: 1, reducedMotion: 'system', theme: 'tapestry', lighting: 'smooth', onboarding: 'on', bindings: {} };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
 
       const { container } = render(
@@ -241,7 +241,7 @@ describe('registry overlay infrastructure', () => {
     });
 
     it('applies the theme-high-contrast class at the app root when theme is "high-contrast"', async () => {
-      const settings: Settings = { fontScale: 1, reducedMotion: 'system', theme: 'high-contrast', lighting: 'smooth', bindings: {} };
+      const settings: Settings = { fontScale: 1, reducedMotion: 'system', theme: 'high-contrast', lighting: 'smooth', onboarding: 'on', bindings: {} };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
 
       const { container } = render(
@@ -254,7 +254,7 @@ describe('registry overlay infrastructure', () => {
     });
 
     it('applies the motion-full class when reducedMotion is "off", so a guest can force animations back on over an OS-level reduced-motion preference', async () => {
-      const settings: Settings = { fontScale: 1, reducedMotion: 'off', theme: 'tapestry', lighting: 'smooth', bindings: {} };
+      const settings: Settings = { fontScale: 1, reducedMotion: 'off', theme: 'tapestry', lighting: 'smooth', onboarding: 'on', bindings: {} };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
 
       const { container } = render(

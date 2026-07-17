@@ -16,6 +16,7 @@ export type RouterOutcome =
   | PlayerIntent
   | { readonly type: 'open-overlay'; readonly overlay: OverlayActionId }
   | { readonly type: 'close-overlay' }
+  | { readonly type: 'dismiss-hint' }
   | null;
 
 /**
@@ -78,6 +79,8 @@ function outcomeForAction(action: ActionId): RouterOutcome {
     case 'settings':
     case 'help':
       return { type: 'open-overlay', overlay: nonMoveAction };
+    case 'dismiss-hint':
+      return { type: 'dismiss-hint' };
     default: {
       const exhaustive: never = nonMoveAction;
       return exhaustive;
@@ -130,6 +133,8 @@ export interface KeyDispatchHandlers {
   readonly dispatch: (intent: PlayerIntent) => void;
   readonly openOverlay: (overlay: OverlayActionId) => void;
   readonly closeOverlay: () => void;
+  /** Retires whatever onboarding hint (Task 8) is currently showing -- a no-op if none is. */
+  readonly dismissHint: () => void;
 }
 
 export type KeyDispatcher = (event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'target' | 'repeat'>) => void;
@@ -170,6 +175,10 @@ export function createKeyDispatcher(
     }
     if (outcome.type === 'close-overlay') {
       handlers.closeOverlay();
+      return;
+    }
+    if (outcome.type === 'dismiss-hint') {
+      handlers.dismissHint();
       return;
     }
     handlers.dispatch(outcome);

@@ -57,7 +57,7 @@ function snapshotWith(overrides: SnapshotOverrides): SessionSnapshot {
     pendingDecision: null,
     notice: null,
     houseOpen: false,
-    conclusion: null, sightings: { monsterIds: [], itemIds: [] }, heroClassTags: [],
+    conclusion: null, sightings: { monsterIds: [], itemIds: [] }, heroClassTags: [], onboarding: { counts: {}, dismissed: [] },
   };
 }
 

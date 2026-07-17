@@ -176,6 +176,30 @@ export function SettingsOverlay({ settings, onChange, onClearGuestSession, keyma
         </div>
       </section>
 
+      <section aria-labelledby="settings-onboarding-heading">
+        <h3 id="settings-onboarding-heading">Onboarding hints</h3>
+        <div role="radiogroup" aria-label="Onboarding hints">
+          <label>
+            <input
+              type="radio"
+              name="settings-onboarding"
+              checked={settings.onboarding === 'on'}
+              onChange={() => onChange({ ...settings, onboarding: 'on' })}
+            />
+            On (show contextual guidance while learning the ropes)
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="settings-onboarding"
+              checked={settings.onboarding === 'off'}
+              onChange={() => onChange({ ...settings, onboarding: 'off' })}
+            />
+            Off
+          </label>
+        </div>
+      </section>
+
       <section aria-labelledby="settings-motion-heading">
         <h3 id="settings-motion-heading">Reduce motion</h3>
         <div role="radiogroup" aria-label="Reduce motion">

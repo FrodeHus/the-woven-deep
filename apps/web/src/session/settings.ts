@@ -12,7 +12,10 @@ export type ActionId =
   | `move.${'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw'}`
   | 'wait' | 'rest' | 'pickup' | 'descend' | 'ascend'
   | 'inventory' | 'house' | 'trade'
-  | 'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help';
+  | 'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help'
+  // Retires the play screen's contextual onboarding hint strip (Task 8) -- rebindable and listed
+  // in help/settings exactly like every other action, even though it isn't a game command.
+  | 'dismiss-hint';
 
 /** A single rebindable keystroke: `event.key` plus whether Shift must be held. Serializes to
  * "Shift+T" / "i" (see `chordKey`) for both storage-comparison and on-screen display. */
@@ -36,6 +39,13 @@ export interface Settings {
    * old browser): `LightCanvas` detects that itself and renders nothing, independent of this
    * setting's stored value. */
   readonly lighting: 'smooth' | 'classic';
+  /** Whether the play screen's contextual onboarding hint strip (Task 8) may show at all --
+   * `'on'` by default. `'off'` (settings toggle, the wizard's step-1 "Show guidance on your first
+   * delve" checkbox unchecked, or a quickstart boot) suppresses every hint regardless of mastery
+   * state; the mastery ledger itself (`onboarding.ts`'s `OnboardingState`) keeps accumulating
+   * either way, since it lives in a separate localStorage key, not here. Forward-tolerant like
+   * every other field on this type -- an unrecognized stored value falls back to `'on'`. */
+  readonly onboarding: 'on' | 'off';
   /** Overrides only -- any `ActionId` absent here uses its `DEFAULT_BINDINGS` chord. */
   readonly bindings: Readonly<Partial<Record<ActionId, KeyChord>>>;
 }
@@ -47,6 +57,7 @@ export const DEFAULT_SETTINGS: Settings = {
   reducedMotion: 'system',
   theme: 'tapestry',
   lighting: 'smooth',
+  onboarding: 'on',
   bindings: {},
 };
 
@@ -58,6 +69,7 @@ export const ACTION_IDS: readonly ActionId[] = [
   'wait', 'rest', 'pickup', 'descend', 'ascend',
   'inventory', 'house', 'trade',
   'character-sheet', 'map-journal', 'codex', 'settings', 'help',
+  'dismiss-hint',
 ];
 
 function chord(key: string, shift = false): KeyChord {
@@ -75,7 +87,7 @@ export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
   wait: 'Wait', rest: 'Rest', pickup: 'Pick up', descend: 'Descend', ascend: 'Ascend',
   inventory: 'Inventory', house: 'House/Town', trade: 'Trade',
   'character-sheet': 'Character sheet', 'map-journal': 'Map & journal', codex: 'Codex',
-  settings: 'Settings', help: 'Help',
+  settings: 'Settings', help: 'Help', 'dismiss-hint': 'Dismiss hint',
 };
 
 /**
@@ -106,6 +118,8 @@ export const DEFAULT_BINDINGS: Readonly<Record<ActionId, KeyChord>> = {
   codex: chord('x'),
   settings: chord('o'),
   help: chord('?', true),
+  // Free (never hardwired, never used by any other default) -- see `chordReserved`.
+  'dismiss-hint': chord("'"),
 };
 
 /** Serializes a `KeyChord` to its display/comparison string: "Shift+T" or "i". */
@@ -172,6 +186,7 @@ const FONT_SCALES: readonly Settings['fontScale'][] = [1, 1.15, 1.3, 1.5];
 const REDUCED_MOTION_VALUES: readonly Settings['reducedMotion'][] = ['system', 'on', 'off'];
 const THEME_VALUES: readonly Settings['theme'][] = ['tapestry', 'high-contrast'];
 const LIGHTING_VALUES: readonly Settings['lighting'][] = ['smooth', 'classic'];
+const ONBOARDING_VALUES: readonly Settings['onboarding'][] = ['on', 'off'];
 
 function isValidChord(value: unknown): value is KeyChord {
   return typeof value === 'object' && value !== null
@@ -228,6 +243,9 @@ export function loadSettings(
   const lighting = LIGHTING_VALUES.includes(record.lighting as Settings['lighting'])
     ? (record.lighting as Settings['lighting'])
     : DEFAULT_SETTINGS.lighting;
+  const onboarding = ONBOARDING_VALUES.includes(record.onboarding as Settings['onboarding'])
+    ? (record.onboarding as Settings['onboarding'])
+    : DEFAULT_SETTINGS.onboarding;
 
   const rawBindings = typeof record.bindings === 'object' && record.bindings !== null
     ? record.bindings as Record<string, unknown>
@@ -253,7 +271,7 @@ export function loadSettings(
     accepted[actionId] = candidate;
   }
 
-  const settings: Settings = { fontScale, reducedMotion, theme, lighting, bindings: accepted };
+  const settings: Settings = { fontScale, reducedMotion, theme, lighting, onboarding, bindings: accepted };
   return { settings, corrupted: false, droppedOverrides };
 }
 

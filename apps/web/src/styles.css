@@ -551,6 +551,20 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 .threat-slot { grid-area: threat; overflow: visible; }
 .log-slot { grid-area: log; min-height: 0; }
 
+/* Contextual onboarding hint strip (Task 8) -- above the log within its own slot, never a live
+   region (see `HintStrip.tsx`'s doc comment for why `role="note"`, not `alert`/`status`). */
+.hint-strip {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: .4em .6em;
+  margin-bottom: .4em;
+  display: flex;
+  justify-content: space-between;
+  gap: 1em;
+  font-size: .9em;
+}
+.hint-strip-dismiss { color: var(--muted); white-space: nowrap; }
+
 .status-bar { display: flex; gap: 1.5em; align-items: baseline; }
 /* Condition badge (Task 7): the colorblind-safe reinforcement Task 9 verifies -- a generic
    status-effect glyph plus the condition's NAME as text, so meaning never rests on

@@ -64,6 +64,7 @@ function snapshotWithClassTags(classTags: readonly string[]): SessionSnapshot {
     log: [], lastEvents: [], pendingDecision: null, notice: null, houseOpen: false, conclusion: null,
     sightings: { monsterIds: [], itemIds: [] },
     heroClassTags: classTags,
+    onboarding: { counts: {}, dismissed: [] },
   };
 }
 

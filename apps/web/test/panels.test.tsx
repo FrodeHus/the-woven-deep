@@ -39,6 +39,7 @@ function snapshotOf(projection: GameplayProjection, overrides: Partial<SessionSn
     conclusion: null,
     sightings: { monsterIds: [], itemIds: [] },
     heroClassTags: [],
+    onboarding: { counts: {}, dismissed: [] },
     ...overrides,
   };
 }

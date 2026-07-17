@@ -44,6 +44,10 @@ describe('routeKey', () => {
     expect(routeKey({ event: keyEvent('R', { shiftKey: false }), overlayOpen: false, keymap: defaultKeymap })).toBeNull();
   });
 
+  it("maps ' to dismiss-hint (Task 8's onboarding hint strip)", () => {
+    expect(routeKey({ event: keyEvent("'"), overlayOpen: false, keymap: defaultKeymap })).toEqual({ type: 'dismiss-hint' });
+  });
+
   it('maps < to ascend and (Shift+)H to house -- bare "h" stays bound to west movement', () => {
     expect(routeKey({ event: keyEvent('<'), overlayOpen: false, keymap: defaultKeymap })).toEqual({ type: 'ascend' });
     expect(routeKey({ event: keyEvent('H', { shiftKey: true }), overlayOpen: false, keymap: defaultKeymap })).toEqual({ type: 'house' });
@@ -122,7 +126,7 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const now = () => time;
     const dispatch = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn() },
+      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint: vi.fn() },
       () => false,
       () => defaultKeymap,
       now,
@@ -151,7 +155,7 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const now = () => time;
     const dispatch = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn() },
+      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint: vi.fn() },
       () => false,
       () => defaultKeymap,
       now,
@@ -170,7 +174,7 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const closeOverlay = vi.fn();
     let overlayOpen = false;
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay, closeOverlay },
+      { dispatch, openOverlay, closeOverlay, dismissHint: vi.fn() },
       () => overlayOpen,
       () => defaultKeymap,
     );
@@ -189,7 +193,7 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const dispatch = vi.fn();
     const openOverlay = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay, closeOverlay: vi.fn() },
+      { dispatch, openOverlay, closeOverlay: vi.fn(), dismissHint: vi.fn() },
       () => false,
       () => defaultKeymap,
     );
@@ -197,6 +201,20 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     handler(keyEvent('c'));
     expect(openOverlay).toHaveBeenCalledOnce();
     expect(openOverlay).toHaveBeenCalledWith('character-sheet');
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('routes dismiss-hint outcomes to the dismissHint handler instead of dispatch', () => {
+    const dispatch = vi.fn();
+    const dismissHint = vi.fn();
+    const handler = createKeyDispatcher(
+      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint },
+      () => false,
+      () => defaultKeymap,
+    );
+
+    handler(keyEvent("'"));
+    expect(dismissHint).toHaveBeenCalledOnce();
     expect(dispatch).not.toHaveBeenCalled();
   });
 });

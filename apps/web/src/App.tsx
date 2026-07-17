@@ -147,6 +147,10 @@ interface GameRootProps {
   readonly settings: Settings;
   readonly onChangeSettings: (next: Settings) => void;
   readonly onClearGuestSession: () => void;
+  /** Whether the contextual onboarding hint strip may show at all: `settings.onboarding === 'on'`
+   * AND not a quickstart boot -- quickstart always forces it off regardless of the stored setting,
+   * protecting every pinned e2e walk (see `isQuickstart`'s doc comment). */
+  readonly onboardingEnabled: boolean;
 }
 
 /** Everything that needs a live `GuestSession` snapshot: the notice banners and the play screen
@@ -164,7 +168,7 @@ interface GameRootProps {
 function GameRoot({
   session, pack, repository, storage, portraitGlyph, onConcluded, onFinalizeError,
   overlay, onOpenOverlay, onCloseOverlay, keymap,
-  settings, onChangeSettings, onClearGuestSession,
+  settings, onChangeSettings, onClearGuestSession, onboardingEnabled,
 }: GameRootProps): JSX.Element {
   const snapshot = useGuestSession(session);
   // Re-read on every render (every session publish, since this component only re-renders via the
@@ -232,6 +236,7 @@ function GameRoot({
         onClearGuestSession={onClearGuestSession}
         records={repository.records()}
         sightings={sightings}
+        onboardingEnabled={onboardingEnabled}
       />
     </div>
   );
@@ -365,8 +370,11 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
     // reconstruction trigger, not a value read inside the memo.
   }, [storage, storageEpoch]);
 
+  // Read once at boot -- `window.location.search` never changes for the life of this component
+  // (the app never navigates), so this is the one place `isQuickstart` needs calling repeatedly.
+  const [quickstart] = useState(() => isQuickstart(window.location.search));
   const [screen, setScreen] = useState<ScreenState>(
-    () => (isQuickstart(window.location.search) ? { screen: 'play' } : { screen: 'title' }),
+    () => (quickstart ? { screen: 'play' } : { screen: 'title' }),
   );
   const [session, setSession] = useState<GuestSession>();
   const [chargenSeed, setChargenSeed] = useState<Uint32State>();
@@ -470,8 +478,12 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
     if (screen.screen !== 'play') return;
     if (!isQuickstart(window.location.search)) return;
     const seed = parseSeedFromQuery(window.location.search);
-    setSession(seed ? new GuestSession({ pack, storage, seed }) : new GuestSession({ pack, storage }));
-  }, [pack, storage, session, screen]);
+    setSession(
+      seed
+        ? new GuestSession({ pack, storage, seed, localStorage: localStorageInstance })
+        : new GuestSession({ pack, storage, localStorage: localStorageInstance }),
+    );
+  }, [pack, storage, session, screen, localStorageInstance]);
 
   if (error) {
     return withRootStyling(
@@ -506,7 +518,7 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
           onContinue={() => {
             closeOverlay();
             setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
-            setSession(new GuestSession({ pack, storage }));
+            setSession(new GuestSession({ pack, storage, localStorage: localStorageInstance }));
             setScreen({ screen: 'play' });
             bumpFadeToken();
           }}
@@ -535,6 +547,8 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
       <ChargenScreen
         pack={pack}
         seed={seed}
+        settings={settings}
+        onChangeSettings={handleSettingsChange}
         onConfirm={(choices: HeroChoices, glyph: string) => {
           let hero: ReturnType<typeof heroFromChoices>;
           try {
@@ -552,7 +566,7 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
             // the run itself is unaffected if this particular write fails.
           }
           setPortraitGlyph(glyph);
-          setSession(new GuestSession({ pack, storage, seed, hero, startFresh: true }));
+          setSession(new GuestSession({ pack, storage, seed, hero, startFresh: true, localStorage: localStorageInstance }));
           setScreen({ screen: 'play' });
           bumpFadeToken();
         }}
@@ -624,6 +638,7 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
       settings={settings}
       onChangeSettings={handleSettingsChange}
       onClearGuestSession={handleClearGuestSession}
+      onboardingEnabled={settings.onboarding === 'on' && !quickstart}
       onConcluded={(projection, logTail) => {
         setConclusion({ projection, logTail });
         setScreen({ screen: 'conclusion' });

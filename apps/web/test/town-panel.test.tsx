@@ -25,7 +25,7 @@ beforeAll(async () => {
 function snapshotOf(projection: GameplayProjection): SessionSnapshot {
   return {
     projection, log: [], lastEvents: [], pendingDecision: null, notice: null,
-    houseOpen: false, conclusion: null, sightings: { monsterIds: [], itemIds: [] }, heroClassTags: [],
+    houseOpen: false, conclusion: null, sightings: { monsterIds: [], itemIds: [] }, heroClassTags: [], onboarding: { counts: {}, dismissed: [] },
   };
 }
 

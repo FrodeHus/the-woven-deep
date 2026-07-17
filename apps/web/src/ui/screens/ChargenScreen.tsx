@@ -1,6 +1,7 @@
 import { useMemo, useState, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { HeroChoices, Uint32State } from '@woven-deep/engine';
+import { DEFAULT_SETTINGS, type Settings } from '../../session/settings.js';
 import {
   initialWizardState, wizardChoices, wizardReduce, type WizardAction, type WizardState,
 } from '../../session/wizard-reducer.js';
@@ -11,6 +12,12 @@ import {
 export interface ChargenScreenProps {
   readonly pack: CompiledContentPack;
   readonly seed: Uint32State;
+  /** Step 1's "Show guidance on your first delve" toggle seeds from `settings.onboarding`, and
+   * `onConfirm` below writes the guest's choice back through `onChangeSettings` -- both optional,
+   * defaulting to `DEFAULT_SETTINGS`/a no-op, so every pre-existing caller/test (which never
+   * exercises the onboarding toggle) keeps compiling and passing unchanged. */
+  readonly settings?: Settings;
+  readonly onChangeSettings?: (next: Settings) => void;
   /** The portrait glyph is client-only cosmetic state (never engine data — see `PORTRAIT_GLYPHS`),
    * so it rides beside `HeroChoices` here rather than inside it. */
   readonly onConfirm: (choices: HeroChoices, portraitGlyph: string) => void;
@@ -33,8 +40,10 @@ const STEP_LABELS: Readonly<Record<WizardState['step'], string>> = {
  * rather than duplicating `wizardReduce`'s step-completion rules here, so illegal transitions stay
  * unrepresentable in exactly one place.
  */
-export function ChargenScreen({ pack, seed, onConfirm }: ChargenScreenProps): JSX.Element {
-  const [state, setState] = useState<WizardState>(() => initialWizardState(seed));
+export function ChargenScreen({
+  pack, seed, settings = DEFAULT_SETTINGS, onChangeSettings = () => {}, onConfirm,
+}: ChargenScreenProps): JSX.Element {
+  const [state, setState] = useState<WizardState>(() => initialWizardState(seed, settings.onboarding === 'on'));
   const context = useMemo(() => ({ pack, seed }), [pack, seed]);
 
   const dispatch = (action: WizardAction): void => {
@@ -73,7 +82,13 @@ export function ChargenScreen({ pack, seed, onConfirm }: ChargenScreenProps): JS
           <button
             type="button"
             disabled={choices === null}
-            onClick={() => { if (choices) onConfirm(choices, state.portraitGlyph); }}
+            onClick={() => {
+              if (!choices) return;
+              if (state.onboardingEnabled !== (settings.onboarding === 'on')) {
+                onChangeSettings({ ...settings, onboarding: state.onboardingEnabled ? 'on' : 'off' });
+              }
+              onConfirm(choices, state.portraitGlyph);
+            }}
           >
             Confirm
           </button>

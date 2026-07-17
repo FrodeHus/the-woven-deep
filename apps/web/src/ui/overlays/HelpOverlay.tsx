@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { TILE_DEFINITIONS } from '@woven-deep/engine';
+import { HINTS } from '../../session/onboarding.js';
 import {
   ACTION_IDS, ACTION_LABELS, chordKey, type ActionId, type ResolvedKeymap,
 } from '../../session/settings.js';
@@ -214,7 +215,25 @@ function MechanicsSection(): JSX.Element {
 }
 
 /**
- * The help overlay body: controls, glyph legend, mechanics notes, in that order. Purely
+ * Every contextual onboarding hint's copy (Task 8's `HINTS`, `onboarding.ts`), in priority order,
+ * rendered live from `keymap` -- a rebind changes what this section shows exactly like the
+ * controls section above, and it lists every hint regardless of whether the guest has already
+ * mastered/dismissed it (this is a reference list, not a live mirror of `activeHint`'s current
+ * pick -- that state lives on the play screen, not here).
+ */
+function GuidanceSection({ keymap }: Readonly<{ keymap: ResolvedKeymap }>): JSX.Element {
+  return (
+    <section aria-labelledby="help-guidance-heading">
+      <h3 id="help-guidance-heading">Guidance</h3>
+      <ul className="help-guidance-list">
+        {HINTS.map((hint) => <li key={hint.id}>{hint.copy(keymap)}</li>)}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * The help overlay body: controls, glyph legend, mechanics notes, guidance, in that order. Purely
  * presentational content inside `OverlayScaffold`'s dialog frame (focus trap, Escape-close) --
  * there's nothing here for a guest to change, so the sections are static and scroll natively; the
  * scaffold's own fallback (focusing the dialog container itself when it holds no interactive
@@ -226,6 +245,7 @@ export function HelpOverlay({ keymap, pack }: HelpOverlayProps): JSX.Element {
       <ControlsSection keymap={keymap} />
       <GlyphLegendSection pack={pack} />
       <MechanicsSection />
+      <GuidanceSection keymap={keymap} />
     </div>
   );
 }

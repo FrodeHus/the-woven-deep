@@ -25,7 +25,7 @@ beforeAll(async () => {
 function snapshotFor(run: ActiveRun): SessionSnapshot {
   const projection = projectGameplayState({ state: run, content: pack });
   return {
-    projection, log: [], lastEvents: [], pendingDecision: null, notice: null, houseOpen: false, conclusion: null, sightings: { monsterIds: [], itemIds: [] }, heroClassTags: [],
+    projection, log: [], lastEvents: [], pendingDecision: null, notice: null, houseOpen: false, conclusion: null, sightings: { monsterIds: [], itemIds: [] }, heroClassTags: [], onboarding: { counts: {}, dismissed: [] },
   };
 }
 

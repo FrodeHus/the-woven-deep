@@ -217,7 +217,7 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
         'woven-deep.guest-portrait',
         'woven-deep.guest-codex',
       ].filter((key) => sessionStorage.getItem(key) !== null),
-      local: ['woven-deep.settings.v1'].filter((key) => localStorage.getItem(key) !== null),
+      local: ['woven-deep.settings.v1', 'woven-deep.onboarding.v1'].filter((key) => localStorage.getItem(key) !== null),
     }));
     expect(remaining.session).toEqual([]);
     expect(remaining.local).toEqual([]);

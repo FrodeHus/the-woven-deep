@@ -117,10 +117,44 @@ describe('loadSettings / saveSettings round-trip', () => {
       reducedMotion: 'on',
       theme: 'high-contrast',
       lighting: 'classic',
+      onboarding: 'off',
       bindings: { wait: { key: 'z', shift: false } },
     };
     expect(saveSettings(storage, settings)).toEqual({ ok: true });
     expect(loadSettings(storage)).toEqual({ settings, corrupted: false, droppedOverrides: [] });
+  });
+
+  it('defaults onboarding to "on" when nothing is stored', () => {
+    expect(loadSettings(fakeStorage()).settings.onboarding).toBe('on');
+  });
+
+  it('falls back to "on" for an invalid stored onboarding value, without marking corrupted', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({
+        fontScale: 1, reducedMotion: 'system', theme: 'tapestry', lighting: 'smooth', onboarding: 'nonsense', bindings: {},
+      }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.settings.onboarding).toBe('on');
+  });
+
+  it('forward-tolerates a stored blob with no onboarding field at all (pre-Task-8 blob), defaulting to "on"', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({
+        fontScale: 1, reducedMotion: 'system', theme: 'tapestry', lighting: 'smooth', bindings: {},
+      }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.settings.onboarding).toBe('on');
+  });
+
+  it('round-trips an explicit "off" onboarding setting', () => {
+    const storage = fakeStorage();
+    const settings: Settings = { ...DEFAULT_SETTINGS, onboarding: 'off' };
+    expect(saveSettings(storage, settings)).toEqual({ ok: true });
+    expect(loadSettings(storage).settings.onboarding).toBe('off');
   });
 
   it('defaults theme to "tapestry" when nothing is stored', () => {
@@ -244,6 +278,7 @@ describe('loadSettings / saveSettings round-trip', () => {
       reducedMotion: 'off',
       theme: 'tapestry',
       lighting: 'smooth',
+      onboarding: 'on',
       bindings: { wait: { key: 'z', shift: false } },
     });
   });

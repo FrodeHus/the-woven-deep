@@ -9,8 +9,10 @@ import { useGuestSession } from '../session/store.js';
 import { computeCamera, type CameraOrigin } from './camera.js';
 import { EffectsLayer } from './EffectsLayer.js';
 import { GridRenderer } from './GridRenderer.js';
+import { HintStrip } from './HintStrip.js';
 import { canvas2dAvailable, LightCanvas } from './LightCanvas.js';
 import { createKeyDispatcher, type OverlayActionId } from './KeyRouter.js';
+import { activeHint, HINTS } from '../session/onboarding.js';
 import { DEFAULT_SETTINGS, resolveKeymap, type ResolvedKeymap, type Settings } from '../session/settings.js';
 import {
   layoutTier, viewportForPane, zoomForFloor, type LayoutTier, type ZoomFactor,
@@ -98,6 +100,12 @@ export interface PlayScreenProps {
    * caller/test (which never opens the codex overlay) compiling unchanged. */
   readonly records?: readonly StoredHallRecord[];
   readonly sightings?: Sightings;
+  /** Whether the contextual onboarding hint strip (Task 8) may show at all -- `App` computes this
+   * from `settings.onboarding` and the quickstart boot flag. Defaults to `true` so every
+   * pre-existing caller/test keeps compiling and passing unchanged; those never populate
+   * `snapshot.onboarding`'s mastery counts either, so in practice they'd only ever see the
+   * `movement` hint, and only while in town. */
+  readonly onboardingEnabled?: boolean;
 }
 
 interface PositionedActor extends ThreatPopoverActor { readonly x: number; readonly y: number }
@@ -129,10 +137,19 @@ export function PlayScreen({
   overlay = null, onOpenOverlay = () => {}, onCloseOverlay = () => {},
   keymap = resolveKeymap(DEFAULT_SETTINGS.bindings),
   settings = DEFAULT_SETTINGS, onChangeSettings = () => {}, onClearGuestSession = () => {},
-  records = [], sightings = { monsterIds: [], itemIds: [] },
+  records = [], sightings = { monsterIds: [], itemIds: [] }, onboardingEnabled = true,
 }: PlayScreenProps): JSX.Element {
   const snapshot = useGuestSession(session);
   const { projection } = snapshot;
+
+  // The active onboarding hint (Task 8), recomputed every render from the live snapshot --
+  // `activeHintRef` mirrors it into a ref purely so the key-dispatcher effect below (whose own
+  // dependency array must stay stable across every snapshot publish, not just hint changes) can
+  // read the CURRENT hint id without re-attaching the window listener on every keystroke's worth
+  // of state change.
+  const hint = activeHint(snapshot.onboarding, HINTS, projection, snapshot, onboardingEnabled);
+  const activeHintRef = useRef<string | null>(null);
+  activeHintRef.current = hint?.id ?? null;
 
   const triptychRef = useRef<HTMLDivElement>(null);
   const mapPaneRef = useRef<HTMLDivElement>(null);
@@ -237,7 +254,19 @@ export function PlayScreen({
     const dispatcher = createKeyDispatcher(
       {
         dispatch: (intent) => session.dispatch(intent),
-        openOverlay: (overlayActionId) => onOpenOverlay(overlayActionId),
+        openOverlay: (overlayActionId) => {
+          // Two of the six overlay-open actions are their own onboarding milestones (Task 8) --
+          // "inspection"/"inventory" mastery is a one-time open, which never goes through
+          // `session.dispatch` at all (opening an overlay is client-side UI state, not a
+          // `PlayerIntent`), so it's folded in right here instead.
+          if (overlayActionId === 'character-sheet') session.recordOnboardingIntent('open-character-sheet');
+          else if (overlayActionId === 'inventory') session.recordOnboardingIntent('open-inventory');
+          onOpenOverlay(overlayActionId);
+        },
+        dismissHint: () => {
+          const id = activeHintRef.current;
+          if (id) session.dismissOnboardingHint(id);
+        },
         closeOverlay: () => {
           // `inventory` is a registry overlay like every other one now (Task 5 absorbed the old
           // standalone `BackpackMenu`/`backpackOpen` toggle into the same `overlay` field), so
@@ -382,6 +411,7 @@ export function PlayScreen({
         </div>
 
         <div className="log-slot" style={{ '--log-lines': logLines } as CSSProperties}>
+          <HintStrip hint={hint} keymap={keymap} />
           <LogPanel snapshot={snapshot} />
         </div>
 
