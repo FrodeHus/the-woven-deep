@@ -12,9 +12,18 @@ RUN npm test && npm run typecheck && npm run build && npm run engine:demo && npm
 RUN npm prune --omit=dev
 
 FROM node:22-bookworm-slim AS runtime
+# Operational defaults (safe to bake in) plus the auth/config surface documented in
+# docs/server-admin/authentication.md. PUBLIC_URL, COOKIE_SECRET, and the three MAILGUN_* keys are
+# REQUIRED at runtime in production and are declared here only as empty placeholders — supply real
+# values with `docker run -e` / compose; never bake secrets into the image. With NODE_ENV=production
+# the server refuses to boot unless PUBLIC_URL is set to the public, non-localhost URL. Empty
+# placeholders are read as "unset". The two login rate limits fall back to safe numeric defaults.
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 \
     DATABASE_PATH=/data/rogue.sqlite CONTENT_DIR=/app/content \
-    WEB_DIST_DIR=/app/apps/web/dist
+    WEB_DIST_DIR=/app/apps/web/dist \
+    PUBLIC_URL= COOKIE_SECRET= \
+    MAILGUN_API_KEY= MAILGUN_DOMAIN= MAILGUN_SENDER= \
+    LOGIN_RATE_LIMIT_PER_EMAIL_PER_HOUR=5 LOGIN_RATE_LIMIT_PER_SOURCE_PER_HOUR=20
 WORKDIR /app
 COPY --from=build /app/package.json /app/package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
