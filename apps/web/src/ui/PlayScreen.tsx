@@ -10,6 +10,7 @@ import { computeCamera, type CameraOrigin } from './camera.js';
 import { EffectsLayer } from './EffectsLayer.js';
 import { GridRenderer } from './GridRenderer.js';
 import { createKeyDispatcher } from './KeyRouter.js';
+import { DEFAULT_SETTINGS, resolveKeymap } from '../session/settings.js';
 import {
   layoutTier, viewportForPane, zoomForFloor, type LayoutTier, type ZoomFactor,
 } from './layout.js';
@@ -189,6 +190,10 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
       {
         dispatch: (intent) => session.dispatch(intent),
         openBackpack: () => session.setBackpackOpen(true),
+        // The overlay registry (character sheet / map-journal / codex / settings / help) lands in
+        // a later guest-interface task; until then the five overlay-open keys are routable and
+        // rebindable, but resolve to a no-op here.
+        openOverlay: () => {},
         closeOverlay: () => {
           if (snapshot.backpackOpen) session.setBackpackOpen(false);
           else if (snapshot.houseOpen) session.setHouseOpen(false);
@@ -202,6 +207,9 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
       },
       () => snapshot.backpackOpen || snapshot.houseOpen || projection.trade !== undefined
         || snapshot.pendingDecision !== null,
+      // Settings persistence (loading the player's rebindings from storage) lands in a later
+      // task; until then the keymap resolves defaults only.
+      () => resolveKeymap(DEFAULT_SETTINGS.bindings),
     );
     window.addEventListener('keydown', dispatcher);
     return () => window.removeEventListener('keydown', dispatcher);

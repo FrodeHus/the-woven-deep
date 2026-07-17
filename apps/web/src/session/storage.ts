@@ -56,3 +56,23 @@ export function browserSessionStorage(): SessionStorageLike {
     },
   };
 }
+
+/**
+ * Wraps `window.localStorage` behind `SessionStorageLike`, for state that must outlive the tab
+ * session (settings: `woven-deep.settings.v1`). Same fail-soft-read / propagate-write contract as
+ * `browserSessionStorage` above.
+ */
+export function browserLocalStorage(): SessionStorageLike {
+  return {
+    get(key: string): string | null {
+      try {
+        return window.localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    },
+    set(key: string, value: string): void {
+      window.localStorage.setItem(key, value);
+    },
+  };
+}
