@@ -66,6 +66,14 @@ function rgbToCss(color: readonly [number, number, number]): string {
   return `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
 }
 
+/* Fixtures carry no display name in the content model, only an authoring token like
+ * "fixture.standing-lamp" -- turn the last segment into readable copy ("Standing lamp"). */
+function fixtureLabel(token: string): string {
+  const segment = token.split('.').at(-1) ?? token;
+  const words = segment.replaceAll('-', ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 /**
  * Every light fixture a vault legend can place, deduplicated by `presentationToken` (multiple
  * vaults reuse the same fixture presentation). Derived from the pack's own vault entries -- no
@@ -147,7 +155,7 @@ function GlyphLegendSection({ pack }: Readonly<{ pack: CompiledContentPack }>): 
         {fixtures.map((fixture) => (
           <li key={fixture.token}>
             <span className="help-legend-glyph" style={{ color: rgbToCss(fixture.color) }}>{fixture.glyph}</span>
-            <span>{fixture.token}</span>
+            <span>{fixtureLabel(fixture.token)}</span>
           </li>
         ))}
       </ul>

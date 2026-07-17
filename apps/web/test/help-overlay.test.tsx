@@ -65,6 +65,14 @@ describe('HelpOverlay', () => {
     expect(within(legend).getByText(/wall/i)).toBeInTheDocument();
   });
 
+  it('humanizes light-fixture rows -- the raw authoring token never reaches the player', () => {
+    harness();
+    const legend = screen.getByRole('region', { name: /glyph legend/i });
+    // The bundled pack's vault lamps share presentationToken "fixture.lamp".
+    expect(within(legend).getByText('Lamp')).toBeInTheDocument();
+    expect(within(legend).queryByText('fixture.lamp')).not.toBeInTheDocument();
+  });
+
   it('renders mechanics notes covering hunger, light/fuel, identification, the town truce, and death finality', () => {
     harness();
     const mechanics = screen.getByRole('region', { name: /mechanics/i });
