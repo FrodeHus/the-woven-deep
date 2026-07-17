@@ -2,18 +2,24 @@ import {
   useEffect, useRef, useState, type CSSProperties, type JSX, type MouseEvent as ReactMouseEvent,
 } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
-import type { GameplayProjection } from '@woven-deep/engine';
-import { BackpackMenu, useDialogFocusTrap } from './BackpackMenu.js';
+import type { GameplayProjection, StoredHallRecord } from '@woven-deep/engine';
+import type { Sightings } from '../session/codex.js';
 import type { GuestSession, SessionSnapshot } from '../session/guest-session.js';
 import { useGuestSession } from '../session/store.js';
 import { computeCamera, type CameraOrigin } from './camera.js';
 import { EffectsLayer } from './EffectsLayer.js';
 import { GridRenderer } from './GridRenderer.js';
-import { createKeyDispatcher } from './KeyRouter.js';
+import { createKeyDispatcher, type OverlayActionId } from './KeyRouter.js';
+import { DEFAULT_SETTINGS, resolveKeymap, type ResolvedKeymap, type Settings } from '../session/settings.js';
 import {
   layoutTier, viewportForPane, zoomForFloor, type LayoutTier, type ZoomFactor,
 } from './layout.js';
 import { HeroPanel, LogPanel, StatusBar, ThreatPanel, VitalsStrip } from './panels.js';
+import { useDialogFocusTrap } from './overlays/focus-trap.js';
+import { OVERLAY_REGISTRY, type OverlayId } from './overlays/registry.js';
+import { OVERLAY_COMPONENTS } from './overlays/overlay-components.js';
+import { OverlayScaffold } from './overlays/OverlayScaffold.js';
+import { OverlayErrorBoundary } from './overlays/OverlayErrorBoundary.js';
 import { HouseScreen } from './screens/HouseScreen.js';
 import { TradeScreen } from './screens/TradeScreen.js';
 import { ThreatPopover, type ThreatPopoverActor } from './ThreatPopover.js';
@@ -61,6 +67,35 @@ export interface PlayScreenProps {
   /** Test-only escape hatch: forces a tier instead of deriving it from measured pane width, so
    * tier-dependent composition is assertable without simulating a real ResizeObserver layout. */
   readonly tier?: LayoutTier;
+  /** The currently open registry overlay, owned by `App` (beside `ScreenState`) -- `null` when
+   * none is open. Defaults to `null` so every pre-existing caller of `PlayScreen` (tests included)
+   * keeps working unchanged. */
+  readonly overlay?: OverlayId | null;
+  /** Requests opening one of the six overlay-registry actions -- forwarded to `App`, which applies
+   * the scope gating (a `play`-scope id can only open here, which is already guaranteed by
+   * `PlayScreen` only ever mounting during a live play session; `App` still re-checks
+   * defensively). */
+  readonly onOpenOverlay?: (overlay: OverlayActionId) => void;
+  readonly onCloseOverlay?: () => void;
+  /** The resolved keymap driving both movement/action routing and the six overlay-open keys.
+   * Defaults to the default bindings so existing callers (which never rebind anything) are
+   * unaffected. */
+  readonly keymap?: ResolvedKeymap;
+  /** Forwarded straight through to the settings overlay body (`SettingsOverlayBody` in
+   * `overlay-components.tsx`) when it's the one open -- `App` owns the actual settings state and
+   * persistence; `PlayScreen` just plumbs these past the overlay host, exactly like `keymap`
+   * above. Defaults keep every pre-existing caller/test (which never opens the settings overlay)
+   * compiling unchanged. */
+  readonly settings?: Settings;
+  readonly onChangeSettings?: (next: Settings) => void;
+  readonly onClearGuestSession?: () => void;
+  /** Forwarded straight through to the codex overlay body (`CodexOverlayBody`) when it's the one
+   * open -- `codex` is `global`-scope, so it can open mid-play too. `App` (via `GameRoot`) owns the
+   * Hall repository and the sighting-cache storage read; `PlayScreen` just plumbs these past the
+   * overlay host, exactly like `settings`/`keymap` above. Defaults keep every pre-existing
+   * caller/test (which never opens the codex overlay) compiling unchanged. */
+  readonly records?: readonly StoredHallRecord[];
+  readonly sightings?: Sightings;
 }
 
 interface PositionedActor extends ThreatPopoverActor { readonly x: number; readonly y: number }
@@ -87,7 +122,13 @@ const FALLBACK_CELL_PX = { width: 8, height: 16 };
  * previous-floor-keyed camera origin — everything else (tier thresholds, viewport arithmetic, the
  * camera formula itself) is delegated to pure functions so it stays unit-testable without a DOM.
  */
-export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProps): JSX.Element {
+export function PlayScreen({
+  session, pack, tier: tierOverride,
+  overlay = null, onOpenOverlay = () => {}, onCloseOverlay = () => {},
+  keymap = resolveKeymap(DEFAULT_SETTINGS.bindings),
+  settings = DEFAULT_SETTINGS, onChangeSettings = () => {}, onClearGuestSession = () => {},
+  records = [], sightings = { monsterIds: [], itemIds: [] },
+}: PlayScreenProps): JSX.Element {
   const snapshot = useGuestSession(session);
   const { projection } = snapshot;
 
@@ -188,24 +229,30 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
     const dispatcher = createKeyDispatcher(
       {
         dispatch: (intent) => session.dispatch(intent),
-        openBackpack: () => session.setBackpackOpen(true),
+        openOverlay: (overlayActionId) => onOpenOverlay(overlayActionId),
         closeOverlay: () => {
-          if (snapshot.backpackOpen) session.setBackpackOpen(false);
-          else if (snapshot.houseOpen) session.setHouseOpen(false);
-          // Unlike the backpack/house overlays (pure client-side toggles), an open trade session
-          // is engine state (`projection.trade`): closing it means dispatching `trade-close`, not
-          // flipping a local flag -- the screen unmounts once the resulting projection clears
-          // `trade`.
+          // `inventory` is a registry overlay like every other one now (Task 5 absorbed the old
+          // standalone `BackpackMenu`/`backpackOpen` toggle into the same `overlay` field), so
+          // this first branch already covers it.
+          if (overlay !== null) { onCloseOverlay(); return; }
+          if (snapshot.houseOpen) session.setHouseOpen(false);
+          // Unlike the house overlay (a pure client-side toggle), an open trade session is engine
+          // state (`projection.trade`): closing it means dispatching `trade-close`, not flipping a
+          // local flag -- the screen unmounts once the resulting projection clears `trade`.
           else if (projection.trade) session.dispatch({ type: 'trade-close' });
           else if (snapshot.pendingDecision) session.answerDecision(false);
         },
       },
-      () => snapshot.backpackOpen || snapshot.houseOpen || projection.trade !== undefined
+      () => overlay !== null || snapshot.houseOpen || projection.trade !== undefined
         || snapshot.pendingDecision !== null,
+      () => keymap,
     );
     window.addEventListener('keydown', dispatcher);
     return () => window.removeEventListener('keydown', dispatcher);
-  }, [session, snapshot.backpackOpen, snapshot.houseOpen, projection.trade, snapshot.pendingDecision]);
+  }, [
+    session, snapshot.houseOpen, projection.trade, snapshot.pendingDecision,
+    overlay, onOpenOverlay, onCloseOverlay, keymap,
+  ]);
 
   const tier = tierOverride ?? layoutTier(containerWidth);
   const viewport = viewportForPane({ panePx: paneSize, cellPx: cellSize, floor: projection.floor });
@@ -302,11 +349,11 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
 
       <div className="threat-slot">
         {tier === 'full' ? (
-          projection.floor.town ? <TownPanel snapshot={snapshot} /> : <ThreatPanel snapshot={snapshot} />
+          projection.floor.town ? <TownPanel snapshot={snapshot} keymap={keymap} /> : <ThreatPanel snapshot={snapshot} />
         ) : (
           <details className="threat-drawer">
             <summary>{projection.floor.town ? 'Town' : 'Threats'}</summary>
-            {projection.floor.town ? <TownPanel snapshot={snapshot} /> : <ThreatPanel snapshot={snapshot} />}
+            {projection.floor.town ? <TownPanel snapshot={snapshot} keymap={keymap} /> : <ThreatPanel snapshot={snapshot} />}
           </details>
         )}
       </div>
@@ -315,13 +362,6 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
         <LogPanel snapshot={snapshot} />
       </div>
 
-      {snapshot.backpackOpen && (
-        <BackpackMenu
-          snapshot={snapshot}
-          onDispatch={(intent) => session.dispatch(intent)}
-          onClose={() => session.setBackpackOpen(false)}
-        />
-      )}
       {snapshot.houseOpen && (
         <HouseScreen
           snapshot={snapshot}
@@ -337,6 +377,30 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
         />
       )}
       {snapshot.pendingDecision && <DecisionPrompt snapshot={snapshot} session={session} />}
+      {overlay && (() => {
+        const OverlayBody = OVERLAY_COMPONENTS[overlay];
+        return (
+          <OverlayScaffold
+            title={OVERLAY_REGISTRY[overlay].title}
+            onClose={onCloseOverlay}
+            testId={`overlay-${overlay}`}
+          >
+            <OverlayErrorBoundary>
+              <OverlayBody
+                settings={settings}
+                onChangeSettings={onChangeSettings}
+                onClearGuestSession={onClearGuestSession}
+                keymap={keymap}
+                pack={pack}
+                snapshot={snapshot}
+                onDispatch={(intent) => session.dispatch(intent)}
+                records={records}
+                sightings={sightings}
+              />
+            </OverlayErrorBoundary>
+          </OverlayScaffold>
+        );
+      })()}
     </div>
   );
 }

@@ -4,11 +4,20 @@ import {
   heroFromChoices, type HeroChoices, type RunConclusionProjection, type RunRecordRepository, type Uint32State,
 } from '@woven-deep/engine';
 import { loadContentPack } from './api.js';
+import { loadSightings } from './session/codex.js';
 import type { LogLine } from './session/event-log.js';
 import { GuestSession, type SessionNotice } from './session/guest-session.js';
 import { createSessionRunRecordRepository, SessionHallCorruptError } from './session/run-records-storage.js';
+import { clearGuestSession } from './session/clear-guest-session.js';
+import { DEFAULT_SETTINGS, loadSettings, resolveKeymap, saveSettings, type Settings } from './session/settings.js';
 import { useGuestSession } from './session/store.js';
-import { browserSessionStorage, classifyStorageFailure, type SessionStorageLike } from './session/storage.js';
+import {
+  browserLocalStorage, browserSessionStorage, classifyStorageFailure, PORTRAIT_KEY, type SessionStorageLike,
+} from './session/storage.js';
+import { canOpenOverlay, OVERLAY_REGISTRY, type OverlayId } from './ui/overlays/registry.js';
+import { OVERLAY_COMPONENTS } from './ui/overlays/overlay-components.js';
+import { OverlayScaffold } from './ui/overlays/OverlayScaffold.js';
+import { OverlayErrorBoundary } from './ui/overlays/OverlayErrorBoundary.js';
 import { ChargenScreen } from './ui/screens/ChargenScreen.js';
 import { ConclusionScreen } from './ui/screens/ConclusionScreen.js';
 import { HallScreen } from './ui/screens/HallScreen.js';
@@ -21,6 +30,10 @@ export interface AppProps {
   /** Test-only escape hatch: lets tests swap in an in-memory `SessionStorageLike` instead of the
    * real `window.sessionStorage`, exactly like `PlayScreen`'s `tier` prop. */
   readonly storage?: SessionStorageLike;
+  /** Same escape hatch as `storage`, but for the settings module's `localStorage`-backed store
+   * (`woven-deep.settings.v1`) -- a distinct browser storage area from the run/session state
+   * above, so it gets its own override rather than reusing `storage`. */
+  readonly localStorage?: SessionStorageLike;
 }
 
 /**
@@ -35,9 +48,11 @@ export type ScreenState =
   | { readonly screen: 'conclusion' }
   | { readonly screen: 'hall'; readonly returnTo: 'title' | 'conclusion' };
 
-/** Where the confirmed portrait glyph is persisted: client-only cosmetic side-state, never engine
- * data, saved at chargen confirm and read back on Continue. */
-export const PORTRAIT_KEY = 'woven-deep.guest-portrait';
+/** Re-exported from `session/storage.js`, which now owns this constant so the framework-free
+ * `clear-guest-session.ts` module can list it as a wipe target without importing this (React)
+ * entry point -- kept as an `App` export too since it predates that move and one pre-existing test
+ * still imports it from here. */
+export { PORTRAIT_KEY };
 
 /**
  * Test-only seed override: `?seed=11.22.33.44` (four dot-separated `Uint32` words) pins the
@@ -108,12 +123,29 @@ interface GameRootProps {
   readonly session: GuestSession;
   readonly pack: CompiledContentPack;
   readonly repository: RunRecordRepository;
+  /** Read fresh (via `loadSightings`) on every render -- `GameRoot` re-renders on every session
+   * publish (`useGuestSession` below), and `GuestSession` best-effort persists its own in-memory
+   * sighting cache to this SAME storage after every publish, so a plain re-read here always
+   * reflects the latest accumulation without any extra plumbing back out of `GuestSession`. */
+  readonly storage: SessionStorageLike;
   readonly portraitGlyph: string | undefined;
   readonly onConcluded: (projection: RunConclusionProjection, logTail: readonly LogLine[]) => void;
   /** Called if `finalizeConcludedRun` itself throws (e.g. the Hall write hit a storage quota) --
    * surfaces a persistent, non-dismissible warning while the conclusion screen still shows the
    * in-memory (unfinalized) projection instead of leaving the player on a white screen. */
   readonly onFinalizeError: (message: string) => void;
+  /** Forwarded straight through to `PlayScreen` -- `App` owns this state (see the guest-interface
+   * overlay infrastructure), `GameRoot` just plumbs it past the `useGuestSession` split. */
+  readonly overlay: OverlayId | null;
+  readonly onOpenOverlay: (overlay: OverlayId) => void;
+  readonly onCloseOverlay: () => void;
+  readonly keymap: ReturnType<typeof resolveKeymap>;
+  /** Same "just plumbing" note as `overlay`/`keymap` above -- `App` owns the settings state and its
+   * persistence/clear-guest-session handlers; `GameRoot` forwards them to `PlayScreen` so the
+   * settings overlay body works identically whether opened from play or from the title screen. */
+  readonly settings: Settings;
+  readonly onChangeSettings: (next: Settings) => void;
+  readonly onClearGuestSession: () => void;
 }
 
 /** Everything that needs a live `GuestSession` snapshot: the notice banners and the play screen
@@ -128,8 +160,15 @@ interface GameRootProps {
  * already-concluded run), this finalizes the run into the Hall exactly once — `finalizeRun`'s own
  * `finalized` flag makes a repeat call safe, but `finalizedRef` also stops this component from
  * calling it again on every subsequent render before `onConcluded` swaps the screen away. */
-function GameRoot({ session, pack, repository, portraitGlyph, onConcluded, onFinalizeError }: GameRootProps): JSX.Element {
+function GameRoot({
+  session, pack, repository, storage, portraitGlyph, onConcluded, onFinalizeError,
+  overlay, onOpenOverlay, onCloseOverlay, keymap,
+  settings, onChangeSettings, onClearGuestSession,
+}: GameRootProps): JSX.Element {
   const snapshot = useGuestSession(session);
+  // Re-read on every render (every session publish, since this component only re-renders via the
+  // `useGuestSession` subscription above) -- see the doc comment on `storage` in `GameRootProps`.
+  const sightings = loadSightings(storage).sightings;
   const [dismissed, setDismissed] = useState(false);
   const { notice, conclusion } = snapshot;
   const finalizedRef = useRef(false);
@@ -180,7 +219,19 @@ function GameRoot({ session, pack, repository, portraitGlyph, onConcluded, onFin
           <button type="button" onClick={() => setDismissed(true)}>Dismiss</button>
         </div>
       )}
-      <PlayScreen session={session} pack={pack} />
+      <PlayScreen
+        session={session}
+        pack={pack}
+        overlay={overlay}
+        onOpenOverlay={onOpenOverlay}
+        onCloseOverlay={onCloseOverlay}
+        keymap={keymap}
+        settings={settings}
+        onChangeSettings={onChangeSettings}
+        onClearGuestSession={onClearGuestSession}
+        records={repository.records()}
+        sightings={sightings}
+      />
     </div>
   );
 }
@@ -195,10 +246,68 @@ function GameRoot({ session, pack, repository, portraitGlyph, onConcluded, onFin
  * (retry button) vs. anything the session itself surfaces once it's running (a dismissible
  * banner in `GameRoot`, covering storage being unavailable/full and save-discard notices alike).
  */
-export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JSX.Element {
+export function App({ fetcher = fetch, storage: storageOverride, localStorage: localStorageOverride }: AppProps): JSX.Element {
   const [pack, setPack] = useState<CompiledContentPack>();
   const [error, setError] = useState<string>();
   const [attempt, setAttempt] = useState(0);
+
+  const localStorageInstance = useMemo(
+    () => localStorageOverride ?? browserLocalStorage(),
+    [localStorageOverride],
+  );
+  // Settings are read once at boot; from here on `setSettings` is the single source of truth --
+  // every mutation (font scale, motion, a rebind, a reset) flows through `handleSettingsChange`
+  // below, which persists via `saveSettings` before applying the change in-memory.
+  const [settings, setSettings] = useState(() => loadSettings(localStorageInstance).settings);
+  const keymap = useMemo(() => resolveKeymap(settings.bindings), [settings.bindings]);
+  const [settingsWriteWarning, setSettingsWriteWarning] = useState<string>();
+
+  /**
+   * The settings overlay's `onChange`. Persists first (`saveSettings` re-validates
+   * `next.bindings` for conflicts as the write-time backstop the settings overlay's own
+   * `bindingConflict` pre-check already guards against in practice), then applies the change
+   * in-memory regardless of whether the write itself succeeded -- mirroring the "a failed
+   * settings write warns and continues" rule: a storage failure (quota/unavailable) still lets
+   * the guest keep playing with the new setting for this visit, surfaced as a persistent warning
+   * rather than silently discarded or crashing. The one write `saveSettings` refuses outright (a
+   * binding conflict with no `reason`) should be unreachable here -- the overlay's own
+   * `bindingConflict` check refuses to even call `onChange` with a colliding chord -- so that
+   * branch is treated as a no-op rather than a user-facing failure.
+   */
+  function handleSettingsChange(next: Settings): void {
+    const result = saveSettings(localStorageInstance, next);
+    if (!result.ok && result.reason === undefined) return;
+    setSettings(next);
+    setSettingsWriteWarning(result.ok ? undefined : (
+      result.reason === 'full'
+        ? 'Your browser storage is full, so settings changes will not be saved.'
+        : 'Saving settings is unavailable in this browser -- changes apply for this visit only.'
+    ));
+  }
+
+  // Bumped by `handleClearGuestSession` so the Hall-of-Records `repository` memo below (keyed on
+  // this alongside `storage`) is forced to reconstruct AFTER the wipe -- otherwise it would keep
+  // serving the in-memory records it already loaded at its last construction, even though the
+  // underlying storage key is now gone.
+  const [storageEpoch, setStorageEpoch] = useState(0);
+
+  const [overlay, setOverlay] = useState<OverlayId | null>(null);
+
+  /** `fontScale` as an inline `calc(1rem * scale)` on the app root, and `reducedMotion` as at most
+   * one root class -- the three-way contract (see `styles.css`'s comment beside `.motion-full`):
+   * "system" applies neither class (the `@media (prefers-reduced-motion: reduce)` query alone
+   * decides), "on" applies `.motion-reduced` (forces animations off regardless of the OS setting),
+   * "off" applies `.motion-full` (forces animations back on regardless of the OS setting -- the
+   * one case a media query alone cannot serve, since it never sees the in-app setting). */
+  function withRootStyling(children: JSX.Element): JSX.Element {
+    const motionClass = settings.reducedMotion === 'on' ? ' motion-reduced'
+      : settings.reducedMotion === 'off' ? ' motion-full' : '';
+    return (
+      <div className={`guest-app-root${motionClass}`} style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}>
+        {children}
+      </div>
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -223,6 +332,9 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
   // at construction; the module itself clears the storage key back to a fresh, empty Hall before
   // throwing, so retrying the SAME construction immediately below always succeeds. The active run
   // (an entirely separate storage key) is untouched either way — only a notice is surfaced.
+  // `storageEpoch` forces this to reconstruct after `handleClearGuestSession` wipes `RECORDS_KEY`
+  // out from under it -- `storage` itself never changes identity, so without this second
+  // dependency the memo would keep serving the records it already loaded.
   const [repository, hallNotice] = useMemo((): readonly [RunRecordRepository, string | null] => {
     try {
       return [createSessionRunRecordRepository(storage), null] as const;
@@ -232,7 +344,9 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
       }
       throw thrown;
     }
-  }, [storage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `storageEpoch` is a deliberate
+    // reconstruction trigger, not a value read inside the memo.
+  }, [storage, storageEpoch]);
 
   const [screen, setScreen] = useState<ScreenState>(
     () => (isQuickstart(window.location.search) ? { screen: 'play' } : { screen: 'title' }),
@@ -246,11 +360,65 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
   const [finalizeWarning, setFinalizeWarning] = useState<string>();
   const [chargenError, setChargenError] = useState<string>();
 
+  const closeOverlay = (): void => setOverlay(null);
+  /** Play-scope overlays (inventory / character sheet / map-journal) require an actual live run —
+   * `screen.screen === 'play'` with a constructed `session` -- global overlays (codex / settings /
+   * help) are always allowed, from title or play alike (see `canOpenOverlay`). */
+  function openOverlay(id: OverlayId): void {
+    const isPlayActive = screen.screen === 'play' && session !== undefined;
+    if (!canOpenOverlay(OVERLAY_REGISTRY[id], isPlayActive)) return;
+    setOverlay(id);
+  }
+
+  /**
+   * The settings overlay's "clear guest session": wipes every guest-session storage key
+   * (`clearGuestSession` -- run save, command counter, Hall of Records, portrait glyph, settings),
+   * resets every piece of in-memory state those keys backed (so a stale run/portrait/settings
+   * value can't survive the wipe only to be re-persisted on the next natural save), closes
+   * whatever overlay is open, bumps `storageEpoch` so the Hall repository reloads as empty, and
+   * lands on the title screen.
+   */
+  function handleClearGuestSession(): void {
+    clearGuestSession(storage, localStorageInstance);
+    setSettings(DEFAULT_SETTINGS);
+    setSettingsWriteWarning(undefined);
+    setSession(undefined);
+    setConclusion(undefined);
+    setPortraitGlyph(undefined);
+    setChargenError(undefined);
+    setFinalizeWarning(undefined);
+    closeOverlay();
+    setStorageEpoch((epoch) => epoch + 1);
+    setScreen({ screen: 'title' });
+  }
+
+  function renderOverlayHost(): JSX.Element | null {
+    if (!overlay) return null;
+    const definition = OVERLAY_REGISTRY[overlay];
+    const OverlayBody = OVERLAY_COMPONENTS[overlay];
+    return (
+      <OverlayScaffold title={definition.title} onClose={closeOverlay} testId={`overlay-${overlay}`}>
+        <OverlayErrorBoundary>
+          <OverlayBody
+            settings={settings}
+            onChangeSettings={handleSettingsChange}
+            onClearGuestSession={handleClearGuestSession}
+            keymap={keymap}
+            pack={pack}
+            records={repository.records()}
+            sightings={loadSightings(storage).sightings}
+          />
+        </OverlayErrorBoundary>
+      </OverlayScaffold>
+    );
+  }
+
   /** Wraps every post-boot screen with any persistent, non-dismissible warnings pending —
-   * Hall-corruption-on-boot and finalize-write failures alike. The active run survives regardless
-   * of either: only the Hall write (or, on boot, the Hall itself) was affected. */
+   * Hall-corruption-on-boot, finalize-write, and settings-write failures alike. The active run
+   * survives regardless of any of these: only the affected write (or, on boot, the Hall itself)
+   * was affected. */
   function withHallNotice(children: JSX.Element): JSX.Element {
-    if (!hallNotice && !finalizeWarning) return children;
+    if (!hallNotice && !finalizeWarning && !settingsWriteWarning) return children;
     return (
       <>
         {hallNotice && (
@@ -263,74 +431,89 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
             <p>{finalizeWarning}</p>
           </div>
         )}
+        {settingsWriteWarning && (
+          <div role="alert" aria-label="Storage warning" className="storage-warning-banner" data-kind="settings-write-failed">
+            <p>{settingsWriteWarning}</p>
+          </div>
+        )}
         {children}
       </>
     );
   }
 
   // Quickstart's session is constructed once the pack is ready (it can't be constructed at the
-  // `useState` initializer above — the pack isn't loaded yet at first render).
+  // `useState` initializer above — the pack isn't loaded yet at first render). Gated on
+  // `screen.screen === 'play'` (quickstart's initial screen, set at the `useState` initializer
+  // above): without it, a surviving `?quickstart=1` query in the URL re-fires this effect after
+  // `handleClearGuestSession` sets `session` back to undefined and the screen to 'title',
+  // silently constructing a hidden `GuestSession` that re-persists storage (its constructor syncs
+  // sightings on its own) and breaks the wipe contract on quickstart boots.
   useEffect(() => {
     if (!pack || session) return;
+    if (screen.screen !== 'play') return;
     if (!isQuickstart(window.location.search)) return;
     const seed = parseSeedFromQuery(window.location.search);
     setSession(seed ? new GuestSession({ pack, storage, seed }) : new GuestSession({ pack, storage }));
-  }, [pack, storage, session]);
+  }, [pack, storage, session, screen]);
 
   if (error) {
-    return (
+    return withRootStyling(
       <main className="shell boot-error">
         <p className="eyebrow">The Woven Deep</p>
         <h1>The archive would not answer.</h1>
         <p role="alert">{error}</p>
         <button type="button" onClick={() => setAttempt((count) => count + 1)}>Retry</button>
-      </main>
+      </main>,
     );
   }
 
   if (!pack) {
-    return (
+    return withRootStyling(
       <main className="shell boot-loading">
         <p className="eyebrow">The Woven Deep</p>
         <p role="status">Binding the current content pack…</p>
-      </main>
+      </main>,
     );
   }
 
   if (screen.screen === 'title') {
-    return withHallNotice(
+    return withRootStyling(withHallNotice(
       <main className="shell">
         <TitleScreen
           storage={storage}
           onEnterTheDeep={() => {
+            closeOverlay();
             setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
             setScreen({ screen: 'chargen' });
           }}
           onContinue={() => {
+            closeOverlay();
             setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
             setSession(new GuestSession({ pack, storage }));
             setScreen({ screen: 'play' });
           }}
           onHall={() => setScreen({ screen: 'hall', returnTo: 'title' })}
+          onOpenOverlay={openOverlay}
         />
+        {renderOverlayHost()}
       </main>,
-    );
+    ));
   }
 
   if (screen.screen === 'chargen') {
     if (chargenError) {
-      return withHallNotice(
+      return withRootStyling(withHallNotice(
         <main className="shell boot-error">
           <p className="eyebrow">The Woven Deep</p>
           <h1>Something went wrong building your hero.</h1>
           <p role="alert">{chargenError}</p>
           <button type="button" onClick={() => setChargenError(undefined)}>Back</button>
         </main>,
-      );
+      ));
     }
     // `chargenSeed` is always set before this screen is reached (see `onEnterTheDeep` above).
     const seed = chargenSeed!;
-    return withHallNotice(
+    return withRootStyling(withHallNotice(
       <ChargenScreen
         pack={pack}
         seed={seed}
@@ -355,30 +538,30 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
           setScreen({ screen: 'play' });
         }}
       />,
-    );
+    ));
   }
 
   if (screen.screen === 'hall') {
     const { returnTo } = screen;
-    return withHallNotice(
+    return withRootStyling(withHallNotice(
       <main className="shell">
         <HallScreen repository={repository} onBack={() => setScreen({ screen: returnTo })} />
       </main>,
-    );
+    ));
   }
 
   if (screen.screen === 'conclusion') {
     // `conclusion` is always set before this screen is reached — `GameRoot`'s `onConcluded`
     // (below) sets both together, in the same event.
     if (!conclusion) {
-      return withHallNotice(
+      return withRootStyling(withHallNotice(
         <main className="shell boot-loading">
           <p className="eyebrow">The Woven Deep</p>
           <p role="status">The run has ended.</p>
         </main>,
-      );
+      ));
     }
-    return withHallNotice(
+    return withRootStyling(withHallNotice(
       <ConclusionScreen
         projection={conclusion.projection}
         pack={pack}
@@ -396,29 +579,37 @@ export function App({ fetcher = fetch, storage: storageOverride }: AppProps): JS
           setScreen({ screen: 'title' });
         }}
       />,
-    );
+    ));
   }
 
   if (!session) {
-    return withHallNotice(
+    return withRootStyling(withHallNotice(
       <main className="shell boot-loading">
         <p className="eyebrow">The Woven Deep</p>
         <p role="status">Binding the current content pack…</p>
       </main>,
-    );
+    ));
   }
 
-  return withHallNotice(
+  return withRootStyling(withHallNotice(
     <GameRoot
       session={session}
       pack={pack}
       repository={repository}
+      storage={storage}
       portraitGlyph={portraitGlyph}
+      overlay={overlay}
+      onOpenOverlay={openOverlay}
+      onCloseOverlay={closeOverlay}
+      keymap={keymap}
+      settings={settings}
+      onChangeSettings={handleSettingsChange}
+      onClearGuestSession={handleClearGuestSession}
       onConcluded={(projection, logTail) => {
         setConclusion({ projection, logTail });
         setScreen({ screen: 'conclusion' });
       }}
       onFinalizeError={setFinalizeWarning}
     />,
-  );
+  ));
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { LightSource } from '../src/light-model.js';
-import type { TileId } from '../src/model.js';
+import type { ActiveRun, TileId } from '../src/model.js';
 import {
   createDemoContentPack,
   createDemoRun,
@@ -325,6 +325,51 @@ describe('gameplay projection', () => {
     expect(projected.slots).toEqual([{ slotId: 'slot.town-test.house-door', tags: ['town', 'house-door'], x: 1, y: 1 }]);
   });
 
+  it('projects a timed condition\'s remaining world-time as expiresAt minus current worldTime, and drops expiresAt', () => {
+    const base = createDemoRun();
+    const dungeon: ActiveRun = {
+      ...base, worldTime: 30,
+      actors: base.actors.map((actor) => actor.actorId === base.actors[0]!.actorId
+        ? { ...actor, conditions: [{ conditionId: 'condition.disengaged', sourceActorId: null,
+          appliedAt: 20, expiresAt: 130, stacks: 1 }] } : actor),
+    };
+    const projected = projectGameplayState({ state: dungeon, content: createDemoContentPack() });
+    expect(projected.floor.town).toBe(false);
+    const condition = projected.hero.conditions[0] as Readonly<{ remaining: number | null }>;
+    expect(condition.remaining).toBe(100);
+    expect(condition).not.toHaveProperty('expiresAt');
+    expect(stableJson(projected)).not.toContain('expiresAt');
+  });
+
+  it('projects a permanent condition\'s remaining as null regardless of worldTime', () => {
+    const base = createDemoRun();
+    const dungeon: ActiveRun = {
+      ...base, worldTime: 30,
+      actors: base.actors.map((actor) => actor.actorId === base.actors[0]!.actorId
+        ? { ...actor, conditions: [{ conditionId: 'condition.incapacitated', sourceActorId: null,
+          appliedAt: 20, expiresAt: null, stacks: 1 }] } : actor),
+    };
+    const projected = projectGameplayState({ state: dungeon, content: createDemoContentPack() });
+    expect(projected.floor.town).toBe(false);
+    const condition = projected.hero.conditions[0] as Readonly<{ remaining: number | null }>;
+    expect(condition.remaining).toBeNull();
+  });
+
+  it('projects a timed condition\'s remaining as null while in the frozen-time town floor', () => {
+    const base = createDemoRun();
+    const townFloor = { ...base.floors[0]!, floorId: 'floor.town-remaining', depth: 0 };
+    const town: ActiveRun = {
+      ...base, worldTime: 30, floors: [townFloor], activeFloorId: townFloor.floorId,
+      actors: base.actors.map((actor) => actor.actorId === base.actors[0]!.actorId
+        ? { ...actor, floorId: townFloor.floorId, conditions: [{ conditionId: 'condition.disengaged',
+          sourceActorId: null, appliedAt: 20, expiresAt: 130, stacks: 1 }] } : actor),
+    };
+    const projected = projectGameplayState({ state: town, content: createDemoContentPack() });
+    expect(projected.floor.town).toBe(true);
+    const condition = projected.hero.conditions[0] as Readonly<{ remaining: number | null }>;
+    expect(condition.remaining).toBeNull();
+  });
+
   it('projects the hero\'s sight radius', () => {
     const base = createDemoRun();
     const projected = projectGameplayState({ state: base, content: createDemoContentPack() });
@@ -373,5 +418,63 @@ describe('gameplay projection', () => {
     const right = projectGameplayState({ state: { ...base, actors: [...base.actors, hidden],
       rng: { ...base.rng, combat: [44, 55, 66, 77] } }, content });
     expect(stableJson(left)).toBe(stableJson(right));
+  });
+
+  it('projects a visible actor\'s own content id for the guest sighting cache', () => {
+    const base = createDemoRun();
+    const visible = { ...base.actors[0]!, actorId: 'monster.visible', contentId: 'monster.visible',
+      playerControlled: false, disposition: 'hostile' as const, x: 2, y: 1 };
+    const content = { ...createDemoContentPack(), entries: [
+      ...createDemoContentPack().entries, monsterDefinition(visible.contentId),
+    ] };
+    const projected = projectGameplayState({ state: { ...base, actors: [base.actors[0]!, visible] }, content });
+    const actor = projected.actors.find((candidate) => candidate.actorId === 'monster.visible');
+    expect(actor?.contentId).toBe('monster.visible');
+  });
+
+  it('never projects the hero into `actors` at all -- there is no hero-authored contentId row to null', () => {
+    const base = createDemoRun();
+    const projected = projectGameplayState({ state: base, content: createDemoContentPack() });
+    expect(projected.actors.some((actor) => actor.actorId === base.hero.actorId)).toBe(false);
+  });
+
+  it('nulls contentId for fallen-champion and echo actors -- their contentId is the shared ' +
+    'generic fallen-hero template, not a genuine discoverable monster kind', () => {
+    const base = createDemoRun();
+    const championActor = { ...base.actors[0]!, actorId: 'actor.champion.001', contentId: 'monster.fallen-hero-template',
+      playerControlled: false, disposition: 'hostile' as const, x: 2, y: 1, populationId: 'population.champion.001',
+      populationPresentation: { name: 'The Fallen Duke', glyph: 'C', color: '#ff0000', leader: false } };
+    const echoActor = { ...base.actors[0]!, actorId: 'actor.echo.001', contentId: 'monster.fallen-hero-template',
+      playerControlled: false, disposition: 'hostile' as const, x: 3, y: 1, populationId: 'population.echo.001',
+      populationPresentation: { name: 'Echo of the Duke', glyph: 'c', color: '#ff8800', leader: false } };
+    const championPopulation = {
+      model: 'champion' as const, populationId: 'population.champion.001', encounterId: 'encounter.fallen-hero',
+      floorId: base.actors[0]!.floorId, createdAt: 0, livingMemberIds: [championActor.actorId], formerMemberIds: [],
+      actorId: championActor.actorId, hallRecordId: 'record.fallen.1', rank: 1 as const, defeated: false,
+      rewardCreated: false, equipmentContentIds: [], abilityIds: [],
+    };
+    const echoPopulation = {
+      model: 'echo' as const, populationId: 'population.echo.001', encounterId: 'encounter.fallen-hero',
+      floorId: base.actors[0]!.floorId, createdAt: 0, livingMemberIds: [echoActor.actorId], formerMemberIds: [],
+      actorId: echoActor.actorId, hallRecordId: 'record.fallen.2', rank: 2, defeated: false,
+      lootCreated: false, equipmentContentIds: [], abilityIds: [],
+    };
+    const content = { ...createDemoContentPack(), entries: [
+      ...createDemoContentPack().entries, monsterDefinition('monster.fallen-hero-template'),
+    ] };
+    const projected = projectGameplayState({
+      state: { ...base, actors: [base.actors[0]!, championActor, echoActor],
+        populations: [championPopulation, echoPopulation] },
+      content,
+    });
+
+    const champion = projected.actors.find((actor) => actor.actorId === championActor.actorId);
+    const echo = projected.actors.find((actor) => actor.actorId === echoActor.actorId);
+    expect(champion?.contentId).toBeNull();
+    expect(echo?.contentId).toBeNull();
+    // Name/glyph still disclosed exactly as they already were -- only contentId is nulled.
+    expect(champion?.name).toBe('The Fallen Duke');
+    expect(echo?.name).toBe('Echo of the Duke');
+    expect(stableJson(projected)).not.toContain('monster.fallen-hero-template');
   });
 });

@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { SessionSnapshot } from '../session/guest-session.js';
+import { chordKey, type ResolvedKeymap } from '../session/settings.js';
 
 interface ProjectedHero {
   readonly x: number;
@@ -37,6 +38,10 @@ function merchantActors(projection: SessionSnapshot['projection']): readonly Pro
 
 export interface TownPanelProps {
   readonly snapshot: SessionSnapshot;
+  /** The resolved keymap, plumbed down from `PlayScreen` exactly like every overlay body -- the
+   * trade/house key hints below render from `keymap.byAction` (via `chordKey`) rather than a
+   * hardcoded chord, since both actions are rebindable `ActionId`s. */
+  readonly keymap: ResolvedKeymap;
 }
 
 /**
@@ -46,8 +51,10 @@ export interface TownPanelProps {
  * (`actors` for merchant positions, the new `slots` field for the house door), never from any
  * hidden run state.
  */
-export function TownPanel({ snapshot }: TownPanelProps): JSX.Element {
+export function TownPanel({ snapshot, keymap }: TownPanelProps): JSX.Element {
   const { projection } = snapshot;
+  const tradeChord = chordKey(keymap.byAction.trade);
+  const houseChord = chordKey(keymap.byAction.house);
   const hero = projection.hero as unknown as ProjectedHero;
   const merchants = merchantActors(projection);
   const houseDoor = (projection.slots as unknown as readonly ProjectedPlacementSlot[])
@@ -68,14 +75,14 @@ export function TownPanel({ snapshot }: TownPanelProps): JSX.Element {
                 <span>{merchant.name ?? merchant.factionName}</span>
                 {merchant.reputationTier !== undefined && <span className="town-merchant-reputation">{merchant.reputationTier}</span>}
                 {merchant.tradeAvailable === false && <span className="town-merchant-unavailable">unavailable</span>}
-                {canTrade && <span className="town-merchant-trade-hint">press Shift+T to trade</span>}
+                {canTrade && <span className="town-merchant-trade-hint">{`press ${tradeChord} to trade`}</span>}
               </li>
             );
           })}
         </ul>
       )}
       <p className={houseAdjacent ? 'town-house-hint town-house-hint--nearby' : 'town-house-hint'}>
-        {houseAdjacent ? 'The house is nearby — press Shift+H to open it.' : 'The house'}
+        {houseAdjacent ? `The house is nearby — press ${houseChord} to open it.` : 'The house'}
       </p>
     </section>
   );

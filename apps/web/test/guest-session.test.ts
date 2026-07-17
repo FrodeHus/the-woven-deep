@@ -365,6 +365,10 @@ describe('GuestSession', () => {
       }],
     };
 
+    // Construction itself already wrote once (`syncSightings`'s boot-restore sync, Task 8) --
+    // reset the counter so this assertion isolates `persist()`'s OWN behaviour, per the test's
+    // stated intent, rather than conflating it with an unrelated write from an earlier step.
+    setCalls = 0;
     expect(() => sessionInternals.persist()).toThrow();
     expect(setCalls).toBe(0);
     expect(session.getSnapshot().notice).not.toEqual({ kind: 'storage', failure: 'unavailable' });

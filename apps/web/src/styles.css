@@ -186,6 +186,42 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   .effect { animation: none !important; display: none; }
 }
 
+/* Same overrides as the `@media (prefers-reduced-motion: reduce)` block above, applied instead by
+   an explicit `.motion-reduced` root class (set by `App` when the guest's "Reduce motion" setting
+   is "on", regardless of the OS-level media query) -- see `styles-contract.test.ts` for the
+   asserted contract. Duplicated rather than shared with the media block on purpose: a `@media`
+   query cannot be triggered by a class, and this class cannot replace the media query either
+   (players whose OS already requests reduced motion still get it even with the setting on
+   "system"), so both paths to the same declarations have to exist independently. Same `!important`
+   discipline as above, for the identical specificity reason (`.motion-reduced .glow` (0,2,0) vs.
+   `.glow[data-source*="torch"]` (0,2,0) -- equal specificity, so source order alone is not
+   reliable; `!important` removes the ambiguity exactly like the media block does). */
+.motion-reduced {
+  .glow { animation: none !important; opacity: calc(var(--glow-intensity) * 0.7); }
+  .effect { animation: none !important; display: none; }
+}
+
+/* The three-way motion contract (`Settings.reducedMotion`, see `App.tsx`'s `withRootStyling`):
+ *   - "system" -> neither class is applied; the `@media (prefers-reduced-motion: reduce)` block
+ *     above alone decides, purely from the OS-level preference.
+ *   - "on"     -> `.motion-reduced` (above) forces animations OFF, regardless of the OS setting.
+ *   - "off"    -> `.motion-full` (below) forces animations back ON, regardless of the OS setting.
+ * "off" is the one case the media query alone cannot serve: a guest whose OS forces reduced
+ * motion, but who explicitly wants animations, needs an equal-specificity, `!important` override
+ * of the SAME declarations the media block suppresses -- otherwise "off" is a silent no-op on
+ * such a system. Every declaration below is the ORIGINAL, un-overridden value repeated exactly
+ * (see `styles-contract.test.ts`, which parses both sides out of this file and compares them,
+ * rather than trusting a copied literal here to stay in sync).
+ */
+.motion-full {
+  .glow { animation: glow-drift 2.6s ease-in-out infinite alternate !important; }
+  .glow[data-source*="torch"] { animation: glow-gutter 2.2s ease-in-out infinite !important; }
+  .effect { display: block !important; }
+  .effect-hit-flash { animation: hit-flash 120ms ease-out !important; }
+  .effect-attack-streak { animation: attack-streak 160ms ease-out !important; }
+  .effect-death-burst { animation: death-burst 240ms ease-out !important; }
+}
+
 /* Tactical Triptych: hero / map / threat panels plus a status bar and log, arranged by a CSS
    grid whose column tracks respond to `data-tier` (full/compact/minimal, from ui/layout.ts).
    Collapsed panels move into native <details> drawers rather than unmounting, so their content
@@ -363,3 +399,32 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
 .hall-classes { color: #7d89a8; }
 .hall-run { margin-left: auto; color: #7d89a8; font-size: .85rem; }
 .hall-breakdown { margin: 4px 0 4px 2.5em; font-size: .85rem; color: #7d89a8; }
+
+/* Map & journal overlay (Task 7). `.map-journal-map-pane` scrolls the full floor at a FIXED
+   compact cell size (`--map-cell`, set inline per render) -- deliberately its own custom property,
+   distinct from the playfield's zoom-scaled `--cell-w`/`--cell-h`, so this map never grows or
+   shrinks with the guest's play-zoom or font-scale setting. Named `map-journal-map-pane`, not
+   `map-pane` -- `PlayScreen.tsx` already owns that class name for its own live playfield wrapper. */
+.map-journal-tablist { display: flex; gap: 8px; margin-bottom: 8px; }
+.map-journal-tab {
+  background: #121521;
+  color: inherit;
+  border: 1px solid #3d465f;
+  padding: 6px 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.map-journal-tab--active { border-color: #e8c879; color: #e8c879; }
+.map-journal-map-pane { overflow: auto; max-height: 60vh; }
+.map-grid { display: grid; grid-auto-rows: var(--map-cell); line-height: 1; font-size: var(--map-cell); }
+.map-cell { display: block; width: var(--map-cell); height: var(--map-cell); text-align: center; }
+.map-cell-unknown { color: transparent; }
+.map-cell-remembered { color: #4b526b; filter: saturate(0.4); opacity: 0.55; }
+.map-cell-visible { color: var(--fg, #aab3d1); opacity: calc(0.62 + 0.38 * var(--light, 1)); }
+.journal-pane { display: flex; flex-direction: column; gap: 12px; }
+.journal-objective { color: #e8c879; font-style: italic; }
+.journal-landmarks, .journal-log { list-style: none; margin: 0; padding: 0; }
+.journal-log { max-height: 40vh; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.journal-log-line--warning { color: #db7f78; }
+.journal-log-line--combat { color: #e8c879; }
+.journal-log-line--system { color: #7d89a8; }

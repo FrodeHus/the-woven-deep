@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { OpaqueId } from '@woven-deep/engine';
-import { useDialogFocusTrap } from '../BackpackMenu.js';
+import { useDialogFocusTrap } from '../overlays/focus-trap.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
 

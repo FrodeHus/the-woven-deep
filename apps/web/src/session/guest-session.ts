@@ -9,6 +9,7 @@ import {
   type StoredHallRecord, type Uint32State,
 } from '@woven-deep/engine';
 import { buildIntent } from './command-builder.js';
+import { accumulateSightings, loadSightings, saveSightings, type Sightings } from './codex.js';
 import { foldEventsIntoLog, LOG_CAPACITY, type LogLine } from './event-log.js';
 import type { PlayerIntent } from './intents.js';
 import {
@@ -32,7 +33,6 @@ export interface SessionSnapshot {
   readonly lastEvents: readonly PublicEvent[];
   readonly pendingDecision: PublicDecision | null;
   readonly notice: SessionNotice | null;
-  readonly backpackOpen: boolean;
   readonly houseOpen: boolean;
   /** Cheap, pure projection of the run's ending once `run.conclusion !== null`: completion facts
    * and metrics are always safe to expose, but this is computed with `record: null` and
@@ -40,6 +40,19 @@ export interface SessionSnapshot {
    * `conclusion.finalized` flag — the full score/heirloom/achievements only ever come from
    * `finalizeConcludedRun`. `null` while the run is still in progress. */
   readonly conclusion: RunConclusionProjection | null;
+  /** The session's accumulated unlock-codex sighting cache (`codex.ts`'s `Sightings`) -- kept
+   * in-memory here as the authoritative value (updated after every publish, per the design
+   * amendment) and best-effort persisted alongside it; a persistence failure downgrades to
+   * session-memory only (this field still reflects every sighting for the rest of THIS session)
+   * plus the standard storage notice, exactly like a failed run-save write. */
+  readonly sightings: Sightings;
+  /** The active hero's own `classTags` -- read directly off the held `ActiveRun.hero` (`run.hero`),
+   * NEVER through `projectGameplayState` (which does not carry this field, and is not touched here
+   * -- see Task 8's one permitted engine change, the unrelated actor-contentId field). classTags
+   * are not spoiler-sensitive: the identical field already appears, unredacted, on every
+   * `StoredHallRecord`/Hall-of-Records row. Feeds the unlock codex's "active hero's class"
+   * discovery source (`deriveCodexState`, `codex.ts`). */
+  readonly heroClassTags: readonly string[];
 }
 
 function randomSeed(): Uint32State {
@@ -67,8 +80,8 @@ export class GuestSession {
   private lastEvents: readonly PublicEvent[] = [];
   private pendingDecision: PublicDecision | null = null;
   private notice: SessionNotice | null;
-  private backpackOpen = false;
   private houseOpen = false;
+  private sightings: Sightings = { monsterIds: [], itemIds: [] };
   private snapshot: SessionSnapshot;
   private readonly listeners = new Set<() => void>();
 
@@ -90,6 +103,10 @@ export class GuestSession {
     this.run = booted.run;
     this.notice = booted.notice;
     this.commandSequence = booted.commandSequence;
+    // "Accumulates ... on boot restore" -- a restored (or freshly-created) run's initial
+    // projection may already show visible actors/identified items (e.g. a save restored mid-fight),
+    // so the cache must sync once here too, not only after a subsequent dispatch.
+    this.syncSightings();
     this.snapshot = this.buildSnapshot();
   }
 
@@ -277,9 +294,31 @@ export class GuestSession {
     }
   }
 
-  setBackpackOpen(open: boolean): void {
-    this.backpackOpen = open;
-    this.publish();
+  /**
+   * Folds the current projection's freshly-perceived content ids into the sighting cache
+   * (`accumulateSightings`, `codex.ts`), then best-effort persists it. Called once at construction
+   * (boot restore) and again at the top of every `publish()` -- i.e. after every dispatch, decision
+   * answer, and rejected/invalid command alike, exactly the "after every publish" rule. Reads the
+   * PRIOR persisted value fresh each time (not just `this.sightings`) so a sighting recorded by a
+   * different tab/reload of the same guest session is never lost.
+   *
+   * A write failure here downgrades gracefully: `this.sightings` (in-memory) already reflects the
+   * accumulation regardless of whether the write below succeeds, so the codex stays fully correct
+   * for the remainder of THIS session even if storage is full/unavailable -- only cross-reload
+   * persistence is lost, surfaced via the same `storage` notice `persist()` (the run save) uses.
+   * Never overwrites an already-pending notice of the SAME kind (e.g. a run-save failure this same
+   * turn) with a second, redundant one.
+   */
+  private syncSightings(): void {
+    const loaded = loadSightings(this.storage);
+    this.sightings = accumulateSightings(loaded.sightings, this.currentProjection());
+    try {
+      saveSightings(this.storage, this.sightings);
+    } catch (error) {
+      if (this.notice === null || this.notice.kind !== 'storage') {
+        this.notice = { kind: 'storage', failure: classifyStorageFailure(error) };
+      }
+    }
   }
 
   setHouseOpen(open: boolean): void {
@@ -359,14 +398,16 @@ export class GuestSession {
       lastEvents: this.lastEvents,
       pendingDecision: this.pendingDecision,
       notice: this.notice,
-      backpackOpen: this.backpackOpen,
       houseOpen: this.houseOpen,
       conclusion: this.run.conclusion === null ? null
         : projectRunConclusion({ run: this.run, record: null, achievements: [] }),
+      sightings: this.sightings,
+      heroClassTags: [...this.run.hero.classTags],
     };
   }
 
   private publish(): void {
+    this.syncSightings();
     this.snapshot = this.buildSnapshot();
     for (const listener of this.listeners) listener();
   }

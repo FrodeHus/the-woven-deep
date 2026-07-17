@@ -1,0 +1,142 @@
+import { describe, expect, it } from 'vitest';
+import { relativeLuminance, visibleForeground } from '../src/ui/cell-color.js';
+
+/**
+ * `.cell-remembered`'s static color in `styles.css` -- reproduced as a literal here (not imported,
+ * since this is a pure-TS test with no stylesheet parsing) so this suite pins the exact regression
+ * the bug report was about: a `.cell-visible` glyph must never render darker than this gray, even
+ * at the light-radius rim where `intensity` bottoms out to single digits and `tint` goes near-black.
+ */
+const REMEMBERED_GRAY: readonly [number, number, number] = [0x4b, 0x52, 0x6b];
+const REMEMBERED_LUMINANCE = relativeLuminance(REMEMBERED_GRAY);
+
+/**
+ * `FLOOR_RGB` in `cell-color.ts` -- reproduced as a literal here (it isn't exported) so the property
+ * tests below can assert against the exact floor the implementation targets, not just "above
+ * remembered". Do not let the two drift.
+ */
+const FLOOR_RGB: readonly [number, number, number] = [100, 106, 130];
+const FLOOR_LUMINANCE = relativeLuminance(FLOOR_RGB);
+
+/** A representative warm torch tint -- the color the engine reports for a lit, gold-ish light
+ * source, sampled at full brightness. Used to check the blend stays gold-ish (not washed out to
+ * gray) at healthy intensity, and never dips below the remembered floor as intensity climbs. */
+const TORCH_TINT: readonly [number, number, number] = [255, 200, 100];
+
+describe('visibleForeground', () => {
+  it('floors the output above the remembered gray even at the lowest visible intensity', () => {
+    // Near-black tint, as the engine reports right at a torch's radius edge.
+    const rimTint: readonly [number, number, number] = [4, 3, 2];
+    const output = visibleForeground(rimTint, 1);
+    const [r, g, b] = parseRgb(output);
+    expect(relativeLuminance([r, g, b])).toBeGreaterThan(REMEMBERED_LUMINANCE);
+  });
+
+  it('is monotone non-decreasing in intensity for a fixed tint', () => {
+    const samples = [0, 1, 8, 32, 64, 128, 192, 255];
+    const luminances = samples.map((intensity) => relativeLuminance(parseRgb(visibleForeground(TORCH_TINT, intensity))));
+    for (let i = 1; i < luminances.length; i += 1) {
+      expect(luminances[i]).toBeGreaterThanOrEqual(luminances[i - 1]!);
+    }
+  });
+
+  it('renders the tint verbatim (identity) at full intensity, so a gold torch rim stays gold', () => {
+    const output = visibleForeground(TORCH_TINT, 255);
+    expect(parseRgb(output)).toEqual(TORCH_TINT);
+  });
+
+  it('still reads as warm (red channel clearly above blue) at a healthy mid intensity, never washed to neutral gray', () => {
+    const [r, , b] = parseRgb(visibleForeground(TORCH_TINT, 160));
+    expect(r).toBeGreaterThan(b);
+  });
+
+  it('clamps intensity to the 0..255 range rather than producing an out-of-gamut blend', () => {
+    const atZero = parseRgb(visibleForeground(TORCH_TINT, -50));
+    const atMax = parseRgb(visibleForeground(TORCH_TINT, 999));
+    for (const channel of [...atZero, ...atMax]) {
+      expect(channel).toBeGreaterThanOrEqual(0);
+      expect(channel).toBeLessThanOrEqual(255);
+    }
+    expect(parseRgb(visibleForeground(TORCH_TINT, -50))).toEqual(parseRgb(visibleForeground(TORCH_TINT, 0)));
+    expect(parseRgb(visibleForeground(TORCH_TINT, 999))).toEqual(parseRgb(visibleForeground(TORCH_TINT, 255)));
+  });
+});
+
+describe('relativeLuminance', () => {
+  it('ranks pure white above pure black', () => {
+    expect(relativeLuminance([255, 255, 255])).toBeGreaterThan(relativeLuminance([0, 0, 0]));
+  });
+});
+
+/**
+ * Property-style coverage for the "floor + monotone, ALL tints" constraint. `TORCH_TINT` above is
+ * warm, and warm is all that's authored in content today -- but the floor is documented as a
+ * hue-independent guarantee, so it has to hold for cool/blue-dominant tints too, even though no
+ * such light exists yet. A pure-blue tint is the adversarial case: blue contributes only 7.22% to
+ * relative luminance (vs. 21.26% red / 71.52% green), so a naive blend toward a blue tint can drop
+ * luminance well under the floor -- and even fully-saturated blue at intensity 255 can't reach the
+ * floor by itself, forcing the "clip, then mix toward white" fallback to run.
+ */
+const TINT_GRID: readonly RgbGridEntry[] = [
+  ['pure blue', [0, 0, 255]],
+  ['pure red', [255, 0, 0]],
+  ['near-black', [0, 0, 10]],
+  ['white', [255, 255, 255]],
+  ['content torch (ashen-potion-ish warm)', [255, 179, 71]],
+  ['content torch (mid-warm)', [255, 200, 100]],
+];
+
+type RgbGridEntry = readonly [string, readonly [number, number, number]];
+
+const INTENSITY_GRID = [0, 1, 8, 32, 64, 128, 160, 192, 255];
+
+describe('visibleForeground floor + monotonicity (all hues)', () => {
+  for (const [label, tint] of TINT_GRID) {
+    it(`holds the luminance floor for every intensity: ${label}`, () => {
+      for (const intensity of INTENSITY_GRID) {
+        const output = parseRgb(visibleForeground(tint, intensity));
+        expect(relativeLuminance(output)).toBeGreaterThanOrEqual(FLOOR_LUMINANCE - 1e-9);
+      }
+    });
+
+    it(`is monotone non-decreasing in intensity: ${label}`, () => {
+      // Output channels are quantized to 8-bit integers, so two intensities that both land "at
+      // the floor" can differ by a rounding unit or two per channel even though the underlying
+      // continuous target luminance is identical -- that's sub-perceptual quantization noise, not
+      // a regression. QUANTIZATION_NOISE bounds how much wobble that noise can produce; the check
+      // still catches the real bug, which was luminance dropping by tens of percent, not a
+      // fraction of a percent.
+      const QUANTIZATION_NOISE = 0.004;
+      const luminances = INTENSITY_GRID.map((intensity) => relativeLuminance(parseRgb(visibleForeground(tint, intensity))));
+      for (let i = 1; i < luminances.length; i += 1) {
+        expect(luminances[i]).toBeGreaterThanOrEqual(luminances[i - 1]! - QUANTIZATION_NOISE);
+      }
+    });
+  }
+
+  it('is exact identity at intensity 255 for a tint whose own luminance already clears the floor', () => {
+    const output = parseRgb(visibleForeground(TORCH_TINT, 255));
+    expect(output).toEqual(TORCH_TINT);
+  });
+
+  it('stays close to the previous (unfloored) blend for warm tints at sub-max intensity', () => {
+    // The warm domain was just eyeballed in-browser per the Task 10 recipe -- the fix must not
+    // perceptibly shift it. Compare against the plain linear blend (the pre-fix formula) at a mid
+    // intensity: for a warm tint the blend already clears the floor unaided, so the fix should be a
+    // no-op here and the delta should be ~0, not just "small".
+    const intensity = 160;
+    const t = intensity / 255;
+    const floorRgb: readonly [number, number, number] = [100, 106, 130];
+    const oldBlend = floorRgb.map((f, index) => Math.round(f + t * (TORCH_TINT[index]! - f)));
+    const newOutput = parseRgb(visibleForeground(TORCH_TINT, intensity));
+    for (let i = 0; i < 3; i += 1) {
+      expect(Math.abs(newOutput[i]! - oldBlend[i]!)).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+function parseRgb(css: string): readonly [number, number, number] {
+  const match = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(css);
+  if (!match) throw new Error(`not an rgb(...) string: ${css}`);
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}

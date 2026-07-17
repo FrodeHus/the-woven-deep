@@ -162,6 +162,45 @@ describe('App boot flow', () => {
     expect(saved.runSeed).toEqual([11, 22, 33, 44]);
   });
 
+  it('clearing the guest session while ?quickstart=1 is still in the URL lands on title and stays there -- it must not resurrect a hidden GuestSession that re-persists storage (regression: quickstart re-boot guard)', async () => {
+    window.history.pushState({}, '', '/play?quickstart=1');
+    const user = userEvent.setup();
+    // A storage double that actually implements `remove` -- unlike this file's own `fakeStorage`
+    // helper, `clearGuestSession` depends on it (see `clear-guest-session.ts`); the plain
+    // no-`remove` double would silently no-op the wipe and mask the very bug this test targets.
+    function removableStorage(): SessionStorageLike & { peek(): string | null } {
+      const values = new Map<string, string>();
+      return {
+        get: (key: string) => values.get(key) ?? null,
+        set: (key: string, value: string) => { values.set(key, value); },
+        remove: (key: string) => { values.delete(key); },
+        peek: () => values.get(SAVE_KEY) ?? null,
+      };
+    }
+    const storage = removableStorage();
+    const localStorage = removableStorage();
+
+    render(<App fetcher={packFetcher()} storage={storage} localStorage={localStorage} />);
+    await screen.findByRole('grid', { name: /dungeon/i });
+
+    fireEvent.keyDown(window, { key: 'o' });
+    await screen.findByRole('dialog', { name: 'Settings' });
+    await user.type(screen.getByLabelText(/type "clear" to confirm/i), 'clear');
+    await user.click(screen.getByRole('button', { name: 'Clear guest session' }));
+
+    // A correct wipe lands on (and stays on) the title screen -- a hidden GuestSession
+    // re-constructed by the surviving `?quickstart=1` query would instead bounce straight back
+    // into play.
+    expect(await screen.findByRole('option', { name: /enter the deep/i })).toBeInTheDocument();
+    expect(screen.queryByRole('grid', { name: /dungeon/i })).not.toBeInTheDocument();
+
+    // The wiped keys must stay wiped -- a resurrected session's constructor persists sightings
+    // (and would persist a save/command-counter on any further dispatch) even with no player
+    // input at all.
+    expect(storage.peek()).toBeNull();
+    expect(storage.get('woven-deep.guest-codex')).toBeNull();
+  });
+
   it('shows the save-discarded notice from the session as a dismissible banner (via quickstart)', async () => {
     window.history.pushState({}, '', '/play?quickstart=1');
     const user = userEvent.setup();
