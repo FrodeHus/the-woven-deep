@@ -1,5 +1,6 @@
 import { useRef, useState, type CSSProperties, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { SessionSnapshot } from '../../session/guest-session.js';
+import { visibleForeground } from '../cell-color.js';
 
 /**
  * The current-milestone objective line -- static text, sourced from this one exported constant so
@@ -141,7 +142,7 @@ function MapPane({ floor, hero, actors, panelId, tabId }: Readonly<{
           const actor = actorsByCell.get(`${cell.x},${cell.y}`);
           const glyph = isHero ? '@' : (actor?.glyph ?? cell.fixture?.glyph ?? cell.glyph ?? '');
           const style: CellCustomProperties = { '--light': String(cell.intensity / 255) };
-          if (cell.tint) style['--fg'] = `rgb(${cell.tint[0]}, ${cell.tint[1]}, ${cell.tint[2]})`;
+          if (cell.tint) style['--fg'] = visibleForeground(cell.tint, cell.intensity);
 
           return (
             <span

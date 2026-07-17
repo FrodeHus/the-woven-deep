@@ -1,6 +1,7 @@
 import type { CSSProperties, JSX } from 'react';
 import type { GameplayProjection } from '@woven-deep/engine';
 import type { CameraOrigin, CameraViewport } from './camera.js';
+import { visibleForeground } from './cell-color.js';
 
 export interface GridRendererProps {
   readonly projection: GameplayProjection;
@@ -63,7 +64,7 @@ export function GridRenderer({ projection, camera, viewport }: GridRendererProps
       const item = itemsByCell.get(dataCell);
       const glyph = isHero ? '@' : (actor?.glyph ?? item?.glyph ?? cell.fixture?.glyph ?? cell.glyph ?? '');
       const style: CellCustomProperties = { '--light': String(cell.intensity / 255) };
-      if (cell.tint) style['--fg'] = `rgb(${cell.tint[0]}, ${cell.tint[1]}, ${cell.tint[2]})`;
+      if (cell.tint) style['--fg'] = visibleForeground(cell.tint, cell.intensity);
 
       slots.push(
         <span
