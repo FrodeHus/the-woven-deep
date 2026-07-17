@@ -237,6 +237,43 @@ describe('reduced-motion stylesheet contract', () => {
     expect(duration(fullAttackStreakMatch![1]!)).toBe(duration(originalAttackStreak![0]!));
     expect(duration(fullDeathBurstMatch![1]!)).toBe(duration(originalDeathBurst![0]!));
   });
+
+  it('never lets the screen-fade overlay block input, and declares its motion behavior in all four motion blocks', () => {
+    const fadeRuleMatch = /(?:^|\n)\.screen-fade\s*\{([^}]*)\}/.exec(css);
+    expect(fadeRuleMatch, '.screen-fade rule not found in stylesheet').toBeTruthy();
+    const fadeDecls = fadeRuleMatch![1]!;
+    expect(fadeDecls).toMatch(/pointer-events\s*:\s*none/);
+    expect(fadeDecls).toMatch(/position\s*:\s*fixed/);
+
+    const originalAnimationMatch = /animation\s*:\s*([^;]+);/.exec(fadeDecls);
+    expect(originalAnimationMatch, '.screen-fade has no animation declaration').toBeTruthy();
+
+    // Global @media (prefers-reduced-motion: reduce) block.
+    const globalReducedBlocks = extractReducedMotionBlocks(css);
+    const globalFadeOverride = globalReducedBlocks.find((block) => /\.screen-fade\s*\{[^}]*\}/.test(block));
+    expect(globalFadeOverride, 'expected a .screen-fade override in the global reduced-motion media block').toBeTruthy();
+
+    // Effects @media (prefers-reduced-motion: reduce) block (the one with .glow/.effect overrides).
+    const effectsReducedBlock = globalReducedBlocks.find((block) => /\.glow\s*\{[^}]*animation\s*:/.test(block));
+    expect(effectsReducedBlock, 'expected the effects reduced-motion media block').toBeTruthy();
+    expect(effectsReducedBlock).toMatch(/\.screen-fade\s*\{[^}]*animation\s*:\s*none\s*!important/);
+
+    // .motion-reduced class block.
+    const motionReducedBlocks = extractBlocksAfterMarker(css, '.motion-reduced {');
+    expect(motionReducedBlocks[0]).toMatch(/\.screen-fade\s*\{[^}]*animation\s*:\s*none\s*!important/);
+
+    // .motion-full class block -- restored duration must match the original declaration.
+    const motionFullBlocks = extractBlocksAfterMarker(css, '.motion-full {');
+    const fullFadeMatch = /\.screen-fade\s*\{([^}]*)\}/.exec(motionFullBlocks[0]!);
+    expect(fullFadeMatch, '.screen-fade rule not found inside .motion-full').toBeTruthy();
+    expect(fullFadeMatch![1]).toMatch(/!important/);
+    function duration(declBlock: string): string {
+      const match = /animation\s*:\s*[\w-]+\s+([\d.]+m?s)/.exec(declBlock);
+      expect(match, `no animation duration found in: ${declBlock}`).toBeTruthy();
+      return match![1]!;
+    }
+    expect(duration(fullFadeMatch![1]!)).toBe(duration(originalAnimationMatch![0]!));
+  });
 });
 
 /** Parses a `#rrggbb`/`#rgb` literal into an `[r, g, b]` triple (0..255 each). */

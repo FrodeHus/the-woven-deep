@@ -23,6 +23,7 @@ import { ConclusionScreen } from './ui/screens/ConclusionScreen.js';
 import { HallScreen } from './ui/screens/HallScreen.js';
 import { TitleScreen } from './ui/screens/TitleScreen.js';
 import { PlayScreen } from './ui/PlayScreen.js';
+import { effectiveReducedMotion, ScreenFade } from './ui/ScreenFade.js';
 import './styles.css';
 
 export interface AppProps {
@@ -293,19 +294,34 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
 
   const [overlay, setOverlay] = useState<OverlayId | null>(null);
 
+  /** Bumped exactly at the three screen-level transitions the design calls out for a fade-through-
+   * dark (title->play via Continue, chargen->play via Confirm, play->conclusion on death) --
+   * `ScreenFade` (below, inside `withRootStyling`) fades whenever this changes, since every branch
+   * of the screen switch (title/chargen/hall/conclusion/play) shares that one wrapper and never
+   * touches this token on its own. Every OTHER screen switch (title->chargen, hall in and out of
+   * either direction, conclusion->title/chargen for a new hero) stays the instant conditional
+   * return it always was, exactly per the brief. */
+  const [fadeToken, setFadeToken] = useState(0);
+  const bumpFadeToken = (): void => setFadeToken((token) => token + 1);
+
   /** `fontScale` as an inline `calc(1rem * scale)` on the app root, and `reducedMotion` as at most
    * one root class -- the three-way contract (see `styles.css`'s comment beside `.motion-full`):
    * "system" applies neither class (the `@media (prefers-reduced-motion: reduce)` query alone
    * decides), "on" applies `.motion-reduced` (forces animations off regardless of the OS setting),
    * "off" applies `.motion-full` (forces animations back on regardless of the OS setting -- the
-   * one case a media query alone cannot serve, since it never sees the in-app setting). */
+   * one case a media query alone cannot serve, since it never sees the in-app setting). The SAME
+   * three-way value, resolved to a plain boolean via `effectiveReducedMotion`, gates `ScreenFade`
+   * below -- reduced motion must render NO fade element at all, which only a JS-side decision can
+   * express (a CSS class alone cannot suppress an element's existence). */
   function withRootStyling(children: JSX.Element): JSX.Element {
     const motionClass = settings.reducedMotion === 'on' ? ' motion-reduced'
       : settings.reducedMotion === 'off' ? ' motion-full' : '';
     const themeClass = settings.theme === 'high-contrast' ? ' theme-high-contrast' : '';
     return (
       <div className={`guest-app-root${motionClass}${themeClass}`} style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}>
-        {children}
+        <ScreenFade transitionKey={fadeToken} reducedMotion={effectiveReducedMotion(settings.reducedMotion)}>
+          {children}
+        </ScreenFade>
       </div>
     );
   }
@@ -492,6 +508,7 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
             setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
             setSession(new GuestSession({ pack, storage }));
             setScreen({ screen: 'play' });
+            bumpFadeToken();
           }}
           onHall={() => setScreen({ screen: 'hall', returnTo: 'title' })}
           onOpenOverlay={openOverlay}
@@ -537,6 +554,7 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
           setPortraitGlyph(glyph);
           setSession(new GuestSession({ pack, storage, seed, hero, startFresh: true }));
           setScreen({ screen: 'play' });
+          bumpFadeToken();
         }}
       />,
     ));
@@ -609,6 +627,7 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
       onConcluded={(projection, logTail) => {
         setConclusion({ projection, logTail });
         setScreen({ screen: 'conclusion' });
+        bumpFadeToken();
       }}
       onFinalizeError={setFinalizeWarning}
     />,

@@ -22,6 +22,7 @@ import { OverlayScaffold } from './overlays/OverlayScaffold.js';
 import { OverlayErrorBoundary } from './overlays/OverlayErrorBoundary.js';
 import { HouseScreen } from './screens/HouseScreen.js';
 import { TradeScreen } from './screens/TradeScreen.js';
+import { effectiveReducedMotion, ScreenFade } from './ScreenFade.js';
 import { ThreatPopover, type ThreatPopoverActor } from './ThreatPopover.js';
 import { TownPanel } from './TownPanel.js';
 
@@ -300,110 +301,115 @@ export function PlayScreen({
   const logLines = tier === 'minimal' ? 3 : 6;
 
   return (
-    <div className="triptych" data-tier={tier} ref={triptychRef}>
-      <div className="status-slot">
-        <StatusBar snapshot={snapshot} />
-      </div>
-
-      <div className="hero-slot">
-        {tier === 'minimal' ? (
-          <details className="hero-drawer framed">
-            <summary>Hero</summary>
-            <HeroPanel snapshot={snapshot} />
-          </details>
-        ) : (
-          <HeroPanel snapshot={snapshot} />
-        )}
-      </div>
-
-      <div
-        className="map-pane"
-        ref={mapPaneRef}
-        onMouseOver={handleMouseOver}
-        onMouseLeave={handleMouseLeave}
-      >
-        {tier === 'minimal' && (
-          <div className="vitals-overlay">
-            <VitalsStrip snapshot={snapshot} />
-          </div>
-        )}
-        <div
-          className={`playfield${projection.floor.town ? ' playfield-town' : ''}`}
-          style={{ '--zoom': zoom } as CSSProperties}
-        >
-          <span ref={cellProbeRef} className="cell cell-probe" aria-hidden="true">0</span>
-          <span ref={cellProbeBaseRef} className="cell cell-probe-base" aria-hidden="true">0</span>
-          <GridRenderer projection={projection} camera={camera} viewport={viewport} />
-          <EffectsLayer
-            projection={projection} pack={pack} lastEvents={snapshot.lastEvents} camera={camera} viewport={viewport}
-          />
+    <ScreenFade
+      transitionKey={projection.floor.floorId}
+      reducedMotion={effectiveReducedMotion(settings.reducedMotion)}
+    >
+      <div className="triptych" data-tier={tier} ref={triptychRef}>
+        <div className="status-slot">
+          <StatusBar snapshot={snapshot} />
         </div>
-        {hover && (
-          <ThreatPopover
-            actor={hover.actor}
-            col={hover.actor.x - camera.x}
-            row={hover.actor.y - camera.y}
-            paneCols={viewport.width}
-            paneRows={viewport.height}
-            cellPx={cellSize}
+
+        <div className="hero-slot">
+          {tier === 'minimal' ? (
+            <details className="hero-drawer framed">
+              <summary>Hero</summary>
+              <HeroPanel snapshot={snapshot} />
+            </details>
+          ) : (
+            <HeroPanel snapshot={snapshot} />
+          )}
+        </div>
+
+        <div
+          className="map-pane"
+          ref={mapPaneRef}
+          onMouseOver={handleMouseOver}
+          onMouseLeave={handleMouseLeave}
+        >
+          {tier === 'minimal' && (
+            <div className="vitals-overlay">
+              <VitalsStrip snapshot={snapshot} />
+            </div>
+          )}
+          <div
+            className={`playfield${projection.floor.town ? ' playfield-town' : ''}`}
+            style={{ '--zoom': zoom } as CSSProperties}
+          >
+            <span ref={cellProbeRef} className="cell cell-probe" aria-hidden="true">0</span>
+            <span ref={cellProbeBaseRef} className="cell cell-probe-base" aria-hidden="true">0</span>
+            <GridRenderer projection={projection} camera={camera} viewport={viewport} />
+            <EffectsLayer
+              projection={projection} pack={pack} lastEvents={snapshot.lastEvents} camera={camera} viewport={viewport}
+            />
+          </div>
+          {hover && (
+            <ThreatPopover
+              actor={hover.actor}
+              col={hover.actor.x - camera.x}
+              row={hover.actor.y - camera.y}
+              paneCols={viewport.width}
+              paneRows={viewport.height}
+              cellPx={cellSize}
+            />
+          )}
+        </div>
+
+        <div className="threat-slot">
+          {tier === 'full' ? (
+            projection.floor.town ? <TownPanel snapshot={snapshot} keymap={keymap} /> : <ThreatPanel snapshot={snapshot} />
+          ) : (
+            <details className="threat-drawer framed">
+              <summary>{projection.floor.town ? 'Town' : 'Threats'}</summary>
+              {projection.floor.town ? <TownPanel snapshot={snapshot} keymap={keymap} /> : <ThreatPanel snapshot={snapshot} />}
+            </details>
+          )}
+        </div>
+
+        <div className="log-slot" style={{ '--log-lines': logLines } as CSSProperties}>
+          <LogPanel snapshot={snapshot} />
+        </div>
+
+        {snapshot.houseOpen && (
+          <HouseScreen
+            snapshot={snapshot}
+            onDispatch={(intent) => session.dispatch(intent)}
+            onClose={() => session.setHouseOpen(false)}
           />
         )}
-      </div>
-
-      <div className="threat-slot">
-        {tier === 'full' ? (
-          projection.floor.town ? <TownPanel snapshot={snapshot} keymap={keymap} /> : <ThreatPanel snapshot={snapshot} />
-        ) : (
-          <details className="threat-drawer framed">
-            <summary>{projection.floor.town ? 'Town' : 'Threats'}</summary>
-            {projection.floor.town ? <TownPanel snapshot={snapshot} keymap={keymap} /> : <ThreatPanel snapshot={snapshot} />}
-          </details>
+        {projection.trade && (
+          <TradeScreen
+            snapshot={snapshot}
+            onDispatch={(intent) => session.dispatch(intent)}
+            onClose={() => session.dispatch({ type: 'trade-close' })}
+          />
         )}
+        {snapshot.pendingDecision && <DecisionPrompt snapshot={snapshot} session={session} />}
+        {overlay && (() => {
+          const OverlayBody = OVERLAY_COMPONENTS[overlay];
+          return (
+            <OverlayScaffold
+              title={OVERLAY_REGISTRY[overlay].title}
+              onClose={onCloseOverlay}
+              testId={`overlay-${overlay}`}
+            >
+              <OverlayErrorBoundary>
+                <OverlayBody
+                  settings={settings}
+                  onChangeSettings={onChangeSettings}
+                  onClearGuestSession={onClearGuestSession}
+                  keymap={keymap}
+                  pack={pack}
+                  snapshot={snapshot}
+                  onDispatch={(intent) => session.dispatch(intent)}
+                  records={records}
+                  sightings={sightings}
+                />
+              </OverlayErrorBoundary>
+            </OverlayScaffold>
+          );
+        })()}
       </div>
-
-      <div className="log-slot" style={{ '--log-lines': logLines } as CSSProperties}>
-        <LogPanel snapshot={snapshot} />
-      </div>
-
-      {snapshot.houseOpen && (
-        <HouseScreen
-          snapshot={snapshot}
-          onDispatch={(intent) => session.dispatch(intent)}
-          onClose={() => session.setHouseOpen(false)}
-        />
-      )}
-      {projection.trade && (
-        <TradeScreen
-          snapshot={snapshot}
-          onDispatch={(intent) => session.dispatch(intent)}
-          onClose={() => session.dispatch({ type: 'trade-close' })}
-        />
-      )}
-      {snapshot.pendingDecision && <DecisionPrompt snapshot={snapshot} session={session} />}
-      {overlay && (() => {
-        const OverlayBody = OVERLAY_COMPONENTS[overlay];
-        return (
-          <OverlayScaffold
-            title={OVERLAY_REGISTRY[overlay].title}
-            onClose={onCloseOverlay}
-            testId={`overlay-${overlay}`}
-          >
-            <OverlayErrorBoundary>
-              <OverlayBody
-                settings={settings}
-                onChangeSettings={onChangeSettings}
-                onClearGuestSession={onClearGuestSession}
-                keymap={keymap}
-                pack={pack}
-                snapshot={snapshot}
-                onDispatch={(intent) => session.dispatch(intent)}
-                records={records}
-                sightings={sightings}
-              />
-            </OverlayErrorBoundary>
-          </OverlayScaffold>
-        );
-      })()}
-    </div>
+    </ScreenFade>
   );
 }

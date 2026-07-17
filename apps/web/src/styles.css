@@ -143,7 +143,38 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   background: color-mix(in srgb, var(--alert) 12%, transparent);
 }
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+  /* Belt-and-suspenders: `ScreenFade` (ScreenFade.tsx) already resolves the three-way motion
+     contract in JS and never MOUNTS this element under reduced motion, so this rule should never
+     actually need to fire in practice -- kept here anyway so every new animation this milestone
+     adds declares behavior in all four motion blocks (see the Global Constraints), and so a
+     consumer that somehow renders the element anyway (e.g. a future caller that forgets the JS
+     gate) still degrades safely to no animation, no paint. */
+  .screen-fade { display: none; }
+}
+
+/* Screen transitions (Task 4): a short fade-through-dark wrapping title->play, chargen->play, a
+   floor change within play (descend/ascend), and play->conclusion -- see `ScreenFade.tsx`. Purely
+   visual (`aria-hidden`, `pointer-events: none` here): the wrapped screen/floor already renders
+   the NEW state instantly underneath (App's screen switching stays the instant conditional-return
+   it always was) -- this overlay only cloaks the swap by fading itself in then back out over the
+   keyframes' duration. `position: fixed` so it covers the full viewport regardless of where
+   `ScreenFade` mounts in the tree (inside `PlayScreen`'s own subtree for the floor-change case, or
+   at `App`'s root for the screen-level cases). */
+.screen-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--ground);
+  pointer-events: none;
+  animation: screen-fade 440ms linear;
+}
+@keyframes screen-fade {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
 
 /* Playfield: the grid renders gameplay truth, the effects layer is a purely decorative overlay
    sharing its coordinate space via --cell-w/--cell-h set on the wrapper. `--zoom` is the single
@@ -347,6 +378,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
      beats this bare .glow override (0,1,0) and the torch flicker keeps animating. */
   .glow { animation: none !important; opacity: calc(var(--glow-intensity) * 0.7); }
   .effect { animation: none !important; display: none; }
+  .screen-fade { animation: none !important; display: none; }
 }
 
 /* Same overrides as the `@media (prefers-reduced-motion: reduce)` block above, applied instead by
@@ -362,6 +394,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 .motion-reduced {
   .glow { animation: none !important; opacity: calc(var(--glow-intensity) * 0.7); }
   .effect { animation: none !important; display: none; }
+  .screen-fade { animation: none !important; display: none; }
 }
 
 /* The three-way motion contract (`Settings.reducedMotion`, see `App.tsx`'s `withRootStyling`):
@@ -383,6 +416,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   .effect-hit-flash { animation: hit-flash 120ms ease-out !important; }
   .effect-attack-streak { animation: attack-streak 160ms ease-out !important; }
   .effect-death-burst { animation: death-burst 240ms ease-out !important; }
+  .screen-fade { display: block !important; animation: screen-fade 440ms linear !important; }
 }
 
 /* Tactical Triptych: hero / map / threat panels plus a status bar and log, arranged by a CSS
