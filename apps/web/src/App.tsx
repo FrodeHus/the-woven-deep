@@ -13,6 +13,7 @@ import {
   browserLocalStorage, browserSessionStorage, classifyStorageFailure, type SessionStorageLike,
 } from './session/storage.js';
 import { canOpenOverlay, OVERLAY_REGISTRY, type OverlayId } from './ui/overlays/registry.js';
+import { OVERLAY_COMPONENTS } from './ui/overlays/overlay-components.js';
 import { OverlayScaffold } from './ui/overlays/OverlayScaffold.js';
 import { OverlayErrorBoundary } from './ui/overlays/OverlayErrorBoundary.js';
 import { ChargenScreen } from './ui/screens/ChargenScreen.js';
@@ -31,27 +32,6 @@ export interface AppProps {
    * (`woven-deep.settings.v1`) -- a distinct browser storage area from the run/session state
    * above, so it gets its own override rather than reusing `storage`. */
   readonly localStorage?: SessionStorageLike;
-}
-
-/**
- * What to render inside a registry overlay's frame when opened from the TITLE screen (the two
- * global-scope entry points reachable there -- Codex/Settings/Help). Deliberately duplicates
- * `PlayScreen.tsx`'s own `overlayBody` rather than sharing one: "component lookup lives in
- * PlayScreen/App", per the guest-interface plan, precisely because each host will independently
- * grow real per-id components in later tasks (a title-opened Settings overlay and a play-opened
- * one render the same component, but the LOOKUP itself is duplicated infrastructure, not shared
- * state). All six ids are still placeholders in this task.
- */
-function overlayBody(overlay: OverlayId): JSX.Element {
-  switch (overlay) {
-    case 'inventory':
-    case 'character-sheet':
-    case 'map-journal':
-    case 'codex':
-    case 'settings':
-    case 'help':
-      return <p>Coming in a later task</p>;
-  }
 }
 
 /**
@@ -259,16 +239,17 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
 
   const [overlay, setOverlay] = useState<OverlayId | null>(null);
 
-  /** `fontScale` as an inline `calc(1rem * scale)` on the app root, and `reducedMotion === 'on'`
-   * as a `motion-reduced` root class (see `styles.css`'s duplicated `.motion-reduced` block).
-   * `reducedMotion === 'off'` deliberately applies NO class here, same as `'system'` -- see this
-   * task's report for why ("off" cannot honestly force animations back on against an OS-level
-   * `prefers-reduced-motion: reduce` without a second, equal-specificity override class, which is
-   * out of scope for this task; both `'system'` and `'off'` just defer to the media query). */
+  /** `fontScale` as an inline `calc(1rem * scale)` on the app root, and `reducedMotion` as at most
+   * one root class -- the three-way contract (see `styles.css`'s comment beside `.motion-full`):
+   * "system" applies neither class (the `@media (prefers-reduced-motion: reduce)` query alone
+   * decides), "on" applies `.motion-reduced` (forces animations off regardless of the OS setting),
+   * "off" applies `.motion-full` (forces animations back on regardless of the OS setting -- the
+   * one case a media query alone cannot serve, since it never sees the in-app setting). */
   function withRootStyling(children: JSX.Element): JSX.Element {
-    const className = settings.reducedMotion === 'on' ? 'guest-app-root motion-reduced' : 'guest-app-root';
+    const motionClass = settings.reducedMotion === 'on' ? ' motion-reduced'
+      : settings.reducedMotion === 'off' ? ' motion-full' : '';
     return (
-      <div className={className} style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}>
+      <div className={`guest-app-root${motionClass}`} style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}>
         {children}
       </div>
     );
@@ -333,9 +314,10 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
   function renderOverlayHost(): JSX.Element | null {
     if (!overlay) return null;
     const definition = OVERLAY_REGISTRY[overlay];
+    const OverlayBody = OVERLAY_COMPONENTS[overlay];
     return (
       <OverlayScaffold title={definition.title} onClose={closeOverlay} testId={`overlay-${overlay}`}>
-        <OverlayErrorBoundary>{overlayBody(overlay)}</OverlayErrorBoundary>
+        <OverlayErrorBoundary><OverlayBody /></OverlayErrorBoundary>
       </OverlayScaffold>
     );
   }

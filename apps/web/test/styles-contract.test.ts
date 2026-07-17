@@ -174,6 +174,68 @@ describe('reduced-motion stylesheet contract', () => {
     expect(effectRuleMatch, '.effect rule not found inside .motion-reduced').toBeTruthy();
     expect(effectRuleMatch![1]).toMatch(/animation\s*:\s*none\s*!important/);
   });
+
+  it('re-enables the glow/effect animations under an explicit .motion-full root class (set when "Reduce motion" is "off"), matching the ORIGINAL declared durations with !important -- the mirror-image of .motion-reduced', () => {
+    // The original (un-overridden) declarations, parsed straight out of the stylesheet -- never
+    // copied literals, so this test can't drift out of sync with the real animation values.
+    const glowRuleMatch = /(?:^|\n)\.glow\s*\{([^}]*)\}/.exec(css);
+    expect(glowRuleMatch, '.glow rule not found in stylesheet').toBeTruthy();
+    const originalGlowAnimation = /animation\s*:\s*([^;]+);/.exec(glowRuleMatch![1]!);
+    expect(originalGlowAnimation, '.glow has no animation declaration').toBeTruthy();
+
+    const torchGlowRuleMatch = /\.glow\[data-source\*="torch"\]\s*\{([^}]*)\}/.exec(css);
+    expect(torchGlowRuleMatch, '.glow[data-source*="torch"] rule not found in stylesheet').toBeTruthy();
+    const originalTorchAnimation = /animation\s*:\s*([^;]+);/.exec(torchGlowRuleMatch![1]!);
+    expect(originalTorchAnimation, '.glow[data-source*="torch"] has no animation declaration').toBeTruthy();
+
+    const hitFlashRuleMatch = /(?:^|\n)\.effect-hit-flash\s*\{([^}]*)\}/.exec(css);
+    const attackStreakRuleMatch = /(?:^|\n)\.effect-attack-streak\s*\{([^}]*)\}/.exec(css);
+    const deathBurstRuleMatch = /(?:^|\n)\.effect-death-burst\s*\{([^}]*)\}/.exec(css);
+    expect(hitFlashRuleMatch, '.effect-hit-flash rule not found').toBeTruthy();
+    expect(attackStreakRuleMatch, '.effect-attack-streak rule not found').toBeTruthy();
+    expect(deathBurstRuleMatch, '.effect-death-burst rule not found').toBeTruthy();
+    const originalHitFlash = /animation\s*:\s*([^;]+);/.exec(hitFlashRuleMatch![1]!);
+    const originalAttackStreak = /animation\s*:\s*([^;]+);/.exec(attackStreakRuleMatch![1]!);
+    const originalDeathBurst = /animation\s*:\s*([^;]+);/.exec(deathBurstRuleMatch![1]!);
+    expect(originalHitFlash, '.effect-hit-flash has no animation declaration').toBeTruthy();
+    expect(originalAttackStreak, '.effect-attack-streak has no animation declaration').toBeTruthy();
+    expect(originalDeathBurst, '.effect-death-burst has no animation declaration').toBeTruthy();
+
+    const blocks = extractBlocksAfterMarker(css, '.motion-full {');
+    expect(blocks.length, 'expected a top-level .motion-full { ... } block').toBeGreaterThan(0);
+    const block = blocks[0]!;
+
+    const fullGlowMatch = /(?:^|\n)\s*\.glow\s*\{([^}]*)\}/.exec(block);
+    expect(fullGlowMatch, '.glow rule not found inside .motion-full').toBeTruthy();
+    expect(fullGlowMatch![1]).toMatch(/animation\s*:/);
+    expect(fullGlowMatch![1]).toMatch(/!important/);
+
+    const fullTorchGlowMatch = /\.glow\[data-source\*="torch"\]\s*\{([^}]*)\}/.exec(block);
+    expect(fullTorchGlowMatch, '.glow[data-source*="torch"] rule not found inside .motion-full').toBeTruthy();
+    expect(fullTorchGlowMatch![1]).toMatch(/!important/);
+
+    const fullHitFlashMatch = /\.effect-hit-flash\s*\{([^}]*)\}/.exec(block);
+    const fullAttackStreakMatch = /\.effect-attack-streak\s*\{([^}]*)\}/.exec(block);
+    const fullDeathBurstMatch = /\.effect-death-burst\s*\{([^}]*)\}/.exec(block);
+    expect(fullHitFlashMatch, '.effect-hit-flash rule not found inside .motion-full').toBeTruthy();
+    expect(fullAttackStreakMatch, '.effect-attack-streak rule not found inside .motion-full').toBeTruthy();
+    expect(fullDeathBurstMatch, '.effect-death-burst rule not found inside .motion-full').toBeTruthy();
+
+    // Extract just the duration token (e.g. "2.6s"/"120ms") out of each `animation` shorthand and
+    // compare the ORIGINAL to the restored .motion-full value -- proves the restored declaration
+    // isn't just present, but actually matches the original timing.
+    function duration(declBlock: string): string {
+      const match = /animation\s*:\s*[\w-]+\s+([\d.]+m?s)/.exec(declBlock);
+      expect(match, `no animation duration found in: ${declBlock}`).toBeTruthy();
+      return match![1]!;
+    }
+
+    expect(duration(fullGlowMatch![1]!)).toBe(duration(originalGlowAnimation![0]!));
+    expect(duration(fullTorchGlowMatch![1]!)).toBe(duration(originalTorchAnimation![0]!));
+    expect(duration(fullHitFlashMatch![1]!)).toBe(duration(originalHitFlash![0]!));
+    expect(duration(fullAttackStreakMatch![1]!)).toBe(duration(originalAttackStreak![0]!));
+    expect(duration(fullDeathBurstMatch![1]!)).toBe(duration(originalDeathBurst![0]!));
+  });
 });
 
 describe('landing page reduced-motion stylesheet contract', () => {

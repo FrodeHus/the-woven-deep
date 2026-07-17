@@ -21,8 +21,8 @@ export interface OverlayDefinition {
 /**
  * React-free by design: this module is consumed by both the (React) component layer and, in a
  * later task, the framework-free help-overlay content builder. Component lookup for what to
- * actually RENDER for a given id lives in `PlayScreen`/`App` (see their `overlayBody` helpers),
- * keeping this registry a plain data table.
+ * actually RENDER for a given id lives in `overlay-components.tsx`'s `OVERLAY_COMPONENTS` (shared
+ * by both `PlayScreen` and `App`), keeping this registry itself a plain data table.
  */
 export const OVERLAY_REGISTRY: Readonly<Record<OverlayId, OverlayDefinition>> = {
   inventory: { id: 'inventory', title: 'Inventory', scope: 'play', action: 'inventory' },

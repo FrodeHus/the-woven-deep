@@ -208,20 +208,32 @@ describe('registry overlay infrastructure', () => {
       expect(root.style.fontSize).toBe('calc(1.3rem)');
     });
 
-    it('applies no motion-reduced class when reducedMotion is "system" (defers to the OS media query) or "off"', async () => {
-      for (const reducedMotion of ['system', 'off'] as const) {
-        const settings: Settings = { fontScale: 1, reducedMotion, bindings: {} };
-        const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
+    it('applies neither motion class when reducedMotion is "system" (defers to the OS media query)', async () => {
+      const settings: Settings = { fontScale: 1, reducedMotion: 'system', bindings: {} };
+      const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
 
-        const { container, unmount } = render(
-          <App fetcher={packFetcher()} storage={fakeStorage()} localStorage={localStorage} />,
-        );
-        await screen.findByRole('option', { name: /enter the deep/i });
+      const { container } = render(
+        <App fetcher={packFetcher()} storage={fakeStorage()} localStorage={localStorage} />,
+      );
+      await screen.findByRole('option', { name: /enter the deep/i });
 
-        const root = container.firstElementChild as HTMLElement;
-        expect(root.className).not.toMatch(/\bmotion-reduced\b/);
-        unmount();
-      }
+      const root = container.firstElementChild as HTMLElement;
+      expect(root.className).not.toMatch(/\bmotion-reduced\b/);
+      expect(root.className).not.toMatch(/\bmotion-full\b/);
+    });
+
+    it('applies the motion-full class when reducedMotion is "off", so a guest can force animations back on over an OS-level reduced-motion preference', async () => {
+      const settings: Settings = { fontScale: 1, reducedMotion: 'off', bindings: {} };
+      const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
+
+      const { container } = render(
+        <App fetcher={packFetcher()} storage={fakeStorage()} localStorage={localStorage} />,
+      );
+      await screen.findByRole('option', { name: /enter the deep/i });
+
+      const root = container.firstElementChild as HTMLElement;
+      expect(root.className).toMatch(/\bmotion-full\b/);
+      expect(root.className).not.toMatch(/\bmotion-reduced\b/);
     });
   });
 });

@@ -16,31 +16,13 @@ import {
 } from './layout.js';
 import { HeroPanel, LogPanel, StatusBar, ThreatPanel, VitalsStrip } from './panels.js';
 import { OVERLAY_REGISTRY, type OverlayId } from './overlays/registry.js';
+import { OVERLAY_COMPONENTS } from './overlays/overlay-components.js';
 import { OverlayScaffold } from './overlays/OverlayScaffold.js';
 import { OverlayErrorBoundary } from './overlays/OverlayErrorBoundary.js';
 import { HouseScreen } from './screens/HouseScreen.js';
 import { TradeScreen } from './screens/TradeScreen.js';
 import { ThreatPopover, type ThreatPopoverActor } from './ThreatPopover.js';
 import { TownPanel } from './TownPanel.js';
-
-/**
- * What to render inside a registry overlay's frame. All six ids are placeholders for now -- the
- * overlay infrastructure ships fully tested before any real overlay content exists (later
- * guest-interface tasks replace each branch with its actual component). Component lookup
- * deliberately lives here (and, for the two global-scope entry points reachable from the title
- * screen, in `App.tsx`) rather than in the React-free `registry.ts`.
- */
-function overlayBody(overlay: OverlayId): JSX.Element {
-  switch (overlay) {
-    case 'inventory':
-    case 'character-sheet':
-    case 'map-journal':
-    case 'codex':
-    case 'settings':
-    case 'help':
-      return <p>Coming in a later task</p>;
-  }
-}
 
 interface DecisionPromptProps {
   readonly snapshot: SessionSnapshot;
@@ -384,15 +366,18 @@ export function PlayScreen({
         />
       )}
       {snapshot.pendingDecision && <DecisionPrompt snapshot={snapshot} session={session} />}
-      {overlay && (
-        <OverlayScaffold
-          title={OVERLAY_REGISTRY[overlay].title}
-          onClose={onCloseOverlay}
-          testId={`overlay-${overlay}`}
-        >
-          <OverlayErrorBoundary>{overlayBody(overlay)}</OverlayErrorBoundary>
-        </OverlayScaffold>
-      )}
+      {overlay && (() => {
+        const OverlayBody = OVERLAY_COMPONENTS[overlay];
+        return (
+          <OverlayScaffold
+            title={OVERLAY_REGISTRY[overlay].title}
+            onClose={onCloseOverlay}
+            testId={`overlay-${overlay}`}
+          >
+            <OverlayErrorBoundary><OverlayBody /></OverlayErrorBoundary>
+          </OverlayScaffold>
+        );
+      })()}
     </div>
   );
 }

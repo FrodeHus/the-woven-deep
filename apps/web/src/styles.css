@@ -201,6 +201,27 @@ h1 { color: #e8c879; font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; line
   .effect { animation: none !important; display: none; }
 }
 
+/* The three-way motion contract (`Settings.reducedMotion`, see `App.tsx`'s `withRootStyling`):
+ *   - "system" -> neither class is applied; the `@media (prefers-reduced-motion: reduce)` block
+ *     above alone decides, purely from the OS-level preference.
+ *   - "on"     -> `.motion-reduced` (above) forces animations OFF, regardless of the OS setting.
+ *   - "off"    -> `.motion-full` (below) forces animations back ON, regardless of the OS setting.
+ * "off" is the one case the media query alone cannot serve: a guest whose OS forces reduced
+ * motion, but who explicitly wants animations, needs an equal-specificity, `!important` override
+ * of the SAME declarations the media block suppresses -- otherwise "off" is a silent no-op on
+ * such a system. Every declaration below is the ORIGINAL, un-overridden value repeated exactly
+ * (see `styles-contract.test.ts`, which parses both sides out of this file and compares them,
+ * rather than trusting a copied literal here to stay in sync).
+ */
+.motion-full {
+  .glow { animation: glow-drift 2.6s ease-in-out infinite alternate !important; }
+  .glow[data-source*="torch"] { animation: glow-gutter 2.2s ease-in-out infinite !important; }
+  .effect { display: block !important; }
+  .effect-hit-flash { animation: hit-flash 120ms ease-out !important; }
+  .effect-attack-streak { animation: attack-streak 160ms ease-out !important; }
+  .effect-death-burst { animation: death-burst 240ms ease-out !important; }
+}
+
 /* Tactical Triptych: hero / map / threat panels plus a status bar and log, arranged by a CSS
    grid whose column tracks respond to `data-tier` (full/compact/minimal, from ui/layout.ts).
    Collapsed panels move into native <details> drawers rather than unmounting, so their content
