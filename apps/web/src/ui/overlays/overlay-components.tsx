@@ -6,6 +6,7 @@ import type { ResolvedKeymap, Settings } from '../../session/settings.js';
 import { SettingsOverlay } from './SettingsOverlay.js';
 import { HelpOverlay } from './HelpOverlay.js';
 import { InventoryOverlay } from './InventoryOverlay.js';
+import { CharacterSheetOverlay } from './CharacterSheetOverlay.js';
 import type { OverlayId } from './registry.js';
 
 /**
@@ -93,12 +94,26 @@ function InventoryOverlayBody(props: OverlayBodyProps): JSX.Element {
 }
 
 /**
+ * Adapts the widened `OverlayBodyProps` bag down to `CharacterSheetOverlay`'s own (fully required)
+ * `CharacterSheetOverlayProps`. Same non-null-assertion reasoning as `InventoryOverlayBody` --
+ * `PlayScreen` always passes `snapshot` on every render regardless of which overlay is open; unlike
+ * inventory, this overlay never dispatches anything, so `onDispatch` isn't threaded through.
+ */
+function CharacterSheetOverlayBody(props: OverlayBodyProps): JSX.Element {
+  const { snapshot } = props;
+  if (!snapshot) {
+    return <p>Your character sheet is unavailable right now.</p>;
+  }
+  return <CharacterSheetOverlay snapshot={snapshot} />;
+}
+
+/**
  * The single shared lookup from `OverlayId` to the component that renders its body -- previously
- * duplicated as an identical `overlayBody` switch in both `App.tsx` and `PlayScreen.tsx`. Three ids
- * (`character-sheet`, `map-journal`, `codex`) are still the placeholder component; `settings`
- * (Task 3), `help` (Task 4), and `inventory` (Task 5, absorbing the pre-existing `BackpackMenu`)
- * are real. Later guest-interface tasks replace the remaining entries here with real components,
- * and both hosts pick up each change automatically.
+ * duplicated as an identical `overlayBody` switch in both `App.tsx` and `PlayScreen.tsx`. Two ids
+ * (`map-journal`, `codex`) are still the placeholder component; `settings` (Task 3), `help`
+ * (Task 4), `inventory` (Task 5, absorbing the pre-existing `BackpackMenu`), and `character-sheet`
+ * (Task 6) are real. Later guest-interface tasks replace the remaining entries here with real
+ * components, and both hosts pick up each change automatically.
  *
  * Deliberately its own module (not folded into `registry.ts`): `registry.ts` stays React-free (it
  * is also consumed by a framework-free help-overlay content builder in a later task), while this
@@ -106,7 +121,7 @@ function InventoryOverlayBody(props: OverlayBodyProps): JSX.Element {
  */
 export const OVERLAY_COMPONENTS: Readonly<Record<OverlayId, ComponentType<OverlayBodyProps>>> = {
   inventory: InventoryOverlayBody,
-  'character-sheet': ComingSoon,
+  'character-sheet': CharacterSheetOverlayBody,
   'map-journal': ComingSoon,
   codex: ComingSoon,
   settings: SettingsOverlayBody,

@@ -38,9 +38,9 @@ function fakeStorage(initial?: Readonly<Record<string, string>>): SessionStorage
 
 /** Global overlay-open keys routed by the resolved default keymap. `i` (inventory) is excluded
  * from this table only because it's no longer a placeholder body once absorbed (Task 5) -- the
- * loop below asserts every OTHER id still shows "Coming in a later task", which inventory (a real
- * body, see `inventory-overlay.test.tsx`) never would; inventory's own routing/rendering is
- * covered directly by `key-router.test.ts` and `inventory-overlay.test.tsx`. */
+ * loop below asserts every OTHER id's placeholder status (real bodies must NOT show "Coming in a
+ * later task", remaining placeholders must); inventory's own routing/rendering is covered directly
+ * by `key-router.test.ts` and `inventory-overlay.test.tsx`. */
 const OVERLAY_KEYS: Readonly<Record<'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help', Readonly<{ key: string; shift: boolean }>>> = {
   'character-sheet': { key: 'c', shift: false },
   'map-journal': { key: 'm', shift: false },
@@ -68,10 +68,10 @@ describe('registry overlay infrastructure', () => {
       pressKey(chord);
       const dialog = await screen.findByRole('dialog', { name: title });
       expect(dialog).toHaveAttribute('data-testid', `overlay-${id}`);
-      // `settings` and `help` are real content as of their respective overlays (see
-      // settings-overlay.test.tsx and help-overlay.test.tsx for their own coverage); the remaining
-      // three ids are still the placeholder body.
-      if (id === 'settings' || id === 'help') {
+      // `settings`, `help`, and `character-sheet` are real content as of their respective overlays
+      // (see settings-overlay.test.tsx, help-overlay.test.tsx, and character-sheet-overlay.test.tsx
+      // for their own coverage); the remaining two ids are still the placeholder body.
+      if (id === 'settings' || id === 'help' || id === 'character-sheet') {
         expect(dialog).not.toHaveTextContent('Coming in a later task');
       } else {
         expect(dialog).toHaveTextContent('Coming in a later task');
