@@ -10,7 +10,7 @@ import { computeCamera, type CameraOrigin } from './camera.js';
 import { EffectsLayer } from './EffectsLayer.js';
 import { GridRenderer } from './GridRenderer.js';
 import { createKeyDispatcher, type OverlayActionId } from './KeyRouter.js';
-import { DEFAULT_SETTINGS, resolveKeymap, type ResolvedKeymap } from '../session/settings.js';
+import { DEFAULT_SETTINGS, resolveKeymap, type ResolvedKeymap, type Settings } from '../session/settings.js';
 import {
   layoutTier, viewportForPane, zoomForFloor, type LayoutTier, type ZoomFactor,
 } from './layout.js';
@@ -80,6 +80,14 @@ export interface PlayScreenProps {
    * Defaults to the default bindings so existing callers (which never rebind anything) are
    * unaffected. */
   readonly keymap?: ResolvedKeymap;
+  /** Forwarded straight through to the settings overlay body (`SettingsOverlayBody` in
+   * `overlay-components.tsx`) when it's the one open -- `App` owns the actual settings state and
+   * persistence; `PlayScreen` just plumbs these past the overlay host, exactly like `keymap`
+   * above. Defaults keep every pre-existing caller/test (which never opens the settings overlay)
+   * compiling unchanged. */
+  readonly settings?: Settings;
+  readonly onChangeSettings?: (next: Settings) => void;
+  readonly onClearGuestSession?: () => void;
 }
 
 interface PositionedActor extends ThreatPopoverActor { readonly x: number; readonly y: number }
@@ -110,6 +118,7 @@ export function PlayScreen({
   session, pack, tier: tierOverride,
   overlay = null, onOpenOverlay = () => {}, onCloseOverlay = () => {},
   keymap = resolveKeymap(DEFAULT_SETTINGS.bindings),
+  settings = DEFAULT_SETTINGS, onChangeSettings = () => {}, onClearGuestSession = () => {},
 }: PlayScreenProps): JSX.Element {
   const snapshot = useGuestSession(session);
   const { projection } = snapshot;
@@ -374,7 +383,14 @@ export function PlayScreen({
             onClose={onCloseOverlay}
             testId={`overlay-${overlay}`}
           >
-            <OverlayErrorBoundary><OverlayBody /></OverlayErrorBoundary>
+            <OverlayErrorBoundary>
+              <OverlayBody
+                settings={settings}
+                onChangeSettings={onChangeSettings}
+                onClearGuestSession={onClearGuestSession}
+                keymap={keymap}
+              />
+            </OverlayErrorBoundary>
           </OverlayScaffold>
         );
       })()}

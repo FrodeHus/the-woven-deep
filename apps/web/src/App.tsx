@@ -7,10 +7,11 @@ import { loadContentPack } from './api.js';
 import type { LogLine } from './session/event-log.js';
 import { GuestSession, type SessionNotice } from './session/guest-session.js';
 import { createSessionRunRecordRepository, SessionHallCorruptError } from './session/run-records-storage.js';
-import { loadSettings, resolveKeymap } from './session/settings.js';
+import { clearGuestSession } from './session/clear-guest-session.js';
+import { DEFAULT_SETTINGS, loadSettings, resolveKeymap, saveSettings, type Settings } from './session/settings.js';
 import { useGuestSession } from './session/store.js';
 import {
-  browserLocalStorage, browserSessionStorage, classifyStorageFailure, type SessionStorageLike,
+  browserLocalStorage, browserSessionStorage, classifyStorageFailure, PORTRAIT_KEY, type SessionStorageLike,
 } from './session/storage.js';
 import { canOpenOverlay, OVERLAY_REGISTRY, type OverlayId } from './ui/overlays/registry.js';
 import { OVERLAY_COMPONENTS } from './ui/overlays/overlay-components.js';
@@ -46,9 +47,11 @@ export type ScreenState =
   | { readonly screen: 'conclusion' }
   | { readonly screen: 'hall'; readonly returnTo: 'title' | 'conclusion' };
 
-/** Where the confirmed portrait glyph is persisted: client-only cosmetic side-state, never engine
- * data, saved at chargen confirm and read back on Continue. */
-export const PORTRAIT_KEY = 'woven-deep.guest-portrait';
+/** Re-exported from `session/storage.js`, which now owns this constant so the framework-free
+ * `clear-guest-session.ts` module can list it as a wipe target without importing this (React)
+ * entry point -- kept as an `App` export too since it predates that move and one pre-existing test
+ * still imports it from here. */
+export { PORTRAIT_KEY };
 
 /**
  * Test-only seed override: `?seed=11.22.33.44` (four dot-separated `Uint32` words) pins the
@@ -131,6 +134,12 @@ interface GameRootProps {
   readonly onOpenOverlay: (overlay: OverlayId) => void;
   readonly onCloseOverlay: () => void;
   readonly keymap: ReturnType<typeof resolveKeymap>;
+  /** Same "just plumbing" note as `overlay`/`keymap` above -- `App` owns the settings state and its
+   * persistence/clear-guest-session handlers; `GameRoot` forwards them to `PlayScreen` so the
+   * settings overlay body works identically whether opened from play or from the title screen. */
+  readonly settings: Settings;
+  readonly onChangeSettings: (next: Settings) => void;
+  readonly onClearGuestSession: () => void;
 }
 
 /** Everything that needs a live `GuestSession` snapshot: the notice banners and the play screen
@@ -148,6 +157,7 @@ interface GameRootProps {
 function GameRoot({
   session, pack, repository, portraitGlyph, onConcluded, onFinalizeError,
   overlay, onOpenOverlay, onCloseOverlay, keymap,
+  settings, onChangeSettings, onClearGuestSession,
 }: GameRootProps): JSX.Element {
   const snapshot = useGuestSession(session);
   const [dismissed, setDismissed] = useState(false);
@@ -207,6 +217,9 @@ function GameRoot({
         onOpenOverlay={onOpenOverlay}
         onCloseOverlay={onCloseOverlay}
         keymap={keymap}
+        settings={settings}
+        onChangeSettings={onChangeSettings}
+        onClearGuestSession={onClearGuestSession}
       />
     </div>
   );
@@ -231,11 +244,41 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
     () => localStorageOverride ?? browserLocalStorage(),
     [localStorageOverride],
   );
-  // Settings are read once at boot -- Task 3 wires the settings overlay's mutation callbacks
-  // (which will re-run `loadSettings`/call `saveSettings` and update this state); this task only
-  // needs the resolved keymap and the font-scale/motion values to apply at the root.
-  const [settings] = useState(() => loadSettings(localStorageInstance).settings);
+  // Settings are read once at boot; from here on `setSettings` is the single source of truth --
+  // every mutation (font scale, motion, a rebind, a reset) flows through `handleSettingsChange`
+  // below, which persists via `saveSettings` before applying the change in-memory.
+  const [settings, setSettings] = useState(() => loadSettings(localStorageInstance).settings);
   const keymap = useMemo(() => resolveKeymap(settings.bindings), [settings.bindings]);
+  const [settingsWriteWarning, setSettingsWriteWarning] = useState<string>();
+
+  /**
+   * The settings overlay's `onChange`. Persists first (`saveSettings` re-validates
+   * `next.bindings` for conflicts as the write-time backstop the settings overlay's own
+   * `bindingConflict` pre-check already guards against in practice), then applies the change
+   * in-memory regardless of whether the write itself succeeded -- mirroring the "a failed
+   * settings write warns and continues" rule: a storage failure (quota/unavailable) still lets
+   * the guest keep playing with the new setting for this visit, surfaced as a persistent warning
+   * rather than silently discarded or crashing. The one write `saveSettings` refuses outright (a
+   * binding conflict with no `reason`) should be unreachable here -- the overlay's own
+   * `bindingConflict` check refuses to even call `onChange` with a colliding chord -- so that
+   * branch is treated as a no-op rather than a user-facing failure.
+   */
+  function handleSettingsChange(next: Settings): void {
+    const result = saveSettings(localStorageInstance, next);
+    if (!result.ok && result.reason === undefined) return;
+    setSettings(next);
+    setSettingsWriteWarning(result.ok ? undefined : (
+      result.reason === 'full'
+        ? 'Your browser storage is full, so settings changes will not be saved.'
+        : 'Saving settings is unavailable in this browser -- changes apply for this visit only.'
+    ));
+  }
+
+  // Bumped by `handleClearGuestSession` so the Hall-of-Records `repository` memo below (keyed on
+  // this alongside `storage`) is forced to reconstruct AFTER the wipe -- otherwise it would keep
+  // serving the in-memory records it already loaded at its last construction, even though the
+  // underlying storage key is now gone.
+  const [storageEpoch, setStorageEpoch] = useState(0);
 
   const [overlay, setOverlay] = useState<OverlayId | null>(null);
 
@@ -278,6 +321,9 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
   // at construction; the module itself clears the storage key back to a fresh, empty Hall before
   // throwing, so retrying the SAME construction immediately below always succeeds. The active run
   // (an entirely separate storage key) is untouched either way — only a notice is surfaced.
+  // `storageEpoch` forces this to reconstruct after `handleClearGuestSession` wipes `RECORDS_KEY`
+  // out from under it -- `storage` itself never changes identity, so without this second
+  // dependency the memo would keep serving the records it already loaded.
   const [repository, hallNotice] = useMemo((): readonly [RunRecordRepository, string | null] => {
     try {
       return [createSessionRunRecordRepository(storage), null] as const;
@@ -287,7 +333,9 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
       }
       throw thrown;
     }
-  }, [storage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `storageEpoch` is a deliberate
+    // reconstruction trigger, not a value read inside the memo.
+  }, [storage, storageEpoch]);
 
   const [screen, setScreen] = useState<ScreenState>(
     () => (isQuickstart(window.location.search) ? { screen: 'play' } : { screen: 'title' }),
@@ -311,22 +359,52 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
     setOverlay(id);
   }
 
+  /**
+   * The settings overlay's "clear guest session": wipes every guest-session storage key
+   * (`clearGuestSession` -- run save, command counter, Hall of Records, portrait glyph, settings),
+   * resets every piece of in-memory state those keys backed (so a stale run/portrait/settings
+   * value can't survive the wipe only to be re-persisted on the next natural save), closes
+   * whatever overlay is open, bumps `storageEpoch` so the Hall repository reloads as empty, and
+   * lands on the title screen.
+   */
+  function handleClearGuestSession(): void {
+    clearGuestSession(storage, localStorageInstance);
+    setSettings(DEFAULT_SETTINGS);
+    setSettingsWriteWarning(undefined);
+    setSession(undefined);
+    setConclusion(undefined);
+    setPortraitGlyph(undefined);
+    setChargenError(undefined);
+    setFinalizeWarning(undefined);
+    closeOverlay();
+    setStorageEpoch((epoch) => epoch + 1);
+    setScreen({ screen: 'title' });
+  }
+
   function renderOverlayHost(): JSX.Element | null {
     if (!overlay) return null;
     const definition = OVERLAY_REGISTRY[overlay];
     const OverlayBody = OVERLAY_COMPONENTS[overlay];
     return (
       <OverlayScaffold title={definition.title} onClose={closeOverlay} testId={`overlay-${overlay}`}>
-        <OverlayErrorBoundary><OverlayBody /></OverlayErrorBoundary>
+        <OverlayErrorBoundary>
+          <OverlayBody
+            settings={settings}
+            onChangeSettings={handleSettingsChange}
+            onClearGuestSession={handleClearGuestSession}
+            keymap={keymap}
+          />
+        </OverlayErrorBoundary>
       </OverlayScaffold>
     );
   }
 
   /** Wraps every post-boot screen with any persistent, non-dismissible warnings pending —
-   * Hall-corruption-on-boot and finalize-write failures alike. The active run survives regardless
-   * of either: only the Hall write (or, on boot, the Hall itself) was affected. */
+   * Hall-corruption-on-boot, finalize-write, and settings-write failures alike. The active run
+   * survives regardless of any of these: only the affected write (or, on boot, the Hall itself)
+   * was affected. */
   function withHallNotice(children: JSX.Element): JSX.Element {
-    if (!hallNotice && !finalizeWarning) return children;
+    if (!hallNotice && !finalizeWarning && !settingsWriteWarning) return children;
     return (
       <>
         {hallNotice && (
@@ -337,6 +415,11 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
         {finalizeWarning && (
           <div role="alert" aria-label="Storage warning" className="storage-warning-banner" data-kind="finalize-failed">
             <p>{finalizeWarning}</p>
+          </div>
+        )}
+        {settingsWriteWarning && (
+          <div role="alert" aria-label="Storage warning" className="storage-warning-banner" data-kind="settings-write-failed">
+            <p>{settingsWriteWarning}</p>
           </div>
         )}
         {children}
@@ -498,6 +581,9 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
       onOpenOverlay={openOverlay}
       onCloseOverlay={closeOverlay}
       keymap={keymap}
+      settings={settings}
+      onChangeSettings={handleSettingsChange}
+      onClearGuestSession={handleClearGuestSession}
       onConcluded={(projection, logTail) => {
         setConclusion({ projection, logTail });
         setScreen({ screen: 'conclusion' });

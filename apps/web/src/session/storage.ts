@@ -8,9 +8,23 @@
 export interface SessionStorageLike {
   get(key: string): string | null;
   set(key: string, value: string): void;
+  /**
+   * Erases a key outright (distinct from `set(key, '')`, which would leave `get` returning `''`
+   * rather than `null`). Optional: every consumer before "clear guest session" only ever needed
+   * `get`/`set`, so the many existing in-memory test doubles across this suite are not required to
+   * implement it -- both real browser-backed implementations below do, and that (plus this
+   * module's own tests) is what "clear guest session" actually depends on.
+   */
+  remove?(key: string): void;
 }
 
 export const SAVE_KEY = 'woven-deep.guest-run';
+
+/** Where the confirmed portrait glyph is persisted: client-only cosmetic side-state, never engine
+ * data, saved at chargen confirm and read back on Continue. Lives here (not `App.tsx`, which
+ * re-exports it for its pre-existing consumers) so the framework-free `clear-guest-session.ts`
+ * module can list it as a wipe target without importing the React entry point. */
+export const PORTRAIT_KEY = 'woven-deep.guest-portrait';
 
 /**
  * Persists `GuestSession`'s monotonic command-id counter, kept separate from the run save so it
@@ -54,6 +68,14 @@ export function browserSessionStorage(): SessionStorageLike {
     set(key: string, value: string): void {
       window.sessionStorage.setItem(key, value);
     },
+    remove(key: string): void {
+      try {
+        window.sessionStorage.removeItem(key);
+      } catch {
+        // Best-effort, same fail-soft posture as `get` -- a wipe that can't reach storage (private
+        // browsing, disabled storage) leaves nothing to clear anyway.
+      }
+    },
   };
 }
 
@@ -73,6 +95,13 @@ export function browserLocalStorage(): SessionStorageLike {
     },
     set(key: string, value: string): void {
       window.localStorage.setItem(key, value);
+    },
+    remove(key: string): void {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {
+        // Best-effort, same fail-soft posture as `get`/`browserSessionStorage.remove` above.
+      }
     },
   };
 }

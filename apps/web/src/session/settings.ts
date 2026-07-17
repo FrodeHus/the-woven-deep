@@ -1,4 +1,4 @@
-import type { SessionStorageLike } from './storage.js';
+import type { SessionStorageLike, StorageFailure } from './storage.js';
 import { classifyStorageFailure } from './storage.js';
 
 /**
@@ -212,18 +212,30 @@ function hasBindingConflict(bindings: Settings['bindings']): boolean {
 }
 
 /**
+ * `saveSettings`'s result: `{ ok: true }` on a clean write. On failure, `reason` distinguishes
+ * *why* -- present (a `StorageFailure`) when `storage.set` itself threw (quota/unavailable, per the
+ * 5A pattern), absent when the write never happened because `settings.bindings` was conflict-free
+ * -- letting a caller word a specific notice for the storage case while treating the conflict case
+ * (which the settings UI itself pre-checks with `bindingConflict`, so a caller should never see the
+ * `saveSettings` guard actually fire) as the silent backstop it's meant to be.
+ *
+ * (Widened forward from Task 1's literal `{ ok: boolean }` brief shape -- flagged there as a gap
+ * for whichever task first needed to distinguish the failure reason; Task 3's settings-overlay
+ * write-failure notice is that caller.)
+ */
+export type SaveSettingsResult = Readonly<{ ok: true }> | Readonly<{ ok: false; reason?: StorageFailure }>;
+
+/**
  * Persists `settings` to `storage` as JSON -- but only if `settings.bindings` is conflict-free.
  * This is the first line of defense promised by `loadSettings`'s doc comment: every override is
  * checked with `bindingConflict` against the resolved map of the other overrides plus defaults,
- * and if any collision exists, nothing is written and `{ ok: false }` is returned. (The brief for
- * this shape keeps `{ ok: boolean }` rather than a discriminated result carrying the conflicting
- * `ActionId`s -- surfacing *which* action(s) conflict is Task 3's settings-UI concern.)
+ * and if any collision exists, nothing is written and `{ ok: false }` (no `reason`) is returned.
  *
  * Beyond that, `storage.set` can throw (quota exceeded, storage disabled/unavailable); that
- * failure is classified via `classifyStorageFailure` so a future caller can surface a specific
- * notice, and `{ ok: false }` is returned rather than letting the error propagate.
+ * failure is classified via `classifyStorageFailure` and returned as `{ ok: false, reason }` rather
+ * than letting the error propagate.
  */
-export function saveSettings(storage: SessionStorageLike, settings: Settings): Readonly<{ ok: boolean }> {
+export function saveSettings(storage: SessionStorageLike, settings: Settings): SaveSettingsResult {
   if (hasBindingConflict(settings.bindings)) {
     return { ok: false };
   }
@@ -231,7 +243,6 @@ export function saveSettings(storage: SessionStorageLike, settings: Settings): R
     storage.set(SETTINGS_KEY, JSON.stringify(settings));
     return { ok: true };
   } catch (error) {
-    classifyStorageFailure(error);
-    return { ok: false };
+    return { ok: false, reason: classifyStorageFailure(error) };
   }
 }

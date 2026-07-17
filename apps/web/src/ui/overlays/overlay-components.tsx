@@ -1,26 +1,58 @@
 import type { ComponentType, JSX } from 'react';
+import type { ResolvedKeymap, Settings } from '../../session/settings.js';
+import { SettingsOverlay } from './SettingsOverlay.js';
 import type { OverlayId } from './registry.js';
 
 /**
  * Props passed to whatever component `OVERLAY_COMPONENTS` maps an `OverlayId` to. Both hosts
- * (`App.tsx`'s title-screen entry points and `PlayScreen.tsx`'s in-play entry points) currently
- * pass nothing -- every overlay body is still the same placeholder, with no per-id data or
- * callbacks threaded through. Kept as an honest empty object rather than a wider, speculative shape
- * so later guest-interface tasks (which give each overlay real content/callbacks) widen this type
- * exactly when they need to, instead of carrying unused fields now.
+ * (`App.tsx`'s title-screen entry points and `PlayScreen.tsx`'s in-play entry points) pass the same
+ * bag of fields regardless of which overlay is actually open -- each field is optional so a
+ * placeholder body (still `ComingSoon` for four of the six ids) can ignore all of them, and a real
+ * body (like `SettingsOverlay`, wired below) picks out only what it needs. Later guest-interface
+ * tasks widen this further (e.g. a `snapshot`/`pack` for the codex) exactly when a new overlay
+ * needs it, rather than carrying unused fields for everyone from the start.
  */
-export type OverlayBodyProps = Record<string, never>;
+export interface OverlayBodyProps {
+  readonly settings?: Settings;
+  readonly onChangeSettings?: (next: Settings) => void;
+  readonly onClearGuestSession?: () => void;
+  readonly keymap?: ResolvedKeymap;
+}
 
 function ComingSoon(): JSX.Element {
   return <p>Coming in a later task</p>;
 }
 
 /**
+ * Adapts the widened `OverlayBodyProps` bag down to `SettingsOverlay`'s own (fully required)
+ * `SettingsOverlayProps`. The non-null assertions are safe in practice, not just convenient: both
+ * hosts always pass `settings`/`onChangeSettings`/`onClearGuestSession`/`keymap` on every render
+ * (see `App.tsx`'s `renderOverlayHost`/`GameRoot` and `PlayScreen.tsx`'s overlay-render block) --
+ * they don't vary by which `OverlayId` is open. The fallback paragraph only exists so a future bug
+ * in that wiring fails as a visible, dismissible overlay body (caught by `OverlayErrorBoundary`'s
+ * sibling, the play surface, staying up) rather than a thrown exception.
+ */
+function SettingsOverlayBody(props: OverlayBodyProps): JSX.Element {
+  const { settings, onChangeSettings, onClearGuestSession, keymap } = props;
+  if (!settings || !onChangeSettings || !onClearGuestSession || !keymap) {
+    return <p>Settings are unavailable right now.</p>;
+  }
+  return (
+    <SettingsOverlay
+      settings={settings}
+      onChange={onChangeSettings}
+      onClearGuestSession={onClearGuestSession}
+      keymap={keymap}
+    />
+  );
+}
+
+/**
  * The single shared lookup from `OverlayId` to the component that renders its body -- previously
- * duplicated as an identical `overlayBody` switch in both `App.tsx` and `PlayScreen.tsx`. All six
- * ids are still the same placeholder component for now (the overlay infrastructure ships fully
- * tested before any real overlay content exists); later guest-interface tasks replace individual
- * entries here with real components, and both hosts pick up the change automatically.
+ * duplicated as an identical `overlayBody` switch in both `App.tsx` and `PlayScreen.tsx`. Five ids
+ * are still the placeholder component; `settings` is the first real one (Task 3). Later
+ * guest-interface tasks replace the remaining entries here with real components, and both hosts
+ * pick up each change automatically.
  *
  * Deliberately its own module (not folded into `registry.ts`): `registry.ts` stays React-free (it
  * is also consumed by a framework-free help-overlay content builder in a later task), while this
@@ -31,6 +63,6 @@ export const OVERLAY_COMPONENTS: Readonly<Record<OverlayId, ComponentType<Overla
   'character-sheet': ComingSoon,
   'map-journal': ComingSoon,
   codex: ComingSoon,
-  settings: ComingSoon,
+  settings: SettingsOverlayBody,
   help: ComingSoon,
 };

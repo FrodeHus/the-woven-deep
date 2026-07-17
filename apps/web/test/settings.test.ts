@@ -104,9 +104,9 @@ describe('loadSettings / saveSettings round-trip', () => {
     expect(loadSettings(storage)).toEqual({ settings, corrupted: false, droppedOverrides: [] });
   });
 
-  it('saveSettings reports ok:false (without throwing) when the storage write fails', () => {
+  it('saveSettings reports ok:false with the classified reason (without throwing) when the storage write fails', () => {
     const storage = fakeStorage({}, new Error('disabled'));
-    expect(saveSettings(storage, DEFAULT_SETTINGS)).toEqual({ ok: false });
+    expect(saveSettings(storage, DEFAULT_SETTINGS)).toEqual({ ok: false, reason: 'unavailable' });
   });
 
   it('saveSettings rejects bindings colliding with another action\'s default, writing nothing', () => {
