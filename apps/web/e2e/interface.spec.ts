@@ -191,13 +191,9 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await expect(trade).toBeHidden();
 
   // --- Clear the guest session from settings; the app lands on a fresh title screen. ---
-  // Strip the quickstart query first (no reload; React state intact): with `?quickstart=1` still
-  // in the URL, App.tsx's quickstart boot effect re-fires the instant clearing sets `session`
-  // back to undefined and constructs a fresh hidden GuestSession, whose constructor re-persists
-  // the sightings cache (`syncSightings`) -- re-creating `woven-deep.guest-codex` right after the
-  // wipe. Real users clearing their session are never on a quickstart URL, so the storage-empty
-  // assertion below targets the real flow.
-  await page.evaluate(() => window.history.replaceState(null, '', '/'));
+  // The `?quickstart=1` query is still in the URL here -- the boot effect that constructs
+  // quickstart's session is gated on `screen.screen === 'play'`, so it does not re-fire once
+  // clearing lands on the title screen, and storage stays wiped (see `App.tsx`).
   await page.keyboard.press('o');
   await expect(settings).toBeVisible();
   await settings.locator('#settings-clear-confirm').fill('clear');

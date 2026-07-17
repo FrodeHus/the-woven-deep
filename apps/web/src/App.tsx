@@ -442,13 +442,19 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
   }
 
   // Quickstart's session is constructed once the pack is ready (it can't be constructed at the
-  // `useState` initializer above — the pack isn't loaded yet at first render).
+  // `useState` initializer above — the pack isn't loaded yet at first render). Gated on
+  // `screen.screen === 'play'` (quickstart's initial screen, set at the `useState` initializer
+  // above): without it, a surviving `?quickstart=1` query in the URL re-fires this effect after
+  // `handleClearGuestSession` sets `session` back to undefined and the screen to 'title',
+  // silently constructing a hidden `GuestSession` that re-persists storage (its constructor syncs
+  // sightings on its own) and breaks the wipe contract on quickstart boots.
   useEffect(() => {
     if (!pack || session) return;
+    if (screen.screen !== 'play') return;
     if (!isQuickstart(window.location.search)) return;
     const seed = parseSeedFromQuery(window.location.search);
     setSession(seed ? new GuestSession({ pack, storage, seed }) : new GuestSession({ pack, storage }));
-  }, [pack, storage, session]);
+  }, [pack, storage, session, screen]);
 
   if (error) {
     return withRootStyling(
