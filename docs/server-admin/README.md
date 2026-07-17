@@ -3,6 +3,7 @@
 These guides cover operator-owned configuration and persistent service data:
 
 - [Content configuration](content-configuration.md): every supported YAML entry, registry, reference, validation rule, and deployment workflow.
+- [Authentication and settings roaming](authentication.md): magic-link sign-in, the auth environment variables (including the production-mandatory `PUBLIC_URL`), the dev-echo endpoint, and the enforced security properties.
 - [Content and storage operations](../operations/content-and-storage.md): read-only content mounts, container verification, and SQLite backup.
 
 Treat content changes like code changes. Validate them in staging, review the resulting content hash, mount the directory read-only, and keep the previous complete directory available for rollback.
