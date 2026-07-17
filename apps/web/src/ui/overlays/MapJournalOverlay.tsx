@@ -167,6 +167,11 @@ function MapPane({ floor, hero, actors, panelId, tabId }: Readonly<{
 interface Landmark {
   readonly key: string;
   readonly label: string;
+  /** Set only for merchant landmarks -- their disclosed name, used by `mergeLandmarks` to dedupe
+   * by IDENTITY rather than position. Stairs and the house never move, so their `key` alone
+   * (which already encodes position) is identity enough; a dungeon merchant can flee/defend once
+   * provoked (`merchant-behavior`), so its position is not a stable identity. */
+  readonly merchantName?: string;
 }
 
 /**
@@ -216,7 +221,8 @@ function landmarksFor(floor: ProjectedFloor, actors: readonly ProjectedActor[], 
 
   for (const actor of actors) {
     if (typeof actor.factionName !== 'string') continue;
-    landmarks.push({ key: `merchant:${actor.x}:${actor.y}`, label: `${actor.name ?? actor.factionName} (met)` });
+    const name = actor.name ?? actor.factionName;
+    landmarks.push({ key: `merchant:${actor.x}:${actor.y}`, label: `${name} (met)`, merchantName: name });
   }
   return landmarks;
 }
@@ -250,17 +256,37 @@ function persistedLandmarksFor(floorId: string, persisted: readonly PersistedLan
     .map((landmark) => ({
       key: `${landmark.kind}:${landmark.x}:${landmark.y}`,
       label: PERSISTED_LANDMARK_LABEL[landmark.kind](landmark.name),
+      ...(landmark.kind === 'merchant' ? { merchantName: landmark.name } : {}),
     }));
 }
 
 /** Live ∪ persisted, deduped by key -- the live row wins when both exist for the same key (it is
  * always at least as current as the persisted one), so a persisted twin of a still-visible
- * landmark never renders as a second, redundant row. */
+ * landmark never renders as a second, redundant row.
+ *
+ * Merchant landmarks get a SECOND dedup pass, by identity (`merchantName`) rather than position:
+ * a dungeon merchant can flee/defend once provoked (`merchant-behavior`), so a persisted entry
+ * frozen at its first-seen (x,y) and a live entry at the merchant's current (x,y) have different
+ * keys and would otherwise both survive the position-keyed pass above as two rows for the same
+ * merchant. Live wins here too, being the fresher position. Stairs and the house are exempt --
+ * they never move, so position IS their identity, and this pass only ever touches entries carrying
+ * `merchantName` (town's slot-derived merchant landmarks never set it, so town's already-safe
+ * position dedup is untouched). */
 function mergeLandmarks(live: readonly Landmark[], persisted: readonly Landmark[]): readonly Landmark[] {
   const byKey = new Map<string, Landmark>();
   for (const landmark of live) byKey.set(landmark.key, landmark);
   for (const landmark of persisted) if (!byKey.has(landmark.key)) byKey.set(landmark.key, landmark);
-  return [...byKey.values()];
+
+  const liveKeys = new Set(live.map((landmark) => landmark.key));
+  const liveMerchantNames = new Set(
+    live.flatMap((landmark) => (landmark.merchantName !== undefined ? [landmark.merchantName] : [])),
+  );
+
+  return [...byKey.values()].filter((landmark) => {
+    if (landmark.merchantName === undefined) return true;
+    if (liveKeys.has(landmark.key)) return true; // this IS the live row for its key -- always kept
+    return !liveMerchantNames.has(landmark.merchantName); // a stale persisted twin of a live merchant -- drop it
+  });
 }
 
 function JournalPane({ snapshot, panelId, tabId }: Readonly<{

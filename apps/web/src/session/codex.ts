@@ -214,6 +214,11 @@ function capturedLandmarks(floor: SightedFloor, actors: readonly LandmarkActor[]
 
   for (const actor of actors) {
     if (typeof actor.factionName !== 'string') continue;
+    // In town, this capture is unreachable from the CURRENT session's journal: actors are pinned
+    // to their slot in town (an engine invariant), so `MapJournalOverlay`'s merge always has a
+    // live, slot-based merchant landmark at this exact (x,y), and the live entry always wins. It
+    // is still captured here for a future cross-run codex (Milestone 6) that outlives the current
+    // session's live projection.
     captured.push({
       floorId: floor.floorId, kind: 'merchant', name: actor.name ?? actor.factionName, x: actor.x, y: actor.y,
     });
