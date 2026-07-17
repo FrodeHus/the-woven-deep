@@ -224,13 +224,24 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 }
 .playfield-grid:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
 /* Task 6's visibility-polygon light layer: a plain `<canvas>` slotted into `.playfield` BEFORE
-   `.playfield-grid` (the slot the town tint's pre-mix, above, was deliberately kept free for).
-   `position: absolute; inset: 0` overlays it exactly on the grid's own box (both are siblings of
-   the same `position: relative` `.playfield`); `mix-blend-mode: screen` lets its additive glow
-   composite over the glyph grid's own painted background/text without ever darkening it (canvas
-   internal compositing already uses `globalCompositeOperation: 'lighter'` between light sources;
-   this is the SEPARATE question of how the canvas's own final pixels blend with the DOM behind
-   it). `pointer-events: none` and `aria-hidden` (set in JSX) keep it fully out of interaction and
+   `.playfield-grid` in DOM order (the slot the town tint's pre-mix, above, was deliberately kept
+   free for) but painted ON TOP of it visually: `.light-canvas` is `position: absolute` while
+   `.playfield-grid` is a plain in-flow (non-positioned) box, and within a stacking context
+   positioned descendants always paint after in-flow non-positioned ones, regardless of DOM/source
+   order -- so this canvas's pixels are the LAST thing composited here, over the grid's own glyphs
+   and backgrounds, not the reverse. `mix-blend-mode: screen` then lets its additive glow blend
+   into whatever the grid already painted without ever darkening it (canvas internal compositing
+   already uses `globalCompositeOperation: 'lighter'` between light sources; this is the SEPARATE
+   question of how the canvas's own final pixels blend with the DOM behind it).
+   IMPORTANT -- this is NOT a spoiler guard: `screen` blending brightens whatever is underneath
+   regardless of that backdrop's opacity (`result = 1-(1-b)(1-s)`; an opaque `.cell-unknown`
+   background composites no differently than a transparent one here), and this canvas paints ON
+   TOP of the grid besides. An earlier version of this comment claimed `.cell-unknown`'s opaque
+   background occludes the canvas's spill into unexplored cells -- that was never true. The actual
+   guarantee is a JS-side clip: `LightCanvas.tsx`'s `traceVisibleCellClip` restricts every source's
+   drawing to the union of viewport cells whose `knowledge === 'visible'` before any source is
+   painted, so light can never reach a remembered or unknown cell no matter what this stylesheet
+   does. `pointer-events: none` and `aria-hidden` (set in JSX) keep it fully out of interaction and
    the accessibility tree -- purely decorative, exactly like `.effects-layer`. */
 .light-canvas {
   position: absolute;

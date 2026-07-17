@@ -84,6 +84,58 @@ function occludersNear(
   return occluders;
 }
 
+/** Half the overlap (in CSS px) added to each visible-cell clip rect's edges beyond its true
+ * boundary -- adjacent rects whose edges land on the exact same fractional pixel can still leave a
+ * hairline anti-aliased seam between them (the renderer softens each rect's own edge slightly, and
+ * two independently-softened edges butted together don't always re-composite back to fully
+ * opaque), so each rect is grown by this much on every side. This can only ever widen the clip
+ * region by a fraction of a pixel into a NON-visible neighbor -- never restore full unclipped
+ * spill -- so it does not reopen the spoiler leak the clip exists to close. */
+const CLIP_RECT_OVERLAP_PX = 0.5;
+
+/**
+ * The spoiler guarantee for Task 6's canvas (see the fix-wave note in `styles.css`'s
+ * `.light-canvas` rule for why this has to live in JS, not CSS): traces one axis-aligned rect per
+ * viewport cell whose `knowledge === 'visible'` -- the engine's own perception truth, the SAME
+ * field `GridRenderer` uses to choose `.cell-visible` vs `.cell-remembered` vs `.cell-unknown` --
+ * as the CURRENT path, ready for the caller to `ctx.clip()` before drawing any source. A cell that
+ * is merely `'remembered'` (previously seen, not currently perceived) or `'unknown'` gets NO rect,
+ * so no light source can ever paint into it, regardless of how far its authored radius or its
+ * shadow-cast polygon actually reaches -- this is what stops a hero light whose radius outruns the
+ * perception radius, and a fixture light cast from ITS OWN vantage around a corner the hero has
+ * never seen, from revealing unexplored room/corridor shapes. Iterates only the camera's own
+ * viewport window (clamped to the floor's bounds), not the whole floor, so cost stays
+ * proportional to what's on screen.
+ */
+function traceVisibleCellClip(
+  ctx: CanvasRenderingContext2D,
+  floor: GameplayProjection['floor'],
+  camera: CameraOrigin,
+  viewport: CameraViewport,
+  cellSize: Readonly<{ width: number; height: number }>,
+): void {
+  const minX = Math.max(0, Math.floor(camera.x));
+  const maxX = Math.min(floor.width - 1, Math.ceil(camera.x + viewport.width) - 1);
+  const minY = Math.max(0, Math.floor(camera.y));
+  const maxY = Math.min(floor.height - 1, Math.ceil(camera.y + viewport.height) - 1);
+
+  ctx.beginPath();
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const cell = floor.cells[y * floor.width + x];
+      if (cell?.knowledge !== 'visible') continue;
+      const screenX = (x - camera.x) * cellSize.width;
+      const screenY = (y - camera.y) * cellSize.height;
+      ctx.rect(
+        screenX - CLIP_RECT_OVERLAP_PX,
+        screenY - CLIP_RECT_OVERLAP_PX,
+        cellSize.width + CLIP_RECT_OVERLAP_PX * 2,
+        cellSize.height + CLIP_RECT_OVERLAP_PX * 2,
+      );
+    }
+  }
+}
+
 /** Feature-detects a real canvas 2D context WITHOUT ever mounting a `<canvas>` into the DOM --
  * jsdom (our test environment) and any browser without canvas support both return `null` from
  * `getContext('2d')` on a bare, unattached element, so this is a safe, side-effect-free probe.
@@ -194,6 +246,13 @@ function drawSource(
  *
  * Purely decorative: `aria-hidden`, `pointer-events: none`, never read by any gameplay logic --
  * the engine's per-cell `intensity`/`tint` remain the sole gameplay/perception authority.
+ *
+ * The spoiler guarantee is `traceVisibleCellClip` + `ctx.clip()` (below), NOT the DOM/CSS layer.
+ * `mix-blend-mode: screen` (`styles.css`'s `.light-canvas` rule) only brightens whatever is
+ * already painted underneath it -- it can never be occluded by an opaque backdrop, at any
+ * opacity, so a `.cell-unknown` cell's opaque background does nothing to stop this canvas's glow
+ * from reaching it. The JS-side clip to `knowledge === 'visible'` cells is the only thing that
+ * does.
  */
 export function LightCanvas({ projection, pack, camera, viewport, cellSize, lighting }: LightCanvasProps): JSX.Element | null {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -231,6 +290,15 @@ export function LightCanvas({ projection, pack, camera, viewport, cellSize, ligh
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+    // The spoiler guarantee (see `traceVisibleCellClip`'s doc): every source below is drawn
+    // through this single clip, so no light -- however far its radius or shadow-cast polygon
+    // reaches -- can ever paint a pixel outside a currently-`visible` cell. Set once per frame,
+    // BEFORE any source, and never narrowed further per-source; `drawSource`'s own `ctx.save()`
+    // wraps each source's drawing state but never touches the clip region itself, so it applies
+    // uniformly to hero and fixture lights alike.
+    traceVisibleCellClip(ctx, projection.floor, camera, viewport, cellSize);
+    ctx.clip();
 
     const hero = equippedLightSource(projection, pack);
     const heroPosition = projection.hero as unknown as { x: number; y: number };
