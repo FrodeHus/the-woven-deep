@@ -68,15 +68,10 @@ describe('registry overlay infrastructure', () => {
       pressKey(chord);
       const dialog = await screen.findByRole('dialog', { name: title });
       expect(dialog).toHaveAttribute('data-testid', `overlay-${id}`);
-      // `settings`, `help`, `character-sheet`, and `map-journal` are real content as of their
-      // respective overlays (see settings-overlay.test.tsx, help-overlay.test.tsx,
-      // character-sheet-overlay.test.tsx, and map-journal-overlay.test.tsx for their own coverage);
-      // the remaining id (`codex`) is still the placeholder body.
-      if (id === 'settings' || id === 'help' || id === 'character-sheet' || id === 'map-journal') {
-        expect(dialog).not.toHaveTextContent('Coming in a later task');
-      } else {
-        expect(dialog).toHaveTextContent('Coming in a later task');
-      }
+      // Every id is real content now (see settings-overlay.test.tsx, help-overlay.test.tsx,
+      // character-sheet-overlay.test.tsx, map-journal-overlay.test.tsx, and codex.test.ts/
+      // codex-overlay.test.tsx for each overlay's own coverage) -- no placeholder body remains.
+      expect(dialog).not.toHaveTextContent('Coming in a later task');
 
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(screen.queryByRole('dialog', { name: title })).not.toBeInTheDocument();

@@ -37,6 +37,8 @@ function snapshotOf(projection: GameplayProjection, overrides: Partial<SessionSn
     notice: null,
     houseOpen: false,
     conclusion: null,
+    sightings: { monsterIds: [], itemIds: [] },
+    heroClassTags: [],
     ...overrides,
   };
 }

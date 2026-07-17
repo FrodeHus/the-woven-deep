@@ -47,7 +47,7 @@ function snapshotWithBackpack(
     pendingDecision: null,
     notice: null,
     houseOpen: false,
-    conclusion: null,
+    conclusion: null, sightings: { monsterIds: [], itemIds: [] }, heroClassTags: [],
   };
 }
 

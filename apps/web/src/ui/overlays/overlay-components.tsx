@@ -1,5 +1,7 @@
 import type { ComponentType, JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
+import type { StoredHallRecord } from '@woven-deep/engine';
+import type { Sightings } from '../../session/codex.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
 import type { ResolvedKeymap, Settings } from '../../session/settings.js';
@@ -8,16 +10,16 @@ import { HelpOverlay } from './HelpOverlay.js';
 import { InventoryOverlay } from './InventoryOverlay.js';
 import { CharacterSheetOverlay } from './CharacterSheetOverlay.js';
 import { MapJournalOverlay } from './MapJournalOverlay.js';
+import { CodexOverlay } from './CodexOverlay.js';
 import type { OverlayId } from './registry.js';
 
 /**
  * Props passed to whatever component `OVERLAY_COMPONENTS` maps an `OverlayId` to. Both hosts
  * (`App.tsx`'s title-screen entry points and `PlayScreen.tsx`'s in-play entry points) pass the same
- * bag of fields regardless of which overlay is actually open -- each field is optional so a
- * placeholder body (still `ComingSoon` for one of the six ids) can ignore all of them, and a real
- * body (like `SettingsOverlay`, wired below) picks out only what it needs. Later guest-interface
- * tasks widen this further (e.g. a `snapshot`/`pack` for the codex) exactly when a new overlay
- * needs it, rather than carrying unused fields for everyone from the start.
+ * bag of fields regardless of which overlay is actually open -- each field is optional so a given
+ * body can ignore whatever it doesn't need (e.g. `SettingsOverlay`, wired below, never touches
+ * `snapshot`/`records`). Fields were widened one at a time, exactly when the overlay that needed
+ * them landed, rather than all carried from the start.
  */
 export interface OverlayBodyProps {
   readonly settings?: Settings;
@@ -37,10 +39,14 @@ export interface OverlayBodyProps {
    * `InventoryOverlayBody` is never actually reached without them. */
   readonly snapshot?: SessionSnapshot;
   readonly onDispatch?: (intent: PlayerIntent) => void;
-}
-
-function ComingSoon(): JSX.Element {
-  return <p>Coming in a later task</p>;
+  /** The Hall of Records and the unlock codex's sighting cache -- added for the codex overlay
+   * (Task 8), which is `global`-scope (reachable from the title screen too, where `snapshot` above
+   * is absent) and so needs its OWN discovery sources threaded past `snapshot`. Both hosts (`App`,
+   * which owns the Hall `repository`/session storage directly, and `PlayScreen` via `GameRoot`,
+   * which now forwards them) always pass these regardless of which overlay is open, the same
+   * "cheap to always pass" convention `pack`/`keymap` already established. */
+  readonly records?: readonly StoredHallRecord[];
+  readonly sightings?: Sightings;
 }
 
 /**
@@ -123,22 +129,36 @@ function MapJournalOverlayBody(props: OverlayBodyProps): JSX.Element {
 }
 
 /**
+ * Adapts the widened `OverlayBodyProps` bag down to `CodexOverlay`'s own (fully required)
+ * `CodexOverlayProps`. Unlike every other real body above, `snapshot` here is genuinely OPTIONAL --
+ * `codex` is `global`-scope (reachable from the title screen, with no live run), so `undefined`
+ * (never passed) is a normal, expected case, not a wiring bug: `CodexOverlay`/`deriveCodexState`
+ * both accept a `null` snapshot on purpose. `records`/`sightings`/`pack` are always passed by both
+ * hosts regardless of overlay id (see the doc comment on `OverlayBodyProps`), so only THEIR absence
+ * (a wiring bug, same as every other body's non-null assertions) falls back to the placeholder.
+ */
+function CodexOverlayBody(props: OverlayBodyProps): JSX.Element {
+  const { records, sightings, pack, snapshot } = props;
+  if (!records || !sightings || !pack) return <p>The codex is unavailable right now.</p>;
+  return <CodexOverlay records={records} snapshot={snapshot ?? null} sightings={sightings} pack={pack} />;
+}
+
+/**
  * The single shared lookup from `OverlayId` to the component that renders its body -- previously
- * duplicated as an identical `overlayBody` switch in both `App.tsx` and `PlayScreen.tsx`. One id
- * (`codex`) is still the placeholder component; `settings` (Task 3), `help` (Task 4), `inventory`
- * (Task 5, absorbing the pre-existing `BackpackMenu`), `character-sheet` (Task 6), and
- * `map-journal` (Task 7) are real. Later guest-interface tasks replace the remaining entries here
- * with real components, and both hosts pick up each change automatically.
+ * duplicated as an identical `overlayBody` switch in both `App.tsx` and `PlayScreen.tsx`. Every id
+ * is now real: `settings` (Task 3), `help` (Task 4), `inventory` (Task 5, absorbing the
+ * pre-existing `BackpackMenu`), `character-sheet` (Task 6), `map-journal` (Task 7), and `codex`
+ * (Task 8, the last placeholder).
  *
  * Deliberately its own module (not folded into `registry.ts`): `registry.ts` stays React-free (it
- * is also consumed by a framework-free help-overlay content builder in a later task), while this
- * module is the React-specific component lookup both hosts share.
+ * is also consumed by a framework-free help-overlay content builder), while this module is the
+ * React-specific component lookup both hosts share.
  */
 export const OVERLAY_COMPONENTS: Readonly<Record<OverlayId, ComponentType<OverlayBodyProps>>> = {
   inventory: InventoryOverlayBody,
   'character-sheet': CharacterSheetOverlayBody,
   'map-journal': MapJournalOverlayBody,
-  codex: ComingSoon,
+  codex: CodexOverlayBody,
   settings: SettingsOverlayBody,
   help: HelpOverlayBody,
 };

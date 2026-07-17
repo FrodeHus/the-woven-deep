@@ -4,6 +4,7 @@ import {
   heroFromChoices, type HeroChoices, type RunConclusionProjection, type RunRecordRepository, type Uint32State,
 } from '@woven-deep/engine';
 import { loadContentPack } from './api.js';
+import { loadSightings } from './session/codex.js';
 import type { LogLine } from './session/event-log.js';
 import { GuestSession, type SessionNotice } from './session/guest-session.js';
 import { createSessionRunRecordRepository, SessionHallCorruptError } from './session/run-records-storage.js';
@@ -122,6 +123,11 @@ interface GameRootProps {
   readonly session: GuestSession;
   readonly pack: CompiledContentPack;
   readonly repository: RunRecordRepository;
+  /** Read fresh (via `loadSightings`) on every render -- `GameRoot` re-renders on every session
+   * publish (`useGuestSession` below), and `GuestSession` best-effort persists its own in-memory
+   * sighting cache to this SAME storage after every publish, so a plain re-read here always
+   * reflects the latest accumulation without any extra plumbing back out of `GuestSession`. */
+  readonly storage: SessionStorageLike;
   readonly portraitGlyph: string | undefined;
   readonly onConcluded: (projection: RunConclusionProjection, logTail: readonly LogLine[]) => void;
   /** Called if `finalizeConcludedRun` itself throws (e.g. the Hall write hit a storage quota) --
@@ -155,11 +161,14 @@ interface GameRootProps {
  * `finalized` flag makes a repeat call safe, but `finalizedRef` also stops this component from
  * calling it again on every subsequent render before `onConcluded` swaps the screen away. */
 function GameRoot({
-  session, pack, repository, portraitGlyph, onConcluded, onFinalizeError,
+  session, pack, repository, storage, portraitGlyph, onConcluded, onFinalizeError,
   overlay, onOpenOverlay, onCloseOverlay, keymap,
   settings, onChangeSettings, onClearGuestSession,
 }: GameRootProps): JSX.Element {
   const snapshot = useGuestSession(session);
+  // Re-read on every render (every session publish, since this component only re-renders via the
+  // `useGuestSession` subscription above) -- see the doc comment on `storage` in `GameRootProps`.
+  const sightings = loadSightings(storage).sightings;
   const [dismissed, setDismissed] = useState(false);
   const { notice, conclusion } = snapshot;
   const finalizedRef = useRef(false);
@@ -220,6 +229,8 @@ function GameRoot({
         settings={settings}
         onChangeSettings={onChangeSettings}
         onClearGuestSession={onClearGuestSession}
+        records={repository.records()}
+        sightings={sightings}
       />
     </div>
   );
@@ -394,6 +405,8 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
             onClearGuestSession={handleClearGuestSession}
             keymap={keymap}
             pack={pack}
+            records={repository.records()}
+            sightings={loadSightings(storage).sightings}
           />
         </OverlayErrorBoundary>
       </OverlayScaffold>
@@ -577,6 +590,7 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
       session={session}
       pack={pack}
       repository={repository}
+      storage={storage}
       portraitGlyph={portraitGlyph}
       overlay={overlay}
       onOpenOverlay={openOverlay}

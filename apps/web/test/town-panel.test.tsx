@@ -22,7 +22,7 @@ beforeAll(async () => {
 function snapshotOf(projection: GameplayProjection): SessionSnapshot {
   return {
     projection, log: [], lastEvents: [], pendingDecision: null, notice: null,
-    houseOpen: false, conclusion: null,
+    houseOpen: false, conclusion: null, sightings: { monsterIds: [], itemIds: [] }, heroClassTags: [],
   };
 }
 
@@ -38,11 +38,11 @@ function withMerchants(projection: GameplayProjection): GameplayProjection {
   return {
     ...projection,
     actors: [
-      { actorId: 'population.town-provisioner', name: 'Provisioner', factionName: 'Provisioners Guild',
+      { actorId: 'population.town-provisioner', contentId: null, name: 'Provisioner', factionName: 'Provisioners Guild',
         reputationTier: 'neutral', tradeAvailable: true, x: hero.x + 1, y: hero.y },
-      { actorId: 'population.town-armorer', name: 'Armorer', factionName: 'Armorers Guild',
+      { actorId: 'population.town-armorer', contentId: null, name: 'Armorer', factionName: 'Armorers Guild',
         reputationTier: 'neutral', tradeAvailable: true, x: hero.x + 10, y: hero.y },
-      { actorId: 'population.town-curios-dealer', name: 'Curios dealer', factionName: 'Curio Sellers',
+      { actorId: 'population.town-curios-dealer', contentId: null, name: 'Curios dealer', factionName: 'Curio Sellers',
         reputationTier: 'neutral', tradeAvailable: false, x: hero.x + 20, y: hero.y },
     ],
   };

@@ -28,7 +28,7 @@ function withActorEast(projection: GameplayProjection, disposition: 'hostile' | 
     ...projection,
     actors: [
       ...projection.actors,
-      { actorId: 'actor.target', x: x + 1, y, disposition, health: 10, maxHealth: 10 },
+      { actorId: 'actor.target', contentId: null, x: x + 1, y, disposition, health: 10, maxHealth: 10 },
     ],
   };
 }

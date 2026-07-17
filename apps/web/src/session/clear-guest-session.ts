@@ -1,16 +1,15 @@
+import { SIGHTINGS_KEY } from './codex.js';
 import { RECORDS_KEY } from './run-records-storage.js';
 import { SETTINGS_KEY } from './settings.js';
 import { COMMAND_SEQUENCE_KEY, PORTRAIT_KEY, SAVE_KEY, type SessionStorageLike } from './storage.js';
 
 /**
  * Every `sessionStorage` key wiped by "clear guest session": the active run save, its
- * monotonic command-id counter, the Hall of Records, and the confirmed portrait glyph. Exported
- * as a list (rather than inlined into `clearGuestSession` below) so a later task -- the Task 8
- * sighting cache, an additional `sessionStorage` key (`woven-deep.guest-codex`) -- can extend it
- * by pushing onto this array without touching this module's wipe logic.
+ * monotonic command-id counter, the Hall of Records, the confirmed portrait glyph, and (Task 8)
+ * the unlock codex's sighting cache -- session-only, exactly like the rest of this list.
  */
 export const GUEST_SESSION_STORAGE_KEYS: readonly string[] = [
-  SAVE_KEY, COMMAND_SEQUENCE_KEY, RECORDS_KEY, PORTRAIT_KEY,
+  SAVE_KEY, COMMAND_SEQUENCE_KEY, RECORDS_KEY, PORTRAIT_KEY, SIGHTINGS_KEY,
 ];
 
 /** The one `localStorage` key wiped alongside the above: the guest's settings. */
