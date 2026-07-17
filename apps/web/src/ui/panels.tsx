@@ -40,8 +40,8 @@ export function HeroPanel({ snapshot }: PanelProps): JSX.Element {
   const heroData = hero(snapshot);
   const healthRatio = heroData.maxHealth > 0 ? heroData.health / heroData.maxHealth : 0;
   return (
-    <section aria-label="Hero" className="hero-panel">
-      <h2>{heroData.name}</h2>
+    <section aria-label="Hero" className="hero-panel framed">
+      <h2 className="framed-title">{heroData.name}</h2>
       <p className="vital-text">{`${heroData.health}/${heroData.maxHealth} HP`}</p>
       <div className="bar" aria-hidden="true">
         <div className="bar-fill" style={{ '--fill': healthRatio } as CSSProperties} />
@@ -104,7 +104,7 @@ export function ThreatPanel({ snapshot }: PanelProps): JSX.Element {
   const items = groundItems(snapshot);
   const nothingNearby = hostiles.length === 0 && items.length === 0;
   return (
-    <section aria-label="Threats" className="threat-panel">
+    <section aria-label="Threats" className="threat-panel framed">
       {nothingNearby && <p className="placeholder">Nothing nearby.</p>}
       {hostiles.length > 0 && (
         <ul className="threat-list">
@@ -146,7 +146,7 @@ export function LogPanel({ snapshot }: PanelProps): JSX.Element {
   }, [log]);
 
   return (
-    <div ref={containerRef} role="log" aria-live="polite" aria-label="Adventure log" className="log-panel">
+    <div ref={containerRef} role="log" aria-live="polite" aria-label="Adventure log" className="log-panel framed">
       {log.map((line) => (
         <p key={line.id} className={`log-line ${TONE_CLASS[line.tone]}`}>{line.text}</p>
       ))}

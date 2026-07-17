@@ -307,7 +307,7 @@ export function PlayScreen({
 
       <div className="hero-slot">
         {tier === 'minimal' ? (
-          <details className="hero-drawer">
+          <details className="hero-drawer framed">
             <summary>Hero</summary>
             <HeroPanel snapshot={snapshot} />
           </details>
@@ -354,7 +354,7 @@ export function PlayScreen({
         {tier === 'full' ? (
           projection.floor.town ? <TownPanel snapshot={snapshot} keymap={keymap} /> : <ThreatPanel snapshot={snapshot} />
         ) : (
-          <details className="threat-drawer">
+          <details className="threat-drawer framed">
             <summary>{projection.floor.town ? 'Town' : 'Threats'}</summary>
             {projection.floor.town ? <TownPanel snapshot={snapshot} keymap={keymap} /> : <ThreatPanel snapshot={snapshot} />}
           </details>

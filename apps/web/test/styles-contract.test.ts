@@ -399,6 +399,43 @@ describe('high-contrast theme stylesheet contract', () => {
   });
 });
 
+describe('ornamental framing stylesheet contract', () => {
+  function ruleBody(selector: string): string {
+    const match = new RegExp(`(?:^|\\n)${selector.replace(/[.[\]]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(css);
+    expect(match, `${selector} rule not found`).toBeTruthy();
+    return match![1]!;
+  }
+
+  it('declares a --frame-* vocabulary in :root, with the corner color a REFERENCE to --gold (never a raw hex), so the high-contrast theme inherits it automatically', () => {
+    const rootMatch = /:root\s*\{([\s\S]*?)\n\}/.exec(css);
+    expect(rootMatch, ':root block not found').toBeTruthy();
+    const root = rootMatch![1]!;
+    expect(root).toMatch(/--frame-corner\s*:\s*"[^"]+"/);
+    expect(root).toMatch(/--frame-corner-color\s*:\s*var\(--gold\)/);
+    expect(root).toMatch(/--frame-corner-size\s*:/);
+    expect(root).toMatch(/--frame-inset\s*:/);
+  });
+
+  it('never re-declares a --frame-* variable inside .theme-high-contrast -- the frame inherits through the cascade, no theme-specific frame rule exists', () => {
+    const blocks = extractBlocksAfterMarker(css, '.theme-high-contrast {');
+    expect(blocks.length).toBeGreaterThan(0);
+    expect(blocks[0]!).not.toMatch(/--frame-/);
+  });
+
+  it('gives .framed relative positioning and two corner pseudo-elements using the CSS alt-text syntax (content: ... / "") so the glyph never enters the accessibility tree', () => {
+    expect(ruleBody('.framed')).toMatch(/position\s*:\s*relative/);
+    const before = ruleBody('.framed::before,\n.framed::after');
+    expect(before).toMatch(/content\s*:\s*var\(--frame-corner\)\s*\/\s*""/);
+    expect(before).not.toMatch(/#[0-9a-fA-F]{3,6}/);
+  });
+
+  it('gives .framed-title a trailing ornament, also via the alt-text content syntax, consuming only frame/palette variables (no raw hex)', () => {
+    const after = ruleBody('.framed-title::after');
+    expect(after).toMatch(/content\s*:\s*var\(--frame-corner\)\s*\/\s*""/);
+    expect(after).not.toMatch(/#[0-9a-fA-F]{3,6}/);
+  });
+});
+
 describe('landing page reduced-motion stylesheet contract', () => {
   const blocks = extractReducedMotionBlocks(landingCss);
 

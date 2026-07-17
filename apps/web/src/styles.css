@@ -25,6 +25,16 @@
   --mat-stair: #c9a227;
   --mat-void: #232733;
 
+  /* Frame vocabulary (Task 3): a single diamond-corner ornament reused by `.framed`/
+     `.framed-title` below. `--frame-corner-color` is a REFERENCE to `--gold`, never a literal --
+     so the high-contrast theme inherits the frame automatically through the normal custom-property
+     cascade, and needs no re-declaration of its own in `.theme-high-contrast`. */
+  --frame-corner: "◆";
+  --frame-corner-color: var(--gold);
+  --frame-corner-size: .6em;
+  --frame-inset: -.5em;
+  --frame-title-size: .55em;
+
   color: var(--ink);
   background: var(--ground);
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -56,6 +66,40 @@
   --mat-stair: #ffe066;
   --mat-void: #0a0a0a;
 }
+/* Ornamental framing (Task 3): one shared frame vocabulary for the panel/dialog/drawer/log border
+   sites -- a single diamond glyph (`--frame-corner`) marking two diagonal corners (top-left,
+   bottom-right) of a `.framed` container, plus a smaller trailing diamond (`.framed-title`) for a
+   section header. Deliberately restrained to container-level chrome (hero/threat panels and
+   drawers, the log, the threat popover, and page titles) rather than every repeated list row
+   (chargen options, hall records, title-menu entries, map-journal tabs keep their plain
+   `1px solid var(--line)` border unchanged) -- corner marks on every row in a list read busy under
+   the browser pass; two accents on a handful of standalone panels do not.
+   The glyph is painted via `content: "◆" / ""` (the CSS alt-text syntax): the string after `/` is
+   what an accessibility tree sees for this generated content -- empty, i.e. nothing -- so the
+   ornament can never be announced or enter an accessible name, with no `aria-hidden` wrapper span
+   needed. Both classes consume only `var(--frame-*)`/`var(--gold)` custom properties, so the
+   high-contrast theme inherits them automatically; no theme-specific frame rule exists here. */
+.framed { position: relative; }
+.framed::before,
+.framed::after {
+  content: var(--frame-corner) / "";
+  position: absolute;
+  color: var(--frame-corner-color);
+  font-size: var(--frame-corner-size);
+  line-height: 1;
+  pointer-events: none;
+}
+.framed::before { top: var(--frame-inset); left: var(--frame-inset); }
+.framed::after { bottom: var(--frame-inset); right: var(--frame-inset); }
+
+.framed-title { display: inline-flex; align-items: center; gap: .4em; }
+.framed-title::after {
+  content: var(--frame-corner) / "";
+  color: var(--frame-corner-color);
+  font-size: var(--frame-title-size);
+  line-height: 1;
+}
+
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
 /* Repaints the actual page background AND base text color from `.guest-app-root` (the app's own

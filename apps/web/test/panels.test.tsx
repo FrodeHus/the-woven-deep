@@ -64,6 +64,26 @@ describe('HeroPanel', () => {
     expect(screen.getByText(`main-hand: ${mainHand!.name}`)).toBeInTheDocument();
     expect(screen.getByText(`Backpack: ${hero.backpack.length}/${hero.backpackCapacity}`)).toBeInTheDocument();
   });
+
+  it('carries the shared .framed corner class (Task 3 ornamental framing) and keeps the panel\'s accessible name/description unchanged -- the decorative corner glyphs are painted by CSS pseudo-elements, which never appear in React\'s rendered markup at all, so no accessibility-tree node can carry them', () => {
+    render(<HeroPanel snapshot={snapshotOf(baseProjection)} />);
+    const hero = baseProjection.hero as unknown as { name: string };
+
+    const region = screen.getByRole('region', { name: 'Hero' });
+    expect(region).toHaveClass('framed');
+    // The accessible name is exactly "Hero" (from aria-label) -- proves the framing didn't leak
+    // any ornamental text into the name via e.g. an aria-label change or an extra labelled child.
+    expect(region).toHaveAccessibleName('Hero');
+
+    const title = screen.getByText(hero.name);
+    expect(title.tagName).toBe('H2');
+    expect(title).toHaveClass('framed-title');
+    // The <h2> element's only text content is the hero's name -- the `.framed-title::after`
+    // ornament is pure generated CSS content (`content: "◆" / ""`), never a DOM text node, so it
+    // can neither change this element's textContent nor its accessible name.
+    expect(title).toHaveTextContent(hero.name);
+    expect(title.textContent).toBe(hero.name);
+  });
 });
 
 describe('ThreatPanel', () => {

@@ -58,7 +58,7 @@ export function TitleScreen({
   return (
     <section aria-label="Title" className="title-screen">
       <p className="eyebrow">The Woven Deep</p>
-      <h1>The Woven Deep</h1>
+      <h1 className="framed-title">The Woven Deep</h1>
       <div role="listbox" aria-label="Title menu" className="title-menu" onKeyDown={handleArrowKeys}>
         {options.map((option, index) => (
           <button
