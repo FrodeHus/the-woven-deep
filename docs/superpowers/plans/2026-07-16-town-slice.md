@@ -311,6 +311,10 @@ NOTE: the 5B e2e specs assume a depth-1 boot — Task 9 re-bases them; keep unit
 
 - [ ] RED-first: command-builder table tests (trade-open only when adjacent to a merchant; buy/sell/service/close only while `projection.trade` matches the merchant; all through the normal command path with `expectedRevision`); TradeScreen component tests (buy updates currency + backpack, sell mirrors, service purchase, keyboard-only full pass, closed-session unmount). Then implement → web suite + typecheck green (engine untouched) → commit `feat: surface trade in the client`.
 
+---
+
+### Task 8: Rendering fixes — visible-dim inversion and the town zoom
+
 **Files:**
 - Modify: `apps/web/src/styles.css`, `src/ui/PlayScreen.tsx` (zoom application), `src/ui/layout.ts` (if the zoom factor lives there as a pure helper: `zoomForFloor(panePx, cellPx, floor) → 1 | 1.25 | 1.5 | 1.75 | 2`)
 - Modify: `apps/web/test/styles-contract.test.ts`, `test/layout.test.ts`, `test/play-screen-tier.test.tsx`

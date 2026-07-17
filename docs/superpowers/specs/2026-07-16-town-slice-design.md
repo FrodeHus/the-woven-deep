@@ -50,7 +50,7 @@ Approved design for the third sub-milestone of milestone 5 (decomposition in `do
 
 - Town renders through the same play surface. StatusBar sources the ACTIVE floor's depth (new projection field if absent) and shows "Town" on depth 0 instead of a depth label; the deepest-depth metric stays available to the conclusion/Hall screens.
 - On the town floor the ThreatPanel yields to a Town panel listing the three merchants and the house with proximity hints (same snapshot-pure panel conventions).
-- Trade in town reuses the existing trade screen; the house gets a transfer screen (two keyboard lists, backpack ↔ house, capacity readouts) following the established dialog/focus conventions.
+- Trade in town goes through a trade screen. (Amended 2026-07-17: this sentence originally assumed a trade screen already existed — it never did; the engine's 4B2 trade layer had no client UI. The screen was built in this milestone as plan Task 7b: Shift+T opens it adjacent to a merchant, driven by `projection.trade`, following the dialog/focus conventions.) The house gets a transfer screen (two keyboard lists, backpack ↔ house, capacity readouts) following the same conventions.
 - The wizard/title/conclusion flow is untouched except that new runs begin in town.
 
 ## Rendering fixes (from live play, part of 5C)
