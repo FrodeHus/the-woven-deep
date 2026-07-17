@@ -37,7 +37,10 @@ afterEach(() => {
 });
 
 function packFetcher(): typeof fetch {
-  return vi.fn().mockResolvedValue(new Response(JSON.stringify(pack))) as unknown as typeof fetch;
+  // A fresh `Response` per call (not a single shared instance) -- Task 12's roam-on-sign-in effect
+  // can issue a second fetch (`/api/profile/settings`) alongside the content-pack fetch, and a
+  // shared `Response`'s body can only be read once.
+  return vi.fn(() => Promise.resolve(new Response(JSON.stringify(pack)))) as unknown as typeof fetch;
 }
 
 function fakeStorage(initial: string | null = null): SessionStorageLike & { peek(key?: string): string | null } {

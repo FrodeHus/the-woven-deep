@@ -3,14 +3,16 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import {
   heroFromChoices, type HeroChoices, type RunConclusionProjection, type RunRecordRepository, type Uint32State,
 } from '@woven-deep/engine';
-import { loadContentPack, logout } from './api.js';
+import { fetchProfileSettings, loadContentPack, logout, putProfileSettings } from './api.js';
 import { GUEST_ACCOUNT, loadAccount, type AccountState } from './session/account.js';
 import { loadSightings } from './session/codex.js';
 import type { LogLine } from './session/event-log.js';
 import { GuestSession, type SessionNotice } from './session/guest-session.js';
 import { createSessionRunRecordRepository, SessionHallCorruptError } from './session/run-records-storage.js';
 import { clearGuestSession } from './session/clear-guest-session.js';
-import { DEFAULT_SETTINGS, loadSettings, resolveKeymap, saveSettings, type Settings } from './session/settings.js';
+import {
+  DEFAULT_SETTINGS, loadSettings, resolveKeymap, saveSettings, settingsFromJson, type Settings,
+} from './session/settings.js';
 import { useGuestSession } from './session/store.js';
 import {
   browserLocalStorage, browserSessionStorage, classifyStorageFailure, PORTRAIT_KEY, type SessionStorageLike,
@@ -290,6 +292,27 @@ export function App({
   // (a corrupt blob is a one-time boot fact, not an ongoing condition).
   const [settingsCorruptedDismissed, setSettingsCorruptedDismissed] = useState(false);
 
+  // Settings roaming (Task 12) bookkeeping. `settingsRef` mirrors `settings` for the roam effect's
+  // async closure (which only re-fires on an account-status transition, so it cannot rely on the
+  // render-time `settings` staying fresh by the time its network round-trip resolves).
+  // `settingsVersionRef` is a monotonic counter this client increments on every push it makes (the
+  // roam-seed PUT and every debounced PUT below) -- the server's own copy is opaque to us; we only
+  // need our own pushes to be strictly increasing so a stale in-flight write can never race ahead of
+  // a newer one. `roamedForSessionRef` guards the one-time roam-on-sign-in so it fires exactly once
+  // per sign-in (reset back to `false` when the account drops to guest, so a later sign-in in the
+  // same tab roams again). `settingsPushTimerRef` holds the debounce timer `handleSettingsChange`
+  // resets on every call.
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+  const settingsVersionRef = useRef(0);
+  const roamedForSessionRef = useRef(false);
+  const settingsPushTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => {
+    if (settingsPushTimerRef.current !== undefined) clearTimeout(settingsPushTimerRef.current);
+  }, []);
+
   /**
    * The settings overlay's `onChange`. Persists first (`saveSettings` re-validates
    * `next.bindings` for conflicts as the write-time backstop the settings overlay's own
@@ -311,6 +334,21 @@ export function App({
         ? 'Your browser storage is full, so settings changes will not be saved.'
         : 'Saving settings is unavailable in this browser -- changes apply for this visit only.'
     ));
+
+    // Task 12: signed-in players roam settings across devices. The localStorage write above is
+    // unconditional (guest and signed-in alike); this debounced push is the signed-in-only extra --
+    // gated so a guest, or a player who has since signed out, never reaches the server. Trailing
+    // debounce (~500ms): rapid-fire changes (e.g. dragging a font-scale slider) collapse into one
+    // PUT carrying only the final value, each call resetting the timer.
+    if (account.status === 'signed-in') {
+      const csrfToken = account.csrfToken ?? '';
+      if (settingsPushTimerRef.current !== undefined) clearTimeout(settingsPushTimerRef.current);
+      settingsPushTimerRef.current = setTimeout(() => {
+        const nextVersion = settingsVersionRef.current + 1;
+        settingsVersionRef.current = nextVersion;
+        void putProfileSettings({ settingsJson: JSON.stringify(next), settingsVersion: nextVersion, csrfToken }, fetcher);
+      }, 500);
+    }
   }
 
   // Bumped by `handleClearGuestSession` so the Hall-of-Records `repository` memo below (keyed on
@@ -394,6 +432,55 @@ export function App({
       cancelled = true;
     };
   }, [fetcher, accountOverride]);
+
+  /**
+   * Settings roaming (Task 12), the one-time "roam on sign-in" half: fires exactly once per
+   * sign-in, whether the account arrived already-signed-in at boot (a fresh page load after a
+   * magic-link redirect, or `accountOverride` in tests) or flipped from guest to signed-in later.
+   * `roamedForSessionRef` is the once-guard, reset back to `false` on a drop to guest so a later
+   * sign-in in the same tab roams again. Server-wins on a non-empty profile: the remote blob is
+   * validated through `settingsFromJson` -- the exact same forward-tolerant rules `loadSettings`
+   * applies to a local read -- so a corrupt/partial server blob falls back to `DEFAULT_SETTINGS`
+   * rather than crashing or corrupting the in-memory settings. An empty profile (this player has
+   * never roamed before) seeds the server with whatever is currently in effect locally. Best-effort:
+   * a network failure here (session lapsed, offline) is swallowed -- the guest/local settings stay
+   * exactly as they were, and the debounced push below will retry the next time something changes.
+   */
+  useEffect(() => {
+    if (account.status !== 'signed-in') {
+      roamedForSessionRef.current = false;
+      return;
+    }
+    if (roamedForSessionRef.current) return;
+    roamedForSessionRef.current = true;
+    let cancelled = false;
+    const csrfToken = account.csrfToken ?? '';
+    void (async () => {
+      try {
+        const remote = await fetchProfileSettings(fetcher);
+        if (cancelled) return;
+        if (typeof remote.settingsJson === 'string') {
+          const { settings: adopted } = settingsFromJson(remote.settingsJson);
+          settingsVersionRef.current = remote.settingsVersion;
+          saveSettings(localStorageInstance, adopted);
+          setSettings(adopted);
+        } else {
+          const nextVersion = settingsVersionRef.current + 1;
+          settingsVersionRef.current = nextVersion;
+          await putProfileSettings(
+            { settingsJson: JSON.stringify(settingsRef.current), settingsVersion: nextVersion, csrfToken },
+            fetcher,
+          );
+        }
+      } catch {
+        // Best-effort: leave local settings untouched on a network/parsing hiccup.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- settingsRef/localStorageInstance/refs are stable seams, not reactive deps
+  }, [account.status, account.csrfToken, fetcher]);
 
   const storage = useMemo(() => storageOverride ?? browserSessionStorage(), [storageOverride]);
 

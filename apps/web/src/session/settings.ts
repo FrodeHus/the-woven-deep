@@ -210,14 +210,17 @@ function isValidChord(value: unknown): value is KeyChord {
  *   chord onto a hardwired arrow/numpad key (`chordReserved`), drops the override outright. Either
  *   way the loser is reported in `droppedOverrides`, and this does not mark the load as corrupted.
  */
-export function loadSettings(
-  storage: SessionStorageLike,
+/**
+ * The shared body of `loadSettings`/`settingsFromJson`: parses a raw JSON string through the same
+ * forward-tolerant validation (unknown fields dropped, invalid `bindings` entries dropped or
+ * conflict-resolved, anything unparsable/non-object falls back to `DEFAULT_SETTINGS` with
+ * `corrupted: true`). Extracted so a roamed server blob (Task 12) is validated through the exact
+ * same rules a local storage read is -- a server value can never bypass the client's own shape
+ * authority.
+ */
+function parseSettingsJson(
+  raw: string,
 ): Readonly<{ settings: Settings; corrupted: boolean; droppedOverrides: readonly ActionId[] }> {
-  const raw = storage.get(SETTINGS_KEY);
-  if (raw === null) {
-    return { settings: DEFAULT_SETTINGS, corrupted: false, droppedOverrides: [] };
-  }
-
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -273,6 +276,35 @@ export function loadSettings(
 
   const settings: Settings = { fontScale, reducedMotion, theme, lighting, onboarding, bindings: accepted };
   return { settings, corrupted: false, droppedOverrides };
+}
+
+/**
+ * Loads `Settings` from `storage`, tolerating a corrupted or stale blob:
+ * - No stored value: `DEFAULT_SETTINGS`, not corrupted (a plain missing key is not corrupt).
+ * - Otherwise delegates to `parseSettingsJson` -- see its doc comment for the full validation
+ *   contract (unparsable/non-object -> `corrupted: true` + defaults; unknown fields and invalid
+ *   `bindings` entries dropped silently).
+ */
+export function loadSettings(
+  storage: SessionStorageLike,
+): Readonly<{ settings: Settings; corrupted: boolean; droppedOverrides: readonly ActionId[] }> {
+  const raw = storage.get(SETTINGS_KEY);
+  if (raw === null) {
+    return { settings: DEFAULT_SETTINGS, corrupted: false, droppedOverrides: [] };
+  }
+  return parseSettingsJson(raw);
+}
+
+/**
+ * Validates a raw JSON string (e.g. a roamed server settings blob, Task 12) through the exact same
+ * forward-tolerant rules `loadSettings` applies to a storage read -- the server stores/validates
+ * settings opaquely, so the client owns the shape end to end. A blob that fails to parse or isn't a
+ * plain object falls back to `DEFAULT_SETTINGS` with `corrupted: true`, never a thrown error.
+ */
+export function settingsFromJson(
+  json: string,
+): Readonly<{ settings: Settings; corrupted: boolean; droppedOverrides: readonly ActionId[] }> {
+  return parseSettingsJson(json);
 }
 
 /**
