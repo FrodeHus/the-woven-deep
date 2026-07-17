@@ -2,17 +2,18 @@ import type { Direction } from '@woven-deep/engine';
 import type { PlayerIntent } from '../session/intents.js';
 import type { ActionId, ResolvedKeymap } from '../session/settings.js';
 
-/** The five overlay-open commands whose outcome is `{ type: 'open-overlay', overlay }`. Typed
- * directly as this string union (rather than importing an `OverlayId` from elsewhere) because
- * that type doesn't exist yet -- a later task introduces the overlay registry with the same
- * strings, minus `inventory` (which keeps routing `open-backpack`, below). */
-export type OverlayActionId = 'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help';
+/** The six overlay-open commands whose outcome is `{ type: 'open-overlay', overlay }`. Typed
+ * directly as this string union (rather than importing an `OverlayId` from elsewhere) so this
+ * module stays free of a dependency on the overlay registry -- it happens to be the exact same
+ * string set as `OverlayId` (registry.ts), `inventory` included: the guest-interface Task 5
+ * absorption retired the legacy `open-backpack` outcome, so `i` now routes through this same
+ * registry path as every other overlay. */
+export type OverlayActionId = 'inventory' | 'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help';
 
-/** Everything `routeKey` can hand back to the caller besides a `PlayerIntent`: opening the
- * backpack, opening a registry overlay, or closing whatever overlay is currently open. */
+/** Everything `routeKey` can hand back to the caller besides a `PlayerIntent`: opening a registry
+ * overlay, or closing whatever overlay is currently open. */
 export type RouterOutcome =
   | PlayerIntent
-  | { readonly type: 'open-backpack' }
   | { readonly type: 'open-overlay'; readonly overlay: OverlayActionId }
   | { readonly type: 'close-overlay' }
   | null;
@@ -68,11 +69,9 @@ function outcomeForAction(action: ActionId): RouterOutcome {
     case 'pickup': return { type: 'pickup' };
     case 'descend': return { type: 'descend' };
     case 'ascend': return { type: 'ascend' };
-    // `i` keeps routing the legacy open-backpack outcome for now -- a later task rewires
-    // `inventory` onto the overlay registry alongside the other five.
-    case 'inventory': return { type: 'open-backpack' };
     case 'house': return { type: 'house' };
     case 'trade': return { type: 'trade-open' };
+    case 'inventory':
     case 'character-sheet':
     case 'map-journal':
     case 'codex':
@@ -129,7 +128,6 @@ export function routeKey(input: Readonly<{
 
 export interface KeyDispatchHandlers {
   readonly dispatch: (intent: PlayerIntent) => void;
-  readonly openBackpack: () => void;
   readonly openOverlay: (overlay: OverlayActionId) => void;
   readonly closeOverlay: () => void;
 }
@@ -166,10 +164,6 @@ export function createKeyDispatcher(
     const outcome = routeKey({ event, overlayOpen: isOverlayOpen(), keymap: getKeymap() });
     if (outcome === null) return;
     lastAcceptedAt = timestamp;
-    if (outcome.type === 'open-backpack') {
-      handlers.openBackpack();
-      return;
-    }
     if (outcome.type === 'open-overlay') {
       handlers.openOverlay(outcome.overlay);
       return;

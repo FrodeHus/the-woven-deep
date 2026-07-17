@@ -13,10 +13,10 @@ function focusableElements(container: HTMLElement): readonly HTMLElement[] {
  * escapes to the page behind it, and restores focus to whatever had it beforehand once the dialog
  * closes or unmounts.
  *
- * Originally defined in `BackpackMenu.tsx` (that module still re-exports it so its existing
- * consumers -- BackpackMenu, DecisionPrompt, HouseScreen, TradeScreen -- don't need an import
- * change); extracted here so the overlay registry infrastructure (`OverlayScaffold`) can share it
- * without importing a component module.
+ * Originally defined in the now-deleted `BackpackMenu.tsx` (absorbed into `InventoryOverlay.tsx`
+ * by Task 5); its remaining non-registry consumers (`DecisionPrompt` in `PlayScreen.tsx`,
+ * `HouseScreen`, `TradeScreen`) import it from here directly. Shared by the overlay registry
+ * infrastructure (`OverlayScaffold`) too, without importing a component module.
  */
 export function useDialogFocusTrap(containerRef: RefObject<HTMLElement | null>): void {
   useEffect(() => {

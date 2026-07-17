@@ -36,9 +36,11 @@ function fakeStorage(initial?: Readonly<Record<string, string>>): SessionStorage
   };
 }
 
-/** Global overlay-open keys routed by the resolved default keymap -- `i` (inventory) is
- * deliberately excluded: it still opens `BackpackMenu` via the legacy `open-backpack` outcome, not
- * the registry (see `KeyRouter.ts`'s `OverlayActionId`). */
+/** Global overlay-open keys routed by the resolved default keymap. `i` (inventory) is excluded
+ * from this table only because it's no longer a placeholder body once absorbed (Task 5) -- the
+ * loop below asserts every OTHER id still shows "Coming in a later task", which inventory (a real
+ * body, see `inventory-overlay.test.tsx`) never would; inventory's own routing/rendering is
+ * covered directly by `key-router.test.ts` and `inventory-overlay.test.tsx`. */
 const OVERLAY_KEYS: Readonly<Record<'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help', Readonly<{ key: string; shift: boolean }>>> = {
   'character-sheet': { key: 'c', shift: false },
   'map-journal': { key: 'm', shift: false },

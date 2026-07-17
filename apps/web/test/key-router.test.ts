@@ -34,7 +34,8 @@ describe('routeKey', () => {
     expect(routeKey({ event: keyEvent('R', { shiftKey: true }), overlayOpen: false, keymap: defaultKeymap })).toEqual({ type: 'rest' });
     expect(routeKey({ event: keyEvent('g'), overlayOpen: false, keymap: defaultKeymap })).toEqual({ type: 'pickup' });
     expect(routeKey({ event: keyEvent('>'), overlayOpen: false, keymap: defaultKeymap })).toEqual({ type: 'descend' });
-    expect(routeKey({ event: keyEvent('i'), overlayOpen: false, keymap: defaultKeymap })).toEqual({ type: 'open-backpack' });
+    expect(routeKey({ event: keyEvent('i'), overlayOpen: false, keymap: defaultKeymap }))
+      .toEqual({ type: 'open-overlay', overlay: 'inventory' });
     expect(routeKey({ event: keyEvent('Escape'), overlayOpen: true, keymap: defaultKeymap })).toEqual({ type: 'close-overlay' });
     expect(routeKey({ event: keyEvent('Escape'), overlayOpen: false, keymap: defaultKeymap })).toBeNull();
   });
@@ -77,7 +78,9 @@ describe('routeKey', () => {
   });
 
   describe('overlay-open keys (new)', () => {
-    it('maps c/m/x/o/Shift+? to their open-overlay outcomes', () => {
+    it('maps i/c/m/x/o/Shift+? to their open-overlay outcomes', () => {
+      expect(routeKey({ event: keyEvent('i'), overlayOpen: false, keymap: defaultKeymap }))
+        .toEqual({ type: 'open-overlay', overlay: 'inventory' });
       expect(routeKey({ event: keyEvent('c'), overlayOpen: false, keymap: defaultKeymap }))
         .toEqual({ type: 'open-overlay', overlay: 'character-sheet' });
       expect(routeKey({ event: keyEvent('m'), overlayOpen: false, keymap: defaultKeymap }))
@@ -119,7 +122,7 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const now = () => time;
     const dispatch = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openBackpack: vi.fn(), openOverlay: vi.fn(), closeOverlay: vi.fn() },
+      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn() },
       () => false,
       () => defaultKeymap,
       now,
@@ -148,7 +151,7 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const now = () => time;
     const dispatch = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openBackpack: vi.fn(), openOverlay: vi.fn(), closeOverlay: vi.fn() },
+      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn() },
       () => false,
       () => defaultKeymap,
       now,
@@ -161,20 +164,20 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     expect(dispatch).toHaveBeenCalledTimes(5);
   });
 
-  it('routes open-backpack and close-overlay outcomes to their handlers instead of dispatch', () => {
+  it('routes open-overlay(inventory) and close-overlay outcomes to their handlers instead of dispatch', () => {
     const dispatch = vi.fn();
-    const openBackpack = vi.fn();
     const openOverlay = vi.fn();
     const closeOverlay = vi.fn();
     let overlayOpen = false;
     const handler = createKeyDispatcher(
-      { dispatch, openBackpack, openOverlay, closeOverlay },
+      { dispatch, openOverlay, closeOverlay },
       () => overlayOpen,
       () => defaultKeymap,
     );
 
     handler(keyEvent('i'));
-    expect(openBackpack).toHaveBeenCalledOnce();
+    expect(openOverlay).toHaveBeenCalledOnce();
+    expect(openOverlay).toHaveBeenCalledWith('inventory');
 
     overlayOpen = true;
     handler(keyEvent('Escape'));
@@ -186,7 +189,7 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const dispatch = vi.fn();
     const openOverlay = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openBackpack: vi.fn(), openOverlay, closeOverlay: vi.fn() },
+      { dispatch, openOverlay, closeOverlay: vi.fn() },
       () => false,
       () => defaultKeymap,
     );

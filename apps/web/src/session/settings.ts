@@ -4,10 +4,9 @@ import { classifyStorageFailure } from './storage.js';
 /**
  * Every player command the rebindable keymap can route to. Movement synonyms (arrows, numpad)
  * stay hardwired in `KeyRouter.ts` and are never represented here -- only the *primary* movement
- * keys (vi keys, by default) are rebindable, alongside the non-movement commands and the five
- * overlay-open actions. `inventory` keeps routing to the legacy `open-backpack` outcome for now
- * (a later task rewires it onto the overlay registry); it is still a rebindable `ActionId` so its
- * key can be changed from the settings screen.
+ * keys (vi keys, by default) are rebindable, alongside the non-movement commands and the six
+ * overlay-open actions (`inventory` included -- it routes onto the overlay registry exactly like
+ * the other five, see `KeyRouter.ts`).
  */
 export type ActionId =
   | `move.${'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw'}`

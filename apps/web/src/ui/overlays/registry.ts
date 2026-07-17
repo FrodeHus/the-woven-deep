@@ -1,12 +1,9 @@
 import type { ActionId } from '../../session/settings.js';
 
 /**
- * Every overlay the guest UI can present. `inventory` keeps routing through the pre-existing
- * `BackpackMenu`/`open-backpack` path for now (see `KeyRouter.ts`'s `OverlayActionId`, which
- * deliberately excludes it) -- a later guest-interface task absorbs it into this registry. It is
- * still listed here (and carries a real `OverlayDefinition`) because the registry is meant to be
- * the single source of truth for every overlay's title/scope/action, even before every id is
- * wired end-to-end.
+ * Every overlay the guest UI can present. `inventory` (Task 5) absorbed the pre-existing
+ * `BackpackMenu`/`open-backpack` path into this same registry -- `i` now routes exactly like the
+ * other five overlay-open keys (see `KeyRouter.ts`'s `OverlayActionId`).
  */
 export type OverlayId = 'inventory' | 'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help';
 
@@ -25,7 +22,12 @@ export interface OverlayDefinition {
  * by both `PlayScreen` and `App`), keeping this registry itself a plain data table.
  */
 export const OVERLAY_REGISTRY: Readonly<Record<OverlayId, OverlayDefinition>> = {
-  inventory: { id: 'inventory', title: 'Inventory', scope: 'play', action: 'inventory' },
+  // Title (and therefore the dialog's accessible name/`<h2>`) is "Backpack", not "Inventory" --
+  // Task 5 absorbs the pre-existing `BackpackMenu` into this registry entry, and the pinned 5A/5C
+  // e2e walks assert `getByRole('dialog', { name: 'Backpack' | /backpack/i })` verbatim. The
+  // keymap ACTION label (settings/help rows) stays "Inventory" (`ACTION_LABELS.inventory` in
+  // settings.ts) -- that's a separate, unaffected string.
+  inventory: { id: 'inventory', title: 'Backpack', scope: 'play', action: 'inventory' },
   'character-sheet': { id: 'character-sheet', title: 'Character Sheet', scope: 'play', action: 'character-sheet' },
   'map-journal': { id: 'map-journal', title: 'Map & Journal', scope: 'play', action: 'map-journal' },
   codex: { id: 'codex', title: 'Codex', scope: 'global', action: 'codex' },

@@ -3,7 +3,6 @@ import {
 } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection } from '@woven-deep/engine';
-import { BackpackMenu, useDialogFocusTrap } from './BackpackMenu.js';
 import type { GuestSession, SessionSnapshot } from '../session/guest-session.js';
 import { useGuestSession } from '../session/store.js';
 import { computeCamera, type CameraOrigin } from './camera.js';
@@ -15,6 +14,7 @@ import {
   layoutTier, viewportForPane, zoomForFloor, type LayoutTier, type ZoomFactor,
 } from './layout.js';
 import { HeroPanel, LogPanel, StatusBar, ThreatPanel, VitalsStrip } from './panels.js';
+import { useDialogFocusTrap } from './overlays/focus-trap.js';
 import { OVERLAY_REGISTRY, type OverlayId } from './overlays/registry.js';
 import { OVERLAY_COMPONENTS } from './overlays/overlay-components.js';
 import { OverlayScaffold } from './overlays/OverlayScaffold.js';
@@ -70,13 +70,13 @@ export interface PlayScreenProps {
    * none is open. Defaults to `null` so every pre-existing caller of `PlayScreen` (tests included)
    * keeps working unchanged. */
   readonly overlay?: OverlayId | null;
-  /** Requests opening one of the five overlay-registry actions (never `inventory`, which keeps its
-   * own legacy `open-backpack` path) -- forwarded to `App`, which applies the scope gating (a
-   * `play`-scope id can only open here, which is already guaranteed by `PlayScreen` only ever
-   * mounting during a live play session; `App` still re-checks defensively). */
+  /** Requests opening one of the six overlay-registry actions -- forwarded to `App`, which applies
+   * the scope gating (a `play`-scope id can only open here, which is already guaranteed by
+   * `PlayScreen` only ever mounting during a live play session; `App` still re-checks
+   * defensively). */
   readonly onOpenOverlay?: (overlay: OverlayActionId) => void;
   readonly onCloseOverlay?: () => void;
-  /** The resolved keymap driving both movement/action routing and the five overlay-open keys.
+  /** The resolved keymap driving both movement/action routing and the six overlay-open keys.
    * Defaults to the default bindings so existing callers (which never rebind anything) are
    * unaffected. */
   readonly keymap?: ResolvedKeymap;
@@ -220,28 +220,28 @@ export function PlayScreen({
     const dispatcher = createKeyDispatcher(
       {
         dispatch: (intent) => session.dispatch(intent),
-        openBackpack: () => session.setBackpackOpen(true),
         openOverlay: (overlayActionId) => onOpenOverlay(overlayActionId),
         closeOverlay: () => {
+          // `inventory` is a registry overlay like every other one now (Task 5 absorbed the old
+          // standalone `BackpackMenu`/`backpackOpen` toggle into the same `overlay` field), so
+          // this first branch already covers it.
           if (overlay !== null) { onCloseOverlay(); return; }
-          if (snapshot.backpackOpen) session.setBackpackOpen(false);
-          else if (snapshot.houseOpen) session.setHouseOpen(false);
-          // Unlike the backpack/house overlays (pure client-side toggles), an open trade session
-          // is engine state (`projection.trade`): closing it means dispatching `trade-close`, not
-          // flipping a local flag -- the screen unmounts once the resulting projection clears
-          // `trade`.
+          if (snapshot.houseOpen) session.setHouseOpen(false);
+          // Unlike the house overlay (a pure client-side toggle), an open trade session is engine
+          // state (`projection.trade`): closing it means dispatching `trade-close`, not flipping a
+          // local flag -- the screen unmounts once the resulting projection clears `trade`.
           else if (projection.trade) session.dispatch({ type: 'trade-close' });
           else if (snapshot.pendingDecision) session.answerDecision(false);
         },
       },
-      () => overlay !== null || snapshot.backpackOpen || snapshot.houseOpen || projection.trade !== undefined
+      () => overlay !== null || snapshot.houseOpen || projection.trade !== undefined
         || snapshot.pendingDecision !== null,
       () => keymap,
     );
     window.addEventListener('keydown', dispatcher);
     return () => window.removeEventListener('keydown', dispatcher);
   }, [
-    session, snapshot.backpackOpen, snapshot.houseOpen, projection.trade, snapshot.pendingDecision,
+    session, snapshot.houseOpen, projection.trade, snapshot.pendingDecision,
     overlay, onOpenOverlay, onCloseOverlay, keymap,
   ]);
 
@@ -353,13 +353,6 @@ export function PlayScreen({
         <LogPanel snapshot={snapshot} />
       </div>
 
-      {snapshot.backpackOpen && (
-        <BackpackMenu
-          snapshot={snapshot}
-          onDispatch={(intent) => session.dispatch(intent)}
-          onClose={() => session.setBackpackOpen(false)}
-        />
-      )}
       {snapshot.houseOpen && (
         <HouseScreen
           snapshot={snapshot}
@@ -390,6 +383,8 @@ export function PlayScreen({
                 onClearGuestSession={onClearGuestSession}
                 keymap={keymap}
                 pack={pack}
+                snapshot={snapshot}
+                onDispatch={(intent) => session.dispatch(intent)}
               />
             </OverlayErrorBoundary>
           </OverlayScaffold>

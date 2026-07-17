@@ -1,8 +1,11 @@
 import type { ComponentType, JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
+import type { SessionSnapshot } from '../../session/guest-session.js';
+import type { PlayerIntent } from '../../session/intents.js';
 import type { ResolvedKeymap, Settings } from '../../session/settings.js';
 import { SettingsOverlay } from './SettingsOverlay.js';
 import { HelpOverlay } from './HelpOverlay.js';
+import { InventoryOverlay } from './InventoryOverlay.js';
 import type { OverlayId } from './registry.js';
 
 /**
@@ -25,6 +28,13 @@ export interface OverlayBodyProps {
    * live, so it's forwarded here unconditionally the same way `keymap` already is -- rather than
    * threading it in only for `help`, which would make this bag vary by `OverlayId` after all. */
   readonly pack?: CompiledContentPack | undefined;
+  /** The live session snapshot and dispatch -- added for the inventory overlay (Task 5), which
+   * needs the hero's backpack/equipment projection and a way to issue `backpack` intents. Only
+   * `PlayScreen` (a live run) ever passes these; `App`'s title-screen overlay host never does,
+   * which is fine -- `inventory` is `play`-scope only (see `registry.ts`'s `canOpenOverlay`), so
+   * `InventoryOverlayBody` is never actually reached without them. */
+  readonly snapshot?: SessionSnapshot;
+  readonly onDispatch?: (intent: PlayerIntent) => void;
 }
 
 function ComingSoon(): JSX.Element {
@@ -69,18 +79,33 @@ function HelpOverlayBody(props: OverlayBodyProps): JSX.Element {
 }
 
 /**
+ * Adapts the widened `OverlayBodyProps` bag down to `InventoryOverlay`'s own (fully required)
+ * `InventoryOverlayProps`. Same non-null-assertion reasoning as the other two real bodies above --
+ * `PlayScreen` always passes `snapshot`/`onDispatch` on every render (see `PlayScreen.tsx`'s
+ * overlay-render block), regardless of which overlay is open.
+ */
+function InventoryOverlayBody(props: OverlayBodyProps): JSX.Element {
+  const { snapshot, onDispatch } = props;
+  if (!snapshot || !onDispatch) {
+    return <p>Your backpack is unavailable right now.</p>;
+  }
+  return <InventoryOverlay snapshot={snapshot} onDispatch={onDispatch} />;
+}
+
+/**
  * The single shared lookup from `OverlayId` to the component that renders its body -- previously
- * duplicated as an identical `overlayBody` switch in both `App.tsx` and `PlayScreen.tsx`. Five ids
- * are still the placeholder component; `settings` is the first real one (Task 3). Later
- * guest-interface tasks replace the remaining entries here with real components, and both hosts
- * pick up each change automatically.
+ * duplicated as an identical `overlayBody` switch in both `App.tsx` and `PlayScreen.tsx`. Three ids
+ * (`character-sheet`, `map-journal`, `codex`) are still the placeholder component; `settings`
+ * (Task 3), `help` (Task 4), and `inventory` (Task 5, absorbing the pre-existing `BackpackMenu`)
+ * are real. Later guest-interface tasks replace the remaining entries here with real components,
+ * and both hosts pick up each change automatically.
  *
  * Deliberately its own module (not folded into `registry.ts`): `registry.ts` stays React-free (it
  * is also consumed by a framework-free help-overlay content builder in a later task), while this
  * module is the React-specific component lookup both hosts share.
  */
 export const OVERLAY_COMPONENTS: Readonly<Record<OverlayId, ComponentType<OverlayBodyProps>>> = {
-  inventory: ComingSoon,
+  inventory: InventoryOverlayBody,
   'character-sheet': ComingSoon,
   'map-journal': ComingSoon,
   codex: ComingSoon,

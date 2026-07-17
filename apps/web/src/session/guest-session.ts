@@ -32,7 +32,6 @@ export interface SessionSnapshot {
   readonly lastEvents: readonly PublicEvent[];
   readonly pendingDecision: PublicDecision | null;
   readonly notice: SessionNotice | null;
-  readonly backpackOpen: boolean;
   readonly houseOpen: boolean;
   /** Cheap, pure projection of the run's ending once `run.conclusion !== null`: completion facts
    * and metrics are always safe to expose, but this is computed with `record: null` and
@@ -67,7 +66,6 @@ export class GuestSession {
   private lastEvents: readonly PublicEvent[] = [];
   private pendingDecision: PublicDecision | null = null;
   private notice: SessionNotice | null;
-  private backpackOpen = false;
   private houseOpen = false;
   private snapshot: SessionSnapshot;
   private readonly listeners = new Set<() => void>();
@@ -277,11 +275,6 @@ export class GuestSession {
     }
   }
 
-  setBackpackOpen(open: boolean): void {
-    this.backpackOpen = open;
-    this.publish();
-  }
-
   setHouseOpen(open: boolean): void {
     this.houseOpen = open;
     this.publish();
@@ -359,7 +352,6 @@ export class GuestSession {
       lastEvents: this.lastEvents,
       pendingDecision: this.pendingDecision,
       notice: this.notice,
-      backpackOpen: this.backpackOpen,
       houseOpen: this.houseOpen,
       conclusion: this.run.conclusion === null ? null
         : projectRunConclusion({ run: this.run, record: null, achievements: [] }),

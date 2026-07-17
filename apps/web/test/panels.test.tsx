@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { useState, type JSX } from 'react';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
@@ -14,6 +15,7 @@ import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 import type { SessionSnapshot } from '../src/session/guest-session.js';
 import { HeroPanel, LogPanel, StatusBar, ThreatPanel } from '../src/ui/panels.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
+import type { OverlayId } from '../src/ui/overlays/registry.js';
 
 let pack: CompiledContentPack;
 let baseProjection: GameplayProjection;
@@ -33,7 +35,6 @@ function snapshotOf(projection: GameplayProjection, overrides: Partial<SessionSn
     lastEvents: [],
     pendingDecision: null,
     notice: null,
-    backpackOpen: false,
     houseOpen: false,
     conclusion: null,
     ...overrides,
@@ -313,7 +314,24 @@ describe('PlayScreen keyboard routing', () => {
   it('opens the backpack on "i", moves the game keys through a focus trap, and closes on Escape', async () => {
     const user = userEvent.setup();
     const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
-    render(<PlayScreen session={session} pack={pack} tier="full" />);
+    // `inventory` is a registry overlay now (Task 5 absorbed the old standalone `BackpackMenu`),
+    // so -- exactly like every other registry overlay -- `PlayScreen` no longer owns whether it's
+    // open; that lives in the parent (`App`, normally). This tiny stateful wrapper stands in for
+    // `App` so the test can drive `i`/Escape the same way a real guest would.
+    function Harness(): JSX.Element {
+      const [overlay, setOverlay] = useState<OverlayId | null>(null);
+      return (
+        <PlayScreen
+          session={session}
+          pack={pack}
+          tier="full"
+          overlay={overlay}
+          onOpenOverlay={setOverlay}
+          onCloseOverlay={() => setOverlay(null)}
+        />
+      );
+    }
+    render(<Harness />);
 
     expect(screen.queryByRole('dialog', { name: /backpack/i })).not.toBeInTheDocument();
     await user.keyboard('i');

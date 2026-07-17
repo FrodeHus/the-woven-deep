@@ -22,7 +22,7 @@ beforeAll(async () => {
 function snapshotOf(projection: GameplayProjection): SessionSnapshot {
   return {
     projection, log: [], lastEvents: [], pendingDecision: null, notice: null,
-    backpackOpen: false, houseOpen: false, conclusion: null,
+    houseOpen: false, conclusion: null,
   };
 }
 
