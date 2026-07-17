@@ -9,6 +9,7 @@ import { useListNavigation } from './roving-focus.js';
 interface ProjectedItemRef {
   readonly itemId: OpaqueId;
   readonly name: string;
+  readonly glyph?: string;
 }
 
 interface ProjectedStockEntry {
@@ -52,6 +53,20 @@ function backpackItemName(snapshot: SessionSnapshot, itemId: OpaqueId): string {
   return owner.backpack.find((item) => item.itemId === itemId)?.name ?? itemId;
 }
 
+/** Identify targets can be backpacked OR equipped (see `identifyTargetIds` in
+ * `packages/engine/src/projection.ts`), so -- unlike `backpackItemName` above, which only ever
+ * looks at sale offers -- this checks both `hero.backpack` and `hero.equipment` for the owned
+ * item's projected name/glyph. Falls back to the raw id if neither owns it (should not happen). */
+function ownedItemRef(snapshot: SessionSnapshot, itemId: OpaqueId): ProjectedItemRef {
+  const owner = snapshot.projection.hero as unknown as {
+    backpack: readonly ProjectedItemRef[];
+    equipment: Readonly<Record<string, ProjectedItemRef | null>>;
+  };
+  return owner.backpack.find((item) => item.itemId === itemId)
+    ?? Object.values(owner.equipment).find((item): item is ProjectedItemRef => item !== null && item.itemId === itemId)
+    ?? { itemId, name: itemId };
+}
+
 type FocusedList = 'buy' | 'sell' | 'services';
 
 const LIST_ORDER: readonly FocusedList[] = ['buy', 'sell', 'services'];
@@ -76,10 +91,18 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
   const containerRef = useRef<HTMLDivElement>(null);
   const session = trade(snapshot);
   const [focusedList, setFocusedList] = useState<FocusedList>('buy');
+  // Set only for services whose `targetItemIds` is non-empty (e.g. identify): opening the picker
+  // replaces the immediate dispatch with an inline target list, per Task 9. A service with no
+  // eligible targets (or the targetless strongbox) never touches this state.
+  const [pickerServiceId, setPickerServiceId] = useState<MerchantServiceId | null>(null);
 
   const buyNav = useListNavigation(session?.stock.length ?? 0);
   const sellNav = useListNavigation(session?.saleOffers.length ?? 0);
   const serviceNav = useListNavigation(session?.services.length ?? 0);
+  const pickerService = pickerServiceId === null
+    ? null
+    : session?.services.find((entry) => entry.serviceId === pickerServiceId) ?? null;
+  const pickerNav = useListNavigation(pickerService?.targetItemIds.length ?? 0);
 
   useDialogFocusTrap(containerRef);
 
@@ -97,9 +120,16 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
   ]);
   const serviceRows: readonly (readonly [string, () => void])[] = session.services.map((entry) => [
     `${entry.serviceId} (${entry.remainingUses} left) — ${entry.unitPrice}g`,
-    () => onDispatch({
-      type: 'trade-service', serviceId: entry.serviceId, targetItemId: entry.targetItemIds[0] ?? null,
-    }),
+    // A service with eligible targets (e.g. identify) opens the inline picker instead of guessing
+    // which item the player meant; a targetless service (e.g. the strongbox) dispatches straight
+    // through, unchanged from before Task 9.
+    () => {
+      if (entry.targetItemIds.length > 0) {
+        setPickerServiceId(entry.serviceId);
+      } else {
+        onDispatch({ type: 'trade-service', serviceId: entry.serviceId, targetItemId: null });
+      }
+    },
   ]);
   const rowsFor = (list: FocusedList): readonly (readonly [string, () => void])[] =>
     (list === 'buy' ? buyRows : list === 'sell' ? sellRows : serviceRows);
@@ -119,7 +149,28 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
       // `trade-close` against the now-stale (trade already closed) projection, surfacing as a
       // spurious "There is no open trade session." log line on every ordinary Escape-close.
       event.stopPropagation();
-      onClose();
+      // Nested-Esc (same scaffold pattern, one layer deeper): with the picker open, Escape closes
+      // just the picker and returns to the services list -- it must NOT also close the trade
+      // dialog, so `onClose` only runs when no picker is open.
+      if (pickerService) {
+        setPickerServiceId(null);
+      } else {
+        onClose();
+      }
+      return;
+    }
+    if (pickerService) {
+      if (pickerNav.handleArrowKeys(event)) return;
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        const targetItemId = pickerService.targetItemIds[pickerNav.selectedIndex];
+        if (targetItemId) {
+          onDispatch({ type: 'trade-service', serviceId: pickerService.serviceId, targetItemId });
+        }
+        setPickerServiceId(null);
+      }
+      // Swallow every other key (notably Tab) while the picker is open: list-switching doesn't
+      // apply to a target picker.
       return;
     }
     if (event.key === 'Tab') {
@@ -184,6 +235,33 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
         {listBox('sell', 'Sell', sellRows)}
         {listBox('services', 'Services', serviceRows)}
       </div>
+      {pickerService && (
+        <div className="trade-picker">
+          <h3>Identify which item?</h3>
+          <ul role="listbox" aria-label="Identify target" className="trade-item-list">
+            {pickerService.targetItemIds.map((itemId, index) => {
+              const ref = ownedItemRef(snapshot, itemId);
+              return (
+                <li key={itemId} role="option" aria-selected={index === pickerNav.selectedIndex}>
+                  <button
+                    type="button"
+                    ref={pickerNav.registerItem(index)}
+                    className={index === pickerNav.selectedIndex ? 'trade-item trade-item--selected' : 'trade-item'}
+                    onClick={() => pickerNav.setSelectedIndex(index)}
+                    onDoubleClick={() => {
+                      onDispatch({ type: 'trade-service', serviceId: pickerService.serviceId, targetItemId: itemId });
+                      setPickerServiceId(null);
+                    }}
+                  >
+                    {ref.glyph ? `${ref.glyph} ` : ''}{ref.name}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="trade-hints">↑↓ select · Enter identify · Esc back</p>
+        </div>
+      )}
       <p className="trade-hints">↑↓ select · Tab switch list · Enter trade · Esc close</p>
     </div>
   );

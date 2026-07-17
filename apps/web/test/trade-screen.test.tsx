@@ -9,7 +9,7 @@ import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   DEFAULT_GUEST_HERO, createNewRun, heroActor, heroPerception, projectGameplayState, refreshKnowledge,
   resolveCommand, validateActiveRun, type ActiveRun, type FloorSnapshot, type GameCommand,
-  type GameplayProjection, type MerchantPopulation,
+  type GameplayProjection, type ItemInstance, type MerchantPopulation,
 } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../src/session/guest-session.js';
 import { TradeScreen } from '../src/ui/screens/TradeScreen.js';
@@ -118,7 +118,7 @@ describe('TradeScreen', () => {
     });
   });
 
-  it('dispatches trade-service with a target item for an identify-style service', async () => {
+  it('opens the identify target picker for a service with eligible targets, then dispatches the chosen target', async () => {
     const user = userEvent.setup();
     const onDispatch = vi.fn();
     const projection = withTrade(baseProjection, {
@@ -132,9 +132,41 @@ describe('TradeScreen', () => {
     await user.keyboard('{Tab}{Tab}');
     await user.keyboard('{Enter}');
 
+    // Enter on a service with eligible targets opens the picker instead of dispatching immediately.
+    expect(onDispatch).not.toHaveBeenCalled();
+    expect(screen.getByRole('listbox', { name: 'Identify target' })).toBeInTheDocument();
+
+    await user.keyboard('{Enter}');
+
     expect(onDispatch).toHaveBeenCalledWith({
       type: 'trade-service', serviceId: 'merchant-service.identify', targetItemId: 'item.mystery-ring',
     });
+    expect(screen.queryByRole('listbox', { name: 'Identify target' })).not.toBeInTheDocument();
+  });
+
+  it('closes the picker on Escape without closing the trade dialog', async () => {
+    const user = userEvent.setup();
+    const onDispatch = vi.fn();
+    const onClose = vi.fn();
+    const projection = withTrade(baseProjection, {
+      services: [{
+        serviceId: 'merchant-service.identify', unitPrice: 10, remainingUses: 2,
+        targetItemIds: ['item.mystery-ring', 'item.mystery-potion'],
+      }],
+    });
+    render(<TradeScreen snapshot={snapshotOf(projection)} onDispatch={onDispatch} onClose={onClose} />);
+
+    await user.keyboard('{Tab}{Tab}');
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('listbox', { name: 'Identify target' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onDispatch).not.toHaveBeenCalled();
+    expect(screen.queryByRole('listbox', { name: 'Identify target' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Trade' })).toBeInTheDocument();
+    expect(screen.getByRole('listbox', { name: 'Services' })).toBeInTheDocument();
   });
 
   it('moves the selection within the focused list with ArrowUp/ArrowDown', async () => {
@@ -301,5 +333,125 @@ describe('TradeScreen roving focus after a sale shrinks the list', () => {
 
     await screen.findAllByText('Nothing here.');
     expect(screen.queryByRole('listbox', { name: 'Sell' })).not.toBeInTheDocument();
+  });
+});
+
+/** Minimal reducer harness for `trade-service`: owns the `ActiveRun` in state, re-projects on
+ * every dispatch, and forwards the intent straight to the real engine command -- mirrors
+ * `TradeHarness` above, but for identify instead of sell. `onRunChange` lets a test observe the
+ * *actual* post-command `ActiveRun` (e.g. which item got identified) directly, rather than only
+ * through the DOM -- the same "real resolveCommand style" the sale-list regression above uses. */
+function IdentifyHarness({ initialRun, onRunChange }: Readonly<{
+  initialRun: ActiveRun; onRunChange?: (run: ActiveRun) => void;
+}>): JSX.Element {
+  const [run, setRun] = useState(initialRun);
+  const projection = projectGameplayState({ state: run, content: pack });
+  return (
+    <TradeScreen
+      snapshot={snapshotOf(projection)}
+      onDispatch={(intent) => {
+        if (intent.type !== 'trade-service') throw new Error(`unexpected intent in harness: ${intent.type}`);
+        const merchantPopulationId = projection.trade!.merchantPopulationId;
+        setRun((current) => {
+          const next = apply(current, {
+            type: 'trade-service', commandId: `command.identify.${intent.targetItemId}`, expectedRevision: current.revision,
+            merchantPopulationId, serviceId: intent.serviceId, targetItemId: intent.targetItemId,
+          });
+          onRunChange?.(next);
+          return next;
+        });
+      }}
+      onClose={vi.fn()}
+    />
+  );
+}
+
+// Task 9: the identify target picker. Places two unidentified potions (distinct contentIds, so
+// their generated appearance names differ) straight into the hero's backpack -- bypassing the
+// normal loot path, same fixture technique `merchant-service.test.ts` uses in the engine package --
+// then stands the hero beside the town curios dealer (the only permanent town merchant offering
+// `merchant-service.identify`; see `content/encounters/town-merchants.yaml`) and opens trade for
+// real.
+describe('TradeScreen identify target picker', () => {
+  function runWithUnidentifiedPair(): ActiveRun {
+    let run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const hero = heroActor(run);
+    const unidentified: readonly ItemInstance[] = [
+      { itemId: 'item.hero.test-potion-a', contentId: 'item.crimson-potion', quantity: 1, condition: 100,
+        enchantment: null, identified: false, charges: null, fuel: null, enabled: null,
+        location: { type: 'backpack', actorId: hero.actorId } },
+      { itemId: 'item.hero.test-potion-b', contentId: 'item.ashen-potion', quantity: 1, condition: 100,
+        enchantment: null, identified: false, charges: null, fuel: null, enabled: null,
+        location: { type: 'backpack', actorId: hero.actorId } },
+    ];
+    run = validateActiveRun({
+      ...run,
+      items: [...run.items, ...unidentified].sort((left, right) => left.itemId < right.itemId ? -1 : 1),
+    });
+    const curiosDealer = run.populations.find((population): population is MerchantPopulation =>
+      population.model === 'merchant' && population.encounterId === 'encounter.town-curios-dealer')!;
+    const merchantActor = run.actors.find((actor) => actor.actorId === curiosDealer.actorId)!;
+    run = teleportHero(run, adjacentFreeCell(run, merchantActor));
+    run = apply(run, {
+      type: 'trade-open', commandId: 'command.trade-open', expectedRevision: run.revision,
+      merchantActorId: merchantActor.actorId,
+    });
+    return run;
+  }
+
+  it('lists exactly the eligible items, and identifying the SECOND one identifies only that item', async () => {
+    const user = userEvent.setup();
+    const run = runWithUnidentifiedPair();
+    const opened = projectGameplayState({ state: run, content: pack });
+    const identifyService = opened.trade!.services.find((service) => service.serviceId === 'merchant-service.identify')!;
+    expect(identifyService.targetItemIds).toEqual(['item.hero.test-potion-a', 'item.hero.test-potion-b']);
+
+    const backpack = opened.hero as unknown as { backpack: readonly { itemId: string; name: string }[] };
+    const nameOf = (itemId: string) => backpack.backpack.find((item) => item.itemId === itemId)!.name;
+    const [firstTargetId, secondTargetId] = identifyService.targetItemIds;
+    const firstName = nameOf(firstTargetId!);
+    const secondName = nameOf(secondTargetId!);
+
+    let latestRun = run;
+    render(<IdentifyHarness initialRun={run} onRunChange={(next) => { latestRun = next; }} />);
+
+    await user.keyboard('{Tab}{Tab}'); // buy -> sell -> services
+    await user.keyboard('{Enter}'); // opens the picker (targetItemIds is non-empty)
+
+    const picker = screen.getByRole('listbox', { name: 'Identify target' });
+    const options = within(picker).getAllByRole('option');
+    expect(options).toHaveLength(2);
+    expect(within(picker).getByText(new RegExp(firstName))).toBeInTheDocument();
+    expect(within(picker).getByText(new RegExp(secondName))).toBeInTheDocument();
+
+    await user.keyboard('{ArrowDown}'); // select the second item
+    await user.keyboard('{Enter}'); // identify it
+
+    // Identifying doesn't close the trade dialog -- only the picker.
+    expect(screen.getByRole('dialog', { name: 'Trade' })).toBeInTheDocument();
+    expect(screen.queryByRole('listbox', { name: 'Identify target' })).not.toBeInTheDocument();
+
+    // Assert against the real post-command `ActiveRun`: the SECOND target item is identified,
+    // the first is untouched.
+    const firstItem = latestRun.items.find((item) => item.itemId === firstTargetId)!;
+    const secondItem = latestRun.items.find((item) => item.itemId === secondTargetId)!;
+    expect(secondItem.identified).toBe(true);
+    expect(firstItem.identified).toBe(false);
+  });
+
+  it('closes the picker on Escape and returns to the services list without closing the trade dialog', async () => {
+    const user = userEvent.setup();
+    const run = runWithUnidentifiedPair();
+    render(<IdentifyHarness initialRun={run} />);
+
+    await user.keyboard('{Tab}{Tab}');
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('listbox', { name: 'Identify target' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.getByRole('dialog', { name: 'Trade' })).toBeInTheDocument();
+    expect(screen.queryByRole('listbox', { name: 'Identify target' })).not.toBeInTheDocument();
+    expect(screen.getByRole('listbox', { name: 'Services' })).toBeInTheDocument();
   });
 });
