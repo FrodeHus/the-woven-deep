@@ -286,8 +286,8 @@ export function SettingsOverlay({ settings, onChange, onClearGuestSession, keyma
       <section aria-labelledby="settings-clear-heading">
         <h3 id="settings-clear-heading">Clear guest session</h3>
         <p>
-          Wipes your active run, Hall of Records, and settings on this device, then returns to the
-          title screen. This cannot be undone.
+          Wipes your active run, Hall of Records, discovery log, guidance progress, and settings on
+          this device, then returns to the title screen. This cannot be undone.
         </p>
         <label htmlFor="settings-clear-confirm">Type &quot;clear&quot; to confirm</label>
         <input
