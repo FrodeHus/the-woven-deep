@@ -3,7 +3,8 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import {
   heroFromChoices, type HeroChoices, type RunConclusionProjection, type RunRecordRepository, type Uint32State,
 } from '@woven-deep/engine';
-import { loadContentPack } from './api.js';
+import { loadContentPack, logout } from './api.js';
+import { GUEST_ACCOUNT, loadAccount, type AccountState } from './session/account.js';
 import { loadSightings } from './session/codex.js';
 import type { LogLine } from './session/event-log.js';
 import { GuestSession, type SessionNotice } from './session/guest-session.js';
@@ -21,6 +22,7 @@ import { OverlayErrorBoundary } from './ui/overlays/OverlayErrorBoundary.js';
 import { ChargenScreen } from './ui/screens/ChargenScreen.js';
 import { ConclusionScreen } from './ui/screens/ConclusionScreen.js';
 import { HallScreen } from './ui/screens/HallScreen.js';
+import { SignInScreen } from './ui/screens/SignInScreen.js';
 import { TitleScreen } from './ui/screens/TitleScreen.js';
 import { PlayScreen } from './ui/PlayScreen.js';
 import { effectiveReducedMotion, ScreenFade } from './ui/ScreenFade.js';
@@ -35,6 +37,10 @@ export interface AppProps {
    * (`woven-deep.settings.v1`) -- a distinct browser storage area from the run/session state
    * above, so it gets its own override rather than reusing `storage`. */
   readonly localStorage?: SessionStorageLike;
+  /** Test-only escape hatch mirroring `localStorage` above: when provided, skips the network
+   * `loadAccount` fetch entirely and seeds `account` state with this value directly -- lets tests
+   * assert on a signed-in title/App without wiring a session-shaped fetcher response. */
+  readonly accountOverride?: AccountState;
 }
 
 /**
@@ -44,6 +50,7 @@ export interface AppProps {
  */
 export type ScreenState =
   | { readonly screen: 'title' }
+  | { readonly screen: 'signin' }
   | { readonly screen: 'chargen' }
   | { readonly screen: 'play' }
   | { readonly screen: 'conclusion' }
@@ -258,7 +265,9 @@ function GameRoot({
  * (retry button) vs. anything the session itself surfaces once it's running (a dismissible
  * banner in `GameRoot`, covering storage being unavailable/full and save-discard notices alike).
  */
-export function App({ fetcher = fetch, storage: storageOverride, localStorage: localStorageOverride }: AppProps): JSX.Element {
+export function App({
+  fetcher = fetch, storage: storageOverride, localStorage: localStorageOverride, accountOverride,
+}: AppProps): JSX.Element {
   const [pack, setPack] = useState<CompiledContentPack>();
   const [error, setError] = useState<string>();
   const [attempt, setAttempt] = useState(0);
@@ -360,6 +369,31 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
       cancelled = true;
     };
   }, [fetcher, attempt]);
+
+  // The signed-in identity, if any -- `GUEST_ACCOUNT` until (and unless) a session cookie proves
+  // otherwise. `accountOverride` is a test-only seam (mirroring `localStorageOverride`): when
+  // given, it seeds state directly and the network fetch below never fires, exactly like
+  // `localStorage`'s override skips `browserLocalStorage()`. Otherwise every boot re-fetches the
+  // session fresh (declared -- and thus effect-ordered -- AFTER the pack-load effect above, so a
+  // shared/naive test fetcher double serves the pack request first): this is also what picks up a
+  // freshly-established session after a magic-link redirect lands back on `/` with `?auth=ok` in
+  // the URL, since that redirect is itself a fresh page load and thus a fresh boot.
+  const [account, setAccount] = useState<AccountState>(accountOverride ?? GUEST_ACCOUNT);
+  useEffect(() => {
+    if (accountOverride) return;
+    let cancelled = false;
+    void loadAccount(fetcher).then(
+      (loaded) => {
+        if (!cancelled) setAccount(loaded);
+      },
+      () => {
+        if (!cancelled) setAccount(GUEST_ACCOUNT);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [fetcher, accountOverride]);
 
   const storage = useMemo(() => storageOverride ?? browserSessionStorage(), [storageOverride]);
 
@@ -530,6 +564,7 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
       <main className="shell">
         <TitleScreen
           storage={storage}
+          account={account}
           onEnterTheDeep={() => {
             closeOverlay();
             setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
@@ -544,8 +579,20 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
           }}
           onHall={() => setScreen({ screen: 'hall', returnTo: 'title' })}
           onOpenOverlay={openOverlay}
+          onSignIn={() => setScreen({ screen: 'signin' })}
+          onSignOut={() => {
+            void logout(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
+          }}
         />
         {renderOverlayHost()}
+      </main>,
+    ));
+  }
+
+  if (screen.screen === 'signin') {
+    return withRootStyling(withHallNotice(
+      <main className="shell">
+        <SignInScreen fetcher={fetcher} onBack={() => setScreen({ screen: 'title' })} />
       </main>,
     ));
   }

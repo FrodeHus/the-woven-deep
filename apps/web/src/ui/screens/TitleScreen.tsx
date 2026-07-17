@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import { decodeActiveRun } from '@woven-deep/engine';
+import type { AccountState } from '../../session/account.js';
 import { SAVE_KEY, type SessionStorageLike } from '../../session/storage.js';
 import type { OverlayId } from '../overlays/registry.js';
 import { useListNavigation } from './roving-focus.js';
@@ -13,6 +14,14 @@ export interface TitleScreenProps {
    * menu -- optional so every pre-existing caller (which never offered these entries) keeps
    * working unchanged; when omitted, the three menu options simply aren't rendered. */
   readonly onOpenOverlay?: (overlay: OverlayId) => void;
+  /** The signed-in identity (or `GUEST_ACCOUNT`) -- gates the "Sign in with email"/"Sign out"
+   * menu entries and, when signed in, the email line shown above the menu. */
+  readonly account: AccountState;
+  /** Navigates to the `signin` screen. Offered only while `account.status === 'guest'`. */
+  readonly onSignIn: () => void;
+  /** Signs the current session out. Offered only while `account.status === 'signed-in'`, in
+   * place of (never alongside) "Sign in with email". */
+  readonly onSignOut: () => void;
 }
 
 /**
@@ -41,8 +50,9 @@ function canContinue(storage: SessionStorageLike): boolean {
  * listbox convention as the chargen wizard's option lists.
  */
 export function TitleScreen({
-  storage, onEnterTheDeep, onContinue, onHall, onOpenOverlay,
+  storage, onEnterTheDeep, onContinue, onHall, onOpenOverlay, account, onSignIn, onSignOut,
 }: TitleScreenProps): JSX.Element {
+  const signedIn = account.status === 'signed-in';
   const options: readonly { readonly key: string; readonly label: string; readonly onSelect: () => void }[] = [
     { key: 'enter', label: 'Enter the Deep', onSelect: onEnterTheDeep },
     ...(canContinue(storage) ? [{ key: 'continue', label: 'Continue', onSelect: onContinue }] : []),
@@ -52,6 +62,9 @@ export function TitleScreen({
       { key: 'settings', label: 'Settings', onSelect: () => onOpenOverlay('settings') },
       { key: 'help', label: 'Help', onSelect: () => onOpenOverlay('help') },
     ] : []),
+    ...(signedIn
+      ? [{ key: 'sign-out', label: 'Sign out', onSelect: onSignOut }]
+      : [{ key: 'sign-in', label: 'Sign in with email', onSelect: onSignIn }]),
   ];
   const { selectedIndex, registerItem, handleArrowKeys } = useListNavigation(options.length);
 
@@ -59,6 +72,7 @@ export function TitleScreen({
     <section aria-label="Title" className="title-screen">
       <p className="eyebrow">The Woven Deep</p>
       <h1 className="framed-title">The Woven Deep</h1>
+      {signedIn && <p className="title-account">Signed in as {account.email}</p>}
       <div role="listbox" aria-label="Title menu" className="title-menu" onKeyDown={handleArrowKeys}>
         {options.map((option, index) => (
           <button
