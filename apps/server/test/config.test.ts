@@ -151,6 +151,55 @@ describe('readConfig auth', () => {
     });
   });
 
+  it('requires an explicit PUBLIC_URL when NODE_ENV=production', () => {
+    expect(() => readConfig({ NODE_ENV: 'production' })).toThrow(/PUBLIC_URL is required when NODE_ENV=production/);
+    // An empty-string placeholder (the compose/Docker default) counts as unset.
+    expect(() => readConfig({ NODE_ENV: 'production', PUBLIC_URL: '' })).toThrow(
+      /PUBLIC_URL is required when NODE_ENV=production/,
+    );
+  });
+
+  it('rejects a localhost PUBLIC_URL when NODE_ENV=production', () => {
+    expect(() => readConfig({ NODE_ENV: 'production', PUBLIC_URL: 'http://localhost:3000' })).toThrow(
+      /PUBLIC_URL must be a non-localhost URL when NODE_ENV=production/,
+    );
+    expect(() => readConfig({ NODE_ENV: 'production', PUBLIC_URL: 'https://127.0.0.1' })).toThrow(
+      /PUBLIC_URL must be a non-localhost URL when NODE_ENV=production/,
+    );
+  });
+
+  it('accepts a production-shaped env with NODE_ENV=production', () => {
+    const config = readConfig({
+      NODE_ENV: 'production',
+      PUBLIC_URL: 'https://play.example.com',
+      COOKIE_SECRET: 'a'.repeat(32),
+      ...fullMailgun,
+    });
+
+    expect(config.auth.publicUrl).toBe('https://play.example.com');
+    expect(config.auth.cookieSecure).toBe(true);
+    expect(config.auth.mailgun).toEqual({
+      apiKey: fullMailgun.MAILGUN_API_KEY,
+      domain: fullMailgun.MAILGUN_DOMAIN,
+      sender: fullMailgun.MAILGUN_SENDER,
+    });
+  });
+
+  it('treats empty-string auth secrets as unset (compose/Docker placeholders)', () => {
+    const config = readConfig({
+      PUBLIC_URL: '',
+      COOKIE_SECRET: '',
+      MAILGUN_API_KEY: '',
+      MAILGUN_DOMAIN: '',
+      MAILGUN_SENDER: '',
+    });
+
+    // Falls back to the localhost dev shape rather than parsing '' as a URL or a 0-length secret.
+    expect(config.auth.publicUrl).toBe('http://localhost:3000');
+    expect(config.auth.cookieSecret.length).toBeGreaterThanOrEqual(32);
+    expect(config.auth.mailgun).toBeNull();
+  });
+
   it('applies login rate-limit defaults and honors overrides', () => {
     const defaults = readConfig({});
     expect(defaults.auth.loginRateLimit).toEqual({ perEmailPerHour: 5, perSourcePerHour: 20 });

@@ -33,6 +33,16 @@ function isLocalHost(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '127.0.0.1';
 }
 
+/**
+ * Treat an empty string exactly like an unset variable. Deploy manifests declare the auth secrets
+ * as overridable placeholders (`${COOKIE_SECRET:-}` in compose, blank `ENV` keys in the Dockerfile);
+ * an operator who never supplies them leaves the container holding empty strings, which must behave
+ * as "not configured" rather than as a zero-length secret or a Mailgun key of `''`.
+ */
+function readNonEmpty(value: string | undefined): string | undefined {
+  return value === undefined || value === '' ? undefined : value;
+}
+
 function parsePositiveInt(value: string | undefined, fallback: number, label: string): number {
   if (value === undefined) {
     return fallback;
@@ -45,7 +55,19 @@ function parsePositiveInt(value: string | undefined, fallback: number, label: st
 }
 
 function readAuthConfig(env: NodeJS.ProcessEnv): AuthConfig {
-  const publicUrl = env.PUBLIC_URL ?? 'http://localhost:3000';
+  const isProduction = env.NODE_ENV === 'production';
+  const publicUrlEnv = readNonEmpty(env.PUBLIC_URL);
+
+  // Production guard: `NODE_ENV=production` (the Dockerfile sets it) with no explicit PUBLIC_URL
+  // would otherwise silently fall through to the localhost default below, which in turn selects the
+  // dev cookie secret and the dev-echo mail transport — a deployment that looks healthy while
+  // leaking magic links to an in-memory endpoint and signing sessions with a public dev secret.
+  // Require an explicit, non-localhost PUBLIC_URL instead so a misconfigured prod boot fails loudly.
+  if (isProduction && publicUrlEnv === undefined) {
+    throw new Error('PUBLIC_URL is required when NODE_ENV=production (set it to the public, non-localhost URL)');
+  }
+
+  const publicUrl = publicUrlEnv ?? 'http://localhost:3000';
 
   let parsedUrl: URL;
   try {
@@ -56,10 +78,16 @@ function readAuthConfig(env: NodeJS.ProcessEnv): AuthConfig {
   if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
     throw new Error('PUBLIC_URL must use the http or https scheme');
   }
+  if (isProduction && isLocalHost(parsedUrl.hostname)) {
+    throw new Error('PUBLIC_URL must be a non-localhost URL when NODE_ENV=production');
+  }
 
   const isProductionShaped = !isLocalHost(parsedUrl.hostname);
 
-  const mailgunFieldsPresent = [env.MAILGUN_API_KEY, env.MAILGUN_DOMAIN, env.MAILGUN_SENDER].filter(
+  const mailgunApiKey = readNonEmpty(env.MAILGUN_API_KEY);
+  const mailgunDomain = readNonEmpty(env.MAILGUN_DOMAIN);
+  const mailgunSender = readNonEmpty(env.MAILGUN_SENDER);
+  const mailgunFieldsPresent = [mailgunApiKey, mailgunDomain, mailgunSender].filter(
     (value) => value !== undefined,
   ).length;
   if (mailgunFieldsPresent > 0 && mailgunFieldsPresent < 3) {
@@ -72,18 +100,19 @@ function readAuthConfig(env: NodeJS.ProcessEnv): AuthConfig {
   const mailgun =
     mailgunFieldsPresent === 3
       ? {
-          apiKey: env.MAILGUN_API_KEY as string,
-          domain: env.MAILGUN_DOMAIN as string,
-          sender: env.MAILGUN_SENDER as string,
+          apiKey: mailgunApiKey as string,
+          domain: mailgunDomain as string,
+          sender: mailgunSender as string,
         }
       : null;
 
+  const cookieSecretEnv = readNonEmpty(env.COOKIE_SECRET);
   let cookieSecret: string;
-  if (env.COOKIE_SECRET !== undefined) {
-    if (env.COOKIE_SECRET.length < MIN_COOKIE_SECRET_LENGTH) {
+  if (cookieSecretEnv !== undefined) {
+    if (cookieSecretEnv.length < MIN_COOKIE_SECRET_LENGTH) {
       throw new Error(`COOKIE_SECRET must be at least ${MIN_COOKIE_SECRET_LENGTH} characters`);
     }
-    cookieSecret = env.COOKIE_SECRET;
+    cookieSecret = cookieSecretEnv;
   } else if (isProductionShaped) {
     throw new Error('COOKIE_SECRET is required for a non-localhost PUBLIC_URL');
   } else {

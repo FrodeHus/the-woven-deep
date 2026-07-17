@@ -23,13 +23,18 @@ export default defineConfig({
   },
   webServer: {
     // Env names from apps/server/src/config.ts: PORT, HOST, DATABASE_PATH, CONTENT_DIR,
-    // WEB_DIST_DIR. CONTENT_DIR and WEB_DIST_DIR keep their repo-root defaults (`content/`,
-    // `apps/web/dist/`); the database gets its own file so e2e runs never touch a dev database.
+    // WEB_DIST_DIR, PUBLIC_URL. CONTENT_DIR and WEB_DIST_DIR keep their repo-root defaults
+    // (`content/`, `apps/web/dist/`); the database gets its own file so e2e runs never touch a dev
+    // database. PUBLIC_URL is pinned to the `baseURL` origin so `auth.spec.ts` drives the real
+    // magic-link loop: the login origin check compares against it, magic links and the post-verify
+    // redirect are built from it, and a localhost value keeps the dev-echo mail transport active
+    // (no Mailgun configured), so `GET /api/dev/last-login-link` returns the link.
     command: 'node ../server/dist/main.js',
     env: {
       PORT: '4173',
       HOST: '127.0.0.1',
       DATABASE_PATH: '../../data/e2e-guest.sqlite',
+      PUBLIC_URL: 'http://localhost:4173',
     },
     url: 'http://localhost:4173/api/content/guest',
     reuseExistingServer: false,
