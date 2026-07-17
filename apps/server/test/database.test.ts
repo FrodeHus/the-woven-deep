@@ -31,6 +31,22 @@ describe('openDatabase', () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  it('enforces foreign keys so a session cannot reference a missing profile', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'woven-deep-database-'));
+    const database = openDatabase(join(directory, 'rogue.sqlite'));
+
+    try {
+      expect(database.pragma('foreign_keys', { simple: true })).toBe(1);
+      expect(() => database.prepare(`
+        insert into sessions(token_hash, profile_id, created_at, last_seen_at, expires_at)
+        values ('h', 'no-such-profile', 't', 't', 't')
+      `).run()).toThrow();
+    } finally {
+      database.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('runMigrations', () => {

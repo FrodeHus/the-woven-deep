@@ -111,6 +111,9 @@ export const migrateDatabase = runMigrations;
 export function openDatabase(path: string): Database.Database {
   const database = new Database(path);
   database.pragma('journal_mode = WAL');
+  // SQLite leaves foreign-key enforcement off by default; without this the REFERENCES
+  // clauses (e.g. sessions.profile_id -> profiles.id) are documentation-only.
+  database.pragma('foreign_keys = ON');
   runMigrations(database);
   return database;
 }
