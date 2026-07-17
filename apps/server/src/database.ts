@@ -38,6 +38,40 @@ export const MIGRATIONS: readonly Migration[] = [
       database.exec(createContentPacksTable);
     },
   },
+  {
+    id: 2,
+    name: 'auth-tables',
+    up: (database) => {
+      database.exec(`
+        create table if not exists profiles (
+          id text primary key,
+          normalized_email text not null unique,
+          progression_json text not null,
+          settings_json text,
+          settings_version integer not null default 0,
+          created_at text not null,
+          updated_at text not null
+        ) strict;
+
+        create table if not exists login_tokens (
+          token_hash text primary key,
+          normalized_email text not null,
+          expires_at text not null,
+          created_at text not null,
+          consumed_at text
+        ) strict;
+
+        create table if not exists sessions (
+          token_hash text primary key,
+          profile_id text not null references profiles(id),
+          created_at text not null,
+          last_seen_at text not null,
+          expires_at text not null,
+          revoked_at text
+        ) strict;
+      `);
+    },
+  },
 ];
 
 /**
