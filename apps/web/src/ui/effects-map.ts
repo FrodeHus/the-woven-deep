@@ -74,6 +74,11 @@ export function effectsForEvents(
    * streak off: every spell and every melee attack collapses onto the same generic
    * 'attack-streak' kind below. This is a disclosed limitation, not an oversight -- do not fake
    * one by guessing from `attackerName`/`targetName` text.
+   *
+   * Root cause is one layer deeper than projection: the DOMAIN events `AttackHitEvent`/
+   * `AttackMissedEvent` never capture a spell/weapon id either (the reducer discards
+   * `CastCommand.spellId` before any event is emitted), so a future fix must widen the
+   * domain-event shape in the reducer, not just `projectDomainEvents`.
    */
   events.forEach((event, index) => {
     const key = `${event.type}-${index}`;
