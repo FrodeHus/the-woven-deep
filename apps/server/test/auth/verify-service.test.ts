@@ -26,6 +26,9 @@ class FakeClock implements Clock {
 
 function freshDatabase(): Database.Database {
   const database = new Database(':memory:');
+  // Enable FK enforcement explicitly (openDatabase does this in production); the rollback
+  // test's precondition depends on it rather than on better-sqlite3's library default.
+  database.pragma('foreign_keys = ON');
   runMigrations(database);
   return database;
 }

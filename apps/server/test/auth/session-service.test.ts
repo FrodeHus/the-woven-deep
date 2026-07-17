@@ -27,6 +27,7 @@ class FakeClock implements Clock {
 
 function freshDatabase(): Database.Database {
   const database = new Database(':memory:');
+  database.pragma('foreign_keys = ON');
   runMigrations(database);
   return database;
 }
