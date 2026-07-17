@@ -264,6 +264,7 @@ const REMEMBERED_LUMINANCE = relativeLuminance(hexToRgb('#4b526b'));
 describe('named palette stylesheet contract', () => {
   const NAMED_COLORS = [
     'ink', 'ground', 'gold', 'gold-bright', 'line', 'muted', 'alert', 'panel',
+    'remembered', 'void-bg', 'portrait-default',
   ] as const;
   const MATERIAL_COLORS = ['mat-wall', 'mat-floor', 'mat-door', 'mat-stair', 'mat-void'] as const;
 
@@ -276,8 +277,11 @@ describe('named palette stylesheet contract', () => {
   it('leaves no raw hex literal for a recurring named color outside its own :root declaration', () => {
     // Every rule that used to spell out one of these hex literals directly must now reference the
     // variable instead -- the literal itself should appear exactly once in the whole file (the
-    // :root declaration line), never again as a copy-pasted value elsewhere.
-    for (const name of NAMED_COLORS) {
+    // :root declaration line), never again as a copy-pasted value elsewhere. Swept over EVERY named
+    // color (including the material palette) -- not just the original 8 -- so a re-introduced
+    // copy-pasted literal for `--remembered`/`--void-bg`/`--portrait-default`/`--mat-*` fails this
+    // just as loudly as one of the original set would.
+    for (const name of [...NAMED_COLORS, ...MATERIAL_COLORS]) {
       const hex = rootVariable(name);
       const occurrences = css.split(hex).length - 1;
       expect(occurrences, `--${name} (${hex}) should only appear once, in :root`).toBe(1);
@@ -297,8 +301,22 @@ describe('named palette stylesheet contract', () => {
     }
   });
 
-  it('gives .playfield-town a modifier rule (fed from projection.floor.town by PlayScreen)', () => {
-    expect(css).toMatch(/\.playfield-town\s*\{/);
+  it('composites the town tint into .playfield-grid\'s OWN background, not onto .playfield', () => {
+    // `.playfield-grid` paints an opaque `background: var(--void-bg)` and is a child of
+    // `.playfield` that covers essentially the same box -- a tint painted as a `background` on
+    // `.playfield` itself is fully occluded by its child and never actually renders (jsdom can't
+    // catch this via paint order, since it doesn't paint at all, so this test parses the real rule
+    // shape instead: the tint must live on a `.playfield-town .playfield-grid` rule, mixed
+    // straight into the grid's own background, not on a bare `.playfield-town` rule).
+    expect(css, 'a bare `.playfield-town { background: ... }` rule is occluded by .playfield-grid and must not exist')
+      .not.toMatch(/\.playfield-town\s*\{[^}]*background/);
+
+    const townGridRuleMatch = /\.playfield-town\s+\.playfield-grid\s*\{([^}]*)\}/.exec(css);
+    expect(townGridRuleMatch, 'expected a `.playfield-town .playfield-grid { ... }` rule').toBeTruthy();
+    const decls = townGridRuleMatch![1]!;
+    expect(decls, 'the town tint must be pre-mixed into the grid\'s own background via color-mix').toMatch(
+      /background\s*:\s*color-mix\(in srgb,\s*var\(--gold\)\s*4%,\s*var\(--void-bg\)\)/,
+    );
   });
 });
 

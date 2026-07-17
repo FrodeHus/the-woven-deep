@@ -83,12 +83,24 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   line-height: 1;
 }
 /* Town floors read slightly warmer than the dungeon proper -- PlayScreen adds this class to the
-   same `.playfield` element whenever `projection.floor.town` is true. A gentle warm-white overlay
-   (screen blend, low opacity) rather than a hue shift on the materials themselves, so the dungeon's
-   own material palette isn't duplicated per-floor-kind. */
-.playfield-town {
-  background: color-mix(in srgb, var(--gold) 4%, transparent);
-  background-blend-mode: screen;
+   same `.playfield` element whenever `projection.floor.town` is true. A gentle warm-gold tint
+   (4%) rather than a hue shift on the materials themselves, so the dungeon's own material palette
+   isn't duplicated per-floor-kind.
+   IMPORTANT: this can NOT be painted as a `background` on `.playfield` itself (as an earlier
+   version of this rule did) -- `.playfield-grid`, its child, paints its OWN opaque
+   `background: var(--void-bg)` over essentially the same box, so a `.playfield` background never
+   actually composites into anything visible; it is fully occluded. (A `background-blend-mode` on
+   `.playfield` doesn't rescue this either -- blend modes mix multiple background LAYERS on the
+   SAME element, and `.playfield` only ever had the one layer here; the two elements' separate
+   backgrounds simply stack in paint order, they never blend.) It also cannot become a second layer
+   painted onto `.playfield-grid`'s own background (e.g. two `background` layers on `.playfield-grid`
+   itself) or an inserted overlay element, because Task 6 slots a `<canvas>` into `.playfield`,
+   between it and `.playfield-grid`, and any layer occupying that space would compete with the
+   canvas for the same box. The one place left that (a) actually composites and (b) claims no
+   layer/element Task 6 needs is `.playfield-grid`'s OWN background declaration: pre-mix the 4% gold
+   into `--void-bg` itself, once, as a single flat color. */
+.playfield-town .playfield-grid {
+  background: color-mix(in srgb, var(--gold) 4%, var(--void-bg));
 }
 .playfield-grid {
   display: grid;
@@ -118,7 +130,12 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 .cell-unknown { color: transparent; background: var(--void-bg); }
 /* A remembered cell must never render brighter than the darkest a visible cell can get — otherwise
    the player's remembered floor plan would out-shine what their torch is actually illuminating
-   right now. Kept slightly below `.cell-visible`'s floor term (0.62) below. */
+   right now. Kept slightly below `.cell-visible`'s floor term (0.62) below.
+   `saturate(0.4)` desaturates whatever hue is already set on `color` IN PLACE -- it does not pull
+   different hues toward a shared `--remembered` family or toward each other; a desaturated gold
+   and a desaturated blue-grey remain visibly distinct hues, just muted versions of themselves. The
+   actual "never brighter than visible" guarantee here comes entirely from the unconditional
+   `opacity: 0.55`, not from the filter. */
 .cell-remembered { color: var(--remembered); filter: saturate(0.4); opacity: 0.55; }
 /* The floor term (0.62) is deliberately high: a visible-but-dim cell (low --light, e.g. at the
    edge of a torch's radius) must still read as brighter than any remembered cell, never darker —
@@ -142,12 +159,13 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { --mat: var(--mat-stair); }
 .cell-visible.mat-void { --mat: var(--mat-void); }
 
-/* Remembered cells keep their material hue, still funneled through the SAME `saturate(0.4)` filter
-   `.cell-remembered` already applies -- pulling every material toward the established
-   `--remembered` (#4b526b) family rather than each material's own fully-saturated color, so a
-   remembered wall and a remembered door read as close cousins of the same dim gray-blue memory,
-   never as bright or as legible as anything currently visible (the class-level `opacity: 0.55`
-   above stays the dimmer-than-any-visible guarantee; it is unchanged by material). */
+/* Remembered cells keep their material hue, still run through the SAME `saturate(0.4)` filter
+   `.cell-remembered` already applies -- but that filter only desaturates each material's own hue
+   in place, it does NOT converge different materials toward a shared `--remembered` color
+   family or toward each other; a remembered wall and a remembered door stay visibly distinct,
+   muted versions of their own colors, not close cousins of one gray-blue memory. What DOES hold
+   regardless of material is the dimmer-than-any-visible guarantee: the class-level
+   `opacity: 0.55` above is unconditional and unchanged by material. */
 .cell-remembered.mat-wall, .cell-remembered.mat-pillar { color: var(--mat-wall); }
 .cell-remembered.mat-floor { color: var(--mat-floor); }
 .cell-remembered.mat-door { color: var(--mat-door); }
