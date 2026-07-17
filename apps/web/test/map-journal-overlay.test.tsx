@@ -159,6 +159,45 @@ describe('MapJournalOverlay', () => {
       expect(screen.getByRole('grid', { name: /floor map/i })).toBeInTheDocument();
     });
 
+    it('links each tab to its panel via aria-controls/id and gives each panel role="tabpanel" with aria-labelledby back to its tab', () => {
+      const snapshot = snapshotWith({ floor: MIXED_KNOWLEDGE_FLOOR, hero: { x: 2, y: 0 } });
+      render(<MapJournalOverlay snapshot={snapshot} />);
+
+      const mapTab = screen.getByRole('tab', { name: 'Map' });
+      const journalTab = screen.getByRole('tab', { name: 'Journal' });
+      const panels = screen.getAllByRole('tabpanel', { hidden: true });
+      expect(panels).toHaveLength(1);
+      const [visiblePanel] = panels;
+
+      const mapTabId = mapTab.getAttribute('id');
+      const journalTabId = journalTab.getAttribute('id');
+      expect(mapTabId).toBeTruthy();
+      expect(journalTabId).toBeTruthy();
+
+      const mapControls = mapTab.getAttribute('aria-controls');
+      expect(mapControls).toBeTruthy();
+      expect(visiblePanel).toHaveAttribute('id', mapControls);
+      expect(visiblePanel).toHaveAttribute('aria-labelledby', mapTabId);
+    });
+
+    it('moves DOM focus to the newly-active tab on ArrowRight, using roving tabindex (active=0, inactive=-1)', async () => {
+      const user = userEvent.setup();
+      const snapshot = snapshotWith({ floor: MIXED_KNOWLEDGE_FLOOR, hero: { x: 2, y: 0 } });
+      render(<MapJournalOverlay snapshot={snapshot} />);
+
+      const mapTab = screen.getByRole('tab', { name: 'Map' });
+      const journalTab = screen.getByRole('tab', { name: 'Journal' });
+      expect(mapTab).toHaveAttribute('tabIndex', '0');
+      expect(journalTab).toHaveAttribute('tabIndex', '-1');
+
+      mapTab.focus();
+      await user.keyboard('{ArrowRight}');
+
+      expect(document.activeElement).toBe(journalTab);
+      expect(journalTab).toHaveAttribute('tabIndex', '0');
+      expect(mapTab).toHaveAttribute('tabIndex', '-1');
+    });
+
     it('also switches tabs by clicking', async () => {
       const user = userEvent.setup();
       const snapshot = snapshotWith({ floor: MIXED_KNOWLEDGE_FLOOR, hero: { x: 2, y: 0 } });

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useRef, useState, type CSSProperties, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 
 /**
@@ -13,6 +13,14 @@ type MapJournalTab = 'map' | 'journal';
 
 const TAB_ORDER: readonly MapJournalTab[] = ['map', 'journal'];
 const TAB_LABEL: Readonly<Record<MapJournalTab, string>> = { map: 'Map', journal: 'Journal' };
+const TAB_ID: Readonly<Record<MapJournalTab, string>> = {
+  map: 'map-journal-tab-map',
+  journal: 'map-journal-tab-journal',
+};
+const PANEL_ID: Readonly<Record<MapJournalTab, string>> = {
+  map: 'map-journal-panel-map',
+  journal: 'map-journal-panel-journal',
+};
 
 /** The full `ObservableCell` shape this overlay reads (`packages/engine/src/projection.ts`) --
  * every field reused verbatim, never re-derived: `knowledge` decides which of the three render
@@ -87,16 +95,29 @@ function byCell<T extends { x: number; y: number }>(items: readonly T[]): Readon
  * layered on top exactly as `GridRenderer` does. `projection.actors` is visible-only by
  * construction (`projectGameplayState`'s actor filter drops anything not currently perceived), so
  * layering actor glyphs unconditionally here can never leak an actor onto a non-visible cell.
+ *
+ * This pane deliberately omits `groundItems` overlays -- it paints actors/hero/stairs only, per
+ * the brief -- so a future reader diffing this against `GridRenderer` (which does layer ground
+ * items) should read that as intentional scope, not an oversight.
  */
-function MapPane({ floor, hero, actors }: Readonly<{
+function MapPane({ floor, hero, actors, panelId, tabId }: Readonly<{
   floor: ProjectedFloor;
   hero: ProjectedHero;
   actors: readonly ProjectedActor[];
+  panelId: string;
+  tabId: string;
 }>): JSX.Element {
   const actorsByCell = byCell(actors);
 
   return (
-    <div className="map-journal-map-pane" style={{ '--map-cell': '0.6em' } as CSSProperties}>
+    <div
+      className="map-journal-map-pane"
+      style={{ '--map-cell': '0.6em' } as CSSProperties}
+      role="tabpanel"
+      id={panelId}
+      aria-labelledby={tabId}
+      tabIndex={0}
+    >
       <div
         role="grid"
         aria-label="Floor map"
@@ -192,14 +213,18 @@ function landmarksFor(floor: ProjectedFloor, actors: readonly ProjectedActor[], 
   return landmarks;
 }
 
-function JournalPane({ snapshot }: Readonly<{ snapshot: SessionSnapshot }>): JSX.Element {
+function JournalPane({ snapshot, panelId, tabId }: Readonly<{
+  snapshot: SessionSnapshot;
+  panelId: string;
+  tabId: string;
+}>): JSX.Element {
   const floor = snapshot.projection.floor as unknown as ProjectedFloor;
   const actors = snapshot.projection.actors as unknown as readonly ProjectedActor[];
   const slots = snapshot.projection.slots as unknown as readonly ProjectedPlacementSlot[];
   const landmarks = landmarksFor(floor, actors, slots);
 
   return (
-    <div className="journal-pane">
+    <div className="journal-pane" role="tabpanel" id={panelId} aria-labelledby={tabId} tabIndex={0}>
       <p className="journal-objective">{JOURNAL_OBJECTIVE}</p>
 
       <section aria-labelledby="journal-landmarks-heading">
@@ -249,13 +274,21 @@ export function MapJournalOverlay({ snapshot }: MapJournalOverlayProps): JSX.Ele
   const hero = snapshot.projection.hero as unknown as ProjectedHero;
   const actors = snapshot.projection.actors as unknown as readonly ProjectedActor[];
 
+  // Roving-tabindex bookkeeping: only the active tab button is ever in the Tab order
+  // (`tabIndex=0`), the inactive one is `-1` -- the standard ARIA tablist convention. These refs
+  // exist solely so ArrowLeft/ArrowRight can move DOM focus to match, since updating `tab` state
+  // alone repaints `aria-selected` but never moves the screen reader/keyboard focus itself.
+  const tabButtonRefs = useRef<Record<MapJournalTab, HTMLButtonElement | null>>({ map: null, journal: null });
+
   const handleTablistKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
     const currentIndex = TAB_ORDER.indexOf(tab);
     const delta = event.key === 'ArrowRight' ? 1 : -1;
     const nextIndex = (currentIndex + delta + TAB_ORDER.length) % TAB_ORDER.length;
-    setTab(TAB_ORDER[nextIndex]!);
+    const nextTab = TAB_ORDER[nextIndex]!;
+    setTab(nextTab);
+    tabButtonRefs.current[nextTab]?.focus();
   };
 
   return (
@@ -270,9 +303,13 @@ export function MapJournalOverlay({ snapshot }: MapJournalOverlayProps): JSX.Ele
         {TAB_ORDER.map((candidate) => (
           <button
             key={candidate}
+            ref={(element) => { tabButtonRefs.current[candidate] = element; }}
             type="button"
             role="tab"
+            id={TAB_ID[candidate]}
             aria-selected={candidate === tab}
+            aria-controls={PANEL_ID[candidate]}
+            tabIndex={candidate === tab ? 0 : -1}
             className={candidate === tab ? 'map-journal-tab map-journal-tab--active' : 'map-journal-tab'}
             onClick={() => setTab(candidate)}
           >
@@ -281,8 +318,8 @@ export function MapJournalOverlay({ snapshot }: MapJournalOverlayProps): JSX.Ele
         ))}
       </div>
       {tab === 'map'
-        ? <MapPane floor={floor} hero={hero} actors={actors} />
-        : <JournalPane snapshot={snapshot} />}
+        ? <MapPane floor={floor} hero={hero} actors={actors} panelId={PANEL_ID.map} tabId={TAB_ID.map} />
+        : <JournalPane snapshot={snapshot} panelId={PANEL_ID.journal} tabId={TAB_ID.journal} />}
       <p className="map-journal-hints">← → switch tab · Esc close</p>
     </div>
   );
