@@ -96,28 +96,36 @@ describe('dismissHint', () => {
 });
 
 describe('loadOnboarding / saveOnboarding round-trip', () => {
-  it('returns the empty state when nothing is stored', () => {
-    expect(loadOnboarding(fakeStorage())).toEqual(EMPTY);
+  it('returns the empty state, not corrupted, when nothing is stored', () => {
+    const loaded = loadOnboarding(fakeStorage());
+    expect(loaded.state).toEqual(EMPTY);
+    expect(loaded.corrupted).toBe(false);
   });
 
-  it('round-trips a saved OnboardingState', () => {
+  it('round-trips a saved OnboardingState, not corrupted', () => {
     const storage = fakeStorage();
     const state: OnboardingState = { counts: { move: 4 }, dismissed: ['movement'] };
     saveOnboarding(storage, state);
-    expect(loadOnboarding(storage)).toEqual(state);
+    const loaded = loadOnboarding(storage);
+    expect(loaded.state).toEqual(state);
+    expect(loaded.corrupted).toBe(false);
     expect(storage.get(ONBOARDING_KEY)).not.toBeNull();
   });
 
-  it('treats a corrupted (non-JSON) blob as the empty state', () => {
+  it('treats a corrupted (non-JSON) blob as the empty state and reports corrupted: true', () => {
     const storage = fakeStorage();
     storage.set(ONBOARDING_KEY, 'not json{{{');
-    expect(loadOnboarding(storage)).toEqual(EMPTY);
+    const loaded = loadOnboarding(storage);
+    expect(loaded.state).toEqual(EMPTY);
+    expect(loaded.corrupted).toBe(true);
   });
 
-  it('treats a shape-invalid blob (wrong field types) as the empty state', () => {
+  it('treats a shape-invalid blob (wrong field types) as the empty state and reports corrupted: true', () => {
     const storage = fakeStorage();
     storage.set(ONBOARDING_KEY, JSON.stringify({ counts: { move: 'four' }, dismissed: [] }));
-    expect(loadOnboarding(storage)).toEqual(EMPTY);
+    const loaded = loadOnboarding(storage);
+    expect(loaded.state).toEqual(EMPTY);
+    expect(loaded.corrupted).toBe(true);
   });
 });
 
