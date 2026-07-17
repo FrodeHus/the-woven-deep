@@ -1,4 +1,5 @@
 import type { AuthConfig } from '../config.js';
+import { normalizeEmail } from './email.js';
 
 export interface MailTransport {
   sendLoginLink(input: Readonly<{ email: string; link: string }>): Promise<void>;
@@ -8,23 +9,15 @@ export interface MailTransport {
 
 const MAILGUN_SUBJECT = 'Your Woven Deep sign-in link';
 
-// NOTE: Task 5 owns the canonical `normalizeEmail` (apps/server/src/auth/email.ts, not yet
-// landed). Until it exists, the dev transport keys its map by this local trim+lowercase+NFC
-// normalization, which mirrors the rule described in the plan. Thread in the real
-// `normalizeEmail` here once Task 5 lands.
-function normalizeEmailLocally(email: string): string {
-  return email.trim().toLowerCase().normalize('NFC');
-}
-
 function createDevMailTransport(): MailTransport {
   const links = new Map<string, string>();
 
   return {
     async sendLoginLink({ email, link }) {
-      links.set(normalizeEmailLocally(email), link);
+      links.set(normalizeEmail(email), link);
     },
     lastLinkFor(email: string): string | undefined {
-      return links.get(normalizeEmailLocally(email));
+      return links.get(normalizeEmail(email));
     },
   };
 }
