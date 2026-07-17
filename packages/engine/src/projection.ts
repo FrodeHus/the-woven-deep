@@ -325,7 +325,15 @@ export interface ObservableHouse {
 export interface GameplayProjection {
   readonly floor: ObservableFloorProjection;
   readonly hero: Readonly<Record<string, unknown>>;
-  readonly actors: readonly Readonly<Record<string, unknown>>[];
+  /**
+   * `contentId` is the one formally-typed field here (the rest of an actor's shape stays an
+   * untyped record, as before) -- the perceived actor's own content id, `null` for the hero (never
+   * present in this array at all) and for fallen-champion/echo actors (see the doc comment at this
+   * field's construction site in `projectGameplayState`). This is the one permitted engine
+   * projection change for the guest-interface milestone (Task 8): it feeds the guest client's
+   * session-only sighting cache for the unlock codex, and nothing else reads or requires it.
+   */
+  readonly actors: readonly (Readonly<Record<string, unknown>> & { readonly contentId: OpaqueId | null })[];
   readonly features: readonly Readonly<Record<string, unknown>>[];
   readonly groundItems: readonly Readonly<Record<string, unknown>>[];
   readonly actions: readonly Readonly<{ type: string; cost: number }>[];
@@ -580,7 +588,20 @@ export function projectGameplayState(input: Readonly<{
       const merchantState = population?.model === 'merchant'
         ? visibleMerchantState(input.state, input.content, population)
         : {};
-      return { actorId: actor.actorId, contentId: actor.contentId, ...presentation,
+      // The one permitted projection change this milestone (Task 8): the perceived actor's own
+      // content id, so the guest client can accumulate a session sighting cache for the unlock
+      // codex. Never the hero -- the hero is already excluded from `actors` entirely (the filter
+      // above drops `actor.actorId === hero.actorId`), so there is no hero-authored row here to
+      // null in the first place. Champion/echo actors (fallen-hero encounters) DO null it: their
+      // `contentId` is `normalized.monsterId` (`champion.ts`'s `placeFallenHeroEncounters`), the
+      // shared generic fallen-hero combat template -- not a genuine "kind of monster" a player
+      // could discover, and treating it as one would misfeed the codex's monster category. Their
+      // `name`/`glyph`/`color` (via `populationPresentation`, above) are the only identity these
+      // actors already disclose -- mirroring exactly that (nothing more) is the discipline the
+      // brief asks for.
+      const perceivedContentId = (population?.model === 'champion' || population?.model === 'echo')
+        ? null : actor.contentId;
+      return { actorId: actor.actorId, contentId: perceivedContentId, ...presentation,
         ...((population?.model === 'champion' || population?.model === 'echo') ? {
           equipmentContentIds: population.equipmentContentIds,
           abilityIds: population.abilityIds,
