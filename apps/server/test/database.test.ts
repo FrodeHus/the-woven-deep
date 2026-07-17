@@ -136,4 +136,10 @@ describe('assertMigrationsWellFormed', () => {
 
     expect(() => assertMigrationsWellFormed(misordered)).toThrow();
   });
+
+  it('throws when the list does not start at id 1', () => {
+    const nonStart: Migration[] = [{ id: 2, name: 'second', up: () => {} }];
+
+    expect(() => assertMigrationsWellFormed(nonStart)).toThrow();
+  });
 });
