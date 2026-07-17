@@ -15,7 +15,7 @@ beforeAll(async () => {
   pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
 });
 
-const EMPTY_SIGHTINGS: Sightings = { monsterIds: [], itemIds: [] };
+const EMPTY_SIGHTINGS: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
 
 function record(overrides: Partial<StoredHallRecord> = {}): StoredHallRecord {
   return {

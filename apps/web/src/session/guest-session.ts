@@ -122,7 +122,7 @@ export class GuestSession {
   private pendingDecision: PublicDecision | null = null;
   private notice: SessionNotice | null;
   private houseOpen = false;
-  private sightings: Sightings = { monsterIds: [], itemIds: [] };
+  private sightings: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
   private readonly localStorage: SessionStorageLike;
   private onboarding: OnboardingState;
   private snapshot: SessionSnapshot;

@@ -4,6 +4,7 @@ import {
 import type { OpaqueId } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
+import { effectLabel } from '../labels.js';
 
 /** The real item-category vocabulary the content model/engine projection actually emits (see
  * `packages/content/src/model.ts`'s `ItemCategory`) -- never invented. */
@@ -147,7 +148,9 @@ function DetailPane({ entry }: Readonly<{ entry: MenuItem | undefined }>): JSX.E
           <dt>Effects</dt>
           <dd>
             <ul className="inventory-detail-effects">
-              {item.effects.map((effect) => <li key={effect.effectId}>{effect.effectId}</li>)}
+              {item.effects.map((effect) => (
+                <li key={effect.effectId}>{effectLabel(effect.effectId, effect.parameters)}</li>
+              ))}
             </ul>
           </dd>
         </>

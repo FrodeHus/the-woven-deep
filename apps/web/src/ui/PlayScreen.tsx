@@ -137,7 +137,7 @@ export function PlayScreen({
   overlay = null, onOpenOverlay = () => {}, onCloseOverlay = () => {},
   keymap = resolveKeymap(DEFAULT_SETTINGS.bindings),
   settings = DEFAULT_SETTINGS, onChangeSettings = () => {}, onClearGuestSession = () => {},
-  records = [], sightings = { monsterIds: [], itemIds: [] }, onboardingEnabled = true,
+  records = [], sightings = { monsterIds: [], itemIds: [], landmarks: [] }, onboardingEnabled = true,
 }: PlayScreenProps): JSX.Element {
   const snapshot = useGuestSession(session);
   const { projection } = snapshot;

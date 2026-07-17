@@ -5,6 +5,7 @@ import { HINTS } from '../../session/onboarding.js';
 import {
   ACTION_IDS, ACTION_LABELS, chordKey, type ActionId, type ResolvedKeymap,
 } from '../../session/settings.js';
+import { humanize } from '../labels.js';
 
 export interface HelpOverlayProps {
   /** The live resolved keymap (defaults merged with any rebinding) -- every chord this overlay
@@ -65,14 +66,6 @@ function ControlsSection({ keymap }: Readonly<{ keymap: ResolvedKeymap }>): JSX.
 
 function rgbToCss(color: readonly [number, number, number]): string {
   return `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
-}
-
-/* Fixtures carry no display name in the content model, only an authoring token like
- * "fixture.standing-lamp" -- turn the last segment into readable copy ("Standing lamp"). */
-function fixtureLabel(token: string): string {
-  const segment = token.split('.').at(-1) ?? token;
-  const words = segment.replaceAll('-', ' ');
-  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /**
@@ -156,7 +149,7 @@ function GlyphLegendSection({ pack }: Readonly<{ pack: CompiledContentPack }>): 
         {fixtures.map((fixture) => (
           <li key={fixture.token}>
             <span className="help-legend-glyph" style={{ color: rgbToCss(fixture.color) }}>{fixture.glyph}</span>
-            <span>{fixtureLabel(fixture.token)}</span>
+            <span>{humanize(fixture.token)}</span>
           </li>
         ))}
       </ul>

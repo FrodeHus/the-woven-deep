@@ -47,7 +47,7 @@ function snapshotWithBackpack(
     pendingDecision: null,
     notice: null,
     houseOpen: false,
-    conclusion: null, sightings: { monsterIds: [], itemIds: [] }, heroClassTags: [], onboarding: { counts: {}, dismissed: [] },
+    conclusion: null, sightings: { monsterIds: [], itemIds: [], landmarks: [] }, heroClassTags: [], onboarding: { counts: {}, dismissed: [] },
   };
 }
 
@@ -310,11 +310,28 @@ describe('InventoryOverlay (absorbs BackpackMenu -- compatibility proof: every a
       render(<InventoryOverlay snapshot={snapshot} onDispatch={vi.fn()} />);
 
       expect(screen.getByText('Identified')).toBeInTheDocument();
-      expect(screen.getByText('effect.bleed')).toBeInTheDocument();
+      // Humanized (Task 10's `labels.ts`) -- the raw authoring effect id never reaches the player.
+      expect(screen.getByText('Bleed')).toBeInTheDocument();
+      expect(screen.queryByText('effect.bleed')).not.toBeInTheDocument();
       expect(screen.getByText('meleeAccuracy: +3')).toBeInTheDocument();
       expect(screen.getByText('4')).toBeInTheDocument(); // charges
       expect(screen.getByText('87')).toBeInTheDocument(); // condition
       expect(screen.getByText('main-hand')).toBeInTheDocument(); // equipped-slot marker
+    });
+
+    it('the detail pane phrases a heal effect\'s dice parameters, not just its humanized id', () => {
+      const snapshot = snapshotWithBackpack(
+        [item({
+          itemId: 'item.potion', contentId: 'item.ashen-potion', name: 'Ashen potion', category: 'potion',
+          effects: [{ effectId: 'effect.heal', parameters: { dice: { count: 1, sides: 4, bonus: 1 } } }],
+        })],
+        {},
+      );
+
+      render(<InventoryOverlay snapshot={snapshot} onDispatch={vi.fn()} />);
+      expect(screen.getByRole('button', { name: 'Ashen potion' })).toBeInTheDocument();
+
+      expect(screen.getByText('Heal 1d4+1')).toBeInTheDocument();
     });
 
     it('marks unknown properties (an unidentified enchantment) without leaking the enchantment itself', () => {
