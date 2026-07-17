@@ -117,6 +117,11 @@ function occluderCorners(occluder: LightOccluder): readonly (readonly [number, n
   ];
 }
 
+/**
+ * Vertices are sorted by ascending atan2 angle — counter-clockwise in y-up math, which renders
+ * clockwise on this y-down cell grid. Canvas `fill()`'s nonzero rule is winding-agnostic for
+ * simple polygons, so consumers may fill either way; do not rely on a specific winding.
+ */
 export function visibilityPolygon(
   input: Readonly<{
     origin: Readonly<{ x: number; y: number }>;
