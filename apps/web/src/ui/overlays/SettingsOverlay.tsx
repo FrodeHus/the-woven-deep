@@ -1,6 +1,6 @@
 import { useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
-  ACTION_IDS, bindingConflict, chordKey, chordReserved,
+  ACTION_IDS, ACTION_LABELS, bindingConflict, chordKey, chordReserved,
   type ActionId, type KeyChord, type ResolvedKeymap, type Settings,
 } from '../../session/settings.js';
 
@@ -14,18 +14,6 @@ export interface SettingsOverlayProps {
 }
 
 const FONT_SCALE_STEPS: readonly Settings['fontScale'][] = [1, 1.15, 1.3, 1.5];
-
-/** Human-readable label per `ActionId`, used for row text and for naming the action that already
- * holds a chord in the conflict-refusal message -- never a raw `ActionId`/key literal in copy. */
-const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
-  'move.n': 'Move north', 'move.ne': 'Move northeast', 'move.e': 'Move east',
-  'move.se': 'Move southeast', 'move.s': 'Move south', 'move.sw': 'Move southwest',
-  'move.w': 'Move west', 'move.nw': 'Move northwest',
-  wait: 'Wait', rest: 'Rest', pickup: 'Pick up', descend: 'Descend', ascend: 'Ascend',
-  inventory: 'Inventory', house: 'House/Town', trade: 'Trade',
-  'character-sheet': 'Character sheet', 'map-journal': 'Map & journal', codex: 'Codex',
-  settings: 'Settings', help: 'Help',
-};
 
 /** The exact word "clear guest session" requires, typed into the confirmation field before the
  * wipe button enables -- compared case-insensitively (still "the exact word", not a substring or

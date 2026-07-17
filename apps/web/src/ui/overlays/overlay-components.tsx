@@ -1,6 +1,8 @@
 import type { ComponentType, JSX } from 'react';
+import type { CompiledContentPack } from '@woven-deep/content';
 import type { ResolvedKeymap, Settings } from '../../session/settings.js';
 import { SettingsOverlay } from './SettingsOverlay.js';
+import { HelpOverlay } from './HelpOverlay.js';
 import type { OverlayId } from './registry.js';
 
 /**
@@ -17,6 +19,12 @@ export interface OverlayBodyProps {
   readonly onChangeSettings?: (next: Settings) => void;
   readonly onClearGuestSession?: () => void;
   readonly keymap?: ResolvedKeymap;
+  /** The compiled content pack -- added for the help overlay (Task 4), which needs it to build the
+   * glyph legend. Both hosts already have `pack` on hand for every render (`App`'s boot-fetched
+   * state, `PlayScreen`'s own `pack` prop) regardless of which overlay is open or whether a run is
+   * live, so it's forwarded here unconditionally the same way `keymap` already is -- rather than
+   * threading it in only for `help`, which would make this bag vary by `OverlayId` after all. */
+  readonly pack?: CompiledContentPack | undefined;
 }
 
 function ComingSoon(): JSX.Element {
@@ -48,6 +56,19 @@ function SettingsOverlayBody(props: OverlayBodyProps): JSX.Element {
 }
 
 /**
+ * Adapts the widened `OverlayBodyProps` bag down to `HelpOverlay`'s own (fully required)
+ * `HelpOverlayProps`. Same non-null-assertion reasoning as `SettingsOverlayBody`: both hosts always
+ * pass `keymap`/`pack` on every render, regardless of which overlay is open.
+ */
+function HelpOverlayBody(props: OverlayBodyProps): JSX.Element {
+  const { keymap, pack } = props;
+  if (!keymap || !pack) {
+    return <p>Help is unavailable right now.</p>;
+  }
+  return <HelpOverlay keymap={keymap} pack={pack} />;
+}
+
+/**
  * The single shared lookup from `OverlayId` to the component that renders its body -- previously
  * duplicated as an identical `overlayBody` switch in both `App.tsx` and `PlayScreen.tsx`. Five ids
  * are still the placeholder component; `settings` is the first real one (Task 3). Later
@@ -64,5 +85,5 @@ export const OVERLAY_COMPONENTS: Readonly<Record<OverlayId, ComponentType<Overla
   'map-journal': ComingSoon,
   codex: ComingSoon,
   settings: SettingsOverlayBody,
-  help: ComingSoon,
+  help: HelpOverlayBody,
 };

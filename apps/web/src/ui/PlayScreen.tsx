@@ -389,6 +389,7 @@ export function PlayScreen({
                 onChangeSettings={onChangeSettings}
                 onClearGuestSession={onClearGuestSession}
                 keymap={keymap}
+                pack={pack}
               />
             </OverlayErrorBoundary>
           </OverlayScaffold>

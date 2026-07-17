@@ -48,6 +48,20 @@ function chord(key: string, shift = false): KeyChord {
   return { key, shift };
 }
 
+/** Human-readable label per `ActionId` -- the single source of truth for naming an action in copy
+ * (settings rows, conflict-refusal messages, the help overlay's controls section) so no caller
+ * needs a raw `ActionId`/key literal to describe what a row means. Originally defined inline in
+ * `SettingsOverlay.tsx`; extracted here (Task 4) once the help overlay needed the same labels. */
+export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
+  'move.n': 'Move north', 'move.ne': 'Move northeast', 'move.e': 'Move east',
+  'move.se': 'Move southeast', 'move.s': 'Move south', 'move.sw': 'Move southwest',
+  'move.w': 'Move west', 'move.nw': 'Move northwest',
+  wait: 'Wait', rest: 'Rest', pickup: 'Pick up', descend: 'Descend', ascend: 'Ascend',
+  inventory: 'Inventory', house: 'House/Town', trade: 'Trade',
+  'character-sheet': 'Character sheet', 'map-journal': 'Map & journal', codex: 'Codex',
+  settings: 'Settings', help: 'Help',
+};
+
 /**
  * The shipped keymap. Movement defaults are the vi keys (arrows/numpad are separate, hardwired
  * synonyms baked into `KeyRouter.ts` -- they are never represented here and can never be

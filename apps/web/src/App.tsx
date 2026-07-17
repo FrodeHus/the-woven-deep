@@ -393,6 +393,7 @@ export function App({ fetcher = fetch, storage: storageOverride, localStorage: l
             onChangeSettings={handleSettingsChange}
             onClearGuestSession={handleClearGuestSession}
             keymap={keymap}
+            pack={pack}
           />
         </OverlayErrorBoundary>
       </OverlayScaffold>

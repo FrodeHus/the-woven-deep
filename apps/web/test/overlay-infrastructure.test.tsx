@@ -66,9 +66,10 @@ describe('registry overlay infrastructure', () => {
       pressKey(chord);
       const dialog = await screen.findByRole('dialog', { name: title });
       expect(dialog).toHaveAttribute('data-testid', `overlay-${id}`);
-      // `settings` is real content as of the settings overlay (see settings-overlay.test.tsx for
-      // its own coverage); the other four ids are still the placeholder body.
-      if (id === 'settings') {
+      // `settings` and `help` are real content as of their respective overlays (see
+      // settings-overlay.test.tsx and help-overlay.test.tsx for their own coverage); the remaining
+      // three ids are still the placeholder body.
+      if (id === 'settings' || id === 'help') {
         expect(dialog).not.toHaveTextContent('Coming in a later task');
       } else {
         expect(dialog).toHaveTextContent('Coming in a later task');
