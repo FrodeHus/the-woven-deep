@@ -156,11 +156,11 @@ export function LogPanel({ snapshot }: PanelProps): JSX.Element {
 
 export function StatusBar({ snapshot }: PanelProps): JSX.Element {
   const heroData = hero(snapshot);
-  const { metrics } = snapshot.projection;
+  const { metrics, floor } = snapshot.projection;
   return (
     <div className="status-bar" role="status">
       <span className="status-hero">{heroData.name}</span>
-      <span className="status-depth">{`Depth ${metrics.deepestDepth}`}</span>
+      <span className="status-depth">{floor.town ? 'Town' : `Depth ${floor.depth}`}</span>
       <span data-testid="turn-count">{`Turn ${metrics.turnsElapsed}`}</span>
     </div>
   );

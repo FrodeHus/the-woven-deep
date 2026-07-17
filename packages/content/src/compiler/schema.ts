@@ -190,6 +190,8 @@ const lootChoice = z.strictObject({
   weight: safePositive,
   minimumQuantity: safePositive,
   maximumQuantity: safePositive,
+  minDepth: safeNonNegative.max(999).optional(),
+  maxDepth: safeNonNegative.max(999).optional(),
 });
 
 const lootTableEntry = z.strictObject({
@@ -316,7 +318,23 @@ const balanceEntry = z.strictObject({
     budget: safePositive,
     costs: z.array(z.strictObject({ value: safeInteger, cost: safeNonNegative })),
   }),
+  restockMilestones: z.array(safePositive),
+  house: z.strictObject({
+    baseCapacity: safePositive,
+    strongboxIncrement: safePositive,
+  }),
+  encounterDensity: z.strictObject({
+    cellsPerEncounter: safePositive,
+  }),
 }).superRefine((entry, context) => {
+  let previousMilestone = 0;
+  entry.restockMilestones.forEach((milestone, index) => {
+    if (milestone <= previousMilestone) {
+      context.addIssue({ code: 'custom', path: ['restockMilestones', index],
+        message: 'restock milestones must be strictly increasing positive integers' });
+    }
+    previousMilestone = milestone;
+  });
   const { starving, weak, hungry } = entry.hungerThresholds;
   if (!(starving <= weak && weak <= hungry && hungry < entry.hungerMaximum)) {
     context.addIssue({ code: 'custom', path: ['hungerThresholds'],
@@ -414,9 +432,16 @@ const rotations = z.array(z.union([z.literal(0), z.literal(90), z.literal(180), 
     }
   });
 const layoutRow = z.string().min(1).refine((value) => [...value].length <= 160, 'layout row exceeds 160 code points');
+export const TOWN_VAULT_REQUIRED_SLOT_IDS = [
+  'dungeon-entrance', 'house-door', 'merchant-provisioner', 'merchant-arms', 'merchant-curios',
+] as const;
+
 const vaultEntry = z.strictObject({
   ...base,
-  ...depthRange,
+  // Ordinary vaults require a positive depth range; the surface town vault is the sole
+  // exception and is pinned to minDepth 0 / maxDepth 0 by the tag-scoped rule below.
+  minDepth: safeNonNegative,
+  maxDepth: safeNonNegative,
   kind: z.literal('vault'),
   rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
   weight: safePositive,
@@ -426,6 +451,19 @@ const vaultEntry = z.strictObject({
   layout: z.array(layoutRow).min(1).max(100),
   legend: z.record(z.string(), legendEntry),
 }).superRefine((entry, context) => {
+  const isTown = entry.tags.includes('town');
+  if (isTown) {
+    if (entry.minDepth !== 0 || entry.maxDepth !== 0) {
+      context.addIssue({ code: 'custom', path: ['minDepth'], message: 'a town vault requires minDepth 0 and maxDepth 0' });
+    }
+  } else {
+    if (entry.minDepth <= 0) {
+      context.addIssue({ code: 'custom', path: ['minDepth'], message: 'Too small: expected number to be >0' });
+    }
+    if (entry.maxDepth <= 0) {
+      context.addIssue({ code: 'custom', path: ['maxDepth'], message: 'Too small: expected number to be >0' });
+    }
+  }
   if (entry.maxDepth < entry.minDepth) context.addIssue({ code: 'custom', path: ['maxDepth'], message: 'maximum depth must be greater than or equal to minimum depth' });
 });
 
@@ -546,19 +584,49 @@ const bossEncounterEntry = z.strictObject({
   }),
 });
 
+export const merchantServiceIds = ['merchant-service.identify', 'merchant-service.strongbox'] as const;
+
 const merchantService = z.strictObject({
-  serviceId: z.literal('merchant-service.identify'), basePrice: safeNonNegative,
+  serviceId: z.enum(merchantServiceIds), basePrice: safeNonNegative,
   minimumUses: safeNonNegative, maximumUses: safeNonNegative, tierIds: z.array(slugSchema).min(1),
+}).superRefine((service, context) => {
+  if (service.serviceId === 'merchant-service.strongbox' && (service.minimumUses !== 1 || service.maximumUses !== 1)) {
+    context.addIssue({
+      code: 'custom', path: ['minimumUses'],
+      message: 'the strongbox service requires minimumUses and maximumUses of exactly 1',
+    });
+  }
 });
 const merchantEncounterDefinition = z.strictObject({
   npcId: stableIdSchema, stockLootTableId: stableIdSchema,
   minimumStockRolls: safePositive, maximumStockRolls: safePositive,
   merchantSaleBps: safePositive, merchantPurchaseBps: safePositive,
   acceptedCategories: z.array(z.enum(['weapon', 'ammunition', 'armor', 'shield', 'light', 'fuel', 'food', 'potion', 'scroll', 'ring', 'misc'])).min(1),
-  services: z.array(merchantService), minimumLifetime: safePositive, maximumLifetime: safePositive,
-  departureWarningThresholds: z.array(safePositive), aggressionResponse: z.enum(['flee', 'self-defense']),
+  services: z.array(merchantService),
+  // A permanent (town) merchant never departs and must omit every lifetime field below;
+  // a non-permanent (dungeon-wandering) merchant must declare all three.
+  permanent: z.boolean(),
+  minimumLifetime: safePositive.optional(), maximumLifetime: safePositive.optional(),
+  departureWarningThresholds: z.array(safePositive).optional(), aggressionResponse: z.enum(['flee', 'self-defense']),
   commerceReputationDelta: safeInteger, aggressionReputationDelta: safeInteger,
   deathReputationDelta: safeInteger, stockDropFraction: probability,
+}).superRefine((definition, context) => {
+  const hasAnyLifetimeField = definition.minimumLifetime !== undefined
+    || definition.maximumLifetime !== undefined || definition.departureWarningThresholds !== undefined;
+  if (definition.permanent && hasAnyLifetimeField) {
+    context.addIssue({
+      code: 'custom', path: ['permanent'],
+      message: 'a permanent merchant must not declare minimumLifetime, maximumLifetime, or departureWarningThresholds',
+    });
+  }
+  const hasEveryLifetimeField = definition.minimumLifetime !== undefined
+    && definition.maximumLifetime !== undefined && definition.departureWarningThresholds !== undefined;
+  if (!definition.permanent && !hasEveryLifetimeField) {
+    context.addIssue({
+      code: 'custom', path: ['permanent'],
+      message: 'a non-permanent merchant requires minimumLifetime, maximumLifetime, and departureWarningThresholds',
+    });
+  }
 });
 
 const encounterEntry = z.strictObject({
@@ -615,7 +683,7 @@ const encounterEntry = z.strictObject({
 const reputationTier = z.strictObject({
   tierId: slugSchema, name: z.string().trim().min(1).max(80), minimum: safeInteger, maximum: safeInteger,
   purchasePriceBps: safePositive, salePriceBps: safePositive, acceptsTrade: z.boolean(),
-  serviceIds: z.array(z.literal('merchant-service.identify')),
+  serviceIds: z.array(z.enum(merchantServiceIds)),
 });
 const npcFactionEntry = z.strictObject({
   ...base, kind: z.literal('npc-faction'), minimumReputation: safeInteger, maximumReputation: safeInteger,

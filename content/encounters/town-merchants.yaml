@@ -1,0 +1,96 @@
+schemaVersion: 7
+entries:
+  - kind: encounter
+    id: encounter.town-provisioner
+    name: Town Provisioner
+    tags: [town, merchant, provisioner]
+    model: merchant
+    minDepth: 1
+    maxDepth: 1
+    environmentTags: []
+    requiredVaultTags: [town]
+    weight: 1
+    rarity: common
+    runAppearanceChance: 1
+    maximumInstancesPerRun: 1
+    placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: required }
+    intentPresentation: { visible: true }
+    definition:
+      npcId: npc.town-provisioner
+      stockLootTableId: loot-table.town-provisioner
+      minimumStockRolls: 1
+      maximumStockRolls: 1
+      merchantSaleBps: 12000
+      merchantPurchaseBps: 6000
+      acceptedCategories: [food, fuel, light]
+      services:
+        - { serviceId: merchant-service.strongbox, basePrice: 45, minimumUses: 1, maximumUses: 1, tierIds: [neutral, refused, trusted, wary] }
+      permanent: true
+      aggressionResponse: flee
+      commerceReputationDelta: 25
+      aggressionReputationDelta: -300
+      deathReputationDelta: -200
+      stockDropFraction: 0.5
+
+  - kind: encounter
+    id: encounter.town-armorer
+    name: Town Armorer
+    tags: [town, merchant, arms]
+    model: merchant
+    minDepth: 1
+    maxDepth: 1
+    environmentTags: []
+    requiredVaultTags: [town]
+    weight: 1
+    rarity: common
+    runAppearanceChance: 1
+    maximumInstancesPerRun: 1
+    placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: required }
+    intentPresentation: { visible: true }
+    definition:
+      npcId: npc.town-armorer
+      stockLootTableId: loot-table.town-arms
+      minimumStockRolls: 1
+      maximumStockRolls: 1
+      merchantSaleBps: 12000
+      merchantPurchaseBps: 6000
+      acceptedCategories: [weapon, ammunition, armor, shield]
+      services: []
+      permanent: true
+      aggressionResponse: self-defense
+      commerceReputationDelta: 25
+      aggressionReputationDelta: -300
+      deathReputationDelta: -200
+      stockDropFraction: 0.5
+
+  - kind: encounter
+    id: encounter.town-curios-dealer
+    name: Town Curios Dealer
+    tags: [town, merchant, curios]
+    model: merchant
+    minDepth: 1
+    maxDepth: 1
+    environmentTags: []
+    requiredVaultTags: [town]
+    weight: 1
+    rarity: common
+    runAppearanceChance: 1
+    maximumInstancesPerRun: 1
+    placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: required }
+    intentPresentation: { visible: true }
+    definition:
+      npcId: npc.town-curios-dealer
+      stockLootTableId: loot-table.town-curios
+      minimumStockRolls: 1
+      maximumStockRolls: 1
+      merchantSaleBps: 12000
+      merchantPurchaseBps: 6000
+      acceptedCategories: [potion, ring, scroll]
+      services:
+        - { serviceId: merchant-service.identify, basePrice: 10, minimumUses: 1, maximumUses: 2, tierIds: [neutral, trusted] }
+      permanent: true
+      aggressionResponse: flee
+      commerceReputationDelta: 25
+      aggressionReputationDelta: -300
+      deathReputationDelta: -200
+      stockDropFraction: 0.5

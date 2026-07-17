@@ -66,6 +66,62 @@ function withStairDownUnderHero(projection: GameplayProjection): GameplayProject
   };
 }
 
+function withStairUpUnderHero(projection: GameplayProjection): GameplayProjection {
+  const { x, y } = heroPosition(projection);
+  return {
+    ...projection,
+    floor: {
+      ...projection.floor,
+      cells: projection.floor.cells.map((cell) => (cell.x === x && cell.y === y ? { ...cell, tileId: 4 as const } : cell)),
+    },
+  };
+}
+
+function houseDoorSlot(projection: GameplayProjection): { x: number; y: number } {
+  const slots = projection.slots as unknown as readonly { tags: readonly string[]; x: number; y: number }[];
+  const found = slots.find((slot) => slot.tags.includes('house-door'));
+  if (!found) throw new Error('test fixture town projection is missing its house-door slot');
+  return { x: found.x, y: found.y };
+}
+
+function withHeroAt(projection: GameplayProjection, x: number, y: number): GameplayProjection {
+  return { ...projection, hero: { ...projection.hero, x, y } };
+}
+
+interface ProjectedMerchantActor {
+  readonly actorId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly factionName?: string;
+}
+
+function firstMerchantActor(projection: GameplayProjection): ProjectedMerchantActor {
+  const merchant = (projection.actors as unknown as readonly ProjectedMerchantActor[])
+    .find((actor) => typeof actor.factionName === 'string');
+  if (!merchant) throw new Error('test fixture town projection is missing a merchant actor');
+  return merchant;
+}
+
+function withActiveTrade(
+  projection: GameplayProjection, overrides: Partial<NonNullable<GameplayProjection['trade']>> = {},
+): GameplayProjection {
+  return {
+    ...projection,
+    trade: {
+      merchantPopulationId: 'population.town-provisioner',
+      merchantActorId: 'actor.population.town-provisioner.001',
+      merchantName: 'Provisioner',
+      factionName: 'Provisioners Guild',
+      reputationTier: 'neutral',
+      currency: 100,
+      stock: [],
+      saleOffers: [],
+      services: [],
+      ...overrides,
+    },
+  };
+}
+
 describe('buildIntent', () => {
   it('builds a move command for an empty walkable target', () => {
     const built = buildIntent({
@@ -226,6 +282,24 @@ describe('buildIntent', () => {
     });
   });
 
+  it('builds an unequip command for an equipped item, finding its slot from the projection', () => {
+    const equipment = (baseProjection.hero as unknown as {
+      equipment: Readonly<Record<string, Readonly<{ itemId: string }> | null>>;
+    }).equipment;
+    const sword = equipment['main-hand']!;
+    const built = buildIntent({
+      intent: { type: 'backpack', action: 'unequip', itemId: sword.itemId },
+      projection: baseProjection,
+      commandId: 'command.guest-000099',
+      expectedRevision: 42,
+      pack,
+    });
+    expect(built).toEqual({
+      kind: 'command',
+      command: { type: 'unequip', slot: 'main-hand', commandId: 'command.guest-000099', expectedRevision: 42 },
+    });
+  });
+
   it('rejects equip of a non-equipment item with the item name in the message', () => {
     const backpack = baseProjection.hero as unknown as { backpack: readonly Readonly<Record<string, unknown>>[] };
     const ration = backpack.backpack.find((item) => item.contentId === 'item.travel-ration')!;
@@ -238,5 +312,228 @@ describe('buildIntent', () => {
     });
     expect(built.kind).toBe('rejected');
     expect((built as { message: string }).message).toMatch(/travel ration/i);
+  });
+
+  it('returns ascend marker only when the hero stands on the stair-up cell, else rejects', () => {
+    const onStairs = withStairUpUnderHero(baseProjection);
+    const built = buildIntent({
+      intent: { type: 'ascend' },
+      projection: onStairs,
+      commandId: 'command.guest-000014',
+      expectedRevision: 12,
+    });
+    expect(built).toEqual({ kind: 'ascend' });
+
+    const notOnStairs = buildIntent({
+      intent: { type: 'ascend' },
+      projection: baseProjection,
+      commandId: 'command.guest-000015',
+      expectedRevision: 12,
+    });
+    expect(notOnStairs.kind).toBe('rejected');
+  });
+
+  it('returns house marker only when the hero is Chebyshev-adjacent to the house-door slot, else rejects', () => {
+    const door = houseDoorSlot(baseProjection);
+    const adjacent = withHeroAt(baseProjection, door.x + 1, door.y + 1);
+    const built = buildIntent({
+      intent: { type: 'house' },
+      projection: adjacent,
+      commandId: 'command.guest-000016',
+      expectedRevision: 13,
+    });
+    expect(built).toEqual({ kind: 'house' });
+
+    const far = withHeroAt(baseProjection, door.x + 5, door.y);
+    const rejected = buildIntent({
+      intent: { type: 'house' },
+      projection: far,
+      commandId: 'command.guest-000017',
+      expectedRevision: 13,
+    });
+    expect(rejected.kind).toBe('rejected');
+
+    const onTopOfDoor = withHeroAt(baseProjection, door.x, door.y);
+    expect(buildIntent({
+      intent: { type: 'house' },
+      projection: onTopOfDoor,
+      commandId: 'command.guest-000018',
+      expectedRevision: 13,
+    }).kind).toBe('rejected');
+  });
+
+  it('builds house-deposit/house-withdraw commands for house-transfer intents', () => {
+    const deposit = buildIntent({
+      intent: { type: 'house-transfer', action: 'deposit', itemId: 'item.some-item', quantity: 2 },
+      projection: baseProjection,
+      commandId: 'command.guest-000019',
+      expectedRevision: 14,
+    });
+    expect(deposit).toEqual({
+      kind: 'command',
+      command: {
+        type: 'house-deposit', itemId: 'item.some-item', quantity: 2,
+        commandId: 'command.guest-000019', expectedRevision: 14,
+      },
+    });
+
+    const withdraw = buildIntent({
+      intent: { type: 'house-transfer', action: 'withdraw', itemId: 'item.some-item', quantity: 1 },
+      projection: baseProjection,
+      commandId: 'command.guest-000020',
+      expectedRevision: 15,
+    });
+    expect(withdraw).toEqual({
+      kind: 'command',
+      command: {
+        type: 'house-withdraw', itemId: 'item.some-item', quantity: 1,
+        commandId: 'command.guest-000020', expectedRevision: 15,
+      },
+    });
+  });
+
+  it('builds trade-open only when the hero is Chebyshev-adjacent to a merchant actor, else rejects', () => {
+    const merchant = firstMerchantActor(baseProjection);
+    const adjacent = withHeroAt(baseProjection, merchant.x - 1, merchant.y - 1);
+    const built = buildIntent({
+      intent: { type: 'trade-open' },
+      projection: adjacent,
+      commandId: 'command.guest-000021',
+      expectedRevision: 16,
+    });
+    expect(built).toEqual({
+      kind: 'command',
+      command: {
+        type: 'trade-open', merchantActorId: merchant.actorId,
+        commandId: 'command.guest-000021', expectedRevision: 16,
+      },
+    });
+
+    const far = withHeroAt(baseProjection, merchant.x + 5, merchant.y);
+    const rejected = buildIntent({
+      intent: { type: 'trade-open' },
+      projection: far,
+      commandId: 'command.guest-000022',
+      expectedRevision: 16,
+    });
+    expect(rejected.kind).toBe('rejected');
+
+    const onTopOfMerchant = withHeroAt(baseProjection, merchant.x, merchant.y);
+    expect(buildIntent({
+      intent: { type: 'trade-open' },
+      projection: onTopOfMerchant,
+      commandId: 'command.guest-000023',
+      expectedRevision: 16,
+    }).kind).toBe('rejected');
+  });
+
+  it('rejects trade-buy/trade-sell/trade-service/trade-close when no trade session is open', () => {
+    const buy = buildIntent({
+      intent: { type: 'trade-buy', itemId: 'item.some-stock', quantity: 1 },
+      projection: baseProjection,
+      commandId: 'command.guest-000024',
+      expectedRevision: 17,
+    });
+    expect(buy.kind).toBe('rejected');
+
+    const sell = buildIntent({
+      intent: { type: 'trade-sell', itemId: 'item.some-offer', quantity: 1 },
+      projection: baseProjection,
+      commandId: 'command.guest-000025',
+      expectedRevision: 17,
+    });
+    expect(sell.kind).toBe('rejected');
+
+    const service = buildIntent({
+      intent: { type: 'trade-service', serviceId: 'merchant-service.strongbox', targetItemId: null },
+      projection: baseProjection,
+      commandId: 'command.guest-000026',
+      expectedRevision: 17,
+    });
+    expect(service.kind).toBe('rejected');
+
+    const close = buildIntent({
+      intent: { type: 'trade-close' },
+      projection: baseProjection,
+      commandId: 'command.guest-000027',
+      expectedRevision: 17,
+    });
+    expect(close.kind).toBe('rejected');
+  });
+
+  it('builds trade-buy/trade-sell/trade-service/trade-close against the open session\'s merchant population', () => {
+    const projection = withActiveTrade(baseProjection);
+
+    const buy = buildIntent({
+      intent: { type: 'trade-buy', itemId: 'item.some-stock', quantity: 2 },
+      projection,
+      commandId: 'command.guest-000028',
+      expectedRevision: 18,
+    });
+    expect(buy).toEqual({
+      kind: 'command',
+      command: {
+        type: 'trade-buy', merchantPopulationId: 'population.town-provisioner',
+        itemId: 'item.some-stock', quantity: 2, commandId: 'command.guest-000028', expectedRevision: 18,
+      },
+    });
+
+    const sell = buildIntent({
+      intent: { type: 'trade-sell', itemId: 'item.some-offer', quantity: 1 },
+      projection,
+      commandId: 'command.guest-000029',
+      expectedRevision: 18,
+    });
+    expect(sell).toEqual({
+      kind: 'command',
+      command: {
+        type: 'trade-sell', merchantPopulationId: 'population.town-provisioner',
+        itemId: 'item.some-offer', quantity: 1, commandId: 'command.guest-000029', expectedRevision: 18,
+      },
+    });
+
+    const service = buildIntent({
+      intent: { type: 'trade-service', serviceId: 'merchant-service.strongbox', targetItemId: null },
+      projection,
+      commandId: 'command.guest-000030',
+      expectedRevision: 18,
+    });
+    expect(service).toEqual({
+      kind: 'command',
+      command: {
+        type: 'trade-service', merchantPopulationId: 'population.town-provisioner',
+        serviceId: 'merchant-service.strongbox', targetItemId: null,
+        commandId: 'command.guest-000030', expectedRevision: 18,
+      },
+    });
+
+    const identifyService = buildIntent({
+      intent: { type: 'trade-service', serviceId: 'merchant-service.identify', targetItemId: 'item.mystery' },
+      projection,
+      commandId: 'command.guest-000031',
+      expectedRevision: 18,
+    });
+    expect(identifyService).toEqual({
+      kind: 'command',
+      command: {
+        type: 'trade-service', merchantPopulationId: 'population.town-provisioner',
+        serviceId: 'merchant-service.identify', targetItemId: 'item.mystery',
+        commandId: 'command.guest-000031', expectedRevision: 18,
+      },
+    });
+
+    const close = buildIntent({
+      intent: { type: 'trade-close' },
+      projection,
+      commandId: 'command.guest-000032',
+      expectedRevision: 18,
+    });
+    expect(close).toEqual({
+      kind: 'command',
+      command: {
+        type: 'trade-close', merchantPopulationId: 'population.town-provisioner',
+        commandId: 'command.guest-000032', expectedRevision: 18,
+      },
+    });
   });
 });

@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, emptyEquipment, encodeActiveRun,
+  createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, descendToNextFloor, emptyEquipment, encodeActiveRun,
   RECENT_COMMAND_LIMIT, type ActiveRun, type ActorState, type Uint32State,
 } from '@woven-deep/engine';
 import { GuestSession } from '../src/session/guest-session.js';
@@ -14,15 +14,28 @@ let pack: CompiledContentPack;
 
 const SEED: Uint32State = [11, 22, 33, 44];
 
-// Found by scanning candidate seeds `[a, a+1, a+2, a+3]` for a==743 in a small throwaway script:
-// createNewRun a depth-1 floor, then `findPath` (topology 8) from the hero's spawn to the floor's
-// `stairDown`. This seed's path is 16 steps and crosses no other actor's starting position, so
-// walking it with plain `move` intents never bumps into anything.
+// The town is authored, fixed layout (not generated), so this path is the same for every seed:
+// from the town's entrance plaza, the dungeon entrance (the town's stair-down) sits a single
+// diagonal step southeast (verified against the compiled town vault's tiles).
 const DESCEND_SEED: Uint32State = [743, 744, 745, 746];
-const DESCEND_PATH = [
-  'east', 'southeast', 'southeast', 'southeast', 'southeast', 'southeast', 'southeast', 'east',
-  'east', 'southeast', 'southwest', 'southeast', 'southeast', 'southeast', 'southeast', 'southeast',
-] as const;
+const DESCEND_PATH = ['southeast'] as const;
+
+/** A run whose hero has already descended once, standing on the depth-1 floor's stair-up tile
+ * (arrival position from `descendToNextFloor`). Built directly (not by dispatching through the
+ * session) so tests that need a dark, non-town floor — where the town's always-on ambient light
+ * doesn't defeat the "doused torch keeps a neighbor hidden" trick below — can start there without
+ * re-deriving the town-to-dungeon walk in every test. */
+function depth1Run(seed: Uint32State): ActiveRun {
+  const fresh = createNewRun({ pack, seed, hero: DEFAULT_GUEST_HERO });
+  const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+  const town = fresh.floors.find((floor) => floor.floorId === hero.floorId)!;
+  const atStairDown: ActiveRun = {
+    ...fresh,
+    actors: fresh.actors.map((actor) => actor.actorId === hero.actorId
+      ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y } : actor),
+  };
+  return descendToNextFloor(atStairDown, { content: pack }).state;
+}
 
 beforeAll(async () => {
   pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
@@ -153,12 +166,73 @@ describe('GuestSession', () => {
     expect(saved).not.toBeNull();
     const restored: ActiveRun = decodeActiveRun(saved!);
     expect(restored.floors.length).toBe(2);
-    expect(restored.activeFloorId).toBe('floor.depth-002');
+    expect(restored.activeFloorId).toBe('floor.depth-001');
+  });
+
+  it('routes ascend through the engine transition and persists the trip back to town, mirroring descend', () => {
+    const storage = fakeStorage();
+    const session = new GuestSession({ pack, storage, seed: DESCEND_SEED });
+
+    for (const direction of DESCEND_PATH) session.dispatch({ type: 'move', direction });
+    session.dispatch({ type: 'descend' });
+    expect(decodeActiveRun(storage.peek()!).activeFloorId).toBe('floor.depth-001');
+
+    session.dispatch({ type: 'ascend' });
+
+    const restored = decodeActiveRun(storage.peek()!);
+    expect(restored.floors.length).toBe(2);
+    expect(restored.activeFloorId).toBe('floor.depth-000');
+    expect(session.getSnapshot().projection.floor.town).toBe(true);
+  });
+
+  it('surfaces an ascend rejection as a log line when the hero is not on stair-up', () => {
+    const storage = fakeStorage();
+    const session = new GuestSession({ pack, storage, seed: SEED });
+    const logBefore = session.getSnapshot().log.length;
+
+    session.dispatch({ type: 'ascend' });
+
+    expect(session.getSnapshot().log.length).toBe(logBefore + 1);
+    expect(session.getSnapshot().log.at(-1)?.tone).toBe('system');
+  });
+
+  it('opens the house screen via a "house" intent only when adjacent to the house door', () => {
+    const storage = fakeStorage();
+    const session = new GuestSession({ pack, storage, seed: SEED });
+
+    expect(session.getSnapshot().houseOpen).toBe(false);
+    session.dispatch({ type: 'house' });
+    expect(session.getSnapshot().houseOpen).toBe(false);
+    expect(session.getSnapshot().log.at(-1)?.tone).toBe('system');
+
+    session.setHouseOpen(true);
+    expect(session.getSnapshot().houseOpen).toBe(true);
+    session.setHouseOpen(false);
+    expect(session.getSnapshot().houseOpen).toBe(false);
+  });
+
+  it('opens the house screen through a "house" intent dispatch when the hero is adjacent to the house door', () => {
+    const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+    const town = fresh.floors.find((floor) => floor.floorId === hero.floorId)!;
+    const door = town.placementSlots.find((slot) => slot.tags.includes('house-door'))!;
+    const adjacentRun: ActiveRun = {
+      ...fresh,
+      actors: fresh.actors.map((actor) => actor.actorId === hero.actorId
+        ? { ...actor, x: door.x - 1, y: door.y - 1 } : actor),
+    };
+    const storage = fakeStorage();
+    storage.set(SAVE_KEY, encodeActiveRun(adjacentRun));
+    const session = new GuestSession({ pack, storage });
+
+    session.dispatch({ type: 'house' });
+
+    expect(session.getSnapshot().houseOpen).toBe(true);
   });
 
   it('exposes lastEvents for one snapshot generation and pendingDecision for decision_required results', () => {
     const storage = fakeStorage();
-    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const run = depth1Run(SEED);
     const hero = run.actors.find((actor) => actor.playerControlled)!;
 
     // Douse the hero's torch and place a neutral actor one tile east, in the dark, so it never
@@ -207,7 +281,7 @@ describe('GuestSession', () => {
 
   it('clears the pending decision with a log line when the player declines', () => {
     const storage = fakeStorage();
-    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const run = depth1Run(SEED);
     const hero = run.actors.find((actor) => actor.playerControlled)!;
     const doused = run.items.map((item) => item.location.type === 'equipped' && item.location.slot === 'off-hand'
       ? { ...item, enabled: false } : item);
@@ -327,29 +401,35 @@ describe('GuestSession', () => {
     // deriving commandId from `revision + 1` alone collides forever after any `invalid` result,
     // because the engine records invalid results into `recentCommands` WITHOUT advancing revision
     // (reducer.ts recordInvalid), and rejects any later same-id/different-payload command as
-    // `command_id_conflict`. From this seed's start position, `north` is a wall (verified against
-    // the compiled floor's tiles), so it is guaranteed to produce an `invalid` result without
-    // moving the hero.
+    // `command_id_conflict`. The town's entrance plaza sits in a large open room, so unlike an
+    // ungenerated dungeon spawn there is no wall in any of the hero's 8 starting neighbors — but
+    // walking west 4 times reaches the room's western wall (verified against the compiled town
+    // vault's tiles), so a 5th `west` is guaranteed to produce an `invalid` result without moving
+    // the hero further.
     const storage = fakeStorage();
     const session = new GuestSession({ pack, storage, seed: SEED });
-    const logBefore = session.getSnapshot().log.length;
 
-    session.dispatch({ type: 'move', direction: 'north' });
+    for (let step = 0; step < 4; step += 1) session.dispatch({ type: 'move', direction: 'west' });
+    const beforeBump = session.getSnapshot();
+    const turnsBeforeBump = beforeBump.projection.metrics.turnsElapsed;
+    const logBefore = beforeBump.log.length;
+
+    session.dispatch({ type: 'move', direction: 'west' });
 
     const afterBump = session.getSnapshot();
     expect(afterBump.log.length).toBe(logBefore + 1);
     expect(afterBump.log.at(-1)?.tone).toBe('system');
-    expect(afterBump.projection.metrics.turnsElapsed).toBe(0);
+    expect(afterBump.projection.metrics.turnsElapsed).toBe(turnsBeforeBump);
 
     session.dispatch({ type: 'wait' });
     const afterWait = session.getSnapshot();
-    expect(afterWait.projection.metrics.turnsElapsed).toBe(1);
+    expect(afterWait.projection.metrics.turnsElapsed).toBe(turnsBeforeBump + 1);
 
     // Persist + restore, then dispatch again: the restored counter must still be able to advance.
     const saved = storage.peek();
     const restoredSession = new GuestSession({ pack, storage: { ...storage, get: () => saved } });
     restoredSession.dispatch({ type: 'wait' });
-    expect(restoredSession.getSnapshot().projection.metrics.turnsElapsed).toBe(2);
+    expect(restoredSession.getSnapshot().projection.metrics.turnsElapsed).toBe(turnsBeforeBump + 2);
   });
 
   it('keeps applying valid commands after the engine prunes recentCommands past RECENT_COMMAND_LIMIT', () => {
@@ -369,13 +449,16 @@ describe('GuestSession', () => {
     }
     expect(session.getSnapshot().projection.metrics.turnsElapsed).toBe(RECENT_COMMAND_LIMIT);
 
-    // From this seed's spawn tile, `north` is a wall (see the wall-bump test above), so both
-    // dispatches below produce `invalid` results without moving the hero or advancing revision.
-    session.dispatch({ type: 'move', direction: 'north' });
-    session.dispatch({ type: 'move', direction: 'north' });
+    // Walk to the town's western wall (see the wall-bump test above for why the entrance plaza
+    // itself has no adjacent wall), then bump into it twice: both dispatches produce `invalid`
+    // results without moving the hero or advancing revision.
+    for (let step = 0; step < 4; step += 1) session.dispatch({ type: 'move', direction: 'west' });
+    const turnsAtWall = session.getSnapshot().projection.metrics.turnsElapsed;
+    session.dispatch({ type: 'move', direction: 'west' });
+    session.dispatch({ type: 'move', direction: 'west' });
 
     session.dispatch({ type: 'wait' });
-    expect(session.getSnapshot().projection.metrics.turnsElapsed).toBe(RECENT_COMMAND_LIMIT + 1);
+    expect(session.getSnapshot().projection.metrics.turnsElapsed).toBe(turnsAtWall + 1);
   });
 
   it('restores the persisted command-sequence counter on reload, so ids keep advancing past what a fresh counter would produce', () => {
@@ -423,7 +506,9 @@ describe('GuestSession', () => {
         actors: fresh.actors.map((actor) => (actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor)),
         conclusion: {
           completionType: 'died',
-          cause: { killerContentId: null, depth: 1, turn: fresh.turn, worldTime: fresh.worldTime },
+          // The fresh guest run starts in town (depth 0), and this fixture never moves the hero
+          // anywhere else before killing them.
+          cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
           concludedAtRevision: fresh.revision, finalized: false,
         },
       };
@@ -493,7 +578,7 @@ describe('GuestSession', () => {
         ...deadRun(SEED),
         conclusion: {
           completionType: 'died',
-          cause: { killerContentId: null, depth: 1, turn: 0, worldTime: 0 },
+          cause: { killerContentId: null, depth: 0, turn: 0, worldTime: 0 },
           concludedAtRevision: 0, finalized: true,
         },
       };

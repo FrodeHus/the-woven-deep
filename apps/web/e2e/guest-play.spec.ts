@@ -11,34 +11,39 @@ import { expect, test, type Page } from '@playwright/test';
  * and printed the resulting key sequence. Engine determinism (same seed + same command sequence
  * = same states) makes the replay exact.
  *
- * Seed hunt notes: on floor depth-001 this seed spawns two hostile cave rats at (32,3)/(33,3),
- * hero at (57,18) on the stair-up, stair-down at (23,19) — all mutually reachable. A 40-seed
- * sweep confirmed NO seed places ground items on floor 1 (monsters carry no loot tables, and
- * `createNewRun` only creates the hero's own items), so the "walk onto an item and press g"
- * requirement is met by dropping one of the hero's three travel rations (a real ground item),
- * stepping off it, stepping back onto it, and picking it up.
+ * Town start (5C): quickstart now boots into the authored town (depth 0), so every walk gains a
+ * one-step descend prefix — the hero spawns at (5,9), the dungeon entrance / stair-down is (6,10)
+ * (a single southeast step, `3`), then `>` drops to depth 1 (160x50, hero on the stair-up at
+ * (38,23)). The two dungeon walks below are re-derived against that floor (the old 80x25 depth-1
+ * pins are gone). `KILL` chases the lone monster that intercepts the hero and kills it at (27,10),
+ * leaving a calm spot for the item-management beats. `CLUSTER_KILL` marches into the far monster
+ * room and kills one of the packed group, leaving a live cave rat adjacent at (9,2) (hero at
+ * (10,2)) for the threat-panel/death walks. No seed places ground items on a dungeon floor, so the
+ * "walk onto an item and press g" beat drops one of the hero's travel rations and picks it back up.
  */
 // The landing page now owns `/`; the guest game lives behind the `/play` path (see
 // `src/main.tsx`'s path check). The seed override still parses out of the query string exactly
 // as before (see `App.tsx`'s `parseSeedFromQuery`). `?quickstart=1` is the test-only escape hatch
 // that skips the title screen and chargen wizard (added alongside `ScreenState`) and boots
-// straight into play with `DEFAULT_GUEST_HERO`, so this pinned walk (recorded against that exact
-// hero) still applies unmodified.
+// straight into play with `DEFAULT_GUEST_HERO`.
 const SEED_QUERY = '/play?quickstart=1&seed=11.22.33.44';
 
-/** Keys 1–40: walk from the stair-up to the cave rats and bump-attack until one dies. */
-const KILL_PHASE = [
-  '6', '6', '9', '7', '4', '4', '4', '4', '7', '7', '7', '8', '8', '8', '8', '8', '8', '8',
-  '8', '8', '7', '4', '4', '7', '7', '4', '4', '4', '4', '1', '2', '2', '2', '1', '4', '4',
-  '4', '4', '7', '7',
+/** Town spawn (5,9) -> dungeon entrance / stair-down (6,10): one southeast step, then `>`. */
+const DESCEND_PREFIX = ['3'];
+
+/** Depth 1: chase the intercepting monster and bump-attack until it dies at (27,10) (hero (28,10),
+ * no hostiles left nearby — a calm spot for the drop/pickup/consume/rest beats). */
+const KILL = [
+  '4', '7', '8', '8', '8', '8', '8', '8', '8', '7', '7', '7', '8', '8', '8', '8', '8', '8', '8',
+  '8', '8', '8', '7', '4', '1', '2', '2', '2', '2', '2', '2', '2', '1', '4', '4',
 ];
 
-/** Keys 51–106: walk from the kill site to the stair-down at (23,19). */
-const STAIR_PHASE = [
-  '3', '2', '2', '2', '3', '3', '3', '2', '1', '1', '1', '1', '1', '4', '1', '2', '2', '2',
-  '1', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4',
-  '4', '4', '4', '4', '4', '7', '9', '9', '6', '3', '6', '6', '6', '6', '6', '9', '9', '6',
-  '6', '6',
+/** Depth 1: march into the far monster room and kill one of the packed group, leaving a live cave
+ * rat adjacent at (9,2) with the hero at (10,2). */
+const CLUSTER_KILL = [
+  '4', '7', '8', '8', '8', '8', '8', '8', '8', '7', '7', '7', '8', '8', '8', '8', '8', '8', '8',
+  '8', '8', '8', '7', '4', '4', '1', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4',
+  '4', '4', '4', '4', '4', '4', '4',
 ];
 
 async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
@@ -75,18 +80,24 @@ async function closeBackpack(page: Page): Promise<void> {
 test('a guest plays, persists, and descends by keyboard alone', async ({ page }) => {
   await page.goto(SEED_QUERY);
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
+  await expect(page.locator('.status-depth')).toHaveText('Town');
   const log = page.getByRole('log', { name: /adventure log/i });
   await awaitKeyboardReady(page);
 
-  // Bump-attack a cave rat until it dies.
-  await pressAll(page, KILL_PHASE);
+  // Descend from town into the dungeon.
+  await pressAll(page, DESCEND_PREFIX);
+  await page.keyboard.press('>');
+  await expect(page.locator('.status-depth')).toHaveText('Depth 1');
+
+  // Bump-attack a monster until it dies.
+  await pressAll(page, KILL);
   await expect(log).toContainText(/dies/i);
 
   // Drop a travel ration (creating a real ground item), step off and back onto it, pick it up.
   await openBackpack(page);
   await page.keyboard.press('d');
   await closeBackpack(page);
-  await pressAll(page, ['8', '2']);
+  await pressAll(page, ['4', '6']);
   await page.keyboard.press('g');
   await expect(log).toContainText(/you pick up an item/i);
 
@@ -99,11 +110,6 @@ test('a guest plays, persists, and descends by keyboard alone', async ({ page })
   // Rest (completes or is interrupted — either way the engine reports why it stopped).
   await page.keyboard.press('Shift+R');
   await expect(log).toContainText(/stop resting/i);
-
-  // Walk to the stair-down and descend.
-  await pressAll(page, STAIR_PHASE);
-  await page.keyboard.press('>');
-  await expect(page.getByText(/depth 2/i)).toBeVisible();
 });
 
 test('a mid-run reload restores the run and a cleared session starts fresh', async ({ page }) => {
@@ -143,17 +149,20 @@ test('every interactive surface is reachable by keyboard', async ({ page }) => {
   await page.keyboard.press('Tab');
   await expect(grid).toBeFocused();
 
-  // `i` opens the backpack as a focus-trapped dialog: focus lands inside...
+  // `i` opens the backpack as a focus-trapped dialog: focus lands inside on the first item...
   await page.keyboard.press('i');
   const dialog = page.getByRole('dialog', { name: 'Backpack' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator('button').first()).toBeFocused();
+  const firstItem = dialog.locator('button').first();
+  const lastItem = dialog.locator('button').last();
+  await expect(firstItem).toBeFocused();
 
-  // ...and Tab cannot escape it (a single focusable wraps onto itself).
-  await page.keyboard.press('Tab');
-  await expect(dialog.locator('button').first()).toBeFocused();
+  // ...and Tab cannot escape it: it wraps within the dialog's focusables (the backpack lists the
+  // hero's ration stack plus the equipped gear rows, so there is more than one focusable).
   await page.keyboard.press('Shift+Tab');
-  await expect(dialog.locator('button').first()).toBeFocused();
+  await expect(lastItem).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(firstItem).toBeFocused();
 
   // Escape closes the dialog and restores focus to the grid.
   await page.keyboard.press('Escape');
@@ -166,9 +175,12 @@ test('the compact tier swaps the threat panel for a drawer and offers the hover 
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
   await awaitKeyboardReady(page);
 
-  // Play up to the kill so a hostile is on screen: after these 40 keys the surviving cave rat
-  // sits at world cell (35,4) beside the hero at (36,5) — pinned by the same derivation run.
-  await pressAll(page, KILL_PHASE);
+  // Descend, then march into the monster room and kill one of the packed group: a surviving cave
+  // rat is left at world cell (9,2) beside the hero at (10,2) — pinned by the derivation run.
+  await pressAll(page, DESCEND_PREFIX);
+  await page.keyboard.press('>');
+  await expect(page.locator('.status-depth')).toHaveText('Depth 1');
+  await pressAll(page, CLUSTER_KILL);
   await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(/dies/i);
 
   // At the pinned 1440x900 viewport the layout sits in the full tier: threat panel present,
@@ -192,10 +204,10 @@ test('the compact tier swaps the threat panel for a drawer and offers the hover 
   await expect(drawer.locator('summary')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(drawer).toHaveJSProperty('open', true);
-  await expect(drawer.getByText(/cave rat/i)).toBeAttached();
+  await expect(drawer).toContainText(/cave rat/i);
 
   // Hovering the rat's cell raises the threat popover card.
-  await page.locator('[data-cell="35,4"]').hover();
+  await page.locator('[data-cell="9,2"]').hover();
   const popover = page.getByRole('tooltip');
   await expect(popover).toBeVisible();
   await expect(popover).toContainText(/cave rat/i);

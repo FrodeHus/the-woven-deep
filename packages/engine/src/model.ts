@@ -5,7 +5,9 @@ import type { ActorState, EquipmentSlot, RelationshipOverride } from './actor-mo
 import type { DungeonFeature } from './feature-model.js';
 import type { IdentificationState, ItemInstance } from './item-model.js';
 import type { HungerStage, SurvivalState } from './survival-model.js';
-import type { AchievementCriteriaId, CompletionType, DamageType, LeaderDeathResponse } from '@woven-deep/content';
+import type {
+  AchievementCriteriaId, CompletionType, DamageType, LeaderDeathResponse, MerchantServiceId,
+} from '@woven-deep/content';
 import type {
   EncounterRunDecision, FallenHeroRunDecision, FallenHeroStandingSnapshot, PopulationInstance, PopulationIntent,
 } from './population-model.js';
@@ -132,8 +134,9 @@ export interface TradeSellCommand extends CommandEnvelope {
 export interface TradeServiceCommand extends CommandEnvelope {
   readonly type: 'trade-service';
   readonly merchantPopulationId: OpaqueId;
-  readonly serviceId: 'merchant-service.identify';
-  readonly targetItemId: OpaqueId;
+  readonly serviceId: MerchantServiceId;
+  /** `null` for a service that has no single target item (e.g. a strongbox transaction). */
+  readonly targetItemId: OpaqueId | null;
 }
 export interface TradeCloseCommand extends CommandEnvelope {
   readonly type: 'trade-close'; readonly merchantPopulationId: OpaqueId;
@@ -142,10 +145,19 @@ export interface TradeCloseCommand extends CommandEnvelope {
 export type TradeCommand = TradeOpenCommand | TradeBuyCommand | TradeSellCommand
   | TradeServiceCommand | TradeCloseCommand;
 
+export interface HouseDepositCommand extends CommandEnvelope {
+  readonly type: 'house-deposit'; readonly itemId: OpaqueId; readonly quantity: number;
+}
+export interface HouseWithdrawCommand extends CommandEnvelope {
+  readonly type: 'house-withdraw'; readonly itemId: OpaqueId; readonly quantity: number;
+}
+
+export type HouseCommand = HouseDepositCommand | HouseWithdrawCommand;
+
 export type GameCommand = MoveCommand | WaitCommand | AttackCommand | FireCommand | CastCommand | ThrowItemCommand
   | UseItemCommand | EquipCommand | UnequipCommand | PickupCommand | DropCommand | SplitStackCommand | RefuelCommand
   | ToggleLightCommand | OpenDoorCommand | CloseDoorCommand | SearchCommand | DisarmCommand | RestCommand
-  | TradeCommand;
+  | TradeCommand | HouseCommand;
 
 export type MovementInvalidReason = 'blocked.bounds' | 'blocked.wall' | 'blocked.door' | 'blocked.pillar'
   | 'blocked.void' | 'blocked.corner' | 'blocked.actor';
@@ -153,7 +165,9 @@ export type TradeInvalidReason = 'trade.active' | 'trade.required' | 'merchant.u
   | 'merchant.out-of-range' | 'merchant.refuses' | 'trade.merchant-mismatch' | 'trade.insufficient-funds'
   | 'trade.stock-unavailable' | 'trade.item-unacceptable' | 'trade.capacity'
   | 'trade.service-unavailable' | 'trade.target-invalid';
-export type InvalidActionReason = MovementInvalidReason | TradeInvalidReason | 'action.unavailable' | 'inventory.full'
+export type TownInvalidReason = 'town.truce' | 'town.rest' | 'house.full';
+export type InvalidActionReason = MovementInvalidReason | TradeInvalidReason | TownInvalidReason
+  | 'action.unavailable' | 'inventory.full'
   | 'item.missing' | 'item.unavailable' | 'item.quantity' | 'item.incompatible' | 'item.id-conflict'
   | 'target.not_visible' | 'target.out_of_range' | 'target.blocked' | 'target.invalid' | 'run.concluded';
 
@@ -452,7 +466,7 @@ export interface PopulationNoticePublicEvent {
     | 'boss-recovery' | 'boss-defeated' | 'boss-reward' | 'champion-encountered' | 'champion-defeated'
     | 'champion-heirloom' | 'echo-encountered' | 'echo-defeated' | 'echo-loot'
     | 'merchant-departure-warning' | 'merchant-departed' | 'merchant-provoked'
-    | 'merchant-stock-dropped' | 'merchant-died';
+    | 'merchant-stock-dropped' | 'merchant-died' | 'merchant-restocked';
   readonly actorId: OpaqueId | null;
   readonly presentation: string;
   readonly displayName?: string;
@@ -498,8 +512,9 @@ export interface TradeServicePurchasedEvent {
   readonly type: 'trade.service-purchased';
   readonly eventId: OpaqueId;
   readonly merchantPopulationId: OpaqueId;
-  readonly serviceId: 'merchant-service.identify';
-  readonly targetItemId: OpaqueId;
+  readonly serviceId: MerchantServiceId;
+  /** `null` for a service with no single target item (e.g. a strongbox purchase). */
+  readonly targetItemId: OpaqueId | null;
   readonly price: number;
   readonly currency: number;
   readonly remainingUses: number;
@@ -553,8 +568,15 @@ export interface MerchantDiedEvent {
   readonly killerActorId: OpaqueId;
   readonly destroyedStockItemIds: readonly OpaqueId[];
 }
+export interface MerchantRestockedEvent {
+  readonly type: 'merchant.restocked';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly stockItemIds: readonly OpaqueId[];
+}
 export type MerchantLifecycleDomainEvent = MerchantDepartureWarningEvent | MerchantDepartedEvent
-  | MerchantProvokedEvent | MerchantStockDroppedEvent | MerchantDiedEvent;
+  | MerchantProvokedEvent | MerchantStockDroppedEvent | MerchantDiedEvent | MerchantRestockedEvent;
 export interface RestCompletedEvent {
   readonly type: 'rest.completed'; readonly eventId: OpaqueId;
   readonly stopReason: 'full-health' | 'maximum-duration' | 'visible-danger' | 'aware-hostile'
@@ -645,8 +667,13 @@ export interface RecordedCommand {
   readonly publicEvents: readonly PublicEvent[];
 }
 
+export interface HouseState {
+  readonly capacity: number;
+  readonly upgradesPurchased: number;
+}
+
 export interface ActiveRun {
-  readonly schemaVersion: 7;
+  readonly schemaVersion: 8;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly runId: OpaqueId;
@@ -675,6 +702,8 @@ export interface ActiveRun {
   readonly conqueredChampionRecordIds: readonly OpaqueId[];
   readonly metrics: RunMetrics;
   readonly conclusion: RunConclusion | null;
+  readonly house: HouseState;
+  readonly restockedMilestones: readonly number[];
 }
 
 export interface CommandResolution {

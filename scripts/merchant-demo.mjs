@@ -89,7 +89,10 @@ const HIDDEN_MERCHANT_FIELDS = ['departureAt', 'rolledLifetime', 'initialStockIt
   'stockLossResolved', 'commerceBonusApplied'];
 
 function proveMilestone(result, split, content) {
-  const encounter = content.entries.find((entry) => entry.kind === 'encounter' && entry.model === 'merchant');
+  // Permanent (town) merchants are never materialized through population placement, so this
+  // demo only ever forces a non-permanent, dungeon-wandering merchant encounter.
+  const encounter = content.entries.find((entry) => entry.kind === 'encounter' && entry.model === 'merchant'
+    && !entry.definition.permanent);
   assert(encounter, 'bundled content is missing the merchant encounter');
   const placed = merchants(result.initial);
   assert(placed.length === 2 && placed.every((population) => population.encounterId === encounter.id),

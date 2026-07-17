@@ -1,0 +1,40 @@
+schemaVersion: 7
+entries:
+  - kind: npc-faction
+    id: npc-faction.town-provisioner
+    name: Town Provisioner's Guild
+    tags: [town, merchant, provisioner]
+    minimumReputation: -1000
+    maximumReputation: 1000
+    startingReputation: 0
+    tiers:
+      - { tierId: refused, name: Refused, minimum: -1000, maximum: -251, purchasePriceBps: 15000, salePriceBps: 5000, acceptsTrade: false, serviceIds: [merchant-service.strongbox] }
+      - { tierId: wary, name: Wary, minimum: -250, maximum: -1, purchasePriceBps: 13000, salePriceBps: 7000, acceptsTrade: true, serviceIds: [merchant-service.strongbox] }
+      - { tierId: neutral, name: Neutral, minimum: 0, maximum: 249, purchasePriceBps: 11000, salePriceBps: 9000, acceptsTrade: true, serviceIds: [merchant-service.strongbox] }
+      - { tierId: trusted, name: Trusted, minimum: 250, maximum: 1000, purchasePriceBps: 9000, salePriceBps: 10000, acceptsTrade: true, serviceIds: [merchant-service.strongbox] }
+
+  - kind: npc-faction
+    id: npc-faction.town-armorer
+    name: Town Armorer's Guild
+    tags: [town, merchant, arms]
+    minimumReputation: -1000
+    maximumReputation: 1000
+    startingReputation: 0
+    tiers:
+      - { tierId: refused, name: Refused, minimum: -1000, maximum: -251, purchasePriceBps: 15000, salePriceBps: 5000, acceptsTrade: false, serviceIds: [] }
+      - { tierId: wary, name: Wary, minimum: -250, maximum: -1, purchasePriceBps: 13000, salePriceBps: 7000, acceptsTrade: true, serviceIds: [] }
+      - { tierId: neutral, name: Neutral, minimum: 0, maximum: 249, purchasePriceBps: 11000, salePriceBps: 9000, acceptsTrade: true, serviceIds: [] }
+      - { tierId: trusted, name: Trusted, minimum: 250, maximum: 1000, purchasePriceBps: 9000, salePriceBps: 10000, acceptsTrade: true, serviceIds: [] }
+
+  - kind: npc-faction
+    id: npc-faction.town-curios-dealer
+    name: Town Curios Dealers
+    tags: [town, merchant, curios]
+    minimumReputation: -1000
+    maximumReputation: 1000
+    startingReputation: 0
+    tiers:
+      - { tierId: refused, name: Refused, minimum: -1000, maximum: -251, purchasePriceBps: 15000, salePriceBps: 5000, acceptsTrade: false, serviceIds: [] }
+      - { tierId: wary, name: Wary, minimum: -250, maximum: -1, purchasePriceBps: 13000, salePriceBps: 7000, acceptsTrade: true, serviceIds: [] }
+      - { tierId: neutral, name: Neutral, minimum: 0, maximum: 249, purchasePriceBps: 11000, salePriceBps: 9000, acceptsTrade: true, serviceIds: [merchant-service.identify] }
+      - { tierId: trusted, name: Trusted, minimum: 250, maximum: 1000, purchasePriceBps: 9000, salePriceBps: 10000, acceptsTrade: true, serviceIds: [merchant-service.identify] }

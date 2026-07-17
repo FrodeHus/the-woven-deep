@@ -7,6 +7,8 @@ import type { PlayerIntent } from './intents.js';
 export type BuiltIntent =
   | { readonly kind: 'command'; readonly command: GameCommand }
   | { readonly kind: 'descend' }
+  | { readonly kind: 'ascend' }
+  | { readonly kind: 'house' }
   | { readonly kind: 'rejected'; readonly message: string };
 
 /**
@@ -39,6 +41,9 @@ interface ProjectedActor {
   readonly x: number;
   readonly y: number;
   readonly disposition?: string;
+  /** Present (via the engine's `visibleMerchantState`) only on merchant actors -- the honest
+   * signal that this actor can be traded with, mirrored from `TownPanel`'s own use of the field. */
+  readonly factionName?: string;
 }
 
 interface ProjectedFeature {
@@ -99,6 +104,40 @@ function stairDownUnderHero(projection: GameplayProjection): boolean {
   return cell?.tileId === 5;
 }
 
+function stairUpUnderHero(projection: GameplayProjection): boolean {
+  const { x, y } = hero(projection);
+  const cell = projection.floor.cells.find((candidate) => candidate.x === x && candidate.y === y);
+  return cell?.tileId === 4;
+}
+
+interface ProjectedPlacementSlot {
+  readonly tags: readonly string[];
+  readonly x: number;
+  readonly y: number;
+}
+
+/** True when the hero is Chebyshev-adjacent (but not standing on) the town's house-door slot --
+ * mirrors the engine's own `heroAtHouseDoor` adjacency rule in `house.ts`. */
+function heroAdjacentToHouseDoor(projection: GameplayProjection): boolean {
+  const door = (projection.slots as unknown as readonly ProjectedPlacementSlot[])
+    .find((slot) => slot.tags.includes('house-door'));
+  if (!door) return false;
+  const { x, y } = hero(projection);
+  return Math.max(Math.abs(x - door.x), Math.abs(y - door.y)) === 1;
+}
+
+/** The merchant actor the hero is Chebyshev-adjacent to (but not standing on), if any -- mirrors
+ * `heroAdjacentToHouseDoor` above. When more than one merchant is adjacent, the nearest by
+ * actor-id ordering wins; the town's authored merchant stalls never place two merchants close
+ * enough for this to matter in practice. */
+function heroAdjacentMerchant(projection: GameplayProjection): ProjectedActor | undefined {
+  const origin = hero(projection);
+  return (projection.actors as unknown as readonly ProjectedActor[])
+    .filter((actor) => typeof actor.factionName === 'string')
+    .filter((actor) => Math.max(Math.abs(actor.x - origin.x), Math.abs(actor.y - origin.y)) === 1)
+    .sort((left, right) => (left.actorId < right.actorId ? -1 : 1))[0];
+}
+
 function equipSlotFor(pack: CompiledContentPack, contentId: OpaqueId, occupiedSlots: ReadonlySet<EquipmentSlot>): EquipmentSlot | undefined {
   const entry = pack.entries.find((candidate) => candidate.id === contentId);
   if (!entry || entry.kind !== 'item' || entry.equipment === null) return undefined;
@@ -145,12 +184,19 @@ function buildPickupIntent(input: Readonly<{
 
 function buildBackpackIntent(input: Readonly<{
   projection: GameplayProjection; commandId: OpaqueId; expectedRevision: number;
-  action: 'equip' | 'use' | 'drop' | 'toggle-light'; itemId: OpaqueId; pack?: CompiledContentPack | undefined;
+  action: 'equip' | 'unequip' | 'use' | 'drop' | 'toggle-light'; itemId: OpaqueId; pack?: CompiledContentPack | undefined;
 }>): BuiltIntent {
   const { projection, commandId, expectedRevision, action, itemId, pack } = input;
   const item = ownedItem(projection, itemId);
   if (!item) return { kind: 'rejected', message: 'That item is no longer in your backpack.' };
 
+  if (action === 'unequip') {
+    const equipment = hero(projection).equipment;
+    const slot = Object.entries(equipment)
+      .find(([, equipped]) => (equipped as { itemId?: OpaqueId } | null)?.itemId === itemId)?.[0] as EquipmentSlot | undefined;
+    if (!slot) return { kind: 'rejected', message: `${item.name} is not equipped.` };
+    return { kind: 'command', command: { type: 'unequip', slot, commandId, expectedRevision } };
+  }
   if (action === 'use') {
     return { kind: 'command', command: { type: 'use-item', itemId, target: null, commandId, expectedRevision } };
   }
@@ -203,6 +249,65 @@ export function buildIntent(input: Readonly<{
   }
   if (intent.type === 'descend') {
     return stairDownUnderHero(projection) ? { kind: 'descend' } : { kind: 'rejected', message: 'There are no stairs down here.' };
+  }
+  if (intent.type === 'ascend') {
+    return stairUpUnderHero(projection) ? { kind: 'ascend' } : { kind: 'rejected', message: 'There are no stairs up here.' };
+  }
+  if (intent.type === 'house') {
+    return heroAdjacentToHouseDoor(projection) ? { kind: 'house' } : { kind: 'rejected', message: 'You are not near the house.' };
+  }
+  if (intent.type === 'house-transfer') {
+    return {
+      kind: 'command',
+      command: {
+        type: intent.action === 'deposit' ? 'house-deposit' : 'house-withdraw',
+        itemId: intent.itemId, quantity: intent.quantity, commandId, expectedRevision,
+      },
+    };
+  }
+  if (intent.type === 'trade-open') {
+    const merchant = heroAdjacentMerchant(projection);
+    if (!merchant) return { kind: 'rejected', message: 'There is no merchant nearby to trade with.' };
+    return {
+      kind: 'command',
+      command: { type: 'trade-open', merchantActorId: merchant.actorId, commandId, expectedRevision },
+    };
+  }
+  if (intent.type === 'trade-close' || intent.type === 'trade-buy' || intent.type === 'trade-sell'
+    || intent.type === 'trade-service') {
+    const { trade } = projection;
+    if (!trade) return { kind: 'rejected', message: 'There is no open trade session.' };
+    if (intent.type === 'trade-close') {
+      return {
+        kind: 'command',
+        command: { type: 'trade-close', merchantPopulationId: trade.merchantPopulationId, commandId, expectedRevision },
+      };
+    }
+    if (intent.type === 'trade-buy') {
+      return {
+        kind: 'command',
+        command: {
+          type: 'trade-buy', merchantPopulationId: trade.merchantPopulationId,
+          itemId: intent.itemId, quantity: intent.quantity, commandId, expectedRevision,
+        },
+      };
+    }
+    if (intent.type === 'trade-sell') {
+      return {
+        kind: 'command',
+        command: {
+          type: 'trade-sell', merchantPopulationId: trade.merchantPopulationId,
+          itemId: intent.itemId, quantity: intent.quantity, commandId, expectedRevision,
+        },
+      };
+    }
+    return {
+      kind: 'command',
+      command: {
+        type: 'trade-service', merchantPopulationId: trade.merchantPopulationId,
+        serviceId: intent.serviceId, targetItemId: intent.targetItemId, commandId, expectedRevision,
+      },
+    };
   }
   return buildBackpackIntent({ projection, commandId, expectedRevision, action: intent.action, itemId: intent.itemId, pack });
 }

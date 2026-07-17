@@ -13,15 +13,15 @@ import {
 
 describe('engine model boundary', () => {
   it('publishes the active schema constants', () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(7);
+    expect(SAVE_SCHEMA_VERSION).toBe(8);
     expect(ENGINE_GAME_VERSION).toBe('0.1.0');
     expect(RECENT_COMMAND_LIMIT).toBe(128);
   });
 
-  it('stores merchant-ready population state in schema v7', () => {
+  it('stores merchant-ready population state in schema v8', () => {
     const run = createDemoRun();
 
-    expect(run.schemaVersion).toBe(7);
+    expect(run.schemaVersion).toBe(8);
     expect(run.worldTime).toBe(0);
     expect(run.actors.map((actor) => actor.actorId)).toEqual(['hero.demo']);
     expect(run.items).toEqual([]);
@@ -39,6 +39,8 @@ describe('engine model boundary', () => {
     expect(run.fallenHeroDecisions).toEqual([]);
     expect(run.metrics).toEqual(emptyRunMetrics());
     expect(run.conclusion).toBeNull();
+    expect(run.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
+    expect(run.restockedMilestones).toEqual([]);
     expect(run.rng).toHaveProperty('population-gates');
     expect(run.rng).toHaveProperty('merchant-stock');
     expect(run.rng).toHaveProperty('merchant-runtime');

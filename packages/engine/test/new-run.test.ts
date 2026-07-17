@@ -4,9 +4,9 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import type { ClassContentEntry } from '@woven-deep/content';
 import {
-  createNewRun, DEFAULT_GUEST_HERO, decodeActiveRun, encodeActiveRun,
+  createNewRun, DEFAULT_GUEST_HERO, decodeActiveRun, descendToNextFloor, encodeActiveRun,
   heroActor, heroFromChoices, itemLightSources, resolveCommand, validateActiveRun, validateContentBoundRun,
-  type HeroChoices, type ResolutionContext,
+  type ActiveRun, type HeroChoices, type ResolutionContext,
 } from '../src/index.js';
 
 let pack: CompiledContentPack;
@@ -20,29 +20,39 @@ beforeAll(async () => {
 const SEED = [11, 22, 33, 44] as const;
 
 describe('createNewRun', () => {
-  it('builds a valid, deterministic schema-v7 run on a generated depth-1 floor', () => {
+  it('builds a valid, deterministic schema-v8 run starting in the authored town', () => {
     const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(7);
+    expect(first.schemaVersion).toBe(8);
+    expect(first.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
+    expect(first.restockedMilestones).toEqual([]);
+    // The town is the run's only floor at creation -- depth 1 is generated later, on the hero's
+    // first descent through the town's dungeon-entrance stair-down.
     expect(first.floors).toHaveLength(1);
-    expect(first.floors[0]?.depth).toBe(1);
+    expect(first.floors[0]?.depth).toBe(0);
+    expect(first.floors[0]?.floorId).toBe('floor.depth-000');
     expect(first.activeFloorId).toBe(first.floors[0]?.floorId);
-    expect(first.metrics.floorsEntered).toBe(1);
-    expect(first.metrics.deepestDepth).toBe(1);
+    expect(first.floors[0]?.stairUp).toBeNull();
+    expect(first.floors[0]?.stairDown).not.toBeNull();
+    // The town never counts toward floorsEntered/deepestDepth: those track dungeon progress.
+    expect(first.metrics.floorsEntered).toBe(0);
+    expect(first.metrics.deepestDepth).toBe(0);
     expect(first.conclusion).toBeNull();
     expect(first.contentHash).toBe(pack.hash);
   });
 
-  it('places and equips the default hero', () => {
+  it('places and equips the default hero at the town entrance plaza', () => {
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const hero = heroActor(run);
     expect(hero.playerControlled).toBe(true);
     expect(hero.attributes).toEqual({ might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 });
     expect(run.hero.name).toBe('Wayfarer');
     const floor = run.floors[0]!;
-    expect({ x: hero.x, y: hero.y }).toEqual(floor.stairUp);
+    expect(hero.floorId).toBe(floor.floorId);
+    // The hero starts adjacent to (not on) the dungeon entrance's stair-down tile.
+    expect({ x: hero.x, y: hero.y }).not.toEqual(floor.stairDown);
     const equippedContent = Object.values(hero.equipment)
       .filter((id): id is string => id !== null)
       .map((itemId) => run.items.find((item) => item.itemId === itemId)?.contentId)
@@ -54,6 +64,14 @@ describe('createNewRun', () => {
     const rations = run.items.find((item) => item.contentId === 'item.travel-ration')!;
     expect(rations.location).toEqual({ type: 'backpack', actorId: hero.actorId });
     expect(rations.quantity).toBe(3);
+  });
+
+  it('grants the hero the balance entry\'s startingCurrency, not zero', () => {
+    const balance = pack.entries.find((entry) => entry.id === 'balance.core-gameplay');
+    if (balance?.kind !== 'balance') throw new Error('expected balance.core-gameplay content entry');
+    expect(balance.startingCurrency).toBeGreaterThan(0);
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    expect(run.hero.currency).toBe(balance.startingCurrency);
   });
 
   it('derives different runs from different seeds and round-trips the codec', () => {
@@ -192,7 +210,17 @@ describe('dead wielders and illumination', () => {
     // (two hostile cave rats, already energy-ready) alongside the guest hero -- exactly the
     // "another actor's turn pending" condition that exposes the bug: one of those rats gets
     // its turn prepared in the same resolveWorldStep call that kills the hero from starvation.
-    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    // The run now starts in the (population-free) town, so descend to depth 1 first to reach
+    // that real generated population.
+    const started = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const townStairDown = started.floors[0]!.stairDown!;
+    const startedHero = heroActor(started);
+    const onStairs: ActiveRun = validateActiveRun({
+      ...started,
+      actors: started.actors.map((actor) => actor.actorId === startedHero.actorId
+        ? { ...actor, x: townStairDown.x, y: townStairDown.y } : actor),
+    });
+    const run = descendToNextFloor(onStairs, { content: pack }).state;
     const hero = heroActor(run);
     expect(run.items.find((item) => item.contentId === 'item.pitch-torch')?.enabled).toBe(true);
     expect(run.actors.filter((actor) => actor.actorId !== hero.actorId && actor.health > 0).length)

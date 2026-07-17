@@ -76,6 +76,10 @@ Deliver this milestone through four independently reviewable slices:
 
 **5B chargen and run lifecycle — this plan's scope, e2e gate green:** `docs/superpowers/plans/2026-07-16-chargen-run-lifecycle.md` — the full title → seven-step chargen wizard → play → death → conclusion → session Hall lifecycle is proven end-to-end by `apps/web/e2e/run-lifecycle.spec.ts` (`npm run guest:e2e` green), alongside the re-verified 5A pinned walk.
 
+**5C design:** `docs/superpowers/specs/2026-07-16-town-slice-design.md`
+
+**5C town slice — this plan's scope, e2e gate green:** `docs/superpowers/plans/2026-07-16-town-slice.md` — the full town loop is proven end-to-end by `apps/web/e2e/town-loop.spec.ts` (`npm run guest:e2e` green): a seeded, keyboard-only guest boots into the town, buys a ration from the provisioner, stores it in the house, descends, kills a monster, returns to town and back down onto the killed monster's own cell (dead stays dead in the stored floor), sells surplus starting gear to the arms dealer, buys the strongbox upgrade (house capacity 6 → 10), withdraws the stored item, and descends again. The two prior specs (`guest-play.spec.ts`, `run-lifecycle.spec.ts`) are re-based for the town start and remain green.
+
 **Exit demonstration:** a desktop browser can complete a representative five-floor guest campaign slice, lose session progress when the session closes, and operate every screen by keyboard.
 
 ### 6. Server-authoritative profiles

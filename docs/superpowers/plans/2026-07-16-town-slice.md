@@ -247,7 +247,10 @@ NOTE: this changes `createNewRun`-based tests' floor layouts (160×50) — the 5
 export function restockMerchant(run: ActiveRun, input: Readonly<{ content: CompiledContentPack; populationId: OpaqueId }>):
   Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }>;
 // re-rolls stockItemIds from the encounter's loot table on rng['merchant-stock'], removing old merchant-stock items and
-// adding the new ones; preserves reputation/services/lifecycle/identity; emits a 'merchant.restocked' domain event
+// adding the new ones; preserves reputation/services/lifecycle/identity; PROJECTS the loot graph at
+// max(1, metrics.deepestDepth) — NOT the merchant's floor depth (town is 0) — and projectLootGraph additionally
+// honors the new per-choice minDepth/maxDepth bands from Task 1's fix round, so milestone restocks surface the
+// widened bands; emits a 'merchant.restocked' domain event
 // (new event type + save-schema entry + hero-visible only if the hero is in town — follow projectDomainEvents conventions).
 // floor-transition.ts descend path: after a successful descend, for each balance restockMilestone m not in
 // run.restockedMilestones with metrics.deepestDepth >= m: restock all permanent merchants, append m.
@@ -290,6 +293,23 @@ export function restockMerchant(run: ActiveRun, input: Readonly<{ content: Compi
 - [ ] RED: projection tests (depth/town fields, hidden-state greps still clean); command-builder table (ascend only on stair-up tile 4, house intent only when adjacent to the house door — thread the door position through the projection's features/slots honestly: check what the projection exposes for placement slots and extend minimally if nothing does, disclosing it); session ascend branch (mirrors descend semantics incl. persistence); TownPanel/HouseScreen component tests (transfer both ways, capacity readouts, full-house handling, keyboard-only); StatusBar town label. Then implement → web + engine suites, typecheck → demo projection re-pins with inspected deltas → commit `feat: bring the town into the client`.
 
 NOTE: the 5B e2e specs assume a depth-1 boot — Task 9 re-bases them; keep unit/component suites green here, e2e is allowed red between Tasks 7–9 ONLY if the failures are exclusively the town-start re-basing (verify and state so in the report).
+
+---
+
+### Task 7b: The trade screen (amendment, 2026-07-17)
+
+**Why amended:** Task 9 blocked on a false spec assumption. The design says "Trade in town reuses the existing trade screen," but no trade UI was ever built — 5A deferred it, and no later task delivered it. The engine side is complete (commands `trade-open { merchantActorId }`, `trade-buy`/`trade-sell { merchantPopulationId, ... }`, `trade-service`, `trade-close`; `GameplayProjection.trade` carries the active session). This task is web wiring only; any engine change is BLOCKED-report territory.
+
+**Files:**
+- Modify: `apps/web/src/session/intents.ts`, `command-builder.ts` (trade intents legal only when adjacent to a merchant actor / a trade session is open — mirror the house-intent gating), `KeyRouter.ts` (Shift+T to open trade when adjacent, following the Shift+H precedent; check for collisions and disclose the final binding)
+- Create: `apps/web/src/ui/screens/TradeScreen.tsx`, `apps/web/test/trade-screen.test.tsx`
+- Modify: `apps/web/src/ui/PlayScreen.tsx` (render TradeScreen when `projection.trade` is non-null), `TownPanel.tsx` (merchant proximity hint gains the open-trade key)
+
+**Interfaces:**
+- Consumes: engine trade commands and `projection.trade` exactly as projected — the projection is the source of truth for stock, prices, services, and currency; no client-side price math.
+- Produces: a keyboard-first dialog following the HouseScreen/BackpackMenu conventions (`useDialogFocusTrap`, `role="dialog"`, ArrowUp/ArrowDown roving selection, Tab to switch buy/sell/service lists, Enter to execute, Esc closes via `trade-close`). Currency readout visible at all times; invalid results surface as the standard log lines. Hover/mouse selection remains first-class per the established panel conventions.
+
+- [ ] RED-first: command-builder table tests (trade-open only when adjacent to a merchant; buy/sell/service/close only while `projection.trade` matches the merchant; all through the normal command path with `expectedRevision`); TradeScreen component tests (buy updates currency + backpack, sell mirrors, service purchase, keyboard-only full pass, closed-session unmount). Then implement → web suite + typecheck green (engine untouched) → commit `feat: surface trade in the client`.
 
 ---
 

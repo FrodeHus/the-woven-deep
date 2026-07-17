@@ -7,6 +7,8 @@ import {
   expandLegacySeed,
   generateTopology,
   maskHas,
+  NEW_RUN_FLOOR_HEIGHT,
+  NEW_RUN_FLOOR_WIDTH,
   stableJson,
   type GenerateTopologyRequest,
   type GenerationTheme,
@@ -164,5 +166,25 @@ describe('classic topology generation', () => {
   ])('rejects invalid dimensions, limits, seeds, or mismatched themes', (input) => {
     if (input.width === 20 && input.height === 12) expect(() => generateTopology(input)).not.toThrow();
     else expect(() => generateTopology(input)).toThrowError(expect.objectContaining({ code: expect.stringMatching(/^generation\./) }));
+  });
+
+  // Smoke test for the larger-dungeon baseline (Task 5): 160x50 with a 14-room minimum, matching
+  // `NEW_RUN_FLOOR_WIDTH`/`NEW_RUN_FLOOR_HEIGHT` and the theme settings `descendToNextFloor` uses.
+  it('generates a complete 160x50 floor meeting the raised room budget, with both stairs, in sane time', () => {
+    const width = NEW_RUN_FLOOR_WIDTH;
+    const height = NEW_RUN_FLOOR_HEIGHT;
+    const theme = createClassicTheme(width, height, { ambient, minimumRooms: 14 });
+    const started = Date.now();
+    const draft = generateTopology({
+      floorId: 'floor.smoke-160x50', floorSeed: [5, 10, 15, 20], depth: 3, width, height, theme,
+    });
+    const elapsedMs = Date.now() - started;
+
+    assertValid(draft);
+    expect(draft.rooms.length).toBeGreaterThanOrEqual(14);
+    expect(draft.report.roomCount).toBeGreaterThanOrEqual(14);
+    expect(draft.stairUp).toBeTruthy();
+    expect(draft.stairDown).toBeTruthy();
+    expect(elapsedMs).toBeLessThan(5000);
   });
 });

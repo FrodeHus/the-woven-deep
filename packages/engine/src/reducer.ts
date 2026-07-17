@@ -10,10 +10,12 @@ import { resolveWorldStep } from './world-step.js';
 import { resolveRest } from './rest.js';
 import { validateContentBoundRun } from './content-bound-validation.js';
 import { closeTradeIfInvalid, isTradeCommand, resolveTradeCommand, validateTradeCommand } from './trade.js';
+import { isHouseCommand, resolveHouseCommand, validateHouseCommand } from './house.js';
 import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import { projectDomainEvents } from './event-projection.js';
 import { foldRunMetrics } from './run-metrics.js';
 import { concludeRunOnHeroDeath } from './run-conclusion.js';
+import { isTownFloorActive } from './town-floor.js';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
   return stableJson(left) === stableJson(right);
@@ -82,6 +84,17 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
     return recordInvalid(state, context.content, command, 'run.concluded', [], []);
   }
 
+  // The town (depth 0) is a truce zone with frozen worldTime: hostile actions and resting both
+  // consume no randomness here, so they are rejected before any stream touches, the same way a
+  // concluded run is above.
+  if (isTownFloorActive(state)
+    && (command.type === 'attack' || command.type === 'fire' || command.type === 'cast' || command.type === 'throw-item')) {
+    return recordInvalid(state, context.content, command, 'town.truce', [], []);
+  }
+  if (isTownFloorActive(state) && command.type === 'rest') {
+    return recordInvalid(state, context.content, command, 'town.rest', [], []);
+  }
+
   // Normalize the modal session first: a session whose merchant no longer satisfies the
   // invariant closes (without a bonus) before the submitted command resolves against it.
   const normalized = closeTradeIfInvalid({ state, content: context.content, eventId: command.commandId });
@@ -124,6 +137,23 @@ export function resolveCommand(state: ActiveRun, command: GameCommand, context: 
   }
   if (current.activeTrade !== null) {
     return recordInvalid(current, context.content, command, 'trade.active', preEvents, prePublicEvents);
+  }
+
+  if (isHouseCommand(command)) {
+    const validation = validateHouseCommand({ state: current, command, content: context.content });
+    if (!validation.ok) {
+      return recordInvalid(current, context.content, command, validation.reason, preEvents, prePublicEvents);
+    }
+    assertCountersCanAdvance(current, false);
+    // House commands advance the revision only, exactly like trade commands: no turn, world
+    // time, energy, or survival change.
+    const result = { status: 'applied', commandId: command.commandId, revision: current.revision + 1, turn: current.turn } as const;
+    const resolved = resolveHouseCommand({ state: current, command, content: context.content });
+    const events = [...preEvents, ...resolved.events];
+    const publicEvents = [...prePublicEvents, ...(resolved.events.length === 0 ? [] : projectDomainEvents({
+      state: resolved.state, content: context.content, heroId: resolved.state.hero.actorId, events: resolved.events,
+    }))];
+    return { state: record(resolved.state, context.content, command, result, events, publicEvents), result, events: publicEvents };
   }
 
   const validation = validatePlayerAction({ state: current, command, context });

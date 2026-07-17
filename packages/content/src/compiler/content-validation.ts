@@ -224,17 +224,21 @@ function encounterIssues(
     if (definition.maximumStockRolls < definition.minimumStockRolls) {
       issues.push(issue(file, `${path}.maximumStockRolls`, 'maximum stock rolls must be at least minimum stock rolls'));
     }
-    if (definition.maximumLifetime < definition.minimumLifetime) {
+    if (!definition.permanent && definition.maximumLifetime !== undefined && definition.minimumLifetime !== undefined
+      && definition.maximumLifetime < definition.minimumLifetime) {
       issues.push(issue(file, `${path}.maximumLifetime`, 'maximum lifetime must be at least minimum lifetime'));
     }
-    let previous = Number.POSITIVE_INFINITY;
-    definition.departureWarningThresholds.forEach((threshold, index) => {
-      if (threshold >= previous || threshold >= definition.minimumLifetime) {
-        issues.push(issue(file, `${path}.departureWarningThresholds.${index}`,
-          'departure warning thresholds must be unique, strictly descending, and below minimum lifetime'));
-      }
-      previous = threshold;
-    });
+    if (!definition.permanent && definition.departureWarningThresholds !== undefined && definition.minimumLifetime !== undefined) {
+      let previous = Number.POSITIVE_INFINITY;
+      const minimumLifetime = definition.minimumLifetime;
+      definition.departureWarningThresholds.forEach((threshold, index) => {
+        if (threshold >= previous || threshold >= minimumLifetime) {
+          issues.push(issue(file, `${path}.departureWarningThresholds.${index}`,
+            'departure warning thresholds must be unique, strictly descending, and below minimum lifetime'));
+        }
+        previous = threshold;
+      });
+    }
     const npc = byId.get(definition.npcId);
     const faction = npc?.kind === 'npc' ? byId.get(npc.factionId) : undefined;
     const factionTiers = faction?.kind === 'npc-faction'
@@ -557,6 +561,9 @@ function lootIssues(locatedEntries: readonly LocatedContentEntry[], byId: Readon
       }
       if (choice.minimumQuantity > choice.maximumQuantity) {
         issues.push(issue(file, `${path}.maximumQuantity`, 'maximum quantity must be at least minimum quantity'));
+      }
+      if (choice.minDepth !== undefined && choice.maxDepth !== undefined && choice.minDepth > choice.maxDepth) {
+        issues.push(issue(file, `${path}.maxDepth`, 'loot choice maxDepth must be at least minDepth'));
       }
       if (choice.maximumQuantity > MAX_LOOT_CHOICE_QUANTITY) {
         issues.push(issue(file, `${path}.maximumQuantity`,

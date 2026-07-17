@@ -14,6 +14,7 @@ import {
   createDemoContentPack,
   createDemoRun,
   createUnknownKnowledge,
+  placeFloorPopulations,
   placePopulation,
   rollDie,
   stableJson,
@@ -608,5 +609,104 @@ describe('atomic population placement', () => {
 
     expect(result).toMatchObject({ status: 'rejected', encounterId: encounter.id, reason: 'required-route-blocked' });
     expect(result).not.toHaveProperty('createdActors');
+  });
+});
+
+// `placeFloorPopulations` fills a floor up to its density budget: attempts =
+// clamp(floor((width * height) / cellsPerEncounter), 1, 8). `createDemoContentPack`'s balance
+// (via `pack`) carries the bundled `cellsPerEncounter: 2000`.
+function openFloor(width: number, height: number, floorId = `floor.density-${width}x${height}`): FloorSnapshot {
+  const tiles = Array.from({ length: width * height }, (_, index) => {
+    const x = index % width; const y = Math.floor(index / width);
+    if (x === 0 || y === 0 || x === width - 1 || y === height - 1) return 0 as const;
+    return 1 as const;
+  });
+  tiles[1 * width + 1] = 4;
+  tiles[(height - 2) * width + (width - 2)] = 5;
+  return floor({
+    floorId, width, height, tiles,
+    stairUp: { x: 1, y: 1 }, stairDown: { x: width - 2, y: height - 2 },
+    knowledge: createUnknownKnowledge(tiles.length),
+  });
+}
+
+// A floor that is entirely wall except an L-shaped 1-wide corridor connecting its stairs and
+// exactly one dead-end branch cell off that corridor: the corridor itself is the sole route
+// between the stairs, so `placePopulation`'s route protection excludes every corridor cell from
+// candidates, leaving the branch as the only legal placement -- whichever attempt claims it leaves
+// every later attempt with zero legal cells.
+function corridorWithOneBranchFloor(width: number, height: number, branch: Readonly<{ x: number; y: number }>): FloorSnapshot {
+  const tiles = new Array(width * height).fill(0) as number[];
+  const index = (x: number, y: number): number => y * width + x;
+  for (let x = 1; x <= width - 2; x += 1) tiles[index(x, 1)] = 1;
+  for (let y = 1; y <= height - 2; y += 1) tiles[index(width - 2, y)] = 1;
+  tiles[index(1, 1)] = 4;
+  tiles[index(width - 2, height - 2)] = 5;
+  tiles[index(branch.x, branch.y)] = 1;
+  return floor({
+    floorId: 'floor.density-branch', width, height, tiles: tiles as FloorSnapshot['tiles'],
+    stairUp: { x: 1, y: 1 }, stairDown: { x: width - 2, y: height - 2 },
+    knowledge: createUnknownKnowledge(tiles.length),
+  });
+}
+
+describe('placeFloorPopulations (encounter density)', () => {
+  it('gives an 80x25 floor exactly 1 attempt (2000 cells / 2000 cellsPerEncounter)', () => {
+    const encounter = individual('encounter.density-80x25', { maximumInstancesPerRun: 8 });
+    const run = runFor([encounter]);
+
+    const result = placeFloorPopulations({ run, floor: openFloor(80, 25), content: pack([encounter]) });
+
+    expect(result.placements).toHaveLength(1);
+    expect(result.placements[0]).toMatchObject({ status: 'placed' });
+  });
+
+  it('gives a 160x50 floor exactly 4 attempts (8000 cells / 2000 cellsPerEncounter)', () => {
+    const encounter = individual('encounter.density-160x50', { maximumInstancesPerRun: 8 });
+    const run = runFor([encounter]);
+
+    const result = placeFloorPopulations({ run, floor: openFloor(160, 50), content: pack([encounter]) });
+
+    expect(result.placements).toHaveLength(4);
+    expect(result.placements.every((entry) => entry.status === 'placed')).toBe(true);
+    // Distinct populationIds, all threaded onto the same run.
+    const populationIds = new Set(result.state.populations.map((population) => population.populationId));
+    expect(populationIds.size).toBe(4);
+    expect(result.state.actors.filter((actor) => actor.populationId !== null)).toHaveLength(4);
+  });
+
+  it('clamps attempts at 8 for an arbitrarily large floor', () => {
+    const encounter = individual('encounter.density-clamp', { maximumInstancesPerRun: 1 });
+    const run: ActiveRun = {
+      ...runFor([encounter]),
+      // Already at its instance cap: every attempt is a cheap, tiles-untouched "no-eligible-encounter"
+      // skip, so the huge nominal floor area below never needs a real tile array.
+      encounterDecisions: [{
+        encounterId: encounter.id, baseProbability: 1, protectionBonus: 0, effectiveProbability: 1,
+        eligible: true, reachedEligibleDepth: false, encountered: false, instancesCreated: 1,
+      }],
+    };
+    const massiveFloor = floor({ width: 4000, height: 4000, tiles: [0] });
+
+    const result = placeFloorPopulations({ run, floor: massiveFloor, content: pack([encounter]) });
+
+    expect(result.placements).toHaveLength(8);
+    expect(result.placements.every((entry) => entry.status === 'skipped' && entry.reason === 'no-eligible-encounter')).toBe(true);
+  });
+
+  it('stops the loop as soon as a required encounter is rejected, short of the attempt budget', () => {
+    const encounter = individual('encounter.density-rejected', {
+      maximumInstancesPerRun: 8, placement: { ...placement, failureMode: 'required' },
+    });
+    const run = runFor([encounter]);
+    // 160x50 gives a budget of 4 attempts, but only one legal (non-route) cell exists on the
+    // whole floor -- the corridor connecting the stairs is protected and excluded from candidates.
+    const floorWithOneCell = corridorWithOneBranchFloor(160, 50, { x: 80, y: 2 });
+
+    const result = placeFloorPopulations({ run, floor: floorWithOneCell, content: pack([encounter]) });
+
+    expect(result.placements).toHaveLength(2);
+    expect(result.placements[0]).toMatchObject({ status: 'placed' });
+    expect(result.placements[1]).toMatchObject({ status: 'rejected', reason: 'required-route-blocked' });
   });
 });

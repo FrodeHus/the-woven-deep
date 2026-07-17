@@ -23,7 +23,7 @@ describe('active-run save codec', () => {
   function v4Fixture(): Record<string, unknown> {
     const current = structuredClone(createDemoRun()) as any;
     const { reputations: _reputations, activeTrade: _activeTrade, metrics: _metrics, conclusion: _conclusion,
-      ...withoutRunFields } = current;
+      house: _house, restockedMilestones: _restockedMilestones, ...withoutRunFields } = current;
     const { currency: _currency, classTags: _classTags, statModifiers: _statModifiers, ...hero } = withoutRunFields.hero;
     const { 'merchant-stock': _merchantStock, 'merchant-runtime': _merchantRuntime, 'run-records': _runRecords,
       ...rng } = withoutRunFields.rng;
@@ -33,7 +33,7 @@ describe('active-run save codec', () => {
   function stripToV4Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
     const current = structuredClone(run) as any;
     const { reputations: _reputations, activeTrade: _activeTrade, metrics: _metrics, conclusion: _conclusion,
-      ...withoutRunFields } = current;
+      house: _house, restockedMilestones: _restockedMilestones, ...withoutRunFields } = current;
     const { currency: _currency, classTags: _classTags, statModifiers: _statModifiers, ...hero } = withoutRunFields.hero;
     const { 'merchant-stock': _merchantStock, 'merchant-runtime': _merchantRuntime, 'run-records': _runRecords,
       ...rng } = withoutRunFields.rng;
@@ -42,7 +42,8 @@ describe('active-run save codec', () => {
 
   function v5Fixture(): Record<string, unknown> {
     const current = structuredClone(createDemoRun()) as any;
-    const { metrics: _metrics, conclusion: _conclusion, ...withoutV6Fields } = current;
+    const { metrics: _metrics, conclusion: _conclusion, house: _house,
+      restockedMilestones: _restockedMilestones, ...withoutV6Fields } = current;
     const { 'run-records': _runRecords, ...rng } = withoutV6Fields.rng;
     const { classTags: _classTags, statModifiers: _statModifiers, ...hero } = withoutV6Fields.hero;
     return { ...withoutV6Fields, schemaVersion: 5, hero, rng };
@@ -50,7 +51,8 @@ describe('active-run save codec', () => {
 
   function stripV6Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
     const current = structuredClone(run) as any;
-    const { metrics: _metrics, conclusion: _conclusion, ...withoutV6Fields } = current;
+    const { metrics: _metrics, conclusion: _conclusion, house: _house,
+      restockedMilestones: _restockedMilestones, ...withoutV6Fields } = current;
     const { 'run-records': _runRecords, ...rng } = withoutV6Fields.rng;
     const { classTags: _classTags, statModifiers: _statModifiers, ...hero } = withoutV6Fields.hero;
     return { ...withoutV6Fields, schemaVersion: 5, hero, rng };
@@ -59,13 +61,27 @@ describe('active-run save codec', () => {
   function v6Fixture(): Record<string, unknown> {
     const current = structuredClone(createDemoRun()) as any;
     const { classTags: _classTags, statModifiers: _statModifiers, ...hero } = current.hero;
-    return { ...current, schemaVersion: 6, hero };
+    const { house: _house, restockedMilestones: _restockedMilestones, ...withoutV8Fields } = current;
+    return { ...withoutV8Fields, schemaVersion: 6, hero };
   }
 
   function stripV7Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
     const current = structuredClone(run) as any;
     const { classTags: _classTags, statModifiers: _statModifiers, ...hero } = current.hero;
-    return { ...current, schemaVersion: 6, hero };
+    const { house: _house, restockedMilestones: _restockedMilestones, ...withoutV8Fields } = current;
+    return { ...withoutV8Fields, schemaVersion: 6, hero };
+  }
+
+  function v7Fixture(): Record<string, unknown> {
+    const current = structuredClone(createDemoRun()) as any;
+    const { house: _house, restockedMilestones: _restockedMilestones, ...withoutV8Fields } = current;
+    return { ...withoutV8Fields, schemaVersion: 7 };
+  }
+
+  function stripV8Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
+    const current = structuredClone(run) as any;
+    const { house: _house, restockedMilestones: _restockedMilestones, ...withoutV8Fields } = current;
+    return { ...withoutV8Fields, schemaVersion: 7 };
   }
 
   function concludedRun(): ReturnType<typeof createDemoRun> {
@@ -186,11 +202,11 @@ describe('active-run save codec', () => {
     return population;
   }
 
-  it('migrates strict schema v4 state through v5, v6, and v7 and preserves every former field', () => {
+  it('migrates strict schema v4 state through v5, v6, v7, and v8 and preserves every former field', () => {
     const legacy = v4Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(7);
+    expect(decoded.schemaVersion).toBe(8);
     expect(decoded.hero.currency).toBe(0);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
@@ -198,6 +214,8 @@ describe('active-run save codec', () => {
     expect(decoded.activeTrade).toBeNull();
     expect(decoded.metrics).toEqual(emptyRunMetrics());
     expect(decoded.conclusion).toBeNull();
+    expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
+    expect(decoded.restockedMilestones).toEqual([]);
     const derived = deriveRngStreams(legacy.runSeed as any);
     expect(decoded.rng['merchant-stock']).toEqual(derived['merchant-stock']);
     expect(decoded.rng['merchant-runtime']).toEqual(derived['merchant-runtime']);
@@ -206,29 +224,44 @@ describe('active-run save codec', () => {
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(encodeActiveRun(decoded));
   });
 
-  it('migrates strict schema v5 state through v6 and v7 and preserves every former field', () => {
+  it('migrates strict schema v5 state through v6, v7, and v8 and preserves every former field', () => {
     const legacy = v5Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(7);
+    expect(decoded.schemaVersion).toBe(8);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
     expect(decoded.metrics).toEqual(emptyRunMetrics());
     expect(decoded.conclusion).toBeNull();
+    expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
+    expect(decoded.restockedMilestones).toEqual([]);
     const derived = deriveRngStreams(legacy.runSeed as any);
     expect(decoded.rng['run-records']).toEqual(derived['run-records']);
     expect(stripV6Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(encodeActiveRun(decoded));
   });
 
-  it('migrates strict schema v6 state to v7 and preserves every former field', () => {
+  it('migrates strict schema v6 state through v7 and v8 and preserves every former field', () => {
     const legacy = v6Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(7);
+    expect(decoded.schemaVersion).toBe(8);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
+    expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
+    expect(decoded.restockedMilestones).toEqual([]);
     expect(stripV7Fields(decoded)).toEqual(legacy);
+    expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(encodeActiveRun(decoded));
+  });
+
+  it('migrates strict schema v7 state to v8 and preserves every former field', () => {
+    const legacy = v7Fixture();
+    const decoded = decodeActiveRun(JSON.stringify(legacy));
+
+    expect(decoded.schemaVersion).toBe(8);
+    expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
+    expect(decoded.restockedMilestones).toEqual([]);
+    expect(stripV8Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(encodeActiveRun(decoded));
   });
 
@@ -395,6 +428,93 @@ describe('active-run save codec', () => {
         population.deathPenaltyApplied = true;
       }
       expect(decodeActiveRun(encodeActiveRun(run))).toEqual(run);
+    },
+  );
+
+  it('round-trips a permanent merchant with a null departureAt', () => {
+    const run = merchantRun() as any;
+    run.populations[0].departureAt = null;
+    expect(decodeActiveRun(encodeActiveRun(run))).toEqual(run);
+  });
+
+  it('rejects a permanent merchant whose emitted warnings still bound its rolled lifetime', () => {
+    const run = merchantRun() as any;
+    run.populations[0].departureAt = null;
+    run.populations[0].emittedWarningThresholds = [4000];
+    expect(() => encodeActiveRun(run)).toThrow(/warning/i);
+  });
+
+  it('round-trips a house-located item stack within house capacity', () => {
+    const run = createDemoRun() as any;
+    run.items = [{
+      itemId: 'item.house.1', contentId: 'item.lantern', quantity: 1, condition: 100,
+      enchantment: null, identified: true, charges: null, fuel: null, enabled: null,
+      location: { type: 'house' },
+    }];
+    expect(decodeActiveRun(encodeActiveRun(run))).toEqual(run);
+  });
+
+  it('rejects more house item stacks than the house capacity allows', () => {
+    const run = createDemoRun() as any;
+    run.house = { capacity: 1, upgradesPurchased: 0 };
+    run.items = [0, 1].map((index) => ({
+      itemId: `item.house.${index}`, contentId: 'item.lantern', quantity: 1, condition: 100,
+      enchantment: null, identified: true, charges: null, fuel: null, enabled: null,
+      location: { type: 'house' as const },
+    }));
+    expect(() => encodeActiveRun(run)).toThrow(/house\.capacity|capacity/i);
+  });
+
+  it('round-trips an invalid trade-service command with a null target item id', () => {
+    const state = createDemoRun();
+    const command = {
+      type: 'trade-service' as const, commandId: 'command.service-null', expectedRevision: 0,
+      merchantPopulationId: 'population.missing', serviceId: 'merchant-service.identify' as const,
+      targetItemId: null,
+    };
+    const result = { status: 'invalid' as const, commandId: command.commandId, revision: 0, turn: 0,
+      reason: 'merchant.unavailable' as const };
+    const invalidEvent = { type: 'action.invalid' as const, eventId: command.commandId,
+      commandId: command.commandId, reason: result.reason };
+    const withHistory = { ...state, recentCommands: [{ command, result, events: [invalidEvent], publicEvents: [] }] };
+    expect(decodeActiveRun(encodeActiveRun(withHistory))).toEqual(withHistory);
+  });
+
+  it.each(['house-deposit', 'house-withdraw'] as const)(
+    'round-trips an invalid %s command rejected as house.full',
+    (type) => {
+      const state = createDemoRun();
+      const command = { type, commandId: `command.${type}`, expectedRevision: 0, itemId: 'item.house.1', quantity: 1 };
+      const result = { status: 'invalid' as const, commandId: command.commandId, revision: 0, turn: 0,
+        reason: 'house.full' as const };
+      const invalidEvent = { type: 'action.invalid' as const, eventId: command.commandId,
+        commandId: command.commandId, reason: result.reason };
+      const withHistory = { ...state, recentCommands: [{ command, result, events: [invalidEvent], publicEvents: [] }] };
+      expect(decodeActiveRun(encodeActiveRun(withHistory))).toEqual(withHistory);
+    },
+  );
+
+  it('rejects a house.full reason attached to a non-house command', () => {
+    const state = createDemoRun();
+    const command = { type: 'wait' as const, commandId: 'command.wait-house', expectedRevision: 0 };
+    const result = { status: 'invalid' as const, commandId: command.commandId, revision: 0, turn: 0,
+      reason: 'house.full' as const };
+    const invalidEvent = { type: 'action.invalid' as const, eventId: command.commandId,
+      commandId: command.commandId, reason: result.reason };
+    expect(() => encodeActiveRun({ ...state, recentCommands: [{ command, result, events: [invalidEvent], publicEvents: [] }] }))
+      .toThrow(/house reason requires a house command/i);
+  });
+
+  it.each(['town.truce', 'town.rest'] as const)(
+    'round-trips an invalid wait command rejected as %s',
+    (reason) => {
+      const state = createDemoRun();
+      const command = { type: 'wait' as const, commandId: `command.${reason}`, expectedRevision: 0 };
+      const result = { status: 'invalid' as const, commandId: command.commandId, revision: 0, turn: 0, reason };
+      const invalidEvent = { type: 'action.invalid' as const, eventId: command.commandId,
+        commandId: command.commandId, reason };
+      const withHistory = { ...state, recentCommands: [{ command, result, events: [invalidEvent], publicEvents: [] }] };
+      expect(decodeActiveRun(encodeActiveRun(withHistory))).toEqual(withHistory);
     },
   );
 
@@ -893,7 +1013,7 @@ describe('active-run save codec', () => {
     expect(() => decodeActiveRun(JSON.stringify({ ...createDemoRun(), surprise: true }))).toThrow(/surprise/);
   });
 
-  it.each([0, 1, 2, 3, 8])('rejects unsupported schema version %i without partial state', (schemaVersion) => {
+  it.each([0, 1, 2, 3, 9])('rejects unsupported schema version %i without partial state', (schemaVersion) => {
     try {
       decodeActiveRun(JSON.stringify({ schemaVersion }));
       expect.fail('expected unsupported version');

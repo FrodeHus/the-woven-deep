@@ -59,6 +59,11 @@ export interface ProjectedLootTable {
  * projection, keyed by table id.
  *
  * `itemEligible` restricts direct-item choices (merchant stock filters by floor depth).
+ * `depth`, when supplied, additionally prunes any choice (direct or nested) whose own authored
+ * `minDepth`/`maxDepth` band excludes it — this is the loot-choice depth band (e.g. a town
+ * merchant restock widening its pool at a balance restock milestone), independent of and
+ * additive to `itemEligible`'s item-level depth filtering. Absent `depth` never prunes by band,
+ * matching every pre-existing caller's unbanded behavior.
  * Every authored choice is validated, but ineligible direct choices — and nested choices whose
  * child table keeps no eligible choice — are pruned from the projection so resolution never
  * selects them. Two semantics are deliberately shared by every caller:
@@ -73,9 +78,17 @@ export function projectLootGraph(input: Readonly<{
   /** Error-message prefix; defaults to the ordinary-loot 'loot preflight'. */
   preflightLabel?: string;
   itemEligible?: (item: ItemContentEntry) => boolean;
+  /** When supplied, additionally prunes choices whose authored minDepth/maxDepth band excludes it. */
+  depth?: number;
 }>): ReadonlyMap<OpaqueId, ProjectedLootTable> {
-  const { content, itemEligible } = input;
+  const { content, itemEligible, depth } = input;
   const label = input.preflightLabel ?? 'loot preflight';
+  const bandEligible = (choice: LootChoiceDefinition): boolean => {
+    if (depth === undefined) return true;
+    if (choice.minDepth !== undefined && depth < choice.minDepth) return false;
+    if (choice.maxDepth !== undefined && depth > choice.maxDepth) return false;
+    return true;
+  };
   const memo = new Map<OpaqueId, ProjectedLootTable>();
   const bossUniqueIds = new Set(content.entries.filter((entry) => entry.kind === 'encounter' && entry.model === 'boss')
     .map((entry) => entry.definition.uniqueItemId));
@@ -115,7 +128,7 @@ export function projectLootGraph(input: Readonly<{
         throw new Error(`${label}: guaranteed boss-unique item ${choice.contentId} cannot appear in ordinary loot`);
       }
       if (directItem !== null) {
-        if (itemEligible === undefined || itemEligible(directItem)) {
+        if ((itemEligible === undefined || itemEligible(directItem)) && bandEligible(choice)) {
           choices.push(choice);
           worstChoice = Math.max(worstChoice,
             boundedProduct(choice.maximumQuantity, 1, MAX_LOOT_CREATED_UNITS));
@@ -123,7 +136,7 @@ export function projectLootGraph(input: Readonly<{
         continue;
       }
       const child = visit(choice.lootTableId!, [...trail, tableId]);
-      if (itemEligible === undefined || child.choices.length > 0) {
+      if ((itemEligible === undefined || child.choices.length > 0) && bandEligible(choice)) {
         choices.push(choice);
         worstChoice = Math.max(worstChoice,
           boundedProduct(choice.maximumQuantity, child.worstCreatedUnits, MAX_LOOT_CREATED_UNITS));

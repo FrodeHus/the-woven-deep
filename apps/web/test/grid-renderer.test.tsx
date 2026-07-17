@@ -13,7 +13,7 @@ function makeFloor(width: number, height: number, floorId = 'floor.test'): Gamep
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) cells.push(unknownCell(y * width + x, x, y));
   }
-  return { floorId, width, height, cells };
+  return { floorId, depth: 1, town: false, width, height, cells };
 }
 
 function withCell(

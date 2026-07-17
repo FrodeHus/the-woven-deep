@@ -69,8 +69,11 @@ export interface RunRecordsDemoInput {
 }
 
 function encounter(pack: CompiledContentPack, model: EncounterContentEntry['model']): EncounterContentEntry {
+  // Permanent (town) merchants are never materialized through population placement, so this
+  // fixture only ever selects a non-permanent, dungeon-wandering merchant encounter.
   const result = pack.entries.find((entry): entry is EncounterContentEntry =>
-    entry.kind === 'encounter' && entry.model === model);
+    entry.kind === 'encounter' && entry.model === model
+    && (entry.model !== 'merchant' || !entry.definition.permanent));
   if (!result) throw new Error(`run-records fixture requires a ${model} encounter`);
   return result;
 }

@@ -73,6 +73,74 @@ describe('reduced-motion stylesheet contract', () => {
     expect(declarations).toMatch(/closest-side/);
   });
 
+  it('never lets a visible cell render darker than a remembered one, even at minimum light', () => {
+    // Regression for the "dark circle" bug: `.cell-visible`'s opacity floor (its value at
+    // `--light: 0`) must be >= `.cell-remembered`'s (static) opacity, so a dim-but-visible cell at
+    // the edge of a torch's radius never renders darker than the remembered floor beyond it.
+    const rememberedMatch = /(?:^|\n)\.cell-remembered\s*\{([^}]*)\}/.exec(css);
+    const visibleMatch = /(?:^|\n)\.cell-visible\s*\{([^}]*)\}/.exec(css);
+    expect(rememberedMatch, '.cell-remembered rule not found').toBeTruthy();
+    expect(visibleMatch, '.cell-visible rule not found').toBeTruthy();
+
+    const rememberedOpacityMatch = /opacity\s*:\s*([\d.]+)/.exec(rememberedMatch![1]!);
+    expect(rememberedOpacityMatch, '.cell-remembered has no explicit opacity').toBeTruthy();
+    const rememberedOpacity = Number(rememberedOpacityMatch![1]);
+
+    // `.cell-visible`'s opacity is `calc(FLOOR + SPAN * var(--light, 1))`; its minimum (at
+    // `--light: 0`) is FLOOR.
+    const visibleCalcMatch = /opacity\s*:\s*calc\(\s*([\d.]+)\s*\+\s*[\d.]+\s*\*\s*var\(--light/.exec(visibleMatch![1]!);
+    expect(visibleCalcMatch, '.cell-visible opacity is not the expected calc(FLOOR + SPAN * var(--light)) shape').toBeTruthy();
+    const visibleFloor = Number(visibleCalcMatch![1]);
+
+    expect(visibleFloor).toBeGreaterThanOrEqual(rememberedOpacity);
+  });
+
+  it('scales font-size (not --cell-w/--cell-h) on .playfield with --zoom, so glyphs grow with the cell box instead of leaving whitespace at zoom', () => {
+    // `.cell` inherits font-size from `.playfield`, and `1ch`/`1lh` are relative to the element
+    // they're used on — so scaling font-size here (rather than multiplying --cell-w/--cell-h by
+    // --zoom directly) grows both the rendered glyph AND the cell box in lockstep from one
+    // number. Multiplying --cell-w/--cell-h by --zoom directly, on top of a font-size that is
+    // ALSO scaled by --zoom, would double-scale the box relative to the glyph — this pins that it
+    // is one or the other, never both.
+    const playfieldRuleMatch = /(?:^|\n)\.playfield\s*\{([^}]*)\}/.exec(css);
+    expect(playfieldRuleMatch, '.playfield rule not found').toBeTruthy();
+    const playfieldDecls = playfieldRuleMatch![1]!;
+
+    const fontSizeMatch = /font-size\s*:\s*([^;]+);/.exec(playfieldDecls);
+    expect(fontSizeMatch, '.playfield has no font-size declaration').toBeTruthy();
+    expect(fontSizeMatch![1]).toMatch(/var\(--zoom/);
+
+    const cellWMatch = /--cell-w\s*:\s*([^;]+);/.exec(playfieldDecls);
+    const cellHMatch = /--cell-h\s*:\s*([^;]+);/.exec(playfieldDecls);
+    expect(cellWMatch, '.playfield has no --cell-w declaration').toBeTruthy();
+    expect(cellHMatch, '.playfield has no --cell-h declaration').toBeTruthy();
+    // --cell-w/--cell-h must be plain 1ch/1lh — NOT also multiplied by --zoom — since font-size
+    // above already carries the zoom scale into these units.
+    expect(cellWMatch![1]!.trim()).toBe('1ch');
+    expect(cellHMatch![1]!.trim()).toBe('1lh');
+    expect(cellWMatch![1]).not.toMatch(/var\(--zoom/);
+    expect(cellHMatch![1]).not.toMatch(/var\(--zoom/);
+
+    const gridRuleMatch = /(?:^|\n)\.playfield-grid\s*\{([^}]*)\}/.exec(css);
+    expect(gridRuleMatch, '.playfield-grid rule not found').toBeTruthy();
+    expect(gridRuleMatch![1]).toMatch(/grid-auto-rows\s*:\s*var\(--cell-h\)/);
+
+    const probeRuleMatch = /(?:^|\n)\.cell-probe\s*\{([^}]*)\}/.exec(css);
+    expect(probeRuleMatch, '.cell-probe rule not found').toBeTruthy();
+    expect(probeRuleMatch![1]).toMatch(/width\s*:\s*var\(--cell-w\)/);
+    expect(probeRuleMatch![1]).toMatch(/height\s*:\s*var\(--cell-h\)/);
+  });
+
+  it('gives .cell-probe-base a fixed base font-size (not tied to --zoom), so PlayScreen can measure the 1x cell size directly instead of dividing the zoomed probe by the applied zoom', () => {
+    const probeBaseRuleMatch = /(?:^|\n)\.cell-probe-base\s*\{([^}]*)\}/.exec(css);
+    expect(probeBaseRuleMatch, '.cell-probe-base rule not found').toBeTruthy();
+    const decls = probeBaseRuleMatch![1]!;
+    expect(decls).toMatch(/font-size\s*:\s*1rem/);
+    expect(decls).not.toMatch(/var\(--zoom/);
+    expect(decls).toMatch(/width\s*:\s*1ch/);
+    expect(decls).toMatch(/height\s*:\s*1lh/);
+  });
+
   it('centers .glow with a standalone translate property so keyframes can animate scale/opacity without overwriting it', () => {
     const glowRuleMatch = /(?:^|\n)\.glow\s*\{([^}]*)\}/.exec(css);
     expect(glowRuleMatch, '.glow rule not found in stylesheet').toBeTruthy();

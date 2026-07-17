@@ -29,7 +29,7 @@ export const NPC_BEHAVIOR_PARAMETER_SCHEMAS = {
   'npc-behavior.travelling-merchant': z.strictObject({}),
 } as const;
 
-export const MERCHANT_SERVICE_IDS = ['merchant-service.identify'] as const;
+export const MERCHANT_SERVICE_IDS = ['merchant-service.identify', 'merchant-service.strongbox'] as const;
 export const MERCHANT_AGGRESSION_RESPONSES = ['flee', 'self-defense'] as const;
 
 export { ACHIEVEMENT_CRITERIA_IDS } from '../model.js';

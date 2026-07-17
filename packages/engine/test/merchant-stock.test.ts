@@ -19,7 +19,7 @@ let encounter: MerchantEncounterContentEntry;
 beforeAll(async () => {
   content = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
   encounter = content.entries.find((entry): entry is MerchantEncounterContentEntry =>
-    entry.kind === 'encounter' && entry.model === 'merchant')!;
+    entry.kind === 'encounter' && entry.model === 'merchant' && !entry.definition.permanent)!;
 });
 
 function fixture(overrides: Partial<ActiveRun> = {}) {

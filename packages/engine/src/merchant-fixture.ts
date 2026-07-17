@@ -54,8 +54,10 @@ export interface MerchantDemoInput {
 }
 
 function merchantEncounterEntry(pack: CompiledContentPack): MerchantEncounterContentEntry {
+  // Permanent (town) merchants are never materialized through population placement, so this
+  // fixture only ever selects a non-permanent, dungeon-wandering merchant encounter.
   const entry = pack.entries.find((candidate): candidate is MerchantEncounterContentEntry =>
-    candidate.kind === 'encounter' && candidate.model === 'merchant');
+    candidate.kind === 'encounter' && candidate.model === 'merchant' && !candidate.definition.permanent);
   if (!entry) throw new Error('merchant fixture requires a merchant encounter');
   return entry;
 }
@@ -346,9 +348,11 @@ function moveHeroToFloor(state: ActiveRun, floorId: string, worldTime: number): 
 function prepareMerchantDemoBoundary(state: ActiveRun, input: MerchantDemoInput): ActiveRun {
   const { boundary } = input;
   if (boundary === 'before-warning') {
+    // This fixture only ever materializes non-permanent merchants (see merchantEncounterEntry),
+    // so departureAt is always numeric here.
     const departures = state.populations
       .filter((population): population is MerchantPopulation => population.model === 'merchant')
-      .map((population) => population.departureAt);
+      .map((population) => population.departureAt!);
     const target = Math.min(...departures) - 1001;
     if (target < state.worldTime) throw new Error('merchant fixture warning window has already passed');
     return { ...state, worldTime: target };
@@ -371,13 +375,13 @@ function prepareMerchantDemoBoundary(state: ActiveRun, input: MerchantDemoInput)
   }
   if (boundary === 'before-return') {
     const away = merchantOnFloor(state, AWAY_FLOOR_ID);
-    const target = away.departureAt - 101;
+    const target = away.departureAt! - 101;
     if (target < state.worldTime) throw new Error('merchant fixture departure window has already passed');
     return moveHeroToFloor(state, HOME_FLOOR_ID, target);
   }
   if (boundary === 'before-departure') {
     const away = merchantOnFloor(state, AWAY_FLOOR_ID);
-    const target = away.departureAt - 1;
+    const target = away.departureAt! - 1;
     if (target < state.worldTime) throw new Error('merchant fixture departure deadline has already passed');
     return { ...state, worldTime: target };
   }

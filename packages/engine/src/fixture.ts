@@ -46,6 +46,9 @@ export function createDemoContentPack(): CompiledContentPack {
           { value: 28, cost: 54 }, { value: 29, cost: 57 }, { value: 30, cost: 60 },
         ],
       },
+      restockMilestones: [5, 10, 15, 20],
+      house: { baseCapacity: 6, strongboxIncrement: 4 },
+      encounterDensity: { cellsPerEncounter: 2000 },
     }, {
       kind: 'condition', id: 'condition.disengaged', name: 'Disengaged',
       description: 'Avoids opportunity attacks', tags: ['beneficial'], color: '#78c8dc',
@@ -165,5 +168,9 @@ export function createDemoRun(): ActiveRun {
     conqueredChampionRecordIds: [],
     metrics: emptyRunMetrics(),
     conclusion: null,
+    // Matches this fixture's bundled balance base (see createDemoContentPack); migrations never
+    // read content, so real saves derive this from the authored balance entry instead.
+    house: { capacity: 6, upgradesPurchased: 0 },
+    restockedMilestones: [],
   };
 }

@@ -5,7 +5,8 @@ export type ItemLocation =
   | Readonly<{ type: 'backpack'; actorId: OpaqueId }>
   | Readonly<{ type: 'equipped'; actorId: OpaqueId; slot: EquipmentSlot }>
   | Readonly<{ type: 'floor'; floorId: OpaqueId; x: number; y: number }>
-  | Readonly<{ type: 'merchant-stock'; populationId: OpaqueId }>;
+  | Readonly<{ type: 'merchant-stock'; populationId: OpaqueId }>
+  | Readonly<{ type: 'house' }>;
 
 export interface ItemEnchantmentState {
   readonly enchantmentId: OpaqueId;

@@ -1,31 +1,55 @@
-import type { CompiledContentPack, ItemContentEntry, VaultContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, ItemContentEntry, MerchantEncounterContentEntry } from '@woven-deep/content';
 import type { BaseAttributes, EquipmentSlot } from './actor-model.js';
 import { emptyEquipment, type ActorState } from './actor-model.js';
 import { balanceEntry } from './actions.js';
 import { deriveActorStats, type DerivedStatModifier } from './attributes.js';
-import { addGeneratedFloor } from './floor-integration.js';
-import { depthFloorId } from './floor-transition.js';
-import { generateFloor } from './generate-floor.js';
 import type { ClassicThemeSettings } from './generation-model.js';
-import { createClassicTheme } from './generation-mask.js';
-import { allocateFloorSeed } from './generation-random.js';
 import { allocateIdentificationMap } from './identification.js';
 import type { ItemInstance } from './item-model.js';
-import type { ActiveRun, OpaqueId, Uint32State } from './model.js';
+import { materializeMerchant } from './merchant-stock.js';
+import type { ActiveRun, OpaqueId, Point, Uint32State } from './model.js';
 import { createEncounterRunDecisions } from './population-gates.js';
 import { deriveRngStreams, isNonZeroState } from './random.js';
 import { encodeRunSeed } from './run-records-model.js';
 import { emptyRunMetrics } from './run-metrics.js';
+import { validateActiveRun } from './save-schema.js';
+import { compareCodeUnits } from './stable-json.js';
+import { generateTownFloor, TOWN_FLOOR_ID } from './town-floor.js';
 import { ENGINE_GAME_VERSION, SAVE_SCHEMA_VERSION } from './versions.js';
 
-export const NEW_RUN_FLOOR_WIDTH = 80;
-export const NEW_RUN_FLOOR_HEIGHT = 25;
+interface TownMerchantSpec {
+  readonly populationId: OpaqueId;
+  readonly encounterId: OpaqueId;
+  readonly position: Point;
+}
+
+function townMerchantSpecs(town: ReturnType<typeof generateTownFloor>): readonly TownMerchantSpec[] {
+  return [
+    { populationId: 'population.town-provisioner', encounterId: 'encounter.town-provisioner', position: town.merchantSlots.provisioner },
+    { populationId: 'population.town-armorer', encounterId: 'encounter.town-armorer', position: town.merchantSlots.arms },
+    { populationId: 'population.town-curios-dealer', encounterId: 'encounter.town-curios-dealer', position: town.merchantSlots.curios },
+  ];
+}
+
+function townMerchantEncounter(pack: CompiledContentPack, encounterId: OpaqueId): MerchantEncounterContentEntry {
+  const entry = pack.entries.find((candidate) => candidate.id === encounterId);
+  if (!entry || entry.kind !== 'encounter' || entry.model !== 'merchant' || !entry.definition.permanent) {
+    throw new Error(`createNewRun requires a permanent town merchant encounter ${encounterId}`);
+  }
+  return entry;
+}
+
+// Dungeon generation settings; the town start below no longer uses them directly, but
+// `descendToNextFloor` still generates every floor below the town at this width/height/theme so
+// the whole run stays on one generation profile. 160x50 (with a raised room floor) is the
+// larger-dungeon baseline: `createClassicTheme` caps width at 160 and height at 100, so this sits
+// at the width ceiling with headroom on height.
+export const NEW_RUN_FLOOR_WIDTH = 160;
+export const NEW_RUN_FLOOR_HEIGHT = 50;
 export const NEW_RUN_FLOOR_THEME_SETTINGS: ClassicThemeSettings = {
   ambient: { color: [19, 23, 31], strength: 7 },
+  minimumRooms: 14,
 };
-const WIDTH = NEW_RUN_FLOOR_WIDTH;
-const HEIGHT = NEW_RUN_FLOOR_HEIGHT;
-const FIRST_FLOOR_ID = depthFloorId(1);
 
 export interface NewRunHeroItem {
   readonly contentId: OpaqueId;
@@ -132,19 +156,9 @@ export function createNewRun(input: Readonly<{
   });
   const initializedRng = { ...identified.rng, 'population-gates': gates.state };
 
-  const allocation = allocateFloorSeed(initializedRng.generation);
-  const vaults = pack.entries.filter((entry): entry is VaultContentEntry => entry.kind === 'vault');
-  const generated = generateFloor({
-    floorId: FIRST_FLOOR_ID,
-    floorSeed: allocation.floorSeed,
-    depth: 1,
-    width: WIDTH,
-    height: HEIGHT,
-    theme: createClassicTheme(WIDTH, HEIGHT, NEW_RUN_FLOOR_THEME_SETTINGS),
-    vaults,
-  });
-  const stairUp = generated.floor.stairUp;
-  if (stairUp === null) throw new Error('internal invariant: generated first floor must have a stair-up');
+  // The town is authored, not generated: it consumes no randomness, so the RNG streams above stay
+  // untouched at their post-identification/post-gates values -- no floor-seed allocation happens.
+  const town = generateTownFloor(pack);
 
   const heroActorId: OpaqueId = 'hero.guest';
   let equipment = emptyEquipment();
@@ -182,9 +196,9 @@ export function createNewRun(input: Readonly<{
     actorId: heroActorId,
     contentId: 'hero.adventurer',
     playerControlled: true,
-    floorId: FIRST_FLOOR_ID,
-    x: stairUp.x,
-    y: stairUp.y,
+    floorId: TOWN_FLOOR_ID,
+    x: town.entrancePlaza.x,
+    y: town.entrancePlaza.y,
     attributes: hero.attributes,
     health: maxHealth,
     maxHealth,
@@ -217,7 +231,7 @@ export function createNewRun(input: Readonly<{
       name: hero.name,
       sightRadius: 12,
       backpackCapacity: 12,
-      currency: 0,
+      currency: balance.startingCurrency,
       classTags: hero.classTags,
       statModifiers: hero.statModifiers,
     },
@@ -235,18 +249,49 @@ export function createNewRun(input: Readonly<{
       emittedFuelWarnings: [],
     },
     identification: identified.identification,
-    activeFloorId: FIRST_FLOOR_ID,
+    activeFloorId: TOWN_FLOOR_ID,
     activeFloorEnteredAt: 0,
-    floors: [],
+    floors: [town.floor],
     recentCommands: [],
     encounterDecisions: gates.decisions,
     populations: [],
     fallenHeroStandings: [],
     fallenHeroDecisions: [],
     conqueredChampionRecordIds: [],
+    // The town never counts toward floorsEntered/deepestDepth: those track dungeon progress, and
+    // the hero starts in town without ever "entering" it via a transition.
     metrics: emptyRunMetrics(),
     conclusion: null,
+    house: { capacity: balance.house.baseCapacity, upgradesPurchased: 0 },
+    restockedMilestones: [],
   };
 
-  return addGeneratedFloor(skeleton, generated, allocation, { content: pack });
+  // Town shopkeepers are permanent merchants, materialized here (deterministically, in a fixed
+  // order) rather than through population placement: their stock is projected against the run's
+  // dungeon high-water mark (max(1, deepestDepth) === 1 for a fresh run), not the town's own
+  // depth 0. Each materialization consumes further `merchant-stock` RNG state in order.
+  let withMerchants: ActiveRun = skeleton;
+  for (const spec of townMerchantSpecs(town)) {
+    const encounter = townMerchantEncounter(pack, spec.encounterId);
+    const materialized = materializeMerchant({
+      run: withMerchants, content: pack, encounter, populationId: spec.populationId,
+      floorId: TOWN_FLOOR_ID, position: spec.position,
+    });
+    withMerchants = {
+      ...withMerchants,
+      rng: { ...withMerchants.rng, 'merchant-stock': materialized.nextMerchantStockState },
+      actors: [...withMerchants.actors, materialized.actor]
+        .sort((left, right) => compareCodeUnits(left.actorId, right.actorId)),
+      items: [...withMerchants.items, ...materialized.items]
+        .sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
+      populations: [...withMerchants.populations, materialized.population]
+        .sort((left, right) => compareCodeUnits(left.populationId, right.populationId)),
+      // Town merchants bypass ordinary population placement, so their encounter decision's
+      // instance count (content-bound validated against `run.populations`) is bumped here.
+      encounterDecisions: withMerchants.encounterDecisions.map((decision) =>
+        decision.encounterId === spec.encounterId ? { ...decision, instancesCreated: decision.instancesCreated + 1 } : decision),
+    };
+  }
+
+  return validateActiveRun(withMerchants);
 }

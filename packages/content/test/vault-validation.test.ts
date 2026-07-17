@@ -127,3 +127,104 @@ describe('validateVaultEntry', () => {
     });
   });
 });
+
+describe('validateVaultEntry (town vault contract)', () => {
+  const townLegend: Record<string, VaultLegendEntry> = {
+    '#': { terrain: 'wall', entrance: false, light: null, slot: null },
+    '.': { terrain: 'floor', entrance: false, light: null, slot: null },
+    '+': { terrain: 'floor', entrance: true, light: null, slot: null },
+    '>': {
+      terrain: 'stair-down', entrance: false, light: null,
+      slot: { id: 'dungeon-entrance', kind: 'fixture', required: true, tags: ['town'] },
+    },
+    D: {
+      terrain: 'closed-door', entrance: false, light: null,
+      slot: { id: 'house-door', kind: 'fixture', required: true, tags: ['town'] },
+    },
+    P: {
+      terrain: 'floor', entrance: false, light: null,
+      slot: { id: 'merchant-provisioner', kind: 'npc', required: true, tags: ['town'] },
+    },
+    A: {
+      terrain: 'floor', entrance: false, light: null,
+      slot: { id: 'merchant-arms', kind: 'npc', required: true, tags: ['town'] },
+    },
+    C: {
+      terrain: 'floor', entrance: false, light: null,
+      slot: { id: 'merchant-curios', kind: 'npc', required: true, tags: ['town'] },
+    },
+    L: {
+      terrain: 'floor', entrance: false, slot: null,
+      light: {
+        idSuffix: 'town-lamp', glyph: 'L', presentationToken: 'fixture.lamp',
+        color: [255, 180, 64], radius: 6, strength: 180, enabled: true,
+      },
+    },
+  };
+
+  function townVault(
+    layout: readonly string[],
+    legend: Readonly<Record<string, VaultLegendEntry>> = townLegend,
+  ): VaultContentEntry {
+    return {
+      kind: 'vault',
+      id: 'vault.town',
+      name: 'Town',
+      tags: ['town'],
+      minDepth: 0,
+      maxDepth: 0,
+      rarity: 'common',
+      weight: 1,
+      maxPerFloor: 1,
+      margin: 0,
+      transforms: { rotations: [0], reflectHorizontal: false },
+      layout,
+      legend,
+      entranceCount: 1,
+      requiredSlotIds: ['dungeon-entrance', 'house-door', 'merchant-arms', 'merchant-curios', 'merchant-provisioner'],
+    };
+  }
+
+  const validLayout = ['+>PAC.', '.....D', '..L...'] as const;
+
+  it('accepts a town vault carrying exactly the five required slots and a light', () => {
+    const issues = validateVaultEntry(townVault(validLayout), 'vaults/town.yaml');
+    expect(issues.filter((issue) => issue.message.includes('town vault'))).toEqual([]);
+  });
+
+  it('rejects a town vault missing a required slot', () => {
+    const layoutWithoutHouseDoor = ['+>PAC.', '......', '..L...'] as const;
+    const legendWithoutDoor = { ...townLegend, D: townLegend['.']! };
+    const issues = validateVaultEntry(townVault(layoutWithoutHouseDoor, legendWithoutDoor), 'vaults/town.yaml');
+    expect(issues.some((issue) => issue.message.includes('a town vault must declare exactly the required slots'))).toBe(true);
+  });
+
+  it('rejects a town vault declaring an extra required slot', () => {
+    const layout = ['+>PAC.', '.....D', '..LX..'] as const;
+    const legendWithExtra: Record<string, VaultLegendEntry> = {
+      ...townLegend,
+      X: {
+        terrain: 'floor', entrance: false, light: null,
+        slot: { id: 'extra-slot', kind: 'item', required: true, tags: ['town'] },
+      },
+    };
+    const issues = validateVaultEntry(townVault(layout, legendWithExtra), 'vaults/town.yaml');
+    expect(issues.some((issue) => issue.message.includes('a town vault must declare exactly the required slots'))).toBe(true);
+  });
+
+  it('rejects a town vault with no light fixture', () => {
+    const layoutWithoutLight = ['+>PAC.', '.....D', '......'] as const;
+    const issues = validateVaultEntry(townVault(layoutWithoutLight), 'vaults/town.yaml');
+    expect(issues).toContainEqual(expect.objectContaining({
+      message: 'a town vault must declare at least one light fixture',
+    }));
+  });
+
+  it('rejects a town vault whose dungeon-entrance slot is not on stair-down terrain', () => {
+    const legendWithFloorEntrance = { ...townLegend, '>': { ...townLegend['>']!, terrain: 'floor' as const } };
+    const issues = validateVaultEntry(townVault(validLayout, legendWithFloorEntrance), 'vaults/town.yaml');
+    expect(issues).toContainEqual(expect.objectContaining({
+      message: 'the dungeon-entrance slot of a town vault must sit on stair-down terrain',
+    }));
+  });
+});

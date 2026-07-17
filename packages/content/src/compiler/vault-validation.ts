@@ -5,6 +5,10 @@ const potentiallyTraversable = new Set<VaultTerrainName>([
   'floor', 'closed-door', 'stair-up', 'stair-down',
 ]);
 
+export const TOWN_VAULT_REQUIRED_SLOT_IDS = [
+  'dungeon-entrance', 'house-door', 'merchant-provisioner', 'merchant-arms', 'merchant-curios',
+] as const;
+
 function compareText(left: string, right: string): number {
   if (left < right) return -1;
   if (left > right) return 1;
@@ -98,6 +102,34 @@ export function validateVaultEntry(entry: VaultContentEntry, file: string): Cont
   for (const [suffix, locations] of [...fixtureLocations].sort(([left], [right]) => compareText(left, right))) {
     if (locations.length > 1) {
       add(`$.entries.${entry.id}.legend`, `duplicate fixture suffix ${suffix}`);
+    }
+  }
+
+  if (entry.tags.includes('town')) {
+    const requiredSlotIds = new Set<string>();
+    for (const [slotId, locations] of slotLocations) {
+      const [slotX, slotY] = locations[0]!;
+      const slot = entry.legend[rows[slotY]?.[slotX] ?? '']?.slot;
+      if (slot?.required) requiredSlotIds.add(slotId);
+    }
+    const expectedSlotIds = TOWN_VAULT_REQUIRED_SLOT_IDS;
+    const missingSlotIds = expectedSlotIds.filter((id) => !requiredSlotIds.has(id));
+    const extraSlotIds = [...requiredSlotIds].filter((id) => !(expectedSlotIds as readonly string[]).includes(id));
+    if (missingSlotIds.length > 0 || extraSlotIds.length > 0) {
+      add(`$.entries.${entry.id}.requiredSlotIds`,
+        `a town vault must declare exactly the required slots ${expectedSlotIds.join(', ')}; `
+        + `missing ${missingSlotIds.join(', ') || 'none'}, extra ${extraSlotIds.join(', ') || 'none'}`);
+    }
+    if (fixtureLocations.size === 0) {
+      add(`$.entries.${entry.id}.legend`, 'a town vault must declare at least one light fixture');
+    }
+    const entranceLocations = slotLocations.get('dungeon-entrance');
+    if (entranceLocations) {
+      const [entranceX, entranceY] = entranceLocations[0]!;
+      const entranceTerrain = entry.legend[rows[entranceY]?.[entranceX] ?? '']?.terrain;
+      if (entranceTerrain !== 'stair-down') {
+        add(`$.entries.${entry.id}.legend`, 'the dungeon-entrance slot of a town vault must sit on stair-down terrain');
+      }
     }
   }
 

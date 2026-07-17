@@ -55,3 +55,36 @@ export function viewportForPane(input: Readonly<{
     height: clampAxis(rawHeight, MIN_VIEWPORT.height, input.floor.height),
   };
 }
+
+/**
+ * The discrete zoom steps the playfield may render at. Discrete (not continuous) so the grid's
+ * `1ch`/`1lh` character-cell alignment never lands on a fractional pixel that would blur
+ * monospace glyphs; bounded at 2x because beyond that a compact floor stops reading as a tactical
+ * map and starts reading as a magnifying glass.
+ */
+export const ZOOM_STEPS = [1, 1.25, 1.5, 1.75, 2] as const;
+export type ZoomFactor = typeof ZOOM_STEPS[number];
+
+/**
+ * Picks the highest zoom step at which the WHOLE floor still fits inside the pane on both axes, so
+ * a small authored floor (e.g. the 34x16 town) fills the pane instead of leaving letterboxed empty
+ * space, while a floor that already meets-or-exceeds the pane at 1x (any dungeon floor, all of
+ * which are far larger than any realistic pane) never gets scaled up and forced into a scrollable
+ * camera window instead. `cellPx` MUST be the unzoomed (1x) cell size — the caller is responsible
+ * for feeding this function the same base measurement it un-zooms from the live probe, never a
+ * value computed independently, so this stays the single source of truth `viewportForPane` and the
+ * popover pixel math also read from (see PlayScreen's measure pass).
+ */
+export function zoomForFloor(input: Readonly<{
+  panePx: Readonly<{ width: number; height: number }>;
+  cellPx: Readonly<{ width: number; height: number }>;
+  floor: Readonly<{ width: number; height: number }>;
+}>): ZoomFactor {
+  let best: ZoomFactor = 1;
+  for (const step of ZOOM_STEPS) {
+    const fitsWidth = input.floor.width * input.cellPx.width * step <= input.panePx.width;
+    const fitsHeight = input.floor.height * input.cellPx.height * step <= input.panePx.height;
+    if (fitsWidth && fitsHeight) best = step;
+  }
+  return best;
+}

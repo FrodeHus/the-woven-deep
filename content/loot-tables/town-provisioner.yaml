@@ -1,0 +1,16 @@
+schemaVersion: 7
+entries:
+  - kind: loot-table
+    id: loot-table.town-provisioner
+    name: Town Provisioner stock
+    tags: [town, provisioner]
+    rolls: 4
+    # Base band (no minDepth/maxDepth) is always available. The bundled light/food/fuel item
+    # pool is thin (four items total), so this table widens with a single deeper band rather
+    # than one per restock milestone: from depth 5 onward the brass lantern - the pool's only
+    # better light source - joins the rotation alongside the always-available staples.
+    choices:
+      - { contentId: item.travel-ration, lootTableId: null, weight: 4, minimumQuantity: 2, maximumQuantity: 4 }
+      - { contentId: item.pitch-torch, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.lamp-oil, lootTableId: null, weight: 4, minimumQuantity: 2, maximumQuantity: 4 }
+      - { contentId: item.brass-lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, minDepth: 5 }

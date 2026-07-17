@@ -50,13 +50,21 @@ Approved design for the third sub-milestone of milestone 5 (decomposition in `do
 
 - Town renders through the same play surface. StatusBar sources the ACTIVE floor's depth (new projection field if absent) and shows "Town" on depth 0 instead of a depth label; the deepest-depth metric stays available to the conclusion/Hall screens.
 - On the town floor the ThreatPanel yields to a Town panel listing the three merchants and the house with proximity hints (same snapshot-pure panel conventions).
-- Trade in town reuses the existing trade screen; the house gets a transfer screen (two keyboard lists, backpack ↔ house, capacity readouts) following the established dialog/focus conventions.
+- Trade in town goes through a trade screen. (Amended 2026-07-17: this sentence originally assumed a trade screen already existed — it never did; the engine's 4B2 trade layer had no client UI. The screen was built in this milestone as plan Task 7b: Shift+T opens it adjacent to a merchant, driven by `projection.trade`, following the dialog/focus conventions.) The house gets a transfer screen (two keyboard lists, backpack ↔ house, capacity readouts) following the same conventions.
 - The wizard/title/conclusion flow is untouched except that new runs begin in town.
 
 ## Rendering fixes (from live play, part of 5C)
 
 1. **Visible-dim inversion ("dark circle")**: visible cells at low light intensity render darker than remembered cells, producing a dark ring around the carried light. Fix the brightness model so a visible cell is never darker than a remembered one (raise the visible floor above the remembered gray, or apply falloff in color-space rather than opacity), verified against real-browser screenshots.
 2. **Map not filling the pane — two-part fix.** (a) Production dungeon floors grow to 160×50 (from 80×25): with the sight-limited scrolling camera this gives genuinely explorable levels and makes dungeon floors larger than any pane, eliminating the dead-margin case for the dungeon. The floor-population sizing gains an area-aware density knob (balance content) so larger floors carry proportionally more encounters instead of reading as empty; the pinned e2e walks re-derive against the new layouts; demo/test fixtures keep their own dimensions and are untouched; the plan verifies the encoded save footprint of 160×50 floors against the sessionStorage quota (compact grid encoding is expected to make this comfortable). (b) The compact, authored town still needs the original fix: a bounded playfield zoom (font-size scaling, clamped to a sane maximum) fills the pane when the floor is smaller than it. The camera math is unchanged — the cell size input to `viewportForPane` reflects the zoomed size, and measurement (probe, popover pixel math) stays consistent with the zoomed cell size.
+
+## Guest economy viability (amendment, 2026-07-17)
+
+Deriving the exit-gate loop exposed three economy gaps; resolved as follows so the loop's beats are reachable by a real seeded walk:
+
+- `createNewRun` now grants `balance.startingCurrency` (bundled: 40) instead of a hardcoded 0 — a latent defect: the balance field existed and test fixtures honored it, real runs didn't.
+- The strongbox service is repriced within one excursion's reach (bundled: 50), since the spec's own loop requires purchasing it from starting gold plus sale proceeds.
+- Ordinary monsters have no drop machinery (loot tables attach only to bosses and champions), so the loop's "sell loot" beat sells surplus starting gear to the arms dealer instead. Monster drop loot is real design work (content field + defeat-drop engine wiring + economy balance) recorded in the backlog, not smuggled in as a gap-fill.
 
 ## Error handling
 

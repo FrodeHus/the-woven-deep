@@ -1,7 +1,8 @@
 import type { ActiveRun } from './model.js';
 import { SaveLoadError } from './save-error.js';
 import {
-  legacyActiveRunV4Schema, legacyActiveRunV5Schema, legacyActiveRunV6Schema, validateActiveRun,
+  legacyActiveRunV4Schema, legacyActiveRunV5Schema, legacyActiveRunV6Schema, legacyActiveRunV7Schema,
+  validateActiveRun,
 } from './save-schema.js';
 import { deriveRngStreams } from './random.js';
 import { emptyRunMetrics } from './run-metrics.js';
@@ -50,13 +51,27 @@ function migrateV6ToV7(input: unknown): unknown {
   };
 }
 
-function migrateLegacy(input: unknown, schemaVersion: 4 | 5 | 6): ActiveRun {
+function migrateV7ToV8(input: unknown): unknown {
+  const v7 = legacyActiveRunV7Schema.parse(input);
+  return {
+    ...v7,
+    schemaVersion: 8,
+    // Migrations are content-free: the literal 6 matches the bundled base house capacity, and a
+    // v7 save can never have purchased upgrades (the feature did not exist yet).
+    house: { capacity: 6, upgradesPurchased: 0 },
+    restockedMilestones: [],
+  };
+}
+
+function migrateLegacy(input: unknown, schemaVersion: 4 | 5 | 6 | 7): ActiveRun {
   try {
     const migrated = schemaVersion === 4
-      ? migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input)))
+      ? migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input))))
       : schemaVersion === 5
-        ? migrateV6ToV7(migrateV5ToV6(input))
-        : migrateV6ToV7(input);
+        ? migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input)))
+        : schemaVersion === 6
+          ? migrateV7ToV8(migrateV6ToV7(input))
+          : migrateV7ToV8(input);
     return validateActiveRun(migrated);
   } catch (cause) {
     if (cause instanceof SaveLoadError) throw cause;
@@ -74,7 +89,9 @@ export function decodeActiveRun(json: string): ActiveRun {
   const schemaVersion = typeof input === 'object' && input !== null
     ? (input as Readonly<Record<string, unknown>>).schemaVersion
     : undefined;
-  if (schemaVersion === 4 || schemaVersion === 5 || schemaVersion === 6) return migrateLegacy(input, schemaVersion);
+  if (schemaVersion === 4 || schemaVersion === 5 || schemaVersion === 6 || schemaVersion === 7) {
+    return migrateLegacy(input, schemaVersion);
+  }
   if (schemaVersion !== SAVE_SCHEMA_VERSION) {
     throw new SaveLoadError(
       'unsupported_version',

@@ -10,9 +10,14 @@ import { computeCamera, type CameraOrigin } from './camera.js';
 import { EffectsLayer } from './EffectsLayer.js';
 import { GridRenderer } from './GridRenderer.js';
 import { createKeyDispatcher } from './KeyRouter.js';
-import { layoutTier, viewportForPane, type LayoutTier } from './layout.js';
+import {
+  layoutTier, viewportForPane, zoomForFloor, type LayoutTier, type ZoomFactor,
+} from './layout.js';
 import { HeroPanel, LogPanel, StatusBar, ThreatPanel, VitalsStrip } from './panels.js';
+import { HouseScreen } from './screens/HouseScreen.js';
+import { TradeScreen } from './screens/TradeScreen.js';
 import { ThreatPopover, type ThreatPopoverActor } from './ThreatPopover.js';
+import { TownPanel } from './TownPanel.js';
 
 interface DecisionPromptProps {
   readonly snapshot: SessionSnapshot;
@@ -89,9 +94,20 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
   const triptychRef = useRef<HTMLDivElement>(null);
   const mapPaneRef = useRef<HTMLDivElement>(null);
   const cellProbeRef = useRef<HTMLSpanElement>(null);
+  // A second, un-zoomed probe (fixed at the base font-size, see `.cell-probe-base` in styles.css)
+  // used only to feed `zoomForFloor` the 1x cell size — see the effect below for why this is a
+  // second measured element rather than dividing `cellProbeRef`'s zoomed measurement by the
+  // applied zoom.
+  const cellProbeBaseRef = useRef<HTMLSpanElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [paneSize, setPaneSize] = useState({ width: 0, height: 0 });
   const [cellSize, setCellSize] = useState(FALLBACK_CELL_PX);
+  const [zoom, setZoom] = useState<ZoomFactor>(1);
+  // Mirrors `zoom` state but read synchronously inside the measure callback below (which closes
+  // over it once per floor, via the `floorId`-keyed effect), so the callback can compare against
+  // the zoom actually applied to the DOM right now without adding `zoom` to that effect's own
+  // dependency array (which would tear down/re-attach the pane observer on every zoom change).
+  const zoomRef = useRef<ZoomFactor>(1);
 
   // Tier derivation MUST watch a tier-independent measurement. The triptych container's width
   // does not depend on `data-tier` (only its children's grid columns do), so this observer never
@@ -113,24 +129,57 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
     };
   }, []);
 
-  // The map pane observer only ever feeds `viewportForPane` (cell math for the camera/grid), and
-  // never the tier — see above.
+  // The map pane observer feeds `viewportForPane` (cell math for the camera/grid) and the zoom
+  // decision — never the tier — see above. Re-runs (tearing down and re-attaching the observer,
+  // then measuring immediately) whenever the floor identity changes, not only on a real resize:
+  // `zoomForFloor`'s answer depends on the floor's own dimensions (a 34x16 town and a 160x50
+  // dungeon floor pick very different zooms in the same pane), and descending/ascending stairs
+  // does not itself fire a ResizeObserver notification, so without this dependency the zoom
+  // chosen for the PREVIOUS floor would silently keep applying to the new one.
   useEffect(() => {
     const node = mapPaneRef.current;
     if (!node) return undefined;
     const measure = (): void => {
       const paneRect = node.getBoundingClientRect();
       setPaneSize({ width: paneRect.width, height: paneRect.height });
+      // `cellProbeRef` reports the CURRENTLY zoomed cell size — this is what the grid/effects
+      // layer/popover math are actually rendered at, so it feeds `cellSize` directly.
       const cellRect = cellProbeRef.current?.getBoundingClientRect();
       if (cellRect && cellRect.width > 0 && cellRect.height > 0) {
         setCellSize({ width: cellRect.width, height: cellRect.height });
+      }
+      // `cellProbeBaseRef` is pinned to the base (1x) font-size regardless of the applied zoom
+      // (see `.cell-probe-base` in styles.css), so it reports the 1x cell size `zoomForFloor`
+      // needs directly — no algebra recovering it from the zoomed measurement, which would assume
+      // font metrics scale perfectly linearly across font-sizes (they don't always, due to
+      // hinting/subpixel rounding).
+      const baseCellRect = cellProbeBaseRef.current?.getBoundingClientRect();
+      if (baseCellRect && baseCellRect.width > 0 && baseCellRect.height > 0) {
+        const baseCellPx = { width: baseCellRect.width, height: baseCellRect.height };
+        const nextZoom = zoomForFloor({ panePx: paneRect, cellPx: baseCellPx, floor: projection.floor });
+        if (nextZoom !== zoomRef.current) {
+          zoomRef.current = nextZoom;
+          setZoom(nextZoom);
+        }
       }
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, []);
+  }, [projection.floor.floorId]);
+
+  // Applying `--zoom` (below, on `.playfield`) changes the probe's OWN box size (it is pinned to
+  // `var(--cell-w)`/`var(--cell-h)`, see styles.css), but that never changes the map pane's own
+  // box size, so the ResizeObserver above — which only watches the pane — does not re-fire. This
+  // effect re-measures the probe specifically after a zoom change lands, so `cellSize` (read by
+  // `viewportForPane` and the popover pixel math) always reflects what is actually on screen.
+  useEffect(() => {
+    const cellRect = cellProbeRef.current?.getBoundingClientRect();
+    if (cellRect && cellRect.width > 0 && cellRect.height > 0) {
+      setCellSize({ width: cellRect.width, height: cellRect.height });
+    }
+  }, [zoom]);
 
   // The single global keydown listener: `createKeyDispatcher` translates keys to intents via the
   // pure `routeKey` and forwards them to the session, rate-limiting OS key auto-repeat so it
@@ -142,14 +191,21 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
         openBackpack: () => session.setBackpackOpen(true),
         closeOverlay: () => {
           if (snapshot.backpackOpen) session.setBackpackOpen(false);
+          else if (snapshot.houseOpen) session.setHouseOpen(false);
+          // Unlike the backpack/house overlays (pure client-side toggles), an open trade session
+          // is engine state (`projection.trade`): closing it means dispatching `trade-close`, not
+          // flipping a local flag -- the screen unmounts once the resulting projection clears
+          // `trade`.
+          else if (projection.trade) session.dispatch({ type: 'trade-close' });
           else if (snapshot.pendingDecision) session.answerDecision(false);
         },
       },
-      () => snapshot.backpackOpen || snapshot.pendingDecision !== null,
+      () => snapshot.backpackOpen || snapshot.houseOpen || projection.trade !== undefined
+        || snapshot.pendingDecision !== null,
     );
     window.addEventListener('keydown', dispatcher);
     return () => window.removeEventListener('keydown', dispatcher);
-  }, [session, snapshot.backpackOpen, snapshot.pendingDecision]);
+  }, [session, snapshot.backpackOpen, snapshot.houseOpen, projection.trade, snapshot.pendingDecision]);
 
   const tier = tierOverride ?? layoutTier(containerWidth);
   const viewport = viewportForPane({ panePx: paneSize, cellPx: cellSize, floor: projection.floor });
@@ -224,8 +280,9 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
             <VitalsStrip snapshot={snapshot} />
           </div>
         )}
-        <div className="playfield">
+        <div className="playfield" style={{ '--zoom': zoom } as CSSProperties}>
           <span ref={cellProbeRef} className="cell cell-probe" aria-hidden="true">0</span>
+          <span ref={cellProbeBaseRef} className="cell cell-probe-base" aria-hidden="true">0</span>
           <GridRenderer projection={projection} camera={camera} viewport={viewport} />
           <EffectsLayer
             projection={projection} pack={pack} lastEvents={snapshot.lastEvents} camera={camera} viewport={viewport}
@@ -245,11 +302,11 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
 
       <div className="threat-slot">
         {tier === 'full' ? (
-          <ThreatPanel snapshot={snapshot} />
+          projection.floor.town ? <TownPanel snapshot={snapshot} /> : <ThreatPanel snapshot={snapshot} />
         ) : (
           <details className="threat-drawer">
-            <summary>Threats</summary>
-            <ThreatPanel snapshot={snapshot} />
+            <summary>{projection.floor.town ? 'Town' : 'Threats'}</summary>
+            {projection.floor.town ? <TownPanel snapshot={snapshot} /> : <ThreatPanel snapshot={snapshot} />}
           </details>
         )}
       </div>
@@ -263,6 +320,20 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
           snapshot={snapshot}
           onDispatch={(intent) => session.dispatch(intent)}
           onClose={() => session.setBackpackOpen(false)}
+        />
+      )}
+      {snapshot.houseOpen && (
+        <HouseScreen
+          snapshot={snapshot}
+          onDispatch={(intent) => session.dispatch(intent)}
+          onClose={() => session.setHouseOpen(false)}
+        />
+      )}
+      {projection.trade && (
+        <TradeScreen
+          snapshot={snapshot}
+          onDispatch={(intent) => session.dispatch(intent)}
+          onClose={() => session.dispatch({ type: 'trade-close' })}
         />
       )}
       {snapshot.pendingDecision && <DecisionPrompt snapshot={snapshot} session={session} />}
