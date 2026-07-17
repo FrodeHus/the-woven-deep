@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** The functional guest interface — six registry overlays (inventory, character sheet, map/journal, codex, settings, help), full key rebinding, font scale, reduced motion, clear-guest-session, and the identify target picker — per `docs/superpowers/specs/2026-07-17-guest-interface-design.md` (including its two dated amendments).
+**Goal:** The functional guest interface — six registry overlays (inventory, character sheet, map/journal, codex, settings, help), full key rebinding, font scale, reduced motion, clear-guest-session, and the identify target picker — per `docs/superpowers/specs/2026-07-17-guest-interface-design.md` (including its dated codex amendment) plus this plan's own Task 10 live-play amendment.
 
 **Architecture:** One `overlay: OverlayId | null` on App state with a static registry (component, title, scope); a shared `OverlayScaffold` extracted from the existing dialog conventions; a framework-free settings module in the session layer feeding a resolved keymap into KeyRouter and root-level font-scale/motion classes; codex discovery from records + a session sighting cache. Web-only except one narrow, disclosed projection addition (Task 8).
 
