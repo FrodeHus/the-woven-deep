@@ -120,6 +120,24 @@ export function bindingConflict(
   return null;
 }
 
+/** Keys `routeKey` (`KeyRouter.ts`) resolves as hardwired arrow/numpad movement synonyms *before*
+ * ever consulting the keymap -- binding one of these to an `ActionId` here would produce a chord
+ * that saves and displays fine but silently never fires. Duplicated from `KeyRouter.ts`'s
+ * `HARDWIRED_DIRECTION_KEYS` (rather than imported) because `settings.ts` is the lower-level,
+ * framework-free module `KeyRouter.ts` itself depends on; keep the two key lists in sync. */
+const HARDWIRED_KEYS: ReadonlySet<string> = new Set([
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  '1', '2', '3', '4', '6', '7', '8', '9',
+]);
+
+/** True if `chordCandidate`'s key is one of the hardwired arrow/numpad synonyms above -- binding
+ * it to any action is always refused, at capture time (`SettingsOverlay`) and at both `loadSettings`
+ * and `saveSettings`'s write-time guard. Shift is irrelevant: `routeKey` matches these by `event.key`
+ * alone, regardless of the shift flag. */
+export function chordReserved(chordCandidate: KeyChord): boolean {
+  return HARDWIRED_KEYS.has(chordCandidate.key);
+}
+
 const FONT_SCALES: readonly Settings['fontScale'][] = [1, 1.15, 1.3, 1.5];
 const REDUCED_MOTION_VALUES: readonly Settings['reducedMotion'][] = ['system', 'on', 'off'];
 
@@ -135,14 +153,15 @@ function isValidChord(value: unknown): value is KeyChord {
  *   `corrupted: true` only for the JSON-parse/shape failure (a plain missing key is not corrupt).
  * - Unknown top-level fields, and unknown/malformed `bindings` entries, are dropped silently
  *   (forward tolerance) -- they do not mark the load as corrupted.
- * - Conflict-free storage is enforced in two layers: `saveSettings` rejects a colliding write
- *   outright (see its doc comment), so anything written through this module's own API is already
- *   conflict-free by construction. This function's per-override `bindingConflict` check is the
- *   second layer, guarding a hand-edited or foreign-version blob that reached storage some other
- *   way. Entries are accepted in `ACTION_IDS` order, so of two stored overrides that collide with
- *   *each other* the earlier one (by that order) wins and the later one is dropped; a conflict
- *   with another action's default chord drops the override outright. Either way the loser is
- *   reported in `droppedOverrides`, and this does not mark the load as corrupted.
+ * - Conflict-free, hardwired-free storage is enforced in two layers: `saveSettings` rejects a
+ *   colliding or hardwired-key write outright (see its doc comment), so anything written through
+ *   this module's own API is already clean by construction. This function's per-override
+ *   `bindingConflict`/`chordReserved` checks are the second layer, guarding a hand-edited or
+ *   foreign-version blob that reached storage some other way. Entries are accepted in `ACTION_IDS`
+ *   order, so of two stored overrides that collide with *each other* the earlier one (by that
+ *   order) wins and the later one is dropped; a conflict with another action's default chord, or a
+ *   chord onto a hardwired arrow/numpad key (`chordReserved`), drops the override outright. Either
+ *   way the loser is reported in `droppedOverrides`, and this does not mark the load as corrupted.
  */
 export function loadSettings(
   storage: SessionStorageLike,
@@ -184,6 +203,10 @@ export function loadSettings(
     if (candidate === undefined) continue; // no override stored for this action
     if (!isValidChord(candidate)) continue; // malformed entry: dropped silently, not "corrupted"
 
+    if (chordReserved(candidate)) {
+      droppedOverrides.push(actionId);
+      continue;
+    }
     const conflictWith = bindingConflict(accepted, actionId, candidate);
     if (conflictWith !== null) {
       droppedOverrides.push(actionId);
@@ -206,6 +229,7 @@ function hasBindingConflict(bindings: Settings['bindings']): boolean {
   for (const actionId of Object.keys(bindings) as ActionId[]) {
     const candidate = bindings[actionId];
     if (candidate === undefined) continue;
+    if (chordReserved(candidate)) return true;
     if (bindingConflict(bindings, actionId, candidate) !== null) return true;
   }
   return false;
@@ -226,10 +250,11 @@ function hasBindingConflict(bindings: Settings['bindings']): boolean {
 export type SaveSettingsResult = Readonly<{ ok: true }> | Readonly<{ ok: false; reason?: StorageFailure }>;
 
 /**
- * Persists `settings` to `storage` as JSON -- but only if `settings.bindings` is conflict-free.
- * This is the first line of defense promised by `loadSettings`'s doc comment: every override is
- * checked with `bindingConflict` against the resolved map of the other overrides plus defaults,
- * and if any collision exists, nothing is written and `{ ok: false }` (no `reason`) is returned.
+ * Persists `settings` to `storage` as JSON -- but only if `settings.bindings` is conflict-free and
+ * hardwired-free. This is the first line of defense promised by `loadSettings`'s doc comment: every
+ * override is checked with `bindingConflict` against the resolved map of the other overrides plus
+ * defaults, and with `chordReserved` against the hardwired arrow/numpad keys, and if either check
+ * fails, nothing is written and `{ ok: false }` (no `reason`) is returned.
  *
  * Beyond that, `storage.set` can throw (quota exceeded, storage disabled/unavailable); that
  * failure is classified via `classifyStorageFailure` and returned as `{ ok: false, reason }` rather

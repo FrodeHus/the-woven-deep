@@ -1,6 +1,6 @@
 import { useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
-  ACTION_IDS, bindingConflict, chordKey,
+  ACTION_IDS, bindingConflict, chordKey, chordReserved,
   type ActionId, type KeyChord, type ResolvedKeymap, type Settings,
 } from '../../session/settings.js';
 
@@ -33,10 +33,15 @@ const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
  * this screen. */
 const CLEAR_CONFIRM_WORD = 'clear';
 
-interface ConflictNotice {
-  readonly action: ActionId;
-  readonly holder: ActionId;
-}
+/** The Escape key itself is stripped by `handleCaptureKeyDown` before this ever needs to
+ * distinguish it; these are the modifier keys that produce a nonsensical bare chord (e.g.
+ * `{key:'Shift', shift:true}`) if committed on their own -- pressing one of these leaves capture
+ * armed rather than committing or refusing anything (Finding 2). */
+const MODIFIER_ONLY_KEYS: ReadonlySet<string> = new Set(['Shift', 'Control', 'Alt', 'Meta']);
+
+type CaptureRefusal =
+  | { readonly reason: 'conflict'; readonly action: ActionId; readonly holder: ActionId }
+  | { readonly reason: 'hardwired'; readonly action: ActionId };
 
 /**
  * The settings overlay body: font scale (live preview), reduced motion (the three-way contract:
@@ -50,7 +55,7 @@ interface ConflictNotice {
  */
 export function SettingsOverlay({ settings, onChange, onClearGuestSession, keymap }: SettingsOverlayProps): JSX.Element {
   const [capturing, setCapturing] = useState<ActionId | null>(null);
-  const [conflict, setConflict] = useState<ConflictNotice | null>(null);
+  const [conflict, setConflict] = useState<CaptureRefusal | null>(null);
   const [clearText, setClearText] = useState('');
 
   function armCapture(action: ActionId): void {
@@ -68,7 +73,16 @@ export function SettingsOverlay({ settings, onChange, onClearGuestSession, keyma
    * `createKeyDispatcher`) while a run is live behind the overlay -- it would otherwise also try to
    * route this same keydown as a game command once the overlay's own Escape-close handling saw it
    * wasn't Escape. Escape itself cancels the capture rather than committing "Escape" as a chord (it
-   * stays hardwired/non-rebindable per `KeyRouter.ts`, so binding it here would be a dead chord). */
+   * stays hardwired/non-rebindable per `KeyRouter.ts`, so binding it here would be a dead chord).
+   *
+   * A bare modifier keydown (Shift/Control/Alt/Meta, with no other key held) is ignored outright --
+   * capture stays armed, nothing is committed or refused (Finding 2) -- since `event.key` for those
+   * is just the modifier's own name and would otherwise commit a nonsensical chord.
+   *
+   * A candidate matching a hardwired arrow/numpad key (`chordReserved`, `settings.ts`) is refused
+   * the same way a conflict is: `routeKey` (`KeyRouter.ts`) resolves those keys as movement
+   * *before* ever consulting the keymap, so binding one here would save and display fine while
+   * silently never firing (Finding 1). */
   function handleCaptureKeyDown(action: ActionId, event: ReactKeyboardEvent<HTMLElement>): void {
     event.preventDefault();
     event.stopPropagation();
@@ -76,10 +90,18 @@ export function SettingsOverlay({ settings, onChange, onClearGuestSession, keyma
       cancelCapture();
       return;
     }
+    if (MODIFIER_ONLY_KEYS.has(event.key)) {
+      return;
+    }
     const candidate: KeyChord = { key: event.key, shift: event.shiftKey };
+    if (chordReserved(candidate)) {
+      setConflict({ reason: 'hardwired', action });
+      setCapturing(null);
+      return;
+    }
     const holder = bindingConflict(settings.bindings, action, candidate);
     if (holder !== null) {
-      setConflict({ action, holder });
+      setConflict({ reason: 'conflict', action, holder });
       setCapturing(null);
       return;
     }
@@ -157,10 +179,16 @@ export function SettingsOverlay({ settings, onChange, onClearGuestSession, keyma
 
       <section aria-labelledby="settings-bindings-heading">
         <h3 id="settings-bindings-heading">Key bindings</h3>
-        {conflict && (
+        {conflict && conflict.reason === 'conflict' && (
           <p role="alert">
             {ACTION_LABELS[conflict.action]} could not be rebound to that key --{' '}
             {ACTION_LABELS[conflict.holder]} already uses it.
+          </p>
+        )}
+        {conflict && conflict.reason === 'hardwired' && (
+          <p role="alert">
+            {ACTION_LABELS[conflict.action]} could not be rebound to that key -- arrow and numpad
+            keys always move, pick another key.
           </p>
         )}
         <ul className="settings-bindings-list">

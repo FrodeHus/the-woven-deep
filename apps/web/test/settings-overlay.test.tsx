@@ -118,6 +118,36 @@ describe('SettingsOverlay (component-level)', () => {
     expect(bindingRow('Pick up')).toHaveTextContent('g');
   });
 
+  it('hardwired-key refusal: capturing ArrowUp for Wait is refused (arrows/numpad always move, and routeKey resolves them before the keymap so the binding would never fire), leaving Wait unchanged', async () => {
+    const user = userEvent.setup();
+    const { onChange } = harness();
+    const waitRow = bindingRow('Wait');
+    within(waitRow).getByRole('button', { name: 'Rebind' }).click();
+    await user.keyboard('{ArrowUp}');
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/arrow and numpad keys always move/i);
+    expect(bindingRow('Wait')).toHaveTextContent('.');
+  });
+
+  it('modifier-only capture: pressing bare Shift is ignored -- capture stays armed, no chord committed, no refusal message', async () => {
+    const user = userEvent.setup();
+    const { onChange } = harness();
+    const waitRow = bindingRow('Wait');
+    within(waitRow).getByRole('button', { name: 'Rebind' }).click();
+    await user.keyboard('{Shift}');
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(within(waitRow).getByRole('textbox')).toHaveFocus(); // still armed for capture
+
+    // The capture is still live: a real key now commits normally.
+    await user.keyboard('z');
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      bindings: expect.objectContaining({ wait: { key: 'z', shift: false } }),
+    }));
+  });
+
   it('Escape while capturing cancels the capture without committing a chord or closing (the row reverts to its Rebind button)', async () => {
     const user = userEvent.setup();
     const { onChange } = harness();
@@ -282,6 +312,62 @@ describe('SettingsOverlay composed with PlayScreen/App', () => {
       expect(storage.get(key)).toBeNull();
     }
     expect(localStorage.get(SETTINGS_KEY)).toBeNull();
+  });
+
+  it('clear guest session forces the memoized Hall repository to reload: a seeded record is gone from the Hall screen after the wipe, not served stale from cache', async () => {
+    const seededHall = {
+      records: [{
+        recordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+        heroName: 'Ada',
+        classTags: ['fighter'],
+        completionType: 'died',
+        cause: { killerContentId: 'monster.cave-rat', depth: 3, turn: 12, worldTime: 12 },
+        deepestDepth: 3,
+        score: { lines: [], total: 40 },
+        metrics: {
+          kills: 0, killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },
+          bossKills: 0, championKills: 0, echoKills: 0, threatDefeated: 0,
+          damageDealt: 0, damageTaken: 0, itemsCollected: 0, itemsIdentified: 0,
+          currencyEarned: 0, currencySpent: 0, tradesCompleted: 0,
+          floorsEntered: 0, deepestDepth: 3, discoveriesRevealed: 0,
+          turnsElapsed: 0, restsCompleted: 0,
+        },
+        reputations: [],
+        heirloom: null,
+        build: { attributes: { might: 14, agility: 12, vitality: 16, wits: 10, resolve: 12 }, equippedItemContentIds: [], signatureAbilityIds: [] },
+        runSeed: 'aaaaaaaa00000000',
+        contentHash: 'b'.repeat(64),
+        enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
+      }],
+      heart: null,
+      lifetime: {
+        conqueredChampionRecordIds: [], grantedAchievementIds: [], discoveryProtection: [],
+        totals: {
+          kills: 0, killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },
+          bossKills: 0, championKills: 0, echoKills: 0, threatDefeated: 0,
+          damageDealt: 0, damageTaken: 0, itemsCollected: 0, itemsIdentified: 0,
+          currencyEarned: 0, currencySpent: 0, tradesCompleted: 0,
+          floorsEntered: 0, deepestDepth: 0, discoveriesRevealed: 0,
+          turnsElapsed: 0, restsCompleted: 0,
+        },
+      },
+      appliedDeltaRecordIds: [],
+    };
+    const storage = fakeStorage({ [RECORDS_KEY]: JSON.stringify(seededHall) });
+    const localStorage = fakeStorage();
+    await bootIntoPlay(storage, localStorage);
+    await openSettings();
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/type "clear" to confirm/i), 'clear');
+    await user.click(screen.getByRole('button', { name: 'Clear guest session' }));
+
+    await screen.findByRole('option', { name: /enter the deep/i });
+    await user.click(screen.getByRole('option', { name: /hall of records/i }));
+
+    await screen.findByRole('heading', { name: 'Hall of Records' });
+    expect(screen.getByRole('status')).toHaveTextContent(/no runs have been recorded yet/i);
+    expect(screen.queryByText('Ada')).not.toBeInTheDocument();
   });
 });
 

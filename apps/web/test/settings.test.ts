@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionStorageLike } from '../src/session/storage.js';
 import {
-  ACTION_IDS, bindingConflict, chordKey, DEFAULT_BINDINGS, DEFAULT_SETTINGS, loadSettings,
-  resolveKeymap, saveSettings, SETTINGS_KEY, type ActionId, type KeyChord, type Settings,
+  ACTION_IDS, bindingConflict, chordKey, chordReserved, DEFAULT_BINDINGS, DEFAULT_SETTINGS,
+  loadSettings, resolveKeymap, saveSettings, SETTINGS_KEY, type ActionId, type KeyChord, type Settings,
 } from '../src/session/settings.js';
 
 /** An in-memory `SessionStorageLike` fake, mirroring the pattern used for `GuestSession`'s
@@ -87,6 +87,23 @@ describe('bindingConflict', () => {
   });
 });
 
+describe('chordReserved', () => {
+  it('reports true for every hardwired arrow/numpad key routeKey resolves before the keymap', () => {
+    const reserved = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', '1', '2', '3', '4', '6', '7', '8', '9'];
+    for (const key of reserved) {
+      expect(chordReserved({ key, shift: false })).toBe(true);
+    }
+  });
+
+  it('ignores shift: a hardwired key is reserved regardless of the shift flag', () => {
+    expect(chordReserved({ key: 'ArrowUp', shift: true })).toBe(true);
+  });
+
+  it('returns false for an ordinary rebindable key', () => {
+    expect(chordReserved({ key: 'z', shift: false })).toBe(false);
+  });
+});
+
 describe('loadSettings / saveSettings round-trip', () => {
   it('returns DEFAULT_SETTINGS with corrupted: false when nothing is stored', () => {
     const result = loadSettings(fakeStorage());
@@ -115,6 +132,16 @@ describe('loadSettings / saveSettings round-trip', () => {
       ...DEFAULT_SETTINGS,
       // `pickup`'s default is bound to "g"; overriding `wait` onto "g" collides with it.
       bindings: { wait: { key: 'g', shift: false } },
+    };
+    expect(saveSettings(storage, settings)).toEqual({ ok: false });
+    expect(storage.get(SETTINGS_KEY)).toBeNull();
+  });
+
+  it('saveSettings rejects a binding onto a hardwired arrow/numpad key, writing nothing', () => {
+    const storage = fakeStorage();
+    const settings: Settings = {
+      ...DEFAULT_SETTINGS,
+      bindings: { wait: { key: 'ArrowUp', shift: false } },
     };
     expect(saveSettings(storage, settings)).toEqual({ ok: false });
     expect(storage.get(SETTINGS_KEY)).toBeNull();
@@ -193,6 +220,22 @@ describe('loadSettings / saveSettings round-trip', () => {
         reducedMotion: 'system',
         // `pickup`'s default is bound to "g"; overriding `wait` onto "g" collides with it.
         bindings: { wait: { key: 'g', shift: false } },
+      }),
+    });
+    const result = loadSettings(storage);
+    expect(result.corrupted).toBe(false);
+    expect(result.droppedOverrides).toEqual(['wait']);
+    expect(result.settings.bindings).toEqual({});
+  });
+
+  it('drops a stored override onto a hardwired arrow/numpad key, reporting it in droppedOverrides', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({
+        fontScale: 1,
+        reducedMotion: 'system',
+        // `ArrowUp` is a hardwired movement synonym (see KeyRouter.ts); it can never be bound to
+        // another action because routeKey resolves it before ever consulting the keymap.
+        bindings: { wait: { key: 'ArrowUp', shift: false } },
       }),
     });
     const result = loadSettings(storage);
