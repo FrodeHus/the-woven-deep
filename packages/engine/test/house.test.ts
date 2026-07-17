@@ -3,8 +3,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  createNewRun, DEFAULT_GUEST_HERO, descendToNextFloor, encodeActiveRun, heroActor, movementBlockReason,
-  resolveCommand, validateActiveRun, type ActiveRun, type FloorSnapshot, type ItemInstance,
+  createNewRun, DEFAULT_GUEST_HERO, decodeActiveRun, descendToNextFloor, encodeActiveRun, heroActor,
+  movementBlockReason, resolveCommand, validateActiveRun, type ActiveRun, type FloorSnapshot, type ItemInstance,
 } from '../src/index.js';
 
 let pack: CompiledContentPack;
@@ -186,7 +186,17 @@ describe('house deposit/withdraw legality matrix', () => {
       itemId: 'item.house-test.stack', quantity: 4,
     }, context());
     expect(deposited.result.status).toBe('applied');
-    expect(() => encodeActiveRun(deposited.state)).not.toThrow();
+    const encoded = encodeActiveRun(deposited.state);
+    expect(() => encoded).not.toThrow();
+
+    const decoded = decodeActiveRun(encoded);
+    expect(encodeActiveRun(decoded)).toBe(encoded);
+    const recorded = decoded.recentCommands.find((entry) => entry.command.commandId === 'command.deposit-persisted');
+    expect(recorded?.command).toEqual({
+      type: 'house-deposit', commandId: 'command.deposit-persisted', expectedRevision: run.revision,
+      itemId: 'item.house-test.stack', quantity: 4,
+    });
+    expect(recorded?.result.status).toBe('applied');
   });
 
   it('round-trips a whole enchanted stack through the house, preserving its identity exactly', () => {

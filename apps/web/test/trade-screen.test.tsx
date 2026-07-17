@@ -1,11 +1,16 @@
 import { resolve } from 'node:path';
+import { useState, type JSX } from 'react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
-import { DEFAULT_GUEST_HERO, createNewRun, projectGameplayState, type GameplayProjection } from '@woven-deep/engine';
+import {
+  DEFAULT_GUEST_HERO, createNewRun, heroActor, heroPerception, projectGameplayState, refreshKnowledge,
+  resolveCommand, validateActiveRun, type ActiveRun, type FloorSnapshot, type GameCommand,
+  type GameplayProjection, type MerchantPopulation,
+} from '@woven-deep/engine';
 import type { SessionSnapshot } from '../src/session/guest-session.js';
 import { TradeScreen } from '../src/ui/screens/TradeScreen.js';
 
@@ -171,5 +176,130 @@ describe('TradeScreen', () => {
 
     expect(screen.queryByRole('dialog', { name: 'Trade' })).not.toBeInTheDocument();
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+function townFloor(run: ActiveRun): FloorSnapshot {
+  return run.floors.find((floor) => floor.floorId === run.activeFloorId)!;
+}
+
+/** Mirrors the identical helper in `trade-close-escape.test.tsx`: teleports the hero and refreshes
+ * the active floor's knowledge in place, since `trade-open` requires the merchant to be visible. */
+function teleportHero(run: ActiveRun, position: Readonly<{ x: number; y: number }>): ActiveRun {
+  const hero = heroActor(run);
+  const moved: ActiveRun = {
+    ...run,
+    actors: run.actors.map((actor) => actor.actorId === hero.actorId ? { ...actor, ...position } : actor),
+  };
+  const floor = townFloor(moved);
+  const movedHero = heroActor(moved);
+  const knowledge = refreshKnowledge({
+    floor, hero: heroPerception(moved.hero, movedHero),
+    actors: new Map(moved.actors.filter((actor) => actor.floorId === floor.floorId).map((actor) => [actor.actorId, actor] as const)),
+  }).knowledge;
+  return validateActiveRun({
+    ...moved,
+    floors: moved.floors.map((candidate) => candidate.floorId === floor.floorId ? { ...candidate, knowledge } : candidate),
+  });
+}
+
+/** Stands the hero directly beside (Chebyshev distance 1 from) the given point. */
+function adjacentFreeCell(run: ActiveRun, target: Readonly<{ x: number; y: number }>): Readonly<{ x: number; y: number }> {
+  const floor = townFloor(run);
+  const occupied = new Set(run.actors.filter((actor) => actor.floorId === floor.floorId && actor.health > 0)
+    .map((actor) => `${actor.x}:${actor.y}`));
+  for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+    const x = target.x + dx;
+    const y = target.y + dy;
+    if (x < 0 || y < 0 || x >= floor.width || y >= floor.height) continue;
+    if (occupied.has(`${x}:${y}`)) continue;
+    return { x, y };
+  }
+  throw new Error(`test setup failure: cannot stand adjacent to ${target.x}:${target.y}`);
+}
+
+function apply(run: ActiveRun, command: GameCommand): ActiveRun {
+  const resolved = resolveCommand(run, command, { content: pack });
+  if (resolved.result.status !== 'applied') {
+    throw new Error(`test setup failure: ${command.type} was not applied (${JSON.stringify(resolved.result)})`);
+  }
+  return resolved.state;
+}
+
+/** Minimal reducer harness: owns the `ActiveRun` in state, re-projects on every dispatch, and
+ * forwards each intent straight to the matching real engine command (only the two intents this
+ * regression needs -- selling from the sell list, nothing else). This lets the test observe the
+ * *actual* list-shrinking-after-sale behavior `TradeScreen` sees in production, rather than a
+ * synthetic `withTrade` override. */
+function TradeHarness({ initialRun }: { readonly initialRun: ActiveRun }): JSX.Element {
+  const [run, setRun] = useState(initialRun);
+  const projection = projectGameplayState({ state: run, content: pack });
+  return (
+    <TradeScreen
+      snapshot={snapshotOf(projection)}
+      onDispatch={(intent) => {
+        if (intent.type !== 'trade-sell') throw new Error(`unexpected intent in harness: ${intent.type}`);
+        const merchantPopulationId = projection.trade!.merchantPopulationId;
+        setRun((current) => apply(current, {
+          type: 'trade-sell', commandId: `command.sell.${intent.itemId}`, expectedRevision: current.revision,
+          merchantPopulationId, itemId: intent.itemId, quantity: intent.quantity,
+        }));
+      }}
+      onClose={vi.fn()}
+    />
+  );
+}
+
+// Regression for the reviewer-verified bug: selling the selected sale offer removes it from
+// `saleOffers`, and the surviving offer slides into the same list position. `useListNavigation`'s
+// refocus effect only re-ran on `selectedIndex` changes, so when the index stayed the same (0) but
+// the DOM node at that position was replaced (new key, since the row's text/itemId changed), DOM
+// focus was stranded on the detached old button. The next Enter keypress then had nowhere to land
+// -- `document.activeElement` falls back to `<body>`, which is outside the dialog's `onKeyDown`
+// handler, so the keystroke never reaches `TradeScreen` at all. Fixed by adding `length` to the
+// refocus effect's dependency array (roving-focus.ts) so a list-size change also re-triggers focus.
+describe('TradeScreen roving focus after a sale shrinks the list', () => {
+  it('keeps focus on the surviving offer so a second Enter sells it too', async () => {
+    const user = userEvent.setup();
+    let run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const armorer = run.populations.find((population): population is MerchantPopulation =>
+      population.model === 'merchant' && population.encounterId === 'encounter.town-armorer')!;
+    const merchantActor = run.actors.find((actor) => actor.actorId === armorer.actorId)!;
+
+    run = teleportHero(run, adjacentFreeCell(run, merchantActor));
+    // Unequip the starting sword and armor into the backpack: both are sellable to the armorer
+    // (acceptedCategories: weapon, armor -- see content/encounters/town-merchants.yaml), giving two
+    // distinct sale offers.
+    run = apply(run, { type: 'unequip', commandId: 'command.unequip-sword', expectedRevision: run.revision, slot: 'main-hand' });
+    run = apply(run, { type: 'unequip', commandId: 'command.unequip-armor', expectedRevision: run.revision, slot: 'body' });
+    run = apply(run, {
+      type: 'trade-open', commandId: 'command.trade-open', expectedRevision: run.revision,
+      merchantActorId: merchantActor.actorId,
+    });
+
+    const opened = projectGameplayState({ state: run, content: pack });
+    expect(opened.trade?.saleOffers.length).toBe(2);
+    const backpack = opened.hero as unknown as { backpack: readonly { itemId: string; name: string }[] };
+    const nameOf = (itemId: string) => backpack.backpack.find((item) => item.itemId === itemId)!.name;
+    const [firstOffer, secondOffer] = opened.trade!.saleOffers;
+    const survivorName = nameOf(secondOffer!.itemId);
+    const soldFirstName = nameOf(firstOffer!.itemId);
+
+    render(<TradeHarness initialRun={run} />);
+    const sellList = () => screen.getByRole('listbox', { name: 'Sell' });
+
+    await user.keyboard('{Tab}'); // buy -> sell list
+    await user.keyboard('{Enter}'); // sell the first offer (index 0)
+    // The sold item leaves the backpack (and reappears as merchant stock, so the item's name may
+    // still be on the page in the Buy list) -- scope the assertions to the Sell listbox.
+    expect(await within(sellList()).findByText(new RegExp(survivorName))).toBeInTheDocument();
+    expect(within(sellList()).queryByText(new RegExp(soldFirstName))).not.toBeInTheDocument();
+
+    // The surviving offer slid into index 0. If focus were stranded on the removed node, this
+    // keypress would land on <body> and never reach the dialog's key handler.
+    await user.keyboard('{Enter}'); // sell the surviving offer (now at index 0)
+
+    await screen.findAllByText('Nothing here.');
+    expect(screen.queryByRole('listbox', { name: 'Sell' })).not.toBeInTheDocument();
   });
 });
