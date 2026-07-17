@@ -13,9 +13,12 @@ const testDir = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(join(testDir, '../src/styles.css'), 'utf8');
 const landingCss = readFileSync(join(testDir, '../src/landing/landing.css'), 'utf8');
 
-function extractReducedMotionBlocks(source: string): readonly string[] {
+/** Brace-depth scan from the first `{` after `marker` to its matching `}`, returning everything in
+ * between (inclusive of the braces). Shared by `extractReducedMotionBlocks` (marker = the media
+ * query opener) and the `.motion-reduced` class-block contract below (marker = the class
+ * selector) -- both are "a rule opener, then nested sub-rules" shapes. */
+function extractBlocksAfterMarker(source: string, marker: string): readonly string[] {
   const blocks: string[] = [];
-  const marker = '@media (prefers-reduced-motion: reduce)';
   let searchFrom = 0;
   for (;;) {
     const start = source.indexOf(marker, searchFrom);
@@ -34,6 +37,10 @@ function extractReducedMotionBlocks(source: string): readonly string[] {
     searchFrom = end + 1;
   }
   return blocks;
+}
+
+function extractReducedMotionBlocks(source: string): readonly string[] {
+  return extractBlocksAfterMarker(source, '@media (prefers-reduced-motion: reduce)');
 }
 
 describe('reduced-motion stylesheet contract', () => {
@@ -150,6 +157,22 @@ describe('reduced-motion stylesheet contract', () => {
     const keyframesMatch = /@keyframes\s+glow-drift\s*\{([\s\S]*?)\n\}/.exec(css);
     expect(keyframesMatch, '@keyframes glow-drift not found').toBeTruthy();
     expect(keyframesMatch![1]).not.toMatch(/transform\s*:/);
+  });
+
+  it('duplicates the reduced-motion overrides under an explicit .motion-reduced root class (set when the "Reduce motion" setting is "on", independent of the OS media query), with the same !important discipline', () => {
+    // `.motion-reduced` is a single class-selector block (not a media query), but the sub-rules
+    // inside it are found the same way -- reuse the media block's own brace-depth scan.
+    const blocks = extractBlocksAfterMarker(css, '.motion-reduced {');
+    expect(blocks.length, 'expected a top-level .motion-reduced { ... } block').toBeGreaterThan(0);
+    const block = blocks[0]!;
+
+    const glowRuleMatch = /\.glow\s*\{([^}]*)\}/.exec(block);
+    expect(glowRuleMatch, '.glow rule not found inside .motion-reduced').toBeTruthy();
+    expect(glowRuleMatch![1]).toMatch(/animation\s*:\s*none\s*!important/);
+
+    const effectRuleMatch = /\.effect\s*\{([^}]*)\}/.exec(block);
+    expect(effectRuleMatch, '.effect rule not found inside .motion-reduced').toBeTruthy();
+    expect(effectRuleMatch![1]).toMatch(/animation\s*:\s*none\s*!important/);
   });
 });
 

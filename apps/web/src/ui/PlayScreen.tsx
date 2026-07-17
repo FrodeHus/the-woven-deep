@@ -9,16 +9,38 @@ import { useGuestSession } from '../session/store.js';
 import { computeCamera, type CameraOrigin } from './camera.js';
 import { EffectsLayer } from './EffectsLayer.js';
 import { GridRenderer } from './GridRenderer.js';
-import { createKeyDispatcher } from './KeyRouter.js';
-import { DEFAULT_SETTINGS, resolveKeymap } from '../session/settings.js';
+import { createKeyDispatcher, type OverlayActionId } from './KeyRouter.js';
+import { DEFAULT_SETTINGS, resolveKeymap, type ResolvedKeymap } from '../session/settings.js';
 import {
   layoutTier, viewportForPane, zoomForFloor, type LayoutTier, type ZoomFactor,
 } from './layout.js';
 import { HeroPanel, LogPanel, StatusBar, ThreatPanel, VitalsStrip } from './panels.js';
+import { OVERLAY_REGISTRY, type OverlayId } from './overlays/registry.js';
+import { OverlayScaffold } from './overlays/OverlayScaffold.js';
+import { OverlayErrorBoundary } from './overlays/OverlayErrorBoundary.js';
 import { HouseScreen } from './screens/HouseScreen.js';
 import { TradeScreen } from './screens/TradeScreen.js';
 import { ThreatPopover, type ThreatPopoverActor } from './ThreatPopover.js';
 import { TownPanel } from './TownPanel.js';
+
+/**
+ * What to render inside a registry overlay's frame. All six ids are placeholders for now -- the
+ * overlay infrastructure ships fully tested before any real overlay content exists (later
+ * guest-interface tasks replace each branch with its actual component). Component lookup
+ * deliberately lives here (and, for the two global-scope entry points reachable from the title
+ * screen, in `App.tsx`) rather than in the React-free `registry.ts`.
+ */
+function overlayBody(overlay: OverlayId): JSX.Element {
+  switch (overlay) {
+    case 'inventory':
+    case 'character-sheet':
+    case 'map-journal':
+    case 'codex':
+    case 'settings':
+    case 'help':
+      return <p>Coming in a later task</p>;
+  }
+}
 
 interface DecisionPromptProps {
   readonly snapshot: SessionSnapshot;
@@ -62,6 +84,20 @@ export interface PlayScreenProps {
   /** Test-only escape hatch: forces a tier instead of deriving it from measured pane width, so
    * tier-dependent composition is assertable without simulating a real ResizeObserver layout. */
   readonly tier?: LayoutTier;
+  /** The currently open registry overlay, owned by `App` (beside `ScreenState`) -- `null` when
+   * none is open. Defaults to `null` so every pre-existing caller of `PlayScreen` (tests included)
+   * keeps working unchanged. */
+  readonly overlay?: OverlayId | null;
+  /** Requests opening one of the five overlay-registry actions (never `inventory`, which keeps its
+   * own legacy `open-backpack` path) -- forwarded to `App`, which applies the scope gating (a
+   * `play`-scope id can only open here, which is already guaranteed by `PlayScreen` only ever
+   * mounting during a live play session; `App` still re-checks defensively). */
+  readonly onOpenOverlay?: (overlay: OverlayActionId) => void;
+  readonly onCloseOverlay?: () => void;
+  /** The resolved keymap driving both movement/action routing and the five overlay-open keys.
+   * Defaults to the default bindings so existing callers (which never rebind anything) are
+   * unaffected. */
+  readonly keymap?: ResolvedKeymap;
 }
 
 interface PositionedActor extends ThreatPopoverActor { readonly x: number; readonly y: number }
@@ -88,7 +124,11 @@ const FALLBACK_CELL_PX = { width: 8, height: 16 };
  * previous-floor-keyed camera origin — everything else (tier thresholds, viewport arithmetic, the
  * camera formula itself) is delegated to pure functions so it stays unit-testable without a DOM.
  */
-export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProps): JSX.Element {
+export function PlayScreen({
+  session, pack, tier: tierOverride,
+  overlay = null, onOpenOverlay = () => {}, onCloseOverlay = () => {},
+  keymap = resolveKeymap(DEFAULT_SETTINGS.bindings),
+}: PlayScreenProps): JSX.Element {
   const snapshot = useGuestSession(session);
   const { projection } = snapshot;
 
@@ -190,11 +230,9 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
       {
         dispatch: (intent) => session.dispatch(intent),
         openBackpack: () => session.setBackpackOpen(true),
-        // The overlay registry (character sheet / map-journal / codex / settings / help) lands in
-        // a later guest-interface task; until then the five overlay-open keys are routable and
-        // rebindable, but resolve to a no-op here.
-        openOverlay: () => {},
+        openOverlay: (overlayActionId) => onOpenOverlay(overlayActionId),
         closeOverlay: () => {
+          if (overlay !== null) { onCloseOverlay(); return; }
           if (snapshot.backpackOpen) session.setBackpackOpen(false);
           else if (snapshot.houseOpen) session.setHouseOpen(false);
           // Unlike the backpack/house overlays (pure client-side toggles), an open trade session
@@ -205,15 +243,16 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
           else if (snapshot.pendingDecision) session.answerDecision(false);
         },
       },
-      () => snapshot.backpackOpen || snapshot.houseOpen || projection.trade !== undefined
+      () => overlay !== null || snapshot.backpackOpen || snapshot.houseOpen || projection.trade !== undefined
         || snapshot.pendingDecision !== null,
-      // Settings persistence (loading the player's rebindings from storage) lands in a later
-      // task; until then the keymap resolves defaults only.
-      () => resolveKeymap(DEFAULT_SETTINGS.bindings),
+      () => keymap,
     );
     window.addEventListener('keydown', dispatcher);
     return () => window.removeEventListener('keydown', dispatcher);
-  }, [session, snapshot.backpackOpen, snapshot.houseOpen, projection.trade, snapshot.pendingDecision]);
+  }, [
+    session, snapshot.backpackOpen, snapshot.houseOpen, projection.trade, snapshot.pendingDecision,
+    overlay, onOpenOverlay, onCloseOverlay, keymap,
+  ]);
 
   const tier = tierOverride ?? layoutTier(containerWidth);
   const viewport = viewportForPane({ panePx: paneSize, cellPx: cellSize, floor: projection.floor });
@@ -345,6 +384,15 @@ export function PlayScreen({ session, pack, tier: tierOverride }: PlayScreenProp
         />
       )}
       {snapshot.pendingDecision && <DecisionPrompt snapshot={snapshot} session={session} />}
+      {overlay && (
+        <OverlayScaffold
+          title={OVERLAY_REGISTRY[overlay].title}
+          onClose={onCloseOverlay}
+          testId={`overlay-${overlay}`}
+        >
+          <OverlayErrorBoundary>{overlayBody(overlay)}</OverlayErrorBoundary>
+        </OverlayScaffold>
+      )}
     </div>
   );
 }
