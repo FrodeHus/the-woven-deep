@@ -174,6 +174,43 @@ describe('StatusBar', () => {
     expect(screen.getByText('Town')).toBeInTheDocument();
     expect(screen.queryByText(/Depth/)).not.toBeInTheDocument();
   });
+
+  it('renders no condition badge when the hero has no active conditions', () => {
+    render(<StatusBar snapshot={snapshotOf(baseProjection)} />);
+    expect(document.querySelector('.condition-badge')).toBeNull();
+  });
+
+  it('renders a glyph-plus-name condition badge (not color-only) tinted from the condition\'s projected color', () => {
+    const heroData = baseProjection.hero as unknown as Record<string, unknown>;
+    const projection: GameplayProjection = {
+      ...baseProjection,
+      hero: {
+        ...heroData,
+        conditions: [{ conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50 }],
+      },
+    } as unknown as GameplayProjection;
+    render(<StatusBar snapshot={snapshotOf(projection)} />);
+    const badge = document.querySelector('.condition-badge')!;
+    expect(badge).not.toBeNull();
+    expect(badge.textContent).toMatch(/Poisoned/);
+    expect(badge.getAttribute('style')).toContain('--condition-color: #7ac86a');
+  });
+
+  it('picks the highest-stacks condition for the badge when several are active', () => {
+    const heroData = baseProjection.hero as unknown as Record<string, unknown>;
+    const projection: GameplayProjection = {
+      ...baseProjection,
+      hero: {
+        ...heroData,
+        conditions: [
+          { conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50 },
+          { conditionId: 'condition.bleeding', name: 'Bleeding', color: '#c85a5a', stacks: 3, remaining: 20 },
+        ],
+      },
+    } as unknown as GameplayProjection;
+    render(<StatusBar snapshot={snapshotOf(projection)} />);
+    expect(document.querySelector('.condition-badge')!.textContent).toMatch(/Bleeding/);
+  });
 });
 
 describe('PlayScreen tier behavior', () => {

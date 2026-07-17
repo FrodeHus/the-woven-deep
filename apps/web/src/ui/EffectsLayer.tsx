@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, type CSSProperties, type JSX } from 'react
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection, OpaqueId, PublicEvent } from '@woven-deep/engine';
 import type { CameraOrigin, CameraViewport } from './camera.js';
-import { effectsForEvents, MAX_TRANSIENT_EFFECTS, type TransientEffect } from './effects-map.js';
+import {
+  effectsForEvents, MAX_TRANSIENT_EFFECTS, pickPrimaryCondition, type ProjectedCondition, type TransientEffect,
+} from './effects-map.js';
 import { equippedLightSource } from './light-sources.js';
 
 /**
@@ -41,7 +43,9 @@ const EFFECT_LIFETIME_MS: Record<TransientEffect['kind'], number> = {
  */
 export function EffectsLayer({ projection, pack, lastEvents, camera, viewport }: EffectsLayerProps): JSX.Element {
   const heroId = (projection.hero as unknown as { actorId: OpaqueId }).actorId;
-  const hero = projection.hero as unknown as { x: number; y: number };
+  const hero = projection.hero as unknown as {
+    x: number; y: number; conditions?: readonly ProjectedCondition[];
+  };
 
   const positionsRef = useRef(new Map<OpaqueId, Readonly<{ x: number; y: number }>>());
   const floorIdRef = useRef(projection.floor.floorId);
@@ -89,8 +93,31 @@ export function EffectsLayer({ projection, pack, lastEvents, camera, viewport }:
 
   const light = equippedLightSource(projection, pack);
 
+  /*
+   * Hero condition aura (Task 7): `projection.hero.conditions` is the ONLY conditions field the
+   * client receives -- actor (non-hero) conditions are NOT projected at all (confirmed against
+   * `packages/engine/src/projection.ts`), so this aura can only ever represent the HERO's own
+   * active conditions, never an NPC's; that is a disclosed limitation, not an oversight.
+   * Unlike hit-flash/attack-streak/death-burst, this is NOT a `TransientEffect` with its own
+   * timer-based cleanup: it is derived fresh from `projection.hero.conditions` on every render, so
+   * it appears the instant a condition is applied and disappears the instant the condition list
+   * empties (expiry, cure, etc.) with no separate removal logic to keep in sync.
+   */
+  const primaryCondition = pickPrimaryCondition(hero.conditions ?? []);
+
   return (
     <div aria-hidden="true" className="effects-layer">
+      {primaryCondition && withinViewport(hero.x, hero.y) && (
+        <div
+          className="condition-aura"
+          data-condition={primaryCondition.conditionId}
+          style={{
+            '--x': hero.x - camera.x,
+            '--y': hero.y - camera.y,
+            '--aura-color': primaryCondition.color,
+          } as CSSProperties}
+        />
+      )}
       {light && withinViewport(hero.x, hero.y) && (
         <div
           className="glow"

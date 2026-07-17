@@ -1,6 +1,7 @@
 import { useEffect, useRef, type CSSProperties, type JSX } from 'react';
 import type { SessionSnapshot } from '../session/guest-session.js';
 import type { LogLine } from '../session/event-log.js';
+import { pickPrimaryCondition } from './effects-map.js';
 
 export interface PanelProps {
   readonly snapshot: SessionSnapshot;
@@ -10,7 +11,10 @@ interface ProjectedEquippedItem { readonly itemId: string; readonly name: string
 
 interface ProjectedBackpackItem { readonly itemId: string; readonly name: string }
 
-interface ProjectedCondition { readonly conditionId: string; readonly name: string }
+interface ProjectedCondition {
+  readonly conditionId: string; readonly name: string; readonly color: string;
+  readonly stacks: number; readonly remaining: number | null;
+}
 
 interface ProjectedHero {
   readonly name: string;
@@ -156,14 +160,32 @@ export function LogPanel({ snapshot }: PanelProps): JSX.Element {
   );
 }
 
+/** `StatusBar` is the one panel that renders at EVERY layout tier (full/compact/minimal), unlike
+ * `HeroPanel`'s own condition list (which collapses into a drawer at the `minimal` tier) -- so the
+ * colorblind-safe condition badge lives here rather than there, guaranteeing it is always on
+ * screen while any hero condition is active. This is the glyph badge Task 9's colorblind pass
+ * verifies: a generic status-effect glyph (conditions carry no per-id glyph of their own in the
+ * projection, only a `color`) PLUS the condition's name as text -- so meaning never rests on color
+ * alone, even though the badge is also tinted via `--condition-color` for a sighted-color reader. */
 export function StatusBar({ snapshot }: PanelProps): JSX.Element {
   const heroData = hero(snapshot);
   const { metrics, floor } = snapshot.projection;
+  const primaryCondition = pickPrimaryCondition(heroData.conditions);
   return (
     <div className="status-bar" role="status">
       <span className="status-hero">{heroData.name}</span>
       <span className="status-depth">{floor.town ? 'Town' : `Depth ${floor.depth}`}</span>
       <span data-testid="turn-count">{`Turn ${metrics.turnsElapsed}`}</span>
+      {primaryCondition && (
+        <span
+          className="condition-badge"
+          title={primaryCondition.name}
+          style={{ '--condition-color': primaryCondition.color } as CSSProperties}
+        >
+          <span aria-hidden="true">{'✺'}</span>
+          {` ${primaryCondition.name}`}
+        </span>
+      )}
     </div>
   );
 }

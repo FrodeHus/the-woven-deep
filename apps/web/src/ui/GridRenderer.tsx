@@ -9,7 +9,9 @@ export interface GridRendererProps {
   readonly viewport: CameraViewport;
 }
 
-type CellCustomProperties = CSSProperties & { '--light'?: string; '--fg'?: string };
+type CellCustomProperties = CSSProperties & {
+  '--light'?: string; '--fg'?: string; '--flicker-delay'?: string; '--flicker-duration'?: string;
+};
 
 interface PositionedGlyph { readonly x: number; readonly y: number; readonly glyph?: string }
 
@@ -43,6 +45,32 @@ const MATERIAL_BASE_KEY: Readonly<Record<MaterialSuffix, MaterialBaseName>> = {
 };
 
 interface MaterialCell { readonly token?: string; readonly tileId?: number }
+
+/** Deterministic string hash (32-bit FNV-1a) -- never `Math.random`. Fixture flicker jitter must
+ * derive from the fixture's OWN `lightId` so the same fixture always jitters the same way across
+ * renders/remounts (tested twice in grid-renderer.test.tsx); `Math.random` would reshuffle every
+ * fixture's phase on every re-render, which reads as flicker resetting on the guest's own
+ * scroll/turn rather than a calm, continuous per-fixture cadence. */
+function hashLightId(lightId: string): number {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < lightId.length; index += 1) {
+    hash ^= lightId.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+/** Per-fixture animation-delay/duration jitter (Task 7), derived purely from `cell.fixture.lightId`
+ * so two different fixtures read as independent flames rather than one fixture-wide strobe, while
+ * a given fixture keeps the exact same cadence forever. Ranges (delay 0-2s, duration 1.8-2.6s) are
+ * arbitrary but small, chosen to keep every fixture inside the same ballpark as the shared
+ * `fixture-flicker` keyframe (`styles.css`) while still desynchronizing visibly. */
+export function fixtureFlickerStyle(lightId: string): Readonly<{ '--flicker-delay': string; '--flicker-duration': string }> {
+  const hash = hashLightId(lightId);
+  const delaySeconds = (hash % 2000) / 1000;
+  const durationSeconds = 1.8 + ((hash >>> 8) % 800) / 1000;
+  return { '--flicker-delay': `${delaySeconds}s`, '--flicker-duration': `${durationSeconds}s` };
+}
 
 /** Derives the `mat-*` CSS class for a cell from its terrain vocabulary (`cell.token`, stairs
  * further split by `cell.tileId`) -- `''` for a cell with no recognized terrain token (e.g. an
@@ -121,12 +149,13 @@ export function GridRenderer({ projection, camera, viewport }: GridRendererProps
       const material = materialClass(cell);
       const style: CellCustomProperties = { '--light': String(cell.intensity / 255) };
       if (cell.tint) style['--fg'] = visibleForeground(cell.tint, cell.intensity, materialBase(material));
+      if (cell.fixture) Object.assign(style, fixtureFlickerStyle(cell.fixture.lightId));
 
       slots.push(
         <span
           key={slotIndex}
           data-cell={dataCell}
-          className={['cell', 'cell-visible', material].filter(Boolean).join(' ')}
+          className={['cell', 'cell-visible', material, cell.fixture ? 'fixture-flicker' : ''].filter(Boolean).join(' ')}
           style={style}
           {...(isHero ? { 'aria-label': `Hero at ${x}, ${y}` } : {})}
         >

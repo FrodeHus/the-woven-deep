@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { PublicEvent } from '@woven-deep/engine';
-import { effectsForEvents, MAX_TRANSIENT_EFFECTS, type ActorPositions } from '../src/ui/effects-map.js';
+import {
+  effectsForEvents, MAX_TRANSIENT_EFFECTS, pickPrimaryCondition,
+  type ActorPositions, type ProjectedCondition,
+} from '../src/ui/effects-map.js';
 
 const HERO = 'actor.hero';
 const RAT = 'actor.rat';
@@ -92,5 +95,56 @@ describe('effectsForEvents', () => {
     // oldest (event.0 .. event.4) dropped; the surviving effects are the most recent ones.
     expect(mapped[0]).toEqual({ key: 'event.5', kind: 'hit-flash', x: 8, y: 5 });
     expect(mapped.at(-1)).toEqual({ key: `event.${MAX_TRANSIENT_EFFECTS + 4}`, kind: 'hit-flash', x: 8, y: 5 });
+  });
+
+  // Task 7 finding: `CombatObservedPublicEvent` (the ONLY event a spell cast like ember-bolt ever
+  // produces) carries no spell/weapon discriminator -- confirmed against
+  // `packages/engine/src/model.ts` (`CastCommand.spellId` never survives into any `PublicEvent`).
+  // A spell attack and a melee attack are therefore indistinguishable in the event stream, so both
+  // honestly collapse onto the same generic 'attack-streak' kind -- no fake distinct kind is
+  // invented here.
+  it('maps a spell-cast attack (e.g. ember-bolt) to the SAME generic attack-streak kind as a melee attack -- no discriminator exists in combat.observed to key a distinct spell streak off', () => {
+    const meleeEvents: PublicEvent[] = [
+      { type: 'combat.observed', eventId: 'event.melee', outcome: 'hit', attackerActorId: HERO, targetActorId: RAT },
+    ];
+    const spellEvents: PublicEvent[] = [
+      {
+        type: 'combat.observed', eventId: 'event.spell', outcome: 'hit',
+        attackerActorId: HERO, targetActorId: RAT, attackerName: 'Ada', targetName: 'Cave rat',
+      },
+    ];
+    const melee = effectsForEvents(meleeEvents, HERO, positions);
+    const spell = effectsForEvents(spellEvents, HERO, positions);
+    expect(melee[0]!.kind).toBe('attack-streak');
+    expect(spell[0]!.kind).toBe('attack-streak');
+  });
+});
+
+describe('pickPrimaryCondition', () => {
+  const poisoned: ProjectedCondition = {
+    conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50,
+  };
+  const bleeding: ProjectedCondition = {
+    conditionId: 'condition.bleeding', name: 'Bleeding', color: '#c85a5a', stacks: 3, remaining: 20,
+  };
+  const dazed: ProjectedCondition = {
+    conditionId: 'condition.dazed', name: 'Dazed', color: '#c8b86a', stacks: 1, remaining: null,
+  };
+
+  it('returns undefined for no active conditions', () => {
+    expect(pickPrimaryCondition([])).toBeUndefined();
+  });
+
+  it('returns the single active condition', () => {
+    expect(pickPrimaryCondition([poisoned])).toBe(poisoned);
+  });
+
+  it('picks the highest-stacks condition when several are active', () => {
+    expect(pickPrimaryCondition([poisoned, bleeding, dazed])).toBe(bleeding);
+  });
+
+  it('falls back to array (first-listed) order on a stacks tie', () => {
+    expect(pickPrimaryCondition([poisoned, dazed])).toBe(poisoned);
+    expect(pickPrimaryCondition([dazed, poisoned])).toBe(dazed);
   });
 });

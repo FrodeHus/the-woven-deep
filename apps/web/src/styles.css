@@ -152,6 +152,17 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
      consumer that somehow renders the element anyway (e.g. a future caller that forgets the JS
      gate) still degrades safely to no animation, no paint. */
   .screen-fade { display: none; }
+  /* Unlike .screen-fade above, `fixture-flicker`/`mat-stair-*` shimmer/`.condition-aura` are pure
+     CSS animations with no JS-side reduced-motion gate at all -- this global media block is the
+     ONLY thing that honors an OS-level "reduce motion" preference for them (the `.motion-reduced`/
+     `.motion-full` blocks further below only fire from the EXPLICIT in-game setting). `!important`
+     is required on all three: each has a higher- or equal-specificity unconditional rule declared
+     LATER in this file (`.cell-visible.fixture-flicker`, `.cell-visible.mat-stair-up`/
+     `-down`, `.condition-aura`) that would otherwise win by source order despite this block's
+     earlier position. */
+  .fixture-flicker { animation: none !important; }
+  .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: none !important; }
+  .condition-aura { animation: none !important; opacity: 0.4; }
 }
 
 /* Screen transitions (Task 4): a short fade-through-dark wrapping title->play, chargen->play, a
@@ -322,6 +333,34 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 .cell-remembered.mat-stair-up, .cell-remembered.mat-stair-down { color: var(--mat-stair); }
 .cell-remembered.mat-void { color: var(--mat-void); }
 
+/* Fixture flicker variation (Task 7): every wall/floor light fixture (`cell.fixture`) flickers
+   with its OWN delay/duration, derived deterministically from its `lightId` hash
+   (`fixtureFlickerStyle`, GridRenderer.tsx) -- never `Math.random`, so the SAME fixture always
+   flickers the SAME way across renders/remounts, while two different fixtures desynchronize into
+   independent-looking flames rather than one fixture-wide strobe. `--flicker-delay`/
+   `--flicker-duration` are set inline per-cell; the keyframe itself is shared. Applies to VISIBLE
+   fixture cells only -- a remembered fixture is dim memory, not an active light source. */
+.cell-visible.fixture-flicker {
+  animation: fixture-flicker var(--flicker-duration, 2.2s) ease-in-out var(--flicker-delay, 0s) infinite;
+}
+@keyframes fixture-flicker {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.18); }
+}
+
+/* Stair/entrance shimmer (Task 7): a subtle periodic brightness sheen on VISIBLE stair cells --
+   an ambient "this is the way out/down" cue, layered onto the existing `mat-stair-up`/
+   `mat-stair-down` material classes (Task 1) rather than a new glyph or color. Kept as a plain
+   `filter: brightness()` pulse (same technique as `fixture-flicker` above) so it composes cleanly
+   with whichever `--fg`/`--mat` color the cell already resolved to. */
+.cell-visible.mat-stair-up, .cell-visible.mat-stair-down {
+  animation: stair-shimmer 3.4s ease-in-out infinite;
+}
+@keyframes stair-shimmer {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.4); }
+}
+
 .effects-layer {
   position: absolute;
   inset: 0;
@@ -367,6 +406,29 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   animation: glow-drift 2.6s ease-in-out infinite alternate;
 }
 .glow[data-source*="torch"] { animation: glow-gutter 2.2s ease-in-out infinite; }
+
+/* Hero condition aura (Task 7): a faint tinted pulse on the hero's OWN cell while any condition
+   from `projection.hero.conditions` is active, colored from that condition's projected `color`
+   (`pickPrimaryCondition`, effects-map.ts, picks the highest-stacks condition when several are
+   active -- see that function's own doc comment for the tie-break rule). Positioned like `.effect`
+   (single-cell, corner-anchored) rather than like the many-cell `.glow`, since it marks exactly
+   one cell. This is a colored SUPPLEMENT to the glyph-plus-name condition badge in `StatusBar`
+   (panels.tsx) -- never the only signal a condition is active, so meaning is never color-only. */
+.condition-aura {
+  position: absolute;
+  left: calc(var(--cell-w) * var(--x, 0));
+  top: calc(var(--cell-h) * var(--y, 0));
+  width: var(--cell-w);
+  height: var(--cell-h);
+  pointer-events: none;
+  background: radial-gradient(circle, var(--aura-color, var(--gold)) 0%, transparent 75%);
+  mix-blend-mode: screen;
+  animation: condition-aura-pulse 1.8s ease-in-out infinite;
+}
+@keyframes condition-aura-pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.55; }
+}
 
 .effect { transform-origin: center; }
 .effect-hit-flash {
@@ -415,6 +477,9 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   .glow { animation: none !important; opacity: calc(var(--glow-intensity) * 0.7); }
   .effect { animation: none !important; display: none; }
   .screen-fade { animation: none !important; display: none; }
+  .fixture-flicker { animation: none !important; }
+  .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: none !important; }
+  .condition-aura { animation: none !important; opacity: 0.4; }
 }
 
 /* Same overrides as the `@media (prefers-reduced-motion: reduce)` block above, applied instead by
@@ -431,6 +496,9 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   .glow { animation: none !important; opacity: calc(var(--glow-intensity) * 0.7); }
   .effect { animation: none !important; display: none; }
   .screen-fade { animation: none !important; display: none; }
+  .fixture-flicker { animation: none !important; }
+  .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: none !important; }
+  .condition-aura { animation: none !important; opacity: 0.4; }
 }
 
 /* The three-way motion contract (`Settings.reducedMotion`, see `App.tsx`'s `withRootStyling`):
@@ -453,6 +521,9 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   .effect-attack-streak { animation: attack-streak 160ms ease-out !important; }
   .effect-death-burst { animation: death-burst 240ms ease-out !important; }
   .screen-fade { display: block !important; animation: screen-fade 440ms linear !important; }
+  .fixture-flicker { animation: fixture-flicker var(--flicker-duration, 2.2s) ease-in-out var(--flicker-delay, 0s) infinite !important; }
+  .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: stair-shimmer 3.4s ease-in-out infinite !important; }
+  .condition-aura { animation: condition-aura-pulse 1.8s ease-in-out infinite !important; }
 }
 
 /* Tactical Triptych: hero / map / threat panels plus a status bar and log, arranged by a CSS
@@ -481,6 +552,16 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 .log-slot { grid-area: log; min-height: 0; }
 
 .status-bar { display: flex; gap: 1.5em; align-items: baseline; }
+/* Condition badge (Task 7): the colorblind-safe reinforcement Task 9 verifies -- a generic
+   status-effect glyph plus the condition's NAME as text, so meaning never rests on
+   `--condition-color` alone; the tinted border is a supplement for a sighted-color reader, not the
+   only signal. Lives in `.status-bar` because that panel renders at every layout tier. */
+.condition-badge {
+  border: 1px solid var(--condition-color, var(--line));
+  border-radius: 3px;
+  padding: 0 .4em;
+  font-size: .85em;
+}
 
 .hero-panel, .threat-panel { border: 1px solid var(--line); padding: 12px; }
 .hero-panel h2 { margin: 0 0 .5em; font-size: 1rem; color: var(--gold-bright); }

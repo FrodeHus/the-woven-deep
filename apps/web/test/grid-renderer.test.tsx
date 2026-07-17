@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { GameplayProjection, ObservableCell } from '@woven-deep/engine';
-import { GridRenderer, materialClass } from '../src/ui/GridRenderer.js';
+import { fixtureFlickerStyle, GridRenderer, materialClass } from '../src/ui/GridRenderer.js';
 
 function unknownCell(index: number, x: number, y: number): ObservableCell {
   return { index, x, y, knowledge: 'unknown', intensity: 0 };
@@ -147,6 +147,45 @@ describe('GridRenderer', () => {
     const grid = screen.getByRole('grid', { name: /dungeon/i });
     const cell = grid.querySelector('[data-cell="0,0"]')!;
     expect(cell.className).toBe('cell cell-unknown');
+  });
+
+  it('applies the fixture-flicker class and per-fixture --flicker-delay/--flicker-duration vars to a visible fixture cell', () => {
+    let floor = makeFloor(1, 1);
+    floor = withCell(floor, 0, 0, {
+      knowledge: 'visible', glyph: '.', token: 'terrain.floor', intensity: 180,
+      fixture: { lightId: 'light.wall-torch-1', glyph: 'F', token: 'fixture.wall-torch' },
+    });
+    const projection = baseProjection(floor, { x: 5, y: 5 });
+    render(<GridRenderer projection={projection} camera={{ x: 0, y: 0 }} viewport={{ width: 1, height: 1 }} />);
+    const grid = screen.getByRole('grid', { name: /dungeon/i });
+    const cell = grid.querySelector('[data-cell="0,0"]')!;
+    expect(cell).toHaveClass('fixture-flicker');
+    const style = cell.getAttribute('style')!;
+    expect(style).toContain('--flicker-delay');
+    expect(style).toContain('--flicker-duration');
+  });
+
+  it('never applies fixture-flicker to a cell with no fixture', () => {
+    let floor = makeFloor(1, 1);
+    floor = withCell(floor, 0, 0, { knowledge: 'visible', glyph: '.', token: 'terrain.floor', intensity: 180 });
+    const projection = baseProjection(floor, { x: 5, y: 5 });
+    render(<GridRenderer projection={projection} camera={{ x: 0, y: 0 }} viewport={{ width: 1, height: 1 }} />);
+    const grid = screen.getByRole('grid', { name: /dungeon/i });
+    expect(grid.querySelector('[data-cell="0,0"]')).not.toHaveClass('fixture-flicker');
+  });
+});
+
+describe('fixtureFlickerStyle', () => {
+  it('is deterministic: the same lightId produces the same delay/duration every call', () => {
+    const first = fixtureFlickerStyle('light.wall-torch-1');
+    const second = fixtureFlickerStyle('light.wall-torch-1');
+    expect(second).toEqual(first);
+  });
+
+  it('produces different jitter for different lightIds (not a constant)', () => {
+    const a = fixtureFlickerStyle('light.wall-torch-1');
+    const b = fixtureFlickerStyle('light.wall-torch-2');
+    expect(a).not.toEqual(b);
   });
 });
 

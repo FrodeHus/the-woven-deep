@@ -13,6 +13,33 @@ export const MAX_TRANSIENT_EFFECTS = 12;
 
 export type ActorPositions = ReadonlyMap<OpaqueId, Readonly<{ x: number; y: number }>>;
 
+/** Mirrors `projection.hero.conditions` (`packages/engine/src/projection.ts:566-567`) -- the ONLY
+ * per-condition data the client ever receives is `{conditionId, name, color, stacks, remaining}`;
+ * actor conditions (non-hero) are NOT projected at all, so the aura/badge this module supports can
+ * only ever represent the HERO's own conditions, never an NPC's. */
+export interface ProjectedCondition {
+  readonly conditionId: string;
+  readonly name: string;
+  readonly color: string;
+  readonly stacks: number;
+  readonly remaining: number | null;
+}
+
+/**
+ * Picks the ONE condition an aura/badge represents when several are simultaneously active:
+ * highest `stacks` wins; a tie (including the common all-1-stack case) falls back to array order,
+ * i.e. the hero's first-listed condition -- there is no severity ranking in the projection to
+ * break the tie any other way, and inventing one here would be presenting an opinion as engine
+ * truth. Disclosed simplification, per the brief ("multiple conditions -> the highest-stacks or
+ * first"): a hero with several active conditions only ever shows ONE tint/glyph at a time.
+ */
+export function pickPrimaryCondition(
+  conditions: readonly ProjectedCondition[],
+): ProjectedCondition | undefined {
+  if (conditions.length === 0) return undefined;
+  return conditions.reduce((best, candidate) => (candidate.stacks > best.stacks ? candidate : best));
+}
+
 /**
  * Maps one snapshot's hero-visible public events to transient world-coordinate effects.
  *
@@ -35,6 +62,19 @@ export function effectsForEvents(
 
   const at = (actorId: OpaqueId): Readonly<{ x: number; y: number }> | undefined => positions.get(actorId);
 
+  /*
+   * Ember-bolt / spell-cast discriminator (Task 7 finding): `CombatObservedPublicEvent` -- the
+   * only event any spell attack, ember-bolt included, ever produces -- carries exactly
+   * `{outcome, attackerActorId, targetActorId, attackerName?, targetName?}` and NO spell/weapon
+   * id (verified against `packages/engine/src/model.ts`; `CastCommand.spellId` never survives
+   * into any `PublicEvent`, and no field on `CombatObservedPublicEvent` distinguishes a spell
+   * cast from a melee swing). `ItemThrownEvent` DOES carry an `itemId`, but that identifies a
+   * thrown ITEM, not a cast spell -- ember-bolt is cast, never thrown, so it never produces that
+   * event either. There is therefore no honest discriminator to key a distinct warm ember-bolt
+   * streak off: every spell and every melee attack collapses onto the same generic
+   * 'attack-streak' kind below. This is a disclosed limitation, not an oversight -- do not fake
+   * one by guessing from `attackerName`/`targetName` text.
+   */
   events.forEach((event, index) => {
     const key = `${event.type}-${index}`;
     switch (event.type) {

@@ -298,6 +298,68 @@ describe('reduced-motion stylesheet contract', () => {
     }
     expect(duration(fullFadeMatch![1]!)).toBe(duration(originalAnimationMatch![0]!));
   });
+
+  // Task 7 (effects vocabulary): three new continuous, CSS-only animations -- fixture flicker
+  // jitter, stair/entrance shimmer, and the hero condition aura pulse. Unlike .screen-fade, none
+  // of these are JS-gated, so the global @media (prefers-reduced-motion: reduce) block is not
+  // "belt and suspenders" here -- it is the ONLY thing that honors an OS-level reduced-motion
+  // preference for them, exactly like .glow/.effect. Every one still needs the full four-block
+  // treatment per the milestone's motion-completeness constraint.
+  it('declares fixture-flicker, stair-shimmer, and condition-aura motion behavior in all four motion blocks', () => {
+    function assertAllFourBlocks(selector: string, escapedSelector: string, originalRuleRegex: RegExp): void {
+      const originalMatch = originalRuleRegex.exec(css);
+      expect(originalMatch, `${selector} rule not found in stylesheet`).toBeTruthy();
+      const originalAnimation = /animation\s*:\s*([^;]+);/.exec(originalMatch![1]!);
+      expect(originalAnimation, `${selector} has no animation declaration`).toBeTruthy();
+
+      const globalReducedBlocks = extractReducedMotionBlocks(css);
+      const globalOverride = globalReducedBlocks.find((block) => new RegExp(`${escapedSelector}\\s*\\{[^}]*animation\\s*:`).test(block));
+      expect(globalOverride, `expected a ${selector} override in the global reduced-motion media block`).toBeTruthy();
+      const globalRuleMatch = new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`).exec(globalOverride!);
+      expect(globalRuleMatch![1]).toMatch(/animation\s*:\s*none\s*!important/);
+
+      const effectsReducedBlock = globalReducedBlocks.find((block) => /\.glow\s*\{[^}]*animation\s*:/.test(block));
+      expect(effectsReducedBlock, 'expected the effects reduced-motion media block').toBeTruthy();
+      const effectsRuleMatch = new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`).exec(effectsReducedBlock!);
+      expect(effectsRuleMatch, `${selector} not found inside the effects reduced-motion media block`).toBeTruthy();
+      expect(effectsRuleMatch![1]).toMatch(/animation\s*:\s*none\s*!important/);
+
+      const motionReducedBlocks = extractBlocksAfterMarker(css, '.motion-reduced {');
+      const reducedClassMatch = new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`).exec(motionReducedBlocks[0]!);
+      expect(reducedClassMatch, `${selector} not found inside .motion-reduced`).toBeTruthy();
+      expect(reducedClassMatch![1]).toMatch(/animation\s*:\s*none\s*!important/);
+
+      const motionFullBlocks = extractBlocksAfterMarker(css, '.motion-full {');
+      const fullClassMatch = new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`).exec(motionFullBlocks[0]!);
+      expect(fullClassMatch, `${selector} not found inside .motion-full`).toBeTruthy();
+      expect(fullClassMatch![1]).toMatch(/!important/);
+      // The restored .motion-full declaration must match the ORIGINAL, un-overridden animation
+      // shorthand exactly (aside from the trailing !important) -- proves it truly re-enables the
+      // same animation rather than merely present-but-different.
+      const fullAnimation = /animation\s*:\s*([^;]+?)\s*!important/.exec(fullClassMatch![1]!);
+      expect(fullAnimation, `${selector} .motion-full declaration has no animation`).toBeTruthy();
+      expect(fullAnimation![1]!.replace(/\s+/g, ' ')).toBe(originalAnimation![1]!.trim().replace(/\s+/g, ' '));
+    }
+
+    assertAllFourBlocks(
+      '.fixture-flicker', '\\.fixture-flicker',
+      /(?:^|\n)\.cell-visible\.fixture-flicker\s*\{([^}]*)\}/,
+    );
+    assertAllFourBlocks(
+      '.mat-stair (shimmer)', '\\.cell-visible\\.mat-stair-up,\\s*\\.cell-visible\\.mat-stair-down',
+      /(?:^|\n)\.cell-visible\.mat-stair-up,\s*\.cell-visible\.mat-stair-down\s*\{([^}]*animation[^}]*)\}/,
+    );
+    assertAllFourBlocks(
+      '.condition-aura', '\\.condition-aura',
+      /(?:^|\n)\.condition-aura\s*\{([^}]*)\}/,
+    );
+  });
+
+  it('keeps the .condition-aura keyframe purely opacity-driven (no layout-affecting properties), same discipline as glow-drift', () => {
+    const keyframesMatch = /@keyframes\s+condition-aura-pulse\s*\{([\s\S]*?)\n\}/.exec(css);
+    expect(keyframesMatch, '@keyframes condition-aura-pulse not found').toBeTruthy();
+    expect(keyframesMatch![1]).toMatch(/opacity\s*:/);
+  });
 });
 
 /** Parses a `#rrggbb`/`#rgb` literal into an `[r, g, b]` triple (0..255 each). */
