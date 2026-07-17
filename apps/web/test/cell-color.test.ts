@@ -10,6 +10,14 @@ import { relativeLuminance, visibleForeground } from '../src/ui/cell-color.js';
 const REMEMBERED_GRAY: readonly [number, number, number] = [0x4b, 0x52, 0x6b];
 const REMEMBERED_LUMINANCE = relativeLuminance(REMEMBERED_GRAY);
 
+/**
+ * `FLOOR_RGB` in `cell-color.ts` -- reproduced as a literal here (it isn't exported) so the property
+ * tests below can assert against the exact floor the implementation targets, not just "above
+ * remembered". Do not let the two drift.
+ */
+const FLOOR_RGB: readonly [number, number, number] = [100, 106, 130];
+const FLOOR_LUMINANCE = relativeLuminance(FLOOR_RGB);
+
 /** A representative warm torch tint -- the color the engine reports for a lit, gold-ish light
  * source, sampled at full brightness. Used to check the blend stays gold-ish (not washed out to
  * gray) at healthy intensity, and never dips below the remembered floor as intensity climbs. */
@@ -57,6 +65,73 @@ describe('visibleForeground', () => {
 describe('relativeLuminance', () => {
   it('ranks pure white above pure black', () => {
     expect(relativeLuminance([255, 255, 255])).toBeGreaterThan(relativeLuminance([0, 0, 0]));
+  });
+});
+
+/**
+ * Property-style coverage for the "floor + monotone, ALL tints" constraint. `TORCH_TINT` above is
+ * warm, and warm is all that's authored in content today -- but the floor is documented as a
+ * hue-independent guarantee, so it has to hold for cool/blue-dominant tints too, even though no
+ * such light exists yet. A pure-blue tint is the adversarial case: blue contributes only 7.22% to
+ * relative luminance (vs. 21.26% red / 71.52% green), so a naive blend toward a blue tint can drop
+ * luminance well under the floor -- and even fully-saturated blue at intensity 255 can't reach the
+ * floor by itself, forcing the "clip, then mix toward white" fallback to run.
+ */
+const TINT_GRID: readonly RgbGridEntry[] = [
+  ['pure blue', [0, 0, 255]],
+  ['pure red', [255, 0, 0]],
+  ['near-black', [0, 0, 10]],
+  ['white', [255, 255, 255]],
+  ['content torch (ashen-potion-ish warm)', [255, 179, 71]],
+  ['content torch (mid-warm)', [255, 200, 100]],
+];
+
+type RgbGridEntry = readonly [string, readonly [number, number, number]];
+
+const INTENSITY_GRID = [0, 1, 8, 32, 64, 128, 160, 192, 255];
+
+describe('visibleForeground floor + monotonicity (all hues)', () => {
+  for (const [label, tint] of TINT_GRID) {
+    it(`holds the luminance floor for every intensity: ${label}`, () => {
+      for (const intensity of INTENSITY_GRID) {
+        const output = parseRgb(visibleForeground(tint, intensity));
+        expect(relativeLuminance(output)).toBeGreaterThanOrEqual(FLOOR_LUMINANCE - 1e-9);
+      }
+    });
+
+    it(`is monotone non-decreasing in intensity: ${label}`, () => {
+      // Output channels are quantized to 8-bit integers, so two intensities that both land "at
+      // the floor" can differ by a rounding unit or two per channel even though the underlying
+      // continuous target luminance is identical -- that's sub-perceptual quantization noise, not
+      // a regression. QUANTIZATION_NOISE bounds how much wobble that noise can produce; the check
+      // still catches the real bug, which was luminance dropping by tens of percent, not a
+      // fraction of a percent.
+      const QUANTIZATION_NOISE = 0.004;
+      const luminances = INTENSITY_GRID.map((intensity) => relativeLuminance(parseRgb(visibleForeground(tint, intensity))));
+      for (let i = 1; i < luminances.length; i += 1) {
+        expect(luminances[i]).toBeGreaterThanOrEqual(luminances[i - 1]! - QUANTIZATION_NOISE);
+      }
+    });
+  }
+
+  it('is exact identity at intensity 255 for a tint whose own luminance already clears the floor', () => {
+    const output = parseRgb(visibleForeground(TORCH_TINT, 255));
+    expect(output).toEqual(TORCH_TINT);
+  });
+
+  it('stays close to the previous (unfloored) blend for warm tints at sub-max intensity', () => {
+    // The warm domain was just eyeballed in-browser per the Task 10 recipe -- the fix must not
+    // perceptibly shift it. Compare against the plain linear blend (the pre-fix formula) at a mid
+    // intensity: for a warm tint the blend already clears the floor unaided, so the fix should be a
+    // no-op here and the delta should be ~0, not just "small".
+    const intensity = 160;
+    const t = intensity / 255;
+    const floorRgb: readonly [number, number, number] = [100, 106, 130];
+    const oldBlend = floorRgb.map((f, index) => Math.round(f + t * (TORCH_TINT[index]! - f)));
+    const newOutput = parseRgb(visibleForeground(TORCH_TINT, intensity));
+    for (let i = 0; i < 3; i += 1) {
+      expect(Math.abs(newOutput[i]! - oldBlend[i]!)).toBeLessThanOrEqual(1);
+    }
   });
 });
 
