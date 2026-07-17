@@ -7,13 +7,14 @@ import { SettingsOverlay } from './SettingsOverlay.js';
 import { HelpOverlay } from './HelpOverlay.js';
 import { InventoryOverlay } from './InventoryOverlay.js';
 import { CharacterSheetOverlay } from './CharacterSheetOverlay.js';
+import { MapJournalOverlay } from './MapJournalOverlay.js';
 import type { OverlayId } from './registry.js';
 
 /**
  * Props passed to whatever component `OVERLAY_COMPONENTS` maps an `OverlayId` to. Both hosts
  * (`App.tsx`'s title-screen entry points and `PlayScreen.tsx`'s in-play entry points) pass the same
  * bag of fields regardless of which overlay is actually open -- each field is optional so a
- * placeholder body (still `ComingSoon` for four of the six ids) can ignore all of them, and a real
+ * placeholder body (still `ComingSoon` for one of the six ids) can ignore all of them, and a real
  * body (like `SettingsOverlay`, wired below) picks out only what it needs. Later guest-interface
  * tasks widen this further (e.g. a `snapshot`/`pack` for the codex) exactly when a new overlay
  * needs it, rather than carrying unused fields for everyone from the start.
@@ -108,12 +109,26 @@ function CharacterSheetOverlayBody(props: OverlayBodyProps): JSX.Element {
 }
 
 /**
+ * Adapts the widened `OverlayBodyProps` bag down to `MapJournalOverlay`'s own (fully required)
+ * `MapJournalOverlayProps`. Same non-null-assertion reasoning as `CharacterSheetOverlayBody` --
+ * `PlayScreen` always passes `snapshot` on every render regardless of which overlay is open; this
+ * overlay never dispatches anything either.
+ */
+function MapJournalOverlayBody(props: OverlayBodyProps): JSX.Element {
+  const { snapshot } = props;
+  if (!snapshot) {
+    return <p>The map and journal are unavailable right now.</p>;
+  }
+  return <MapJournalOverlay snapshot={snapshot} />;
+}
+
+/**
  * The single shared lookup from `OverlayId` to the component that renders its body -- previously
- * duplicated as an identical `overlayBody` switch in both `App.tsx` and `PlayScreen.tsx`. Two ids
- * (`map-journal`, `codex`) are still the placeholder component; `settings` (Task 3), `help`
- * (Task 4), `inventory` (Task 5, absorbing the pre-existing `BackpackMenu`), and `character-sheet`
- * (Task 6) are real. Later guest-interface tasks replace the remaining entries here with real
- * components, and both hosts pick up each change automatically.
+ * duplicated as an identical `overlayBody` switch in both `App.tsx` and `PlayScreen.tsx`. One id
+ * (`codex`) is still the placeholder component; `settings` (Task 3), `help` (Task 4), `inventory`
+ * (Task 5, absorbing the pre-existing `BackpackMenu`), `character-sheet` (Task 6), and
+ * `map-journal` (Task 7) are real. Later guest-interface tasks replace the remaining entries here
+ * with real components, and both hosts pick up each change automatically.
  *
  * Deliberately its own module (not folded into `registry.ts`): `registry.ts` stays React-free (it
  * is also consumed by a framework-free help-overlay content builder in a later task), while this
@@ -122,7 +137,7 @@ function CharacterSheetOverlayBody(props: OverlayBodyProps): JSX.Element {
 export const OVERLAY_COMPONENTS: Readonly<Record<OverlayId, ComponentType<OverlayBodyProps>>> = {
   inventory: InventoryOverlayBody,
   'character-sheet': CharacterSheetOverlayBody,
-  'map-journal': ComingSoon,
+  'map-journal': MapJournalOverlayBody,
   codex: ComingSoon,
   settings: SettingsOverlayBody,
   help: HelpOverlayBody,
