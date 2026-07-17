@@ -349,11 +349,11 @@ export function PlayScreen({
 
       <div className="threat-slot">
         {tier === 'full' ? (
-          projection.floor.town ? <TownPanel snapshot={snapshot} /> : <ThreatPanel snapshot={snapshot} />
+          projection.floor.town ? <TownPanel snapshot={snapshot} keymap={keymap} /> : <ThreatPanel snapshot={snapshot} />
         ) : (
           <details className="threat-drawer">
             <summary>{projection.floor.town ? 'Town' : 'Threats'}</summary>
-            {projection.floor.town ? <TownPanel snapshot={snapshot} /> : <ThreatPanel snapshot={snapshot} />}
+            {projection.floor.town ? <TownPanel snapshot={snapshot} keymap={keymap} /> : <ThreatPanel snapshot={snapshot} />}
           </details>
         )}
       </div>
