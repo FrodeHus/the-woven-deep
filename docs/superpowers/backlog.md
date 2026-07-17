@@ -11,6 +11,10 @@ Extends the Final Chamber endings (see the roadmap's milestone 7 amendment and `
 
 Design note for milestone 7: today's model maps refusal to the `refused` completion type (bonus 400) with no fight. This idea likely means either a new completion type for slaying the released horror (with its own Hall tier placement) or an outcome flag on `refused` — decide when the Final Chamber milestone is designed, since completion types are a closed content-schema registry.
 
+## Talents (undefined master-design hook)
+
+The master design's character-sheet screen lists "talents" but nothing defines them. The design philosophy rules out XP/level stat inflation ("substantial repeat play without permanent stat upgrades"; within-run power comes from gear, consumables, and spells). If talents ever get designed, the fitting shape is discrete capability picks earned at kill/exploration milestones — new options, not bigger numbers — which would give kills a visible in-run reward without breaking the no-levels stance. Decision recorded 2026-07-17: the no-XP design stands; talents stay undefined until deliberately designed.
+
 ## Mini-quests
 
 Support for small optional quests encountered during a descent (fetch, rescue, clear, deliver). Natural fit with the encounter/vault/NPC systems; needs a quest state model in the run and probably content kinds for quest definitions.
