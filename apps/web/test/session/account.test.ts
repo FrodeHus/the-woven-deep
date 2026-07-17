@@ -67,6 +67,14 @@ describe('fetchProfileSettings', () => {
     const [, init] = fetcher.mock.calls[0] as [string, RequestInit];
     expect(init?.credentials).toBe('same-origin');
   });
+
+  it('returns the empty marker on a non-200 without parsing the body', async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(new Response('unauthorized', { status: 401 }));
+
+    const result = await fetchProfileSettings(fetcher as unknown as typeof fetch);
+
+    expect(result).toEqual({ settingsJson: null, settingsVersion: 0 });
+  });
 });
 
 describe('putProfileSettings', () => {

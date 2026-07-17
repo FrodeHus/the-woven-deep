@@ -65,6 +65,9 @@ export async function fetchProfileSettings(
   fetcher: typeof fetch = fetch,
 ): Promise<{ settingsJson: string | null; settingsVersion: number }> {
   const response = await fetcher('/api/profile/settings', { credentials: 'same-origin' });
+  // A non-200 (e.g. the session lapsed) means "no server settings" — fall back to the empty
+  // marker so roaming treats it as an unset profile rather than parsing an error body.
+  if (!response.ok) return { settingsJson: null, settingsVersion: 0 };
   const body = await response.json() as { settings: string | null; settingsVersion: number };
   return { settingsJson: body.settings, settingsVersion: body.settingsVersion };
 }
