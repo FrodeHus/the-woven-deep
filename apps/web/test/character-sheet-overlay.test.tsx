@@ -105,14 +105,38 @@ describe('CharacterSheetOverlay', () => {
     const snapshot = snapshotFor(dungeonRun);
     expect(snapshot.projection.floor.town).toBe(false);
     const condition = (snapshot.projection.hero as unknown as {
-      conditions: readonly { name: string; stacks: number; expiresAt: number | null }[];
+      conditions: readonly { name: string; stacks: number; remaining: number | null }[];
     }).conditions[0]!;
     expect(condition.name).toBe('Disengaged');
+    expect(condition.remaining).not.toBeNull();
 
     render(<CharacterSheetOverlay snapshot={snapshot} />);
     expect(screen.getByText('Disengaged')).toBeInTheDocument();
     expect(screen.getByText('×1')).toBeInTheDocument();
-    expect(screen.getByText(`until world-time ${condition.expiresAt}`)).toBeInTheDocument();
+    expect(screen.getByText(`${condition.remaining} world-time units remaining`)).toBeInTheDocument();
+  });
+
+  it('shows "Permanent" (no countdown) for a permanent condition outside town', () => {
+    const hero = heroActor(baseRun);
+    const applied = applyCondition({
+      actors: baseRun.actors, content: pack, targetActorId: hero.actorId, sourceActorId: hero.actorId,
+      conditionId: 'condition.incapacitated', worldTime: baseRun.worldTime, eventId: 'event.test-permanent',
+    });
+    const dungeonFloor = { ...baseRun.floors[0]!, depth: 1 };
+    const dungeonRun: ActiveRun = {
+      ...baseRun, actors: applied.actors,
+      floors: [dungeonFloor, ...baseRun.floors.slice(1)],
+    };
+    const snapshot = snapshotFor(dungeonRun);
+    expect(snapshot.projection.floor.town).toBe(false);
+    const condition = (snapshot.projection.hero as unknown as {
+      conditions: readonly { name: string; remaining: number | null }[];
+    }).conditions[0]!;
+    expect(condition.remaining).toBeNull();
+
+    render(<CharacterSheetOverlay snapshot={snapshot} />);
+    expect(screen.getByText('Incapacitated')).toBeInTheDocument();
+    expect(screen.getByText('Permanent')).toBeInTheDocument();
   });
 
   it('shows the frozen-time marker for a condition while in town, where worldTime is frozen', () => {

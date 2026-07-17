@@ -31,7 +31,7 @@ interface ProjectedCondition {
   readonly name: string;
   readonly color: string;
   readonly stacks: number;
-  readonly expiresAt: number | null;
+  readonly remaining: number | null;
 }
 
 /** The subset of `projection.hero`'s widened `Record<string, unknown>` shape this overlay actually
@@ -103,15 +103,22 @@ export interface CharacterSheetOverlayProps {
  *   Task 8 (an unrelated actor-contentId field), so this section is omitted here rather than
  *   inventing engine state; a later task can add it following that same disclosed process.
  *
- * - **Condition remaining time**: the design calls for "remaining durations" (`expiresAt -
- *   worldTime`), but `worldTime` itself is never projected anywhere reachable from the web layer
- *   during live play -- not on `GameplayProjection`, not on `SessionSnapshot`. The only web-visible
- *   `worldTime` lives in `RunConclusionProjection.cause.worldTime`, populated solely once a run has
- *   already ended, which is a different moment entirely. Rather than fabricate a countdown from
- *   data the client doesn't have, this overlay shows the condition's own absolute `expiresAt` tick
- *   verbatim while a run is live, and the disclosed frozen marker while `projection.floor.town` is
- *   true (town is the one place the design's "worldTime is frozen" premise is actually true and
- *   already observable, via the pre-existing `floor.town` flag -- no projection change needed).
+ * - **Condition remaining time**: the design calls for "remaining durations". `projectGameplayState`
+ *   (`packages/engine/src/projection.ts`) now computes this engine-side per condition as `remaining
+ *   = expiresAt - worldTime` (hero-experienced time, not hidden state -- `worldTime` itself still
+ *   never reaches the web layer, only this derived value does), `null` when the condition is
+ *   permanent (`expiresAt === null`) or the active floor is town (depth 0, frozen time). The raw
+ *   `expiresAt` tick was dropped from the projection entirely -- this overlay was its only
+ *   consumer (verified by grep), so there is nothing left needing the absolute tick once
+ *   `remaining` exists. Because both "permanent" and "frozen in town" collapse to `remaining ===
+ *   null`, this overlay disambiguates using the pre-existing `projection.floor.town` flag: town
+ *   always shows the frozen marker (time is frozen for every condition while in town, permanent or
+ *   not); outside town, a null `remaining` can only mean the condition is permanent, so it renders
+ *   "Permanent". A non-null `remaining` renders as "N world-time units remaining" -- "world-time
+ *   units" is this codebase's own established vocabulary for `worldTime` ticks (see
+ *   `restMaximumDuration` in `docs/server-admin/content-configuration.md` and the `worldTime` field
+ *   doc in `docs/superpowers/specs/2026-07-13-core-gameplay-survival-design.md`), not an invented
+ *   "turns" unit.
  */
 export function CharacterSheetOverlay({ snapshot }: CharacterSheetOverlayProps): JSX.Element {
   const hero = snapshot.projection.hero as unknown as ProjectedHeroLike;
@@ -180,11 +187,11 @@ export function CharacterSheetOverlay({ snapshot }: CharacterSheetOverlayProps):
                 <span className="character-sheet-condition-stacks">{`×${condition.stacks}`}</span>
                 {' '}
                 <span className="character-sheet-condition-remaining">
-                  {condition.expiresAt === null
-                    ? 'Permanent'
-                    : town
+                  {condition.remaining === null
+                    ? town
                       ? '— (frozen while in town)'
-                      : `until world-time ${condition.expiresAt}`}
+                      : 'Permanent'
+                    : `${condition.remaining} world-time units remaining`}
                 </span>
               </li>
             ))}
