@@ -81,3 +81,31 @@ export function heroAnnouncements(prev: HeroAnnounceSnapshot, next: HeroAnnounce
 
   return messages;
 }
+
+/** The minimal projected-floor shape this module compares between ticks. */
+export interface FloorAnnounceSnapshot {
+  readonly floorId: string;
+  readonly depth: number;
+  readonly town: boolean;
+}
+
+/**
+ * The announcement for a floor transition, or `null` when there is nothing to say -- the caller must
+ * NOT push a `null` result into the live region. This is the only spoken cue for a depth change: the
+ * engine emits no descend event and the log never narrates it, and demoting `StatusBar` off
+ * `role="status"` (to stop its turn counter from spamming every step) removed the last SR-audible
+ * path, so this function is that path.
+ *
+ * Rules (same silent-on-mount discipline as `heroAnnouncements`, keyed on `floorId` instead of health/
+ * hunger/conditions):
+ *  - `prev === null` (first tick, or a restore that boots straight into an already-descended save) is
+ *    always silent -- entering the screen must not announce the floor the player is already on.
+ *  - Unless `next.floorId` differs from `prev.floorId`, stays silent -- a projection tick that
+ *    doesn't move the hero to a different floor (turn/combat churn) must not repeat the line.
+ *  - Entering the town announces "Returned to the town."; entering a dungeon depth announces
+ *    "Depth N."
+ */
+export function floorAnnouncement(prev: FloorAnnounceSnapshot | null, next: FloorAnnounceSnapshot): string | null {
+  if (prev === null || prev.floorId === next.floorId) return null;
+  return next.town ? 'Returned to the town.' : `Depth ${next.depth}.`;
+}

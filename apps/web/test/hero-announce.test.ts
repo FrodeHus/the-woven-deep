@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { healthBand, heroAnnouncements, type HeroAnnounceSnapshot } from '../src/ui/hero-announce.js';
+import {
+  floorAnnouncement, healthBand, heroAnnouncements, type FloorAnnounceSnapshot, type HeroAnnounceSnapshot,
+} from '../src/ui/hero-announce.js';
 
 function snap(overrides: Partial<HeroAnnounceSnapshot> = {}): HeroAnnounceSnapshot {
   return { health: 100, maxHealth: 100, hungerStage: 'Fed', conditions: [], ...overrides };
@@ -67,5 +69,39 @@ describe('heroAnnouncements', () => {
     const prev = snap({ health: 80, hungerStage: 'Fed' });
     const next = snap({ health: 20, hungerStage: 'Starving', conditions: [{ conditionId: 'c.bleed', name: 'Bleeding' }] });
     expect(heroAnnouncements(prev, next)).toEqual(['Health critical.', 'Hunger: Starving.', 'Afflicted: Bleeding.']);
+  });
+});
+
+function floor(overrides: Partial<FloorAnnounceSnapshot> = {}): FloorAnnounceSnapshot {
+  return { floorId: 'floor.town', depth: 0, town: true, ...overrides };
+}
+
+describe('floorAnnouncement', () => {
+  it('is silent when there is no previous floor (mount, or a restore straight into a depth)', () => {
+    expect(floorAnnouncement(null, floor({ floorId: 'floor.town', depth: 0, town: true }))).toBeNull();
+    expect(floorAnnouncement(null, floor({ floorId: 'floor.depth-003', depth: 3, town: false }))).toBeNull();
+  });
+
+  it('is silent when the floorId is unchanged across projection churn', () => {
+    const same = floor({ floorId: 'floor.depth-001', depth: 1, town: false });
+    expect(floorAnnouncement(same, floor({ floorId: 'floor.depth-001', depth: 1, town: false }))).toBeNull();
+  });
+
+  it('announces the new depth when descending from town', () => {
+    const prev = floor({ floorId: 'floor.town', depth: 0, town: true });
+    const next = floor({ floorId: 'floor.depth-001', depth: 1, town: false });
+    expect(floorAnnouncement(prev, next)).toBe('Depth 1.');
+  });
+
+  it('announces returning to town from a depth', () => {
+    const prev = floor({ floorId: 'floor.depth-001', depth: 1, town: false });
+    const next = floor({ floorId: 'floor.town', depth: 0, town: true });
+    expect(floorAnnouncement(prev, next)).toBe('Returned to the town.');
+  });
+
+  it('announces a new depth when moving between two dungeon floors', () => {
+    const prev = floor({ floorId: 'floor.depth-001', depth: 1, town: false });
+    const next = floor({ floorId: 'floor.depth-002', depth: 2, town: false });
+    expect(floorAnnouncement(prev, next)).toBe('Depth 2.');
   });
 });

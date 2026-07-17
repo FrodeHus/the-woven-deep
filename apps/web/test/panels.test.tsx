@@ -481,4 +481,48 @@ describe('HeroStatusAnnouncer (Task 9)', () => {
     }))} />);
     expect(region.textContent).toContain('Afflicted: Poisoned.');
   });
+
+  it('stays silent on mount even when the hero boots in at low/critical health (no announce-on-restore)', () => {
+    render(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 10, maxHealth: 100 }))} />);
+    const region = screen.getByRole('status');
+    expect(region.textContent).toBe('');
+  });
+
+  function floorWith(overrides: Record<string, unknown>): GameplayProjection {
+    const floorData = baseProjection.floor as unknown as Record<string, unknown>;
+    return { ...baseProjection, floor: { ...floorData, ...overrides } } as unknown as GameplayProjection;
+  }
+
+  it('stays silent on mount even when booting directly into a dungeon depth (no announce-on-restore)', () => {
+    render(<HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-003', depth: 3, town: false }))} />);
+    const region = screen.getByRole('status');
+    expect(region.textContent).toBe('');
+  });
+
+  it('announces descending from town into depth 1', () => {
+    const { rerender } = render(
+      <HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.town', depth: 0, town: true }))} />,
+    );
+    const region = screen.getByRole('status');
+    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))} />);
+    expect(region.textContent).toContain('Depth 1.');
+  });
+
+  it('announces returning to town from a depth', () => {
+    const { rerender } = render(
+      <HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))} />,
+    );
+    const region = screen.getByRole('status');
+    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.town', depth: 0, town: true }))} />);
+    expect(region.textContent).toContain('Returned to the town.');
+  });
+
+  it('stays silent when the floor is unchanged across projection churn', () => {
+    const { rerender } = render(
+      <HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))} />,
+    );
+    const region = screen.getByRole('status');
+    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))} />);
+    expect(region.textContent).toBe('');
+  });
 });
