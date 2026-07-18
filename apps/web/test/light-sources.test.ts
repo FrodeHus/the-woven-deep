@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection, ObservableCell } from '@woven-deep/engine';
-import { equippedLightSource, fixtureLightsFor } from '../src/ui/light-sources.js';
+import { equippedLightSource } from '../src/ui/light-sources.js';
 
 const PITCH_TORCH_LIGHT = {
   color: [255, 154, 68] as const, radius: 5, strength: 220,
@@ -51,7 +51,7 @@ describe('equippedLightSource', () => {
     expect(equippedLightSource(projection, pack([]))).toBeUndefined();
   });
 
-  it('resolves the equipped light item, scaled by remaining fuel, plus its authored strength', () => {
+  it('resolves the equipped light item, scaled by remaining fuel', () => {
     const projection = makeProjection({
       heroX: 5, heroY: 5,
       equipment: { 'off-hand': { contentId: 'item.pitch-torch', enabled: true, fuel: 400 } },
@@ -59,7 +59,7 @@ describe('equippedLightSource', () => {
     const contentPack = pack([{ id: 'item.pitch-torch', kind: 'item', light: PITCH_TORCH_LIGHT }]);
     const light = equippedLightSource(projection, contentPack);
     expect(light).toEqual({
-      contentId: 'item.pitch-torch', color: [255, 154, 68], radius: 5, fuelFraction: 0.5, strength: 220,
+      contentId: 'item.pitch-torch', color: [255, 154, 68], radius: 5, fuelFraction: 0.5,
     });
   });
 
@@ -70,46 +70,5 @@ describe('equippedLightSource', () => {
     });
     const contentPack = pack([{ id: 'item.pitch-torch', kind: 'item', light: PITCH_TORCH_LIGHT }]);
     expect(equippedLightSource(projection, contentPack)).toBeUndefined();
-  });
-});
-
-const LAMP_VAULT = {
-  id: 'vault.town', kind: 'vault', legend: {
-    L: {
-      terrain: 'floor', entrance: false, slot: null,
-      light: {
-        idSuffix: 'lamp', glyph: '1', presentationToken: 'fixture.lamp',
-        color: [255, 179, 71], radius: 6, strength: 180, enabled: true,
-      },
-    },
-  },
-};
-
-describe('fixtureLightsFor', () => {
-  it('maps a visible town lamp cell to its legend light spec', () => {
-    const cells: ObservableCell[] = [
-      emptyCell(0, 3, 4, {
-        knowledge: 'visible', fixture: { lightId: 'light.lamp-1', glyph: '1', token: 'fixture.lamp' },
-      }),
-    ];
-    const projection = makeProjection({ heroX: 0, heroY: 0, cells });
-    const lights = fixtureLightsFor(projection, pack([LAMP_VAULT]));
-    expect(lights).toEqual([{ x: 3, y: 4, color: [255, 179, 71], radius: 6, strength: 180 }]);
-  });
-
-  it('excludes a fixture whose cell is only remembered, not currently visible', () => {
-    const cells: ObservableCell[] = [
-      emptyCell(0, 3, 4, {
-        knowledge: 'remembered', fixture: { lightId: 'light.lamp-1', glyph: '1', token: 'fixture.lamp' },
-      }),
-    ];
-    const projection = makeProjection({ heroX: 0, heroY: 0, cells });
-    expect(fixtureLightsFor(projection, pack([LAMP_VAULT]))).toEqual([]);
-  });
-
-  it('excludes a visible cell with no fixture', () => {
-    const cells: ObservableCell[] = [emptyCell(0, 3, 4, { knowledge: 'visible' })];
-    const projection = makeProjection({ heroX: 0, heroY: 0, cells });
-    expect(fixtureLightsFor(projection, pack([LAMP_VAULT]))).toEqual([]);
   });
 });

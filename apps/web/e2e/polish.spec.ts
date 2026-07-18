@@ -9,10 +9,10 @@ import { expect, test, type Page } from '@playwright/test';
  *   boot with onboarding ON -> the movement hint leads (priority 0) -> walk ten town steps and it
  *   retires, the inspection hint taking its place -> dismiss that one by hand (the dismiss key) and
  *   it stays gone, the inventory hint stepping up -> open settings, turn onboarding off, the strip
- *   vanishes -> flip lighting to classic (the canvas disappears) and back to smooth (it returns) ->
- *   switch the theme to high contrast (the root class lands and the palette recomputes) -> descend,
- *   the fade-through-dark playing then clearing itself away -> clear the guest session and land on a
- *   fresh title, with every guest storage key -- the onboarding mastery ledger among them -- wiped.
+ *   vanishes -> switch the theme to high contrast (the root class lands and the palette recomputes)
+ *   -> descend, the fade-through-dark playing then clearing itself away -> clear the guest session
+ *   and land on a fresh title, with every guest storage key -- the onboarding mastery ledger among
+ *   them -- wiped.
  *
  * WHY THE WIZARD, NOT `?quickstart=1` (as the other four specs use): quickstart deliberately FORCES
  * onboarding off no matter the stored setting (`App.tsx`: `settings.onboarding === 'on' &&
@@ -86,12 +86,12 @@ async function buildHeroAndEnterTown(page: Page): Promise<void> {
   await expect(page.locator('.status-depth')).toHaveText('Town');
 }
 
-test('the guest polish: onboarding, lighting, theme, the descend fade, and a clean reset', async ({ page }) => {
+test('the guest polish: onboarding, theme, the descend fade, and a clean reset', async ({ page }) => {
   // Seed the settings blob BEFORE boot: onboarding on (explicit) and motion forced full so the
   // descend fade element is guaranteed to render (see the file header).
   await page.addInitScript(() => {
     window.localStorage.setItem('woven-deep.settings.v1', JSON.stringify({
-      fontScale: 1, reducedMotion: 'off', theme: 'tapestry', lighting: 'smooth', onboarding: 'on', bindings: {},
+      fontScale: 1, reducedMotion: 'off', theme: 'tapestry', onboarding: 'on', bindings: {},
     }));
   });
 
@@ -127,13 +127,6 @@ test('the guest polish: onboarding, lighting, theme, the descend fade, and a cle
   // Turn onboarding off -> the strip vanishes entirely (HintStrip renders nothing).
   await settings.getByRole('radiogroup', { name: 'Onboarding hints' }).getByRole('radio', { name: 'Off' }).click();
   await expect(strip).toHaveCount(0);
-
-  // Lighting: classic removes the visibility-polygon canvas; smooth brings it back.
-  const lighting = settings.getByRole('radiogroup', { name: 'Lighting' });
-  await lighting.getByRole('radio', { name: /Classic/ }).click();
-  await expect(page.locator('.light-canvas')).toHaveCount(0);
-  await lighting.getByRole('radio', { name: /Smooth/ }).click();
-  await expect(page.locator('.light-canvas')).toBeVisible();
 
   // Theme: high contrast lands the root class and recomputes the palette (a computed-style spot
   // check on `--ink`, which the `.theme-high-contrast` block redeclares to pure white).

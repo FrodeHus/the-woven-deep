@@ -29,16 +29,6 @@ export interface Settings {
    * re-declares every palette variable for WCAG AA legibility, applied by `App` as the root class
    * `theme-high-contrast` -- see `styles.css`'s `.theme-high-contrast` block. */
   readonly theme: 'tapestry' | 'high-contrast';
-  /** How the playfield renders light (Task 6). `'smooth'` mounts `LightCanvas` -- a per-cell
-   * visibility-polygon gradient behind the glyph grid -- and flattens `.cell-visible`'s own
-   * brightness contribution (the canvas now carries the falloff; see `.lighting-smooth` in
-   * `styles.css`). `'classic'` renders no canvas at all and keeps the pre-Task-6 CSS-only
-   * lighting exactly as it was. Defaults to `'smooth'`; forward-tolerant like every other field
-   * here -- an unrecognized stored value falls back to the default rather than corrupting the
-   * whole blob. Also the automatic fallback when a canvas 2D context is unavailable (jsdom, an
-   * old browser): `LightCanvas` detects that itself and renders nothing, independent of this
-   * setting's stored value. */
-  readonly lighting: 'smooth' | 'classic';
   /** Whether the play screen's contextual onboarding hint strip (Task 8) may show at all --
    * `'on'` by default. `'off'` (settings toggle, the wizard's step-1 "Show guidance on your first
    * delve" checkbox unchecked, or a quickstart boot) suppresses every hint regardless of mastery
@@ -56,7 +46,6 @@ export const DEFAULT_SETTINGS: Settings = {
   fontScale: 1,
   reducedMotion: 'system',
   theme: 'tapestry',
-  lighting: 'smooth',
   onboarding: 'on',
   bindings: {},
 };
@@ -185,7 +174,6 @@ export function chordReserved(chordCandidate: KeyChord): boolean {
 const FONT_SCALES: readonly Settings['fontScale'][] = [1, 1.15, 1.3, 1.5];
 const REDUCED_MOTION_VALUES: readonly Settings['reducedMotion'][] = ['system', 'on', 'off'];
 const THEME_VALUES: readonly Settings['theme'][] = ['tapestry', 'high-contrast'];
-const LIGHTING_VALUES: readonly Settings['lighting'][] = ['smooth', 'classic'];
 const ONBOARDING_VALUES: readonly Settings['onboarding'][] = ['on', 'off'];
 
 function isValidChord(value: unknown): value is KeyChord {
@@ -243,9 +231,6 @@ function parseSettingsJson(
   const theme = THEME_VALUES.includes(record.theme as Settings['theme'])
     ? (record.theme as Settings['theme'])
     : DEFAULT_SETTINGS.theme;
-  const lighting = LIGHTING_VALUES.includes(record.lighting as Settings['lighting'])
-    ? (record.lighting as Settings['lighting'])
-    : DEFAULT_SETTINGS.lighting;
   const onboarding = ONBOARDING_VALUES.includes(record.onboarding as Settings['onboarding'])
     ? (record.onboarding as Settings['onboarding'])
     : DEFAULT_SETTINGS.onboarding;
@@ -274,7 +259,7 @@ function parseSettingsJson(
     accepted[actionId] = candidate;
   }
 
-  const settings: Settings = { fontScale, reducedMotion, theme, lighting, onboarding, bindings: accepted };
+  const settings: Settings = { fontScale, reducedMotion, theme, onboarding, bindings: accepted };
   return { settings, corrupted: false, droppedOverrides };
 }
 
