@@ -3,7 +3,6 @@ import {
 } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection, StoredHallRecord } from '@woven-deep/engine';
-import type { Sightings } from '../session/codex.js';
 import type { GuestSession, SessionSnapshot } from '../session/guest-session.js';
 import { useGuestSession } from '../session/store.js';
 import { computeCamera, type CameraOrigin } from './camera.js';
@@ -93,11 +92,10 @@ export interface PlayScreenProps {
   readonly onClearGuestSession?: () => void;
   /** Forwarded straight through to the codex overlay body (`CodexOverlayBody`) when it's the one
    * open -- `codex` is `global`-scope, so it can open mid-play too. `App` (via `GameRoot`) owns the
-   * Hall repository and the sighting-cache storage read; `PlayScreen` just plumbs these past the
-   * overlay host, exactly like `settings`/`keymap` above. Defaults keep every pre-existing
-   * caller/test (which never opens the codex overlay) compiling unchanged. */
+   * Hall repository; `PlayScreen` just plumbs this past the overlay host, exactly like
+   * `settings`/`keymap` above. Defaults keep every pre-existing caller/test (which never opens the
+   * codex overlay) compiling unchanged. */
   readonly records?: readonly StoredHallRecord[];
-  readonly sightings?: Sightings;
   /** Whether the contextual onboarding hint strip (Task 8) may show at all -- `App` computes this
    * from `settings.onboarding` and the quickstart boot flag. Defaults to `true` so every
    * pre-existing caller/test keeps compiling and passing unchanged; those never populate
@@ -135,7 +133,7 @@ export function PlayScreen({
   overlay = null, onOpenOverlay = () => {}, onCloseOverlay = () => {},
   keymap = resolveKeymap(DEFAULT_SETTINGS.bindings),
   settings = DEFAULT_SETTINGS, onChangeSettings = () => {}, onClearGuestSession = () => {},
-  records = [], sightings = { monsterIds: [], itemIds: [], landmarks: [] }, onboardingEnabled = true,
+  records = [], onboardingEnabled = true,
 }: PlayScreenProps): JSX.Element {
   const snapshot = useGuestSession(session);
   const { projection } = snapshot;

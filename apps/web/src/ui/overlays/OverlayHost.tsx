@@ -25,6 +25,12 @@ export interface OverlayHostProps {
   readonly isPlayActive: boolean;
   readonly records?: readonly StoredHallRecord[];
   readonly onClearGuestSession?: () => void;
+  /** Explicit override for the codex body's sightings, taking precedence over the live session's
+   * `snapshot.sightings` -- the title screen has no session (see `App.tsx`'s TITLE-screen
+   * `OverlayHost` call site), so it passes the guest's persisted cross-run sighting cache
+   * (`session/codex.ts`'s `loadSightings`) directly here instead. Unset on the play path, where
+   * the live session already provides sightings via context. */
+  readonly sightings?: Sightings;
 }
 
 /**
@@ -35,7 +41,7 @@ export interface OverlayHostProps {
  * `closeOverlay`/`onCloseOverlay` already uses, so it stays a single source of truth regardless of
  * whether the close came from Escape, the scrim, or the close button.
  */
-export function OverlayHost({ overlay, onClose, isPlayActive, records, onClearGuestSession }: Readonly<OverlayHostProps>): JSX.Element | null {
+export function OverlayHost({ overlay, onClose, isPlayActive, records, onClearGuestSession, sightings }: Readonly<OverlayHostProps>): JSX.Element | null {
   const pack = usePack();
   const { settings, onChange, keymap } = useSettingsCtx();
   const sessionCtx = useSessionCtx();
@@ -48,7 +54,7 @@ export function OverlayHost({ overlay, onClose, isPlayActive, records, onClearGu
     pack, settings, onChange, keymap, records, onClearGuestSession,
     snapshot: sessionCtx?.snapshot,
     onDispatch: sessionCtx ? (intent) => sessionCtx.session.dispatch(intent) : undefined,
-    sightings: sessionCtx?.snapshot.sightings,
+    sightings: sightings ?? sessionCtx?.snapshot.sightings,
   });
 
   const onOpenChange = (open: boolean): void => {
