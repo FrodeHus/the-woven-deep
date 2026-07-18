@@ -1,5 +1,5 @@
-import type { JSX, KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { BalanceContentEntry, CompiledContentPack } from '@woven-deep/content';
+import { useMemo, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { BalanceContentEntry, ClassContentEntry, CompiledContentPack } from '@woven-deep/content';
 import {
   ATTRIBUTE_ORDER, HERO_NAME_RULES, pointBuyCost, type AttributeName,
 } from '@woven-deep/engine';
@@ -12,6 +12,9 @@ import {
 } from '../../../session/wizard-reducer.js';
 import { BlockBar } from './chargen-components.js';
 import { AttributeStepper } from './AttributeStepper.js';
+import { OptionRow } from './OptionRow.js';
+import { FilterBar } from './FilterBar.js';
+import { useListFacets } from './use-list-facets.js';
 import { useListNavigation } from '../roving-focus.js';
 
 export interface StepProps {
@@ -217,6 +220,78 @@ export function AttributesStep({ state, pack, dispatch }: StepProps): JSX.Elemen
       </div>
       {state.method === 'roll' && <RollAttributes state={state} pack={pack} dispatch={dispatch} />}
       {state.method === 'point-buy' && <PointBuyAttributes state={state} pack={pack} dispatch={dispatch} />}
+    </section>
+  );
+}
+
+function classEntries(pack: CompiledContentPack): readonly ClassContentEntry[] {
+  return pack.entries.filter((entry): entry is ClassContentEntry => entry.kind === 'class');
+}
+
+export function CallingStep({ state, pack, dispatch }: StepProps): JSX.Element {
+  const entries = classEntries(pack);
+  const facets = useListFacets(entries);
+  const { registerItem, handleArrowKeys } = useListNavigation(facets.filtered.length);
+
+  return (
+    <section aria-label="Calling" className="flex flex-col gap-3 font-mono">
+      <FilterBar facets={facets} />
+      <div role="listbox" aria-label="Calling" className="flex flex-col gap-1.5" onKeyDown={handleArrowKeys}>
+        {facets.filtered.map((entry, index) => (
+          <div key={entry.id} ref={registerItem(index)} tabIndex={-1}>
+            <OptionRow
+              glyph={entry.silhouetteGlyph}
+              name={entry.name}
+              description={entry.description}
+              tags={entry.tags}
+              marker="single"
+              selected={state.classId === entry.id}
+              locked={!entry.playable}
+              {...(entry.unlockHint ? { lockHint: entry.unlockHint } : {})}
+              onSelect={() => { if (entry.playable) dispatch({ type: 'choose-class', classId: entry.id }); }}
+            />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+interface FacetedKit {
+  readonly kitId: string;
+  readonly name: string;
+  readonly tags: readonly string[];
+}
+
+export function KitStep({ state, pack, dispatch }: StepProps): JSX.Element {
+  const entries = classEntries(pack);
+  const classEntry = entries.find((entry) => entry.id === state.classId);
+  const kits = useMemo<readonly FacetedKit[]>(
+    () => (classEntry?.kits ?? []).map((kit) => ({ kitId: kit.kitId, name: kit.name, tags: [] })),
+    [classEntry],
+  );
+  const facets = useListFacets(kits);
+  const { registerItem, handleArrowKeys } = useListNavigation(facets.filtered.length);
+
+  if (!classEntry) {
+    return <p className="text-sm text-muted">Choose a calling first.</p>;
+  }
+
+  return (
+    <section aria-label="Kit" className="flex flex-col gap-3 font-mono">
+      <FilterBar facets={facets} />
+      <div role="listbox" aria-label="Kit" className="flex flex-col gap-1.5" onKeyDown={handleArrowKeys}>
+        {facets.filtered.map((kit, index) => (
+          <div key={kit.kitId} ref={registerItem(index)} tabIndex={-1}>
+            <OptionRow
+              name={kit.name}
+              marker="single"
+              selected={state.kitId === kit.kitId}
+              onSelect={() => dispatch({ type: 'choose-kit', kitId: kit.kitId })}
+            />
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
