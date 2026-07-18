@@ -285,11 +285,10 @@ export function App({
   const [settings, setSettings] = useState(() => settingsLoad.settings);
   const keymap = useMemo(() => resolveKeymap(settings.bindings), [settings.bindings]);
   const [settingsWriteWarning, setSettingsWriteWarning] = useState<string>();
-  // Task 8 review Finding 3 (milestone-wide error-handling debt): `loadSettings` already detects a
-  // corrupt blob and resets to `DEFAULT_SETTINGS`, but that reset used to happen silently -- the
-  // plan's error-handling section promises the standard dismissible notice for exactly this case.
-  // Read once, at the same boot moment as `settingsLoad` above; dismissing it never re-shows it
-  // (a corrupt blob is a one-time boot fact, not an ongoing condition).
+  // When `loadSettings` detects a corrupt blob at boot it resets to `DEFAULT_SETTINGS` and flags
+  // it; this state surfaces the standard dismissible notice for that reset. Read once, at the same
+  // boot moment as `settingsLoad` above; dismissing it never re-shows it (a corrupt blob is a
+  // one-time boot fact, not an ongoing condition).
   const [settingsCorruptedDismissed, setSettingsCorruptedDismissed] = useState(false);
 
   // Settings roaming (Task 12) bookkeeping. `settingsRef` mirrors `settings` for the roam effect's

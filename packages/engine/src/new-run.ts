@@ -39,9 +39,9 @@ function townMerchantEncounter(pack: CompiledContentPack, encounterId: OpaqueId)
   return entry;
 }
 
-// Dungeon generation settings; the town start below no longer uses them directly, but
-// `descendToNextFloor` still generates every floor below the town at this width/height/theme so
-// the whole run stays on one generation profile. 160x50 (with a raised room floor) is the
+// Dungeon generation settings. The authored town floor doesn't use them; `descendToNextFloor`
+// generates every floor below the town at this width/height/theme so the whole run stays on one
+// generation profile. 160x50 (with a raised room floor) is the
 // larger-dungeon baseline: `createClassicTheme` caps width at 160 and height at 100, so this sits
 // at the width ceiling with headroom on height.
 export const NEW_RUN_FLOOR_WIDTH = 160;

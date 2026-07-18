@@ -22,7 +22,7 @@ const PANEL_ID: Readonly<Record<CodexCategoryData['kind'], string>> = {
 };
 
 /** A locked class's `unlockHint`, zipped by index against the SAME `sortedClassEntries` order
- * `deriveCodexState` used to build the class category -- `CodexEntry`'s undiscovered variant
+ * `deriveCodexState` uses to build the class category -- `CodexEntry`'s undiscovered variant
  * deliberately carries no id to look this up by (spoiler-free), but `unlockHint` text is not
  * itself a spoiler: chargen already discloses it, unlocked or not (`ClassStep`,
  * `chargen-steps.tsx`). `null` for every OTHER category, and for a discovered class (chargen shows

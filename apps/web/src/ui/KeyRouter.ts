@@ -5,8 +5,7 @@ import type { ActionId, ResolvedKeymap } from '../session/settings.js';
 /** The six overlay-open commands whose outcome is `{ type: 'open-overlay', overlay }`. Typed
  * directly as this string union (rather than importing an `OverlayId` from elsewhere) so this
  * module stays free of a dependency on the overlay registry -- it happens to be the exact same
- * string set as `OverlayId` (registry.ts), `inventory` included: the guest-interface Task 5
- * absorption retired the legacy `open-backpack` outcome, so `i` now routes through this same
+ * string set as `OverlayId` (registry.ts), `inventory` included: `i` routes through this same
  * registry path as every other overlay. */
 export type OverlayActionId = 'inventory' | 'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help';
 

@@ -171,7 +171,7 @@ export function PlayScreen({
   // Tier derivation MUST watch a tier-independent measurement. The triptych container's width
   // does not depend on `data-tier` (only its children's grid columns do), so this observer never
   // feeds back into itself — unlike watching the map pane, whose own column shrinks when the tier
-  // changes, which used to oscillate the tier indefinitely at mid-band widths (see layout.ts).
+  // changes and would oscillate the tier at mid-band widths (see layout.ts).
   useEffect(() => {
     const node = triptychRef.current;
     if (!node) return undefined;
