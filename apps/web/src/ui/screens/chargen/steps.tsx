@@ -3,16 +3,17 @@ import type {
   BackgroundContentEntry, BalanceContentEntry, ClassContentEntry, CompiledContentPack, TraitContentEntry,
 } from '@woven-deep/content';
 import {
-  ATTRIBUTE_ORDER, DERIVED_STAT_NAMES, HERO_NAME_RULES, pointBuyCost, type AttributeName, type DerivedStatName,
+  ATTRIBUTE_ORDER, DERIVED_STAT_NAMES, HERO_NAME_RULES, pointBuyCost,
+  type AttributeName, type DerivedStatName,
 } from '@woven-deep/engine';
 import { Button } from '@/ui/components/button.js';
 import { Input } from '@/ui/components/input.js';
 import { Label } from '@/ui/components/label.js';
 import { cn } from '@/ui/lib/cn.js';
 import {
-  PORTRAIT_GLYPHS, type WizardAction, type WizardState,
+  PORTRAIT_GLYPHS, wizardPreview, type WizardAction, type WizardState,
 } from '../../../session/wizard-reducer.js';
-import { BlockBar } from './chargen-components.js';
+import { BlockBar, DotLeaderRow } from './chargen-components.js';
 import { AttributeStepper } from './AttributeStepper.js';
 import { OptionRow } from './OptionRow.js';
 import { FilterBar } from './FilterBar.js';
@@ -343,6 +344,16 @@ function traitEntries(pack: CompiledContentPack): readonly TraitContentEntry[] {
   return pack.entries.filter((entry): entry is TraitContentEntry => entry.kind === 'trait');
 }
 
+const STAT_LABELS: Readonly<Record<DerivedStatName, string>> = {
+  maxHealth: 'Max health',
+  meleeAccuracy: 'Melee accuracy',
+  meleeDamageBonus: 'Melee damage bonus',
+  rangedAccuracy: 'Ranged accuracy',
+  defense: 'Defense',
+  search: 'Search',
+  disarm: 'Disarm',
+};
+
 export function TraitsStep({ state, pack, dispatch }: StepProps): JSX.Element {
   const entries = traitEntries(pack);
   const facets = useListFacets(entries);
@@ -379,6 +390,50 @@ export function TraitsStep({ state, pack, dispatch }: StepProps): JSX.Element {
           );
         })}
       </div>
+    </section>
+  );
+}
+
+export function ReviewStep({ state, pack }: StepProps): JSX.Element {
+  const classEntry = classEntries(pack).find((entry) => entry.id === state.classId);
+  const kit = classEntry?.kits.find((candidate) => candidate.kitId === state.kitId);
+  const background = backgroundEntries(pack).find((entry) => entry.id === state.backgroundId);
+  const chosenTraits = traitEntries(pack).filter((entry) => state.traitIds.includes(entry.id));
+  const stats = wizardPreview(state, pack);
+
+  return (
+    <section aria-label="Review" className="flex flex-col gap-3 font-mono">
+      <h2 className="m-0 font-serif text-2xl text-accent-strong">{state.name || '—'}</h2>
+      <div className="flex flex-col gap-1">
+        <DotLeaderRow label="Calling" value={classEntry?.name ?? '—'} />
+        <DotLeaderRow label="Kit" value={kit?.name ?? '—'} />
+        <DotLeaderRow label="Origin" value={background?.name ?? '—'} />
+        <DotLeaderRow
+          label="Traits"
+          value={chosenTraits.length > 0 ? chosenTraits.map((trait) => trait.name).join(', ') : 'None'}
+        />
+      </div>
+      <div className="flex flex-col gap-1 border-t border-line pt-2">
+        <h3 className="m-0 text-sm font-semibold text-fg-strong">Attributes</h3>
+        {ATTRIBUTE_ORDER.map((attributeName) => (
+          <DotLeaderRow
+            key={attributeName}
+            label={attributeName.charAt(0).toUpperCase() + attributeName.slice(1)}
+            value={String(state.attributes?.[attributeName] ?? '—')}
+          />
+        ))}
+      </div>
+      {stats && (
+        <div className="flex flex-col gap-1 border-t border-line pt-2">
+          <h3 className="m-0 text-sm font-semibold text-fg-strong">Derived stats</h3>
+          {DERIVED_STAT_NAMES.map((statName) => (
+            <DotLeaderRow key={statName} label={STAT_LABELS[statName]} value={String(stats[statName])} />
+          ))}
+        </div>
+      )}
+      <p className="m-0 text-sm italic text-muted">
+        {`${state.name || 'This hero'} steps into the dark, ${classEntry?.name ?? 'unproven'} and ${background?.name ?? 'unbound by fate'}.`}
+      </p>
     </section>
   );
 }
