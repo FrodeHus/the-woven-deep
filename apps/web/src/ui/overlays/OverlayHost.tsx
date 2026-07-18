@@ -105,7 +105,7 @@ function renderBody(overlay: OverlayId, ctx: RenderBodyContext): JSX.Element {
       return <InventoryOverlay />;
     case 'character-sheet':
       if (!ctx.snapshot) return <p>Your character sheet is unavailable right now.</p>;
-      return <CharacterSheetOverlay snapshot={ctx.snapshot} />;
+      return <CharacterSheetOverlay />;
     case 'map-journal':
       if (!ctx.snapshot) return <p>The map and journal are unavailable right now.</p>;
       return <MapJournalOverlay snapshot={ctx.snapshot} />;
