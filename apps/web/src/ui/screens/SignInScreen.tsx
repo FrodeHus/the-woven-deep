@@ -1,5 +1,8 @@
 import { useEffect, useState, type FormEvent, type JSX } from 'react';
 import { requestLogin } from '../../api.js';
+import { Button } from '../components/button.js';
+import { Input } from '../components/input.js';
+import { Label } from '../components/label.js';
 
 export interface SignInScreenProps {
   /** Same test seam as `App`'s own `fetcher` prop -- threaded straight through to `requestLogin`,
@@ -49,29 +52,31 @@ export function SignInScreen({ fetcher = fetch, onBack }: SignInScreenProps): JS
 
   if (submitted) {
     return (
-      <section aria-label="Sign in" className="signin-screen">
-        <p role="status">{CONFIRMATION_MESSAGE}</p>
-        <button type="button" onClick={onBack}>Back to title</button>
+      <section aria-label="Sign in" className="mx-auto flex max-w-md flex-col gap-3 p-6">
+        <p role="status" className="text-sm text-fg">{CONFIRMATION_MESSAGE}</p>
+        <Button type="button" variant="outline" className="self-start" onClick={onBack}>Back to title</Button>
       </section>
     );
   }
 
   return (
-    <section aria-label="Sign in" className="signin-screen">
-      <h1>Sign in with email</h1>
-      <form onSubmit={(event) => { void handleSubmit(event); }}>
-        <label htmlFor="signin-email">Email</label>
-        <input
-          id="signin-email"
-          type="email"
-          required
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          autoFocus
-        />
-        <button type="submit">Send sign-in link</button>
+    <section aria-label="Sign in" className="mx-auto flex max-w-md flex-col gap-3 p-6">
+      <h1 className="font-serif text-2xl text-accent-strong">Sign in with email</h1>
+      <form className="flex flex-col gap-3" onSubmit={(event) => { void handleSubmit(event); }}>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="signin-email">Email</Label>
+          <Input
+            id="signin-email"
+            type="email"
+            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoFocus
+          />
+        </div>
+        <Button type="submit" className="self-start">Send sign-in link</Button>
       </form>
-      <button type="button" onClick={onBack}>Back</button>
+      <Button type="button" variant="outline" className="self-start" onClick={onBack}>Back</Button>
     </section>
   );
 }
