@@ -1,6 +1,10 @@
+import fastifyCookie from '@fastify/cookie';
+import fastifyCsrf from '@fastify/csrf-protection';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { CompiledContentPack } from '@woven-deep/content';
+import { registerAuthRoutes, type AuthBundle } from './routes/auth.js';
+import { registerProfileRoutes } from './routes/profile.js';
 
 function isReservedApiUrl(url: string): boolean {
   let pathname = new URL(url, 'http://localhost').pathname;
@@ -19,6 +23,7 @@ function isReservedApiUrl(url: string): boolean {
 export function buildApp(input: {
   pack: CompiledContentPack;
   webDistDir?: string;
+  auth?: AuthBundle;
 }): FastifyInstance {
   const app = Fastify({ logger: false });
   app.get('/api/health', async () => ({
@@ -27,6 +32,18 @@ export function buildApp(input: {
     entries: input.pack.entries.length,
   }));
   app.get('/api/content/guest', async () => input.pack);
+  if (input.auth) {
+    const auth = input.auth;
+    // Registration is queued (Fastify's encapsulation resolves the plugin tree on
+    // ready/inject); registering routes synchronously right after is safe since they
+    // don't touch csrfProtection/generateCsrf/cookies until a request is handled.
+    void app.register(fastifyCookie, { secret: auth.config.cookieSecret });
+    void app.register(fastifyCsrf, {
+      getToken: (req) => req.headers['x-csrf-token'] as string | undefined,
+    });
+    registerAuthRoutes(app, auth);
+    registerProfileRoutes(app, auth);
+  }
   if (input.webDistDir) {
     void app.register(fastifyStatic, { root: input.webDistDir, wildcard: false });
     app.setNotFoundHandler((request, reply) => {

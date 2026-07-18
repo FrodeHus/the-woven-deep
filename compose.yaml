@@ -7,6 +7,17 @@ services:
       NODE_ENV: production
       DATABASE_PATH: /data/rogue.sqlite
       CONTENT_DIR: /app/content
+      # Auth/config — see docs/server-admin/authentication.md. All overridable from the host env.
+      # PUBLIC_URL, COOKIE_SECRET, and the three MAILGUN_* keys are REQUIRED in production; with
+      # NODE_ENV=production the server refuses to boot unless PUBLIC_URL is a public, non-localhost
+      # URL. Unset host vars become empty strings, which the server reads as "not configured".
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      COOKIE_SECRET: ${COOKIE_SECRET:-}
+      MAILGUN_API_KEY: ${MAILGUN_API_KEY:-}
+      MAILGUN_DOMAIN: ${MAILGUN_DOMAIN:-}
+      MAILGUN_SENDER: ${MAILGUN_SENDER:-}
+      LOGIN_RATE_LIMIT_PER_EMAIL_PER_HOUR: ${LOGIN_RATE_LIMIT_PER_EMAIL_PER_HOUR:-5}
+      LOGIN_RATE_LIMIT_PER_SOURCE_PER_HOUR: ${LOGIN_RATE_LIMIT_PER_SOURCE_PER_HOUR:-20}
     volumes:
       - ${CONTENT_SOURCE:-./content}:/app/content:ro
       - rogue-data:/data

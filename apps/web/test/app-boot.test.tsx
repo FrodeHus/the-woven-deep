@@ -11,6 +11,7 @@ import {
   type ActiveRun, type Uint32State,
 } from '@woven-deep/engine';
 import { App, PORTRAIT_KEY } from '../src/App.js';
+import type { AccountState } from '../src/session/account.js';
 import { createSessionRunRecordRepository, RECORDS_KEY } from '../src/session/run-records-storage.js';
 import { PORTRAIT_GLYPHS } from '../src/session/wizard-reducer.js';
 import { SETTINGS_KEY } from '../src/session/settings.js';
@@ -36,7 +37,10 @@ afterEach(() => {
 });
 
 function packFetcher(): typeof fetch {
-  return vi.fn().mockResolvedValue(new Response(JSON.stringify(pack))) as unknown as typeof fetch;
+  // A fresh `Response` per call (not a single shared instance) -- Task 12's roam-on-sign-in effect
+  // can issue a second fetch (`/api/profile/settings`) alongside the content-pack fetch, and a
+  // shared `Response`'s body can only be read once.
+  return vi.fn(() => Promise.resolve(new Response(JSON.stringify(pack)))) as unknown as typeof fetch;
 }
 
 function fakeStorage(initial: string | null = null): SessionStorageLike & { peek(key?: string): string | null } {
@@ -134,8 +138,12 @@ describe('App boot flow', () => {
 
   it('shows a retry screen naming the failure when the pack fetch fails, and retries on Enter', async () => {
     const user = userEvent.setup();
+    // Three canned responses in call order: the failing pack fetch, the boot-time account/session
+    // fetch (unauthenticated -- irrelevant to this test, but still a real fetcher call the boot
+    // effect makes), then the retried pack fetch succeeding.
     const fetcher = vi.fn()
       .mockRejectedValueOnce(new Error('The content service is unavailable.'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ authenticated: false }), { status: 401 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(pack)));
 
     render(<App fetcher={fetcher as unknown as typeof fetch} storage={fakeStorage()} />);
@@ -147,7 +155,7 @@ describe('App boot flow', () => {
     await user.keyboard('{Enter}');
 
     expect(await screen.findByRole('option', { name: /enter the deep/i })).toBeInTheDocument();
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
   it('?quickstart=1 boots directly into play with a fresh default-hero session', async () => {
@@ -540,5 +548,73 @@ describe('App finalize-once (concluded run)', () => {
     expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
     expect(screen.queryByRole('table', { name: 'Score' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Heirloom' })).not.toBeInTheDocument();
+  });
+});
+
+describe('App identity/account', () => {
+  const SIGNED_IN_ACCOUNT: AccountState = { status: 'signed-in', email: 'player@example.com', csrfToken: 'tok' };
+
+  it('boots as guest by default: title shows "Sign in with email", not an email/Sign-out', async () => {
+    render(<App fetcher={packFetcher()} storage={fakeStorage()} />);
+
+    expect(await screen.findByRole('option', { name: /sign in with email/i })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /sign out/i })).not.toBeInTheDocument();
+  });
+
+  it('accountOverride seeds a signed-in title immediately, without any session fetch', async () => {
+    // A fetcher that only ever serves the content pack -- if `loadAccount` were still invoked
+    // over the network despite the override, this fetcher's single canned pack response would
+    // desync the shared Response's body and the boot would surface an error instead of a title.
+    render(<App fetcher={packFetcher()} storage={fakeStorage()} accountOverride={SIGNED_IN_ACCOUNT} />);
+
+    expect(await screen.findByText(/signed in as/i)).toHaveTextContent('player@example.com');
+    expect(screen.getByRole('option', { name: /sign out/i })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /sign in with email/i })).not.toBeInTheDocument();
+  });
+
+  it('?auth=ok at boot re-fetches the session, flipping the title to signed-in when it reports authenticated', async () => {
+    window.history.pushState({}, '', '/?auth=ok');
+    const fetcher = vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('/api/auth/session')) {
+        return Promise.resolve(new Response(
+          JSON.stringify({ authenticated: true, email: 'player@example.com', csrfToken: 'tok' }),
+          { status: 200 },
+        ));
+      }
+      return Promise.resolve(new Response(JSON.stringify(pack), { status: 200 }));
+    }) as unknown as typeof fetch;
+
+    render(<App fetcher={fetcher} storage={fakeStorage()} />);
+
+    expect(await screen.findByText(/signed in as/i)).toHaveTextContent('player@example.com');
+    expect(screen.getByRole('option', { name: /sign out/i })).toBeInTheDocument();
+  });
+
+  it('Sign in with email navigates to the sign-in screen, and Esc/Back return to title', async () => {
+    const user = userEvent.setup();
+    render(<App fetcher={packFetcher()} storage={fakeStorage()} />);
+
+    await user.click(await screen.findByRole('option', { name: /sign in with email/i }));
+    expect(await screen.findByRole('heading', { name: /sign in with email/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^back$/i }));
+    expect(await screen.findByRole('option', { name: /sign in with email/i })).toBeInTheDocument();
+  });
+
+  it('Sign out logs out and returns the title to guest', async () => {
+    const user = userEvent.setup();
+    const fetcher = vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('/api/auth/logout')) {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify(pack), { status: 200 }));
+    }) as unknown as typeof fetch;
+
+    render(<App fetcher={fetcher} storage={fakeStorage()} accountOverride={SIGNED_IN_ACCOUNT} />);
+    await user.click(await screen.findByRole('option', { name: /sign out/i }));
+
+    expect(await screen.findByRole('option', { name: /sign in with email/i })).toBeInTheDocument();
+    expect(screen.queryByText(/signed in as/i)).not.toBeInTheDocument();
+    expect(fetcher).toHaveBeenCalledWith('/api/auth/logout', expect.objectContaining({ method: 'POST' }));
   });
 });

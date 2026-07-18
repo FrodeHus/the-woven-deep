@@ -77,11 +77,24 @@ async function createDirectories(root) {
   return { valid, invalid, data };
 }
 
+// The runtime image sets NODE_ENV=production, so the server's config guard refuses to boot without
+// an explicit non-localhost PUBLIC_URL plus a cookie secret and full Mailgun config. This gate only
+// exercises content startup, not auth, so supply well-formed throwaway values (never real secrets)
+// so a production-shaped container can boot and serve /api/health and content.
+const GATE_AUTH_ENV = [
+  '--env', 'PUBLIC_URL=http://startup-gate.invalid:3000',
+  '--env', 'COOKIE_SECRET=content-startup-gate-throwaway-cookie-secret',
+  '--env', 'MAILGUN_API_KEY=startup-gate-not-real',
+  '--env', 'MAILGUN_DOMAIN=startup-gate.invalid',
+  '--env', 'MAILGUN_SENDER=gate@startup-gate.invalid',
+];
+
 function containerArguments(name, image, content, data, detached) {
   return [
     'run', ...(detached ? ['--detach'] : []), '--name', name,
     '--mount', `type=bind,src=${content},dst=/app/content,readonly`,
     '--mount', `type=bind,src=${data},dst=/data`,
+    ...GATE_AUTH_ENV,
     ...(detached ? ['--publish', '127.0.0.1::3000'] : []),
     image,
   ];
