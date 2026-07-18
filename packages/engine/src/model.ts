@@ -166,8 +166,10 @@ export type TradeInvalidReason = 'trade.active' | 'trade.required' | 'merchant.u
   | 'trade.stock-unavailable' | 'trade.item-unacceptable' | 'trade.capacity'
   | 'trade.service-unavailable' | 'trade.target-invalid';
 export type TownInvalidReason = 'town.truce' | 'town.rest' | 'house.full';
+export type DoorInvalidReason = 'door.missing' | 'door.not-adjacent' | 'door.locked'
+  | 'door.already-open' | 'door.already-closed' | 'door.occupied';
 export type InvalidActionReason = MovementInvalidReason | TradeInvalidReason | TownInvalidReason
-  | 'action.unavailable' | 'inventory.full'
+  | DoorInvalidReason | 'action.unavailable' | 'inventory.full'
   | 'item.missing' | 'item.unavailable' | 'item.quantity' | 'item.incompatible' | 'item.id-conflict'
   | 'target.not_visible' | 'target.out_of_range' | 'target.blocked' | 'target.invalid' | 'run.concluded';
 

@@ -48,6 +48,27 @@ describe('foldEventsIntoLog', () => {
     expect(concludedLine?.tone).toBe('system');
   });
 
+  it('renders specific copy for each door-related invalid action reason', () => {
+    const events: readonly PublicEvent[] = [
+      { type: 'action.invalid', eventId: 'e1', commandId: 'command.1', reason: 'door.locked' },
+      { type: 'action.invalid', eventId: 'e2', commandId: 'command.2', reason: 'door.not-adjacent' },
+      { type: 'action.invalid', eventId: 'e3', commandId: 'command.3', reason: 'door.occupied' },
+      { type: 'action.invalid', eventId: 'e4', commandId: 'command.4', reason: 'door.already-open' },
+      { type: 'action.invalid', eventId: 'e5', commandId: 'command.5', reason: 'door.already-closed' },
+      { type: 'action.invalid', eventId: 'e6', commandId: 'command.6', reason: 'door.missing' },
+    ];
+    const folded = foldEventsIntoLog([], events, 1);
+    expect(folded.log.map((line) => line.text)).toEqual([
+      'The door is locked.',
+      'You are too far from the door.',
+      'Something is blocking the doorway.',
+      'The door is already open.',
+      'The door is already closed.',
+      'There is no door there.',
+    ]);
+    expect(folded.log.every((line) => line.tone === 'system')).toBe(true);
+  });
+
   it('caps the log at LOG_CAPACITY dropping oldest first and keeps ids monotonic', () => {
     const waits: readonly PublicEvent[] = Array.from({ length: 250 }, (_unused, index) => ({
       type: 'action.invalid' as const, eventId: `event.${index}`, commandId: `command.${index}`,
