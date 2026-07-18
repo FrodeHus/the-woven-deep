@@ -1,19 +1,30 @@
 import { useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   ACTION_IDS, ACTION_LABELS, bindingConflict, chordKey, chordReserved,
-  type ActionId, type KeyChord, type ResolvedKeymap, type Settings,
+  type ActionId, type KeyChord,
 } from '../../session/settings.js';
+import { useSettingsCtx } from '../providers.js';
+import { Button } from '../components/button.js';
+import { Input } from '../components/input.js';
+import { Label } from '../components/label.js';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/select.js';
+import { Switch } from '../components/switch.js';
 
 export interface SettingsOverlayProps {
-  readonly settings: Settings;
-  readonly onChange: (next: Settings) => void;
   readonly onClearGuestSession: () => void;
-  /** The resolved keymap (defaults merged with `settings.bindings`) -- the source of truth for
-   * each row's *currently effective* chord, since an unbound action still has a default one. */
-  readonly keymap: ResolvedKeymap;
 }
 
-const FONT_SCALE_STEPS: readonly Settings['fontScale'][] = [1, 1.15, 1.3, 1.5];
+const FONT_SCALE_STEPS: readonly (1 | 1.15 | 1.3 | 1.5)[] = [1, 1.15, 1.3, 1.5];
+
+const THEME_LABELS: Readonly<Record<string, string>> = {
+  tapestry: 'Tapestry (dark fantasy)', 'high-contrast': 'High contrast',
+};
+
+const REDUCED_MOTION_LABELS: Readonly<Record<string, string>> = {
+  system: "System (follow this device's own reduced-motion preference)",
+  on: 'Always (turn off glow/flash animations)',
+  off: 'Never (keep animations on, even if the device asks for reduced motion)',
+};
 
 /** The exact word "clear guest session" requires, typed into the confirmation field before the
  * wipe button enables -- compared case-insensitively (still "the exact word", not a substring or
@@ -32,16 +43,17 @@ type CaptureRefusal =
   | { readonly reason: 'hardwired'; readonly action: ActionId };
 
 /**
- * The settings overlay body: font scale (live preview), reduced motion (the three-way contract:
- * "system" defers to the OS, "on" forces animations off, "off" forces them back on regardless of
- * the OS setting -- see `App.tsx`'s `withRootStyling` doc comment for the CSS side of this), full
- * per-action key rebinding (press-to-rebind, conflict refusal, per-row/global reset), and
- * clear-guest-session. Fully controlled: `settings`/`keymap` are owned by the caller (`App`), and
- * every change is reported via `onChange` rather than held in local state -- the only local state
- * here is transient UI-only (which row is armed for capture, the pending conflict notice, and the
- * clear-confirmation text).
+ * The settings overlay body: font scale (live preview), theme, onboarding hints, reduced motion
+ * (the three-way contract: "system" defers to the OS, "on" forces animations off, "off" forces
+ * them back on regardless of the OS setting -- see `App.tsx`'s `withRootStyling` doc comment for
+ * the CSS side of this), full per-action key rebinding (press-to-rebind, conflict refusal,
+ * per-row/global reset), and clear-guest-session. `settings`/`onChange`/`keymap` arrive via
+ * `useSettingsCtx()` (owned by `App`); `onClearGuestSession` is the one prop, threaded in by
+ * `OverlayHost`. The only local state here is transient UI-only (which row is armed for capture,
+ * the pending conflict notice, and the clear-confirmation text).
  */
-export function SettingsOverlay({ settings, onChange, onClearGuestSession, keymap }: SettingsOverlayProps): JSX.Element {
+export function SettingsOverlay({ onClearGuestSession }: Readonly<SettingsOverlayProps>): JSX.Element {
+  const { settings, onChange, keymap } = useSettingsCtx();
   const [capturing, setCapturing] = useState<ActionId | null>(null);
   const [conflict, setConflict] = useState<CaptureRefusal | null>(null);
   const [clearText, setClearText] = useState('');
@@ -111,173 +123,156 @@ export function SettingsOverlay({ settings, onChange, onClearGuestSession, keyma
   const clearReady = clearText.trim().toLowerCase() === CLEAR_CONFIRM_WORD;
 
   return (
-    <div className="settings-overlay">
-      <section aria-labelledby="settings-font-scale-heading">
-        <h3 id="settings-font-scale-heading">Font scale</h3>
-        <div role="radiogroup" aria-label="Font scale">
-          {FONT_SCALE_STEPS.map((scale) => (
-            <label key={scale}>
-              <input
-                type="radio"
-                name="settings-font-scale"
-                checked={settings.fontScale === scale}
-                onChange={() => onChange({ ...settings, fontScale: scale })}
-              />
-              {Math.round(scale * 100)}%
-            </label>
-          ))}
+    <div className="flex flex-col gap-6">
+      <section aria-labelledby="settings-font-scale-heading" className="flex flex-col gap-2">
+        <h3 id="settings-font-scale-heading" className="text-sm font-semibold text-fg-strong">Font scale</h3>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="settings-font-scale">Font scale</Label>
+          <Select
+            value={settings.fontScale}
+            onValueChange={(value) => onChange({ ...settings, fontScale: value as typeof settings.fontScale })}
+          >
+            <SelectTrigger id="settings-font-scale" className="max-w-48">
+              <SelectValue>{(value: number) => `${Math.round(value * 100)}%`}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {FONT_SCALE_STEPS.map((scale) => (
+                <SelectItem key={scale} value={scale}>{Math.round(scale * 100)}%</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <p className="settings-font-preview" style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}>
+        <p className="text-sm text-muted" style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}>
           The Woven Deep awaits.
         </p>
       </section>
 
-      <section aria-labelledby="settings-display-heading">
-        <h3 id="settings-display-heading">Display</h3>
-        <div role="radiogroup" aria-label="Theme">
-          <label>
-            <input
-              type="radio"
-              name="settings-theme"
-              checked={settings.theme === 'tapestry'}
-              onChange={() => onChange({ ...settings, theme: 'tapestry' })}
-            />
-            Tapestry (dark fantasy)
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="settings-theme"
-              checked={settings.theme === 'high-contrast'}
-              onChange={() => onChange({ ...settings, theme: 'high-contrast' })}
-            />
-            High contrast
-          </label>
+      <section aria-labelledby="settings-display-heading" className="flex flex-col gap-2">
+        <h3 id="settings-display-heading" className="text-sm font-semibold text-fg-strong">Display</h3>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="settings-theme">Theme</Label>
+          <Select
+            value={settings.theme}
+            onValueChange={(value) => onChange({ ...settings, theme: value as typeof settings.theme })}
+          >
+            <SelectTrigger id="settings-theme" className="max-w-48">
+              <SelectValue>{(value: string) => THEME_LABELS[value]}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tapestry">Tapestry (dark fantasy)</SelectItem>
+              <SelectItem value="high-contrast">High contrast</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </section>
 
-      <section aria-labelledby="settings-onboarding-heading">
-        <h3 id="settings-onboarding-heading">Onboarding hints</h3>
-        <div role="radiogroup" aria-label="Onboarding hints">
-          <label>
-            <input
-              type="radio"
-              name="settings-onboarding"
-              checked={settings.onboarding === 'on'}
-              onChange={() => onChange({ ...settings, onboarding: 'on' })}
-            />
-            On (show contextual guidance while learning the ropes)
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="settings-onboarding"
-              checked={settings.onboarding === 'off'}
-              onChange={() => onChange({ ...settings, onboarding: 'off' })}
-            />
-            Off
-          </label>
+      <section aria-labelledby="settings-onboarding-heading" className="flex flex-col gap-2">
+        <h3 id="settings-onboarding-heading" className="text-sm font-semibold text-fg-strong">Onboarding hints</h3>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="settings-onboarding">
+            Show contextual guidance while learning the ropes
+          </Label>
+          <Switch
+            id="settings-onboarding"
+            checked={settings.onboarding === 'on'}
+            onCheckedChange={(checked) => onChange({ ...settings, onboarding: checked ? 'on' : 'off' })}
+          />
         </div>
       </section>
 
-      <section aria-labelledby="settings-motion-heading">
-        <h3 id="settings-motion-heading">Reduce motion</h3>
-        <div role="radiogroup" aria-label="Reduce motion">
-          <label>
-            <input
-              type="radio"
-              name="settings-reduced-motion"
-              checked={settings.reducedMotion === 'system'}
-              onChange={() => onChange({ ...settings, reducedMotion: 'system' })}
-            />
-            System (follow this device&apos;s own reduced-motion preference)
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="settings-reduced-motion"
-              checked={settings.reducedMotion === 'on'}
-              onChange={() => onChange({ ...settings, reducedMotion: 'on' })}
-            />
-            Always (turn off glow/flash animations)
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="settings-reduced-motion"
-              checked={settings.reducedMotion === 'off'}
-              onChange={() => onChange({ ...settings, reducedMotion: 'off' })}
-            />
-            Never (keep animations on, even if the device asks for reduced motion)
-          </label>
+      <section aria-labelledby="settings-motion-heading" className="flex flex-col gap-2">
+        <h3 id="settings-motion-heading" className="text-sm font-semibold text-fg-strong">Reduce motion</h3>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="settings-reduced-motion">Reduce motion</Label>
+          <Select
+            value={settings.reducedMotion}
+            onValueChange={(value) => onChange({ ...settings, reducedMotion: value as typeof settings.reducedMotion })}
+          >
+            <SelectTrigger id="settings-reduced-motion" className="max-w-64">
+              <SelectValue>{(value: string) => REDUCED_MOTION_LABELS[value]}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="system">System (follow this device&apos;s own reduced-motion preference)</SelectItem>
+              <SelectItem value="on">Always (turn off glow/flash animations)</SelectItem>
+              <SelectItem value="off">Never (keep animations on, even if the device asks for reduced motion)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </section>
 
-      <section aria-labelledby="settings-bindings-heading">
-        <h3 id="settings-bindings-heading">Key bindings</h3>
+      <section aria-labelledby="settings-bindings-heading" className="flex flex-col gap-2">
+        <h3 id="settings-bindings-heading" className="text-sm font-semibold text-fg-strong">Key bindings</h3>
         {conflict && conflict.reason === 'conflict' && (
-          <p role="alert">
+          <p role="alert" className="text-sm text-danger">
             {ACTION_LABELS[conflict.action]} could not be rebound to that key --{' '}
             {ACTION_LABELS[conflict.holder]} already uses it.
           </p>
         )}
         {conflict && conflict.reason === 'hardwired' && (
-          <p role="alert">
+          <p role="alert" className="text-sm text-danger">
             {ACTION_LABELS[conflict.action]} could not be rebound to that key -- arrow and numpad
             keys always move, pick another key.
           </p>
         )}
-        <ul className="settings-bindings-list">
+        <ul className="flex flex-col gap-1">
           {ACTION_IDS.map((action) => {
             const chord = keymap.byAction[action];
             const isCapturing = capturing === action;
             return (
-              <li key={action}>
-                <span className="settings-binding-label">{ACTION_LABELS[action]}</span>
-                <span className="settings-binding-chord">{chordKey(chord)}</span>
+              <li key={action} className="flex items-center gap-3">
+                <span className="min-w-40 text-sm">{ACTION_LABELS[action]}</span>
+                <span className="min-w-16 font-mono text-sm text-muted">{chordKey(chord)}</span>
                 {isCapturing ? (
-                  <input
+                  <Input
                     aria-label={`Press a key to rebind ${ACTION_LABELS[action]}`}
                     // eslint-disable-next-line jsx-a11y/no-autofocus -- capture must move focus to
                     // this field the instant it appears so the very next keydown lands here.
                     autoFocus
                     readOnly
                     value="Press a key…"
+                    className="max-w-40"
                     onKeyDown={(event) => handleCaptureKeyDown(action, event)}
                     onBlur={cancelCapture}
                   />
                 ) : (
-                  <button type="button" onClick={() => armCapture(action)}>
+                  <Button type="button" variant="outline" size="sm" onClick={() => armCapture(action)}>
                     Rebind
-                  </button>
+                  </Button>
                 )}
-                <button type="button" onClick={() => resetRow(action)}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => resetRow(action)}>
                   Reset
-                </button>
+                </Button>
               </li>
             );
           })}
         </ul>
-        <button type="button" onClick={resetAll}>
+        <Button type="button" variant="secondary" onClick={resetAll} className="self-start">
           Reset all bindings
-        </button>
+        </Button>
       </section>
 
-      <section aria-labelledby="settings-clear-heading">
-        <h3 id="settings-clear-heading">Clear guest session</h3>
-        <p>
+      <section aria-labelledby="settings-clear-heading" className="flex flex-col gap-2">
+        <h3 id="settings-clear-heading" className="text-sm font-semibold text-fg-strong">Clear guest session</h3>
+        <p className="text-sm text-muted">
           Wipes your active run, Hall of Records, discovery log, guidance progress, and settings on
           this device, then returns to the title screen. This cannot be undone.
         </p>
-        <label htmlFor="settings-clear-confirm">Type &quot;clear&quot; to confirm</label>
-        <input
+        <Label htmlFor="settings-clear-confirm">Type &quot;clear&quot; to confirm</Label>
+        <Input
           id="settings-clear-confirm"
           value={clearText}
           onChange={(event) => setClearText(event.target.value)}
+          className="max-w-48"
         />
-        <button type="button" disabled={!clearReady} onClick={onClearGuestSession}>
+        <Button
+          type="button"
+          variant="destructive"
+          disabled={!clearReady}
+          onClick={onClearGuestSession}
+          className="self-start"
+        >
           Clear guest session
-        </button>
+        </Button>
       </section>
     </div>
   );
