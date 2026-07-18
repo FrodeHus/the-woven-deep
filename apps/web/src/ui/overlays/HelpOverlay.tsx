@@ -6,15 +6,7 @@ import {
   ACTION_IDS, ACTION_LABELS, chordKey, type ActionId, type ResolvedKeymap,
 } from '../../session/settings.js';
 import { humanize } from '../labels.js';
-
-export interface HelpOverlayProps {
-  /** The live resolved keymap (defaults merged with any rebinding) -- every chord this overlay
-   * shows comes from here, never a hardcoded key literal, so a rebind is reflected immediately. */
-  readonly keymap: ResolvedKeymap;
-  /** The compiled content pack -- the glyph legend is derived from its entries at render time, so
-   * new monsters/items/vault fixtures show up automatically with no hand-maintained list here. */
-  readonly pack: CompiledContentPack;
-}
+import { usePack, useSettingsCtx } from '../providers.js';
 
 const MOVEMENT_ACTIONS: readonly ActionId[] = ACTION_IDS.filter((id) => id.startsWith('move.'));
 const SCREEN_ACTIONS: readonly ActionId[] = ['character-sheet', 'map-journal', 'codex', 'settings', 'help'];
@@ -24,9 +16,9 @@ const ACTION_ACTIONS: readonly ActionId[] = ACTION_IDS.filter(
 
 function ControlsRow({ action, keymap }: Readonly<{ action: ActionId; keymap: ResolvedKeymap }>): JSX.Element {
   return (
-    <li>
-      <span className="help-controls-label">{ACTION_LABELS[action]}</span>
-      <span className="help-controls-chord">{chordKey(keymap.byAction[action])}</span>
+    <li className="flex items-center gap-3">
+      <span className="min-w-40 text-sm">{ACTION_LABELS[action]}</span>
+      <span className="min-w-16 font-mono text-sm text-muted">{chordKey(keymap.byAction[action])}</span>
     </li>
   );
 }
@@ -41,25 +33,25 @@ function ControlsRow({ action, keymap }: Readonly<{ action: ActionId; keymap: Re
  */
 function ControlsSection({ keymap }: Readonly<{ keymap: ResolvedKeymap }>): JSX.Element {
   return (
-    <section aria-labelledby="help-controls-heading">
-      <h3 id="help-controls-heading">Controls</h3>
+    <section aria-labelledby="help-controls-heading" className="flex flex-col gap-2">
+      <h3 id="help-controls-heading" className="text-sm font-semibold text-fg-strong">Controls</h3>
 
-      <h4>Movement</h4>
-      <ul className="help-controls-list">
+      <h4 className="text-sm font-semibold text-fg-strong">Movement</h4>
+      <ul className="flex flex-col gap-1">
         {MOVEMENT_ACTIONS.map((action) => <ControlsRow key={action} action={action} keymap={keymap} />)}
       </ul>
-      <p className="help-controls-note">Arrow keys and the numpad always move too -- always available, not rebindable.</p>
+      <p className="text-sm text-muted">Arrow keys and the numpad always move too -- always available, not rebindable.</p>
 
-      <h4>Actions</h4>
-      <ul className="help-controls-list">
+      <h4 className="text-sm font-semibold text-fg-strong">Actions</h4>
+      <ul className="flex flex-col gap-1">
         {ACTION_ACTIONS.map((action) => <ControlsRow key={action} action={action} keymap={keymap} />)}
       </ul>
 
-      <h4>Screens</h4>
-      <ul className="help-controls-list">
+      <h4 className="text-sm font-semibold text-fg-strong">Screens</h4>
+      <ul className="flex flex-col gap-1">
         {SCREEN_ACTIONS.map((action) => <ControlsRow key={action} action={action} keymap={keymap} />)}
       </ul>
-      <p className="help-controls-note">Escape closes whatever screen is currently open.</p>
+      <p className="text-sm text-muted">Escape closes whatever screen is currently open.</p>
     </section>
   );
 }
@@ -105,51 +97,54 @@ function GlyphLegendSection({ pack }: Readonly<{ pack: CompiledContentPack }>): 
   const fixtures = collectLightFixtures(pack);
 
   return (
-    <section aria-labelledby="help-legend-heading">
-      <h3 id="help-legend-heading">Glyph legend</h3>
+    <section aria-labelledby="help-legend-heading" className="flex flex-col gap-2">
+      <h3 id="help-legend-heading" className="text-sm font-semibold text-fg-strong">Glyph legend</h3>
 
-      <h4>Hero</h4>
-      <ul className="help-legend-list">
-        <li><span className="help-legend-glyph">@</span><span>You</span></li>
+      <h4 className="text-sm font-semibold text-fg-strong">Hero</h4>
+      <ul className="flex flex-col gap-1">
+        <li className="flex items-center gap-3">
+          <span className="min-w-6 font-mono text-sm">@</span>
+          <span className="text-sm">You</span>
+        </li>
       </ul>
 
-      <h4>Creatures</h4>
-      <ul className="help-legend-list">
+      <h4 className="text-sm font-semibold text-fg-strong">Creatures</h4>
+      <ul className="flex flex-col gap-1">
         {monsters.map((monster) => (
-          <li key={monster.id}>
-            <span className="help-legend-glyph" style={{ color: monster.color }}>{monster.glyph}</span>
-            <span>{monster.name}</span>
+          <li key={monster.id} className="flex items-center gap-3">
+            <span className="min-w-6 font-mono text-sm" style={{ color: monster.color }}>{monster.glyph}</span>
+            <span className="text-sm">{monster.name}</span>
           </li>
         ))}
       </ul>
 
-      <h4>Items</h4>
-      <ul className="help-legend-list">
+      <h4 className="text-sm font-semibold text-fg-strong">Items</h4>
+      <ul className="flex flex-col gap-1">
         {items.map((item) => (
-          <li key={item.id}>
-            <span className="help-legend-glyph" style={{ color: item.color }}>{item.glyph}</span>
-            <span>{item.name}</span>
-            <span className="help-legend-category">({item.category})</span>
+          <li key={item.id} className="flex items-center gap-3">
+            <span className="min-w-6 font-mono text-sm" style={{ color: item.color }}>{item.glyph}</span>
+            <span className="text-sm">{item.name}</span>
+            <span className="text-sm text-muted">({item.category})</span>
           </li>
         ))}
       </ul>
 
-      <h4>Terrain</h4>
-      <ul className="help-legend-list">
+      <h4 className="text-sm font-semibold text-fg-strong">Terrain</h4>
+      <ul className="flex flex-col gap-1">
         {TILE_DEFINITIONS.map((tile) => (
-          <li key={tile.id}>
-            <span className="help-legend-glyph">{tile.glyph === ' ' ? ' ' : tile.glyph}</span>
-            <span>{tile.name}</span>
+          <li key={tile.id} className="flex items-center gap-3">
+            <span className="min-w-6 font-mono text-sm">{tile.glyph === ' ' ? ' ' : tile.glyph}</span>
+            <span className="text-sm">{tile.name}</span>
           </li>
         ))}
       </ul>
 
-      <h4>Light fixtures</h4>
-      <ul className="help-legend-list">
+      <h4 className="text-sm font-semibold text-fg-strong">Light fixtures</h4>
+      <ul className="flex flex-col gap-1">
         {fixtures.map((fixture) => (
-          <li key={fixture.token}>
-            <span className="help-legend-glyph" style={{ color: rgbToCss(fixture.color) }}>{fixture.glyph}</span>
-            <span>{humanize(fixture.token)}</span>
+          <li key={fixture.token} className="flex items-center gap-3">
+            <span className="min-w-6 font-mono text-sm" style={{ color: rgbToCss(fixture.color) }}>{fixture.glyph}</span>
+            <span className="text-sm">{humanize(fixture.token)}</span>
           </li>
         ))}
       </ul>
@@ -165,38 +160,38 @@ function GlyphLegendSection({ pack }: Readonly<{ pack: CompiledContentPack }>): 
  */
 function MechanicsSection(): JSX.Element {
   return (
-    <section aria-labelledby="help-mechanics-heading">
-      <h3 id="help-mechanics-heading">Mechanics notes</h3>
-      <dl className="help-mechanics-list">
-        <dt>Hunger</dt>
+    <section aria-labelledby="help-mechanics-heading" className="flex flex-col gap-2">
+      <h3 id="help-mechanics-heading" className="text-sm font-semibold text-fg-strong">Mechanics notes</h3>
+      <dl className="flex flex-col gap-2 text-sm">
+        <dt className="font-semibold text-fg-strong">Hunger</dt>
         <dd>
           Every action spends food. As your reserve drops you pass through sated, hungry, weak, and
           starving -- each stage weighs on your fighting ability more than the last. Eat before you
           reach the bottom.
         </dd>
 
-        <dt>Light and fuel</dt>
+        <dt className="font-semibold text-fg-strong">Light and fuel</dt>
         <dd>
           A lit source burns fuel every turn it's carried or placed and eventually gutters out.
           Refuel, extinguish, or relight it from your backpack. Some creatures hunt light, some flee
           it, and some only show themselves in the dark.
         </dd>
 
-        <dt>Identification</dt>
+        <dt className="font-semibold text-fg-strong">Identification</dt>
         <dd>
           An unidentified potion, scroll, or ring shows only its appearance -- a made-up name and a
           look, not what it does. Using one, or having it identified, reveals the truth for every
           item that shares that appearance for the rest of the run.
         </dd>
 
-        <dt>The town truce</dt>
+        <dt className="font-semibold text-fg-strong">The town truce</dt>
         <dd>
           Town holds a truce: no monster attacks you there, and your own hostile actions are
           refused. Time and light fuel still pass as you walk, but rest is uninterrupted and
           merchants only restock at real milestones, not by walking in and out.
         </dd>
 
-        <dt>Death is final</dt>
+        <dt className="font-semibold text-fg-strong">Death is final</dt>
         <dd>
           When your hero dies, the run ends there -- the hero, everything carried, and everything
           stored at the house are gone for good. Escaping with the Heart ends the run the other way.
@@ -216,9 +211,9 @@ function MechanicsSection(): JSX.Element {
  */
 function GuidanceSection({ keymap }: Readonly<{ keymap: ResolvedKeymap }>): JSX.Element {
   return (
-    <section aria-labelledby="help-guidance-heading">
-      <h3 id="help-guidance-heading">Guidance</h3>
-      <ul className="help-guidance-list">
+    <section aria-labelledby="help-guidance-heading" className="flex flex-col gap-2">
+      <h3 id="help-guidance-heading" className="text-sm font-semibold text-fg-strong">Guidance</h3>
+      <ul className="flex flex-col gap-1 text-sm">
         {HINTS.map((hint) => <li key={hint.id}>{hint.copy(keymap)}</li>)}
       </ul>
     </section>
@@ -227,14 +222,16 @@ function GuidanceSection({ keymap }: Readonly<{ keymap: ResolvedKeymap }>): JSX.
 
 /**
  * The help overlay body: controls, glyph legend, mechanics notes, guidance, in that order. Purely
- * presentational content inside `OverlayScaffold`'s dialog frame (focus trap, Escape-close) --
- * there's nothing here for a guest to change, so the sections are static and scroll natively; the
- * scaffold's own fallback (focusing the dialog container itself when it holds no interactive
- * control) keeps arrow/Page Up/Page Down keyboard scrolling working with no extra wiring.
+ * presentational content inside `OverlayHost`'s `Dialog` frame (focus trap, Escape-close) -- there's
+ * nothing here for a guest to change, so the sections are static and scroll natively. `keymap` and
+ * `pack` are read straight from context (`useSettingsCtx`/`usePack`), the same convention every
+ * other rebuilt overlay follows -- no props.
  */
-export function HelpOverlay({ keymap, pack }: HelpOverlayProps): JSX.Element {
+export function HelpOverlay(): JSX.Element {
+  const { keymap } = useSettingsCtx();
+  const pack = usePack();
   return (
-    <div className="help-overlay">
+    <div className="flex flex-col gap-6">
       <ControlsSection keymap={keymap} />
       <GlyphLegendSection pack={pack} />
       <MechanicsSection />

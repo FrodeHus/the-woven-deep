@@ -4,19 +4,26 @@ import { render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
-import { DEFAULT_SETTINGS, resolveKeymap, type Settings } from '../src/session/settings.js';
-import { HelpOverlay } from '../src/ui/overlays/HelpOverlay.js';
+import { DEFAULT_SETTINGS, type Settings } from '../../session/settings.js';
+import { UiProviders } from '../providers.js';
+import { HelpOverlay } from './HelpOverlay.js';
 
 let pack: CompiledContentPack;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../content') });
 });
 
+/** Renders `HelpOverlay` exactly the way `OverlayHost`'s help case does: through `UiProviders`
+ * with no `session` prop (help has no session dependency), so `useSettingsCtx`/`usePack` resolve
+ * from context, never from props. */
 function harness(overrides: Partial<Settings> = {}) {
   const settings: Settings = { ...DEFAULT_SETTINGS, ...overrides };
-  const keymap = resolveKeymap(settings.bindings);
-  render(<HelpOverlay keymap={keymap} pack={pack} />);
+  render(
+    <UiProviders pack={pack} settings={settings} onChangeSettings={() => {}}>
+      <HelpOverlay />
+    </UiProviders>,
+  );
 }
 
 describe('HelpOverlay', () => {
@@ -26,7 +33,7 @@ describe('HelpOverlay', () => {
     expect(inventoryRow).toHaveTextContent('i');
   });
 
-  it('renders the REBOUND chord for Inventory ("p") when settings override it -- proves the row is', () => {
+  it('renders the REBOUND chord for Inventory ("p") when settings override it -- proves the row is live from the keymap', () => {
     harness({ bindings: { inventory: { key: 'p', shift: false } } });
     const inventoryRow = screen.getByText('Inventory').closest('li')!;
     expect(inventoryRow).toHaveTextContent('p');

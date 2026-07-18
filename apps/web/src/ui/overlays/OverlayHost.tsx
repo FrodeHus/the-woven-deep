@@ -123,6 +123,6 @@ function renderBody(overlay: OverlayId, ctx: RenderBodyContext): JSX.Element {
       if (!ctx.onClearGuestSession) return <p>Settings are unavailable right now.</p>;
       return <SettingsOverlay onClearGuestSession={ctx.onClearGuestSession} />;
     case 'help':
-      return <HelpOverlay keymap={ctx.keymap} pack={ctx.pack} />;
+      return <HelpOverlay />;
   }
 }
