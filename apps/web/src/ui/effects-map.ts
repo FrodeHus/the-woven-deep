@@ -63,7 +63,7 @@ export function effectsForEvents(
   const at = (actorId: OpaqueId): Readonly<{ x: number; y: number }> | undefined => positions.get(actorId);
 
   /*
-   * Ember-bolt / spell-cast discriminator: `CombatObservedPublicEvent` -- the
+   * Ember-bolt / spell-cast discriminator (Task 7 finding): `CombatObservedPublicEvent` -- the
    * only event any spell attack, ember-bolt included, ever produces -- carries exactly
    * `{outcome, attackerActorId, targetActorId, attackerName?, targetName?}` and NO spell/weapon
    * id (verified against `packages/engine/src/model.ts`; `CastCommand.spellId` never survives

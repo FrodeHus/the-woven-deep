@@ -125,7 +125,7 @@ function liftToFloor(rgb: RgbTuple): RgbTuple {
  * `base`, this holds for ANY material base too (see `MATERIAL_BASE_RGB` below and its property
  * tests in `cell-color.test.ts`), not just the generic floor.
  *
- * `base` is `GridRenderer`'s hook for material coloring: passing a cell's material base
+ * `base` is `GridRenderer`'s hook for material coloring (Task 1): passing a cell's material base
  * color (e.g. `MATERIAL_BASE_RGB.wall`) makes a lit wall read mineral blue-grey at low intensity
  * instead of the old one-size-fits-all `FLOOR_RGB` gray, while still guaranteeing the same floor.
  *
@@ -135,11 +135,11 @@ function liftToFloor(rgb: RgbTuple): RgbTuple {
 /**
  * The maximum blend fraction toward `tint` for an explicit MATERIAL base -- caps `t` so at least
  * `1 - MATERIAL_MAX_BLEND_T` (15%) of the material's own base color always survives, even at a
- * torch's brightest rim (`intensity` 255). Without this cap, a wall cell right beside a carried
- * torch would render nearly indistinguishable from the warm floor beside it -- at `intensity` 255
- * the blend is (by design) the tint verbatim, so ANY base washes out completely at the light's
- * core, and a wall/door/stair one cell from the hero would sit well into that washout zone. The
- * generic (no-material) floor path is deliberately exempt -- see
+ * torch's brightest rim (`intensity` 255). Added after Task 2's browser pass: without this cap, a
+ * wall cell right beside a carried torch rendered nearly indistinguishable from the warm floor
+ * beside it -- at `intensity` 255 the blend is (by design) the tint verbatim, so ANY base washes
+ * out completely at the light's core, and a wall/door/stair one cell from the hero sits well into
+ * that washout zone. The generic (no-material) floor path is deliberately exempt -- see
  * `isDefaultFloorBase` below -- so the pre-existing identity-at-255 contract for a plain call
  * (`cell-color.test.ts`'s "renders the tint verbatim... so a gold torch rim stays gold") still
  * holds unchanged; only an explicit, distinct material base is capped.

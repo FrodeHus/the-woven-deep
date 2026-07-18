@@ -94,7 +94,7 @@ export function EffectsLayer({ projection, pack, lastEvents, camera, viewport }:
   const light = equippedLightSource(projection, pack);
 
   /*
-   * Hero condition aura: `projection.hero.conditions` is the ONLY conditions field the
+   * Hero condition aura (Task 7): `projection.hero.conditions` is the ONLY conditions field the
    * client receives -- actor (non-hero) conditions are NOT projected at all (confirmed against
    * `packages/engine/src/projection.ts`), so this aura can only ever represent the HERO's own
    * active conditions, never an NPC's; that is a disclosed limitation, not an oversight.
