@@ -8,6 +8,7 @@ import {
 import {
   AttributesStep, BackgroundTraitsStep, ClassStep, KitStep, MethodStep, NameStep, SummaryStep,
 } from './chargen-steps.js';
+import { Button } from '../components/button.js';
 
 export interface ChargenScreenProps {
   readonly pack: CompiledContentPack;
@@ -56,11 +57,11 @@ export function ChargenScreen({
   const stepProps = { state, pack, dispatch };
 
   return (
-    <div className="chargen-screen">
-      <header className="chargen-progress" aria-label={`Step ${state.step} of 7: ${STEP_LABELS[state.step]}`}>
-        <p className="chargen-step-label">{`Step ${state.step} of 7 — ${STEP_LABELS[state.step]}`}</p>
+    <div className="mx-auto flex max-w-2xl flex-col gap-4 p-6">
+      <header aria-label={`Step ${state.step} of 7: ${STEP_LABELS[state.step]}`} className="text-muted">
+        <p className="m-0 text-sm uppercase tracking-wide">{`Step ${state.step} of 7 — ${STEP_LABELS[state.step]}`}</p>
       </header>
-      <main className="chargen-main">
+      <main className="flex flex-col gap-4">
         {state.step === 1 && <NameStep {...stepProps} />}
         {state.step === 2 && <MethodStep {...stepProps} />}
         {state.step === 3 && <AttributesStep {...stepProps} />}
@@ -69,17 +70,17 @@ export function ChargenScreen({
         {state.step === 6 && <BackgroundTraitsStep {...stepProps} />}
         {state.step === 7 && <SummaryStep {...stepProps} />}
       </main>
-      <nav className="chargen-nav">
-        <button type="button" onClick={() => dispatch({ type: 'back' })} disabled={state.step === 1}>
+      <nav className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={() => dispatch({ type: 'back' })} disabled={state.step === 1}>
           Back
-        </button>
+        </Button>
         {state.step < 7 && (
-          <button type="button" onClick={() => dispatch({ type: 'next' })} disabled={!canAdvance}>
+          <Button type="button" onClick={() => dispatch({ type: 'next' })} disabled={!canAdvance}>
             Next
-          </button>
+          </Button>
         )}
         {state.step === 7 && (
-          <button
+          <Button
             type="button"
             disabled={choices === null}
             onClick={() => {
@@ -91,7 +92,7 @@ export function ChargenScreen({
             }}
           >
             Confirm
-          </button>
+          </Button>
         )}
       </nav>
     </div>

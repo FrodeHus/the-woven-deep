@@ -4,6 +4,7 @@ import type { AccountState } from '../../session/account.js';
 import { SAVE_KEY, type SessionStorageLike } from '../../session/storage.js';
 import type { OverlayId } from '../overlays/registry.js';
 import { useListNavigation } from './roving-focus.js';
+import { cn } from '../lib/cn.js';
 
 export interface TitleScreenProps {
   readonly storage: SessionStorageLike;
@@ -69,11 +70,11 @@ export function TitleScreen({
   const { selectedIndex, registerItem, handleArrowKeys } = useListNavigation(options.length);
 
   return (
-    <section aria-label="Title" className="title-screen">
-      <p className="eyebrow">The Woven Deep</p>
-      <h1 className="framed-title">The Woven Deep</h1>
-      {signedIn && <p className="title-account">Signed in as {account.email}</p>}
-      <div role="listbox" aria-label="Title menu" className="title-menu" onKeyDown={handleArrowKeys}>
+    <section aria-label="Title" className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
+      <p className="text-xs uppercase tracking-widest text-muted">The Woven Deep</p>
+      <h1 className="framed-title font-serif text-4xl text-accent-strong">The Woven Deep</h1>
+      {signedIn && <p className="text-sm text-muted">Signed in as {account.email}</p>}
+      <div role="listbox" aria-label="Title menu" className="flex max-w-xs flex-col gap-1.5" onKeyDown={handleArrowKeys}>
         {options.map((option, index) => (
           <button
             key={option.key}
@@ -81,7 +82,10 @@ export function TitleScreen({
             role="option"
             aria-selected={index === selectedIndex}
             ref={registerItem(index)}
-            className={index === selectedIndex ? 'title-option title-option--focused' : 'title-option'}
+            className={cn(
+              'rounded-md border border-line bg-surface px-3.5 py-2.5 text-left text-sm text-fg hover:bg-raised',
+              index === selectedIndex && 'outline outline-2 outline-accent outline-offset-2 border-accent',
+            )}
             onClick={option.onSelect}
           >
             {option.label}
