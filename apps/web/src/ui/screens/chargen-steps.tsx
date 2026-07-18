@@ -30,8 +30,8 @@ const STAT_LABELS: Readonly<Record<string, string>> = {
   disarm: 'Disarm',
 };
 
-/** Tailwind text-color utility keyed by portrait glyph id, mirroring the previous
- * `--portrait-accent` custom-property mapping (`data-glyph` -> hue). */
+/** Tailwind text-color utility keyed by portrait glyph id, giving each portrait
+ * option its own accent hue in the picker. */
 const PORTRAIT_GLYPH_CLASS: Readonly<Record<string, string>> = {
   '@': 'text-fg-strong',
   '@·gold': 'text-accent',
