@@ -4,12 +4,11 @@ import type { StoredHallRecord } from '@woven-deep/engine';
 import type { Sightings } from '../../session/codex.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
-import type { ResolvedKeymap, Settings } from '../../session/settings.js';
 import { canOpenOverlay, OVERLAY_REGISTRY, type OverlayId } from './registry.js';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/sheet.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
 import { OverlayErrorBoundary } from './OverlayErrorBoundary.js';
-import { usePack, useSessionCtx, useSettingsCtx } from '../providers.js';
+import { usePack, useSessionCtx } from '../providers.js';
 import { InventoryOverlay } from './InventoryOverlay.js';
 import { CharacterSheetOverlay } from './CharacterSheetOverlay.js';
 import { MapJournalOverlay } from './MapJournalOverlay.js';
@@ -43,7 +42,6 @@ export interface OverlayHostProps {
  */
 export function OverlayHost({ overlay, onClose, isPlayActive, records, onClearGuestSession, sightings }: Readonly<OverlayHostProps>): JSX.Element | null {
   const pack = usePack();
-  const { settings, onChange, keymap } = useSettingsCtx();
   const sessionCtx = useSessionCtx();
 
   if (overlay === null) return null;
@@ -51,7 +49,7 @@ export function OverlayHost({ overlay, onClose, isPlayActive, records, onClearGu
   if (!canOpenOverlay(definition, isPlayActive)) return null;
 
   const body = renderBody(overlay, {
-    pack, settings, onChange, keymap, records, onClearGuestSession,
+    pack, records, onClearGuestSession,
     snapshot: sessionCtx?.snapshot,
     onDispatch: sessionCtx ? (intent) => sessionCtx.session.dispatch(intent) : undefined,
     sightings: sightings ?? sessionCtx?.snapshot.sightings,
@@ -88,9 +86,6 @@ export function OverlayHost({ overlay, onClose, isPlayActive, records, onClearGu
 
 interface RenderBodyContext {
   readonly pack: CompiledContentPack;
-  readonly settings: Settings;
-  readonly onChange: (next: Settings) => void;
-  readonly keymap: ResolvedKeymap;
   readonly records: readonly StoredHallRecord[] | undefined;
   readonly onClearGuestSession: (() => void) | undefined;
   readonly snapshot: SessionSnapshot | undefined;

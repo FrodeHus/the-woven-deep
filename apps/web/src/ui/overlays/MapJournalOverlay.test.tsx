@@ -115,7 +115,7 @@ describe('MapJournalOverlay', () => {
   describe('map tab', () => {
     it('renders exactly the known subset of a mixed-knowledge floor: the unknown cell shows no glyph at all', () => {
       const snapshot = snapshotWith({ floor: MIXED_KNOWLEDGE_FLOOR, hero: { x: 2, y: 0 } });
-      const { container } = renderOverlay(snapshot);
+      renderOverlay(snapshot);
 
       const grid = screen.getByRole('grid', { name: /floor map/i });
       // The unknown cell's own glyph ('Z') must never appear anywhere in the map markup, even
@@ -124,7 +124,6 @@ describe('MapJournalOverlay', () => {
       expect(within(grid).queryByText('Z')).not.toBeInTheDocument();
       // The remembered wall glyph is shown (dim), reused verbatim from the cell.
       expect(within(grid).getByText('#')).toBeInTheDocument();
-      expect(container).toBeTruthy();
     });
 
     it('marks the hero position on its visible cell', () => {
@@ -145,11 +144,10 @@ describe('MapJournalOverlay', () => {
       // engine ever projects actors (visible-only by construction) -- proving the overlay itself
       // never paints an actor glyph outside a visible cell, even if one were (incorrectly) handed
       // to it, is the point of this assertion.
-      const { container } = renderOverlay(snapshot);
+      renderOverlay(snapshot);
       const grid = screen.getByRole('grid', { name: /floor map/i });
       expect(within(grid).getByText('#')).toBeInTheDocument();
       expect(screen.queryByText('r')).not.toBeInTheDocument();
-      expect(container).toBeTruthy();
     });
 
     it('paints a visible actor glyph on its cell', () => {

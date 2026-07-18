@@ -14,9 +14,9 @@ function focusableElements(container: HTMLElement): readonly HTMLElement[] {
  * closes or unmounts.
  *
  * Originally defined in the now-deleted `BackpackMenu.tsx` (absorbed into `InventoryOverlay.tsx`
- * by Task 5); its remaining non-registry consumers (`DecisionPrompt` in `PlayScreen.tsx`,
- * `HouseScreen`, `TradeScreen`) import it from here directly. Shared by the overlay registry
- * infrastructure (`OverlayScaffold`) too, without importing a component module.
+ * by Task 5); its remaining consumers (`DecisionPrompt` in `PlayScreen.tsx`, `HouseScreen`,
+ * `TradeScreen`) import it from here directly. The registry overlays themselves now get their
+ * focus trapping from the `Sheet`/`Dialog` primitives in `OverlayHost.tsx`, not from here.
  */
 export function useDialogFocusTrap(containerRef: RefObject<HTMLElement | null>): void {
   useEffect(() => {

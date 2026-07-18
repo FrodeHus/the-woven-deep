@@ -65,14 +65,9 @@
   --mat-stair: #ffe066;
   --mat-void: #0a0a0a;
 }
-/* Ornamental framing (Task 3): one shared frame vocabulary for the panel/dialog/drawer/log border
-   sites -- a single diamond glyph (`--frame-corner`) marking two diagonal corners (top-left,
-   bottom-right) of a `.framed` container, plus a smaller trailing diamond (`.framed-title`) for a
-   section header. Deliberately restrained to container-level chrome (hero/threat panels and
-   drawers, the log, the threat popover, and page titles) rather than every repeated list row
-   (chargen options, hall records, title-menu entries, map-journal tabs keep their plain
-   `1px solid var(--line)` border unchanged) -- corner marks on every row in a list read busy under
-   the browser pass; two accents on a handful of standalone panels do not.
+/* Ornamental framing: a single diamond glyph (`--frame-corner`) marking two diagonal corners
+   (top-left, bottom-right) of a `.framed` container, plus a smaller trailing diamond
+   (`.framed-title`) for a section heading -- used by `ThreatPopover` and `TitleScreen`'s `<h1>`.
    The glyph is painted via `content: "◆" / ""` (the CSS alt-text syntax): the string after `/` is
    what an accessibility tree sees for this generated content -- empty, i.e. nothing -- so the
    ornament can never be announced or enter an accessible name, with no `aria-hidden` wrapper span
@@ -122,20 +117,6 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 .tapestry code { overflow-wrap: anywhere; color: #7783a4; }
 [role="alert"] { color: var(--alert); }
 
-/* Title screen: a keyboard-first menu (Enter the Deep / Continue / Hall of Records) reusing the
-   same option-list convention as the chargen wizard's lists (`.chargen-option`). */
-.title-screen { display: flex; flex-direction: column; gap: 16px; }
-.title-menu { display: flex; flex-direction: column; gap: 6px; max-width: 320px; }
-.title-option {
-  text-align: left;
-  border: 1px solid var(--line);
-  background: var(--ground);
-  color: inherit;
-  padding: 10px 14px;
-  font-size: 1rem;
-}
-.title-option--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
-.title-option[aria-selected="true"] { border-color: var(--gold); }
 .storage-warning-banner {
   border: 1px solid var(--alert);
   padding: 8px 12px;
@@ -489,30 +470,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   .condition-aura { animation: condition-aura-pulse 1.8s ease-in-out infinite !important; }
 }
 
-/* Tactical Triptych: hero / map / threat panels plus a status bar and log, arranged by a CSS
-   grid whose column tracks respond to `data-tier` (full/compact/minimal, from ui/layout.ts).
-   Collapsed panels move into native <details> drawers rather than unmounting, so their content
-   stays keyboard-reachable even when their grid track is squeezed to zero width. */
-.triptych {
-  display: grid;
-  grid-template:
-    "status status status" auto
-    "hero map threat" 1fr
-    "log log log" minmax(6rem, 20vh)
-    / minmax(14rem, 1fr) minmax(0, 4fr) minmax(14rem, 1fr);
-  gap: 8px;
-  height: 100%;
-  min-height: 100vh;
-  padding: 8px;
-}
-.triptych[data-tier='compact'] { grid-template-columns: minmax(14rem, 1fr) minmax(0, 5fr) 0; }
-.triptych[data-tier='minimal'] { grid-template-columns: 0 1fr 0; }
-
-.status-slot { grid-area: status; }
-.hero-slot { grid-area: hero; overflow: visible; }
-.map-pane { grid-area: map; position: relative; overflow: hidden; }
-.threat-slot { grid-area: threat; overflow: visible; }
-.log-slot { grid-area: log; min-height: 0; }
+.map-pane { position: relative; overflow: hidden; }
 
 /* Contextual onboarding hint strip (Task 8) -- above the log within its own slot, never a live
    region (see `HintStrip.tsx`'s doc comment for why `role="note"`, not `alert`/`status`). */
@@ -528,72 +486,30 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 }
 .hint-strip-dismiss { color: var(--muted); white-space: nowrap; }
 
-.status-bar { display: flex; gap: 1.5em; align-items: baseline; }
-/* Condition badge (Task 7): the colorblind-safe reinforcement Task 9 verifies -- a generic
-   status-effect glyph plus the condition's NAME as text, so meaning never rests on
-   `--condition-color` alone; the tinted border is a supplement for a sighted-color reader, not the
-   only signal. Lives in `.status-bar` because that panel renders at every layout tier. */
-.condition-badge {
-  border: 1px solid var(--condition-color, var(--line));
-  border-radius: 3px;
-  padding: 0 .4em;
-  font-size: .85em;
-}
-
-.hero-panel, .threat-panel { border: 1px solid var(--line); padding: 12px; }
-.hero-panel h2 { margin: 0 0 .5em; font-size: 1rem; color: var(--gold-bright); }
-.vital-text { margin: .25em 0; }
-.bar { height: 6px; background: var(--panel); border-radius: 3px; overflow: hidden; }
-.bar-fill { height: 100%; width: calc(var(--fill, 1) * 100%); background: var(--alert); }
-.equipment-list, .condition-list, .threat-list, .ground-item-list { list-style: none; margin: .5em 0; padding: 0; }
-.backpack-summary { margin-top: .5em; }
-.threat-panel .placeholder { color: var(--muted); font-style: italic; }
-
-.vitals-strip {
-  display: flex; gap: 1em; padding: 4px 8px; background: color-mix(in srgb, var(--ground) 80%, transparent);
-  border-bottom: 1px solid var(--line); font-size: .85rem;
-}
-.vitals-overlay { position: absolute; inset: 0 0 auto 0; z-index: 2; }
-
-.hero-drawer, .threat-drawer { border: 1px solid var(--line); padding: 4px 8px; }
-.hero-drawer summary, .threat-drawer summary { cursor: pointer; color: var(--muted); }
-
-/* `--log-lines` is set inline by PlayScreen per tier (6 at full/compact, 3 at minimal); the log
-   region itself never unmounts, only its visible height changes, so it keeps the newest lines
-   scrolled into view (see LogPanel) even while collapsed.
-   `.log-panel` itself stays `overflow: visible` (the `.framed` default) so its corner marks --
-   painted `--frame-inset` OUTSIDE the padding box -- aren't clipped by the scrollbox's own overflow
-   (a pseudo-element is always clipped by its own element's overflow). The actual scrolling/height
-   clamp lives on the inner `.log-panel-scroll` wrapper instead; `role="log"`/`aria-live="polite"`
-   stay on that same inner element, since it's still the element whose content actually scrolls and
-   gains new lines -- unchanged from before this split, just moved one level in. */
-.log-panel {
-  height: 100%;
-  border: 1px solid var(--line);
-  padding: 4px 8px;
-}
-.log-panel-scroll {
-  height: 100%;
-  max-height: calc(var(--log-lines, 6) * 1.6em);
-  overflow-y: auto;
-}
-.log-line { margin: .15em 0; }
-.log-line--combat { color: var(--alert); }
-.log-line--warning { color: var(--gold); }
-.log-line--system { color: var(--muted); font-style: italic; }
-/* Colorblind reinforcement (Task 9): a log line's tone is carried by color today (combat red,
-   warning gold, system muted) -- a channel a colorblind reader cannot rely on. Each toned line now
-   also gets a leading glyph, so tone is legible without color. Painted as a `::before` with the CSS
-   alt-text syntax (`content: "⚔ " / ""`, the same silent-to-the-a11y-tree trick `.framed` uses):
-   the string after `/` is what a screen reader sees -- nothing -- because the line's own text
-   already describes the event, so the glyph is a purely visual reinforcement and never spoken. The
-   `info` tone is the uncolored default and gets no glyph. */
+/* Colorblind reinforcement (Task 9): a silent `::before` glyph for each colored log tone, painted
+   via the CSS alt-text syntax (`content: "..." / ""` -- the string after `/` is what a screen
+   reader sees, i.e. nothing) so meaning is never carried by color alone. `styles-contract.test.ts`
+   asserts this contract directly against the stylesheet. NOTE: `LogPanel.tsx`/`MapJournalOverlay.tsx`
+   currently style log tones with plain Tailwind color utilities and do not apply the
+   `.log-line--*`/`.journal-log-line--*` classes these rules target -- flagged in the Task 15a
+   report for follow-up (either reapply the classes there, or fold the contract into token classes). */
 .log-line--combat::before { content: "\2694  " / ""; }
 .log-line--warning::before { content: "\26A0  " / ""; }
 .log-line--system::before { content: "\2699  " / ""; }
 .journal-log-line--warning::before { content: "\26A0  " / ""; }
 .journal-log-line--combat::before { content: "\2694  " / ""; }
 .journal-log-line--system::before { content: "\2699  " / ""; }
+
+/* Condition badge (Task 7): the colorblind-safe reinforcement Task 9 verifies -- a generic
+   status-effect glyph plus the condition's NAME as text, so meaning never rests on
+   `--condition-color` alone; the tinted border is a supplement for a sighted-color reader, not the
+   only signal. Rendered by `StatusBar` (panels/StatusBar.tsx). */
+.condition-badge {
+  border: 1px solid var(--condition-color, var(--line));
+  border-radius: 3px;
+  padding: 0 .4em;
+  font-size: .85em;
+}
 
 /* Visually-hidden but screen-reader-available (the standard clip-rect pattern). Used by
    `HeroStatusAnnouncer` (panels.tsx) for its off-screen `role="status"` live region -- present in
@@ -623,137 +539,3 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   white-space: nowrap;
 }
 
-/* Character-generation wizard: step shell, keyboard-first option lists, and the portrait picker.
-   Portrait accent colors are keyed off the `data-glyph` id (`ChargenScreen`'s `PORTRAIT_GLYPHS`),
-   not the glyph's rendered character. */
-.chargen-screen {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.chargen-progress { color: var(--muted); }
-.chargen-step-label { margin: 0; font-size: .9rem; letter-spacing: .04em; text-transform: uppercase; }
-.chargen-main { display: flex; flex-direction: column; gap: 12px; }
-.chargen-nav { display: flex; gap: 8px; justify-content: flex-end; }
-
-.chargen-option-list, .chargen-portrait-list, .chargen-attribute-adjust-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.chargen-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  text-align: left;
-  border: 1px solid var(--line);
-  background: var(--ground);
-  color: inherit;
-  padding: 8px 10px;
-}
-.chargen-option--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
-.chargen-option[aria-selected="true"] { border-color: var(--gold); }
-.chargen-option--locked { opacity: .55; cursor: not-allowed; }
-.chargen-class-glyph { font-weight: bold; }
-.chargen-class-unlock-hint { font-size: .8rem; color: var(--muted); font-style: italic; }
-
-.chargen-portrait-list { flex-direction: row; flex-wrap: wrap; }
-.chargen-portrait {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid var(--line);
-  background: var(--ground);
-  color: var(--portrait-accent, var(--portrait-default));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.chargen-portrait--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
-.chargen-portrait[aria-selected="true"] { border-color: var(--gold); }
-.chargen-portrait[data-glyph="@"] { --portrait-accent: var(--portrait-default); }
-.chargen-portrait[data-glyph="@·gold"] { --portrait-accent: var(--gold); }
-.chargen-portrait[data-glyph="@·ember"] { --portrait-accent: var(--alert); }
-.chargen-portrait[data-glyph="@·mist"] { --portrait-accent: var(--muted); }
-.chargen-portrait[data-glyph="@·moss"] { --portrait-accent: #7fa87d; }
-
-.chargen-attribute-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.chargen-attribute-row--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
-.chargen-attribute-name { width: 6em; text-transform: capitalize; }
-.chargen-point-buy-budget { color: var(--muted); }
-.chargen-hints, .chargen-summary-list, .chargen-preview-list, .chargen-attribute-list {
-  font-size: .85rem;
-  color: var(--muted);
-}
-.chargen-preview { border-top: 1px solid var(--line); padding-top: 8px; }
-
-/* Hall of Records: outcome/class filters (native selects — keyboard-reachable for free) above a
-   keyboard-first option list of rows, reusing the same roving-focus/option-list convention as
-   `.title-option`/`.chargen-option`. Row expansion (Enter) reveals a `.hall-breakdown` table of
-   the engine's itemized `ScoreBreakdown` lines. */
-.hall-screen { display: flex; flex-direction: column; gap: 12px; }
-.hall-provenance { color: var(--muted); font-style: italic; }
-.hall-filters { display: flex; gap: 16px; }
-.hall-filter { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); }
-.hall-filter select {
-  background: var(--ground);
-  color: inherit;
-  border: 1px solid var(--line);
-  padding: 6px 8px;
-  font-family: inherit;
-}
-.hall-records { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.hall-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  text-align: left;
-  border: 1px solid var(--line);
-  background: var(--ground);
-  color: inherit;
-  padding: 8px 10px;
-  cursor: pointer;
-}
-.hall-row--focused { outline: 2px solid var(--gold); outline-offset: 2px; }
-.hall-row[aria-selected="true"] { border-color: var(--gold); }
-.hall-glyph { font-weight: bold; width: 1.5em; text-align: center; }
-.hall-name { min-width: 8em; }
-.hall-classes { color: var(--muted); }
-.hall-run { margin-left: auto; color: var(--muted); font-size: .85rem; }
-.hall-breakdown { margin: 4px 0 4px 2.5em; font-size: .85rem; color: var(--muted); }
-
-/* Map & journal overlay (Task 7). `.map-journal-map-pane` scrolls the full floor at a FIXED
-   compact cell size (`--map-cell`, set inline per render) -- deliberately its own custom property,
-   distinct from the playfield's zoom-scaled `--cell-w`/`--cell-h`, so this map never grows or
-   shrinks with the guest's play-zoom or font-scale setting. Named `map-journal-map-pane`, not
-   `map-pane` -- `PlayScreen.tsx` already owns that class name for its own live playfield wrapper. */
-.map-journal-tablist { display: flex; gap: 8px; margin-bottom: 8px; }
-.map-journal-tab {
-  background: var(--ground);
-  color: inherit;
-  border: 1px solid var(--line);
-  padding: 6px 12px;
-  font-family: inherit;
-  cursor: pointer;
-}
-.map-journal-tab--active { border-color: var(--gold); color: var(--gold); }
-.map-journal-map-pane { overflow: auto; max-height: 60vh; }
-.map-grid { display: grid; grid-auto-rows: var(--map-cell); line-height: 1; font-size: var(--map-cell); }
-.map-cell { display: block; width: var(--map-cell); height: var(--map-cell); text-align: center; }
-.map-cell-unknown { color: transparent; }
-.map-cell-remembered { color: var(--remembered); filter: saturate(0.4); opacity: 0.55; }
-.map-cell-visible { color: var(--fg, var(--ink)); opacity: calc(0.62 + 0.38 * var(--light, 1)); }
-.journal-pane { display: flex; flex-direction: column; gap: 12px; }
-.journal-objective { color: var(--gold); font-style: italic; }
-.journal-landmarks, .journal-log { list-style: none; margin: 0; padding: 0; }
-.journal-log { max-height: 40vh; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
-.journal-log-line--warning { color: var(--alert); }
-.journal-log-line--combat { color: var(--gold); }
-.journal-log-line--system { color: var(--muted); }

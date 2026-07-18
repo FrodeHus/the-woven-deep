@@ -28,8 +28,8 @@ function ControlsRow({ action, keymap }: Readonly<{ action: ActionId; keymap: Re
  * live from `keymap.byAction` -- rebinding an action (e.g. inventory to `p`) changes what this
  * section renders with no code change here. The two hardwired facts that are NOT part of the
  * rebindable keymap (arrow/numpad keys always move; Escape always closes the open screen -- see
- * `settings.ts`'s `chordReserved` and `OverlayScaffold`'s Escape handler) are called out as their
- * own fixed notes so a guest doesn't go looking for them in the bindings list.
+ * `settings.ts`'s `chordReserved` and `OverlayHost`'s `Dialog`/`Sheet` Escape handling) are called
+ * out as their own fixed notes so a guest doesn't go looking for them in the bindings list.
  */
 function ControlsSection({ keymap }: Readonly<{ keymap: ResolvedKeymap }>): JSX.Element {
   return (

@@ -9,14 +9,14 @@ interface OverlayErrorBoundaryState {
 }
 
 /**
- * Wraps an overlay's own body content (NOT the surrounding `OverlayScaffold` frame -- see
- * `PlayScreen`/`App`'s overlay host composition: `<OverlayScaffold><OverlayErrorBoundary>{body}
- * </OverlayErrorBoundary></OverlayScaffold>`). A render error inside the body is caught here
- * instead of unmounting everything above it: the scaffold's own dialog frame (role, Esc handling,
- * focus trap) stays mounted, and -- because the scaffold is the only thing between the body and
- * the rest of the app -- the play surface underneath is never touched. Before this task there was
- * no React error boundary anywhere in `apps/web`; a throwing overlay would otherwise crash the
- * whole client to a white screen.
+ * Wraps an overlay's own body content (NOT the surrounding `Sheet`/`Dialog` frame -- see
+ * `OverlayHost.tsx`'s composition: `<SheetContent>/<DialogContent><OverlayErrorBoundary>{body}
+ * </OverlayErrorBoundary></SheetContent>/</DialogContent>`). A render error inside the body is
+ * caught here instead of unmounting everything above it: the surrounding primitive's own dialog
+ * frame (role, Esc handling, focus trap) stays mounted, and -- because that primitive is the only
+ * thing between the body and the rest of the app -- the play surface underneath is never touched.
+ * Before this task there was no React error boundary anywhere in `apps/web`; a throwing overlay
+ * would otherwise crash the whole client to a white screen.
  */
 export class OverlayErrorBoundary extends Component<OverlayErrorBoundaryProps, OverlayErrorBoundaryState> {
   public override state: OverlayErrorBoundaryState = { hasError: false };
