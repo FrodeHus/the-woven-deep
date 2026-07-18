@@ -56,6 +56,6 @@ describe('OverlayHost', () => {
     );
 
     await user.click(screen.getByRole('tab', { name: /monsters/i }));
-    expect(screen.getByRole('button', { name: /cave rat/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /cave rat/i })).toBeInTheDocument();
   });
 });

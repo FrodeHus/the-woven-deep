@@ -1,18 +1,21 @@
 import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import type { StoredHallRecord } from '@woven-deep/engine';
 import { emptyRunMetrics } from '@woven-deep/engine';
-import { CodexOverlay } from '../src/ui/overlays/CodexOverlay.js';
-import type { Sightings } from '../src/session/codex.js';
+import { DEFAULT_SETTINGS } from '../../session/settings.js';
+import type { Sightings } from '../../session/codex.js';
+import { UiProviders } from '../providers.js';
+import { CodexOverlay } from './CodexOverlay.js';
 
 let pack: CompiledContentPack;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../content') });
 });
 
 const EMPTY_SIGHTINGS: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
@@ -45,40 +48,65 @@ function record(overrides: Partial<StoredHallRecord> = {}): StoredHallRecord {
   };
 }
 
+/** Renders `CodexOverlay` exactly the way `OverlayHost`'s title-screen codex path does: through
+ * `UiProviders` with NO `session` prop (so `usePack`-only context is available, mirroring the
+ * title screen where `useSessionCtx()` is null) and `sightings`/`records`/`snapshot`/`pack` handed
+ * in as the SAME resolved props `OverlayHost.tsx`'s `renderBody` codex case passes. */
+function renderCodex(props: Readonly<{ records: readonly StoredHallRecord[]; sightings?: Sightings }>) {
+  return render(
+    <UiProviders pack={pack} settings={DEFAULT_SETTINGS} onChangeSettings={() => {}}>
+      <CodexOverlay
+        records={props.records}
+        snapshot={null}
+        sightings={props.sightings ?? EMPTY_SIGHTINGS}
+        pack={pack}
+      />
+    </UiProviders>,
+  );
+}
+
 describe('CodexOverlay', () => {
-  it('opens on the class tab, and switches tabs with ArrowRight/ArrowLeft', () => {
-    render(<CodexOverlay records={[]} snapshot={null} sightings={EMPTY_SIGHTINGS} pack={pack} />);
+  it('opens on the class tab, and switches tabs with ArrowRight/ArrowLeft', async () => {
+    const user = userEvent.setup();
+    renderCodex({ records: [] });
 
     expect(screen.getByRole('tab', { name: 'Classes' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getAllByRole('tabpanel')).toHaveLength(1); // exactly one panel rendered at a time
 
-    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
+    screen.getByRole('tab', { name: 'Classes' }).focus();
+    await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('tab', { name: 'Items' })).toHaveAttribute('aria-selected', 'true');
 
-    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
+    await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('tab', { name: 'Spells' })).toHaveAttribute('aria-selected', 'true');
 
-    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
+    await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('tab', { name: 'Monsters' })).toHaveAttribute('aria-selected', 'true');
 
-    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowLeft' });
+    await user.keyboard('{ArrowLeft}');
     expect(screen.getByRole('tab', { name: 'Spells' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('shows a discovered monster\'s name and glyph in the list and detail pane', () => {
-    render(<CodexOverlay records={[record()]} snapshot={null} sightings={EMPTY_SIGHTINGS} pack={pack} />);
-    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowLeft' }); // -> monster (wraps from class)
+  it('shows a discovered monster\'s name and glyph in the list and detail pane', async () => {
+    const user = userEvent.setup();
+    renderCodex({ records: [record()] });
+
+    screen.getByRole('tab', { name: 'Classes' }).focus();
+    await user.keyboard('{ArrowLeft}'); // -> monster (wraps from class)
+    expect(screen.getByRole('tab', { name: 'Monsters' })).toHaveAttribute('aria-selected', 'true');
 
     const list = screen.getByRole('listbox', { name: 'Monsters' });
     expect(within(list).getByText('Cave rat', { exact: false })).toBeInTheDocument();
   });
 
-  it('renders undiscovered entries as "???" with no content id/name anywhere in the DOM (whole-overlay serialization)', () => {
-    const { container } = render(
-      <CodexOverlay records={[]} snapshot={null} sightings={EMPTY_SIGHTINGS} pack={pack} />,
-    );
+  it('renders undiscovered entries as "???" with no content id/name anywhere in the DOM (whole-overlay serialization)', async () => {
+    const user = userEvent.setup();
+    const { container } = renderCodex({ records: [] });
     // Monster tab: nothing has been sighted or killed -- every entry is undiscovered.
-    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowLeft' });
+    screen.getByRole('tab', { name: 'Classes' }).focus();
+    await user.keyboard('{ArrowLeft}');
+    expect(screen.getByRole('tab', { name: 'Monsters' })).toHaveAttribute('aria-selected', 'true');
+
     const html = container.innerHTML;
     expect(html).toContain('???');
     expect(html).not.toContain('monster.cave-rat');
@@ -87,10 +115,13 @@ describe('CodexOverlay', () => {
     expect(html).not.toContain('Training beetle');
   });
 
-  it('renders the empty/fully-undiscovered spells category with its silhouette rows, not an empty-state placeholder', () => {
-    render(<CodexOverlay records={[record()]} snapshot={null} sightings={EMPTY_SIGHTINGS} pack={pack} />);
-    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
-    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
+  it('renders the empty/fully-undiscovered spells category with its silhouette rows, not an empty-state placeholder', async () => {
+    const user = userEvent.setup();
+    renderCodex({ records: [record()] });
+
+    screen.getByRole('tab', { name: 'Classes' }).focus();
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('tab', { name: 'Spells' })).toHaveAttribute('aria-selected', 'true');
 
     const list = screen.getByRole('listbox', { name: 'Spells' });
@@ -99,18 +130,19 @@ describe('CodexOverlay', () => {
     for (const option of options) expect(option).toHaveTextContent('???');
   });
 
-  it('shows a locked class\'s unlockHint in the detail pane, per the chargen convention', () => {
-    render(<CodexOverlay records={[]} snapshot={null} sightings={EMPTY_SIGHTINGS} pack={pack} />);
+  it('shows a locked class\'s unlockHint in the detail pane, per the chargen convention', async () => {
+    const user = userEvent.setup();
+    renderCodex({ records: [] });
     // Class tab is the default; select the Archivist row (a known-locked class).
     const list = screen.getByRole('listbox', { name: 'Classes' });
     const archivistOption = within(list).getAllByRole('option').find((option) => option.textContent?.includes('A'));
     expect(archivistOption).toBeDefined();
-    fireEvent.click(within(archivistOption!).getByRole('button'));
+    await user.click(archivistOption!);
     expect(screen.getByText(/Read three lore fragments/)).toBeInTheDocument();
   });
 
   it('shows the session-only footer line', () => {
-    render(<CodexOverlay records={[]} snapshot={null} sightings={EMPTY_SIGHTINGS} pack={pack} />);
+    renderCodex({ records: [] });
     expect(screen.getByText(/Session-only, like your Hall records/)).toBeInTheDocument();
   });
 });
