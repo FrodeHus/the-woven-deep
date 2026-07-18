@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { useState, type JSX } from 'react';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
@@ -202,6 +202,41 @@ describe('PlayScreen keyboard routing', () => {
     await user.keyboard('n');
     await waitFor(() => expect(session.getSnapshot().pendingDecision).toBeNull());
     expect(session.getSnapshot().log.at(-1)?.tone).toBe('system');
+  });
+});
+
+describe('PlayScreen command palette shortcut', () => {
+  it('opens the command palette on Ctrl/Cmd+K', () => {
+    const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
+    render(<PlayScreen session={session} pack={pack} />);
+
+    expect(screen.queryByTestId('command-palette')).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    expect(screen.getByTestId('command-palette')).toBeInTheDocument();
+  });
+
+  it('does not open the command palette while an overlay is already open', async () => {
+    const user = userEvent.setup();
+    const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
+    function Harness(): JSX.Element {
+      const [overlay, setOverlay] = useState<OverlayId | null>(null);
+      return (
+        <PlayScreen
+          session={session}
+          pack={pack}
+          overlay={overlay}
+          onOpenOverlay={setOverlay}
+          onCloseOverlay={() => setOverlay(null)}
+        />
+      );
+    }
+    render(<Harness />);
+
+    await user.keyboard('i');
+    expect(await screen.findByRole('dialog', { name: /backpack/i })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    expect(screen.queryByTestId('command-palette')).not.toBeInTheDocument();
   });
 });
 
