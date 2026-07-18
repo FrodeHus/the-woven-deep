@@ -16,15 +16,15 @@
 
   /* Material palette (Living Tapestry direction): the base color a lit cell's tint blends FROM
      (see `visibleForeground`'s `base` parameter in `cell-color.ts`) and a remembered cell's own hue
-     before it is desaturated toward `--remembered`. Starting values only -- Task 2's browser pass
-     tunes these by eye; the luminance floor in `cell-color.ts` holds for any value here. */
+     before it is desaturated toward `--remembered`. Starting values only -- tuned by eye; the
+     luminance floor in `cell-color.ts` holds for any value here. */
   --mat-wall: #5b6478;
   --mat-floor: #8a7f6e;
   --mat-door: #8b5a3c;
   --mat-stair: #c9a227;
   --mat-void: #232733;
 
-  /* Frame vocabulary (Task 3): a single diamond-corner ornament reused by `.framed`/
+  /* Frame vocabulary: a single diamond-corner ornament reused by `.framed`/
      `.framed-title` below. `--frame-corner-color` is a REFERENCE to `--gold`, never a literal --
      so the high-contrast theme inherits the frame automatically through the normal custom-property
      cascade, and needs no re-declaration of its own in `.theme-high-contrast`. */
@@ -39,7 +39,7 @@
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   font-synthesis: none;
 }
-/* High-contrast theme (Task 2): set by `App` as the root class `theme-high-contrast` when
+/* High-contrast theme: set by `App` as the root class `theme-high-contrast` when
    `Settings.theme === 'high-contrast'` -- re-declares EVERY named palette variable above with
    values chosen for legibility (WCAG AA, per `styles-contract.test.ts`'s "high-contrast theme
    stylesheet contract"), never a per-component override. Deliberately near-monochrome (near-black
@@ -145,7 +145,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   .condition-aura { animation: none !important; opacity: 0.4; }
 }
 
-/* Screen transitions (Task 4): a short fade-through-dark wrapping title->play, chargen->play, a
+/* Screen transitions: a short fade-through-dark wrapping title->play, chargen->play, a
    floor change within play (descend/ascend), and play->conclusion -- see `ScreenFade.tsx`. Purely
    visual (`aria-hidden`, `pointer-events: none` here): the wrapped screen/floor already renders
    the NEW state instantly underneath (App's screen switching stays the instant conditional-return
@@ -199,11 +199,11 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
    SAME element, and `.playfield` only ever had the one layer here; the two elements' separate
    backgrounds simply stack in paint order, they never blend.) It also cannot become a second layer
    painted onto `.playfield-grid`'s own background (e.g. two `background` layers on `.playfield-grid`
-   itself) or an inserted overlay element, because Task 6 slots a `<canvas>` into `.playfield`,
-   between it and `.playfield-grid`, and any layer occupying that space would compete with the
-   canvas for the same box. The one place left that (a) actually composites and (b) claims no
-   layer/element Task 6 needs is `.playfield-grid`'s OWN background declaration: pre-mix the 4% gold
-   into `--void-bg` itself, once, as a single flat color. */
+   itself) or an inserted overlay element, because a `<canvas>` sits inside `.playfield`, between it
+   and `.playfield-grid`, and any layer occupying that space would compete with the canvas for the
+   same box. The one place left that (a) actually composites and (b) claims no layer/element the
+   canvas needs is `.playfield-grid`'s OWN background declaration: pre-mix the 4% gold into
+   `--void-bg` itself, once, as a single flat color. */
 .playfield-town .playfield-grid {
   background: color-mix(in srgb, var(--gold) 4%, var(--void-bg));
 }
@@ -248,7 +248,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
    than the remembered floor beyond it, an inverted "dark circle" around the player's own torch. */
 .cell-visible { color: var(--fg, var(--mat, var(--ink))); opacity: calc(0.62 + 0.38 * var(--light, 1)); }
 
-/* Material coloring (Task 1): `materialClass` (`GridRenderer.tsx`) adds one of these classes,
+/* Material coloring: `materialClass` (`GridRenderer.tsx`) adds one of these classes,
    derived from the cell's terrain token (stairs split further by tileId), beside the knowledge
    class. `--mat` is consumed two ways: here, as a fallback color for a visible cell that has no
    `tint` yet (rare, but keeps a material-flavored cell from ever falling back all the way to plain
@@ -277,7 +277,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 .cell-remembered.mat-stair-up, .cell-remembered.mat-stair-down { color: var(--mat-stair); }
 .cell-remembered.mat-void { color: var(--mat-void); }
 
-/* Fixture flicker variation (Task 7): every wall/floor light fixture (`cell.fixture`) flickers
+/* Fixture flicker variation: every wall/floor light fixture (`cell.fixture`) flickers
    with its OWN delay/duration, derived deterministically from its `lightId` hash
    (`fixtureFlickerStyle`, GridRenderer.tsx) -- never `Math.random`, so the SAME fixture always
    flickers the SAME way across renders/remounts, while two different fixtures desynchronize into
@@ -292,9 +292,9 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   50% { filter: brightness(1.18); }
 }
 
-/* Stair/entrance shimmer (Task 7): a subtle periodic brightness sheen on VISIBLE stair cells --
+/* Stair/entrance shimmer: a subtle periodic brightness sheen on VISIBLE stair cells --
    an ambient "this is the way out/down" cue, layered onto the existing `mat-stair-up`/
-   `mat-stair-down` material classes (Task 1) rather than a new glyph or color. Kept as a plain
+   `mat-stair-down` material classes rather than a new glyph or color. Kept as a plain
    `filter: brightness()` pulse (same technique as `fixture-flicker` above) so it composes cleanly
    with whichever `--fg`/`--mat` color the cell already resolved to. */
 .cell-visible.mat-stair-up, .cell-visible.mat-stair-down {
@@ -351,7 +351,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 }
 .glow[data-source*="torch"] { animation: glow-gutter 2.2s ease-in-out infinite; }
 
-/* Hero condition aura (Task 7): a faint tinted pulse on the hero's OWN cell while any condition
+/* Hero condition aura: a faint tinted pulse on the hero's OWN cell while any condition
    from `projection.hero.conditions` is active, colored from that condition's projected `color`
    (`pickPrimaryCondition`, effects-map.ts, picks the highest-stacks condition when several are
    active -- see that function's own doc comment for the tie-break rule). Positioned like `.effect`
@@ -472,7 +472,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 
 .map-pane { position: relative; overflow: hidden; }
 
-/* Contextual onboarding hint strip (Task 8) -- above the log within its own slot, never a live
+/* Contextual onboarding hint strip -- above the log within its own slot, never a live
    region (see `HintStrip.tsx`'s doc comment for why `role="note"`, not `alert`/`status`). */
 .hint-strip {
   border: 1px solid var(--line);
@@ -486,7 +486,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 }
 .hint-strip-dismiss { color: var(--muted); white-space: nowrap; }
 
-/* Colorblind reinforcement (Task 9): a silent `::before` glyph for each colored log tone, painted
+/* Colorblind reinforcement: a silent `::before` glyph for each colored log tone, painted
    via the CSS alt-text syntax (`content: "..." / ""` -- the string after `/` is what a screen
    reader sees, i.e. nothing) so meaning is never carried by color alone. `styles-contract.test.ts`
    asserts this contract directly against the stylesheet, and `LogPanel.tsx`/`MapJournalOverlay.tsx`
@@ -498,7 +498,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 .journal-log-line--combat::before { content: "\2694  " / ""; }
 .journal-log-line--system::before { content: "\2699  " / ""; }
 
-/* Condition badge (Task 7): the colorblind-safe reinforcement Task 9 verifies -- a generic
+/* Condition badge: the colorblind-safe reinforcement `styles-contract.test.ts` verifies -- a generic
    status-effect glyph plus the condition's NAME as text, so meaning never rests on
    `--condition-color` alone; the tinted border is a supplement for a sighted-color reader, not the
    only signal. Rendered by `StatusBar` (panels/StatusBar.tsx). */

@@ -114,8 +114,8 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
   const [sellIndex, setSellIndex] = useState(0);
   const [servicesIndex, setServicesIndex] = useState(0);
   // Set only for services whose `targetItemIds` is non-empty (e.g. identify): opening the picker
-  // replaces the immediate dispatch with an inline target list, per Task 9. A service with no
-  // eligible targets (or the targetless strongbox) never touches this state.
+  // replaces the immediate dispatch with an inline target list. A service with no eligible
+  // targets (or the targetless strongbox) never touches this state.
   const [pickerServiceId, setPickerServiceId] = useState<MerchantServiceId | null>(null);
   const [pickerIndex, setPickerIndex] = useState(0);
 
@@ -143,7 +143,7 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
     label: `${entry.serviceId} (${entry.remainingUses} left) — ${entry.unitPrice}g`,
     // A service with eligible targets (e.g. identify) opens the inline picker instead of guessing
     // which item the player meant; a targetless service (e.g. the strongbox) dispatches straight
-    // through, unchanged from before Task 9.
+    // through.
     run: () => {
       if (entry.targetItemIds.length > 0) {
         setPickerIndex(0);

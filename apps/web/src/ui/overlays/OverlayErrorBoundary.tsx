@@ -15,8 +15,8 @@ interface OverlayErrorBoundaryState {
  * caught here instead of unmounting everything above it: the surrounding primitive's own dialog
  * frame (role, Esc handling, focus trap) stays mounted, and -- because that primitive is the only
  * thing between the body and the rest of the app -- the play surface underneath is never touched.
- * Before this task there was no React error boundary anywhere in `apps/web`; a throwing overlay
- * would otherwise crash the whole client to a white screen.
+ * Isolates a throwing overlay body so a render error shows a contained alert instead of crashing
+ * the client.
  */
 export class OverlayErrorBoundary extends Component<OverlayErrorBoundaryProps, OverlayErrorBoundaryState> {
   public override state: OverlayErrorBoundaryState = { hasError: false };

@@ -281,7 +281,7 @@ export function App({
   // one-time boot fact, not an ongoing condition).
   const [settingsCorruptedDismissed, setSettingsCorruptedDismissed] = useState(false);
 
-  // Settings roaming (Task 12) bookkeeping. `settingsRef` mirrors `settings` for the roam effect's
+  // Settings roaming bookkeeping. `settingsRef` mirrors `settings` for the roam effect's
   // async closure (which only re-fires on an account-status transition, so it cannot rely on the
   // render-time `settings` staying fresh by the time its network round-trip resolves).
   // `settingsVersionRef` is a monotonic counter this client increments on every push it makes (the
@@ -324,7 +324,7 @@ export function App({
         : 'Saving settings is unavailable in this browser -- changes apply for this visit only.'
     ));
 
-    // Task 12: signed-in players roam settings across devices. The localStorage write above is
+    // Signed-in players roam settings across devices. The localStorage write above is
     // unconditional (guest and signed-in alike); this debounced push is the signed-in-only extra --
     // gated so a guest, or a player who has since signed out, never reaches the server. Trailing
     // debounce (~500ms): rapid-fire changes (e.g. dragging a font-scale slider) collapse into one
@@ -423,7 +423,7 @@ export function App({
   }, [fetcher, accountOverride]);
 
   /**
-   * Settings roaming (Task 12), the one-time "roam on sign-in" half: fires exactly once per
+   * Settings roaming, the one-time "roam on sign-in" half: fires exactly once per
    * sign-in, whether the account arrived already-signed-in at boot (a fresh page load after a
    * magic-link redirect, or `accountOverride` in tests) or flipped from guest to signed-in later.
    * `roamedForSessionRef` is the once-guard, reset back to `false` on a drop to guest so a later

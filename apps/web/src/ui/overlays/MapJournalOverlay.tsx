@@ -158,8 +158,8 @@ interface Landmark {
 
 /**
  * Landmarks are derived fresh on every render from fields the projection already exposes -- no new
- * engine state, no new projection fields (per the plan's Global Constraints). This is the LIVE half
- * (Task 10's brief); `JournalPane` unions it with the PERSISTED half (`persistedLandmarksFor`,
+ * engine state, no new projection fields (per the plan's Global Constraints). This is the LIVE half;
+ * `JournalPane` unions it with the PERSISTED half (`persistedLandmarksFor`,
  * fed by `session/codex.ts`'s `accumulateLandmarks`) so a landmark survives even once it leaves the
  * current projection entirely (a merchant who has since departed, a floor left behind).
  *

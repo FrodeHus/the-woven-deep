@@ -3,7 +3,6 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import type { StoredHallRecord } from '@woven-deep/engine';
 import type { Sightings } from '../../session/codex.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
-import type { PlayerIntent } from '../../session/intents.js';
 import { canOpenOverlay, OVERLAY_REGISTRY, type OverlayId } from './registry.js';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/sheet.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
@@ -51,7 +50,6 @@ export function OverlayHost({ overlay, onClose, isPlayActive, records, onClearGu
   const body = renderBody(overlay, {
     pack, records, onClearGuestSession,
     snapshot: sessionCtx?.snapshot,
-    onDispatch: sessionCtx ? (intent) => sessionCtx.session.dispatch(intent) : undefined,
     sightings: sightings ?? sessionCtx?.snapshot.sightings,
   });
 
@@ -89,7 +87,6 @@ interface RenderBodyContext {
   readonly records: readonly StoredHallRecord[] | undefined;
   readonly onClearGuestSession: (() => void) | undefined;
   readonly snapshot: SessionSnapshot | undefined;
-  readonly onDispatch: ((intent: PlayerIntent) => void) | undefined;
   readonly sightings: Sightings | undefined;
 }
 
@@ -105,6 +102,8 @@ function renderBody(overlay: OverlayId, ctx: RenderBodyContext): JSX.Element {
       if (!ctx.snapshot) return <p>The map and journal are unavailable right now.</p>;
       return <MapJournalOverlay />;
     case 'codex':
+      // Codex renders from the session-less title screen too, so it takes records/snapshot/
+      // sightings/pack as explicit props here rather than reading them from session context.
       if (!ctx.records) return <p>The codex is unavailable right now.</p>;
       return (
         <CodexOverlay

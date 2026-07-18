@@ -87,9 +87,8 @@ function collectLightFixtures(pack: CompiledContentPack): ReadonlyArray<Readonly
  * imported, not re-declared, so it can never drift from what the floor renderer actually uses),
  * and vault-authored light fixtures. This is a reference manual, not a discovery-gated surface: the
  * master design describes Help as "keyboard reference, glyph legend, and mechanics explanations"
- * with no mention of a sighting gate, and the (separately gated) codex is Task 8's job. Rendering
- * every pack entry here is therefore intentional, not an oversight -- flagged in the task report
- * for review to weigh.
+ * with no mention of a sighting gate; the (separately gated) codex serves the discovery-gated
+ * purpose instead. Rendering every pack entry here is therefore intentional, not an oversight.
  */
 function GlyphLegendSection({ pack }: Readonly<{ pack: CompiledContentPack }>): JSX.Element {
   const monsters = pack.entries.filter((entry) => entry.kind === 'monster');
@@ -203,7 +202,7 @@ function MechanicsSection(): JSX.Element {
 }
 
 /**
- * Every contextual onboarding hint's copy (Task 8's `HINTS`, `onboarding.ts`), in priority order,
+ * Every contextual onboarding hint's copy (`HINTS`, `onboarding.ts`), in priority order,
  * rendered live from `keymap` -- a rebind changes what this section shows exactly like the
  * controls section above, and it lists every hint regardless of whether the guest has already
  * mastered/dismissed it (this is a reference list, not a live mirror of `activeHint`'s current

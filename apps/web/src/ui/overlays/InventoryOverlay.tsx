@@ -235,7 +235,7 @@ function EquipmentSlots({ equipment }: Readonly<{ equipment: Readonly<Record<str
 }
 
 /**
- * The guest's backpack, rebuilt (Task 7) on the shared `ListDetail` component as the "structure 1"
+ * The guest's backpack, built on the shared `ListDetail` component as the "structure 1"
  * drawer exemplar -- an equipped-gear slot grid, a scrollable pack list, and a detail pane with
  * contextual action buttons, all inside the `OverlayHost`'s right `Sheet`. Reads directly from
  * `useSessionCtx()` rather than taking props, since inventory is play-scope (a session is always

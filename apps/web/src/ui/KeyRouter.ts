@@ -133,7 +133,7 @@ export interface KeyDispatchHandlers {
   readonly dispatch: (intent: PlayerIntent) => void;
   readonly openOverlay: (overlay: OverlayActionId) => void;
   readonly closeOverlay: () => void;
-  /** Retires whatever onboarding hint (Task 8) is currently showing -- a no-op if none is. */
+  /** Retires whatever onboarding hint is currently showing -- a no-op if none is. */
   readonly dismissHint: () => void;
 }
 

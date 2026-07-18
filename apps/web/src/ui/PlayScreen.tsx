@@ -95,7 +95,7 @@ export interface PlayScreenProps {
    * `settings`/`keymap` above. Defaults keep every pre-existing caller/test (which never opens the
    * codex overlay) compiling unchanged. */
   readonly records?: readonly StoredHallRecord[];
-  /** Whether the contextual onboarding hint strip (Task 8) may show at all -- `App` computes this
+  /** Whether the contextual onboarding hint strip may show at all -- `App` computes this
    * from `settings.onboarding` and the quickstart boot flag. Defaults to `true` so every
    * pre-existing caller/test keeps compiling and passing unchanged; those never populate
    * `snapshot.onboarding`'s mastery counts either, so in practice they'd only ever see the
@@ -156,7 +156,7 @@ export function PlayScreen({
   const snapshot = useGuestSession(session);
   const { projection } = snapshot;
 
-  // The active onboarding hint (Task 8), recomputed every render from the live snapshot --
+  // The active onboarding hint, recomputed every render from the live snapshot --
   // `activeHintRef` mirrors it into a ref purely so the key-dispatcher effect below (whose own
   // dependency array must stay stable across every snapshot publish, not just hint changes) can
   // read the CURRENT hint id without re-attaching the window listener on every keystroke's worth
@@ -241,7 +241,7 @@ export function PlayScreen({
       {
         dispatch: (intent) => session.dispatch(intent),
         openOverlay: (overlayActionId) => {
-          // Two of the six overlay-open actions are their own onboarding milestones (Task 8) --
+          // Two of the six overlay-open actions are their own onboarding milestones --
           // "inspection"/"inventory" mastery is a one-time open, which never goes through
           // `session.dispatch` at all (opening an overlay is client-side UI state, not a
           // `PlayerIntent`), so it's folded in right here instead.
@@ -254,9 +254,8 @@ export function PlayScreen({
           if (id) session.dismissOnboardingHint(id);
         },
         closeOverlay: () => {
-          // `inventory` is a registry overlay like every other one now (Task 5 absorbed the old
-          // standalone `BackpackMenu`/`backpackOpen` toggle into the same `overlay` field), so
-          // this first branch already covers it.
+          // `inventory` is a registry overlay like every other one, so this first branch already
+          // covers it.
           if (overlay !== null) { onCloseOverlay(); return; }
           if (snapshot.houseOpen) session.setHouseOpen(false);
           // Unlike the house overlay (a pure client-side toggle), an open trade session is engine
