@@ -110,6 +110,21 @@ describe('survival clocks', () => {
     expect(danger.state.actors[0]?.health).toBe(10);
   });
 
+  it('recovers at the hungry stage once recoveryAmount matches the fixed content value', () => {
+    const demoContent = createDemoContentPack();
+    const content = { ...demoContent, entries: [
+      balance({ recoveryAmount: 10, recoveryInterval: 5 }),
+      ...demoContent.entries.filter((entry) => entry.kind !== 'balance'),
+    ] };
+    const base = createDemoRun();
+    const actor = { ...base.actors[0]!, health: 10 };
+    const state = { ...base, worldTime: 10, actors: [actor],
+      survival: { ...base.survival, hungerReserve: 50, hungerStage: hungerStage({ reserve: 50, thresholds }) } };
+    const result = advanceSurvival({ state, content, elapsed: 10, eventId: 'event.survival', danger: false });
+    // hungry recovery percentage is 50; floor(10 * 50 / 100) = 5 per crossed interval, 2 intervals crossed.
+    expect(result.state.actors[0]?.health).toBe(20);
+  });
+
   it('does not recover while an active condition blocks recovery', () => {
     const input = fixture({ elapsed: 10, hunger: 90 });
     const condition = {

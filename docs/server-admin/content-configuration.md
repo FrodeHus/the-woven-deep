@@ -178,7 +178,7 @@ entries:
     starvationInterval: 500
     starvationDamage: 1
     recoveryInterval: 500
-    recoveryAmount: 1
+    recoveryAmount: 10
     restMaximumDuration: 5000
     recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }
     hungerStageModifiers:
@@ -406,7 +406,7 @@ entries:
     runAppearanceChance: 1
     discoveryProtectionIncrement: 0
     discoveryProtectionCap: 1
-    maximumInstancesPerRun: 8
+    maximumInstancesPerRun: 24
     placement: { minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition: { monsterId: monster.cave-rat, minimumQuantity: 1, maximumQuantity: 2 }

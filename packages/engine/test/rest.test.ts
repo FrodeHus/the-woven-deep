@@ -101,6 +101,19 @@ describe('interruptible rest', () => {
     expect(result.events).toContainEqual(expect.objectContaining({ type: 'actor.healed', amount: 1 }));
   });
 
+  it('reaches full health within the duration cap once recoveryAmount matches the fixed content value', () => {
+    const base = createDemoRun();
+    const demoContent = createDemoContentPack();
+    const content = { ...demoContent, entries: demoContent.entries.map((entry) =>
+      entry.kind === 'balance' ? { ...entry, recoveryAmount: 10 } : entry) };
+    const hero = { ...base.actors[0]!, health: Math.floor(base.actors[0]!.maxHealth / 2) };
+    const result = resolveRest({ state: { ...base, actors: [hero] }, content,
+      eventId: 'command.rest', until: 'healed', maximumDuration: 5000 });
+    expect(result.stopReason).toBe('full-health');
+    expect(result.elapsed).toBeLessThan(5000);
+    expect(result.effectiveHealing).toBe(base.actors[0]!.maxHealth - hero.health);
+  });
+
   it('rejects non-positive and server-capped command durations', () => {
     const state = createDemoRun();
     const context = { content: createDemoContentPack() };
