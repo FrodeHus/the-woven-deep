@@ -60,7 +60,16 @@ interface SheetContentProps
   extends React.ComponentProps<typeof DrawerPrimitive.Popup>,
     VariantProps<typeof sheetVariants> {}
 
-function SheetContent({ side = "right", className, children, ...props }: SheetContentProps) {
+function SheetContent({ side = "right", className, children, finalFocus, ...props }: SheetContentProps) {
+  // Unlike `Dialog.Popup`, `DrawerPrimitive.Popup`'s own default return-focus tracking does not
+  // reliably restore focus to the element that was focused before the sheet opened (observed: it
+  // lands on `<body>` on close instead). Captured synchronously during this component's first
+  // render -- before any mount effect (the sheet's own initial-focus effect included) can move
+  // focus -- so it always holds whatever was focused immediately before the sheet opened.
+  const previouslyFocusedRef = React.useRef<HTMLElement | null>(null)
+  if (previouslyFocusedRef.current === null && typeof document !== "undefined") {
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null
+  }
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -68,6 +77,7 @@ function SheetContent({ side = "right", className, children, ...props }: SheetCo
         <DrawerPrimitive.Popup
           data-slot="sheet-content"
           className={cn(sheetVariants({ side }), className)}
+          finalFocus={finalFocus ?? previouslyFocusedRef}
           {...props}
         >
           <DrawerPrimitive.Content className="relative flex h-full flex-col gap-4">

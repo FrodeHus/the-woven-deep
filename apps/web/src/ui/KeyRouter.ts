@@ -111,13 +111,14 @@ function lookupAction(keymap: ResolvedKeymap, key: string, shiftKey: boolean): A
  * regardless of `keymap`.
  */
 export function routeKey(input: Readonly<{
-  event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'target'>;
+  event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'target' | 'ctrlKey' | 'metaKey'>;
   overlayOpen: boolean;
   keymap: ResolvedKeymap;
 }>): RouterOutcome {
   const { event, overlayOpen, keymap } = input;
 
   if (isFormFieldTarget(event.target)) return null;
+  if (event.ctrlKey || event.metaKey) return null;
   if (event.key === 'Escape') return overlayOpen ? { type: 'close-overlay' } : null;
   if (overlayOpen) return null;
 
@@ -136,7 +137,7 @@ export interface KeyDispatchHandlers {
   readonly dismissHint: () => void;
 }
 
-export type KeyDispatcher = (event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'target' | 'repeat'>) => void;
+export type KeyDispatcher = (event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'target' | 'repeat' | 'ctrlKey' | 'metaKey'>) => void;
 
 /** OS key auto-repeat fires at roughly 30/sec; this is the minimum gap enforced between two
  * accepted `repeat: true` keydowns (see `createKeyDispatcher`). */

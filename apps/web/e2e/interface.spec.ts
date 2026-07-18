@@ -204,24 +204,25 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await expect(trade).toBeHidden();
 
   // --- The ⌘K command palette: Meta+K opens it (Control+K on hosts without a Meta key), typing
-  // filters to the "Map & journal" entry, Enter invokes it exactly like the `m` key would. Placed
-  // here, after every position-pinned walk is done, because `KeyRouter.ts`'s `lookupAction` does
-  // not check `ctrlKey`/`metaKey`: the bare `k` the chord shares with the default "Move north"
-  // binding still reaches the game dispatcher when Meta/Control is held, so opening the palette
-  // also issues a real move -- harmless this late (nothing after this point depends on the hero's
-  // cell), but it would desync every pinned walk still to come. ---
+  // filters to the "Map & journal" entry, Enter invokes it exactly like the `m` key would.
+  // `KeyRouter.ts`'s `routeKey` ignores any keydown with `ctrlKey`/`metaKey` held, so the bare `k`
+  // chord it shares with the default "Move north" binding does not also reach the game dispatcher
+  // -- asserted directly below by checking the hero's cell is unchanged across the whole sequence.
+  const heroLabelBeforePalette = await page.getByLabel(/^Hero at \d+, \d+$/).getAttribute('aria-label');
   await page.keyboard.press('Meta+k');
   const palette = page.getByTestId('command-palette');
   if (!(await palette.isVisible().catch(() => false))) {
     await page.keyboard.press('Control+k');
   }
   await expect(palette).toBeVisible();
+  await expect(page.getByLabel(heroLabelBeforePalette!)).toBeVisible(); // opening the palette did not move the hero
   await palette.getByRole('combobox').fill('map');
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('overlay-map-journal')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('overlay-map-journal')).toBeHidden();
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
+  await expect(page.getByLabel(heroLabelBeforePalette!)).toBeVisible(); // still unchanged after the full round-trip
 
   // --- Clear the guest session from settings; the app lands on a fresh title screen. ---
   // The `?quickstart=1` query is still in the URL here -- the boot effect that constructs
