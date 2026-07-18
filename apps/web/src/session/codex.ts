@@ -292,9 +292,8 @@ export interface CodexState {
  * merely conventionally hidden (a property test serializes the whole `CodexState` and greps for
  * every undiscovered id/name to hold this to account). `silhouetteGlyph` is the one thing an
  * undiscovered entry may show: for classes, the content pack's own `ClassContentEntry.silhouetteGlyph`
- * (already disclosed, unlocked or not, by the chargen screen -- see `chargen-steps.tsx`'s
- * `ClassStep`); for the other three kinds (no silhouette field exists in their content shape), a
- * fixed placeholder glyph.
+ * (already disclosed, unlocked or not, by the Calling step of chargen); for the other three kinds
+ * (no silhouette field exists in their content shape), a fixed placeholder glyph.
  */
 export type CodexEntry =
   | {

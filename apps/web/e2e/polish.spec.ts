@@ -14,10 +14,10 @@ import { expect, test, type Page } from '@playwright/test';
  *   and land on a fresh title, with every guest storage key -- the onboarding mastery ledger among
  *   them -- wiped.
  *
- * WHY THE WIZARD, NOT `?quickstart=1` (as the other four specs use): quickstart deliberately FORCES
+ * WHY THE CONSOLE, NOT `?quickstart=1` (as the other four specs use): quickstart deliberately FORCES
  * onboarding off no matter the stored setting (`App.tsx`: `settings.onboarding === 'on' &&
  * !quickstart`), precisely so it can never perturb those four pinned walks. The onboarding beats
- * here therefore need a NON-quickstart boot, so this spec builds a hero through the chargen wizard
+ * here therefore need a NON-quickstart boot, so this spec builds a hero through the chargen console
  * (the minimal path `run-lifecycle` already exercises) and lands in the town with onboarding live.
  * Town geometry is authored and seed-independent (see `interface.spec.ts`'s town facts); the seed
  * is carried only for parity with the other specs and to pin the wizard's attribute roll.
@@ -49,9 +49,10 @@ async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
   for (const key of keys) await page.keyboard.press(key);
 }
 
-/** Builds a hero through the minimal chargen wizard path and enters play -- the same lean
+/** Builds a hero through the minimal chargen console path and enters play -- the same lean
  * run-through `run-lifecycle.spec.ts`'s "New Hero" leg uses, lifted here so this spec can reach
- * town play WITHOUT quickstart (the only boot under which onboarding is allowed to show). */
+ * town play WITHOUT quickstart (the only boot under which onboarding is allowed to show). Step
+ * order is Identity -> Calling -> Kit -> Attributes -> Origin -> Traits -> Review. */
 async function buildHeroAndEnterTown(page: Page): Promise<void> {
   await page.getByRole('option', { name: 'Enter the Deep' }).click();
 
@@ -60,27 +61,27 @@ async function buildHeroAndEnterTown(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Next' }).click();
 
   await expect(page.getByLabel(/Step 2 of 7/)).toBeVisible();
-  await page.getByRole('option', { name: /Roll/ }).click();
-  await page.getByRole('button', { name: 'Next' }).click();
-
-  await expect(page.getByLabel(/Step 3 of 7/)).toBeVisible();
-  await page.getByRole('button', { name: 'Roll attributes' }).click();
-  await page.getByRole('button', { name: 'Next' }).click();
-
-  await expect(page.getByLabel(/Step 4 of 7/)).toBeVisible();
   await page.getByRole('option', { name: /Wayfarer/ }).click();
   await page.getByRole('button', { name: 'Next' }).click();
 
-  await expect(page.getByLabel(/Step 5 of 7/)).toBeVisible();
-  await page.getByRole('option').first().click();
+  await expect(page.getByLabel(/Step 3 of 7/)).toBeVisible();
+  await page.getByRole('listbox', { name: 'Kit' }).getByRole('option').first().click();
   await page.getByRole('button', { name: 'Next' }).click();
 
-  await expect(page.getByLabel(/Step 6 of 7/)).toBeVisible();
+  await expect(page.getByLabel(/Step 4 of 7/)).toBeVisible();
+  await page.getByRole('option', { name: /ROLL 3D6/i }).click();
+  await page.getByRole('button', { name: 'Roll attributes' }).click();
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  await expect(page.getByLabel(/Step 5 of 7/)).toBeVisible();
   await page.getByRole('option', { name: 'Caravan guard' }).click();
   await page.getByRole('button', { name: 'Next' }).click();
 
+  await expect(page.getByLabel(/Step 6 of 7/)).toBeVisible();
+  await page.getByRole('button', { name: 'Next' }).click();
+
   await expect(page.getByLabel(/Step 7 of 7/)).toBeVisible();
-  await page.getByRole('button', { name: 'Confirm' }).click();
+  await page.getByRole('button', { name: 'WEAVE ▸', exact: true }).click();
 
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');

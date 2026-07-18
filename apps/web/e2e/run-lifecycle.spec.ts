@@ -6,11 +6,12 @@ import { expect, test, type Page } from '@playwright/test';
  *
  * Two independent journeys share this file:
  *
- * 1. The seven-step chargen wizard (`/play?seed=...`, NO quickstart), driven the way a player would:
- *    a typed name, keyboard-navigated option lists, a point-buy allocation adjusted with the arrow
- *    keys, and a click on "Next" between steps (mirroring `chargen-screen.test.tsx`'s hybrid). The
- *    seed pins the wizard's attribute rolls but is irrelevant to the point-buy path this walk ends
- *    on. The chosen block sets Vitality to 12; with the retuned `maxHealth = { base: 10, vitality: 1 }`
+ * 1. The seven-step chargen console (`/play?seed=...`, NO quickstart), driven the way a player
+ *    would: a typed name, clicked option rows, a point-buy allocation adjusted through the
+ *    attribute stepper's +/- buttons, and a click on "NEXT ▸" between steps. The step order is
+ *    Identity -> Calling -> Kit -> Attributes -> Origin -> Traits -> Review. The seed pins the
+ *    console's attribute rolls but is irrelevant to the point-buy path this walk ends on. The
+ *    chosen block sets Vitality to 12; with the retuned `maxHealth = { base: 10, vitality: 1 }`
  *    formula and no equipment/background/trait touching maxHealth (verified against the bundled
  *    content), the Lamplighter lands in play with 10 + 12 = 22 HP and the brass lantern in its
  *    off-hand — both asserted in the hero panel.
@@ -54,68 +55,62 @@ async function awaitKeyboardReady(page: Page): Promise<void> {
   }).toPass();
 }
 
-test('a guest builds a Lamplighter through the seven-step wizard and enters play', async ({ page }) => {
+test('a guest builds a Lamplighter through the seven-step console and enters play', async ({ page }) => {
   await page.goto(WIZARD_SEED_QUERY);
 
   // Title -> Enter the Deep.
   await expect(page.getByRole('option', { name: 'Enter the Deep' })).toBeVisible();
   await page.getByRole('option', { name: 'Enter the Deep' }).click();
 
-  // Step 1: name + portrait.
+  // Step 1 (Identity): name + portrait.
   await expect(page.getByLabel(/Step 1 of 7/)).toBeVisible();
   await page.getByRole('textbox', { name: 'Name' }).fill('Testa');
   await page.getByRole('listbox', { name: 'Portrait' }).getByRole('option').nth(1).click();
   await page.getByRole('button', { name: 'Next' }).click();
 
-  // Step 2: choose Roll first...
+  // Step 2 (Calling): the Lamplighter.
   await expect(page.getByLabel(/Step 2 of 7/)).toBeVisible();
-  await page.getByRole('option', { name: /Roll/ }).click();
+  await page.getByRole('option', { name: /Lamplighter/ }).click();
   await page.getByRole('button', { name: 'Next' }).click();
 
-  // Step 3 (roll): roll, then use the one-shot reroll.
+  // Step 3 (Kit): the lantern kit.
   await expect(page.getByLabel(/Step 3 of 7/)).toBeVisible();
+  await page.getByRole('option', { name: 'Lantern' }).click();
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  // Step 4 (Attributes): choose Roll first, roll, then use the one-shot reroll...
+  await expect(page.getByLabel(/Step 4 of 7/)).toBeVisible();
+  await page.getByRole('option', { name: /ROLL 3D6/i }).click();
   await page.getByRole('button', { name: 'Roll attributes' }).click();
   await page.getByRole('button', { name: 'Reroll' }).click();
   await expect(page.getByRole('button', { name: 'Reroll used' })).toBeVisible();
 
-  // ...then switch the method to point buy and allocate a legal block by keyboard.
-  await page.getByRole('button', { name: 'Back' }).click();
-  await expect(page.getByLabel(/Step 2 of 7/)).toBeVisible();
-  await page.getByRole('option', { name: 'Point buy' }).click();
+  // ...then switch the method to point buy (inline within the same step, no navigation needed)
+  // and allocate a legal block via the attribute stepper's +/- buttons.
+  await page.getByRole('option', { name: /POINT-BUY/i }).click();
+  await expect(page.getByText(/Points: 0\/30/)).toBeVisible();
+  // Attribute order is [might, agility, vitality, wits, resolve], each with its own stepper row;
+  // the third "+" button (index 2) raises Vitality. 12 clicks lands it at 12 (cost 14 of the 30
+  // budget).
+  const vitalityIncrement = page.getByRole('button', { name: '+', exact: true }).nth(2);
+  for (let i = 0; i < 12; i += 1) await vitalityIncrement.click();
+  await expect(page.getByRole('region', { name: 'Derived stats' })).toContainText(/Max health.*22/);
   await page.getByRole('button', { name: 'Next' }).click();
 
-  await expect(page.getByLabel(/Step 3 of 7/)).toBeVisible();
-  await expect(page.getByText(/Points spent: 0\/30/)).toBeVisible();
-  // Attribute order is [might, agility, vitality, wits, resolve]; the first row auto-focuses, so
-  // ArrowDown x2 selects Vitality, then ArrowRight x12 raises it to 12 (cost 14 of the 30 budget).
-  const attributeRows = page.getByRole('listbox', { name: 'Point-buy attributes' }).getByRole('option');
-  await expect(attributeRows.first()).toBeFocused();
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowDown');
-  for (let i = 0; i < 12; i += 1) await page.keyboard.press('ArrowRight');
-  await expect(page.getByText(/Max health: 22/)).toBeVisible();
-  await page.getByRole('button', { name: 'Next' }).click();
-
-  // Step 4: Lamplighter.
-  await expect(page.getByLabel(/Step 4 of 7/)).toBeVisible();
-  await page.getByRole('option', { name: /Lamplighter/ }).click();
-  await page.getByRole('button', { name: 'Next' }).click();
-
-  // Step 5: the lantern kit.
+  // Step 5 (Origin): deep-miner background.
   await expect(page.getByLabel(/Step 5 of 7/)).toBeVisible();
-  await page.getByRole('option', { name: 'Lantern' }).click();
+  await page.getByRole('option', { name: 'Deep miner' }).click();
   await page.getByRole('button', { name: 'Next' }).click();
 
-  // Step 6: deep-miner background + two traits.
+  // Step 6 (Traits): two traits.
   await expect(page.getByLabel(/Step 6 of 7/)).toBeVisible();
-  await page.getByRole('option', { name: 'Deep miner' }).click();
   await page.getByRole('option', { name: 'Keen-eyed' }).click();
   await page.getByRole('option', { name: 'Sure-footed' }).click();
   await page.getByRole('button', { name: 'Next' }).click();
 
-  // Step 7: confirm and enter play.
+  // Step 7 (Review): weave the hero and enter play.
   await expect(page.getByLabel(/Step 7 of 7/)).toBeVisible();
-  await page.getByRole('button', { name: 'Confirm' }).click();
+  await page.getByRole('button', { name: 'WEAVE ▸', exact: true }).click();
 
   // The Lamplighter's loadout is live in the hero panel: brass lantern equipped, 22 HP derived
   // from the allocated Vitality.
@@ -171,30 +166,31 @@ test('a death finalizes into the Hall and the conclusion closes the loop', async
   await page.getByRole('option', { name: 'New Hero' }).click();
   await expect(page.getByLabel(/Step 1 of 7/)).toBeVisible();
 
-  // Regression: New Hero -> wizard -> Confirm must start the NEW hero fresh, not restore the
+  // Regression: New Hero -> console -> WEAVE must start the NEW hero fresh, not restore the
   // just-finalized dead run (whose non-null conclusion would otherwise bounce straight back to
-  // this same conclusion screen forever). Complete a minimal wizard run-through and arrive in the
-  // dungeon at Turn 0 with the new hero's name visible.
+  // this same conclusion screen forever). Complete a minimal run-through (Identity -> Calling ->
+  // Kit -> Attributes -> Origin -> Traits -> Review) and arrive in the dungeon at Turn 0 with the
+  // new hero's name visible.
   await page.getByRole('textbox', { name: 'Name' }).fill('Nova');
-  await page.getByRole('button', { name: 'Next' }).click();
-
-  await page.getByRole('option', { name: /Roll/ }).click();
-  await page.getByRole('button', { name: 'Next' }).click();
-
-  await page.getByRole('button', { name: 'Roll attributes' }).click();
   await page.getByRole('button', { name: 'Next' }).click();
 
   await page.getByRole('option', { name: /Wayfarer/ }).click();
   await page.getByRole('button', { name: 'Next' }).click();
 
-  await page.getByRole('option').first().click();
+  await page.getByRole('listbox', { name: 'Kit' }).getByRole('option').first().click();
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  await page.getByRole('option', { name: /ROLL 3D6/i }).click();
+  await page.getByRole('button', { name: 'Roll attributes' }).click();
   await page.getByRole('button', { name: 'Next' }).click();
 
   await page.getByRole('option', { name: 'Caravan guard' }).click();
   await page.getByRole('button', { name: 'Next' }).click();
 
+  await page.getByRole('button', { name: 'Next' }).click();
+
   await expect(page.getByLabel(/Step 7 of 7/)).toBeVisible();
-  await page.getByRole('button', { name: 'Confirm' }).click();
+  await page.getByRole('button', { name: 'WEAVE ▸', exact: true }).click();
 
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
   await expect(page.getByRole('heading', { name: /you have fallen/i })).not.toBeVisible();

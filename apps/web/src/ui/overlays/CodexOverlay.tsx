@@ -17,9 +17,9 @@ const CATEGORY_LABEL: Readonly<Record<CodexCategoryData['kind'], string>> = {
 /** A locked class's `unlockHint`, zipped by index against the SAME `sortedClassEntries` order
  * `deriveCodexState` uses to build the class category -- `CodexEntry`'s undiscovered variant
  * deliberately carries no id to look this up by (spoiler-free), but `unlockHint` text is not
- * itself a spoiler: chargen already discloses it, unlocked or not (`ClassStep`,
- * `chargen-steps.tsx`). `null` for every OTHER category, and for a discovered class (chargen shows
- * no hint once a class is playable). */
+ * itself a spoiler: the Calling step of chargen already discloses it, unlocked or not. `null` for
+ * every OTHER category, and for a discovered class (chargen shows no hint once a class is
+ * playable). */
 function unlockHintFor(pack: CompiledContentPack, category: CodexCategoryData, index: number): string | null {
   if (category.kind !== 'class') return null;
   const entry = category.entries[index];
