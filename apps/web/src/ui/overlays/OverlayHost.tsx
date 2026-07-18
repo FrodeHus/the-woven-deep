@@ -108,7 +108,7 @@ function renderBody(overlay: OverlayId, ctx: RenderBodyContext): JSX.Element {
       return <CharacterSheetOverlay />;
     case 'map-journal':
       if (!ctx.snapshot) return <p>The map and journal are unavailable right now.</p>;
-      return <MapJournalOverlay snapshot={ctx.snapshot} />;
+      return <MapJournalOverlay />;
     case 'codex':
       if (!ctx.records) return <p>The codex is unavailable right now.</p>;
       return (
