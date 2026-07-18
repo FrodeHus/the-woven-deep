@@ -1,8 +1,7 @@
 :root {
-  /* Named palette: the recurring hex literals that used to be scattered across every rule below,
-     collected here as custom properties -- a pure rename, same values, zero visual change. Colors
-     that appear only once (e.g. the hit-flash/death-burst gradients' own accent reds) are left as
-     literals; only recurring ones earn a name. */
+  /* Named palette: colors used by more than one rule live here as custom properties. Colors that
+     appear only once (e.g. the hit-flash/death-burst gradients' own accent reds) stay as literals;
+     only recurring ones earn a name. */
   --ink: #aab3d1;
   --ground: #121521;
   --gold: #e8c879;
