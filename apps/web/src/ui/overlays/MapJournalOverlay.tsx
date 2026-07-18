@@ -1,6 +1,7 @@
 import type { CSSProperties, JSX } from 'react';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import { visibleForeground } from '../cell-color.js';
+import { cn } from '../lib/cn.js';
 import { useSessionCtx } from '../providers.js';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/tabs.js';
 
@@ -276,6 +277,15 @@ const LOG_TONE_CLASS: Readonly<Record<string, string>> = {
   system: 'text-muted',
 };
 
+/** Colorblind reinforcement classes (`styles.css`'s `.journal-log-line--*::before` rules): a silent
+ * leading glyph for each colored tone, so severity is never carried by `LOG_TONE_CLASS`'s text
+ * color alone. `info` (and any tone absent from `LOG_TONE_CLASS`) gets no glyph. */
+const LOG_REINFORCEMENT_CLASS: Readonly<Record<string, string>> = {
+  warning: 'journal-log-line--warning',
+  combat: 'journal-log-line--combat',
+  system: 'journal-log-line--system',
+};
+
 function JournalPane({ snapshot }: Readonly<{ snapshot: SessionSnapshot }>): JSX.Element {
   const floor = snapshot.projection.floor as unknown as ProjectedFloor;
   const actors = snapshot.projection.actors as unknown as readonly ProjectedActor[];
@@ -307,7 +317,7 @@ function JournalPane({ snapshot }: Readonly<{ snapshot: SessionSnapshot }>): JSX
             order `foldEventsIntoLog` already appends in (oldest first). */}
         <ul className="flex max-h-[40vh] list-none flex-col gap-0.5 overflow-auto p-0 text-sm" aria-label="Adventure log">
           {snapshot.log.map((line) => (
-            <li key={line.id} className={LOG_TONE_CLASS[line.tone] ?? ''}>{line.text}</li>
+            <li key={line.id} className={cn(LOG_TONE_CLASS[line.tone], LOG_REINFORCEMENT_CLASS[line.tone])}>{line.text}</li>
           ))}
         </ul>
       </section>

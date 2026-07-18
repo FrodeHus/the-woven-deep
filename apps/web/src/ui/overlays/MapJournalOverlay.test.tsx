@@ -345,6 +345,27 @@ describe('MapJournalOverlay', () => {
       expect(landmarks.getByText(/wandering peddler/i)).toBeInTheDocument();
     });
 
+    it('applies the colorblind reinforcement class alongside the token color class for each colored log tone', async () => {
+      const log: readonly LogLine[] = [
+        { id: 1, text: 'You enter the room.', tone: 'info' },
+        { id: 2, text: 'A rat bites you.', tone: 'combat' },
+        { id: 3, text: 'Your light is running low.', tone: 'warning' },
+        { id: 4, text: 'The mechanism clicks.', tone: 'system' },
+      ];
+      const snapshot = snapshotWith({ floor: MIXED_KNOWLEDGE_FLOOR, log });
+      renderOverlay(snapshot);
+      await openJournalTab();
+
+      // The `.journal-log-line--*::before` glyph in `styles.css` only ever renders on these
+      // classes -- so the class must land on the actual rendered element, not merely exist as a
+      // rule in the stylesheet.
+      expect(screen.getByText('A rat bites you.')).toHaveClass('journal-log-line--combat', 'text-accent');
+      expect(screen.getByText('Your light is running low.')).toHaveClass('journal-log-line--warning', 'text-danger-fg');
+      expect(screen.getByText('The mechanism clicks.')).toHaveClass('journal-log-line--system', 'text-muted');
+      // `info` has no reinforcement glyph in the stylesheet -- no `.journal-log-line--info` class.
+      expect(screen.getByText('You enter the room.')).not.toHaveClass('journal-log-line--info');
+    });
+
     it('does not show a persisted landmark captured on a DIFFERENT floor', async () => {
       const dungeonFloor: FloorOverrides = { floorId: 'floor.dungeon-2', town: false, width: 1, height: 1, cells: [] };
       const snapshot = snapshotWith({

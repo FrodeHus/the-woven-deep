@@ -489,10 +489,8 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 /* Colorblind reinforcement (Task 9): a silent `::before` glyph for each colored log tone, painted
    via the CSS alt-text syntax (`content: "..." / ""` -- the string after `/` is what a screen
    reader sees, i.e. nothing) so meaning is never carried by color alone. `styles-contract.test.ts`
-   asserts this contract directly against the stylesheet. NOTE: `LogPanel.tsx`/`MapJournalOverlay.tsx`
-   currently style log tones with plain Tailwind color utilities and do not apply the
-   `.log-line--*`/`.journal-log-line--*` classes these rules target -- flagged in the Task 15a
-   report for follow-up (either reapply the classes there, or fold the contract into token classes). */
+   asserts this contract directly against the stylesheet, and `LogPanel.tsx`/`MapJournalOverlay.tsx`
+   apply these classes alongside their token text-color classes on every colored log line. */
 .log-line--combat::before { content: "\2694  " / ""; }
 .log-line--warning::before { content: "\26A0  " / ""; }
 .log-line--system::before { content: "\2699  " / ""; }
