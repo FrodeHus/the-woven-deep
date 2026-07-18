@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { OptionRow } from './OptionRow.js';
 
 describe('OptionRow', () => {
@@ -89,6 +89,29 @@ describe('OptionRow', () => {
     expect(screen.getByText('A stalwart fighter.')).toBeInTheDocument();
     expect(screen.getByText('Melee')).toBeInTheDocument();
     expect(screen.getByText('Tank')).toBeInTheDocument();
+  });
+
+  it('calls onSelect when Enter or Space is pressed on a focused option', () => {
+    const onSelect = vi.fn();
+    render(
+      <OptionRow name="Warrior" marker="single" selected={false} onSelect={onSelect} />
+    );
+    const row = screen.getByRole('option');
+    fireEvent.keyDown(row, { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(row, { key: ' ' });
+    expect(onSelect).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not call onSelect on Enter or Space when locked', () => {
+    const onSelect = vi.fn();
+    render(
+      <OptionRow name="Paladin" marker="single" selected={false} locked onSelect={onSelect} />
+    );
+    const row = screen.getByRole('option');
+    fireEvent.keyDown(row, { key: 'Enter' });
+    fireEvent.keyDown(row, { key: ' ' });
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it('renders an optional glyph tile', () => {

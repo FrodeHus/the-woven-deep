@@ -238,19 +238,19 @@ export function CallingStep({ state, pack, dispatch }: StepProps): JSX.Element {
       <FilterBar facets={facets} />
       <div role="listbox" aria-label="Calling" className="flex flex-col gap-1.5" onKeyDown={handleArrowKeys}>
         {facets.filtered.map((entry, index) => (
-          <div key={entry.id} ref={registerItem(index)} tabIndex={-1}>
-            <OptionRow
-              glyph={entry.silhouetteGlyph}
-              name={entry.name}
-              description={entry.description}
-              tags={entry.tags}
-              marker="single"
-              selected={state.classId === entry.id}
-              locked={!entry.playable}
-              {...(entry.unlockHint ? { lockHint: entry.unlockHint } : {})}
-              onSelect={() => { if (entry.playable) dispatch({ type: 'choose-class', classId: entry.id }); }}
-            />
-          </div>
+          <OptionRow
+            key={entry.id}
+            ref={registerItem(index)}
+            glyph={entry.silhouetteGlyph}
+            name={entry.name}
+            description={entry.description}
+            tags={entry.tags}
+            marker="single"
+            selected={state.classId === entry.id}
+            locked={!entry.playable}
+            {...(entry.unlockHint ? { lockHint: entry.unlockHint } : {})}
+            onSelect={() => { if (entry.playable) dispatch({ type: 'choose-class', classId: entry.id }); }}
+          />
         ))}
       </div>
     </section>
@@ -282,14 +282,14 @@ export function KitStep({ state, pack, dispatch }: StepProps): JSX.Element {
       <FilterBar facets={facets} />
       <div role="listbox" aria-label="Kit" className="flex flex-col gap-1.5" onKeyDown={handleArrowKeys}>
         {facets.filtered.map((kit, index) => (
-          <div key={kit.kitId} ref={registerItem(index)} tabIndex={-1}>
-            <OptionRow
-              name={kit.name}
-              marker="single"
-              selected={state.kitId === kit.kitId}
-              onSelect={() => dispatch({ type: 'choose-kit', kitId: kit.kitId })}
-            />
-          </div>
+          <OptionRow
+            key={kit.kitId}
+            ref={registerItem(index)}
+            name={kit.name}
+            marker="single"
+            selected={state.kitId === kit.kitId}
+            onSelect={() => dispatch({ type: 'choose-kit', kitId: kit.kitId })}
+          />
         ))}
       </div>
     </section>

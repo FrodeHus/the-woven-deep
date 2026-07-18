@@ -44,6 +44,22 @@ describe('CallingStep', () => {
     await user.click(archivistOption);
     expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'choose-class', classId: ARCHIVIST }));
   });
+
+  it('dispatches choose-class when a class row is reached via arrow keys and selected with Enter', async () => {
+    const user = userEvent.setup();
+    const dispatch = vi.fn();
+    render(<CallingStep state={stubState()} pack={pack} dispatch={dispatch} />);
+    const options = screen.getAllByRole('option');
+    const targetIndex = options.findIndex((option) => /Wayfarer/.test(option.textContent ?? ''));
+    expect(targetIndex).toBeGreaterThanOrEqual(0);
+
+    options[0]!.focus();
+    for (let i = 0; i < targetIndex; i += 1) {
+      await user.keyboard('{ArrowDown}');
+    }
+    await user.keyboard('{Enter}');
+    expect(dispatch).toHaveBeenCalledWith({ type: 'choose-class', classId: WAYFARER });
+  });
 });
 
 describe('KitStep', () => {
@@ -64,6 +80,27 @@ describe('KitStep', () => {
 
     const kitOption = screen.getByRole('option', { name: new RegExp(kit.name) });
     await user.click(kitOption);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'choose-kit', kitId: kit.kitId });
+  });
+
+  it('dispatches choose-kit when a kit row is reached via arrow keys and selected with Enter', async () => {
+    const user = userEvent.setup();
+    const dispatch = vi.fn();
+    const classEntry = pack.entries.find((entry) => entry.kind === 'class' && entry.id === WAYFARER) as {
+      kits: readonly { kitId: string; name: string }[];
+    };
+    const kit = classEntry.kits[0]!;
+    render(<KitStep state={stubState({ classId: WAYFARER })} pack={pack} dispatch={dispatch} />);
+
+    const options = screen.getAllByRole('option');
+    const targetIndex = options.findIndex((option) => new RegExp(kit.name).test(option.textContent ?? ''));
+    expect(targetIndex).toBeGreaterThanOrEqual(0);
+
+    options[0]!.focus();
+    for (let i = 0; i < targetIndex; i += 1) {
+      await user.keyboard('{ArrowDown}');
+    }
+    await user.keyboard('{Enter}');
     expect(dispatch).toHaveBeenCalledWith({ type: 'choose-kit', kitId: kit.kitId });
   });
 });

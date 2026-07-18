@@ -1,18 +1,7 @@
+import { forwardRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { cn } from '@/ui/lib/cn.js';
 
-export function OptionRow({
-  glyph,
-  glyphColor,
-  name,
-  meta,
-  description,
-  tags,
-  marker,
-  selected,
-  locked,
-  lockHint,
-  onSelect,
-}: {
+export const OptionRow = forwardRef<HTMLDivElement, {
   glyph?: string;
   glyphColor?: string;
   name: string;
@@ -24,7 +13,10 @@ export function OptionRow({
   locked?: boolean;
   lockHint?: string;
   onSelect: () => void;
-}) {
+}>(function OptionRow(
+  { glyph, glyphColor, name, meta, description, tags, marker, selected, locked, lockHint, onSelect },
+  ref
+) {
   const markerText = locked
     ? '⊘'
     : marker === 'single'
@@ -35,12 +27,23 @@ export function OptionRow({
         ? '[×]'
         : '[ ]';
 
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (locked) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onSelect();
+    }
+  };
+
   return (
     <div
+      ref={ref}
       role="option"
       aria-selected={selected}
       aria-disabled={locked || undefined}
+      tabIndex={-1}
       onClick={locked ? undefined : onSelect}
+      onKeyDown={handleKeyDown}
       className={cn(
         'flex items-start gap-3 rounded border p-2 font-mono',
         locked
@@ -77,4 +80,4 @@ export function OptionRow({
       </span>
     </div>
   );
-}
+});
