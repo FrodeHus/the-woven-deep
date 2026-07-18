@@ -64,12 +64,13 @@ async function awaitKeyboardReady(page: Page): Promise<void> {
 }
 
 /** Opens the backpack with `i` and waits until its focus trap owns the keyboard, so the
- * following menu keys can never race the dialog's mount. */
+ * following menu keys can never race the dialog's mount -- the overlay's mount effect moves focus
+ * onto its own listbox (see `InventoryOverlay`'s `useEffect`), not onto any particular button. */
 async function openBackpack(page: Page): Promise<void> {
   await page.keyboard.press('i');
   const dialog = page.getByRole('dialog', { name: 'Backpack' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator('button').first()).toBeFocused();
+  await expect(dialog.getByRole('listbox')).toBeFocused();
 }
 
 async function closeBackpack(page: Page): Promise<void> {
@@ -80,14 +81,14 @@ async function closeBackpack(page: Page): Promise<void> {
 test('a guest plays, persists, and descends by keyboard alone', async ({ page }) => {
   await page.goto(SEED_QUERY);
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
-  await expect(page.locator('.status-depth')).toHaveText('Town');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
   const log = page.getByRole('log', { name: /adventure log/i });
   await awaitKeyboardReady(page);
 
   // Descend from town into the dungeon.
   await pressAll(page, DESCEND_PREFIX);
   await page.keyboard.press('>');
-  await expect(page.locator('.status-depth')).toHaveText('Depth 1');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
 
   // Bump-attack a monster until it dies.
   await pressAll(page, KILL);
@@ -149,20 +150,24 @@ test('every interactive surface is reachable by keyboard', async ({ page }) => {
   await page.keyboard.press('Tab');
   await expect(grid).toBeFocused();
 
-  // `i` opens the backpack as a focus-trapped dialog: focus lands inside on the first item...
+  // `i` opens the backpack as a focus-trapped dialog: its mount effect moves focus onto the
+  // backpack's own listbox (see `InventoryOverlay`)...
   await page.keyboard.press('i');
   const dialog = page.getByRole('dialog', { name: 'Backpack' });
   await expect(dialog).toBeVisible();
-  const firstItem = dialog.locator('button').first();
-  const lastItem = dialog.locator('button').last();
-  await expect(firstItem).toBeFocused();
+  const listbox = dialog.getByRole('listbox');
+  await expect(listbox).toBeFocused();
 
-  // ...and Tab cannot escape it: it wraps within the dialog's focusables (the backpack lists the
-  // hero's ration stack plus the equipped gear rows, so there is more than one focusable).
-  await page.keyboard.press('Shift+Tab');
-  await expect(lastItem).toBeFocused();
+  // ...and Tab cannot escape the dialog: it wraps within its focusables (the toolbar's filter/sort
+  // buttons, the listbox itself, the detail pane's action buttons, and the close button).
+  const focusables = dialog.locator('button, [role="listbox"]');
+  const firstFocusable = focusables.first();
+  const lastFocusable = focusables.last();
+  await lastFocusable.focus();
   await page.keyboard.press('Tab');
-  await expect(firstItem).toBeFocused();
+  await expect(firstFocusable).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(lastFocusable).toBeFocused();
 
   // Escape closes the dialog and restores focus to the grid.
   await page.keyboard.press('Escape');
@@ -170,7 +175,13 @@ test('every interactive surface is reachable by keyboard', async ({ page }) => {
   await expect(grid).toBeFocused();
 });
 
-test('the compact tier swaps the threat panel for a drawer and offers the hover popover', async ({ page }) => {
+// Layout A's right rail (hero/vitals, minimap, threat/town) is a fixed CSS grid that never
+// reflows by viewport size (see `PlayScreen`'s own doc comment) -- the pre-redesign responsive
+// tier/drawer-collapse this test used to cover (`.triptych`'s `data-tier` and `.threat-drawer`) no
+// longer exists, so those assertions are removed rather than translated; the surviving intent is
+// "the threat panel lists a nearby hostile, reachable regardless of viewport size, and hovering
+// its cell raises the popover".
+test('the right rail lists a nearby threat and offers the hover popover', async ({ page }) => {
   await page.goto(SEED_QUERY);
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
   await awaitKeyboardReady(page);
@@ -179,32 +190,19 @@ test('the compact tier swaps the threat panel for a drawer and offers the hover 
   // rat is left at world cell (9,2) beside the hero at (10,2) — pinned by the derivation run.
   await pressAll(page, DESCEND_PREFIX);
   await page.keyboard.press('>');
-  await expect(page.locator('.status-depth')).toHaveText('Depth 1');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
   await pressAll(page, CLUSTER_KILL);
   await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(/dies/i);
 
-  // At the pinned 1440x900 viewport the layout sits in the full tier: threat panel present,
-  // no drawer.
-  await expect(page.locator('.triptych')).toHaveAttribute('data-tier', 'full');
-  await expect(page.locator('.threat-drawer')).toHaveCount(0);
+  const threatPanel = page.getByRole('region', { name: 'Threats' });
+  await expect(threatPanel).toBeVisible();
+  await expect(threatPanel).toContainText(/cave rat/i);
 
-  // Resize into the compact tier mid-run: the threat panel collapses into its drawer while
-  // the grid stays put.
+  // Resizing the viewport never collapses the right rail or hides the grid -- Layout A's
+  // composition is fixed.
   await page.setViewportSize({ width: 900, height: 900 });
-  await expect(page.locator('.triptych')).toHaveAttribute('data-tier', 'compact');
-  const drawer = page.locator('details.threat-drawer');
-  await expect(drawer).toBeVisible();
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
-
-  // The drawer stays keyboard-reachable: its summary takes focus and Enter toggles it open,
-  // with the visible rat listed inside. (The drawer's grid track is deliberately squeezed to
-  // zero width at this tier — see styles.css — so these are reachability assertions, not
-  // pixel-visibility ones, which Playwright would fail on any zero-width element.)
-  await drawer.locator('summary').focus();
-  await expect(drawer.locator('summary')).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(drawer).toHaveJSProperty('open', true);
-  await expect(drawer).toContainText(/cave rat/i);
+  await expect(threatPanel).toContainText(/cave rat/i);
 
   // Hovering the rat's cell raises the threat popover card.
   await page.locator('[data-cell="9,2"]').hover();

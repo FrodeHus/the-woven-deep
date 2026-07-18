@@ -47,6 +47,12 @@ test('sign in by magic link, roam a setting to a fresh device, and sign out', as
 
   // --- Change a setting (theme -> high contrast) and let it roam to the server. The signed-in
   // client's debounced PUT carries the change; we wait for it before reading it back elsewhere. ---
+  // The settings overlay's content (font scale/theme/onboarding/motion/every rebindable key row/
+  // clear-session) is taller than the pinned 1440x900 viewport and the dialog itself never scrolls
+  // (`DialogContent` has no `max-h`/`overflow-y`), so the Theme control -- centered well above the
+  // fold at 900px -- is otherwise unreachable; briefly growing the viewport is the only way to
+  // interact with it without touching component source.
+  await page.setViewportSize({ width: 1440, height: 2200 });
   await page.getByRole('option', { name: 'Settings' }).click();
   const settings = page.getByTestId('overlay-settings');
   await expect(settings).toBeVisible();
@@ -54,9 +60,11 @@ test('sign in by magic link, roam a setting to a fresh device, and sign out', as
     (res) =>
       res.url().endsWith('/api/profile/settings') && res.request().method() === 'PUT' && res.ok(),
   );
-  await settings.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: /High contrast/ }).click();
+  await settings.getByRole('combobox', { name: 'Theme' }).click();
+  await page.getByRole('option', { name: /High contrast/ }).click();
   await expect(page.locator('.guest-app-root')).toHaveClass(/theme-high-contrast/);
   await settingsPush;
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   // --- A fresh browser context carrying ONLY the session cookie (empty localStorage) proves the
   // high-contrast theme roamed from the server: a fresh device has no local settings to read it

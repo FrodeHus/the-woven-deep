@@ -64,7 +64,7 @@ test('a guest builds a Lamplighter through the seven-step wizard and enters play
   // Step 1: name + portrait.
   await expect(page.getByLabel(/Step 1 of 7/)).toBeVisible();
   await page.getByRole('textbox', { name: 'Name' }).fill('Testa');
-  await page.locator('.chargen-portrait-list .chargen-portrait').nth(1).click();
+  await page.getByRole('listbox', { name: 'Portrait' }).getByRole('option').nth(1).click();
   await page.getByRole('button', { name: 'Next' }).click();
 
   // Step 2: choose Roll first...
@@ -88,7 +88,8 @@ test('a guest builds a Lamplighter through the seven-step wizard and enters play
   await expect(page.getByText(/Points spent: 0\/30/)).toBeVisible();
   // Attribute order is [might, agility, vitality, wits, resolve]; the first row auto-focuses, so
   // ArrowDown x2 selects Vitality, then ArrowRight x12 raises it to 12 (cost 14 of the 30 budget).
-  await page.locator('.chargen-attribute-row').first().focus();
+  const attributeRows = page.getByRole('listbox', { name: 'Point-buy attributes' }).getByRole('option');
+  await expect(attributeRows.first()).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   for (let i = 0; i < 12; i += 1) await page.keyboard.press('ArrowRight');
@@ -133,7 +134,7 @@ test('a death finalizes into the Hall and the conclusion closes the loop', async
   // survivors until they kill the wounded hero.
   await pressAll(page, DESCEND_PREFIX);
   await page.keyboard.press('>');
-  await expect(page.locator('.status-depth')).toHaveText('Depth 1');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
   await pressAll(page, CLUSTER_KILL);
   await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(/dies/i);
 
