@@ -1,8 +1,9 @@
 import { Fragment, type CSSProperties, type JSX, type ReactNode } from 'react';
 import {
-  DERIVED_STAT_NAMES, type DerivedStatFormula, type DerivedStatName,
+  type DerivedStatFormula, type DerivedStatName,
 } from '@woven-deep/engine';
 import { useSessionCtx } from '../providers.js';
+import { playerVisibleDerivedStats } from '../derived-stats-display.js';
 import type { ProjectedItemLike } from './InventoryOverlay.js';
 
 type AttributeName = 'might' | 'agility' | 'vitality' | 'wits' | 'resolve';
@@ -108,8 +109,9 @@ function Row({ label, value }: Readonly<{ label: string; value: ReactNode }>): J
 }
 
 /**
- * Read-only character sheet: base attributes, every `DERIVED_STAT_NAMES` entry with its value AND
- * formula, active conditions (stacks + a disclosed expiry marker), hunger stage, sight radius,
+ * Read-only character sheet: base attributes, every player-visible derived stat (`DERIVED_STAT_NAMES`
+ * minus the internal knobs in `PLAYER_HIDDEN_DERIVED_STATS`) with its value AND formula, active
+ * conditions (stacks + a disclosed expiry marker), hunger stage, sight radius,
  * equipped gear, and current-run metrics. No dispatch surface at all -- unlike `InventoryOverlay`,
  * this overlay never calls `onDispatch`; there is nothing here to act on, only to read. Reads
  * directly from `useSessionCtx()` rather than taking props, since the character sheet is
@@ -162,7 +164,7 @@ export function CharacterSheetOverlay(): JSX.Element | null {
 
       <Section id="character-sheet-derived-heading" title="Derived stats">
         <DefinitionGrid>
-          {DERIVED_STAT_NAMES.map((name) => {
+          {playerVisibleDerivedStats().map((name) => {
             const stat = hero.derived[name];
             return (
               <Row
