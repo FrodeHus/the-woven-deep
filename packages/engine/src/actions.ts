@@ -416,7 +416,7 @@ export function validatePlayerAction(input: Readonly<{
     const transition = input.command.type === 'open-door'
       ? openDoor({ run: input.state, actorId: actor.actorId, featureId: input.command.featureId })
       : closeDoor({ run: input.state, actorId: actor.actorId, featureId: input.command.featureId });
-    if (!transition.ok) return { status: 'invalid', reason: 'action.unavailable' };
+    if (!transition.ok) return { status: 'invalid', reason: transition.reason };
     return { type: input.command.type, actorId: actor.actorId, featureId: input.command.featureId,
       cost: actionCostFor(rules, `action.${input.command.type}`) };
   }

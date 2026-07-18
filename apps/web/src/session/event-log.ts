@@ -36,6 +36,8 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
       return { text: 'You consume an item.', tone: 'info' };
     case 'item.light-extinguished':
       return { text: 'Your light source goes out.', tone: 'warning' };
+    case 'item.refueled':
+      return { text: 'You refill your light source.', tone: 'info' };
     case 'fuel.warning':
       return { text: `Your light is running low on fuel (${event.fuel} remaining).`, tone: 'warning' };
     case 'hunger.stage-changed':
@@ -53,7 +55,22 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
     case 'sound.heard':
       return { text: `You hear ${event.category} to the ${event.direction}.`, tone: 'info' };
     case 'action.invalid':
-      return { text: `That cannot be done (${event.reason}).`, tone: 'system' };
+      switch (event.reason) {
+        case 'door.locked':
+          return { text: 'The door is locked.', tone: 'system' };
+        case 'door.not-adjacent':
+          return { text: 'You are too far from the door.', tone: 'system' };
+        case 'door.occupied':
+          return { text: 'Something is blocking the doorway.', tone: 'system' };
+        case 'door.already-open':
+          return { text: 'The door is already open.', tone: 'system' };
+        case 'door.already-closed':
+          return { text: 'The door is already closed.', tone: 'system' };
+        case 'door.missing':
+          return { text: 'There is no door there.', tone: 'system' };
+        default:
+          return { text: `That cannot be done (${event.reason}).`, tone: 'system' };
+      }
     case 'run.concluded':
       return { text: 'Your run has concluded.', tone: 'system' };
     default:

@@ -399,6 +399,29 @@ describe('population placement selection and composition', () => {
     });
   });
 
+  it('places up to and including a raised per-run cap (matching the raised early-game encounter caps)', () => {
+    const encounter = individual('encounter.raised-cap', { maximumInstancesPerRun: 24 });
+    const belowCapRun = runFor([encounter]);
+    const belowCapResult = placePopulation({
+      run: { ...belowCapRun, encounterDecisions: belowCapRun.encounterDecisions.map((decision) =>
+        ({ ...decision, instancesCreated: 23 })) },
+      floor: floor(), content: pack([encounter]), forcedEncounterId: encounter.id,
+    });
+    expect(belowCapResult.status).toBe('placed');
+    if (belowCapResult.status === 'placed') {
+      expect(belowCapResult.encounterDecisions.find((decision) => decision.encounterId === encounter.id)
+        ?.instancesCreated).toBe(24);
+    }
+
+    const atCapRun = runFor([encounter]);
+    const atCapResult = placePopulation({
+      run: { ...atCapRun, encounterDecisions: atCapRun.encounterDecisions.map((decision) =>
+        ({ ...decision, instancesCreated: 24 })) },
+      floor: floor(), content: pack([encounter]), forcedEncounterId: encounter.id,
+    });
+    expect(atCapResult).toMatchObject({ status: 'skipped', reason: 'no-eligible-encounter' });
+  });
+
   it('advances fixed population allocation past existing actor identifiers', () => {
     const encounter = individual('encounter.id-collision');
     const base = runFor([encounter]);

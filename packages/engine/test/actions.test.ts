@@ -39,6 +39,38 @@ describe('player action validation', () => {
     })).toEqual({ status: 'invalid', reason: 'action.unavailable' });
   });
 
+  it('surfaces the specific reason when opening a locked door', () => {
+    const run = createDemoRun();
+    const locked = {
+      ...run,
+      features: [{
+        featureId: 'door.locked', type: 'door' as const, floorId: run.floors[0]!.floorId, x: 2, y: 1,
+        contentId: null, coverTileId: 2 as const, state: 'locked' as const,
+      }],
+    };
+    expect(validatePlayerAction({
+      state: locked,
+      command: { type: 'open-door', commandId: 'command.open-door', expectedRevision: 0, featureId: 'door.locked' },
+      context,
+    })).toEqual({ status: 'invalid', reason: 'door.locked' });
+  });
+
+  it('surfaces the specific reason when opening a door that is not adjacent', () => {
+    const run = createDemoRun();
+    const distant = {
+      ...run,
+      features: [{
+        featureId: 'door.distant', type: 'door' as const, floorId: run.floors[0]!.floorId, x: 5, y: 3,
+        contentId: null, coverTileId: 2 as const, state: 'closed' as const,
+      }],
+    };
+    expect(validatePlayerAction({
+      state: distant,
+      command: { type: 'open-door', commandId: 'command.open-door', expectedRevision: 0, featureId: 'door.distant' },
+      context,
+    })).toEqual({ status: 'invalid', reason: 'door.not-adjacent' });
+  });
+
   it('never resolves trade commands through the world-step action path', () => {
     expect(validatePlayerAction({
       state: createDemoRun(),

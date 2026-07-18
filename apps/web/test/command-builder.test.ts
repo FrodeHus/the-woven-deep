@@ -282,6 +282,35 @@ describe('buildIntent', () => {
     });
   });
 
+  it('builds a refuel command from a fuel intent, targeting the equipped light with the fuel stack quantity', () => {
+    // The default guest hero equips a pitch torch (fuelTags: []) and carries no lamp oil, so a
+    // brass lantern + lamp oil pairing is grafted onto the base projection here.
+    const oil = { itemId: 'item.oil-stack', contentId: 'item.lamp-oil', name: 'Lamp oil', quantity: 5, identified: true };
+    const lantern = { itemId: 'item.lantern-1', contentId: 'item.brass-lantern', name: 'Brass lantern', identified: true };
+    const projectionWithFuel: GameplayProjection = {
+      ...baseProjection,
+      hero: {
+        ...baseProjection.hero,
+        backpack: [oil],
+        equipment: { ...(baseProjection.hero as unknown as { equipment: Readonly<Record<string, unknown>> }).equipment, 'off-hand': lantern },
+      },
+    };
+
+    const built = buildIntent({
+      intent: { type: 'refuel', fuelItemId: oil.itemId, targetItemId: lantern.itemId },
+      projection: projectionWithFuel,
+      commandId: 'command.guest-000050',
+      expectedRevision: 5,
+    });
+    expect(built).toEqual({
+      kind: 'command',
+      command: {
+        type: 'refuel', itemId: lantern.itemId, fuelItemId: oil.itemId, quantity: oil.quantity,
+        commandId: 'command.guest-000050', expectedRevision: 5,
+      },
+    });
+  });
+
   it('builds an unequip command for an equipped item, finding its slot from the projection', () => {
     const equipment = (baseProjection.hero as unknown as {
       equipment: Readonly<Record<string, Readonly<{ itemId: string }> | null>>;

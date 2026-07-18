@@ -73,6 +73,8 @@ const blockReason = z.enum([
   'trade.stock-unavailable', 'trade.item-unacceptable', 'trade.capacity',
   'trade.service-unavailable', 'trade.target-invalid', 'run.concluded',
   'town.truce', 'town.rest', 'house.full',
+  'door.missing', 'door.not-adjacent', 'door.locked', 'door.already-open',
+  'door.already-closed', 'door.occupied',
 ]);
 const invalidEvent = z.strictObject({ type: z.literal('action.invalid'), eventId: identifier, commandId: identifier, reason: blockReason });
 const attackBase = { eventId: identifier, actorId: identifier, targetActorId: identifier,
@@ -1706,6 +1708,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         const houseReason = recordValue.result.reason === 'house.full';
         // A truce or rest rejection may reject any in-town command, not just a specific shape.
         const townReason = recordValue.result.reason === 'town.truce' || recordValue.result.reason === 'town.rest';
+        const doorCommand = recordValue.command.type === 'open-door' || recordValue.command.type === 'close-door';
+        const doorReason = recordValue.result.reason.startsWith('door.');
         if (tradeReason) {
           // Modal rejection: any command may fail with trade.active; other trade reasons
           // require the trade command boundary.
@@ -1723,7 +1727,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         }
         if (targetReason && !targetingCommand) fail(`${path}.result.reason`, 'target reason requires a targeting command');
         if (houseReason && !houseCommand) fail(`${path}.result.reason`, 'house reason requires a house command');
-        if (!inventoryReason && !targetReason && !houseReason && !townReason
+        if (doorReason && !doorCommand) fail(`${path}.result.reason`, 'door reason requires a door command');
+        if (!inventoryReason && !targetReason && !houseReason && !townReason && !doorReason
           && recordValue.result.reason !== 'action.unavailable' && recordValue.result.reason !== 'run.concluded') {
           fail(`${path}.result.reason`, 'non-movement command reason is inconsistent');
         }

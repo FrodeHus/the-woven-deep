@@ -47,9 +47,7 @@ export function createRotTopology(width: number, height: number, maskWords: read
       corridorLength: [2, 12],
       timeLimit: Number.MAX_SAFE_INTEGER,
     });
-    const tiles = Array.from({ length: width * height }, (_, index) =>
-      (maskHas(maskWords, width, index % width, Math.floor(index / width)) ? 0 : 6) as TileId,
-    );
+    const tiles = Array.from({ length: width * height }, () => 0 as TileId);
     let outsideMask = false;
     digger.create((x, y, value) => {
       const inside = maskHas(maskWords, width, x, y);

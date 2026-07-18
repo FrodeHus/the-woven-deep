@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { EquipmentSlot, OpaqueId } from '@woven-deep/engine';
+import type { CompiledContentPack } from '@woven-deep/content';
 import { effectLabel } from '../labels.js';
-import { useSessionCtx } from '../providers.js';
+import { usePack, useSessionCtx } from '../providers.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
 import { Button } from '../components/button.js';
 import { cn } from '../lib/cn.js';
@@ -139,6 +140,30 @@ function visibleEntries(
   return [...filtered].sort(byNameStable);
 }
 
+/**
+ * The currently-equipped light (if any) that `fuelItem` can refuel: matches when the fuel item's
+ * content-pack `tags` intersect the light's `light.fuelTags` (see `content/items/lamp-oil.yaml`'s
+ * `lamp-oil` tag and `content/items/brass-lantern.yaml`'s `light.fuelTags: [lamp-oil]`). Returns
+ * the first matching equipped light in `hero.equipment`'s own key order -- mirrors
+ * `allMenuEntries`'s equipped-item ordering; the content pack never equips two lights that share
+ * a fuel tag, so "first match" is unambiguous in practice.
+ */
+function equippedLightMatchingFuel(
+  pack: CompiledContentPack, hero: ProjectedHeroLike, fuelItem: ProjectedItemLike,
+): ProjectedItemLike | undefined {
+  if (fuelItem.contentId === undefined) return undefined;
+  const fuelEntry = pack.entries.find((entry) => entry.id === fuelItem.contentId);
+  if (!fuelEntry || fuelEntry.kind !== 'item') return undefined;
+  const fuelTags = fuelEntry.tags;
+  return Object.values(hero.equipment)
+    .filter((item): item is ProjectedItemLike => item !== null && item.category === 'light' && item.contentId !== undefined)
+    .find((item) => {
+      const lightEntry = pack.entries.find((entry) => entry.id === item.contentId);
+      return lightEntry?.kind === 'item' && lightEntry.light !== null
+        && lightEntry.light.fuelTags.some((tag) => fuelTags.includes(tag));
+    });
+}
+
 function toListItem(entry: MenuEntry): ListDetailItem {
   return {
     id: entry.item.itemId,
@@ -158,13 +183,16 @@ function ActionButton({ label, chord, onClick }: Readonly<{ label: string; chord
 }
 
 function DetailPane({
-  entry, onEquip, onUse, onDrop, onToggleLight,
+  entry, refuelTarget, onEquip, onUse, onDrop, onToggleLight, onRefuel,
 }: Readonly<{
   entry: MenuEntry | undefined;
+  /** The equipped light `entry`'s item can refuel, if any -- see `equippedLightMatchingFuel`. */
+  refuelTarget: ProjectedItemLike | undefined;
   onEquip: () => void;
   onUse: () => void;
   onDrop: () => void;
   onToggleLight: () => void;
+  onRefuel: () => void;
 }>): JSX.Element {
   if (!entry) return <p className="text-muted">Nothing selected.</p>;
   const { item, equipped, slot } = entry;
@@ -211,6 +239,7 @@ function DetailPane({
         <ActionButton label="Use" chord="u" onClick={onUse} />
         <ActionButton label="Drop" chord="d" onClick={onDrop} />
         {item.category === 'light' && <ActionButton label="Toggle light" chord="l" onClick={onToggleLight} />}
+        {refuelTarget && <ActionButton label={`Refuel ${refuelTarget.name}`} chord="r" onClick={onRefuel} />}
       </div>
     </div>
   );
@@ -250,6 +279,7 @@ function EquipmentSlots({ equipment }: Readonly<{ equipment: Readonly<Record<str
  */
 export function InventoryOverlay(): JSX.Element | null {
   const sessionCtx = useSessionCtx();
+  const pack = usePack();
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [filter, setFilter] = useState<CategoryFilter>('all');
@@ -273,10 +303,16 @@ export function InventoryOverlay(): JSX.Element | null {
 
   const entries = visibleEntries(hero, filter, sortByName);
   const selected = entries[selectedIndex];
+  const refuelTarget = selected ? equippedLightMatchingFuel(pack, hero, selected.item) : undefined;
 
   function dispatchAction(action: 'equip' | 'unequip' | 'use' | 'drop' | 'toggle-light'): void {
     if (!selected) return;
     session.dispatch({ type: 'backpack', action, itemId: selected.item.itemId });
+  }
+
+  function dispatchRefuel(): void {
+    if (!selected || !refuelTarget) return;
+    session.dispatch({ type: 'refuel', fuelItemId: selected.item.itemId, targetItemId: refuelTarget.itemId });
   }
 
   function cycleFilter(): void {
@@ -302,6 +338,7 @@ export function InventoryOverlay(): JSX.Element | null {
     else if (key === 'u') dispatchAction('use');
     else if (key === 'd') dispatchAction('drop');
     else if (key === 'l') dispatchAction('toggle-light');
+    else if (key === 'r' && refuelTarget) dispatchRefuel();
   }
 
   return (
@@ -335,10 +372,12 @@ export function InventoryOverlay(): JSX.Element | null {
         renderDetail={() => (
           <DetailPane
             entry={selected}
+            refuelTarget={refuelTarget}
             onEquip={() => dispatchAction(selected?.equipped ? 'unequip' : 'equip')}
             onUse={() => dispatchAction('use')}
             onDrop={() => dispatchAction('drop')}
             onToggleLight={() => dispatchAction('toggle-light')}
+            onRefuel={dispatchRefuel}
           />
         )}
       />

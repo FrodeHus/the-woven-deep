@@ -66,6 +66,7 @@ interface ProjectedBackpackItem {
   readonly contentId?: OpaqueId;
   readonly name: string;
   readonly enabled?: boolean | null;
+  readonly quantity?: number;
 }
 
 function hero(projection: GameplayProjection): ProjectedHero {
@@ -223,6 +224,23 @@ function buildBackpackIntent(input: Readonly<{
   return { kind: 'command', command: { type: 'equip', itemId, slot, commandId, expectedRevision } };
 }
 
+function buildRefuelIntent(input: Readonly<{
+  projection: GameplayProjection; commandId: OpaqueId; expectedRevision: number;
+  fuelItemId: OpaqueId; targetItemId: OpaqueId;
+}>): BuiltIntent {
+  const { projection, commandId, expectedRevision, fuelItemId, targetItemId } = input;
+  const fuel = ownedItem(projection, fuelItemId);
+  if (!fuel) return { kind: 'rejected', message: 'That item is no longer in your backpack.' };
+  const target = ownedItem(projection, targetItemId);
+  if (!target) return { kind: 'rejected', message: 'That light is no longer equipped.' };
+  return {
+    kind: 'command',
+    command: {
+      type: 'refuel', itemId: targetItemId, fuelItemId, quantity: fuel.quantity ?? 1, commandId, expectedRevision,
+    },
+  };
+}
+
 export function buildIntent(input: Readonly<{
   intent: PlayerIntent;
   projection: GameplayProjection;
@@ -252,6 +270,11 @@ export function buildIntent(input: Readonly<{
   }
   if (intent.type === 'ascend') {
     return stairUpUnderHero(projection) ? { kind: 'ascend' } : { kind: 'rejected', message: 'There are no stairs up here.' };
+  }
+  if (intent.type === 'refuel') {
+    return buildRefuelIntent({
+      projection, commandId, expectedRevision, fuelItemId: intent.fuelItemId, targetItemId: intent.targetItemId,
+    });
   }
   if (intent.type === 'house') {
     return heroAdjacentToHouseDoor(projection) ? { kind: 'house' } : { kind: 'rejected', message: 'You are not near the house.' };

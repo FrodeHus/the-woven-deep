@@ -14,7 +14,7 @@ entries:
     runAppearanceChance: 1
     discoveryProtectionIncrement: 0
     discoveryProtectionCap: 1
-    maximumInstancesPerRun: 8
+    maximumInstancesPerRun: 24
     placement: { minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition: { monsterId: monster.cave-rat, minimumQuantity: 1, maximumQuantity: 2 }
@@ -33,7 +33,7 @@ entries:
     runAppearanceChance: 0.65
     discoveryProtectionIncrement: 0.08
     discoveryProtectionCap: 0.9
-    maximumInstancesPerRun: 3
+    maximumInstancesPerRun: 12
     placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 4, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition:
@@ -65,7 +65,7 @@ entries:
     runAppearanceChance: 0.4
     discoveryProtectionIncrement: 0.08
     discoveryProtectionCap: 0.8
-    maximumInstancesPerRun: 2
+    maximumInstancesPerRun: 8
     placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition:
