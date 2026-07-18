@@ -1,12 +1,22 @@
-import { describe, expect, it, vi } from 'vitest';
+import { resolve } from 'node:path';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
+import type { CompiledContentPack } from '@woven-deep/content';
+import { compileContentDirectory } from '@woven-deep/content/compiler';
 import type { Uint32State } from '@woven-deep/engine';
 import { initialWizardState, type WizardState } from '../../../session/wizard-reducer.js';
 import { StepMenu, STEP_LABELS } from './StepMenu.js';
 
 const SEED: Uint32State = [11, 22, 33, 44];
+const WAYFARER = 'class.wayfarer';
+
+let pack: CompiledContentPack;
+
+beforeAll(async () => {
+  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../../content') });
+});
 
 function stubState(overrides: Partial<WizardState> = {}): WizardState {
   return { ...initialWizardState(SEED), ...overrides };
@@ -74,5 +84,21 @@ describe('StepMenu', () => {
     const onJump = vi.fn();
     render(<StepMenu state={stubState({ name: 'Rin' })} current={1} onJump={onJump} />);
     expect(screen.getByRole('option', { name: /Identity/ }).textContent).toMatch(/Rin/);
+  });
+
+  it('resolves the Calling row to the class NAME (not the raw content id) when given a pack', () => {
+    const onJump = vi.fn();
+    const classEntry = pack.entries.find((entry) => entry.kind === 'class' && entry.id === WAYFARER) as { name: string };
+    render(
+      <StepMenu
+        state={stubState({ name: 'Rin', classId: WAYFARER })}
+        current={2}
+        onJump={onJump}
+        pack={pack}
+      />,
+    );
+    const row = screen.getByRole('option', { name: /Calling/ });
+    expect(row.textContent).toMatch(new RegExp(classEntry.name));
+    expect(row.textContent).not.toMatch(WAYFARER);
   });
 });

@@ -5,10 +5,12 @@ import { DEFAULT_SETTINGS, type Settings } from '../../session/settings.js';
 import {
   initialWizardState, wizardChoices, wizardReduce, type WizardAction, type WizardState,
 } from '../../session/wizard-reducer.js';
-import {
-  AttributesStep, BackgroundTraitsStep, ClassStep, KitStep, MethodStep, NameStep, SummaryStep,
-} from './chargen-steps.js';
 import { Button } from '../components/button.js';
+import { HeroRecord } from './chargen/HeroRecord.js';
+import { StepMenu } from './chargen/StepMenu.js';
+import {
+  AttributesStep, CallingStep, IdentityStep, KitStep, OriginStep, ReviewStep, TraitsStep, type StepProps,
+} from './chargen/steps.js';
 
 export interface ChargenScreenProps {
   readonly pack: CompiledContentPack;
@@ -25,20 +27,22 @@ export interface ChargenScreenProps {
 }
 
 const STEP_LABELS: Readonly<Record<WizardState['step'], string>> = {
-  1: 'Name & portrait',
-  2: 'Attribute method',
-  3: 'Attributes',
-  4: 'Class',
-  5: 'Kit',
-  6: 'Background & traits',
-  7: 'Summary',
+  1: 'Identity',
+  2: 'Calling',
+  3: 'Kit',
+  4: 'Attributes',
+  5: 'Origin',
+  6: 'Traits',
+  7: 'Review',
 };
 
 /**
- * The character-generation wizard: hosts the pure `wizardReduce` state machine and renders the
- * step matching `state.step`. Whether "Next" can be pressed is derived by asking the reducer
- * itself — dispatching `next` speculatively and checking whether the state actually changed —
- * rather than duplicating `wizardReduce`'s step-completion rules here, so illegal transitions stay
+ * The character-generation console: a fixed-height three-pane shell over the pure `wizardReduce`
+ * state machine. Left is `StepMenu` (build order + jump), center is the active step's body
+ * (switched on `state.step` so each body remounts and its own facet/filter state resets), right is
+ * the live `HeroRecord`. Whether "Next" can be pressed is derived by asking the reducer itself --
+ * dispatching `next` speculatively and checking whether the state actually changed -- rather than
+ * duplicating `wizardReduce`'s step-completion rules here, so illegal transitions stay
  * unrepresentable in exactly one place.
  */
 export function ChargenScreen({
@@ -53,48 +57,65 @@ export function ChargenScreen({
 
   const canAdvance = wizardReduce(state, { type: 'next' }, context) !== state;
   const choices = wizardChoices(state);
+  const canWeave = state.step === 7 && choices !== null;
 
-  const stepProps = { state, pack, dispatch };
+  const weave = (): void => {
+    if (!choices) return;
+    if (state.onboardingEnabled !== (settings.onboarding === 'on')) {
+      onChangeSettings({ ...settings, onboarding: state.onboardingEnabled ? 'on' : 'off' });
+    }
+    onConfirm(choices, state.portraitGlyph);
+  };
+
+  const onJump = (target: WizardState['step']): void => {
+    let step = state.step;
+    while (step < target) { dispatch({ type: 'next' }); step += 1; }
+    while (step > target) { dispatch({ type: 'back' }); step -= 1; }
+  };
+
+  const stepProps: StepProps = { state, pack, dispatch };
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4 p-6">
-      <header aria-label={`Step ${state.step} of 7: ${STEP_LABELS[state.step]}`} className="text-muted">
-        <p className="m-0 text-sm uppercase tracking-wide">{`Step ${state.step} of 7 — ${STEP_LABELS[state.step]}`}</p>
+    <div className="flex h-screen flex-col gap-2 bg-deep p-2 text-fg font-mono">
+      <header aria-label={`Step ${state.step} of 7: ${STEP_LABELS[state.step]}`} className="flex items-baseline gap-2 border-b border-line px-1 pb-2">
+        <h1 className="m-0 font-serif text-lg text-accent-strong">Weave a hero</h1>
+        <span className="text-sm uppercase tracking-wide text-muted">{`Step ${state.step} of 7 — ${STEP_LABELS[state.step]}`}</span>
       </header>
-      <main className="flex flex-col gap-4">
-        {state.step === 1 && <NameStep {...stepProps} />}
-        {state.step === 2 && <MethodStep {...stepProps} />}
-        {state.step === 3 && <AttributesStep {...stepProps} />}
-        {state.step === 4 && <ClassStep {...stepProps} />}
-        {state.step === 5 && <KitStep {...stepProps} />}
-        {state.step === 6 && <BackgroundTraitsStep {...stepProps} />}
-        {state.step === 7 && <SummaryStep {...stepProps} />}
-      </main>
-      <nav className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={() => dispatch({ type: 'back' })} disabled={state.step === 1}>
-          Back
-        </Button>
-        {state.step < 7 && (
-          <Button type="button" onClick={() => dispatch({ type: 'next' })} disabled={!canAdvance}>
-            Next
-          </Button>
-        )}
-        {state.step === 7 && (
-          <Button
-            type="button"
-            disabled={choices === null}
-            onClick={() => {
-              if (!choices) return;
-              if (state.onboardingEnabled !== (settings.onboarding === 'on')) {
-                onChangeSettings({ ...settings, onboarding: state.onboardingEnabled ? 'on' : 'off' });
-              }
-              onConfirm(choices, state.portraitGlyph);
-            }}
-          >
-            Confirm
-          </Button>
-        )}
-      </nav>
+      <div className="grid min-h-0 flex-1 grid-cols-[236px_1fr_340px] gap-2">
+        <div className="min-h-0 overflow-y-auto rounded-md border border-line bg-surface p-2">
+          <StepMenu state={state} current={state.step} onJump={onJump} pack={pack} />
+        </div>
+        <div className="flex min-h-0 flex-col gap-2 rounded-md border border-line bg-surface p-3">
+          <main className="min-h-0 flex-1 overflow-y-auto">
+            {state.step === 1 && <IdentityStep {...stepProps} />}
+            {state.step === 2 && <CallingStep {...stepProps} />}
+            {state.step === 3 && <KitStep {...stepProps} />}
+            {state.step === 4 && <AttributesStep {...stepProps} />}
+            {state.step === 5 && <OriginStep {...stepProps} />}
+            {state.step === 6 && <TraitsStep {...stepProps} />}
+            {state.step === 7 && <ReviewStep {...stepProps} />}
+          </main>
+          <nav className="flex items-center justify-between gap-2 border-t border-line pt-2">
+            <Button type="button" variant="outline" onClick={() => dispatch({ type: 'back' })} disabled={state.step === 1}>
+              {'◂ BACK'}
+            </Button>
+            <span className="text-sm text-muted">{`${state.step} / 7`}</span>
+            {state.step < 7 && (
+              <Button type="button" onClick={() => dispatch({ type: 'next' })} disabled={!canAdvance}>
+                {'NEXT ▸'}
+              </Button>
+            )}
+            {state.step === 7 && (
+              <Button type="button" disabled={!canWeave} onClick={weave}>
+                {'WEAVE ▸'}
+              </Button>
+            )}
+          </nav>
+        </div>
+        <div className="min-h-0 overflow-y-auto rounded-md border border-line bg-surface p-3">
+          <HeroRecord state={state} pack={pack} onWeave={weave} canWeave={canWeave} />
+        </div>
+      </div>
     </div>
   );
 }

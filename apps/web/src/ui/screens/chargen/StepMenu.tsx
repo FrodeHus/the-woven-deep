@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import type { ClassContentEntry, CompiledContentPack } from '@woven-deep/content';
 import { HERO_NAME_RULES } from '@woven-deep/engine';
 import { cn } from '@/ui/lib/cn.js';
 import type { WizardState } from '../../../session/wizard-reducer.js';
@@ -49,24 +50,44 @@ function stepIsReachable(step: WizardState['step'], state: WizardState): boolean
   return STEPS.filter((candidate) => candidate < step).every((earlier) => stepIsSet(earlier, state));
 }
 
-function currentValue(step: WizardState['step'], state: WizardState): string {
+function classEntryOf(pack: CompiledContentPack | undefined, classId: string | null): ClassContentEntry | undefined {
+  if (classId === null || !pack) return undefined;
+  return pack.entries.find((entry): entry is ClassContentEntry => entry.kind === 'class' && entry.id === classId);
+}
+
+/** Resolves a step's current-value line to a human-readable NAME (class/kit/background), rather
+ * than the raw content id (e.g. `class.wayfarer`) -- `pack` is optional so callers without one
+ * (e.g. older tests) still get a sane, if less readable, fallback. */
+function currentValue(step: WizardState['step'], state: WizardState, pack: CompiledContentPack | undefined): string {
   switch (step) {
     case 1: return state.name || '—';
-    case 2: return state.classId ?? '—';
-    case 3: return state.kitId ?? '—';
+    case 2: {
+      if (state.classId === null) return '—';
+      return classEntryOf(pack, state.classId)?.name ?? state.classId;
+    }
+    case 3: {
+      if (state.kitId === null) return '—';
+      const classEntry = classEntryOf(pack, state.classId);
+      return classEntry?.kits.find((kit) => kit.kitId === state.kitId)?.name ?? state.kitId;
+    }
     case 4: return state.method ? (METHOD_LABELS[state.method] ?? state.method) : '—';
-    case 5: return state.backgroundId ?? '—';
+    case 5: {
+      if (state.backgroundId === null || !pack) return state.backgroundId ?? '—';
+      const entry = pack.entries.find((candidate) => candidate.kind === 'background' && candidate.id === state.backgroundId);
+      return entry?.name ?? state.backgroundId;
+    }
     case 6: return `${state.traitIds.length}/2 traits`;
     case 7: return '—';
   }
 }
 
 export function StepMenu({
-  state, current, onJump,
+  state, current, onJump, pack,
 }: {
   readonly state: WizardState;
   readonly current: WizardState['step'];
   readonly onJump: (step: WizardState['step']) => void;
+  readonly pack?: CompiledContentPack;
 }): JSX.Element {
   const { registerItem, handleArrowKeys } = useListNavigation(STEPS.length);
 
@@ -100,7 +121,7 @@ export function StepMenu({
                 <span className={active ? 'text-fg-strong' : 'text-fg'}>{STEP_LABELS[step]}</span>
                 <span aria-hidden="true" className={set ? 'text-good' : 'text-subtle'}>{set ? '●' : '○'}</span>
               </span>
-              <span className="pl-9 text-xs text-muted">{currentValue(step, state)}</span>
+              <span className="pl-9 text-xs text-muted">{currentValue(step, state, pack)}</span>
             </button>
           );
         })}

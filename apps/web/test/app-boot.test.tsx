@@ -99,29 +99,29 @@ function wayfarerKit(): { kitId: string; name: string } {
   return entry.kits[0]!;
 }
 
-/** Drives the full seven-step wizard via the keyboard/UI, exactly like `chargen-screen.test.tsx`,
- * up to (but not including) the final Confirm click, so callers can assert on the portrait choice
- * or intercept the Confirm click themselves. */
+/** Drives the full seven-step console via clicks, exactly like `chargen-screen.test.tsx`, up to
+ * (but not including) the final Weave click, so callers can assert on the portrait choice or
+ * intercept the Weave click themselves. */
 async function driveWizardToSummary(user: ReturnType<typeof userEvent.setup>): Promise<void> {
   await user.type(screen.getByLabelText('Name'), 'Rin');
-  await user.click(screen.getByRole('button', { name: 'Next' }));
-
-  await user.click(screen.getByRole('option', { name: /Roll/ }));
-  await user.click(screen.getByRole('button', { name: 'Next' }));
-
-  await user.click(screen.getByRole('button', { name: 'Roll attributes' }));
-  await user.click(screen.getByRole('button', { name: 'Next' }));
+  await user.click(screen.getByRole('button', { name: /NEXT/ }));
 
   await user.click(screen.getByRole('option', { name: /Wayfarer/ }));
-  await user.click(screen.getByRole('button', { name: 'Next' }));
+  await user.click(screen.getByRole('button', { name: /NEXT/ }));
 
   const kit = wayfarerKit();
-  await user.click(screen.getByRole('option', { name: kit.name }));
-  await user.click(screen.getByRole('button', { name: 'Next' }));
+  await user.click(screen.getByRole('option', { name: new RegExp(kit.name) }));
+  await user.click(screen.getByRole('button', { name: /NEXT/ }));
 
-  await user.click(screen.getByRole('option', { name: 'Caravan guard' }));
-  await user.click(screen.getByRole('option', { name: 'Keen-eyed' }));
-  await user.click(screen.getByRole('button', { name: 'Next' }));
+  await user.click(screen.getByRole('option', { name: /roll/i }));
+  await user.click(screen.getByRole('button', { name: 'Roll attributes' }));
+  await user.click(screen.getByRole('button', { name: /NEXT/ }));
+
+  await user.click(screen.getByRole('option', { name: /Caravan guard/ }));
+  await user.click(screen.getByRole('button', { name: /NEXT/ }));
+
+  await user.click(screen.getByRole('option', { name: /Keen-eyed/ }));
+  await user.click(screen.getByRole('button', { name: /NEXT/ }));
 
   expect(screen.getByLabelText(/Step 7 of 7/)).toBeInTheDocument();
 }
@@ -308,7 +308,7 @@ describe('App boot flow', () => {
     await user.click(await screen.findByRole('option', { name: /enter the deep/i }));
     await screen.findByLabelText(/Step 1 of 7/);
     await driveWizardToSummary(user);
-    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+    await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
 
     expect(await screen.findByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
     // A fresh session doesn't persist until its first dispatch — force one (harmless: `.` waits).
@@ -332,12 +332,13 @@ describe('App boot flow', () => {
 
     // Pick a non-default portrait so persistence is actually exercised (not just a stale default).
     // The portrait buttons' visible glyph is `aria-hidden`, so they carry no accessible name —
-    // select by position within step 1's only listbox instead.
-    const portraitOptions = screen.getAllByRole('option');
+    // select by position within the Portrait listbox (the console's StepMenu is also a listbox of
+    // `option`s, so this scopes to the right one rather than `getAllByRole('option')` globally).
+    const portraitOptions = within(screen.getByRole('listbox', { name: 'Portrait' })).getAllByRole('option');
     expect(portraitOptions).toHaveLength(PORTRAIT_GLYPHS.length);
     await user.click(portraitOptions[1]!);
     await driveWizardToSummary(user);
-    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+    await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
 
     await screen.findByRole('grid', { name: /dungeon/i });
     expect(storage.peek(PORTRAIT_KEY)).toBe(PORTRAIT_GLYPHS[1]);
@@ -365,7 +366,7 @@ describe('App boot flow', () => {
     await user.click(await screen.findByRole('option', { name: /enter the deep/i }));
     await screen.findByLabelText(/Step 1 of 7/);
     await driveWizardToSummary(user);
-    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+    await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/poisoned choices: boom/);
@@ -406,7 +407,7 @@ describe('App boot flow', () => {
       await user.click(await screen.findByRole('option', { name: /enter the deep/i }));
       await screen.findByLabelText(/Step 1 of 7/);
       await driveWizardToSummary(user);
-      await user.click(screen.getByRole('button', { name: 'Confirm' }));
+      await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
 
       await screen.findByRole('grid', { name: /dungeon/i });
       expect(screen.getByRole('note')).toHaveTextContent(/move/i);
@@ -493,7 +494,7 @@ describe('App finalize-once (concluded run)', () => {
     await user.click(screen.getByRole('option', { name: 'New Hero' }));
     await screen.findByLabelText(/Step 1 of 7/);
     await driveWizardToSummary(user);
-    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+    await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
 
     // The PLAY screen mounts with the new hero, at turn 0 -- NOT the conclusion screen again.
     expect(await screen.findByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
