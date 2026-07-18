@@ -103,30 +103,6 @@ describe('reduced-motion stylesheet contract', () => {
     expect(visibleFloor).toBeGreaterThanOrEqual(rememberedOpacity);
   });
 
-  it('flattens .cell-visible brightness in smooth-lighting mode without breaking the visible-vs-remembered floor', () => {
-    // Task 6: `.lighting-smooth` (applied to `.playfield` when `settings.lighting === 'smooth'`
-    // AND a canvas is actually rendering) flattens `.cell-visible`'s own per-cell brightness
-    // contribution -- the canvas now carries the falloff. The flattened value must still sit at
-    // or above `.cell-remembered`'s opacity, preserving the SAME guarantee the un-flattened
-    // `.cell-visible` floor term protects (a visible cell never renders darker than a remembered
-    // one), and it must be an unconditional flat number -- not itself scaled by `--light` --
-    // otherwise smooth mode would double-apply falloff (once via the canvas gradient, once via
-    // the glyph's own opacity).
-    const rememberedMatch = /(?:^|\n)\.cell-remembered\s*\{([^}]*)\}/.exec(css);
-    expect(rememberedMatch, '.cell-remembered rule not found').toBeTruthy();
-    const rememberedOpacity = Number(/opacity\s*:\s*([\d.]+)/.exec(rememberedMatch![1]!)![1]);
-
-    const smoothMatch = /\.lighting-smooth\s+\.cell-visible\s*\{([^}]*)\}/.exec(css);
-    expect(smoothMatch, '.lighting-smooth .cell-visible rule not found').toBeTruthy();
-    const smoothDecls = smoothMatch![1]!;
-
-    const opacityMatch = /opacity\s*:\s*([\d.]+)\s*;/.exec(smoothDecls);
-    expect(opacityMatch, '.lighting-smooth .cell-visible opacity is not a flat number (still scales with --light?)').toBeTruthy();
-    const smoothOpacity = Number(opacityMatch![1]);
-
-    expect(smoothOpacity).toBeGreaterThanOrEqual(rememberedOpacity);
-  });
-
   it('scales font-size (not --cell-w/--cell-h) on .playfield with --zoom, so glyphs grow with the cell box instead of leaving whitespace at zoom', () => {
     // `.cell` inherits font-size from `.playfield`, and `1ch`/`1lh` are relative to the element
     // they're used on — so scaling font-size here (rather than multiplying --cell-w/--cell-h by

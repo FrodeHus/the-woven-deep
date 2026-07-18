@@ -387,7 +387,7 @@ describe('App boot flow', () => {
       const localStorage = fakeLocalStorage({
         key: SETTINGS_KEY,
         value: JSON.stringify({
-          fontScale: 1, reducedMotion: 'system', theme: 'tapestry', lighting: 'smooth',
+          fontScale: 1, reducedMotion: 'system', theme: 'tapestry',
           onboarding: 'on', bindings: {},
         }),
       });
