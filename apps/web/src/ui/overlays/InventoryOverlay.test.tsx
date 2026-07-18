@@ -208,6 +208,44 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(options[1]).toHaveTextContent('Zebra pelt');
   });
 
+  it('shows a Refuel affordance for fuel matching an equipped light, and dispatches a refuel intent', async () => {
+    const user = userEvent.setup();
+    const snapshot = snapshotWithBackpack(
+      [item({
+        itemId: 'item.oil-stack', contentId: 'item.lamp-oil', name: 'Lamp oil', category: 'fuel', quantity: 3,
+      })],
+      {
+        'off-hand': item({
+          itemId: 'item.lantern-1', contentId: 'item.brass-lantern', name: 'Brass lantern', category: 'light',
+        }),
+      },
+    );
+    const { session, dispatch } = stubSession(snapshot);
+    renderInventory(session);
+
+    const list = within(screen.getByRole('listbox', { name: 'Backpack items' }));
+    await user.click(list.getByRole('option', { name: /Lamp oil/ }));
+
+    const refuelButton = screen.getByRole('button', { name: /Refuel Brass lantern/ });
+    expect(refuelButton).toBeInTheDocument();
+
+    await user.click(refuelButton);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'refuel', fuelItemId: 'item.oil-stack', targetItemId: 'item.lantern-1' });
+  });
+
+  it('shows no Refuel affordance when no equipped light matches the selected fuel', () => {
+    const snapshot = snapshotWithBackpack(
+      [item({
+        itemId: 'item.oil-stack', contentId: 'item.lamp-oil', name: 'Lamp oil', category: 'fuel', quantity: 3,
+      })],
+      { 'main-hand': item({ itemId: 'item.sword', name: 'Iron sword', category: 'weapon' }) },
+    );
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.queryByRole('button', { name: /Refuel/ })).not.toBeInTheDocument();
+  });
+
   it('renders nothing when there is no session in context', () => {
     const { container } = render(
       <UiProviders pack={pack} settings={DEFAULT_SETTINGS} onChangeSettings={() => {}}>

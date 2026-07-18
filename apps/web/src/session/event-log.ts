@@ -36,6 +36,8 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
       return { text: 'You consume an item.', tone: 'info' };
     case 'item.light-extinguished':
       return { text: 'Your light source goes out.', tone: 'warning' };
+    case 'item.refueled':
+      return { text: 'You refill your light source.', tone: 'info' };
     case 'fuel.warning':
       return { text: `Your light is running low on fuel (${event.fuel} remaining).`, tone: 'warning' };
     case 'hunger.stage-changed':

@@ -28,6 +28,11 @@ export type PlayerIntent =
     readonly action: 'equip' | 'unequip' | 'use' | 'drop' | 'toggle-light';
     readonly itemId: OpaqueId;
   }
+  // Refuels an equipped light source (`targetItemId`) from a backpack fuel stack
+  // (`fuelItemId`) -- see command-builder.ts, which builds the engine's `refuel` command from
+  // this, sending the fuel stack's full quantity (the engine clamps to the light's remaining
+  // capacity, so no capacity math belongs here).
+  | { readonly type: 'refuel'; readonly fuelItemId: OpaqueId; readonly targetItemId: OpaqueId }
   // Opens a trade session with the merchant actor the hero is Chebyshev-adjacent to (see
   // command-builder.ts); dispatches an engine `trade-open` command directly, so the resulting
   // `projection.trade` is what actually drives `TradeScreen`'s presence -- there is no separate
