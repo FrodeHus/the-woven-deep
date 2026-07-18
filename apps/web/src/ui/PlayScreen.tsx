@@ -80,8 +80,8 @@ export interface PlayScreenProps {
    * Defaults to the default bindings so existing callers (which never rebind anything) are
    * unaffected. */
   readonly keymap?: ResolvedKeymap;
-  /** Forwarded straight through to the settings overlay body (`SettingsOverlayBody` in
-   * `overlay-components.tsx`) when it's the one open -- `App` owns the actual settings state and
+  /** Forwarded straight through to the settings overlay body (`OverlayHost.tsx`'s `renderBody`)
+   * when it's the one open -- `App` owns the actual settings state and
    * persistence; `PlayScreen` just plumbs these past the overlay host, exactly like `keymap`
    * above. Defaults keep every pre-existing caller/test (which never opens the settings overlay)
    * compiling unchanged. */

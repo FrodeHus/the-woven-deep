@@ -101,8 +101,8 @@ interface RenderBodyContext {
 function renderBody(overlay: OverlayId, ctx: RenderBodyContext): JSX.Element {
   switch (overlay) {
     case 'inventory':
-      if (!ctx.snapshot || !ctx.onDispatch) return <p>Your backpack is unavailable right now.</p>;
-      return <InventoryOverlay snapshot={ctx.snapshot} onDispatch={ctx.onDispatch} />;
+      if (!ctx.snapshot) return <p>Your backpack is unavailable right now.</p>;
+      return <InventoryOverlay />;
     case 'character-sheet':
       if (!ctx.snapshot) return <p>Your character sheet is unavailable right now.</p>;
       return <CharacterSheetOverlay snapshot={ctx.snapshot} />;
