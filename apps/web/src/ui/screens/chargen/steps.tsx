@@ -1,7 +1,9 @@
 import { useMemo, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { BalanceContentEntry, ClassContentEntry, CompiledContentPack } from '@woven-deep/content';
+import type {
+  BackgroundContentEntry, BalanceContentEntry, ClassContentEntry, CompiledContentPack, TraitContentEntry,
+} from '@woven-deep/content';
 import {
-  ATTRIBUTE_ORDER, HERO_NAME_RULES, pointBuyCost, type AttributeName,
+  ATTRIBUTE_ORDER, DERIVED_STAT_NAMES, HERO_NAME_RULES, pointBuyCost, type AttributeName, type DerivedStatName,
 } from '@woven-deep/engine';
 import { Button } from '@/ui/components/button.js';
 import { Input } from '@/ui/components/input.js';
@@ -291,6 +293,91 @@ export function KitStep({ state, pack, dispatch }: StepProps): JSX.Element {
             onSelect={() => dispatch({ type: 'choose-kit', kitId: kit.kitId })}
           />
         ))}
+      </div>
+    </section>
+  );
+}
+
+function modifiersMeta(modifiers: Readonly<Partial<Record<DerivedStatName, number>>>): string | undefined {
+  const parts = DERIVED_STAT_NAMES
+    .filter((statName) => modifiers[statName] !== undefined)
+    .map((statName) => `${modifiers[statName]! >= 0 ? '+' : ''}${modifiers[statName]} ${statName}`);
+  return parts.length > 0 ? parts.join(', ') : undefined;
+}
+
+function backgroundEntries(pack: CompiledContentPack): readonly BackgroundContentEntry[] {
+  return pack.entries.filter((entry): entry is BackgroundContentEntry => entry.kind === 'background');
+}
+
+export function OriginStep({ state, pack, dispatch }: StepProps): JSX.Element {
+  const entries = backgroundEntries(pack);
+  const facets = useListFacets(entries);
+  const { registerItem, handleArrowKeys } = useListNavigation(facets.filtered.length);
+
+  return (
+    <section aria-label="Origin" className="flex flex-col gap-3 font-mono">
+      <FilterBar facets={facets} />
+      <div role="listbox" aria-label="Origin" className="flex flex-col gap-1.5" onKeyDown={handleArrowKeys}>
+        {facets.filtered.map((entry, index) => {
+          const meta = modifiersMeta(entry.modifiers);
+          return (
+            <OptionRow
+              key={entry.id}
+              ref={registerItem(index)}
+              name={entry.name}
+              {...(meta ? { meta } : {})}
+              description={entry.description}
+              tags={entry.tags}
+              marker="single"
+              selected={state.backgroundId === entry.id}
+              onSelect={() => dispatch({ type: 'choose-background', backgroundId: entry.id })}
+            />
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function traitEntries(pack: CompiledContentPack): readonly TraitContentEntry[] {
+  return pack.entries.filter((entry): entry is TraitContentEntry => entry.kind === 'trait');
+}
+
+export function TraitsStep({ state, pack, dispatch }: StepProps): JSX.Element {
+  const entries = traitEntries(pack);
+  const facets = useListFacets(entries);
+  const { registerItem, handleArrowKeys } = useListNavigation(facets.filtered.length);
+  const atCap = state.traitIds.length >= 2;
+
+  return (
+    <section aria-label="Traits" className="flex flex-col gap-3 font-mono">
+      <FilterBar facets={facets} />
+      <span className="text-sm text-muted">{`${state.traitIds.length}/2`}</span>
+      <div
+        role="listbox"
+        aria-label="Traits"
+        aria-multiselectable="true"
+        className="flex flex-col gap-1.5"
+        onKeyDown={handleArrowKeys}
+      >
+        {facets.filtered.map((entry, index) => {
+          const selected = state.traitIds.includes(entry.id);
+          const meta = modifiersMeta(entry.modifiers);
+          return (
+            <OptionRow
+              key={entry.id}
+              ref={registerItem(index)}
+              name={entry.name}
+              {...(meta ? { meta } : {})}
+              description={entry.description}
+              tags={entry.tags}
+              marker="multi"
+              selected={selected}
+              locked={!selected && atCap}
+              onSelect={() => dispatch({ type: 'toggle-trait', traitId: entry.id })}
+            />
+          );
+        })}
       </div>
     </section>
   );
