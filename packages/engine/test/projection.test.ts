@@ -281,6 +281,73 @@ function monsterDefinition(id: string): MonsterContentEntry {
   };
 }
 
+const lightOutLines = [
+  '#######',
+  '#.....#',
+  '#.....#',
+  '#.....#',
+  '#######',
+] as const;
+const lightOutWidth = 7;
+const lightOutHeight = 5;
+const lightOutTiles = lightOutLines.flatMap((line) => [...line].map<TileId>((glyph) => glyph === '#' ? 0 : 1));
+const lightOutHero = { heroId: 'hero.lightout', x: 3, y: 2, sightRadius: 5 } as const;
+const lightOutAt = (x: number, y: number): number => y * lightOutWidth + x;
+
+/** Fully explores a small open room while lit, then re-perceives it in total darkness (ambient 0,
+ * no lights) -- leaving every cell explored/remembered but currently unlit, matching the "actually
+ * dark" trigger condition the light-out mechanic gates on. */
+function darkBubbleFixture() {
+  const initialFloor = {
+    floorId: 'floor.lightout', depth: 1, width: lightOutWidth, height: lightOutHeight, tiles: lightOutTiles,
+    ambient: { color: [255, 255, 255] as const, strength: 255 },
+    lights: [], knowledge: createUnknownKnowledge(lightOutWidth * lightOutHeight),
+  };
+  const explored = refreshKnowledge({
+    floor: initialFloor, hero: lightOutHero, actors: new Map([[lightOutHero.heroId, lightOutHero]]),
+  });
+  const darkFloor = { ...initialFloor, knowledge: explored.knowledge, ambient: { color: [255, 255, 255] as const, strength: 0 } };
+  const dark = refreshKnowledge({ floor: darkFloor, hero: lightOutHero, actors: new Map([[lightOutHero.heroId, lightOutHero]]) });
+  return { floor: { ...darkFloor, knowledge: dark.knowledge }, hero: lightOutHero,
+    visibilityWords: dark.visibilityWords, illumination: dark.illumination };
+}
+
+describe('light-out emergency-reveal bubble (projectFloor)', () => {
+  it('renders bubble cells at the reveal radius as visible terrain-only, with no fixture merge', () => {
+    const input = darkBubbleFixture();
+    const projection = projectFloor({ ...input, lightOut: { revealRadius: 1, rememberedMapPersists: false } });
+
+    const heroCell = projection.cells[lightOutAt(3, 2)]!;
+    expect(heroCell).toEqual({
+      index: lightOutAt(3, 2), x: 3, y: 2, knowledge: 'visible', tileId: 1,
+      glyph: '.', token: 'terrain.floor', intensity: 255, tint: [255, 255, 255],
+    });
+    const adjacentCell = projection.cells[lightOutAt(3, 1)]!;
+    expect(adjacentCell).toEqual({
+      index: lightOutAt(3, 1), x: 3, y: 1, knowledge: 'visible', tileId: 1,
+      glyph: '.', token: 'terrain.floor', intensity: 255, tint: [255, 255, 255],
+    });
+    expect(adjacentCell).not.toHaveProperty('fixture');
+  });
+
+  it('hides out-of-bubble explored cells as unknown when memory does not persist', () => {
+    const input = darkBubbleFixture();
+    const projection = projectFloor({ ...input, lightOut: { revealRadius: 1, rememberedMapPersists: false } });
+
+    const farCell = projection.cells[lightOutAt(1, 1)]!;
+    expect(farCell).toEqual({ index: lightOutAt(1, 1), x: 1, y: 1, knowledge: 'unknown', intensity: 0 });
+  });
+
+  it('keeps out-of-bubble explored cells remembered when memory persists', () => {
+    const input = darkBubbleFixture();
+    const projection = projectFloor({ ...input, lightOut: { revealRadius: 1, rememberedMapPersists: true } });
+
+    const farCell = projection.cells[lightOutAt(1, 1)]!;
+    expect(farCell.knowledge).toBe('remembered');
+    expect(farCell.tileId).toBe(1);
+  });
+});
+
 describe('gameplay projection', () => {
   it('includes hero resources and visible actors without private scheduler or random state', () => {
     const base = createDemoRun();
@@ -476,5 +543,58 @@ describe('gameplay projection', () => {
     expect(champion?.name).toBe('The Fallen Duke');
     expect(echo?.name).toBe('Echo of the Duke');
     expect(stableJson(projected)).not.toContain('monster.fallen-hero-template');
+  });
+
+  it('hides actors and ground items entirely once the hero\'s own cell goes dark, even a genuinely lit one elsewhere', () => {
+    const base = createDemoRun();
+    const nearbyLight = {
+      lightId: 'light.faraway', location: { type: 'fixed' as const, x: 5, y: 1 },
+      color: [255, 255, 255] as const, radius: 1, strength: 255, enabled: true,
+      falloff: 'linear' as const, vaultPlacementId: null, presentation: null,
+    };
+    const monster = { ...base.actors[0]!, actorId: 'monster.lit', contentId: 'monster.lit',
+      playerControlled: false, disposition: 'hostile' as const, x: 5, y: 1 };
+    const content = { ...createDemoContentPack(), entries: [
+      ...createDemoContentPack().entries, monsterDefinition(monster.contentId),
+    ] };
+
+    // Baseline: under the demo's default full ambient light, the monster is genuinely visible.
+    const litProjected = projectGameplayState({ state: { ...base, actors: [base.actors[0]!, monster] }, content });
+    expect(litProjected.actors.some((actor) => actor.actorId === 'monster.lit')).toBe(true);
+
+    // With ambient extinguished and only a light far from the hero (never reaching the hero's own
+    // cell), the hero is genuinely dark -- the monster stays individually lit and in view, yet must
+    // still be hidden.
+    const darkFloor = { ...base.floors[0]!, ambient: { color: [255, 255, 255] as const, strength: 0 }, lights: [nearbyLight] };
+    const darkProjected = projectGameplayState({
+      state: { ...base, floors: [darkFloor], actors: [base.actors[0]!, monster] }, content,
+    });
+    expect(darkProjected.actors).toEqual([]);
+    expect(darkProjected.groundItems).toEqual([]);
+  });
+
+  it('does not apply the light-out bubble when the hero\'s own cell is fixture/ambient-lit', () => {
+    const base = createDemoRun();
+    const projected = projectGameplayState({ state: base, content: createDemoContentPack() });
+
+    // The hero sits at (1, 1); (5, 1) is well outside the default reveal radius but still within
+    // the demo's ambient-lit floor, so it must render as normally 'visible', not the bubble's
+    // 'unknown' fallback.
+    const farCell = projected.floor.cells.find((cell) => cell.x === 5 && cell.y === 1)!;
+    expect(farCell.knowledge).toBe('visible');
+  });
+
+  it('widens the light-out bubble when a hero modifier raises lightOutRevealRadius', () => {
+    const base = createDemoRun();
+    const darkFloor = { ...base.floors[0]!, ambient: { color: [255, 255, 255] as const, strength: 0 } };
+    const boosted = { ...base, floors: [darkFloor], hero: { ...base.hero, statModifiers: { lightOutRevealRadius: 3 } } };
+    const content = createDemoContentPack();
+
+    const projected = projectGameplayState({ state: boosted, content });
+    expect(projected.hero.derived.lightOutRevealRadius?.value).toBe(4);
+    // The hero sits at (1, 1); (5, 1) is at Chebyshev distance 4, inside the boosted radius-4
+    // bubble but outside the default radius-1 bubble.
+    const farCell = projected.floor.cells.find((cell) => cell.x === 5 && cell.y === 1)!;
+    expect(farCell.knowledge).toBe('visible');
   });
 });

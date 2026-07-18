@@ -16,6 +16,8 @@ function fixture(): ActorDerivationInput {
       defense: { base: 6, agility: 1 },
       search: { wits: 1 },
       disarm: { agility: 1, wits: 1 },
+      lightOutRevealRadius: { base: 1 },
+      lightOutMemoryPersists: { base: 0 },
     },
     equipmentModifiers: [
       { meleeAccuracy: -7, meleeDamageBonus: -8, rangedAccuracy: -8, defense: -6, search: -4, disarm: -17 },
@@ -39,6 +41,8 @@ describe('deriveActorStats', () => {
       defense: 12,
       search: 5,
       disarm: 4,
+      lightOutRevealRadius: 1,
+      lightOutMemoryPersists: 0,
     });
     expect(input).toEqual(before);
   });

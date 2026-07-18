@@ -31,6 +31,7 @@ export function createDemoContentPack(): CompiledContentPack {
         maxHealth: { base: 8, vitality: 2 }, meleeAccuracy: { might: 1 }, meleeDamageBonus: { might: 1 },
         rangedAccuracy: { agility: 1 }, defense: { base: 8, agility: 1 }, search: { wits: 1 },
         disarm: { agility: 1, wits: 1 },
+        lightOutRevealRadius: { base: 1 }, lightOutMemoryPersists: { base: 0 },
       },
       actionCosts: { 'action.move': 100, 'action.wait': 100, 'action.spawn': 100 },
       pointBuy: {

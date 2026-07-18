@@ -16,6 +16,7 @@ const ATTRIBUTE_LABEL: Readonly<Record<AttributeName, string>> = {
 const DERIVED_STAT_LABEL: Readonly<Record<DerivedStatName, string>> = {
   maxHealth: 'Max health', meleeAccuracy: 'Melee accuracy', meleeDamageBonus: 'Melee damage bonus',
   rangedAccuracy: 'Ranged accuracy', defense: 'Defense', search: 'Search', disarm: 'Disarm',
+  lightOutRevealRadius: 'Light-out reveal radius', lightOutMemoryPersists: 'Light-out memory persists',
 };
 
 /** The projection's `derived` entry shape -- `{value, formula}` per `DERIVED_STAT_NAMES`, produced
