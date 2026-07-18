@@ -6,7 +6,7 @@ import type { PlayerIntent } from '../../session/intents.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
 import { Button } from '../components/button.js';
-import { cn } from '../lib/cn.js';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/tabs.js';
 
 interface ProjectedItemRef {
   readonly itemId: OpaqueId;
@@ -74,6 +74,15 @@ type FocusedList = 'buy' | 'sell' | 'services';
 const LIST_ORDER: readonly FocusedList[] = ['buy', 'sell', 'services'];
 const LIST_LABEL: Readonly<Record<FocusedList, string>> = { buy: 'Buy', sell: 'Sell', services: 'Services' };
 
+/** `MerchantServiceId` is a closed, hardcoded union (`packages/content/src/model.ts`) rather than a
+ * dynamically registered content entry, so there is no pack lookup that resolves it to a display
+ * name -- this is the one place that mapping lives, and every service row reads its label from
+ * here instead of ever rendering the raw `merchant-service.<id>` string. */
+const SERVICE_LABEL: Readonly<Record<MerchantServiceId, string>> = {
+  'merchant-service.identify': 'Identify',
+  'merchant-service.strongbox': 'Strongbox',
+};
+
 interface TradeRow {
   readonly id: string;
   readonly label: string;
@@ -87,25 +96,34 @@ export interface TradeScreenProps {
 }
 
 /**
- * The merchant trade dialog: three `ListDetail` lists (buy from stock, sell from the backpack,
- * purchase a service) with Tab switching focus between them. Every price, stock quantity, and offer
- * comes straight from `projection.trade` -- this screen never computes a price itself, it only
- * dispatches the intent and lets the engine's rejection (insufficient funds, stock unavailable,
- * capacity, ...) come back as the usual log line. Renders nothing if the session projection has no
- * active trade (defensive: `PlayScreen` only mounts this while `projection.trade` is set, but an
- * in-flight Esc/close can race a session update that clears it).
+ * The merchant trade dialog: one full-width `ListDetail` list at a time (buy from stock, sell from
+ * the backpack, purchase a service), switched via the shared `Tabs` primitive (Base UI, the same
+ * convention `MapJournalOverlay`/`CodexOverlay` use) so item rows always render at full dialog width
+ * instead of splitting the pane three ways. Every price, stock quantity, and offer comes straight
+ * from `projection.trade` -- this screen never computes a price itself, it only dispatches the
+ * intent and lets the engine's rejection (insufficient funds, stock unavailable, capacity, ...) come
+ * back as the usual log line. Renders nothing if the session projection has no active trade
+ * (defensive: `PlayScreen` only mounts this while `projection.trade` is set, but an in-flight
+ * Esc/close can race a session update that clears it).
+ *
+ * `Tabs` is controlled by `focusedList` rather than left to its own uncontrolled `defaultValue`: the
+ * SAME state also indexes which list a keyboard Tab/Arrow/Enter should act on, so both the visible
+ * tab and the keyboard target always agree.
  *
  * Framed by the shared `Dialog` primitive, which owns focus trapping and (for the ordinary,
  * no-picker case) Escape-dismissal, routed back through `onClose` via `onOpenChange`. The Tab/Enter/
  * Arrow list-navigation contract, and the identify-target picker's own nested Escape, are driven by
- * a capture-phase `window` keydown listener rather than DOM focus + `ListDetail`'s own built-in
- * arrow handling: `Dialog`'s enter transition briefly renders its popup `hidden` (so the CSS
+ * a capture-phase `window` keydown listener rather than DOM focus + `ListDetail`'s (or `Tabs`'s) own
+ * built-in arrow handling: `Dialog`'s enter transition briefly renders its popup `hidden` (so the CSS
  * transition-in has a "before" state to register), during which nothing inside it is focusable, so a
  * mount-time `.focus()` call races that transition. A capture-phase listener sidesteps the race
  * (the same mechanism `Dialog` itself uses for Escape, via a `document`-level listener) and lets
  * this screen intercept a picker-closing Escape BEFORE it ever reaches that listener -- calling
  * `stopPropagation()` there stops the native event from bubbling any further, so a picker-closing
- * Escape only closes the picker, never the whole trade dialog.
+ * Escape only closes the picker, never the whole trade dialog. Since that listener runs in the
+ * capture phase, it also stops a swallowed Tab/Arrow/Enter from ever reaching `Tabs`'s own built-in
+ * keyboard handling on the tab buttons, so the two never fight over the same keypress; clicking a
+ * `TabsTrigger` still switches lists normally via `onValueChange`.
  */
 export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps): JSX.Element | null {
   const session = trade(snapshot);
@@ -140,7 +158,7 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
   })) : [];
   const serviceRows: readonly TradeRow[] = session ? session.services.map((entry) => ({
     id: entry.serviceId,
-    label: `${entry.serviceId} (${entry.remainingUses} left) — ${entry.unitPrice}g`,
+    label: `${SERVICE_LABEL[entry.serviceId]} (${entry.remainingUses} left) — ${entry.unitPrice}g`,
     // A service with eligible targets (e.g. identify) opens the inline picker instead of guessing
     // which item the player meant; a targetless service (e.g. the strongbox) dispatches straight
     // through.
@@ -232,9 +250,8 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
   const toListItems = (rows: readonly TradeRow[]): readonly ListDetailItem[] =>
     rows.map((row) => ({ id: row.id, label: row.label }));
 
-  const listColumn = (list: FocusedList, rows: readonly TradeRow[]): JSX.Element => (
-    <div className={cn('flex flex-col gap-1 rounded-md p-1', list === focusedList && 'ring-1 ring-accent')}>
-      <h3 className="text-sm font-semibold text-fg-strong">{LIST_LABEL[list]}</h3>
+  const listPanel = (list: FocusedList, rows: readonly TradeRow[]): JSX.Element => (
+    <div className="flex flex-col gap-1">
       {rows.length === 0 && <p className="text-sm text-muted">Nothing here.</p>}
       {rows.length > 0 && (
         <ListDetail
@@ -269,18 +286,23 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Trade</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-fg-strong">{session.merchantName}</p>
         <p className="text-sm text-muted">{session.reputationTier}</p>
-        <p className="text-sm text-fg">{`${session.currency}g`}</p>
-        <div className="grid grid-cols-3 gap-3">
-          {listColumn('buy', buyRows)}
-          {listColumn('sell', sellRows)}
-          {listColumn('services', serviceRows)}
-        </div>
+        <p className="text-sm font-mono text-fg">{`${session.currency}g`}</p>
+        <Tabs value={focusedList} onValueChange={(value) => setFocusedList(value as FocusedList)}>
+          <TabsList aria-label="Trade lists">
+            {LIST_ORDER.map((list) => <TabsTrigger key={list} value={list}>{LIST_LABEL[list]}</TabsTrigger>)}
+          </TabsList>
+          {LIST_ORDER.map((list) => (
+            <TabsContent key={list} value={list}>
+              {listPanel(list, rowsFor(list))}
+            </TabsContent>
+          ))}
+        </Tabs>
         {pickerService && (
           <div className="flex flex-col gap-1 rounded-md border border-line p-2">
             <h3 className="text-sm font-semibold text-fg-strong">Identify which item?</h3>
