@@ -106,13 +106,13 @@ function nameIsValid(name: string): boolean {
 
 function stepSatisfied(state: WizardState): boolean {
   switch (state.step) {
-    case 1: return nameIsValid(state.name);
-    case 2: return state.method !== null;
-    case 3: return state.attributes !== null;
-    case 4: return state.classId !== null;
-    case 5: return state.kitId !== null;
-    case 6: return state.backgroundId !== null;
-    case 7: return false;
+    case 1: return nameIsValid(state.name);        // Identity
+    case 2: return state.classId !== null;          // Calling
+    case 3: return state.kitId !== null;             // Kit
+    case 4: return state.attributes !== null;        // Attributes (method + values)
+    case 5: return state.backgroundId !== null;      // Origin
+    case 6: return true;                              // Traits (optional, capped in toggle-trait)
+    case 7: return false;                             // Review (terminal)
   }
 }
 
