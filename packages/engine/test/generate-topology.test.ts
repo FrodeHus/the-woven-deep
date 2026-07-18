@@ -3,7 +3,10 @@ import { Map, RNG } from 'rot-js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   analyzeConnectivity,
+  classicMask,
   createClassicTheme,
+  createFallbackTopology,
+  createRotTopology,
   expandLegacySeed,
   generateTopology,
   maskHas,
@@ -186,5 +189,32 @@ describe('classic topology generation', () => {
     expect(draft.stairUp).toBeTruthy();
     expect(draft.stairDown).toBeTruthy();
     expect(elapsedMs).toBeLessThan(5000);
+  });
+});
+
+function assertSolidBorder(tiles: readonly number[], width: number, height: number): void {
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
+      expect(tiles[y * width + x]).toBe(0);
+    }
+  }
+}
+
+describe('outer border rendering', () => {
+  it.each([
+    [40, 20], [80, 25],
+  ])('fills the entire %sx%s outer border with wall tiles for the rot-js topology path', (width, height) => {
+    for (const seed of [[1, 2, 3, 4] as const, [5, 10, 15, 20] as const]) {
+      const result = createRotTopology(width, height, classicMask(width, height), seed);
+      expect(result.ok).toBe(true);
+      if (result.ok) assertSolidBorder(result.topology.tiles, width, height);
+    }
+  });
+
+  it.each([
+    [20, 12], [40, 20], [80, 25],
+  ])('fills the entire %sx%s outer border with wall tiles for the fallback topology path', (width, height) => {
+    const topology = createFallbackTopology(width, height, classicMask(width, height), 1);
+    assertSolidBorder(topology.tiles, width, height);
   });
 });

@@ -1,8 +1,8 @@
 {
-  "floor-state": "1d8565b7dc49978529144781a1aea39b0944afc753427690990fec985566b89a",
+  "floor-state": "d247179cd5bf46e2511ded95f5bc9965b4e1e28a9b51d49ca58b48873d20a36d",
   "projection absolute-darkness": "502822ab97dc9aec33a3656d41eda5f338cb47ce0ec69235b0a5dc0bc31dd7a3",
-  "projection low-ambient": "2f100166e2f2a3cfb2820dbb7e1a443fbf3834b0487172e23b425dcaacdc3bb0",
-  "projection overlapping-color": "ee16fd597dbc85dd29eccae61d314ead35f3c351d84887515575e9488fc513c4",
+  "projection low-ambient": "f299ce2c809124ff228c887f6a46789558fee7c0c4aa2cc6cd967be6fb67daac",
+  "projection overlapping-color": "db7b75602448b32bd2448c9cefe8be52a61a16e3c51b8e5583880620cff678de",
   "projection sealed-corner": "53b089954f8173f51322dbcbf82fa97f0a795da0e90d00e720c9b931fc7a2bbc",
-  "projection remembered": "ad3b4363bc4d2a25e3fc9de2a7d609954942865b9ea02ab56ae2321480e65239"
+  "projection remembered": "789bfdd83c28ec40993f70d4100fce9739ab7109e9a8512a6842cb796e73be55"
 }

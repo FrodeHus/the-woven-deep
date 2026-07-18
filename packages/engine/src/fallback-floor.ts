@@ -108,9 +108,7 @@ export function createFallbackTopology(
   const path: number[] = [];
   for (let cursor = second; cursor !== -1; cursor = secondSearch.previous[cursor]!) path.push(cursor);
   path.reverse();
-  const tiles = Array.from({ length: width * height }, (_, index) =>
-    (maskHas(maskWords, width, index % width, Math.floor(index / width)) ? 0 : 6) as TileId,
-  );
+  const tiles = Array.from({ length: width * height }, () => 0 as TileId);
   for (const index of path) tiles[index] = 1;
 
   const roomCenters = [first, path[Math.floor(path.length / 2)]!, second];
