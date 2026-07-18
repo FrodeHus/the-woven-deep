@@ -1,10 +1,12 @@
-import { useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type JSX, type SetStateAction } from 'react';
 import type { OpaqueId } from '@woven-deep/engine';
 import type { MerchantServiceId } from '@woven-deep/content';
-import { useDialogFocusTrap } from '../overlays/focus-trap.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
-import { useListNavigation } from './roving-focus.js';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
+import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
+import { Button } from '../components/button.js';
+import { cn } from '../lib/cn.js';
 
 interface ProjectedItemRef {
   readonly itemId: OpaqueId;
@@ -70,6 +72,13 @@ function ownedItemRef(snapshot: SessionSnapshot, itemId: OpaqueId): ProjectedIte
 type FocusedList = 'buy' | 'sell' | 'services';
 
 const LIST_ORDER: readonly FocusedList[] = ['buy', 'sell', 'services'];
+const LIST_LABEL: Readonly<Record<FocusedList, string>> = { buy: 'Buy', sell: 'Sell', services: 'Services' };
+
+interface TradeRow {
+  readonly id: string;
+  readonly label: string;
+  readonly run: () => void;
+}
 
 export interface TradeScreenProps {
   readonly snapshot: SessionSnapshot;
@@ -78,191 +87,234 @@ export interface TradeScreenProps {
 }
 
 /**
- * The merchant trade dialog: three keyboard lists (buy from stock, sell from the backpack,
- * purchase a service) with Tab switching focus between them, following the same dialog/focus-trap
- * and roving-selection conventions as `HouseScreen`/`BackpackMenu`. Every price, stock quantity,
- * and offer comes straight from `projection.trade` -- this screen never computes a price itself,
- * it only dispatches the intent and lets the engine's rejection (insufficient funds, stock
- * unavailable, capacity, ...) come back as the usual log line. Renders nothing if the session
- * projection has no active trade (defensive: `PlayScreen` only mounts this while `projection.trade`
- * is set, but an in-flight Esc/close can race a session update that clears it).
+ * The merchant trade dialog: three `ListDetail` lists (buy from stock, sell from the backpack,
+ * purchase a service) with Tab switching focus between them. Every price, stock quantity, and offer
+ * comes straight from `projection.trade` -- this screen never computes a price itself, it only
+ * dispatches the intent and lets the engine's rejection (insufficient funds, stock unavailable,
+ * capacity, ...) come back as the usual log line. Renders nothing if the session projection has no
+ * active trade (defensive: `PlayScreen` only mounts this while `projection.trade` is set, but an
+ * in-flight Esc/close can race a session update that clears it).
+ *
+ * Framed by the shared `Dialog` primitive, which owns focus trapping and (for the ordinary,
+ * no-picker case) Escape-dismissal, routed back through `onClose` via `onOpenChange`. The Tab/Enter/
+ * Arrow list-navigation contract, and the identify-target picker's own nested Escape, are driven by
+ * a capture-phase `window` keydown listener rather than DOM focus + `ListDetail`'s own built-in
+ * arrow handling: `Dialog`'s enter transition briefly renders its popup `hidden` (so the CSS
+ * transition-in has a "before" state to register), during which nothing inside it is focusable, so a
+ * mount-time `.focus()` call races that transition. A capture-phase listener sidesteps the race
+ * (the same mechanism `Dialog` itself uses for Escape, via a `document`-level listener) and lets
+ * this screen intercept a picker-closing Escape BEFORE it ever reaches that listener -- calling
+ * `stopPropagation()` there stops the native event from bubbling any further, so a picker-closing
+ * Escape only closes the picker, never the whole trade dialog.
  */
 export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps): JSX.Element | null {
-  const containerRef = useRef<HTMLDivElement>(null);
   const session = trade(snapshot);
   const [focusedList, setFocusedList] = useState<FocusedList>('buy');
+  const [buyIndex, setBuyIndex] = useState(0);
+  const [sellIndex, setSellIndex] = useState(0);
+  const [servicesIndex, setServicesIndex] = useState(0);
   // Set only for services whose `targetItemIds` is non-empty (e.g. identify): opening the picker
-  // replaces the immediate dispatch with an inline target list, per Task 9. A service with no
-  // eligible targets (or the targetless strongbox) never touches this state.
+  // replaces the immediate dispatch with an inline target list. A service with no eligible
+  // targets (or the targetless strongbox) never touches this state.
   const [pickerServiceId, setPickerServiceId] = useState<MerchantServiceId | null>(null);
+  const [pickerIndex, setPickerIndex] = useState(0);
 
-  const buyNav = useListNavigation(session?.stock.length ?? 0);
-  const sellNav = useListNavigation(session?.saleOffers.length ?? 0);
-  const serviceNav = useListNavigation(session?.services.length ?? 0);
   const pickerService = pickerServiceId === null
     ? null
-    : session?.services.find((entry) => entry.serviceId === pickerServiceId) ?? null;
-  const pickerNav = useListNavigation(pickerService?.targetItemIds.length ?? 0);
+    : (session?.services.find((entry) => entry.serviceId === pickerServiceId) ?? null);
 
-  useDialogFocusTrap(containerRef);
+  const indexFor = (list: FocusedList): number => (list === 'buy' ? buyIndex : list === 'sell' ? sellIndex : servicesIndex);
+  const setIndexFor = (list: FocusedList): Dispatch<SetStateAction<number>> => (
+    list === 'buy' ? setBuyIndex : list === 'sell' ? setSellIndex : setServicesIndex
+  );
 
-  if (!session) return null;
-
-  const navFor = (list: FocusedList) => (list === 'buy' ? buyNav : list === 'sell' ? sellNav : serviceNav);
-
-  const buyRows: readonly (readonly [string, () => void])[] = session.stock.map((entry) => [
-    `${entry.item.name} (${entry.quantity}) — ${entry.unitPrice}g`,
-    () => onDispatch({ type: 'trade-buy', itemId: entry.item.itemId, quantity: 1 }),
-  ]);
-  const sellRows: readonly (readonly [string, () => void])[] = session.saleOffers.map((entry) => [
-    `${backpackItemName(snapshot, entry.itemId)} (${entry.quantity}) — ${entry.unitPrice}g`,
-    () => onDispatch({ type: 'trade-sell', itemId: entry.itemId, quantity: 1 }),
-  ]);
-  const serviceRows: readonly (readonly [string, () => void])[] = session.services.map((entry) => [
-    `${entry.serviceId} (${entry.remainingUses} left) — ${entry.unitPrice}g`,
+  const buyRows: readonly TradeRow[] = session ? session.stock.map((entry) => ({
+    id: entry.item.itemId,
+    label: `${entry.item.name} (${entry.quantity}) — ${entry.unitPrice}g`,
+    run: () => onDispatch({ type: 'trade-buy', itemId: entry.item.itemId, quantity: 1 }),
+  })) : [];
+  const sellRows: readonly TradeRow[] = session ? session.saleOffers.map((entry) => ({
+    id: entry.itemId,
+    label: `${backpackItemName(snapshot, entry.itemId)} (${entry.quantity}) — ${entry.unitPrice}g`,
+    run: () => onDispatch({ type: 'trade-sell', itemId: entry.itemId, quantity: 1 }),
+  })) : [];
+  const serviceRows: readonly TradeRow[] = session ? session.services.map((entry) => ({
+    id: entry.serviceId,
+    label: `${entry.serviceId} (${entry.remainingUses} left) — ${entry.unitPrice}g`,
     // A service with eligible targets (e.g. identify) opens the inline picker instead of guessing
     // which item the player meant; a targetless service (e.g. the strongbox) dispatches straight
-    // through, unchanged from before Task 9.
-    () => {
+    // through.
+    run: () => {
       if (entry.targetItemIds.length > 0) {
+        setPickerIndex(0);
         setPickerServiceId(entry.serviceId);
       } else {
         onDispatch({ type: 'trade-service', serviceId: entry.serviceId, targetItemId: null });
       }
     },
-  ]);
-  const rowsFor = (list: FocusedList): readonly (readonly [string, () => void])[] =>
-    (list === 'buy' ? buyRows : list === 'sell' ? sellRows : serviceRows);
+  })) : [];
+  const rowsFor = (list: FocusedList): readonly TradeRow[] => (list === 'buy' ? buyRows : list === 'sell' ? sellRows : serviceRows);
 
-  const execute = (): void => {
-    const rows = rowsFor(focusedList);
-    const selected = rows[navFor(focusedList).selectedIndex];
-    selected?.[1]();
-  };
-
-  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+  const keyHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {});
+  keyHandlerRef.current = (event: KeyboardEvent) => {
+    if (!session) return;
     if (event.key === 'Escape') {
-      event.preventDefault();
-      // Stop the native keydown from bubbling to `PlayScreen`'s window-level key dispatcher: that
-      // listener also routes Escape for open overlays (it has to, for the `pendingDecision` prompt,
-      // which owns no keydown handler of its own) and would otherwise dispatch a second
-      // `trade-close` against the now-stale (trade already closed) projection, surfacing as a
-      // spurious "There is no open trade session." log line on every ordinary Escape-close.
-      event.stopPropagation();
-      // Nested-Esc (same scaffold pattern, one layer deeper): with the picker open, Escape closes
-      // just the picker and returns to the services list -- it must NOT also close the trade
-      // dialog, so `onClose` only runs when no picker is open.
       if (pickerService) {
+        event.preventDefault();
+        event.stopPropagation();
         setPickerServiceId(null);
-      } else {
-        onClose();
       }
+      // Plain Escape (no picker open) is deliberately left unhandled: it bubbles to the `Dialog`
+      // primitive's own Escape-dismissal, which calls `onOpenChange(false)` -> `onClose` exactly
+      // once, and stops the native event there before `PlayScreen`'s window-level key dispatcher
+      // ever sees it.
       return;
     }
     if (pickerService) {
-      if (pickerNav.handleArrowKeys(event)) return;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        const targets = pickerService.targetItemIds;
+        if (targets.length === 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const delta = event.key === 'ArrowDown' ? 1 : -1;
+        setPickerIndex((index) => (index + delta + targets.length) % targets.length);
+        return;
+      }
       if (event.key === 'Enter') {
         event.preventDefault();
-        const targetItemId = pickerService.targetItemIds[pickerNav.selectedIndex];
+        event.stopPropagation();
+        const targetItemId = pickerService.targetItemIds[pickerIndex];
         if (targetItemId) {
           onDispatch({ type: 'trade-service', serviceId: pickerService.serviceId, targetItemId });
         }
         setPickerServiceId(null);
+        return;
       }
       // Swallow every other key (notably Tab) while the picker is open: list-switching doesn't
       // apply to a target picker.
+      event.preventDefault();
+      event.stopPropagation();
       return;
     }
     if (event.key === 'Tab') {
       event.preventDefault();
+      event.stopPropagation();
       setFocusedList((list) => LIST_ORDER[(LIST_ORDER.indexOf(list) + 1) % LIST_ORDER.length]!);
       return;
     }
-    if (navFor(focusedList).handleArrowKeys(event)) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      const rows = rowsFor(focusedList);
+      if (rows.length === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const delta = event.key === 'ArrowDown' ? 1 : -1;
+      setIndexFor(focusedList)((index) => (index + delta + rows.length) % rows.length);
+      return;
+    }
     if (event.key === 'Enter') {
       event.preventDefault();
-      execute();
+      event.stopPropagation();
+      rowsFor(focusedList)[indexFor(focusedList)]?.run();
     }
   };
 
-  const listBox = (list: FocusedList, label: string, rows: readonly (readonly [string, () => void])[]): JSX.Element => {
-    const nav = navFor(list);
-    return (
-      <div className={list === focusedList ? 'trade-column trade-column--focused' : 'trade-column'}>
-        <h3>{label}</h3>
-        {rows.length === 0 && <p className="placeholder">Nothing here.</p>}
-        {rows.length > 0 && (
-          <ul role="listbox" aria-label={label} className="trade-item-list">
-            {rows.map(([text], index) => (
-              <li key={`${list}-${index}-${text}`} role="option" aria-selected={list === focusedList && index === nav.selectedIndex}>
-                <button
+  // Capture phase: runs before the event reaches any focused descendant (or `document`'s own
+  // Escape-dismiss listener), so it works regardless of where DOM focus currently is -- see the
+  // rationale in this component's own doc comment.
+  useEffect(() => {
+    const listener = (event: KeyboardEvent): void => keyHandlerRef.current(event);
+    window.addEventListener('keydown', listener, true);
+    return () => window.removeEventListener('keydown', listener, true);
+  }, []);
+
+  if (!session) return null;
+
+  const toListItems = (rows: readonly TradeRow[]): readonly ListDetailItem[] =>
+    rows.map((row) => ({ id: row.id, label: row.label }));
+
+  const listColumn = (list: FocusedList, rows: readonly TradeRow[]): JSX.Element => (
+    <div className={cn('flex flex-col gap-1 rounded-md p-1', list === focusedList && 'ring-1 ring-accent')}>
+      <h3 className="text-sm font-semibold text-fg-strong">{LIST_LABEL[list]}</h3>
+      {rows.length === 0 && <p className="text-sm text-muted">Nothing here.</p>}
+      {rows.length > 0 && (
+        <ListDetail
+          listLabel={LIST_LABEL[list]}
+          items={toListItems(rows)}
+          selectedIndex={indexFor(list)}
+          onSelect={(index) => {
+            setFocusedList(list);
+            setIndexFor(list)(index);
+          }}
+          renderDetail={(item) => (
+            item
+              ? (
+                <Button
                   type="button"
-                  ref={nav.registerItem(index)}
-                  className={list === focusedList && index === nav.selectedIndex
-                    ? 'trade-item trade-item--selected' : 'trade-item'}
-                  onClick={() => { setFocusedList(list); nav.setSelectedIndex(index); }}
-                  onDoubleClick={() => {
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
                     setFocusedList(list);
-                    nav.setSelectedIndex(index);
-                    rows[index]![1]();
+                    rows.find((row) => row.id === item.id)?.run();
                   }}
                 >
-                  {text}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    );
-  };
+                  {list === 'buy' ? 'Buy' : list === 'sell' ? 'Sell' : 'Use'}
+                </Button>
+              )
+              : <p className="text-sm text-muted">Nothing selected.</p>
+          )}
+        />
+      )}
+    </div>
+  );
 
   return (
-    <div
-      ref={containerRef}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Trade"
-      className="trade-screen"
-      tabIndex={-1}
-      onKeyDown={handleKeyDown}
-    >
-      <h2>{session.merchantName}</h2>
-      <p className="trade-reputation">{session.reputationTier}</p>
-      <p className="trade-currency">{`${session.currency}g`}</p>
-      <div className="trade-columns">
-        {listBox('buy', 'Buy', buyRows)}
-        {listBox('sell', 'Sell', sellRows)}
-        {listBox('services', 'Services', serviceRows)}
-      </div>
-      {pickerService && (
-        <div className="trade-picker">
-          <h3>Identify which item?</h3>
-          <ul role="listbox" aria-label="Identify target" className="trade-item-list">
-            {pickerService.targetItemIds.map((itemId, index) => {
-              const ref = ownedItemRef(snapshot, itemId);
-              return (
-                <li key={itemId} role="option" aria-selected={index === pickerNav.selectedIndex}>
-                  <button
-                    type="button"
-                    ref={pickerNav.registerItem(index)}
-                    className={index === pickerNav.selectedIndex ? 'trade-item trade-item--selected' : 'trade-item'}
-                    onClick={() => pickerNav.setSelectedIndex(index)}
-                    onDoubleClick={() => {
-                      onDispatch({ type: 'trade-service', serviceId: pickerService.serviceId, targetItemId: itemId });
-                      setPickerServiceId(null);
-                    }}
-                  >
-                    {ref.glyph ? `${ref.glyph} ` : ''}{ref.name}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <p className="trade-hints">↑↓ select · Enter identify · Esc back</p>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Trade</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-fg-strong">{session.merchantName}</p>
+        <p className="text-sm text-muted">{session.reputationTier}</p>
+        <p className="text-sm text-fg">{`${session.currency}g`}</p>
+        <div className="grid grid-cols-3 gap-3">
+          {listColumn('buy', buyRows)}
+          {listColumn('sell', sellRows)}
+          {listColumn('services', serviceRows)}
         </div>
-      )}
-      <p className="trade-hints">↑↓ select · Tab switch list · Enter trade · Esc close</p>
-    </div>
+        {pickerService && (
+          <div className="flex flex-col gap-1 rounded-md border border-line p-2">
+            <h3 className="text-sm font-semibold text-fg-strong">Identify which item?</h3>
+            <ListDetail
+              listLabel="Identify target"
+              items={pickerService.targetItemIds.map((itemId) => {
+                const ref = ownedItemRef(snapshot, itemId);
+                return { id: itemId, label: ref.name, ...(ref.glyph ? { glyph: ref.glyph } : {}) };
+              })}
+              selectedIndex={pickerIndex}
+              onSelect={setPickerIndex}
+              renderDetail={(item) => (
+                item
+                  ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        onDispatch({ type: 'trade-service', serviceId: pickerService.serviceId, targetItemId: item.id });
+                        setPickerServiceId(null);
+                      }}
+                    >
+                      Identify
+                    </Button>
+                  )
+                  : <p className="text-sm text-muted">Nothing selected.</p>
+              )}
+            />
+            <p className="text-xs text-muted">↑↓ select · Enter identify · Esc back</p>
+          </div>
+        )}
+        <p className="text-xs text-muted">↑↓ select · Tab switch list · Enter trade · Esc close</p>
+      </DialogContent>
+    </Dialog>
   );
 }

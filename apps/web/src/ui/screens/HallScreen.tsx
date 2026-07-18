@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState, type JSX, type KeyboardEvent as ReactKeyb
 import type { CompletionType } from '@woven-deep/content';
 import { compareHallRecords, type OpaqueId, type RunRecordRepository, type StoredHallRecord } from '@woven-deep/engine';
 import { useListNavigation } from './roving-focus.js';
+import { Button } from '../components/button.js';
+import { Label } from '../components/label.js';
+import { cn } from '../lib/cn.js';
 
 export interface HallScreenProps {
   readonly repository: RunRecordRepository;
@@ -84,48 +87,50 @@ export function HallScreen({ repository, onBack }: HallScreenProps): JSX.Element
   }
 
   return (
-    <section aria-label="Hall of Records" className="hall-screen">
-      <p className="eyebrow">The Woven Deep</p>
-      <h1 className="framed-title">Hall of Records</h1>
-      <p role="note" className="hall-provenance">
+    <section aria-label="Hall of Records" className="mx-auto flex max-w-3xl flex-col gap-3 p-6">
+      <p className="text-xs uppercase tracking-widest text-muted">The Woven Deep</p>
+      <h1 className="font-serif text-3xl text-accent-strong">Hall of Records</h1>
+      <p role="note" className="text-sm italic text-muted">
         Unverified · this session only — nothing here is confirmed by a server yet.
       </p>
 
-      <div className="hall-filters">
-        <label className="hall-filter">
+      <div className="flex gap-4">
+        <Label className="flex flex-col gap-1 text-xs text-muted">
           Outcome
           <select
             aria-label="Outcome filter"
             value={outcomeFilter}
             onChange={(event) => setOutcomeFilter(event.target.value as OutcomeFilter)}
+            className="rounded-md border border-line bg-surface px-2 py-1.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <option value="all">All outcomes</option>
             {OUTCOME_ORDER.map((outcome) => (
               <option key={outcome} value={outcome}>{OUTCOME_LABEL[outcome]}</option>
             ))}
           </select>
-        </label>
-        <label className="hall-filter">
+        </Label>
+        <Label className="flex flex-col gap-1 text-xs text-muted">
           Class
           <select
             aria-label="Class filter"
             value={classFilter}
             onChange={(event) => setClassFilter(event.target.value)}
+            className="rounded-md border border-line bg-surface px-2 py-1.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <option value="all">All classes</option>
             {availableClassTags.map((tag) => (
               <option key={tag} value={tag}>{tag}</option>
             ))}
           </select>
-        </label>
+        </Label>
       </div>
 
       {records.length === 0 ? (
-        <p role="status">No runs have been recorded yet — the Hall awaits its first legend.</p>
+        <p role="status" className="text-sm text-muted">No runs have been recorded yet — the Hall awaits its first legend.</p>
       ) : filtered.length === 0 ? (
-        <p role="status">No records match the current filters.</p>
+        <p role="status" className="text-sm text-muted">No records match the current filters.</p>
       ) : (
-        <ul role="listbox" aria-label="Hall records" className="hall-records">
+        <ul role="listbox" aria-label="Hall records" className="flex flex-col gap-1.5 list-none m-0 p-0">
           {filtered.map((record, index) => {
             const expanded = expandedRecordId === record.recordId;
             return (
@@ -136,29 +141,33 @@ export function HallScreen({ repository, onBack }: HallScreenProps): JSX.Element
                   aria-selected={index === selectedIndex}
                   aria-expanded={expanded}
                   ref={registerItem(index)}
-                  className={index === selectedIndex ? 'hall-row hall-row--focused' : 'hall-row'}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-3 rounded-md border border-line bg-surface px-2.5 py-2 text-sm text-fg',
+                    index === selectedIndex && 'outline outline-2 outline-accent outline-offset-2',
+                    record.recordId === expandedRecordId && 'border-accent',
+                  )}
                   onKeyDown={(event) => handleRowKeyDown(event, record.recordId)}
                   onClick={() => toggleExpanded(record.recordId)}
                 >
-                  <span className="hall-glyph">{record.enrichment.portraitGlyph}</span>
-                  <span className="hall-name">{record.heroName}</span>
-                  <span className="hall-classes">{record.classTags.join(', ')}</span>
-                  <span className="hall-depth">Depth {record.deepestDepth}</span>
-                  <span className="hall-score">{record.score.total}</span>
-                  <span className="hall-run">{record.enrichment.achievedAt}</span>
+                  <span className="w-6 text-center font-bold">{record.enrichment.portraitGlyph}</span>
+                  <span className="min-w-32 font-medium text-fg-strong">{record.heroName}</span>
+                  <span className="text-muted">{record.classTags.join(', ')}</span>
+                  <span>Depth {record.deepestDepth}</span>
+                  <span className="font-medium">{record.score.total}</span>
+                  <span className="ml-auto text-xs text-muted">{record.enrichment.achievedAt}</span>
                 </div>
                 {expanded && (
-                  <table aria-label={`${record.heroName} score breakdown`} className="hall-breakdown">
+                  <table aria-label={`${record.heroName} score breakdown`} className="ml-10 mt-1 text-sm text-muted">
                     <tbody>
                       {record.score.lines.map((line) => (
                         <tr key={line.lineId}>
-                          <td>{SCORE_LINE_LABEL[line.lineId] ?? line.lineId}</td>
+                          <td className="pr-4">{SCORE_LINE_LABEL[line.lineId] ?? line.lineId}</td>
                           <td>{line.amount}</td>
                         </tr>
                       ))}
                       <tr>
-                        <td>Total</td>
-                        <td>{record.score.total}</td>
+                        <td className="pr-4 font-medium text-fg">Total</td>
+                        <td className="font-medium text-fg">{record.score.total}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -169,7 +178,7 @@ export function HallScreen({ repository, onBack }: HallScreenProps): JSX.Element
         </ul>
       )}
 
-      <button type="button" onClick={onBack}>Back</button>
+      <Button type="button" variant="outline" className="self-start" onClick={onBack}>Back</Button>
     </section>
   );
 }

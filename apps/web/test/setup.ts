@@ -61,6 +61,13 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
   value: () => null,
 });
 
+// jsdom has no scrollIntoView -- `cmdk` (the command-palette primitive) calls it on the selected
+// item whenever the filtered set changes, which would otherwise throw for every CommandPalette
+// test.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 afterEach(() => {
   cleanup();
 });

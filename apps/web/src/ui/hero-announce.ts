@@ -1,5 +1,5 @@
 /**
- * Significant-transition detection for the hero-state screen-reader announcer (Task 9 a11y).
+ * Significant-transition detection for the hero-state screen-reader announcer.
  *
  * The play screen already exposes the hero's vitals as visible text (`HeroPanel`/`VitalsStrip`) and
  * the log as a polite live region, but nothing announced a *change* in the hero's own condition:

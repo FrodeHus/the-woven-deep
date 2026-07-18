@@ -1,6 +1,9 @@
-import { useRef, useState, type CSSProperties, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { CSSProperties, JSX } from 'react';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import { visibleForeground } from '../cell-color.js';
+import { cn } from '../lib/cn.js';
+import { useSessionCtx } from '../providers.js';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/tabs.js';
 
 /**
  * The current-milestone objective line -- static text, sourced from this one exported constant so
@@ -9,19 +12,6 @@ import { visibleForeground } from '../cell-color.js';
  * exists today (see the plan's Global Constraints -- this task adds zero new projection fields).
  */
 export const JOURNAL_OBJECTIVE = 'Reach the Heart of the Deep, then find your way back out alive.';
-
-type MapJournalTab = 'map' | 'journal';
-
-const TAB_ORDER: readonly MapJournalTab[] = ['map', 'journal'];
-const TAB_LABEL: Readonly<Record<MapJournalTab, string>> = { map: 'Map', journal: 'Journal' };
-const TAB_ID: Readonly<Record<MapJournalTab, string>> = {
-  map: 'map-journal-tab-map',
-  journal: 'map-journal-tab-journal',
-};
-const PANEL_ID: Readonly<Record<MapJournalTab, string>> = {
-  map: 'map-journal-panel-map',
-  journal: 'map-journal-panel-journal',
-};
 
 /** The full `ObservableCell` shape this overlay reads (`packages/engine/src/projection.ts`) --
  * every field reused verbatim, never re-derived: `knowledge` decides which of the three render
@@ -81,13 +71,14 @@ function byCell<T extends { x: number; y: number }>(items: readonly T[]): Readon
   return map;
 }
 
+const MAP_CELL_STYLE = { width: 'var(--map-cell)', height: 'var(--map-cell)' } as const;
+
 /**
  * The map tab's grid: the FULL floor (not the camera-limited viewport `GridRenderer` draws during
  * play) at a fixed, compact cell size -- `--map-cell` is its own custom property (deliberately
  * distinct from the playfield's zoom-scaled `--cell-w`/`--cell-h`), so this pane's cell size never
- * changes with the guest's play-zoom or font-scale setting. The pane itself scrolls
- * (`.map-journal-map-pane`'s `overflow: auto`) rather than clipping, since even a large floor must stay fully
- * reachable at a fixed cell size.
+ * changes with the guest's play-zoom or font-scale setting. The pane itself scrolls rather than
+ * clipping, since even a large floor must stay fully reachable at a fixed cell size.
  *
  * Every branch below reuses the cell's own `knowledge`/`glyph`/`tint`/`intensity` verbatim -- an
  * `unknown` cell renders no glyph at all (blank), a `remembered` cell renders its glyph dim (same
@@ -101,38 +92,29 @@ function byCell<T extends { x: number; y: number }>(items: readonly T[]): Readon
  * the brief -- so a future reader diffing this against `GridRenderer` (which does layer ground
  * items) should read that as intentional scope, not an oversight.
  */
-function MapPane({ floor, hero, actors, panelId, tabId }: Readonly<{
+function MapPane({ floor, hero, actors }: Readonly<{
   floor: ProjectedFloor;
   hero: ProjectedHero;
   actors: readonly ProjectedActor[];
-  panelId: string;
-  tabId: string;
 }>): JSX.Element {
   const actorsByCell = byCell(actors);
 
   return (
-    <div
-      className="map-journal-map-pane"
-      style={{ '--map-cell': '0.6em' } as CSSProperties}
-      role="tabpanel"
-      id={panelId}
-      aria-labelledby={tabId}
-      tabIndex={0}
-    >
+    <div className="max-h-[60vh] overflow-auto" style={{ '--map-cell': '0.6em' } as CSSProperties}>
       <div
         role="grid"
         aria-label="Floor map"
-        className="map-grid"
-        style={{ gridTemplateColumns: `repeat(${floor.width}, var(--map-cell))` }}
+        className="grid font-mono leading-none"
+        style={{ gridTemplateColumns: `repeat(${floor.width}, var(--map-cell))`, gridAutoRows: 'var(--map-cell)', fontSize: 'var(--map-cell)' }}
       >
         {floor.cells.map((cell) => {
           if (cell.knowledge === 'unknown') {
-            return <span key={cell.index} className="map-cell map-cell-unknown" />;
+            return <span key={cell.index} className="block text-center text-transparent" style={MAP_CELL_STYLE} />;
           }
 
           if (cell.knowledge === 'remembered') {
             return (
-              <span key={cell.index} className="map-cell map-cell-remembered">
+              <span key={cell.index} className="block text-center text-subtle opacity-55 saturate-50" style={MAP_CELL_STYLE}>
                 {cell.glyph ?? ''}
               </span>
             );
@@ -141,14 +123,14 @@ function MapPane({ floor, hero, actors, panelId, tabId }: Readonly<{
           const isHero = cell.x === hero.x && cell.y === hero.y;
           const actor = actorsByCell.get(`${cell.x},${cell.y}`);
           const glyph = isHero ? '@' : (actor?.glyph ?? cell.fixture?.glyph ?? cell.glyph ?? '');
-          const style: CellCustomProperties = { '--light': String(cell.intensity / 255) };
+          const style: CellCustomProperties = { ...MAP_CELL_STYLE, '--light': String(cell.intensity / 255) };
           if (cell.tint) style['--fg'] = visibleForeground(cell.tint, cell.intensity);
 
           return (
             <span
               key={cell.index}
-              className="map-cell map-cell-visible"
-              style={style}
+              className="block text-center text-[color:var(--fg,var(--color-fg))]"
+              style={{ ...style, opacity: `calc(0.62 + 0.38 * var(--light, 1))` }}
               {...(isHero ? { 'aria-label': `Hero at ${cell.x}, ${cell.y}` } : {})}
             >
               {glyph}
@@ -176,8 +158,8 @@ interface Landmark {
 
 /**
  * Landmarks are derived fresh on every render from fields the projection already exposes -- no new
- * engine state, no new projection fields (per the plan's Global Constraints). This is the LIVE half
- * (Task 10's brief); `JournalPane` unions it with the PERSISTED half (`persistedLandmarksFor`,
+ * engine state, no new projection fields (per the plan's Global Constraints). This is the LIVE half;
+ * `JournalPane` unions it with the PERSISTED half (`persistedLandmarksFor`,
  * fed by `session/codex.ts`'s `accumulateLandmarks`) so a landmark survives even once it leaves the
  * current projection entirely (a merchant who has since departed, a floor left behind).
  *
@@ -289,11 +271,22 @@ function mergeLandmarks(live: readonly Landmark[], persisted: readonly Landmark[
   });
 }
 
-function JournalPane({ snapshot, panelId, tabId }: Readonly<{
-  snapshot: SessionSnapshot;
-  panelId: string;
-  tabId: string;
-}>): JSX.Element {
+const LOG_TONE_CLASS: Readonly<Record<string, string>> = {
+  warning: 'text-danger-fg',
+  combat: 'text-accent',
+  system: 'text-muted',
+};
+
+/** Colorblind reinforcement classes (`styles.css`'s `.journal-log-line--*::before` rules): a silent
+ * leading glyph for each colored tone, so severity is never carried by `LOG_TONE_CLASS`'s text
+ * color alone. `info` (and any tone absent from `LOG_TONE_CLASS`) gets no glyph. */
+const LOG_REINFORCEMENT_CLASS: Readonly<Record<string, string>> = {
+  warning: 'journal-log-line--warning',
+  combat: 'journal-log-line--combat',
+  system: 'journal-log-line--system',
+};
+
+function JournalPane({ snapshot }: Readonly<{ snapshot: SessionSnapshot }>): JSX.Element {
   const floor = snapshot.projection.floor as unknown as ProjectedFloor;
   const actors = snapshot.projection.actors as unknown as readonly ProjectedActor[];
   const slots = snapshot.projection.slots as unknown as readonly ProjectedPlacementSlot[];
@@ -302,29 +295,29 @@ function JournalPane({ snapshot, panelId, tabId }: Readonly<{
   const landmarks = mergeLandmarks(liveLandmarks, persistedLandmarks);
 
   return (
-    <div className="journal-pane" role="tabpanel" id={panelId} aria-labelledby={tabId} tabIndex={0}>
-      <p className="journal-objective">{JOURNAL_OBJECTIVE}</p>
+    <div className="flex flex-col gap-3">
+      <p className="italic text-accent">{JOURNAL_OBJECTIVE}</p>
 
-      <section aria-labelledby="journal-landmarks-heading">
-        <h3 id="journal-landmarks-heading">Landmarks</h3>
+      <section aria-labelledby="journal-landmarks-heading" className="flex flex-col gap-2">
+        <h3 id="journal-landmarks-heading" className="font-serif text-sm text-fg-strong">Landmarks</h3>
         {landmarks.length === 0
-          ? <p className="placeholder">Nothing landmark-worthy seen yet.</p>
+          ? <p className="text-sm text-muted">Nothing landmark-worthy seen yet.</p>
           : (
-            <ul className="journal-landmarks" aria-label="Landmarks">
+            <ul className="flex list-none flex-col gap-1 p-0 text-sm" aria-label="Landmarks">
               {landmarks.map((landmark) => <li key={landmark.key}>{landmark.label}</li>)}
             </ul>
           )}
       </section>
 
-      <section aria-labelledby="journal-log-heading">
-        <h3 id="journal-log-heading">Adventure log</h3>
+      <section aria-labelledby="journal-log-heading" className="flex flex-col gap-2">
+        <h3 id="journal-log-heading" className="font-serif text-sm text-fg-strong">Adventure log</h3>
         {/* The FULL retained log history (up to `LOG_CAPACITY` = 200 lines), not the 8-line
             conclusion tail `App.tsx` shows on the run-ending screen -- `snapshot.log` is the same
             array either consumer reads, this one just never slices it. Newest last, matching the
             order `foldEventsIntoLog` already appends in (oldest first). */}
-        <ul className="journal-log" aria-label="Adventure log">
+        <ul className="flex max-h-[40vh] list-none flex-col gap-0.5 overflow-auto p-0 text-sm" aria-label="Adventure log">
           {snapshot.log.map((line) => (
-            <li key={line.id} className={`journal-log-line journal-log-line--${line.tone}`}>{line.text}</li>
+            <li key={line.id} className={cn(LOG_TONE_CLASS[line.tone], LOG_REINFORCEMENT_CLASS[line.tone])}>{line.text}</li>
           ))}
         </ul>
       </section>
@@ -332,73 +325,35 @@ function JournalPane({ snapshot, panelId, tabId }: Readonly<{
   );
 }
 
-export interface MapJournalOverlayProps {
-  readonly snapshot: SessionSnapshot;
-}
-
 /**
- * Map & journal, as two tabs sharing one overlay body. **Tab switching is deliberately NOT bound
- * to the literal `Tab` key** the brief suggests: `Tab` is already load-bearing here for
- * `useDialogFocusTrap`'s native focus-order wrapping between this pane's own focusable elements
- * (the two tab buttons) -- exactly the same conflict Task 5 (`InventoryOverlay`'s filter/sort)
- * hit and resolved by picking different keys. Here, ArrowLeft/ArrowRight cycle the active tab
- * instead -- the standard ARIA tablist keyboard convention (see the `role="tablist"` markup
- * below), which reads naturally as "switch tabs" without colliding with Tab's own focus-movement
- * job. The tabs are also plainly clickable, matching the brief's "also clickable".
+ * Map & journal, as two tabs sharing one overlay body -- built on the shadcn `Tabs` primitive
+ * (`../components/tabs.js`, itself Base UI's `Tabs`), which owns tab switching, roving focus, and
+ * the ARIA tab/tabpanel wiring; this component only supplies the two panes. Reads directly from
+ * `useSessionCtx()` rather than taking props, since map & journal is play-scope (a session is
+ * always present while this overlay can open) -- guards to rendering nothing if that invariant is
+ * ever violated.
  */
-export function MapJournalOverlay({ snapshot }: MapJournalOverlayProps): JSX.Element {
-  const [tab, setTab] = useState<MapJournalTab>('map');
+export function MapJournalOverlay(): JSX.Element | null {
+  const sessionCtx = useSessionCtx();
+  if (!sessionCtx) return null;
+
+  const { snapshot } = sessionCtx;
   const floor = snapshot.projection.floor as unknown as ProjectedFloor;
   const hero = snapshot.projection.hero as unknown as ProjectedHero;
   const actors = snapshot.projection.actors as unknown as readonly ProjectedActor[];
 
-  // Roving-tabindex bookkeeping: only the active tab button is ever in the Tab order
-  // (`tabIndex=0`), the inactive one is `-1` -- the standard ARIA tablist convention. These refs
-  // exist solely so ArrowLeft/ArrowRight can move DOM focus to match, since updating `tab` state
-  // alone repaints `aria-selected` but never moves the screen reader/keyboard focus itself.
-  const tabButtonRefs = useRef<Record<MapJournalTab, HTMLButtonElement | null>>({ map: null, journal: null });
-
-  const handleTablistKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-    event.preventDefault();
-    const currentIndex = TAB_ORDER.indexOf(tab);
-    const delta = event.key === 'ArrowRight' ? 1 : -1;
-    const nextIndex = (currentIndex + delta + TAB_ORDER.length) % TAB_ORDER.length;
-    const nextTab = TAB_ORDER[nextIndex]!;
-    setTab(nextTab);
-    tabButtonRefs.current[nextTab]?.focus();
-  };
-
   return (
-    <div className="map-journal-overlay">
-      <div
-        role="tablist"
-        aria-label="Map and journal"
-        className="map-journal-tablist"
-        tabIndex={-1}
-        onKeyDown={handleTablistKeyDown}
-      >
-        {TAB_ORDER.map((candidate) => (
-          <button
-            key={candidate}
-            ref={(element) => { tabButtonRefs.current[candidate] = element; }}
-            type="button"
-            role="tab"
-            id={TAB_ID[candidate]}
-            aria-selected={candidate === tab}
-            aria-controls={PANEL_ID[candidate]}
-            tabIndex={candidate === tab ? 0 : -1}
-            className={candidate === tab ? 'map-journal-tab map-journal-tab--active' : 'map-journal-tab'}
-            onClick={() => setTab(candidate)}
-          >
-            {TAB_LABEL[candidate]}
-          </button>
-        ))}
-      </div>
-      {tab === 'map'
-        ? <MapPane floor={floor} hero={hero} actors={actors} panelId={PANEL_ID.map} tabId={TAB_ID.map} />
-        : <JournalPane snapshot={snapshot} panelId={PANEL_ID.journal} tabId={TAB_ID.journal} />}
-      <p className="map-journal-hints">← → switch tab · Esc close</p>
-    </div>
+    <Tabs defaultValue="map" className="flex flex-col gap-3">
+      <TabsList aria-label="Map and journal" activateOnFocus>
+        <TabsTrigger value="map">Map</TabsTrigger>
+        <TabsTrigger value="journal">Journal</TabsTrigger>
+      </TabsList>
+      <TabsContent value="map">
+        <MapPane floor={floor} hero={hero} actors={actors} />
+      </TabsContent>
+      <TabsContent value="journal">
+        <JournalPane snapshot={snapshot} />
+      </TabsContent>
+    </Tabs>
   );
 }

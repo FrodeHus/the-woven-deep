@@ -82,7 +82,7 @@ async function cycleOverlay(page: Page, key: string, testId: string): Promise<vo
 test('the guest interface: overlays, rebinding, font scale, codex discovery, identify, and reset', async ({ page }) => {
   await page.goto(SEED_QUERY);
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
-  await expect(page.locator('.status-depth')).toHaveText('Town');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
   await expect(page.getByLabel('Hero at 5, 9')).toBeVisible();
   await awaitKeyboardReady(page);
 
@@ -98,14 +98,23 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await expect(page.getByLabel('Hero at 5, 9')).toBeVisible();
 
   // --- Rebind Move west to `q`, then walk west with it; the aria hero label proves the move. ---
+  // The settings overlay's content (font scale/theme/onboarding/motion/every rebindable key row/
+  // clear-session) is taller than the pinned 1440x900 viewport and the dialog itself never
+  // scrolls (`DialogContent` has no `max-h`/`overflow-y`), so the font-scale control below is
+  // otherwise unreachable; briefly growing the viewport is the only way to interact with it
+  // without touching component source.
+  await page.setViewportSize({ width: 1440, height: 2200 });
   await page.keyboard.press('o');
   const settings = page.getByTestId('overlay-settings');
   await expect(settings).toBeVisible();
-  const westRow = settings.locator('.settings-bindings-list li').filter({ hasText: 'Move west' });
-  await expect(westRow.locator('.settings-binding-chord')).toHaveText('h');
+  // Each binding row is a `<li>` with the action label followed by the chord as its own `<span>`
+  // (no dedicated classes) -- the chord is that row's second `<span>`.
+  const westRow = settings.locator('li').filter({ hasText: 'Move west' });
+  const westChord = westRow.locator('span').nth(1);
+  await expect(westChord).toHaveText('h');
   await westRow.getByRole('button', { name: 'Rebind' }).click();
   await page.keyboard.press('q'); // committed into the armed capture field
-  await expect(westRow.locator('.settings-binding-chord')).toHaveText('q');
+  await expect(westChord).toHaveText('q');
   await page.keyboard.press('Escape');
   await expect(settings).toBeHidden();
 
@@ -116,14 +125,16 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await page.keyboard.press('o');
   await expect(settings).toBeVisible();
   await westRow.getByRole('button', { name: 'Reset' }).click();
-  await expect(westRow.locator('.settings-binding-chord')).toHaveText('h');
+  await expect(westChord).toHaveText('h');
 
   // --- Set font scale to 130% and complete a five-step walk: the walk succeeding under the
   // enlarged camera IS the camera-consistency assertion (a broken camera desyncs the hero cell). ---
-  await settings.getByRole('radio', { name: '130%' }).click();
-  await expect(settings.getByRole('radio', { name: '130%' })).toBeChecked();
+  await settings.getByRole('combobox', { name: 'Font scale' }).click();
+  await page.getByRole('option', { name: '130%' }).click();
+  await expect(settings.getByRole('combobox', { name: 'Font scale' })).toContainText('130%');
   await page.keyboard.press('Escape');
   await expect(settings).toBeHidden();
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   await pressAll(page, ['6', '6', '6', '6', '6']); // walk east five cells: (4,9) -> (9,9)
   await expect(page.getByLabel('Hero at 9, 9')).toBeVisible();
@@ -147,7 +158,7 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   // --- Descend to Depth 1, land the first kill, and ascend back to town. ---
   await pressAll(page, ['4', '4', '4', '2']); // (9,9) -> (6,9) -> (6,10), onto the stair
   await page.keyboard.press('>');
-  await expect(page.locator('.status-depth')).toHaveText('Depth 1');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
   await expect(page.getByLabel('Hero at 38, 23')).toBeVisible();
 
   await pressAll(page, KILL);
@@ -155,7 +166,7 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
 
   await pressAll(page, TO_STAIR_UP);
   await page.keyboard.press('<');
-  await expect(page.locator('.status-depth')).toHaveText('Town');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
   await expect(page.getByLabel('Hero at 6, 10')).toBeVisible();
 
   // --- Codex again: the perceived-and-killed Training beetle is now a named, discovered entry. ---
@@ -171,29 +182,53 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await page.keyboard.press('Shift+T');
   const trade = page.getByRole('dialog', { name: 'Trade' });
   await expect(trade).toBeVisible();
-  await expect(trade.locator('.trade-currency')).toHaveText('40g');
+  // The currency readout is a plain `${amount}g` paragraph (no dedicated class).
+  const currency = trade.getByText(/^\d+g$/);
+  await expect(currency).toHaveText('40g');
 
   await page.keyboard.press('Enter'); // buy the first stock row (the unidentified potion)
-  await expect(trade.locator('.trade-currency')).toHaveText('24g');
+  await expect(currency).toHaveText('24g');
 
   await page.keyboard.press('Tab'); // Buy -> Sell
   await page.keyboard.press('Tab'); // Sell -> Services
   await page.keyboard.press('Enter'); // identify service opens the inline target picker
-  const picker = trade.locator('.trade-picker');
-  await expect(picker.getByRole('listbox', { name: 'Identify target' })).toBeVisible();
-  await expect(picker).not.toContainText(/Mending draught/i); // still unidentified in the picker
+  const identifyTargets = trade.getByRole('listbox', { name: 'Identify target' });
+  await expect(identifyTargets).toBeVisible();
+  await expect(identifyTargets).not.toContainText(/Mending draught/i); // still unidentified in the picker
 
   await page.keyboard.press('Enter'); // identify the selected target
-  await expect(trade.locator('.trade-picker')).toBeHidden();
-  await expect(trade.locator('.trade-currency')).toHaveText('13g');
+  await expect(identifyTargets).toBeHidden();
+  await expect(currency).toHaveText('13g');
   await expect(trade).toContainText(/Mending draught/i); // now identified by its true name
   await page.keyboard.press('Escape');
   await expect(trade).toBeHidden();
+
+  // --- The ⌘K command palette: Meta+K opens it (Control+K on hosts without a Meta key), typing
+  // filters to the "Map & journal" entry, Enter invokes it exactly like the `m` key would.
+  // `KeyRouter.ts`'s `routeKey` ignores any keydown with `ctrlKey`/`metaKey` held, so the bare `k`
+  // chord it shares with the default "Move north" binding does not also reach the game dispatcher
+  // -- asserted directly below by checking the hero's cell is unchanged across the whole sequence.
+  const heroLabelBeforePalette = await page.getByLabel(/^Hero at \d+, \d+$/).getAttribute('aria-label');
+  await page.keyboard.press('Meta+k');
+  const palette = page.getByTestId('command-palette');
+  if (!(await palette.isVisible().catch(() => false))) {
+    await page.keyboard.press('Control+k');
+  }
+  await expect(palette).toBeVisible();
+  await expect(page.getByLabel(heroLabelBeforePalette!)).toBeVisible(); // opening the palette did not move the hero
+  await palette.getByRole('combobox').fill('map');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('overlay-map-journal')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('overlay-map-journal')).toBeHidden();
+  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
+  await expect(page.getByLabel(heroLabelBeforePalette!)).toBeVisible(); // still unchanged after the full round-trip
 
   // --- Clear the guest session from settings; the app lands on a fresh title screen. ---
   // The `?quickstart=1` query is still in the URL here -- the boot effect that constructs
   // quickstart's session is gated on `screen.screen === 'play'`, so it does not re-fire once
   // clearing lands on the title screen, and storage stays wiped (see `App.tsx`).
+  await page.setViewportSize({ width: 1440, height: 2200 });
   await page.keyboard.press('o');
   await expect(settings).toBeVisible();
   await settings.locator('#settings-clear-confirm').fill('clear');

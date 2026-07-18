@@ -7,16 +7,13 @@ function focusableElements(container: HTMLElement): readonly HTMLElement[] {
 }
 
 /**
- * Hand-rolled focus trap shared by every modal dialog in the guest UI (the backpack menu, the
- * confirm-aggression decision prompt, trade/house screens, and every registry overlay): focuses
- * the dialog's first focusable element on mount, wraps Tab/Shift+Tab at the edges so focus never
- * escapes to the page behind it, and restores focus to whatever had it beforehand once the dialog
- * closes or unmounts.
+ * Hand-rolled focus trap used by `DecisionPrompt` in `PlayScreen.tsx` (the confirm-aggression
+ * prompt): focuses the dialog's first focusable element on mount, wraps Tab/Shift+Tab at the
+ * edges so focus never escapes to the page behind it, and restores focus to whatever had it
+ * beforehand once the dialog closes or unmounts.
  *
- * Originally defined in the now-deleted `BackpackMenu.tsx` (absorbed into `InventoryOverlay.tsx`
- * by Task 5); its remaining non-registry consumers (`DecisionPrompt` in `PlayScreen.tsx`,
- * `HouseScreen`, `TradeScreen`) import it from here directly. Shared by the overlay registry
- * infrastructure (`OverlayScaffold`) too, without importing a component module.
+ * The registry overlays get their focus trapping from the `Sheet`/`Dialog` primitives in
+ * `OverlayHost.tsx` instead of from here.
  */
 export function useDialogFocusTrap(containerRef: RefObject<HTMLElement | null>): void {
   useEffect(() => {

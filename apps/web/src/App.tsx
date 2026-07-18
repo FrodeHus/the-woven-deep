@@ -18,9 +18,7 @@ import {
   browserLocalStorage, browserSessionStorage, classifyStorageFailure, PORTRAIT_KEY, type SessionStorageLike,
 } from './session/storage.js';
 import { canOpenOverlay, OVERLAY_REGISTRY, type OverlayId } from './ui/overlays/registry.js';
-import { OVERLAY_COMPONENTS } from './ui/overlays/overlay-components.js';
-import { OverlayScaffold } from './ui/overlays/OverlayScaffold.js';
-import { OverlayErrorBoundary } from './ui/overlays/OverlayErrorBoundary.js';
+import { OverlayHost } from './ui/overlays/OverlayHost.js';
 import { ChargenScreen } from './ui/screens/ChargenScreen.js';
 import { ConclusionScreen } from './ui/screens/ConclusionScreen.js';
 import { HallScreen } from './ui/screens/HallScreen.js';
@@ -28,6 +26,7 @@ import { SignInScreen } from './ui/screens/SignInScreen.js';
 import { TitleScreen } from './ui/screens/TitleScreen.js';
 import { PlayScreen } from './ui/PlayScreen.js';
 import { effectiveReducedMotion, ScreenFade } from './ui/ScreenFade.js';
+import { UiProviders } from './ui/providers.js';
 import './styles.css';
 
 export interface AppProps {
@@ -139,11 +138,6 @@ interface GameRootProps {
   readonly session: GuestSession;
   readonly pack: CompiledContentPack;
   readonly repository: RunRecordRepository;
-  /** Read fresh (via `loadSightings`) on every render -- `GameRoot` re-renders on every session
-   * publish (`useGuestSession` below), and `GuestSession` best-effort persists its own in-memory
-   * sighting cache to this SAME storage after every publish, so a plain re-read here always
-   * reflects the latest accumulation without any extra plumbing back out of `GuestSession`. */
-  readonly storage: SessionStorageLike;
   readonly portraitGlyph: string | undefined;
   readonly onConcluded: (projection: RunConclusionProjection, logTail: readonly LogLine[]) => void;
   /** Called if `finalizeConcludedRun` itself throws (e.g. the Hall write hit a storage quota) --
@@ -181,14 +175,11 @@ interface GameRootProps {
  * `finalized` flag makes a repeat call safe, but `finalizedRef` also stops this component from
  * calling it again on every subsequent render before `onConcluded` swaps the screen away. */
 function GameRoot({
-  session, pack, repository, storage, portraitGlyph, onConcluded, onFinalizeError,
+  session, pack, repository, portraitGlyph, onConcluded, onFinalizeError,
   overlay, onOpenOverlay, onCloseOverlay, keymap,
   settings, onChangeSettings, onClearGuestSession, onboardingEnabled,
 }: GameRootProps): JSX.Element {
   const snapshot = useGuestSession(session);
-  // Re-read on every render (every session publish, since this component only re-renders via the
-  // `useGuestSession` subscription above) -- see the doc comment on `storage` in `GameRootProps`.
-  const sightings = loadSightings(storage).sightings;
   const [dismissed, setDismissed] = useState(false);
   const { notice, conclusion } = snapshot;
   const finalizedRef = useRef(false);
@@ -250,7 +241,6 @@ function GameRoot({
         onChangeSettings={onChangeSettings}
         onClearGuestSession={onClearGuestSession}
         records={repository.records()}
-        sightings={sightings}
         onboardingEnabled={onboardingEnabled}
       />
     </div>
@@ -291,7 +281,7 @@ export function App({
   // one-time boot fact, not an ongoing condition).
   const [settingsCorruptedDismissed, setSettingsCorruptedDismissed] = useState(false);
 
-  // Settings roaming (Task 12) bookkeeping. `settingsRef` mirrors `settings` for the roam effect's
+  // Settings roaming bookkeeping. `settingsRef` mirrors `settings` for the roam effect's
   // async closure (which only re-fires on an account-status transition, so it cannot rely on the
   // render-time `settings` staying fresh by the time its network round-trip resolves).
   // `settingsVersionRef` is a monotonic counter this client increments on every push it makes (the
@@ -334,7 +324,7 @@ export function App({
         : 'Saving settings is unavailable in this browser -- changes apply for this visit only.'
     ));
 
-    // Task 12: signed-in players roam settings across devices. The localStorage write above is
+    // Signed-in players roam settings across devices. The localStorage write above is
     // unconditional (guest and signed-in alike); this debounced push is the signed-in-only extra --
     // gated so a guest, or a player who has since signed out, never reaches the server. Trailing
     // debounce (~500ms): rapid-fire changes (e.g. dragging a font-scale slider) collapse into one
@@ -433,7 +423,7 @@ export function App({
   }, [fetcher, accountOverride]);
 
   /**
-   * Settings roaming (Task 12), the one-time "roam on sign-in" half: fires exactly once per
+   * Settings roaming, the one-time "roam on sign-in" half: fires exactly once per
    * sign-in, whether the account arrived already-signed-in at boot (a fresh page load after a
    * magic-link redirect, or `accountOverride` in tests) or flipped from guest to signed-in later.
    * `roamedForSessionRef` is the once-guard, reset back to `false` on a drop to guest so a later
@@ -550,27 +540,6 @@ export function App({
     setScreen({ screen: 'title' });
   }
 
-  function renderOverlayHost(): JSX.Element | null {
-    if (!overlay) return null;
-    const definition = OVERLAY_REGISTRY[overlay];
-    const OverlayBody = OVERLAY_COMPONENTS[overlay];
-    return (
-      <OverlayScaffold title={definition.title} onClose={closeOverlay} testId={`overlay-${overlay}`}>
-        <OverlayErrorBoundary>
-          <OverlayBody
-            settings={settings}
-            onChangeSettings={handleSettingsChange}
-            onClearGuestSession={handleClearGuestSession}
-            keymap={keymap}
-            pack={pack}
-            records={repository.records()}
-            sightings={loadSightings(storage).sightings}
-          />
-        </OverlayErrorBoundary>
-      </OverlayScaffold>
-    );
-  }
-
   /** Wraps every post-boot screen with any persistent, non-dismissible warnings pending —
    * Hall-corruption-on-boot, finalize-write, and settings-write failures alike. The active run
    * survives regardless of any of these: only the affected write (or, on boot, the Hall itself)
@@ -647,31 +616,40 @@ export function App({
 
   if (screen.screen === 'title') {
     return withRootStyling(withHallNotice(
-      <main className="shell">
-        <TitleScreen
-          storage={storage}
-          account={account}
-          onEnterTheDeep={() => {
-            closeOverlay();
-            setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
-            setScreen({ screen: 'chargen' });
-          }}
-          onContinue={() => {
-            closeOverlay();
-            setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
-            setSession(new GuestSession({ pack, storage, localStorage: localStorageInstance }));
-            setScreen({ screen: 'play' });
-            bumpFadeToken();
-          }}
-          onHall={() => setScreen({ screen: 'hall', returnTo: 'title' })}
-          onOpenOverlay={openOverlay}
-          onSignIn={() => setScreen({ screen: 'signin' })}
-          onSignOut={() => {
-            void logout(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
-          }}
-        />
-        {renderOverlayHost()}
-      </main>,
+      <UiProviders pack={pack} settings={settings} onChangeSettings={handleSettingsChange}>
+        <main className="shell">
+          <TitleScreen
+            storage={storage}
+            account={account}
+            onEnterTheDeep={() => {
+              closeOverlay();
+              setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
+              setScreen({ screen: 'chargen' });
+            }}
+            onContinue={() => {
+              closeOverlay();
+              setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
+              setSession(new GuestSession({ pack, storage, localStorage: localStorageInstance }));
+              setScreen({ screen: 'play' });
+              bumpFadeToken();
+            }}
+            onHall={() => setScreen({ screen: 'hall', returnTo: 'title' })}
+            onOpenOverlay={openOverlay}
+            onSignIn={() => setScreen({ screen: 'signin' })}
+            onSignOut={() => {
+              void logout(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
+            }}
+          />
+          <OverlayHost
+            overlay={overlay}
+            onClose={closeOverlay}
+            isPlayActive={false}
+            records={repository.records()}
+            onClearGuestSession={handleClearGuestSession}
+            sightings={loadSightings(storage).sightings}
+          />
+        </main>
+      </UiProviders>,
     ));
   }
 
@@ -778,26 +756,27 @@ export function App({
   }
 
   return withRootStyling(withHallNotice(
-    <GameRoot
-      session={session}
-      pack={pack}
-      repository={repository}
-      storage={storage}
-      portraitGlyph={portraitGlyph}
-      overlay={overlay}
-      onOpenOverlay={openOverlay}
-      onCloseOverlay={closeOverlay}
-      keymap={keymap}
-      settings={settings}
-      onChangeSettings={handleSettingsChange}
-      onClearGuestSession={handleClearGuestSession}
-      onboardingEnabled={settings.onboarding === 'on' && !quickstart}
-      onConcluded={(projection, logTail) => {
-        setConclusion({ projection, logTail });
-        setScreen({ screen: 'conclusion' });
-        bumpFadeToken();
-      }}
-      onFinalizeError={setFinalizeWarning}
-    />,
+    <UiProviders pack={pack} settings={settings} onChangeSettings={handleSettingsChange} session={session}>
+      <GameRoot
+        session={session}
+        pack={pack}
+        repository={repository}
+        portraitGlyph={portraitGlyph}
+        overlay={overlay}
+        onOpenOverlay={openOverlay}
+        onCloseOverlay={closeOverlay}
+        keymap={keymap}
+        settings={settings}
+        onChangeSettings={handleSettingsChange}
+        onClearGuestSession={handleClearGuestSession}
+        onboardingEnabled={settings.onboarding === 'on' && !quickstart}
+        onConcluded={(projection, logTail) => {
+          setConclusion({ projection, logTail });
+          setScreen({ screen: 'conclusion' });
+          bumpFadeToken();
+        }}
+        onFinalizeError={setFinalizeWarning}
+      />
+    </UiProviders>,
   ));
 }

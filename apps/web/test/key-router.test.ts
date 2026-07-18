@@ -5,9 +5,22 @@ import { resolveKeymap } from '../src/session/settings.js';
 
 function keyEvent(
   key: string,
-  options: Readonly<{ shiftKey?: boolean; target?: EventTarget | null; repeat?: boolean }> = {},
+  options: Readonly<{
+    shiftKey?: boolean;
+    target?: EventTarget | null;
+    repeat?: boolean;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+  }> = {},
 ) {
-  return { key, shiftKey: options.shiftKey ?? false, target: options.target ?? null, repeat: options.repeat ?? false };
+  return {
+    key,
+    shiftKey: options.shiftKey ?? false,
+    target: options.target ?? null,
+    repeat: options.repeat ?? false,
+    ctrlKey: options.ctrlKey ?? false,
+    metaKey: options.metaKey ?? false,
+  };
 }
 
 // The default resolved keymap (no player rebindings): this is the "default map" every existing
@@ -102,6 +115,13 @@ describe('routeKey', () => {
         expect(routeKey({ event: keyEvent(key), overlayOpen: true, keymap: defaultKeymap })).toBeNull();
       }
     });
+  });
+
+  it('ignores any Ctrl/Meta chord, even one that shares a key with a default binding', () => {
+    // "k" is the default "Move north" binding -- Meta+K/Control+K must not also move the hero
+    // (this is the browser/OS palette-open chord; see the ⌘K command palette listener).
+    expect(routeKey({ event: keyEvent('k', { metaKey: true }), overlayOpen: false, keymap: defaultKeymap })).toBeNull();
+    expect(routeKey({ event: keyEvent('k', { ctrlKey: true }), overlayOpen: false, keymap: defaultKeymap })).toBeNull();
   });
 
   describe('rebinding', () => {

@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
@@ -112,8 +113,13 @@ describe('settings roaming (Task 12)', () => {
     await screen.findByRole('dialog', { name: 'Settings' });
 
     // Fake timers only from here on -- opening the dialog above needed real timers/microtasks.
+    // `shouldAdvanceTime: true` lets the fake clock auto-track real elapsed time for the Select's
+    // own internal (near-zero) timeouts, while `vi.advanceTimersByTimeAsync` below still drives
+    // the debounce timer deterministically.
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    fireEvent.click(screen.getByRole('radio', { name: /high contrast/i }));
+    const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByRole('combobox', { name: /theme/i }));
+    await user.click(await screen.findByRole('option', { name: /high contrast/i }));
 
     // Not yet -- the debounce hasn't elapsed.
     expect(puts).toHaveLength(1);
@@ -142,7 +148,9 @@ describe('settings roaming (Task 12)', () => {
     const { fireEvent } = await import('@testing-library/react');
     fireEvent.keyDown(window, { key: 'o' });
     await screen.findByRole('dialog', { name: 'Settings' });
-    fireEvent.click(screen.getByRole('radio', { name: /high contrast/i }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('combobox', { name: /theme/i }));
+    await user.click(await screen.findByRole('option', { name: /high contrast/i }));
 
     await new Promise((r) => setTimeout(r, 600));
     expect(puts).toHaveLength(0);

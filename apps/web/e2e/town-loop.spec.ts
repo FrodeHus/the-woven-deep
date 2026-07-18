@@ -59,28 +59,45 @@ async function awaitKeyboardReady(page: Page): Promise<void> {
   }).toPass();
 }
 
+/** Opens a dialog by key and waits for it to mount before the caller sends further keys.
+ * `TradeScreen`/`HouseScreen` route Tab/Arrow/Enter through a capture-phase `window` listener
+ * rather than DOM focus (see their own doc comments), so -- unlike the backpack sheet, whose
+ * dedicated focus-trap contract is exercised in `guest-play.spec.ts` -- there is no single
+ * "the first item is focused" assertion that applies to every dialog this helper opens; waiting
+ * for visibility is the load-bearing guard against racing the dialog's mount here. */
 async function openDialog(page: Page, key: string, name: RegExp): Promise<void> {
   await page.keyboard.press(key);
   const dialog = page.getByRole('dialog', { name });
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator('button').first()).toBeFocused();
+}
+
+/** The currency readout is a plain `${amount}g` paragraph (no dedicated class). */
+function currencyText(dialog: ReturnType<Page['getByRole']>) {
+  return dialog.getByText(/^\d+g$/);
+}
+
+/** The house capacity readout is a plain `House (used/capacity)` paragraph (no dedicated class). */
+function houseCapacityText(dialog: ReturnType<Page['getByRole']>) {
+  return dialog.getByText(/^House \(\d+\/\d+\)$/);
 }
 
 test('the town loop: buy, store, descend, kill, return, sell, upgrade, retrieve, descend', async ({ page }) => {
   await page.goto(SEED_QUERY);
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
+  const trade = page.getByRole('dialog', { name: /trade/i });
+  const house = page.getByRole('dialog', { name: /house/i });
 
   // --- Boot to town: the status label reads "Town" and the provisioner is on the town panel. ---
-  await expect(page.locator('.status-depth')).toHaveText('Town');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
   await expect(page.getByRole('region', { name: 'Town' })).toContainText(/provisioner/i);
   await awaitKeyboardReady(page);
 
   // --- Buy a Travel ration from the provisioner: currency drops 40g -> 33g. ---
   await pressAll(page, TO_PROVISIONER);
   await openDialog(page, 'Shift+T', /trade/i);
-  await expect(page.locator('.trade-currency')).toHaveText('40g');
+  await expect(currencyText(trade)).toHaveText('40g');
   await page.keyboard.press('Enter'); // buy the first stock row (a Travel ration, 7g)
-  await expect(page.locator('.trade-currency')).toHaveText('33g');
+  await expect(currencyText(trade)).toHaveText('33g');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: /trade/i })).toBeHidden();
 
@@ -88,14 +105,14 @@ test('the town loop: buy, store, descend, kill, return, sell, upgrade, retrieve,
   await pressAll(page, TO_HOUSE);
   await openDialog(page, 'Shift+H', /house/i);
   await page.keyboard.press('Enter'); // deposit the selected backpack stack (a ration)
-  await expect(page.locator('.house-capacity')).toHaveText('House (1/6)');
+  await expect(houseCapacityText(house)).toHaveText('House (1/6)');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: /house/i })).toBeHidden();
 
   // --- Descend to Depth 1. ---
   await pressAll(page, TO_STAIR);
   await page.keyboard.press('>');
-  await expect(page.locator('.status-depth')).toHaveText('Depth 1');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
 
   // --- Kill a monster. ---
   await pressAll(page, KILL);
@@ -104,9 +121,9 @@ test('the town loop: buy, store, descend, kill, return, sell, upgrade, retrieve,
   // --- Return to town, then back down to the SAME stored floor. ---
   await pressAll(page, TO_STAIR_UP);
   await page.keyboard.press('<');
-  await expect(page.locator('.status-depth')).toHaveText('Town');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
   await page.keyboard.press('>');
-  await expect(page.locator('.status-depth')).toHaveText('Depth 1');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
 
   // Dead stays dead: walk the hero back onto the killed monster's cell (27,10). It is only
   // reachable and standable because the corpse never respawned -- a regenerated floor would have a
@@ -117,7 +134,7 @@ test('the town loop: buy, store, descend, kill, return, sell, upgrade, retrieve,
   // Back up to town for the trade half of the loop.
   await pressAll(page, TO_STAIR_UP_2);
   await page.keyboard.press('<');
-  await expect(page.locator('.status-depth')).toHaveText('Town');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
 
   // --- Unequip the surplus starting gear (sword + armor) into the backpack so it can be sold. ---
   await openDialog(page, 'i', /backpack/i);
@@ -133,13 +150,13 @@ test('the town loop: buy, store, descend, kill, return, sell, upgrade, retrieve,
   // --- Sell both to the arms dealer: currency rises 33g -> 52g. ---
   await pressAll(page, TO_ARMORER);
   await openDialog(page, 'Shift+T', /trade/i);
-  await expect(page.locator('.trade-currency')).toHaveText('33g');
+  await expect(currencyText(trade)).toHaveText('33g');
   await page.keyboard.press('Tab'); // buy -> sell list
   await page.keyboard.press('Enter'); // sell the first sale offer
   // Wait for the sale to settle (the offer list re-renders) before selling the next.
-  await expect(page.locator('.trade-currency')).not.toHaveText('33g');
+  await expect(currencyText(trade)).not.toHaveText('33g');
   await page.keyboard.press('Enter'); // sell the remaining sale offer
-  await expect(page.locator('.trade-currency')).toHaveText('52g');
+  await expect(currencyText(trade)).toHaveText('52g');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: /trade/i })).toBeHidden();
 
@@ -149,22 +166,22 @@ test('the town loop: buy, store, descend, kill, return, sell, upgrade, retrieve,
   await page.keyboard.press('Tab'); // buy -> sell
   await page.keyboard.press('Tab'); // sell -> services
   await page.keyboard.press('Enter'); // buy the strongbox service (50g)
-  await expect(page.locator('.trade-currency')).toHaveText('2g');
+  await expect(currencyText(trade)).toHaveText('2g');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: /trade/i })).toBeHidden();
 
   // --- Retrieve the stored ration: the house readout now shows capacity 10 (6 -> 10). ---
   await pressAll(page, TO_HOUSE_2);
   await openDialog(page, 'Shift+H', /house/i);
-  await expect(page.locator('.house-capacity')).toHaveText('House (1/10)');
+  await expect(houseCapacityText(house)).toHaveText('House (1/10)');
   await page.keyboard.press('Tab'); // backpack -> house list
   await page.keyboard.press('Enter'); // withdraw the stored ration
-  await expect(page.locator('.house-capacity')).toHaveText('House (0/10)');
+  await expect(houseCapacityText(house)).toHaveText('House (0/10)');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: /house/i })).toBeHidden();
 
   // --- Descend once more to close the loop. ---
   await pressAll(page, TO_STAIR_2);
   await page.keyboard.press('>');
-  await expect(page.locator('.status-depth')).toHaveText('Depth 1');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
 });

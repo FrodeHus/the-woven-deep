@@ -1,24 +1,17 @@
-import { useEffect, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useState, type JSX, type ReactNode } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { StoredHallRecord } from '@woven-deep/engine';
 import {
   deriveCodexState, sortedClassEntries, type CodexCategory as CodexCategoryData, type CodexEntry, type Sightings,
 } from '../../session/codex.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
-import { useListNavigation } from '../screens/roving-focus.js';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/tabs.js';
+import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
 
 const CATEGORY_ORDER: readonly CodexCategoryData['kind'][] = ['class', 'item', 'spell', 'monster'];
 
 const CATEGORY_LABEL: Readonly<Record<CodexCategoryData['kind'], string>> = {
   class: 'Classes', item: 'Items', spell: 'Spells', monster: 'Monsters',
-};
-
-const TAB_ID: Readonly<Record<CodexCategoryData['kind'], string>> = {
-  class: 'codex-tab-class', item: 'codex-tab-item', spell: 'codex-tab-spell', monster: 'codex-tab-monster',
-};
-
-const PANEL_ID: Readonly<Record<CodexCategoryData['kind'], string>> = {
-  class: 'codex-panel-class', item: 'codex-panel-item', spell: 'codex-panel-spell', monster: 'codex-panel-monster',
 };
 
 /** A locked class's `unlockHint`, zipped by index against the SAME `sortedClassEntries` order
@@ -42,19 +35,28 @@ function entryGlyph(entry: CodexEntry): string {
   return entry.discovered ? entry.glyph : entry.silhouetteGlyph;
 }
 
-function DetailPane({ entry, unlockHint }: Readonly<{ entry: CodexEntry | undefined; unlockHint: string | null }>): JSX.Element {
-  if (!entry) return <p className="codex-detail placeholder">Nothing selected.</p>;
+function toListItem(entry: CodexEntry, index: number): ListDetailItem {
+  return {
+    id: String(index),
+    glyph: entryGlyph(entry),
+    label: entryLabel(entry),
+    ...(entry.discovered ? { glyphColor: entry.color } : {}),
+  };
+}
+
+function DetailPane({ entry, unlockHint }: Readonly<{ entry: CodexEntry | undefined; unlockHint: string | null }>): ReactNode {
+  if (!entry) return <p className="text-muted">Nothing selected.</p>;
 
   if (!entry.discovered) {
     return (
-      <dl className="codex-detail" aria-label="Codex entry details">
-        <dt>Name</dt>
+      <dl aria-label="Codex entry details" className="flex flex-col gap-1 text-sm">
+        <dt className="text-muted">Name</dt>
         <dd>???</dd>
-        <dt>Glyph</dt>
-        <dd aria-hidden="true">{entry.silhouetteGlyph}</dd>
+        <dt className="text-muted">Glyph</dt>
+        <dd aria-hidden="true" className="font-mono">{entry.silhouetteGlyph}</dd>
         {unlockHint && (
           <>
-            <dt>Unlock</dt>
+            <dt className="text-muted">Unlock</dt>
             <dd>{unlockHint}</dd>
           </>
         )}
@@ -63,56 +65,37 @@ function DetailPane({ entry, unlockHint }: Readonly<{ entry: CodexEntry | undefi
   }
 
   return (
-    <dl className="codex-detail" aria-label="Codex entry details">
-      <dt>Name</dt>
+    <dl aria-label="Codex entry details" className="flex flex-col gap-1 text-sm">
+      <dt className="text-muted">Name</dt>
       <dd>{entry.name}</dd>
-      <dt>Glyph</dt>
-      <dd style={{ color: entry.color }} aria-hidden="true">{entry.glyph}</dd>
+      <dt className="text-muted">Glyph</dt>
+      <dd style={{ color: entry.color }} aria-hidden="true" className="font-mono">{entry.glyph}</dd>
       {entry.description && (
         <>
-          <dt>Description</dt>
+          <dt className="text-muted">Description</dt>
           <dd>{entry.description}</dd>
         </>
       )}
-      <dt>First seen</dt>
+      <dt className="text-muted">First seen</dt>
       <dd>{entry.firstSeenRun === null ? 'This run' : `Run #${entry.firstSeenRun}`}</dd>
     </dl>
   );
 }
 
-function CategoryPanel({ category, pack, panelId, tabId }: Readonly<{
-  category: CodexCategoryData; pack: CompiledContentPack; panelId: string; tabId: string;
+function CategoryPanel({ category, pack, selectedIndex, onSelect }: Readonly<{
+  category: CodexCategoryData; pack: CompiledContentPack; selectedIndex: number; onSelect: (index: number) => void;
 }>): JSX.Element {
   const { entries } = category;
-  const { selectedIndex, setSelectedIndex, registerItem, handleArrowKeys } = useListNavigation(entries.length);
-  const selected = entries[selectedIndex];
-
   return (
-    <div className="codex-category-panel" role="tabpanel" id={panelId} aria-labelledby={tabId} tabIndex={0}>
-      {entries.length === 0
-        ? <p className="placeholder">Nothing in this category yet.</p>
-        : (
-          <div className="codex-category-body">
-            <ul role="listbox" aria-label={CATEGORY_LABEL[category.kind]} className="codex-entry-list" onKeyDown={handleArrowKeys}>
-              {entries.map((entry, index) => (
-                <li key={index} role="option" aria-selected={index === selectedIndex}>
-                  <button
-                    type="button"
-                    ref={registerItem(index)}
-                    className={index === selectedIndex ? 'codex-entry codex-entry--selected' : 'codex-entry'}
-                    onClick={() => setSelectedIndex(index)}
-                  >
-                    <span aria-hidden="true">{entryGlyph(entry)}</span>
-                    {' '}
-                    {entryLabel(entry)}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <DetailPane entry={selected} unlockHint={unlockHintFor(pack, category, selectedIndex)} />
-          </div>
-        )}
-    </div>
+    <ListDetail
+      listLabel={CATEGORY_LABEL[category.kind]}
+      items={entries.map(toListItem)}
+      selectedIndex={selectedIndex}
+      onSelect={onSelect}
+      renderDetail={(_item, index) => (
+        <DetailPane entry={entries[index]} unlockHint={unlockHintFor(pack, category, index)} />
+      )}
+    />
   );
 }
 
@@ -123,66 +106,48 @@ export interface CodexOverlayProps {
   readonly pack: CompiledContentPack;
 }
 
+const EMPTY_SELECTION: Readonly<Record<CodexCategoryData['kind'], number>> = { class: 0, item: 0, spell: 0, monster: 0 };
+
 /**
  * The unlock codex: one category tab per content kind (classes/items/spells/monsters, the spec's
- * own order), each with a list+detail pane. Reachable from the title screen too (`snapshot` is
- * `null` there -- the "active hero's class" discovery source is then simply unavailable, exactly
- * like every other active-run-only source with no active run).
+ * own order), each with a `ListDetail` list+detail pane. Reachable from the title screen too
+ * (`snapshot` is `null` there -- the "active hero's class" discovery source is then simply
+ * unavailable, exactly like every other active-run-only source with no active run). `records`,
+ * `snapshot`, `sightings`, and `pack` all arrive as PROPS from `OverlayHost` -- `sightings` in
+ * particular is a RESOLVED value there (falling back to the guest's persisted cross-run sighting
+ * cache when there is no live session), so this component must never re-read it from session
+ * context itself.
  *
- * Tab switching follows Task 7's completed `MapJournalOverlay` tablist convention exactly:
- * ArrowLeft/ArrowRight cycle the active tab (not the literal `Tab` key, which stays load-bearing
- * for `useDialogFocusTrap`'s own focus-order wrapping), with roving `tabIndex` and full
- * `tabpanel`/`aria-labelledby`/`aria-controls` linkage. Within a panel, ArrowUp/ArrowDown move the
- * list selection (`useListNavigation`, the same roving-focus hook `InventoryOverlay`/`KitStep` use).
+ * Tab switching is the shared shadcn `Tabs` primitive (Base UI), the same convention
+ * `MapJournalOverlay` established: `activateOnFocus` on `TabsList` so arrow keys switch the active
+ * tab immediately. Within a panel, `ListDetail` owns list selection (ArrowUp/ArrowDown/Home/End).
  */
-export function CodexOverlay({ records, snapshot, sightings, pack }: CodexOverlayProps): JSX.Element {
-  const [tab, setTab] = useState<CodexCategoryData['kind']>('class');
+export function CodexOverlay({ records, snapshot, sightings, pack }: Readonly<CodexOverlayProps>): JSX.Element {
   const state = deriveCodexState({ records, snapshot, sightings, pack });
-  const category = state.categories.find((candidate) => candidate.kind === tab)!;
-
-  const tabButtonRefs = useRef<Record<CodexCategoryData['kind'], HTMLButtonElement | null>>({
-    class: null, item: null, spell: null, monster: null,
-  });
-
-  const handleTablistKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-    event.preventDefault();
-    const currentIndex = CATEGORY_ORDER.indexOf(tab);
-    const delta = event.key === 'ArrowRight' ? 1 : -1;
-    const nextIndex = (currentIndex + delta + CATEGORY_ORDER.length) % CATEGORY_ORDER.length;
-    const nextTab = CATEGORY_ORDER[nextIndex]!;
-    setTab(nextTab);
-    tabButtonRefs.current[nextTab]?.focus();
-  };
+  // One selection cursor per category, so switching tabs never loses (or cross-contaminates) the
+  // guest's place in a different category's list -- mirrors each category panel's independent
+  // `ListDetail` instance.
+  const [selectedIndices, setSelectedIndices] = useState(EMPTY_SELECTION);
 
   return (
-    <div className="codex-overlay">
-      <div
-        role="tablist"
-        aria-label="Codex categories"
-        className="codex-tablist"
-        tabIndex={-1}
-        onKeyDown={handleTablistKeyDown}
-      >
-        {CATEGORY_ORDER.map((candidate) => (
-          <button
-            key={candidate}
-            ref={(element) => { tabButtonRefs.current[candidate] = element; }}
-            type="button"
-            role="tab"
-            id={TAB_ID[candidate]}
-            aria-selected={candidate === tab}
-            aria-controls={PANEL_ID[candidate]}
-            tabIndex={candidate === tab ? 0 : -1}
-            className={candidate === tab ? 'codex-tab codex-tab--active' : 'codex-tab'}
-            onClick={() => setTab(candidate)}
-          >
-            {CATEGORY_LABEL[candidate]}
-          </button>
-        ))}
-      </div>
-      <CategoryPanel category={category} pack={pack} panelId={PANEL_ID[tab]} tabId={TAB_ID[tab]} />
-      <p className="codex-footer">Session-only, like your Hall records — nothing here is confirmed by a server yet.</p>
-    </div>
+    <Tabs defaultValue="class" className="flex flex-col gap-3">
+      <TabsList aria-label="Codex categories" activateOnFocus>
+        {CATEGORY_ORDER.map((kind) => <TabsTrigger key={kind} value={kind}>{CATEGORY_LABEL[kind]}</TabsTrigger>)}
+      </TabsList>
+      {CATEGORY_ORDER.map((kind) => {
+        const category = state.categories.find((candidate) => candidate.kind === kind)!;
+        return (
+          <TabsContent key={kind} value={kind}>
+            <CategoryPanel
+              category={category}
+              pack={pack}
+              selectedIndex={selectedIndices[kind]}
+              onSelect={(index) => setSelectedIndices((prev) => ({ ...prev, [kind]: index }))}
+            />
+          </TabsContent>
+        );
+      })}
+      <p className="text-sm text-muted">Session-only, like your Hall records — nothing here is confirmed by a server yet.</p>
+    </Tabs>
   );
 }

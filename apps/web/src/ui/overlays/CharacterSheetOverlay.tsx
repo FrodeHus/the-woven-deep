@@ -1,8 +1,8 @@
-import type { JSX } from 'react';
+import { Fragment, type CSSProperties, type JSX, type ReactNode } from 'react';
 import {
   DERIVED_STAT_NAMES, type DerivedStatFormula, type DerivedStatName,
 } from '@woven-deep/engine';
-import type { SessionSnapshot } from '../../session/guest-session.js';
+import { useSessionCtx } from '../providers.js';
 import type { ProjectedItemLike } from './InventoryOverlay.js';
 
 type AttributeName = 'might' | 'agility' | 'vitality' | 'wits' | 'resolve';
@@ -84,109 +84,124 @@ function formatFormula(formula: DerivedStatFormula): string {
   )).join(' + ');
 }
 
-export interface CharacterSheetOverlayProps {
-  readonly snapshot: SessionSnapshot;
+function Section({ id, title, children }: Readonly<{ id: string; title: string; children: ReactNode }>): JSX.Element {
+  return (
+    <section aria-labelledby={id} className="flex flex-col gap-2 rounded-md border border-line bg-surface p-3">
+      <h3 id={id} className="font-serif text-sm text-fg-strong">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function DefinitionGrid({ children }: Readonly<{ children: ReactNode }>): JSX.Element {
+  return <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">{children}</dl>;
+}
+
+function Row({ label, value }: Readonly<{ label: string; value: ReactNode }>): JSX.Element {
+  return (
+    <Fragment>
+      <dt className="text-muted">{label}</dt>
+      <dd className="text-right text-fg">{value}</dd>
+    </Fragment>
+  );
 }
 
 /**
  * Read-only character sheet: base attributes, every `DERIVED_STAT_NAMES` entry with its value AND
  * formula, active conditions (stacks + a disclosed expiry marker), hunger stage, sight radius,
  * equipped gear, and current-run metrics. No dispatch surface at all -- unlike `InventoryOverlay`,
- * this overlay never calls `onDispatch`; there is nothing here to act on, only to read.
+ * this overlay never calls `onDispatch`; there is nothing here to act on, only to read. Reads
+ * directly from `useSessionCtx()` rather than taking props, since the character sheet is
+ * play-scope (a session is always present while this overlay can open) -- guards to rendering
+ * nothing if that invariant is ever violated.
+ *
+ * Presented as a static section grid rather than `ListDetail`: every section here is a flat,
+ * read-only fact sheet with no drill-down detail pane to show, so a list+detail split would add
+ * structure with nothing to put in the detail side (YAGNI).
  *
  * Two deliberate omissions, both disclosed rather than silently dropped:
  *
  * - **Resistances**: the approved design spec calls for them, but `projection.hero` does not
  *   project a `resistances` field (verified against `projectGameplayState`'s hero object,
  *   `packages/engine/src/projection.ts`) -- only monster/encounter content entries carry
- *   `resistances`. The plan's Global Constraints reserve the one permitted projection addition for
- *   Task 8 (an unrelated actor-contentId field), so this section is omitted here rather than
- *   inventing engine state; a later task can add it following that same disclosed process.
+ *   `resistances`. This section is omitted here rather than inventing engine state; a later task
+ *   can add it following that same disclosed process.
  *
  * - **Condition remaining time**: the design calls for "remaining durations". `projectGameplayState`
- *   (`packages/engine/src/projection.ts`) now computes this engine-side per condition as `remaining
- *   = expiresAt - worldTime` (hero-experienced time, not hidden state -- `worldTime` itself still
+ *   (`packages/engine/src/projection.ts`) computes this engine-side per condition as `remaining =
+ *   expiresAt - worldTime` (hero-experienced time, not hidden state -- `worldTime` itself still
  *   never reaches the web layer, only this derived value does), `null` when the condition is
- *   permanent (`expiresAt === null`) or the active floor is town (depth 0, frozen time). The raw
- *   `expiresAt` tick was dropped from the projection entirely -- this overlay was its only
- *   consumer (verified by grep), so there is nothing left needing the absolute tick once
- *   `remaining` exists. Because both "permanent" and "frozen in town" collapse to `remaining ===
- *   null`, this overlay disambiguates using the pre-existing `projection.floor.town` flag: town
- *   always shows the frozen marker (time is frozen for every condition while in town, permanent or
- *   not); outside town, a null `remaining` can only mean the condition is permanent, so it renders
- *   "Permanent". A non-null `remaining` renders as "N world-time units remaining" -- "world-time
- *   units" is this codebase's own established vocabulary for `worldTime` ticks (see
- *   `restMaximumDuration` in `docs/server-admin/content-configuration.md` and the `worldTime` field
- *   doc in `docs/superpowers/specs/2026-07-13-core-gameplay-survival-design.md`), not an invented
- *   "turns" unit.
+ *   permanent (`expiresAt === null`) or the active floor is town (depth 0, frozen time). Because
+ *   both "permanent" and "frozen in town" collapse to `remaining === null`, this overlay
+ *   disambiguates using the pre-existing `projection.floor.town` flag: town always shows the
+ *   frozen marker (time is frozen for every condition while in town, permanent or not); outside
+ *   town, a null `remaining` can only mean the condition is permanent, so it renders "Permanent".
+ *   A non-null `remaining` renders as "N world-time units remaining" -- "world-time units" is this
+ *   codebase's own established vocabulary for `worldTime` ticks (see `restMaximumDuration` in
+ *   `docs/server-admin/content-configuration.md`), not an invented "turns" unit.
  */
-export function CharacterSheetOverlay({ snapshot }: CharacterSheetOverlayProps): JSX.Element {
+export function CharacterSheetOverlay(): JSX.Element | null {
+  const sessionCtx = useSessionCtx();
+  if (!sessionCtx) return null;
+
+  const { snapshot } = sessionCtx;
   const hero = snapshot.projection.hero as unknown as ProjectedHeroLike;
   const town = snapshot.projection.floor.town;
   const metrics = snapshot.projection.metrics;
 
   return (
-    <div className="character-sheet-overlay">
-      <section aria-labelledby="character-sheet-attributes-heading">
-        <h3 id="character-sheet-attributes-heading">Attributes</h3>
-        <dl className="character-sheet-attributes">
+    <div className="flex flex-col gap-3">
+      <Section id="character-sheet-attributes-heading" title="Attributes">
+        <DefinitionGrid>
           {ATTRIBUTE_ORDER.map((name) => (
-            <div key={name}>
-              <dt>{ATTRIBUTE_LABEL[name]}</dt>
-              <dd>{hero.attributes[name]}</dd>
-            </div>
+            <Row key={name} label={ATTRIBUTE_LABEL[name]} value={hero.attributes[name]} />
           ))}
-        </dl>
-      </section>
+        </DefinitionGrid>
+      </Section>
 
-      <section aria-labelledby="character-sheet-derived-heading">
-        <h3 id="character-sheet-derived-heading">Derived stats</h3>
-        <dl className="character-sheet-derived">
+      <Section id="character-sheet-derived-heading" title="Derived stats">
+        <DefinitionGrid>
           {DERIVED_STAT_NAMES.map((name) => {
             const stat = hero.derived[name];
             return (
-              <div key={name}>
-                <dt>{DERIVED_STAT_LABEL[name]}</dt>
-                <dd>
-                  {stat.value}
-                  <span className="character-sheet-formula"> ({formatFormula(stat.formula)})</span>
-                </dd>
-              </div>
+              <Row
+                key={name}
+                label={DERIVED_STAT_LABEL[name]}
+                value={(
+                  <>
+                    {stat.value}
+                    <span className="ml-1 text-xs text-muted">{`(${formatFormula(stat.formula)})`}</span>
+                  </>
+                )}
+              />
             );
           })}
-        </dl>
-      </section>
+        </DefinitionGrid>
+      </Section>
 
-      <section aria-labelledby="character-sheet-vitals-heading">
-        <h3 id="character-sheet-vitals-heading">Vitals</h3>
-        <dl className="character-sheet-vitals">
-          <div>
-            <dt>Health</dt>
-            <dd>{`${hero.health} / ${hero.maxHealth}`}</dd>
-          </div>
-          <div>
-            <dt>Hunger</dt>
-            <dd>{hero.hungerStage}</dd>
-          </div>
-          <div>
-            <dt>Sight radius</dt>
-            <dd>{hero.sightRadius}</dd>
-          </div>
-        </dl>
-      </section>
+      <Section id="character-sheet-vitals-heading" title="Vitals">
+        <DefinitionGrid>
+          <Row label="Health" value={`${hero.health} / ${hero.maxHealth}`} />
+          <Row label="Hunger" value={hero.hungerStage} />
+          <Row label="Sight radius" value={hero.sightRadius} />
+        </DefinitionGrid>
+      </Section>
 
-      <section aria-labelledby="character-sheet-conditions-heading">
-        <h3 id="character-sheet-conditions-heading">Conditions</h3>
-        {hero.conditions.length === 0 && <p className="placeholder">No active conditions.</p>}
+      <Section id="character-sheet-conditions-heading" title="Conditions">
+        {hero.conditions.length === 0 && <p className="text-sm text-muted">No active conditions.</p>}
         {hero.conditions.length > 0 && (
-          <ul className="character-sheet-conditions">
+          <ul className="flex flex-wrap gap-2">
             {hero.conditions.map((condition) => (
-              <li key={condition.conditionId} style={{ color: condition.color }}>
-                <span className="character-sheet-condition-name">{condition.name}</span>
+              <li
+                key={condition.conditionId}
+                className="rounded border px-2 py-1 text-xs"
+                style={{ borderColor: condition.color, color: condition.color } as CSSProperties}
+              >
+                <span className="font-medium">{condition.name}</span>
                 {' '}
-                <span className="character-sheet-condition-stacks">{`×${condition.stacks}`}</span>
+                <span>{`×${condition.stacks}`}</span>
                 {' '}
-                <span className="character-sheet-condition-remaining">
+                <span>
                   {condition.remaining === null
                     ? town
                       ? '— (frozen while in town)'
@@ -197,31 +212,23 @@ export function CharacterSheetOverlay({ snapshot }: CharacterSheetOverlayProps):
             ))}
           </ul>
         )}
-      </section>
+      </Section>
 
-      <section aria-labelledby="character-sheet-equipment-heading">
-        <h3 id="character-sheet-equipment-heading">Equipment</h3>
-        <dl className="character-sheet-equipment">
+      <Section id="character-sheet-equipment-heading" title="Equipment">
+        <DefinitionGrid>
           {Object.entries(hero.equipment).map(([slot, item]) => (
-            <div key={slot}>
-              <dt>{slot}</dt>
-              <dd>{item ? item.name : 'Empty'}</dd>
-            </div>
+            <Row key={slot} label={slot} value={item ? item.name : 'Empty'} />
           ))}
-        </dl>
-      </section>
+        </DefinitionGrid>
+      </Section>
 
-      <section aria-labelledby="character-sheet-metrics-heading">
-        <h3 id="character-sheet-metrics-heading">Run statistics</h3>
-        <dl className="character-sheet-metrics">
+      <Section id="character-sheet-metrics-heading" title="Run statistics">
+        <DefinitionGrid>
           {METRIC_ROWS.map(({ key, label }) => (
-            <div key={key}>
-              <dt>{label}</dt>
-              <dd>{metrics[key]}</dd>
-            </div>
+            <Row key={key} label={label} value={metrics[key]} />
           ))}
-        </dl>
-      </section>
+        </DefinitionGrid>
+      </Section>
     </div>
   );
 }

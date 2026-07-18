@@ -7,8 +7,9 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import { App } from '../src/App.js';
 import { GuestSession } from '../src/session/guest-session.js';
+import { UiProviders } from '../src/ui/providers.js';
 import {
-  DEFAULT_BINDINGS, DEFAULT_SETTINGS, resolveKeymap, SETTINGS_KEY, type Settings,
+  DEFAULT_BINDINGS, DEFAULT_SETTINGS, SETTINGS_KEY, type Settings,
 } from '../src/session/settings.js';
 import { COMMAND_SEQUENCE_KEY, PORTRAIT_KEY, SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 import { RECORDS_KEY } from '../src/session/run-records-storage.js';
@@ -43,14 +44,24 @@ function bindingRow(label: string): HTMLElement {
   return screen.getByText(label).closest('li')!;
 }
 
+/** Opens a shadcn `Select` by its trigger's accessible name, then clicks the option with `option`
+ * text -- the two-step interaction every restyled radio group below now requires. */
+async function chooseSelectOption(
+  user: ReturnType<typeof userEvent.setup>, triggerName: string | RegExp, optionName: string | RegExp,
+): Promise<void> {
+  await user.click(screen.getByRole('combobox', { name: triggerName }));
+  await user.click(await screen.findByRole('option', { name: optionName }));
+}
+
 describe('SettingsOverlay (component-level)', () => {
   function harness(overrides: Partial<Settings> = {}) {
     const settings: Settings = { ...DEFAULT_SETTINGS, ...overrides };
     const onChange = vi.fn();
     const onClearGuestSession = vi.fn();
-    const keymap = resolveKeymap(settings.bindings);
     render(
-      <SettingsOverlay settings={settings} onChange={onChange} onClearGuestSession={onClearGuestSession} keymap={keymap} />,
+      <UiProviders pack={pack} settings={settings} onChangeSettings={onChange}>
+        <SettingsOverlay onClearGuestSession={onClearGuestSession} />
+      </UiProviders>,
     );
     return { onChange, onClearGuestSession };
   }
@@ -63,42 +74,46 @@ describe('SettingsOverlay (component-level)', () => {
     expect(bindingRow('Settings')).toHaveTextContent('o');
   });
 
-  it('font scale: selecting a step calls onChange with the new fontScale, and the preview reflects it live', () => {
+  it('font scale: selecting a step calls onChange with the new fontScale, and the preview reflects it live', async () => {
+    const user = userEvent.setup();
     const { onChange } = harness();
-    const option130 = screen.getByRole('radio', { name: '130%' });
-    fireEvent.click(option130);
+    await chooseSelectOption(user, /font scale/i, '130%');
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ fontScale: 1.3 }));
   });
 
-  it('Display: theme defaults to Tapestry selected, and selecting High contrast calls onChange', () => {
+  it('Display: theme defaults to Tapestry selected, and selecting High contrast calls onChange', async () => {
+    const user = userEvent.setup();
     const { onChange } = harness();
-    expect(screen.getByRole('radio', { name: /tapestry/i })).toBeChecked();
-    fireEvent.click(screen.getByRole('radio', { name: /high contrast/i }));
+    expect(screen.getByRole('combobox', { name: /theme/i })).toHaveTextContent(/tapestry/i);
+    await chooseSelectOption(user, /theme/i, /high contrast/i);
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ theme: 'high-contrast' }));
   });
 
   it('Display: theme "high-contrast" starts with that radio checked', () => {
     harness({ theme: 'high-contrast' });
-    expect(screen.getByRole('radio', { name: /high contrast/i })).toBeChecked();
+    expect(screen.getByRole('combobox', { name: /theme/i })).toHaveTextContent(/high contrast/i);
   });
 
-  it('reduced motion "Always" reports reducedMotion: on', () => {
+  it('reduced motion "Always" reports reducedMotion: on', async () => {
+    const user = userEvent.setup();
     const { onChange } = harness();
-    fireEvent.click(screen.getByRole('radio', { name: /always/i }));
+    await chooseSelectOption(user, /reduce motion/i, /always/i);
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ reducedMotion: 'on' }));
   });
 
-  it('reduced motion "Never" reports reducedMotion: off', () => {
+  it('reduced motion "Never" reports reducedMotion: off', async () => {
+    const user = userEvent.setup();
     const { onChange } = harness();
-    fireEvent.click(screen.getByRole('radio', { name: /never/i }));
+    await chooseSelectOption(user, /reduce motion/i, /never/i);
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ reducedMotion: 'off' }));
   });
 
-  it('reduced motion "System" reports reducedMotion: system', () => {
-    // Starts already checked (DEFAULT_SETTINGS.reducedMotion is 'system'), so seed a different
-    // current value -- otherwise a click on an already-checked native radio fires no change event.
+  it('reduced motion "System" reports reducedMotion: system', async () => {
+    // Starts already "system" (DEFAULT_SETTINGS.reducedMotion), so seed a different current value
+    // -- otherwise re-selecting the already-selected Select item fires no change event.
+    const user = userEvent.setup();
     const { onChange } = harness({ reducedMotion: 'on' });
-    fireEvent.click(screen.getByRole('radio', { name: /^system/i }));
+    await chooseSelectOption(user, /reduce motion/i, /^system/i);
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ reducedMotion: 'system' }));
   });
 
@@ -106,7 +121,7 @@ describe('SettingsOverlay (component-level)', () => {
     const user = userEvent.setup();
     const { onChange } = harness();
     const waitRow = bindingRow('Wait');
-    await user.tab(); // move focus onto the dialog's first control (font-scale radio)
+    await user.tab(); // move focus onto the dialog's first control (font-scale select trigger)
     within(waitRow).getByRole('button', { name: 'Rebind' }).focus();
     await user.keyboard('{Enter}');
     expect(within(waitRow).getByRole('textbox')).toHaveFocus();
@@ -286,8 +301,9 @@ describe('SettingsOverlay composed with PlayScreen/App', () => {
     await bootIntoPlay(bootStorage(), localStorage);
     await openSettings();
 
-    fireEvent.click(screen.getByRole('radio', { name: '130%' }));
-    fireEvent.click(screen.getByRole('radio', { name: /always/i }));
+    const user = userEvent.setup();
+    await chooseSelectOption(user, /font scale/i, '130%');
+    await chooseSelectOption(user, /reduce motion/i, /always/i);
 
     const stored = JSON.parse(localStorage.get(SETTINGS_KEY)!) as Settings;
     expect(stored.fontScale).toBe(1.3);

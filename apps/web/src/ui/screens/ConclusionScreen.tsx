@@ -3,6 +3,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import type { RunConclusionProjection } from '@woven-deep/engine';
 import type { LogLine } from '../../session/event-log.js';
 import { useListNavigation } from './roving-focus.js';
+import { cn } from '../lib/cn.js';
 
 export interface ConclusionScreenProps {
   readonly projection: RunConclusionProjection;
@@ -29,6 +30,13 @@ const COMPLETION_HEADLINE: Readonly<Record<RunConclusionProjection['completionTy
   'became-heart': 'You have become the Heart.',
   'broke-cycle': 'You have broken the cycle.',
   refused: 'You have refused the Deep.',
+};
+
+const LOG_TONE_CLASS: Readonly<Record<LogLine['tone'], string>> = {
+  info: 'text-fg',
+  combat: 'text-danger-fg',
+  warning: 'text-accent',
+  system: 'italic text-muted',
 };
 
 /** Resolves a killer's display name from its content ID: monsters carry a `name` field; a `null`
@@ -61,36 +69,36 @@ export function ConclusionScreen({
   const { selectedIndex, registerItem, handleArrowKeys } = useListNavigation(options.length);
 
   return (
-    <section aria-label="Conclusion" className="conclusion-screen">
-      <p className="eyebrow">The Woven Deep</p>
-      <h1>{COMPLETION_HEADLINE[completionType]}</h1>
-      <p className="conclusion-cause">
+    <section aria-label="Conclusion" className="mx-auto flex max-w-3xl flex-col gap-3 p-6">
+      <p className="text-xs uppercase tracking-widest text-muted">The Woven Deep</p>
+      <h1 className="font-serif text-3xl text-accent-strong">{COMPLETION_HEADLINE[completionType]}</h1>
+      <p className="text-sm text-muted">
         {killer ? `Slain by ${killer}` : 'Claimed by the depths'} at depth {cause.depth}, turn {cause.turn}.
       </p>
 
-      <section aria-label="Last moments" className="conclusion-recap">
-        <h2>Last moments</h2>
-        <ol className="conclusion-log-tail">
+      <section aria-label="Last moments" className="flex flex-col gap-1">
+        <h2 className="text-sm font-semibold text-fg-strong">Last moments</h2>
+        <ol className="m-0 flex list-none flex-col gap-0.5 p-0 text-sm">
           {logTail.map((line) => (
-            <li key={line.id} className={`log-line log-line--${line.tone}`}>{line.text}</li>
+            <li key={line.id} className={LOG_TONE_CLASS[line.tone]}>{line.text}</li>
           ))}
         </ol>
       </section>
 
       {score && (
-        <section aria-label="Score" className="conclusion-score">
-          <h2>Score</h2>
-          <table aria-label="Score">
+        <section aria-label="Score" className="flex flex-col gap-1">
+          <h2 className="text-sm font-semibold text-fg-strong">Score</h2>
+          <table aria-label="Score" className="text-sm text-muted">
             <tbody>
               {score.lines.map((line) => (
                 <tr key={line.lineId}>
-                  <td>{SCORE_LINE_LABEL[line.lineId] ?? line.lineId}</td>
+                  <td className="pr-4">{SCORE_LINE_LABEL[line.lineId] ?? line.lineId}</td>
                   <td>{line.amount}</td>
                 </tr>
               ))}
               <tr>
-                <td>Total</td>
-                <td>{score.total}</td>
+                <td className="pr-4 font-medium text-fg">Total</td>
+                <td className="font-medium text-fg">{score.total}</td>
               </tr>
             </tbody>
           </table>
@@ -98,16 +106,16 @@ export function ConclusionScreen({
       )}
 
       {heirloom && (
-        <section aria-label="Heirloom" className="conclusion-heirloom">
-          <h2>Heirloom</h2>
-          <p>{heirloom.displayName}</p>
+        <section aria-label="Heirloom" className="flex flex-col gap-1">
+          <h2 className="text-sm font-semibold text-fg-strong">Heirloom</h2>
+          <p className="text-sm text-fg">{heirloom.displayName}</p>
         </section>
       )}
 
       {achievements.length > 0 && (
-        <section aria-label="Achievements" className="conclusion-achievements">
-          <h2>Achievements</h2>
-          <ul>
+        <section aria-label="Achievements" className="flex flex-col gap-1">
+          <h2 className="text-sm font-semibold text-fg-strong">Achievements</h2>
+          <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-sm">
             {achievements.map((achievement) => (
               <li key={achievement.achievementId}>{achievement.name}</li>
             ))}
@@ -115,11 +123,11 @@ export function ConclusionScreen({
         </section>
       )}
 
-      <p role="note" className="conclusion-provenance">
+      <p role="note" className="text-sm italic text-muted">
         Unverified · this session only — nothing here is confirmed by a server yet.
       </p>
 
-      <div role="listbox" aria-label="Conclusion menu" className="conclusion-menu" onKeyDown={handleArrowKeys}>
+      <div role="listbox" aria-label="Conclusion menu" className="flex flex-col gap-1.5" onKeyDown={handleArrowKeys}>
         {options.map((option, index) => (
           <button
             key={option.key}
@@ -127,7 +135,10 @@ export function ConclusionScreen({
             role="option"
             aria-selected={index === selectedIndex}
             ref={registerItem(index)}
-            className={index === selectedIndex ? 'conclusion-option conclusion-option--focused' : 'conclusion-option'}
+            className={cn(
+              'rounded-md border border-line bg-surface px-3 py-2 text-left text-sm text-fg hover:bg-raised',
+              index === selectedIndex && 'outline outline-2 outline-accent outline-offset-2 border-accent',
+            )}
             onClick={option.onSelect}
           >
             {option.label}

@@ -9,6 +9,10 @@ import {
   PORTRAIT_GLYPHS, wizardPreview, type WizardAction, type WizardState,
 } from '../../session/wizard-reducer.js';
 import { useListNavigation } from './roving-focus.js';
+import { Button } from '../components/button.js';
+import { Input } from '../components/input.js';
+import { Label } from '../components/label.js';
+import { cn } from '../lib/cn.js';
 
 export interface StepProps {
   readonly state: WizardState;
@@ -26,14 +30,28 @@ const STAT_LABELS: Readonly<Record<string, string>> = {
   disarm: 'Disarm',
 };
 
+/** Tailwind text-color utility keyed by portrait glyph id, giving each portrait
+ * option its own accent hue in the picker. */
+const PORTRAIT_GLYPH_CLASS: Readonly<Record<string, string>> = {
+  '@': 'text-fg-strong',
+  '@·gold': 'text-accent',
+  '@·ember': 'text-danger',
+  '@·mist': 'text-muted',
+  '@·moss': 'text-good',
+};
+
+const OPTION_BUTTON_CLASS = 'flex items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-2 text-left text-sm text-fg hover:bg-raised';
+const OPTION_SELECTED_CLASS = 'outline outline-2 outline-accent outline-offset-2 border-accent';
+const OPTION_LOCKED_CLASS = 'cursor-not-allowed opacity-55';
+
 /** Derived-stats preview panel, shown on the attributes step and the summary step. */
 export function PreviewPanel({ state, pack }: { readonly state: WizardState; readonly pack: CompiledContentPack }): JSX.Element | null {
   const stats = wizardPreview(state, pack);
   if (!stats) return null;
   return (
-    <section aria-label="Derived stats preview" className="chargen-preview">
-      <h3>Derived stats</h3>
-      <ul className="chargen-preview-list">
+    <section aria-label="Derived stats preview" className="flex flex-col gap-1 border-t border-line pt-2">
+      <h3 className="m-0 text-sm font-semibold text-fg-strong">Derived stats</h3>
+      <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-sm text-muted">
         {DERIVED_STAT_NAMES.map((statName) => (
           <li key={statName}>{`${STAT_LABELS[statName] ?? statName}: ${stats[statName]}`}</li>
         ))}
@@ -50,22 +68,24 @@ export function NameStep({ state, dispatch }: StepProps): JSX.Element {
   };
 
   return (
-    <section aria-label="Name and portrait" className="chargen-step chargen-step--name">
-      <label htmlFor="chargen-name">Name</label>
-      <input
-        id="chargen-name"
-        type="text"
-        value={state.name}
-        maxLength={HERO_NAME_RULES.maxLength}
-        onChange={(event) => dispatch({ type: 'set-name', name: event.target.value })}
-        autoFocus
-      />
-      <fieldset>
-        <legend>Portrait</legend>
+    <section aria-label="Name and portrait" className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="chargen-name">Name</Label>
+        <Input
+          id="chargen-name"
+          type="text"
+          value={state.name}
+          maxLength={HERO_NAME_RULES.maxLength}
+          onChange={(event) => dispatch({ type: 'set-name', name: event.target.value })}
+          autoFocus
+        />
+      </div>
+      <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+        <legend className="text-sm font-medium text-fg">Portrait</legend>
         <div
           role="listbox"
           aria-label="Portrait"
-          className="chargen-portrait-list"
+          className="flex flex-row flex-wrap gap-2"
           onKeyDown={handlePortraitKeyDown}
         >
           {PORTRAIT_GLYPHS.map((glyph, index) => (
@@ -75,27 +95,28 @@ export function NameStep({ state, dispatch }: StepProps): JSX.Element {
               role="option"
               aria-selected={state.portraitGlyph === glyph}
               ref={registerItem(index)}
-              className={
-                index === selectedIndex
-                  ? 'chargen-portrait chargen-portrait--focused'
-                  : 'chargen-portrait'
-              }
+              className={cn(
+                'flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface',
+                PORTRAIT_GLYPH_CLASS[glyph],
+                index === selectedIndex && OPTION_SELECTED_CLASS,
+              )}
               data-glyph={glyph}
               onClick={() => dispatch({ type: 'set-portrait', glyph })}
             >
-              <span className="chargen-portrait-glyph" data-glyph={glyph} aria-hidden="true">@</span>
+              <span aria-hidden="true">@</span>
             </button>
           ))}
         </div>
       </fieldset>
-      <label className="chargen-onboarding-toggle">
+      <Label className="flex items-center gap-2 text-sm text-fg">
         <input
           type="checkbox"
+          className="h-4 w-4 rounded border-line accent-accent"
           checked={state.onboardingEnabled}
           onChange={(event) => dispatch({ type: 'set-onboarding-enabled', enabled: event.target.checked })}
         />
         Show guidance on your first delve
-      </label>
+      </Label>
     </section>
   );
 }
@@ -109,8 +130,8 @@ export function MethodStep({ state, dispatch }: StepProps): JSX.Element {
   const { selectedIndex, registerItem, handleArrowKeys } = useListNavigation(METHOD_OPTIONS.length);
 
   return (
-    <section aria-label="Attribute method" className="chargen-step chargen-step--method">
-      <div role="listbox" aria-label="Attribute method" className="chargen-option-list" onKeyDown={handleArrowKeys}>
+    <section aria-label="Attribute method" className="flex flex-col gap-3">
+      <div role="listbox" aria-label="Attribute method" className="flex flex-col gap-1.5" onKeyDown={handleArrowKeys}>
         {METHOD_OPTIONS.map((option, index) => (
           <button
             key={option.method}
@@ -118,7 +139,7 @@ export function MethodStep({ state, dispatch }: StepProps): JSX.Element {
             role="option"
             aria-selected={state.method === option.method}
             ref={registerItem(index)}
-            className={index === selectedIndex ? 'chargen-option chargen-option--focused' : 'chargen-option'}
+            className={cn(OPTION_BUTTON_CLASS, index === selectedIndex && OPTION_SELECTED_CLASS)}
             onClick={() => dispatch({ type: 'choose-method', method: option.method })}
           >
             {option.label}
@@ -131,7 +152,7 @@ export function MethodStep({ state, dispatch }: StepProps): JSX.Element {
 
 function AttributeReadout({ state }: { readonly state: WizardState }): JSX.Element {
   return (
-    <ul className="chargen-attribute-list">
+    <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-sm text-muted">
       {ATTRIBUTE_ORDER.map((attributeName) => (
         <li key={attributeName}>{`${attributeName}: ${state.attributes?.[attributeName] ?? '—'}`}</li>
       ))}
@@ -166,12 +187,12 @@ function PointBuyAttributes({ state, pack, dispatch }: StepProps): JSX.Element {
   };
 
   return (
-    <div className="chargen-point-buy">
-      <p className="chargen-point-buy-budget">{`Points spent: ${spent}/${budget}`}</p>
+    <div className="flex flex-col gap-2">
+      <p className="m-0 text-sm text-muted">{`Points spent: ${spent}/${budget}`}</p>
       <div
         role="listbox"
         aria-label="Point-buy attributes"
-        className="chargen-attribute-adjust-list"
+        className="flex flex-col gap-1.5"
         onKeyDown={handleKeyDown}
       >
         {ATTRIBUTE_ORDER.map((attributeName, index) => (
@@ -181,33 +202,42 @@ function PointBuyAttributes({ state, pack, dispatch }: StepProps): JSX.Element {
             aria-selected={index === selectedIndex}
             tabIndex={-1}
             ref={registerItem(index)}
-            className={index === selectedIndex ? 'chargen-attribute-row chargen-attribute-row--focused' : 'chargen-attribute-row'}
+            className={cn(
+              'flex items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-2 text-sm text-fg',
+              index === selectedIndex && OPTION_SELECTED_CLASS,
+            )}
           >
-            <span className="chargen-attribute-name">{attributeName}</span>
-            <button type="button" aria-label={`Decrease ${attributeName}`} onClick={() => adjust(attributeName, -1)}>-</button>
-            <span className="chargen-attribute-value">{state.attributes?.[attributeName] ?? 0}</span>
-            <button type="button" aria-label={`Increase ${attributeName}`} onClick={() => adjust(attributeName, 1)}>+</button>
+            <span className="w-24 capitalize">{attributeName}</span>
+            <Button type="button" variant="outline" size="icon" aria-label={`Decrease ${attributeName}`} onClick={() => adjust(attributeName, -1)}>-</Button>
+            <span className="w-6 text-center">{state.attributes?.[attributeName] ?? 0}</span>
+            <Button type="button" variant="outline" size="icon" aria-label={`Increase ${attributeName}`} onClick={() => adjust(attributeName, 1)}>+</Button>
           </div>
         ))}
       </div>
-      <p className="chargen-hints">↑↓ select attribute · ←→ adjust value</p>
+      <p className="m-0 text-sm text-muted">↑↓ select attribute · ←→ adjust value</p>
     </div>
   );
 }
 
 export function AttributesStep({ state, pack, dispatch }: StepProps): JSX.Element {
   return (
-    <section aria-label="Attributes" className="chargen-step chargen-step--attributes">
+    <section aria-label="Attributes" className="flex flex-col gap-3">
       {state.method === 'roll' && (
-        <div className="chargen-roll">
+        <div className="flex flex-col gap-2">
           {state.attributes === null
-            ? <button type="button" autoFocus onClick={() => dispatch({ type: 'roll' })}>Roll attributes</button>
+            ? <Button type="button" autoFocus className="self-start" onClick={() => dispatch({ type: 'roll' })}>Roll attributes</Button>
             : (
               <>
                 <AttributeReadout state={state} />
-                <button type="button" disabled={state.rerollUsed} onClick={() => dispatch({ type: 'reroll' })}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="self-start"
+                  disabled={state.rerollUsed}
+                  onClick={() => dispatch({ type: 'reroll' })}
+                >
                   {state.rerollUsed ? 'Reroll used' : 'Reroll'}
-                </button>
+                </Button>
               </>
             )}
         </div>
@@ -231,8 +261,8 @@ export function ClassStep({ state, pack, dispatch }: StepProps): JSX.Element {
   };
 
   return (
-    <section aria-label="Class" className="chargen-step chargen-step--class">
-      <div role="listbox" aria-label="Class" className="chargen-option-list" onKeyDown={handleKeyDown}>
+    <section aria-label="Class" className="flex flex-col gap-3">
+      <div role="listbox" aria-label="Class" className="flex flex-col gap-1.5" onKeyDown={handleKeyDown}>
         {entries.map((entry, index) => (
           <button
             key={entry.id}
@@ -242,19 +272,16 @@ export function ClassStep({ state, pack, dispatch }: StepProps): JSX.Element {
             aria-disabled={!entry.playable}
             ref={registerItem(index)}
             disabled={!entry.playable}
-            className={
-              !entry.playable
-                ? 'chargen-option chargen-option--locked'
-                : index === selectedIndex
-                  ? 'chargen-option chargen-option--focused'
-                  : 'chargen-option'
-            }
+            className={cn(
+              OPTION_BUTTON_CLASS,
+              !entry.playable ? OPTION_LOCKED_CLASS : index === selectedIndex && OPTION_SELECTED_CLASS,
+            )}
             onClick={() => { if (entry.playable) dispatch({ type: 'choose-class', classId: entry.id }); }}
           >
-            <span className="chargen-class-glyph" aria-hidden="true">{entry.silhouetteGlyph}</span>
-            <span className="chargen-class-name">{entry.name}</span>
+            <span aria-hidden="true" className="font-bold text-accent">{entry.silhouetteGlyph}</span>
+            <span className="font-medium text-fg-strong">{entry.name}</span>
             {!entry.playable && entry.unlockHint && (
-              <span className="chargen-class-unlock-hint">{entry.unlockHint}</span>
+              <span className="text-sm italic text-muted">{entry.unlockHint}</span>
             )}
           </button>
         ))}
@@ -269,11 +296,11 @@ export function KitStep({ state, pack, dispatch }: StepProps): JSX.Element {
   const kits = classEntry?.kits ?? [];
   const { selectedIndex, registerItem, handleArrowKeys } = useListNavigation(kits.length);
 
-  if (!classEntry) return <p className="placeholder">Choose a class first.</p>;
+  if (!classEntry) return <p className="text-sm text-muted">Choose a class first.</p>;
 
   return (
-    <section aria-label="Kit" className="chargen-step chargen-step--kit">
-      <div role="listbox" aria-label="Kit" className="chargen-option-list" onKeyDown={handleArrowKeys}>
+    <section aria-label="Kit" className="flex flex-col gap-3">
+      <div role="listbox" aria-label="Kit" className="flex flex-col gap-1.5" onKeyDown={handleArrowKeys}>
         {kits.map((kit, index) => (
           <button
             key={kit.kitId}
@@ -281,7 +308,7 @@ export function KitStep({ state, pack, dispatch }: StepProps): JSX.Element {
             role="option"
             aria-selected={state.kitId === kit.kitId}
             ref={registerItem(index)}
-            className={index === selectedIndex ? 'chargen-option chargen-option--focused' : 'chargen-option'}
+            className={cn(OPTION_BUTTON_CLASS, index === selectedIndex && OPTION_SELECTED_CLASS)}
             onClick={() => dispatch({ type: 'choose-kit', kitId: kit.kitId })}
           >
             {kit.name}
@@ -307,13 +334,13 @@ export function BackgroundTraitsStep({ state, pack, dispatch }: StepProps): JSX.
   const traitNav = useListNavigation(traits.length);
 
   return (
-    <section aria-label="Background and traits" className="chargen-step chargen-step--background">
-      <fieldset>
-        <legend>Background</legend>
+    <section aria-label="Background and traits" className="flex flex-col gap-4">
+      <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+        <legend className="text-sm font-medium text-fg">Background</legend>
         <div
           role="listbox"
           aria-label="Background"
-          className="chargen-option-list"
+          className="flex flex-col gap-1.5"
           onKeyDown={backgroundNav.handleArrowKeys}
         >
           {backgrounds.map((entry, index) => (
@@ -323,9 +350,7 @@ export function BackgroundTraitsStep({ state, pack, dispatch }: StepProps): JSX.
               role="option"
               aria-selected={state.backgroundId === entry.id}
               ref={backgroundNav.registerItem(index)}
-              className={
-                index === backgroundNav.selectedIndex ? 'chargen-option chargen-option--focused' : 'chargen-option'
-              }
+              className={cn(OPTION_BUTTON_CLASS, index === backgroundNav.selectedIndex && OPTION_SELECTED_CLASS)}
               onClick={() => dispatch({ type: 'choose-background', backgroundId: entry.id })}
             >
               {entry.name}
@@ -333,9 +358,9 @@ export function BackgroundTraitsStep({ state, pack, dispatch }: StepProps): JSX.
           ))}
         </div>
       </fieldset>
-      <fieldset>
-        <legend>{`Traits (${state.traitIds.length}/2)`}</legend>
-        <div role="listbox" aria-label="Traits" aria-multiselectable="true" className="chargen-option-list" onKeyDown={traitNav.handleArrowKeys}>
+      <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+        <legend className="text-sm font-medium text-fg">{`Traits (${state.traitIds.length}/2)`}</legend>
+        <div role="listbox" aria-label="Traits" aria-multiselectable="true" className="flex flex-col gap-1.5" onKeyDown={traitNav.handleArrowKeys}>
           {traits.map((entry, index) => {
             const selected = state.traitIds.includes(entry.id);
             const atCap = !selected && state.traitIds.length >= 2;
@@ -347,11 +372,11 @@ export function BackgroundTraitsStep({ state, pack, dispatch }: StepProps): JSX.
                 aria-selected={selected}
                 aria-disabled={atCap}
                 ref={traitNav.registerItem(index)}
-                className={
-                  index === traitNav.selectedIndex
-                    ? 'chargen-option chargen-option--focused'
-                    : 'chargen-option'
-                }
+                className={cn(
+                  OPTION_BUTTON_CLASS,
+                  index === traitNav.selectedIndex && OPTION_SELECTED_CLASS,
+                  selected && 'border-accent',
+                )}
                 onClick={() => dispatch({ type: 'toggle-trait', traitId: entry.id })}
               >
                 {entry.name}
@@ -371,9 +396,9 @@ export function SummaryStep({ state, pack }: StepProps): JSX.Element {
   const chosenTraits = traitEntries(pack).filter((entry) => state.traitIds.includes(entry.id));
 
   return (
-    <section aria-label="Summary" className="chargen-step chargen-step--summary">
-      <h2>{state.name}</h2>
-      <ul className="chargen-summary-list">
+    <section aria-label="Summary" className="flex flex-col gap-3">
+      <h2 className="m-0 font-serif text-2xl text-accent-strong">{state.name}</h2>
+      <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-sm text-muted">
         <li>{`Method: ${state.method ?? '—'}`}</li>
         <li>{`Class: ${classEntry?.name ?? '—'}`}</li>
         <li>{`Kit: ${kit?.name ?? '—'}`}</li>

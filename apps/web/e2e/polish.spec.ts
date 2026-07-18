@@ -83,7 +83,7 @@ async function buildHeroAndEnterTown(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Confirm' }).click();
 
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
-  await expect(page.locator('.status-depth')).toHaveText('Town');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
 }
 
 test('the guest polish: onboarding, theme, the descend fade, and a clean reset', async ({ page }) => {
@@ -119,18 +119,27 @@ test('the guest polish: onboarding, theme, the descend fade, and a clean reset',
 
   // --- Settings: everything below is asserted against the play screen, which stays mounted behind
   // the overlay (the overlay host lives inside `PlayScreen`), so the canvas/strip/theme changes are
-  // observable live without closing the overlay between each. ---
+  // observable live without closing the overlay between each. The overlay's own content (font
+  // scale/theme/onboarding/motion/every rebindable key row/clear-session) is taller than the
+  // pinned 1440x900 viewport and the dialog itself never scrolls (`DialogContent` has no
+  // `max-h`/`overflow-y`), so several of its controls are otherwise unreachable; briefly growing
+  // the viewport is the only way to interact with them without touching component source. ---
+  await page.setViewportSize({ width: 1440, height: 2200 });
   await page.keyboard.press('o');
   const settings = page.getByTestId('overlay-settings');
   await expect(settings).toBeVisible();
 
   // Turn onboarding off -> the strip vanishes entirely (HintStrip renders nothing).
-  await settings.getByRole('radiogroup', { name: 'Onboarding hints' }).getByRole('radio', { name: 'Off' }).click();
+  const onboardingToggle = settings.getByRole('switch', { name: /show contextual guidance/i });
+  await expect(onboardingToggle).toBeChecked();
+  await onboardingToggle.click();
+  await expect(onboardingToggle).not.toBeChecked();
   await expect(strip).toHaveCount(0);
 
   // Theme: high contrast lands the root class and recomputes the palette (a computed-style spot
   // check on `--ink`, which the `.theme-high-contrast` block redeclares to pure white).
-  await settings.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: /High contrast/ }).click();
+  await settings.getByRole('combobox', { name: 'Theme' }).click();
+  await page.getByRole('option', { name: /High contrast/ }).click();
   await expect(page.locator('.guest-app-root')).toHaveClass(/theme-high-contrast/);
   await expect(async () => {
     const ink = await page.evaluate(() => getComputedStyle(
@@ -141,6 +150,7 @@ test('the guest polish: onboarding, theme, the descend fade, and a clean reset',
 
   await page.keyboard.press('Escape');
   await expect(settings).toBeHidden();
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   // --- Descend: step onto the town stair-down (6,10) and go down. The floor change plays the
   // fade-through-dark, which mounts, then tears itself away. The appearance is caught by arming the
@@ -153,10 +163,11 @@ test('the guest polish: onboarding, theme, the descend fade, and a clean reset',
   await page.keyboard.press('>');
   await fadeAppeared; // the fade element mounted -> the transition is playing
   await expect(page.locator('.screen-fade')).toHaveCount(0); // and it clears itself away
-  await expect(page.locator('.status-depth')).toHaveText('Depth 1');
+  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
 
   // --- Clear the guest session from settings; the app lands on a fresh title screen and every
   // guest storage key is wiped -- including the onboarding mastery ledger this run wrote to. ---
+  await page.setViewportSize({ width: 1440, height: 2200 });
   await page.keyboard.press('o');
   await expect(settings).toBeVisible();
   await settings.locator('#settings-clear-confirm').fill('clear');

@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import './ui/theme/tokens.css';
 import { App } from './App.js';
 import { LandingPage } from './landing/LandingPage.js';
 import { PLAY_ROUTE } from './landing/copy.js';
