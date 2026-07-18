@@ -12,12 +12,6 @@ import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
 import { triggerResize } from './setup.js';
 
-// Regression for the tier feedback loop found by real-browser probing: `layoutTier` was fed the
-// MAP PANE's measured width, but the tier sets `data-tier` on the triptych, which changes the
-// pane's own CSS grid column (1fr 4fr 1fr full vs 1fr 5fr 0 compact) — a loop where every tier
-// switch changes the very measurement that produced it. In jsdom we can't reproduce the CSS grid
-// math, so we pin the invariant structurally: mock the container and pane to report DIFFERENT
-// widths, and assert the tier tracks the container, never the pane.
 let pack: CompiledContentPack;
 
 const SEED = [11, 22, 33, 44] as const;
@@ -66,77 +60,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('PlayScreen tier derivation', () => {
-  it('derives data-tier from the triptych container width, not the map pane width', () => {
-    const { container } = render(<PlayScreen session={session()} pack={pack} />);
-    const triptych = container.querySelector('.triptych')!;
-    const mapPane = container.querySelector('.map-pane')!;
-
-    // Container reports a full-tier width; pane reports a much narrower (minimal-tier) width —
-    // exactly what the real CSS grid produces once `data-tier="compact"` shrinks the pane column.
-    stubRect(triptych, 1400);
-    stubRect(mapPane, 400);
-    act(() => {
-      triggerResize(triptych);
-      triggerResize(mapPane);
-    });
-
-    expect(triptych).toHaveAttribute('data-tier', 'full');
-  });
-
-  it('never changes the tier when only the pane width changes', () => {
-    const { container } = render(<PlayScreen session={session()} pack={pack} />);
-    const triptych = container.querySelector('.triptych')!;
-    const mapPane = container.querySelector('.map-pane')!;
-
-    stubRect(triptych, 1400);
-    stubRect(mapPane, 1173);
-    act(() => {
-      triggerResize(triptych);
-      triggerResize(mapPane);
-    });
-    expect(triptych).toHaveAttribute('data-tier', 'full');
-
-    // Simulate the oscillation: the pane's own width swings wildly (as it does under the real CSS
-    // feedback loop) while the container never moves. The tier must not react.
-    stubRect(mapPane, 939);
-    act(() => triggerResize(mapPane));
-    expect(triptych).toHaveAttribute('data-tier', 'full');
-
-    stubRect(mapPane, 300);
-    act(() => triggerResize(mapPane));
-    expect(triptych).toHaveAttribute('data-tier', 'full');
-  });
-
-  it('changes the tier when the container width crosses a threshold, even with the pane held fixed', () => {
-    const { container } = render(<PlayScreen session={session()} pack={pack} />);
-    const triptych = container.querySelector('.triptych')!;
-    const mapPane = container.querySelector('.map-pane')!;
-
-    stubRect(triptych, 1400);
-    stubRect(mapPane, 500);
-    act(() => {
-      triggerResize(triptych);
-      triggerResize(mapPane);
-    });
-    expect(triptych).toHaveAttribute('data-tier', 'full');
-
-    stubRect(triptych, 700); // below the compact threshold (760) -> minimal
-    act(() => triggerResize(triptych));
-    expect(triptych).toHaveAttribute('data-tier', 'minimal');
-  });
-});
-
 // Regression coverage for the bounded playfield zoom (see `zoomForFloor` in layout.ts): a fresh
-// run boots straight into the compact 34x16 town floor. This asserts the SAME plumbing the
-// dark-circle/zoom brief requires — `--zoom` is derived from a real probe measurement and applied
-// to `.playfield`, not computed in parallel — by stubbing the probe to report an unzoomed cell
-// size and asserting the pane picks a zoom step (rather than asserting a raw pixel viewport count,
-// which is layout.test.ts's job for the pure function itself).
+// run boots straight into the compact 34x16 town floor. `--zoom` is derived from a real probe
+// measurement and applied to `.playfield`, not computed in parallel -- by stubbing the probe to
+// report an unzoomed cell size and asserting the pane picks a zoom step (rather than asserting a
+// raw pixel viewport count, which is layout.test.ts's job for the pure function itself). Layout A
+// never reflows its columns, so only the map pane and cell probes need stubbing here -- there is
+// no separate container-width measurement to drive.
 describe('PlayScreen playfield zoom', () => {
   it('applies a --zoom > 1 to .playfield when a small floor (town) sits in a spacious pane', () => {
     const { container } = render(<PlayScreen session={session()} pack={pack} />);
-    const triptych = container.querySelector('.triptych')!;
     const mapPane = container.querySelector('.map-pane')!;
     const probe = container.querySelector('.cell-probe')!;
     // `.cell-probe-base` is what `zoomForFloor` is actually fed (see PlayScreen's measure effect):
@@ -144,12 +77,10 @@ describe('PlayScreen playfield zoom', () => {
     // with the SAME unzoomed size as `.cell-probe`'s initial (zoom=1) reading.
     const probeBase = container.querySelector('.cell-probe-base')!;
 
-    stubRect(triptych, 1400);
     stubRect(mapPane, 2000, 2000);
     stubRect(probe, 8, 16);
     stubRect(probeBase, 8, 16);
     act(() => {
-      triggerResize(triptych);
       triggerResize(mapPane);
     });
 
@@ -161,17 +92,14 @@ describe('PlayScreen playfield zoom', () => {
 
   it('leaves --zoom at 1 when the floor already fills the pane at 1x (dungeon-sized floor case)', () => {
     const { container } = render(<PlayScreen session={session()} pack={pack} />);
-    const triptych = container.querySelector('.triptych')!;
     const mapPane = container.querySelector('.map-pane')!;
     const probe = container.querySelector('.cell-probe')!;
     const probeBase = container.querySelector('.cell-probe-base')!;
 
-    stubRect(triptych, 1400);
     stubRect(mapPane, 400, 300);
     stubRect(probe, 8, 16);
     stubRect(probeBase, 8, 16);
     act(() => {
-      triggerResize(triptych);
       triggerResize(mapPane);
     });
 
@@ -188,7 +116,6 @@ describe('PlayScreen playfield zoom', () => {
   it('re-derives --zoom when the floor changes (a descend), without any new pane resize event', () => {
     const guestSession = sessionAtTownStairs();
     const { container } = render(<PlayScreen session={guestSession} pack={pack} />);
-    const triptych = container.querySelector('.triptych')!;
     const mapPane = container.querySelector('.map-pane')!;
     const probe = container.querySelector('.cell-probe')!;
     const probeBase = container.querySelector('.cell-probe-base')!;
@@ -196,12 +123,10 @@ describe('PlayScreen playfield zoom', () => {
     // A pane roomy enough that the compact town floor (34x16) reaches the max 2x zoom step, but a
     // dungeon floor (160x50) can only reach 1.5x — two different, both non-trivial answers, so a
     // stale zoom left over from the town would be visibly wrong rather than accidentally correct.
-    stubRect(triptych, 1400);
     stubRect(mapPane, 2000, 2000);
     stubRect(probe, 8, 16);
     stubRect(probeBase, 8, 16);
     act(() => {
-      triggerResize(triptych);
       triggerResize(mapPane);
     });
 
