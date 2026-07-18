@@ -18,10 +18,9 @@ import {
 } from './layout.js';
 import { HeroPanel, HeroStatusAnnouncer, LogPanel, StatusBar, ThreatPanel, VitalsStrip } from './panels.js';
 import { useDialogFocusTrap } from './overlays/focus-trap.js';
-import { OVERLAY_REGISTRY, type OverlayId } from './overlays/registry.js';
-import { OVERLAY_COMPONENTS } from './overlays/overlay-components.js';
-import { OverlayScaffold } from './overlays/OverlayScaffold.js';
-import { OverlayErrorBoundary } from './overlays/OverlayErrorBoundary.js';
+import type { OverlayId } from './overlays/registry.js';
+import { OverlayHost } from './overlays/OverlayHost.js';
+import { UiProviders } from './providers.js';
 import { HouseScreen } from './screens/HouseScreen.js';
 import { TradeScreen } from './screens/TradeScreen.js';
 import { effectiveReducedMotion, ScreenFade } from './ScreenFade.js';
@@ -419,30 +418,19 @@ export function PlayScreen({
           />
         )}
         {snapshot.pendingDecision && <DecisionPrompt snapshot={snapshot} session={session} />}
-        {overlay && (() => {
-          const OverlayBody = OVERLAY_COMPONENTS[overlay];
-          return (
-            <OverlayScaffold
-              title={OVERLAY_REGISTRY[overlay].title}
-              onClose={onCloseOverlay}
-              testId={`overlay-${overlay}`}
-            >
-              <OverlayErrorBoundary>
-                <OverlayBody
-                  settings={settings}
-                  onChangeSettings={onChangeSettings}
-                  onClearGuestSession={onClearGuestSession}
-                  keymap={keymap}
-                  pack={pack}
-                  snapshot={snapshot}
-                  onDispatch={(intent) => session.dispatch(intent)}
-                  records={records}
-                  sightings={sightings}
-                />
-              </OverlayErrorBoundary>
-            </OverlayScaffold>
-          );
-        })()}
+        {/* `PlayScreen` supplies its own `UiProviders` from the props it already holds, so
+         * `OverlayHost`'s hooks resolve whether `PlayScreen` is mounted standalone or nested inside
+         * a caller's own `UiProviders` (e.g. `App`'s, around `GameRoot`) -- nesting two providers
+         * with the same values is harmless. */}
+        <UiProviders pack={pack} settings={settings} onChangeSettings={onChangeSettings} session={session}>
+          <OverlayHost
+            overlay={overlay}
+            onClose={onCloseOverlay}
+            isPlayActive
+            records={records}
+            onClearGuestSession={onClearGuestSession}
+          />
+        </UiProviders>
       </div>
     </ScreenFade>
   );

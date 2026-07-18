@@ -18,9 +18,7 @@ import {
   browserLocalStorage, browserSessionStorage, classifyStorageFailure, PORTRAIT_KEY, type SessionStorageLike,
 } from './session/storage.js';
 import { canOpenOverlay, OVERLAY_REGISTRY, type OverlayId } from './ui/overlays/registry.js';
-import { OVERLAY_COMPONENTS } from './ui/overlays/overlay-components.js';
-import { OverlayScaffold } from './ui/overlays/OverlayScaffold.js';
-import { OverlayErrorBoundary } from './ui/overlays/OverlayErrorBoundary.js';
+import { OverlayHost } from './ui/overlays/OverlayHost.js';
 import { ChargenScreen } from './ui/screens/ChargenScreen.js';
 import { ConclusionScreen } from './ui/screens/ConclusionScreen.js';
 import { HallScreen } from './ui/screens/HallScreen.js';
@@ -28,6 +26,7 @@ import { SignInScreen } from './ui/screens/SignInScreen.js';
 import { TitleScreen } from './ui/screens/TitleScreen.js';
 import { PlayScreen } from './ui/PlayScreen.js';
 import { effectiveReducedMotion, ScreenFade } from './ui/ScreenFade.js';
+import { UiProviders } from './ui/providers.js';
 import './styles.css';
 
 export interface AppProps {
@@ -550,27 +549,6 @@ export function App({
     setScreen({ screen: 'title' });
   }
 
-  function renderOverlayHost(): JSX.Element | null {
-    if (!overlay) return null;
-    const definition = OVERLAY_REGISTRY[overlay];
-    const OverlayBody = OVERLAY_COMPONENTS[overlay];
-    return (
-      <OverlayScaffold title={definition.title} onClose={closeOverlay} testId={`overlay-${overlay}`}>
-        <OverlayErrorBoundary>
-          <OverlayBody
-            settings={settings}
-            onChangeSettings={handleSettingsChange}
-            onClearGuestSession={handleClearGuestSession}
-            keymap={keymap}
-            pack={pack}
-            records={repository.records()}
-            sightings={loadSightings(storage).sightings}
-          />
-        </OverlayErrorBoundary>
-      </OverlayScaffold>
-    );
-  }
-
   /** Wraps every post-boot screen with any persistent, non-dismissible warnings pending —
    * Hall-corruption-on-boot, finalize-write, and settings-write failures alike. The active run
    * survives regardless of any of these: only the affected write (or, on boot, the Hall itself)
@@ -647,31 +625,39 @@ export function App({
 
   if (screen.screen === 'title') {
     return withRootStyling(withHallNotice(
-      <main className="shell">
-        <TitleScreen
-          storage={storage}
-          account={account}
-          onEnterTheDeep={() => {
-            closeOverlay();
-            setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
-            setScreen({ screen: 'chargen' });
-          }}
-          onContinue={() => {
-            closeOverlay();
-            setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
-            setSession(new GuestSession({ pack, storage, localStorage: localStorageInstance }));
-            setScreen({ screen: 'play' });
-            bumpFadeToken();
-          }}
-          onHall={() => setScreen({ screen: 'hall', returnTo: 'title' })}
-          onOpenOverlay={openOverlay}
-          onSignIn={() => setScreen({ screen: 'signin' })}
-          onSignOut={() => {
-            void logout(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
-          }}
-        />
-        {renderOverlayHost()}
-      </main>,
+      <UiProviders pack={pack} settings={settings} onChangeSettings={handleSettingsChange}>
+        <main className="shell">
+          <TitleScreen
+            storage={storage}
+            account={account}
+            onEnterTheDeep={() => {
+              closeOverlay();
+              setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
+              setScreen({ screen: 'chargen' });
+            }}
+            onContinue={() => {
+              closeOverlay();
+              setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
+              setSession(new GuestSession({ pack, storage, localStorage: localStorageInstance }));
+              setScreen({ screen: 'play' });
+              bumpFadeToken();
+            }}
+            onHall={() => setScreen({ screen: 'hall', returnTo: 'title' })}
+            onOpenOverlay={openOverlay}
+            onSignIn={() => setScreen({ screen: 'signin' })}
+            onSignOut={() => {
+              void logout(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
+            }}
+          />
+          <OverlayHost
+            overlay={overlay}
+            onClose={closeOverlay}
+            isPlayActive={false}
+            records={repository.records()}
+            onClearGuestSession={handleClearGuestSession}
+          />
+        </main>
+      </UiProviders>,
     ));
   }
 
@@ -778,26 +764,28 @@ export function App({
   }
 
   return withRootStyling(withHallNotice(
-    <GameRoot
-      session={session}
-      pack={pack}
-      repository={repository}
-      storage={storage}
-      portraitGlyph={portraitGlyph}
-      overlay={overlay}
-      onOpenOverlay={openOverlay}
-      onCloseOverlay={closeOverlay}
-      keymap={keymap}
-      settings={settings}
-      onChangeSettings={handleSettingsChange}
-      onClearGuestSession={handleClearGuestSession}
-      onboardingEnabled={settings.onboarding === 'on' && !quickstart}
-      onConcluded={(projection, logTail) => {
-        setConclusion({ projection, logTail });
-        setScreen({ screen: 'conclusion' });
-        bumpFadeToken();
-      }}
-      onFinalizeError={setFinalizeWarning}
-    />,
+    <UiProviders pack={pack} settings={settings} onChangeSettings={handleSettingsChange} session={session}>
+      <GameRoot
+        session={session}
+        pack={pack}
+        repository={repository}
+        storage={storage}
+        portraitGlyph={portraitGlyph}
+        overlay={overlay}
+        onOpenOverlay={openOverlay}
+        onCloseOverlay={closeOverlay}
+        keymap={keymap}
+        settings={settings}
+        onChangeSettings={handleSettingsChange}
+        onClearGuestSession={handleClearGuestSession}
+        onboardingEnabled={settings.onboarding === 'on' && !quickstart}
+        onConcluded={(projection, logTail) => {
+          setConclusion({ projection, logTail });
+          setScreen({ screen: 'conclusion' });
+          bumpFadeToken();
+        }}
+        onFinalizeError={setFinalizeWarning}
+      />
+    </UiProviders>,
   ));
 }
