@@ -81,19 +81,29 @@ export function ListDetail(props: Readonly<ListDetailProps>): JSX.Element {
                   selected && 'bg-raised border-accent',
                 )}
               >
+                {selected && (
+                  <span aria-hidden="true" className="text-accent">
+                    {'›'}
+                  </span>
+                )}
                 {item.glyph && (
                   <span className="font-mono" style={item.glyphColor ? { color: item.glyphColor } : undefined}>
                     {item.glyph}
                   </span>
                 )}
-                <span className="flex-1">{selected ? `› ${item.label}` : item.label}</span>
+                <span className="flex-1">{item.label}</span>
                 {item.quantity !== undefined && <span className="text-muted">{`x${item.quantity}`}</span>}
                 {item.badge && <span className="text-xs text-muted">{item.badge}</span>}
               </div>
             );
           })}
         </div>
-        <div className="rounded-md border border-line bg-surface p-2 text-fg">
+        <div
+          role="region"
+          aria-live="polite"
+          aria-label={`${listLabel} detail`}
+          className="rounded-md border border-line bg-surface p-2 text-fg"
+        >
           {renderDetail(activeItem, selectedIndex)}
         </div>
       </div>
