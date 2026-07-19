@@ -5,11 +5,12 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  applyCondition, DEFAULT_GUEST_HERO, DERIVED_STAT_NAMES, createNewRun, heroActor, projectGameplayState,
+  applyCondition, DEFAULT_GUEST_HERO, createNewRun, heroActor, projectGameplayState,
   type ActiveRun,
 } from '@woven-deep/engine';
 import type { GuestSession, SessionSnapshot } from '../../session/guest-session.js';
 import { DEFAULT_SETTINGS } from '../../session/settings.js';
+import { playerVisibleDerivedStats } from '../derived-stats-display.js';
 import { UiProviders } from '../providers.js';
 import { CharacterSheetOverlay } from './CharacterSheetOverlay.js';
 
@@ -160,12 +161,12 @@ describe('CharacterSheetOverlay', () => {
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 
-  it('renders every DERIVED_STAT_NAMES entry with its value and formula text', () => {
+  it('renders every player-visible derived stat entry with its value and formula text', () => {
     const snapshot = snapshotFor(baseRun);
     renderSheet(snapshot);
     const derivedSection = sectionFor('Derived stats');
 
-    for (const statName of DERIVED_STAT_NAMES) {
+    for (const statName of playerVisibleDerivedStats()) {
       const derived = (snapshot.projection.hero as unknown as {
         derived: Record<string, { value: number; formula: Record<string, number> }>;
       }).derived[statName]!;
@@ -174,6 +175,17 @@ describe('CharacterSheetOverlay', () => {
       }
       expect(derivedSection.getAllByText(new RegExp(`^${derived.value}$`)).length).toBeGreaterThan(0);
     }
+  });
+
+  it('shows Defense in the Derived stats section but hides the internal light-out knobs', () => {
+    const snapshot = snapshotFor(baseRun);
+    renderSheet(snapshot);
+    const derivedSection = sectionFor('Derived stats');
+
+    expect(derivedSection.getByText('Defense')).toBeInTheDocument();
+    expect(derivedSection.queryByText(/light-out/i)).not.toBeInTheDocument();
+    expect(derivedSection.queryByText(/lightOutRevealRadius/i)).not.toBeInTheDocument();
+    expect(derivedSection.queryByText(/lightOutMemoryPersists/i)).not.toBeInTheDocument();
   });
 
   it('renders every base attribute label', () => {

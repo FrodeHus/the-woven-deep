@@ -72,7 +72,17 @@ export interface ProjectFloorInput {
   readonly visibilityWords: readonly number[];
   readonly illumination: IlluminationField;
   readonly preview?: LightPreview;
+  /**
+   * Set only when the hero's own cell is genuinely dark (see `projectGameplayState`). Replaces
+   * normal FOV/illumination rendering with a terrain-only emergency-reveal bubble around the hero.
+   */
+  readonly lightOut?: Readonly<{ revealRadius: number; rememberedMapPersists: boolean }>;
 }
+
+// Fixed readable presentation for the light-out emergency-reveal bubble: full, neutral-white
+// brightness, independent of the floor's real illumination.
+const LIGHT_OUT_BUBBLE_INTENSITY = 255;
+const LIGHT_OUT_BUBBLE_TINT: RgbColor = [255, 255, 255];
 
 interface FixturePresentation {
   readonly lightId: OpaqueId;
@@ -247,6 +257,24 @@ export function projectFloor(input: ProjectFloorInput): ObservableFloorProjectio
     const y = Math.floor(index / input.floor.width);
     const currentlyVisible = isVisible(input.visibilityWords, index) && input.illumination.intensity[index]! > 0;
     const explored = isExplored(input.floor.knowledge, index);
+
+    if (input.lightOut !== undefined) {
+      const distance = Math.max(Math.abs(x - input.hero.x), Math.abs(y - input.hero.y));
+      if (distance <= input.lightOut.revealRadius) {
+        const tileId = input.floor.tiles[index]!;
+        const terrain = tileDefinition(tileId);
+        cells.push({
+          index, x, y, knowledge: 'visible', tileId,
+          glyph: terrain.glyph, token: terrain.token,
+          intensity: LIGHT_OUT_BUBBLE_INTENSITY, tint: LIGHT_OUT_BUBBLE_TINT,
+        });
+        continue;
+      }
+      if (!input.lightOut.rememberedMapPersists) {
+        cells.push({ index, x, y, knowledge: 'unknown', intensity: 0 });
+        continue;
+      }
+    }
 
     if (!currentlyVisible && !explored) {
       cells.push({ index, x, y, knowledge: 'unknown', intensity: 0 });
@@ -550,6 +578,15 @@ export function projectGameplayState(input: Readonly<{
     ],
     heroModifiers: [input.state.hero.statModifiers],
   });
+  // "Actually dark" trigger (user decision): gate solely on the hero's own cell receiving no
+  // effective light, never on "carried light out" alone -- a fixture/ambient-lit room stays
+  // visible normally even with the hero's carried light extinguished.
+  const heroCellIndex = tileIndex(observed.floor, hero.x, hero.y);
+  const heroInDark = heroCellIndex !== undefined && observed.illumination.intensity[heroCellIndex]! <= 0;
+  const lightOut = heroInDark ? {
+    revealRadius: derived.lightOutRevealRadius,
+    rememberedMapPersists: derived.lightOutMemoryPersists > 0,
+  } : undefined;
   const backpack = input.state.items
     .filter((item) => item.location.type === 'backpack' && item.location.actorId === hero.actorId)
     .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)
@@ -645,7 +682,8 @@ export function projectGameplayState(input: Readonly<{
   return {
     ...(trade === undefined ? {} : { trade }),
     floor: projectFloor({ floor: observed.floor, hero: heroPerception(input.state.hero, hero),
-      visibilityWords: observed.visibilityWords, illumination: observed.illumination }),
+      visibilityWords: observed.visibilityWords, illumination: observed.illumination,
+      ...(lightOut === undefined ? {} : { lightOut }) }),
     hero: {
       actorId: hero.actorId, name: input.state.hero.name, x: hero.x, y: hero.y,
       attributes: { ...hero.attributes },
@@ -657,7 +695,10 @@ export function projectGameplayState(input: Readonly<{
       backpackCapacity: input.state.hero.backpackCapacity,
       knownAppearanceIds: [...input.state.identification.knownAppearanceIds],
     },
-    actors, features, groundItems, slots, house,
+    actors: lightOut === undefined ? actors : [],
+    features: lightOut === undefined ? features : [],
+    groundItems: lightOut === undefined ? groundItems : [],
+    slots, house,
     actions: ['move', 'wait', 'attack', 'pickup', 'use-item', 'equip', 'rest'].map((type) => ({
       type, cost: type === 'rest' ? rules.actionCosts['action.wait'] ?? rules.normalActionCost
         : rules.actionCosts[`action.${type}`] ?? rules.normalActionCost,

@@ -10,7 +10,7 @@ export const CONTENT_KIND_IDS = [
 export type ContentKind = typeof CONTENT_KIND_IDS[number];
 export const DERIVED_STAT_NAMES = [
   'maxHealth', 'meleeAccuracy', 'meleeDamageBonus', 'rangedAccuracy',
-  'defense', 'search', 'disarm',
+  'defense', 'search', 'disarm', 'lightOutRevealRadius', 'lightOutMemoryPersists',
 ] as const;
 export type DerivedStatName = typeof DERIVED_STAT_NAMES[number];
 export const CONDITION_TRAIT_IDS = [

@@ -10,6 +10,7 @@ import {
 import { BlockBar, DotLeaderRow } from './chargen-components.js';
 import { Button } from '../../components/button.js';
 import { cn } from '../../lib/cn.js';
+import { playerVisibleDerivedStats } from '../../derived-stats-display.js';
 
 const STAT_LABELS: Readonly<Record<DerivedStatName, string>> = {
   maxHealth: 'Max health',
@@ -19,6 +20,8 @@ const STAT_LABELS: Readonly<Record<DerivedStatName, string>> = {
   defense: 'Defense',
   search: 'Search',
   disarm: 'Disarm',
+  lightOutRevealRadius: 'Light-out reveal radius',
+  lightOutMemoryPersists: 'Light-out memory persists',
 };
 
 function balanceOf(pack: CompiledContentPack): BalanceContentEntry | undefined {
@@ -160,7 +163,7 @@ export function HeroRecord({
       {stats && (
         <section aria-label="Derived stats" className="flex flex-col gap-1 border-t border-line pt-2">
           <h3 className="m-0 text-sm font-semibold text-fg-strong">Derived stats</h3>
-          {DERIVED_STAT_NAMES.map((statName) => {
+          {playerVisibleDerivedStats().map((statName) => {
             const delta = deltas[statName];
             return (
               <DotLeaderRow

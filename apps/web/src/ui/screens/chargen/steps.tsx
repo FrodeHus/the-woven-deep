@@ -3,9 +3,10 @@ import type {
   BackgroundContentEntry, BalanceContentEntry, ClassContentEntry, CompiledContentPack, TraitContentEntry,
 } from '@woven-deep/content';
 import {
-  ATTRIBUTE_ORDER, DERIVED_STAT_NAMES, HERO_NAME_RULES, pointBuyCost,
+  ATTRIBUTE_ORDER, HERO_NAME_RULES, pointBuyCost,
   type AttributeName, type DerivedStatName,
 } from '@woven-deep/engine';
+import { playerVisibleDerivedStats } from '@/ui/derived-stats-display.js';
 import { Button } from '@/ui/components/button.js';
 import { Input } from '@/ui/components/input.js';
 import { Label } from '@/ui/components/label.js';
@@ -292,7 +293,7 @@ export function KitStep({ state, pack, dispatch }: StepProps): JSX.Element {
 }
 
 function modifiersMeta(modifiers: Readonly<Partial<Record<DerivedStatName, number>>>): string | undefined {
-  const parts = DERIVED_STAT_NAMES
+  const parts = playerVisibleDerivedStats()
     .filter((statName) => modifiers[statName] !== undefined)
     .map((statName) => `${modifiers[statName]! >= 0 ? '+' : ''}${modifiers[statName]} ${statName}`);
   return parts.length > 0 ? parts.join(', ') : undefined;
@@ -344,6 +345,8 @@ const STAT_LABELS: Readonly<Record<DerivedStatName, string>> = {
   defense: 'Defense',
   search: 'Search',
   disarm: 'Disarm',
+  lightOutRevealRadius: 'Light-out reveal radius',
+  lightOutMemoryPersists: 'Light-out memory persists',
 };
 
 export function TraitsStep({ state, pack, dispatch }: StepProps): JSX.Element {
@@ -418,7 +421,7 @@ export function ReviewStep({ state, pack }: StepProps): JSX.Element {
       {stats && (
         <div className="flex flex-col gap-1 border-t border-line pt-2">
           <h3 className="m-0 text-sm font-semibold text-fg-strong">Derived stats</h3>
-          {DERIVED_STAT_NAMES.map((statName) => (
+          {playerVisibleDerivedStats().map((statName) => (
             <DotLeaderRow key={statName} label={STAT_LABELS[statName]} value={String(stats[statName])} />
           ))}
         </div>
