@@ -1,0 +1,126 @@
+schemaVersion: 7
+entries:
+  - kind: monster
+    id: monster.thread-skitter
+    name: Thread skitter
+    glyph: g
+    color: "#7c8a5b"
+    tags: [thread-kin, humanoid, offense]
+    minDepth: 1
+    maxDepth: 4
+    attributes: { might: 4, agility: 6, vitality: 5, wits: 4, resolve: 3 }
+    health: 7
+    speed: 100
+    accuracy: 2
+    defense: 10
+    perception: 6
+    damage: { count: 1, sides: 4, bonus: 0 }
+    armor: 0
+    resistances: { physical: 0, fire: -10, cold: 0, lightning: 0, poison: 10, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 2
+    rarity: common
+    lootTableId: loot-table.thread-kin
+    dropChance: 0.35
+
+  - kind: monster
+    id: monster.spindle-cutter
+    name: Spindle cutter
+    glyph: j
+    color: "#9aa36a"
+    tags: [thread-kin, humanoid, skirmisher]
+    minDepth: 1
+    maxDepth: 4
+    attributes: { might: 3, agility: 9, vitality: 4, wits: 4, resolve: 3 }
+    health: 5
+    speed: 125
+    accuracy: 3
+    defense: 12
+    perception: 6
+    damage: { count: 1, sides: 4, bonus: 1 }
+    armor: 0
+    resistances: { physical: 0, fire: -10, cold: 0, lightning: 0, poison: 10, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 2
+    rarity: common
+    lootTableId: loot-table.thread-kin
+    dropChance: 0.3
+
+  - kind: monster
+    id: monster.barb-slinger
+    name: Barb slinger
+    glyph: s
+    color: "#6f7d4e"
+    tags: [thread-kin, humanoid, ranged]
+    minDepth: 2
+    maxDepth: 5
+    attributes: { might: 4, agility: 7, vitality: 5, wits: 5, resolve: 4 }
+    health: 8
+    speed: 95
+    accuracy: 3
+    defense: 10
+    perception: 8
+    damage: { count: 1, sides: 6, bonus: 0 }
+    armor: 0
+    resistances: { physical: 0, fire: -10, cold: 0, lightning: 0, poison: 10, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 3
+    rarity: uncommon
+    lootTableId: loot-table.thread-kin
+    dropChance: 0.35
+
+  - kind: monster
+    id: monster.snarl-warden
+    name: Snarl warden
+    glyph: k
+    color: "#5f6b45"
+    tags: [thread-kin, humanoid, armored]
+    minDepth: 3
+    maxDepth: 5
+    attributes: { might: 7, agility: 5, vitality: 7, wits: 4, resolve: 6 }
+    health: 16
+    speed: 85
+    accuracy: 3
+    defense: 12
+    perception: 6
+    damage: { count: 1, sides: 8, bonus: 1 }
+    armor: 3
+    resistances: { physical: 20, fire: -10, cold: 0, lightning: 0, poison: 10, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 4
+    rarity: uncommon
+    lootTableId: loot-table.thread-kin
+    dropChance: 0.4
+
+  - kind: monster
+    id: monster.loom-hexer
+    name: Loom hexer
+    glyph: h
+    color: "#8a6fa0"
+    tags: [thread-kin, humanoid, caster, arcane]
+    minDepth: 4
+    maxDepth: 5
+    attributes: { might: 3, agility: 6, vitality: 6, wits: 9, resolve: 7 }
+    health: 13
+    speed: 90
+    accuracy: 4
+    defense: 11
+    perception: 9
+    damage: { count: 1, sides: 6, bonus: 2 }
+    armor: 0
+    resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 25 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 4
+    rarity: rare
+    lootTableId: loot-table.thread-kin
+    dropChance: 0.4

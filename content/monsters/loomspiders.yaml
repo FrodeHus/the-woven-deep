@@ -1,0 +1,126 @@
+schemaVersion: 7
+entries:
+  - kind: monster
+    id: monster.web-stalker
+    name: Web stalker
+    glyph: x
+    color: "#6a5f7a"
+    tags: [spider, poison, offense]
+    minDepth: 3
+    maxDepth: 6
+    attributes: { might: 5, agility: 8, vitality: 6, wits: 3, resolve: 4 }
+    health: 12
+    speed: 110
+    accuracy: 3
+    defense: 12
+    perception: 8
+    damage: { count: 1, sides: 6, bonus: 0 }
+    armor: 0
+    resistances: { physical: 0, fire: -15, cold: 0, lightning: 0, poison: 40, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 3
+    rarity: common
+    lootTableId: loot-table.loomspiders
+    dropChance: 0.3
+
+  - kind: monster
+    id: monster.gossamer-darter
+    name: Gossamer darter
+    glyph: x
+    color: "#8a7fa0"
+    tags: [spider, skirmisher]
+    minDepth: 3
+    maxDepth: 6
+    attributes: { might: 3, agility: 11, vitality: 4, wits: 3, resolve: 3 }
+    health: 8
+    speed: 140
+    accuracy: 4
+    defense: 14
+    perception: 9
+    damage: { count: 1, sides: 4, bonus: 1 }
+    armor: 0
+    resistances: { physical: 0, fire: -15, cold: 0, lightning: 0, poison: 35, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 3
+    rarity: common
+    lootTableId: loot-table.loomspiders
+    dropChance: 0.25
+
+  - kind: monster
+    id: monster.venom-spinner
+    name: Venom spinner
+    glyph: x
+    color: "#5f7d4e"
+    tags: [spider, poison, ranged]
+    minDepth: 4
+    maxDepth: 7
+    attributes: { might: 4, agility: 8, vitality: 6, wits: 5, resolve: 5 }
+    health: 14
+    speed: 100
+    accuracy: 4
+    defense: 12
+    perception: 10
+    damage: { count: 1, sides: 8, bonus: 0 }
+    armor: 0
+    resistances: { physical: 0, fire: -15, cold: 0, lightning: 0, poison: 60, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 4
+    rarity: uncommon
+    lootTableId: loot-table.loomspiders
+    dropChance: 0.35
+
+  - kind: monster
+    id: monster.carapace-broodmother
+    name: Carapace broodmother
+    glyph: M
+    color: "#4a4358"
+    tags: [spider, armored, swarm-source]
+    minDepth: 5
+    maxDepth: 8
+    attributes: { might: 8, agility: 6, vitality: 11, wits: 4, resolve: 7 }
+    health: 32
+    speed: 85
+    accuracy: 4
+    defense: 12
+    perception: 9
+    damage: { count: 2, sides: 6, bonus: 1 }
+    armor: 3
+    resistances: { physical: 20, fire: -20, cold: 0, lightning: 0, poison: 50, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 6
+    rarity: rare
+    lootTableId: loot-table.loomspiders
+    dropChance: 0.45
+
+  - kind: monster
+    id: monster.shroud-widow
+    name: Shroud widow
+    glyph: X
+    color: "#3f3a4d"
+    tags: [spider, poison, elite]
+    minDepth: 6
+    maxDepth: 8
+    attributes: { might: 9, agility: 9, vitality: 10, wits: 5, resolve: 8 }
+    health: 30
+    speed: 115
+    accuracy: 5
+    defense: 14
+    perception: 10
+    damage: { count: 2, sides: 7, bonus: 1 }
+    armor: 1
+    resistances: { physical: 10, fire: -15, cold: 0, lightning: 0, poison: 70, arcane: 10 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 7
+    rarity: rare
+    lootTableId: loot-table.loomspiders
+    dropChance: 0.45

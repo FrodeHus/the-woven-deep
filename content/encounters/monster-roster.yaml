@@ -1,0 +1,577 @@
+schemaVersion: 7
+entries:
+  # --- Silt vermin (depth 1-5) ---
+  - kind: encounter
+    id: encounter.silt-nibbler-stragglers
+    name: Silt nibbler stragglers
+    tags: [animal, early, vermin]
+    model: individual
+    minDepth: 1
+    maxDepth: 4
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 9
+    rarity: common
+    runAppearanceChance: 1
+    discoveryProtectionIncrement: 0
+    discoveryProtectionCap: 1
+    maximumInstancesPerRun: 20
+    placement: { minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.silt-nibbler, minimumQuantity: 1, maximumQuantity: 3 }
+
+  - kind: encounter
+    id: encounter.drowned-boar-charge
+    name: Drowned boar charge
+    tags: [animal, vermin]
+    model: individual
+    minDepth: 4
+    maxDepth: 5
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 4
+    rarity: rare
+    runAppearanceChance: 0.4
+    discoveryProtectionIncrement: 0.06
+    discoveryProtectionCap: 0.7
+    maximumInstancesPerRun: 6
+    placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.drowned-boar, minimumQuantity: 1, maximumQuantity: 2 }
+
+  - kind: encounter
+    id: encounter.silt-vermin-pack
+    name: Silt vermin pack
+    tags: [animal, early, vermin]
+    model: group
+    minDepth: 2
+    maxDepth: 5
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 7
+    rarity: uncommon
+    runAppearanceChance: 0.7
+    discoveryProtectionIncrement: 0.08
+    discoveryProtectionCap: 0.9
+    maximumInstancesPerRun: 12
+    placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 4, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      roles:
+        - { roleId: nibbler, monsterId: monster.silt-nibbler, minimumQuantity: 1, maximumQuantity: 3, formationPreference: front, behaviorParameters: {} }
+        - { roleId: tick, monsterId: monster.bile-tick, minimumQuantity: 1, maximumQuantity: 2, formationPreference: flank, behaviorParameters: {} }
+        - { roleId: lurker, monsterId: monster.mire-lurker, minimumQuantity: 1, maximumQuantity: 1, formationPreference: center, behaviorParameters: {} }
+      formation: cluster
+      communicationRadius: 4
+      leaderChance: 0.4
+      leaderRoleId: lurker
+      leaderAccentColor: "#8a7b5c"
+      leaderAlternateGlyph: M
+      coordinationModifiers: { accuracy: 1, defense: 0, damage: 0 }
+      leaderDeathResponse: panic
+      responseParameters: { duration: 6 }
+      supernaturalBond: false
+      collapseRewards: none
+
+  - kind: encounter
+    id: encounter.gorge-swarm
+    name: Gorge swarm
+    tags: [animal, swarm, vermin]
+    model: swarm
+    minDepth: 2
+    maxDepth: 5
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 4
+    rarity: uncommon
+    runAppearanceChance: 0.4
+    discoveryProtectionIncrement: 0.08
+    discoveryProtectionCap: 0.8
+    maximumInstancesPerRun: 8
+    placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      sourceMonsterId: monster.gorge-swarm
+      spawnRoles:
+        - { roleId: nibbler, monsterId: monster.silt-nibbler, weight: 3 }
+        - { roleId: tick, monsterId: monster.bile-tick, weight: 1 }
+      spawnInterval: 300
+      minimumSpawnQuantity: 1
+      maximumSpawnQuantity: 2
+      placementRadius: 3
+      allowedTerrainTags: [floor]
+      maximumLivingChildren: 8
+      maximumLivingMembers: 9
+      maximumFloorActors: 20
+      sourceDestructionResponse: flee
+      responseParameters: {}
+
+  # --- Thread-kin (depth 1-5) ---
+  - kind: encounter
+    id: encounter.thread-skitter-band
+    name: Thread skitter band
+    tags: [early, humanoid, thread-kin]
+    model: individual
+    minDepth: 1
+    maxDepth: 4
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 8
+    rarity: common
+    runAppearanceChance: 1
+    discoveryProtectionIncrement: 0
+    discoveryProtectionCap: 1
+    maximumInstancesPerRun: 18
+    placement: { minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.thread-skitter, minimumQuantity: 1, maximumQuantity: 3 }
+
+  - kind: encounter
+    id: encounter.barb-slinger-perch
+    name: Barb slinger perch
+    tags: [humanoid, ranged, thread-kin]
+    model: individual
+    minDepth: 2
+    maxDepth: 5
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 5
+    rarity: uncommon
+    runAppearanceChance: 0.55
+    discoveryProtectionIncrement: 0.07
+    discoveryProtectionCap: 0.8
+    maximumInstancesPerRun: 10
+    placement: { minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.barb-slinger, minimumQuantity: 1, maximumQuantity: 2 }
+
+  - kind: encounter
+    id: encounter.loom-hexer-rite
+    name: Loom hexer rite
+    tags: [arcane, caster, thread-kin]
+    model: individual
+    minDepth: 4
+    maxDepth: 5
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 3
+    rarity: rare
+    runAppearanceChance: 0.35
+    discoveryProtectionIncrement: 0.05
+    discoveryProtectionCap: 0.6
+    maximumInstancesPerRun: 6
+    placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.loom-hexer, minimumQuantity: 1, maximumQuantity: 1 }
+
+  - kind: encounter
+    id: encounter.thread-kin-warband
+    name: Thread-kin warband
+    tags: [humanoid, thread-kin]
+    model: group
+    minDepth: 3
+    maxDepth: 5
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 6
+    rarity: uncommon
+    runAppearanceChance: 0.65
+    discoveryProtectionIncrement: 0.08
+    discoveryProtectionCap: 0.9
+    maximumInstancesPerRun: 12
+    placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 4, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      roles:
+        - { roleId: skitter, monsterId: monster.thread-skitter, minimumQuantity: 1, maximumQuantity: 3, formationPreference: front, behaviorParameters: {} }
+        - { roleId: cutter, monsterId: monster.spindle-cutter, minimumQuantity: 1, maximumQuantity: 2, formationPreference: flank, behaviorParameters: {} }
+        - { roleId: warden, monsterId: monster.snarl-warden, minimumQuantity: 1, maximumQuantity: 1, formationPreference: front, behaviorParameters: {} }
+      formation: wedge
+      communicationRadius: 5
+      leaderChance: 0.5
+      leaderRoleId: warden
+      leaderAccentColor: "#7c8a5b"
+      leaderAlternateGlyph: K
+      coordinationModifiers: { accuracy: 1, defense: 1, damage: 0 }
+      leaderDeathResponse: weaken
+      responseParameters: { modifiers: { accuracy: -1, defense: -2, damage: -1 } }
+      supernaturalBond: false
+      collapseRewards: none
+
+  # --- Tallow oozes (depth 2-7) ---
+  - kind: encounter
+    id: encounter.cinder-ooze-seep
+    name: Cinder ooze seep
+    tags: [fire, ooze]
+    model: individual
+    minDepth: 3
+    maxDepth: 6
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 5
+    rarity: uncommon
+    runAppearanceChance: 0.5
+    discoveryProtectionIncrement: 0.06
+    discoveryProtectionCap: 0.75
+    maximumInstancesPerRun: 10
+    placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.cinder-ooze, minimumQuantity: 1, maximumQuantity: 2 }
+
+  - kind: encounter
+    id: encounter.caustic-pool-pit
+    name: Caustic pool pit
+    tags: [ooze, poison]
+    model: individual
+    minDepth: 4
+    maxDepth: 7
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 4
+    rarity: rare
+    runAppearanceChance: 0.4
+    discoveryProtectionIncrement: 0.05
+    discoveryProtectionCap: 0.65
+    maximumInstancesPerRun: 8
+    placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.caustic-pool, minimumQuantity: 1, maximumQuantity: 1 }
+
+  - kind: encounter
+    id: encounter.rendering-glut-mass
+    name: Rendering glut mass
+    tags: [ooze]
+    model: individual
+    minDepth: 4
+    maxDepth: 7
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 4
+    rarity: uncommon
+    runAppearanceChance: 0.45
+    discoveryProtectionIncrement: 0.05
+    discoveryProtectionCap: 0.7
+    maximumInstancesPerRun: 8
+    placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.rendering-glut, minimumQuantity: 1, maximumQuantity: 1 }
+
+  - kind: encounter
+    id: encounter.tallow-ooze-cluster
+    name: Tallow ooze cluster
+    tags: [ooze]
+    model: group
+    minDepth: 2
+    maxDepth: 5
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 6
+    rarity: uncommon
+    runAppearanceChance: 0.6
+    discoveryProtectionIncrement: 0.08
+    discoveryProtectionCap: 0.85
+    maximumInstancesPerRun: 12
+    placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 4, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      roles:
+        - { roleId: slither, monsterId: monster.tallow-slither, minimumQuantity: 1, maximumQuantity: 2, formationPreference: front, behaviorParameters: {} }
+        - { roleId: crawler, monsterId: monster.wax-crawler, minimumQuantity: 1, maximumQuantity: 3, formationPreference: front, behaviorParameters: {} }
+      formation: cluster
+      communicationRadius: 3
+      leaderChance: 0.3
+      leaderRoleId: slither
+      leaderAccentColor: "#c9b45f"
+      leaderAlternateGlyph: O
+      coordinationModifiers: { accuracy: 0, defense: 1, damage: 0 }
+      leaderDeathResponse: disband
+      responseParameters: {}
+      supernaturalBond: false
+      collapseRewards: none
+
+  # --- Loomspiders (depth 3-8) ---
+  - kind: encounter
+    id: encounter.venom-spinner-web
+    name: Venom spinner web
+    tags: [poison, ranged, spider]
+    model: individual
+    minDepth: 4
+    maxDepth: 7
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 5
+    rarity: uncommon
+    runAppearanceChance: 0.5
+    discoveryProtectionIncrement: 0.06
+    discoveryProtectionCap: 0.75
+    maximumInstancesPerRun: 10
+    placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.venom-spinner, minimumQuantity: 1, maximumQuantity: 2 }
+
+  - kind: encounter
+    id: encounter.shroud-widow-lair
+    name: Shroud widow lair
+    tags: [elite, poison, spider]
+    model: individual
+    minDepth: 6
+    maxDepth: 8
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 3
+    rarity: rare
+    runAppearanceChance: 0.35
+    discoveryProtectionIncrement: 0.05
+    discoveryProtectionCap: 0.6
+    maximumInstancesPerRun: 6
+    placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.shroud-widow, minimumQuantity: 1, maximumQuantity: 1 }
+
+  - kind: encounter
+    id: encounter.loomspider-nest
+    name: Loomspider nest
+    tags: [poison, spider]
+    model: group
+    minDepth: 3
+    maxDepth: 7
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 6
+    rarity: uncommon
+    runAppearanceChance: 0.55
+    discoveryProtectionIncrement: 0.07
+    discoveryProtectionCap: 0.85
+    maximumInstancesPerRun: 10
+    placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 5, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      roles:
+        - { roleId: stalker, monsterId: monster.web-stalker, minimumQuantity: 1, maximumQuantity: 3, formationPreference: front, behaviorParameters: {} }
+        - { roleId: darter, monsterId: monster.gossamer-darter, minimumQuantity: 1, maximumQuantity: 2, formationPreference: flank, behaviorParameters: {} }
+      formation: surround
+      communicationRadius: 5
+      leaderChance: 0.35
+      leaderRoleId: stalker
+      leaderAccentColor: "#6a5f7a"
+      leaderAlternateGlyph: X
+      coordinationModifiers: { accuracy: 1, defense: 1, damage: 0 }
+      leaderDeathResponse: panic
+      responseParameters: { duration: 5 }
+      supernaturalBond: false
+      collapseRewards: none
+
+  - kind: encounter
+    id: encounter.broodmother-swarm
+    name: Broodmother swarm
+    tags: [spider, swarm]
+    model: swarm
+    minDepth: 5
+    maxDepth: 8
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 3
+    rarity: rare
+    runAppearanceChance: 0.3
+    discoveryProtectionIncrement: 0.05
+    discoveryProtectionCap: 0.6
+    maximumInstancesPerRun: 6
+    placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 4, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      sourceMonsterId: monster.carapace-broodmother
+      spawnRoles:
+        - { roleId: stalker, monsterId: monster.web-stalker, weight: 2 }
+        - { roleId: darter, monsterId: monster.gossamer-darter, weight: 3 }
+      spawnInterval: 280
+      minimumSpawnQuantity: 1
+      maximumSpawnQuantity: 3
+      placementRadius: 4
+      allowedTerrainTags: [floor]
+      maximumLivingChildren: 10
+      maximumLivingMembers: 11
+      maximumFloorActors: 24
+      sourceDestructionResponse: flee
+      responseParameters: {}
+
+  # --- Drowned husks (depth 4-10) ---
+  - kind: encounter
+    id: encounter.sodden-lurcher-wade
+    name: Sodden lurcher wade
+    tags: [armored, drowned, undead]
+    model: individual
+    minDepth: 6
+    maxDepth: 9
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 4
+    rarity: uncommon
+    runAppearanceChance: 0.45
+    discoveryProtectionIncrement: 0.05
+    discoveryProtectionCap: 0.7
+    maximumInstancesPerRun: 8
+    placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.sodden-lurcher, minimumQuantity: 1, maximumQuantity: 2 }
+
+  - kind: encounter
+    id: encounter.wailing-echo-haunt
+    name: Wailing echo haunt
+    tags: [arcane, caster, echo, undead]
+    model: individual
+    minDepth: 5
+    maxDepth: 9
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 3
+    rarity: rare
+    runAppearanceChance: 0.35
+    discoveryProtectionIncrement: 0.05
+    discoveryProtectionCap: 0.6
+    maximumInstancesPerRun: 6
+    placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.wailing-echo, minimumQuantity: 1, maximumQuantity: 2 }
+
+  - kind: encounter
+    id: encounter.tide-revenant-rise
+    name: Tide revenant rise
+    tags: [drowned, elite, undead]
+    model: individual
+    minDepth: 7
+    maxDepth: 10
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 3
+    rarity: rare
+    runAppearanceChance: 0.3
+    discoveryProtectionIncrement: 0.04
+    discoveryProtectionCap: 0.55
+    maximumInstancesPerRun: 5
+    placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.tide-revenant, minimumQuantity: 1, maximumQuantity: 1 }
+
+  - kind: encounter
+    id: encounter.drowned-host
+    name: Drowned host
+    tags: [drowned, undead]
+    model: group
+    minDepth: 4
+    maxDepth: 8
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 5
+    rarity: uncommon
+    runAppearanceChance: 0.5
+    discoveryProtectionIncrement: 0.06
+    discoveryProtectionCap: 0.8
+    maximumInstancesPerRun: 10
+    placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 5, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      roles:
+        - { roleId: shambler, monsterId: monster.drowned-shambler, minimumQuantity: 1, maximumQuantity: 3, formationPreference: front, behaviorParameters: {} }
+        - { roleId: skeleton, monsterId: monster.brine-skeleton, minimumQuantity: 1, maximumQuantity: 2, formationPreference: front, behaviorParameters: {} }
+      formation: line
+      communicationRadius: 6
+      leaderChance: 0.4
+      leaderRoleId: shambler
+      leaderAccentColor: "#6a8a8f"
+      leaderAlternateGlyph: Z
+      coordinationModifiers: { accuracy: 1, defense: 0, damage: 1 }
+      leaderDeathResponse: weaken
+      responseParameters: { modifiers: { accuracy: -1, defense: -1, damage: -2 } }
+      supernaturalBond: false
+      collapseRewards: none
+
+  # --- Ashwrought brutes (depth 6-12) ---
+  - kind: encounter
+    id: encounter.emberclad-reaver-stand
+    name: Emberclad reaver stand
+    tags: [armored, ashwrought, brute, fire]
+    model: individual
+    minDepth: 7
+    maxDepth: 11
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 3
+    rarity: uncommon
+    runAppearanceChance: 0.4
+    discoveryProtectionIncrement: 0.05
+    discoveryProtectionCap: 0.65
+    maximumInstancesPerRun: 7
+    placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.emberclad-reaver, minimumQuantity: 1, maximumQuantity: 2 }
+
+  - kind: encounter
+    id: encounter.cinder-hurler-barrage
+    name: Cinder hurler barrage
+    tags: [ashwrought, fire, ranged]
+    model: individual
+    minDepth: 7
+    maxDepth: 11
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 3
+    rarity: rare
+    runAppearanceChance: 0.35
+    discoveryProtectionIncrement: 0.04
+    discoveryProtectionCap: 0.6
+    maximumInstancesPerRun: 6
+    placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.cinder-hurler, minimumQuantity: 1, maximumQuantity: 2 }
+
+  - kind: encounter
+    id: encounter.ashen-juggernaut-march
+    name: Ashen juggernaut march
+    tags: [ashwrought, brute, elite, fire]
+    model: individual
+    minDepth: 9
+    maxDepth: 12
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 2
+    rarity: legendary
+    runAppearanceChance: 0.25
+    discoveryProtectionIncrement: 0.03
+    discoveryProtectionCap: 0.45
+    maximumInstancesPerRun: 4
+    placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.ashen-juggernaut, minimumQuantity: 1, maximumQuantity: 1 }
+
+  - kind: encounter
+    id: encounter.ashwrought-warband
+    name: Ashwrought warband
+    tags: [ashwrought, brute, fire]
+    model: group
+    minDepth: 6
+    maxDepth: 9
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 4
+    rarity: rare
+    runAppearanceChance: 0.4
+    discoveryProtectionIncrement: 0.05
+    discoveryProtectionCap: 0.7
+    maximumInstancesPerRun: 8
+    placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 5, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      roles:
+        - { roleId: thug, monsterId: monster.cinder-thug, minimumQuantity: 1, maximumQuantity: 3, formationPreference: front, behaviorParameters: {} }
+        - { roleId: skirmisher, monsterId: monster.slag-skirmisher, minimumQuantity: 1, maximumQuantity: 2, formationPreference: flank, behaviorParameters: {} }
+      formation: wedge
+      communicationRadius: 6
+      leaderChance: 0.45
+      leaderRoleId: thug
+      leaderAccentColor: "#c06a3e"
+      leaderAlternateGlyph: T
+      coordinationModifiers: { accuracy: 1, defense: 1, damage: 1 }
+      leaderDeathResponse: frenzy
+      responseParameters: { duration: 8, modifiers: { accuracy: 1, defense: -1, damage: 2 } }
+      supernaturalBond: false
+      collapseRewards: none

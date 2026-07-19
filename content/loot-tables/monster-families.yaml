@@ -1,0 +1,70 @@
+schemaVersion: 7
+entries:
+  - kind: loot-table
+    id: loot-table.silt-vermin
+    name: Silt vermin scraps
+    tags: [early, vermin]
+    rolls: 1
+    choices:
+      - { contentId: item.travel-ration, lootTableId: null, weight: 6, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.lamp-oil, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.crimson-potion, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+
+  - kind: loot-table
+    id: loot-table.thread-kin
+    name: Thread-kin pickings
+    tags: [early, humanoid]
+    rolls: 1
+    choices:
+      - { contentId: item.pitch-torch, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.lamp-oil, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.travel-ration, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.iron-sword, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.wooden-shield, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+
+  - kind: loot-table
+    id: loot-table.tallow-oozes
+    name: Tallow ooze residue
+    tags: [fuel, ooze]
+    rolls: 1
+    choices:
+      - { contentId: item.lamp-oil, lootTableId: null, weight: 6, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.crimson-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.ashen-potion, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.brass-lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+
+  - kind: loot-table
+    id: loot-table.loomspiders
+    name: Loomspider silk
+    tags: [poison, spider]
+    rolls: 1
+    choices:
+      - { contentId: item.travel-ration, lootTableId: null, weight: 5, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.crimson-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.ashen-potion, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.etched-ring, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+
+  - kind: loot-table
+    id: loot-table.drowned-husks
+    name: Drowned husk remnants
+    tags: [undead, drowned]
+    rolls: 1
+    choices:
+      - { contentId: item.echo-remnant, lootTableId: null, weight: 5, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.ashen-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.etched-ring, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.ember-scroll, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+
+  - kind: loot-table
+    id: loot-table.ashwrought-brutes
+    name: Ashwrought spoils
+    tags: [fire, brute, deep]
+    rolls: 2
+    choices:
+      - { contentId: item.iron-sword, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.leather-armor, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.ashen-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.wooden-shield, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.ember-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.hunting-bow, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.wooden-arrows, lootTableId: null, weight: 2, minimumQuantity: 4, maximumQuantity: 12 }
