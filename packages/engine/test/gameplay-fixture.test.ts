@@ -83,7 +83,9 @@ describe('seeded gameplay fixture', () => {
     expect(Math.max(Math.abs(hero.x - rat.x), Math.abs(hero.y - rat.y))).toBeGreaterThanOrEqual(3);
     expect(Math.max(Math.abs(hero.x - beetle.x), Math.abs(hero.y - beetle.y))).toBeGreaterThanOrEqual(6);
 
-    expect(run.items).toHaveLength(13);
+    // 13 pre-existing demo items plus one item created from `vault.lampwright-cache`'s filled
+    // item slot (`item-cache`, `loot-table.travelling-lampwright-stock`).
+    expect(run.items).toHaveLength(14);
     expect(run.items.find((item) => item.itemId === ids.lantern)).toMatchObject({
       contentId: 'item.brass-lantern',
       fuel: 1800,
