@@ -97,22 +97,26 @@ function normalizedName(name: string): string {
   return name.trim().normalize('NFC');
 }
 
-function nameIsValid(name: string): boolean {
+export function nameIsValid(name: string): boolean {
   const normalized = normalizedName(name);
   return normalized.length >= HERO_NAME_RULES.minLength
     && normalized.length <= HERO_NAME_RULES.maxLength
     && HERO_NAME_RULES.pattern.test(normalized);
 }
 
-function stepSatisfied(state: WizardState): boolean {
-  switch (state.step) {
-    case 1: return nameIsValid(state.name);
-    case 2: return state.method !== null;
-    case 3: return state.attributes !== null;
-    case 4: return state.classId !== null;
-    case 5: return state.kitId !== null;
-    case 6: return state.backgroundId !== null;
-    case 7: return false;
+/** Whether the given step's own field has been chosen. Step 7 (Review) has no field of its own
+ * and is terminal, so `next` never advances past it -- this is the single source of truth for
+ * both the reducer's `next` gating and any UI (e.g. `StepMenu`) that needs to know per-step
+ * completion without re-implementing these rules. */
+export function stepIsSatisfied(state: WizardState, step: WizardState['step']): boolean {
+  switch (step) {
+    case 1: return nameIsValid(state.name);          // Identity
+    case 2: return state.classId !== null;            // Calling
+    case 3: return state.kitId !== null;               // Kit
+    case 4: return state.attributes !== null;          // Attributes (method + values)
+    case 5: return state.backgroundId !== null;        // Origin
+    case 6: return true;                                // Traits (optional, capped in toggle-trait)
+    case 7: return false;                               // Review (terminal)
   }
 }
 
@@ -209,7 +213,7 @@ export function wizardReduce(state: WizardState, action: WizardAction, context: 
       return { ...state, onboardingEnabled: action.enabled };
 
     case 'next': {
-      if (state.step >= 7 || !stepSatisfied(state)) return state;
+      if (state.step >= 7 || !stepIsSatisfied(state, state.step)) return state;
       return { ...state, step: (state.step + 1) as WizardState['step'] };
     }
 

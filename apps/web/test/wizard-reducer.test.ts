@@ -4,7 +4,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import { rerollAttributes, rollAttributes, type Uint32State } from '@woven-deep/engine';
 import {
-  initialWizardState, wizardChoices, wizardPreview, wizardReduce,
+  initialWizardState, nameIsValid, stepIsSatisfied, wizardChoices, wizardPreview, wizardReduce,
   type WizardAction, type WizardState,
 } from '../src/session/wizard-reducer.js';
 
@@ -52,32 +52,32 @@ describe('wizardReduce', () => {
     expect(advanced.step).toBe(2);
   });
 
-  it('blocks next at step 2 until a method is chosen', () => {
+  it('blocks next at step 2 until a class is chosen', () => {
     const state = dispatchAll(initialWizardState(SEED), [{ type: 'set-name', name: 'Rin' }, { type: 'next' }]);
     expect(state.step).toBe(2);
 
     const blocked = wizardReduce(state, { type: 'next' }, context());
     expect(blocked.step).toBe(2);
 
-    const chosen = wizardReduce(state, { type: 'choose-method', method: 'roll' }, context());
+    const chosen = wizardReduce(state, { type: 'choose-class', classId: WAYFARER }, context());
     const advanced = wizardReduce(chosen, { type: 'next' }, context());
     expect(advanced.step).toBe(3);
   });
 
-  it('blocks next at step 3 until attributes are set', () => {
+  it('blocks next at step 3 until a kit is chosen', () => {
     const state = dispatchAll(initialWizardState(SEED), [
       { type: 'set-name', name: 'Rin' }, { type: 'next' },
-      { type: 'choose-method', method: 'roll' }, { type: 'next' },
+      { type: 'choose-class', classId: WAYFARER }, { type: 'next' },
     ]);
     expect(state.step).toBe(3);
-    expect(state.attributes).toBeNull();
+    expect(state.kitId).toBeNull();
 
     const blocked = wizardReduce(state, { type: 'next' }, context());
     expect(blocked.step).toBe(3);
 
-    const rolled = wizardReduce(state, { type: 'roll' }, context());
-    expect(rolled.attributes).not.toBeNull();
-    const advanced = wizardReduce(rolled, { type: 'next' }, context());
+    const withKit = wizardReduce(state, { type: 'choose-kit', kitId: wayfarerKitId() }, context());
+    expect(withKit.kitId).not.toBeNull();
+    const advanced = wizardReduce(withKit, { type: 'next' }, context());
     expect(advanced.step).toBe(4);
   });
 
@@ -151,10 +151,8 @@ describe('wizardReduce', () => {
   it('rejects choosing a locked class as a no-op', () => {
     const state = dispatchAll(initialWizardState(SEED), [
       { type: 'set-name', name: 'Rin' }, { type: 'next' },
-      { type: 'choose-method', method: 'roll' }, { type: 'next' },
-      { type: 'roll' }, { type: 'next' },
     ]);
-    expect(state.step).toBe(4);
+    expect(state.step).toBe(2);
 
     const rejected = wizardReduce(state, { type: 'choose-class', classId: ARCHIVIST }, context());
     expect(rejected).toBe(state);
@@ -239,8 +237,9 @@ describe('wizardReduce', () => {
   it('preserves entered data when going back', () => {
     const state = dispatchAll(initialWizardState(SEED), [
       { type: 'set-name', name: 'Rin' }, { type: 'next' },
-      { type: 'choose-method', method: 'roll' }, { type: 'next' },
-      { type: 'roll' }, { type: 'next' },
+      { type: 'choose-class', classId: WAYFARER }, { type: 'next' },
+      { type: 'choose-kit', kitId: wayfarerKitId() }, { type: 'next' },
+      { type: 'choose-method', method: 'roll' }, { type: 'roll' },
     ]);
     expect(state.step).toBe(4);
 
@@ -258,11 +257,10 @@ describe('wizardReduce', () => {
   it('produces null wizardChoices until step 7 is reached with every selection made, then matches the selections', () => {
     const state = dispatchAll(initialWizardState(SEED), [
       { type: 'set-name', name: 'Rin' }, { type: 'next' },
-      { type: 'choose-method', method: 'roll' }, { type: 'next' },
-      { type: 'roll' }, { type: 'next' },
       { type: 'choose-class', classId: WAYFARER }, { type: 'next' },
       { type: 'choose-kit', kitId: wayfarerKitId() }, { type: 'next' },
-      { type: 'choose-background', backgroundId: CARAVAN_GUARD },
+      { type: 'choose-method', method: 'roll' }, { type: 'roll' }, { type: 'next' },
+      { type: 'choose-background', backgroundId: CARAVAN_GUARD }, { type: 'next' },
       { type: 'toggle-trait', traitId: KEEN_EYED },
     ]);
     expect(state.step).toBe(6);
@@ -309,5 +307,142 @@ describe('wizardReduce', () => {
   it('returns null preview before attributes exist', () => {
     const state = initialWizardState(SEED);
     expect(wizardPreview(state, pack)).toBeNull();
+  });
+
+  it('advances Identity(1) -> Calling(2) -> Kit(3) -> Attributes(4) -> Origin(5) -> Traits(6) -> Review(7)', () => {
+    let s = initialWizardState(SEED);
+    expect(wizardReduce(s, { type: 'next' }, context())).toBe(s); // blocked: no name
+
+    s = wizardReduce(s, { type: 'set-name', name: 'Ash' }, context());
+    s = wizardReduce(s, { type: 'next' }, context());
+    expect(s.step).toBe(2);
+
+    expect(wizardReduce(s, { type: 'next' }, context())).toBe(s); // blocked: no class
+    s = wizardReduce(s, { type: 'choose-class', classId: WAYFARER }, context());
+    s = wizardReduce(s, { type: 'next' }, context());
+    expect(s.step).toBe(3);
+
+    expect(wizardReduce(s, { type: 'next' }, context())).toBe(s); // blocked: no kit
+    s = wizardReduce(s, { type: 'choose-kit', kitId: wayfarerKitId() }, context());
+    s = wizardReduce(s, { type: 'next' }, context());
+    expect(s.step).toBe(4);
+
+    expect(wizardReduce(s, { type: 'next' }, context())).toBe(s); // blocked: no attributes
+    s = wizardReduce(s, { type: 'choose-method', method: 'roll' }, context());
+    s = wizardReduce(s, { type: 'roll' }, context());
+    s = wizardReduce(s, { type: 'next' }, context());
+    expect(s.step).toBe(5);
+
+    expect(wizardReduce(s, { type: 'next' }, context())).toBe(s); // blocked: no background
+    s = wizardReduce(s, { type: 'choose-background', backgroundId: CARAVAN_GUARD }, context());
+    s = wizardReduce(s, { type: 'next' }, context());
+    expect(s.step).toBe(6);
+
+    // traits optional -- step 6 advances with zero traits selected
+    s = wizardReduce(s, { type: 'next' }, context());
+    expect(s.step).toBe(7);
+
+    expect(wizardChoices(s)).toMatchObject({
+      name: 'Ash', classId: WAYFARER, kitId: wayfarerKitId(), backgroundId: CARAVAN_GUARD,
+    });
+  });
+
+  it('choosing a class on step 2 resets a previously chosen kit', () => {
+    const atKitStep = dispatchAll(initialWizardState(SEED), [
+      { type: 'set-name', name: 'Ash' }, { type: 'next' },
+      { type: 'choose-class', classId: WAYFARER }, { type: 'next' },
+      { type: 'choose-kit', kitId: wayfarerKitId() },
+    ]);
+    expect(atKitStep.kitId).toBe(wayfarerKitId());
+
+    const backToClass = wizardReduce(atKitStep, { type: 'back' }, context());
+    expect(backToClass.step).toBe(2);
+    expect(backToClass.kitId).toBe(wayfarerKitId());
+
+    const chosenAnother = wizardReduce(
+      backToClass, { type: 'choose-class', classId: LAMPLIGHTER }, context(),
+    );
+    expect(chosenAnother.classId).toBe(LAMPLIGHTER);
+    expect(chosenAnother.kitId).toBeNull();
+  });
+
+  it('point-buy path also satisfies step 4', () => {
+    const atAttributesStep = dispatchAll(initialWizardState(SEED), [
+      { type: 'set-name', name: 'Ash' }, { type: 'next' },
+      { type: 'choose-class', classId: WAYFARER }, { type: 'next' },
+      { type: 'choose-kit', kitId: wayfarerKitId() }, { type: 'next' },
+    ]);
+    expect(atAttributesStep.step).toBe(4);
+    expect(wizardReduce(atAttributesStep, { type: 'next' }, context())).toBe(atAttributesStep);
+
+    const withPointBuy = wizardReduce(
+      atAttributesStep, { type: 'choose-method', method: 'point-buy' }, context(),
+    );
+    expect(withPointBuy.attributes).not.toBeNull();
+
+    const advanced = wizardReduce(withPointBuy, { type: 'next' }, context());
+    expect(advanced.step).toBe(5);
+  });
+});
+
+describe('nameIsValid', () => {
+  it('rejects empty, too-long, and pattern-violating names, and accepts a well-formed one', () => {
+    expect(nameIsValid('')).toBe(false);
+    expect(nameIsValid('   ')).toBe(false);
+    expect(nameIsValid('x'.repeat(200))).toBe(false);
+    expect(nameIsValid('Rin')).toBe(true);
+  });
+});
+
+describe('stepIsSatisfied', () => {
+  it('matches per-step field-chosen rules used by next-gating, for every step', () => {
+    const empty = initialWizardState(SEED);
+    expect(stepIsSatisfied(empty, 1)).toBe(false);
+    expect(stepIsSatisfied({ ...empty, name: 'Rin' }, 1)).toBe(true);
+
+    expect(stepIsSatisfied(empty, 2)).toBe(false);
+    expect(stepIsSatisfied({ ...empty, classId: WAYFARER }, 2)).toBe(true);
+
+    expect(stepIsSatisfied(empty, 3)).toBe(false);
+    expect(stepIsSatisfied({ ...empty, kitId: wayfarerKitId() }, 3)).toBe(true);
+
+    expect(stepIsSatisfied(empty, 4)).toBe(false);
+    const rolled = wizardReduce(
+      dispatchAll(empty, [{ type: 'choose-method', method: 'roll' }]), { type: 'roll' }, context(),
+    );
+    expect(stepIsSatisfied(rolled, 4)).toBe(true);
+
+    expect(stepIsSatisfied(empty, 5)).toBe(false);
+    expect(stepIsSatisfied({ ...empty, backgroundId: CARAVAN_GUARD }, 5)).toBe(true);
+
+    // Traits (step 6) are optional -- always satisfied.
+    expect(stepIsSatisfied(empty, 6)).toBe(true);
+    expect(stepIsSatisfied({ ...empty, traitIds: [KEEN_EYED] }, 6)).toBe(true);
+
+    // Review (step 7) is terminal -- next never advances past it.
+    expect(stepIsSatisfied(empty, 7)).toBe(false);
+  });
+
+  it('agrees with next-gating: next only advances a step when stepIsSatisfied is true', () => {
+    let s = initialWizardState(SEED);
+    for (const step of [1, 2, 3, 4, 5, 6] as const) {
+      expect(wizardReduce(s, { type: 'next' }, context()) !== s).toBe(stepIsSatisfied(s, step));
+      if (!stepIsSatisfied(s, step)) {
+        // Fill in whatever this step needs, matching the full-flow test above.
+        s = dispatchAll(s, (() => {
+          switch (step) {
+            case 1: return [{ type: 'set-name', name: 'Ash' }] as const;
+            case 2: return [{ type: 'choose-class', classId: WAYFARER }] as const;
+            case 3: return [{ type: 'choose-kit', kitId: wayfarerKitId() }] as const;
+            case 4: return [{ type: 'choose-method', method: 'roll' }, { type: 'roll' }] as const;
+            case 5: return [{ type: 'choose-background', backgroundId: CARAVAN_GUARD }] as const;
+            case 6: return [] as const;
+          }
+        })());
+      }
+      expect(stepIsSatisfied(s, step)).toBe(true);
+      s = wizardReduce(s, { type: 'next' }, context());
+    }
+    expect(s.step).toBe(7);
   });
 });
