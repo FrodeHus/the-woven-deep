@@ -240,6 +240,43 @@ describe('PlayScreen command palette shortcut', () => {
   });
 });
 
+describe('PlayScreen threat hover scroll-dismiss', () => {
+  // Mirrors `threat-popover.test.tsx`'s own "hovering a cell holding a visible actor" harness (a
+  // synthetic hostile neighbour spliced onto a real guest session's own snapshot, since `PlayScreen`
+  // reads live actors straight off the session), extended with the one behavior that file doesn't
+  // cover yet: a real `scroll` event (the listener `PlayScreen` attaches at L321-325) dismissing an
+  // already-open popover.
+  it('hovering an actor cell opens the popover, and a scroll event dismisses it', () => {
+    const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
+    const snapshot = session.getSnapshot();
+    const hero = snapshot.projection.hero as unknown as { x: number; y: number };
+    const spliced = {
+      ...snapshot,
+      projection: {
+        ...snapshot.projection,
+        actors: [{
+          actorId: 'actor.rat', name: 'Cave rat', glyph: 'r', disposition: 'hostile',
+          healthPresentation: { band: 'wounded' }, x: hero.x + 1, y: hero.y,
+        }],
+      },
+    };
+    const fakeHoverSession = {
+      subscribe: () => () => {},
+      getSnapshot: () => spliced,
+    } as unknown as GuestSession;
+
+    render(<PlayScreen session={fakeHoverSession} pack={pack} />);
+    const grid = screen.getByRole('grid', { name: /dungeon/i });
+    const actorCell = grid.querySelector(`[data-cell="${hero.x + 1},${hero.y}"]`)!;
+
+    fireEvent.mouseOver(actorCell);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Cave rat');
+
+    fireEvent.scroll(window);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+});
+
 describe('PlayScreen Layout A composition', () => {
   function session(): GuestSession {
     const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
