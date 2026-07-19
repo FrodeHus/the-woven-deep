@@ -22,3 +22,5 @@ entries:
     behaviorParameters: {}
     threat: 1
     rarity: common
+    lootTableId: loot-table.cave-rat
+    dropChance: 0.35

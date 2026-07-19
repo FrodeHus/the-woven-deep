@@ -22,3 +22,5 @@ entries:
     behaviorParameters: {}
     threat: 2
     rarity: common
+    lootTableId: loot-table.training-beetle
+    dropChance: 0.5
