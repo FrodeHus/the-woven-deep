@@ -3,6 +3,7 @@ import { heroOf } from '../../session/projection-view.js';
 import { usePack, useSessionCtx } from '../providers.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
 import { Button } from '../components/button.js';
+import { useItemActionKeys } from '../hooks/useItemActionKeys.js';
 import { DetailPane } from './DetailPane.js';
 import { EquipmentSlots } from './EquipmentSlots.js';
 import {
@@ -81,6 +82,14 @@ export function InventoryOverlay(): JSX.Element | null {
     setSelectedIndex(0);
   }
 
+  const handleItemActionKey = useItemActionKeys<MenuEntry>(selected, {
+    e: (entry) => dispatchAction(entry.equipped ? 'unequip' : 'equip'),
+    u: () => dispatchAction('use'),
+    d: () => dispatchAction('drop'),
+    l: () => dispatchAction('toggle-light'),
+    r: () => dispatchRefuel(),
+  });
+
   function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
     if (event.key === 'f') {
       event.preventDefault();
@@ -92,13 +101,7 @@ export function InventoryOverlay(): JSX.Element | null {
       setSortByName((value) => !value);
       return;
     }
-    if (!selected) return;
-    const key = event.key.toLowerCase();
-    if (key === 'e') dispatchAction(selected.equipped ? 'unequip' : 'equip');
-    else if (key === 'u') dispatchAction('use');
-    else if (key === 'd') dispatchAction('drop');
-    else if (key === 'l') dispatchAction('toggle-light');
-    else if (key === 'r' && refuelTarget) dispatchRefuel();
+    handleItemActionKey(event);
   }
 
   return (
