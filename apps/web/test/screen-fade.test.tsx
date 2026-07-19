@@ -9,6 +9,7 @@ import { GuestSession } from '../src/session/guest-session.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
 import { effectiveReducedMotion, ScreenFade, SCREEN_FADE_MS } from '../src/ui/ScreenFade.js';
+import { withUiProviders } from './with-ui-providers.js';
 
 describe('effectiveReducedMotion', () => {
   afterEach(() => {
@@ -136,7 +137,7 @@ describe('ScreenFade composed with PlayScreen (input is never blocked)', () => {
   it('keeps dispatching keydowns to the session while the floor-change fade is playing', () => {
     const guestSession = sessionAtTownStairs();
     const dispatchSpy = vi.spyOn(guestSession, 'dispatch');
-    const { container } = render(<PlayScreen session={guestSession} pack={pack} />);
+    const { container } = render(withUiProviders(pack, <PlayScreen session={guestSession} pack={pack} />));
 
     // Descend -- changes `projection.floor.floorId`, which is what PlayScreen keys its own
     // ScreenFade on for the floor-change transition. This should mount a fade overlay...

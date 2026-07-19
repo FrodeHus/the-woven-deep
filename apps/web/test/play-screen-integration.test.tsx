@@ -14,6 +14,7 @@ import { GuestSession } from '../src/session/guest-session.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
 import type { OverlayId } from '../src/ui/overlays/registry.js';
+import { withUiProviders } from './with-ui-providers.js';
 
 let pack: CompiledContentPack;
 let baseProjection: GameplayProjection;
@@ -75,21 +76,21 @@ describe('PlayScreen camera wiring', () => {
 
   it('keeps the same camera origin across a small in-floor hero move (deadzone holds)', () => {
     const first = floorProjection('floor.depth-001', { x: 50, y: 30 });
-    const { rerender } = render(<PlayScreen session={fakeSession(first)} pack={pack} />);
+    const { rerender } = render(withUiProviders(pack, <PlayScreen session={fakeSession(first)} pack={pack} />));
     const originAfterFirst = topLeftDataCell();
 
     const movedSlightly = floorProjection('floor.depth-001', { x: 51, y: 30 });
-    rerender(<PlayScreen session={fakeSession(movedSlightly)} pack={pack} />);
+    rerender(withUiProviders(pack, <PlayScreen session={fakeSession(movedSlightly)} pack={pack} />));
     expect(topLeftDataCell()).toBe(originAfterFirst);
   });
 
   it('recenters on the new hero position when the floorId changes (a descend)', () => {
     const first = floorProjection('floor.depth-001', { x: 50, y: 30 });
-    const { rerender } = render(<PlayScreen session={fakeSession(first)} pack={pack} />);
+    const { rerender } = render(withUiProviders(pack, <PlayScreen session={fakeSession(first)} pack={pack} />));
     const originOnFirstFloor = topLeftDataCell();
 
     const nextFloor = floorProjection('floor.depth-002', { x: 5, y: 5 });
-    rerender(<PlayScreen session={fakeSession(nextFloor)} pack={pack} />);
+    rerender(withUiProviders(pack, <PlayScreen session={fakeSession(nextFloor)} pack={pack} />));
     expect(topLeftDataCell()).not.toBe(originOnFirstFloor);
     // Centered afresh on the new hero position (5,5) inside a 100x60 floor with a >=30x12
     // viewport clamps to the top-left floor corner, same as computeCamera's own corner-clamp test.
@@ -156,7 +157,7 @@ describe('PlayScreen keyboard routing', () => {
     // `App` so the test can drive `i`/Escape the same way a real guest would.
     function Harness(): JSX.Element {
       const [overlay, setOverlay] = useState<OverlayId | null>(null);
-      return (
+      return withUiProviders(pack, (
         <PlayScreen
           session={session}
           pack={pack}
@@ -164,7 +165,7 @@ describe('PlayScreen keyboard routing', () => {
           onOpenOverlay={setOverlay}
           onCloseOverlay={() => setOverlay(null)}
         />
-      );
+      ));
     }
     render(<Harness />);
 
@@ -179,7 +180,7 @@ describe('PlayScreen keyboard routing', () => {
   it('answers a pending confirm-aggression decision with y/n via the decision prompt', async () => {
     const user = userEvent.setup();
     const session = decisionSession();
-    render(<PlayScreen session={session} pack={pack} />);
+    render(withUiProviders(pack, <PlayScreen session={session} pack={pack} />));
 
     // A plain "move" into the hidden neighbor's cell (east) raises the decision.
     await user.keyboard('l');
@@ -194,7 +195,7 @@ describe('PlayScreen keyboard routing', () => {
   it('declines a pending decision on "n"', async () => {
     const user = userEvent.setup();
     const session = decisionSession();
-    render(<PlayScreen session={session} pack={pack} />);
+    render(withUiProviders(pack, <PlayScreen session={session} pack={pack} />));
 
     await user.keyboard('l');
     await screen.findByRole('dialog', { name: /confirm attack/i });
@@ -208,7 +209,7 @@ describe('PlayScreen keyboard routing', () => {
 describe('PlayScreen command palette shortcut', () => {
   it('opens the command palette on Ctrl/Cmd+K', () => {
     const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
-    render(<PlayScreen session={session} pack={pack} />);
+    render(withUiProviders(pack, <PlayScreen session={session} pack={pack} />));
 
     expect(screen.queryByTestId('command-palette')).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
@@ -220,7 +221,7 @@ describe('PlayScreen command palette shortcut', () => {
     const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
     function Harness(): JSX.Element {
       const [overlay, setOverlay] = useState<OverlayId | null>(null);
-      return (
+      return withUiProviders(pack, (
         <PlayScreen
           session={session}
           pack={pack}
@@ -228,7 +229,7 @@ describe('PlayScreen command palette shortcut', () => {
           onOpenOverlay={setOverlay}
           onCloseOverlay={() => setOverlay(null)}
         />
-      );
+      ));
     }
     render(<Harness />);
 
@@ -265,7 +266,7 @@ describe('PlayScreen threat hover scroll-dismiss', () => {
       getSnapshot: () => spliced,
     } as unknown as GuestSession;
 
-    render(<PlayScreen session={fakeHoverSession} pack={pack} />);
+    render(withUiProviders(pack, <PlayScreen session={fakeHoverSession} pack={pack} />));
     const grid = screen.getByRole('grid', { name: /dungeon/i });
     const actorCell = grid.querySelector(`[data-cell="${hero.x + 1},${hero.y}"]`)!;
 
@@ -298,7 +299,7 @@ describe('PlayScreen Layout A composition', () => {
   }
 
   it('always renders the hero panel, minimap, map grid, and an always-visible threat panel -- Layout A never collapses into drawers', () => {
-    render(<PlayScreen session={session()} pack={pack} />);
+    render(withUiProviders(pack, <PlayScreen session={session()} pack={pack} />));
     expect(screen.getByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Hero' })).toBeInTheDocument();
     expect(screen.getByTestId('minimap')).toBeInTheDocument();
@@ -309,7 +310,7 @@ describe('PlayScreen Layout A composition', () => {
 
   it('renders the town panel instead of the threat panel while in town, still without collapsing', () => {
     const guestSession = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
-    render(<PlayScreen session={guestSession} pack={pack} />);
+    render(withUiProviders(pack, <PlayScreen session={guestSession} pack={pack} />));
     expect(screen.getByRole('region', { name: /town/i })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: /threats/i })).not.toBeInTheDocument();
   });

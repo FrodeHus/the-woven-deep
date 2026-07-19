@@ -11,6 +11,7 @@ import { GuestSession } from '../src/session/guest-session.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
 import { triggerResize } from './setup.js';
+import { withUiProviders } from './with-ui-providers.js';
 
 let pack: CompiledContentPack;
 
@@ -69,7 +70,7 @@ afterEach(() => {
 // no separate container-width measurement to drive.
 describe('PlayScreen playfield zoom', () => {
   it('applies a --zoom > 1 to .playfield when a small floor (town) sits in a spacious pane', () => {
-    const { container } = render(<PlayScreen session={session()} pack={pack} />);
+    const { container } = render(withUiProviders(pack, <PlayScreen session={session()} pack={pack} />));
     const mapPane = container.querySelector('.map-pane')!;
     const probe = container.querySelector('.cell-probe')!;
     // `.cell-probe-base` is what `zoomForFloor` is actually fed (see PlayScreen's measure effect):
@@ -91,7 +92,7 @@ describe('PlayScreen playfield zoom', () => {
   });
 
   it('leaves --zoom at 1 when the floor already fills the pane at 1x (dungeon-sized floor case)', () => {
-    const { container } = render(<PlayScreen session={session()} pack={pack} />);
+    const { container } = render(withUiProviders(pack, <PlayScreen session={session()} pack={pack} />));
     const mapPane = container.querySelector('.map-pane')!;
     const probe = container.querySelector('.cell-probe')!;
     const probeBase = container.querySelector('.cell-probe-base')!;
@@ -115,7 +116,7 @@ describe('PlayScreen playfield zoom', () => {
   // dependency to `[]` and confirming this test goes red, then restoring it.
   it('re-derives --zoom when the floor changes (a descend), without any new pane resize event', () => {
     const guestSession = sessionAtTownStairs();
-    const { container } = render(<PlayScreen session={guestSession} pack={pack} />);
+    const { container } = render(withUiProviders(pack, <PlayScreen session={guestSession} pack={pack} />));
     const mapPane = container.querySelector('.map-pane')!;
     const probe = container.querySelector('.cell-probe')!;
     const probeBase = container.querySelector('.cell-probe-base')!;

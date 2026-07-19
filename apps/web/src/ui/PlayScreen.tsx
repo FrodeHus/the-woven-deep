@@ -11,13 +11,12 @@ import { GridRenderer } from './GridRenderer.js';
 import { HintStrip } from './HintStrip.js';
 import type { OverlayActionId } from './KeyRouter.js';
 import { activeHint, HINTS } from '../session/onboarding.js';
-import { DEFAULT_SETTINGS, resolveKeymap, type ResolvedKeymap, type Settings } from '../session/settings.js';
 import { viewportForPane, type LayoutTier } from './layout.js';
 import { HeroPanel, HeroStatusAnnouncer, LogPanel, MinimapPanel, StatusBar, ThreatPanel } from './panels.js';
 import type { OverlayId } from './overlays/registry.js';
 import { DecisionPrompt } from './overlays/DecisionPrompt.js';
 import { OverlayHost } from './overlays/OverlayHost.js';
-import { UiProviders } from './providers.js';
+import { useSettingsCtx } from './providers.js';
 import { HouseScreen } from './screens/HouseScreen.js';
 import { TradeScreen } from './screens/TradeScreen.js';
 import { effectiveReducedMotion, ScreenFade } from './ScreenFade.js';
@@ -44,23 +43,11 @@ export interface PlayScreenProps {
    * defensively). */
   readonly onOpenOverlay?: (overlay: OverlayActionId) => void;
   readonly onCloseOverlay?: () => void;
-  /** The resolved keymap driving both movement/action routing and the six overlay-open keys.
-   * Defaults to the default bindings so existing callers (which never rebind anything) are
-   * unaffected. */
-  readonly keymap?: ResolvedKeymap;
-  /** Forwarded straight through to the settings overlay body (`OverlayHost.tsx`'s `renderBody`)
-   * when it's the one open -- `App` owns the actual settings state and
-   * persistence; `PlayScreen` just plumbs these past the overlay host, exactly like `keymap`
-   * above. Defaults keep every pre-existing caller/test (which never opens the settings overlay)
-   * compiling unchanged. */
-  readonly settings?: Settings;
-  readonly onChangeSettings?: (next: Settings) => void;
   readonly onClearGuestSession?: () => void;
   /** Forwarded straight through to the codex overlay body (`CodexOverlayBody`) when it's the one
    * open -- `codex` is `global`-scope, so it can open mid-play too. `App` (via `GameRoot`) owns the
-   * Hall repository; `PlayScreen` just plumbs this past the overlay host, exactly like
-   * `settings`/`keymap` above. Defaults keep every pre-existing caller/test (which never opens the
-   * codex overlay) compiling unchanged. */
+   * Hall repository; `PlayScreen` just plumbs this past the overlay host. Defaults keep every
+   * pre-existing caller/test (which never opens the codex overlay) compiling unchanged. */
   readonly records?: readonly StoredHallRecord[];
   /** Whether the contextual onboarding hint strip may show at all -- `App` computes this
    * from `settings.onboarding` and the quickstart boot flag. Defaults to `true` so every
@@ -81,10 +68,10 @@ export interface PlayScreenProps {
 export function PlayScreen({
   session, pack,
   overlay = null, onOpenOverlay = () => {}, onCloseOverlay = () => {},
-  keymap = resolveKeymap(DEFAULT_SETTINGS.bindings),
-  settings = DEFAULT_SETTINGS, onChangeSettings = () => {}, onClearGuestSession = () => {},
+  onClearGuestSession = () => {},
   records = [], onboardingEnabled = true,
 }: PlayScreenProps): JSX.Element {
+  const { settings, keymap } = useSettingsCtx();
   const snapshot = useGuestSession(session);
   const { projection } = snapshot;
 
@@ -205,26 +192,20 @@ export function PlayScreen({
           />
         )}
         {snapshot.pendingDecision && <DecisionPrompt snapshot={snapshot} session={session} />}
-        {/* `PlayScreen` supplies its own `UiProviders` from the props it already holds, so
-         * `OverlayHost`'s hooks resolve whether `PlayScreen` is mounted standalone or nested inside
-         * a caller's own `UiProviders` (e.g. `App`'s, around `GameRoot`) -- nesting two providers
-         * with the same values is harmless. */}
-        <UiProviders pack={pack} settings={settings} onChangeSettings={onChangeSettings} session={session}>
-          <OverlayHost
-            overlay={overlay}
-            onClose={onCloseOverlay}
-            isPlayActive
-            records={records}
-            onClearGuestSession={onClearGuestSession}
-          />
-          <CommandPalette
-            open={paletteOpen}
-            onOpenChange={setPaletteOpen}
-            onOpenOverlay={onOpenOverlay}
-            isTownContext={projection.floor.town}
-            tradeAvailable={tradeIsAvailable(projection)}
-          />
-        </UiProviders>
+        <OverlayHost
+          overlay={overlay}
+          onClose={onCloseOverlay}
+          isPlayActive
+          records={records}
+          onClearGuestSession={onClearGuestSession}
+        />
+        <CommandPalette
+          open={paletteOpen}
+          onOpenChange={setPaletteOpen}
+          onOpenOverlay={onOpenOverlay}
+          isTownContext={projection.floor.town}
+          tradeAvailable={tradeIsAvailable(projection)}
+        />
       </div>
     </ScreenFade>
   );
