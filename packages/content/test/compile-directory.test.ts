@@ -76,6 +76,21 @@ describe('compileContentDirectory', () => {
     });
   });
 
+  it('resolves a monster lootTableId against a known loot table', async () => {
+    const lootyMonster = compactMonster.replace(', threat: 2, rarity: common}', ', threat: 2, rarity: common, lootTableId: loot-table.stock, dropChance: 0.25}');
+    const root = await fixture({ 'content.yaml': contentFile(lootyMonster, compactItem, compactStock, compactVault) });
+    const pack = await compileContentDirectory({ rootDir: root });
+    expect(pack.entries.find((entry) => entry.id === 'monster.rat')).toMatchObject({
+      lootTableId: 'loot-table.stock', dropChance: 0.25,
+    });
+  });
+
+  it('rejects a monster lootTableId that does not resolve to a loot table', async () => {
+    const lootyMonster = compactMonster.replace(', threat: 2, rarity: common}', ', threat: 2, rarity: common, lootTableId: loot-table.missing, dropChance: 1}');
+    const root = await fixture({ 'content.yaml': contentFile(lootyMonster, compactItem) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/unknown loot-table reference loot-table\.missing/);
+  });
+
   it('allows zero-priced services and zero-use offers', async () => {
     const zeroService = compactMerchant
       .replace('basePrice: 10', 'basePrice: 0')

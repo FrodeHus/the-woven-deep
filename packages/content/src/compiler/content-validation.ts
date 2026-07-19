@@ -793,6 +793,9 @@ export function validateContentEntries(locatedEntries: readonly LocatedContentEn
   for (const { entry, file } of locatedEntries) {
     if (entry.kind === 'monster') {
       issues.push(...validateParameters(file, `$.entries.${entry.id}.behavior`, entry.behaviorId, entry.behaviorParameters, BEHAVIOR_PARAMETER_SCHEMAS, 'behavior'));
+      if (entry.lootTableId !== null && byId.get(entry.lootTableId)?.kind !== 'loot-table') {
+        issues.push(issue(file, `$.entries.${entry.id}.lootTableId`, `unknown loot-table reference ${entry.lootTableId}`));
+      }
     }
     if (entry.kind === 'npc') {
       issues.push(...referencedKindIssue(file, `$.entries.${entry.id}.factionId`, entry.factionId, 'npc-faction', byId));

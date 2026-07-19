@@ -413,7 +413,71 @@ entries:
     expect(entry).toMatchObject({
       id: 'monster.cave-rat',
       tags: [],
+      lootTableId: null,
+      dropChance: 1,
     });
+  });
+
+  it('parses a monster loot table and drop chance', () => {
+    const [entry] = parseContentFile({
+      path: 'monsters/rat.yaml',
+      source: `schemaVersion: 7
+entries:
+  - kind: monster
+    id: monster.cave-rat
+    name: Cave rat
+    glyph: r
+    color: '#a89b82'
+    minDepth: 1
+    maxDepth: 5
+    attributes: { might: 4, agility: 8, vitality: 4, wits: 3, resolve: 2 }
+    health: 4
+    speed: 100
+    accuracy: 1
+    defense: 10
+    perception: 6
+    damage: { count: 1, sides: 3, bonus: 0 }
+    armor: 0
+    resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 }
+    threat: 1
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    rarity: common
+    lootTableId: loot-table.cave-rat
+    dropChance: 0.25
+`,
+    });
+
+    expect(entry).toMatchObject({ id: 'monster.cave-rat', lootTableId: 'loot-table.cave-rat', dropChance: 0.25 });
+  });
+
+  it('rejects a monster dropChance outside 0..1', () => {
+    const source = `schemaVersion: 7
+entries:
+  - kind: monster
+    id: monster.cave-rat
+    name: Cave rat
+    glyph: r
+    color: '#a89b82'
+    minDepth: 1
+    maxDepth: 5
+    attributes: { might: 4, agility: 8, vitality: 4, wits: 3, resolve: 2 }
+    health: 4
+    speed: 100
+    accuracy: 1
+    defense: 10
+    perception: 6
+    damage: { count: 1, sides: 3, bonus: 0 }
+    armor: 0
+    resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 }
+    threat: 1
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    rarity: common
+    lootTableId: loot-table.cave-rat
+    dropChance: 1.5
+`;
+    expect(() => parseContentFile({ path: 'monsters/invalid.yaml', source })).toThrow(/dropChance/);
   });
 
   it('parses strict timed and permanent condition definitions', () => {
