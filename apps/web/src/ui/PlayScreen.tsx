@@ -1,9 +1,7 @@
-import {
-  useEffect, useRef, useState, type CSSProperties, type JSX, type MouseEvent as ReactMouseEvent,
-} from 'react';
+import { useRef, type CSSProperties, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection, StoredHallRecord } from '@woven-deep/engine';
-import type { GuestSession, SessionSnapshot } from '../session/guest-session.js';
+import type { GuestSession } from '../session/guest-session.js';
 import { useGuestSession } from '../session/store.js';
 import { actorsOf, heroOf } from '../session/projection-view.js';
 import { computeCamera, type CameraOrigin } from './camera.js';
@@ -11,56 +9,24 @@ import { CommandPalette } from './CommandPalette.js';
 import { EffectsLayer } from './EffectsLayer.js';
 import { GridRenderer } from './GridRenderer.js';
 import { HintStrip } from './HintStrip.js';
-import { createKeyDispatcher, type OverlayActionId } from './KeyRouter.js';
+import type { OverlayActionId } from './KeyRouter.js';
 import { activeHint, HINTS } from '../session/onboarding.js';
 import { DEFAULT_SETTINGS, resolveKeymap, type ResolvedKeymap, type Settings } from '../session/settings.js';
-import { viewportForPane, zoomForFloor, type LayoutTier, type ZoomFactor } from './layout.js';
+import { viewportForPane, type LayoutTier } from './layout.js';
 import { HeroPanel, HeroStatusAnnouncer, LogPanel, MinimapPanel, StatusBar, ThreatPanel } from './panels.js';
-import { useDialogFocusTrap } from './overlays/focus-trap.js';
 import type { OverlayId } from './overlays/registry.js';
+import { DecisionPrompt } from './overlays/DecisionPrompt.js';
 import { OverlayHost } from './overlays/OverlayHost.js';
 import { UiProviders } from './providers.js';
 import { HouseScreen } from './screens/HouseScreen.js';
 import { TradeScreen } from './screens/TradeScreen.js';
 import { effectiveReducedMotion, ScreenFade } from './ScreenFade.js';
-import { ThreatPopover, type ThreatPopoverActor } from './ThreatPopover.js';
+import { ThreatPopover } from './ThreatPopover.js';
 import { TownPanel } from './TownPanel.js';
-
-interface DecisionPromptProps {
-  readonly snapshot: SessionSnapshot;
-  readonly session: GuestSession;
-}
-
-/** The confirm-aggression prompt: reuses the same dialog primitives as `BackpackMenu` (focus trap,
- * `role="dialog"`), answering with `y`/`n` (or Escape, which declines non-destructively). */
-function DecisionPrompt({ snapshot, session }: DecisionPromptProps): JSX.Element | null {
-  const containerRef = useRef<HTMLDivElement>(null);
-  useDialogFocusTrap(containerRef);
-  const decision = snapshot.pendingDecision;
-  if (!decision) return null;
-
-  const answer = (confirmed: boolean): void => session.answerDecision(confirmed);
-
-  return (
-    <div
-      ref={containerRef}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Confirm attack"
-      className="decision-prompt"
-      tabIndex={-1}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') { event.preventDefault(); answer(false); return; }
-        if (event.key === 'y' || event.key === 'Y') { event.preventDefault(); answer(true); return; }
-        if (event.key === 'n' || event.key === 'N') { event.preventDefault(); answer(false); }
-      }}
-    >
-      <p>Attack this target?</p>
-      <button type="button" onClick={() => answer(true)}>Yes (y)</button>
-      <button type="button" onClick={() => answer(false)}>No (n)</button>
-    </div>
-  );
-}
+import { useCellHover } from './hooks/useCellHover.js';
+import { useCommandPaletteHotkey } from './hooks/useCommandPaletteHotkey.js';
+import { usePaneMeasurement } from './hooks/usePaneMeasurement.js';
+import { usePlayKeyDispatcher } from './hooks/usePlayKeyDispatcher.js';
 
 export interface PlayScreenProps {
   readonly session: GuestSession;
@@ -104,22 +70,6 @@ export interface PlayScreenProps {
   readonly onboardingEnabled?: boolean;
 }
 
-interface PositionedActor extends ThreatPopoverActor { readonly x: number; readonly y: number }
-
-function actorAtCell(projection: GameplayProjection, x: number, y: number): PositionedActor | undefined {
-  return actorsOf(projection).find((actor) => actor.x === x && actor.y === y);
-}
-
-function parseDataCell(value: string): Readonly<{ x: number; y: number }> | undefined {
-  const [xText, yText] = value.split(',');
-  const x = Number(xText);
-  const y = Number(yText);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return undefined;
-  return { x, y };
-}
-
-const FALLBACK_CELL_PX = { width: 8, height: 16 };
-
 function chebyshevDistance(ax: number, ay: number, bx: number, by: number): number {
   return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 }
@@ -138,10 +88,9 @@ function tradeIsAvailable(projection: GameplayProjection): boolean {
  * Composes Layout A: a fixed status bar, the ASCII grid + effects layer as the main focal region,
  * a persistent right rail (hero/vitals, minimap, threat/town panel), and a full-width message log
  * -- none of which reflow as the window resizes; overlays open over this shell via `OverlayHost`'s
- * Sheet. Owns the only two pieces of layout state that cannot live in a pure module — measured
- * pane/cell pixel sizes and the previous-floor-keyed camera origin — everything else (viewport
- * arithmetic, the camera formula itself) is delegated to pure functions so it stays unit-testable
- * without a DOM.
+ * Sheet. The measured pane/cell pixel sizes and per-floor zoom live in `usePaneMeasurement`; the
+ * five stateful concerns (measurement, the global key dispatcher, cell-hover popover, the ⌘K
+ * palette) are each their own hook so this component stays layout + composition.
  */
 export function PlayScreen({
   session, pack,
@@ -162,116 +111,21 @@ export function PlayScreen({
   const activeHintRef = useRef<string | null>(null);
   activeHintRef.current = hint?.id ?? null;
 
-  const mapPaneRef = useRef<HTMLDivElement>(null);
-  const cellProbeRef = useRef<HTMLSpanElement>(null);
-  // A second, un-zoomed probe (fixed at the base font-size, see `.cell-probe-base` in styles.css)
-  // used only to feed `zoomForFloor` the 1x cell size — see the effect below for why this is a
-  // second measured element rather than dividing `cellProbeRef`'s zoomed measurement by the
-  // applied zoom.
-  const cellProbeBaseRef = useRef<HTMLSpanElement>(null);
-  const [paneSize, setPaneSize] = useState({ width: 0, height: 0 });
-  const [cellSize, setCellSize] = useState(FALLBACK_CELL_PX);
-  const [zoom, setZoom] = useState<ZoomFactor>(1);
-  // Mirrors `zoom` state but read synchronously inside the measure callback below (which closes
-  // over it once per floor, via the `floorId`-keyed effect), so the callback can compare against
-  // the zoom actually applied to the DOM right now without adding `zoom` to that effect's own
-  // dependency array (which would tear down/re-attach the pane observer on every zoom change).
-  const zoomRef = useRef<ZoomFactor>(1);
+  const {
+    mapPaneRef, cellProbeRef, cellProbeBaseRef, paneSize, cellSize, zoom,
+  } = usePaneMeasurement(projection.floor);
 
-  // The map pane observer feeds `viewportForPane` (cell math for the camera/grid) and the zoom
-  // decision. Re-runs (tearing down and re-attaching the observer, then measuring immediately)
-  // whenever the floor identity changes, not only on a real resize:
-  // `zoomForFloor`'s answer depends on the floor's own dimensions (a 34x16 town and a 160x50
-  // dungeon floor pick very different zooms in the same pane), and descending/ascending stairs
-  // does not itself fire a ResizeObserver notification, so without this dependency the zoom
-  // chosen for the PREVIOUS floor would silently keep applying to the new one.
-  useEffect(() => {
-    const node = mapPaneRef.current;
-    if (!node) return undefined;
-    const measure = (): void => {
-      const paneRect = node.getBoundingClientRect();
-      setPaneSize({ width: paneRect.width, height: paneRect.height });
-      // `cellProbeRef` reports the CURRENTLY zoomed cell size — this is what the grid/effects
-      // layer/popover math are actually rendered at, so it feeds `cellSize` directly.
-      const cellRect = cellProbeRef.current?.getBoundingClientRect();
-      if (cellRect && cellRect.width > 0 && cellRect.height > 0) {
-        setCellSize({ width: cellRect.width, height: cellRect.height });
-      }
-      // `cellProbeBaseRef` is pinned to the base (1x) font-size regardless of the applied zoom
-      // (see `.cell-probe-base` in styles.css), so it reports the 1x cell size `zoomForFloor`
-      // needs directly — no algebra recovering it from the zoomed measurement, which would assume
-      // font metrics scale perfectly linearly across font-sizes (they don't always, due to
-      // hinting/subpixel rounding).
-      const baseCellRect = cellProbeBaseRef.current?.getBoundingClientRect();
-      if (baseCellRect && baseCellRect.width > 0 && baseCellRect.height > 0) {
-        const baseCellPx = { width: baseCellRect.width, height: baseCellRect.height };
-        const nextZoom = zoomForFloor({ panePx: paneRect, cellPx: baseCellPx, floor: projection.floor });
-        if (nextZoom !== zoomRef.current) {
-          zoomRef.current = nextZoom;
-          setZoom(nextZoom);
-        }
-      }
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [projection.floor.floorId]);
-
-  // Applying `--zoom` (below, on `.playfield`) changes the probe's OWN box size (it is pinned to
-  // `var(--cell-w)`/`var(--cell-h)`, see styles.css), but that never changes the map pane's own
-  // box size, so the ResizeObserver above — which only watches the pane — does not re-fire. This
-  // effect re-measures the probe specifically after a zoom change lands, so `cellSize` (read by
-  // `viewportForPane` and the popover pixel math) always reflects what is actually on screen.
-  useEffect(() => {
-    const cellRect = cellProbeRef.current?.getBoundingClientRect();
-    if (cellRect && cellRect.width > 0 && cellRect.height > 0) {
-      setCellSize({ width: cellRect.width, height: cellRect.height });
-    }
-  }, [zoom]);
-
-  // The single global keydown listener: `createKeyDispatcher` translates keys to intents via the
-  // pure `routeKey` and forwards them to the session, rate-limiting OS key auto-repeat so it
-  // can't outpace what the player can perceive (see `KeyRouter.ts`'s input-flood guard).
-  useEffect(() => {
-    const dispatcher = createKeyDispatcher(
-      {
-        dispatch: (intent) => session.dispatch(intent),
-        openOverlay: (overlayActionId) => {
-          // Two of the six overlay-open actions are their own onboarding milestones --
-          // "inspection"/"inventory" mastery is a one-time open, which never goes through
-          // `session.dispatch` at all (opening an overlay is client-side UI state, not a
-          // `PlayerIntent`), so it's folded in right here instead.
-          if (overlayActionId === 'character-sheet') session.recordOnboardingIntent('open-character-sheet');
-          else if (overlayActionId === 'inventory') session.recordOnboardingIntent('open-inventory');
-          onOpenOverlay(overlayActionId);
-        },
-        dismissHint: () => {
-          const id = activeHintRef.current;
-          if (id) session.dismissOnboardingHint(id);
-        },
-        closeOverlay: () => {
-          // `inventory` is a registry overlay like every other one, so this first branch already
-          // covers it.
-          if (overlay !== null) { onCloseOverlay(); return; }
-          if (snapshot.houseOpen) session.setHouseOpen(false);
-          // Unlike the house overlay (a pure client-side toggle), an open trade session is engine
-          // state (`projection.trade`): closing it means dispatching `trade-close`, not flipping a
-          // local flag -- the screen unmounts once the resulting projection clears `trade`.
-          else if (projection.trade) session.dispatch({ type: 'trade-close' });
-          else if (snapshot.pendingDecision) session.answerDecision(false);
-        },
-      },
-      () => overlay !== null || snapshot.houseOpen || projection.trade !== undefined
-        || snapshot.pendingDecision !== null,
-      () => keymap,
-    );
-    window.addEventListener('keydown', dispatcher);
-    return () => window.removeEventListener('keydown', dispatcher);
-  }, [
-    session, snapshot.houseOpen, projection.trade, snapshot.pendingDecision,
-    overlay, onOpenOverlay, onCloseOverlay, keymap,
-  ]);
+  usePlayKeyDispatcher({
+    session,
+    overlay,
+    houseOpen: snapshot.houseOpen,
+    trade: projection.trade,
+    pendingDecision: snapshot.pendingDecision,
+    onOpenOverlay,
+    onCloseOverlay,
+    keymap,
+    activeHintRef,
+  });
 
   const viewport = viewportForPane({ panePx: paneSize, cellPx: cellSize, floor: projection.floor });
 
@@ -287,50 +141,11 @@ export function PlayScreen({
   });
   cameraRef.current = { floorId: projection.floor.floorId, origin: camera };
 
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const isModalActive = overlay !== null || snapshot.houseOpen || projection.trade !== undefined
     || snapshot.pendingDecision !== null;
-  const isModalActiveRef = useRef(isModalActive);
-  isModalActiveRef.current = isModalActive;
+  const [paletteOpen, setPaletteOpen] = useCommandPaletteHotkey(isModalActive);
 
-  // The ⌘K command palette is a UI-only concern (the discovery surface over the same
-  // intents/overlays the keymap already routes to), so it stays a separate window listener from
-  // `createKeyDispatcher` below rather than another routed `ActionId` -- guarded to fire only when
-  // nothing else modal is already active, exactly like that dispatcher's own guard.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (isModalActiveRef.current) return;
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        setPaletteOpen(true);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  const [hover, setHover] = useState<Readonly<{ actor: PositionedActor }> | null>(null);
-
-  useEffect(() => {
-    setHover(null);
-  }, [snapshot]);
-
-  useEffect(() => {
-    const dismiss = (): void => setHover(null);
-    window.addEventListener('scroll', dismiss, true);
-    return () => window.removeEventListener('scroll', dismiss, true);
-  }, []);
-
-  const handleMouseOver = (event: ReactMouseEvent<HTMLDivElement>): void => {
-    const cellElement = (event.target as HTMLElement).closest('[data-cell]');
-    if (!cellElement) return;
-    const cell = parseDataCell(cellElement.getAttribute('data-cell') ?? '');
-    if (!cell) return;
-    const actor = actorAtCell(projection, cell.x, cell.y);
-    setHover(actor ? { actor } : null);
-  };
-
-  const handleMouseLeave = (): void => setHover(null);
+  const { hover, handlers } = useCellHover(snapshot);
 
   return (
     <ScreenFade
@@ -345,8 +160,8 @@ export function PlayScreen({
           <div
             className="map-pane relative col-start-1 row-start-1 overflow-hidden"
             ref={mapPaneRef}
-            onMouseOver={handleMouseOver}
-            onMouseLeave={handleMouseLeave}
+            onMouseOver={handlers.onMouseOver}
+            onMouseLeave={handlers.onMouseLeave}
           >
             <div
               className={[

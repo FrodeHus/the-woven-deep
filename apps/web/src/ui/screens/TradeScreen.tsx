@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Dispatch, type JSX, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { OpaqueId } from '@woven-deep/engine';
 import type { MerchantServiceId } from '@woven-deep/content';
 import type { SessionSnapshot } from '../../session/guest-session.js';
@@ -9,7 +9,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
 import { Button } from '../components/button.js';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/tabs.js';
+import { Tabs, TabsList, TabsTrigger } from '../components/tabs.js';
 
 /** The minimal owned-item shape the trade rows read -- an owned item's projection, or a bare
  * `{ itemId, name }` fallback when the offer's item is no longer in the hero's own projection. */
@@ -43,6 +43,7 @@ type FocusedList = 'buy' | 'sell' | 'services';
 
 const LIST_ORDER: readonly FocusedList[] = ['buy', 'sell', 'services'];
 const LIST_LABEL: Readonly<Record<FocusedList, string>> = { buy: 'Buy', sell: 'Sell', services: 'Services' };
+const PICKER_LABEL = 'Identify target';
 
 /** `MerchantServiceId` is a closed, hardcoded union (`packages/content/src/model.ts`) rather than a
  * dynamically registered content entry, so there is no pack lookup that resolves it to a display
@@ -57,6 +58,20 @@ interface TradeRow {
   readonly id: string;
   readonly label: string;
   readonly run: () => void;
+}
+
+/** Seats DOM focus so `handleKeyDown` receives keys. While the picker is open, focus goes to the
+ * container itself and `handleKeyDown` drives the picker directly -- moving focus onto the picker's
+ * own listbox instead would race the `Dialog`'s focus manager. Otherwise focus goes to the active
+ * tab's `ListDetail` listbox so the primitive owns its arrows, falling back to the container when
+ * that list is empty. Returns the focused element (shared by the focus effect and `initialFocus`). */
+function focusActiveList(container: HTMLElement, pickerOpen: boolean): HTMLElement {
+  const listbox = pickerOpen
+    ? null
+    : container.querySelector<HTMLElement>(`[role="listbox"]:not([aria-label="${PICKER_LABEL}"])`);
+  const target = listbox ?? container;
+  target.focus();
+  return target;
 }
 
 export interface TradeScreenProps {
@@ -76,236 +91,236 @@ export interface TradeScreenProps {
  * (defensive: `PlayScreen` only mounts this while `projection.trade` is set, but an in-flight
  * Esc/close can race a session update that clears it).
  *
- * `Tabs` is controlled by `focusedList` rather than left to its own uncontrolled `defaultValue`: the
- * SAME state also indexes which list a keyboard Tab/Arrow/Enter should act on, so both the visible
- * tab and the keyboard target always agree.
+ * `Tabs` is controlled by `focusedList`, which also names the list a keyboard Tab/Enter acts on so
+ * the visible tab and the keyboard target always agree. DOM focus drives selection: the active
+ * list's `ListDetail` listbox is focused (on open via the `Dialog` popup's `initialFocus`, and on
+ * every tab-switch via a focus effect), so `ListDetail` owns that list's ArrowUp/ArrowDown/Home/End.
+ * Enter (act on the selected row) and Tab (advance to the next list) are layered on top by an
+ * `onKeyDown` on this screen's own container -- they fire only while focus is inside it, and
+ * `stopPropagation()` keeps them from reaching `Tabs`'s tab-button keyboard handling. Clicking a
+ * `TabsTrigger` still switches lists via `onValueChange`.
  *
- * Framed by the shared `Dialog` primitive, which owns focus trapping and (for the ordinary,
- * no-picker case) Escape-dismissal, routed back through `onClose` via `onOpenChange`. The Tab/Enter/
- * Arrow list-navigation contract, and the identify-target picker's own nested Escape, are driven by
- * a capture-phase `window` keydown listener rather than DOM focus + `ListDetail`'s (or `Tabs`'s) own
- * built-in arrow handling: `Dialog`'s enter transition briefly renders its popup `hidden` (so the CSS
- * transition-in has a "before" state to register), during which nothing inside it is focusable, so a
- * mount-time `.focus()` call races that transition. A capture-phase listener sidesteps the race
- * (the same mechanism `Dialog` itself uses for Escape, via a `document`-level listener) and lets
- * this screen intercept a picker-closing Escape BEFORE it ever reaches that listener -- calling
- * `stopPropagation()` there stops the native event from bubbling any further, so a picker-closing
- * Escape only closes the picker, never the whole trade dialog. Since that listener runs in the
- * capture phase, it also stops a swallowed Tab/Arrow/Enter from ever reaching `Tabs`'s own built-in
- * keyboard handling on the tab buttons, so the two never fight over the same keypress; clicking a
- * `TabsTrigger` still switches lists normally via `onValueChange`.
+ * A service with eligible targets (e.g. identify) opens an inline nested `ListDetail` picker instead
+ * of dispatching immediately. While the picker is open, focus rests on the container and its
+ * `onKeyDown` drives the picker's Arrow/Enter directly (Tab is swallowed), so the picker never has to
+ * win a focus move away from the active list against the `Dialog`'s focus manager. Escape is owned by
+ * the `Dialog` primitive: it fires `onOpenChange(false)` (reason `escape-key`) and stops the native
+ * event before `PlayScreen`'s window-level dispatcher ever sees it, so this screen routes that single
+ * close through `onOpenChange` -- closing the picker first when it is open, otherwise the whole dialog
+ * via `onClose`.
  */
 export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps): JSX.Element | null {
   const session = trade(snapshot);
   const [focusedList, setFocusedList] = useState<FocusedList>('buy');
-  const [buyIndex, setBuyIndex] = useState(0);
-  const [sellIndex, setSellIndex] = useState(0);
-  const [servicesIndex, setServicesIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   // Set only for services whose `targetItemIds` is non-empty (e.g. identify): opening the picker
   // replaces the immediate dispatch with an inline target list. A service with no eligible
   // targets (or the targetless strongbox) never touches this state.
   const [pickerServiceId, setPickerServiceId] = useState<MerchantServiceId | null>(null);
   const [pickerIndex, setPickerIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // `onOpenChange` reads the picker state through a ref so the `Dialog`'s Escape close always sees
+  // the current value regardless of when Base UI captured the handler.
+  const pickerServiceIdRef = useRef<MerchantServiceId | null>(pickerServiceId);
+  pickerServiceIdRef.current = pickerServiceId;
 
   const pickerService = pickerServiceId === null
     ? null
     : (session?.services.find((entry) => entry.serviceId === pickerServiceId) ?? null);
 
-  const indexFor = (list: FocusedList): number => (list === 'buy' ? buyIndex : list === 'sell' ? sellIndex : servicesIndex);
-  const setIndexFor = (list: FocusedList): Dispatch<SetStateAction<number>> => (
-    list === 'buy' ? setBuyIndex : list === 'sell' ? setSellIndex : setServicesIndex
-  );
+  const rows = useMemo((): Readonly<Record<FocusedList, readonly TradeRow[]>> => {
+    if (!session) return { buy: [], sell: [], services: [] };
+    return {
+      buy: session.stock.map((entry) => ({
+        id: entry.item.itemId,
+        label: `${entry.item.name} (${entry.quantity}) — ${entry.unitPrice}g`,
+        run: () => onDispatch({ type: 'trade-buy', itemId: entry.item.itemId, quantity: 1 }),
+      })),
+      sell: session.saleOffers.map((entry) => ({
+        id: entry.itemId,
+        label: `${backpackItemName(snapshot, entry.itemId)} (${entry.quantity}) — ${entry.unitPrice}g`,
+        run: () => onDispatch({ type: 'trade-sell', itemId: entry.itemId, quantity: 1 }),
+      })),
+      services: session.services.map((entry) => ({
+        id: entry.serviceId,
+        label: `${SERVICE_LABEL[entry.serviceId]} (${entry.remainingUses} left) — ${entry.unitPrice}g`,
+        // A service with eligible targets (e.g. identify) opens the inline picker instead of guessing
+        // which item the player meant; a targetless service (e.g. the strongbox) dispatches straight
+        // through.
+        run: () => {
+          if (entry.targetItemIds.length > 0) {
+            setPickerIndex(0);
+            setPickerServiceId(entry.serviceId);
+          } else {
+            onDispatch({ type: 'trade-service', serviceId: entry.serviceId, targetItemId: null });
+          }
+        },
+      })),
+    };
+  }, [session, snapshot, onDispatch]);
 
-  const buyRows: readonly TradeRow[] = session ? session.stock.map((entry) => ({
-    id: entry.item.itemId,
-    label: `${entry.item.name} (${entry.quantity}) — ${entry.unitPrice}g`,
-    run: () => onDispatch({ type: 'trade-buy', itemId: entry.item.itemId, quantity: 1 }),
-  })) : [];
-  const sellRows: readonly TradeRow[] = session ? session.saleOffers.map((entry) => ({
-    id: entry.itemId,
-    label: `${backpackItemName(snapshot, entry.itemId)} (${entry.quantity}) — ${entry.unitPrice}g`,
-    run: () => onDispatch({ type: 'trade-sell', itemId: entry.itemId, quantity: 1 }),
-  })) : [];
-  const serviceRows: readonly TradeRow[] = session ? session.services.map((entry) => ({
-    id: entry.serviceId,
-    label: `${SERVICE_LABEL[entry.serviceId]} (${entry.remainingUses} left) — ${entry.unitPrice}g`,
-    // A service with eligible targets (e.g. identify) opens the inline picker instead of guessing
-    // which item the player meant; a targetless service (e.g. the strongbox) dispatches straight
-    // through.
-    run: () => {
-      if (entry.targetItemIds.length > 0) {
-        setPickerIndex(0);
-        setPickerServiceId(entry.serviceId);
-      } else {
-        onDispatch({ type: 'trade-service', serviceId: entry.serviceId, targetItemId: null });
-      }
-    },
-  })) : [];
-  const rowsFor = (list: FocusedList): readonly TradeRow[] => (list === 'buy' ? buyRows : list === 'sell' ? sellRows : serviceRows);
+  const activeRows = rows[focusedList];
 
-  const keyHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {});
-  keyHandlerRef.current = (event: KeyboardEvent) => {
-    if (!session) return;
-    if (event.key === 'Escape') {
-      if (pickerService) {
-        event.preventDefault();
-        event.stopPropagation();
-        setPickerServiceId(null);
-      }
-      // Plain Escape (no picker open) is deliberately left unhandled: it bubbles to the `Dialog`
-      // primitive's own Escape-dismissal, which calls `onOpenChange(false)` -> `onClose` exactly
-      // once, and stops the native event there before `PlayScreen`'s window-level key dispatcher
-      // ever sees it.
-      return;
-    }
-    if (pickerService) {
+  // Keeps DOM focus on whichever listbox owns keyboard selection: the picker's while it is open,
+  // otherwise the active tab's. Runs on first open, on every tab-switch / picker transition, and
+  // whenever the active list's row count changes -- a dispatch (e.g. selling the last offer) can
+  // empty the list and unmount its listbox without a tab-switch, so `activeRows.length` is also a
+  // dependency. The container itself is the fallback when the active list is empty (no listbox to
+  // focus), so Enter and Tab still reach `handleKeyDown` instead of stranding focus on a tab button.
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+    focusActiveList(root, pickerServiceId !== null);
+  }, [focusedList, pickerServiceId, activeRows.length]);
+
+  function switchList(next: FocusedList): void {
+    setFocusedList(next);
+    setSelectedIndex(0);
+  }
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
+    if (pickerServiceId) {
+      const targets = pickerService?.targetItemIds ?? [];
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        const targets = pickerService.targetItemIds;
         if (targets.length === 0) return;
         event.preventDefault();
         event.stopPropagation();
         const delta = event.key === 'ArrowDown' ? 1 : -1;
         setPickerIndex((index) => (index + delta + targets.length) % targets.length);
-        return;
-      }
-      if (event.key === 'Enter') {
+      } else if (event.key === 'Enter') {
         event.preventDefault();
         event.stopPropagation();
-        const targetItemId = pickerService.targetItemIds[pickerIndex];
+        const targetItemId = targets[pickerIndex];
         if (targetItemId) {
-          onDispatch({ type: 'trade-service', serviceId: pickerService.serviceId, targetItemId });
+          onDispatch({ type: 'trade-service', serviceId: pickerServiceId, targetItemId });
         }
         setPickerServiceId(null);
-        return;
+      } else if (event.key === 'Tab') {
+        // List-switching does not apply to the target picker.
+        event.preventDefault();
+        event.stopPropagation();
       }
-      // Swallow every other key (notably Tab) while the picker is open: list-switching doesn't
-      // apply to a target picker.
-      event.preventDefault();
-      event.stopPropagation();
+      // Escape falls through to the `Dialog` primitive, which routes it back to `onOpenChange`.
       return;
     }
     if (event.key === 'Tab') {
       event.preventDefault();
       event.stopPropagation();
-      setFocusedList((list) => LIST_ORDER[(LIST_ORDER.indexOf(list) + 1) % LIST_ORDER.length]!);
-      return;
-    }
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      const rows = rowsFor(focusedList);
-      if (rows.length === 0) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const delta = event.key === 'ArrowDown' ? 1 : -1;
-      setIndexFor(focusedList)((index) => (index + delta + rows.length) % rows.length);
+      switchList(LIST_ORDER[(LIST_ORDER.indexOf(focusedList) + 1) % LIST_ORDER.length]!);
       return;
     }
     if (event.key === 'Enter') {
       event.preventDefault();
       event.stopPropagation();
-      rowsFor(focusedList)[indexFor(focusedList)]?.run();
+      activeRows[selectedIndex]?.run();
     }
-  };
-
-  // Capture phase: runs before the event reaches any focused descendant (or `document`'s own
-  // Escape-dismiss listener), so it works regardless of where DOM focus currently is -- see the
-  // rationale in this component's own doc comment.
-  useEffect(() => {
-    const listener = (event: KeyboardEvent): void => keyHandlerRef.current(event);
-    window.addEventListener('keydown', listener, true);
-    return () => window.removeEventListener('keydown', listener, true);
-  }, []);
+  }
 
   if (!session) return null;
 
-  const toListItems = (rows: readonly TradeRow[]): readonly ListDetailItem[] =>
-    rows.map((row) => ({ id: row.id, label: row.label }));
+  const toListItems = (list: readonly TradeRow[]): readonly ListDetailItem[] =>
+    list.map((row) => ({ id: row.id, label: row.label }));
 
-  const listPanel = (list: FocusedList, rows: readonly TradeRow[]): JSX.Element => (
-    <div className="flex flex-col gap-1">
-      {rows.length === 0 && <p className="text-sm text-muted">Nothing here.</p>}
-      {rows.length > 0 && (
-        <ListDetail
-          listLabel={LIST_LABEL[list]}
-          items={toListItems(rows)}
-          selectedIndex={indexFor(list)}
-          onSelect={(index) => {
-            setFocusedList(list);
-            setIndexFor(list)(index);
-          }}
-          renderDetail={(item) => (
-            item
-              ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setFocusedList(list);
-                    rows.find((row) => row.id === item.id)?.run();
-                  }}
-                >
-                  {list === 'buy' ? 'Buy' : list === 'sell' ? 'Sell' : 'Use'}
-                </Button>
-              )
-              : <p className="text-sm text-muted">Nothing selected.</p>
-          )}
-        />
-      )}
-    </div>
-  );
+  const actionLabel = focusedList === 'buy' ? 'Buy' : focusedList === 'sell' ? 'Sell' : 'Use';
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-2xl">
+    <Dialog
+      open
+      onOpenChange={(nextOpen, eventDetails) => {
+        if (nextOpen) return;
+        // The `Dialog` collapses every dismissal (Escape, backdrop, close button) into a single
+        // close signal. Only an Escape while the picker is open should peel off the picker instead
+        // of the whole dialog -- every other dismissal closes the trade.
+        if (eventDetails.reason === 'escape-key' && pickerServiceIdRef.current) {
+          setPickerServiceId(null);
+          return;
+        }
+        onClose();
+      }}
+    >
+      <DialogContent
+        className="sm:max-w-2xl"
+        // `Dialog` mounts its popup contents behind an enter transition, so a mount-time `.focus()`
+        // effect runs before the container exists; the popup's own post-enter `initialFocus` hook is
+        // the transition-aware place to seat focus on the active listbox for the first open.
+        initialFocus={() => (containerRef.current ? focusActiveList(containerRef.current, pickerServiceIdRef.current !== null) : false)}
+      >
         <DialogHeader>
           <DialogTitle>Trade</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-fg-strong">{session.merchantName}</p>
         <p className="text-sm text-muted">{session.reputationTier}</p>
         <p className="text-sm font-mono text-fg">{`${session.currency}g`}</p>
-        <Tabs value={focusedList} onValueChange={(value) => setFocusedList(value as FocusedList)}>
-          <TabsList aria-label="Trade lists">
-            {LIST_ORDER.map((list) => <TabsTrigger key={list} value={list}>{LIST_LABEL[list]}</TabsTrigger>)}
-          </TabsList>
-          {LIST_ORDER.map((list) => (
-            <TabsContent key={list} value={list}>
-              {listPanel(list, rowsFor(list))}
-            </TabsContent>
-          ))}
-        </Tabs>
-        {pickerService && (
-          <div className="flex flex-col gap-1 rounded-md border border-line p-2">
-            <h3 className="text-sm font-semibold text-fg-strong">Identify which item?</h3>
-            <ListDetail
-              listLabel="Identify target"
-              items={pickerService.targetItemIds.map((itemId) => {
-                const ref = ownedItemRef(snapshot, itemId);
-                return { id: itemId, label: ref.name, ...(ref.glyph ? { glyph: ref.glyph } : {}) };
-              })}
-              selectedIndex={pickerIndex}
-              onSelect={setPickerIndex}
-              renderDetail={(item) => (
-                item
-                  ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        onDispatch({ type: 'trade-service', serviceId: pickerService.serviceId, targetItemId: item.id });
-                        setPickerServiceId(null);
-                      }}
-                    >
-                      Identify
-                    </Button>
-                  )
-                  : <p className="text-sm text-muted">Nothing selected.</p>
-              )}
-            />
-            <p className="text-xs text-muted">↑↓ select · Enter identify · Esc back</p>
+        <div ref={containerRef} tabIndex={-1} className="flex flex-col gap-2 outline-none" onKeyDown={handleKeyDown}>
+          <Tabs value={focusedList} onValueChange={(value) => switchList(value as FocusedList)}>
+            <TabsList aria-label="Trade lists">
+              {LIST_ORDER.map((list) => <TabsTrigger key={list} value={list}>{LIST_LABEL[list]}</TabsTrigger>)}
+            </TabsList>
+          </Tabs>
+          {/* One list panel for the active tab, rendered outside `Tabs` so its `ListDetail` listbox
+            * is a single persistent DOM node whose items change as the tab switches -- keyboard focus
+            * never has to survive a listbox unmount/remount (which would race the `Dialog`'s focus
+            * trap). An empty list drops the listbox entirely and shows the placeholder instead. */}
+          <div className="flex flex-col gap-1">
+            {activeRows.length === 0 && <p className="text-sm text-muted">Nothing here.</p>}
+            {activeRows.length > 0 && (
+              <ListDetail
+                listLabel={LIST_LABEL[focusedList]}
+                items={toListItems(activeRows)}
+                selectedIndex={selectedIndex}
+                onSelect={setSelectedIndex}
+                renderDetail={(item) => (
+                  item
+                    ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => activeRows.find((row) => row.id === item.id)?.run()}
+                      >
+                        {actionLabel}
+                      </Button>
+                    )
+                    : <p className="text-sm text-muted">Nothing selected.</p>
+                )}
+              />
+            )}
           </div>
-        )}
-        <p className="text-xs text-muted">↑↓ select · Tab switch list · Enter trade · Esc close</p>
+          {pickerService && (
+            <div className="flex flex-col gap-1 rounded-md border border-line p-2">
+              <h3 className="text-sm font-semibold text-fg-strong">Identify which item?</h3>
+              <ListDetail
+                listLabel={PICKER_LABEL}
+                items={pickerService.targetItemIds.map((itemId) => {
+                  const ref = ownedItemRef(snapshot, itemId);
+                  return { id: itemId, label: ref.name, ...(ref.glyph ? { glyph: ref.glyph } : {}) };
+                })}
+                selectedIndex={pickerIndex}
+                onSelect={setPickerIndex}
+                renderDetail={(item) => (
+                  item
+                    ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          onDispatch({ type: 'trade-service', serviceId: pickerService.serviceId, targetItemId: item.id });
+                          setPickerServiceId(null);
+                        }}
+                      >
+                        Identify
+                      </Button>
+                    )
+                    : <p className="text-sm text-muted">Nothing selected.</p>
+                )}
+              />
+              <p className="text-xs text-muted">↑↓ select · Enter identify · Esc back</p>
+            </div>
+          )}
+          <p className="text-xs text-muted">↑↓ select · Tab switch list · Enter trade · Esc close</p>
+        </div>
       </DialogContent>
     </Dialog>
   );

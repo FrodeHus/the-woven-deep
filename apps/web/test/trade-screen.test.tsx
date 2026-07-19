@@ -352,6 +352,50 @@ describe('TradeScreen roving focus after a sale shrinks the list', () => {
   });
 });
 
+// Regression for issue #39: the focus effect that re-seats DOM focus on the active list's
+// `ListDetail` listbox only depended on `[focusedList, pickerServiceId]`. When a dispatch (e.g.
+// selling the last offer) empties the active list without a tab-switch, the listbox unmounts and
+// focus falls off it, but the effect never re-runs -- so its container fallback (`focusActiveList`)
+// never seats focus back on the container, and Tab/Enter stop reaching `handleKeyDown` until the
+// next tab-switch. Fixed by adding `activeRows.length` to the effect's dependency array.
+describe('TradeScreen focus after a dispatch empties the active list', () => {
+  it('keeps the container reachable by Tab after the last sale offer is removed', async () => {
+    const user = userEvent.setup();
+
+    function EmptyingHarness(): JSX.Element {
+      const [projection, setProjection] = useState(() => withTrade(baseProjection, {
+        saleOffers: [{ itemId: 'item.stock-ration', quantity: 1, unitPrice: 2 }],
+      }));
+      return (
+        <TradeScreen
+          snapshot={snapshotOf(projection)}
+          onDispatch={(intent) => {
+            if (intent.type !== 'trade-sell') return;
+            setProjection((current) => (
+              current.trade ? { ...current, trade: { ...current.trade, saleOffers: [] } } : current
+            ));
+          }}
+          onClose={vi.fn()}
+        />
+      );
+    }
+
+    render(<EmptyingHarness />);
+
+    await user.keyboard('{Tab}'); // buy -> sell
+    await user.keyboard('{Enter}'); // sells the only offer, emptying the sell list
+
+    expect(await screen.findByText('Nothing here.')).toBeInTheDocument();
+    expect(screen.queryByRole('listbox', { name: 'Sell' })).not.toBeInTheDocument();
+
+    // If focus were stranded off the (now-unmounted) listbox, this Tab would never reach the
+    // container's `onKeyDown`, and the active tab would never advance to Services.
+    await user.keyboard('{Tab}');
+
+    expect(screen.getByRole('tab', { name: 'Services', selected: true })).toBeInTheDocument();
+  });
+});
+
 /** Minimal reducer harness for `trade-service`: owns the `ActiveRun` in state, re-projects on
  * every dispatch, and forwards the intent straight to the real engine command -- mirrors
  * `TradeHarness` above, but for identify instead of sell. `onRunChange` lets a test observe the

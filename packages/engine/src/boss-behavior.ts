@@ -7,9 +7,10 @@ import {
 } from '@woven-deep/content';
 import type { ActorState } from './actor-model.js';
 import { resolveEffectSequence, type EffectOperations } from './effects.js';
-import { consumeItemQuantityFromItems, createFloorItem, createFloorLootFromTable } from './inventory.js';
+import { consumeItemQuantityFromItems, createPopulationLoot } from './inventory.js';
 import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
 import type { BossPopulation } from './population-model.js';
+import { replacePopulation, requireEncounter, sortedPopulations, synchronizeDeath as sharedSynchronizeDeath } from './population-runtime.js';
 import { compareCodeUnits } from './stable-json.js';
 import type { DungeonFeature } from './feature-model.js';
 import { parseEffectParameters } from './parameter-contracts.js';
@@ -17,19 +18,11 @@ import { parseEffectParameters } from './parameter-contracts.js';
 const ZERO_MODIFIERS: PopulationCombatModifiers = { accuracy: 0, defense: 0, damage: 0 };
 
 function encounter(content: CompiledContentPack, encounterId: OpaqueId): BossEncounterContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === encounterId);
-  if (!entry || entry.kind !== 'encounter' || entry.model !== 'boss') {
-    throw new Error(`internal invariant: boss encounter ${encounterId} does not exist`);
-  }
+  const entry = requireEncounter(content, encounterId, 'boss');
   if (entry.maximumInstancesPerRun !== 1) {
     throw new Error(`internal invariant: boss encounter ${encounterId} must allow exactly one instance per run`);
   }
   return entry;
-}
-
-function replacePopulation(state: ActiveRun, population: BossPopulation): ActiveRun {
-  return { ...state, populations: state.populations.map((candidate) => candidate.populationId === population.populationId
-    ? population : candidate) };
 }
 
 function replaceActor(state: ActiveRun, actor: ActorState): ActiveRun {
@@ -44,9 +37,7 @@ function currentPhaseMaximum(population: BossPopulation, definition: BossEncount
 }
 
 function synchronizeDeath(population: BossPopulation, actor: ActorState): BossPopulation {
-  if (actor.health > 0 || !population.livingMemberIds.includes(actor.actorId)) return population;
-  return { ...population, livingMemberIds: population.livingMemberIds.filter((id) => id !== actor.actorId),
-    formerMemberIds: [...new Set([...population.formerMemberIds, actor.actorId])].sort(compareCodeUnits) };
+  return sharedSynchronizeDeath(population, actor.health <= 0 ? [actor.actorId] : []);
 }
 
 function itemDefinition(content: CompiledContentPack, contentId: OpaqueId): ItemContentEntry {
@@ -243,30 +234,20 @@ function createRewards(input: Readonly<{
   if (input.boss.health > 0 || input.population.rewardCreated) {
     return { state: input.state, population: input.population, events: [] };
   }
-  const unique = createFloorItem({ content: input.content, contentId: input.definition.uniqueItemId,
-    itemId: `item.reward.${input.population.populationId}.unique`, floorId: input.population.floorId,
-    x: input.boss.x, y: input.boss.y });
-  const loot = createFloorLootFromTable({ content: input.content, tableId: input.definition.enhancedLootTableId,
-    state: input.state.rng.loot, itemIdPrefix: `item.reward.${input.population.populationId}.loot`,
-    floorId: input.population.floorId, x: input.boss.x, y: input.boss.y });
-  const created = [unique, ...loot.items];
-  for (const item of created) if (input.state.items.some((existing) => existing.itemId === item.itemId)) {
-    throw new Error(`internal invariant: boss reward item ${item.itemId} already exists without reward state`);
-  }
-  const population = { ...input.population, rewardCreated: true, rewardReceipt: {
-    lootStateBefore: input.state.rng.loot,
-    lootStateAfter: loot.state,
-    items: created.map((item) => ({ itemId: item.itemId, contentId: item.contentId, quantity: item.quantity }))
-      .sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
-  } };
-  const state = { ...input.state, items: [...input.state.items, ...created]
-    .sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
-    rng: { ...input.state.rng, loot: loot.state } };
+  const { state, createdItems, unique, receipt } = createPopulationLoot({
+    content: input.content, state: input.state, tableId: input.definition.enhancedLootTableId,
+    itemIdPrefix: `item.reward.${input.population.populationId}.loot`,
+    floorId: input.population.floorId, x: input.boss.x, y: input.boss.y,
+    uniqueContentId: input.definition.uniqueItemId,
+    uniqueItemId: `item.reward.${input.population.populationId}.unique`,
+    existsError: (item) => `internal invariant: boss reward item ${item.itemId} already exists without reward state`,
+  });
+  const population = { ...input.population, rewardCreated: true, rewardReceipt: receipt };
   return { state, population, events: [{ type: 'boss.defeated', eventId: input.eventId,
     populationId: population.populationId, actorId: population.actorId, encounterId: population.encounterId },
   { type: 'boss.reward-created', eventId: input.eventId, populationId: population.populationId,
-    actorId: population.actorId, encounterId: population.encounterId, uniqueItemId: unique.itemId,
-    itemIds: created.map((item) => item.itemId) }] };
+    actorId: population.actorId, encounterId: population.encounterId, uniqueItemId: unique!.itemId,
+    itemIds: createdItems.map((item) => item.itemId) }] };
 }
 
 export function bossCombatModifiers(input: Readonly<{
@@ -291,7 +272,7 @@ export function advanceBosses(input: Readonly<{
   }
   let state = input.state;
   const events: DomainEvent[] = [];
-  for (const original of [...state.populations].sort((left, right) => compareCodeUnits(left.populationId, right.populationId))) {
+  for (const original of sortedPopulations(state.populations)) {
     if (original.model !== 'boss') continue;
     const boss = state.actors.find((actor) => actor.actorId === original.actorId);
     if (!boss) throw new Error(`internal invariant: boss actor ${original.actorId} does not exist`);

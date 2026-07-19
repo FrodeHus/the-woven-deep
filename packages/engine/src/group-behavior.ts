@@ -11,6 +11,7 @@ import type {
   GroupOutcomeAppliedEvent, OpaqueId,
 } from './model.js';
 import type { GroupPopulation, LastKnownTarget } from './population-model.js';
+import { deadLivingMembers, replacePopulationList, requireEncounter, sortedPopulations, synchronizeDeath } from './population-runtime.js';
 import { compareCodeUnits } from './stable-json.js';
 import { movementBlockReason } from './terrain.js';
 import { findPath } from './pathfinding.js';
@@ -29,11 +30,7 @@ export type GroupBehaviorEvent = GroupAwarenessSharedEvent | GroupLeaderDefeated
   | GroupOutcomeAppliedEvent | ActorDiedEvent;
 
 function groupEncounter(content: CompiledContentPack, encounterId: OpaqueId): EncounterContentEntry & { model: 'group' } {
-  const encounter = content.entries.find((entry) => entry.id === encounterId);
-  if (!encounter || encounter.kind !== 'encounter' || encounter.model !== 'group') {
-    throw new Error(`internal invariant: group encounter ${encounterId} does not exist`);
-  }
-  return encounter;
+  return requireEncounter(content, encounterId, 'group');
 }
 
 function distance(left: ActorState, right: ActorState): number {
@@ -238,13 +235,12 @@ export function coordinateGroups(input: Readonly<{
   let actors = input.state.actors;
   let populations = input.state.populations;
   const events: GroupBehaviorEvent[] = [];
-  for (const population of [...input.state.populations].sort((left, right) => compareCodeUnits(left.populationId, right.populationId))) {
+  for (const population of sortedPopulations(input.state.populations)) {
     if (population.model !== 'group' || population.floorId !== input.state.activeFloorId) continue;
     const definition = groupEncounter(input.content, population.encounterId).definition;
     const relayed = relay(actors, population, definition.communicationRadius, input.eventId);
     actors = formationGoals(input.state, relayed.actors, population, definition);
-    populations = populations.map((candidate) => candidate.populationId === population.populationId
-      ? { ...population, sharedKnowledge: relayed.sharedKnowledge } : candidate);
+    populations = replacePopulationList(populations, { ...population, sharedKnowledge: relayed.sharedKnowledge });
     events.push(...relayed.events);
   }
   if (actors === input.state.actors && populations === input.state.populations) return { state: input.state, events };
@@ -281,19 +277,13 @@ export function applyGroupLeaderOutcomes(input: Readonly<{
   let relationships = input.state.relationships;
   let changed = false;
   const events: GroupBehaviorEvent[] = [];
-  for (const population of [...input.state.populations].sort((left, right) => compareCodeUnits(left.populationId, right.populationId))) {
+  for (const population of sortedPopulations(input.state.populations)) {
     if (population.model !== 'group' || population.floorId !== input.state.activeFloorId) continue;
-    const newlyDead = population.livingMemberIds.filter((actorId) => (
-      (actors.find((actor) => actor.actorId === actorId)?.health ?? 0) <= 0
-    )).sort(compareCodeUnits);
-    let group = newlyDead.length === 0 ? population : {
-      ...population,
-      livingMemberIds: population.livingMemberIds.filter((actorId) => !newlyDead.includes(actorId)),
-      formerMemberIds: [...new Set([...population.formerMemberIds, ...newlyDead])].sort(compareCodeUnits),
-    };
+    const newlyDead = deadLivingMembers(population, actors);
+    let group = synchronizeDeath(population, newlyDead);
     if (newlyDead.length > 0) {
       changed = true;
-      populations = populations.map((candidate) => candidate.populationId === group.populationId ? group : candidate);
+      populations = replacePopulationList(populations, group);
     }
     if (group.leaderActorId === null || group.leaderResponseApplied) continue;
     const leader = actors.find((actor) => actor.actorId === group.leaderActorId);
@@ -342,7 +332,7 @@ export function applyGroupLeaderOutcomes(input: Readonly<{
         ? responseDeadline : null,
     };
     changed = true;
-    populations = populations.map((candidate) => candidate.populationId === group.populationId ? group : candidate);
+    populations = replacePopulationList(populations, group);
     events.push({ type: 'group.leader-defeated', eventId: input.eventId,
       populationId: group.populationId, actorId: leader.actorId });
     if (collapse && definition.collapseRewards === 'individual') {
