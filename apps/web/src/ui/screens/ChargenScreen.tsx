@@ -7,7 +7,7 @@ import {
 } from '../../session/wizard-reducer.js';
 import { Button } from '../components/button.js';
 import { HeroRecord } from './chargen/HeroRecord.js';
-import { StepMenu } from './chargen/StepMenu.js';
+import { STEP_LABELS, StepMenu } from './chargen/StepMenu.js';
 import {
   AttributesStep, CallingStep, IdentityStep, KitStep, OriginStep, ReviewStep, TraitsStep, type StepProps,
 } from './chargen/steps.js';
@@ -25,16 +25,6 @@ export interface ChargenScreenProps {
    * so it rides beside `HeroChoices` here rather than inside it. */
   readonly onConfirm: (choices: HeroChoices, portraitGlyph: string) => void;
 }
-
-const STEP_LABELS: Readonly<Record<WizardState['step'], string>> = {
-  1: 'Identity',
-  2: 'Calling',
-  3: 'Kit',
-  4: 'Attributes',
-  5: 'Origin',
-  6: 'Traits',
-  7: 'Review',
-};
 
 /**
  * The character-generation console: a fixed-height three-pane shell over the pure `wizardReduce`
@@ -68,9 +58,18 @@ export function ChargenScreen({
   };
 
   const onJump = (target: WizardState['step']): void => {
-    let step = state.step;
-    while (step < target) { dispatch({ type: 'next' }); step += 1; }
-    while (step > target) { dispatch({ type: 'back' }); step -= 1; }
+    let next = state;
+    while (next.step < target) {
+      const advanced = wizardReduce(next, { type: 'next' }, context);
+      if (advanced === next) break;
+      next = advanced;
+    }
+    while (next.step > target) {
+      const receded = wizardReduce(next, { type: 'back' }, context);
+      if (receded === next) break;
+      next = receded;
+    }
+    if (next !== state) setState(next);
   };
 
   const stepProps: StepProps = { state, pack, dispatch };

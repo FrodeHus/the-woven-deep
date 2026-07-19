@@ -4,7 +4,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import { rerollAttributes, rollAttributes, type Uint32State } from '@woven-deep/engine';
 import {
-  initialWizardState, wizardChoices, wizardPreview, wizardReduce,
+  initialWizardState, nameIsValid, stepIsSatisfied, wizardChoices, wizardPreview, wizardReduce,
   type WizardAction, type WizardState,
 } from '../src/session/wizard-reducer.js';
 
@@ -382,5 +382,67 @@ describe('wizardReduce', () => {
 
     const advanced = wizardReduce(withPointBuy, { type: 'next' }, context());
     expect(advanced.step).toBe(5);
+  });
+});
+
+describe('nameIsValid', () => {
+  it('rejects empty, too-long, and pattern-violating names, and accepts a well-formed one', () => {
+    expect(nameIsValid('')).toBe(false);
+    expect(nameIsValid('   ')).toBe(false);
+    expect(nameIsValid('x'.repeat(200))).toBe(false);
+    expect(nameIsValid('Rin')).toBe(true);
+  });
+});
+
+describe('stepIsSatisfied', () => {
+  it('matches per-step field-chosen rules used by next-gating, for every step', () => {
+    const empty = initialWizardState(SEED);
+    expect(stepIsSatisfied(empty, 1)).toBe(false);
+    expect(stepIsSatisfied({ ...empty, name: 'Rin' }, 1)).toBe(true);
+
+    expect(stepIsSatisfied(empty, 2)).toBe(false);
+    expect(stepIsSatisfied({ ...empty, classId: WAYFARER }, 2)).toBe(true);
+
+    expect(stepIsSatisfied(empty, 3)).toBe(false);
+    expect(stepIsSatisfied({ ...empty, kitId: wayfarerKitId() }, 3)).toBe(true);
+
+    expect(stepIsSatisfied(empty, 4)).toBe(false);
+    const rolled = wizardReduce(
+      dispatchAll(empty, [{ type: 'choose-method', method: 'roll' }]), { type: 'roll' }, context(),
+    );
+    expect(stepIsSatisfied(rolled, 4)).toBe(true);
+
+    expect(stepIsSatisfied(empty, 5)).toBe(false);
+    expect(stepIsSatisfied({ ...empty, backgroundId: CARAVAN_GUARD }, 5)).toBe(true);
+
+    // Traits (step 6) are optional -- always satisfied.
+    expect(stepIsSatisfied(empty, 6)).toBe(true);
+    expect(stepIsSatisfied({ ...empty, traitIds: [KEEN_EYED] }, 6)).toBe(true);
+
+    // Review (step 7) is terminal -- next never advances past it.
+    expect(stepIsSatisfied(empty, 7)).toBe(false);
+  });
+
+  it('agrees with next-gating: next only advances a step when stepIsSatisfied is true', () => {
+    let s = initialWizardState(SEED);
+    for (const step of [1, 2, 3, 4, 5, 6] as const) {
+      expect(wizardReduce(s, { type: 'next' }, context()) !== s).toBe(stepIsSatisfied(s, step));
+      if (!stepIsSatisfied(s, step)) {
+        // Fill in whatever this step needs, matching the full-flow test above.
+        s = dispatchAll(s, (() => {
+          switch (step) {
+            case 1: return [{ type: 'set-name', name: 'Ash' }] as const;
+            case 2: return [{ type: 'choose-class', classId: WAYFARER }] as const;
+            case 3: return [{ type: 'choose-kit', kitId: wayfarerKitId() }] as const;
+            case 4: return [{ type: 'choose-method', method: 'roll' }, { type: 'roll' }] as const;
+            case 5: return [{ type: 'choose-background', backgroundId: CARAVAN_GUARD }] as const;
+            case 6: return [] as const;
+          }
+        })());
+      }
+      expect(stepIsSatisfied(s, step)).toBe(true);
+      s = wizardReduce(s, { type: 'next' }, context());
+    }
+    expect(s.step).toBe(7);
   });
 });

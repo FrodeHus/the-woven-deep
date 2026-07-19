@@ -11,7 +11,7 @@ import { Input } from '@/ui/components/input.js';
 import { Label } from '@/ui/components/label.js';
 import { cn } from '@/ui/lib/cn.js';
 import {
-  PORTRAIT_GLYPHS, wizardPreview, type WizardAction, type WizardState,
+  nameIsValid, PORTRAIT_GLYPHS, wizardPreview, type WizardAction, type WizardState,
 } from '../../../session/wizard-reducer.js';
 import { BlockBar, DotLeaderRow } from './chargen-components.js';
 import { AttributeStepper } from './AttributeStepper.js';
@@ -30,14 +30,6 @@ const RANDOM_NAMES = ['Rin', 'Kael', 'Mira', 'Thane', 'Sable', 'Doran', 'Wren', 
 
 const OPTION_SELECTED_CLASS = 'outline outline-2 outline-accent outline-offset-2 border-accent';
 
-function isNameValid(name: string): boolean {
-  return (
-    name.length >= HERO_NAME_RULES.minLength
-    && name.length <= HERO_NAME_RULES.maxLength
-    && HERO_NAME_RULES.pattern.test(name)
-  );
-}
-
 function pickRandomName(): string {
   const index = Math.floor(Math.random() * RANDOM_NAMES.length);
   return RANDOM_NAMES[index] ?? RANDOM_NAMES[0];
@@ -45,7 +37,7 @@ function pickRandomName(): string {
 
 export function IdentityStep({ state, dispatch }: StepProps): JSX.Element {
   const { selectedIndex, registerItem, handleArrowKeys } = useListNavigation(PORTRAIT_GLYPHS.length);
-  const valid = isNameValid(state.name);
+  const valid = nameIsValid(state.name);
 
   return (
     <section aria-label="Name and portrait" className="flex flex-col gap-3 font-mono">

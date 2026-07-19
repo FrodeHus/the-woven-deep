@@ -1,8 +1,7 @@
 import type { JSX } from 'react';
 import type { ClassContentEntry, CompiledContentPack } from '@woven-deep/content';
-import { HERO_NAME_RULES } from '@woven-deep/engine';
 import { cn } from '@/ui/lib/cn.js';
-import type { WizardState } from '../../../session/wizard-reducer.js';
+import { stepIsSatisfied, type WizardState } from '../../../session/wizard-reducer.js';
 import { useListNavigation } from '../roving-focus.js';
 
 export const STEP_LABELS: Readonly<Record<WizardState['step'], string>> = {
@@ -22,26 +21,12 @@ const METHOD_LABELS: Readonly<Record<string, string>> = {
 
 const STEPS: readonly WizardState['step'][] = [1, 2, 3, 4, 5, 6, 7];
 
-function isNameValid(name: string): boolean {
-  return (
-    name.length >= HERO_NAME_RULES.minLength
-    && name.length <= HERO_NAME_RULES.maxLength
-    && HERO_NAME_RULES.pattern.test(name)
-  );
-}
-
 /** Whether a given step's own field has been chosen -- drives that row's status dot. Step 7
- * (Review) has no field of its own, so it reuses the "everything earlier is satisfied" check. */
+ * (Review) has no field of its own, so it reuses the "everything earlier is satisfied" check.
+ * Delegates to the reducer's `stepIsSatisfied` so this stays in sync with `next`'s gating. */
 function stepIsSet(step: WizardState['step'], state: WizardState): boolean {
-  switch (step) {
-    case 1: return isNameValid(state.name);
-    case 2: return state.classId !== null;
-    case 3: return state.kitId !== null;
-    case 4: return state.attributes !== null;
-    case 5: return state.backgroundId !== null;
-    case 6: return true;
-    case 7: return STEPS.slice(0, 6).every((earlier) => stepIsSet(earlier, state));
-  }
+  if (step === 7) return STEPS.slice(0, 6).every((earlier) => stepIsSet(earlier, state));
+  return stepIsSatisfied(state, step);
 }
 
 /** A step is reachable only if every earlier step is satisfied -- this is what guards `onJump`
