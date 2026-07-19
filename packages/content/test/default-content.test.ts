@@ -13,7 +13,7 @@ describe('bundled content', () => {
       'achievement', 'class', 'background', 'trait'] as const;
     expect(Object.fromEntries(kinds.map((kind) => [kind,
       pack.entries.filter((entry) => entry.kind === kind).length]))).toEqual({
-      monster: 4, item: 16, spell: 1, trap: 1, 'loot-table': 7, balance: 1, vault: 2,
+      monster: 4, item: 16, spell: 1, trap: 1, 'loot-table': 9, balance: 1, vault: 2,
       'identification-pool': 2, encounter: 8, 'fallen-champion-template': 1, npc: 4, 'npc-faction': 4,
       achievement: 2, class: 4, background: 3, trait: 5,
     });

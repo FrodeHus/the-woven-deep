@@ -40,6 +40,7 @@ describe('OverlayHost', () => {
       defense: 1, perception: 1, damage: { count: 1, sides: 4, bonus: 0 }, armor: 0,
       resistances: {} as MonsterContentEntry['resistances'], disposition: 'hostile', behaviorId: 'default',
       behaviorParameters: {}, minDepth: 1, maxDepth: 1, threat: 1, rarity: 'common',
+      lootTableId: null, dropChance: 1,
     };
     const pack = { entries: [caveRat] } as unknown as CompiledContentPack;
 

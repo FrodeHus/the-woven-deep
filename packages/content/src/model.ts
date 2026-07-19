@@ -83,6 +83,8 @@ export interface MonsterContentEntry extends PresentedContentEntry {
   readonly maxDepth: number;
   readonly threat: number;
   readonly rarity: ItemRarity;
+  readonly lootTableId: ContentId | null;
+  readonly dropChance: number;
 }
 
 export type CompletionType = 'died' | 'became-heart' | 'refused' | 'broke-cycle';
@@ -501,6 +503,8 @@ export interface VaultPlacementSlot {
   readonly kind: VaultPlacementKind;
   readonly required: boolean;
   readonly tags: readonly string[];
+  readonly lootTableId: ContentId | null;
+  readonly contentId: ContentId | null;
 }
 
 export interface VaultLightFixture {

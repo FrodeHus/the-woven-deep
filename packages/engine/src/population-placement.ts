@@ -3,15 +3,19 @@ import type {
   CompiledContentPack,
   EncounterContentEntry,
   MonsterContentEntry,
+  VaultContentEntry,
+  VaultPlacementSlot,
 } from '@woven-deep/content';
 import { emptyEquipment, type ActorState } from './actor-model.js';
 import { analyzeConnectivity, preservesRequiredRoutes } from './connectivity.js';
+import { createFloorItem, createFloorLootFromTable } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
 import { materializeMerchant } from './merchant-stock.js';
 import type { ActiveRun, DomainEvent, FloorSnapshot, OpaqueId, Point, Uint32State } from './model.js';
 import { emptyActorBehaviorState, type EncounterRunDecision, type PopulationInstance } from './population-model.js';
 import { nextUint32, rollDie } from './random.js';
 import { tileDefinition } from './terrain.js';
+import { transformVault } from './vault-transform.js';
 
 export type PopulationPlacementFailureReason = 'no-eligible-encounter' | 'no-valid-placement'
   | 'required-route-blocked';
@@ -309,6 +313,78 @@ function slotProvidesTags(input: PlacePopulationInput, slot: FloorSnapshot['plac
   return tags.every((tag) => available.has(tag));
 }
 
+/**
+ * Resolves a `kind:'item'` `FloorPlacementSlot` back to the authored `VaultPlacementSlot` on its
+ * originating vault's legend, so `fillItemSlots` can read the `lootTableId`/`contentId` the
+ * runtime slot itself does not carry. Re-runs the same rotation/reflection transform
+ * `vault-placement.ts` used to derive the slot's floor position, then matches by that position --
+ * robust to callers (tests, notably) that append their own uniqueness suffixes onto `slotId`.
+ */
+function originatingVaultSlot(input: PlacePopulationInput, slot: FloorSnapshot['placementSlots'][number]): VaultPlacementSlot {
+  const placement = input.floor.vaults.find((vault) => vault.placementId === slot.vaultPlacementId);
+  const vault = placement === undefined ? undefined : input.content.entries.find((entry): entry is VaultContentEntry =>
+    entry.kind === 'vault' && entry.id === placement.vaultId);
+  if (placement === undefined || vault === undefined) {
+    throw new Error(`internal invariant: item slot ${slot.slotId} has no originating vault`);
+  }
+  const transformed = transformVault(vault, placement.rotation, placement.reflected);
+  const localX = slot.x - placement.x;
+  const localY = slot.y - placement.y;
+  const match = transformed.slots.find((candidate) => candidate.x === localX && candidate.y === localY);
+  if (match === undefined) {
+    throw new Error(`internal invariant: vault ${vault.id} has no legend slot at local position (${localX}, ${localY})`);
+  }
+  return match.slot;
+}
+
+function floorLocation(item: ItemInstance): Extract<ItemInstance['location'], { type: 'floor' }> | null {
+  return item.location.type === 'floor' ? item.location : null;
+}
+
+function unfilledItemSlots(input: PlacePopulationInput): readonly FloorSnapshot['placementSlots'][number][] {
+  const filledPositions = new Set(input.run.items
+    .map(floorLocation)
+    .filter((location): location is Extract<ItemInstance['location'], { type: 'floor' }> =>
+      location !== null && location.floorId === input.floor.floorId)
+    .map((location) => `${location.x},${location.y}`));
+  return input.floor.placementSlots.filter((slot) => slot.kind === 'item' && !filledPositions.has(`${slot.x},${slot.y}`));
+}
+
+/**
+ * Fills every not-yet-filled `kind:'item'` vault slot on the floor with the item or loot-table
+ * roll its originating `VaultPlacementSlot` names, threading the same `encounters` RNG stream the
+ * rest of this file's floor-generation-time placement uses (never `run.rng.loot`, reserved for
+ * runtime combat drops). Checking already-filled positions against `run.items` makes repeated
+ * calls across `placeFloorPopulations`' multiple attempts on one floor idempotent.
+ */
+function fillItemSlots(
+  input: PlacePopulationInput,
+  state: Uint32State,
+): Readonly<{ items: readonly ItemInstance[]; state: Uint32State }> {
+  let currentState = state;
+  const items: ItemInstance[] = [];
+  for (const slot of unfilledItemSlots(input)) {
+    const vaultSlot = originatingVaultSlot(input, slot);
+    const itemId = `item.vault.${slot.slotId}`;
+    if (vaultSlot.lootTableId !== null) {
+      const loot = createFloorLootFromTable({
+        content: input.content, tableId: vaultSlot.lootTableId, state: currentState,
+        itemIdPrefix: itemId, floorId: input.floor.floorId, x: slot.x, y: slot.y,
+      });
+      items.push(...loot.items);
+      currentState = loot.state;
+    } else if (vaultSlot.contentId !== null) {
+      items.push(createFloorItem({
+        content: input.content, contentId: vaultSlot.contentId, itemId,
+        floorId: input.floor.floorId, x: slot.x, y: slot.y,
+      }));
+    } else {
+      throw new Error(`internal invariant: item slot ${slot.slotId} has neither lootTableId nor contentId`);
+    }
+  }
+  return { items, state: currentState };
+}
+
 function selectCells(
   input: PlacePopulationInput,
   encounter: EncounterContentEntry,
@@ -425,12 +501,14 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
       run: runWithFloor, content: input.content, encounter: selected.encounter,
       populationId, floorId: input.floor.floorId, position: positions.cells[0]!,
     });
+    const itemSlots = fillItemSlots(input, planned.state);
     return {
-      status: 'placed', encounterId: selected.encounter.id, nextEncounterState: planned.state,
+      status: 'placed', encounterId: selected.encounter.id, nextEncounterState: itemSlots.state,
       encounterDecisions: reachedDecisions.map((decision) => decision.encounterId === selected.encounter.id
         ? { ...decision, instancesCreated: decision.instancesCreated + 1 } : decision),
       diagnostics: [], createdActors: [merchant.actor], population: merchant.population,
-      floor: input.floor, createdItems: merchant.items, nextMerchantStockState: merchant.nextMerchantStockState,
+      floor: input.floor, createdItems: [...merchant.items, ...itemSlots.items],
+      nextMerchantStockState: merchant.nextMerchantStockState,
     };
   }
   const createdActors = planned.members.map((member, index): ActorState => {
@@ -487,10 +565,11 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
   }
   const encounterDecisions = reachedDecisions.map((decision) => decision.encounterId === selected.encounter.id
     ? { ...decision, instancesCreated: decision.instancesCreated + 1 } : decision);
+  const itemSlots = fillItemSlots(input, planned.state);
   return {
-    status: 'placed', encounterId: selected.encounter.id, nextEncounterState: planned.state,
+    status: 'placed', encounterId: selected.encounter.id, nextEncounterState: itemSlots.state,
     encounterDecisions, diagnostics: [], createdActors, population,
-    floor: input.floor, createdItems: [], nextMerchantStockState: null,
+    floor: input.floor, createdItems: itemSlots.items, nextMerchantStockState: null,
   };
 }
 

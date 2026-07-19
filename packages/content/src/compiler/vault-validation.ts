@@ -1,5 +1,6 @@
-import type { VaultContentEntry, VaultTerrainName } from '../model.js';
+import type { ContentEntry, VaultContentEntry, VaultTerrainName } from '../model.js';
 import type { ContentCompileIssue } from './error.js';
+import { referencedKindIssue } from './content-validation.js';
 
 const potentiallyTraversable = new Set<VaultTerrainName>([
   'floor', 'closed-door', 'stair-up', 'stair-down',
@@ -15,7 +16,11 @@ function compareText(left: string, right: string): number {
   return 0;
 }
 
-export function validateVaultEntry(entry: VaultContentEntry, file: string): ContentCompileIssue[] {
+export function validateVaultEntry(
+  entry: VaultContentEntry,
+  file: string,
+  byId: ReadonlyMap<string, ContentEntry> = new Map(),
+): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
   const add = (path: string, message: string): void => {
     issues.push({ file, path, message });
@@ -87,6 +92,22 @@ export function validateVaultEntry(entry: VaultContentEntry, file: string): Cont
         `$.entries.${entry.id}.legend.${symbol}.slot`,
         `void terrain cannot contain placement slot ${legend.slot.id}; use non-void terrain or remove the slot`,
       );
+    }
+    if (legend.slot !== null) {
+      const { slot } = legend;
+      const slotPath = `$.entries.${entry.id}.legend.${symbol}.slot`;
+      if (slot.kind === 'item') {
+        const setCount = Number(slot.lootTableId !== null) + Number(slot.contentId !== null);
+        if (setCount !== 1) {
+          add(slotPath, `item slot ${slot.id} must set exactly one of lootTableId or contentId`);
+        } else if (slot.lootTableId !== null) {
+          issues.push(...referencedKindIssue(file, `${slotPath}.lootTableId`, slot.lootTableId, 'loot-table', byId));
+        } else if (slot.contentId !== null) {
+          issues.push(...referencedKindIssue(file, `${slotPath}.contentId`, slot.contentId, 'item', byId));
+        }
+      } else if (slot.lootTableId !== null || slot.contentId !== null) {
+        add(slotPath, `${slot.kind} slot ${slot.id} may not set item loot fields`);
+      }
     }
   }
 

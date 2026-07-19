@@ -66,7 +66,9 @@ describe('addGeneratedFloor', () => {
     expect(integrated.state.items.filter((item) => item.location.type === 'merchant-stock'
       && item.location.populationId === merchant.populationId).map((item) => item.itemId))
       .toEqual(merchant.stockItemIds);
-    expect(integrated.state.rng.encounters).toEqual(run.rng.encounters);
+    // The fixture floor's vault carries a filled item slot (`vault.lampwright-cache`), so
+    // committing it also rolls that slot's loot table on the `encounters` stream.
+    expect(integrated.state.rng.encounters).not.toEqual(run.rng.encounters);
     expect(integrated.state.rng['merchant-stock']).not.toEqual(run.rng['merchant-stock']);
     expect(integrated.state.rng.combat).toEqual(run.rng.combat);
     expect(integrated.state.rng.loot).toEqual(run.rng.loot);

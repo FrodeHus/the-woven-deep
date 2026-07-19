@@ -22,6 +22,8 @@ entries:
     behaviorParameters: {}
     threat: 4
     rarity: uncommon
+    lootTableId: loot-table.cave-rat
+    dropChance: 0.3
 
   - kind: monster
     id: monster.ashen-warden

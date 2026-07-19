@@ -113,7 +113,7 @@ function effectsAtPath(
   });
 }
 
-function referencedKindIssue(
+export function referencedKindIssue(
   file: string,
   path: string,
   id: string,
@@ -793,6 +793,9 @@ export function validateContentEntries(locatedEntries: readonly LocatedContentEn
   for (const { entry, file } of locatedEntries) {
     if (entry.kind === 'monster') {
       issues.push(...validateParameters(file, `$.entries.${entry.id}.behavior`, entry.behaviorId, entry.behaviorParameters, BEHAVIOR_PARAMETER_SCHEMAS, 'behavior'));
+      if (entry.lootTableId !== null) {
+        issues.push(...referencedKindIssue(file, `$.entries.${entry.id}.lootTableId`, entry.lootTableId, 'loot-table', byId));
+      }
     }
     if (entry.kind === 'npc') {
       issues.push(...referencedKindIssue(file, `$.entries.${entry.id}.factionId`, entry.factionId, 'npc-faction', byId));

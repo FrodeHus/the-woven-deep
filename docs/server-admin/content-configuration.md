@@ -662,6 +662,8 @@ guaranteed boss-unique item item.warden-ember cannot appear in ordinary loot
 
 Terrain is `wall`, `floor`, `closed-door`, `pillar`, `stair-up`, `stair-down`, or `void`. A placement slot kind is `monster`, `item`, `trap`, `npc`, `fixture`, or `objective`. Slot IDs are vault-local slugs. Required slots must occur in the layout. Lights require a local suffix, one glyph, stable presentation token, RGB color, radius 1–32, strength 1–255, and optional enabled state (default true). Void terrain cannot contain lights or placement slots.
 
+A slot's `lootTableId` and `contentId` name what it can contain once placed. A `kind: item` slot must set exactly one of them (a loot table to roll from, or a single fixed item); every other slot kind must leave both `null`. Whichever is set must resolve to the matching content kind (`loot-table` or `item`).
+
 ```yaml
 schemaVersion: 7
 entries:
@@ -683,7 +685,7 @@ entries:
       "+": { terrain: floor, entrance: true }
       "i":
         terrain: floor
-        slot: { id: item-cache, kind: item, required: true, tags: [cache] }
+        slot: { id: item-cache, kind: item, required: true, tags: [cache], lootTableId: loot-table.small-cache }
 ```
 
 ### The `town` vault

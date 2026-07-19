@@ -733,3 +733,111 @@ describe('placeFloorPopulations (encounter density)', () => {
     expect(result.placements[1]).toMatchObject({ status: 'rejected', reason: 'required-route-blocked' });
   });
 });
+
+describe('vault item slot consumption', () => {
+  const stockItemEntry: ItemContentEntry = {
+    kind: 'item', id: 'item.test-cache-loot', name: 'Test Cache Loot', tags: [], glyph: '!', color: '#ffffff',
+    category: 'potion', stackLimit: 9, price: 1, rarity: 'common', heirloomEligible: false,
+    minDepth: 1, maxDepth: 10, actionCost: 100, equipment: null, combat: null, light: null,
+    identification: { mode: 'known', poolId: null }, effects: [],
+  };
+  const directItemEntry: ItemContentEntry = {
+    ...stockItemEntry, id: 'item.test-cache-direct', name: 'Test Cache Direct',
+  };
+  const itemLootTable: LootTableContentEntry = {
+    kind: 'loot-table', id: 'loot-table.test-item-cache', name: 'Test Item Cache', tags: [], rolls: 1,
+    choices: [{ contentId: stockItemEntry.id, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }],
+  };
+
+  function itemCacheVault(id: string, slot: Readonly<{ lootTableId: string | null; contentId: string | null }>): VaultContentEntry {
+    return {
+      kind: 'vault', id, name: 'Item Cache Test', tags: [], minDepth: 1, maxDepth: 20, rarity: 'common',
+      weight: 1, maxPerFloor: 1, margin: 0, transforms: { rotations: [0], reflectHorizontal: false }, layout: ['.'],
+      legend: { '.': { terrain: 'floor', entrance: false, light: null, slot: {
+        id: 'item-cache', kind: 'item', required: true, tags: ['cache'],
+        lootTableId: slot.lootTableId, contentId: slot.contentId,
+      } } },
+      entranceCount: 0, requiredSlotIds: [],
+    };
+  }
+
+  function itemCacheFloor(vaultId: string): FloorSnapshot {
+    return floor({
+      vaults: [{
+        placementId: 'vault-placement.test.0', vaultId, x: 3, y: 2,
+        width: 1, height: 1, rotation: 0, reflected: false, entrances: [],
+      }],
+      placementSlots: [{
+        slotId: 'slot.test.0.item-cache', vaultPlacementId: 'vault-placement.test.0', kind: 'item',
+        required: true, tags: ['cache'], x: 3, y: 2,
+      }],
+    });
+  }
+
+  it('fills a vault item slot from its loot table at the slot position', () => {
+    const encounter = individual('encounter.item-cache-loot-table');
+    const vault = itemCacheVault('vault.item-cache-test', { lootTableId: itemLootTable.id, contentId: null });
+    const generated = itemCacheFloor(vault.id);
+
+    const result = placePopulation({
+      run: runFor([encounter]), floor: generated, content: pack([encounter], [vault, itemLootTable, stockItemEntry]),
+      forcedEncounterId: encounter.id,
+    });
+
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed') return;
+    const placed = result.createdItems.filter((item) => item.location.type === 'floor'
+      && item.location.x === 3 && item.location.y === 2);
+    expect(placed.length).toBeGreaterThan(0);
+    expect(placed.every((item) => item.itemId.startsWith('item.vault.slot.test.0.item-cache'))).toBe(true);
+  });
+
+  it('fills a vault item slot from a direct content id at the slot position', () => {
+    const encounter = individual('encounter.item-cache-direct');
+    const vault = itemCacheVault('vault.item-cache-direct-test', { lootTableId: null, contentId: directItemEntry.id });
+    const generated = itemCacheFloor(vault.id);
+
+    const result = placePopulation({
+      run: runFor([encounter]), floor: generated, content: pack([encounter], [vault, directItemEntry]),
+      forcedEncounterId: encounter.id,
+    });
+
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed') return;
+    expect(result.createdItems).toEqual([expect.objectContaining({
+      contentId: directItemEntry.id, location: { type: 'floor', floorId: generated.floorId, x: 3, y: 2 },
+    })]);
+  });
+
+  it('is a pure function of the floor seed', () => {
+    const encounter = individual('encounter.item-cache-deterministic');
+    const vault = itemCacheVault('vault.item-cache-deterministic-test', { lootTableId: itemLootTable.id, contentId: null });
+    const generated = itemCacheFloor(vault.id);
+    const run = runFor([encounter]);
+    const content = pack([encounter], [vault, itemLootTable, stockItemEntry]);
+
+    const first = placePopulation({ run, floor: generated, content, forcedEncounterId: encounter.id });
+    const second = placePopulation({ run, floor: generated, content, forcedEncounterId: encounter.id });
+
+    expect(stableJson(first)).toBe(stableJson(second));
+  });
+
+  it('does not refill an item slot the run already has an item placed at', () => {
+    const encounter = individual('encounter.item-cache-idempotent');
+    const vault = itemCacheVault('vault.item-cache-idempotent-test', { lootTableId: itemLootTable.id, contentId: null });
+    const generated = itemCacheFloor(vault.id);
+    const run = runFor([encounter]);
+    const content = pack([encounter], [vault, itemLootTable, stockItemEntry]);
+
+    const first = placePopulation({ run, floor: generated, content, forcedEncounterId: encounter.id });
+    expect(first.status).toBe('placed');
+    if (first.status !== 'placed') return;
+    const runWithItem = { ...run, items: [...run.items, ...first.createdItems] };
+
+    const second = placePopulation({ run: runWithItem, floor: generated, content, forcedEncounterId: encounter.id });
+
+    expect(second.status).toBe('placed');
+    if (second.status !== 'placed') return;
+    expect(second.createdItems).toHaveLength(0);
+  });
+});

@@ -2,10 +2,12 @@ import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
+import type { Direction, GameCommand } from '../src/index.js';
 import {
   createGameplayDemoRun,
   heroActor,
   isExplored,
+  resolveCommand,
   stableJson,
   tileDefinition,
   tileIndex,
@@ -83,7 +85,9 @@ describe('seeded gameplay fixture', () => {
     expect(Math.max(Math.abs(hero.x - rat.x), Math.abs(hero.y - rat.y))).toBeGreaterThanOrEqual(3);
     expect(Math.max(Math.abs(hero.x - beetle.x), Math.abs(hero.y - beetle.y))).toBeGreaterThanOrEqual(6);
 
-    expect(run.items).toHaveLength(13);
+    // 13 pre-existing demo items plus one item created from `vault.lampwright-cache`'s filled
+    // item slot (`item-cache`, `loot-table.travelling-lampwright-stock`).
+    expect(run.items).toHaveLength(14);
     expect(run.items.find((item) => item.itemId === ids.lantern)).toMatchObject({
       contentId: 'item.brass-lantern',
       fuel: 1800,
@@ -123,4 +127,46 @@ describe('seeded gameplay fixture', () => {
     (group as any).roleMembership[0].roleId = 'missing';
     expect(() => validateContentBoundRun(badRole, pack)).toThrow(/role missing is invalid/i);
   });
+
+  it('drops findable loot on the floor when a wired early monster is defeated', () => {
+    const fixture = createGameplayDemoRun(pack);
+    const { ids } = fixture;
+    const commandFactories: readonly ((state: ReturnType<typeof createGameplayDemoRun>['run']) => GameCommand)[] = [
+      () => ({ type: 'open-door', featureId: ids.door }) as GameCommand,
+      (state) => {
+        const hero = state.actors.find((actor) => actor.actorId === ids.hero)!;
+        const door = state.features.find((feature) => feature.featureId === ids.door)!;
+        return { type: 'move', direction: directionTo(hero, door) } as GameCommand;
+      },
+      () => ({ type: 'search' }) as GameCommand,
+      () => ({ type: 'disarm', featureId: ids.trap }) as GameCommand,
+      () => ({ type: 'equip', itemId: ids.armor, slot: 'body' }) as GameCommand,
+      () => ({ type: 'attack', targetActorId: ids.rat }) as GameCommand,
+    ];
+
+    let state = fixture.run;
+    for (const [index, factory] of commandFactories.entries()) {
+      const command = { ...factory(state), commandId: `command.loot-fixture-${index + 1}`,
+        expectedRevision: state.revision } as GameCommand;
+      const resolution = resolveCommand(state, command, { content: pack });
+      expect(resolution.result.status, stableJson(resolution.events)).toBe('applied');
+      state = resolution.state;
+    }
+
+    const rat = state.actors.find((actor) => actor.actorId === ids.rat)!;
+    expect(rat.health).toBe(0);
+    const floorItemsAtDeathTile = state.items.filter((item) =>
+      item.location.type === 'floor' && item.location.x === rat.x && item.location.y === rat.y);
+    expect(floorItemsAtDeathTile.length).toBeGreaterThanOrEqual(1);
+  });
 });
+
+function directionTo(from: Readonly<{ x: number; y: number }>, to: Readonly<{ x: number; y: number }>): Direction {
+  const directions: Record<string, Direction> = {
+    '0:-1': 'north', '1:-1': 'northeast', '1:0': 'east', '1:1': 'southeast',
+    '0:1': 'south', '-1:1': 'southwest', '-1:0': 'west', '-1:-1': 'northwest',
+  };
+  const direction = directions[`${Math.sign(to.x - from.x)}:${Math.sign(to.y - from.y)}`];
+  if (direction === undefined) throw new Error('target is not adjacent to the hero');
+  return direction;
+}

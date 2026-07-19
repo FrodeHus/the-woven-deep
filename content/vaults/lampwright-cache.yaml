@@ -39,7 +39,7 @@ entries:
         slot: { id: monster-guard, kind: monster, required: true, tags: [guard, lamplight] }
       "i":
         terrain: floor
-        slot: { id: item-cache, kind: item, required: true, tags: [cache, utility] }
+        slot: { id: item-cache, kind: item, required: true, tags: [cache, utility], lootTableId: loot-table.travelling-lampwright-stock }
       "t":
         terrain: floor
         slot: { id: trap-threshold, kind: trap, required: false, tags: [threshold, warning] }

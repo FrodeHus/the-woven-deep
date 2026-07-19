@@ -60,9 +60,10 @@ export async function compileContentDirectory(input: {
     }
   }
 
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
   for (const { entry, file } of vaultEntries) {
     throwIfAborted(input.signal);
-    issues.push(...validateVaultEntry(entry, file));
+    issues.push(...validateVaultEntry(entry, file, byId));
   }
   issues.push(...validateContentEntries(locatedEntries));
 

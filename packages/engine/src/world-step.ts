@@ -29,6 +29,7 @@ import { advanceBosses, bossCombatModifiers } from './boss-behavior.js';
 import { reconcileIndividualDeaths } from './individual-behavior.js';
 import { advanceFallenHeroEncounters, fallenHeroCombatModifiers } from './champion.js';
 import { projectDomainEvents } from './event-projection.js';
+import { dropMonsterLoot } from './monster-loot.js';
 import {
   completeNormalActorTurn, relationshipBetween, resolveOpportunityAttacks, setRelationship,
   type ReactionAttackResult,
@@ -845,6 +846,18 @@ export function resolveWorldStep(input: Readonly<{
   scrubDepartedIntentEvents({ events, publicEvents, departureEvents: lifecycle.events });
   appendEvents(events, publicEvents, lifecycle.events, state, heroId, input.content);
   state = refreshHeroKnowledge(state, input.content);
+  // Single reaping pass: any actor (never the hero) that transitioned from health >0 to 0
+  // this step drops its monster loot exactly once, in deterministic actorId order, before
+  // the function's two return points below.
+  const preStepHealth = new Map(input.state.actors.map((actor) => [actor.actorId, actor.health] as const));
+  const newlyDead = state.actors
+    .filter((actor) => actor.health === 0 && !actor.playerControlled && (preStepHealth.get(actor.actorId) ?? 0) > 0)
+    .sort((left, right) => compareCodeUnits(left.actorId, right.actorId));
+  for (const deadActor of newlyDead) {
+    const drop = dropMonsterLoot({ state, content: input.content, deadActor, eventId: input.eventId });
+    state = drop.state;
+    appendEvents(events, publicEvents, drop.events, state, heroId, input.content);
+  }
   const passiveHero = heroActor(state);
   if (passiveHero.health === 0) return { state, events, publicEvents, internalActions };
   const passiveFloor = state.floors.find((candidate) => candidate.floorId === passiveHero.floorId)!;

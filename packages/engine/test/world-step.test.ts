@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { CompiledContentPack, EncounterContentEntry, ItemContentEntry, MonsterContentEntry } from '@woven-deep/content';
+import type {
+  CompiledContentPack, EncounterContentEntry, ItemContentEntry, LootTableContentEntry, MonsterContentEntry,
+} from '@woven-deep/content';
 import {
   createDemoContentPack,
   createDemoRun,
@@ -7,8 +9,10 @@ import {
   resolveCommand,
   resolveWorldStep,
   selectReadyActor,
+  type ActiveRun,
   type ActorState,
   type ItemInstance,
+  type OpaqueId,
 } from '../src/index.js';
 
 function monsterDefinition(id: string): MonsterContentEntry {
@@ -36,6 +40,40 @@ function monster(id: string, overrides: Partial<ActorState> = {}): ActorState {
     disposition: 'hostile', behaviorId: 'behavior.approach-and-attack',
     x: 3, y: 1, awareActorIds: [hero.actorId], ...overrides,
   };
+}
+
+function lootTable(): LootTableContentEntry {
+  return { kind: 'loot-table', id: 'loot-table.world-step-drop', name: 'World step drop', tags: [], rolls: 1,
+    choices: [{ contentId: 'item.world-step-drop', lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }] };
+}
+
+function droppedItemDefinition(): ItemContentEntry {
+  return { kind: 'item', id: 'item.world-step-drop', name: 'World step drop', tags: [], glyph: '*', color: '#ffaa00',
+    category: 'misc', stackLimit: 10, price: 1, rarity: 'common', minDepth: 1, maxDepth: 20, actionCost: 100,
+    equipment: null, combat: null, light: null, identification: { mode: 'known', poolId: null }, effects: [] };
+}
+
+function lootingMonsterDefinition(id: string): MonsterContentEntry {
+  return { ...monsterDefinition(id), health: 1, defense: -1_000, lootTableId: lootTable().id, dropChance: 1 };
+}
+
+function advanceUntilMonsterDead(input: Readonly<{
+  state: ActiveRun; content: CompiledContentPack; heroId: OpaqueId; targetActorId: OpaqueId;
+}>): ReturnType<typeof resolveWorldStep> {
+  let state = input.state;
+  let events: ReturnType<typeof resolveWorldStep>['events'] = [];
+  let publicEvents: ReturnType<typeof resolveWorldStep>['publicEvents'] = [];
+  let internalActions = 0;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const target = state.actors.find((actor) => actor.actorId === input.targetActorId);
+    if (!target || target.health === 0) break;
+    const step = resolveWorldStep({
+      state, content: input.content, eventId: `command.attack-${attempt}`,
+      action: { type: 'bump-attack', actorId: input.heroId, targetActorId: input.targetActorId, cost: 100 },
+    });
+    state = step.state; events = step.events; publicEvents = step.publicEvents; internalActions = step.internalActions;
+  }
+  return { state, events, publicEvents, internalActions };
 }
 
 describe('atomic world steps', () => {
@@ -233,5 +271,35 @@ describe('atomic world steps', () => {
     expect(result.state.actors[0]?.health).toBe(0);
     expect(result.events.map((event) => event.type)).toEqual(['hero.waited', 'actor.damaged', 'actor.died']);
     expect(selectReadyActor(result.state.actors, createDemoContentPack())).toBeUndefined();
+  });
+
+  it('drops monster loot on a killing blow and stays replay-stable', () => {
+    const state = createDemoRun();
+    const enemy = monster('monster.looting', { energy: 0, x: 2, y: 1 });
+    const content: CompiledContentPack = { ...createDemoContentPack(),
+      entries: [...createDemoContentPack().entries, lootingMonsterDefinition(enemy.contentId),
+        lootTable(), droppedItemDefinition()] };
+    const input: ActiveRun = { ...state, actors: [state.actors[0]!, enemy] };
+    const after = advanceUntilMonsterDead({ state: input, content, heroId: state.hero.actorId, targetActorId: enemy.actorId });
+    expect(after.state.actors.find((actor) => actor.actorId === enemy.actorId)?.health).toBe(0);
+    const dropped = after.state.items.filter((item) => item.location.type === 'floor');
+    expect(dropped.length).toBeGreaterThan(0);
+    expect(after.events.some((event) => event.type === 'loot.dropped')).toBe(true);
+    const replay = advanceUntilMonsterDead({ state: input, content, heroId: state.hero.actorId, targetActorId: enemy.actorId });
+    expect(replay.state).toEqual(after.state);
+    expect(replay.events).toEqual(after.events);
+  });
+
+  it('does not drop loot for a monster with no loot table configured', () => {
+    const state = createDemoRun();
+    const enemy = monster('monster.no-loot', { energy: 0, x: 2, y: 1 });
+    const content: CompiledContentPack = { ...createDemoContentPack(),
+      entries: [...createDemoContentPack().entries, { ...monsterDefinition(enemy.contentId), health: 1,
+        defense: -1_000, lootTableId: null, dropChance: 0 }] };
+    const input: ActiveRun = { ...state, actors: [state.actors[0]!, enemy] };
+    const after = advanceUntilMonsterDead({ state: input, content, heroId: state.hero.actorId, targetActorId: enemy.actorId });
+    expect(after.state.actors.find((actor) => actor.actorId === enemy.actorId)?.health).toBe(0);
+    expect(after.state.items.filter((item) => item.location.type === 'floor')).toHaveLength(0);
+    expect(after.events.some((event) => event.type === 'loot.dropped')).toBe(false);
   });
 });

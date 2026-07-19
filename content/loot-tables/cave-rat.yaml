@@ -1,0 +1,11 @@
+schemaVersion: 7
+entries:
+  - kind: loot-table
+    id: loot-table.cave-rat
+    name: Cave rat scraps
+    tags: [early, vermin]
+    rolls: 1
+    choices:
+      - { contentId: item.travel-ration, lootTableId: null, weight: 6, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.lamp-oil, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.crimson-potion, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
