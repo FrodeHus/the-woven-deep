@@ -12,8 +12,8 @@ export interface UseSettingsRoamingResult {
 }
 
 /**
- * Settings roaming: the refs/version-counter/debounced-PUT/roam-on-sign-in machinery, extracted
- * verbatim from `App` (Task 36). `settingsRef` mirrors `settings` for the roam effect's async
+ * Settings roaming: the refs/version-counter/debounced-PUT/roam-on-sign-in machinery.
+ * `settingsRef` mirrors `settings` for the roam effect's async
  * closure (which only re-fires on an account-status transition, so it cannot rely on the
  * render-time `settings` staying fresh by the time its network round-trip resolves).
  * `settingsVersionRef` is a monotonic counter this client increments on every push it makes (the

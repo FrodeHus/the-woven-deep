@@ -7,8 +7,7 @@ export interface UseAccountResult {
 }
 
 /** Owns the boot-time account/session fetch: `GUEST_ACCOUNT` until (and unless) a session cookie
- * proves otherwise. Extracted verbatim from `App`'s former account effect (Task 36) --
- * `accountOverride` is the same test-only seam that skips the network fetch entirely, seeding
+ * proves otherwise. `accountOverride` is the test-only seam that skips the network fetch entirely, seeding
  * state directly. `setAccount` is exposed so callers can flip the account themselves (e.g. on
  * sign-out). */
 export function useAccount(fetcher: typeof fetch, accountOverride?: AccountState): UseAccountResult {

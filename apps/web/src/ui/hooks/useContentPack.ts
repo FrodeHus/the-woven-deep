@@ -9,8 +9,7 @@ export interface UseContentPackResult {
 }
 
 /** Owns the boot-time content-pack fetch: loading -> pack, or loading -> error with a `retry` that
- * re-fires the effect. Extracted verbatim from `App`'s former pack-loading effect (Task 36) --
- * `attempt` is the retry counter the effect keys off, bumped by `retry`. */
+ * re-fires the effect. `attempt` is the retry counter the effect keys off, bumped by `retry`. */
 export function useContentPack(fetcher: typeof fetch): UseContentPackResult {
   const [pack, setPack] = useState<CompiledContentPack>();
   const [error, setError] = useState<string>();
