@@ -4,7 +4,7 @@ import { actorById, heroActor, heroPerception, type ActorState } from './actor-m
 import { deriveActorStats } from './attributes.js';
 import { chooseBehaviorAction, selectPatrolGoal } from './behavior.js';
 import { ensureFactionReputation } from './commerce.js';
-import { applyPopulationCombatModifiers, resolveAttack } from './combat.js';
+import { applyPopulationCombatModifiers, composePopulationCombatModifiers, resolveAttack } from './combat.js';
 import { conditionModifiers } from './conditions.js';
 import { resolveEffectSequence } from './effects.js';
 import { consumeItemQuantity, dropItem, pickupItem, splitStack } from './inventory.js';
@@ -92,10 +92,9 @@ function profile(
   const bossModifiers = bossCombatModifiers({ state: { actors, populations }, content, actorId: actor.actorId });
   const fallenModifiers = fallenHeroCombatModifiers({ state: { actors, populations,
     fallenHeroStandings }, content, actorId: actor.actorId });
-  const populationModifiers = { accuracy: groupModifiers.accuracy + swarmModifiers.accuracy
-    + bossModifiers.accuracy + fallenModifiers.accuracy,
-    defense: groupModifiers.defense + swarmModifiers.defense + bossModifiers.defense + fallenModifiers.defense,
-    damage: groupModifiers.damage + swarmModifiers.damage + bossModifiers.damage + fallenModifiers.damage };
+  const populationModifiers = composePopulationCombatModifiers([
+    groupModifiers, swarmModifiers, bossModifiers, fallenModifiers,
+  ]);
   const npc = monster === undefined ? npcDefinition(content, actor) : undefined;
   if (npc) return applyPopulationCombatModifiers({
     accuracy: npc.accuracy,
