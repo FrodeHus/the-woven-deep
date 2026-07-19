@@ -12,6 +12,7 @@ import { closeDoor, featureTiles, openDoor } from './features.js';
 import type {
   ActiveRun, DecisionRequiredResult, GameCommand, InvalidActionReason, OpaqueId, Point,
 } from './model.js';
+import { isDispatchableActionType } from './action-dispatch.js';
 
 export interface ResolutionContext {
   readonly content: CompiledContentPack;
@@ -91,13 +92,6 @@ export interface RestAction {
 export type GameAction = MoveAction | WaitAction | SwarmSpawnAction | BumpAttackAction | PickupAction | DropAction | SplitStackAction
   | FireAction | ThrowItemAction | UseItemAction | EquipAction | UnequipAction | ToggleLightAction | RefuelAction
   | DoorAction | SearchAction | DisarmAction | RestAction;
-export type ActionResolverRegistry = Readonly<Partial<Record<GameAction['type'], true>>>;
-export const ACTION_RESOLVER_REGISTRY: ActionResolverRegistry = Object.freeze({
-  move: true, wait: true, 'swarm-spawn': true, 'bump-attack': true, pickup: true, drop: true, 'split-stack': true,
-  fire: true, 'throw-item': true, 'use-item': true, equip: true, unequip: true,
-  'toggle-light': true, refuel: true, 'open-door': true, 'close-door': true, search: true, disarm: true,
-  rest: true,
-});
 
 export interface InvalidActionValidation {
   readonly status: 'invalid';
@@ -191,7 +185,7 @@ export function validatePlayerAction(input: Readonly<{
     const action: GameAction = movement.status === 'move'
       ? { type: 'move', actorId: actor.actorId, to: movement.to, cost: movement.cost }
       : { type: 'bump-attack', actorId: actor.actorId, targetActorId: movement.targetActorId, cost: movement.cost };
-    return ACTION_RESOLVER_REGISTRY[action.type] ? action : { status: 'invalid', reason: 'action.unavailable' };
+    return isDispatchableActionType(action.type) ? action : { status: 'invalid', reason: 'action.unavailable' };
   }
   if (input.command.type === 'attack') {
     const targetActorId = input.command.targetActorId;
