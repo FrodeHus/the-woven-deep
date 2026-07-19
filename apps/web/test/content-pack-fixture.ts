@@ -64,6 +64,7 @@ const entries: readonly ContentEntry[] = [
     minDepth: 1, maxDepth: 5, attributes, health: 4, speed: 110, accuracy: 1, defense: 10,
     perception: 6, damage: dice, armor: 0, resistances, disposition: 'hostile',
     behaviorId: 'behavior.approach-and-attack', behaviorParameters: {}, rarity: 'common', threat: 1,
+    lootTableId: null, dropChance: 1,
   },
   {
     kind: 'spell', id: 'spell.spark', name: 'Spark', tags: [], targetingId: 'target.actor', range: 5,
