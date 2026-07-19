@@ -7,8 +7,7 @@ import { logout } from './api.js';
 import { GUEST_ACCOUNT, type AccountState } from './session/account.js';
 import { loadSightings } from './session/codex.js';
 import type { LogLine } from './session/event-log.js';
-import { GuestSession, type SessionNotice } from './session/guest-session.js';
-import { createSessionRunRecordRepository, SessionHallCorruptError } from './session/run-records-storage.js';
+import { GuestSession } from './session/guest-session.js';
 import { clearGuestSession } from './session/clear-guest-session.js';
 import {
   DEFAULT_SETTINGS, loadSettings, resolveKeymap, saveSettings, type Settings,
@@ -17,8 +16,12 @@ import { useGuestSession } from './session/store.js';
 import {
   browserLocalStorage, browserSessionStorage, classifyStorageFailure, PORTRAIT_KEY, type SessionStorageLike,
 } from './session/storage.js';
+import { AppBanners, isStorageNotice, noticeMessage, storageWarningMessage } from './ui/AppBanners.js';
+import { RootStyling } from './ui/RootStyling.js';
 import { useAccount } from './ui/hooks/useAccount.js';
 import { useContentPack } from './ui/hooks/useContentPack.js';
+import { useHallRepository } from './ui/hooks/useHallRepository.js';
+import { useScreenRouter } from './ui/hooks/useScreenRouter.js';
 import { useSettingsRoaming } from './ui/hooks/useSettingsRoaming.js';
 import { canOpenOverlay, OVERLAY_REGISTRY, type OverlayId } from './ui/overlays/registry.js';
 import { OverlayHost } from './ui/overlays/OverlayHost.js';
@@ -28,7 +31,6 @@ import { HallScreen } from './ui/screens/HallScreen.js';
 import { SignInScreen } from './ui/screens/SignInScreen.js';
 import { TitleScreen } from './ui/screens/TitleScreen.js';
 import { PlayScreen } from './ui/PlayScreen.js';
-import { effectiveReducedMotion, ScreenFade } from './ui/ScreenFade.js';
 import { UiProviders } from './ui/providers.js';
 import './styles.css';
 
@@ -47,18 +49,7 @@ export interface AppProps {
   readonly accountOverride?: AccountState;
 }
 
-/**
- * The client-side screen state machine: title (the landing menu) -> chargen (the wizard) -> play
- * (the live run) -> conclusion (payload wiring lands in a later task) -> hall (the Hall of
- * Records, reachable from either title or conclusion, hence `returnTo`).
- */
-export type ScreenState =
-  | { readonly screen: 'title' }
-  | { readonly screen: 'signin' }
-  | { readonly screen: 'chargen' }
-  | { readonly screen: 'play' }
-  | { readonly screen: 'conclusion' }
-  | { readonly screen: 'hall'; readonly returnTo: 'title' | 'conclusion' };
+export type { ScreenState } from './ui/hooks/useScreenRouter.js';
 
 /** Re-exported from `session/storage.js`, which now owns this constant so the framework-free
  * `clear-guest-session.ts` module can list it as a wipe target without importing this (React)
@@ -101,37 +92,6 @@ function randomSeed(): Uint32State {
   crypto.getRandomValues(words);
   if (words.every((word) => word === 0)) words[0] = 1;
   return [words[0]!, words[1]!, words[2]!, words[3]!];
-}
-
-type DismissibleNotice = Exclude<SessionNotice, { kind: 'storage' }>;
-type StorageNotice = Extract<SessionNotice, { kind: 'storage' }>;
-
-function isStorageNotice(notice: SessionNotice): notice is StorageNotice {
-  return notice.kind === 'storage';
-}
-
-/** Wording for the dismissible fresh/restored/save-discarded/data-reset banner. Storage notices
- * never reach this — they get their own persistent, non-dismissible warning (see
- * `storageWarningMessage`). */
-function noticeMessage(notice: DismissibleNotice): string {
-  if (notice.kind === 'fresh') return 'A new run has begun.';
-  if (notice.kind === 'restored') return 'Welcome back — your run was restored.';
-  if (notice.kind === 'data-reset') {
-    return notice.source === 'sightings'
-      ? 'Your discovery log was unreadable and has been reset.'
-      : 'Your guidance progress was unreadable and has been reset.';
-  }
-  return `Your previous save could not be loaded (${notice.reason}) — a new run has begun.`;
-}
-
-/**
- * Wording for storage-unavailable vs storage-full, per the design spec's requirement that the two
- * failures produce distinct, actionable messages.
- */
-function storageWarningMessage(notice: StorageNotice): string {
-  return notice.failure === 'full'
-    ? 'Your browser storage is full, so this run cannot be saved — play continues unsaved.'
-    : 'Saving is unavailable in this browser — play continues, but your progress will not persist.';
 }
 
 /** How much of the adventure log the conclusion screen's "last moments" recap keeps. */
@@ -324,74 +284,23 @@ export function App({
     pushSettings(next);
   }
 
-  // Bumped by `handleClearGuestSession` so the Hall-of-Records `repository` memo below (keyed on
-  // this alongside `storage`) is forced to reconstruct AFTER the wipe -- otherwise it would keep
-  // serving the in-memory records it already loaded at its last construction, even though the
-  // underlying storage key is now gone.
+  // Bumped by `handleClearGuestSession` so the Hall-of-Records `repository` (keyed on this
+  // alongside `storage`) is forced to reconstruct AFTER the wipe -- otherwise it would keep serving
+  // the in-memory records it already loaded at its last construction, even though the underlying
+  // storage key is now gone.
   const [storageEpoch, setStorageEpoch] = useState(0);
 
   const [overlay, setOverlay] = useState<OverlayId | null>(null);
 
-  /** Bumped exactly at the three screen-level transitions the design calls out for a fade-through-
-   * dark (title->play via Continue, chargen->play via Confirm, play->conclusion on death) --
-   * `ScreenFade` (below, inside `withRootStyling`) fades whenever this changes, since every branch
-   * of the screen switch (title/chargen/hall/conclusion/play) shares that one wrapper and never
-   * touches this token on its own. Every OTHER screen switch (title->chargen, hall in and out of
-   * either direction, conclusion->title/chargen for a new hero) stays the instant conditional
-   * return it always was, exactly per the brief. */
-  const [fadeToken, setFadeToken] = useState(0);
-  const bumpFadeToken = (): void => setFadeToken((token) => token + 1);
-
-  /** `fontScale` as an inline `calc(1rem * scale)` on the app root, and `reducedMotion` as at most
-   * one root class -- the three-way contract (see `styles.css`'s comment beside `.motion-full`):
-   * "system" applies neither class (the `@media (prefers-reduced-motion: reduce)` query alone
-   * decides), "on" applies `.motion-reduced` (forces animations off regardless of the OS setting),
-   * "off" applies `.motion-full` (forces animations back on regardless of the OS setting -- the
-   * one case a media query alone cannot serve, since it never sees the in-app setting). The SAME
-   * three-way value, resolved to a plain boolean via `effectiveReducedMotion`, gates `ScreenFade`
-   * below -- reduced motion must render NO fade element at all, which only a JS-side decision can
-   * express (a CSS class alone cannot suppress an element's existence). */
-  function withRootStyling(children: JSX.Element): JSX.Element {
-    const motionClass = settings.reducedMotion === 'on' ? ' motion-reduced'
-      : settings.reducedMotion === 'off' ? ' motion-full' : '';
-    const themeClass = settings.theme === 'high-contrast' ? ' theme-high-contrast' : '';
-    return (
-      <div className={`guest-app-root${motionClass}${themeClass}`} style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}>
-        <ScreenFade transitionKey={fadeToken} reducedMotion={effectiveReducedMotion(settings.reducedMotion)}>
-          {children}
-        </ScreenFade>
-      </div>
-    );
-  }
-
   const storage = useMemo(() => storageOverride ?? browserSessionStorage(), [storageOverride]);
 
-  // The session-scoped Hall of Records repository. A corrupt blob throws `SessionHallCorruptError`
-  // at construction; the module itself clears the storage key back to a fresh, empty Hall before
-  // throwing, so retrying the SAME construction immediately below always succeeds. The active run
-  // (an entirely separate storage key) is untouched either way — only a notice is surfaced.
-  // `storageEpoch` forces this to reconstruct after `handleClearGuestSession` wipes `RECORDS_KEY`
-  // out from under it -- `storage` itself never changes identity, so without this second
-  // dependency the memo would keep serving the records it already loaded.
-  const [repository, hallNotice] = useMemo((): readonly [RunRecordRepository, string | null] => {
-    try {
-      return [createSessionRunRecordRepository(storage), null] as const;
-    } catch (thrown) {
-      if (thrown instanceof SessionHallCorruptError) {
-        return [createSessionRunRecordRepository(storage), thrown.message] as const;
-      }
-      throw thrown;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `storageEpoch` is a deliberate
-    // reconstruction trigger, not a value read inside the memo.
-  }, [storage, storageEpoch]);
+  const [repository, hallNotice] = useHallRepository(storage, storageEpoch);
 
   // Read once at boot -- `window.location.search` never changes for the life of this component
   // (the app never navigates), so this is the one place `isQuickstart` needs calling repeatedly.
   const [quickstart] = useState(() => isQuickstart(window.location.search));
-  const [screen, setScreen] = useState<ScreenState>(
-    () => (quickstart ? { screen: 'play' } : { screen: 'title' }),
-  );
+  const router = useScreenRouter(quickstart);
+  const { screen } = router;
   const [session, setSession] = useState<GuestSession>();
   const [chargenSeed, setChargenSeed] = useState<Uint32State>();
   const [portraitGlyph, setPortraitGlyph] = useState<string>();
@@ -430,51 +339,16 @@ export function App({
     setFinalizeWarning(undefined);
     closeOverlay();
     setStorageEpoch((epoch) => epoch + 1);
-    setScreen({ screen: 'title' });
-  }
-
-  /** Wraps every post-boot screen with any persistent, non-dismissible warnings pending —
-   * Hall-corruption-on-boot, finalize-write, and settings-write failures alike. The active run
-   * survives regardless of any of these: only the affected write (or, on boot, the Hall itself)
-   * was affected. */
-  function withHallNotice(children: JSX.Element): JSX.Element {
-    const showSettingsCorrupted = settingsLoad.corrupted && !settingsCorruptedDismissed;
-    if (!hallNotice && !finalizeWarning && !settingsWriteWarning && !showSettingsCorrupted) return children;
-    return (
-      <>
-        {showSettingsCorrupted && (
-          <div role="status" aria-label="Settings notice" className="session-banner" data-kind="settings-corrupted">
-            <p>Stored settings were unreadable and have been reset.</p>
-            <button type="button" onClick={() => setSettingsCorruptedDismissed(true)}>Dismiss</button>
-          </div>
-        )}
-        {hallNotice && (
-          <div role="alert" aria-label="Hall notice" className="storage-warning-banner" data-kind="hall-corrupt">
-            <p>Your Hall of Records could not be read and has been reset. ({hallNotice})</p>
-          </div>
-        )}
-        {finalizeWarning && (
-          <div role="alert" aria-label="Storage warning" className="storage-warning-banner" data-kind="finalize-failed">
-            <p>{finalizeWarning}</p>
-          </div>
-        )}
-        {settingsWriteWarning && (
-          <div role="alert" aria-label="Storage warning" className="storage-warning-banner" data-kind="settings-write-failed">
-            <p>{settingsWriteWarning}</p>
-          </div>
-        )}
-        {children}
-      </>
-    );
+    router.toTitle();
   }
 
   // Quickstart's session is constructed once the pack is ready (it can't be constructed at the
   // `useState` initializer above — the pack isn't loaded yet at first render). Gated on
-  // `screen.screen === 'play'` (quickstart's initial screen, set at the `useState` initializer
-  // above): without it, a surviving `?quickstart=1` query in the URL re-fires this effect after
-  // `handleClearGuestSession` sets `session` back to undefined and the screen to 'title',
-  // silently constructing a hidden `GuestSession` that re-persists storage (its constructor syncs
-  // sightings on its own) and breaks the wipe contract on quickstart boots.
+  // `screen.screen === 'play'` (quickstart's initial screen): without it, a surviving
+  // `?quickstart=1` query in the URL re-fires this effect after `handleClearGuestSession` sets
+  // `session` back to undefined and the screen to 'title', silently constructing a hidden
+  // `GuestSession` that re-persists storage (its constructor syncs sightings on its own) and breaks
+  // the wipe contract on quickstart boots.
   useEffect(() => {
     if (!pack || session) return;
     if (screen.screen !== 'play') return;
@@ -488,188 +362,208 @@ export function App({
   }, [pack, storage, session, screen, localStorageInstance]);
 
   if (error) {
-    return withRootStyling(
-      <main className="shell boot-error">
-        <p className="eyebrow">The Woven Deep</p>
-        <h1>The archive would not answer.</h1>
-        <p role="alert">{error}</p>
-        <button type="button" onClick={retry}>Retry</button>
-      </main>,
+    return (
+      <RootStyling settings={settings} fadeToken={router.fadeToken}>
+        <main className="shell boot-error">
+          <p className="eyebrow">The Woven Deep</p>
+          <h1>The archive would not answer.</h1>
+          <p role="alert">{error}</p>
+          <button type="button" onClick={retry}>Retry</button>
+        </main>
+      </RootStyling>
     );
   }
 
   if (!pack) {
-    return withRootStyling(
-      <main className="shell boot-loading">
-        <p className="eyebrow">The Woven Deep</p>
-        <p role="status">Binding the current content pack…</p>
-      </main>,
+    return (
+      <RootStyling settings={settings} fadeToken={router.fadeToken}>
+        <main className="shell boot-loading">
+          <p className="eyebrow">The Woven Deep</p>
+          <p role="status">Binding the current content pack…</p>
+        </main>
+      </RootStyling>
     );
   }
 
-  if (screen.screen === 'title') {
-    return withRootStyling(withHallNotice(
-      <UiProviders pack={pack} settings={settings} onChangeSettings={handleSettingsChange}>
-        <main className="shell">
-          <TitleScreen
-            storage={storage}
-            account={account}
-            onEnterTheDeep={() => {
-              closeOverlay();
-              setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
-              setScreen({ screen: 'chargen' });
-            }}
-            onContinue={() => {
-              closeOverlay();
-              setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
-              setSession(new GuestSession({ pack, storage, localStorage: localStorageInstance }));
-              setScreen({ screen: 'play' });
-              bumpFadeToken();
-            }}
-            onHall={() => setScreen({ screen: 'hall', returnTo: 'title' })}
-            onOpenOverlay={openOverlay}
-            onSignIn={() => setScreen({ screen: 'signin' })}
-            onSignOut={() => {
-              void logout(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
-            }}
-          />
-          <OverlayHost
-            overlay={overlay}
-            onClose={closeOverlay}
-            isPlayActive={false}
-            records={repository.records()}
-            onClearGuestSession={handleClearGuestSession}
-            sightings={loadSightings(storage).sightings}
-          />
-        </main>
-      </UiProviders>,
-    ));
-  }
-
-  if (screen.screen === 'signin') {
-    return withRootStyling(withHallNotice(
-      <main className="shell">
-        <SignInScreen fetcher={fetcher} onBack={() => setScreen({ screen: 'title' })} />
-      </main>,
-    ));
-  }
-
-  if (screen.screen === 'chargen') {
-    if (chargenError) {
-      return withRootStyling(withHallNotice(
-        <main className="shell boot-error">
-          <p className="eyebrow">The Woven Deep</p>
-          <h1>Something went wrong building your hero.</h1>
-          <p role="alert">{chargenError}</p>
-          <button type="button" onClick={() => setChargenError(undefined)}>Back</button>
-        </main>,
-      ));
+  /** The current screen's content, before the persistent-warning and root-styling wrappers. Every
+   * post-boot screen shares those two wrappers (applied once below), so each branch here returns
+   * only its own inner element. Takes the loaded `pack` so it stays non-nullable throughout. */
+  function renderScreen(pack: CompiledContentPack): JSX.Element {
+    if (screen.screen === 'title') {
+      return (
+        <UiProviders pack={pack} settings={settings} onChangeSettings={handleSettingsChange}>
+          <main className="shell">
+            <TitleScreen
+              storage={storage}
+              account={account}
+              onEnterTheDeep={() => {
+                closeOverlay();
+                setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
+                router.toChargen();
+              }}
+              onContinue={() => {
+                closeOverlay();
+                setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
+                setSession(new GuestSession({ pack, storage, localStorage: localStorageInstance }));
+                router.toPlay();
+              }}
+              onHall={() => router.toHall('title')}
+              onOpenOverlay={openOverlay}
+              onSignIn={() => router.toSignin()}
+              onSignOut={() => {
+                void logout(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
+              }}
+            />
+            <OverlayHost
+              overlay={overlay}
+              onClose={closeOverlay}
+              isPlayActive={false}
+              records={repository.records()}
+              onClearGuestSession={handleClearGuestSession}
+              sightings={loadSightings(storage).sightings}
+            />
+          </main>
+        </UiProviders>
+      );
     }
-    // `chargenSeed` is always set before this screen is reached (see `onEnterTheDeep` above).
-    const seed = chargenSeed!;
-    return withRootStyling(withHallNotice(
-      <ChargenScreen
-        pack={pack}
-        seed={seed}
-        settings={settings}
-        onChangeSettings={handleSettingsChange}
-        onConfirm={(choices: HeroChoices, glyph: string) => {
-          let hero: ReturnType<typeof heroFromChoices>;
-          try {
-            hero = heroFromChoices({ pack, choices });
-          } catch (thrown) {
-            // A client bug (a malformed choice heroFromChoices' own validation somehow missed
-            // upstream) must never fail silently -- surface it visibly rather than only logging.
-            setChargenError(thrown instanceof Error ? thrown.message : 'Hero creation failed unexpectedly.');
-            return;
-          }
-          try {
-            storage.set(PORTRAIT_KEY, glyph);
-          } catch {
-            // Best-effort, same as every other portrait/cosmetic persistence attempt in this app —
-            // the run itself is unaffected if this particular write fails.
-          }
-          setPortraitGlyph(glyph);
-          setSession(new GuestSession({ pack, storage, seed, hero, startFresh: true, localStorage: localStorageInstance }));
-          setScreen({ screen: 'play' });
-          bumpFadeToken();
-        }}
-      />,
-    ));
-  }
 
-  if (screen.screen === 'hall') {
-    const { returnTo } = screen;
-    return withRootStyling(withHallNotice(
-      <main className="shell">
-        <HallScreen repository={repository} onBack={() => setScreen({ screen: returnTo })} />
-      </main>,
-    ));
-  }
+    if (screen.screen === 'signin') {
+      return (
+        <main className="shell">
+          <SignInScreen fetcher={fetcher} onBack={() => router.toTitle()} />
+        </main>
+      );
+    }
 
-  if (screen.screen === 'conclusion') {
-    // `conclusion` is always set before this screen is reached — `GameRoot`'s `onConcluded`
-    // (below) sets both together, in the same event.
-    if (!conclusion) {
-      return withRootStyling(withHallNotice(
+    if (screen.screen === 'chargen') {
+      if (chargenError) {
+        return (
+          <main className="shell boot-error">
+            <p className="eyebrow">The Woven Deep</p>
+            <h1>Something went wrong building your hero.</h1>
+            <p role="alert">{chargenError}</p>
+            <button type="button" onClick={() => setChargenError(undefined)}>Back</button>
+          </main>
+        );
+      }
+      // `chargenSeed` is always set before this screen is reached (see `onEnterTheDeep` above).
+      const seed = chargenSeed!;
+      return (
+        <ChargenScreen
+          pack={pack}
+          seed={seed}
+          settings={settings}
+          onChangeSettings={handleSettingsChange}
+          onConfirm={(choices: HeroChoices, glyph: string) => {
+            let hero: ReturnType<typeof heroFromChoices>;
+            try {
+              hero = heroFromChoices({ pack, choices });
+            } catch (thrown) {
+              // A client bug (a malformed choice heroFromChoices' own validation somehow missed
+              // upstream) must never fail silently -- surface it visibly rather than only logging.
+              setChargenError(thrown instanceof Error ? thrown.message : 'Hero creation failed unexpectedly.');
+              return;
+            }
+            try {
+              storage.set(PORTRAIT_KEY, glyph);
+            } catch {
+              // Best-effort, same as every other portrait/cosmetic persistence attempt in this app —
+              // the run itself is unaffected if this particular write fails.
+            }
+            setPortraitGlyph(glyph);
+            setSession(new GuestSession({ pack, storage, seed, hero, startFresh: true, localStorage: localStorageInstance }));
+            router.toPlay();
+          }}
+        />
+      );
+    }
+
+    if (screen.screen === 'hall') {
+      const { returnTo } = screen;
+      return (
+        <main className="shell">
+          <HallScreen repository={repository} onBack={() => router.returnFromHall(returnTo)} />
+        </main>
+      );
+    }
+
+    if (screen.screen === 'conclusion') {
+      // `conclusion` is always set before this screen is reached — `GameRoot`'s `onConcluded`
+      // (below) sets both together, in the same event.
+      if (!conclusion) {
+        return (
+          <main className="shell boot-loading">
+            <p className="eyebrow">The Woven Deep</p>
+            <p role="status">The run has ended.</p>
+          </main>
+        );
+      }
+      return (
+        <ConclusionScreen
+          projection={conclusion.projection}
+          pack={pack}
+          logTail={conclusion.logTail}
+          onHall={() => router.toHall('conclusion')}
+          onNewHero={() => {
+            setSession(undefined);
+            setConclusion(undefined);
+            setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
+            router.toChargen();
+          }}
+          onTitle={() => {
+            setSession(undefined);
+            setConclusion(undefined);
+            router.toTitle();
+          }}
+        />
+      );
+    }
+
+    if (!session) {
+      return (
         <main className="shell boot-loading">
           <p className="eyebrow">The Woven Deep</p>
-          <p role="status">The run has ended.</p>
-        </main>,
-      ));
+          <p role="status">Binding the current content pack…</p>
+        </main>
+      );
     }
-    return withRootStyling(withHallNotice(
-      <ConclusionScreen
-        projection={conclusion.projection}
-        pack={pack}
-        logTail={conclusion.logTail}
-        onHall={() => setScreen({ screen: 'hall', returnTo: 'conclusion' })}
-        onNewHero={() => {
-          setSession(undefined);
-          setConclusion(undefined);
-          setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
-          setScreen({ screen: 'chargen' });
-        }}
-        onTitle={() => {
-          setSession(undefined);
-          setConclusion(undefined);
-          setScreen({ screen: 'title' });
-        }}
-      />,
-    ));
+
+    return (
+      <UiProviders pack={pack} settings={settings} onChangeSettings={handleSettingsChange} session={session}>
+        <GameRoot
+          session={session}
+          pack={pack}
+          repository={repository}
+          portraitGlyph={portraitGlyph}
+          overlay={overlay}
+          onOpenOverlay={openOverlay}
+          onCloseOverlay={closeOverlay}
+          keymap={keymap}
+          settings={settings}
+          onChangeSettings={handleSettingsChange}
+          onClearGuestSession={handleClearGuestSession}
+          onboardingEnabled={settings.onboarding === 'on' && !quickstart}
+          onConcluded={(projection, logTail) => {
+            setConclusion({ projection, logTail });
+            router.toConclusion();
+          }}
+          onFinalizeError={setFinalizeWarning}
+        />
+      </UiProviders>
+    );
   }
 
-  if (!session) {
-    return withRootStyling(withHallNotice(
-      <main className="shell boot-loading">
-        <p className="eyebrow">The Woven Deep</p>
-        <p role="status">Binding the current content pack…</p>
-      </main>,
-    ));
-  }
-
-  return withRootStyling(withHallNotice(
-    <UiProviders pack={pack} settings={settings} onChangeSettings={handleSettingsChange} session={session}>
-      <GameRoot
-        session={session}
-        pack={pack}
-        repository={repository}
-        portraitGlyph={portraitGlyph}
-        overlay={overlay}
-        onOpenOverlay={openOverlay}
-        onCloseOverlay={closeOverlay}
-        keymap={keymap}
-        settings={settings}
-        onChangeSettings={handleSettingsChange}
-        onClearGuestSession={handleClearGuestSession}
-        onboardingEnabled={settings.onboarding === 'on' && !quickstart}
-        onConcluded={(projection, logTail) => {
-          setConclusion({ projection, logTail });
-          setScreen({ screen: 'conclusion' });
-          bumpFadeToken();
-        }}
-        onFinalizeError={setFinalizeWarning}
-      />
-    </UiProviders>,
-  ));
+  return (
+    <RootStyling settings={settings} fadeToken={router.fadeToken}>
+      <AppBanners
+        hallNotice={hallNotice}
+        finalizeWarning={finalizeWarning}
+        settingsWriteWarning={settingsWriteWarning}
+        showSettingsCorrupted={settingsLoad.corrupted && !settingsCorruptedDismissed}
+        onDismissSettingsCorrupted={() => setSettingsCorruptedDismissed(true)}
+      >
+        {renderScreen(pack)}
+      </AppBanners>
+    </RootStyling>
+  );
 }
