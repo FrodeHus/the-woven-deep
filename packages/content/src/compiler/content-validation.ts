@@ -113,7 +113,7 @@ function effectsAtPath(
   });
 }
 
-function referencedKindIssue(
+export function referencedKindIssue(
   file: string,
   path: string,
   id: string,

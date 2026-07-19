@@ -657,6 +657,94 @@ describe('compileContentDirectory', () => {
     }]);
   });
 
+  it('parses a vault item slot that names a loot table', async () => {
+    const vaultWithLootSlot = compactVault.replace(
+      'slot: {id: monster-main, kind: monster, required: true, tags: [guard]}',
+      'slot: {id: item-cache, kind: item, required: true, tags: [cache], lootTableId: loot-table.stock}',
+    );
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, compactItem, compactStock, vaultWithLootSlot),
+    });
+
+    const pack = await compileContentDirectory({ rootDir: root });
+    const vault = pack.entries.find((entry) => entry.id === 'vault.test-room');
+    expect(vault).toMatchObject({ legend: { m: { slot: { lootTableId: 'loot-table.stock', contentId: null } } } });
+  });
+
+  it('parses a vault item slot that names a fixed item', async () => {
+    const vaultWithItemSlot = compactVault.replace(
+      'slot: {id: monster-main, kind: monster, required: true, tags: [guard]}',
+      'slot: {id: item-cache, kind: item, required: true, tags: [cache], contentId: item.lantern}',
+    );
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, compactItem, vaultWithItemSlot),
+    });
+
+    const pack = await compileContentDirectory({ rootDir: root });
+    const vault = pack.entries.find((entry) => entry.id === 'vault.test-room');
+    expect(vault).toMatchObject({ legend: { m: { slot: { lootTableId: null, contentId: 'item.lantern' } } } });
+  });
+
+  it('rejects a non-item vault slot that sets item loot fields', async () => {
+    const vaultWithBadTrapSlot = compactVault.replace(
+      'slot: {id: monster-main, kind: monster, required: true, tags: [guard]}',
+      'slot: {id: trap-loot, kind: trap, required: true, tags: [guard], contentId: item.lantern}',
+    );
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, compactItem, vaultWithBadTrapSlot),
+    });
+
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/may not set item loot fields/);
+  });
+
+  it('rejects an item slot with neither lootTableId nor contentId', async () => {
+    const vaultWithEmptyItemSlot = compactVault.replace(
+      'slot: {id: monster-main, kind: monster, required: true, tags: [guard]}',
+      'slot: {id: item-cache, kind: item, required: true, tags: [cache]}',
+    );
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, compactItem, vaultWithEmptyItemSlot),
+    });
+
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/item slot/);
+  });
+
+  it('rejects an item slot with both lootTableId and contentId', async () => {
+    const vaultWithBothItemSlot = compactVault.replace(
+      'slot: {id: monster-main, kind: monster, required: true, tags: [guard]}',
+      'slot: {id: item-cache, kind: item, required: true, tags: [cache], lootTableId: loot-table.stock, contentId: item.lantern}',
+    );
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, compactItem, compactStock, vaultWithBothItemSlot),
+    });
+
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/item slot/);
+  });
+
+  it('rejects a vault item slot naming an unknown loot table', async () => {
+    const vaultWithUnknownLootSlot = compactVault.replace(
+      'slot: {id: monster-main, kind: monster, required: true, tags: [guard]}',
+      'slot: {id: item-cache, kind: item, required: true, tags: [cache], lootTableId: loot-table.missing}',
+    );
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, compactItem, vaultWithUnknownLootSlot),
+    });
+
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/unknown loot-table reference loot-table\.missing/);
+  });
+
+  it('rejects a vault item slot naming an unknown item', async () => {
+    const vaultWithUnknownItemSlot = compactVault.replace(
+      'slot: {id: monster-main, kind: monster, required: true, tags: [guard]}',
+      'slot: {id: item-cache, kind: item, required: true, tags: [cache], contentId: item.missing}',
+    );
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, compactItem, vaultWithUnknownItemSlot),
+    });
+
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/unknown item reference item\.missing/);
+  });
+
   it('includes vault IDs and values in global uniqueness and content hashing', async () => {
     const duplicateRoot = await fixture({
       'a.yaml': contentFile(compactMonster, compactItem, compactVault),

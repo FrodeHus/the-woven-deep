@@ -405,6 +405,8 @@ const slot = z.strictObject({
   kind: z.enum(vaultPlacementKinds),
   required: z.boolean().default(false),
   tags,
+  lootTableId: stableIdSchema.nullable().default(null),
+  contentId: stableIdSchema.nullable().default(null),
 });
 const light = z.strictObject({
   idSuffix: slugSchema,

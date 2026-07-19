@@ -71,8 +71,9 @@ export function validateCompiledContentPack(input: unknown): CompiledContentPack
     }
   }
   const semanticIssues = validateContentEntries(entries.map((entry) => ({ entry, file: 'compiled content' })));
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
   for (const entry of entries) {
-    if (entry.kind === 'vault') semanticIssues.push(...validateVaultEntry(entry, 'compiled content'));
+    if (entry.kind === 'vault') semanticIssues.push(...validateVaultEntry(entry, 'compiled content', byId));
   }
   if (semanticIssues.length > 0) {
     const first = semanticIssues[0]!;

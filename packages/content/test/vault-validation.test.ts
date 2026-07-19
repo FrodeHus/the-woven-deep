@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { VaultContentEntry, VaultLegendEntry } from '../src/index.js';
+import type { ContentEntry, VaultContentEntry, VaultLegendEntry } from '../src/index.js';
 import { validateVaultEntry } from '../src/compiler/index.js';
 
 const baseLegend: Record<string, VaultLegendEntry> = {
@@ -10,7 +10,7 @@ const baseLegend: Record<string, VaultLegendEntry> = {
     terrain: 'floor',
     entrance: false,
     light: null,
-    slot: { id: 'monster-main', kind: 'monster', required: true, tags: ['guard'] },
+    slot: { id: 'monster-main', kind: 'monster', required: true, tags: ['guard'], lootTableId: null, contentId: null },
   },
 };
 
@@ -97,7 +97,10 @@ describe('validateVaultEntry', () => {
       '+': baseLegend['+']!,
       s: {
         terrain: 'void', entrance: false, light: null,
-        slot: { id: 'optional-cache', kind: 'item', required: false, tags: ['cache'] },
+        slot: {
+          id: 'optional-cache', kind: 'item', required: false, tags: ['cache'],
+          lootTableId: 'loot-table.cache', contentId: null,
+        },
       },
     }), 'vaults/test-room.yaml');
 
@@ -126,6 +129,100 @@ describe('validateVaultEntry', () => {
       message: 'void terrain cannot contain light void-lamp; use non-void terrain or remove the light',
     });
   });
+
+  it('rejects an item slot that sets neither lootTableId nor contentId', () => {
+    const issues = validateVaultEntry(vault(['+i'], {
+      '+': baseLegend['+']!,
+      i: {
+        terrain: 'floor', entrance: false, light: null,
+        slot: { id: 'item-cache', kind: 'item', required: true, tags: ['cache'], lootTableId: null, contentId: null },
+      },
+    }), 'vaults/test-room.yaml');
+
+    expect(issues).toContainEqual({
+      file: 'vaults/test-room.yaml',
+      path: '$.entries.vault.test-room.legend.i.slot',
+      message: 'item slot item-cache must set exactly one of lootTableId or contentId',
+    });
+  });
+
+  it('rejects an item slot that sets both lootTableId and contentId', () => {
+    const issues = validateVaultEntry(vault(['+i'], {
+      '+': baseLegend['+']!,
+      i: {
+        terrain: 'floor', entrance: false, light: null,
+        slot: {
+          id: 'item-cache', kind: 'item', required: true, tags: ['cache'],
+          lootTableId: 'loot-table.cave-rat', contentId: 'item.crimson-potion',
+        },
+      },
+    }), 'vaults/test-room.yaml');
+
+    expect(issues).toContainEqual({
+      file: 'vaults/test-room.yaml',
+      path: '$.entries.vault.test-room.legend.i.slot',
+      message: 'item slot item-cache must set exactly one of lootTableId or contentId',
+    });
+  });
+
+  it('rejects a non-item slot that sets lootTableId or contentId', () => {
+    const issues = validateVaultEntry(vault(['+i'], {
+      '+': baseLegend['+']!,
+      i: {
+        terrain: 'floor', entrance: false, light: null,
+        slot: { id: 'trap-loot', kind: 'trap', required: true, tags: [], lootTableId: 'loot-table.cave-rat', contentId: null },
+      },
+    }), 'vaults/test-room.yaml');
+
+    expect(issues).toContainEqual({
+      file: 'vaults/test-room.yaml',
+      path: '$.entries.vault.test-room.legend.i.slot',
+      message: 'trap slot trap-loot may not set item loot fields',
+    });
+  });
+
+  it('accepts an item slot naming a known loot table or item and reports unknown references', () => {
+    const byId = new Map<string, ContentEntry>([
+      ['monster.rat', { kind: 'monster', id: 'monster.rat' } as unknown as ContentEntry],
+      ['loot-table.cave-rat', { kind: 'loot-table', id: 'loot-table.cave-rat' } as unknown as ContentEntry],
+      ['item.crimson-potion', { kind: 'item', id: 'item.crimson-potion' } as unknown as ContentEntry],
+    ]);
+
+    const validIssues = validateVaultEntry(vault(['+i'], {
+      '+': baseLegend['+']!,
+      i: {
+        terrain: 'floor', entrance: false, light: null,
+        slot: { id: 'item-cache', kind: 'item', required: true, tags: ['cache'], lootTableId: 'loot-table.cave-rat', contentId: null },
+      },
+    }), 'vaults/test-room.yaml', byId);
+    expect(validIssues).toEqual([]);
+
+    const unknownIssues = validateVaultEntry(vault(['+i'], {
+      '+': baseLegend['+']!,
+      i: {
+        terrain: 'floor', entrance: false, light: null,
+        slot: { id: 'item-cache', kind: 'item', required: true, tags: ['cache'], lootTableId: null, contentId: 'item.missing' },
+      },
+    }), 'vaults/test-room.yaml', byId);
+    expect(unknownIssues).toContainEqual({
+      file: 'vaults/test-room.yaml',
+      path: '$.entries.vault.test-room.legend.i.slot.contentId',
+      message: 'unknown item reference item.missing',
+    });
+
+    const wrongKindIssues = validateVaultEntry(vault(['+i'], {
+      '+': baseLegend['+']!,
+      i: {
+        terrain: 'floor', entrance: false, light: null,
+        slot: { id: 'item-cache', kind: 'item', required: true, tags: ['cache'], lootTableId: null, contentId: 'monster.rat' },
+      },
+    }), 'vaults/test-room.yaml', byId);
+    expect(wrongKindIssues).toContainEqual({
+      file: 'vaults/test-room.yaml',
+      path: '$.entries.vault.test-room.legend.i.slot.contentId',
+      message: 'item reference monster.rat resolves to monster',
+    });
+  });
 });
 
 describe('validateVaultEntry (town vault contract)', () => {
@@ -135,23 +232,23 @@ describe('validateVaultEntry (town vault contract)', () => {
     '+': { terrain: 'floor', entrance: true, light: null, slot: null },
     '>': {
       terrain: 'stair-down', entrance: false, light: null,
-      slot: { id: 'dungeon-entrance', kind: 'fixture', required: true, tags: ['town'] },
+      slot: { id: 'dungeon-entrance', kind: 'fixture', required: true, tags: ['town'], lootTableId: null, contentId: null },
     },
     D: {
       terrain: 'closed-door', entrance: false, light: null,
-      slot: { id: 'house-door', kind: 'fixture', required: true, tags: ['town'] },
+      slot: { id: 'house-door', kind: 'fixture', required: true, tags: ['town'], lootTableId: null, contentId: null },
     },
     P: {
       terrain: 'floor', entrance: false, light: null,
-      slot: { id: 'merchant-provisioner', kind: 'npc', required: true, tags: ['town'] },
+      slot: { id: 'merchant-provisioner', kind: 'npc', required: true, tags: ['town'], lootTableId: null, contentId: null },
     },
     A: {
       terrain: 'floor', entrance: false, light: null,
-      slot: { id: 'merchant-arms', kind: 'npc', required: true, tags: ['town'] },
+      slot: { id: 'merchant-arms', kind: 'npc', required: true, tags: ['town'], lootTableId: null, contentId: null },
     },
     C: {
       terrain: 'floor', entrance: false, light: null,
-      slot: { id: 'merchant-curios', kind: 'npc', required: true, tags: ['town'] },
+      slot: { id: 'merchant-curios', kind: 'npc', required: true, tags: ['town'], lootTableId: null, contentId: null },
     },
     L: {
       terrain: 'floor', entrance: false, slot: null,
@@ -205,7 +302,10 @@ describe('validateVaultEntry (town vault contract)', () => {
       ...townLegend,
       X: {
         terrain: 'floor', entrance: false, light: null,
-        slot: { id: 'extra-slot', kind: 'item', required: true, tags: ['town'] },
+        slot: {
+          id: 'extra-slot', kind: 'item', required: true, tags: ['town'],
+          lootTableId: 'loot-table.extra', contentId: null,
+        },
       },
     };
     const issues = validateVaultEntry(townVault(layout, legendWithExtra), 'vaults/town.yaml');

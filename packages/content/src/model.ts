@@ -503,6 +503,8 @@ export interface VaultPlacementSlot {
   readonly kind: VaultPlacementKind;
   readonly required: boolean;
   readonly tags: readonly string[];
+  readonly lootTableId: ContentId | null;
+  readonly contentId: ContentId | null;
 }
 
 export interface VaultLightFixture {
