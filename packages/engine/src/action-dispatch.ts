@@ -1,8 +1,8 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import { type GameAction } from './actions.js';
-import { actorById, heroPerception, type ActorState } from './actor-model.js';
+import { actorById, heroPerception, withActor, type ActorState } from './actor-model.js';
 import { applyPopulationCombatModifiers, resolveAttack } from './combat.js';
-import { resolveEffectSequence } from './effects.js';
+import { applyEffectResult, resolveEffectSequence } from './effects.js';
 import { consumeItemQuantity, dropItem, pickupItem, splitStack } from './inventory.js';
 import {
   equipItem, itemLightSources, refuelItem, toggleItemLight, unequipItem,
@@ -20,12 +20,9 @@ import { resolveSwarmSpawnAction } from './swarm-behavior.js';
 import { relationshipBetween, resolveOpportunityAttacks, setRelationship } from './reactions.js';
 import { provokeMerchant } from './merchant-behavior.js';
 import type { MerchantPopulation } from './merchant-model.js';
-import { combat, profile, requiredItemDefinition } from './combat-profile.js';
+import { combat, profile } from './combat-profile.js';
+import { requireItem } from './content-index.js';
 import { chargeActionEnergy } from './scheduler.js';
-
-export function withActor(state: ActiveRun, actor: ActorState): ActiveRun {
-  return { ...state, actors: state.actors.map((candidate) => candidate.actorId === actor.actorId ? actor : candidate) };
-}
 
 function moveActor(state: ActiveRun, actorId: OpaqueId, to: Point): ActiveRun {
   return {
@@ -179,7 +176,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
   'use-item': ({ state, action, actor, content, eventId, events }) => {
     const source = state.items.find((item) => item.itemId === action.itemId);
     if (!source) throw new Error(`internal invariant: used item ${action.itemId} disappeared`);
-    const definition = requiredItemDefinition(content, source.contentId);
+    const definition = requireItem(content, source.contentId);
     const target = actorById(state, action.targetActorId);
     if (!target) throw new Error(`internal invariant: effect target ${action.targetActorId} disappeared`);
     events.push({ type: 'item.used', eventId, actorId: actor.actorId,
@@ -195,8 +192,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       },
       operations: {},
     });
-    let next = { ...state, actors: resolved.actors, items: resolved.items, survival: resolved.survival,
-      rng: { ...state.rng, effects: resolved.effectsState } };
+    let next = applyEffectResult(state, resolved);
     const consumedEvents = resolved.events.filter((event) => event.type === 'item.consumed');
     events.push(...resolved.events.filter((event) => event.type !== 'item.consumed'));
     if (definition.identification.mode === 'shuffled') {
@@ -210,7 +206,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
   fire: ({ state, action, actor, content, eventId, events }) => {
     const weapon = state.items.find((item) => item.itemId === action.weaponItemId);
     if (!weapon) throw new Error(`internal invariant: weapon ${action.weaponItemId} disappeared`);
-    const definition = requiredItemDefinition(content, weapon.contentId);
+    const definition = requireItem(content, weapon.contentId);
     if (!definition.combat?.damage) throw new Error(`internal invariant: weapon ${weapon.itemId} cannot fire`);
     const consumed = consumeItemQuantity({ run: state, itemId: action.ammunitionItemId, quantity: 1 });
     if (!consumed.ok) throw new Error(`internal invariant: validated ammunition failed with ${consumed.reason}`);
@@ -239,7 +235,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
   'throw-item': ({ state, action, actor, content, eventId, events }) => {
     const source = state.items.find((item) => item.itemId === action.itemId);
     if (!source) throw new Error(`internal invariant: thrown item ${action.itemId} disappeared`);
-    const definition = requiredItemDefinition(content, source.contentId);
+    const definition = requireItem(content, source.contentId);
     if (definition.effects.some((effect) => effect.effectId === 'effect.item.consume')) {
       const target = state.actors.find((candidate) => candidate.floorId === actor.floorId && candidate.health > 0
         && candidate.x === action.target.x && candidate.y === action.target.y);
@@ -255,8 +251,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
         forceMoveDirection: { x: Math.sign(target.x - actor.x), y: Math.sign(target.y - actor.y) },
         operations: {},
       });
-      const next = { ...state, actors: resolved.actors, items: resolved.items, survival: resolved.survival,
-        rng: { ...state.rng, effects: resolved.effectsState } };
+      const next = applyEffectResult(state, resolved);
       events.push(...resolved.events);
       return { state: next, chargeEnergy: true };
     }

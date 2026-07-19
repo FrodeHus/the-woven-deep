@@ -2,6 +2,7 @@ import type {
   CompiledContentPack, CompletionType, ItemContentEntry, MerchantEncounterContentEntry, MerchantServiceId,
 } from '@woven-deep/content';
 import { heroActor, heroPerception } from './actor-model.js';
+import { entryById } from './content-index.js';
 import { deriveActorStats } from './attributes.js';
 import { balanceEntry } from './actions.js';
 import {
@@ -460,7 +461,7 @@ function projectActiveTrade(
     candidate.model === 'merchant' && candidate.populationId === trade.merchantPopulationId);
   const actor = state.actors.find((candidate) => candidate.actorId === trade.merchantActorId);
   const encounterEntry = population === undefined ? undefined
-    : content.entries.find((candidate) => candidate.id === population.encounterId);
+    : entryById(content, population.encounterId);
   const encounter: MerchantEncounterContentEntry | undefined =
     encounterEntry?.kind === 'encounter' && encounterEntry.model === 'merchant' ? encounterEntry : undefined;
   if (!population || !actor || !encounter) return undefined;
@@ -468,7 +469,7 @@ function projectActiveTrade(
   const tier = reputationTier(factionReputation(state, faction), faction);
   const hero = heroActor(state);
   const itemEntry = (contentId: OpaqueId): ItemContentEntry | undefined => {
-    const entry = content.entries.find((candidate) => candidate.id === contentId);
+    const entry = entryById(content, contentId);
     return entry?.kind === 'item' ? entry : undefined;
   };
   const stock = [...population.stockItemIds]
@@ -611,10 +612,9 @@ function projectActor(input: Readonly<{
   actor: ActiveRun['actors'][number];
 }>): Readonly<Record<string, unknown>> & { readonly contentId: OpaqueId | null } {
   const { state, content, heroActorId, actor } = input;
-  const definition = content.entries.find((entry) => entry.id === actor.contentId);
+  const definition = entryById(content, actor.contentId);
   const population = state.populations.find((candidate) => candidate.populationId === actor.populationId);
-  const encounter = population === undefined ? undefined : content.entries.find((entry) =>
-    entry.kind === 'encounter' && entry.id === population.encounterId);
+  const encounter = population === undefined ? undefined : entryById(content, population.encounterId);
   const presentation = actor.populationPresentation ?? (definition?.kind === 'monster'
     ? { name: definition.name, glyph: definition.glyph, color: definition.color } : {});
   const healthRatio = actor.maxHealth === 0 ? 0 : actor.health / actor.maxHealth;

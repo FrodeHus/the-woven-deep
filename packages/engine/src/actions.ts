@@ -1,5 +1,6 @@
 import type { BalanceContentEntry, CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
 import { heroActor, type EquipmentSlot } from './actor-model.js';
+import { entryById } from './content-index.js';
 import { movementAction } from './movement.js';
 import { actorHasConditionTrait } from './conditions.js';
 import { dropItem, pickupItem, splitStack } from './inventory.js';
@@ -113,7 +114,7 @@ export function actionCostFor(entry: BalanceContentEntry, actionId: string): num
 }
 
 function itemEntry(content: CompiledContentPack, contentId: OpaqueId): ItemContentEntry | undefined {
-  const entry = content.entries.find((candidate) => candidate.id === contentId);
+  const entry = entryById(content, contentId);
   return entry?.kind === 'item' ? entry : undefined;
 }
 

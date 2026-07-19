@@ -57,6 +57,7 @@ export * from './actions.js';
 export * from './combat.js';
 export * from './targeting.js';
 export * from './effects.js';
+export * from './content-index.js';
 export * from './conditions.js';
 export * from './reactions.js';
 export * from './behavior.js';

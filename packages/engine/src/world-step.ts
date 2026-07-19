@@ -1,9 +1,10 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameAction } from './actions.js';
-import { actorById, heroActor } from './actor-model.js';
+import { actorById, heroActor, withActor } from './actor-model.js';
+import { entryById } from './content-index.js';
 import { chooseBehaviorAction, selectPatrolGoal } from './behavior.js';
 import { ensureFactionReputation } from './commerce.js';
-import { applyAction, withActor } from './action-dispatch.js';
+import { applyAction } from './action-dispatch.js';
 import { monsterDefinition } from './combat-profile.js';
 import { itemLightSources } from './equipment.js';
 import { advanceSurvival } from './survival.js';
@@ -179,7 +180,7 @@ function observeEncounters(state: ActiveRun, content: CompiledContentPack): Acti
   // First legitimate observation of a merchant materializes its faction's authored
   // starting reputation exactly once; later observations keep the earned value.
   for (const factionId of observedMerchantFactionIds) {
-    const faction = content.entries.find((entry) => entry.id === factionId);
+    const faction = entryById(content, factionId);
     if (!faction || faction.kind !== 'npc-faction') {
       throw new Error(`internal invariant: merchant faction ${factionId} does not exist`);
     }

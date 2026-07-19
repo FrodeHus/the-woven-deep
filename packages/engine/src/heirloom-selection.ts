@@ -1,4 +1,5 @@
 import type { CompiledContentPack, FallenChampionTemplateContentEntry, ItemContentEntry } from '@woven-deep/content';
+import { requireItem as itemDefinition } from './content-index.js';
 import { guaranteedUniqueItemIds } from './commerce.js';
 import type { ItemInstance } from './item-model.js';
 import type { ActiveRun, OpaqueId, Uint32State } from './model.js';
@@ -12,12 +13,6 @@ interface HeirloomCandidate {
   readonly instance: ItemInstance;
   readonly definition: ItemContentEntry;
   readonly weight: number;
-}
-
-function itemDefinition(content: CompiledContentPack, contentId: OpaqueId): ItemContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === contentId);
-  if (!entry || entry.kind !== 'item') throw new Error(`internal invariant: item definition ${contentId} does not exist`);
-  return entry;
 }
 
 /** Counts the instance's positive enchantment modifier values. */

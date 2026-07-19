@@ -7,6 +7,7 @@ import {
   type NpcContentEntry,
 } from '@woven-deep/content';
 import { emptyEquipment, type ActorState } from './actor-model.js';
+import { entryById, requireEncounter } from './content-index.js';
 import { projectLootGraph, rollLootFromProjection } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
 import type { MerchantPopulation } from './merchant-model.js';
@@ -22,7 +23,7 @@ export interface MerchantMaterialization {
 }
 
 function npcDefinition(content: CompiledContentPack, id: OpaqueId): NpcContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === id);
+  const entry = entryById(content, id);
   if (!entry || entry.kind !== 'npc') {
     throw new Error(`internal invariant: merchant npc definition ${id} does not exist`);
   }
@@ -36,11 +37,7 @@ function balanceDefinition(content: CompiledContentPack): BalanceContentEntry {
 }
 
 function merchantEncounterDefinition(content: CompiledContentPack, encounterId: OpaqueId): MerchantEncounterContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === encounterId);
-  if (!entry || entry.kind !== 'encounter' || entry.model !== 'merchant') {
-    throw new Error(`internal invariant: merchant encounter ${encounterId} does not exist`);
-  }
-  return entry;
+  return requireEncounter(content, encounterId, 'merchant');
 }
 
 export function materializeMerchant(input: Readonly<{

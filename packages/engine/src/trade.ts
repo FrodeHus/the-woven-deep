@@ -2,6 +2,7 @@ import type {
   CompiledContentPack, ItemContentEntry, MerchantEncounterContentEntry, NpcFactionContentEntry,
 } from '@woven-deep/content';
 import { heroActor, type ActorState } from './actor-model.js';
+import { entryById, requireEncounter, requireItem as itemDefinition } from './content-index.js';
 import { balanceEntry } from './actions.js';
 import { actorHasConditionTrait } from './conditions.js';
 import {
@@ -32,24 +33,12 @@ export function isTradeCommand(command: GameCommand): command is TradeCommand {
     || command.type === 'trade-close';
 }
 
-function itemDefinition(content: CompiledContentPack, contentId: OpaqueId): ItemContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === contentId);
-  if (!entry || entry.kind !== 'item') {
-    throw new Error(`internal invariant: item definition ${contentId} does not exist`);
-  }
-  return entry;
-}
-
 function merchantEncounter(content: CompiledContentPack, encounterId: OpaqueId): MerchantEncounterContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === encounterId);
-  if (!entry || entry.kind !== 'encounter' || entry.model !== 'merchant') {
-    throw new Error(`internal invariant: merchant encounter ${encounterId} does not exist`);
-  }
-  return entry;
+  return requireEncounter(content, encounterId, 'merchant');
 }
 
 export function merchantFaction(content: CompiledContentPack, factionId: OpaqueId): NpcFactionContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === factionId);
+  const entry = entryById(content, factionId);
   if (!entry || entry.kind !== 'npc-faction') {
     throw new Error(`internal invariant: merchant faction ${factionId} does not exist`);
   }

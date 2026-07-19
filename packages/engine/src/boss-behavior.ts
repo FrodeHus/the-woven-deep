@@ -2,15 +2,15 @@ import {
   BOSS_PHASE_EFFECT_IDS,
   type BossEncounterContentEntry,
   type CompiledContentPack,
-  type ItemContentEntry,
   type PopulationCombatModifiers,
 } from '@woven-deep/content';
-import type { ActorState } from './actor-model.js';
-import { resolveEffectSequence, type EffectOperations } from './effects.js';
+import { withActor, type ActorState } from './actor-model.js';
+import { applyEffectResult, resolveEffectSequence, type EffectOperations } from './effects.js';
 import { consumeItemQuantityFromItems, createPopulationLoot } from './inventory.js';
 import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
 import type { BossPopulation } from './population-model.js';
-import { replacePopulation, requireEncounter, sortedPopulations, synchronizeDeath as sharedSynchronizeDeath } from './population-runtime.js';
+import { replacePopulation, sortedPopulations, synchronizeDeath as sharedSynchronizeDeath } from './population-runtime.js';
+import { entryById, requireEncounter, requireItem } from './content-index.js';
 import { compareCodeUnits } from './stable-json.js';
 import type { DungeonFeature } from './feature-model.js';
 import { parseEffectParameters } from './parameter-contracts.js';
@@ -25,10 +25,6 @@ function encounter(content: CompiledContentPack, encounterId: OpaqueId): BossEnc
   return entry;
 }
 
-function replaceActor(state: ActiveRun, actor: ActorState): ActiveRun {
-  return { ...state, actors: state.actors.map((candidate) => candidate.actorId === actor.actorId ? actor : candidate) };
-}
-
 function currentPhaseMaximum(population: BossPopulation, definition: BossEncounterContentEntry['definition'], maxHealth: number): number {
   if (population.currentPhaseId === null) return maxHealth;
   const phase = definition.phases.find((candidate) => candidate.phaseId === population.currentPhaseId);
@@ -38,12 +34,6 @@ function currentPhaseMaximum(population: BossPopulation, definition: BossEncount
 
 function synchronizeDeath(population: BossPopulation, actor: ActorState): BossPopulation {
   return sharedSynchronizeDeath(population, actor.health <= 0 ? [actor.actorId] : []);
-}
-
-function itemDefinition(content: CompiledContentPack, contentId: OpaqueId): ItemContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === contentId);
-  if (!entry || entry.kind !== 'item') throw new Error(`internal invariant: item definition ${contentId} does not exist`);
-  return entry;
 }
 
 function mutatedFeature(feature: DungeonFeature, state: string): DungeonFeature | null {
@@ -67,7 +57,7 @@ function bossEffectOperations(input: Readonly<{
     const floor = floors.find((candidate) => candidate.floorId === input.population.floorId);
     if (!floor) throw new Error(`internal invariant: boss floor ${input.population.floorId} does not exist`);
     return floor.vaults.filter((placement) => {
-      const vault = input.content.entries.find((entry) => entry.kind === 'vault' && entry.id === placement.vaultId);
+      const vault = entryById(input.content, placement.vaultId);
       return vault?.kind === 'vault' && input.definition.vaultTags.every((tag) => vault.tags.includes(tag));
     });
   };
@@ -103,7 +93,7 @@ function bossEffectOperations(input: Readonly<{
       const items = operation.items.map((item) => {
         const owned = (item.location.type === 'backpack' || item.location.type === 'equipped')
           && item.location.actorId === operation.targetActorId;
-        if (!owned || itemDefinition(input.content, item.contentId).light === null) return item;
+        if (!owned || requireItem(input.content,item.contentId).light === null) return item;
         if (enabled && (item.fuel ?? 0) <= 0) throw new Error(`internal invariant: boss arena light ${item.itemId} has no fuel`);
         changed += 1;
         events.push({ type: 'item.light-toggled', eventId: operation.eventId, actorId: operation.targetActorId,
@@ -142,15 +132,15 @@ function bossEffectOperations(input: Readonly<{
       const maximum = parseEffectParameters(operation.effect, 'effect.fuel.transfer').maximum;
       const owned = (item: typeof operation.items[number]) => (item.location.type === 'backpack'
         || item.location.type === 'equipped') && item.location.actorId === operation.targetActorId;
-      const lights = operation.items.filter((item) => owned(item) && itemDefinition(input.content, item.contentId).light !== null)
+      const lights = operation.items.filter((item) => owned(item) && requireItem(input.content,item.contentId).light !== null)
         .sort((left, right) => compareCodeUnits(left.itemId, right.itemId));
       for (const lightItem of lights) {
-        const light = itemDefinition(input.content, lightItem.contentId).light!;
+        const light = requireItem(input.content,lightItem.contentId).light!;
         const capacity = light.fuelCapacity - (lightItem.fuel ?? 0);
         if (capacity <= 0) continue;
         const fuel = operation.items.filter((item) => item.location.type === 'backpack'
           && item.location.actorId === operation.targetActorId
-          && itemDefinition(input.content, item.contentId).tags.some((tag) => light.fuelTags.includes(tag)))
+          && requireItem(input.content,item.contentId).tags.some((tag) => light.fuelTags.includes(tag)))
           .sort((left, right) => compareCodeUnits(left.itemId, right.itemId))[0];
         if (!fuel) continue;
         const quantity = Math.min(maximum, capacity, fuel.quantity);
@@ -200,9 +190,8 @@ function applyNewPhases(input: Readonly<{
   const phaseEvents: DomainEvent[] = phases.map((phase) => ({ type: 'boss.phase-changed', eventId: input.eventId,
     populationId: population.populationId, actorId: population.actorId,
     encounterId: population.encounterId, phaseId: phase.phaseId }));
-  return { population, state: { ...input.state, actors, items: effectResult.items,
-    features: effectResult.features, floors: effectResult.floors,
-    survival: effectResult.survival, rng: { ...input.state.rng, effects: effectResult.effectsState } },
+  return { population, state: { ...applyEffectResult(input.state, effectResult), actors,
+    features: effectResult.features, floors: effectResult.floors },
     events: [...phaseEvents, ...effectResult.events] };
 }
 
@@ -222,7 +211,7 @@ function recoverOnReentry(input: Readonly<{
   const boss = { ...input.boss, health: input.boss.health + amount };
   const recovered: BossPopulation = { ...population,
     recoveryHistory: [...population.recoveryHistory, { at: input.state.activeFloorEnteredAt, amount }] };
-  return { state: replaceActor(input.state, boss), population: recovered, events: [{ type: 'boss.recovered',
+  return { state: withActor(input.state, boss), population: recovered, events: [{ type: 'boss.recovered',
     eventId: input.eventId, populationId: population.populationId, actorId: population.actorId,
     encounterId: population.encounterId, amount, health: boss.health }] };
 }

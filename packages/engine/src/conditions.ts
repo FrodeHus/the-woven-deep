@@ -4,6 +4,7 @@ import type {
   ConditionTraitId,
 } from '@woven-deep/content';
 import type { ActorState, ConditionState } from './actor-model.js';
+import { entryById } from './content-index.js';
 import type { DerivedStatModifier } from './attributes.js';
 import type { DomainEvent, OpaqueId } from './model.js';
 
@@ -22,7 +23,7 @@ export function conditionDefinition(
   content: CompiledContentPack,
   conditionId: OpaqueId,
 ): ConditionContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === conditionId);
+  const entry = entryById(content, conditionId);
   if (!entry) throw new Error(`internal invariant: condition ${conditionId} definition does not exist`);
   if (entry.kind !== 'condition') {
     throw new Error(`internal invariant: condition ${conditionId} definition resolves to ${entry.kind}`);

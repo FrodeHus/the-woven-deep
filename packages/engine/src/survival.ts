@@ -1,5 +1,5 @@
 import type { BalanceContentEntry, CompiledContentPack, DerivedStatName, ItemContentEntry } from '@woven-deep/content';
-import type { ActorState } from './actor-model.js';
+import { replaceActor, type ActorState } from './actor-model.js';
 import { actorHasConditionTrait, advanceConditions } from './conditions.js';
 import type { DerivedStatModifier } from './attributes.js';
 import type { ItemInstance } from './item-model.js';
@@ -111,10 +111,6 @@ export function consumeFuel(input: Readonly<{
     emittedWarnings: [...emitted].sort(),
     events,
   };
-}
-
-function replaceActor(actors: readonly ActorState[], actor: ActorState): readonly ActorState[] {
-  return actors.map((candidate) => candidate.actorId === actor.actorId ? actor : candidate);
 }
 
 export function advanceSurvival(input: Readonly<{
