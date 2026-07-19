@@ -238,6 +238,27 @@ describe('public event projection', () => {
     }]);
   });
 
+  it('suppresses an off-screen monster\'s loot.dropped while projecting a visible one', () => {
+    const input = fixture();
+    const droppedItemDefinition = { kind: 'item' as const, id: 'item.dropped-loot-content', name: 'Dropped loot',
+      tags: [], glyph: '*', color: '#ffaa00', category: 'misc' as const, stackLimit: 10, price: 1,
+      rarity: 'common' as const, minDepth: 1, maxDepth: 20, actionCost: 100, equipment: null, combat: null,
+      light: null, identification: { mode: 'known' as const, poolId: null }, effects: [] };
+    const content = { ...input.content, entries: [...input.content.entries, droppedItemDefinition] };
+    const droppedItem = { itemId: 'item.dropped-loot', contentId: droppedItemDefinition.id, quantity: 1, condition: 100,
+      enchantment: null, identified: true, charges: null, fuel: null, enabled: false,
+      location: { type: 'floor' as const, floorId: input.state.activeFloorId, x: 3, y: 1 } };
+    const stateWithItem = { ...input.state, items: [droppedItem] };
+    const event: DomainEvent = { type: 'loot.dropped', eventId: 'event.loot', actorId: 'monster.hidden',
+      contentId: 'monster.hidden', x: 3, y: 1, itemIds: [droppedItem.itemId] };
+    expect(projectDomainEvents({ state: stateWithItem, content, events: [event],
+      heroId: stateWithItem.hero.actorId })).toEqual([]);
+    const visible = { ...stateWithItem, floors: [{ ...stateWithItem.floors[0]!,
+      ambient: { color: [255, 255, 255] as const, strength: 255 } }] };
+    expect(projectDomainEvents({ state: visible, content, events: [event],
+      heroId: visible.hero.actorId })).toEqual([event]);
+  });
+
   it('redacts visible merchant lifecycle events to qualitative notices', () => {
     const input = merchantEventFixture(true);
     const output = projectDomainEvents({ ...input, heroId: input.state.hero.actorId });

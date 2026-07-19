@@ -40,7 +40,7 @@ function pack(groupDefinition = definition()): CompiledContentPack {
     damage: { count: 1, sides: 2, bonus: 0 }, armor: 0,
     resistances: { physical: 0, fire: 0, cold: 0, poison: 0, arcane: 0 },
     disposition: 'hostile' as const, behaviorId: 'behavior.approach-and-attack', behaviorParameters: {},
-    minDepth: 1, maxDepth: 20, rarity: 'common' as const,
+    minDepth: 1, maxDepth: 20, rarity: 'common' as const, lootTableId: null, dropChance: 0,
   };
   const encounter: EncounterContentEntry = {
     kind: 'encounter', id: 'encounter.group-test', name: 'Test group', description: '', tags: [],

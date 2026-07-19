@@ -241,7 +241,7 @@ function monsterDefinition(id: string): MonsterContentEntry {
     damage: { count: 1, sides: 1, bonus: 0 }, armor: 0,
     resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 },
     disposition: 'hostile', behaviorId: 'behavior.approach-and-attack', behaviorParameters: {},
-    rarity: 'common', threat: 4,
+    rarity: 'common', threat: 4, lootTableId: null, dropChance: 0,
   };
 }
 
