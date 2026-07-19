@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { registerAuthRoutes, type AuthBundle } from './routes/auth.js';
 import { registerProfileRoutes } from './routes/profile.js';
+import { decorateProfileId } from './auth/http-guards.js';
 
 function isReservedApiUrl(url: string): boolean {
   let pathname = new URL(url, 'http://localhost').pathname;
@@ -41,6 +42,7 @@ export function buildApp(input: {
     void app.register(fastifyCsrf, {
       getToken: (req) => req.headers['x-csrf-token'] as string | undefined,
     });
+    decorateProfileId(app);
     registerAuthRoutes(app, auth);
     registerProfileRoutes(app, auth);
   }

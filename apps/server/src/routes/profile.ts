@@ -1,54 +1,29 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { assertOrigin, makeCsrfPreHandler, readSessionToken, type AuthBundle } from './auth.js';
+import type { FastifyInstance } from 'fastify';
+import type { AuthBundle } from './auth.js';
+import { requireOrigin, requireSession, requireCsrf } from '../auth/http-guards.js';
 import { normalizeEmail } from '../auth/email.js';
 
-type RequestWithProfileId = FastifyRequest & { profileId?: string };
-
-/**
- * Resolves the authenticated profile id from the session cookie, replying 401 and
- * returning null when there is no valid session. Shared by both profile routes.
- */
-function requireProfileId(request: FastifyRequest, reply: FastifyReply, auth: AuthBundle): string | null {
-  const token = readSessionToken(request);
-  const authenticated = token ? auth.session.authenticate(token) : null;
-  if (!authenticated) {
-    reply.code(401).send({ error: 'unauthenticated' });
-    return null;
-  }
-  return authenticated.profileId;
-}
-
 export function registerProfileRoutes(app: FastifyInstance, auth: AuthBundle): void {
+  const sessionPreHandler = requireSession(auth.session);
+
   app.get('/api/profile/settings', async (request, reply) => {
-    const profileId = requireProfileId(request, reply, auth);
-    if (profileId === null) {
+    await sessionPreHandler(request, reply);
+    if (request.profileId === undefined) {
       return;
     }
 
-    const { settingsJson, settingsVersion } = auth.settings.read(profileId);
+    const { settingsJson, settingsVersion } = auth.settings.read(request.profileId);
     reply.send({ settings: settingsJson, settingsVersion });
   });
 
-  const originPreHandler = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    assertOrigin(request, reply, auth.config.publicUrl);
-  };
-  // Session is checked as its own preHandler (before CSRF) so a request with neither a
-  // session nor a CSRF token surfaces the more specific 401 (unauthenticated), not a
-  // generic 403 from the CSRF check. The resolved profileId rides on the request object
-  // for the main handler to pick up.
-  const sessionPreHandler = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const profileId = requireProfileId(request, reply, auth);
-    if (profileId !== null) {
-      (request as RequestWithProfileId).profileId = profileId;
-    }
-  };
-  const csrfPreHandler = makeCsrfPreHandler(app);
+  const originPreHandler = requireOrigin(auth.config.publicUrl);
+  const csrfPreHandler = requireCsrf(app);
 
   app.put(
     '/api/profile/settings',
     { preHandler: [originPreHandler, sessionPreHandler, csrfPreHandler] },
     async (request, reply) => {
-      const profileId = (request as RequestWithProfileId).profileId;
+      const profileId = request.profileId;
       if (profileId === undefined) {
         return;
       }
