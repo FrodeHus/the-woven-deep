@@ -571,6 +571,7 @@ describe('gameplay projection', () => {
     });
     expect(darkProjected.actors).toEqual([]);
     expect(darkProjected.groundItems).toEqual([]);
+    expect(darkProjected.features).toEqual([]);
   });
 
   it('does not apply the light-out bubble when the hero\'s own cell is fixture/ambient-lit', () => {

@@ -696,7 +696,7 @@ export function projectGameplayState(input: Readonly<{
       knownAppearanceIds: [...input.state.identification.knownAppearanceIds],
     },
     actors: lightOut === undefined ? actors : [],
-    features,
+    features: lightOut === undefined ? features : [],
     groundItems: lightOut === undefined ? groundItems : [],
     slots, house,
     actions: ['move', 'wait', 'attack', 'pickup', 'use-item', 'equip', 'rest'].map((type) => ({
