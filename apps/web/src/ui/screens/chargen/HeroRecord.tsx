@@ -10,19 +10,7 @@ import {
 import { BlockBar, DotLeaderRow } from './chargen-components.js';
 import { Button } from '../../components/button.js';
 import { cn } from '../../lib/cn.js';
-import { playerVisibleDerivedStats } from '../../derived-stats-display.js';
-
-const STAT_LABELS: Readonly<Record<DerivedStatName, string>> = {
-  maxHealth: 'Max health',
-  meleeAccuracy: 'Melee accuracy',
-  meleeDamageBonus: 'Melee damage bonus',
-  rangedAccuracy: 'Ranged accuracy',
-  defense: 'Defense',
-  search: 'Search',
-  disarm: 'Disarm',
-  lightOutRevealRadius: 'Light-out reveal radius',
-  lightOutMemoryPersists: 'Light-out memory persists',
-};
+import { DERIVED_STAT_LABELS, playerVisibleDerivedStats } from '../../derived-stats-display.js';
 
 function balanceOf(pack: CompiledContentPack): BalanceContentEntry | undefined {
   return pack.entries.find((entry): entry is BalanceContentEntry => entry.kind === 'balance');
@@ -168,7 +156,7 @@ export function HeroRecord({
             return (
               <DotLeaderRow
                 key={statName}
-                label={STAT_LABELS[statName]}
+                label={DERIVED_STAT_LABELS[statName]}
                 value={String(stats[statName])}
                 {...(delta !== undefined ? { delta } : {})}
               />
