@@ -1,6 +1,7 @@
 import type { CompiledContentPack } from '@woven-deep/content';
-import type {
-  Direction, EquipmentSlot, GameCommand, GameplayProjection, OpaqueId,
+import {
+  isStairDown, isStairUp,
+  type Direction, type EquipmentSlot, type GameCommand, type GameplayProjection, type OpaqueId,
 } from '@woven-deep/engine';
 import type { PlayerIntent } from './intents.js';
 import {
@@ -54,13 +55,13 @@ function ownedItem(projection: GameplayProjection, itemId: OpaqueId): OwnedItemV
 function stairDownUnderHero(projection: GameplayProjection): boolean {
   const { x, y } = heroOf(projection);
   const cell = projection.floor.cells.find((candidate) => candidate.x === x && candidate.y === y);
-  return cell?.tileId === 5;
+  return isStairDown(cell?.tileId);
 }
 
 function stairUpUnderHero(projection: GameplayProjection): boolean {
   const { x, y } = heroOf(projection);
   const cell = projection.floor.cells.find((candidate) => candidate.x === x && candidate.y === y);
-  return cell?.tileId === 4;
+  return isStairUp(cell?.tileId);
 }
 
 /** True when the hero is Chebyshev-adjacent (but not standing on) the town's house-door slot --

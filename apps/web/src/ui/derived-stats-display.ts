@@ -1,4 +1,4 @@
-import { DERIVED_STAT_NAMES, type DerivedStatName } from '@woven-deep/engine';
+import { DERIVED_STAT_NAMES, type AttributeName, type DerivedStatName } from '@woven-deep/engine';
 
 /**
  * Derived stats that must stay in `DERIVED_STAT_NAMES` (so item/trait/class modifiers can target
@@ -27,6 +27,12 @@ export const DERIVED_STAT_LABELS: Readonly<Record<DerivedStatName, string>> = {
   disarm: 'Disarm',
   lightOutRevealRadius: 'Light-out reveal radius',
   lightOutMemoryPersists: 'Light-out memory persists',
+};
+
+/** Display label for each base attribute, in `ATTRIBUTE_ORDER`, used by any player-facing
+ * attribute list (chargen, character sheet). */
+export const ATTRIBUTE_LABELS: Readonly<Record<AttributeName, string>> = {
+  might: 'Might', agility: 'Agility', vitality: 'Vitality', wits: 'Wits', resolve: 'Resolve',
 };
 
 /** Summarizes a background/trait's derived-stat modifiers as short `+N Stat` text, e.g. for an

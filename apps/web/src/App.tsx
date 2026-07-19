@@ -9,6 +9,7 @@ import { loadSightings } from './session/codex.js';
 import type { LogLine } from './session/event-log.js';
 import { GuestSession } from './session/guest-session.js';
 import { clearGuestSession } from './session/clear-guest-session.js';
+import { randomSeed } from './session/seed.js';
 import {
   DEFAULT_SETTINGS, loadSettings, resolveKeymap, saveSettings, type Settings,
 } from './session/settings.js';
@@ -81,17 +82,6 @@ function parseSeedFromQuery(search: string): Uint32State | undefined {
  */
 function isQuickstart(search: string): boolean {
   return new URLSearchParams(search).get('quickstart') === '1';
-}
-
-/** Client-only ambient randomness for the chargen wizard's seed when no `?seed=` override is
- * present — mirrors `GuestSession`'s own `randomSeed` (guest-session.ts), duplicated here rather
- * than exported/shared because the chargen screen needs the seed BEFORE any `GuestSession`
- * exists (chargen constructs its session lazily, at confirm — see `App`'s doc comment). */
-function randomSeed(): Uint32State {
-  const words = new Uint32Array(4);
-  crypto.getRandomValues(words);
-  if (words.every((word) => word === 0)) words[0] = 1;
-  return [words[0]!, words[1]!, words[2]!, words[3]!];
 }
 
 /** How much of the adventure log the conclusion screen's "last moments" recap keeps. */

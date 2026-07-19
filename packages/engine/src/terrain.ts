@@ -23,6 +23,17 @@ export const TILE_DEFINITIONS: readonly TileDefinition[] = [
   { id: 6, name: 'void', glyph: ' ', walkable: false, potentiallyTraversable: false, opaque: true, token: 'terrain.void' },
 ] as const;
 
+export const STAIR_UP_TILE_ID: TileId = 4;
+export const STAIR_DOWN_TILE_ID: TileId = 5;
+
+export function isStairUp(tileId: TileId | undefined): boolean {
+  return tileId === STAIR_UP_TILE_ID;
+}
+
+export function isStairDown(tileId: TileId | undefined): boolean {
+  return tileId === STAIR_DOWN_TILE_ID;
+}
+
 export function isTileId(value: unknown): value is TileId {
   return typeof value === 'number'
     && TILE_DEFINITIONS.some((definition) => definition.id === value);

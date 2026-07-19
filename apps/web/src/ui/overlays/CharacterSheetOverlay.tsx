@@ -1,25 +1,10 @@
 import { Fragment, type CSSProperties, type JSX, type ReactNode } from 'react';
 import {
-  type DerivedStatFormula, type DerivedStatName,
+  ATTRIBUTE_ORDER, type DerivedStatFormula, type DerivedStatName,
 } from '@woven-deep/engine';
 import { useSessionCtx } from '../providers.js';
-import { playerVisibleDerivedStats } from '../derived-stats-display.js';
+import { ATTRIBUTE_LABELS, DERIVED_STAT_LABELS, playerVisibleDerivedStats } from '../derived-stats-display.js';
 import { heroOf, type HeroView } from '../../session/projection-view.js';
-
-type AttributeName = 'might' | 'agility' | 'vitality' | 'wits' | 'resolve';
-
-const ATTRIBUTE_ORDER: readonly AttributeName[] = ['might', 'agility', 'vitality', 'wits', 'resolve'];
-
-const ATTRIBUTE_LABEL: Readonly<Record<AttributeName, string>> = {
-  might: 'Might', agility: 'Agility', vitality: 'Vitality', wits: 'Wits', resolve: 'Resolve',
-};
-
-const DERIVED_STAT_LABEL: Readonly<Record<DerivedStatName, string>> = {
-  maxHealth: 'Max health', meleeAccuracy: 'Melee accuracy', meleeDamageBonus: 'Melee damage bonus',
-  rangedAccuracy: 'Ranged accuracy', defense: 'Defense', search: 'Search', disarm: 'Disarm',
-  lightOutRevealRadius: 'Light-out reveal radius', lightOutMemoryPersists: 'Light-out memory persists',
-};
-
 
 /** Only the current-run stats the brief lists -- deliberately a narrower literal union than
  * `keyof RunMetrics` (which also has `killsByModel`, a nested object, plus a few fields the brief
@@ -126,7 +111,7 @@ export function CharacterSheetOverlay(): JSX.Element | null {
       <Section id="character-sheet-attributes-heading" title="Attributes">
         <DefinitionGrid>
           {ATTRIBUTE_ORDER.map((name) => (
-            <Row key={name} label={ATTRIBUTE_LABEL[name]} value={hero.attributes[name]} />
+            <Row key={name} label={ATTRIBUTE_LABELS[name]} value={hero.attributes[name]} />
           ))}
         </DefinitionGrid>
       </Section>
@@ -138,7 +123,7 @@ export function CharacterSheetOverlay(): JSX.Element | null {
             return (
               <Row
                 key={name}
-                label={DERIVED_STAT_LABEL[name]}
+                label={DERIVED_STAT_LABELS[name]}
                 value={(
                   <>
                     {stat.value}
