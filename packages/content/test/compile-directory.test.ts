@@ -91,6 +91,12 @@ describe('compileContentDirectory', () => {
     await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/unknown loot-table reference loot-table\.missing/);
   });
 
+  it('rejects a monster lootTableId that resolves to a non-loot-table entry', async () => {
+    const lootyMonster = compactMonster.replace(', threat: 2, rarity: common}', ', threat: 2, rarity: common, lootTableId: item.lantern, dropChance: 1}');
+    const root = await fixture({ 'content.yaml': contentFile(lootyMonster, compactItem) });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/loot-table reference item\.lantern resolves to item/);
+  });
+
   it('allows zero-priced services and zero-use offers', async () => {
     const zeroService = compactMerchant
       .replace('basePrice: 10', 'basePrice: 0')
