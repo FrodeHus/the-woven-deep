@@ -7,8 +7,8 @@ import type { ItemCategory } from '@woven-deep/content';
  * The single typed boundary over the engine's gameplay projection. The engine projects
  * `hero`/`actors`/`features`/`groundItems`/`house` (and each trade stock item) as loose
  * `Readonly<Record<string, unknown>>` so that spoiler-conditional fields can be present or absent
- * per actor/item; every web consumer used to re-declare its own narrowed `Projected*` interface and
- * reach through its own `as unknown as` cast. This module owns the view-model interfaces and the
+ * per actor/item. Consumers reach every projection surface through this one typed boundary rather
+ * than re-narrowing the loose record themselves. This module owns the view-model interfaces and the
  * ONE cast that maps the loose projection onto them; `projection-view.test.ts` pins these interfaces
  * to the shape a real projection actually emits, so the single cast cannot silently drift.
  */
