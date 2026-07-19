@@ -163,14 +163,16 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
   const activeRows = rows[focusedList];
 
   // Keeps DOM focus on whichever listbox owns keyboard selection: the picker's while it is open,
-  // otherwise the active tab's. Runs on first open and on every tab-switch / picker transition. The
-  // container itself is the fallback when the active list is empty (no listbox to focus), so Enter
-  // and Tab still reach `handleKeyDown` instead of stranding focus on a tab button.
+  // otherwise the active tab's. Runs on first open, on every tab-switch / picker transition, and
+  // whenever the active list's row count changes -- a dispatch (e.g. selling the last offer) can
+  // empty the list and unmount its listbox without a tab-switch, so `activeRows.length` is also a
+  // dependency. The container itself is the fallback when the active list is empty (no listbox to
+  // focus), so Enter and Tab still reach `handleKeyDown` instead of stranding focus on a tab button.
   useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
     focusActiveList(root, pickerServiceId !== null);
-  }, [focusedList, pickerServiceId]);
+  }, [focusedList, pickerServiceId, activeRows.length]);
 
   function switchList(next: FocusedList): void {
     setFocusedList(next);
