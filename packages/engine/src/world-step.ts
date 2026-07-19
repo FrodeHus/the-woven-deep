@@ -1,6 +1,6 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameAction } from './actions.js';
-import { actorById, heroActor, heroPerception } from './actor-model.js';
+import { actorById, heroActor } from './actor-model.js';
 import { chooseBehaviorAction, selectPatrolGoal } from './behavior.js';
 import { ensureFactionReputation } from './commerce.js';
 import { applyAction, withActor } from './action-dispatch.js';
@@ -12,6 +12,7 @@ import {
   tileIndex, type ActiveRun, type DomainEvent, type OpaqueId, type Point, type PublicEvent,
 } from './model.js';
 import { refreshKnowledge } from './perception.js';
+import { heroFloorPerception } from './run-perception.js';
 import { markEncounterObserved } from './population-gates.js';
 import { updatePopulationIntent } from './population-intent.js';
 import { updateActorMemory, visibleTargetObservations } from './population-perception.js';
@@ -50,15 +51,7 @@ function refreshHeroKnowledge(state: ActiveRun, content: CompiledContentPack): A
   const hero = heroActor(state);
   const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
   if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
-  const positions = new Map<string, Readonly<{ x: number; y: number }>>(
-    floor.entities.map((entity) => [entity.entityId, entity] as const),
-  );
-  for (const actor of state.actors) if (actor.floorId === floor.floorId) positions.set(actor.actorId, actor);
-  const knowledge = refreshKnowledge({
-    floor: { ...floor, tiles: featureTiles(state, floor.floorId) },
-    hero: heroPerception(state.hero, hero), actors: positions,
-    additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }),
-  }).knowledge;
+  const knowledge = heroFloorPerception({ state, content }).knowledge;
   return { ...state, floors: state.floors.map((candidate) => candidate === floor ? { ...candidate, knowledge } : candidate) };
 }
 
@@ -161,12 +154,7 @@ function observeEncounters(state: ActiveRun, content: CompiledContentPack): Acti
   const hero = heroActor(state);
   const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
   if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
-  const positions = new Map<string, Readonly<Point>>(floor.entities.map((entity) => [entity.entityId, entity] as const));
-  for (const actor of state.actors) if (actor.floorId === floor.floorId) positions.set(actor.actorId, actor);
-  const perception = refreshKnowledge({
-    floor: { ...floor, tiles: featureTiles(state, floor.floorId) }, hero: heroPerception(state.hero, hero), actors: positions,
-    additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }),
-  });
+  const perception = heroFloorPerception({ state, content });
   let decisions = state.encounterDecisions;
   let fallenDecisions = state.fallenHeroDecisions;
   const observedMerchantFactionIds: OpaqueId[] = [];
@@ -222,11 +210,7 @@ function populationEncounteredEvents(
   const hero = heroActor(after);
   const floor = after.floors.find((candidate) => candidate.floorId === hero.floorId);
   if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
-  const positions = new Map<string, Readonly<Point>>(floor.entities.map((entity) => [entity.entityId, entity] as const));
-  for (const actor of after.actors) if (actor.floorId === floor.floorId) positions.set(actor.actorId, actor);
-  const perception = refreshKnowledge({ floor: { ...floor, tiles: featureTiles(after, floor.floorId) },
-    hero: heroPerception(after.hero, hero), actors: positions,
-    additionalLights: itemLightSources({ run: after, content, floorId: floor.floorId }) });
+  const perception = heroFloorPerception({ state: after, content });
   return transitioned.flatMap((decision) => {
     for (const population of after.populations.filter((candidate) => candidate.encounterId === decision.encounterId)
       .sort((left, right) => compareCodeUnits(left.populationId, right.populationId))) {
@@ -427,15 +411,7 @@ export function resolveWorldStep(input: Readonly<{
   const passiveHero = heroActor(state);
   if (passiveHero.health === 0) return { state, events, publicEvents, internalActions };
   const passiveFloor = state.floors.find((candidate) => candidate.floorId === passiveHero.floorId)!;
-  const passivePositions = new Map<string, Readonly<{ x: number; y: number }>>(
-    passiveFloor.entities.map((entity) => [entity.entityId, entity] as const),
-  );
-  for (const actor of state.actors) if (actor.floorId === passiveFloor.floorId) passivePositions.set(actor.actorId, actor);
-  const passivePerception = refreshKnowledge({
-    floor: { ...passiveFloor, tiles: featureTiles(state, passiveFloor.floorId) },
-    hero: heroPerception(state.hero, passiveHero), actors: passivePositions,
-    additionalLights: itemLightSources({ run: state, content: input.content, floorId: passiveFloor.floorId }),
-  });
+  const passivePerception = heroFloorPerception({ state, content: input.content });
   const passiveIndex = tileIndex(passiveFloor, passiveHero.x, passiveHero.y)!;
   const passive = applyPassiveDiscovery({ run: state, actorId: passiveHero.actorId,
     illumination: passivePerception.illumination.intensity[passiveIndex]!, eventId: input.eventId });

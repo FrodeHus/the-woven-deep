@@ -8,9 +8,8 @@ import {
   factionReputation, guaranteedUniqueItemIds, merchantAcceptsItem,
   quoteMerchantPurchase, quoteMerchantSale, quoteMerchantService, reputationTier,
 } from './commerce.js';
-import { conditionDefinition, conditionModifiers } from './conditions.js';
-import { equipmentModifiers, itemLightSources } from './equipment.js';
-import { featureTiles, projectFeature } from './features.js';
+import { conditionDefinition } from './conditions.js';
+import { projectFeature } from './features.js';
 import { projectItem } from './identification.js';
 import { isExplored, rememberedTile, validateKnowledgePacking } from './knowledge.js';
 import type { IlluminationField, RgbColor } from './light-model.js';
@@ -18,14 +17,15 @@ import { computeIllumination } from './lighting.js';
 import type { MerchantPopulation } from './merchant-model.js';
 import { assertOpaqueId, tileIndex, type ActiveRun, type OpaqueId, type PublicDecision, type TileId } from './model.js';
 import type { RecordedHeirloomSnapshot } from './population-model.js';
-import { refreshKnowledge, type PerceptionFloor, type PerceptionHero } from './perception.js';
+import { type PerceptionFloor, type PerceptionHero } from './perception.js';
+import { heroFloorPerception } from './run-perception.js';
+import { deriveRunActorStats } from './stats.js';
 import { relationshipBetween } from './reactions.js';
 import type { RunConclusion } from './run-conclusion.js';
 import type { RunMetrics } from './run-metrics.js';
 import { deriveHallRecordId, type AchievementGrant, type HallRecord } from './run-records-model.js';
 import type { ScoreBreakdown } from './score-run.js';
 import { compareCodeUnits } from './stable-json.js';
-import { hungerModifiers } from './survival.js';
 import { tileDefinition } from './terrain.js';
 import { activeTradeValidIgnoringDeparture, merchantFaction } from './trade.js';
 import { computeFieldOfView, isVisible } from './visibility.js';
@@ -533,19 +533,14 @@ function projectActiveTrade(
 }
 
 function projectionPerception(state: ActiveRun, content: CompiledContentPack) {
-  const hero = heroActor(state);
-  const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
-  if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
-  const effectiveFloor = { ...floor, tiles: featureTiles(state, floor.floorId) };
-  const positions = new Map<string, Readonly<{ x: number; y: number }>>(
-    floor.entities.map((entity) => [entity.entityId, entity] as const),
-  );
-  for (const actor of state.actors) if (actor.floorId === floor.floorId) positions.set(actor.actorId, actor);
-  const perception = refreshKnowledge({
-    floor: effectiveFloor, hero: heroPerception(state.hero, hero), actors: positions,
-    additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }),
-  });
-  return { hero, floor: { ...effectiveFloor, knowledge: perception.knowledge }, ...perception };
+  const perception = heroFloorPerception({ state, content });
+  return {
+    hero: perception.actor,
+    floor: { ...perception.floor, knowledge: perception.knowledge },
+    knowledge: perception.knowledge,
+    visibilityWords: perception.visibilityWords,
+    illumination: perception.illumination,
+  };
 }
 
 function visiblyOccupied(input: ReturnType<typeof projectionPerception>, x: number, y: number): boolean {
@@ -722,16 +717,7 @@ export function projectGameplayState(input: Readonly<{
   const observed = projectionPerception(input.state, input.content);
   const { hero } = observed;
   const rules = balanceEntry(input.content);
-  const derived = deriveActorStats({
-    attributes: hero.attributes, formulas: rules.formulas,
-    equipmentModifiers: equipmentModifiers({ run: input.state, content: input.content, actorId: hero.actorId })
-      .map((source) => source.modifiers),
-    conditionModifiers: [
-      ...conditionModifiers(hero, input.content),
-      hungerModifiers({ stage: input.state.survival.hungerStage, balance: rules }),
-    ],
-    heroModifiers: [input.state.hero.statModifiers],
-  });
+  const derived = deriveRunActorStats({ state: input.state, content: input.content, actor: hero });
   // "Actually dark" trigger (user decision): gate solely on the hero's own cell receiving no
   // effective light, never on "carried light out" alone -- a fixture/ambient-lit room stays
   // visible normally even with the hero's carried light extinguished.

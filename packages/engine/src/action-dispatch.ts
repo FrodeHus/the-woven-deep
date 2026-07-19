@@ -1,16 +1,14 @@
 import type { CompiledContentPack } from '@woven-deep/content';
-import { type GameAction, balanceEntry } from './actions.js';
+import { type GameAction } from './actions.js';
 import { actorById, heroPerception, type ActorState } from './actor-model.js';
-import { deriveActorStats } from './attributes.js';
 import { applyPopulationCombatModifiers, resolveAttack } from './combat.js';
-import { conditionModifiers } from './conditions.js';
 import { resolveEffectSequence } from './effects.js';
 import { consumeItemQuantity, dropItem, pickupItem, splitStack } from './inventory.js';
 import {
-  equipItem, equipmentModifiers, itemLightSources, refuelItem, toggleItemLight, unequipItem,
+  equipItem, itemLightSources, refuelItem, toggleItemLight, unequipItem,
 } from './equipment.js';
 import { identifyAppearance } from './identification.js';
-import { hungerModifiers } from './survival.js';
+import { deriveRunActorStats } from './stats.js';
 import { closeDoor, disarmTrap, featureTiles, openDoor, searchFeatures, triggerTrap } from './features.js';
 import {
   tileIndex, type ActiveRun, type Direction, type DomainEvent, type OpaqueId, type Point,
@@ -219,16 +217,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
     let next = consumed.run;
     events.push({ type: 'item.consumed', eventId, actorId: actor.actorId,
       itemId: action.ammunitionItemId, quantity: 1 });
-    const attackerStats = deriveActorStats({
-      attributes: actor.attributes, formulas: balanceEntry(content).formulas,
-      equipmentModifiers: equipmentModifiers({ run: next, content, actorId: actor.actorId })
-        .map((source) => source.modifiers),
-      conditionModifiers: [
-        ...conditionModifiers(actor, content),
-        hungerModifiers({ stage: next.survival.hungerStage, balance: balanceEntry(content) }),
-      ],
-      heroModifiers: actor.actorId === next.hero.actorId ? [next.hero.statModifiers] : [],
-    });
+    const attackerStats = deriveRunActorStats({ state: next, content, actor });
     const target = actorById(next, action.targetActorId);
     if (!target) throw new Error(`internal invariant: target ${action.targetActorId} disappeared`);
     const modifiers = groupCombatModifiers({ state: next, content, actorId: actor.actorId });

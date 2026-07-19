@@ -1,13 +1,9 @@
 import type {
   CompiledContentPack, MonsterContentEntry, NpcContentEntry, PopulationCombatModifiers,
 } from '@woven-deep/content';
-import { balanceEntry } from './actions.js';
 import type { ActorState } from './actor-model.js';
-import { deriveActorStats } from './attributes.js';
 import { applyPopulationCombatModifiers, composePopulationCombatModifiers, resolveAttack } from './combat.js';
-import { conditionModifiers } from './conditions.js';
-import { equipmentModifiers } from './equipment.js';
-import { hungerModifiers } from './survival.js';
+import { deriveRunActorStats } from './stats.js';
 import { groupCombatModifiers } from './group-behavior.js';
 import { swarmCombatModifiers } from './swarm-behavior.js';
 import { bossCombatModifiers } from './boss-behavior.js';
@@ -90,16 +86,10 @@ export function profile(
     resistance: monster.resistances.physical,
     immune: monster.resistances.physical === 100,
   }, populationModifiers);
-  const stats = deriveActorStats({
-    attributes: actor.attributes,
-    formulas: balanceEntry(content).formulas,
-    equipmentModifiers: equipmentModifiers({ run: { actors, items }, content, actorId: actor.actorId })
-      .map((source) => source.modifiers),
-    conditionModifiers: [
-      ...conditionModifiers(actor, content),
-      hungerModifiers({ stage: survival?.hungerStage ?? 'sated', balance: balanceEntry(content) }),
-    ],
-    heroModifiers: hero && actor.actorId === hero.actorId ? [hero.statModifiers] : [],
+  const stats = deriveRunActorStats({
+    state: { actors, items, survival: survival ?? { hungerStage: 'sated' }, hero },
+    content,
+    actor,
   });
   const equipped = items.filter((item) => item.location.type === 'equipped'
     && item.location.actorId === actor.actorId);

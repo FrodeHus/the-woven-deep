@@ -1,14 +1,14 @@
 import type { BalanceContentEntry, CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
-import { heroActor, heroPerception, type EquipmentSlot } from './actor-model.js';
+import { heroActor, type EquipmentSlot } from './actor-model.js';
 import { movementAction } from './movement.js';
 import { actorHasConditionTrait } from './conditions.js';
 import { dropItem, pickupItem, splitStack } from './inventory.js';
-import { refreshKnowledge } from './perception.js';
+import { floorPerception } from './run-perception.js';
 import { validateTarget } from './targeting.js';
 import { resolveEffectSequence } from './effects.js';
 import { parseEffectParameters } from './parameter-contracts.js';
-import { equipItem, itemLightSources, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
-import { closeDoor, featureTiles, openDoor } from './features.js';
+import { equipItem, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
+import { closeDoor, openDoor } from './features.js';
 import type {
   ActiveRun, DecisionRequiredResult, GameCommand, InvalidActionReason, OpaqueId, Point,
 } from './model.js';
@@ -118,18 +118,13 @@ function itemEntry(content: CompiledContentPack, contentId: OpaqueId): ItemConte
 }
 
 function targetContext(state: ActiveRun, actor: ReturnType<typeof heroActor>, content: CompiledContentPack) {
-  const floor = state.floors.find((candidate) => candidate.floorId === actor.floorId);
-  if (!floor) throw new Error(`internal invariant: active floor ${actor.floorId} is missing`);
-  const positions = new Map<string, Readonly<{ x: number; y: number }>>(
-    floor.entities.map((entity) => [entity.entityId, entity] as const),
-  );
-  for (const candidate of state.actors) if (candidate.floorId === floor.floorId) positions.set(candidate.actorId, candidate);
-  const effectiveFloor = { ...floor, tiles: featureTiles(state, floor.floorId) };
-  const perception = refreshKnowledge({
-    floor: effectiveFloor, hero: heroPerception(state.hero, actor), actors: positions,
-    additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }),
-  });
-  return { floor: effectiveFloor, ...perception };
+  const perception = floorPerception({ state, content, actorId: actor.actorId });
+  return {
+    floor: perception.floor,
+    knowledge: perception.knowledge,
+    visibilityWords: perception.visibilityWords,
+    illumination: perception.illumination,
+  };
 }
 
 export function validatePlayerAction(input: Readonly<{
