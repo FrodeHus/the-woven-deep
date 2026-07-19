@@ -40,6 +40,7 @@ export * from './monster-loot.js';
 export * from './individual-behavior.js';
 export * from './champion.js';
 export * from './population-fixture.js';
+export * from './combined-population-fixture.js';
 export * from './projection.js';
 export * from './fixture.js';
 export * from './new-run.js';
