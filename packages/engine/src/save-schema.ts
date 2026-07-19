@@ -91,6 +91,8 @@ const actorDiedEvent = z.strictObject({ type: z.literal('actor.died'), eventId: 
   actorId: identifier, contentId: identifier, killerActorId: identifier });
 const actorHealedEvent = z.strictObject({ type: z.literal('actor.healed'), eventId: identifier,
   actorId: identifier, sourceActorId: identifier, amount: safeNonNegative, health: safeNonNegative });
+const lootDroppedEvent = z.strictObject({ type: z.literal('loot.dropped'), eventId: identifier,
+  actorId: identifier, contentId: identifier, x: safeNonNegative, y: safeNonNegative, itemIds: z.array(identifier) });
 const conditionAppliedEvent = z.strictObject({ type: z.literal('condition.applied'), eventId: identifier,
   actorId: identifier, sourceActorId: identifier, conditionId: identifier, stacks: positiveQuantity, expiresAt: safeNonNegative.nullable() });
 const conditionRemovedEvent = z.strictObject({ type: z.enum(['condition.removed', 'condition.expired']),
@@ -291,7 +293,7 @@ const achievementGrantedEvent = z.strictObject({ type: z.literal('achievement.gr
   achievementId: identifier, criteriaId: z.enum(ACHIEVEMENT_CRITERIA_IDS), name: heroName });
 const eventOptions = [
   movedEvent, waitedEvent, invalidEvent, attackMissedEvent, attackHitEvent, actorDamagedEvent,
-  actorDiedEvent, actorHealedEvent, conditionAppliedEvent, conditionRemovedEvent, actorForcedMoveEvent,
+  actorDiedEvent, actorHealedEvent, lootDroppedEvent, conditionAppliedEvent, conditionRemovedEvent, actorForcedMoveEvent,
   reactionTriggeredEvent, relationshipChangedEvent, actorTurnStartedEvent, actorTurnCompletedEvent, actorMovedEvent,
   itemPickedUpEvent, itemDroppedEvent, itemStackSplitEvent,
   itemConsumedEvent,

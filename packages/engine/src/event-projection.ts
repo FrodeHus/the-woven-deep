@@ -140,6 +140,7 @@ export function projectDomainEvents(input: Readonly<{
       case 'actor.healed':
         if (actorVisible(event.actorId) && actorVisible(event.sourceActorId)) output.push(event);
         break;
+      case 'loot.dropped': output.push(event); break;
       case 'condition.applied':
         if (actorVisible(event.actorId) && actorVisible(event.sourceActorId)) output.push(event);
         break;

@@ -218,6 +218,10 @@ export interface ActorHealedEvent {
   readonly type: 'actor.healed'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
   readonly sourceActorId: OpaqueId; readonly amount: number; readonly health: number;
 }
+export interface LootDroppedEvent {
+  readonly type: 'loot.dropped'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
+  readonly contentId: OpaqueId; readonly x: number; readonly y: number; readonly itemIds: readonly OpaqueId[];
+}
 export interface ConditionAppliedEvent {
   readonly type: 'condition.applied'; readonly eventId: OpaqueId; readonly actorId: OpaqueId;
   readonly sourceActorId: OpaqueId; readonly conditionId: OpaqueId; readonly stacks: number; readonly expiresAt: number | null;
@@ -604,7 +608,7 @@ export interface AchievementGrantedEvent {
 export type RunRecordDomainEvent = RunConcludedEvent | RunFinalizedEvent | AchievementGrantedEvent;
 
 export type DomainEvent = HeroMovedEvent | HeroWaitedEvent | InvalidActionEvent | AttackMissedEvent
-  | AttackHitEvent | ActorDamagedEvent | ActorDiedEvent | ActorHealedEvent | ConditionAppliedEvent
+  | AttackHitEvent | ActorDamagedEvent | ActorDiedEvent | ActorHealedEvent | LootDroppedEvent | ConditionAppliedEvent
   | ConditionRemovedEvent | ActorForcedMoveEvent | ReactionTriggeredEvent | RelationshipChangedEvent
   | ActorTurnStartedEvent | ActorTurnCompletedEvent | ActorMovedEvent | ItemPickedUpEvent | ItemDroppedEvent
   | ItemStackSplitEvent | ItemConsumedEvent | ItemThrownEvent | ItemUsedEvent | ItemEquippedEvent
