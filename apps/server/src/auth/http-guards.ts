@@ -10,8 +10,8 @@ declare module 'fastify' {
 const SESSION_COOKIE_NAME = 'wd_session';
 
 /**
- * Adds the `profileId` property to the Fastify request prototype so `requireSession`
- * can populate it and downstream handlers can read it directly, with no cast.
+ * Adds the typed `profileId` property to the Fastify request prototype so `requireSession`
+ * can populate it and downstream handlers can read it as a typed field.
  */
 export function decorateProfileId(app: FastifyInstance): void {
   app.decorateRequest('profileId', undefined);
