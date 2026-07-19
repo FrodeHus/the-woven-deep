@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection, OpaqueId, PublicEvent } from '@woven-deep/engine';
+import { actorsOf, heroOf } from '../session/projection-view.js';
 import type { CameraOrigin, CameraViewport } from './camera.js';
 import {
-  effectsForEvents, MAX_TRANSIENT_EFFECTS, pickPrimaryCondition, type ProjectedCondition, type TransientEffect,
+  effectsForEvents, MAX_TRANSIENT_EFFECTS, pickPrimaryCondition, type TransientEffect,
 } from './effects-map.js';
 import { equippedLightSource } from './light-sources.js';
 
@@ -42,10 +43,8 @@ const EFFECT_LIFETIME_MS: Record<TransientEffect['kind'], number> = {
  * stranding them at a stale viewport position.
  */
 export function EffectsLayer({ projection, pack, lastEvents, camera, viewport }: EffectsLayerProps): JSX.Element {
-  const heroId = (projection.hero as unknown as { actorId: OpaqueId }).actorId;
-  const hero = projection.hero as unknown as {
-    x: number; y: number; conditions?: readonly ProjectedCondition[];
-  };
+  const hero = heroOf(projection);
+  const heroId = hero.actorId;
 
   const positionsRef = useRef(new Map<OpaqueId, Readonly<{ x: number; y: number }>>());
   const floorIdRef = useRef(projection.floor.floorId);
@@ -57,7 +56,7 @@ export function EffectsLayer({ projection, pack, lastEvents, camera, viewport }:
   // they are already gone from `projection.actors`, so their position must come from what we
   // recorded while they were still alive (an earlier render, or this one for survivors).
   positionsRef.current.set(heroId, { x: hero.x, y: hero.y });
-  for (const actor of projection.actors as unknown as readonly { actorId: OpaqueId; x: number; y: number }[]) {
+  for (const actor of actorsOf(projection)) {
     positionsRef.current.set(actor.actorId, { x: actor.x, y: actor.y });
   }
 

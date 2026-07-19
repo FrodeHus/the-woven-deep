@@ -1,5 +1,7 @@
 import type { CSSProperties, JSX } from 'react';
+import type { ObservableFloorProjection, ObservablePlacementSlot } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../../session/guest-session.js';
+import { actorsOf, heroOf, type ActorView, type HeroView } from '../../session/projection-view.js';
 import { visibleForeground } from '../cell-color.js';
 import { cn } from '../lib/cn.js';
 import { useSessionCtx } from '../providers.js';
@@ -12,50 +14,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/tabs.js'
  * exists today (see the plan's Global Constraints -- this task adds zero new projection fields).
  */
 export const JOURNAL_OBJECTIVE = 'Reach the Heart of the Deep, then find your way back out alive.';
-
-/** The full `ObservableCell` shape this overlay reads (`packages/engine/src/projection.ts`) --
- * every field reused verbatim, never re-derived: `knowledge` decides which of the three render
- * branches a cell takes, `glyph`/`tint`/`intensity` are painted exactly as the engine reports them
- * (the same discipline `GridRenderer` already follows for the camera-limited play view). */
-interface ProjectedCell {
-  readonly index: number;
-  readonly x: number;
-  readonly y: number;
-  readonly knowledge: 'unknown' | 'remembered' | 'visible';
-  readonly tileId?: number;
-  readonly glyph?: string;
-  readonly tint?: readonly [number, number, number];
-  readonly intensity: number;
-  readonly fixture?: Readonly<{ glyph: string }>;
-}
-
-interface ProjectedFloor {
-  readonly floorId: string;
-  readonly town: boolean;
-  readonly width: number;
-  readonly height: number;
-  readonly cells: readonly ProjectedCell[];
-}
-
-interface ProjectedHero {
-  readonly x: number;
-  readonly y: number;
-}
-
-interface ProjectedActor {
-  readonly x: number;
-  readonly y: number;
-  readonly glyph?: string;
-  readonly name?: string;
-  readonly factionName?: string;
-}
-
-interface ProjectedPlacementSlot {
-  readonly slotId: string;
-  readonly tags: readonly string[];
-  readonly x: number;
-  readonly y: number;
-}
 
 /** Stair tile ids (`packages/engine/src/terrain.ts`'s `TILE_DEFINITIONS`) -- both share the same
  * `terrain.stair` token, so `tileId` (not `token`) is the only field that actually distinguishes
@@ -93,9 +51,9 @@ const MAP_CELL_STYLE = { width: 'var(--map-cell)', height: 'var(--map-cell)' } a
  * items) should read that as intentional scope, not an oversight.
  */
 function MapPane({ floor, hero, actors }: Readonly<{
-  floor: ProjectedFloor;
-  hero: ProjectedHero;
-  actors: readonly ProjectedActor[];
+  floor: ObservableFloorProjection;
+  hero: HeroView;
+  actors: readonly ActorView[];
 }>): JSX.Element {
   const actorsByCell = byCell(actors);
 
@@ -175,7 +133,7 @@ interface Landmark {
  *   the same floor: town always has slots (never actors duplicating the same three merchants
  *   in this list), a dungeon floor never has slots at all.
  */
-function landmarksFor(floor: ProjectedFloor, actors: readonly ProjectedActor[], slots: readonly ProjectedPlacementSlot[]): readonly Landmark[] {
+function landmarksFor(floor: ObservableFloorProjection, actors: readonly ActorView[], slots: readonly ObservablePlacementSlot[]): readonly Landmark[] {
   const landmarks: Landmark[] = [];
 
   const stairUpCell = floor.cells.find((cell) => cell.knowledge !== 'unknown' && cell.tileId === STAIR_UP_TILE_ID);
@@ -287,9 +245,10 @@ const LOG_REINFORCEMENT_CLASS: Readonly<Record<string, string>> = {
 };
 
 function JournalPane({ snapshot }: Readonly<{ snapshot: SessionSnapshot }>): JSX.Element {
-  const floor = snapshot.projection.floor as unknown as ProjectedFloor;
-  const actors = snapshot.projection.actors as unknown as readonly ProjectedActor[];
-  const slots = snapshot.projection.slots as unknown as readonly ProjectedPlacementSlot[];
+  const { projection } = snapshot;
+  const floor = projection.floor;
+  const actors = actorsOf(projection);
+  const slots = projection.slots;
   const liveLandmarks = landmarksFor(floor, actors, slots);
   const persistedLandmarks = persistedLandmarksFor(floor.floorId, snapshot.sightings.landmarks);
   const landmarks = mergeLandmarks(liveLandmarks, persistedLandmarks);
@@ -338,9 +297,9 @@ export function MapJournalOverlay(): JSX.Element | null {
   if (!sessionCtx) return null;
 
   const { snapshot } = sessionCtx;
-  const floor = snapshot.projection.floor as unknown as ProjectedFloor;
-  const hero = snapshot.projection.hero as unknown as ProjectedHero;
-  const actors = snapshot.projection.actors as unknown as readonly ProjectedActor[];
+  const floor = snapshot.projection.floor;
+  const hero = heroOf(snapshot.projection);
+  const actors = actorsOf(snapshot.projection);
 
   return (
     <Tabs defaultValue="map" className="flex flex-col gap-3">

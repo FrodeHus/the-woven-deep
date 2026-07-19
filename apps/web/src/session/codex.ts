@@ -2,6 +2,7 @@ import type {
   ClassContentEntry, CompiledContentPack, ItemContentEntry, MonsterContentEntry, SpellContentEntry,
 } from '@woven-deep/content';
 import type { GameplayProjection, StoredHallRecord } from '@woven-deep/engine';
+import { actorsOf, groundItemsOf, heroOf, tradeOf } from './projection-view.js';
 import type { SessionSnapshot } from './guest-session.js';
 import type { SessionStorageLike } from './storage.js';
 
@@ -124,13 +125,6 @@ export function saveSightings(storage: SessionStorageLike, sightings: Sightings)
   storage.set(SIGHTINGS_KEY, JSON.stringify(sightings));
 }
 
-/** The narrow slice of a projected actor this module reads -- `contentId` is `null` for the hero
- * (never present in `projection.actors` at all) and for fallen-champion/echo actors (Task 8's
- * engine doc comment, `projection.ts`), both deliberately excluded from monster sightings. */
-interface SightedActor {
-  readonly contentId: string | null;
-}
-
 /** The narrow slice of a projected item this module reads. `contentId` is only ever present on an
  * IDENTIFIED item's projection (`projectItem`, `packages/engine/src/identification.ts`) -- an
  * unidentified item's projected shape omits it entirely, so its absence alone is the identification
@@ -235,10 +229,7 @@ function capturedLandmarks(floor: SightedFloor, actors: readonly LandmarkActor[]
  * per-render derivation (the live half); this is the accumulating, storage-backed half.
  */
 export function accumulateLandmarks(prev: readonly Landmark[], projection: GameplayProjection): readonly Landmark[] {
-  const floor = projection.floor as unknown as SightedFloor;
-  const actors = projection.actors as unknown as readonly LandmarkActor[];
-  const slots = projection.slots as unknown as readonly SightedSlot[];
-  return dedupeLandmarks([...prev, ...capturedLandmarks(floor, actors, slots)]);
+  return dedupeLandmarks([...prev, ...capturedLandmarks(projection.floor, actorsOf(projection), projection.slots)]);
 }
 
 /**
@@ -250,19 +241,16 @@ export function accumulateLandmarks(prev: readonly Landmark[], projection: Gamep
  * owned/ground/stock items", per the design amendment.
  */
 export function accumulateSightings(prev: Sightings, projection: GameplayProjection): Sightings {
-  const actors = projection.actors as unknown as readonly SightedActor[];
+  const actors = actorsOf(projection);
   const monsterIds = sortedUnique([
     ...prev.monsterIds,
     ...actors.flatMap((actor) => (actor.contentId === null ? [] : [actor.contentId])),
   ]);
 
-  const hero = projection.hero as unknown as Readonly<{
-    backpack: readonly SightedItem[];
-    equipment: Readonly<Record<string, SightedItem | null>>;
-  }>;
+  const hero = heroOf(projection);
   const equipped = Object.values(hero.equipment).flatMap((item) => (item ? [item] : []));
-  const groundItems = projection.groundItems as unknown as readonly SightedItem[];
-  const stockItems = (projection.trade?.stock ?? []).map((offer) => offer.item as unknown as SightedItem);
+  const groundItems = groundItemsOf(projection);
+  const stockItems = (tradeOf(projection)?.stock ?? []).map((offer) => offer.item);
 
   const itemIds = sortedUnique([
     ...prev.itemIds,

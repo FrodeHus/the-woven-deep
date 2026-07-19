@@ -1,28 +1,7 @@
 import type { JSX } from 'react';
 import type { SessionSnapshot } from '../session/guest-session.js';
+import { actorsOf, heroOf, type ActorView } from '../session/projection-view.js';
 import { chordKey, type ResolvedKeymap } from '../session/settings.js';
-
-interface ProjectedHero {
-  readonly x: number;
-  readonly y: number;
-}
-
-interface ProjectedMerchantActor {
-  readonly actorId: string;
-  readonly name?: string;
-  readonly factionName?: string;
-  readonly reputationTier?: string;
-  readonly tradeAvailable?: boolean;
-  readonly x: number;
-  readonly y: number;
-}
-
-interface ProjectedPlacementSlot {
-  readonly slotId: string;
-  readonly tags: readonly string[];
-  readonly x: number;
-  readonly y: number;
-}
 
 function chebyshevDistance(ax: number, ay: number, bx: number, by: number): number {
   return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -31,9 +10,8 @@ function chebyshevDistance(ax: number, ay: number, bx: number, by: number): numb
 /** Merchant actors carry `factionName` only via `visibleMerchantState` (see the engine's
  * `projection.ts`), so its presence -- rather than any population-model tag lost in translation
  * -- is the honest signal that an actor is a merchant. */
-function merchantActors(projection: SessionSnapshot['projection']): readonly ProjectedMerchantActor[] {
-  return (projection.actors as unknown as readonly ProjectedMerchantActor[])
-    .filter((actor) => typeof actor.factionName === 'string');
+function merchantActors(projection: SessionSnapshot['projection']): readonly ActorView[] {
+  return actorsOf(projection).filter((actor) => typeof actor.factionName === 'string');
 }
 
 export interface TownPanelProps {
@@ -55,10 +33,9 @@ export function TownPanel({ snapshot, keymap }: TownPanelProps): JSX.Element {
   const { projection } = snapshot;
   const tradeChord = chordKey(keymap.byAction.trade);
   const houseChord = chordKey(keymap.byAction.house);
-  const hero = projection.hero as unknown as ProjectedHero;
+  const hero = heroOf(projection);
   const merchants = merchantActors(projection);
-  const houseDoor = (projection.slots as unknown as readonly ProjectedPlacementSlot[])
-    .find((slot) => slot.tags.includes('house-door'));
+  const houseDoor = projection.slots.find((slot) => slot.tags.includes('house-door'));
   const houseAdjacent = houseDoor !== undefined
     && chebyshevDistance(hero.x, hero.y, houseDoor.x, houseDoor.y) === 1;
 

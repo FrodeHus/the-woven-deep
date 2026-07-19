@@ -1,5 +1,6 @@
 import type { CSSProperties, JSX } from 'react';
 import type { GameplayProjection } from '@woven-deep/engine';
+import { actorsOf, groundItemsOf, heroOf } from '../session/projection-view.js';
 import type { CameraOrigin, CameraViewport } from './camera.js';
 import { MATERIAL_BASE_RGB, visibleForeground, type MaterialBaseName } from './cell-color.js';
 
@@ -103,9 +104,9 @@ function byCell<T extends PositionedGlyph>(items: readonly T[]): ReadonlyMap<str
  */
 export function GridRenderer({ projection, camera, viewport }: GridRendererProps): JSX.Element {
   const { floor } = projection;
-  const hero = projection.hero as unknown as { x: number; y: number };
-  const actorsByCell = byCell(projection.actors as unknown as readonly PositionedGlyph[]);
-  const itemsByCell = byCell(projection.groundItems as unknown as readonly PositionedGlyph[]);
+  const hero = heroOf(projection);
+  const actorsByCell = byCell(actorsOf(projection));
+  const itemsByCell = byCell(groundItemsOf(projection));
 
   const slots: JSX.Element[] = [];
   for (let row = 0; row < viewport.height; row += 1) {

@@ -1,36 +1,15 @@
 import type { CSSProperties, JSX } from 'react';
+import type { ObservableCell } from '@woven-deep/engine';
+import { heroOf } from '../../session/projection-view.js';
 import { visibleForeground } from '../cell-color.js';
 import type { PanelProps } from './types.js';
-
-interface ProjectedCell {
-  readonly index: number;
-  readonly x: number;
-  readonly y: number;
-  readonly knowledge: 'unknown' | 'remembered' | 'visible';
-  readonly glyph?: string;
-  readonly tint?: readonly [number, number, number];
-  readonly intensity: number;
-}
-
-interface ProjectedFloor {
-  readonly floorId: string;
-  readonly town: boolean;
-  readonly width: number;
-  readonly height: number;
-  readonly cells: readonly ProjectedCell[];
-}
-
-interface ProjectedHero {
-  readonly x: number;
-  readonly y: number;
-}
 
 /** A single map-cell dot, `MINIMAP_CELL` square. Mirrors `MapJournalOverlay`'s `MapPane` cell
  * rules at a smaller, fixed size for the right-rail rail: `unknown` renders nothing, `remembered`
  * renders dim, `visible` renders lit (both colored from the cell's own `tint`, same as `MapPane`)
  * -- the same knowledge-driven read-only rendering, without any scrolling viewport (the whole
  * floor is laid out; the rail itself scrolls if it overflows). */
-function MinimapCell({ cell, isHero }: Readonly<{ cell: ProjectedCell; isHero: boolean }>): JSX.Element {
+function MinimapCell({ cell, isHero }: Readonly<{ cell: ObservableCell; isHero: boolean }>): JSX.Element {
   if (cell.knowledge === 'unknown') return <span className="block bg-transparent" />;
   if (isHero) return <span className="block bg-accent" />;
 
@@ -51,8 +30,8 @@ const MINIMAP_CELL = '3px';
  * only ever read for other panels, never here.
  */
 export function MinimapPanel({ snapshot }: PanelProps): JSX.Element {
-  const floor = snapshot.projection.floor as unknown as ProjectedFloor;
-  const heroPosition = snapshot.projection.hero as unknown as ProjectedHero;
+  const floor = snapshot.projection.floor;
+  const heroPosition = heroOf(snapshot.projection);
 
   return (
     <section

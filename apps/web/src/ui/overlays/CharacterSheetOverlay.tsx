@@ -4,7 +4,7 @@ import {
 } from '@woven-deep/engine';
 import { useSessionCtx } from '../providers.js';
 import { playerVisibleDerivedStats } from '../derived-stats-display.js';
-import type { ProjectedItemLike } from './InventoryOverlay.js';
+import { heroOf, type HeroView } from '../../session/projection-view.js';
 
 type AttributeName = 'might' | 'agility' | 'vitality' | 'wits' | 'resolve';
 
@@ -20,37 +20,6 @@ const DERIVED_STAT_LABEL: Readonly<Record<DerivedStatName, string>> = {
   lightOutRevealRadius: 'Light-out reveal radius', lightOutMemoryPersists: 'Light-out memory persists',
 };
 
-/** The projection's `derived` entry shape -- `{value, formula}` per `DERIVED_STAT_NAMES`, produced
- * by `deriveActorStats` (`packages/engine/src/attributes.ts`) and carried verbatim onto
- * `projection.hero.derived` (`projectGameplayState`, `packages/engine/src/projection.ts`). */
-interface ProjectedDerivedStat {
-  readonly value: number;
-  readonly formula: DerivedStatFormula;
-}
-
-interface ProjectedCondition {
-  readonly conditionId: string;
-  readonly name: string;
-  readonly color: string;
-  readonly stacks: number;
-  readonly remaining: number | null;
-}
-
-/** The subset of `projection.hero`'s widened `Record<string, unknown>` shape this overlay actually
- * reads -- mirrors `InventoryOverlay`'s `ProjectedItemLike` cast discipline: the engine's
- * `GameplayProjection.hero` type is intentionally loose (`Readonly<Record<string, unknown>>`), so
- * consumers narrow it to exactly the fields they use, never inventing fields the engine doesn't
- * actually project (no resistances -- see the doc comment below `CharacterSheetOverlay`). */
-interface ProjectedHeroLike {
-  readonly attributes: Readonly<Record<AttributeName, number>>;
-  readonly derived: Readonly<Record<DerivedStatName, ProjectedDerivedStat>>;
-  readonly health: number;
-  readonly maxHealth: number;
-  readonly sightRadius: number;
-  readonly hungerStage: string;
-  readonly conditions: readonly ProjectedCondition[];
-  readonly equipment: Readonly<Record<string, ProjectedItemLike | null>>;
-}
 
 /** Only the current-run stats the brief lists -- deliberately a narrower literal union than
  * `keyof RunMetrics` (which also has `killsByModel`, a nested object, plus a few fields the brief
@@ -148,7 +117,7 @@ export function CharacterSheetOverlay(): JSX.Element | null {
   if (!sessionCtx) return null;
 
   const { snapshot } = sessionCtx;
-  const hero = snapshot.projection.hero as unknown as ProjectedHeroLike;
+  const hero: HeroView = heroOf(snapshot.projection);
   const town = snapshot.projection.floor.town;
   const metrics = snapshot.projection.metrics;
 

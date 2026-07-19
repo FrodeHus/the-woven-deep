@@ -1,5 +1,6 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection, OpaqueId } from '@woven-deep/engine';
+import { heroOf } from '../session/projection-view.js';
 
 /** Client-side light-source resolver used by `EffectsLayer` for the hero's carried-light glow. */
 export interface EquippedLight {
@@ -14,11 +15,7 @@ export interface EquippedLight {
 export function equippedLightSource(
   projection: GameplayProjection, pack: CompiledContentPack,
 ): EquippedLight | undefined {
-  const hero = projection.hero as unknown as {
-    equipment: Readonly<Record<string, Readonly<{
-      contentId?: OpaqueId; enabled?: boolean; fuel?: number;
-    }> | null>>;
-  };
+  const hero = heroOf(projection);
   for (const item of Object.values(hero.equipment)) {
     if (!item || !item.enabled || item.contentId === undefined) continue;
     const entry = pack.entries.find((candidate) => candidate.id === item.contentId);
