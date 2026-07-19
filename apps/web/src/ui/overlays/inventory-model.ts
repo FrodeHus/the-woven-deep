@@ -1,5 +1,6 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import { type HeroView, type OwnedItemView } from '../../session/projection-view.js';
+import { itemById } from '../../session/pack-queries.js';
 
 /** The real item-category vocabulary the content model/engine projection actually emits (see
  * `packages/content/src/model.ts`'s `ItemCategory`) -- never invented. */
@@ -109,14 +110,15 @@ export function equippedLightMatchingFuel(
   pack: CompiledContentPack, hero: HeroView, fuelItem: ProjectedItemLike,
 ): ProjectedItemLike | undefined {
   if (fuelItem.contentId === undefined) return undefined;
-  const fuelEntry = pack.entries.find((entry) => entry.id === fuelItem.contentId);
-  if (!fuelEntry || fuelEntry.kind !== 'item') return undefined;
+  const fuelEntry = itemById(pack, fuelItem.contentId);
+  if (!fuelEntry) return undefined;
   const fuelTags = fuelEntry.tags;
   return Object.values(hero.equipment)
     .filter((item): item is ProjectedItemLike => item !== null && item.category === 'light' && item.contentId !== undefined)
     .find((item) => {
-      const lightEntry = pack.entries.find((entry) => entry.id === item.contentId);
-      return lightEntry?.kind === 'item' && lightEntry.light !== null
+      if (item.contentId === undefined) return false;
+      const lightEntry = itemById(pack, item.contentId);
+      return lightEntry !== undefined && lightEntry.light !== null
         && lightEntry.light.fuelTags.some((tag) => fuelTags.includes(tag));
     });
 }

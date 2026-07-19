@@ -1,9 +1,9 @@
 import { useRef, type CSSProperties, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
-import type { GameplayProjection, StoredHallRecord } from '@woven-deep/engine';
+import type { StoredHallRecord } from '@woven-deep/engine';
 import type { GuestSession } from '../session/guest-session.js';
 import { useGuestSession } from '../session/store.js';
-import { actorsOf, heroOf } from '../session/projection-view.js';
+import { heroOf, tradeIsAvailable } from '../session/projection-view.js';
 import { computeCamera, type CameraOrigin } from './camera.js';
 import { CommandPalette } from './CommandPalette.js';
 import { EffectsLayer } from './EffectsLayer.js';
@@ -68,20 +68,6 @@ export interface PlayScreenProps {
    * `snapshot.onboarding`'s mastery counts either, so in practice they'd only ever see the
    * `movement` hint, and only while in town. */
   readonly onboardingEnabled?: boolean;
-}
-
-function chebyshevDistance(ax: number, ay: number, bx: number, by: number): number {
-  return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
-}
-
-/** Whether a trade session could be opened right now -- mirrors `TownPanel`'s own adjacency/
- * availability check (a merchant actor, identified the same honest way via `factionName`,
- * Chebyshev-adjacent to the hero, with `tradeAvailable` not explicitly `false`). */
-function tradeIsAvailable(projection: GameplayProjection): boolean {
-  const hero = heroOf(projection);
-  const merchants = actorsOf(projection).filter((actor) => typeof actor.factionName === 'string');
-  return merchants.some((merchant) => chebyshevDistance(hero.x, hero.y, merchant.x, merchant.y) === 1
-    && merchant.tradeAvailable !== false);
 }
 
 /**

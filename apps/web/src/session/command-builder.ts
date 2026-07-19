@@ -4,9 +4,10 @@ import type {
 } from '@woven-deep/engine';
 import type { PlayerIntent } from './intents.js';
 import {
-  actorsOf, featuresOf, groundItemsOf, heroOf, ownedItemOf,
+  actorsOf, adjacentMerchant, featuresOf, groundItemsOf, heroOf, ownedItemOf,
   type ActorView, type FeatureView, type GroundItemView, type OwnedItemView,
 } from './projection-view.js';
+import { itemById } from './pack-queries.js';
 
 export type BuiltIntent =
   | { readonly kind: 'command'; readonly command: GameCommand }
@@ -71,21 +72,9 @@ function heroAdjacentToHouseDoor(projection: GameplayProjection): boolean {
   return Math.max(Math.abs(x - door.x), Math.abs(y - door.y)) === 1;
 }
 
-/** The merchant actor the hero is Chebyshev-adjacent to (but not standing on), if any -- mirrors
- * `heroAdjacentToHouseDoor` above. When more than one merchant is adjacent, the nearest by
- * actor-id ordering wins; the town's authored merchant stalls never place two merchants close
- * enough for this to matter in practice. */
-function heroAdjacentMerchant(projection: GameplayProjection): ActorView | undefined {
-  const origin = heroOf(projection);
-  return actorsOf(projection)
-    .filter((actor) => typeof actor.factionName === 'string')
-    .filter((actor) => Math.max(Math.abs(actor.x - origin.x), Math.abs(actor.y - origin.y)) === 1)
-    .sort((left, right) => (left.actorId < right.actorId ? -1 : 1))[0];
-}
-
 function equipSlotFor(pack: CompiledContentPack, contentId: OpaqueId, occupiedSlots: ReadonlySet<EquipmentSlot>): EquipmentSlot | undefined {
-  const entry = pack.entries.find((candidate) => candidate.id === contentId);
-  if (!entry || entry.kind !== 'item' || entry.equipment === null) return undefined;
+  const entry = itemById(pack, contentId);
+  if (!entry || entry.equipment === null) return undefined;
   const { slots } = entry.equipment;
   return slots.find((slot) => !occupiedSlots.has(slot)) ?? slots[0];
 }
@@ -233,7 +222,7 @@ export function buildIntent(input: Readonly<{
     };
   }
   if (intent.type === 'trade-open') {
-    const merchant = heroAdjacentMerchant(projection);
+    const merchant = adjacentMerchant(projection);
     if (!merchant) return { kind: 'rejected', message: 'There is no merchant nearby to trade with.' };
     return {
       kind: 'command',

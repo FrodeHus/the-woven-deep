@@ -1,7 +1,8 @@
 import type { JSX } from 'react';
 import { modifiersMeta } from '@/ui/derived-stats-display.js';
 import { FacetedOptionList } from '../FacetedOptionList.js';
-import { backgroundEntries, type StepProps } from './step-content.js';
+import { backgroundEntries } from '../../../../session/pack-queries.js';
+import { type StepProps } from './step-content.js';
 
 export function OriginStep({ state, pack, dispatch }: StepProps): JSX.Element {
   const entries = backgroundEntries(pack).map((entry) => {

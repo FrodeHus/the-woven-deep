@@ -1,18 +1,7 @@
 import type { JSX } from 'react';
 import type { SessionSnapshot } from '../session/guest-session.js';
-import { actorsOf, heroOf, type ActorView } from '../session/projection-view.js';
+import { chebyshev, heroOf, merchantActors } from '../session/projection-view.js';
 import { chordKey, type ResolvedKeymap } from '../session/settings.js';
-
-function chebyshevDistance(ax: number, ay: number, bx: number, by: number): number {
-  return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
-}
-
-/** Merchant actors carry `factionName` only via `visibleMerchantState` (see the engine's
- * `projection.ts`), so its presence -- rather than any population-model tag lost in translation
- * -- is the honest signal that an actor is a merchant. */
-function merchantActors(projection: SessionSnapshot['projection']): readonly ActorView[] {
-  return actorsOf(projection).filter((actor) => typeof actor.factionName === 'string');
-}
 
 export interface TownPanelProps {
   readonly snapshot: SessionSnapshot;
@@ -37,7 +26,7 @@ export function TownPanel({ snapshot, keymap }: TownPanelProps): JSX.Element {
   const merchants = merchantActors(projection);
   const houseDoor = projection.slots.find((slot) => slot.tags.includes('house-door'));
   const houseAdjacent = houseDoor !== undefined
-    && chebyshevDistance(hero.x, hero.y, houseDoor.x, houseDoor.y) === 1;
+    && chebyshev(hero, houseDoor) === 1;
 
   return (
     <section aria-label="Town" className="town-panel">
@@ -45,7 +34,7 @@ export function TownPanel({ snapshot, keymap }: TownPanelProps): JSX.Element {
       {merchants.length > 0 && (
         <ul className="town-merchant-list">
           {merchants.map((merchant) => {
-            const adjacent = chebyshevDistance(hero.x, hero.y, merchant.x, merchant.y) === 1;
+            const adjacent = chebyshev(hero, merchant) === 1;
             const canTrade = adjacent && merchant.tradeAvailable !== false;
             return (
               <li key={merchant.actorId} className={adjacent ? 'town-merchant town-merchant--nearby' : 'town-merchant'}>
