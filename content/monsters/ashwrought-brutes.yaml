@@ -1,0 +1,126 @@
+schemaVersion: 7
+entries:
+  - kind: monster
+    id: monster.cinder-thug
+    name: Cinder thug
+    glyph: u
+    color: "#c06a3e"
+    tags: [ashwrought, brute, offense]
+    minDepth: 6
+    maxDepth: 9
+    attributes: { might: 11, agility: 5, vitality: 11, wits: 3, resolve: 8 }
+    health: 28
+    speed: 90
+    accuracy: 4
+    defense: 10
+    perception: 6
+    damage: { count: 2, sides: 6, bonus: 1 }
+    armor: 2
+    resistances: { physical: 15, fire: 40, cold: -15, lightning: 0, poison: 15, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 6
+    rarity: common
+    lootTableId: loot-table.ashwrought-brutes
+    dropChance: 0.3
+
+  - kind: monster
+    id: monster.slag-skirmisher
+    name: Slag skirmisher
+    glyph: u
+    color: "#d0824a"
+    tags: [ashwrought, skirmisher]
+    minDepth: 6
+    maxDepth: 9
+    attributes: { might: 9, agility: 8, vitality: 8, wits: 3, resolve: 6 }
+    health: 22
+    speed: 115
+    accuracy: 5
+    defense: 12
+    perception: 7
+    damage: { count: 1, sides: 10, bonus: 1 }
+    armor: 1
+    resistances: { physical: 10, fire: 35, cold: -15, lightning: 0, poison: 10, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 6
+    rarity: uncommon
+    lootTableId: loot-table.ashwrought-brutes
+    dropChance: 0.3
+
+  - kind: monster
+    id: monster.emberclad-reaver
+    name: Emberclad reaver
+    glyph: R
+    color: "#a8552e"
+    tags: [ashwrought, brute, armored]
+    minDepth: 7
+    maxDepth: 11
+    attributes: { might: 13, agility: 5, vitality: 13, wits: 4, resolve: 10 }
+    health: 40
+    speed: 85
+    accuracy: 5
+    defense: 11
+    perception: 6
+    damage: { count: 2, sides: 8, bonus: 2 }
+    armor: 5
+    resistances: { physical: 25, fire: 55, cold: -20, lightning: 0, poison: 20, arcane: 5 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 8
+    rarity: uncommon
+    lootTableId: loot-table.ashwrought-brutes
+    dropChance: 0.4
+
+  - kind: monster
+    id: monster.cinder-hurler
+    name: Cinder hurler
+    glyph: h
+    color: "#d89a3a"
+    tags: [ashwrought, ranged, fire]
+    minDepth: 7
+    maxDepth: 11
+    attributes: { might: 9, agility: 6, vitality: 10, wits: 6, resolve: 8 }
+    health: 30
+    speed: 90
+    accuracy: 5
+    defense: 10
+    perception: 9
+    damage: { count: 2, sides: 6, bonus: 2 }
+    armor: 1
+    resistances: { physical: 10, fire: 60, cold: -20, lightning: 0, poison: 15, arcane: 5 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 7
+    rarity: rare
+    lootTableId: loot-table.ashwrought-brutes
+    dropChance: 0.4
+
+  - kind: monster
+    id: monster.ashen-juggernaut
+    name: Ashen juggernaut
+    glyph: J
+    color: "#8f3f22"
+    tags: [ashwrought, brute, elite]
+    minDepth: 9
+    maxDepth: 12
+    attributes: { might: 16, agility: 5, vitality: 16, wits: 4, resolve: 12 }
+    health: 52
+    speed: 90
+    accuracy: 6
+    defense: 12
+    perception: 7
+    damage: { count: 3, sides: 6, bonus: 2 }
+    armor: 4
+    resistances: { physical: 30, fire: 65, cold: -25, lightning: 0, poison: 25, arcane: 10 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 10
+    rarity: legendary
+    lootTableId: loot-table.ashwrought-brutes
+    dropChance: 0.5

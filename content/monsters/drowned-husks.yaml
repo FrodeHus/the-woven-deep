@@ -1,0 +1,126 @@
+schemaVersion: 7
+entries:
+  - kind: monster
+    id: monster.drowned-shambler
+    name: Drowned shambler
+    glyph: z
+    color: "#6a8a8f"
+    tags: [undead, drowned, mindless]
+    minDepth: 4
+    maxDepth: 7
+    attributes: { might: 7, agility: 3, vitality: 9, wits: 1, resolve: 8 }
+    health: 20
+    speed: 70
+    accuracy: 2
+    defense: 8
+    perception: 5
+    damage: { count: 1, sides: 8, bonus: 1 }
+    armor: 1
+    resistances: { physical: 10, fire: -30, cold: 40, lightning: 0, poison: 80, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 4
+    rarity: common
+    lootTableId: loot-table.drowned-husks
+    dropChance: 0.3
+
+  - kind: monster
+    id: monster.brine-skeleton
+    name: Brine skeleton
+    glyph: y
+    color: "#b8c0b0"
+    tags: [undead, drowned, offense]
+    minDepth: 4
+    maxDepth: 8
+    attributes: { might: 6, agility: 6, vitality: 6, wits: 2, resolve: 7 }
+    health: 16
+    speed: 95
+    accuracy: 3
+    defense: 11
+    perception: 6
+    damage: { count: 1, sides: 8, bonus: 0 }
+    armor: 2
+    resistances: { physical: 20, fire: -20, cold: 20, lightning: 0, poison: 90, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 4
+    rarity: common
+    lootTableId: loot-table.drowned-husks
+    dropChance: 0.3
+
+  - kind: monster
+    id: monster.sodden-lurcher
+    name: Sodden lurcher
+    glyph: Z
+    color: "#4f6b6a"
+    tags: [undead, drowned, armored]
+    minDepth: 6
+    maxDepth: 9
+    attributes: { might: 10, agility: 3, vitality: 12, wits: 1, resolve: 9 }
+    health: 34
+    speed: 65
+    accuracy: 3
+    defense: 9
+    perception: 5
+    damage: { count: 2, sides: 6, bonus: 1 }
+    armor: 4
+    resistances: { physical: 25, fire: -25, cold: 40, lightning: 0, poison: 85, arcane: 0 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 6
+    rarity: uncommon
+    lootTableId: loot-table.drowned-husks
+    dropChance: 0.4
+
+  - kind: monster
+    id: monster.wailing-echo
+    name: Wailing echo
+    glyph: "Ψ"
+    color: "#7fa0b8"
+    tags: [undead, echo, caster, arcane]
+    minDepth: 5
+    maxDepth: 9
+    attributes: { might: 2, agility: 7, vitality: 6, wits: 9, resolve: 10 }
+    health: 18
+    speed: 100
+    accuracy: 4
+    defense: 13
+    perception: 10
+    damage: { count: 1, sides: 8, bonus: 2 }
+    armor: 0
+    resistances: { physical: 30, fire: -20, cold: 50, lightning: 0, poison: 80, arcane: 30 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 5
+    rarity: rare
+    lootTableId: loot-table.drowned-husks
+    dropChance: 0.4
+
+  - kind: monster
+    id: monster.tide-revenant
+    name: Tide revenant
+    glyph: R
+    color: "#3f5f66"
+    tags: [undead, drowned, elite]
+    minDepth: 7
+    maxDepth: 10
+    attributes: { might: 12, agility: 5, vitality: 13, wits: 3, resolve: 11 }
+    health: 42
+    speed: 85
+    accuracy: 4
+    defense: 11
+    perception: 7
+    damage: { count: 2, sides: 8, bonus: 2 }
+    armor: 3
+    resistances: { physical: 20, fire: -25, cold: 45, lightning: 0, poison: 85, arcane: 15 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 8
+    rarity: rare
+    lootTableId: loot-table.drowned-husks
+    dropChance: 0.45

@@ -1,0 +1,126 @@
+schemaVersion: 7
+entries:
+  - kind: monster
+    id: monster.tallow-slither
+    name: Tallow slither
+    glyph: o
+    color: "#c9b45f"
+    tags: [ooze, mindless]
+    minDepth: 2
+    maxDepth: 5
+    attributes: { might: 5, agility: 2, vitality: 8, wits: 1, resolve: 6 }
+    health: 14
+    speed: 55
+    accuracy: 1
+    defense: 6
+    perception: 4
+    damage: { count: 1, sides: 5, bonus: 0 }
+    armor: 1
+    resistances: { physical: 25, fire: -40, cold: 10, lightning: 0, poison: 30, arcane: 10 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 3
+    rarity: common
+    lootTableId: loot-table.tallow-oozes
+    dropChance: 0.3
+
+  - kind: monster
+    id: monster.wax-crawler
+    name: Wax crawler
+    glyph: o
+    color: "#d8cf8a"
+    tags: [ooze, mindless]
+    minDepth: 2
+    maxDepth: 4
+    attributes: { might: 3, agility: 3, vitality: 5, wits: 1, resolve: 4 }
+    health: 8
+    speed: 65
+    accuracy: 0
+    defense: 7
+    perception: 4
+    damage: { count: 1, sides: 3, bonus: 0 }
+    armor: 0
+    resistances: { physical: 20, fire: -35, cold: 5, lightning: 0, poison: 25, arcane: 5 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 2
+    rarity: common
+    lootTableId: loot-table.tallow-oozes
+    dropChance: 0.25
+
+  - kind: monster
+    id: monster.rendering-glut
+    name: Rendering glut
+    glyph: O
+    color: "#b39a4a"
+    tags: [ooze, mindless, armored]
+    minDepth: 4
+    maxDepth: 7
+    attributes: { might: 8, agility: 2, vitality: 12, wits: 1, resolve: 8 }
+    health: 30
+    speed: 45
+    accuracy: 2
+    defense: 6
+    perception: 4
+    damage: { count: 2, sides: 5, bonus: 1 }
+    armor: 3
+    resistances: { physical: 40, fire: -30, cold: 15, lightning: 0, poison: 40, arcane: 15 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 5
+    rarity: uncommon
+    lootTableId: loot-table.tallow-oozes
+    dropChance: 0.35
+
+  - kind: monster
+    id: monster.cinder-ooze
+    name: Cinder ooze
+    glyph: o
+    color: "#d07a3a"
+    tags: [ooze, mindless, fire]
+    minDepth: 3
+    maxDepth: 6
+    attributes: { might: 6, agility: 3, vitality: 9, wits: 1, resolve: 6 }
+    health: 18
+    speed: 60
+    accuracy: 2
+    defense: 7
+    perception: 5
+    damage: { count: 1, sides: 6, bonus: 1 }
+    armor: 1
+    resistances: { physical: 20, fire: 60, cold: -25, lightning: 0, poison: 20, arcane: 10 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 4
+    rarity: uncommon
+    lootTableId: loot-table.tallow-oozes
+    dropChance: 0.35
+
+  - kind: monster
+    id: monster.caustic-pool
+    name: Caustic pool
+    glyph: o
+    color: "#7fae55"
+    tags: [ooze, mindless, poison, caster]
+    minDepth: 4
+    maxDepth: 7
+    attributes: { might: 5, agility: 2, vitality: 10, wits: 2, resolve: 7 }
+    health: 22
+    speed: 50
+    accuracy: 2
+    defense: 6
+    perception: 5
+    damage: { count: 1, sides: 8, bonus: 1 }
+    armor: 0
+    resistances: { physical: 20, fire: -30, cold: 5, lightning: 0, poison: 75, arcane: 10 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 4
+    rarity: rare
+    lootTableId: loot-table.tallow-oozes
+    dropChance: 0.4

@@ -68,13 +68,13 @@ export interface RunRecordsDemoInput {
   readonly command: GameCommand;
 }
 
-function encounter(pack: CompiledContentPack, model: EncounterContentEntry['model']): EncounterContentEntry {
-  // Permanent (town) merchants are never materialized through population placement, so this
-  // fixture only ever selects a non-permanent, dungeon-wandering merchant encounter.
-  const result = pack.entries.find((entry): entry is EncounterContentEntry =>
-    entry.kind === 'encounter' && entry.model === model
-    && (entry.model !== 'merchant' || !entry.definition.permanent));
-  if (!result) throw new Error(`run-records fixture requires a ${model} encounter`);
+/**
+ * Resolves a demo fixture's encounter by explicit content id (not "first of model"), so added
+ * content packs can never perturb which encounter the fixed-depth demo selects.
+ */
+function encounter(pack: CompiledContentPack, id: string): EncounterContentEntry {
+  const result = pack.entries.find((entry): entry is EncounterContentEntry => entry.kind === 'encounter' && entry.id === id);
+  if (!result) throw new Error(`run-records fixture requires the ${id} encounter`);
   return result;
 }
 
@@ -146,10 +146,10 @@ function place(run: ActiveRun, floorId: string, encounterId: string, pack: Compi
  * placement runs through the production placement path.
  */
 export function createRunRecordsDemoRun(pack: CompiledContentPack): ActiveRun {
-  const group = encounter(pack, 'group');
-  const swarm = encounter(pack, 'swarm');
-  const boss = encounter(pack, 'boss');
-  const merchant = encounter(pack, 'merchant');
+  const group = encounter(pack, 'encounter.beetle-patrol');
+  const swarm = encounter(pack, 'encounter.rat-brood');
+  const boss = encounter(pack, 'encounter.ashen-warden');
+  const merchant = encounter(pack, 'encounter.travelling-lampwright');
   const base = createDemoRun();
   const identified = allocateIdentificationMap({ content: pack, rng: base.rng });
   const home = demoFloor(base, HOME_FLOOR_ID, HOME_DEPTH);

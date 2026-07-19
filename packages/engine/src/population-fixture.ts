@@ -58,9 +58,13 @@ export interface PopulationDemoInput {
   readonly scenario: PopulationDemoScenario;
 }
 
-function encounter(pack: CompiledContentPack, model: EncounterContentEntry['model']): EncounterContentEntry {
-  const result = pack.entries.find((entry): entry is EncounterContentEntry => entry.kind === 'encounter' && entry.model === model);
-  if (!result) throw new Error(`population fixture requires a ${model} encounter`);
+/**
+ * Resolves a demo fixture's encounter by explicit content id (not "first of model"), so added
+ * content packs can never perturb which encounter the fixed-depth demo selects.
+ */
+function encounter(pack: CompiledContentPack, id: string): EncounterContentEntry {
+  const result = pack.entries.find((entry): entry is EncounterContentEntry => entry.kind === 'encounter' && entry.id === id);
+  if (!result) throw new Error(`population fixture requires the ${id} encounter`);
   return result;
 }
 
@@ -117,7 +121,8 @@ function publishPlacement(run: ActiveRun, placement: Extract<ReturnType<typeof p
 
 /** Builds the milestone exit fixture. Eligibility overrides are explicit test/demo input; authored YAML is untouched. */
 export function createPopulationDemoRun(pack: CompiledContentPack, scenarioSeed = 0): ActiveRun {
-  const group = encounter(pack, 'group'); const swarm = encounter(pack, 'swarm'); const boss = encounter(pack, 'boss');
+  const group = encounter(pack, 'encounter.beetle-patrol'); const swarm = encounter(pack, 'encounter.rat-brood');
+  const boss = encounter(pack, 'encounter.ashen-warden');
   const template = championTemplate(pack);
   const base = createDemoRun();
   const identified = allocateIdentificationMap({ content: pack, rng: base.rng });
@@ -314,7 +319,7 @@ function preparePopulationDemoBoundary(state: ActiveRun, input: PopulationDemoIn
   }
   if (boundary === 'before-source-spawn') {
     let current = state;
-    const definition = encounter(pack, 'swarm');
+    const definition = encounter(pack, 'encounter.rat-brood');
     if (definition.model !== 'swarm') throw new Error('population fixture requires swarm content');
     const initialSwarm = current.populations.find((population): population is SwarmPopulation => population.model === 'swarm')!;
     current = { ...current,
