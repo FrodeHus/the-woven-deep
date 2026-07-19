@@ -15,6 +15,7 @@ import { compareCodeUnits } from './stable-json.js';
 import { movementBlockReason } from './terrain.js';
 import { findPath } from './pathfinding.js';
 import { relationshipBetween } from './reactions.js';
+import { parseLeaderResponseParameters } from './parameter-contracts.js';
 
 const ZERO_MODIFIERS: PopulationCombatModifiers = Object.freeze({ accuracy: 0, defense: 0, damage: 0 });
 
@@ -263,11 +264,11 @@ export function groupCombatModifiers(input: Readonly<{
     && (input.state.actors.find((candidate) => candidate.actorId === population.leaderActorId)?.health ?? 0) > 0;
   if (population.bonusActive && leaderAlive) return definition.coordinationModifiers;
   if (population.leaderResponseApplied && definition.leaderDeathResponse === 'weaken') {
-    return definition.responseParameters.modifiers as PopulationCombatModifiers;
+    return parseLeaderResponseParameters(definition.responseParameters, 'weaken').modifiers;
   }
   if (population.leaderResponseApplied && definition.leaderDeathResponse === 'frenzy'
     && (population.leaderResponseExpiresAt ?? 0) > input.state.worldTime) {
-    return definition.responseParameters.modifiers as PopulationCombatModifiers;
+    return parseLeaderResponseParameters(definition.responseParameters, 'frenzy').modifiers;
   }
   return ZERO_MODIFIERS;
 }
@@ -299,9 +300,11 @@ export function applyGroupLeaderOutcomes(input: Readonly<{
     if (!leader || leader.health > 0) continue;
     const definition = groupEncounter(input.content, group.encounterId).definition;
     const survivorIds = group.livingMemberIds;
-    const duration = Number((definition.responseParameters as { duration?: number }).duration ?? 0);
     const responseDeadline = definition.leaderDeathResponse === 'panic'
-      || definition.leaderDeathResponse === 'frenzy' ? deadline(input.state.worldTime, duration) : null;
+      || definition.leaderDeathResponse === 'frenzy'
+      ? deadline(input.state.worldTime,
+        parseLeaderResponseParameters(definition.responseParameters, definition.leaderDeathResponse).duration)
+      : null;
     let collapsed = 0;
     actors = actors.map((actor) => {
       if (!survivorIds.includes(actor.actorId)) return actor;

@@ -3,47 +3,24 @@ import type { OpaqueId } from '@woven-deep/engine';
 import type { MerchantServiceId } from '@woven-deep/content';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
+import {
+  heroOf, ownedItemOf, tradeOf, type TradeView,
+} from '../../session/projection-view.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
 import { Button } from '../components/button.js';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/tabs.js';
 
+/** The minimal owned-item shape the trade rows read -- an owned item's projection, or a bare
+ * `{ itemId, name }` fallback when the offer's item is no longer in the hero's own projection. */
 interface ProjectedItemRef {
   readonly itemId: OpaqueId;
   readonly name: string;
   readonly glyph?: string;
 }
 
-interface ProjectedStockEntry {
-  readonly item: ProjectedItemRef;
-  readonly quantity: number;
-  readonly unitPrice: number;
-}
-
-interface ProjectedSaleOffer {
-  readonly itemId: OpaqueId;
-  readonly quantity: number;
-  readonly unitPrice: number;
-}
-
-interface ProjectedServiceOffer {
-  readonly serviceId: MerchantServiceId;
-  readonly unitPrice: number;
-  readonly remainingUses: number;
-  readonly targetItemIds: readonly OpaqueId[];
-}
-
-interface ProjectedTrade {
-  readonly merchantName: string;
-  readonly reputationTier: string;
-  readonly currency: number;
-  readonly stock: readonly ProjectedStockEntry[];
-  readonly saleOffers: readonly ProjectedSaleOffer[];
-  readonly services: readonly ProjectedServiceOffer[];
-}
-
-function trade(snapshot: SessionSnapshot): ProjectedTrade | undefined {
-  return snapshot.projection.trade as unknown as ProjectedTrade | undefined;
+function trade(snapshot: SessionSnapshot): TradeView | undefined {
+  return tradeOf(snapshot.projection);
 }
 
 /** Sale offers only carry an `itemId` (see `ObservableTradeProjection.saleOffers`), so the
@@ -51,8 +28,7 @@ function trade(snapshot: SessionSnapshot): ProjectedTrade | undefined {
  * `ownedItem` performs. Falls back to the raw id if the backpack projection is ever out of sync
  * with the offer list (should not happen, but a fallback beats a blank row). */
 function backpackItemName(snapshot: SessionSnapshot, itemId: OpaqueId): string {
-  const owner = snapshot.projection.hero as unknown as { backpack: readonly ProjectedItemRef[] };
-  return owner.backpack.find((item) => item.itemId === itemId)?.name ?? itemId;
+  return heroOf(snapshot.projection).backpack.find((item) => item.itemId === itemId)?.name ?? itemId;
 }
 
 /** Identify targets can be backpacked OR equipped (see `identifyTargetIds` in
@@ -60,13 +36,7 @@ function backpackItemName(snapshot: SessionSnapshot, itemId: OpaqueId): string {
  * looks at sale offers -- this checks both `hero.backpack` and `hero.equipment` for the owned
  * item's projected name/glyph. Falls back to the raw id if neither owns it (should not happen). */
 function ownedItemRef(snapshot: SessionSnapshot, itemId: OpaqueId): ProjectedItemRef {
-  const owner = snapshot.projection.hero as unknown as {
-    backpack: readonly ProjectedItemRef[];
-    equipment: Readonly<Record<string, ProjectedItemRef | null>>;
-  };
-  return owner.backpack.find((item) => item.itemId === itemId)
-    ?? Object.values(owner.equipment).find((item): item is ProjectedItemRef => item !== null && item.itemId === itemId)
-    ?? { itemId, name: itemId };
+  return ownedItemOf(heroOf(snapshot.projection), itemId) ?? { itemId, name: itemId };
 }
 
 type FocusedList = 'buy' | 'sell' | 'services';

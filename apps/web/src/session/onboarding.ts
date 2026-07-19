@@ -1,4 +1,5 @@
 import type { GameplayProjection } from '@woven-deep/engine';
+import { actorsOf, heroOf } from './projection-view.js';
 import type { ResolvedKeymap } from './settings.js';
 import { chordKey } from './settings.js';
 import type { SessionSnapshot } from './guest-session.js';
@@ -32,22 +33,12 @@ export interface OnboardingState {
 
 const EMPTY_ONBOARDING: OnboardingState = { counts: {}, dismissed: [] };
 
-interface ProjectedHeroPosition {
+interface Position {
   readonly x: number;
   readonly y: number;
 }
 
-interface ProjectedActorPosition {
-  readonly x: number;
-  readonly y: number;
-  readonly factionName?: string;
-}
-
-function heroPosition(projection: GameplayProjection): ProjectedHeroPosition {
-  return projection.hero as unknown as ProjectedHeroPosition;
-}
-
-function chebyshevDistance(a: ProjectedHeroPosition, b: ProjectedHeroPosition): number {
+function chebyshevDistance(a: Position, b: Position): number {
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 }
 
@@ -55,16 +46,16 @@ function chebyshevDistance(a: ProjectedHeroPosition, b: ProjectedHeroPosition): 
  * `command-builder.ts`'s `heroAdjacentMerchant` adjacency rule (that helper isn't exported, so
  * this is a narrow, independent read of the same projected surface). */
 function heroNearMerchant(projection: GameplayProjection): boolean {
-  const hero = heroPosition(projection);
-  const actors = projection.actors as unknown as readonly ProjectedActorPosition[];
-  return actors.some((actor) => typeof actor.factionName === 'string' && chebyshevDistance(hero, actor) <= 1);
+  const hero = heroOf(projection);
+  return actorsOf(projection)
+    .some((actor) => typeof actor.factionName === 'string' && chebyshevDistance(hero, actor) <= 1);
 }
 
 /** True when the hero is standing on, or Chebyshev-adjacent to, a stairs-down cell (`tileId` 5,
  * `TILE_DEFINITIONS` in `packages/engine/src/terrain.ts`) -- "on/near the entrance" for the
  * dungeon-entry hint. */
 function heroNearStairsDown(projection: GameplayProjection): boolean {
-  const hero = heroPosition(projection);
+  const hero = heroOf(projection);
   return projection.floor.cells.some((cell) => cell.tileId === 5 && chebyshevDistance(hero, cell) <= 1);
 }
 

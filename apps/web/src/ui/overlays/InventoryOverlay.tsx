@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { EquipmentSlot, OpaqueId } from '@woven-deep/engine';
+import type { EquipmentSlot } from '@woven-deep/engine';
 import type { CompiledContentPack } from '@woven-deep/content';
+import { heroOf, type HeroView, type OwnedItemView } from '../../session/projection-view.js';
 import { effectLabel } from '../labels.js';
 import { usePack, useSessionCtx } from '../providers.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
@@ -54,34 +55,9 @@ function bucketFor(category: ProjectedItemCategory): Exclude<CategoryFilter, 'al
   }
 }
 
-/** The shape `projectedOwnedItem` (packages/engine/src/projection.ts) actually emits for a
- * hero-owned item -- widened slightly (every field optional except the ones every branch always
- * carries) since an UNIDENTIFIED item's projection omits `contentId`/`effects`/`enchantment`
- * entirely (see `projectItem` in `identification.ts`) rather than nulling them out. Never add a
- * field here that the engine doesn't actually project (no lore/description -- the content model
- * has none, see the plan's Global Constraints). */
-export interface ProjectedItemLike {
-  readonly itemId: OpaqueId;
-  readonly contentId?: OpaqueId;
-  readonly name: string;
-  readonly category: ProjectedItemCategory;
-  readonly quantity: number;
-  readonly identified: boolean;
-  readonly effects?: readonly Readonly<{ effectId: string; parameters: Readonly<Record<string, unknown>> }>[];
-  readonly enchantment?: Readonly<{ enchantmentId: OpaqueId; modifiers: Readonly<Record<string, number>> }>;
-  readonly unknownProperties?: boolean;
-  readonly condition: number;
-  readonly charges?: number | null;
-  readonly fuel: number | null;
-  readonly enabled: boolean | null;
-}
-
-/** The subset of `projection.hero`'s widened `Record<string, unknown>` shape this overlay actually
- * reads -- mirrors `CharacterSheetOverlay`'s cast discipline. */
-interface ProjectedHeroLike {
-  readonly backpack: readonly ProjectedItemLike[];
-  readonly equipment: Readonly<Record<string, ProjectedItemLike | null>>;
-}
+/** The hero-owned item shape this overlay reads, re-exported from the projection boundary so
+ * `CharacterSheetOverlay` and this overlay's tests keep a single shared name. */
+export type ProjectedItemLike = OwnedItemView;
 
 interface MenuEntry {
   readonly item: ProjectedItemLike;
@@ -110,7 +86,7 @@ const SLOT_LABEL: Readonly<Record<EquipmentSlot, string>> = {
  * `InventoryOverlay` produced, since that ordering is load-bearing for the pinned 5A/5C e2e walks
  * (they never invoke the filter/sort additions, so they must see this exact default order).
  */
-function allMenuEntries(hero: ProjectedHeroLike): readonly MenuEntry[] {
+function allMenuEntries(hero: HeroView): readonly MenuEntry[] {
   const backpack = hero.backpack.map((item) => ({ item, equipped: false }));
   const equipped = Object.entries(hero.equipment)
     .filter((entry): entry is [string, ProjectedItemLike] => entry[1] !== null)
@@ -131,7 +107,7 @@ function byNameStable(left: MenuEntry, right: MenuEntry): number {
 }
 
 function visibleEntries(
-  hero: ProjectedHeroLike, filter: CategoryFilter, sortByName: boolean,
+  hero: HeroView, filter: CategoryFilter, sortByName: boolean,
 ): readonly MenuEntry[] {
   const filtered = allMenuEntries(hero).filter((entry) => matchesFilter(entry.item, filter));
   if (!sortByName) return filtered;
@@ -149,7 +125,7 @@ function visibleEntries(
  * a fuel tag, so "first match" is unambiguous in practice.
  */
 function equippedLightMatchingFuel(
-  pack: CompiledContentPack, hero: ProjectedHeroLike, fuelItem: ProjectedItemLike,
+  pack: CompiledContentPack, hero: HeroView, fuelItem: ProjectedItemLike,
 ): ProjectedItemLike | undefined {
   if (fuelItem.contentId === undefined) return undefined;
   const fuelEntry = pack.entries.find((entry) => entry.id === fuelItem.contentId);
@@ -299,7 +275,7 @@ export function InventoryOverlay(): JSX.Element | null {
 
   if (!sessionCtx) return null;
   const { session, snapshot } = sessionCtx;
-  const hero = snapshot.projection.hero as unknown as ProjectedHeroLike;
+  const hero = heroOf(snapshot.projection);
 
   const entries = visibleEntries(hero, filter, sortByName);
   const selected = entries[selectedIndex];

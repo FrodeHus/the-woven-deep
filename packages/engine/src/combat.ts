@@ -52,6 +52,16 @@ function safeInteger(label: string, value: number): number {
   return value;
 }
 
+export function composePopulationCombatModifiers(
+  modifierSets: readonly PopulationCombatModifiers[],
+): PopulationCombatModifiers {
+  return modifierSets.reduce<PopulationCombatModifiers>((total, modifiers) => ({
+    accuracy: total.accuracy + modifiers.accuracy,
+    defense: total.defense + modifiers.defense,
+    damage: total.damage + modifiers.damage,
+  }), { accuracy: 0, defense: 0, damage: 0 });
+}
+
 export function applyPopulationCombatModifiers<T extends Readonly<{
   accuracy: number; defense: number; damage: DiceDefinition;
 }>>(profile: T, modifiers: PopulationCombatModifiers): T {

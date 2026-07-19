@@ -561,6 +561,160 @@ function projectedOwnedItem(state: ActiveRun, content: CompiledContentPack, item
     ...('contentId' in projected ? { charges: item.charges } : {}), fuel: item.fuel, enabled: item.enabled };
 }
 
+type Observed = ReturnType<typeof projectionPerception>;
+type DerivedHeroStats = ReturnType<typeof deriveActorStats>;
+type BalanceRules = ReturnType<typeof balanceEntry>;
+
+/**
+ * The hero's own projected record: attributes, the derived-stat map (value plus its formula),
+ * vitals, the identification appearances the hero has learned, and the fully projected
+ * backpack/equipment/conditions. Condition timers freeze in town (depth 0), matching the engine's
+ * own town time-freeze.
+ */
+function projectHeroView(input: Readonly<{
+  state: ActiveRun; content: CompiledContentPack; observed: Observed;
+  derived: DerivedHeroStats; rules: BalanceRules;
+}>): Readonly<Record<string, unknown>> {
+  const { state, content, observed, derived, rules } = input;
+  const { hero } = observed;
+  const backpack = state.items
+    .filter((item) => item.location.type === 'backpack' && item.location.actorId === hero.actorId)
+    .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)
+    .map((item) => projectedOwnedItem(state, content, item.itemId));
+  const equipment = Object.fromEntries(Object.entries(hero.equipment).map(([slot, itemId]) => [
+    slot, itemId === null ? null : projectedOwnedItem(state, content, itemId),
+  ]));
+  const townFrozen = observed.floor.depth === 0;
+  const conditions = hero.conditions.map((condition) => {
+    const definition = conditionDefinition(content, condition.conditionId);
+    const remaining = condition.expiresAt === null || townFrozen
+      ? null
+      : condition.expiresAt - state.worldTime;
+    return { conditionId: definition.id, name: definition.name, color: definition.color,
+      stacks: condition.stacks, remaining };
+  });
+  return {
+    actorId: hero.actorId, name: state.hero.name, x: hero.x, y: hero.y,
+    attributes: { ...hero.attributes },
+    derived: Object.fromEntries(Object.entries(derived).map(([name, value]) => [name, {
+      value, formula: { ...(rules.formulas[name] ?? {}) },
+    }])),
+    health: hero.health, maxHealth: hero.maxHealth, sightRadius: state.hero.sightRadius,
+    hungerStage: state.survival.hungerStage, conditions, equipment, backpack,
+    backpackCapacity: state.hero.backpackCapacity,
+    knownAppearanceIds: [...state.identification.knownAppearanceIds],
+  };
+}
+
+/**
+ * One perceived non-hero actor's projected record: its disclosed presentation plus whatever
+ * population-model-specific presentation blocks apply (swarm source / boss phase / merchant trade
+ * state / champion-echo loadout / group leadership / visible intent) and its health band.
+ */
+function projectActor(input: Readonly<{
+  state: ActiveRun; content: CompiledContentPack; heroActorId: OpaqueId;
+  actor: ActiveRun['actors'][number];
+}>): Readonly<Record<string, unknown>> & { readonly contentId: OpaqueId | null } {
+  const { state, content, heroActorId, actor } = input;
+  const definition = content.entries.find((entry) => entry.id === actor.contentId);
+  const population = state.populations.find((candidate) => candidate.populationId === actor.populationId);
+  const encounter = population === undefined ? undefined : content.entries.find((entry) =>
+    entry.kind === 'encounter' && entry.id === population.encounterId);
+  const presentation = actor.populationPresentation ?? (definition?.kind === 'monster'
+    ? { name: definition.name, glyph: definition.glyph, color: definition.color } : {});
+  const healthRatio = actor.maxHealth === 0 ? 0 : actor.health / actor.maxHealth;
+  const healthBand = healthRatio >= 0.75 ? 'healthy' : healthRatio >= 0.4 ? 'wounded' : 'critical';
+  const sourceState = population?.model === 'swarm' && population.sourceActorId === actor.actorId
+    ? { source: true, sourceState: population.shutdownState === null ? 'active' : population.shutdownState,
+      growthWarning: population.shutdownState === null ? 'may-spawn' : 'contained' }
+    : {};
+  const bossState = population?.model === 'boss'
+    ? { bossPhase: population.currentPhaseId }
+    : {};
+  const merchantState = population?.model === 'merchant'
+    ? visibleMerchantState(state, content, population)
+    : {};
+  // The one permitted projection change this milestone (Task 8): the perceived actor's own
+  // content id, so the guest client can accumulate a session sighting cache for the unlock
+  // codex. Never the hero -- the hero is already excluded from `actors` entirely (the caller's
+  // filter drops `actor.actorId === hero.actorId`), so there is no hero-authored row here to
+  // null in the first place. Champion/echo actors (fallen-hero encounters) DO null it: their
+  // `contentId` is `normalized.monsterId` (`champion.ts`'s `placeFallenHeroEncounters`), the
+  // shared generic fallen-hero combat template -- not a genuine "kind of monster" a player
+  // could discover, and treating it as one would misfeed the codex's monster category. Their
+  // `name`/`glyph`/`color` (via `populationPresentation`, above) are the only identity these
+  // actors already disclose -- mirroring exactly that (nothing more) is the discipline the
+  // brief asks for.
+  const perceivedContentId = (population?.model === 'champion' || population?.model === 'echo')
+    ? null : actor.contentId;
+  return { actorId: actor.actorId, contentId: perceivedContentId, ...presentation,
+    ...((population?.model === 'champion' || population?.model === 'echo') ? {
+      equipmentContentIds: population.equipmentContentIds,
+      abilityIds: population.abilityIds,
+    } : {}),
+    ...sourceState, ...bossState, ...merchantState,
+    x: actor.x, y: actor.y, health: actor.health, maxHealth: actor.maxHealth,
+    healthPresentation: { current: actor.health, maximum: actor.maxHealth, band: healthBand },
+    disposition: relationshipBetween(state, heroActorId, actor.actorId),
+    ...((encounter?.kind === 'encounter' && encounter.intentPresentation.visible) ? {
+      intent: actor.behaviorState.intent,
+      intentPresentation: `intent.${actor.behaviorState.intent}`,
+    } : {}),
+    ...(population?.model === 'group' && population.leaderActorId === actor.actorId
+      ? { leadershipRole: actor.populationRoleId } : {}),
+  };
+}
+
+/** Every currently-perceived non-hero living actor on the hero's floor, sorted by actor id. */
+function projectVisibleActors(input: Readonly<{
+  state: ActiveRun; content: CompiledContentPack; observed: Observed;
+}>): readonly (Readonly<Record<string, unknown>> & { readonly contentId: OpaqueId | null })[] {
+  const { state, content, observed } = input;
+  const { hero } = observed;
+  return state.actors.filter((actor) => actor.actorId !== hero.actorId
+    && actor.floorId === hero.floorId && actor.health > 0 && visiblyOccupied(observed, actor.x, actor.y))
+    .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0)
+    .map((actor) => projectActor({ state, content, heroActorId: hero.actorId, actor }));
+}
+
+/** Every currently-perceived feature on the hero's floor, sorted by feature id. */
+function projectVisibleFeatures(input: Readonly<{
+  state: ActiveRun; observed: Observed;
+}>): readonly Readonly<Record<string, unknown>>[] {
+  const { state, observed } = input;
+  const { hero } = observed;
+  return state.features.filter((feature) => feature.floorId === hero.floorId
+    && visiblyOccupied(observed, feature.x, feature.y))
+    .sort((left, right) => left.featureId < right.featureId ? -1 : left.featureId > right.featureId ? 1 : 0)
+    .map((feature) => projectFeature(feature, hero.actorId)).filter((feature) => feature !== undefined);
+}
+
+/** Every currently-perceived floor item on the hero's floor, each tagged with its coordinates. */
+function projectGroundItems(input: Readonly<{
+  state: ActiveRun; content: CompiledContentPack; observed: Observed;
+}>): readonly Readonly<Record<string, unknown>>[] {
+  const { state, content, observed } = input;
+  const { hero } = observed;
+  return state.items.filter((item) => item.location.type === 'floor'
+    && item.location.floorId === hero.floorId && visiblyOccupied(observed, item.location.x, item.location.y))
+    .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)
+    .map((item) => ({ ...projectItem({ run: state, content, itemId: item.itemId }),
+      x: item.location.type === 'floor' ? item.location.x : 0,
+      y: item.location.type === 'floor' ? item.location.y : 0 }));
+}
+
+/** The hero's stored-away house contents, sorted by item id. */
+function projectHouseView(state: ActiveRun, content: CompiledContentPack): ObservableHouse {
+  return {
+    capacity: state.house.capacity,
+    upgradesPurchased: state.house.upgradesPurchased,
+    items: state.items
+      .filter((item) => item.location.type === 'house')
+      .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)
+      .map((item) => projectedOwnedItem(state, content, item.itemId)),
+  };
+}
+
 export function projectGameplayState(input: Readonly<{
   state: ActiveRun;
   content: CompiledContentPack;
@@ -587,118 +741,22 @@ export function projectGameplayState(input: Readonly<{
     revealRadius: derived.lightOutRevealRadius,
     rememberedMapPersists: derived.lightOutMemoryPersists > 0,
   } : undefined;
-  const backpack = input.state.items
-    .filter((item) => item.location.type === 'backpack' && item.location.actorId === hero.actorId)
-    .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)
-    .map((item) => projectedOwnedItem(input.state, input.content, item.itemId));
-  const equipment = Object.fromEntries(Object.entries(hero.equipment).map(([slot, itemId]) => [
-    slot, itemId === null ? null : projectedOwnedItem(input.state, input.content, itemId),
-  ]));
-  const townFrozen = observed.floor.depth === 0;
-  const conditions = hero.conditions.map((condition) => {
-    const definition = conditionDefinition(input.content, condition.conditionId);
-    const remaining = condition.expiresAt === null || townFrozen
-      ? null
-      : condition.expiresAt - input.state.worldTime;
-    return { conditionId: definition.id, name: definition.name, color: definition.color,
-      stacks: condition.stacks, remaining };
-  });
-  const actors = input.state.actors.filter((actor) => actor.actorId !== hero.actorId
-    && actor.floorId === hero.floorId && actor.health > 0 && visiblyOccupied(observed, actor.x, actor.y))
-    .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0)
-    .map((actor) => {
-      const definition = input.content.entries.find((entry) => entry.id === actor.contentId);
-      const population = input.state.populations.find((candidate) => candidate.populationId === actor.populationId);
-      const encounter = population === undefined ? undefined : input.content.entries.find((entry) =>
-        entry.kind === 'encounter' && entry.id === population.encounterId);
-      const presentation = actor.populationPresentation ?? (definition?.kind === 'monster'
-        ? { name: definition.name, glyph: definition.glyph, color: definition.color } : {});
-      const healthRatio = actor.maxHealth === 0 ? 0 : actor.health / actor.maxHealth;
-      const healthBand = healthRatio >= 0.75 ? 'healthy' : healthRatio >= 0.4 ? 'wounded' : 'critical';
-      const sourceState = population?.model === 'swarm' && population.sourceActorId === actor.actorId
-        ? { source: true, sourceState: population.shutdownState === null ? 'active' : population.shutdownState,
-          growthWarning: population.shutdownState === null ? 'may-spawn' : 'contained' }
-        : {};
-      const bossState = population?.model === 'boss'
-        ? { bossPhase: population.currentPhaseId }
-        : {};
-      const merchantState = population?.model === 'merchant'
-        ? visibleMerchantState(input.state, input.content, population)
-        : {};
-      // The one permitted projection change this milestone (Task 8): the perceived actor's own
-      // content id, so the guest client can accumulate a session sighting cache for the unlock
-      // codex. Never the hero -- the hero is already excluded from `actors` entirely (the filter
-      // above drops `actor.actorId === hero.actorId`), so there is no hero-authored row here to
-      // null in the first place. Champion/echo actors (fallen-hero encounters) DO null it: their
-      // `contentId` is `normalized.monsterId` (`champion.ts`'s `placeFallenHeroEncounters`), the
-      // shared generic fallen-hero combat template -- not a genuine "kind of monster" a player
-      // could discover, and treating it as one would misfeed the codex's monster category. Their
-      // `name`/`glyph`/`color` (via `populationPresentation`, above) are the only identity these
-      // actors already disclose -- mirroring exactly that (nothing more) is the discipline the
-      // brief asks for.
-      const perceivedContentId = (population?.model === 'champion' || population?.model === 'echo')
-        ? null : actor.contentId;
-      return { actorId: actor.actorId, contentId: perceivedContentId, ...presentation,
-        ...((population?.model === 'champion' || population?.model === 'echo') ? {
-          equipmentContentIds: population.equipmentContentIds,
-          abilityIds: population.abilityIds,
-        } : {}),
-        ...sourceState, ...bossState, ...merchantState,
-        x: actor.x, y: actor.y, health: actor.health, maxHealth: actor.maxHealth,
-        healthPresentation: { current: actor.health, maximum: actor.maxHealth, band: healthBand },
-        disposition: relationshipBetween(input.state, hero.actorId, actor.actorId),
-        ...((encounter?.kind === 'encounter' && encounter.intentPresentation.visible) ? {
-          intent: actor.behaviorState.intent,
-          intentPresentation: `intent.${actor.behaviorState.intent}`,
-        } : {}),
-        ...(population?.model === 'group' && population.leaderActorId === actor.actorId
-          ? { leadershipRole: actor.populationRoleId } : {}),
-      };
-    });
-  const features = input.state.features.filter((feature) => feature.floorId === hero.floorId
-    && visiblyOccupied(observed, feature.x, feature.y))
-    .sort((left, right) => left.featureId < right.featureId ? -1 : left.featureId > right.featureId ? 1 : 0)
-    .map((feature) => projectFeature(feature, hero.actorId)).filter((feature) => feature !== undefined);
-  const groundItems = input.state.items.filter((item) => item.location.type === 'floor'
-    && item.location.floorId === hero.floorId && visiblyOccupied(observed, item.location.x, item.location.y))
-    .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)
-    .map((item) => ({ ...projectItem({ run: input.state, content: input.content, itemId: item.itemId }),
-      x: item.location.type === 'floor' ? item.location.x : 0,
-      y: item.location.type === 'floor' ? item.location.y : 0 }));
   const trade = projectActiveTrade(input.state, input.content);
   const slots: readonly ObservablePlacementSlot[] = observed.floor.depth === 0
     ? observed.floor.placementSlots.map((slot) => ({
       slotId: slot.slotId, tags: [...slot.tags], x: slot.x, y: slot.y,
     }))
     : [];
-  const house: ObservableHouse = {
-    capacity: input.state.house.capacity,
-    upgradesPurchased: input.state.house.upgradesPurchased,
-    items: input.state.items
-      .filter((item) => item.location.type === 'house')
-      .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)
-      .map((item) => projectedOwnedItem(input.state, input.content, item.itemId)),
-  };
   return {
     ...(trade === undefined ? {} : { trade }),
     floor: projectFloor({ floor: observed.floor, hero: heroPerception(input.state.hero, hero),
       visibilityWords: observed.visibilityWords, illumination: observed.illumination,
       ...(lightOut === undefined ? {} : { lightOut }) }),
-    hero: {
-      actorId: hero.actorId, name: input.state.hero.name, x: hero.x, y: hero.y,
-      attributes: { ...hero.attributes },
-      derived: Object.fromEntries(Object.entries(derived).map(([name, value]) => [name, {
-        value, formula: { ...(rules.formulas[name] ?? {}) },
-      }])),
-      health: hero.health, maxHealth: hero.maxHealth, sightRadius: input.state.hero.sightRadius,
-      hungerStage: input.state.survival.hungerStage, conditions, equipment, backpack,
-      backpackCapacity: input.state.hero.backpackCapacity,
-      knownAppearanceIds: [...input.state.identification.knownAppearanceIds],
-    },
-    actors: lightOut === undefined ? actors : [],
-    features: lightOut === undefined ? features : [],
-    groundItems: lightOut === undefined ? groundItems : [],
-    slots, house,
+    hero: projectHeroView({ state: input.state, content: input.content, observed, derived, rules }),
+    actors: lightOut === undefined ? projectVisibleActors({ state: input.state, content: input.content, observed }) : [],
+    features: lightOut === undefined ? projectVisibleFeatures({ state: input.state, observed }) : [],
+    groundItems: lightOut === undefined ? projectGroundItems({ state: input.state, content: input.content, observed }) : [],
+    slots, house: projectHouseView(input.state, input.content),
     actions: ['move', 'wait', 'attack', 'pickup', 'use-item', 'equip', 'rest'].map((type) => ({
       type, cost: type === 'rest' ? rules.actionCosts['action.wait'] ?? rules.normalActionCost
         : rules.actionCosts[`action.${type}`] ?? rules.normalActionCost,

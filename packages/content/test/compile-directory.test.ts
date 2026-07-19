@@ -384,6 +384,43 @@ describe('compileContentDirectory', () => {
   });
 
   it.each([
+    ['a typo\'d effect parameter key', 'effects: [{effectId: effect.heal, parameters: {dyce: {count: 1, sides: 4, bonus: 0}}, requiresLivingTarget: false}]'],
+    ['a missing required effect parameter', 'effects: [{effectId: effect.heal, parameters: {}, requiresLivingTarget: false}]'],
+    ['an ill-typed effect parameter value', 'effects: [{effectId: effect.reveal, parameters: {radius: far}, requiresLivingTarget: false}]'],
+  ])('rejects %s at compile with a parameter-scoped error', async (_label, effects) => {
+    const item = compactItem.replace('effects: []', effects);
+    const root = await fixture({ 'content.yaml': contentFile(compactMonster, item, compactVault) });
+    let caught: unknown;
+    try {
+      await compileContentDirectory({ rootDir: root });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ContentCompileError);
+    const issues = (caught as ContentCompileError).issues;
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues.every((issue) => issue.path.startsWith('$.entries.item.lantern.effects.0.parameters'))).toBe(true);
+    expect(issues.every((issue) => issue.message.length > 0)).toBe(true);
+  });
+
+  it('rejects a typo\'d behavior parameter key at compile with a parameter-scoped error', async () => {
+    const patrol = compactMonster
+      .replace('behavior.approach-and-attack', 'behavior.patrol')
+      .replace('behaviorParameters: {}', 'behaviorParameters: {waypoint: [{x: 1, y: 2}]}');
+    const root = await fixture({ 'content.yaml': contentFile(patrol, compactItem, compactVault) });
+    let caught: unknown;
+    try {
+      await compileContentDirectory({ rootDir: root });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ContentCompileError);
+    expect((caught as ContentCompileError).issues.some(
+      (issue) => issue.path.startsWith('$.entries.monster.rat.behavior'),
+    )).toBe(true);
+  });
+
+  it.each([
     ['missing condition', 'condition.missing', '', /unknown condition reference condition\.missing/],
     ['wrong content kind', 'item.lantern', '', /condition reference item\.lantern resolves to item/],
     ['duration above maximum', 'condition.stunned', ', duration: 501', /duration 501 exceeds maximum 500/],

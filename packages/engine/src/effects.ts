@@ -10,6 +10,7 @@ import { rollDie } from './random.js';
 import { resolveDamage } from './combat.js';
 import { applyCondition, conditionDefinition } from './conditions.js';
 import type { ItemInstance } from './item-model.js';
+import { parseEffectParameters } from './parameter-contracts.js';
 import { consumeItemQuantityFromItems } from './inventory.js';
 import type { SurvivalState } from './survival-model.js';
 import { restoreHunger } from './survival.js';
@@ -148,7 +149,7 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
     const target = actorById(actors, input.targetActorId);
     if (effect.requiresLivingTarget && target.health === 0) continue;
     if (effect.effectId === 'effect.damage') {
-      const parameters = effect.parameters as { damageType: import('@woven-deep/content').DamageType; dice: { count: number; sides: number; bonus: number } };
+      const parameters = parseEffectParameters(effect, 'effect.damage');
       const rolled = rollDice(state, parameters.dice); state = rolled.state;
       const mitigation = input.mitigationByActorId?.[target.actorId] ?? { armor: 0, resistance: 0, immune: false };
       const resolvedDamage = resolveEffectDamage(rolled.value, mitigation);
@@ -164,7 +165,7 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
         contentId: target.contentId, killerActorId: input.sourceActorId,
       });
     } else if (effect.effectId === 'effect.heal') {
-      const rolled = rollDice(state, (effect.parameters as { dice: { count: number; sides: number; bonus: number } }).dice); state = rolled.state;
+      const rolled = rollDice(state, parseEffectParameters(effect, 'effect.heal').dice); state = rolled.state;
       const result = applyHealing({ actors, targetActorId: target.actorId, sourceActorId: input.sourceActorId, amount: rolled.value, eventId: input.eventId });
       actors = [...result.actors]; events.push(...result.events);
     } else if (effect.effectId === 'effect.hunger.restore') {
@@ -172,12 +173,12 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
         throw new TypeError('effect.hunger.restore requires the survival actor as its target');
       }
       const result = restoreHunger({ survival,
-        amount: (effect.parameters as { amount: number }).amount,
+        amount: parseEffectParameters(effect, 'effect.hunger.restore').amount,
         maximum: balance.hungerMaximum, thresholds: balance.hungerThresholds,
         actorId: target.actorId, eventId: input.eventId });
       survival = result.survival; events.push(...result.events);
     } else if (effect.effectId === 'effect.condition.apply') {
-      const parameters = effect.parameters as { conditionId: OpaqueId; duration?: number };
+      const parameters = parseEffectParameters(effect, 'effect.condition.apply');
       const result = applyCondition({
         actors, content: input.content, targetActorId: target.actorId,
         sourceActorId: input.sourceActorId, conditionId: parameters.conditionId,
@@ -186,14 +187,14 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
       });
       actors = [...result.actors]; events.push(...result.events);
     } else if (effect.effectId === 'effect.condition.remove') {
-      const conditionId = (effect.parameters as { conditionId: OpaqueId }).conditionId;
+      const conditionId = parseEffectParameters(effect, 'effect.condition.remove').conditionId;
       conditionDefinition(input.content, conditionId);
       if (target.conditions.some((condition) => condition.conditionId === conditionId)) {
         actors = [...replaceActor(actors, { ...target, conditions: target.conditions.filter((condition) => condition.conditionId !== conditionId) })];
         events.push({ type: 'condition.removed', eventId: input.eventId, actorId: target.actorId, conditionId });
       }
     } else if (effect.effectId === 'effect.force-move') {
-      const distance = (effect.parameters as { distance: number }).distance;
+      const distance = parseEffectParameters(effect, 'effect.force-move').distance;
       const from = { x: target.x, y: target.y };
       const to = {
         x: checkedSafeInteger('forced movement x', target.x + input.forceMoveDirection.x * distance),
@@ -203,7 +204,7 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
       events.push({ type: 'actor.forced-move', eventId: input.eventId, actorId: target.actorId, from, to });
     } else if (effect.effectId === 'effect.item.consume') {
       if (!input.sourceItemId) throw new TypeError('effect.item.consume requires sourceItemId');
-      const quantity = (effect.parameters as { quantity: number }).quantity;
+      const quantity = parseEffectParameters(effect, 'effect.item.consume').quantity;
       const consumed = consumeItemQuantityFromItems({ items, itemId: input.sourceItemId, quantity });
       if (!consumed.ok) throw new RangeError(`effect.item.consume failed: ${consumed.reason}`);
       items = [...consumed.items];

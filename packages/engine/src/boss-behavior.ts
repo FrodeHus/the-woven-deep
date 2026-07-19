@@ -12,6 +12,7 @@ import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
 import type { BossPopulation } from './population-model.js';
 import { compareCodeUnits } from './stable-json.js';
 import type { DungeonFeature } from './feature-model.js';
+import { parseEffectParameters } from './parameter-contracts.js';
 
 const ZERO_MODIFIERS: PopulationCombatModifiers = { accuracy: 0, defense: 0, damage: 0 };
 
@@ -86,7 +87,7 @@ function bossEffectOperations(input: Readonly<{
   };
   return {
     'effect.feature.mutate': (operation) => {
-      const state = (operation.effect.parameters as { state: string }).state;
+      const state = parseEffectParameters(operation.effect, 'effect.feature.mutate').state;
       let changed = 0;
       const events: DomainEvent[] = [];
       const features = operation.features.map((feature): DungeonFeature => {
@@ -105,7 +106,7 @@ function bossEffectOperations(input: Readonly<{
       return { actors: operation.actors, features, events };
     },
     'effect.light.toggle': (operation) => {
-      const enabled = (operation.effect.parameters as { enabled: boolean }).enabled;
+      const enabled = parseEffectParameters(operation.effect, 'effect.light.toggle').enabled;
       let changed = 0;
       const events: DomainEvent[] = [];
       const items = operation.items.map((item) => {
@@ -131,7 +132,7 @@ function bossEffectOperations(input: Readonly<{
       return { actors: operation.actors, items, floors, events };
     },
     'effect.reveal': (operation) => {
-      const radius = (operation.effect.parameters as { radius: number }).radius;
+      const radius = parseEffectParameters(operation.effect, 'effect.reveal').radius;
       const target = operation.actors.find((actor) => actor.actorId === operation.targetActorId)!;
       const events: DomainEvent[] = [];
       const features = operation.features.map((feature): DungeonFeature => {
@@ -147,7 +148,7 @@ function bossEffectOperations(input: Readonly<{
       return { actors: operation.actors, features, events };
     },
     'effect.fuel.transfer': (operation) => {
-      const maximum = (operation.effect.parameters as { maximum: number }).maximum;
+      const maximum = parseEffectParameters(operation.effect, 'effect.fuel.transfer').maximum;
       const owned = (item: typeof operation.items[number]) => (item.location.type === 'backpack'
         || item.location.type === 'equipped') && item.location.actorId === operation.targetActorId;
       const lights = operation.items.filter((item) => owned(item) && itemDefinition(input.content, item.contentId).light !== null)

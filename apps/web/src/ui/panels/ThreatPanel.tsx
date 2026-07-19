@@ -1,28 +1,18 @@
 import type { JSX } from 'react';
 import type { SessionSnapshot } from '../../session/guest-session.js';
+import {
+  actorsOf, groundItemsOf, type ActorView, type GroundItemView,
+} from '../../session/projection-view.js';
 import type { PanelProps } from './types.js';
 
-export interface ProjectedThreatActor {
-  readonly actorId: string;
-  readonly name?: string;
-  readonly glyph?: string;
-  readonly disposition: string;
-  readonly healthPresentation: { readonly band: string };
-  readonly intentPresentation?: string;
+export type ProjectedThreatActor = ActorView;
+
+function threatActors(snapshot: SessionSnapshot): readonly ActorView[] {
+  return actorsOf(snapshot.projection).filter((actor) => actor.disposition === 'hostile');
 }
 
-interface ProjectedGroundItem {
-  readonly itemId: string;
-  readonly name: string;
-}
-
-function threatActors(snapshot: SessionSnapshot): readonly ProjectedThreatActor[] {
-  return (snapshot.projection.actors as unknown as readonly ProjectedThreatActor[])
-    .filter((actor) => actor.disposition === 'hostile');
-}
-
-function groundItems(snapshot: SessionSnapshot): readonly ProjectedGroundItem[] {
-  return snapshot.projection.groundItems as unknown as readonly ProjectedGroundItem[];
+function groundItems(snapshot: SessionSnapshot): readonly GroundItemView[] {
+  return groundItemsOf(snapshot.projection);
 }
 
 export function ThreatPanel({ snapshot }: PanelProps): JSX.Element {

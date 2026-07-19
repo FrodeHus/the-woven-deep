@@ -3,6 +3,10 @@ import type {
   Direction, EquipmentSlot, GameCommand, GameplayProjection, OpaqueId,
 } from '@woven-deep/engine';
 import type { PlayerIntent } from './intents.js';
+import {
+  actorsOf, featuresOf, groundItemsOf, heroOf, ownedItemOf,
+  type ActorView, type FeatureView, type GroundItemView, type OwnedItemView,
+} from './projection-view.js';
 
 export type BuiltIntent =
   | { readonly kind: 'command'; readonly command: GameCommand }
@@ -29,101 +33,41 @@ const DIRECTION_DELTAS: Readonly<Record<Direction, Readonly<{ dx: number; dy: nu
   northwest: { dx: -1, dy: -1 },
 };
 
-interface ProjectedHero {
-  readonly x: number;
-  readonly y: number;
-  readonly backpack: readonly Readonly<Record<string, unknown>>[];
-  readonly equipment: Readonly<Record<string, Readonly<Record<string, unknown>> | null>>;
+function actorAt(projection: GameplayProjection, x: number, y: number): ActorView | undefined {
+  return actorsOf(projection).find((actor) => actor.x === x && actor.y === y);
 }
 
-interface ProjectedActor {
-  readonly actorId: OpaqueId;
-  readonly x: number;
-  readonly y: number;
-  readonly disposition?: string;
-  /** Present (via the engine's `visibleMerchantState`) only on merchant actors -- the honest
-   * signal that this actor can be traded with, mirrored from `TownPanel`'s own use of the field. */
-  readonly factionName?: string;
-}
-
-interface ProjectedFeature {
-  readonly featureId: OpaqueId;
-  readonly type: string;
-  readonly state?: string;
-  readonly x: number;
-  readonly y: number;
-}
-
-interface ProjectedGroundItem {
-  readonly itemId: OpaqueId;
-  readonly quantity: number;
-  readonly x: number;
-  readonly y: number;
-}
-
-interface ProjectedBackpackItem {
-  readonly itemId: OpaqueId;
-  readonly contentId?: OpaqueId;
-  readonly name: string;
-  readonly enabled?: boolean | null;
-  readonly quantity?: number;
-}
-
-function hero(projection: GameplayProjection): ProjectedHero {
-  return projection.hero as unknown as ProjectedHero;
-}
-
-function actorAt(projection: GameplayProjection, x: number, y: number): ProjectedActor | undefined {
-  return (projection.actors as unknown as readonly ProjectedActor[])
-    .find((actor) => actor.x === x && actor.y === y);
-}
-
-function closedDoorAt(projection: GameplayProjection, x: number, y: number): ProjectedFeature | undefined {
-  return (projection.features as unknown as readonly ProjectedFeature[])
+function closedDoorAt(projection: GameplayProjection, x: number, y: number): FeatureView | undefined {
+  return featuresOf(projection)
     .find((feature) => feature.type === 'door' && feature.state !== 'open' && feature.x === x && feature.y === y);
 }
 
-function groundItemAt(projection: GameplayProjection, x: number, y: number): ProjectedGroundItem | undefined {
-  return (projection.groundItems as unknown as readonly ProjectedGroundItem[])
-    .find((item) => item.x === x && item.y === y);
+function groundItemAt(projection: GameplayProjection, x: number, y: number): GroundItemView | undefined {
+  return groundItemsOf(projection).find((item) => item.x === x && item.y === y);
 }
 
-function ownedItem(projection: GameplayProjection, itemId: OpaqueId): ProjectedBackpackItem | undefined {
-  const owner = hero(projection);
-  const inBackpack = (owner.backpack as unknown as readonly ProjectedBackpackItem[])
-    .find((item) => item.itemId === itemId);
-  if (inBackpack) return inBackpack;
-  return (Object.values(owner.equipment) as readonly (Readonly<Record<string, unknown>> | null)[])
-    .filter((item): item is Readonly<Record<string, unknown>> => item !== null)
-    .map((item) => item as unknown as ProjectedBackpackItem)
-    .find((item) => item.itemId === itemId);
+function ownedItem(projection: GameplayProjection, itemId: OpaqueId): OwnedItemView | undefined {
+  return ownedItemOf(heroOf(projection), itemId);
 }
 
 function stairDownUnderHero(projection: GameplayProjection): boolean {
-  const { x, y } = hero(projection);
+  const { x, y } = heroOf(projection);
   const cell = projection.floor.cells.find((candidate) => candidate.x === x && candidate.y === y);
   return cell?.tileId === 5;
 }
 
 function stairUpUnderHero(projection: GameplayProjection): boolean {
-  const { x, y } = hero(projection);
+  const { x, y } = heroOf(projection);
   const cell = projection.floor.cells.find((candidate) => candidate.x === x && candidate.y === y);
   return cell?.tileId === 4;
-}
-
-interface ProjectedPlacementSlot {
-  readonly tags: readonly string[];
-  readonly x: number;
-  readonly y: number;
 }
 
 /** True when the hero is Chebyshev-adjacent (but not standing on) the town's house-door slot --
  * mirrors the engine's own `heroAtHouseDoor` adjacency rule in `house.ts`. */
 function heroAdjacentToHouseDoor(projection: GameplayProjection): boolean {
-  const door = (projection.slots as unknown as readonly ProjectedPlacementSlot[])
-    .find((slot) => slot.tags.includes('house-door'));
+  const door = projection.slots.find((slot) => slot.tags.includes('house-door'));
   if (!door) return false;
-  const { x, y } = hero(projection);
+  const { x, y } = heroOf(projection);
   return Math.max(Math.abs(x - door.x), Math.abs(y - door.y)) === 1;
 }
 
@@ -131,9 +75,9 @@ function heroAdjacentToHouseDoor(projection: GameplayProjection): boolean {
  * `heroAdjacentToHouseDoor` above. When more than one merchant is adjacent, the nearest by
  * actor-id ordering wins; the town's authored merchant stalls never place two merchants close
  * enough for this to matter in practice. */
-function heroAdjacentMerchant(projection: GameplayProjection): ProjectedActor | undefined {
-  const origin = hero(projection);
-  return (projection.actors as unknown as readonly ProjectedActor[])
+function heroAdjacentMerchant(projection: GameplayProjection): ActorView | undefined {
+  const origin = heroOf(projection);
+  return actorsOf(projection)
     .filter((actor) => typeof actor.factionName === 'string')
     .filter((actor) => Math.max(Math.abs(actor.x - origin.x), Math.abs(actor.y - origin.y)) === 1)
     .sort((left, right) => (left.actorId < right.actorId ? -1 : 1))[0];
@@ -150,7 +94,7 @@ function buildMoveIntent(input: Readonly<{
   projection: GameplayProjection; commandId: OpaqueId; expectedRevision: number; direction: Direction;
 }>): BuiltIntent {
   const { projection, commandId, expectedRevision, direction } = input;
-  const origin = hero(projection);
+  const origin = heroOf(projection);
   const delta = DIRECTION_DELTAS[direction];
   const target = { x: origin.x + delta.dx, y: origin.y + delta.dy };
 
@@ -174,7 +118,7 @@ function buildPickupIntent(input: Readonly<{
   projection: GameplayProjection; commandId: OpaqueId; expectedRevision: number;
 }>): BuiltIntent {
   const { projection, commandId, expectedRevision } = input;
-  const origin = hero(projection);
+  const origin = heroOf(projection);
   const item = groundItemAt(projection, origin.x, origin.y);
   if (!item) return { kind: 'rejected', message: 'There is nothing here to pick up.' };
   return {
@@ -192,9 +136,9 @@ function buildBackpackIntent(input: Readonly<{
   if (!item) return { kind: 'rejected', message: 'That item is no longer in your backpack.' };
 
   if (action === 'unequip') {
-    const equipment = hero(projection).equipment;
+    const equipment = heroOf(projection).equipment;
     const slot = Object.entries(equipment)
-      .find(([, equipped]) => (equipped as { itemId?: OpaqueId } | null)?.itemId === itemId)?.[0] as EquipmentSlot | undefined;
+      .find(([, equipped]) => equipped?.itemId === itemId)?.[0] as EquipmentSlot | undefined;
     if (!slot) return { kind: 'rejected', message: `${item.name} is not equipped.` };
     return { kind: 'command', command: { type: 'unequip', slot, commandId, expectedRevision } };
   }
@@ -215,7 +159,7 @@ function buildBackpackIntent(input: Readonly<{
   if (!pack || !item.contentId) {
     return { kind: 'rejected', message: `${item.name} cannot be equipped.` };
   }
-  const equipment = hero(projection).equipment;
+  const equipment = heroOf(projection).equipment;
   const occupiedSlots = new Set(
     Object.entries(equipment).filter(([, value]) => value !== null).map(([slot]) => slot as EquipmentSlot),
   );

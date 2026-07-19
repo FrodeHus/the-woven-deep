@@ -5,6 +5,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection, StoredHallRecord } from '@woven-deep/engine';
 import type { GuestSession, SessionSnapshot } from '../session/guest-session.js';
 import { useGuestSession } from '../session/store.js';
+import { actorsOf, heroOf } from '../session/projection-view.js';
 import { computeCamera, type CameraOrigin } from './camera.js';
 import { CommandPalette } from './CommandPalette.js';
 import { EffectsLayer } from './EffectsLayer.js';
@@ -106,8 +107,7 @@ export interface PlayScreenProps {
 interface PositionedActor extends ThreatPopoverActor { readonly x: number; readonly y: number }
 
 function actorAtCell(projection: GameplayProjection, x: number, y: number): PositionedActor | undefined {
-  return (projection.actors as unknown as readonly PositionedActor[])
-    .find((actor) => actor.x === x && actor.y === y);
+  return actorsOf(projection).find((actor) => actor.x === x && actor.y === y);
 }
 
 function parseDataCell(value: string): Readonly<{ x: number; y: number }> | undefined {
@@ -120,8 +120,6 @@ function parseDataCell(value: string): Readonly<{ x: number; y: number }> | unde
 
 const FALLBACK_CELL_PX = { width: 8, height: 16 };
 
-interface ProjectedMerchantActor { readonly factionName?: string; readonly tradeAvailable?: boolean; readonly x: number; readonly y: number }
-
 function chebyshevDistance(ax: number, ay: number, bx: number, by: number): number {
   return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 }
@@ -130,9 +128,8 @@ function chebyshevDistance(ax: number, ay: number, bx: number, by: number): numb
  * availability check (a merchant actor, identified the same honest way via `factionName`,
  * Chebyshev-adjacent to the hero, with `tradeAvailable` not explicitly `false`). */
 function tradeIsAvailable(projection: GameplayProjection): boolean {
-  const hero = projection.hero as unknown as { x: number; y: number };
-  const merchants = (projection.actors as unknown as readonly ProjectedMerchantActor[])
-    .filter((actor) => typeof actor.factionName === 'string');
+  const hero = heroOf(projection);
+  const merchants = actorsOf(projection).filter((actor) => typeof actor.factionName === 'string');
   return merchants.some((merchant) => chebyshevDistance(hero.x, hero.y, merchant.x, merchant.y) === 1
     && merchant.tradeAvailable !== false);
 }
@@ -279,7 +276,7 @@ export function PlayScreen({
   const viewport = viewportForPane({ panePx: paneSize, cellPx: cellSize, floor: projection.floor });
 
   const cameraRef = useRef<Readonly<{ floorId: string; origin: CameraOrigin }> | null>(null);
-  const heroPosition = projection.hero as unknown as { x: number; y: number; sightRadius: number };
+  const heroPosition = heroOf(projection);
   const previousOrigin = cameraRef.current?.floorId === projection.floor.floorId ? cameraRef.current.origin : null;
   const camera = computeCamera({
     hero: heroPosition,

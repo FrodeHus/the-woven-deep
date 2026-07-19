@@ -1,25 +1,22 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
-import type { OpaqueId } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
+import { heroOf, houseOf, type HouseView, type OwnedItemView } from '../../session/projection-view.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
 import { Button } from '../components/button.js';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/tabs.js';
 
-interface ProjectedItem {
-  readonly itemId: OpaqueId;
-  readonly name: string;
-}
+type ProjectedItem = OwnedItemView;
 
 type FocusedList = 'backpack' | 'house';
 
-function backpackItems(snapshot: SessionSnapshot): readonly ProjectedItem[] {
-  return (snapshot.projection.hero as unknown as { backpack: readonly ProjectedItem[] }).backpack;
+function backpackItems(snapshot: SessionSnapshot): readonly OwnedItemView[] {
+  return heroOf(snapshot.projection).backpack;
 }
 
-function houseState(snapshot: SessionSnapshot): Readonly<{ capacity: number; items: readonly ProjectedItem[] }> {
-  return snapshot.projection.house as unknown as Readonly<{ capacity: number; items: readonly ProjectedItem[] }>;
+function houseState(snapshot: SessionSnapshot): HouseView {
+  return houseOf(snapshot.projection);
 }
 
 const LIST_LABEL: Readonly<Record<FocusedList, string>> = { backpack: 'Backpack', house: 'House' };
