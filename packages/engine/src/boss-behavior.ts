@@ -7,7 +7,7 @@ import {
 } from '@woven-deep/content';
 import type { ActorState } from './actor-model.js';
 import { resolveEffectSequence, type EffectOperations } from './effects.js';
-import { consumeItemQuantityFromItems, createFloorItem, createFloorLootFromTable } from './inventory.js';
+import { consumeItemQuantityFromItems, createPopulationLoot } from './inventory.js';
 import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
 import type { BossPopulation } from './population-model.js';
 import { replacePopulation, requireEncounter, sortedPopulations, synchronizeDeath as sharedSynchronizeDeath } from './population-runtime.js';
@@ -234,30 +234,20 @@ function createRewards(input: Readonly<{
   if (input.boss.health > 0 || input.population.rewardCreated) {
     return { state: input.state, population: input.population, events: [] };
   }
-  const unique = createFloorItem({ content: input.content, contentId: input.definition.uniqueItemId,
-    itemId: `item.reward.${input.population.populationId}.unique`, floorId: input.population.floorId,
-    x: input.boss.x, y: input.boss.y });
-  const loot = createFloorLootFromTable({ content: input.content, tableId: input.definition.enhancedLootTableId,
-    state: input.state.rng.loot, itemIdPrefix: `item.reward.${input.population.populationId}.loot`,
-    floorId: input.population.floorId, x: input.boss.x, y: input.boss.y });
-  const created = [unique, ...loot.items];
-  for (const item of created) if (input.state.items.some((existing) => existing.itemId === item.itemId)) {
-    throw new Error(`internal invariant: boss reward item ${item.itemId} already exists without reward state`);
-  }
-  const population = { ...input.population, rewardCreated: true, rewardReceipt: {
-    lootStateBefore: input.state.rng.loot,
-    lootStateAfter: loot.state,
-    items: created.map((item) => ({ itemId: item.itemId, contentId: item.contentId, quantity: item.quantity }))
-      .sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
-  } };
-  const state = { ...input.state, items: [...input.state.items, ...created]
-    .sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
-    rng: { ...input.state.rng, loot: loot.state } };
+  const { state, createdItems, unique, receipt } = createPopulationLoot({
+    content: input.content, state: input.state, tableId: input.definition.enhancedLootTableId,
+    itemIdPrefix: `item.reward.${input.population.populationId}.loot`,
+    floorId: input.population.floorId, x: input.boss.x, y: input.boss.y,
+    uniqueContentId: input.definition.uniqueItemId,
+    uniqueItemId: `item.reward.${input.population.populationId}.unique`,
+    existsError: (item) => `internal invariant: boss reward item ${item.itemId} already exists without reward state`,
+  });
+  const population = { ...input.population, rewardCreated: true, rewardReceipt: receipt };
   return { state, population, events: [{ type: 'boss.defeated', eventId: input.eventId,
     populationId: population.populationId, actorId: population.actorId, encounterId: population.encounterId },
   { type: 'boss.reward-created', eventId: input.eventId, populationId: population.populationId,
-    actorId: population.actorId, encounterId: population.encounterId, uniqueItemId: unique.itemId,
-    itemIds: created.map((item) => item.itemId) }] };
+    actorId: population.actorId, encounterId: population.encounterId, uniqueItemId: unique!.itemId,
+    itemIds: createdItems.map((item) => item.itemId) }] };
 }
 
 export function bossCombatModifiers(input: Readonly<{

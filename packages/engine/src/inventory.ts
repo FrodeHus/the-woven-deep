@@ -8,7 +8,7 @@ import { actorById } from './actor-model.js';
 import type { ItemInstance } from './item-model.js';
 import type { ActiveRun, OpaqueId, Uint32State } from './model.js';
 import type { RecordedHeirloomSnapshot } from './population-model.js';
-import { stableJson } from './stable-json.js';
+import { compareCodeUnits, stableJson } from './stable-json.js';
 import { boundedDisplayText } from './display-text.js';
 import { rollDie } from './random.js';
 
@@ -256,6 +256,73 @@ export function createFloorItem(input: Readonly<{
     identified: definition.identification.mode === 'known', charges: null,
     fuel: definition.light?.fuelCapacity ?? null, enabled: definition.light === null ? null : false,
     location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y } };
+}
+
+export type PopulationLootReceipt = Readonly<{
+  lootStateBefore: Uint32State;
+  lootStateAfter: Uint32State;
+  items: readonly Readonly<{ itemId: OpaqueId; contentId: OpaqueId; quantity: number }>[];
+}>;
+
+/**
+ * Shared core of every population reward drop (boss, Echo, and the content-bound validation
+ * dry-run that reconstructs a boss reward): optionally create a guaranteed unique item, roll the
+ * loot table, assert none of the created items already exists, merge them into `state.items`
+ * sorted by `compareCodeUnits`, thread `rng.loot`, and build the deterministic receipt.
+ *
+ * `lootState` overrides the stream to roll from (defaults to the live `state.rng.loot`); the
+ * validation dry-run replays from the saved `lootStateBefore`. `dryRun` reconstructs the reward
+ * without touching real state: it skips the exists-check and the merge, returning the input state
+ * unchanged while still producing `createdItems` and the receipt for comparison. Per-caller
+ * invariants that are NOT shared (Echo's recorded-heirloom exclusion) stay at the call site.
+ */
+export function createPopulationLoot(input: Readonly<{
+  content: CompiledContentPack;
+  state: ActiveRun;
+  tableId: OpaqueId;
+  itemIdPrefix: OpaqueId;
+  floorId: OpaqueId;
+  x: number;
+  y: number;
+  uniqueContentId?: OpaqueId | null;
+  uniqueItemId?: OpaqueId | null;
+  lootState?: Uint32State;
+  existsError?: (item: ItemInstance) => string;
+  dryRun?: boolean;
+}>): Readonly<{
+  state: ActiveRun;
+  createdItems: readonly ItemInstance[];
+  unique: ItemInstance | null;
+  receipt: PopulationLootReceipt;
+}> {
+  const lootStateBefore = input.lootState ?? input.state.rng.loot;
+  const unique = input.uniqueContentId != null && input.uniqueItemId != null
+    ? createFloorItem({ content: input.content, contentId: input.uniqueContentId,
+      itemId: input.uniqueItemId, floorId: input.floorId, x: input.x, y: input.y })
+    : null;
+  const loot = createFloorLootFromTable({ content: input.content, tableId: input.tableId,
+    state: lootStateBefore, itemIdPrefix: input.itemIdPrefix,
+    floorId: input.floorId, x: input.x, y: input.y });
+  const createdItems: readonly ItemInstance[] = unique ? [unique, ...loot.items] : [...loot.items];
+  if (!input.dryRun) {
+    for (const item of createdItems) {
+      if (input.state.items.some((existing) => existing.itemId === item.itemId)) {
+        throw new Error(input.existsError?.(item)
+          ?? `internal invariant: population loot item ${item.itemId} already exists`);
+      }
+    }
+  }
+  const receipt: PopulationLootReceipt = {
+    lootStateBefore, lootStateAfter: loot.state,
+    items: createdItems.map((item) => ({ itemId: item.itemId, contentId: item.contentId, quantity: item.quantity }))
+      .sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
+  };
+  const state = input.dryRun ? input.state : {
+    ...input.state,
+    items: [...input.state.items, ...createdItems].sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
+    rng: { ...input.state.rng, loot: loot.state },
+  };
+  return { state, createdItems, unique, receipt };
 }
 
 export function createRecordedHeirloom(input: Readonly<{
