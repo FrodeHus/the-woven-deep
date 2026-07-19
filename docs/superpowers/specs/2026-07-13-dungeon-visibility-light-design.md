@@ -346,6 +346,34 @@ The engine returns semantic presentation tokens rather than CSS or React objects
 
 A preview describes a prospective light at the hero position with color, radius, strength, and falloff. It uses normal occlusion and distance rules but does not modify authoritative illumination or knowledge.
 
+## Light-out survivability
+
+When the hero's own cell has no light reaching it (aggregate illumination `<= 0` there, after ambient, fixtures, carried light, and actor lights), the floor would otherwise render blank and become unplayable. Instead the projection draws a small emergency reveal so the player can still fumble toward a stairway or a refill:
+
+- A king-move (Chebyshev) bubble around the hero renders terrain only, at a default radius of 1 (own cell plus the eight neighbours).
+- Every cell outside the bubble renders as `unknown`; the remembered map is hidden while dark.
+- The hero glyph is always drawn.
+- Monsters, ground items, and map features stay present in authoritative state and still trigger on contact (combat, pickup, door interaction), but are omitted from the projection — they are not rendered, even inside the bubble.
+- Normal field of view and illumination resume the moment light returns.
+
+The bubble is presentation-only: it runs neither the visible-cell commit (step 5 of Knowledge and remembered terrain) nor any explored-bit update. This makes the memory rule intentional, not incidental:
+
+- Terrain explored under light before the darkness is still remembered once light returns — that saved memory is only hidden while dark, never erased.
+- Terrain only bumped into while fumbling in the dark is never committed, so it is forgotten once light returns. Groping a wall blind does not map the dungeon; the hero's light is what surveys and records it. This is a deliberate survival-tension choice, and it stops a player from deliberately snuffing their light to explore for free.
+
+### Parameterization and feat knobs
+
+Two internal derived stats drive the mechanic, read from the hero's aggregated stats (`deriveActorStats`), so any class, feat, or equipped-item modifier can change them. Both live in `DERIVED_STAT_NAMES` so modifiers can target them, but are excluded from every player-facing derived-stat display via `playerVisibleDerivedStats()`.
+
+- `lightOutRevealRadius` (default 1) — the bubble's Chebyshev radius.
+- `lightOutMemoryPersists` (default 0) — when set, the remembered map stays visible while dark instead of hiding.
+
+Planned feats that plug into these knobs (no feat content exists yet):
+
+- **Born in the dark** — darkvision; sets `lightOutRevealRadius` to 4.
+- **Living compass** — sets `lightOutMemoryPersists`; the remembered map stays visible in the dark. It still does not commit newly dark-fumbled terrain — it only unhides prior memory.
+- **Dungeon sense** — commits discovered terrain to the remembered map whether the light is on or off, so walls found while dark are retained after light returns. This is the one feat that overrides the "dark discoveries are never committed" rule, and it needs a third knob (commit-while-dark) distinct from the two above; add it when the feat is built.
+
 Preview cells are emitted only where the cell is currently visible or explored. Unknown cells are omitted even when geometrically inside the radius. The projection exposes preview intensity separately so the renderer can show an outline or tint without presenting unseen terrain.
 
 ## Reducer integration
