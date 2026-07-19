@@ -13,6 +13,7 @@ import { rollDie } from './random.js';
 import { compareCodeUnits } from './stable-json.js';
 import { movementBlockReason, tileDefinition } from './terrain.js';
 import { findPath } from './pathfinding.js';
+import { parseSwarmResponseParameters } from './parameter-contracts.js';
 
 type CapLevel = SwarmPopulation['emittedCapLevels'][number];
 const ZERO_MODIFIERS: PopulationCombatModifiers = { accuracy: 0, defense: 0, damage: 0 };
@@ -135,7 +136,9 @@ export function swarmCombatModifiers(input: Readonly<{
   const population = input.state.populations.find((candidate) => candidate.populationId === actor?.populationId);
   if (!actor || population?.model !== 'swarm' || population.shutdownState !== 'frenzy'
     || population.shutdownExpiresAt === null || population.shutdownExpiresAt <= input.state.worldTime) return ZERO_MODIFIERS;
-  return encounter(input.content, population.encounterId).definition.responseParameters.modifiers as PopulationCombatModifiers;
+  return parseSwarmResponseParameters(
+    encounter(input.content, population.encounterId).definition.responseParameters, 'frenzy',
+  ).modifiers;
 }
 
 export function advanceSwarms(input: Readonly<{
@@ -165,11 +168,13 @@ export function advanceSwarms(input: Readonly<{
       emittedCapLevels: retainedCapLevels };
     if (!sourceAlive && population.shutdownState === null) {
       const response = def.sourceDestructionResponse;
-      const duration = Number((def.responseParameters as { duration?: number }).duration ?? 0);
-      const interval = Number((def.responseParameters as { interval?: number }).interval ?? 0);
       population = { ...population, shutdownState: response,
-        nextSpawnAt: response === 'decay' ? deadline(state.worldTime, interval) : population.nextSpawnAt,
-        shutdownExpiresAt: response === 'frenzy' ? deadline(state.worldTime, duration) : null };
+        nextSpawnAt: response === 'decay'
+          ? deadline(state.worldTime, parseSwarmResponseParameters(def.responseParameters, 'decay').interval)
+          : population.nextSpawnAt,
+        shutdownExpiresAt: response === 'frenzy'
+          ? deadline(state.worldTime, parseSwarmResponseParameters(def.responseParameters, 'frenzy').duration)
+          : null };
       if (response === 'decay') {
         for (const actorId of population.livingMemberIds) {
           const applied = applyCondition({ actors: state.actors, content: input.content, targetActorId: actorId,
@@ -189,8 +194,9 @@ export function advanceSwarms(input: Readonly<{
         sourceActorId: population.sourceActorId, response });
     }
     if (population.shutdownState === 'decay' && population.nextSpawnAt <= state.worldTime) {
-      const damage = Number((def.responseParameters as { damage: number }).damage);
-      const interval = Number((def.responseParameters as { interval: number }).interval);
+      const decay = parseSwarmResponseParameters(def.responseParameters, 'decay');
+      const damage = decay.damage;
+      const interval = decay.interval;
       for (const actorId of population.livingMemberIds) {
         const resolved = resolveEffectSequence({ effects: [{ effectId: 'effect.damage',
           parameters: { damageType: 'physical', dice: { count: 1, sides: 1, bonus: damage - 1 } },

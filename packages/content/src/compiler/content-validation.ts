@@ -1,3 +1,4 @@
+import type { z } from 'zod';
 import type {
   BalanceContentEntry, ContentEntry, EffectDefinition, ItemContentEntry, LootTableContentEntry,
   MonsterContentEntry, IdentificationPoolContentEntry, EncounterContentEntry,
@@ -41,14 +42,14 @@ function validateParameters(
   path: string,
   identifier: string,
   parameters: Readonly<Record<string, unknown>>,
-  schemas: Readonly<Record<string, { safeParse(value: unknown): { success: boolean; error?: { issues: readonly { path: PropertyKey[]; message: string }[] } } }>>,
+  schemas: Readonly<Record<string, z.ZodTypeAny>>,
   label: string,
 ): ContentCompileIssue[] {
   const schema = schemas[identifier];
   if (!schema) return [issue(file, path, `unregistered ${label} ${identifier}`)];
   const result = schema.safeParse(parameters);
   if (result.success) return [];
-  return result.error!.issues.map((problem) => issue(
+  return result.error.issues.map((problem) => issue(
     file,
     `${path}.parameters${problem.path.length > 0 ? `.${problem.path.join('.')}` : ''}`,
     problem.message,

@@ -6,6 +6,7 @@ import { dropItem, pickupItem, splitStack } from './inventory.js';
 import { refreshKnowledge } from './perception.js';
 import { validateTarget } from './targeting.js';
 import { resolveEffectSequence } from './effects.js';
+import { parseEffectParameters } from './parameter-contracts.js';
 import { equipItem, itemLightSources, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
 import { closeDoor, featureTiles, openDoor } from './features.js';
 import type {
@@ -293,7 +294,7 @@ export function validatePlayerAction(input: Readonly<{
     if (!target.ok) return { status: 'invalid', reason: target.reason };
     const consumes = definition.effects.filter((effect) => effect.effectId === 'effect.item.consume');
     if (consumes.length > 0) {
-      if (consumes.length !== 1 || (consumes[0]!.parameters as { quantity?: unknown }).quantity !== command.quantity) {
+      if (consumes.length !== 1 || parseEffectParameters(consumes[0]!, 'effect.item.consume').quantity !== command.quantity) {
         return { status: 'invalid', reason: 'item.quantity' };
       }
       const targetActor = input.state.actors.find((candidate) => candidate.floorId === actor.floorId
@@ -329,7 +330,7 @@ export function validatePlayerAction(input: Readonly<{
       return { status: 'invalid', reason: 'item.unavailable' };
     }
     const consumption = definition.effects.filter((effect) => effect.effectId === 'effect.item.consume')
-      .reduce((total, effect) => total + ((effect.parameters as { quantity: number }).quantity), 0);
+      .reduce((total, effect) => total + parseEffectParameters(effect, 'effect.item.consume').quantity, 0);
     if (!Number.isSafeInteger(consumption) || consumption > source.quantity) {
       return { status: 'invalid', reason: 'item.quantity' };
     }
