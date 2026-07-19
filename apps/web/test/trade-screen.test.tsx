@@ -118,6 +118,22 @@ describe('TradeScreen', () => {
     });
   });
 
+  it('renders the service NAME, not the raw merchant-service content id', async () => {
+    const user = userEvent.setup();
+    const projection = withTrade(baseProjection, {
+      services: [{
+        serviceId: 'merchant-service.strongbox', unitPrice: 120, remainingUses: 1, targetItemIds: [],
+      }],
+    });
+    render(<TradeScreen snapshot={snapshotOf(projection)} onDispatch={vi.fn()} onClose={vi.fn()} />);
+
+    await user.keyboard('{Tab}{Tab}');
+
+    const servicesList = screen.getByRole('listbox', { name: 'Services' });
+    expect(within(servicesList).getByText(/Strongbox/)).toBeInTheDocument();
+    expect(within(servicesList).queryByText(/merchant-service\.strongbox/)).not.toBeInTheDocument();
+  });
+
   it('opens the identify target picker for a service with eligible targets, then dispatches the chosen target', async () => {
     const user = userEvent.setup();
     const onDispatch = vi.fn();
