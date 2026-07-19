@@ -694,6 +694,51 @@ function fallenHeroEncounteredEvents(before: ActiveRun, after: ActiveRun, eventI
   return events;
 }
 
+function advanceWorldSystems(input: Readonly<{
+  state: ActiveRun;
+  content: CompiledContentPack;
+  eventId: OpaqueId;
+  heroId: OpaqueId;
+  actionEvents: readonly DomainEvent[];
+  events: DomainEvent[];
+  publicEvents: PublicEvent[];
+  phase: 'initial' | 'actor-turn';
+}>): ActiveRun {
+  const { content, eventId, heroId, events, publicEvents } = input;
+  let state = input.state;
+  // Ranged/effect damage and deaths carry merchant consequences resolved from the action events.
+  const merchantOutcome = resolveMerchantCombatOutcomes({ state, content, events: input.actionEvents, eventId });
+  state = merchantOutcome.state;
+  const bosses = advanceBosses({ state, content, eventId });
+  state = bosses.state;
+  state = reconcileIndividualDeaths({ state, eventId }).state;
+  const fallen = advanceFallenHeroEncounters({ state, content, eventId });
+  state = fallen.state;
+  const beforeObservation = state;
+  state = observeEncounters(state, content);
+  appendEvents(events, publicEvents, input.actionEvents, state, heroId, content);
+  appendEvents(events, publicEvents, merchantOutcome.events, state, heroId, content);
+  appendEvents(events, publicEvents, bosses.events, state, heroId, content);
+  appendEvents(events, publicEvents, fallen.events, state, heroId, content);
+  appendEvents(events, publicEvents, populationEncounteredEvents(beforeObservation, state, eventId, content), state, heroId, content);
+  appendEvents(events, publicEvents, bossEncounteredEvents(beforeObservation, state, eventId), state, heroId, content);
+  appendEvents(events, publicEvents, fallenHeroEncounteredEvents(beforeObservation, state, eventId), state, heroId, content);
+  const groupOutcome = applyGroupLeaderOutcomes({ state, content, eventId });
+  state = groupOutcome.state;
+  appendEvents(events, publicEvents, groupOutcome.events, state, heroId, content);
+  // The initial pass coordinates groups after leader outcomes; per-actor turns coordinate
+  // earlier (before the actor's action), so it is not repeated here.
+  if (input.phase === 'initial') {
+    const coordinated = coordinateGroups({ state, content, eventId });
+    state = coordinated.state;
+    appendEvents(events, publicEvents, coordinated.events, state, heroId, content);
+  }
+  const swarms = advanceSwarms({ state, content, eventId });
+  state = swarms.state;
+  appendEvents(events, publicEvents, swarms.events, state, heroId, content);
+  return state;
+}
+
 export function resolveWorldStep(input: Readonly<{
   state: ActiveRun;
   content: CompiledContentPack;
@@ -719,34 +764,10 @@ export function resolveWorldStep(input: Readonly<{
   }
   const events: DomainEvent[] = [];
   const publicEvents: PublicEvent[] = [];
-  // Ranged/effect damage and deaths carry merchant consequences resolved from the action events.
-  let merchantOutcome = resolveMerchantCombatOutcomes({
-    state, content: input.content, events: resolved.events, eventId: input.eventId,
+  state = advanceWorldSystems({
+    state, content: input.content, eventId: input.eventId, heroId,
+    actionEvents: resolved.events, events, publicEvents, phase: 'initial',
   });
-  state = merchantOutcome.state;
-  let bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
-  state = bosses.state;
-  state = reconcileIndividualDeaths({ state, eventId: input.eventId }).state;
-  let fallen = advanceFallenHeroEncounters({ state, content: input.content, eventId: input.eventId });
-  state = fallen.state;
-  let beforeObservation = state;
-  state = observeEncounters(state, input.content);
-  appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
-  appendEvents(events, publicEvents, merchantOutcome.events, state, heroId, input.content);
-  appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
-  appendEvents(events, publicEvents, fallen.events, state, heroId, input.content);
-  appendEvents(events, publicEvents, populationEncounteredEvents(beforeObservation, state, input.eventId, input.content), state, heroId, input.content);
-  appendEvents(events, publicEvents, bossEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
-  appendEvents(events, publicEvents, fallenHeroEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
-  let groupOutcome = applyGroupLeaderOutcomes({ state, content: input.content, eventId: input.eventId });
-  state = groupOutcome.state;
-  appendEvents(events, publicEvents, groupOutcome.events, state, heroId, input.content);
-  let coordinated = coordinateGroups({ state, content: input.content, eventId: input.eventId });
-  state = coordinated.state;
-  appendEvents(events, publicEvents, coordinated.events, state, heroId, input.content);
-  let swarms = advanceSwarms({ state, content: input.content, eventId: input.eventId });
-  state = swarms.state;
-  appendEvents(events, publicEvents, swarms.events, state, heroId, input.content);
   const actedHero = actorById(state, heroId);
   if (actedHero) state = withActor(state, completeNormalActorTurn(actedHero));
   const limit = input.maxInternalActions ?? 10_000;
@@ -765,14 +786,14 @@ export function resolveWorldStep(input: Readonly<{
         elapsed: state.worldTime - previousWorldTime, eventId: input.eventId, danger });
       state = survival.state;
       appendEvents(events, publicEvents, survival.events, state, heroId, input.content);
-      swarms = advanceSwarms({ state, content: input.content, eventId: input.eventId });
+      const swarms = advanceSwarms({ state, content: input.content, eventId: input.eventId });
       state = swarms.state;
       appendEvents(events, publicEvents, swarms.events, state, heroId, input.content);
-      bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
+      const bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
       state = bosses.state;
       appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
       state = reconcileIndividualDeaths({ state, eventId: input.eventId }).state;
-      fallen = advanceFallenHeroEncounters({ state, content: input.content, eventId: input.eventId });
+      const fallen = advanceFallenHeroEncounters({ state, content: input.content, eventId: input.eventId });
       state = fallen.state;
       appendEvents(events, publicEvents, fallen.events, state, heroId, input.content);
       selected = selectReadyActor(state.actors, input.content, state.activeFloorId);
@@ -788,7 +809,7 @@ export function resolveWorldStep(input: Readonly<{
     internalActions += 1;
     const prepared = prepareIndividualTurn({ state, actorId: selected.actorId, content: input.content, eventId: input.eventId });
     state = prepared.state;
-    coordinated = coordinateGroups({ state, content: input.content, eventId: input.eventId });
+    const coordinated = coordinateGroups({ state, content: input.content, eventId: input.eventId });
     state = coordinated.state;
     appendEvents(events, publicEvents, [{
       type: 'actor.turn.started', eventId: input.eventId, actorId: selected.actorId,
@@ -799,30 +820,10 @@ export function resolveWorldStep(input: Readonly<{
     if (action.type === 'rest') throw new Error('internal invariant: non-player behavior selected rest');
     resolved = applyAction({ state, action, content: input.content, eventId: input.eventId });
     state = resolved.state;
-    merchantOutcome = resolveMerchantCombatOutcomes({
-      state, content: input.content, events: resolved.events, eventId: input.eventId,
+    state = advanceWorldSystems({
+      state, content: input.content, eventId: input.eventId, heroId,
+      actionEvents: resolved.events, events, publicEvents, phase: 'actor-turn',
     });
-    state = merchantOutcome.state;
-    bosses = advanceBosses({ state, content: input.content, eventId: input.eventId });
-    state = bosses.state;
-    state = reconcileIndividualDeaths({ state, eventId: input.eventId }).state;
-    fallen = advanceFallenHeroEncounters({ state, content: input.content, eventId: input.eventId });
-    state = fallen.state;
-    beforeObservation = state;
-    state = observeEncounters(state, input.content);
-    appendEvents(events, publicEvents, resolved.events, state, heroId, input.content);
-    appendEvents(events, publicEvents, merchantOutcome.events, state, heroId, input.content);
-    appendEvents(events, publicEvents, bosses.events, state, heroId, input.content);
-    appendEvents(events, publicEvents, fallen.events, state, heroId, input.content);
-    appendEvents(events, publicEvents, populationEncounteredEvents(beforeObservation, state, input.eventId, input.content), state, heroId, input.content);
-    appendEvents(events, publicEvents, bossEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
-    appendEvents(events, publicEvents, fallenHeroEncounteredEvents(beforeObservation, state, input.eventId), state, heroId, input.content);
-    groupOutcome = applyGroupLeaderOutcomes({ state, content: input.content, eventId: input.eventId });
-    state = groupOutcome.state;
-    appendEvents(events, publicEvents, groupOutcome.events, state, heroId, input.content);
-    swarms = advanceSwarms({ state, content: input.content, eventId: input.eventId });
-    state = swarms.state;
-    appendEvents(events, publicEvents, swarms.events, state, heroId, input.content);
     const completed = actorById(state, selected.actorId);
     if (completed) state = withActor(state, completeNormalActorTurn(completed));
     appendEvents(events, publicEvents, [{
