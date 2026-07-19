@@ -9,6 +9,7 @@ import { resolveEffectSequence } from './effects.js';
 import { featureTiles } from './features.js';
 import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
 import type { SwarmPopulation } from './population-model.js';
+import { deadLivingMembers, replacePopulationList, requireEncounter, sortedPopulations, synchronizeDeath } from './population-runtime.js';
 import { rollDie } from './random.js';
 import { compareCodeUnits } from './stable-json.js';
 import { movementBlockReason, tileDefinition } from './terrain.js';
@@ -39,11 +40,7 @@ function deadline(worldTime: number, interval: number): number {
 }
 
 function encounter(content: CompiledContentPack, encounterId: OpaqueId): SwarmEncounterContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === encounterId);
-  if (!entry || entry.kind !== 'encounter' || entry.model !== 'swarm') {
-    throw new Error(`internal invariant: swarm encounter ${encounterId} does not exist`);
-  }
-  return entry;
+  return requireEncounter(content, encounterId, 'swarm');
 }
 
 function preflight(definition: SwarmEncounterContentEntry['definition']): void {
@@ -61,10 +58,7 @@ function preflight(definition: SwarmEncounterContentEntry['definition']): void {
 }
 
 function syncDeaths(population: SwarmPopulation, actors: readonly ActorState[]): SwarmPopulation {
-  const dead = population.livingMemberIds.filter((id) => (actors.find((actor) => actor.actorId === id)?.health ?? 0) <= 0);
-  return dead.length === 0 ? population : { ...population,
-    livingMemberIds: population.livingMemberIds.filter((id) => !dead.includes(id)),
-    formerMemberIds: [...new Set([...population.formerMemberIds, ...dead])].sort(compareCodeUnits) };
+  return synchronizeDeath(population, deadLivingMembers(population, actors));
 }
 
 function capEvent(population: SwarmPopulation, level: CapLevel, eventId: OpaqueId): DomainEvent | null {
@@ -146,7 +140,7 @@ export function advanceSwarms(input: Readonly<{
 }>): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
   let state = input.state;
   const events: DomainEvent[] = [];
-  for (const original of [...state.populations].sort((a, b) => compareCodeUnits(a.populationId, b.populationId))) {
+  for (const original of sortedPopulations(state.populations)) {
     if (original.model !== 'swarm') continue;
     const def = encounter(input.content, original.encounterId).definition;
     preflight(def);
@@ -264,8 +258,7 @@ export function advanceSwarms(input: Readonly<{
         }
       }
     }
-    state = { ...state, populations: state.populations.map((candidate) => candidate.populationId === population.populationId
-      ? population : candidate) };
+    state = { ...state, populations: replacePopulationList(state.populations, population) };
   }
   return { state, events };
 }

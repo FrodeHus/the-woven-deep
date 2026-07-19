@@ -10,6 +10,7 @@ import type {
   ChampionPopulation, EchoPopulation, FallenHeroRunDecision, FallenHeroStandingSnapshot, PopulationInstance,
 } from './population-model.js';
 import { emptyActorBehaviorState } from './population-model.js';
+import { replacePopulationList, sortedPopulations } from './population-runtime.js';
 import { isNonZeroState, nextUint32 } from './random.js';
 import { compareCodeUnits } from './stable-json.js';
 import { boundedPrefixedDisplay, boundedSuffixedDisplay } from './display-text.js';
@@ -303,15 +304,14 @@ export function advanceFallenHeroEncounters(input: Readonly<{
   if (!definition) return { state: input.state, events: [] };
   let state = input.state;
   const events: DomainEvent[] = [];
-  for (const original of [...state.populations].sort((left, right) => compareCodeUnits(left.populationId, right.populationId))) {
+  for (const original of sortedPopulations(state.populations)) {
     if (original.model !== 'champion' && original.model !== 'echo') continue;
     const actor = state.actors.find((candidate) => candidate.actorId === original.actorId);
     const standing = state.fallenHeroStandings.find((candidate) => candidate.hallRecordId === original.hallRecordId);
     if (!actor || !standing) throw new Error(`fallen hero population ${original.populationId} is incomplete`);
     let population = synchronizeDeath(original, actor);
     if (!population.defeated || (population.model === 'champion' ? population.rewardCreated : population.lootCreated)) {
-      if (population !== original) state = { ...state, populations: state.populations.map((candidate) =>
-        candidate.populationId === population.populationId ? population : candidate) };
+      if (population !== original) state = { ...state, populations: replacePopulationList(state.populations, population) };
       continue;
     }
     if (population.model === 'champion') {
@@ -347,8 +347,7 @@ export function advanceFallenHeroEncounters(input: Readonly<{
         actorId: actor.actorId, hallRecordId: standing.hallRecordId, rank: standing.rank,
         itemIds: loot.items.map((item) => item.itemId) });
     }
-    state = { ...state, populations: state.populations.map((candidate) =>
-      candidate.populationId === population.populationId ? population : candidate),
+    state = { ...state, populations: replacePopulationList(state.populations, population),
     fallenHeroDecisions: state.fallenHeroDecisions.map((decision) => decision.hallRecordId === standing.hallRecordId
       ? { ...decision, encountered: true, defeated: true } : decision) };
   }

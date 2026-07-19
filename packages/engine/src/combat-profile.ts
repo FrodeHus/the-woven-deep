@@ -1,4 +1,6 @@
-import type { CompiledContentPack, MonsterContentEntry, NpcContentEntry } from '@woven-deep/content';
+import type {
+  CompiledContentPack, MonsterContentEntry, NpcContentEntry, PopulationCombatModifiers,
+} from '@woven-deep/content';
 import { balanceEntry } from './actions.js';
 import type { ActorState } from './actor-model.js';
 import { deriveActorStats } from './attributes.js';
@@ -38,6 +40,24 @@ export function requiredItemDefinition(content: CompiledContentPack, contentId: 
   return entry;
 }
 
+type PopulationCombatModifierResolver = (input: Readonly<{
+  state: Pick<ActiveRun, 'actors' | 'populations' | 'worldTime' | 'fallenHeroStandings'>;
+  content: CompiledContentPack;
+  actorId: OpaqueId;
+}>) => PopulationCombatModifiers;
+
+// Each resolver returns ZERO modifiers unless the actor belongs to a population of its own model, so
+// iterating the whole registry sums exactly one model's contribution. fallenHeroCombatModifiers serves
+// both champion and echo actors, so a single `champion` entry covers both. Object.values preserves the
+// group -> swarm -> boss -> fallen order that composePopulationCombatModifiers composes additively.
+const populationCombatModifierResolvers: Record<'group' | 'swarm' | 'boss' | 'champion',
+  PopulationCombatModifierResolver> = {
+  group: groupCombatModifiers,
+  swarm: swarmCombatModifiers,
+  boss: bossCombatModifiers,
+  champion: fallenHeroCombatModifiers,
+};
+
 export function profile(
   actor: ActorState,
   content: CompiledContentPack,
@@ -50,14 +70,9 @@ export function profile(
   hero: HeroState | undefined = undefined,
 ): CombatProfile {
   const monster = monsterDefinition(content, actor);
-  const groupModifiers = groupCombatModifiers({ state: { actors, populations, worldTime }, content, actorId: actor.actorId });
-  const swarmModifiers = swarmCombatModifiers({ state: { actors, populations, worldTime }, content, actorId: actor.actorId });
-  const bossModifiers = bossCombatModifiers({ state: { actors, populations }, content, actorId: actor.actorId });
-  const fallenModifiers = fallenHeroCombatModifiers({ state: { actors, populations,
-    fallenHeroStandings }, content, actorId: actor.actorId });
-  const populationModifiers = composePopulationCombatModifiers([
-    groupModifiers, swarmModifiers, bossModifiers, fallenModifiers,
-  ]);
+  const populationModifiers = composePopulationCombatModifiers(
+    Object.values(populationCombatModifierResolvers).map((resolve) =>
+      resolve({ state: { actors, populations, worldTime, fallenHeroStandings }, content, actorId: actor.actorId })));
   const npc = monster === undefined ? npcDefinition(content, actor) : undefined;
   if (npc) return applyPopulationCombatModifiers({
     accuracy: npc.accuracy,
