@@ -270,8 +270,25 @@ export const recorded = z.strictObject({
 });
 
 import type {
-  AttackHitEvent, HeroMovedEvent, InvalidActionEvent, ProcessedCommandResult,
-  RunConcludedEvent, TradeBoughtEvent,
+  AchievementGrantedEvent, ActorDamagedEvent, ActorDamageObservedPublicEvent, ActorDeathObservedPublicEvent,
+  ActorDiedEvent, ActorForcedMoveEvent, ActorHealedEvent, ActorIntentChangedEvent, ActorMovedEvent,
+  ActorMovementObservedPublicEvent, ActorTurnCompletedEvent, ActorTurnStartedEvent, AttackHitEvent,
+  AttackMissedEvent, BossDefeatedEvent, BossEncounteredEvent, BossPhaseChangedEvent, BossRecoveredEvent,
+  BossRewardCreatedEvent, ChampionDefeatedEvent, ChampionEncounteredEvent, ChampionHeirloomCreatedEvent,
+  CombatObservedPublicEvent, ConditionAppliedEvent, ConditionRemovedEvent, EchoDefeatedEvent,
+  EchoEncounteredEvent, EchoLootCreatedEvent, FeatureRevealedEvent, FeatureSearchEvent, FuelWarningEvent,
+  GroupAwarenessSharedEvent, GroupLeaderCreatedEvent, GroupLeaderDefeatedEvent, GroupOutcomeAppliedEvent,
+  HeroDamagedPublicEvent, HeroMovedEvent, HeroWaitedEvent, HungerRestoredEvent, HungerStageChangedEvent,
+  IdentificationAppearanceRevealedEvent, InvalidActionEvent, ItemConsumedEvent, ItemDamagedEvent,
+  ItemDroppedEvent, ItemEquippedEvent, ItemIdentifiedEvent, ItemLightExtinguishedEvent, ItemLightToggledEvent,
+  ItemPickedUpEvent, ItemRefueledEvent, ItemStackSplitEvent, ItemThrownEvent, ItemUnequippedEvent,
+  ItemUsedEvent, LootDroppedEvent, MerchantDepartedEvent, MerchantDepartureWarningEvent, MerchantDiedEvent,
+  MerchantProvokedEvent, MerchantRestockedEvent, MerchantStockDroppedEvent, PopulationCreatedEvent,
+  PopulationEncounteredEvent, PopulationNoticePublicEvent, PopulationPlacementSkippedEvent,
+  ProcessedCommandResult, ReactionTriggeredEvent, RelationshipChangedEvent, ReputationChangedEvent,
+  RestCompletedEvent, RunConcludedEvent, RunFinalizedEvent, SoundHeardEvent, SwarmCapReachedEvent,
+  SwarmMembersCreatedEvent, SwarmSourceDestroyedEvent, TradeBoughtEvent, TradeClosedEvent, TradeOpenedEvent,
+  TradeServicePurchasedEvent, TradeSoldEvent,
 } from '../model.js';
 import type { Expect, SchemaMatches } from './drift.js';
 // The `event` union is a deliberately broader storage superset: it carries both
@@ -286,3 +303,79 @@ type _InvalidActionDrift = Expect<SchemaMatches<z.infer<typeof invalidEvent>, In
 type _AttackHitDrift = Expect<SchemaMatches<z.infer<typeof attackHitEvent>, AttackHitEvent>>;
 type _TradeBoughtDrift = Expect<SchemaMatches<z.infer<typeof tradeBoughtEvent>, TradeBoughtEvent>>;
 type _RunConcludedDrift = Expect<SchemaMatches<z.infer<typeof runConcludedEvent>, RunConcludedEvent>>;
+type _HeroWaitedDrift = Expect<SchemaMatches<z.infer<typeof waitedEvent>, HeroWaitedEvent>>;
+type _AttackMissedDrift = Expect<SchemaMatches<z.infer<typeof attackMissedEvent>, AttackMissedEvent>>;
+type _ActorDamagedDrift = Expect<SchemaMatches<z.infer<typeof actorDamagedEvent>, ActorDamagedEvent>>;
+type _ActorDiedDrift = Expect<SchemaMatches<z.infer<typeof actorDiedEvent>, ActorDiedEvent>>;
+type _ActorHealedDrift = Expect<SchemaMatches<z.infer<typeof actorHealedEvent>, ActorHealedEvent>>;
+type _LootDroppedDrift = Expect<SchemaMatches<z.infer<typeof lootDroppedEvent>, LootDroppedEvent>>;
+type _ConditionAppliedDrift = Expect<SchemaMatches<z.infer<typeof conditionAppliedEvent>, ConditionAppliedEvent>>;
+type _ConditionRemovedDrift = Expect<SchemaMatches<z.infer<typeof conditionRemovedEvent>, ConditionRemovedEvent>>;
+type _ActorForcedMoveDrift = Expect<SchemaMatches<z.infer<typeof actorForcedMoveEvent>, ActorForcedMoveEvent>>;
+type _ReactionTriggeredDrift = Expect<SchemaMatches<z.infer<typeof reactionTriggeredEvent>, ReactionTriggeredEvent>>;
+type _RelationshipChangedDrift = Expect<SchemaMatches<z.infer<typeof relationshipChangedEvent>, RelationshipChangedEvent>>;
+type _ActorTurnStartedDrift = Expect<SchemaMatches<z.infer<typeof actorTurnStartedEvent>, ActorTurnStartedEvent>>;
+type _ActorTurnCompletedDrift = Expect<SchemaMatches<z.infer<typeof actorTurnCompletedEvent>, ActorTurnCompletedEvent>>;
+type _ActorMovedDrift = Expect<SchemaMatches<z.infer<typeof actorMovedEvent>, ActorMovedEvent>>;
+type _ItemPickedUpDrift = Expect<SchemaMatches<z.infer<typeof itemPickedUpEvent>, ItemPickedUpEvent>>;
+type _ItemDroppedDrift = Expect<SchemaMatches<z.infer<typeof itemDroppedEvent>, ItemDroppedEvent>>;
+type _ItemStackSplitDrift = Expect<SchemaMatches<z.infer<typeof itemStackSplitEvent>, ItemStackSplitEvent>>;
+type _ItemConsumedDrift = Expect<SchemaMatches<z.infer<typeof itemConsumedEvent>, ItemConsumedEvent>>;
+type _ItemThrownDrift = Expect<SchemaMatches<z.infer<typeof itemThrownEvent>, ItemThrownEvent>>;
+type _ItemUsedDrift = Expect<SchemaMatches<z.infer<typeof itemUsedEvent>, ItemUsedEvent>>;
+type _ItemEquippedDrift = Expect<SchemaMatches<z.infer<typeof itemEquippedEvent>, ItemEquippedEvent>>;
+type _ItemUnequippedDrift = Expect<SchemaMatches<z.infer<typeof itemUnequippedEvent>, ItemUnequippedEvent>>;
+type _ItemLightToggledDrift = Expect<SchemaMatches<z.infer<typeof itemLightToggledEvent>, ItemLightToggledEvent>>;
+type _ItemRefueledDrift = Expect<SchemaMatches<z.infer<typeof itemRefueledEvent>, ItemRefueledEvent>>;
+type _IdentificationAppearanceRevealedDrift = Expect<SchemaMatches<z.infer<typeof identificationAppearanceRevealedEvent>, IdentificationAppearanceRevealedEvent>>;
+type _ItemIdentifiedDrift = Expect<SchemaMatches<z.infer<typeof itemIdentifiedEvent>, ItemIdentifiedEvent>>;
+type _HungerStageChangedDrift = Expect<SchemaMatches<z.infer<typeof hungerStageChangedEvent>, HungerStageChangedEvent>>;
+type _HungerRestoredDrift = Expect<SchemaMatches<z.infer<typeof hungerRestoredEvent>, HungerRestoredEvent>>;
+type _FuelWarningDrift = Expect<SchemaMatches<z.infer<typeof fuelWarningEvent>, FuelWarningEvent>>;
+type _ItemLightExtinguishedDrift = Expect<SchemaMatches<z.infer<typeof itemLightExtinguishedEvent>, ItemLightExtinguishedEvent>>;
+type _FeatureRevealedDrift = Expect<SchemaMatches<z.infer<typeof featureRevealedEvent>, FeatureRevealedEvent>>;
+type _FeatureSearchDrift = Expect<SchemaMatches<z.infer<typeof featureSearchedEvent>, FeatureSearchEvent>>;
+type _ItemDamagedDrift = Expect<SchemaMatches<z.infer<typeof itemDamagedEvent>, ItemDamagedEvent>>;
+type _ActorIntentChangedDrift = Expect<SchemaMatches<z.infer<typeof actorIntentChangedEvent>, ActorIntentChangedEvent>>;
+type _PopulationCreatedDrift = Expect<SchemaMatches<z.infer<typeof populationCreatedEvent>, PopulationCreatedEvent>>;
+type _PopulationEncounteredDrift = Expect<SchemaMatches<z.infer<typeof populationEncounteredEvent>, PopulationEncounteredEvent>>;
+type _PopulationPlacementSkippedDrift = Expect<SchemaMatches<z.infer<typeof populationPlacementSkippedEvent>, PopulationPlacementSkippedEvent>>;
+type _GroupAwarenessSharedDrift = Expect<SchemaMatches<z.infer<typeof groupAwarenessSharedEvent>, GroupAwarenessSharedEvent>>;
+type _GroupLeaderCreatedDrift = Expect<SchemaMatches<z.infer<typeof groupLeaderCreatedEvent>, GroupLeaderCreatedEvent>>;
+type _GroupLeaderDefeatedDrift = Expect<SchemaMatches<z.infer<typeof groupLeaderDefeatedEvent>, GroupLeaderDefeatedEvent>>;
+type _GroupOutcomeAppliedDrift = Expect<SchemaMatches<z.infer<typeof groupOutcomeAppliedEvent>, GroupOutcomeAppliedEvent>>;
+type _SwarmMembersCreatedDrift = Expect<SchemaMatches<z.infer<typeof swarmMembersCreatedEvent>, SwarmMembersCreatedEvent>>;
+type _SwarmCapReachedDrift = Expect<SchemaMatches<z.infer<typeof swarmCapReachedEvent>, SwarmCapReachedEvent>>;
+type _SwarmSourceDestroyedDrift = Expect<SchemaMatches<z.infer<typeof swarmSourceDestroyedEvent>, SwarmSourceDestroyedEvent>>;
+type _BossEncounteredDrift = Expect<SchemaMatches<z.infer<typeof bossEncounteredEvent>, BossEncounteredEvent>>;
+type _BossPhaseChangedDrift = Expect<SchemaMatches<z.infer<typeof bossPhaseChangedEvent>, BossPhaseChangedEvent>>;
+type _BossRecoveredDrift = Expect<SchemaMatches<z.infer<typeof bossRecoveredEvent>, BossRecoveredEvent>>;
+type _BossDefeatedDrift = Expect<SchemaMatches<z.infer<typeof bossDefeatedEvent>, BossDefeatedEvent>>;
+type _BossRewardCreatedDrift = Expect<SchemaMatches<z.infer<typeof bossRewardCreatedEvent>, BossRewardCreatedEvent>>;
+type _ChampionEncounteredDrift = Expect<SchemaMatches<z.infer<typeof championEncounteredEvent>, ChampionEncounteredEvent>>;
+type _ChampionDefeatedDrift = Expect<SchemaMatches<z.infer<typeof championDefeatedEvent>, ChampionDefeatedEvent>>;
+type _ChampionHeirloomCreatedDrift = Expect<SchemaMatches<z.infer<typeof championHeirloomCreatedEvent>, ChampionHeirloomCreatedEvent>>;
+type _EchoEncounteredDrift = Expect<SchemaMatches<z.infer<typeof echoEncounteredEvent>, EchoEncounteredEvent>>;
+type _EchoDefeatedDrift = Expect<SchemaMatches<z.infer<typeof echoDefeatedEvent>, EchoDefeatedEvent>>;
+type _EchoLootCreatedDrift = Expect<SchemaMatches<z.infer<typeof echoLootCreatedEvent>, EchoLootCreatedEvent>>;
+type _SoundHeardDrift = Expect<SchemaMatches<z.infer<typeof soundHeardEvent>, SoundHeardEvent>>;
+type _HeroDamagedPublicDrift = Expect<SchemaMatches<z.infer<typeof heroDamagedPublicEvent>, HeroDamagedPublicEvent>>;
+type _CombatObservedPublicDrift = Expect<SchemaMatches<z.infer<typeof combatObservedPublicEvent>, CombatObservedPublicEvent>>;
+type _ActorMovementObservedPublicDrift = Expect<SchemaMatches<z.infer<typeof actorMovementObservedPublicEvent>, ActorMovementObservedPublicEvent>>;
+type _ActorDamageObservedPublicDrift = Expect<SchemaMatches<z.infer<typeof actorDamageObservedPublicEvent>, ActorDamageObservedPublicEvent>>;
+type _ActorDeathObservedPublicDrift = Expect<SchemaMatches<z.infer<typeof actorDeathObservedPublicEvent>, ActorDeathObservedPublicEvent>>;
+type _PopulationNoticePublicDrift = Expect<SchemaMatches<z.infer<typeof populationNoticePublicEvent>, PopulationNoticePublicEvent>>;
+type _ReputationChangedDrift = Expect<SchemaMatches<z.infer<typeof reputationChangedEvent>, ReputationChangedEvent>>;
+type _TradeOpenedDrift = Expect<SchemaMatches<z.infer<typeof tradeOpenedEvent>, TradeOpenedEvent>>;
+type _TradeSoldDrift = Expect<SchemaMatches<z.infer<typeof tradeSoldEvent>, TradeSoldEvent>>;
+type _TradeServicePurchasedDrift = Expect<SchemaMatches<z.infer<typeof tradeServicePurchasedEvent>, TradeServicePurchasedEvent>>;
+type _TradeClosedDrift = Expect<SchemaMatches<z.infer<typeof tradeClosedEvent>, TradeClosedEvent>>;
+type _MerchantDepartureWarningDrift = Expect<SchemaMatches<z.infer<typeof merchantDepartureWarningEvent>, MerchantDepartureWarningEvent>>;
+type _MerchantDepartedDrift = Expect<SchemaMatches<z.infer<typeof merchantDepartedEvent>, MerchantDepartedEvent>>;
+type _MerchantProvokedDrift = Expect<SchemaMatches<z.infer<typeof merchantProvokedEvent>, MerchantProvokedEvent>>;
+type _MerchantStockDroppedDrift = Expect<SchemaMatches<z.infer<typeof merchantStockDroppedEvent>, MerchantStockDroppedEvent>>;
+type _MerchantDiedDrift = Expect<SchemaMatches<z.infer<typeof merchantDiedEvent>, MerchantDiedEvent>>;
+type _MerchantRestockedDrift = Expect<SchemaMatches<z.infer<typeof merchantRestockedEvent>, MerchantRestockedEvent>>;
+type _RestCompletedDrift = Expect<SchemaMatches<z.infer<typeof restCompletedEvent>, RestCompletedEvent>>;
+type _RunFinalizedDrift = Expect<SchemaMatches<z.infer<typeof runFinalizedEvent>, RunFinalizedEvent>>;
+type _AchievementGrantedDrift = Expect<SchemaMatches<z.infer<typeof achievementGrantedEvent>, AchievementGrantedEvent>>;
