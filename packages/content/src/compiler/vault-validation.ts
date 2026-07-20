@@ -101,10 +101,13 @@ export function validateVaultEntry(
     if (legend.slot !== null) {
       const { slot } = legend;
       const slotPath = `$.entries.${entry.id}.legend.${symbol}.slot`;
-      if (slot.kind === 'item') {
+      if (slot.kind === 'item' || slot.kind === 'chest') {
         const setCount = Number(slot.lootTableId !== null) + Number(slot.contentId !== null);
         if (setCount !== 1) {
-          add(slotPath, `item slot ${slot.id} must set exactly one of lootTableId or contentId`);
+          add(
+            slotPath,
+            `${slot.kind} slot ${slot.id} must set exactly one of lootTableId or contentId`,
+          );
         } else if (slot.lootTableId !== null) {
           issues.push(
             ...referencedKindIssue(
@@ -122,6 +125,30 @@ export function validateVaultEntry(
         }
       } else if (slot.lootTableId !== null || slot.contentId !== null) {
         add(slotPath, `${slot.kind} slot ${slot.id} may not set item loot fields`);
+      }
+
+      if (slot.kind === 'door' || slot.kind === 'chest') {
+        if (slot.difficulty === undefined) {
+          add(slotPath, `${slot.kind} slot ${slot.id} must set difficulty`);
+        }
+      } else if (slot.difficulty !== undefined) {
+        add(slotPath, `${slot.kind} slot ${slot.id} may not set difficulty`);
+      }
+
+      if (slot.kind === 'door') {
+        if (slot.keyContentId !== undefined && slot.keyContentId !== null) {
+          issues.push(
+            ...referencedKindIssue(
+              file,
+              `${slotPath}.keyContentId`,
+              slot.keyContentId,
+              'item',
+              byId,
+            ),
+          );
+        }
+      } else if (slot.keyContentId !== undefined && slot.keyContentId !== null) {
+        add(slotPath, `${slot.kind} slot ${slot.id} may not set keyContentId`);
       }
     }
   }

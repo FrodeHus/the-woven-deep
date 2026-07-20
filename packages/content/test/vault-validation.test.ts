@@ -364,6 +364,210 @@ describe('validateVaultEntry', () => {
   });
 });
 
+describe('validateVaultEntry (locked door and chest slots)', () => {
+  const doorSlot = {
+    id: 'vault-door',
+    kind: 'door',
+    required: true,
+    tags: [],
+    lootTableId: null,
+    contentId: null,
+    difficulty: 12,
+    keyContentId: 'item.rusty-key',
+  } as const;
+  const chestSlot = {
+    id: 'vault-chest',
+    kind: 'chest',
+    required: false,
+    tags: [],
+    lootTableId: null,
+    contentId: 'item.crimson-potion',
+    difficulty: 8,
+  } as const;
+
+  function lockedVault(legendOverrides: Readonly<Record<string, VaultLegendEntry>>) {
+    return vault(['+DC'], {
+      '+': baseLegend['+']!,
+      D: { terrain: 'closed-door', entrance: false, light: null, slot: doorSlot },
+      C: { terrain: 'floor', entrance: false, light: null, slot: chestSlot },
+      ...legendOverrides,
+    });
+  }
+
+  it('accepts a vault with a valid locked door and locked chest naming known references', () => {
+    const byId = new Map<string, ContentEntry>([
+      ['item.rusty-key', { kind: 'item', id: 'item.rusty-key' } as unknown as ContentEntry],
+      [
+        'item.crimson-potion',
+        { kind: 'item', id: 'item.crimson-potion' } as unknown as ContentEntry,
+      ],
+    ]);
+
+    const issues = validateVaultEntry(lockedVault({}), 'vaults/locked-room.yaml', byId);
+
+    expect(issues).toEqual([]);
+  });
+
+  it('rejects a door slot missing difficulty', () => {
+    const issues = validateVaultEntry(
+      lockedVault({
+        D: {
+          terrain: 'closed-door',
+          entrance: false,
+          light: null,
+          slot: { ...doorSlot, difficulty: undefined },
+        },
+      }),
+      'vaults/locked-room.yaml',
+    );
+
+    expect(issues).toContainEqual({
+      file: 'vaults/locked-room.yaml',
+      path: '$.entries.vault.test-room.legend.D.slot',
+      message: 'door slot vault-door must set difficulty',
+    });
+  });
+
+  it('rejects a chest slot missing difficulty', () => {
+    const issues = validateVaultEntry(
+      lockedVault({
+        C: {
+          terrain: 'floor',
+          entrance: false,
+          light: null,
+          slot: { ...chestSlot, difficulty: undefined },
+        },
+      }),
+      'vaults/locked-room.yaml',
+    );
+
+    expect(issues).toContainEqual({
+      file: 'vaults/locked-room.yaml',
+      path: '$.entries.vault.test-room.legend.C.slot',
+      message: 'chest slot vault-chest must set difficulty',
+    });
+  });
+
+  it('rejects a non-door/chest slot that sets difficulty', () => {
+    const issues = validateVaultEntry(
+      vault(['+i'], {
+        '+': baseLegend['+']!,
+        i: {
+          terrain: 'floor',
+          entrance: false,
+          light: null,
+          slot: {
+            id: 'trap-difficulty',
+            kind: 'trap',
+            required: true,
+            tags: [],
+            lootTableId: null,
+            contentId: null,
+            difficulty: 10,
+          },
+        },
+      }),
+      'vaults/test-room.yaml',
+    );
+
+    expect(issues).toContainEqual({
+      file: 'vaults/test-room.yaml',
+      path: '$.entries.vault.test-room.legend.i.slot',
+      message: 'trap slot trap-difficulty may not set difficulty',
+    });
+  });
+
+  it('rejects a door slot naming an unresolved keyContentId', () => {
+    const issues = validateVaultEntry(lockedVault({}), 'vaults/locked-room.yaml', new Map());
+
+    expect(issues).toContainEqual({
+      file: 'vaults/locked-room.yaml',
+      path: '$.entries.vault.test-room.legend.D.slot.keyContentId',
+      message: 'unknown item reference item.rusty-key',
+    });
+  });
+
+  it('rejects a non-door slot that sets keyContentId', () => {
+    const issues = validateVaultEntry(
+      lockedVault({
+        C: {
+          terrain: 'floor',
+          entrance: false,
+          light: null,
+          slot: { ...chestSlot, keyContentId: 'item.rusty-key' },
+        },
+      }),
+      'vaults/locked-room.yaml',
+    );
+
+    expect(issues).toContainEqual({
+      file: 'vaults/locked-room.yaml',
+      path: '$.entries.vault.test-room.legend.C.slot',
+      message: 'chest slot vault-chest may not set keyContentId',
+    });
+  });
+
+  it('rejects a chest slot that sets neither lootTableId nor contentId', () => {
+    const issues = validateVaultEntry(
+      lockedVault({
+        C: {
+          terrain: 'floor',
+          entrance: false,
+          light: null,
+          slot: { ...chestSlot, contentId: null, lootTableId: null },
+        },
+      }),
+      'vaults/locked-room.yaml',
+    );
+
+    expect(issues).toContainEqual({
+      file: 'vaults/locked-room.yaml',
+      path: '$.entries.vault.test-room.legend.C.slot',
+      message: 'chest slot vault-chest must set exactly one of lootTableId or contentId',
+    });
+  });
+
+  it('rejects a chest slot that sets both lootTableId and contentId', () => {
+    const issues = validateVaultEntry(
+      lockedVault({
+        C: {
+          terrain: 'floor',
+          entrance: false,
+          light: null,
+          slot: { ...chestSlot, contentId: 'item.crimson-potion', lootTableId: 'loot-table.cache' },
+        },
+      }),
+      'vaults/locked-room.yaml',
+    );
+
+    expect(issues).toContainEqual({
+      file: 'vaults/locked-room.yaml',
+      path: '$.entries.vault.test-room.legend.C.slot',
+      message: 'chest slot vault-chest must set exactly one of lootTableId or contentId',
+    });
+  });
+
+  it('rejects a door slot that sets loot fields', () => {
+    const issues = validateVaultEntry(
+      lockedVault({
+        D: {
+          terrain: 'closed-door',
+          entrance: false,
+          light: null,
+          slot: { ...doorSlot, contentId: 'item.crimson-potion' },
+        },
+      }),
+      'vaults/locked-room.yaml',
+    );
+
+    expect(issues).toContainEqual({
+      file: 'vaults/locked-room.yaml',
+      path: '$.entries.vault.test-room.legend.D.slot',
+      message: 'door slot vault-door may not set item loot fields',
+    });
+  });
+});
+
 describe('validateVaultEntry (town vault contract)', () => {
   const townLegend: Record<string, VaultLegendEntry> = {
     '#': { terrain: 'wall', entrance: false, light: null, slot: null },

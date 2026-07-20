@@ -660,9 +660,36 @@ guaranteed boss-unique item item.warden-ember cannot appear in ordinary loot
 | `layout` | string array | Required | 1–100 rows, each at most 160 Unicode code points. |
 | `legend` | symbol map | Required | Each symbol defines terrain and at most one entrance, light, or slot action. |
 
-Terrain is `wall`, `floor`, `closed-door`, `pillar`, `stair-up`, `stair-down`, or `void`. A placement slot kind is `monster`, `item`, `trap`, `npc`, `fixture`, or `objective`. Slot IDs are vault-local slugs. Required slots must occur in the layout. Lights require a local suffix, one glyph, stable presentation token, RGB color, radius 1–32, strength 1–255, and optional enabled state (default true). Void terrain cannot contain lights or placement slots.
+Terrain is `wall`, `floor`, `closed-door`, `pillar`, `stair-up`, `stair-down`, or `void`. A placement slot kind is `monster`, `item`, `trap`, `npc`, `fixture`, `objective`, `door`, or `chest`. Slot IDs are vault-local slugs. Required slots must occur in the layout. Lights require a local suffix, one glyph, stable presentation token, RGB color, radius 1–32, strength 1–255, and optional enabled state (default true). Void terrain cannot contain lights or placement slots.
 
-A slot's `lootTableId` and `contentId` name what it can contain once placed. A `kind: item` slot must set exactly one of them (a loot table to roll from, or a single fixed item); every other slot kind must leave both `null`. Whichever is set must resolve to the matching content kind (`loot-table` or `item`).
+A slot's `lootTableId` and `contentId` name what it can contain once placed. A `kind: item` or `kind: chest` slot must set exactly one of them (a loot table to roll from, or a single fixed item); every other slot kind must leave both `null`. Whichever is set must resolve to the matching content kind (`loot-table` or `item`).
+
+A `kind: door` or `kind: chest` slot authors a locked feature and must set `difficulty` (a safe integer from `1` to `30`, the DC a lockpick check must meet or beat). A `kind: door` slot may also set `keyContentId`, naming an `item` that opens it without a check; every other slot kind must leave `difficulty` and `keyContentId` unset. A `chest` slot may not set `keyContentId` (chests take no keys).
+
+```yaml
+schemaVersion: 7
+entries:
+  - kind: vault
+    id: vault.locked-cache
+    name: Locked cache
+    tags: [cache]
+    minDepth: 1
+    maxDepth: 8
+    rarity: uncommon
+    weight: 10
+    maxPerFloor: 1
+    margin: 1
+    transforms: { rotations: [0], reflectHorizontal: false }
+    layout: ["+DC"]
+    legend:
+      "+": { terrain: floor, entrance: true }
+      "D":
+        terrain: closed-door
+        slot: { id: cache-door, kind: door, required: true, tags: [], difficulty: 12, keyContentId: item.rusty-key }
+      "C":
+        terrain: floor
+        slot: { id: cache-chest, kind: chest, required: false, tags: [], difficulty: 8, contentId: item.crimson-potion }
+```
 
 ```yaml
 schemaVersion: 7

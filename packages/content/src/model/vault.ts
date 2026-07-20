@@ -17,6 +17,8 @@ export const VAULT_PLACEMENT_KINDS = [
   'npc',
   'fixture',
   'objective',
+  'door',
+  'chest',
 ] as const;
 export type VaultPlacementKind = (typeof VAULT_PLACEMENT_KINDS)[number];
 export type VaultRotation = 0 | 90 | 180 | 270;
@@ -29,6 +31,8 @@ export interface VaultPlacementSlot {
   readonly tags: readonly string[];
   readonly lootTableId: ContentId | null;
   readonly contentId: ContentId | null;
+  readonly difficulty?: number;
+  readonly keyContentId?: ContentId | null;
 }
 
 export interface VaultLightFixture {

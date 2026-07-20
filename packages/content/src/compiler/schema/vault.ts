@@ -4,6 +4,7 @@ import {
   glyph,
   itemRarities,
   rgb,
+  safeInteger,
   safeNonNegative,
   safePositive,
   slugSchema,
@@ -28,6 +29,8 @@ const slot = z.strictObject({
   tags,
   lootTableId: stableIdSchema.nullable().default(null),
   contentId: stableIdSchema.nullable().default(null),
+  difficulty: safeInteger.min(1).max(30).optional(),
+  keyContentId: stableIdSchema.nullable().optional(),
 });
 const light = z.strictObject({
   idSuffix: slugSchema,
