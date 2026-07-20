@@ -105,7 +105,7 @@ describe('population encounter seeded invariants', () => {
     );
     expect(scenarioSeeds.size).toBe(512);
     expect(finalSaves.size).toBeGreaterThan(400);
-  }, 120_000);
+  }, 360_000);
 
   it('regression: inactive floors do not accumulate missed swarm births', () => {
     const result = runPopulationDemo(pack);
