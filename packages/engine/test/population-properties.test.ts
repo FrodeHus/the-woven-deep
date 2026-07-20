@@ -92,15 +92,12 @@ describe('population encounter seeded invariants', () => {
           maxLength: 512,
         }),
         async (seeds) => {
-          // Yield to the event loop frequently: each simulation is CPU-bound, and blocking the
-          // worker for too long between yields starves Vitest's RPC heartbeat on slow runners.
-          const batchSize = 4;
-          for (let batchStart = 0; batchStart < seeds.length; batchStart += batchSize) {
-            for (const seed of seeds.slice(batchStart, batchStart + batchSize)) {
-              scenarioSeeds.add(seed);
-              finalSaves.add(execute(seed));
-            }
-            await new Promise<void>((resolveBatch) => setImmediate(resolveBatch));
+          // Each simulation is CPU-bound; yield to the event loop after every one so a slow
+          // runner never blocks the worker long enough to starve Vitest's RPC heartbeat.
+          for (const seed of seeds) {
+            scenarioSeeds.add(seed);
+            finalSaves.add(execute(seed));
+            await new Promise<void>((resolveSeed) => setImmediate(resolveSeed));
           }
         },
       ),
