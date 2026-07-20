@@ -9,7 +9,13 @@ import type {
 import {
   createDemoContentPack,
   createDemoRun,
+  createUnknownKnowledge,
+  decodeActiveRun,
+  encodeActiveRun,
+  isExplored,
+  projectGameplayState,
   relationshipBetween,
+  rememberedTile,
   resolveCommand,
   resolveWorldStep,
   selectReadyActor,
@@ -576,5 +582,163 @@ describe('atomic world steps', () => {
     expect(after.state.actors.find((actor) => actor.actorId === enemy.actorId)?.health).toBe(0);
     expect(after.state.items.filter((item) => item.location.type === 'floor')).toHaveLength(0);
     expect(after.events.some((event) => event.type === 'loot.dropped')).toBe(false);
+  });
+});
+
+describe('dungeon sense (lightOutCommitsMemory) dark-terrain memory commit', () => {
+  function darkDemoRun(statModifiers: Record<string, number>): ActiveRun {
+    const base = createDemoRun();
+    const floor = base.floors[0]!;
+    return {
+      ...base,
+      hero: { ...base.hero, statModifiers },
+      floors: [
+        {
+          ...floor,
+          ambient: { color: [0, 0, 0] as const, strength: 0 },
+          lights: [],
+          knowledge: createUnknownKnowledge(floor.width * floor.height),
+        },
+      ],
+    };
+  }
+
+  /** Walks the hero one step at a time along the demo floor's open corridor (y=1, x 1..5),
+   * entirely in the dark, then relights only the hero's final cell so the hero is no longer
+   * "in the dark" without illuminating the cells left behind. */
+  function walkCorridorThenRelight(
+    state: ActiveRun,
+    content: CompiledContentPack,
+  ): ReturnType<typeof resolveWorldStep> {
+    let step = resolveWorldStep({
+      state,
+      content,
+      eventId: 'command.dark-wait-start',
+      action: { type: 'wait', actorId: state.hero.actorId, cost: 100 },
+    });
+    for (let x = 1; x < 5; x += 1) {
+      step = resolveWorldStep({
+        state: step.state,
+        content,
+        eventId: `command.dark-move-${x}`,
+        action: { type: 'move', actorId: state.hero.actorId, to: { x: x + 1, y: 1 }, cost: 100 },
+      });
+    }
+    const hero = step.state.actors.find((actor) => actor.actorId === state.hero.actorId)!;
+    const litFloor = {
+      ...step.state.floors.find((floor) => floor.floorId === hero.floorId)!,
+      lights: [
+        {
+          lightId: 'light.relight',
+          location: { type: 'fixed' as const, x: hero.x, y: hero.y },
+          color: [255, 255, 255] as const,
+          radius: 1,
+          strength: 255,
+          enabled: true,
+          falloff: 'linear' as const,
+          vaultPlacementId: null,
+          presentation: null,
+        },
+      ],
+    };
+    return resolveWorldStep({
+      state: {
+        ...step.state,
+        floors: step.state.floors.map((floor) =>
+          floor.floorId === hero.floorId ? litFloor : floor,
+        ),
+      },
+      content,
+      eventId: 'command.relight',
+      action: { type: 'wait', actorId: state.hero.actorId, cost: 100 },
+    });
+  }
+
+  it('commits the light-out bubble to FloorKnowledge while dark and keeps it remembered once the hero is lit again', () => {
+    const content = createDemoContentPack();
+    const state = darkDemoRun({ lightOutCommitsMemory: 1 });
+    const width = state.floors[0]!.width;
+    const at = (x: number, y: number) => y * width + x;
+
+    const afterFirstWait = resolveWorldStep({
+      state,
+      content,
+      eventId: 'command.dungeon-sense-wait',
+      action: { type: 'wait', actorId: state.hero.actorId, cost: 100 },
+    });
+    const bubbleFloor = afterFirstWait.state.floors[0]!;
+    // Hero starts at (1,1); default lightOutRevealRadius is 1, so the radius-1 Chebyshev bubble
+    // around it (clipped to floor bounds) must be committed as explored terrain immediately.
+    for (const [x, y] of [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+      [0, 1],
+      [1, 1],
+      [2, 1],
+      [0, 2],
+      [1, 2],
+      [2, 2],
+    ]) {
+      expect(isExplored(bubbleFloor.knowledge, at(x!, y!))).toBe(true);
+      expect(rememberedTile(bubbleFloor.knowledge, at(x!, y!))).toBe(bubbleFloor.tiles[at(x!, y!)]);
+    }
+
+    const final = walkCorridorThenRelight(state, content);
+    const finalHero = final.state.actors.find((actor) => actor.actorId === state.hero.actorId)!;
+    expect(finalHero.x).toBe(5);
+    const finalFloor = final.state.floors.find((floor) => floor.floorId === finalHero.floorId)!;
+    // (1,1) is far outside the hero's new position's dark bubble and outside its current
+    // illumination, but dungeon sense committed it while the hero passed through in the dark.
+    expect(isExplored(finalFloor.knowledge, at(1, 1))).toBe(true);
+    expect(rememberedTile(finalFloor.knowledge, at(1, 1))).toBe(finalFloor.tiles[at(1, 1)]);
+
+    const projected = projectGameplayState({ state: final.state, content });
+    const rememberedCell = projected.floor.cells[at(1, 1)]!;
+    expect(rememberedCell.knowledge).toBe('remembered');
+    expect(rememberedCell.tileId).toBe(finalFloor.tiles[at(1, 1)]);
+  });
+
+  it('commits nothing new while dark when lightOutCommitsMemory is 0 (default) -- pins existing behaviour', () => {
+    const content = createDemoContentPack();
+    const state = darkDemoRun({});
+
+    const afterFirstWait = resolveWorldStep({
+      state,
+      content,
+      eventId: 'command.no-dungeon-sense-wait',
+      action: { type: 'wait', actorId: state.hero.actorId, cost: 100 },
+    });
+    expect(
+      afterFirstWait.state.floors[0]!.knowledge.exploredWords.every((word) => word === 0),
+    ).toBe(true);
+
+    const final = walkCorridorThenRelight(state, content);
+    const finalHero = final.state.actors.find((actor) => actor.actorId === state.hero.actorId)!;
+    const finalFloor = final.state.floors.find((floor) => floor.floorId === finalHero.floorId)!;
+    const width = finalFloor.width;
+    expect(isExplored(finalFloor.knowledge, 1 * width + 1)).toBe(false);
+
+    const projected = projectGameplayState({ state: final.state, content });
+    expect(projected.floor.cells[1 * width + 1]!.knowledge).toBe('unknown');
+  });
+
+  it('round-trips a save containing dark-committed FloorKnowledge cleanly', () => {
+    const content = createDemoContentPack();
+    const state = darkDemoRun({ lightOutCommitsMemory: 1 });
+    const final = walkCorridorThenRelight(state, content);
+
+    const encoded = encodeActiveRun(final.state);
+    const decoded = decodeActiveRun(encoded);
+
+    expect(decoded).toEqual(final.state);
+    const decodedFloor = decoded.floors.find(
+      (floor) => floor.floorId === final.state.floors[0]!.floorId,
+    )!;
+    const width = decodedFloor.width;
+    expect(isExplored(decodedFloor.knowledge, 1 * width + 1)).toBe(true);
+    expect(rememberedTile(decodedFloor.knowledge, 1 * width + 1)).toBe(
+      decodedFloor.tiles[1 * width + 1],
+    );
   });
 });

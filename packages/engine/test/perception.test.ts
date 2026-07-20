@@ -182,6 +182,46 @@ describe('knowledge refresh', () => {
     expect(first.illumination.intensity).not.toBe(second.illumination.intensity);
   });
 
+  it('commits the light-out bubble as explored terrain when lightOutMemory is active and the hero is dark', () => {
+    const result = refreshKnowledge({
+      floor: floor({ lights: [] }),
+      hero,
+      actors: new Map([[hero.heroId, hero]]),
+      lightOutMemory: { commitsMemory: true, revealRadius: 2 },
+    });
+
+    expect(result.illumination.intensity[at(hero.x, hero.y)]).toBe(0);
+    for (let dy = -2; dy <= 2; dy += 1) {
+      for (let dx = -2; dx <= 2; dx += 1) {
+        const x = hero.x + dx;
+        const y = hero.y + dy;
+        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+        expect(isExplored(result.knowledge, at(x, y))).toBe(true);
+        expect(rememberedTile(result.knowledge, at(x, y))).toBe(tiles[at(x, y)]);
+      }
+    }
+    // Outside the radius-2 bubble and outside the extinguished FOV/illumination stays unknown.
+    expect(isExplored(result.knowledge, at(8, 6))).toBe(false);
+  });
+
+  it('commits nothing new when lightOutMemory is absent or commitsMemory is false (default knob 0)', () => {
+    const withoutParam = refreshKnowledge({
+      floor: floor({ lights: [] }),
+      hero,
+      actors: new Map([[hero.heroId, hero]]),
+    });
+    const explicitlyOff = refreshKnowledge({
+      floor: floor({ lights: [] }),
+      hero,
+      actors: new Map([[hero.heroId, hero]]),
+      lightOutMemory: { commitsMemory: false, revealRadius: 2 },
+    });
+
+    expect(withoutParam.knowledge.exploredWords.every((word) => word === 0)).toBe(true);
+    expect(explicitlyOff.knowledge.exploredWords.every((word) => word === 0)).toBe(true);
+    expect(stableJson(withoutParam)).toBe(stableJson(explicitlyOff));
+  });
+
   it('rejects malformed and sparse structural inputs', () => {
     const sparseTiles = Array<TileId>(width * height);
     sparseTiles.fill(1);

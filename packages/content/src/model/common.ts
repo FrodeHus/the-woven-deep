@@ -49,6 +49,7 @@ export const DERIVED_STAT_NAMES = [
   'disarm',
   'lightOutRevealRadius',
   'lightOutMemoryPersists',
+  'lightOutCommitsMemory',
 ] as const;
 export type DerivedStatName = (typeof DERIVED_STAT_NAMES)[number];
 export const DAMAGE_TYPES = ['physical', 'fire', 'cold', 'lightning', 'poison', 'arcane'] as const;

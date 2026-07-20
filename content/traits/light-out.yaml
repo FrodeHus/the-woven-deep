@@ -14,3 +14,11 @@ entries:
       A traveller's sense for ground already walked; the map you have earned stays with
       you when the light dies, though it shows you nothing new.
     modifiers: { lightOutMemoryPersists: 1 }
+  - kind: trait
+    id: trait.dungeon-sense
+    name: Dungeon Sense
+    tags: [chargen]
+    description: >-
+      You map the dark by touch, breath, and echo; what your hands find in the black
+      stays charted forever. Overrides the rule that dark discoveries fade unremembered.
+    modifiers: { lightOutCommitsMemory: 1 }

@@ -28,6 +28,13 @@ export interface RefreshKnowledgeInput {
   readonly hero: PerceptionHero;
   readonly actors: ReadonlyMap<OpaqueId, Readonly<{ x: number; y: number }>>;
   readonly additionalLights?: readonly LightSource[];
+  /**
+   * The `trait.dungeon-sense`-style knob: when `commitsMemory` is true and the hero's own cell
+   * is dark, the hero's light-out bubble (Chebyshev `revealRadius` around the hero) is committed
+   * to `FloorKnowledge` as terrain, in addition to the normal illumination-gated commit. Omit
+   * (or leave `commitsMemory` false) to leave the commit path exactly as before.
+   */
+  readonly lightOutMemory?: Readonly<{ commitsMemory: boolean; revealRadius: number }>;
 }
 
 export interface RefreshedPerception {
@@ -69,10 +76,29 @@ export function refreshKnowledge(input: RefreshKnowledgeInput): RefreshedPercept
     radius: input.hero.sightRadius,
   });
   const observed: { index: number; tile: TileId }[] = [];
+  const observedIndexes = new Set<number>();
 
   for (let index = 0; index < cellCount; index += 1) {
     if (isPerceivedCell(visibilityWords, illumination, index)) {
       observed.push({ index, tile: input.floor.tiles[index]! });
+      observedIndexes.add(index);
+    }
+  }
+
+  if (input.lightOutMemory?.commitsMemory) {
+    const heroIndex = input.hero.y * input.floor.width + input.hero.x;
+    const heroInDark = (illumination.intensity[heroIndex] ?? 0) <= 0;
+    if (heroInDark) {
+      for (let index = 0; index < cellCount; index += 1) {
+        if (observedIndexes.has(index)) continue;
+        const x = index % input.floor.width;
+        const y = Math.floor(index / input.floor.width);
+        const distance = Math.max(Math.abs(x - input.hero.x), Math.abs(y - input.hero.y));
+        if (distance <= input.lightOutMemory.revealRadius) {
+          observed.push({ index, tile: input.floor.tiles[index]! });
+          observedIndexes.add(index);
+        }
+      }
     }
   }
 

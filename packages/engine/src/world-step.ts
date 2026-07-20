@@ -38,6 +38,7 @@ import {
 } from './merchant-behavior.js';
 import { advanceToNextReady, READINESS_THRESHOLD, selectReadyActor } from './scheduler.js';
 import { compareCodeUnits } from './stable-json.js';
+import { deriveRunActorStats } from './stats.js';
 import { isTownFloorActive } from './town-floor.js';
 
 export interface WorldStepResult {
@@ -64,7 +65,15 @@ function refreshHeroKnowledge(state: ActiveRun, content: CompiledContentPack): A
   const hero = heroActor(state);
   const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
   if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
-  const knowledge = heroFloorPerception({ state, content }).knowledge;
+  const derived = deriveRunActorStats({ state, content, actor: hero });
+  const knowledge = heroFloorPerception({
+    state,
+    content,
+    lightOutMemory: {
+      commitsMemory: derived.lightOutCommitsMemory > 0,
+      revealRadius: derived.lightOutRevealRadius,
+    },
+  }).knowledge;
   return {
     ...state,
     floors: state.floors.map((candidate) =>

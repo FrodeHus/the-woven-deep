@@ -22,6 +22,7 @@ function fixture(): ActorDerivationInput {
       disarm: { agility: 1, wits: 1 },
       lightOutRevealRadius: { base: 1 },
       lightOutMemoryPersists: { base: 0 },
+      lightOutCommitsMemory: { base: 0 },
     },
     equipmentModifiers: [
       {
@@ -54,6 +55,7 @@ describe('deriveActorStats', () => {
       disarm: 4,
       lightOutRevealRadius: 1,
       lightOutMemoryPersists: 0,
+      lightOutCommitsMemory: 0,
     });
     expect(input).toEqual(before);
   });

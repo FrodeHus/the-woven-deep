@@ -46,7 +46,7 @@ describe('bundled content', () => {
       achievement: 2,
       class: 4,
       background: 3,
-      trait: 7,
+      trait: 8,
     });
     expect(
       pack.entries.filter((entry) => entry.kind === 'class' && (entry as any).playable),
