@@ -26,7 +26,7 @@ export const PORTRAIT_GLYPHS = ['@', '@·gold', '@·ember', '@·mist', '@·moss'
  * `OptionRow`'s `glyphColor` prop (an inline `color` style) by the identity picker and the hero
  * record portrait tile. */
 export const PORTRAIT_GLYPH_COLOR: Readonly<Record<(typeof PORTRAIT_GLYPHS)[number], string>> = {
-  '@': '#dfe3ef',
+  '@': 'var(--color-accent)',
   '@·gold': '#e8c879',
   '@·ember': '#d97757',
   '@·mist': '#8fb3c7',

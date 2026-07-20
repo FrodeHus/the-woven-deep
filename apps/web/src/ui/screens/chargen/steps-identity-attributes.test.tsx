@@ -71,6 +71,10 @@ describe('IdentityStep', () => {
     });
   });
 
+  it('tints the accent-less base portrait with the app accent colour', () => {
+    expect(PORTRAIT_GLYPH_COLOR['@']).toBe('var(--color-accent)');
+  });
+
   it('dispatches set-onboarding-enabled when the checkbox is toggled', async () => {
     const user = userEvent.setup();
     const dispatch = vi.fn();
