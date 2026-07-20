@@ -1,13 +1,13 @@
 import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 import { CONTENT_SCHEMA_VERSION } from '@woven-deep/content';
-import { migrateDatabase } from '../src/database.js';
+import { runMigrations } from '../src/database.js';
 import { ContentPackRepository } from '../src/content-repository.js';
 
 describe('ContentPackRepository', () => {
   it('deduplicates immutable packs by hash', () => {
     const database = new Database(':memory:');
-    migrateDatabase(database);
+    runMigrations(database);
     const repository = new ContentPackRepository(database);
     const pack = {
       schemaVersion: CONTENT_SCHEMA_VERSION,
@@ -27,7 +27,7 @@ describe('ContentPackRepository', () => {
 
   it('rejects unsupported stored packs before returning entries', () => {
     const database = new Database(':memory:');
-    migrateDatabase(database);
+    runMigrations(database);
     database.prepare('insert into content_packs(hash, schema_version, content_json, created_at) values (?, ?, ?, ?)')
       .run('d'.repeat(64), 1, JSON.stringify({ schemaVersion: 1, hash: 'd'.repeat(64), entries: [] }), new Date().toISOString());
     const repository = new ContentPackRepository(database);

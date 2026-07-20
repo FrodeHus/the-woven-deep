@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { registerAuthRoutes, type AuthBundle } from './routes/auth.js';
 import { registerProfileRoutes } from './routes/profile.js';
+import { registerDevRoutes } from './routes/dev.js';
 import { decorateProfileId } from './auth/http-guards.js';
 
 function isReservedApiUrl(url: string): boolean {
@@ -45,6 +46,12 @@ export function buildApp(input: {
     decorateProfileId(app);
     registerAuthRoutes(app, auth);
     registerProfileRoutes(app, auth);
+    // Dev mode mirrors the absence of a real mail transport: without Mailgun configured,
+    // magic links are only ever delivered through this endpoint, so it must be reachable.
+    const isDevMode = auth.config.mailgun === null;
+    if (isDevMode) {
+      registerDevRoutes(app, auth);
+    }
   }
   if (input.webDistDir) {
     void app.register(fastifyStatic, { root: input.webDistDir, wildcard: false });

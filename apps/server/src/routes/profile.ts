@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { AuthBundle } from './auth.js';
 import { requireOrigin, requireSession, requireCsrf } from '../auth/http-guards.js';
-import { normalizeEmail } from '../auth/email.js';
 
 export function registerProfileRoutes(app: FastifyInstance, auth: AuthBundle): void {
   const sessionPreHandler = requireSession(auth.session);
@@ -52,19 +51,4 @@ export function registerProfileRoutes(app: FastifyInstance, auth: AuthBundle): v
       reply.send({ ok: true });
     },
   );
-
-  if (auth.config.mailgun === null) {
-    app.get('/api/dev/last-login-link', async (request, reply) => {
-      const query = request.query as { email?: unknown };
-      const email = typeof query.email === 'string' ? query.email : '';
-      const link = auth.transport.lastLinkFor?.(normalizeEmail(email));
-
-      if (!link) {
-        reply.code(404).send({ error: 'not_found' });
-        return;
-      }
-
-      reply.send({ link });
-    });
-  }
 }

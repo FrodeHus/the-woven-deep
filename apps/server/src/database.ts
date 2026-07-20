@@ -105,9 +105,6 @@ export function runMigrations(db: Database.Database): void {
   }
 }
 
-/** @deprecated Use {@link runMigrations}; kept as an alias for existing call sites. */
-export const migrateDatabase = runMigrations;
-
 export function openDatabase(path: string): Database.Database {
   const database = new Database(path);
   database.pragma('journal_mode = WAL');
