@@ -22,7 +22,7 @@ export async function runServerStartup(input: {
   const lifecycle = registerShutdownHandlers({
     database: input.database,
     signals: input.signals,
-    onError: input.onShutdownError,
+    onError: (error) => input.onShutdownError(error),
   });
 
   try {

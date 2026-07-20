@@ -18,7 +18,7 @@ function withConclusion(run: ActiveRun, conclusion: ActiveRun['conclusion']): Ac
   return { ...run, conclusion };
 }
 
-function concludedRun(content: CompiledContentPack): ActiveRun {
+function concludedRun(_content: CompiledContentPack): ActiveRun {
   const base = createDemoRun();
   const withMetricsSet = withMetrics(base, {
     deepestDepth: 4,

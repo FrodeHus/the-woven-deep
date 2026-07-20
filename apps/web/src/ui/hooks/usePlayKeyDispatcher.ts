@@ -72,5 +72,15 @@ export function usePlayKeyDispatcher({
     );
     window.addEventListener('keydown', dispatcher);
     return () => window.removeEventListener('keydown', dispatcher);
-  }, [session, houseOpen, trade, pendingDecision, overlay, onOpenOverlay, onCloseOverlay, keymap]);
+  }, [
+    session,
+    houseOpen,
+    trade,
+    pendingDecision,
+    overlay,
+    onOpenOverlay,
+    onCloseOverlay,
+    keymap,
+    activeHintRef,
+  ]);
 }

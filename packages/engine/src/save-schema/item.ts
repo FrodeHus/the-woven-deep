@@ -3,7 +3,6 @@ import {
   heroName,
   identifier,
   nullableIdentifier,
-  positiveQuantity,
   safeNonNegative,
 } from './primitives.js';
 import { tile } from './floor.js';

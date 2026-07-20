@@ -8,8 +8,6 @@ import {
 } from '../../session/projection-view.js';
 import type { PanelProps } from './types.js';
 
-export type ProjectedThreatActor = ActorView;
-
 function threatActors(snapshot: SessionSnapshot): readonly ActorView[] {
   return actorsOf(snapshot.projection).filter((actor) => actor.disposition === 'hostile');
 }

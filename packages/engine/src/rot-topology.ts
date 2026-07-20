@@ -61,6 +61,7 @@ export function createRotTopology(
         corridorLength: [2, 12],
         timeLimit: Number.MAX_SAFE_INTEGER,
       });
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- tsc needs the assertion to narrow the literal `0` (number) to the branded TileId the array is typed as.
       const tiles = Array.from({ length: width * height }, () => 0 as TileId);
       let outsideMask = false;
       digger.create((x, y, value) => {

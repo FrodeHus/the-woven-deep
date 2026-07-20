@@ -136,7 +136,9 @@ function validateVisibility(words: readonly number[], cellCount: number): void {
     throw new RangeError(`visibility word length must be ${expectedLength}`);
   }
   for (let index = 0; index < words.length; index += 1) {
-    const word = words[index];
+    // `Array.isArray` above widens the declared `readonly number[]` to `any[]`; read each element
+    // back as `unknown` and validate it defensively.
+    const word: unknown = words[index];
     if (!Number.isInteger(word) || (word as number) < 0 || (word as number) > UNSIGNED_32_BIT_MAX) {
       throw new TypeError(`visibility word ${index} must be an unsigned 32-bit integer`);
     }

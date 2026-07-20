@@ -221,7 +221,7 @@ describe('compileContentDirectory', () => {
     [
       'duplicate faction service ID',
       compactFaction.replace(
-        'serviceIds: \[merchant-service.identify\]',
+        'serviceIds: [merchant-service.identify]',
         'serviceIds: [merchant-service.identify, merchant-service.identify]',
       ),
       /duplicate service ID/,

@@ -1,15 +1,9 @@
 export type RgbTuple = readonly [number, number, number];
 
 /**
- * `.cell-remembered`'s static color in `styles.css`, reproduced as a plain constant so this module
- * -- and its tests -- can reason about the remembered floor without parsing the stylesheet. Do not
- * let the two drift: if `.cell-remembered`'s color literal ever changes, update this too.
- */
-const REMEMBERED_RGB: RgbTuple = [0x4b, 0x52, 0x6b];
-
-/**
  * The floor a visible cell's color blends up from at zero intensity. Chosen so its relative
- * luminance clears `REMEMBERED_RGB`'s by a healthy margin (roughly 1.9x) -- this is the color-
+ * luminance clears the remembered floor's (`.cell-remembered` in `styles.css`, roughly
+ * `[0x4b, 0x52, 0x6b]`) by a healthy margin (roughly 1.9x) -- this is the color-
  * channel half of the "dark ring" bug fix: 5C already floored `.cell-visible`'s OPACITY above the
  * remembered floor (`styles.css`'s `calc(0.62 + 0.38 * var(--light))`), but left the COLOR
  * (`--fg`, the engine's per-cell `tint`) free to go near-black at the light-radius rim, where

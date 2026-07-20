@@ -166,7 +166,7 @@ export function normalizeFallenHero(
 ): NormalizedFallenHero {
   const fallback = monster(input.content, input.template);
   const attributes = Object.fromEntries(
-    Object.entries(input.standing.attributes).map(([key, value]) => [
+    (Object.entries(input.standing.attributes) as [string, number][]).map(([key, value]) => [
       key,
       clamp(value, 0, input.template.attributeMaximum),
     ]),

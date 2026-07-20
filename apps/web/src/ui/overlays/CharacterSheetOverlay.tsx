@@ -1,5 +1,5 @@
-import { Fragment, type CSSProperties, type JSX, type ReactNode } from 'react';
-import { ATTRIBUTE_ORDER, type DerivedStatFormula, type DerivedStatName } from '@woven-deep/engine';
+import { Fragment, type JSX, type ReactNode } from 'react';
+import { ATTRIBUTE_ORDER, type DerivedStatFormula } from '@woven-deep/engine';
 import { useSessionCtx } from '../providers.js';
 import {
   ATTRIBUTE_LABELS,

@@ -3,7 +3,6 @@ import {
   type DiscoveryProtectionBonus,
   type DiscoveryProtectionUpdate,
   type HeartLineageRecord,
-  type LifetimeDeltas,
   type LifetimeState,
   type OpaqueId,
   type RunMetrics,
@@ -80,7 +79,7 @@ function deepFreezeCopy<T>(value: T): T {
     return value;
   }
   if (Array.isArray(value)) {
-    const cloned = value.map((item) => deepFreezeCopy(item)) as T;
+    const cloned = value.map((item: unknown) => deepFreezeCopy(item)) as T;
     return Object.freeze(cloned);
   }
   const cloned = {} as T;

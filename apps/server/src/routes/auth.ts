@@ -46,7 +46,8 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthBundle): void
 
   app.get('/api/auth/verify', async (request, reply) => {
     const query = request.query as { token?: unknown };
-    const result = verify.verify({ token: String(query.token ?? '') });
+    const token = typeof query.token === 'string' ? query.token : '';
+    const result = verify.verify({ token });
 
     if (!result) {
       reply.redirect(`${config.publicUrl}/?auth=failed`, 303);
@@ -73,7 +74,7 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthBundle): void
       return;
     }
 
-    const csrfToken = await reply.generateCsrf();
+    const csrfToken = reply.generateCsrf();
     reply.send({ authenticated: true, email: authenticated.email, csrfToken });
   });
 

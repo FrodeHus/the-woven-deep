@@ -25,7 +25,7 @@ function deepFreezeCopy<T>(value: T): T {
 
   // Arrays: clone and recursively deep-freeze each element
   if (Array.isArray(value)) {
-    const cloned = value.map((item) => deepFreezeCopy(item)) as T;
+    const cloned = value.map((item: unknown) => deepFreezeCopy(item)) as T;
     return Object.freeze(cloned);
   }
 

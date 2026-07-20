@@ -50,7 +50,7 @@ function serializeArray(value: unknown[], ancestors: Set<object>): string {
 }
 
 function serializeObject(value: object, ancestors: Set<object>): string {
-  const prototype = Object.getPrototypeOf(value);
+  const prototype: unknown = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) {
     throw new TypeError('stable JSON objects must be plain');
   }

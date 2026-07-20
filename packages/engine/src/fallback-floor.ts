@@ -143,6 +143,7 @@ export function createFallbackTopology(
   for (let cursor = second; cursor !== -1; cursor = secondSearch.previous[cursor]!)
     path.push(cursor);
   path.reverse();
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- tsc needs the assertion to narrow the literal `0` (number) to the branded TileId the array is typed as.
   const tiles = Array.from({ length: width * height }, () => 0 as TileId);
   for (const index of path) tiles[index] = 1;
 

@@ -14,7 +14,7 @@ function structuralIssuePath(path: readonly PropertyKey[], value: unknown): stri
   const segments = [...path];
   if (segments[0] === 'entries' && typeof segments[1] === 'number' && isRecord(value)) {
     const entries = value.entries;
-    const entry = Array.isArray(entries) ? entries[segments[1]] : undefined;
+    const entry: unknown = Array.isArray(entries) ? entries[segments[1]] : undefined;
     const parsedId = isRecord(entry) ? stableIdSchema.safeParse(entry.id) : null;
     if (parsedId?.success) {
       segments[1] = parsedId.data;

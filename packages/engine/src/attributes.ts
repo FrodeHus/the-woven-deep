@@ -23,7 +23,8 @@ export type DerivedActorStats = Readonly<Record<DerivedStatName, number>>;
 export function populationDerivedStatModifier(
   modifiers: PopulationCombatModifiers,
 ): DerivedStatModifier {
-  for (const [name, value] of Object.entries(modifiers)) safeInteger(`population ${name}`, value);
+  for (const [name, value] of Object.entries(modifiers) as [string, number][])
+    safeInteger(`population ${name}`, value);
   return Object.freeze({
     meleeAccuracy: modifiers.accuracy,
     rangedAccuracy: modifiers.accuracy,
@@ -49,7 +50,8 @@ function checkedMultiply(label: string, left: number, right: number): number {
 }
 
 export function deriveActorStats(input: ActorDerivationInput): DerivedActorStats {
-  for (const [attribute, value] of Object.entries(input.attributes)) safeInteger(attribute, value);
+  for (const [attribute, value] of Object.entries(input.attributes) as [string, number][])
+    safeInteger(attribute, value);
   const result = Object.fromEntries(
     DERIVED_STAT_NAMES.map((statName) => {
       const formula = input.formulas[statName] as DerivedStatFormula | undefined;

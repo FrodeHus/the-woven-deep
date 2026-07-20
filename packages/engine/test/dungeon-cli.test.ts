@@ -29,6 +29,7 @@ describe('dungeon demo CLI', () => {
     );
     for (const glyph of ['#', '.', '<', '>', '+', 'O']) expect(first.stdout).toContain(glyph);
     expect(first.stdout).toMatch(/[%,:;={}o]/);
+    // eslint-disable-next-line no-control-regex -- intentionally matches the ANSI ESC (\x1b) control byte to assert the CLI emits no color-escape sequences.
     expect(first.stdout).not.toMatch(/\x1b\[/);
     expect(first.stdout).not.toMatch(/slot\.|random|rng/i);
 

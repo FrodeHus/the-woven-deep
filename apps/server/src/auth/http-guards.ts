@@ -89,7 +89,7 @@ export function requireCsrf(
   app: FastifyInstance,
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
   return async (request, reply) => {
-    await app.csrfProtection(request, reply, () => undefined);
+    app.csrfProtection(request, reply, () => undefined);
   };
 }
 

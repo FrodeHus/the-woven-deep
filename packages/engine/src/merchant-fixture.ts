@@ -1,5 +1,5 @@
 import type { CompiledContentPack, MerchantEncounterContentEntry } from '@woven-deep/content';
-import { heroPerception, type ActorState } from './actor-model.js';
+import { heroPerception } from './actor-model.js';
 import { validateContentBoundRun } from './content-bound-validation.js';
 import { createDemoRun } from './fixture.js';
 import { allocateIdentificationMap } from './identification.js';

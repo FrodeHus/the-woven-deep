@@ -26,6 +26,7 @@ import { SETTINGS_KEY } from '../src/session/settings.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 
 vi.mock('@woven-deep/engine', async (importOriginal) => {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vitest's importOriginal needs the whole module's type; a top-level `import type * as` cannot be used as a type (TS2709) and a value namespace used only in `typeof` is itself flagged, so the inline `typeof import()` is the only working form.
   const actual = await importOriginal<typeof import('@woven-deep/engine')>();
   return { ...actual, heroFromChoices: vi.fn(actual.heroFromChoices) };
 });

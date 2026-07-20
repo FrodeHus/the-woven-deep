@@ -100,13 +100,11 @@ describe('auth routes', () => {
   let app: FastifyInstance;
   let bundle: AuthBundle;
   let database: Database.Database;
-  let transport: ReturnType<typeof fakeTransport>;
 
   beforeEach(() => {
     const built = makeBundle();
     bundle = built.bundle;
     database = built.database;
-    transport = built.transport;
     app = buildApp({ pack, auth: bundle });
   });
 

@@ -13,6 +13,7 @@ function createDevMailTransport(): MailTransport {
   const links = new Map<string, string>();
 
   return {
+    // eslint-disable-next-line @typescript-eslint/require-await -- the MailTransport interface requires sendLoginLink to return a Promise; the dev transport resolves synchronously with no I/O.
     async sendLoginLink({ email, link }) {
       links.set(normalizeEmail(email), link);
     },

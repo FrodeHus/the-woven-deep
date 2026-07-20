@@ -23,7 +23,7 @@ export interface HallScreenProps {
 }
 
 type OutcomeFilter = 'all' | CompletionType;
-type ClassFilter = 'all' | string;
+type ClassFilter = string;
 
 const OUTCOME_ORDER: readonly CompletionType[] = ['broke-cycle', 'became-heart', 'refused', 'died'];
 

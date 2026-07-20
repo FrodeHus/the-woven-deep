@@ -411,7 +411,7 @@ function moveHeroToFloor(state: ActiveRun, floorId: string): ActiveRun {
 function prepareBoundary(
   state: ActiveRun,
   boundary: RunRecordsBoundary,
-  pack: CompiledContentPack,
+  _pack: CompiledContentPack,
 ): ActiveRun {
   if (boundary === 'before-group-fight') {
     const group = state.populations.find(

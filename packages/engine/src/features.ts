@@ -1,6 +1,6 @@
 import { actorById } from './actor-model.js';
 import type { DoorFeature, DungeonFeature } from './feature-model.js';
-import { tileIndex, type ActiveRun, type OpaqueId, type TileId } from './model.js';
+import { tileIndex, type ActiveRun, type DomainEvent, type OpaqueId, type TileId } from './model.js';
 import type { CompiledContentPack, TrapContentEntry } from '@woven-deep/content';
 import { rollDie } from './random.js';
 import { applyEffectResult, resolveEffectSequence, withRngStream } from './effects.js';
@@ -183,9 +183,9 @@ function discoveryAttempt(
     eventId: OpaqueId;
     passive: boolean;
   }>,
-): Readonly<{ run: ActiveRun; events: readonly import('./model.js').DomainEvent[] }> {
+): Readonly<{ run: ActiveRun; events: readonly DomainEvent[] }> {
   const actor = actorById(input.run, input.actorId)!;
-  const events: import('./model.js').DomainEvent[] = [];
+  const events: DomainEvent[] = [];
   const features = input.run.features.map((feature): DungeonFeature => {
     if (
       feature.type === 'door' ||
@@ -231,7 +231,7 @@ export function applyPassiveDiscovery(
     illumination: number;
     eventId: OpaqueId;
   }>,
-): Readonly<{ run: ActiveRun; events: readonly import('./model.js').DomainEvent[] }> {
+): Readonly<{ run: ActiveRun; events: readonly DomainEvent[] }> {
   const actor = actorById(input.run, input.actorId)!;
   return discoveryAttempt({
     ...input,
@@ -249,7 +249,7 @@ export function searchFeatures(
     illumination: number;
     eventId: OpaqueId;
   }>,
-): Readonly<{ run: ActiveRun; events: readonly import('./model.js').DomainEvent[] }> {
+): Readonly<{ run: ActiveRun; events: readonly DomainEvent[] }> {
   const actor = actorById(input.run, input.actorId)!;
   const result = discoveryAttempt({
     ...input,
@@ -292,13 +292,13 @@ export function triggerTrap(
     featureId: OpaqueId;
     eventId: OpaqueId;
   }>,
-): Readonly<{ run: ActiveRun; events: readonly import('./model.js').DomainEvent[] }> {
+): Readonly<{ run: ActiveRun; events: readonly DomainEvent[] }> {
   const feature = input.run.features.find((candidate) => candidate.featureId === input.featureId);
   if (!feature || feature.type !== 'trap' || feature.state !== 'armed')
     throw new Error('trap is unavailable');
   const definition = trapDefinition(input.content, feature.contentId);
   let run = input.run;
-  const events: import('./model.js').DomainEvent[] = [];
+  const events: DomainEvent[] = [];
   if (!discovered(feature, input.actorId)) {
     const revealed = reveal(feature, input.actorId);
     run = {
@@ -360,7 +360,7 @@ export function disarmTrap(
     featureId: OpaqueId;
     eventId: OpaqueId;
   }>,
-): Readonly<{ run: ActiveRun; events: readonly import('./model.js').DomainEvent[] }> {
+): Readonly<{ run: ActiveRun; events: readonly DomainEvent[] }> {
   const actor = actorById(input.run, input.actorId);
   const feature = input.run.features.find((candidate) => candidate.featureId === input.featureId);
   if (
@@ -396,7 +396,7 @@ export function disarmTrap(
         : definition.disarmOutcomes.failure;
     const rolledRun = withRngStream(input.run, 'effects', rolled.state);
     if (mode === 'trigger') return triggerTrap({ ...input, run: rolledRun });
-    const events: import('./model.js').DomainEvent[] = [
+    const events: DomainEvent[] = [
       {
         type: 'trap.disarm-failed',
         eventId: input.eventId,

@@ -30,7 +30,6 @@ export function useHallRepository(
       }
       throw thrown;
     }
-     
-    // reconstruction trigger, not a value read inside the memo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- storageEpoch is intentionally a dependency to force reconstruction after a session wipe, even though it is not read inside the memo.
   }, [storage, storageEpoch]);
 }

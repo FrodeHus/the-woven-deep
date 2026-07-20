@@ -14,7 +14,6 @@ let pack: CompiledContentPack;
 const SEED: Uint32State = [11, 22, 33, 44];
 
 const CARAVAN_GUARD = 'background.caravan-guard';
-const DEEP_MINER = 'background.deep-miner';
 const KEEN_EYED = 'trait.keen-eyed';
 const SURE_FOOTED = 'trait.sure-footed';
 const STEADY_HANDS = 'trait.steady-hands';

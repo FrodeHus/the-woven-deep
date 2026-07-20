@@ -21,9 +21,11 @@ await runServerStartup({
   listenOptions: { host: config.host, port: config.port },
   signals: {
     once(signal, listener) {
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises -- process's signal-listener slot expects a void return; handleSignal owns its own rejection handling, and the identical reference must reach process.off for symmetric deregistration, so it is registered directly.
       process.once(signal, listener);
     },
     off(signal, listener) {
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises -- mirror of `once`: the same promise-returning reference must be passed through so process.off removes the exact listener process.once registered.
       process.off(signal, listener);
     },
   },

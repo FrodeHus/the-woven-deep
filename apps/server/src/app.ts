@@ -28,12 +28,12 @@ export function buildApp(input: {
   auth?: AuthBundle;
 }): FastifyInstance {
   const app = Fastify({ logger: false });
-  app.get('/api/health', async () => ({
+  app.get('/api/health', () => ({
     status: 'ok' as const,
     contentHash: input.pack.hash,
     entries: input.pack.entries.length,
   }));
-  app.get('/api/content/guest', async () => input.pack);
+  app.get('/api/content/guest', () => input.pack);
   if (input.auth) {
     const auth = input.auth;
     // Registration is queued (Fastify's encapsulation resolves the plugin tree on

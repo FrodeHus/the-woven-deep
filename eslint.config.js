@@ -34,7 +34,13 @@ export default tseslint.config(
         { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
       ],
       '@typescript-eslint/no-import-type-side-effects': 'error',
-      '@typescript-eslint/switch-exhaustiveness-check': 'error',
+      // A `default` arm counts as exhaustive: this codebase deliberately uses `default` as the
+      // catch-all for large public-event unions (renderers, metric folds) where enumerating every
+      // member would only duplicate the fallback. Switches without a default still get full checking.
+      '@typescript-eslint/switch-exhaustiveness-check': [
+        'error',
+        { considerDefaultExhaustiveForUnions: true },
+      ],
       '@typescript-eslint/no-unused-vars': [
         'error',
         {

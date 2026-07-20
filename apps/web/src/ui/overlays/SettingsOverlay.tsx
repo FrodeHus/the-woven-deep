@@ -266,8 +266,8 @@ export function SettingsOverlay({
                 {isCapturing ? (
                   <Input
                     aria-label={`Press a key to rebind ${ACTION_LABELS[action]}`}
-                    // eslint-disable-next-line jsx-a11y/no-autofocus -- capture must move focus to
-                    // this field the instant it appears so the very next keydown lands here.
+                    // autoFocus: capture must move focus to this field the instant it appears so
+                    // the very next keydown lands here.
                     autoFocus
                     readOnly
                     value="Press a key…"

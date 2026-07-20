@@ -59,7 +59,9 @@ function validateTiles(input: IlluminationInput): number {
     throw new RangeError(`tile length must be ${cellCount}`);
   }
   for (let index = 0; index < cellCount; index += 1) {
-    const tile = input.tiles[index];
+    // `Array.isArray` above widens the declared `readonly TileId[]` to `any[]`; read each element
+    // back as `unknown` and validate it defensively.
+    const tile: unknown = input.tiles[index];
     if (!Number.isInteger(tile) || (tile as number) < 0 || (tile as number) > TILE_ID_MAX) {
       throw new TypeError(`tile ${index} must be a valid tile ID`);
     }
@@ -143,7 +145,9 @@ function validateLights(input: IlluminationInput): readonly ResolvedLight[] {
   if (!Array.isArray(input.lights)) throw new TypeError('lights must be an array');
   const records: Record<string, unknown>[] = [];
   for (let index = 0; index < input.lights.length; index += 1) {
-    const source = input.lights[index];
+    // `Array.isArray` above widens the declared `readonly LightSource[]` to `any[]`; read each
+    // element back as `unknown` before the structural checks below.
+    const source: unknown = input.lights[index];
     if (!isRecord(source)) throw new TypeError('light source must be an object');
     records.push(source);
   }

@@ -62,7 +62,7 @@ function conditionReferenceIssues(
       issue(
         file,
         `${path}.parameters.conditionId`,
-        `condition reference ${conditionId} resolves to ${target.kind}`,
+        `condition reference ${String(conditionId)} resolves to ${target.kind}`,
       ),
     ];
   }
