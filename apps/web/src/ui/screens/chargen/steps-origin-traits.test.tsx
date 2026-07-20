@@ -95,6 +95,20 @@ describe('TraitsStep', () => {
     expect(selected).not.toHaveAttribute('aria-disabled', 'true');
   });
 
+  it('renders an at-cap unselected trait as unavailable, not locked (no unlock-hint marker)', () => {
+    const dispatch = vi.fn();
+    render(
+      <TraitsStep
+        state={stubState({ traitIds: [KEEN_EYED, SURE_FOOTED] })}
+        pack={pack}
+        dispatch={dispatch}
+      />,
+    );
+    const unselected = screen.getByRole('option', { name: /Steady hands/ });
+    expect(unselected.textContent).not.toContain('⊘');
+    expect(unselected.textContent).toContain('2/2 traits picked');
+  });
+
   it('does not dispatch toggle-trait when clicking an aria-disabled row at the cap', async () => {
     const user = userEvent.setup();
     const dispatch = vi.fn();

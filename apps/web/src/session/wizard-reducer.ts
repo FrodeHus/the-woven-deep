@@ -17,8 +17,32 @@ import {
 } from '@woven-deep/engine';
 import { backgroundById, balanceEntry, classById, traitById } from './pack-queries.js';
 
-/** Portrait glyph ids; `apps/web/src/styles.css` maps each id to an accent color for rendering. */
+/** Portrait glyph ids. */
 export const PORTRAIT_GLYPHS = ['@', '@·gold', '@·ember', '@·mist', '@·moss'] as const;
+
+/** Accent colour for each `PORTRAIT_GLYPHS` id, single-sourced right next to that constant so the
+ * two can't drift -- a `Record` keyed by `(typeof PORTRAIT_GLYPHS)[number]` fails to typecheck if
+ * an id is added to or removed from `PORTRAIT_GLYPHS` without a matching colour. Fed into
+ * `OptionRow`'s `glyphColor` prop (an inline `color` style) by the identity picker and the hero
+ * record portrait tile. */
+export const PORTRAIT_GLYPH_COLOR: Readonly<Record<(typeof PORTRAIT_GLYPHS)[number], string>> = {
+  '@': '#dfe3ef',
+  '@·gold': '#e8c879',
+  '@·ember': '#d97757',
+  '@·mist': '#8fb3c7',
+  '@·moss': '#7a9b6e',
+};
+
+/** Safe lookup into `PORTRAIT_GLYPH_COLOR` for a `portraitGlyph` value that has already been
+ * validated against `PORTRAIT_GLYPHS` (e.g. `WizardState.portraitGlyph`, typed as a plain
+ * `string` for serialization). Falls back to the default `@` colour for an unrecognized id. */
+export function portraitGlyphColor(glyph: string): string {
+  const glyphs: readonly string[] = PORTRAIT_GLYPHS;
+  const index = glyphs.indexOf(glyph);
+  return index === -1
+    ? PORTRAIT_GLYPH_COLOR[PORTRAIT_GLYPHS[0]]
+    : PORTRAIT_GLYPH_COLOR[PORTRAIT_GLYPHS[index]!];
+}
 
 const MAX_TRAITS = 2;
 

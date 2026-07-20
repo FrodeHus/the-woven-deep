@@ -6,7 +6,12 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import { ATTRIBUTE_ORDER, rollAttributes, type Uint32State } from '@woven-deep/engine';
-import { initialWizardState, type WizardState } from '../../../session/wizard-reducer.js';
+import {
+  initialWizardState,
+  PORTRAIT_GLYPH_COLOR,
+  wizardReduce,
+  type WizardState,
+} from '../../../session/wizard-reducer.js';
 import { HeroRecord } from './HeroRecord.js';
 
 let pack: CompiledContentPack;
@@ -86,6 +91,30 @@ describe('HeroRecord', () => {
     const state = stubState();
     render(<HeroRecord state={state} pack={pack} onWeave={vi.fn()} canWeave={false} />);
     expect(screen.getByRole('button', { name: /WEAVE THE HERO/ })).toBeDisabled();
+  });
+
+  it('tints the portrait tile with the selected glyph colour, no class picked', () => {
+    const state = wizardReduce(
+      stubState({ classId: null, kitId: null }),
+      { type: 'set-portrait', glyph: '@·ember' },
+      { pack, seed: SEED },
+    );
+    render(<HeroRecord state={state} pack={pack} onWeave={vi.fn()} canWeave={false} />);
+    expect(screen.getByTestId('hero-record-portrait')).toHaveStyle({
+      color: PORTRAIT_GLYPH_COLOR['@·ember'],
+    });
+  });
+
+  it('tints the portrait tile with a different colour for a different selected glyph', () => {
+    const state = wizardReduce(
+      stubState({ classId: null, kitId: null }),
+      { type: 'set-portrait', glyph: '@·moss' },
+      { pack, seed: SEED },
+    );
+    render(<HeroRecord state={state} pack={pack} onWeave={vi.fn()} canWeave={false} />);
+    expect(screen.getByTestId('hero-record-portrait')).toHaveStyle({
+      color: PORTRAIT_GLYPH_COLOR['@·moss'],
+    });
   });
 
   it('renders a blinking caret when the name is empty', () => {
