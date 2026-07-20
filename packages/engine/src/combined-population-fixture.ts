@@ -138,6 +138,9 @@ export function createCombinedPopulationDemoRun(
     items: [...run.items, ...placement.createdItems].sort((left, right) =>
       compareCodeUnits(left.itemId, right.itemId),
     ),
+    features: [...run.features, ...placement.createdFeatures].sort((left, right) =>
+      compareCodeUnits(left.featureId, right.featureId),
+    ),
     floors: run.floors.map((candidate) =>
       candidate.floorId === placement.floor.floorId ? placement.floor : candidate,
     ),

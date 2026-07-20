@@ -14,6 +14,8 @@ import {
   createDemoContentPack,
   createDemoRun,
   createUnknownKnowledge,
+  decodeActiveRun,
+  encodeActiveRun,
   placeFloorPopulations,
   placePopulation,
   rollDie,
@@ -1452,5 +1454,259 @@ describe('vault item slot consumption', () => {
     expect(second.status).toBe('placed');
     if (second.status !== 'placed') return;
     expect(second.createdItems).toHaveLength(0);
+  });
+});
+
+describe('vault door/chest feature slot spawn', () => {
+  function featureCacheVault(id: string): VaultContentEntry {
+    return {
+      kind: 'vault',
+      id,
+      name: 'Door Chest Test',
+      tags: [],
+      minDepth: 1,
+      maxDepth: 20,
+      rarity: 'common',
+      weight: 1,
+      maxPerFloor: 1,
+      margin: 0,
+      transforms: { rotations: [0], reflectHorizontal: false },
+      layout: ['DC'],
+      legend: {
+        D: {
+          terrain: 'closed-door',
+          entrance: false,
+          light: null,
+          slot: {
+            id: 'vault-door',
+            kind: 'door',
+            required: true,
+            tags: [],
+            lootTableId: null,
+            contentId: null,
+            difficulty: 12,
+            keyContentId: 'item.rusty-key',
+          },
+        },
+        C: {
+          terrain: 'floor',
+          entrance: false,
+          light: null,
+          slot: {
+            id: 'vault-chest',
+            kind: 'chest',
+            required: true,
+            tags: [],
+            lootTableId: null,
+            contentId: 'item.test-cache-direct',
+            difficulty: 8,
+          },
+        },
+      },
+      entranceCount: 0,
+      requiredSlotIds: [],
+    };
+  }
+
+  function featureCacheFloor(vaultId: string): FloorSnapshot {
+    const generated = floor({
+      vaults: [
+        {
+          placementId: 'vault-placement.test.1',
+          vaultId,
+          x: 3,
+          y: 2,
+          width: 2,
+          height: 1,
+          rotation: 0,
+          reflected: false,
+          entrances: [],
+        },
+      ],
+      placementSlots: [
+        {
+          slotId: 'slot.test.1.vault-chest',
+          vaultPlacementId: 'vault-placement.test.1',
+          kind: 'chest',
+          required: true,
+          tags: [],
+          x: 4,
+          y: 2,
+        },
+        {
+          slotId: 'slot.test.1.vault-door',
+          vaultPlacementId: 'vault-placement.test.1',
+          kind: 'door',
+          required: true,
+          tags: [],
+          x: 3,
+          y: 2,
+        },
+      ],
+    });
+    const tiles = [...generated.tiles];
+    tiles[2 * generated.width + 3] = 2;
+    return { ...generated, tiles };
+  }
+
+  const directItemEntryForChest: ItemContentEntry = {
+    kind: 'item',
+    id: 'item.test-cache-direct',
+    name: 'Test Cache Direct',
+    tags: [],
+    glyph: '!',
+    color: '#ffffff',
+    category: 'potion',
+    stackLimit: 9,
+    price: 1,
+    rarity: 'common',
+    heirloomEligible: false,
+    minDepth: 1,
+    maxDepth: 10,
+    actionCost: 100,
+    equipment: null,
+    combat: null,
+    light: null,
+    identification: { mode: 'known', poolId: null },
+    effects: [],
+  };
+
+  it('spawns a locked door and a locked chest at their vault slot cells', () => {
+    const encounter = individual('encounter.feature-cache');
+    const vault = featureCacheVault('vault.feature-cache-test');
+    const generated = featureCacheFloor(vault.id);
+
+    const result = placePopulation({
+      run: runFor([encounter]),
+      floor: generated,
+      content: pack([encounter], [vault, directItemEntryForChest]),
+      forcedEncounterId: encounter.id,
+    });
+
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed') return;
+    expect(result.createdFeatures).toEqual([
+      {
+        featureId: 'feature.vault.slot.test.1.vault-chest',
+        type: 'chest',
+        floorId: generated.floorId,
+        x: 4,
+        y: 2,
+        contentId: null,
+        coverTileId: 1,
+        state: 'locked',
+        lock: { difficulty: 8, keyContentId: null },
+        lootTableId: null,
+        lootContentId: 'item.test-cache-direct',
+      },
+      {
+        featureId: 'feature.vault.slot.test.1.vault-door',
+        type: 'door',
+        floorId: generated.floorId,
+        x: 3,
+        y: 2,
+        contentId: null,
+        coverTileId: 2,
+        state: 'locked',
+        lock: { difficulty: 12, keyContentId: 'item.rusty-key' },
+      },
+    ]);
+  });
+
+  it('leaves run.features unchanged on a floor with no door/chest slots', () => {
+    const encounter = individual('encounter.feature-cache-none');
+    const generated = floor({});
+
+    const result = placePopulation({
+      run: runFor([encounter]),
+      floor: generated,
+      content: pack([encounter]),
+      forcedEncounterId: encounter.id,
+    });
+
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed') return;
+    expect(result.createdFeatures).toEqual([]);
+  });
+
+  it('is deterministic across replays: identical features, including featureIds', () => {
+    const encounter = individual('encounter.feature-cache-deterministic');
+    const vault = featureCacheVault('vault.feature-cache-deterministic-test');
+    const generated = featureCacheFloor(vault.id);
+    const run = runFor([encounter]);
+    const content = pack([encounter], [vault, directItemEntryForChest]);
+
+    const first = placePopulation({
+      run,
+      floor: generated,
+      content,
+      forcedEncounterId: encounter.id,
+    });
+    const second = placePopulation({
+      run,
+      floor: generated,
+      content,
+      forcedEncounterId: encounter.id,
+    });
+
+    expect(stableJson(first)).toBe(stableJson(second));
+  });
+
+  it('does not respawn a door/chest feature the run already has at that cell', () => {
+    const encounter = individual('encounter.feature-cache-idempotent');
+    const vault = featureCacheVault('vault.feature-cache-idempotent-test');
+    const generated = featureCacheFloor(vault.id);
+    const run = runFor([encounter]);
+    const content = pack([encounter], [vault, directItemEntryForChest]);
+
+    const first = placePopulation({
+      run,
+      floor: generated,
+      content,
+      forcedEncounterId: encounter.id,
+    });
+    expect(first.status).toBe('placed');
+    if (first.status !== 'placed') return;
+    const runWithFeatures = { ...run, features: [...run.features, ...first.createdFeatures] };
+
+    const second = placePopulation({
+      run: runWithFeatures,
+      floor: generated,
+      content,
+      forcedEncounterId: encounter.id,
+    });
+
+    expect(second.status).toBe('placed');
+    if (second.status !== 'placed') return;
+    expect(second.createdFeatures).toHaveLength(0);
+  });
+
+  it('spawned door/chest features pass the save round-trip and cross-validation', () => {
+    const encounter = individual('encounter.feature-cache-round-trip');
+    const vault = featureCacheVault('vault.feature-cache-round-trip-test');
+    const generated = featureCacheFloor(vault.id);
+    const run = runFor([encounter]);
+
+    const result = placePopulation({
+      run,
+      floor: generated,
+      content: pack([encounter], [vault, directItemEntryForChest]),
+      forcedEncounterId: encounter.id,
+    });
+    expect(result.status).toBe('placed');
+    if (result.status !== 'placed') return;
+
+    const runWithFeatures: ActiveRun = {
+      ...run,
+      floors: [...run.floors, generated].sort((left, right) =>
+        left.floorId < right.floorId ? -1 : left.floorId > right.floorId ? 1 : 0,
+      ),
+      features: [...result.createdFeatures].sort((left, right) =>
+        left.featureId < right.featureId ? -1 : left.featureId > right.featureId ? 1 : 0,
+      ),
+    };
+
+    const encoded = encodeActiveRun(runWithFeatures);
+    expect(decodeActiveRun(encoded)).toEqual(runWithFeatures);
   });
 });
