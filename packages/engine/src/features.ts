@@ -1,6 +1,12 @@
 import { actorById } from './actor-model.js';
 import type { DoorFeature, DungeonFeature } from './feature-model.js';
-import { tileIndex, type ActiveRun, type DomainEvent, type OpaqueId, type TileId } from './model.js';
+import {
+  tileIndex,
+  type ActiveRun,
+  type DomainEvent,
+  type OpaqueId,
+  type TileId,
+} from './model.js';
 import type { CompiledContentPack, TrapContentEntry } from '@woven-deep/content';
 import { rollDie } from './random.js';
 import { applyEffectResult, resolveEffectSequence, withRngStream } from './effects.js';

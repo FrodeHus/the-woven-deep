@@ -1,10 +1,5 @@
 import { z } from 'zod';
-import {
-  heroName,
-  identifier,
-  nullableIdentifier,
-  safeNonNegative,
-} from './primitives.js';
+import { heroName, identifier, nullableIdentifier, safeNonNegative } from './primitives.js';
 import { tile } from './floor.js';
 
 export const legacyItemLocation = z.discriminatedUnion('type', [

@@ -186,8 +186,7 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
     }
   }
   for (const [index, effect] of input.effects.entries()) {
-    const schema =
-      EFFECT_PARAMETER_SCHEMAS[effect.effectId];
+    const schema = EFFECT_PARAMETER_SCHEMAS[effect.effectId];
     if (!schema) throw new TypeError(`unregistered effect ${effect.effectId} at effects.${index}`);
     const parsed = schema.safeParse(effect.parameters);
     if (!parsed.success)

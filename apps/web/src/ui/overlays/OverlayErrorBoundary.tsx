@@ -29,7 +29,6 @@ export class OverlayErrorBoundary extends Component<
   }
 
   public override componentDidCatch(error: unknown, info: ErrorInfo): void {
-     
     console.error('Overlay content failed to render:', error, info.componentStack);
   }
 
