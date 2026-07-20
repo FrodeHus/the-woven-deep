@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { BehaviorId, EffectId } from '../model.js';
 import { damageTypes, diceSchema, stableIdSchema, targetingIds } from './schema.js';
 
 const safePositive = z.number().int().safe().positive();
@@ -23,7 +24,7 @@ export const BEHAVIOR_PARAMETER_SCHEMAS = {
   'behavior.patrol': z.strictObject({
     waypoints: z.array(z.strictObject({ x: safeInteger, y: safeInteger })).min(1),
   }),
-} as const;
+} as const satisfies Record<BehaviorId, z.ZodTypeAny>;
 
 export const NPC_BEHAVIOR_PARAMETER_SCHEMAS = {
   'npc-behavior.travelling-merchant': z.strictObject({}),
@@ -62,10 +63,9 @@ export const EFFECT_PARAMETER_SCHEMAS = {
   'effect.light.toggle': z.strictObject({ enabled: z.boolean() }),
   'effect.item.consume': z.strictObject({ quantity: safePositive }),
   'effect.feature.mutate': z.strictObject({ state: stableIdSchema }),
-} as const;
+} as const satisfies Record<EffectId, z.ZodTypeAny>;
 
-export type BehaviorId = keyof typeof BEHAVIOR_PARAMETER_SCHEMAS;
-export type EffectId = keyof typeof EFFECT_PARAMETER_SCHEMAS;
+export type { BehaviorId, EffectId } from '../model.js';
 
 /** Effects with a well-defined immutable self/arena target contract during boss phase changes. */
 export const BOSS_PHASE_EFFECT_IDS = [

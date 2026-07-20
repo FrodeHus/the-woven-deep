@@ -1,7 +1,6 @@
 /**
- * Shared display-label humanization -- generalizes `HelpOverlay`'s former inline `fixtureLabel`
- * (now deleted in favor of this module) so every authoring-token-to-copy conversion in the client
- * goes through one place.
+ * Shared display-label humanization: every authoring-token-to-copy conversion in the client
+ * goes through this one place.
  */
 
 /** Turns an authoring token (e.g. `fixture.standing-lamp`, `effect.heal`) into readable copy: the

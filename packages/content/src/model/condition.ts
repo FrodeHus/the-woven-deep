@@ -10,6 +10,9 @@ export const CONDITION_TRAIT_IDS = [
 ] as const;
 export type ConditionTraitId = typeof CONDITION_TRAIT_IDS[number];
 
+export const CONDITION_STACKING_MODES = ['replace', 'refresh', 'intensify'] as const;
+export type ConditionStackingMode = typeof CONDITION_STACKING_MODES[number];
+
 export interface ConditionContentEntry extends BaseContentEntry {
   readonly kind: 'condition';
   readonly description: string;
@@ -18,7 +21,7 @@ export interface ConditionContentEntry extends BaseContentEntry {
     | Readonly<{ mode: 'timed'; default: number; maximum: number }>
     | Readonly<{ mode: 'permanent'; default: null; maximum: null }>;
   readonly stacking: Readonly<{
-    mode: 'replace' | 'refresh' | 'intensify';
+    mode: ConditionStackingMode;
     maximumStacks: number;
   }>;
   readonly modifiersPerStack: Readonly<Partial<Record<DerivedStatName, number>>>;

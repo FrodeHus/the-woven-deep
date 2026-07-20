@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import {
-  depthRange, diceSchema, effect, equipmentSlots, itemCategories, itemRarities, presented, rgb,
-  safeInteger, safeNonNegative, safePositive, slugSchema, stableIdSchema,
+  depthRange, diceSchema, effect, equipmentSlots, identificationModes, itemCategories, itemHandedness,
+  itemRarities, presented, rgb, safeInteger, safeNonNegative, safePositive, slugSchema, stableIdSchema,
 } from './common.js';
 
 const equipment = z.strictObject({
   slots: z.array(z.enum(equipmentSlots)).min(1),
-  handedness: z.enum(['one-handed', 'two-handed', 'none']),
+  handedness: z.enum(itemHandedness),
   reservedSlots: z.array(z.enum(equipmentSlots)),
 });
 
@@ -30,7 +30,7 @@ const itemLight = z.strictObject({
 });
 
 const identification = z.strictObject({
-  mode: z.enum(['known', 'shuffled', 'instance']),
+  mode: z.enum(identificationModes),
   poolId: stableIdSchema.nullable(),
 });
 

@@ -1,6 +1,6 @@
 import type {
   CompiledContentPack, ContentEntry, EncounterContentEntry, EncounterModel,
-  ItemContentEntry, MonsterContentEntry,
+  ItemContentEntry,
 } from '@woven-deep/content';
 import type { OpaqueId } from './model.js';
 
@@ -20,14 +20,6 @@ function packIndex(content: CompiledContentPack): Map<string, ContentEntry> {
 
 export function entryById(content: CompiledContentPack, id: OpaqueId): ContentEntry | undefined {
   return packIndex(content).get(id);
-}
-
-export function requireMonster(content: CompiledContentPack, contentId: OpaqueId): MonsterContentEntry {
-  const entry = entryById(content, contentId);
-  if (!entry || entry.kind !== 'monster') {
-    throw new Error(`internal invariant: monster ${contentId} does not exist`);
-  }
-  return entry;
 }
 
 export function requireItem(content: CompiledContentPack, contentId: OpaqueId): ItemContentEntry {

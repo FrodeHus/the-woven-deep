@@ -426,7 +426,7 @@ function IdentifyHarness({ initialRun, onRunChange }: Readonly<{
   );
 }
 
-// Task 9: the identify target picker. Places two unidentified potions (distinct contentIds, so
+// The identify target picker. Places two unidentified potions (distinct contentIds, so
 // their generated appearance names differ) straight into the hero's backpack -- bypassing the
 // normal loot path, same fixture technique `merchant-service.test.ts` uses in the engine package --
 // then stands the hero beside the town curios dealer (the only permanent town merchant offering

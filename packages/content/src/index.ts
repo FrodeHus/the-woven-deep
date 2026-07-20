@@ -12,6 +12,4 @@ export {
   MERCHANT_SERVICE_IDS,
   MERCHANT_AGGRESSION_RESPONSES,
   TARGETING_REGISTRY,
-  type EffectId,
-  type BehaviorId,
 } from './compiler/registries.js';

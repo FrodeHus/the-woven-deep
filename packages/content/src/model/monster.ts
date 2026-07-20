@@ -1,5 +1,5 @@
 import type {
-  BaseAttributeDefinition, DamageType, DiceDefinition, Disposition, ContentId, ItemRarity,
+  BaseAttributeDefinition, BehaviorId, DamageType, DiceDefinition, Disposition, ContentId, ItemRarity,
   PresentedContentEntry,
 } from './common.js';
 
@@ -15,7 +15,7 @@ export interface MonsterContentEntry extends PresentedContentEntry {
   readonly armor: number;
   readonly resistances: Readonly<Record<DamageType, number>>;
   readonly disposition: Disposition;
-  readonly behaviorId: string;
+  readonly behaviorId: BehaviorId;
   readonly behaviorParameters: Readonly<Record<string, unknown>>;
   readonly minDepth: number;
   readonly maxDepth: number;

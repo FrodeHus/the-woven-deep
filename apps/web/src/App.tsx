@@ -52,10 +52,9 @@ export interface AppProps {
 
 export type { ScreenState } from './ui/hooks/useScreenRouter.js';
 
-/** Re-exported from `session/storage.js`, which now owns this constant so the framework-free
+/** Re-exported from `session/storage.js`, which owns this constant so the framework-free
  * `clear-guest-session.ts` module can list it as a wipe target without importing this (React)
- * entry point -- kept as an `App` export too since it predates that move and one pre-existing test
- * still imports it from here. */
+ * entry point -- also exported from `App` since one test imports it from here. */
 export { PORTRAIT_KEY };
 
 /**
@@ -76,9 +75,9 @@ function parseSeedFromQuery(search: string): Uint32State | undefined {
 
 /**
  * Test-only escape hatch (documented, not a real feature): `?quickstart=1` skips the title and
- * chargen screens entirely and boots straight into play with `DEFAULT_GUEST_HERO`, exactly like
- * the pre-5B boot behaviour. It exists so the pre-existing e2e specs (recorded against a fixed
- * keypress walk over the default hero's stats) keep passing unmodified apart from their boot URL.
+ * chargen screens entirely and boots straight into play with `DEFAULT_GUEST_HERO`. It exists so
+ * the e2e specs (recorded against a fixed keypress walk over the default hero's stats) keep
+ * passing unmodified apart from their boot URL.
  */
 function isQuickstart(search: string): boolean {
   return new URLSearchParams(search).get('quickstart') === '1';
@@ -199,7 +198,7 @@ function GameRoot({
 /**
  * Boots the guest client: fetches the compiled content pack, then walks the screen state machine
  * (title -> chargen -> play, plus a stub hall placeholder and a `?quickstart=1` shortcut that
- * skips straight to play). Unlike the pre-5B boot, the `GuestSession` is now created LAZILY —
+ * skips straight to play). The `GuestSession` is created LAZILY —
  * quickstart and Continue construct it as soon as they're selected/available, while entering
  * chargen defers construction until the wizard is confirmed (its hero choices need to reach
  * `createNewRun`). Distinct screens for the two ways boot can go wrong: the pack fetch failing

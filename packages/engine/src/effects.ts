@@ -96,7 +96,7 @@ function resolveEffectDamage(
   return resolveDamage({ rolled, ...mitigation });
 }
 
-function actorById(actors: readonly ActorState[], actorId: OpaqueId): ActorState {
+function findActor(actors: readonly ActorState[], actorId: OpaqueId): ActorState {
   const actor = actors.find((candidate) => candidate.actorId === actorId);
   if (!actor) throw new Error(`internal invariant: actor ${actorId} does not exist`);
   return actor;
@@ -116,7 +116,7 @@ export function applyHealing(input: Readonly<{
   actors: readonly ActorState[]; targetActorId: OpaqueId; sourceActorId: OpaqueId; amount: number; eventId: OpaqueId;
 }>): Readonly<{ actors: readonly ActorState[]; events: readonly DomainEvent[] }> {
   if (!Number.isSafeInteger(input.amount) || input.amount < 0) throw new RangeError('healing amount must be a non-negative safe integer');
-  const target = actorById(input.actors, input.targetActorId);
+  const target = findActor(input.actors, input.targetActorId);
   const missing = target.maxHealth - target.health;
   if (!Number.isSafeInteger(missing) || missing < 0) throw new RangeError('target health bounds must be safe integers');
   const amount = Math.min(missing, input.amount);
@@ -129,8 +129,8 @@ export function applyHealing(input: Readonly<{
 
 export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenceResult {
   if (!Number.isSafeInteger(input.worldTime) || input.worldTime < 0) throw new RangeError('worldTime must be a non-negative safe integer');
-  actorById(input.actors, input.sourceActorId);
-  actorById(input.actors, input.targetActorId);
+  findActor(input.actors, input.sourceActorId);
+  findActor(input.actors, input.targetActorId);
   if (input.effects.some((effect) => effect.effectId === 'effect.force-move')) {
     const { x, y } = input.forceMoveDirection;
     if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)
@@ -155,7 +155,7 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
   if (!balance) throw new Error('internal invariant: balance definition does not exist');
   let survival = input.survival;
   for (const effect of input.effects) {
-    const target = actorById(actors, input.targetActorId);
+    const target = findActor(actors, input.targetActorId);
     if (effect.requiresLivingTarget && target.health === 0) continue;
     if (effect.effectId === 'effect.damage') {
       const parameters = parseEffectParameters(effect, 'effect.damage');

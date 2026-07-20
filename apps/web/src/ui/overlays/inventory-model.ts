@@ -55,17 +55,15 @@ export type ProjectedItemLike = OwnedItemView;
 
 export interface MenuEntry {
   readonly item: ProjectedItemLike;
-  /** `true` for a currently-equipped item: its detail action becomes "unequip" rather than
-   * "equip" -- identical contract to the pre-existing `BackpackMenu`/`InventoryOverlay`. */
+  /** `true` for a currently-equipped item: its detail action is "unequip" rather than "equip". */
   readonly equipped: boolean;
   readonly slot?: string;
 }
 
 /**
- * Everything the overlay can act on, in the exact pre-existing order: the hero's backpack stacks
- * first (the pinned e2e walks act on "the first backpack item"), then each equipped item in
- * `hero.equipment`'s own key order -- byte-for-byte the same ordering the pre-`ListDetail`
- * `InventoryOverlay` produced, since that ordering is load-bearing for the pinned 5A/5C e2e walks
+ * Everything the overlay can act on, in a fixed order: the hero's backpack stacks first (the
+ * pinned e2e walks act on "the first backpack item"), then each equipped item in
+ * `hero.equipment`'s own key order -- that ordering is load-bearing for the pinned 5A/5C e2e walks
  * (they never invoke the filter/sort additions, so they must see this exact default order).
  */
 export function allMenuEntries(hero: HeroView): readonly MenuEntry[] {

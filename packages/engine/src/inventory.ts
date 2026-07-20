@@ -62,8 +62,8 @@ export interface ProjectedLootTable {
  * `depth`, when supplied, additionally prunes any choice (direct or nested) whose own authored
  * `minDepth`/`maxDepth` band excludes it — this is the loot-choice depth band (e.g. a town
  * merchant restock widening its pool at a balance restock milestone), independent of and
- * additive to `itemEligible`'s item-level depth filtering. Absent `depth` never prunes by band,
- * matching every pre-existing caller's unbanded behavior.
+ * additive to `itemEligible`'s item-level depth filtering. Absent `depth` never prunes by band --
+ * every caller without a depth band sees the full, unbanded set of eligible choices.
  * Every authored choice is validated, but ineligible direct choices — and nested choices whose
  * child table keeps no eligible choice — are pruned from the projection so resolution never
  * selects them. Two semantics are deliberately shared by every caller:
@@ -296,6 +296,10 @@ export function createPopulationLoot(input: Readonly<{
   receipt: PopulationLootReceipt;
 }> {
   const lootStateBefore = input.lootState ?? input.state.rng.loot;
+  if ((input.uniqueContentId != null) !== (input.uniqueItemId != null)) {
+    throw new Error('internal invariant: createPopulationLoot requires both uniqueContentId and '
+      + 'uniqueItemId together, or neither');
+  }
   const unique = input.uniqueContentId != null && input.uniqueItemId != null
     ? createFloorItem({ content: input.content, contentId: input.uniqueContentId,
       itemId: input.uniqueItemId, floorId: input.floorId, x: input.x, y: input.y })
