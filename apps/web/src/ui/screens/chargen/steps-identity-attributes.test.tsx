@@ -6,7 +6,12 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import { HERO_NAME_RULES, type Uint32State } from '@woven-deep/engine';
-import { initialWizardState, type WizardState } from '../../../session/wizard-reducer.js';
+import {
+  initialWizardState,
+  PORTRAIT_GLYPHS,
+  PORTRAIT_GLYPH_COLOR,
+  type WizardState,
+} from '../../../session/wizard-reducer.js';
 import { IdentityStep, AttributesStep } from './steps.js';
 
 let pack: CompiledContentPack;
@@ -52,6 +57,22 @@ describe('IdentityStep', () => {
     expect(action.name.length).toBeGreaterThanOrEqual(HERO_NAME_RULES.minLength);
     expect(action.name.length).toBeLessThanOrEqual(HERO_NAME_RULES.maxLength);
     expect(HERO_NAME_RULES.pattern.test(action.name)).toBe(true);
+  });
+
+  it('renders each portrait option in its own glyph colour', () => {
+    const dispatch = vi.fn();
+    render(<IdentityStep state={stubState()} pack={pack} dispatch={dispatch} />);
+    const options = screen.getAllByRole('option');
+    expect(options).toHaveLength(PORTRAIT_GLYPHS.length);
+    options.forEach((option, index) => {
+      const glyph = PORTRAIT_GLYPHS[index]!;
+      const swatch = option.querySelector('span[aria-hidden="true"]');
+      expect(swatch).toHaveStyle({ color: PORTRAIT_GLYPH_COLOR[glyph] });
+    });
+  });
+
+  it('tints the accent-less base portrait with the app accent colour', () => {
+    expect(PORTRAIT_GLYPH_COLOR['@']).toBe('var(--color-accent)');
   });
 
   it('dispatches set-onboarding-enabled when the checkbox is toggled', async () => {

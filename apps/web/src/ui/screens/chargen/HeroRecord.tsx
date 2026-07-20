@@ -7,6 +7,7 @@ import type {
 import { ATTRIBUTE_ORDER, DERIVED_STAT_NAMES, type DerivedStatName } from '@woven-deep/engine';
 import {
   PORTRAIT_GLYPHS,
+  portraitGlyphColor,
   wizardPreview,
   type WizardState,
 } from '../../../session/wizard-reducer.js';
@@ -108,7 +109,9 @@ export function HeroRecord({
       <div className="flex items-center gap-3">
         <div
           aria-hidden="true"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-line bg-surface text-2xl text-accent"
+          data-testid="hero-record-portrait"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-line bg-surface text-2xl"
+          style={{ color: portraitGlyphColor(state.portraitGlyph) }}
         >
           {classEntry
             ? classEntry.silhouetteGlyph

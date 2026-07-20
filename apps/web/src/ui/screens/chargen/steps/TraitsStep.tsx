@@ -12,7 +12,8 @@ export function TraitsStep({ state, pack, dispatch }: StepProps): JSX.Element {
     return {
       ...entry,
       ...(meta ? { meta } : {}),
-      locked: !selected && atCap,
+      disabled: !selected && atCap,
+      ...(!selected && atCap ? { disabledReason: '2/2 traits picked' } : {}),
     };
   });
 

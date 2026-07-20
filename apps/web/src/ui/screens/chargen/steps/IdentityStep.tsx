@@ -4,7 +4,11 @@ import { Button } from '@/ui/components/button.js';
 import { Input } from '@/ui/components/input.js';
 import { Label } from '@/ui/components/label.js';
 import { cn } from '@/ui/lib/cn.js';
-import { nameIsValid, PORTRAIT_GLYPHS } from '../../../../session/wizard-reducer.js';
+import {
+  nameIsValid,
+  PORTRAIT_GLYPHS,
+  PORTRAIT_GLYPH_COLOR,
+} from '../../../../session/wizard-reducer.js';
 import { useListNavigation } from '../../roving-focus.js';
 import { OPTION_SELECTED_CLASS, type StepProps } from './step-content.js';
 
@@ -70,7 +74,9 @@ export function IdentityStep({ state, dispatch }: StepProps): JSX.Element {
               data-glyph={glyph}
               onClick={() => dispatch({ type: 'set-portrait', glyph })}
             >
-              <span aria-hidden="true">@</span>
+              <span aria-hidden="true" style={{ color: PORTRAIT_GLYPH_COLOR[glyph] }}>
+                @
+              </span>
             </button>
           ))}
         </div>

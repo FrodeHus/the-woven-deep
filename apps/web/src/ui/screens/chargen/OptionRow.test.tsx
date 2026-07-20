@@ -100,6 +100,96 @@ describe('OptionRow', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it('is aria-disabled and shows disabledReason (not a lock hint) when disabled, and does not call onSelect on click', () => {
+    const onSelect = vi.fn();
+    render(
+      <OptionRow
+        name="Steady hands"
+        marker="multi"
+        selected={false}
+        disabled
+        disabledReason="2/2 traits picked"
+        onSelect={onSelect}
+      />,
+    );
+    const row = screen.getByRole('option');
+    expect(row).toHaveAttribute('aria-disabled', 'true');
+    expect(row.textContent).toContain('2/2 traits picked');
+    expect(row.textContent).not.toContain('⊘');
+    row.click();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('does not call onSelect on Enter or Space when disabled', () => {
+    const onSelect = vi.fn();
+    render(
+      <OptionRow
+        name="Steady hands"
+        marker="multi"
+        selected={false}
+        disabled
+        onSelect={onSelect}
+      />,
+    );
+    const row = screen.getByRole('option');
+    fireEvent.keyDown(row, { key: 'Enter' });
+    fireEvent.keyDown(row, { key: ' ' });
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('renders a disabled row distinguishably from a locked row (marker and styling differ)', () => {
+    const { unmount } = render(
+      <OptionRow
+        name="Steady hands"
+        marker="multi"
+        selected={false}
+        disabled
+        disabledReason="2/2 traits picked"
+        onSelect={() => {}}
+      />,
+    );
+    const disabledRow = screen.getByRole('option');
+    expect(disabledRow.textContent).not.toContain('⊘');
+    expect(disabledRow.className).not.toContain('border-dashed');
+    unmount();
+
+    render(
+      <OptionRow
+        name="Paladin"
+        marker="single"
+        selected={false}
+        locked
+        lockHint="Requires level 5"
+        onSelect={() => {}}
+      />,
+    );
+    const lockedRow = screen.getByRole('option');
+    expect(lockedRow.textContent).toContain('⊘');
+    expect(lockedRow.className).toContain('border-dashed');
+    expect(lockedRow.textContent).not.toContain('2/2 traits picked');
+  });
+
+  it('lets locked win when both locked and disabled are passed', () => {
+    const onSelect = vi.fn();
+    render(
+      <OptionRow
+        name="Paladin"
+        marker="single"
+        selected={false}
+        locked
+        lockHint="Requires level 5"
+        disabled
+        disabledReason="should not show"
+        onSelect={onSelect}
+      />,
+    );
+    const row = screen.getByRole('option');
+    expect(row.textContent).toContain('⊘');
+    expect(row.textContent).toContain('Requires level 5');
+    expect(row.textContent).not.toContain('should not show');
+    expect(row.className).toContain('border-dashed');
+  });
+
   it('renders an optional glyph tile', () => {
     render(
       <OptionRow

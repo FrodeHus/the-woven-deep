@@ -16,6 +16,8 @@ export interface FacetedOptionListEntry {
   readonly meta?: string;
   readonly locked?: boolean;
   readonly lockHint?: string;
+  readonly disabled?: boolean;
+  readonly disabledReason?: string;
 }
 
 /** The shared `FilterBar` + `useListFacets` + listbox + `OptionRow` scaffold used by the chargen
@@ -65,6 +67,8 @@ export function FacetedOptionList<T extends FacetedOptionListEntry>({
             selected={selected(entry)}
             locked={entry.locked ?? false}
             {...(entry.lockHint ? { lockHint: entry.lockHint } : {})}
+            disabled={entry.disabled ?? false}
+            {...(entry.disabledReason ? { disabledReason: entry.disabledReason } : {})}
             onSelect={() => onSelect(entry)}
           />
         ))}
