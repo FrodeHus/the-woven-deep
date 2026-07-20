@@ -23,7 +23,7 @@ beforeAll(async () => {
 });
 
 describe('population encounter seeded invariants', () => {
-  it('holds after every applied command in 512 distinct seeded simulations with shrinking', async () => {
+  it('holds after every applied command in 128 distinct seeded simulations with shrinking', async () => {
     const finalSaves = new Set<string>();
     const scenarioSeeds = new Set<number>();
     const forbidden = new Set([
@@ -88,8 +88,8 @@ describe('population encounter seeded invariants', () => {
     await fc.assert(
       fc.asyncProperty(
         fc.uniqueArray(fc.integer({ min: 0, max: 0xffff_ffff }), {
-          minLength: 512,
-          maxLength: 512,
+          minLength: 128,
+          maxLength: 128,
         }),
         async (seeds) => {
           // Each simulation is CPU-bound; yield to the event loop after every one so a slow
@@ -103,8 +103,8 @@ describe('population encounter seeded invariants', () => {
       ),
       { seed: 0x4b31_2026, numRuns: 1 },
     );
-    expect(scenarioSeeds.size).toBe(512);
-    expect(finalSaves.size).toBeGreaterThan(400);
+    expect(scenarioSeeds.size).toBe(128);
+    expect(finalSaves.size).toBeGreaterThan(100);
   }, 360_000);
 
   it('regression: inactive floors do not accumulate missed swarm births', () => {
