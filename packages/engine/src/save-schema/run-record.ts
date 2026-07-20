@@ -1227,7 +1227,30 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     ) {
       fail(`${path}.coverTileId`, 'door cover tile does not match its floor terrain');
     }
-    if (featureValue.type !== 'door') {
+    if (featureValue.type === 'door') {
+      if ((featureValue.state === 'locked') !== (featureValue.lock !== undefined)) {
+        fail(`${path}.lock`, 'door lock is present if and only if it is locked');
+      }
+    }
+    if (featureValue.type === 'chest') {
+      if ((featureValue.state === 'locked') !== (featureValue.lock !== null)) {
+        fail(`${path}.lock`, 'chest lock is present if and only if it is locked');
+      }
+      const hasLootPointer =
+        featureValue.lootTableId !== null || featureValue.lootContentId !== null;
+      if (featureValue.state === 'looted' || featureValue.state === 'jammed') {
+        if (hasLootPointer)
+          fail(`${path}.lootTableId`, 'looted or jammed chest must not carry a live loot pointer');
+      } else if (!hasLootPointer) {
+        fail(`${path}.lootTableId`, 'locked or closed chest requires loot contents');
+      } else if (featureValue.lootTableId !== null && featureValue.lootContentId !== null) {
+        fail(
+          `${path}.lootTableId`,
+          'chest loot must name exactly one of lootTableId/lootContentId',
+        );
+      }
+    }
+    if (featureValue.type !== 'door' && featureValue.type !== 'chest') {
       validateOrderedIds(
         featureValue.discovery.discoveredByActorIds,
         `${path}.discovery.discoveredByActorIds`,

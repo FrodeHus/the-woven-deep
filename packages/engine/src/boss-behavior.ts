@@ -189,6 +189,7 @@ function bossEffectOperations(
       const features = operation.features.map((feature): DungeonFeature => {
         if (
           feature.type === 'door' ||
+          feature.type === 'chest' ||
           feature.floorId !== target.floorId ||
           Math.max(Math.abs(feature.x - target.x), Math.abs(feature.y - target.y)) > radius ||
           feature.discovery.discoveredByActorIds.includes(input.heroId)

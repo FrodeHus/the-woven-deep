@@ -169,6 +169,7 @@ export type MovementInvalidReason =
   | 'blocked.bounds'
   | 'blocked.wall'
   | 'blocked.door'
+  | 'blocked.chest'
   | 'blocked.pillar'
   | 'blocked.void'
   | 'blocked.corner'

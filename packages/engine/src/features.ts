@@ -1,5 +1,5 @@
 import { actorById } from './actor-model.js';
-import type { DoorFeature, DungeonFeature } from './feature-model.js';
+import type { ChestFeature, DoorFeature, DungeonFeature } from './feature-model.js';
 import {
   tileIndex,
   type ActiveRun,
@@ -31,6 +31,7 @@ export function featureAt(
 export function featureBlocksMovement(feature: DungeonFeature): boolean {
   if (feature.type === 'door') return feature.state !== 'open';
   if (feature.type === 'secret') return feature.state === 'hidden';
+  if (feature.type === 'chest') return feature.state === 'locked' || feature.state === 'closed';
   return false;
 }
 
@@ -139,7 +140,8 @@ export function closeDoor(
 }
 
 function discovered(feature: DungeonFeature, actorId: OpaqueId): boolean {
-  return feature.type === 'door' || feature.discovery.discoveredByActorIds.includes(actorId);
+  if (feature.type === 'door' || feature.type === 'chest') return true;
+  return feature.discovery.discoveredByActorIds.includes(actorId);
 }
 
 export function discoveryContextKey(
@@ -169,7 +171,10 @@ export function discoveryContextKey(
   return `context.${actor.actorId}.${actor.x}.${actor.y}.${band}.${conditions}.${tools}`;
 }
 
-function reveal(feature: Exclude<DungeonFeature, DoorFeature>, actorId: OpaqueId): DungeonFeature {
+function reveal(
+  feature: Exclude<DungeonFeature, DoorFeature | ChestFeature>,
+  actorId: OpaqueId,
+): DungeonFeature {
   const discoveredByActorIds = [
     ...new Set([...feature.discovery.discoveredByActorIds, actorId]),
   ].sort();
@@ -195,6 +200,7 @@ function discoveryAttempt(
   const features = input.run.features.map((feature): DungeonFeature => {
     if (
       feature.type === 'door' ||
+      feature.type === 'chest' ||
       feature.floorId !== actor.floorId ||
       discovered(feature, actor.actorId) ||
       Math.max(Math.abs(feature.x - actor.x), Math.abs(feature.y - actor.y)) > input.radius
@@ -463,7 +469,7 @@ export function projectFeature(
   feature: DungeonFeature,
   actorId: OpaqueId,
 ): Readonly<Record<string, unknown>> | undefined {
-  if (feature.type === 'door')
+  if (feature.type === 'door' || feature.type === 'chest')
     return {
       featureId: feature.featureId,
       type: feature.type,

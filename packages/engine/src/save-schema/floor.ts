@@ -47,7 +47,7 @@ export const vault = z.strictObject({
 export const slot = z.strictObject({
   slotId: identifier,
   vaultPlacementId: identifier,
-  kind: z.enum(['monster', 'item', 'trap', 'npc', 'fixture', 'objective']),
+  kind: z.enum(['monster', 'item', 'trap', 'npc', 'fixture', 'objective', 'door', 'chest']),
   required: z.boolean(),
   tags: z.array(z.string()).readonly(),
   x: safeNonNegative,
