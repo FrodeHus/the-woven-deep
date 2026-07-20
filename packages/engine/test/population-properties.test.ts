@@ -92,8 +92,11 @@ describe('population encounter seeded invariants', () => {
           maxLength: 512,
         }),
         async (seeds) => {
-          for (let batchStart = 0; batchStart < seeds.length; batchStart += 32) {
-            for (const seed of seeds.slice(batchStart, batchStart + 32)) {
+          // Yield to the event loop frequently: each simulation is CPU-bound, and blocking the
+          // worker for too long between yields starves Vitest's RPC heartbeat on slow runners.
+          const batchSize = 4;
+          for (let batchStart = 0; batchStart < seeds.length; batchStart += batchSize) {
+            for (const seed of seeds.slice(batchStart, batchStart + batchSize)) {
               scenarioSeeds.add(seed);
               finalSaves.add(execute(seed));
             }
