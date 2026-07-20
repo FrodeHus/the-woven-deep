@@ -11,6 +11,7 @@ import {
 import type { PlayerIntent } from './intents.js';
 import {
   actorsOf,
+  adjacentLockedFeature,
   adjacentMerchant,
   chebyshev,
   featuresOf,
@@ -53,6 +54,9 @@ function actorAt(projection: GameplayProjection, x: number, y: number): ActorVie
   return actorsOf(projection).find((actor) => actor.x === x && actor.y === y);
 }
 
+/** A door the hero can walk-bump open: closed, not locked. A *locked* door is never auto-opened
+ * this way -- see `lockedFeatureAt`, which `buildMoveIntent` checks instead so a bump never
+ * silently becomes a pick attempt (a failed pick costs a lockpick; picking must stay deliberate). */
 function closedDoorAt(
   projection: GameplayProjection,
   x: number,
@@ -60,7 +64,23 @@ function closedDoorAt(
 ): FeatureView | undefined {
   return featuresOf(projection).find(
     (feature) =>
-      feature.type === 'door' && feature.state !== 'open' && feature.x === x && feature.y === y,
+      feature.type === 'door' && feature.state === 'closed' && feature.x === x && feature.y === y,
+  );
+}
+
+/** A locked door/chest occupying the given cell -- what `buildMoveIntent` finds instead of a
+ * bump-openable door once a feature's lock is engaged. */
+function lockedFeatureAt(
+  projection: GameplayProjection,
+  x: number,
+  y: number,
+): FeatureView | undefined {
+  return featuresOf(projection).find(
+    (feature) =>
+      (feature.type === 'door' || feature.type === 'chest') &&
+      feature.state === 'locked' &&
+      feature.x === x &&
+      feature.y === y,
   );
 }
 
@@ -139,7 +159,35 @@ function buildMoveIntent(
     };
   }
 
+  // A locked door/chest blocks the bump entirely -- moving into one must never auto-convert into
+  // a `pick-lock` attempt, since a failed pick costs a lockpick. Picking stays a deliberate,
+  // separate action (the `pick-lock` intent below), surfaced instead as a rejection naming the
+  // affordance.
+  const locked = lockedFeatureAt(projection, target.x, target.y);
+  if (locked) {
+    return {
+      kind: 'rejected',
+      message: `That ${locked.type} is locked. Pick the lock to get through.`,
+    };
+  }
+
   return { kind: 'command', command: { type: 'move', direction, commandId, expectedRevision } };
+}
+
+function buildPickLockIntent(
+  input: Readonly<{
+    projection: GameplayProjection;
+    commandId: OpaqueId;
+    expectedRevision: number;
+  }>,
+): BuiltIntent {
+  const { projection, commandId, expectedRevision } = input;
+  const feature = adjacentLockedFeature(projection);
+  if (!feature) return { kind: 'rejected', message: 'There is no lock to pick nearby.' };
+  return {
+    kind: 'command',
+    command: { type: 'pick-lock', featureId: feature.featureId, commandId, expectedRevision },
+  };
 }
 
 function buildPickupIntent(
@@ -290,6 +338,9 @@ export function buildIntent(
   }
   if (intent.type === 'pickup') {
     return buildPickupIntent({ projection, commandId, expectedRevision });
+  }
+  if (intent.type === 'pick-lock') {
+    return buildPickLockIntent({ projection, commandId, expectedRevision });
   }
   if (intent.type === 'descend') {
     return stairDownUnderHero(projection)

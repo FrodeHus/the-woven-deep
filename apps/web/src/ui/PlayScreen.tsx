@@ -195,7 +195,7 @@ export function PlayScreen({
             {projection.floor.town ? (
               <TownPanel snapshot={snapshot} keymap={keymap} />
             ) : (
-              <ThreatPanel snapshot={snapshot} />
+              <ThreatPanel snapshot={snapshot} keymap={keymap} pack={pack} />
             )}
           </aside>
 

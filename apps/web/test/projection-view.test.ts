@@ -19,8 +19,10 @@ import {
 } from '@woven-deep/engine';
 import {
   actorsOf,
+  adjacentLockedFeature,
   featuresOf,
   groundItemsOf,
+  heroCanAttemptPick,
   heroOf,
   houseOf,
   ownedItemOf,
@@ -194,6 +196,102 @@ describe('tradeOf', () => {
     expect(typeof entry!.item.category).toBe('string');
     expect(typeof entry!.quantity).toBe('number');
     expect(typeof entry!.unitPrice).toBe('number');
+  });
+});
+
+describe('adjacentLockedFeature', () => {
+  it('finds a locked door/chest only when Chebyshev-adjacent to the hero, not otherwise', () => {
+    const hero = heroOf(town);
+    const withLockedDoor: GameplayProjection = {
+      ...town,
+      features: [
+        ...town.features,
+        {
+          featureId: 'feature.door-locked-test',
+          type: 'door',
+          state: 'locked',
+          x: hero.x + 1,
+          y: hero.y,
+        },
+      ],
+    } as unknown as GameplayProjection;
+    expect(adjacentLockedFeature(withLockedDoor)?.featureId).toBe('feature.door-locked-test');
+
+    const farLockedDoor: GameplayProjection = {
+      ...town,
+      features: [
+        ...town.features,
+        {
+          featureId: 'feature.door-locked-far',
+          type: 'door',
+          state: 'locked',
+          x: hero.x + 5,
+          y: hero.y,
+        },
+      ],
+    } as unknown as GameplayProjection;
+    expect(adjacentLockedFeature(farLockedDoor)).toBeUndefined();
+
+    // A closed (unlocked) door adjacent to the hero is not offered as a pick target.
+    const withClosedDoor: GameplayProjection = {
+      ...town,
+      features: [
+        ...town.features,
+        {
+          featureId: 'feature.door-closed-test',
+          type: 'door',
+          state: 'closed',
+          x: hero.x + 1,
+          y: hero.y,
+        },
+      ],
+    } as unknown as GameplayProjection;
+    expect(adjacentLockedFeature(withClosedDoor)).toBeUndefined();
+  });
+});
+
+describe('heroCanAttemptPick', () => {
+  it('is true only once the hero holds a lockpick- or key-tagged item', () => {
+    const hero = heroOf(town);
+    expect(heroCanAttemptPick(hero, pack)).toBe(false);
+
+    const withLockpick = {
+      ...hero,
+      backpack: [
+        ...hero.backpack,
+        {
+          itemId: 'item.test-lockpick',
+          contentId: 'item.lockpick',
+          name: 'Bent lockpick',
+          category: 'misc' as const,
+          quantity: 1,
+          identified: true,
+          condition: 100,
+          fuel: null,
+          enabled: null,
+        },
+      ],
+    };
+    expect(heroCanAttemptPick(withLockpick, pack)).toBe(true);
+
+    const withKey = {
+      ...hero,
+      backpack: [
+        ...hero.backpack,
+        {
+          itemId: 'item.test-key',
+          contentId: 'item.iron-key',
+          name: 'Tarnished iron key',
+          category: 'misc' as const,
+          quantity: 1,
+          identified: true,
+          condition: 100,
+          fuel: null,
+          enabled: null,
+        },
+      ],
+    };
+    expect(heroCanAttemptPick(withKey, pack)).toBe(true);
   });
 });
 

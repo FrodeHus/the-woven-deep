@@ -96,6 +96,8 @@ function outcomeForAction(action: ActionId): RouterOutcome {
       return { type: 'house' };
     case 'trade':
       return { type: 'trade-open' };
+    case 'pick-lock':
+      return { type: 'pick-lock' };
     case 'inventory':
     case 'character-sheet':
     case 'map-journal':

@@ -6,7 +6,8 @@ import type {
   OpaqueId,
   TileId,
 } from '@woven-deep/engine';
-import type { ItemCategory } from '@woven-deep/content';
+import type { CompiledContentPack, ItemCategory } from '@woven-deep/content';
+import { itemById } from './pack-queries.js';
 
 /**
  * The single typed boundary over the engine's gameplay projection. The engine projects
@@ -249,4 +250,46 @@ export function tradeIsAvailable(projection: GameplayProjection): boolean {
   return merchantActors(projection).some(
     (merchant) => chebyshev(hero, merchant) === 1 && merchant.tradeAvailable !== false,
   );
+}
+
+/** The locked door/chest the hero is Chebyshev-adjacent to (but not standing on), if any --
+ * mirrors `adjacentMerchant`'s adjacency rule. Feeds both `command-builder.ts` (which resolves a
+ * `pick-lock` intent's `featureId` from this) and any UI affordance offering the action. When more
+ * than one locked feature is adjacent, the nearest by feature-id ordering wins, exactly like
+ * `adjacentMerchant`. */
+export function adjacentLockedFeature(projection: GameplayProjection): FeatureView | undefined {
+  const origin = heroOf(projection);
+  return featuresOf(projection)
+    .filter(
+      (feature) =>
+        (feature.type === 'door' || feature.type === 'chest') &&
+        feature.state === 'locked' &&
+        chebyshev(feature, origin) === 1,
+    )
+    .sort((left, right) => (left.featureId < right.featureId ? -1 : 1))[0];
+}
+
+/** Every item the hero currently holds, backpack and equipped alike -- the pool `heroHoldsTag`
+ * searches for a lockpick or a key. */
+function heroHeldItems(hero: HeroView): readonly OwnedItemView[] {
+  return [
+    ...hero.backpack,
+    ...Object.values(hero.equipment).filter((item): item is OwnedItemView => item !== null),
+  ];
+}
+
+/** Whether the hero holds at least one identified item whose content entry carries `tag` (e.g.
+ * `'lockpick'` or `'key'`). The projection never exposes a lock's exact `keyContentId`, so this is
+ * necessarily a best-effort signal for the UI to offer/label the pick-lock action -- the engine
+ * itself independently re-validates the exact key/lockpick match before resolving the attempt. */
+function heroHoldsTag(hero: HeroView, pack: CompiledContentPack, tag: string): boolean {
+  return heroHeldItems(hero).some(
+    (item) => item.contentId !== undefined && itemById(pack, item.contentId)?.tags.includes(tag),
+  );
+}
+
+/** Whether the hero holds anything that could plausibly open a lock right now: a lockpick, or a
+ * key (only actual keys carry the `key` tag; the engine still checks the exact door/key match). */
+export function heroCanAttemptPick(hero: HeroView, pack: CompiledContentPack): boolean {
+  return heroHoldsTag(hero, pack, 'lockpick') || heroHoldsTag(hero, pack, 'key');
 }
