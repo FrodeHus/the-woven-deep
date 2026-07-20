@@ -61,23 +61,16 @@ All three ship as chargen-selectable `trait` content (see `light-out-feats.md`):
 - **Visibility-polygon lighting** — shipped in 5D-2 as the `smooth` lighting mode; noted
   here only as historical context that it was originally a backlog item promoted forward.
 
-## Playtest bugs (2026-07-15 triage)
+## Playtest bugs (2026-07 triage) — resolved
 
-Open bugs from playtesting, not yet fixed:
+The four bugs from the 2026-07-15 / 2026-07-18 playtests (the two lists were the same
+issues) are all fixed on `main`:
 
-- Oil refill behaves unexpectedly.
-- Healing behaves unexpectedly.
-- Spawns read as too sparse.
-- Wall rendering glitches at the edge of the map.
-
-## Playtest bugs (2026-07-18 triage)
-
-Tracked separately from the chargen console redesign (`ui-redesign.md` sub-project 2):
-
-- Oil refill.
-- Healing.
-- Sparse spawns.
-- Edge-of-map wall render.
-
-(These may be the same four issues re-triaged; worth deduplicating against the
-2026-07-15 list above when picked up.)
+- **Oil refill** — the client never built a `refuel` command, so lamp oil fell through to
+  `use-item`; wired the refuel intent/command + inventory action button.
+- **Healing** — `recoveryAmount` was `1`, which floored to 0 HP/interval at the hungry
+  stage; raised to `10`.
+- **Sparse spawns** — early-encounter `maximumInstancesPerRun` caps weren't rescaled after
+  floors grew 4×; raised them (and the 30-monster roster + G5 loot shipped alongside).
+- **Edge-of-map wall** — the outer border ring was seeded with the void tile instead of the
+  wall tile, so FOV revealed blank space at the map edge; seed the wall tile.
