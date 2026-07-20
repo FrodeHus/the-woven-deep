@@ -54,6 +54,7 @@ export function createDemoContentPack(): CompiledContentPack {
           disarm: { agility: 1, wits: 1 },
           lightOutRevealRadius: { base: 1 },
           lightOutMemoryPersists: { base: 0 },
+          lightOutCommitsMemory: { base: 0 },
         },
         actionCosts: { 'action.move': 100, 'action.wait': 100, 'action.spawn': 100 },
         pointBuy: {

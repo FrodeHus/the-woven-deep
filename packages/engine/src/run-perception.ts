@@ -24,6 +24,7 @@ export function floorPerception(
     content: CompiledContentPack;
     actorId?: OpaqueId;
     floorId?: OpaqueId;
+    lightOutMemory?: Readonly<{ commitsMemory: boolean; revealRadius: number }>;
   }>,
 ): FloorPerception {
   const actor =
@@ -48,6 +49,7 @@ export function floorPerception(
       content: input.content,
       floorId: floor.floorId,
     }),
+    ...(input.lightOutMemory === undefined ? {} : { lightOutMemory: input.lightOutMemory }),
   });
   return { actor, floor: effectiveFloor, ...perception };
 }
@@ -57,6 +59,7 @@ export function heroFloorPerception(
   input: Readonly<{
     state: ActiveRun;
     content: CompiledContentPack;
+    lightOutMemory?: Readonly<{ commitsMemory: boolean; revealRadius: number }>;
   }>,
 ): FloorPerception {
   return floorPerception(input);
