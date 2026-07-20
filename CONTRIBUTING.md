@@ -31,6 +31,7 @@ Most of these rules are not abstract: they were earned. A 2026 code review of th
 4. **Behaviour-preserving means byte-identical.** For any refactor, existing tests pass **with no assertion changes**, and no demo hashes move. Test *infrastructure* (wrapping a component in a provider, updating a fixture to a now-required field) may change; behavioural **assertions** may not.
 5. **Fail loud, never silent.** Invalid content is a compile-time error. Unexpected runtime state throws. Do not swallow errors, do not `catch` and continue, do not fall back to a plausible default that hides a bug.
 6. **No `any`, no lying casts.** See [TypeScript](#3-typescript). A cast that asserts something false compiles clean and no test can catch it — it is worse than the duplication it "fixes".
+7. **Every feature ships with a design doc.** Any feature or behavioural change is documented under `docs/design/` — update the relevant existing doc, or add a new one. The design records the intent and shape *before* the code and stays current with it; no feature PR merges without its design recorded there. (Pure refactors and cleanups that change no behaviour are exempt.)
 
 ---
 
@@ -39,6 +40,12 @@ Most of these rules are not abstract: they were earned. A 2026 code review of th
 - `packages/*/dist` is **gitignored**. A stale local dist silently feeds old types to consumers (the engine imports `@woven-deep/content` via its built `./dist`). **Always rebuild `@woven-deep/content` before building/typechecking the engine or web.**
 - **Git worktrees need their own `npm install`** — it creates the `node_modules/@woven-deep/*` workspace symlinks. Without it, `tsc` resolves stale/wrong content types. A long build session can drop web-only deps (`@tailwindcss/vite`, `cmdk`, `lucide-react`, base-ui) — re-run `npm install` if a web gate fails with "cannot find module".
 - The engine `tsconfig` **excludes test files** from its build. Shared-type breakage in engine test fixtures surfaces via the web typecheck (which includes `apps/web/test/**`), so run that too.
+- **Automated quality gates** back the rules below — run them, don't eyeball:
+  - `npm run lint` — ESLint (type-aware). **Zero errors** to merge; fix the cause, do not blanket-`eslint-disable`. A disable is a last resort for a genuine false positive or a contractual constraint, and carries a present-tense reason. (`react-refresh/only-export-components` warnings are advisory.)
+  - `npm run format` / `npm run format:check` — Prettier. Formatting is not a review topic; let the tool decide. CSS is excluded (hand-authored, and glyph tests pin its source).
+  - `npm run knip` — dead files, exports, and dependencies. Keep it at zero; delete dead code rather than exporting it "just in case".
+  - `npm run depcruise` — forbids runtime import cycles (type-only cycles are allowed) and enforces the layer boundaries (engine ⇏ apps, content ⇏ engine/apps, `model` ⇏ `compiler`, server ⇏ web). The 13 pre-existing runtime cycles are baselined in `.dependency-cruiser-known-violations.json`; do not add new ones, and prefer removing baselined ones (see the burn-down issue).
+  - `npm run verify` runs the whole chain (typecheck → lint → format:check → depcruise → knip → test) — the one command that stands in for the full gate.
 
 ---
 
@@ -112,7 +119,7 @@ Most of these rules are not abstract: they were earned. A 2026 code review of th
 
 - **Branch off `main`; never commit refactors or features directly to `main`.**
 - **One logical change per commit**, imperative subject (`feat: …`, `refactor: …`, `fix: …`, `test: …`, `docs: …`, `content: …`). The commit message describes *what and why*, not the task tracker.
-- **PRs are the unit of merge.** A PR states what changed, how it was verified (the build gate + suites), and links the issues it `Closes`. Keep the diff scoped to its stated purpose — no opportunistic unrelated edits.
+- **PRs are the unit of merge.** A PR states what changed, how it was verified (the build gate + suites), and links the issues it `Closes`. Keep the diff scoped to its stated purpose — no opportunistic unrelated edits. A feature PR also updates or adds its `docs/design/` doc (Golden Rule 7).
 - **Every change is reviewed** (spec compliance + code quality) before merge; verify the full build gate and suites are green on the final state.
 - **Agents:** you are already on the correct branch/worktree for your task. Do **not** run `git checkout`/`switch`/`reset`/`branch`/`rebase`/`worktree` or `cd` outside your worktree; only edit, `git add`, and `git commit` on the current branch. If `git status` looks unexpected, stop and report rather than "fixing" it with a reset.
 
