@@ -389,7 +389,7 @@ export function placeFallenHeroEncounters(
       decisions: input.run.fallenHeroDecisions,
     };
   }
-  let floor = input.floor;
+  const floor = input.floor;
   const createdActors: ActorState[] = [];
   const populations = [...input.run.populations];
   let slots = candidateSlots(floor);

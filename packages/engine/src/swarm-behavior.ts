@@ -1,7 +1,7 @@
-import {
-  type CompiledContentPack,
-  type PopulationCombatModifiers,
-  type SwarmEncounterContentEntry,
+import type {
+  CompiledContentPack,
+  PopulationCombatModifiers,
+  SwarmEncounterContentEntry,
 } from '@woven-deep/content';
 import { emptyEquipment, type ActorState } from './actor-model.js';
 import { actionCostFor, balanceEntry } from './actions.js';
@@ -414,7 +414,7 @@ export function advanceSwarms(
           nextSpawnAt: deadline(state.worldTime, def.spawnInterval),
           emittedCapLevels: [...new Set([...population.emittedCapLevels, ...levels])].sort(
             compareCodeUnits,
-          ) as CapLevel[],
+          ),
         };
       } else {
         let rng = state.rng.encounters;
@@ -473,7 +473,7 @@ export function advanceSwarms(
           ),
           emittedCapLevels: [...new Set([...population.emittedCapLevels, ...limitingLevels])].sort(
             compareCodeUnits,
-          ) as CapLevel[],
+          ),
         };
         state = {
           ...state,

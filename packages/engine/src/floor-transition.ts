@@ -27,7 +27,7 @@ export function depthFloorId(depth: number): OpaqueId {
   if (depth < 0 || depth > 999) {
     throw new RangeError(`floor depth must be between 0 and 999, got ${depth}`);
   }
-  return `floor.depth-${String(depth).padStart(3, '0')}` as OpaqueId;
+  return `floor.depth-${String(depth).padStart(3, '0')}`;
 }
 
 function nextFloorId(depth: number): string {

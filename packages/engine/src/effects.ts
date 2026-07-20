@@ -187,14 +187,14 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
   }
   for (const [index, effect] of input.effects.entries()) {
     const schema =
-      EFFECT_PARAMETER_SCHEMAS[effect.effectId as keyof typeof EFFECT_PARAMETER_SCHEMAS];
+      EFFECT_PARAMETER_SCHEMAS[effect.effectId];
     if (!schema) throw new TypeError(`unregistered effect ${effect.effectId} at effects.${index}`);
     const parsed = schema.safeParse(effect.parameters);
     if (!parsed.success)
       throw new TypeError(
         `invalid effect ${effect.effectId} at effects.${index}: ${parsed.error.issues[0]!.message}`,
       );
-    if (!DIRECT_EFFECTS.has(effect.effectId) && !input.operations[effect.effectId as EffectId]) {
+    if (!DIRECT_EFFECTS.has(effect.effectId) && !input.operations[effect.effectId]) {
       throw new TypeError(`effect operation ${effect.effectId} is unavailable`);
     }
   }

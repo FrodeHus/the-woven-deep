@@ -3,8 +3,8 @@ import { LORE } from '../copy.js';
 
 export function Lore(): JSX.Element {
   const [first, ...rest] = LORE.paragraphs;
-  const dropCap = first!.slice(0, 1);
-  const firstRest = first!.slice(1);
+  const dropCap = first.slice(0, 1);
+  const firstRest = first.slice(1);
   const last = rest[rest.length - 1];
   const middle = rest.slice(0, -1);
 

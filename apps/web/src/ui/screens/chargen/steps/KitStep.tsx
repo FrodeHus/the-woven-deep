@@ -1,7 +1,7 @@
 import { useMemo, type JSX } from 'react';
 import { FacetedOptionList } from '../FacetedOptionList.js';
 import { classEntries } from '../../../../session/pack-queries.js';
-import { type StepProps } from './step-content.js';
+import type { StepProps } from './step-content.js';
 
 interface FacetedKit {
   readonly id: string;

@@ -37,7 +37,7 @@ import {
   survival,
 } from './population.js';
 import { rngEntries, runConclusionSchema, runMetrics } from './run-record.js';
-import { ENGINE_GAME_VERSION, RECENT_COMMAND_LIMIT, RNG_STREAM_NAMES } from '../versions.js';
+import { ENGINE_GAME_VERSION, RECENT_COMMAND_LIMIT, type RNG_STREAM_NAMES } from '../versions.js';
 
 export const legacyPopulationCreatedEvent = z.strictObject({
   type: z.literal('population.created'),

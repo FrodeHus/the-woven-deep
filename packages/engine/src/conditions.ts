@@ -85,7 +85,7 @@ export function conditionModifiers(
         name,
         safeInteger(`${condition.conditionId}.${name} modifier`, amount * condition.stacks),
       ]),
-    ) as DerivedStatModifier;
+    );
   });
 }
 

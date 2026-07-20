@@ -8,8 +8,8 @@ import {
   uint32State,
   uint32Tuple,
 } from './primitives.js';
-import { floor, vault } from './floor.js';
-import { actor, lastKnownTarget } from './actor.js';
+import { floor, type vault } from './floor.js';
+import { actor, type lastKnownTarget } from './actor.js';
 import { feature, item } from './item.js';
 import {
   encounterDecision,

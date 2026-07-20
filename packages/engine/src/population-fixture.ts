@@ -600,7 +600,7 @@ function prepareCommandAttack(state: ActiveRun, targetActorId: string): ActiveRu
       actor.actorId === state.hero.actorId
         ? { ...actor, energy: 100 }
         : actor.actorId === targetActorId
-          ? { ...actor, ...destination!, health: 1 }
+          ? { ...actor, ...destination, health: 1 }
           : actor,
     ),
     rng: { ...state.rng, combat: combatState },

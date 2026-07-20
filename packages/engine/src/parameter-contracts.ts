@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import type { z } from 'zod';
 import {
   EFFECT_PARAMETER_SCHEMAS,
   LEADER_RESPONSE_PARAMETER_SCHEMAS,

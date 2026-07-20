@@ -176,7 +176,7 @@ export function CharacterSheetOverlay(): JSX.Element | null {
               <li
                 key={condition.conditionId}
                 className="rounded border px-2 py-1 text-xs"
-                style={{ borderColor: condition.color, color: condition.color } as CSSProperties}
+                style={{ borderColor: condition.color, color: condition.color }}
               >
                 <span className="font-medium">{condition.name}</span>{' '}
                 <span>{`×${condition.stacks}`}</span>{' '}

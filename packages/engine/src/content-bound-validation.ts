@@ -386,7 +386,7 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
             `content-bound validation: merchant population ${population.populationId} lifetime is invalid`,
           );
         }
-        const authoredWarnings = new Set(encounter.definition.departureWarningThresholds!);
+        const authoredWarnings = new Set(encounter.definition.departureWarningThresholds);
         // A non-permanent merchant (guarded above) always carries a numeric departureAt; `null`
         // is reserved for permanent merchants, handled separately above.
         const departureAt = population.departureAt!;

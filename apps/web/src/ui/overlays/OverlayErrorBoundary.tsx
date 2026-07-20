@@ -29,7 +29,7 @@ export class OverlayErrorBoundary extends Component<
   }
 
   public override componentDidCatch(error: unknown, info: ErrorInfo): void {
-    // eslint-disable-next-line no-console -- surfaced visibly below too; this is the developer trail.
+     
     console.error('Overlay content failed to render:', error, info.componentStack);
   }
 

@@ -1,4 +1,4 @@
-import { type JSX, type RefObject } from 'react';
+import type { JSX, RefObject } from 'react';
 import { HERO, PLAY_ROUTE, TAGLINE } from '../copy.js';
 
 export interface HeroProps {

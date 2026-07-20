@@ -79,8 +79,8 @@ export function nextUint32(state: Uint32State): RandomStep {
   const shifted = (initial1 << 9) >>> 0;
   let s2 = (initial2 ^ initial0) >>> 0;
   let s3 = (initial3 ^ initial1) >>> 0;
-  let s1 = (initial1 ^ s2) >>> 0;
-  let s0 = (initial0 ^ s3) >>> 0;
+  const s1 = (initial1 ^ s2) >>> 0;
+  const s0 = (initial0 ^ s3) >>> 0;
   s2 = (s2 ^ shifted) >>> 0;
   s3 = rotateLeft(s3, 11);
   return { value, state: [s0, s1, s2, s3] };

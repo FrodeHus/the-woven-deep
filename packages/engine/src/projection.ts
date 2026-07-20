@@ -7,7 +7,7 @@ import type {
 } from '@woven-deep/content';
 import { heroActor, heroPerception } from './actor-model.js';
 import { entryById } from './content-index.js';
-import { deriveActorStats } from './attributes.js';
+import type { deriveActorStats } from './attributes.js';
 import { balanceEntry } from './actions.js';
 import {
   factionReputation,
@@ -34,7 +34,7 @@ import {
   type TileId,
 } from './model.js';
 import type { RecordedHeirloomSnapshot } from './population-model.js';
-import { type PerceptionFloor, type PerceptionHero } from './perception.js';
+import type { PerceptionFloor, PerceptionHero } from './perception.js';
 import { heroFloorPerception } from './run-perception.js';
 import { deriveRunActorStats } from './stats.js';
 import { relationshipBetween } from './reactions.js';

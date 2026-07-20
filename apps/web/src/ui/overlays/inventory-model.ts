@@ -1,5 +1,5 @@
 import type { CompiledContentPack } from '@woven-deep/content';
-import { type HeroView, type OwnedItemView } from '../../session/projection-view.js';
+import type { HeroView, OwnedItemView } from '../../session/projection-view.js';
 import { itemById } from '../../session/pack-queries.js';
 
 /** The real item-category vocabulary the content model/engine projection actually emits (see

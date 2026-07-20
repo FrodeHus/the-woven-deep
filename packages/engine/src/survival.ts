@@ -65,9 +65,7 @@ export function hungerModifiers(
     balance: BalanceContentEntry;
   }>,
 ): DerivedStatModifier {
-  return { ...input.balance.hungerStageModifiers[input.stage] } as Partial<
-    Record<DerivedStatName, number>
-  >;
+  return { ...input.balance.hungerStageModifiers[input.stage] };
 }
 
 export function restoreHunger(

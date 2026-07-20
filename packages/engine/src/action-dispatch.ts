@@ -1,5 +1,5 @@
 import type { CompiledContentPack } from '@woven-deep/content';
-import { type GameAction } from './actions.js';
+import type { GameAction } from './actions.js';
 import { actorById, heroPerception, withActor, type ActorState } from './actor-model.js';
 import { applyPopulationCombatModifiers, resolveAttack } from './combat.js';
 import { applyEffectResult, resolveEffectSequence } from './effects.js';

@@ -30,7 +30,7 @@ export function useHallRepository(
       }
       throw thrown;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `storageEpoch` is a deliberate
+     
     // reconstruction trigger, not a value read inside the memo.
   }, [storage, storageEpoch]);
 }
