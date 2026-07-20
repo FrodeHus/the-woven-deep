@@ -1,0 +1,16 @@
+schemaVersion: 7
+entries:
+  - kind: trait
+    id: trait.born-in-the-dark
+    name: Born in the Dark
+    tags: [chargen]
+    description: Eyes raised in lightless burrows pick out shapes the sun-born miss entirely.
+    modifiers: { lightOutRevealRadius: 3 }
+  - kind: trait
+    id: trait.living-compass
+    name: Living Compass
+    tags: [chargen]
+    description: >-
+      A traveller's sense for ground already walked; the map you have earned stays with
+      you when the light dies, though it shows you nothing new.
+    modifiers: { lightOutMemoryPersists: 1 }
