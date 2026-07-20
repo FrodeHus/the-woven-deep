@@ -163,12 +163,14 @@ function resolveRateLimits(env: NodeJS.ProcessEnv): AuthConfig['loginRateLimit']
 
 function readAuthConfig(env: NodeJS.ProcessEnv): AuthConfig {
   const { publicUrl, parsedUrl, isProductionShaped } = resolvePublicUrl(env);
+  const mailgun = resolveMailgunConfig(env, isProductionShaped);
+  const cookieSecret = resolveCookieSecret(env, isProductionShaped);
 
   return {
     publicUrl,
-    cookieSecret: resolveCookieSecret(env, isProductionShaped),
+    cookieSecret,
     cookieSecure: parsedUrl.protocol === 'https:',
-    mailgun: resolveMailgunConfig(env, isProductionShaped),
+    mailgun,
     loginRateLimit: resolveRateLimits(env),
   };
 }
