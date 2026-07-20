@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { effect, presented, safeNonNegative, safePositive, targetingIds } from './common.js';
+import {
+  effect, presented, safeNonNegative, safePositive, targetingIds, trapDisarmOutcomes, trapResetModes,
+} from './common.js';
 
 export const trapEntry = z.strictObject({
   ...presented,
@@ -8,10 +10,10 @@ export const trapEntry = z.strictObject({
   discoveryDifficulty: safeNonNegative,
   disarmDifficulty: safeNonNegative,
   disarmOutcomes: z.strictObject({
-    failure: z.enum(['safe', 'tool-damage', 'trigger']),
-    criticalFailure: z.enum(['safe', 'tool-damage', 'trigger']),
+    failure: z.enum(trapDisarmOutcomes),
+    criticalFailure: z.enum(trapDisarmOutcomes),
     toolDamage: safePositive,
   }),
-  resetMode: z.enum(['once', 'reset', 'disabled']),
+  resetMode: z.enum(trapResetModes),
   effects: z.array(effect).min(1),
 });

@@ -93,7 +93,7 @@ function bossEffectOperations(input: Readonly<{
       const items = operation.items.map((item) => {
         const owned = (item.location.type === 'backpack' || item.location.type === 'equipped')
           && item.location.actorId === operation.targetActorId;
-        if (!owned || requireItem(input.content,item.contentId).light === null) return item;
+        if (!owned || requireItem(input.content, item.contentId).light === null) return item;
         if (enabled && (item.fuel ?? 0) <= 0) throw new Error(`internal invariant: boss arena light ${item.itemId} has no fuel`);
         changed += 1;
         events.push({ type: 'item.light-toggled', eventId: operation.eventId, actorId: operation.targetActorId,
@@ -132,15 +132,15 @@ function bossEffectOperations(input: Readonly<{
       const maximum = parseEffectParameters(operation.effect, 'effect.fuel.transfer').maximum;
       const owned = (item: typeof operation.items[number]) => (item.location.type === 'backpack'
         || item.location.type === 'equipped') && item.location.actorId === operation.targetActorId;
-      const lights = operation.items.filter((item) => owned(item) && requireItem(input.content,item.contentId).light !== null)
+      const lights = operation.items.filter((item) => owned(item) && requireItem(input.content, item.contentId).light !== null)
         .sort((left, right) => compareCodeUnits(left.itemId, right.itemId));
       for (const lightItem of lights) {
-        const light = requireItem(input.content,lightItem.contentId).light!;
+        const light = requireItem(input.content, lightItem.contentId).light!;
         const capacity = light.fuelCapacity - (lightItem.fuel ?? 0);
         if (capacity <= 0) continue;
         const fuel = operation.items.filter((item) => item.location.type === 'backpack'
           && item.location.actorId === operation.targetActorId
-          && requireItem(input.content,item.contentId).tags.some((tag) => light.fuelTags.includes(tag)))
+          && requireItem(input.content, item.contentId).tags.some((tag) => light.fuelTags.includes(tag)))
           .sort((left, right) => compareCodeUnits(left.itemId, right.itemId))[0];
         if (!fuel) continue;
         const quantity = Math.min(maximum, capacity, fuel.quantity);

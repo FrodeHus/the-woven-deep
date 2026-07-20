@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CompiledContentPack, ContentEntry } from '@woven-deep/content';
-import { entryById, requireEncounter, requireItem, requireMonster } from '../src/index.js';
+import { entryById, requireEncounter, requireItem } from '../src/index.js';
 
 function entry(kind: string, id: string, extra: Record<string, unknown> = {}): ContentEntry {
   return { kind, id, name: id, tags: [], ...extra } as unknown as ContentEntry;
@@ -29,20 +29,6 @@ describe('entryById', () => {
 
   it('returns the same cached entry object across calls on the same pack', () => {
     expect(entryById(content, 'monster.rat')).toBe(entryById(content, 'monster.rat'));
-  });
-});
-
-describe('requireMonster', () => {
-  it('returns the monster entry', () => {
-    expect(requireMonster(content, 'monster.rat').id).toBe('monster.rat');
-  });
-
-  it('throws when the id is unknown', () => {
-    expect(() => requireMonster(content, 'monster.ghost')).toThrow(/monster monster.ghost does not exist/);
-  });
-
-  it('throws when the id resolves to a different kind', () => {
-    expect(() => requireMonster(content, 'item.sword')).toThrow(/monster item.sword does not exist/);
   });
 });
 

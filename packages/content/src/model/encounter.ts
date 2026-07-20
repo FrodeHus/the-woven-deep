@@ -12,6 +12,12 @@ export const LEADER_DEATH_RESPONSES = ['weaken', 'panic', 'disband', 'surrender'
 export type LeaderDeathResponse = typeof LEADER_DEATH_RESPONSES[number];
 export const SWARM_DESTRUCTION_RESPONSES = ['stop', 'flee', 'decay', 'frenzy'] as const;
 export type SwarmDestructionResponse = typeof SWARM_DESTRUCTION_RESPONSES[number];
+export const ENCOUNTER_PLACEMENT_FAILURE_MODES = ['optional', 'required'] as const;
+export type EncounterPlacementFailureMode = typeof ENCOUNTER_PLACEMENT_FAILURE_MODES[number];
+export const GROUP_COLLAPSE_REWARDS_VALUES = ['none', 'individual'] as const;
+export type GroupCollapseRewards = typeof GROUP_COLLAPSE_REWARDS_VALUES[number];
+export const MERCHANT_AGGRESSION_RESPONSES = ['flee', 'self-defense'] as const;
+export type MerchantAggressionResponse = typeof MERCHANT_AGGRESSION_RESPONSES[number];
 
 export interface EncounterPlacementDefinition {
   readonly minimumStairDistance: number;
@@ -19,7 +25,7 @@ export interface EncounterPlacementDefinition {
   readonly maximumMemberDistance: number;
   readonly allowedTerrainTags: readonly string[];
   readonly requiresVaultSlot: boolean;
-  readonly failureMode: 'optional' | 'required';
+  readonly failureMode: EncounterPlacementFailureMode;
 }
 
 export interface EncounterIntentPresentation {
@@ -59,7 +65,7 @@ export interface GroupEncounterDefinition {
   readonly leaderDeathResponse: LeaderDeathResponse;
   readonly responseParameters: Readonly<Record<string, unknown>>;
   readonly supernaturalBond: boolean;
-  readonly collapseRewards: 'none' | 'individual';
+  readonly collapseRewards: GroupCollapseRewards;
 }
 
 export interface SwarmSpawnRoleDefinition {
@@ -116,7 +122,7 @@ export interface MerchantEncounterDefinition {
   // Non-permanent (dungeon-wandering) merchants must declare all three.
   readonly permanent: boolean;
   readonly minimumLifetime?: number; readonly maximumLifetime?: number;
-  readonly departureWarningThresholds?: readonly number[]; readonly aggressionResponse: 'flee' | 'self-defense';
+  readonly departureWarningThresholds?: readonly number[]; readonly aggressionResponse: MerchantAggressionResponse;
   readonly commerceReputationDelta: number; readonly aggressionReputationDelta: number;
   readonly deathReputationDelta: number; readonly stockDropFraction: number;
 }

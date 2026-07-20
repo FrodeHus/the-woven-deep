@@ -190,6 +190,9 @@ export function disarmTrap(input: Readonly<{
     || !discovered(feature, actor.actorId)) throw new Error('trap is unavailable');
   const definition = trapDefinition(input.content, feature.contentId);
   const balance = input.content.entries.find((entry) => entry.kind === 'balance')!;
+  // Uses `deriveActorStats` directly, NOT `deriveRunActorStats` -- the latter also folds in
+  // hunger modifiers, which would change the disarm roll's difficulty and is not part of this
+  // check's contract.
   const stats = deriveActorStats({ attributes: actor.attributes, formulas: balance.formulas,
     equipmentModifiers: equipmentModifiers({ run: input.run, content: input.content, actorId: actor.actorId }).map((source) => source.modifiers),
     conditionModifiers: conditionModifiers(actor, input.content),

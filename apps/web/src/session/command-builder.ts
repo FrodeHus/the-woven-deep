@@ -5,7 +5,7 @@ import {
 } from '@woven-deep/engine';
 import type { PlayerIntent } from './intents.js';
 import {
-  actorsOf, adjacentMerchant, featuresOf, groundItemsOf, heroOf, ownedItemOf,
+  actorsOf, adjacentMerchant, chebyshev, featuresOf, groundItemsOf, heroOf, ownedItemOf,
   type ActorView, type FeatureView, type GroundItemView, type OwnedItemView,
 } from './projection-view.js';
 import { itemById } from './pack-queries.js';
@@ -69,8 +69,7 @@ function stairUpUnderHero(projection: GameplayProjection): boolean {
 function heroAdjacentToHouseDoor(projection: GameplayProjection): boolean {
   const door = projection.slots.find((slot) => slot.tags.includes('house-door'));
   if (!door) return false;
-  const { x, y } = heroOf(projection);
-  return Math.max(Math.abs(x - door.x), Math.abs(y - door.y)) === 1;
+  return chebyshev(heroOf(projection), door) === 1;
 }
 
 function equipSlotFor(pack: CompiledContentPack, contentId: OpaqueId, occupiedSlots: ReadonlySet<EquipmentSlot>): EquipmentSlot | undefined {

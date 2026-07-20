@@ -3,8 +3,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  createGameplayDemoRun, createNewRun, DEFAULT_GUEST_HERO, projectGameplayState,
-  type GameplayProjection,
+  createGameplayDemoRun, createNewRun, DEFAULT_GUEST_HERO, heroActor, heroPerception,
+  projectGameplayState, refreshKnowledge, resolveCommand, validateActiveRun,
+  type ActiveRun, type FloorSnapshot, type GameplayProjection, type MerchantPopulation,
 } from '@woven-deep/engine';
 import {
   actorsOf, featuresOf, groundItemsOf, heroOf, houseOf, ownedItemOf, slotsOf, tradeOf,
@@ -137,4 +138,68 @@ describe('tradeOf', () => {
   it('is undefined with no active trade session', () => {
     expect(tradeOf(town)).toBeUndefined();
   });
+
+  it('reads a stock item view-model fields off an opened trade', () => {
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const armorer = run.populations.find((population): population is MerchantPopulation =>
+      population.model === 'merchant' && population.encounterId === 'encounter.town-armorer')!;
+    const merchantActor = run.actors.find((actor) => actor.actorId === armorer.actorId)!;
+    const moved = teleportHero(run, adjacentFreeCell(run, merchantActor));
+    const opened = resolveCommand(moved, {
+      type: 'trade-open', commandId: 'command.trade-open', expectedRevision: moved.revision,
+      merchantActorId: merchantActor.actorId,
+    }, { content: pack });
+    if (opened.result.status !== 'applied') throw new Error(`test setup failure: trade-open was not applied (${JSON.stringify(opened.result)})`);
+
+    const projection = projectGameplayState({ state: opened.state, content: pack });
+    const trade = tradeOf(projection);
+    expect(trade).toBeDefined();
+    const entry = trade!.stock[0];
+    expect(entry).toBeDefined();
+    expect(typeof entry!.item.itemId).toBe('string');
+    expect(typeof entry!.item.name).toBe('string');
+    expect(typeof entry!.item.category).toBe('string');
+    expect(typeof entry!.quantity).toBe('number');
+    expect(typeof entry!.unitPrice).toBe('number');
+  });
 });
+
+function townFloor(run: ActiveRun): FloorSnapshot {
+  return run.floors.find((floor) => floor.floorId === run.activeFloorId)!;
+}
+
+/** Mirrors the identical helper in `trade-close-escape.test.tsx`/`trade-screen.test.tsx`: teleports
+ * the hero and refreshes the active floor's knowledge in place, since `trade-open` requires the
+ * merchant to be visible. */
+function teleportHero(run: ActiveRun, position: Readonly<{ x: number; y: number }>): ActiveRun {
+  const hero = heroActor(run);
+  const moved: ActiveRun = {
+    ...run,
+    actors: run.actors.map((actor) => actor.actorId === hero.actorId ? { ...actor, ...position } : actor),
+  };
+  const floor = townFloor(moved);
+  const movedHero = heroActor(moved);
+  const knowledge = refreshKnowledge({
+    floor, hero: heroPerception(moved.hero, movedHero),
+    actors: new Map(moved.actors.filter((actor) => actor.floorId === floor.floorId).map((actor) => [actor.actorId, actor] as const)),
+  }).knowledge;
+  return validateActiveRun({
+    ...moved,
+    floors: moved.floors.map((candidate) => candidate.floorId === floor.floorId ? { ...candidate, knowledge } : candidate),
+  });
+}
+
+/** Stands the hero directly beside (Chebyshev distance 1 from) the given point. */
+function adjacentFreeCell(run: ActiveRun, target: Readonly<{ x: number; y: number }>): Readonly<{ x: number; y: number }> {
+  const floor = townFloor(run);
+  const occupied = new Set(run.actors.filter((actor) => actor.floorId === floor.floorId && actor.health > 0)
+    .map((actor) => `${actor.x}:${actor.y}`));
+  for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+    const x = target.x + dx;
+    const y = target.y + dy;
+    if (x < 0 || y < 0 || x >= floor.width || y >= floor.height) continue;
+    if (occupied.has(`${x}:${y}`)) continue;
+    return { x, y };
+  }
+  throw new Error(`test setup failure: cannot stand adjacent to ${target.x}:${target.y}`);
+}

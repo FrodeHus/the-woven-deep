@@ -13,7 +13,7 @@ export type ActionId =
   | 'wait' | 'rest' | 'pickup' | 'descend' | 'ascend'
   | 'inventory' | 'house' | 'trade'
   | 'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help'
-  // Retires the play screen's contextual onboarding hint strip (Task 8) -- rebindable and listed
+  // Dismisses the play screen's contextual onboarding hint strip -- rebindable and listed
   // in help/settings exactly like every other action, even though it isn't a game command.
   | 'dismiss-hint';
 
@@ -29,7 +29,7 @@ export interface Settings {
    * re-declares every palette variable for WCAG AA legibility, applied by `App` as the root class
    * `theme-high-contrast` -- see `styles.css`'s `.theme-high-contrast` block. */
   readonly theme: 'tapestry' | 'high-contrast';
-  /** Whether the play screen's contextual onboarding hint strip (Task 8) may show at all --
+  /** Whether the play screen's contextual onboarding hint strip may show at all --
    * `'on'` by default. `'off'` (settings toggle, the wizard's step-1 "Show guidance on your first
    * delve" checkbox unchecked, or a quickstart boot) suppresses every hint regardless of mastery
    * state; the mastery ledger itself (`onboarding.ts`'s `OnboardingState`) keeps accumulating
@@ -67,8 +67,7 @@ function chord(key: string, shift = false): KeyChord {
 
 /** Human-readable label per `ActionId` -- the single source of truth for naming an action in copy
  * (settings rows, conflict-refusal messages, the help overlay's controls section) so no caller
- * needs a raw `ActionId`/key literal to describe what a row means. Originally defined inline in
- * `SettingsOverlay.tsx`; extracted here (Task 4) once the help overlay needed the same labels. */
+ * needs a raw `ActionId`/key literal to describe what a row means. */
 export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
   'move.n': 'Move north', 'move.ne': 'Move northeast', 'move.e': 'Move east',
   'move.se': 'Move southeast', 'move.s': 'Move south', 'move.sw': 'Move southwest',
@@ -82,8 +81,8 @@ export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
 /**
  * The shipped keymap. Movement defaults are the vi keys (arrows/numpad are separate, hardwired
  * synonyms baked into `KeyRouter.ts` -- they are never represented here and can never be
- * rebound away from movement). Every other default matches the pre-existing `KEYMAP` in
- * `KeyRouter.ts` exactly, plus the five new overlay-open keys (`c`/`m`/`x`/`o`/`Shift+?`).
+ * rebound away from movement). Every other default matches `KeyRouter.ts`'s `KEYMAP` exactly,
+ * plus the five overlay-open keys (`c`/`m`/`x`/`o`/`Shift+?`).
  */
 export const DEFAULT_BINDINGS: Readonly<Record<ActionId, KeyChord>> = {
   'move.n': chord('k'),
@@ -202,7 +201,7 @@ function isValidChord(value: unknown): value is KeyChord {
  * The shared body of `loadSettings`/`settingsFromJson`: parses a raw JSON string through the same
  * forward-tolerant validation (unknown fields dropped, invalid `bindings` entries dropped or
  * conflict-resolved, anything unparsable/non-object falls back to `DEFAULT_SETTINGS` with
- * `corrupted: true`). Extracted so a roamed server blob (Task 12) is validated through the exact
+ * `corrupted: true`). Shared so a roamed server settings blob is validated through the exact
  * same rules a local storage read is -- a server value can never bypass the client's own shape
  * authority.
  */
@@ -281,7 +280,7 @@ export function loadSettings(
 }
 
 /**
- * Validates a raw JSON string (e.g. a roamed server settings blob, Task 12) through the exact same
+ * Validates a raw JSON string (e.g. a roamed server settings blob) through the exact same
  * forward-tolerant rules `loadSettings` applies to a storage read -- the server stores/validates
  * settings opaquely, so the client owns the shape end to end. A blob that fails to parse or isn't a
  * plain object falls back to `DEFAULT_SETTINGS` with `corrupted: true`, never a thrown error.
@@ -315,10 +314,6 @@ function hasBindingConflict(bindings: Settings['bindings']): boolean {
  * -- letting a caller word a specific notice for the storage case while treating the conflict case
  * (which the settings UI itself pre-checks with `bindingConflict`, so a caller should never see the
  * `saveSettings` guard actually fire) as the silent backstop it's meant to be.
- *
- * (Widened forward from Task 1's literal `{ ok: boolean }` brief shape -- flagged there as a gap
- * for whichever task first needed to distinguish the failure reason; Task 3's settings-overlay
- * write-failure notice is that caller.)
  */
 export type SaveSettingsResult = Readonly<{ ok: true }> | Readonly<{ ok: false; reason?: StorageFailure }>;
 

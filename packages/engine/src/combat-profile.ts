@@ -90,12 +90,12 @@ export function profile(
     && item.location.actorId === actor.actorId);
   const mainHandId = actor.equipment['main-hand'];
   const mainHand = mainHandId ? equipped.find((item) => item.itemId === mainHandId) : undefined;
-  const weapon = mainHand ? requireItem(content,mainHand.contentId).combat : undefined;
+  const weapon = mainHand ? requireItem(content, mainHand.contentId).combat : undefined;
   const damage = weapon?.damage && weapon.ammunitionTag === null
     ? { ...weapon.damage, bonus: weapon.damage.bonus + stats.meleeDamageBonus }
     : { count: 1, sides: 4, bonus: stats.meleeDamageBonus };
   const armor = equipped.reduce((total, item) => total
-    + (requireItem(content,item.contentId).combat?.armor ?? 0), 0);
+    + (requireItem(content, item.contentId).combat?.armor ?? 0), 0);
   return applyPopulationCombatModifiers({
     accuracy: stats.meleeAccuracy,
     defense: stats.defense,

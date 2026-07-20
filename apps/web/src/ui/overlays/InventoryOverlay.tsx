@@ -32,7 +32,7 @@ function toListItem(entry: MenuEntry): ListDetailItem {
  * present while this overlay can open) -- guards to rendering nothing if that invariant is ever
  * violated.
  *
- * Preserves the pre-existing key contract byte-for-byte: `e` (un)equips the selected item, `u`
+ * The key contract, byte-for-byte: `e` (un)equips the selected item, `u`
  * uses it, `d` drops it, `l` toggles its light, `f` cycles the category filter, `s` toggles a
  * stable name sort -- bound via `onKeyDown` on the drawer's own container (not `window`), so they
  * fire only while focus is inside the drawer. `ListDetail` owns arrow/Home/End selection and

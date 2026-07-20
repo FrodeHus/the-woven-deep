@@ -172,6 +172,9 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
     const root = containerRef.current;
     if (!root) return;
     focusActiveList(root, pickerServiceId !== null);
+    if (activeRows.length > 0) {
+      setSelectedIndex((index) => Math.max(0, Math.min(index, activeRows.length - 1)));
+    }
   }, [focusedList, pickerServiceId, activeRows.length]);
 
   function switchList(next: FocusedList): void {

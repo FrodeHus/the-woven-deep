@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { CONDITION_TRAIT_IDS, DERIVED_STAT_NAMES } from '../../model.js';
-import { base, color, safeInteger, safePositive } from './common.js';
+import { base, color, conditionStackingModes, safeInteger, safePositive } from './common.js';
 
 const conditionDuration = z.discriminatedUnion('mode', [
   z.strictObject({ mode: z.literal('timed'), default: safePositive, maximum: safePositive })
@@ -17,7 +17,7 @@ export const conditionEntry = z.strictObject({
   color,
   duration: conditionDuration,
   stacking: z.strictObject({
-    mode: z.enum(['replace', 'refresh', 'intensify']),
+    mode: z.enum(conditionStackingModes),
     maximumStacks: safePositive.max(100),
   }),
   modifiersPerStack: z.partialRecord(z.enum(DERIVED_STAT_NAMES), safeInteger).default({}),

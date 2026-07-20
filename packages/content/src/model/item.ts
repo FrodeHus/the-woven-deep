@@ -2,9 +2,12 @@ import type {
   DiceDefinition, EffectDefinition, EquipmentSlot, ItemCategory, ItemRarity, PresentedContentEntry,
 } from './common.js';
 
+export const ITEM_HANDEDNESS_VALUES = ['one-handed', 'two-handed', 'none'] as const;
+export type ItemHandedness = typeof ITEM_HANDEDNESS_VALUES[number];
+
 export interface EquipmentDefinition {
   readonly slots: readonly EquipmentSlot[];
-  readonly handedness: 'one-handed' | 'two-handed' | 'none';
+  readonly handedness: ItemHandedness;
   readonly reservedSlots: readonly EquipmentSlot[];
 }
 
@@ -27,8 +30,11 @@ export interface LightItemDefinition {
   readonly fuelTags: readonly string[];
 }
 
+export const IDENTIFICATION_MODES = ['known', 'shuffled', 'instance'] as const;
+export type IdentificationMode = typeof IDENTIFICATION_MODES[number];
+
 export interface IdentificationDefinition {
-  readonly mode: 'known' | 'shuffled' | 'instance';
+  readonly mode: IdentificationMode;
   readonly poolId: string | null;
 }
 

@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import {
-  base, color, depthRange, effect, encounterFormations, formationPreferences, glyph,
-  itemCategories, itemRarities, jsonObject, leaderDeathResponses, merchantServiceIds, probability,
+  base, color, depthRange, effect, encounterFormations, encounterPlacementFailureModes,
+  formationPreferences, glyph, groupCollapseRewards, itemCategories, itemRarities, jsonObject,
+  leaderDeathResponses, merchantAggressionResponses, merchantServiceIds, probability,
   safeInteger, safeNonNegative, safePositive, slugSchema, stableIdSchema,
   swarmDestructionResponses,
 } from './common.js';
@@ -18,7 +19,7 @@ const encounterPlacement = z.strictObject({
   maximumMemberDistance: safeNonNegative,
   allowedTerrainTags: z.array(slugSchema).min(1),
   requiresVaultSlot: z.boolean(),
-  failureMode: z.enum(['optional', 'required']),
+  failureMode: z.enum(encounterPlacementFailureModes),
 });
 
 const encounterIntentPresentation = z.strictObject({ visible: z.boolean() });
@@ -109,7 +110,7 @@ const groupEncounterEntry = z.strictObject({
     leaderDeathResponse: z.enum(leaderDeathResponses),
     responseParameters: jsonObject.default({}),
     supernaturalBond: z.boolean(),
-    collapseRewards: z.enum(['none', 'individual']),
+    collapseRewards: z.enum(groupCollapseRewards),
   }),
 }).superRefine((entry, context) => {
   refineDepth(entry, context);
@@ -196,7 +197,7 @@ const merchantEncounterDefinition = z.strictObject({
   // a non-permanent (dungeon-wandering) merchant must declare all three.
   permanent: z.boolean(),
   minimumLifetime: safePositive.optional(), maximumLifetime: safePositive.optional(),
-  departureWarningThresholds: z.array(safePositive).optional(), aggressionResponse: z.enum(['flee', 'self-defense']),
+  departureWarningThresholds: z.array(safePositive).optional(), aggressionResponse: z.enum(merchantAggressionResponses),
   commerceReputationDelta: safeInteger, aggressionReputationDelta: safeInteger,
   deathReputationDelta: safeInteger, stockDropFraction: probability,
 }).superRefine((definition, context) => {

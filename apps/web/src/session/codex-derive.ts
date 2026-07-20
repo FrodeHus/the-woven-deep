@@ -116,12 +116,17 @@ const CLASS_ENTRY_COLOR = '#c9c9c9';
  * distinctive per class (asserted by `codex.test.ts`'s uniqueness fixture), so this subset test
  * never actually matches more than the one intended class today.
  */
+/** True if `tags` contains every one of `entry`'s own `classTags` -- the shared subset test both
+ * `classDiscovered` and `deriveClassCategory` apply against a hero's or a record's `classTags`. */
+function classCoversEntry(entry: ClassContentEntry, tags: readonly string[]): boolean {
+  return entry.classTags.every((tag) => tags.includes(tag));
+}
+
 function classDiscovered(
   entry: ClassContentEntry, records: readonly StoredHallRecord[], heroClassTags: readonly string[] | null,
 ): boolean {
-  const coversEntry = (tags: readonly string[]): boolean => entry.classTags.every((tag) => tags.includes(tag));
-  if (heroClassTags !== null && coversEntry(heroClassTags)) return true;
-  return records.some((record) => coversEntry(record.classTags));
+  if (heroClassTags !== null && classCoversEntry(entry, heroClassTags)) return true;
+  return records.some((record) => classCoversEntry(entry, record.classTags));
 }
 
 function deriveClassCategory(
@@ -135,10 +140,10 @@ function deriveClassCategory(
       if (!classDiscovered(entry, records, heroClassTags)) {
         return { discovered: false, silhouetteGlyph: entry.silhouetteGlyph };
       }
-      const coversEntry = (tags: readonly string[]): boolean => entry.classTags.every((tag) => tags.includes(tag));
       return {
         discovered: true, contentId: entry.id, name: entry.name, glyph: entry.silhouetteGlyph, color: CLASS_ENTRY_COLOR,
-        description: entry.description, firstSeenRun: firstSeenRun(records, (record) => coversEntry(record.classTags)),
+        description: entry.description,
+        firstSeenRun: firstSeenRun(records, (record) => classCoversEntry(entry, record.classTags)),
       };
     }),
   };
