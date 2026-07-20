@@ -16,9 +16,19 @@ import { trapEntry } from './schema/trap.js';
 import { vaultEntry } from './schema/vault.js';
 
 export {
-  damageTypes, diceSchema, encounterFormations, encounterModels, equipmentSlots,
-  formationPreferences, leaderDeathResponses, merchantServiceIds, slugSchema, stableIdSchema,
-  swarmDestructionResponses, targetingIds, vaultPlacementKinds,
+  damageTypes,
+  diceSchema,
+  encounterFormations,
+  encounterModels,
+  equipmentSlots,
+  formationPreferences,
+  leaderDeathResponses,
+  merchantServiceIds,
+  slugSchema,
+  stableIdSchema,
+  swarmDestructionResponses,
+  targetingIds,
+  vaultPlacementKinds,
 } from './schema/common.js';
 export { TOWN_VAULT_REQUIRED_SLOT_IDS } from './schema/vault.js';
 
@@ -43,11 +53,12 @@ export const contentSourceEntrySchema = z.discriminatedUnion('kind', [
 ]);
 
 export const contentEntrySchema = contentSourceEntrySchema.transform((entry) => {
-  if (entry.kind === 'encounter') return {
-    ...entry,
-    discoveryProtectionIncrement: entry.discoveryProtectionIncrement ?? 0,
-    discoveryProtectionCap: entry.discoveryProtectionCap ?? 0,
-  };
+  if (entry.kind === 'encounter')
+    return {
+      ...entry,
+      discoveryProtectionIncrement: entry.discoveryProtectionIncrement ?? 0,
+      discoveryProtectionCap: entry.discoveryProtectionCap ?? 0,
+    };
   if (entry.kind !== 'vault') return entry;
   let entranceCount = 0;
   const requiredSlotIds = new Set<string>();
@@ -61,7 +72,9 @@ export const contentEntrySchema = contentSourceEntrySchema.transform((entry) => 
   return {
     ...entry,
     entranceCount,
-    requiredSlotIds: [...requiredSlotIds].sort((left, right) => left < right ? -1 : left > right ? 1 : 0),
+    requiredSlotIds: [...requiredSlotIds].sort((left, right) =>
+      left < right ? -1 : left > right ? 1 : 0,
+    ),
   };
 });
 

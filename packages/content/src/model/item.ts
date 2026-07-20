@@ -1,9 +1,14 @@
 import type {
-  DiceDefinition, EffectDefinition, EquipmentSlot, ItemCategory, ItemRarity, PresentedContentEntry,
+  DiceDefinition,
+  EffectDefinition,
+  EquipmentSlot,
+  ItemCategory,
+  ItemRarity,
+  PresentedContentEntry,
 } from './common.js';
 
 export const ITEM_HANDEDNESS_VALUES = ['one-handed', 'two-handed', 'none'] as const;
-export type ItemHandedness = typeof ITEM_HANDEDNESS_VALUES[number];
+export type ItemHandedness = (typeof ITEM_HANDEDNESS_VALUES)[number];
 
 export interface EquipmentDefinition {
   readonly slots: readonly EquipmentSlot[];
@@ -31,7 +36,7 @@ export interface LightItemDefinition {
 }
 
 export const IDENTIFICATION_MODES = ['known', 'shuffled', 'instance'] as const;
-export type IdentificationMode = typeof IDENTIFICATION_MODES[number];
+export type IdentificationMode = (typeof IDENTIFICATION_MODES)[number];
 
 export interface IdentificationDefinition {
   readonly mode: IdentificationMode;

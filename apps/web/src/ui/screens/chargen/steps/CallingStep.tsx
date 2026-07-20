@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 import { FacetedOptionList } from '../FacetedOptionList.js';
 import { classEntries } from '../../../../session/pack-queries.js';
-import { type StepProps } from './step-content.js';
+import type { StepProps } from './step-content.js';
 
 export function CallingStep({ state, pack, dispatch }: StepProps): JSX.Element {
   const entries = classEntries(pack).map((entry) => ({
@@ -18,7 +18,9 @@ export function CallingStep({ state, pack, dispatch }: StepProps): JSX.Element {
         ariaLabel="Calling"
         marker="single"
         selected={(entry) => state.classId === entry.id}
-        onSelect={(entry) => { if (entry.playable) dispatch({ type: 'choose-class', classId: entry.id }); }}
+        onSelect={(entry) => {
+          if (entry.playable) dispatch({ type: 'choose-class', classId: entry.id });
+        }}
       />
     </section>
   );

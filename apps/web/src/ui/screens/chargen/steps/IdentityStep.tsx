@@ -16,7 +16,9 @@ function pickRandomName(): string {
 }
 
 export function IdentityStep({ state, dispatch }: StepProps): JSX.Element {
-  const { selectedIndex, registerItem, handleArrowKeys } = useListNavigation(PORTRAIT_GLYPHS.length);
+  const { selectedIndex, registerItem, handleArrowKeys } = useListNavigation(
+    PORTRAIT_GLYPHS.length,
+  );
   const valid = nameIsValid(state.name);
 
   return (
@@ -34,7 +36,11 @@ export function IdentityStep({ state, dispatch }: StepProps): JSX.Element {
             autoFocus
             className="flex-1"
           />
-          <Button type="button" variant="outline" onClick={() => dispatch({ type: 'set-name', name: pickRandomName() })}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => dispatch({ type: 'set-name', name: pickRandomName() })}
+          >
             {'⟳ RANDOM'}
           </Button>
         </div>
@@ -44,7 +50,12 @@ export function IdentityStep({ state, dispatch }: StepProps): JSX.Element {
       </div>
       <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
         <legend className="text-sm font-medium text-fg">Portrait</legend>
-        <div role="listbox" aria-label="Portrait" className="flex flex-row flex-wrap gap-2" onKeyDown={handleArrowKeys}>
+        <div
+          role="listbox"
+          aria-label="Portrait"
+          className="flex flex-row flex-wrap gap-2"
+          onKeyDown={handleArrowKeys}
+        >
           {PORTRAIT_GLYPHS.map((glyph, index) => (
             <button
               key={glyph}
@@ -69,7 +80,9 @@ export function IdentityStep({ state, dispatch }: StepProps): JSX.Element {
           type="checkbox"
           className="h-4 w-4 rounded border-line accent-accent"
           checked={state.onboardingEnabled}
-          onChange={(event) => dispatch({ type: 'set-onboarding-enabled', enabled: event.target.checked })}
+          onChange={(event) =>
+            dispatch({ type: 'set-onboarding-enabled', enabled: event.target.checked })
+          }
         />
         Show guidance on your first delve
       </Label>

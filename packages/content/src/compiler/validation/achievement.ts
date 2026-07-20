@@ -1,7 +1,9 @@
 import type { ContentCompileIssue } from '../error.js';
 import { issue, type LocatedContentEntry } from './shared.js';
 
-export function achievementIssues(locatedEntries: readonly LocatedContentEntry[]): ContentCompileIssue[] {
+export function achievementIssues(
+  locatedEntries: readonly LocatedContentEntry[],
+): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
   const firstByCriteria = new Map<string, string>();
   for (const { entry, file } of locatedEntries) {
@@ -11,8 +13,13 @@ export function achievementIssues(locatedEntries: readonly LocatedContentEntry[]
       firstByCriteria.set(entry.criteriaId, entry.id);
       continue;
     }
-    issues.push(issue(file, `$.entries.${entry.id}.criteriaId`,
-      `at most one achievement per criterion; ${entry.criteriaId} is already claimed by ${first}`));
+    issues.push(
+      issue(
+        file,
+        `$.entries.${entry.id}.criteriaId`,
+        `at most one achievement per criterion; ${entry.criteriaId} is already claimed by ${first}`,
+      ),
+    );
   }
   return issues;
 }

@@ -56,12 +56,21 @@ function killerName(pack: CompiledContentPack, killerContentId: string | null): 
  * or head back to the title.
  */
 export function ConclusionScreen({
-  projection, pack, logTail, onHall, onNewHero, onTitle,
+  projection,
+  pack,
+  logTail,
+  onHall,
+  onNewHero,
+  onTitle,
 }: ConclusionScreenProps): JSX.Element {
   const { cause, score, heirloom, achievements, completionType } = projection;
   const killer = killerName(pack, cause.killerContentId);
 
-  const options: readonly { readonly key: string; readonly label: string; readonly onSelect: () => void }[] = [
+  const options: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly onSelect: () => void;
+  }[] = [
     { key: 'hall', label: 'Hall of Records', onSelect: onHall },
     { key: 'new-hero', label: 'New Hero', onSelect: onNewHero },
     { key: 'title', label: 'Title', onSelect: onTitle },
@@ -71,16 +80,21 @@ export function ConclusionScreen({
   return (
     <section aria-label="Conclusion" className="mx-auto flex max-w-3xl flex-col gap-3 p-6">
       <p className="text-xs uppercase tracking-widest text-muted">The Woven Deep</p>
-      <h1 className="font-serif text-3xl text-accent-strong">{COMPLETION_HEADLINE[completionType]}</h1>
+      <h1 className="font-serif text-3xl text-accent-strong">
+        {COMPLETION_HEADLINE[completionType]}
+      </h1>
       <p className="text-sm text-muted">
-        {killer ? `Slain by ${killer}` : 'Claimed by the depths'} at depth {cause.depth}, turn {cause.turn}.
+        {killer ? `Slain by ${killer}` : 'Claimed by the depths'} at depth {cause.depth}, turn{' '}
+        {cause.turn}.
       </p>
 
       <section aria-label="Last moments" className="flex flex-col gap-1">
         <h2 className="text-sm font-semibold text-fg-strong">Last moments</h2>
         <ol className="m-0 flex list-none flex-col gap-0.5 p-0 text-sm">
           {logTail.map((line) => (
-            <li key={line.id} className={LOG_TONE_CLASS[line.tone]}>{line.text}</li>
+            <li key={line.id} className={LOG_TONE_CLASS[line.tone]}>
+              {line.text}
+            </li>
           ))}
         </ol>
       </section>
@@ -127,7 +141,12 @@ export function ConclusionScreen({
         Unverified · this session only — nothing here is confirmed by a server yet.
       </p>
 
-      <div role="listbox" aria-label="Conclusion menu" className="flex flex-col gap-1.5" onKeyDown={handleArrowKeys}>
+      <div
+        role="listbox"
+        aria-label="Conclusion menu"
+        className="flex flex-col gap-1.5"
+        onKeyDown={handleArrowKeys}
+      >
         {options.map((option, index) => (
           <button
             key={option.key}
@@ -137,7 +156,8 @@ export function ConclusionScreen({
             ref={registerItem(index)}
             className={cn(
               'rounded-md border border-line bg-surface px-3 py-2 text-left text-sm text-fg hover:bg-raised',
-              index === selectedIndex && 'outline outline-2 outline-accent outline-offset-2 border-accent',
+              index === selectedIndex &&
+                'outline outline-2 outline-accent outline-offset-2 border-accent',
             )}
             onClick={option.onSelect}
           >

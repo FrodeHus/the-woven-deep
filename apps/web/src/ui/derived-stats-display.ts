@@ -7,7 +7,8 @@ import { DERIVED_STAT_NAMES, type AttributeName, type DerivedStatName } from '@w
  * mechanic's reveal radius and memory-persists knobs.
  */
 export const PLAYER_HIDDEN_DERIVED_STATS: ReadonlySet<DerivedStatName> = new Set<DerivedStatName>([
-  'lightOutRevealRadius', 'lightOutMemoryPersists',
+  'lightOutRevealRadius',
+  'lightOutMemoryPersists',
 ]);
 
 /** `DERIVED_STAT_NAMES` filtered down to the stats a player-facing derived-stat display should show. */
@@ -32,13 +33,19 @@ export const DERIVED_STAT_LABELS: Readonly<Record<DerivedStatName, string>> = {
 /** Display label for each base attribute, in `ATTRIBUTE_ORDER`, used by any player-facing
  * attribute list (chargen, character sheet). */
 export const ATTRIBUTE_LABELS: Readonly<Record<AttributeName, string>> = {
-  might: 'Might', agility: 'Agility', vitality: 'Vitality', wits: 'Wits', resolve: 'Resolve',
+  might: 'Might',
+  agility: 'Agility',
+  vitality: 'Vitality',
+  wits: 'Wits',
+  resolve: 'Resolve',
 };
 
 /** Summarizes a background/trait's derived-stat modifiers as short `+N Stat` text, e.g. for an
  * option-row's meta line. Only includes player-visible stats; returns `undefined` when there's
  * nothing to show. */
-export function modifiersMeta(modifiers: Readonly<Partial<Record<DerivedStatName, number>>>): string | undefined {
+export function modifiersMeta(
+  modifiers: Readonly<Partial<Record<DerivedStatName, number>>>,
+): string | undefined {
   const parts = playerVisibleDerivedStats()
     .filter((statName) => modifiers[statName] !== undefined)
     .map((statName) => `${modifiers[statName]! >= 0 ? '+' : ''}${modifiers[statName]} ${statName}`);

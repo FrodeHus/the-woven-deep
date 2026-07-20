@@ -43,35 +43,51 @@ describe('content model', () => {
   it('rejects a stored schema-v6 pack before exposing entries', async () => {
     const content = await import('../src/index.js');
 
-    expect(() => content.validateCompiledContentPack({
-      schemaVersion: 6,
-      hash: '0'.repeat(64),
-      entries: [],
-      generationReport: { foundationalCategories: [] },
-    })).toThrow(/Unsupported content schema version 6; expected 7/);
+    expect(() =>
+      content.validateCompiledContentPack({
+        schemaVersion: 6,
+        hash: '0'.repeat(64),
+        entries: [],
+        generationReport: { foundationalCategories: [] },
+      }),
+    ).toThrow(/Unsupported content schema version 6; expected 7/);
   });
 
   it('rejects a stored schema-v1 pack before exposing entries', async () => {
     const content = await import('../src/index.js');
 
-    expect(() => (content as any).validateCompiledContentPack({
-      schemaVersion: 1,
-      hash: '0'.repeat(64),
-      entries: [],
-    })).toThrow(/unsupported content schema version 1/i);
+    expect(() =>
+      (content as any).validateCompiledContentPack({
+        schemaVersion: 1,
+        hash: '0'.repeat(64),
+        entries: [],
+      }),
+    ).toThrow(/unsupported content schema version 1/i);
   });
 
   it('does not fill source defaults while validating a stored pack', async () => {
     const { validateCompiledContentPack } = await import('../src/index.js');
-    expect(() => validateCompiledContentPack({
-      schemaVersion: 7,
-      hash: '0'.repeat(64),
-      entries: [{
-        kind: 'spell', id: 'spell.bad', name: 'Bad', tags: [], targetingId: 'target.self', range: 0,
-        actionCost: 100, effects: [{ effectId: 'effect.heal', parameters: { dice: { count: 1, sides: 4, bonus: 0 } } }],
-      }],
-      generationReport: { foundationalCategories: [] },
-    })).toThrow(/missing materialized fields/i);
+    expect(() =>
+      validateCompiledContentPack({
+        schemaVersion: 7,
+        hash: '0'.repeat(64),
+        entries: [
+          {
+            kind: 'spell',
+            id: 'spell.bad',
+            name: 'Bad',
+            tags: [],
+            targetingId: 'target.self',
+            range: 0,
+            actionCost: 100,
+            effects: [
+              { effectId: 'effect.heal', parameters: { dice: { count: 1, sides: 4, bonus: 0 } } },
+            ],
+          },
+        ],
+        generationReport: { foundationalCategories: [] },
+      }),
+    ).toThrow(/missing materialized fields/i);
   });
 
   it('publishes vault entries without presentation fields shared by actors and items', () => {

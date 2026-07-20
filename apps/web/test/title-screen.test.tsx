@@ -5,7 +5,12 @@ import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
-import { createNewRun, DEFAULT_GUEST_HERO, encodeActiveRun, type Uint32State } from '@woven-deep/engine';
+import {
+  createNewRun,
+  DEFAULT_GUEST_HERO,
+  encodeActiveRun,
+  type Uint32State,
+} from '@woven-deep/engine';
 import { TitleScreen, type TitleScreenProps } from '../src/ui/screens/TitleScreen.js';
 import { GUEST_ACCOUNT, type AccountState } from '../src/session/account.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
@@ -14,10 +19,16 @@ let pack: CompiledContentPack;
 
 const SEED: Uint32State = [11, 22, 33, 44];
 
-const SIGNED_IN_ACCOUNT: AccountState = { status: 'signed-in', email: 'player@example.com', csrfToken: 'tok' };
+const SIGNED_IN_ACCOUNT: AccountState = {
+  status: 'signed-in',
+  email: 'player@example.com',
+  csrfToken: 'tok',
+};
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 function fakeStorage(initial: string | null = null): SessionStorageLike {
@@ -25,7 +36,9 @@ function fakeStorage(initial: string | null = null): SessionStorageLike {
   if (initial !== null) values.set(SAVE_KEY, initial);
   return {
     get: (key: string) => values.get(key) ?? null,
-    set: (key: string, value: string) => { values.set(key, value); },
+    set: (key: string, value: string) => {
+      values.set(key, value);
+    },
   };
 }
 
@@ -36,7 +49,9 @@ function decodableSave(): string {
 /** Fills in the guest-account/callback props every pre-existing test in this file never cared
  * about, so those tests stay focused on Continue/Enter-the-Deep/Hall behavior while still
  * satisfying `TitleScreenProps`'s now-required `account`/`onSignIn`/`onSignOut`. */
-function renderTitle(overrides: Partial<TitleScreenProps> & { storage: SessionStorageLike }): ReturnType<typeof render> {
+function renderTitle(
+  overrides: Partial<TitleScreenProps> & { storage: SessionStorageLike },
+): ReturnType<typeof render> {
   return render(
     <TitleScreen
       onEnterTheDeep={vi.fn()}
@@ -83,7 +98,10 @@ describe('TitleScreen', () => {
     const onHall = vi.fn();
 
     renderTitle({
-      storage: fakeStorage(decodableSave()), onEnterTheDeep, onContinue, onHall,
+      storage: fakeStorage(decodableSave()),
+      onEnterTheDeep,
+      onContinue,
+      onHall,
     });
 
     // The first option (Enter the Deep) auto-focuses on mount.

@@ -6,7 +6,10 @@ import type { DungeonFeature } from './feature-model.js';
 import type { IdentificationState, ItemInstance } from './item-model.js';
 import type { SurvivalState } from './survival-model.js';
 import type {
-  EncounterRunDecision, FallenHeroRunDecision, FallenHeroStandingSnapshot, PopulationInstance,
+  EncounterRunDecision,
+  FallenHeroRunDecision,
+  FallenHeroStandingSnapshot,
+  PopulationInstance,
 } from './population-model.js';
 import type { ActiveTrade, FactionReputation } from './merchant-model.js';
 import type { RunConclusion } from './run-conclusion.js';
@@ -22,8 +25,12 @@ export type OpaqueId = string;
 export type Uint32State = readonly [number, number, number, number];
 export type RngStreams = Readonly<Record<RngStreamName, Uint32State>>;
 export type TileId = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-export type Direction = 'north' | 'northeast' | 'east' | 'southeast' | 'south' | 'southwest' | 'west' | 'northwest';
-export interface Point { readonly x: number; readonly y: number }
+export type Direction =
+  'north' | 'northeast' | 'east' | 'southeast' | 'south' | 'southwest' | 'west' | 'northwest';
+export interface Point {
+  readonly x: number;
+  readonly y: number;
+}
 
 export interface FloorEntityPosition {
   readonly entityId: OpaqueId;
@@ -188,7 +195,14 @@ export function tileIndex(
   x: number,
   y: number,
 ): number | undefined {
-  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= floor.width || y >= floor.height) {
+  if (
+    !Number.isInteger(x) ||
+    !Number.isInteger(y) ||
+    x < 0 ||
+    y < 0 ||
+    x >= floor.width ||
+    y >= floor.height
+  ) {
     return undefined;
   }
   return y * floor.width + x;

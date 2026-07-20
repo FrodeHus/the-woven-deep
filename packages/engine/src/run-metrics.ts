@@ -31,12 +31,24 @@ export interface RunMetrics {
 
 export function emptyRunMetrics(): RunMetrics {
   return {
-    kills: 0, killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },
-    bossKills: 0, championKills: 0, echoKills: 0, threatDefeated: 0,
-    damageDealt: 0, damageTaken: 0, itemsCollected: 0, itemsIdentified: 0,
-    currencyEarned: 0, currencySpent: 0, tradesCompleted: 0,
-    floorsEntered: 0, deepestDepth: 0, discoveriesRevealed: 0,
-    turnsElapsed: 0, restsCompleted: 0,
+    kills: 0,
+    killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },
+    bossKills: 0,
+    championKills: 0,
+    echoKills: 0,
+    threatDefeated: 0,
+    damageDealt: 0,
+    damageTaken: 0,
+    itemsCollected: 0,
+    itemsIdentified: 0,
+    currencyEarned: 0,
+    currencySpent: 0,
+    tradesCompleted: 0,
+    floorsEntered: 0,
+    deepestDepth: 0,
+    discoveriesRevealed: 0,
+    turnsElapsed: 0,
+    restsCompleted: 0,
   };
 }
 
@@ -49,7 +61,7 @@ function checkedAdd(left: number, right: number, label: string): number {
 }
 
 const TRACKED_POPULATION_MODELS = ['individual', 'group', 'swarm', 'boss'] as const;
-type TrackedPopulationModel = typeof TRACKED_POPULATION_MODELS[number];
+type TrackedPopulationModel = (typeof TRACKED_POPULATION_MODELS)[number];
 
 function isTrackedPopulationModel(model: string): model is TrackedPopulationModel {
   return (TRACKED_POPULATION_MODELS as readonly string[]).includes(model);
@@ -61,13 +73,15 @@ function isTrackedPopulationModel(model: string): model is TrackedPopulationMode
  * rule ever decreases a counter, and overflow near `Number.MAX_SAFE_INTEGER` throws rather than
  * silently wrapping.
  */
-export function foldRunMetrics(input: Readonly<{
-  metrics: RunMetrics;
-  state: ActiveRun;
-  content: CompiledContentPack;
-  events: readonly DomainEvent[];
-  turnAdvanced: boolean;
-}>): RunMetrics {
+export function foldRunMetrics(
+  input: Readonly<{
+    metrics: RunMetrics;
+    state: ActiveRun;
+    content: CompiledContentPack;
+    events: readonly DomainEvent[];
+    turnAdvanced: boolean;
+  }>,
+): RunMetrics {
   const { state, content, metrics } = input;
   const heroId = state.hero.actorId;
   let kills = metrics.kills;
@@ -92,17 +106,24 @@ export function foldRunMetrics(input: Readonly<{
         if (event.killerActorId !== heroId) break;
         kills = checkedAdd(kills, 1, 'kills');
         const actor = state.actors.find((candidate) => candidate.actorId === event.actorId);
-        const population = actor?.populationId === null || actor?.populationId === undefined
-          ? undefined
-          : state.populations.find((candidate) => candidate.populationId === actor.populationId);
+        const population =
+          actor?.populationId === null || actor?.populationId === undefined
+            ? undefined
+            : state.populations.find((candidate) => candidate.populationId === actor.populationId);
         if (population && isTrackedPopulationModel(population.model)) {
           killsByModel = {
             ...killsByModel,
-            [population.model]: checkedAdd(killsByModel[population.model], 1, `killsByModel.${population.model}`),
+            [population.model]: checkedAdd(
+              killsByModel[population.model],
+              1,
+              `killsByModel.${population.model}`,
+            ),
           };
         }
-        const monster = content.entries.find((entry): entry is Extract<typeof entry, { kind: 'monster' }> =>
-          entry.kind === 'monster' && entry.id === event.contentId);
+        const monster = content.entries.find(
+          (entry): entry is Extract<typeof entry, { kind: 'monster' }> =>
+            entry.kind === 'monster' && entry.id === event.contentId,
+        );
         if (monster) threatDefeated = checkedAdd(threatDefeated, monster.threat, 'threatDefeated');
         break;
       }
@@ -142,10 +163,12 @@ export function foldRunMetrics(input: Readonly<{
         currencySpent = checkedAdd(currencySpent, event.price, 'currencySpent');
         break;
       case 'trade.closed':
-        if (event.completedCommerce) tradesCompleted = checkedAdd(tradesCompleted, 1, 'tradesCompleted');
+        if (event.completedCommerce)
+          tradesCompleted = checkedAdd(tradesCompleted, 1, 'tradesCompleted');
         break;
       case 'feature.revealed':
-        if (event.actorId === heroId) discoveriesRevealed = checkedAdd(discoveriesRevealed, 1, 'discoveriesRevealed');
+        if (event.actorId === heroId)
+          discoveriesRevealed = checkedAdd(discoveriesRevealed, 1, 'discoveriesRevealed');
         break;
       case 'rest.completed':
         restsCompleted = checkedAdd(restsCompleted, 1, 'restsCompleted');
@@ -160,10 +183,24 @@ export function foldRunMetrics(input: Readonly<{
     : metrics.turnsElapsed;
 
   return {
-    kills, killsByModel, bossKills, championKills, echoKills, threatDefeated,
-    damageDealt, damageTaken, itemsCollected, itemsIdentified, currencyEarned, currencySpent,
-    tradesCompleted, floorsEntered: metrics.floorsEntered, deepestDepth: metrics.deepestDepth,
-    discoveriesRevealed, turnsElapsed, restsCompleted,
+    kills,
+    killsByModel,
+    bossKills,
+    championKills,
+    echoKills,
+    threatDefeated,
+    damageDealt,
+    damageTaken,
+    itemsCollected,
+    itemsIdentified,
+    currencyEarned,
+    currencySpent,
+    tradesCompleted,
+    floorsEntered: metrics.floorsEntered,
+    deepestDepth: metrics.deepestDepth,
+    discoveriesRevealed,
+    turnsElapsed,
+    restsCompleted,
   };
 }
 

@@ -1,5 +1,8 @@
 import type {
-  CompiledContentPack, MerchantEncounterContentEntry, NpcContentEntry, NpcFactionContentEntry,
+  CompiledContentPack,
+  MerchantEncounterContentEntry,
+  NpcContentEntry,
+  NpcFactionContentEntry,
 } from '@woven-deep/content';
 import { actionCostFor, balanceEntry, type GameAction } from './actions.js';
 import { actorById, withActor, type ActorState } from './actor-model.js';
@@ -14,7 +17,9 @@ import { findPath, selectPathStep } from './pathfinding.js';
 import { refreshKnowledge } from './perception.js';
 import { updatePopulationIntent } from './population-intent.js';
 import {
-  mergeLastKnownTargets, soundTargetObservation, visibleTargetObservations,
+  mergeLastKnownTargets,
+  soundTargetObservation,
+  visibleTargetObservations,
 } from './population-perception.js';
 import { rollDie } from './random.js';
 import { relationshipBetween, setRelationship } from './reactions.js';
@@ -34,11 +39,17 @@ function npcDefinition(content: CompiledContentPack, contentId: OpaqueId): NpcCo
   return entry;
 }
 
-function merchantEncounter(content: CompiledContentPack, encounterId: OpaqueId): MerchantEncounterContentEntry {
+function merchantEncounter(
+  content: CompiledContentPack,
+  encounterId: OpaqueId,
+): MerchantEncounterContentEntry {
   return requireEncounter(content, encounterId, 'merchant');
 }
 
-function merchantFaction(content: CompiledContentPack, factionId: OpaqueId): NpcFactionContentEntry {
+function merchantFaction(
+  content: CompiledContentPack,
+  factionId: OpaqueId,
+): NpcFactionContentEntry {
   const entry = entryById(content, factionId);
   if (!entry || entry.kind !== 'npc-faction') {
     throw new Error(`internal invariant: merchant faction ${factionId} does not exist`);
@@ -46,21 +57,30 @@ function merchantFaction(content: CompiledContentPack, factionId: OpaqueId): Npc
   return entry;
 }
 
-function merchantByPopulationId(state: ActiveRun, populationId: OpaqueId): MerchantPopulation | undefined {
-  return state.populations.find((candidate): candidate is MerchantPopulation =>
-    candidate.model === 'merchant' && candidate.populationId === populationId);
+function merchantByPopulationId(
+  state: ActiveRun,
+  populationId: OpaqueId,
+): MerchantPopulation | undefined {
+  return state.populations.find(
+    (candidate): candidate is MerchantPopulation =>
+      candidate.model === 'merchant' && candidate.populationId === populationId,
+  );
 }
 
 function merchantByActorId(state: ActiveRun, actorId: OpaqueId): MerchantPopulation | undefined {
-  return state.populations.find((candidate): candidate is MerchantPopulation =>
-    candidate.model === 'merchant' && candidate.actorId === actorId);
+  return state.populations.find(
+    (candidate): candidate is MerchantPopulation =>
+      candidate.model === 'merchant' && candidate.actorId === actorId,
+  );
 }
 
 function replaceMerchantPopulation(
-  state: ActiveRun, population: MerchantPopulation,
+  state: ActiveRun,
+  population: MerchantPopulation,
 ): readonly ActiveRun['populations'][number][] {
   return state.populations.map((candidate) =>
-    candidate.populationId === population.populationId ? population : candidate);
+    candidate.populationId === population.populationId ? population : candidate,
+  );
 }
 
 function chebyshev(left: Point, right: Point): number {
@@ -79,9 +99,11 @@ interface ThreatPosition {
  * come from sight when aware, otherwise from the freshest memory on the merchant's floor.
  */
 function knownThreats(state: ActiveRun, actor: ActorState): readonly ThreatPosition[] {
-  const memories = new Map(actor.behaviorState.lastKnownTargets
-    .filter((memory) => memory.floorId === actor.floorId)
-    .map((memory) => [memory.targetActorId, memory] as const));
+  const memories = new Map(
+    actor.behaviorState.lastKnownTargets
+      .filter((memory) => memory.floorId === actor.floorId)
+      .map((memory) => [memory.targetActorId, memory] as const),
+  );
   const threats: ThreatPosition[] = [];
   for (const candidate of state.actors) {
     if (candidate.actorId === actor.actorId || candidate.health <= 0) continue;
@@ -102,28 +124,40 @@ function belowSelfPreservation(npc: NpcContentEntry, actor: ActorState): boolean
 
 type MerchantMode = 'hold' | 'flee' | 'defend';
 
-function merchantMode(input: Readonly<{
-  population: MerchantPopulation;
-  encounter: MerchantEncounterContentEntry;
-  npc: NpcContentEntry;
-  actor: ActorState;
-  threats: readonly ThreatPosition[];
-}>): MerchantMode {
+function merchantMode(
+  input: Readonly<{
+    population: MerchantPopulation;
+    encounter: MerchantEncounterContentEntry;
+    npc: NpcContentEntry;
+    actor: ActorState;
+    threats: readonly ThreatPosition[];
+  }>,
+): MerchantMode {
   if (input.threats.length === 0) return 'hold';
   if (input.population.lifecycle === 'fleeing') return 'flee';
   if (belowSelfPreservation(input.npc, input.actor)) return 'flee';
-  const response = input.population.lifecycle === 'defending'
-    ? 'self-defense' : input.encounter.definition.aggressionResponse;
+  const response =
+    input.population.lifecycle === 'defending'
+      ? 'self-defense'
+      : input.encounter.definition.aggressionResponse;
   return response === 'self-defense' ? 'defend' : 'flee';
 }
 
-function selectDefenseTarget(actor: ActorState, threats: readonly ThreatPosition[]): ThreatPosition {
+function selectDefenseTarget(
+  actor: ActorState,
+  threats: readonly ThreatPosition[],
+): ThreatPosition {
   const savedGoal = actor.behaviorState.goal;
-  const saved = savedGoal?.type === 'actor'
-    ? threats.find((threat) => threat.actorId === savedGoal.targetActorId) : undefined;
+  const saved =
+    savedGoal?.type === 'actor'
+      ? threats.find((threat) => threat.actorId === savedGoal.targetActorId)
+      : undefined;
   if (saved) return saved;
-  return [...threats].sort((left, right) => chebyshev(actor, left) - chebyshev(actor, right)
-    || compareCodeUnits(left.actorId, right.actorId))[0]!;
+  return [...threats].sort(
+    (left, right) =>
+      chebyshev(actor, left) - chebyshev(actor, right) ||
+      compareCodeUnits(left.actorId, right.actorId),
+  )[0]!;
 }
 
 /**
@@ -131,56 +165,89 @@ function selectDefenseTarget(actor: ActorState, threats: readonly ThreatPosition
  * Awareness spans every perceived actor; only hostile observations enter threat memory, so a
  * neutral bystander never becomes something the merchant flees from.
  */
-export function prepareMerchantTurn(input: Readonly<{
-  state: ActiveRun; content: CompiledContentPack; actorId: OpaqueId; eventId: OpaqueId;
-}>): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+export function prepareMerchantTurn(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    actorId: OpaqueId;
+    eventId: OpaqueId;
+  }>,
+): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
   const actor = actorById(input.state, input.actorId);
   if (!actor) throw new Error(`internal invariant: actor ${input.actorId} does not exist`);
   const population = merchantByActorId(input.state, actor.actorId);
-  if (!population) throw new Error(`internal invariant: merchant population for ${input.actorId} does not exist`);
+  if (!population)
+    throw new Error(`internal invariant: merchant population for ${input.actorId} does not exist`);
   const npc = npcDefinition(input.content, actor.contentId);
   const encounter = merchantEncounter(input.content, population.encounterId);
   const floor = input.state.floors.find((candidate) => candidate.floorId === actor.floorId);
   if (!floor) throw new Error(`internal invariant: actor floor ${actor.floorId} does not exist`);
-  const positions = new Map<string, Readonly<Point>>(floor.entities.map((entity) => [entity.entityId, entity] as const));
-  const floorActors = input.state.actors.filter((candidate) => candidate.floorId === floor.floorId && candidate.health > 0);
+  const positions = new Map<string, Readonly<Point>>(
+    floor.entities.map((entity) => [entity.entityId, entity] as const),
+  );
+  const floorActors = input.state.actors.filter(
+    (candidate) => candidate.floorId === floor.floorId && candidate.health > 0,
+  );
   for (const candidate of floorActors) positions.set(candidate.actorId, candidate);
   const perception = refreshKnowledge({
     floor: { ...floor, tiles: featureTiles(input.state, floor.floorId) },
     hero: { heroId: actor.actorId, x: actor.x, y: actor.y, sightRadius: npc.perception },
     actors: positions,
-    additionalLights: itemLightSources({ run: input.state, content: input.content, floorId: floor.floorId }),
+    additionalLights: itemLightSources({
+      run: input.state,
+      content: input.content,
+      floorId: floor.floorId,
+    }),
   });
   const observations = visibleTargetObservations({
-    observerActorId: actor.actorId, floorId: floor.floorId, width: floor.width,
-    visibilityWords: perception.visibilityWords, illuminationIntensity: perception.illumination.intensity,
-    observedAt: input.state.worldTime, actors: floorActors,
+    observerActorId: actor.actorId,
+    floorId: floor.floorId,
+    width: floor.width,
+    visibilityWords: perception.visibilityWords,
+    illuminationIntensity: perception.illumination.intensity,
+    observedAt: input.state.worldTime,
+    actors: floorActors,
   });
-  const awareActorIds = observations.map((observation) => observation.targetActorId).sort(compareCodeUnits);
-  const hostileObservations = observations.filter((observation) =>
-    relationshipBetween(input.state, actor.actorId, observation.targetActorId) === 'hostile');
-  const lastKnownTargets = hostileObservations.length === 0 ? actor.behaviorState.lastKnownTargets
-    : mergeLastKnownTargets(actor.behaviorState.lastKnownTargets, hostileObservations);
+  const awareActorIds = observations
+    .map((observation) => observation.targetActorId)
+    .sort(compareCodeUnits);
+  const hostileObservations = observations.filter(
+    (observation) =>
+      relationshipBetween(input.state, actor.actorId, observation.targetActorId) === 'hostile',
+  );
+  const lastKnownTargets =
+    hostileObservations.length === 0
+      ? actor.behaviorState.lastKnownTargets
+      : mergeLastKnownTargets(actor.behaviorState.lastKnownTargets, hostileObservations);
   const observed: ActorState = {
-    ...actor, awareActorIds,
+    ...actor,
+    awareActorIds,
     behaviorState: { ...actor.behaviorState, lastKnownTargets },
   };
   const threats = knownThreats(input.state, observed);
   const mode = merchantMode({ population, encounter, npc, actor: observed, threats });
   const target = mode === 'defend' ? selectDefenseTarget(observed, threats) : undefined;
-  const goal = target === undefined ? null : { type: 'actor' as const, targetActorId: target.actorId };
+  const goal =
+    target === undefined ? null : { type: 'actor' as const, targetActorId: target.actorId };
   // The attack intent requires a currently perceived target adjacent at its LIVE position;
   // a stale memory of an adjacent cell only warrants approaching the remembered cell.
   const liveTarget = target === undefined ? undefined : actorById(input.state, target.actorId);
-  const targetAdjacent = target !== undefined && liveTarget !== undefined && liveTarget.health > 0
-    && liveTarget.floorId === observed.floorId && awareActorIds.includes(target.actorId)
-    && chebyshev(observed, liveTarget) === 1;
-  const intent = mode === 'hold' ? 'hold' : mode === 'flee' ? 'flee'
-    : targetAdjacent ? 'attack' : 'approach';
+  const targetAdjacent =
+    target !== undefined &&
+    liveTarget !== undefined &&
+    liveTarget.health > 0 &&
+    liveTarget.floorId === observed.floorId &&
+    awareActorIds.includes(target.actorId) &&
+    chebyshev(observed, liveTarget) === 1;
+  const intent =
+    mode === 'hold' ? 'hold' : mode === 'flee' ? 'flee' : targetAdjacent ? 'attack' : 'approach';
   const updated = updatePopulationIntent({
-    eventId: input.eventId, actorId: actor.actorId,
-    state: { ...observed.behaviorState, goal }, intent,
-    targetCategory: goal === null ? null : goal.targetActorId === input.state.hero.actorId ? 'hero' : null,
+    eventId: input.eventId,
+    actorId: actor.actorId,
+    state: { ...observed.behaviorState, goal },
+    intent,
+    targetCategory:
+      goal === null ? null : goal.targetActorId === input.state.hero.actorId ? 'hero' : null,
   });
   return {
     state: withActor(input.state, { ...observed, behaviorState: updated.state }),
@@ -194,15 +261,24 @@ export function prepareMerchantTurn(input: Readonly<{
  * nearest known hostile threat; otherwise — and always below the authored self-preservation
  * threshold — flee along the candidate step with the greatest Chebyshev distance from threats.
  */
-export function merchantBehaviorAction(input: Readonly<{
-  state: ActiveRun; content: CompiledContentPack; actorId: OpaqueId;
-}>): GameAction {
+export function merchantBehaviorAction(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    actorId: OpaqueId;
+  }>,
+): GameAction {
   const actor = actorById(input.state, input.actorId);
   if (!actor) throw new Error(`internal invariant: actor ${input.actorId} does not exist`);
   const population = merchantByActorId(input.state, actor.actorId);
-  if (!population) throw new Error(`internal invariant: merchant population for ${input.actorId} does not exist`);
+  if (!population)
+    throw new Error(`internal invariant: merchant population for ${input.actorId} does not exist`);
   const rules = balanceEntry(input.content);
-  const wait: GameAction = { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };
+  const wait: GameAction = {
+    type: 'wait',
+    actorId: actor.actorId,
+    cost: actionCostFor(rules, 'action.wait'),
+  };
   const npc = npcDefinition(input.content, actor.contentId);
   const encounter = merchantEncounter(input.content, population.encounterId);
   const threats = knownThreats(input.state, actor);
@@ -211,35 +287,60 @@ export function merchantBehaviorAction(input: Readonly<{
   const floor = input.state.floors.find((candidate) => candidate.floorId === actor.floorId);
   if (!floor) throw new Error(`internal invariant: actor floor ${actor.floorId} does not exist`);
   const tiles = featureTiles(input.state, floor.floorId);
-  const occupied = new Set(input.state.actors.filter((candidate) => candidate.actorId !== actor.actorId
-    && candidate.floorId === actor.floorId && candidate.health > 0)
-    .map((candidate) => `${candidate.x}:${candidate.y}`));
-  const passable = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < floor.width && y < floor.height
-    && movementBlockReason(tiles[y * floor.width + x]!) === undefined;
+  const occupied = new Set(
+    input.state.actors
+      .filter(
+        (candidate) =>
+          candidate.actorId !== actor.actorId &&
+          candidate.floorId === actor.floorId &&
+          candidate.health > 0,
+      )
+      .map((candidate) => `${candidate.x}:${candidate.y}`),
+  );
+  const passable = (x: number, y: number): boolean =>
+    x >= 0 &&
+    y >= 0 &&
+    x < floor.width &&
+    y < floor.height &&
+    movementBlockReason(tiles[y * floor.width + x]!) === undefined;
   if (mode === 'defend') {
     const target = selectDefenseTarget(actor, threats);
     const live = actorById(input.state, target.actorId);
     // Mirror monster gating: only bump-attack a live, currently perceived target actually
     // adjacent at its live position. A stale memory of an adjacent cell never licenses an
     // attack at arbitrary range — the merchant paths toward the remembered cell instead.
-    const perceived = live !== undefined && live.health > 0 && live.floorId === actor.floorId
-      && actor.awareActorIds.includes(target.actorId);
+    const perceived =
+      live !== undefined &&
+      live.health > 0 &&
+      live.floorId === actor.floorId &&
+      actor.awareActorIds.includes(target.actorId);
     if (perceived && chebyshev(actor, live) === 1) {
       return {
-        type: 'bump-attack', actorId: actor.actorId, targetActorId: target.actorId,
+        type: 'bump-attack',
+        actorId: actor.actorId,
+        targetActorId: target.actorId,
         cost: actionCostFor(rules, 'action.attack'),
       };
     }
     const destination = perceived ? { x: live.x, y: live.y } : { x: target.x, y: target.y };
     const path = findPath({
-      width: floor.width, height: floor.height, topology: 8,
-      origin: { x: actor.x, y: actor.y }, destination,
-      isPassable: (x, y) => passable(x, y)
-        && ((x === destination.x && y === destination.y) || !occupied.has(`${x}:${y}`)),
+      width: floor.width,
+      height: floor.height,
+      topology: 8,
+      origin: { x: actor.x, y: actor.y },
+      destination,
+      isPassable: (x, y) =>
+        passable(x, y) &&
+        ((x === destination.x && y === destination.y) || !occupied.has(`${x}:${y}`)),
     });
     const selected = selectPathStep(path);
     if (selected.status === 'move') {
-      return { type: 'move', actorId: actor.actorId, to: selected.step, cost: actionCostFor(rules, 'action.move') };
+      return {
+        type: 'move',
+        actorId: actor.actorId,
+        to: selected.step,
+        cost: actionCostFor(rules, 'action.move'),
+      };
     }
     return wait;
   }
@@ -254,13 +355,23 @@ export function merchantBehaviorAction(input: Readonly<{
       const x = actor.x + dx;
       const y = actor.y + dy;
       if (!passable(x, y) || occupied.has(`${x}:${y}`)) continue;
-      if (dx !== 0 && dy !== 0 && !passable(actor.x + dx, actor.y) && !passable(actor.x, actor.y + dy)) continue;
+      if (
+        dx !== 0 &&
+        dy !== 0 &&
+        !passable(actor.x + dx, actor.y) &&
+        !passable(actor.x, actor.y + dy)
+      )
+        continue;
       candidates.push({ x, y });
     }
   }
-  candidates.sort((left, right) => (left.y * floor.width + left.x) - (right.y * floor.width + right.x));
+  candidates.sort(
+    (left, right) => left.y * floor.width + left.x - (right.y * floor.width + right.x),
+  );
   let best = { x: actor.x, y: actor.y };
-  let bestScore = Math.min(...threats.map((threat) => chebyshev({ x: actor.x, y: actor.y }, threat)));
+  let bestScore = Math.min(
+    ...threats.map((threat) => chebyshev({ x: actor.x, y: actor.y }, threat)),
+  );
   for (const candidate of candidates) {
     const score = Math.min(...threats.map((threat) => chebyshev(candidate, threat)));
     if (score > bestScore) {
@@ -269,10 +380,19 @@ export function merchantBehaviorAction(input: Readonly<{
     }
   }
   if (best.x === actor.x && best.y === actor.y) return wait;
-  return { type: 'move', actorId: actor.actorId, to: best, cost: actionCostFor(rules, 'action.move') };
+  return {
+    type: 'move',
+    actorId: actor.actorId,
+    to: best,
+    cost: actionCostFor(rules, 'action.move'),
+  };
 }
 
-function rememberThreat(state: ActiveRun, merchant: MerchantPopulation, sourceActorId: OpaqueId): ActiveRun {
+function rememberThreat(
+  state: ActiveRun,
+  merchant: MerchantPopulation,
+  sourceActorId: OpaqueId,
+): ActiveRun {
   const actor = actorById(state, merchant.actorId);
   const source = actorById(state, sourceActorId);
   if (!actor || !source || sourceActorId === merchant.actorId) return state;
@@ -280,10 +400,16 @@ function rememberThreat(state: ActiveRun, merchant: MerchantPopulation, sourceAc
     ...actor,
     behaviorState: {
       ...actor.behaviorState,
-      lastKnownTargets: mergeLastKnownTargets(actor.behaviorState.lastKnownTargets, [soundTargetObservation({
-        observerActorId: actor.actorId, targetActorId: sourceActorId,
-        floorId: source.floorId, x: source.x, y: source.y, observedAt: state.worldTime,
-      })]),
+      lastKnownTargets: mergeLastKnownTargets(actor.behaviorState.lastKnownTargets, [
+        soundTargetObservation({
+          observerActorId: actor.actorId,
+          targetActorId: sourceActorId,
+          floorId: source.floorId,
+          x: source.x,
+          y: source.y,
+          observedAt: state.worldTime,
+        }),
+      ]),
     },
   });
 }
@@ -295,50 +421,83 @@ function rememberThreat(state: ActiveRun, merchant: MerchantPopulation, sourceAc
  * `ceil(totalUnits * stockDropFraction)` units chosen by a merchant-runtime permutation, split
  * under `item.<populationId>.drop.<sequence>` identifiers, dropped at the merchant cell.
  */
-export function provokeMerchant(input: Readonly<{
-  state: ActiveRun; content: CompiledContentPack;
-  merchantPopulationId: OpaqueId; sourceActorId: OpaqueId; eventId: OpaqueId;
-}>): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+export function provokeMerchant(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    merchantPopulationId: OpaqueId;
+    sourceActorId: OpaqueId;
+    eventId: OpaqueId;
+  }>,
+): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
   const population = merchantByPopulationId(input.state, input.merchantPopulationId);
-  if (!population) throw new Error(`internal invariant: merchant population ${input.merchantPopulationId} does not exist`);
-  if (population.provoked || population.lifecycle === 'dead' || population.lifecycle === 'departed') {
+  if (!population)
+    throw new Error(
+      `internal invariant: merchant population ${input.merchantPopulationId} does not exist`,
+    );
+  if (
+    population.provoked ||
+    population.lifecycle === 'dead' ||
+    population.lifecycle === 'departed'
+  ) {
     return { state: input.state, events: [] };
   }
   const actor = actorById(input.state, population.actorId);
-  if (!actor) throw new Error(`internal invariant: merchant actor ${population.actorId} does not exist`);
+  if (!actor)
+    throw new Error(`internal invariant: merchant actor ${population.actorId} does not exist`);
   const encounter = merchantEncounter(input.content, population.encounterId);
   const faction = merchantFaction(input.content, population.factionId);
   let state = input.state;
   const events: DomainEvent[] = [];
   if (state.activeTrade?.merchantPopulationId === population.populationId) {
-    const closed = closeTrade({ state, content: input.content, eventId: input.eventId, reason: 'aggression' });
+    const closed = closeTrade({
+      state,
+      content: input.content,
+      eventId: input.eventId,
+      reason: 'aggression',
+    });
     state = closed.state;
     events.push(...closed.events);
   }
   const changed = changeReputation({
-    run: state, faction, delta: encounter.definition.aggressionReputationDelta,
-    reason: 'aggression', eventId: input.eventId,
+    run: state,
+    faction,
+    delta: encounter.definition.aggressionReputationDelta,
+    reason: 'aggression',
+    eventId: input.eventId,
   });
   state = changed.state;
   events.push(changed.event);
-  if (input.sourceActorId !== population.actorId
-    && relationshipBetween(state, input.sourceActorId, population.actorId) !== 'hostile') {
+  if (
+    input.sourceActorId !== population.actorId &&
+    relationshipBetween(state, input.sourceActorId, population.actorId) !== 'hostile'
+  ) {
     state = setRelationship(state, input.sourceActorId, population.actorId, 'hostile');
     events.push({
-      type: 'relationship.changed', eventId: input.eventId, actorId: input.sourceActorId,
-      targetActorId: population.actorId, relationship: 'hostile',
+      type: 'relationship.changed',
+      eventId: input.eventId,
+      actorId: input.sourceActorId,
+      targetActorId: population.actorId,
+      relationship: 'hostile',
     });
   }
   state = rememberThreat(state, population, input.sourceActorId);
   const response = encounter.definition.aggressionResponse;
   events.push({
-    type: 'merchant.provoked', eventId: input.eventId, populationId: population.populationId,
-    actorId: population.actorId, sourceActorId: input.sourceActorId, response,
+    type: 'merchant.provoked',
+    eventId: input.eventId,
+    populationId: population.populationId,
+    actorId: population.actorId,
+    sourceActorId: input.sourceActorId,
+    response,
   });
 
   const stockItems = state.items
-    .filter((candidate) => candidate.location.type === 'merchant-stock'
-      && candidate.location.populationId === population.populationId)
+    .filter(
+      (candidate) =>
+        candidate.location.type === 'merchant-stock' &&
+        candidate.location.populationId === population.populationId,
+    )
     .sort((left, right) => compareCodeUnits(left.itemId, right.itemId));
   const totalUnits = stockItems.reduce((total, candidate) => total + candidate.quantity, 0);
   const fraction = encounter.definition.stockDropFraction;
@@ -378,8 +537,11 @@ export function provokeMerchant(input: Readonly<{
   const items: ItemInstance[] = [];
   for (const candidate of state.items) {
     const dropped = droppedPerItem.get(candidate.itemId);
-    if (dropped === undefined || candidate.location.type !== 'merchant-stock'
-      || candidate.location.populationId !== population.populationId) {
+    if (
+      dropped === undefined ||
+      candidate.location.type !== 'merchant-stock' ||
+      candidate.location.populationId !== population.populationId
+    ) {
       items.push(candidate);
       continue;
     }
@@ -397,12 +559,18 @@ export function provokeMerchant(input: Readonly<{
   items.sort((left, right) => compareCodeUnits(left.itemId, right.itemId));
   droppedItemIds.sort(compareCodeUnits);
   const stockItemIds = items
-    .filter((candidate) => candidate.location.type === 'merchant-stock'
-      && candidate.location.populationId === population.populationId)
+    .filter(
+      (candidate) =>
+        candidate.location.type === 'merchant-stock' &&
+        candidate.location.populationId === population.populationId,
+    )
     .map((candidate) => candidate.itemId)
     .sort(compareCodeUnits);
   const provoked: MerchantPopulation = {
-    ...population, provoked: true, aggressionPenaltyApplied: true, stockLossResolved: true,
+    ...population,
+    provoked: true,
+    aggressionPenaltyApplied: true,
+    stockLossResolved: true,
     lifecycle: response === 'self-defense' ? 'defending' : 'fleeing',
     stockItemIds,
   };
@@ -413,8 +581,12 @@ export function provokeMerchant(input: Readonly<{
     populations: replaceMerchantPopulation(state, provoked),
   };
   events.push({
-    type: 'merchant.stock-dropped', eventId: input.eventId, populationId: population.populationId,
-    actorId: population.actorId, itemIds: droppedItemIds, units: dropCount,
+    type: 'merchant.stock-dropped',
+    eventId: input.eventId,
+    populationId: population.populationId,
+    actorId: population.actorId,
+    itemIds: droppedItemIds,
+    units: dropCount,
   });
   return { state, events };
 }
@@ -425,19 +597,32 @@ export function provokeMerchant(input: Readonly<{
  * held stock item (never dropped), moves the actor to former membership, and marks the
  * population dead.
  */
-export function resolveMerchantDeath(input: Readonly<{
-  state: ActiveRun; content: CompiledContentPack;
-  merchantPopulationId: OpaqueId; killerActorId: OpaqueId; eventId: OpaqueId;
-}>): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+export function resolveMerchantDeath(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    merchantPopulationId: OpaqueId;
+    killerActorId: OpaqueId;
+    eventId: OpaqueId;
+  }>,
+): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
   const population = merchantByPopulationId(input.state, input.merchantPopulationId);
-  if (!population) throw new Error(`internal invariant: merchant population ${input.merchantPopulationId} does not exist`);
+  if (!population)
+    throw new Error(
+      `internal invariant: merchant population ${input.merchantPopulationId} does not exist`,
+    );
   if (population.lifecycle === 'dead' || population.lifecycle === 'departed') {
     return { state: input.state, events: [] };
   }
   let state = input.state;
   const events: DomainEvent[] = [];
   if (state.activeTrade?.merchantPopulationId === population.populationId) {
-    const closed = closeTrade({ state, content: input.content, eventId: input.eventId, reason: 'death' });
+    const closed = closeTrade({
+      state,
+      content: input.content,
+      eventId: input.eventId,
+      reason: 'death',
+    });
     state = closed.state;
     events.push(...closed.events);
   }
@@ -445,30 +630,50 @@ export function resolveMerchantDeath(input: Readonly<{
     const encounter = merchantEncounter(input.content, population.encounterId);
     const faction = merchantFaction(input.content, population.factionId);
     const changed = changeReputation({
-      run: state, faction, delta: encounter.definition.deathReputationDelta,
-      reason: 'death', eventId: input.eventId,
+      run: state,
+      faction,
+      delta: encounter.definition.deathReputationDelta,
+      reason: 'death',
+      eventId: input.eventId,
     });
     state = changed.state;
     events.push(changed.event);
   }
   const destroyedStockItemIds = state.items
-    .filter((candidate) => candidate.location.type === 'merchant-stock'
-      && candidate.location.populationId === population.populationId)
+    .filter(
+      (candidate) =>
+        candidate.location.type === 'merchant-stock' &&
+        candidate.location.populationId === population.populationId,
+    )
     .map((candidate) => candidate.itemId)
     .sort(compareCodeUnits);
   const dead: MerchantPopulation = {
-    ...population, lifecycle: 'dead', livingMemberIds: [], formerMemberIds: [population.actorId],
-    stockItemIds: [], deathPenaltyApplied: true, stockLossResolved: true,
+    ...population,
+    lifecycle: 'dead',
+    livingMemberIds: [],
+    formerMemberIds: [population.actorId],
+    stockItemIds: [],
+    deathPenaltyApplied: true,
+    stockLossResolved: true,
   };
   state = {
     ...state,
-    items: state.items.filter((candidate) => !(candidate.location.type === 'merchant-stock'
-      && candidate.location.populationId === population.populationId)),
+    items: state.items.filter(
+      (candidate) =>
+        !(
+          candidate.location.type === 'merchant-stock' &&
+          candidate.location.populationId === population.populationId
+        ),
+    ),
     populations: replaceMerchantPopulation(state, dead),
   };
   events.push({
-    type: 'merchant.died', eventId: input.eventId, populationId: population.populationId,
-    actorId: population.actorId, killerActorId: input.killerActorId, destroyedStockItemIds,
+    type: 'merchant.died',
+    eventId: input.eventId,
+    populationId: population.populationId,
+    actorId: population.actorId,
+    killerActorId: input.killerActorId,
+    destroyedStockItemIds,
   });
   return { state, events };
 }
@@ -480,22 +685,30 @@ export function resolveMerchantDeath(input: Readonly<{
  * the attacker a remembered hostile threat with NO hero reputation or stock consequence.
  * A merchant death resolves its one-time death consequences.
  */
-export function resolveMerchantCombatOutcomes(input: Readonly<{
-  state: ActiveRun; content: CompiledContentPack;
-  events: readonly DomainEvent[]; eventId: OpaqueId;
-}>): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+export function resolveMerchantCombatOutcomes(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    events: readonly DomainEvent[];
+    eventId: OpaqueId;
+  }>,
+): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
   let state = input.state;
   const events: DomainEvent[] = [];
   for (const event of input.events) {
     if (event.type === 'actor.damaged') {
       const population = merchantByActorId(state, event.actorId);
-      if (!population || population.lifecycle === 'dead' || population.lifecycle === 'departed') continue;
+      if (!population || population.lifecycle === 'dead' || population.lifecycle === 'departed')
+        continue;
       if (event.sourceActorId === population.actorId) continue;
       if (event.sourceActorId === state.hero.actorId) {
         if (population.provoked) continue;
         const provoked = provokeMerchant({
-          state, content: input.content, merchantPopulationId: population.populationId,
-          sourceActorId: event.sourceActorId, eventId: input.eventId,
+          state,
+          content: input.content,
+          merchantPopulationId: population.populationId,
+          sourceActorId: event.sourceActorId,
+          eventId: input.eventId,
         });
         state = provoked.state;
         events.push(...provoked.events);
@@ -505,17 +718,24 @@ export function resolveMerchantCombatOutcomes(input: Readonly<{
       if (relationshipBetween(state, event.sourceActorId, population.actorId) !== 'hostile') {
         state = setRelationship(state, event.sourceActorId, population.actorId, 'hostile');
         events.push({
-          type: 'relationship.changed', eventId: input.eventId, actorId: event.sourceActorId,
-          targetActorId: population.actorId, relationship: 'hostile',
+          type: 'relationship.changed',
+          eventId: input.eventId,
+          actorId: event.sourceActorId,
+          targetActorId: population.actorId,
+          relationship: 'hostile',
         });
       }
       state = rememberThreat(state, population, event.sourceActorId);
     } else if (event.type === 'actor.died') {
       const population = merchantByActorId(state, event.actorId);
-      if (!population || population.lifecycle === 'dead' || population.lifecycle === 'departed') continue;
+      if (!population || population.lifecycle === 'dead' || population.lifecycle === 'departed')
+        continue;
       const death = resolveMerchantDeath({
-        state, content: input.content, merchantPopulationId: population.populationId,
-        killerActorId: event.killerActorId, eventId: input.eventId,
+        state,
+        content: input.content,
+        merchantPopulationId: population.populationId,
+        killerActorId: event.killerActorId,
+        eventId: input.eventId,
       });
       state = death.state;
       events.push(...death.events);

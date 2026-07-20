@@ -6,7 +6,11 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  DEFAULT_GUEST_HERO, createNewRun, projectGameplayState, type ActiveRun, type GameplayProjection,
+  DEFAULT_GUEST_HERO,
+  createNewRun,
+  projectGameplayState,
+  type ActiveRun,
+  type GameplayProjection,
 } from '@woven-deep/engine';
 import type { LogLine } from '../../session/event-log.js';
 import type { GuestSession, SessionSnapshot } from '../../session/guest-session.js';
@@ -21,7 +25,9 @@ let baseProjection: GameplayProjection;
 const SEED = [11, 22, 33, 44] as const;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../../../content'),
+  });
   baseRun = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
   baseProjection = projectGameplayState({ state: baseRun, content: pack });
 });
@@ -32,9 +38,14 @@ interface FloorOverrides {
   readonly width: number;
   readonly height: number;
   readonly cells: readonly Readonly<{
-    index: number; x: number; y: number;
+    index: number;
+    x: number;
+    y: number;
     knowledge: 'unknown' | 'remembered' | 'visible';
-    tileId?: number; glyph?: string; intensity: number; tint?: readonly [number, number, number];
+    tileId?: number;
+    glyph?: string;
+    intensity: number;
+    tint?: readonly [number, number, number];
   }>[];
 }
 
@@ -50,7 +61,12 @@ interface SnapshotOverrides {
   readonly floor?: FloorOverrides;
   readonly hero?: Readonly<{ x: number; y: number }>;
   readonly actors?: readonly Readonly<Record<string, unknown>>[];
-  readonly slots?: readonly Readonly<{ slotId: string; tags: readonly string[]; x: number; y: number }>[];
+  readonly slots?: readonly Readonly<{
+    slotId: string;
+    tags: readonly string[];
+    x: number;
+    y: number;
+  }>[];
   readonly log?: readonly LogLine[];
   readonly landmarks?: readonly PersistedLandmarkOverride[];
 }
@@ -86,7 +102,12 @@ function stubSession(snapshot: SessionSnapshot): GuestSession {
 
 function renderOverlay(snapshot: SessionSnapshot) {
   return render(
-    <UiProviders pack={pack} settings={DEFAULT_SETTINGS} onChangeSettings={() => {}} session={stubSession(snapshot)}>
+    <UiProviders
+      pack={pack}
+      settings={DEFAULT_SETTINGS}
+      onChangeSettings={() => {}}
+      session={stubSession(snapshot)}
+    >
       <MapJournalOverlay />
     </UiProviders>,
   );
@@ -103,11 +124,22 @@ async function openJournalTab(): Promise<void> {
  * ignores it rather than merely never receiving one), cell 1 remembered (a wall, `#`), cell 2
  * visible (open floor, `.`) -- the hero stands there. */
 const MIXED_KNOWLEDGE_FLOOR: FloorOverrides = {
-  town: false, width: 3, height: 1,
+  town: false,
+  width: 3,
+  height: 1,
   cells: [
     { index: 0, x: 0, y: 0, knowledge: 'unknown', intensity: 0, glyph: 'Z' },
     { index: 1, x: 1, y: 0, knowledge: 'remembered', tileId: 1, glyph: '#', intensity: 24 },
-    { index: 2, x: 2, y: 0, knowledge: 'visible', tileId: 0, glyph: '.', intensity: 200, tint: [10, 20, 30] },
+    {
+      index: 2,
+      x: 2,
+      y: 0,
+      knowledge: 'visible',
+      tileId: 0,
+      glyph: '.',
+      intensity: 200,
+      tint: [10, 20, 30],
+    },
   ],
 };
 
@@ -162,8 +194,12 @@ describe('MapJournalOverlay', () => {
 
     it('reuses the cell glyph verbatim for stairs -- no re-derivation', () => {
       const stairFloor: FloorOverrides = {
-        town: false, width: 1, height: 1,
-        cells: [{ index: 0, x: 0, y: 0, knowledge: 'visible', tileId: 5, glyph: '>', intensity: 200 }],
+        town: false,
+        width: 1,
+        height: 1,
+        cells: [
+          { index: 0, x: 0, y: 0, knowledge: 'visible', tileId: 5, glyph: '>', intensity: 200 },
+        ],
       };
       const snapshot = snapshotWith({ floor: stairFloor, hero: { x: 5, y: 5 } });
       renderOverlay(snapshot);
@@ -227,9 +263,11 @@ describe('MapJournalOverlay', () => {
 
   describe('journal tab', () => {
     function logLines(count: number): readonly LogLine[] {
-      return Array.from({ length: count }, (_unused, index) => (
-        { id: index, text: `Log line number ${index}`, tone: 'info' as const }
-      ));
+      return Array.from({ length: count }, (_unused, index) => ({
+        id: index,
+        text: `Log line number ${index}`,
+        tone: 'info' as const,
+      }));
     }
 
     it('shows the full retained log history -- more than the 8-line conclusion tail -- proving the source is the full retention', async () => {
@@ -246,13 +284,23 @@ describe('MapJournalOverlay', () => {
       expect(lines[11]).toHaveTextContent('Log line number 11');
     });
 
-    it('lists the town\'s three merchant slots and the house door as landmarks', async () => {
+    it("lists the town's three merchant slots and the house door as landmarks", async () => {
       const townFloor: FloorOverrides = { town: true, width: 1, height: 1, cells: [] };
       const townSlots = [
         { slotId: 'slot.town-test.house-door', tags: ['town', 'house-door'], x: 1, y: 1 },
-        { slotId: 'slot.town-test.merchant-provisioner', tags: ['town', 'merchant', 'provisioner'], x: 2, y: 2 },
+        {
+          slotId: 'slot.town-test.merchant-provisioner',
+          tags: ['town', 'merchant', 'provisioner'],
+          x: 2,
+          y: 2,
+        },
         { slotId: 'slot.town-test.merchant-arms', tags: ['town', 'merchant', 'arms'], x: 3, y: 3 },
-        { slotId: 'slot.town-test.merchant-curios', tags: ['town', 'merchant', 'curios'], x: 4, y: 4 },
+        {
+          slotId: 'slot.town-test.merchant-curios',
+          tags: ['town', 'merchant', 'curios'],
+          x: 4,
+          y: 4,
+        },
       ];
       const snapshot = snapshotWith({ floor: townFloor, slots: townSlots });
       renderOverlay(snapshot);
@@ -267,8 +315,12 @@ describe('MapJournalOverlay', () => {
 
     it('lists the stair-down as a landmark once its cell is seen in a dungeon floor', async () => {
       const dungeonFloor: FloorOverrides = {
-        town: false, width: 1, height: 1,
-        cells: [{ index: 0, x: 0, y: 0, knowledge: 'remembered', tileId: 5, glyph: '>', intensity: 24 }],
+        town: false,
+        width: 1,
+        height: 1,
+        cells: [
+          { index: 0, x: 0, y: 0, knowledge: 'remembered', tileId: 5, glyph: '>', intensity: 24 },
+        ],
       };
       const snapshot = snapshotWith({ floor: dungeonFloor, hero: { x: 5, y: 5 } });
       renderOverlay(snapshot);
@@ -280,10 +332,18 @@ describe('MapJournalOverlay', () => {
     });
 
     it('shows a persisted merchant landmark on the current floor even though no actor is currently visible', async () => {
-      const dungeonFloor: FloorOverrides = { floorId: 'floor.dungeon-1', town: false, width: 1, height: 1, cells: [] };
+      const dungeonFloor: FloorOverrides = {
+        floorId: 'floor.dungeon-1',
+        town: false,
+        width: 1,
+        height: 1,
+        cells: [],
+      };
       const snapshot = snapshotWith({
         floor: dungeonFloor,
-        landmarks: [{ floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Wandering Peddler', x: 5, y: 5 }],
+        landmarks: [
+          { floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Wandering Peddler', x: 5, y: 5 },
+        ],
       });
       renderOverlay(snapshot);
       await openJournalTab();
@@ -294,14 +354,21 @@ describe('MapJournalOverlay', () => {
 
     it('does not duplicate a landmark that is both currently live and already persisted', async () => {
       const dungeonFloor: FloorOverrides = {
-        floorId: 'floor.dungeon-1', town: false, width: 1, height: 1,
-        cells: [{ index: 0, x: 5, y: 5, knowledge: 'visible', tileId: 1, glyph: '.', intensity: 200 }],
+        floorId: 'floor.dungeon-1',
+        town: false,
+        width: 1,
+        height: 1,
+        cells: [
+          { index: 0, x: 5, y: 5, knowledge: 'visible', tileId: 1, glyph: '.', intensity: 200 },
+        ],
       };
       const snapshot = snapshotWith({
         floor: dungeonFloor,
         hero: { x: 0, y: 0 },
         actors: [{ x: 5, y: 5, name: 'Wandering Peddler', factionName: 'faction.lampwrights' }],
-        landmarks: [{ floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Wandering Peddler', x: 5, y: 5 }],
+        landmarks: [
+          { floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Wandering Peddler', x: 5, y: 5 },
+        ],
       });
       renderOverlay(snapshot);
       await openJournalTab();
@@ -310,10 +377,15 @@ describe('MapJournalOverlay', () => {
       expect(landmarks.getAllByText(/wandering peddler/i)).toHaveLength(1);
     });
 
-    it('dedupes a moving merchant by identity, not position -- a persisted landmark frozen at first-seen (x,y) collapses into the live entry at the merchant\'s current position', async () => {
+    it("dedupes a moving merchant by identity, not position -- a persisted landmark frozen at first-seen (x,y) collapses into the live entry at the merchant's current position", async () => {
       const dungeonFloor: FloorOverrides = {
-        floorId: 'floor.dungeon-1', town: false, width: 1, height: 1,
-        cells: [{ index: 0, x: 12, y: 10, knowledge: 'visible', tileId: 1, glyph: '.', intensity: 200 }],
+        floorId: 'floor.dungeon-1',
+        town: false,
+        width: 1,
+        height: 1,
+        cells: [
+          { index: 0, x: 12, y: 10, knowledge: 'visible', tileId: 1, glyph: '.', intensity: 200 },
+        ],
       };
       const snapshot = snapshotWith({
         floor: dungeonFloor,
@@ -321,7 +393,9 @@ describe('MapJournalOverlay', () => {
         // The merchant fled from (10,10) -- where it was first captured -- to (12,10), its
         // current, live position.
         actors: [{ x: 12, y: 10, name: 'Weary Lampwright', factionName: 'faction.lampwrights' }],
-        landmarks: [{ floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Weary Lampwright', x: 10, y: 10 }],
+        landmarks: [
+          { floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Weary Lampwright', x: 10, y: 10 },
+        ],
       });
       renderOverlay(snapshot);
       await openJournalTab();
@@ -331,11 +405,19 @@ describe('MapJournalOverlay', () => {
     });
 
     it('keeps two rows for two different merchants at two different positions', async () => {
-      const dungeonFloor: FloorOverrides = { floorId: 'floor.dungeon-1', town: false, width: 1, height: 1, cells: [] };
+      const dungeonFloor: FloorOverrides = {
+        floorId: 'floor.dungeon-1',
+        town: false,
+        width: 1,
+        height: 1,
+        cells: [],
+      };
       const snapshot = snapshotWith({
         floor: dungeonFloor,
         actors: [{ x: 12, y: 10, name: 'Weary Lampwright', factionName: 'faction.lampwrights' }],
-        landmarks: [{ floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Wandering Peddler', x: 5, y: 5 }],
+        landmarks: [
+          { floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Wandering Peddler', x: 5, y: 5 },
+        ],
       });
       renderOverlay(snapshot);
       await openJournalTab();
@@ -359,18 +441,35 @@ describe('MapJournalOverlay', () => {
       // The `.journal-log-line--*::before` glyph in `styles.css` only ever renders on these
       // classes -- so the class must land on the actual rendered element, not merely exist as a
       // rule in the stylesheet.
-      expect(screen.getByText('A rat bites you.')).toHaveClass('journal-log-line--combat', 'text-accent');
-      expect(screen.getByText('Your light is running low.')).toHaveClass('journal-log-line--warning', 'text-danger-fg');
-      expect(screen.getByText('The mechanism clicks.')).toHaveClass('journal-log-line--system', 'text-muted');
+      expect(screen.getByText('A rat bites you.')).toHaveClass(
+        'journal-log-line--combat',
+        'text-accent',
+      );
+      expect(screen.getByText('Your light is running low.')).toHaveClass(
+        'journal-log-line--warning',
+        'text-danger-fg',
+      );
+      expect(screen.getByText('The mechanism clicks.')).toHaveClass(
+        'journal-log-line--system',
+        'text-muted',
+      );
       // `info` has no reinforcement glyph in the stylesheet -- no `.journal-log-line--info` class.
       expect(screen.getByText('You enter the room.')).not.toHaveClass('journal-log-line--info');
     });
 
     it('does not show a persisted landmark captured on a DIFFERENT floor', async () => {
-      const dungeonFloor: FloorOverrides = { floorId: 'floor.dungeon-2', town: false, width: 1, height: 1, cells: [] };
+      const dungeonFloor: FloorOverrides = {
+        floorId: 'floor.dungeon-2',
+        town: false,
+        width: 1,
+        height: 1,
+        cells: [],
+      };
       const snapshot = snapshotWith({
         floor: dungeonFloor,
-        landmarks: [{ floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Wandering Peddler', x: 5, y: 5 }],
+        landmarks: [
+          { floorId: 'floor.dungeon-1', kind: 'merchant', name: 'Wandering Peddler', x: 5, y: 5 },
+        ],
       });
       renderOverlay(snapshot);
       await openJournalTab();

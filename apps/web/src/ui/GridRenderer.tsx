@@ -11,16 +11,24 @@ export interface GridRendererProps {
 }
 
 type CellCustomProperties = CSSProperties & {
-  '--light'?: string; '--fg'?: string; '--flicker-delay'?: string; '--flicker-duration'?: string;
+  '--light'?: string;
+  '--fg'?: string;
+  '--flicker-delay'?: string;
+  '--flicker-duration'?: string;
 };
 
-interface PositionedGlyph { readonly x: number; readonly y: number; readonly glyph?: string }
+interface PositionedGlyph {
+  readonly x: number;
+  readonly y: number;
+  readonly glyph?: string;
+}
 
 /** The class-name suffix `materialClass` can produce: one entry per terrain material, with the two
  * stair directions kept distinct (glyph `<` vs `>` already distinguishes them; splitting the class
  * too lets stylesheet authors give each its own accent later even though both read `--mat-stair`
  * today). */
-export type MaterialSuffix = 'wall' | 'floor' | 'door' | 'pillar' | 'stair-up' | 'stair-down' | 'void';
+export type MaterialSuffix =
+  'wall' | 'floor' | 'door' | 'pillar' | 'stair-up' | 'stair-down' | 'void';
 
 /** Maps a cell's terrain `token` to its material suffix; stairs are handled separately below since
  * both directions share `terrain.stair` and are only told apart by `tileId` (4 = up, 5 = down). */
@@ -45,7 +53,10 @@ const MATERIAL_BASE_KEY: Readonly<Record<MaterialSuffix, MaterialBaseName>> = {
   void: 'void',
 };
 
-interface MaterialCell { readonly token?: string; readonly tileId?: number }
+interface MaterialCell {
+  readonly token?: string;
+  readonly tileId?: number;
+}
 
 /** Deterministic string hash (32-bit FNV-1a) -- never `Math.random`. Fixture flicker jitter must
  * derive from the fixture's OWN `lightId` so the same fixture always jitters the same way across
@@ -66,7 +77,9 @@ function hashLightId(lightId: string): number {
  * a given fixture keeps the exact same cadence forever. Ranges (delay 0-2s, duration 1.8-2.6s) are
  * arbitrary but small, chosen to keep every fixture inside the same ballpark as the shared
  * `fixture-flicker` keyframe (`styles.css`) while still desynchronizing visibly. */
-export function fixtureFlickerStyle(lightId: string): Readonly<{ '--flicker-delay': string; '--flicker-duration': string }> {
+export function fixtureFlickerStyle(
+  lightId: string,
+): Readonly<{ '--flicker-delay': string; '--flicker-duration': string }> {
   const hash = hashLightId(lightId);
   const delaySeconds = (hash % 2000) / 1000;
   const durationSeconds = 1.8 + ((hash >>> 8) % 800) / 1000;
@@ -86,7 +99,9 @@ export function materialClass(cell: MaterialCell): '' | `mat-${MaterialSuffix}` 
 /** The material's own base color (see `MATERIAL_BASE_RGB`), for feeding into `visibleForeground` as
  * the color a lit cell's tint blends from -- `undefined` for a cell with no material class, which
  * falls back to `visibleForeground`'s own default (`FLOOR_RGB`). */
-function materialBase(material: '' | `mat-${MaterialSuffix}`): readonly [number, number, number] | undefined {
+function materialBase(
+  material: '' | `mat-${MaterialSuffix}`,
+): readonly [number, number, number] | undefined {
   if (!material) return undefined;
   const suffix = material.slice(4) as MaterialSuffix;
   return MATERIAL_BASE_RGB[MATERIAL_BASE_KEY[suffix]];
@@ -146,17 +161,22 @@ export function GridRenderer({ projection, camera, viewport }: GridRendererProps
       const isHero = x === hero.x && y === hero.y;
       const actor = actorsByCell.get(dataCell);
       const item = itemsByCell.get(dataCell);
-      const glyph = isHero ? '@' : (actor?.glyph ?? item?.glyph ?? cell.fixture?.glyph ?? cell.glyph ?? '');
+      const glyph = isHero
+        ? '@'
+        : (actor?.glyph ?? item?.glyph ?? cell.fixture?.glyph ?? cell.glyph ?? '');
       const material = materialClass(cell);
       const style: CellCustomProperties = { '--light': String(cell.intensity / 255) };
-      if (cell.tint) style['--fg'] = visibleForeground(cell.tint, cell.intensity, materialBase(material));
+      if (cell.tint)
+        style['--fg'] = visibleForeground(cell.tint, cell.intensity, materialBase(material));
       if (cell.fixture) Object.assign(style, fixtureFlickerStyle(cell.fixture.lightId));
 
       slots.push(
         <span
           key={slotIndex}
           data-cell={dataCell}
-          className={['cell', 'cell-visible', material, cell.fixture ? 'fixture-flicker' : ''].filter(Boolean).join(' ')}
+          className={['cell', 'cell-visible', material, cell.fixture ? 'fixture-flicker' : '']
+            .filter(Boolean)
+            .join(' ')}
           style={style}
           {...(isHero ? { 'aria-label': `Hero at ${x}, ${y}` } : {})}
         >

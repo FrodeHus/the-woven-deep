@@ -9,24 +9,36 @@ import { compareCodeUnits } from './stable-json.js';
  * `syncDeaths`, boss's `synchronizeDeath`). No event is emitted for a plain member death, matching
  * those conventions — group-model member deaths also stay silent unless a leader dies.
  */
-export function reconcileIndividualDeaths(input: Readonly<{
-  state: ActiveRun; eventId: OpaqueId;
-}>): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+export function reconcileIndividualDeaths(
+  input: Readonly<{
+    state: ActiveRun;
+    eventId: OpaqueId;
+  }>,
+): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
   let populations = input.state.populations;
   let changed = false;
-  for (const population of [...input.state.populations].sort((left, right) => compareCodeUnits(left.populationId, right.populationId))) {
+  for (const population of [...input.state.populations].sort((left, right) =>
+    compareCodeUnits(left.populationId, right.populationId),
+  )) {
     if (population.model !== 'individual') continue;
-    const newlyDead = population.livingMemberIds.filter((actorId) => (
-      (input.state.actors.find((actor) => actor.actorId === actorId)?.health ?? 0) <= 0
-    )).sort(compareCodeUnits);
+    const newlyDead = population.livingMemberIds
+      .filter(
+        (actorId) =>
+          (input.state.actors.find((actor) => actor.actorId === actorId)?.health ?? 0) <= 0,
+      )
+      .sort(compareCodeUnits);
     if (newlyDead.length === 0) continue;
     changed = true;
     const updated: IndividualPopulation = {
       ...population,
       livingMemberIds: population.livingMemberIds.filter((actorId) => !newlyDead.includes(actorId)),
-      formerMemberIds: [...new Set([...population.formerMemberIds, ...newlyDead])].sort(compareCodeUnits),
+      formerMemberIds: [...new Set([...population.formerMemberIds, ...newlyDead])].sort(
+        compareCodeUnits,
+      ),
     };
-    populations = populations.map((candidate) => candidate.populationId === updated.populationId ? updated : candidate);
+    populations = populations.map((candidate) =>
+      candidate.populationId === updated.populationId ? updated : candidate,
+    );
   }
   if (!changed) return { state: input.state, events: [] };
   return { state: { ...input.state, populations }, events: [] };

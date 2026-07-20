@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { attributes, heroName, identifier, nullableIdentifier, safeNonNegative } from './primitives.js';
+import {
+  attributes,
+  heroName,
+  identifier,
+  nullableIdentifier,
+  safeNonNegative,
+} from './primitives.js';
 
 export const condition = z.strictObject({
   conditionId: identifier,
@@ -19,18 +25,46 @@ export const equipment = z.strictObject({
   'left-ring': nullableIdentifier,
   'right-ring': nullableIdentifier,
 });
-export const populationIntent = z.enum(['approach', 'attack', 'hold', 'regroup', 'flee', 'protect', 'spawn', 'phase-change']);
+export const populationIntent = z.enum([
+  'approach',
+  'attack',
+  'hold',
+  'regroup',
+  'flee',
+  'protect',
+  'spawn',
+  'phase-change',
+]);
 export const actorGoal = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('actor'), targetActorId: identifier }),
-  z.strictObject({ type: z.literal('cell'), floorId: identifier, x: safeNonNegative, y: safeNonNegative }),
-  z.strictObject({ type: z.literal('formation'), populationId: identifier, roleId: z.string().min(1).max(80), x: safeNonNegative, y: safeNonNegative }),
+  z.strictObject({
+    type: z.literal('cell'),
+    floorId: identifier,
+    x: safeNonNegative,
+    y: safeNonNegative,
+  }),
+  z.strictObject({
+    type: z.literal('formation'),
+    populationId: identifier,
+    roleId: z.string().min(1).max(80),
+    x: safeNonNegative,
+    y: safeNonNegative,
+  }),
 ]);
 export const lastKnownTarget = z.strictObject({
-  targetActorId: identifier, floorId: identifier, x: safeNonNegative, y: safeNonNegative,
-  observedAt: safeNonNegative, source: z.enum(['sight', 'sound', 'group']), observerActorId: identifier,
+  targetActorId: identifier,
+  floorId: identifier,
+  x: safeNonNegative,
+  y: safeNonNegative,
+  observedAt: safeNonNegative,
+  source: z.enum(['sight', 'sound', 'group']),
+  observerActorId: identifier,
 });
 export const investigation = z.strictObject({
-  floorId: identifier, x: safeNonNegative, y: safeNonNegative, startedAt: safeNonNegative,
+  floorId: identifier,
+  x: safeNonNegative,
+  y: safeNonNegative,
+  startedAt: safeNonNegative,
   expiresAt: safeNonNegative.nullable(),
 });
 export const actorBehaviorState = z.strictObject({

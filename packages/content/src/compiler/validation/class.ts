@@ -14,30 +14,58 @@ function classIssues(
   }
   cls.kits.forEach((kit, kitIndex) => {
     const kitPath = `${path}.kits.${kitIndex}`;
-    const occupants: { index: number; slot: EquipmentSlot; occupiedSlots: readonly EquipmentSlot[] }[] = [];
+    const occupants: {
+      index: number;
+      slot: EquipmentSlot;
+      occupiedSlots: readonly EquipmentSlot[];
+    }[] = [];
     kit.equipped.forEach((equipped, index) => {
       const equippedPath = `${kitPath}.equipped.${index}`;
       const target = byId.get(equipped.contentId);
       if (!target) {
-        issues.push(issue(file, `${equippedPath}.contentId`, `unknown item reference ${equipped.contentId}`));
+        issues.push(
+          issue(file, `${equippedPath}.contentId`, `unknown item reference ${equipped.contentId}`),
+        );
         return;
       }
       if (target.kind !== 'item') {
-        issues.push(issue(file, `${equippedPath}.contentId`, `item reference ${equipped.contentId} resolves to ${target.kind}`));
+        issues.push(
+          issue(
+            file,
+            `${equippedPath}.contentId`,
+            `item reference ${equipped.contentId} resolves to ${target.kind}`,
+          ),
+        );
         return;
       }
       if (!target.equipment) {
-        issues.push(issue(file, `${equippedPath}.slot`, `item ${equipped.contentId} cannot be equipped in any slot`));
+        issues.push(
+          issue(
+            file,
+            `${equippedPath}.slot`,
+            `item ${equipped.contentId} cannot be equipped in any slot`,
+          ),
+        );
         return;
       }
       if (!target.equipment.slots.includes(equipped.slot)) {
-        issues.push(issue(file, `${equippedPath}.slot`,
-          `item ${equipped.contentId} cannot be equipped in slot ${equipped.slot}`));
+        issues.push(
+          issue(
+            file,
+            `${equippedPath}.slot`,
+            `item ${equipped.contentId} cannot be equipped in slot ${equipped.slot}`,
+          ),
+        );
         return;
       }
       if (equipped.enabled !== undefined && !target.light) {
-        issues.push(issue(file, `${equippedPath}.enabled`,
-          `kit ${kit.kitId} sets enabled on non-light item ${equipped.contentId}`));
+        issues.push(
+          issue(
+            file,
+            `${equippedPath}.enabled`,
+            `kit ${kit.kitId} sets enabled on non-light item ${equipped.contentId}`,
+          ),
+        );
       }
       occupants.push({
         index,
@@ -51,8 +79,13 @@ function classIssues(
         const b = occupants[right]!;
         const collision = a.occupiedSlots.find((slot) => b.occupiedSlots.includes(slot));
         if (collision) {
-          issues.push(issue(file, `${kitPath}.equipped.${b.index}.slot`,
-            `kit ${kit.kitId} reserved slot ${collision} conflicts between equipped.${a.index} and equipped.${b.index}`));
+          issues.push(
+            issue(
+              file,
+              `${kitPath}.equipped.${b.index}.slot`,
+              `kit ${kit.kitId} reserved slot ${collision} conflicts between equipped.${a.index} and equipped.${b.index}`,
+            ),
+          );
         }
       }
     }

@@ -53,7 +53,11 @@ function fakeTransport(): MailTransport & { links: Map<string, string> } {
   };
 }
 
-function makeBundle(): { bundle: AuthBundle; database: Database.Database; transport: ReturnType<typeof fakeTransport> } {
+function makeBundle(): {
+  bundle: AuthBundle;
+  database: Database.Database;
+  transport: ReturnType<typeof fakeTransport>;
+} {
   const database = freshDatabase();
   const tokens = new LoginTokenRepository(database);
   const profiles = new ProfileRepository(database);
@@ -80,7 +84,13 @@ function makeBundle(): { bundle: AuthBundle; database: Database.Database; transp
     newId: () => randomUUID(),
     transaction: (fn) => database.transaction(fn)(),
   });
-  const session = createSessionService({ clock, sessions, profiles, hashToken, sessionTtlMs: 30 * 24 * 60 * 60 * 1000 });
+  const session = createSessionService({
+    clock,
+    sessions,
+    profiles,
+    hashToken,
+    sessionTtlMs: 30 * 24 * 60 * 60 * 1000,
+  });
   const settings = createSettingsService({ clock, profiles });
 
   return { bundle: { config, login, verify, session, settings, transport }, database, transport };
@@ -90,13 +100,11 @@ describe('auth routes', () => {
   let app: FastifyInstance;
   let bundle: AuthBundle;
   let database: Database.Database;
-  let transport: ReturnType<typeof fakeTransport>;
 
   beforeEach(() => {
     const built = makeBundle();
     bundle = built.bundle;
     database = built.database;
-    transport = built.transport;
     app = buildApp({ pack, auth: bundle });
   });
 
@@ -144,13 +152,19 @@ describe('auth routes', () => {
       createdAt: '2026-07-17T00:00:00.000Z',
     });
 
-    const first = await app.inject({ method: 'GET', url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}` });
+    const first = await app.inject({
+      method: 'GET',
+      url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}`,
+    });
     expect(first.statusCode).toBe(303);
     expect(first.headers.location).toBe(`${PUBLIC_URL}/?auth=ok`);
     expect(first.headers['set-cookie']).toBeDefined();
     expect(String(first.headers['set-cookie'])).toContain('wd_session=');
 
-    const second = await app.inject({ method: 'GET', url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}` });
+    const second = await app.inject({
+      method: 'GET',
+      url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}`,
+    });
     expect(second.statusCode).toBe(303);
     expect(second.headers.location).toBe(`${PUBLIC_URL}/?auth=failed`);
     expect(second.headers['set-cookie']).toBeUndefined();
@@ -177,7 +191,10 @@ describe('auth routes', () => {
       expiresAt: '2026-07-17T00:15:00.000Z',
       createdAt: '2026-07-17T00:00:00.000Z',
     });
-    const response = await app.inject({ method: 'GET', url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}` });
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}`,
+    });
     const setCookie = response.headers['set-cookie'];
     return Array.isArray(setCookie) ? setCookie : [String(setCookie)];
   }
@@ -220,7 +237,9 @@ describe('auth routes', () => {
     });
     const csrfToken = sessionResponse.json().csrfToken as string;
     const sessionSetCookies = sessionResponse.headers['set-cookie'];
-    const csrfCookies = Array.isArray(sessionSetCookies) ? sessionSetCookies : [String(sessionSetCookies)];
+    const csrfCookies = Array.isArray(sessionSetCookies)
+      ? sessionSetCookies
+      : [String(sessionSetCookies)];
 
     const allCookies = cookieHeader([...verifyCookies, ...csrfCookies]);
 
@@ -260,7 +279,9 @@ describe('auth routes', () => {
     });
     const csrfToken = sessionResponse.json().csrfToken as string;
     const sessionSetCookies = sessionResponse.headers['set-cookie'];
-    const csrfCookies = Array.isArray(sessionSetCookies) ? sessionSetCookies : [String(sessionSetCookies)];
+    const csrfCookies = Array.isArray(sessionSetCookies)
+      ? sessionSetCookies
+      : [String(sessionSetCookies)];
 
     const allCookies = cookieHeader([...verifyCookies, ...csrfCookies]);
 
@@ -316,7 +337,10 @@ describe('auth routes', () => {
       createdAt: '2026-07-17T00:00:00.000Z',
     });
 
-    const response = await app.inject({ method: 'GET', url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}` });
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}`,
+    });
     const setCookie = response.headers['set-cookie'];
     const cookies = Array.isArray(setCookie) ? setCookie : [String(setCookie)];
     const sessionCookie = cookies.find((c) => c.startsWith('wd_session='));

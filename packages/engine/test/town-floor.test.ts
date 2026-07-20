@@ -2,9 +2,7 @@ import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
-import {
-  computeIllumination, generateTownFloor, stableJson, TOWN_FLOOR_ID,
-} from '../src/index.js';
+import { computeIllumination, generateTownFloor, stableJson, TOWN_FLOOR_ID } from '../src/index.js';
 
 let pack: CompiledContentPack;
 
@@ -14,7 +12,10 @@ beforeAll(async () => {
   });
 });
 
-function tileAt(floor: ReturnType<typeof generateTownFloor>['floor'], point: { x: number; y: number }): number {
+function tileAt(
+  floor: ReturnType<typeof generateTownFloor>['floor'],
+  point: { x: number; y: number },
+): number {
   return floor.tiles[point.y * floor.width + point.x]!;
 }
 
@@ -61,7 +62,9 @@ describe('generateTownFloor', () => {
     const stairDown = floor.stairDown!;
     expect(tileAt(floor, entrancePlaza)).toBe(1); // floor tile id
     expect(entrancePlaza).not.toEqual(stairDown);
-    expect(Math.max(Math.abs(entrancePlaza.x - stairDown.x), Math.abs(entrancePlaza.y - stairDown.y))).toBe(1);
+    expect(
+      Math.max(Math.abs(entrancePlaza.x - stairDown.x), Math.abs(entrancePlaza.y - stairDown.y)),
+    ).toBe(1);
   });
 
   it('fully lights every merchant slot cell', () => {

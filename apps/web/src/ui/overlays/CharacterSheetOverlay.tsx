@@ -1,17 +1,28 @@
-import { Fragment, type CSSProperties, type JSX, type ReactNode } from 'react';
-import {
-  ATTRIBUTE_ORDER, type DerivedStatFormula, type DerivedStatName,
-} from '@woven-deep/engine';
+import { Fragment, type JSX, type ReactNode } from 'react';
+import { ATTRIBUTE_ORDER, type DerivedStatFormula } from '@woven-deep/engine';
 import { useSessionCtx } from '../providers.js';
-import { ATTRIBUTE_LABELS, DERIVED_STAT_LABELS, playerVisibleDerivedStats } from '../derived-stats-display.js';
+import {
+  ATTRIBUTE_LABELS,
+  DERIVED_STAT_LABELS,
+  playerVisibleDerivedStats,
+} from '../derived-stats-display.js';
 import { heroOf, type HeroView } from '../../session/projection-view.js';
 
 /** Only the current-run stats the brief lists -- deliberately a narrower literal union than
  * `keyof RunMetrics` (which also has `killsByModel`, a nested object, plus a few fields the brief
  * doesn't ask for) so each row's value is provably a plain number, never an object. */
 type ScalarMetricKey =
-  | 'kills' | 'damageDealt' | 'damageTaken' | 'itemsCollected' | 'itemsIdentified'
-  | 'currencyEarned' | 'currencySpent' | 'floorsEntered' | 'deepestDepth' | 'turnsElapsed' | 'restsCompleted';
+  | 'kills'
+  | 'damageDealt'
+  | 'damageTaken'
+  | 'itemsCollected'
+  | 'itemsIdentified'
+  | 'currencyEarned'
+  | 'currencySpent'
+  | 'floorsEntered'
+  | 'deepestDepth'
+  | 'turnsElapsed'
+  | 'restsCompleted';
 
 const METRIC_ROWS: readonly Readonly<{ key: ScalarMetricKey; label: string }>[] = [
   { key: 'kills', label: 'Kills' },
@@ -35,15 +46,26 @@ const METRIC_ROWS: readonly Readonly<{ key: ScalarMetricKey; label: string }>[] 
  */
 function formatFormula(formula: DerivedStatFormula): string {
   const entries = Object.entries(formula) as readonly (readonly [string, number])[];
-  return entries.map(([operand, coefficient]) => (
-    operand === 'base' ? `base ${coefficient}` : `${operand}×${coefficient}`
-  )).join(' + ');
+  return entries
+    .map(([operand, coefficient]) =>
+      operand === 'base' ? `base ${coefficient}` : `${operand}×${coefficient}`,
+    )
+    .join(' + ');
 }
 
-function Section({ id, title, children }: Readonly<{ id: string; title: string; children: ReactNode }>): JSX.Element {
+function Section({
+  id,
+  title,
+  children,
+}: Readonly<{ id: string; title: string; children: ReactNode }>): JSX.Element {
   return (
-    <section aria-labelledby={id} className="flex flex-col gap-2 rounded-md border border-line bg-surface p-3">
-      <h3 id={id} className="font-serif text-sm text-fg-strong">{title}</h3>
+    <section
+      aria-labelledby={id}
+      className="flex flex-col gap-2 rounded-md border border-line bg-surface p-3"
+    >
+      <h3 id={id} className="font-serif text-sm text-fg-strong">
+        {title}
+      </h3>
       {children}
     </section>
   );
@@ -124,12 +146,12 @@ export function CharacterSheetOverlay(): JSX.Element | null {
               <Row
                 key={name}
                 label={DERIVED_STAT_LABELS[name]}
-                value={(
+                value={
                   <>
                     {stat.value}
                     <span className="ml-1 text-xs text-muted">{`(${formatFormula(stat.formula)})`}</span>
                   </>
-                )}
+                }
               />
             );
           })}
@@ -145,19 +167,19 @@ export function CharacterSheetOverlay(): JSX.Element | null {
       </Section>
 
       <Section id="character-sheet-conditions-heading" title="Conditions">
-        {hero.conditions.length === 0 && <p className="text-sm text-muted">No active conditions.</p>}
+        {hero.conditions.length === 0 && (
+          <p className="text-sm text-muted">No active conditions.</p>
+        )}
         {hero.conditions.length > 0 && (
           <ul className="flex flex-wrap gap-2">
             {hero.conditions.map((condition) => (
               <li
                 key={condition.conditionId}
                 className="rounded border px-2 py-1 text-xs"
-                style={{ borderColor: condition.color, color: condition.color } as CSSProperties}
+                style={{ borderColor: condition.color, color: condition.color }}
               >
-                <span className="font-medium">{condition.name}</span>
-                {' '}
-                <span>{`×${condition.stacks}`}</span>
-                {' '}
+                <span className="font-medium">{condition.name}</span>{' '}
+                <span>{`×${condition.stacks}`}</span>{' '}
                 <span>
                   {condition.remaining === null
                     ? town

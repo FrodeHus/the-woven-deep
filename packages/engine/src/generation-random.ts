@@ -5,7 +5,8 @@ import { deriveSeed, isNonZeroState, nextUint32 } from './random.js';
 const NON_ZERO_FALLBACK = 0x6d2b79f5;
 
 export function allocateFloorSeed(generationState: Uint32State): FloorSeedAllocation {
-  if (!isNonZeroState(generationState)) throw new RangeError('generation state must not be all zero');
+  if (!isNonZeroState(generationState))
+    throw new RangeError('generation state must not be all zero');
   let state = generationState;
   const words: number[] = [];
   for (let index = 0; index < 4; index += 1) {
@@ -14,7 +15,9 @@ export function allocateFloorSeed(generationState: Uint32State): FloorSeedAlloca
     state = step.state;
   }
   const candidate = words as unknown as Uint32State;
-  const floorSeed: Uint32State = isNonZeroState(candidate) ? candidate : [0, 0, 0, NON_ZERO_FALLBACK];
+  const floorSeed: Uint32State = isNonZeroState(candidate)
+    ? candidate
+    : [0, 0, 0, NON_ZERO_FALLBACK];
   return { floorSeed, nextGenerationState: state };
 }
 

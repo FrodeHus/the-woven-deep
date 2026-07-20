@@ -3,8 +3,16 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, descendToNextFloor, emptyEquipment, encodeActiveRun,
-  RECENT_COMMAND_LIMIT, type ActiveRun, type ActorState, type Uint32State,
+  createNewRun,
+  decodeActiveRun,
+  DEFAULT_GUEST_HERO,
+  descendToNextFloor,
+  emptyEquipment,
+  encodeActiveRun,
+  RECENT_COMMAND_LIMIT,
+  type ActiveRun,
+  type ActorState,
+  type Uint32State,
 } from '@woven-deep/engine';
 import { SIGHTINGS_KEY } from '../src/session/codex.js';
 import { GuestSession } from '../src/session/guest-session.js';
@@ -33,14 +41,19 @@ function depth1Run(seed: Uint32State): ActiveRun {
   const town = fresh.floors.find((floor) => floor.floorId === hero.floorId)!;
   const atStairDown: ActiveRun = {
     ...fresh,
-    actors: fresh.actors.map((actor) => actor.actorId === hero.actorId
-      ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y } : actor),
+    actors: fresh.actors.map((actor) =>
+      actor.actorId === hero.actorId
+        ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y }
+        : actor,
+    ),
   };
   return descendToNextFloor(atStairDown, { content: pack }).state;
 }
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 interface FakeStorage extends SessionStorageLike {
@@ -53,7 +66,9 @@ function fakeStorage(): FakeStorage {
   const values = new Map<string, string>();
   return {
     get: (key: string) => values.get(key) ?? null,
-    set: (key: string, value: string) => { values.set(key, value); },
+    set: (key: string, value: string) => {
+      values.set(key, value);
+    },
     peek: (key: string = SAVE_KEY) => values.get(key) ?? null,
   };
 }
@@ -119,7 +134,13 @@ describe('GuestSession', () => {
     storage.set(SAVE_KEY, encodeActiveRun(oldRun));
 
     const newHero = { ...DEFAULT_GUEST_HERO, name: 'New Hero' };
-    const session = new GuestSession({ pack, storage, seed: SEED, hero: newHero, startFresh: true });
+    const session = new GuestSession({
+      pack,
+      storage,
+      seed: SEED,
+      hero: newHero,
+      startFresh: true,
+    });
 
     expect(session.getSnapshot().projection.hero.name).toBe('New Hero');
     expect(session.getSnapshot().notice).toEqual({ kind: 'fresh' });
@@ -136,7 +157,10 @@ describe('GuestSession', () => {
     const mismatchedPack: CompiledContentPack = { ...pack, hash: 'f'.repeat(64) };
 
     const session = new GuestSession({ pack: mismatchedPack, storage, seed: SEED });
-    expect(session.getSnapshot().notice).toEqual({ kind: 'save-discarded', reason: 'content_hash_mismatch' });
+    expect(session.getSnapshot().notice).toEqual({
+      kind: 'save-discarded',
+      reason: 'content_hash_mismatch',
+    });
   });
 
   it('surfaces intent rejections as log lines without touching the run', () => {
@@ -220,8 +244,9 @@ describe('GuestSession', () => {
     const door = town.placementSlots.find((slot) => slot.tags.includes('house-door'))!;
     const adjacentRun: ActiveRun = {
       ...fresh,
-      actors: fresh.actors.map((actor) => actor.actorId === hero.actorId
-        ? { ...actor, x: door.x - 1, y: door.y - 1 } : actor),
+      actors: fresh.actors.map((actor) =>
+        actor.actorId === hero.actorId ? { ...actor, x: door.x - 1, y: door.y - 1 } : actor,
+      ),
     };
     const storage = fakeStorage();
     storage.set(SAVE_KEY, encodeActiveRun(adjacentRun));
@@ -242,8 +267,11 @@ describe('GuestSession', () => {
     // therefore believes the target cell is empty and issues a plain `move`, which the engine
     // resolves against the *actual* occupant: a neutral actor triggers `decision_required`
     // instead of either moving or attacking. See `packages/engine/src/movement.ts`.
-    const doused = run.items.map((item) => item.location.type === 'equipped' && item.location.slot === 'off-hand'
-      ? { ...item, enabled: false } : item);
+    const doused = run.items.map((item) =>
+      item.location.type === 'equipped' && item.location.slot === 'off-hand'
+        ? { ...item, enabled: false }
+        : item,
+    );
     const hiddenNeighbor: ActorState = {
       ...hero,
       actorId: 'npc.hidden-bystander',
@@ -259,7 +287,9 @@ describe('GuestSession', () => {
     const withHiddenNeighbor: ActiveRun = {
       ...run,
       items: doused,
-      actors: [...run.actors, hiddenNeighbor].sort((left, right) => (left.actorId < right.actorId ? -1 : 1)),
+      actors: [...run.actors, hiddenNeighbor].sort((left, right) =>
+        left.actorId < right.actorId ? -1 : 1,
+      ),
     };
     storage.set(SAVE_KEY, encodeActiveRun(withHiddenNeighbor));
 
@@ -267,7 +297,10 @@ describe('GuestSession', () => {
     session.dispatch({ type: 'move', direction: 'east' });
 
     const snapshot = session.getSnapshot();
-    expect(snapshot.pendingDecision).toEqual({ type: 'confirm-aggression', targetActorId: 'npc.hidden-bystander' });
+    expect(snapshot.pendingDecision).toEqual({
+      type: 'confirm-aggression',
+      targetActorId: 'npc.hidden-bystander',
+    });
     expect(snapshot.lastEvents).toEqual([]);
     const beforeConfirm = decodeActiveRun(storage.peek()!);
 
@@ -285,8 +318,11 @@ describe('GuestSession', () => {
     const storage = fakeStorage();
     const run = depth1Run(SEED);
     const hero = run.actors.find((actor) => actor.playerControlled)!;
-    const doused = run.items.map((item) => item.location.type === 'equipped' && item.location.slot === 'off-hand'
-      ? { ...item, enabled: false } : item);
+    const doused = run.items.map((item) =>
+      item.location.type === 'equipped' && item.location.slot === 'off-hand'
+        ? { ...item, enabled: false }
+        : item,
+    );
     const hiddenNeighbor: ActorState = {
       ...hero,
       actorId: 'npc.hidden-bystander',
@@ -302,7 +338,9 @@ describe('GuestSession', () => {
     const withHiddenNeighbor: ActiveRun = {
       ...run,
       items: doused,
-      actors: [...run.actors, hiddenNeighbor].sort((left, right) => (left.actorId < right.actorId ? -1 : 1)),
+      actors: [...run.actors, hiddenNeighbor].sort((left, right) =>
+        left.actorId < right.actorId ? -1 : 1,
+      ),
     };
     storage.set(SAVE_KEY, encodeActiveRun(withHiddenNeighbor));
 
@@ -353,18 +391,27 @@ describe('GuestSession', () => {
     let setCalls = 0;
     const countingStorage: SessionStorageLike = {
       get: storage.get,
-      set: (key: string, value: string) => { setCalls += 1; storage.set(key, value); },
+      set: (key: string, value: string) => {
+        setCalls += 1;
+        storage.set(key, value);
+      },
     };
     const session = new GuestSession({ pack, storage: countingStorage, seed: SEED });
     const sessionInternals = session as unknown as { run: ActiveRun; persist(): void };
 
     sessionInternals.run = {
       ...sessionInternals.run,
-      populations: [{
-        populationId: 'population.corrupt', encounterId: 'encounter.corrupt', model: 'individual',
-        floorId: sessionInternals.run.activeFloorId, createdAt: 0,
-        livingMemberIds: ['monster.does-not-exist'], formerMemberIds: [],
-      }],
+      populations: [
+        {
+          populationId: 'population.corrupt',
+          encounterId: 'encounter.corrupt',
+          model: 'individual',
+          floorId: sessionInternals.run.activeFloorId,
+          createdAt: 0,
+          livingMemberIds: ['monster.does-not-exist'],
+          formerMemberIds: [],
+        },
+      ],
     };
 
     // Construction itself already wrote once (`syncSightings`'s boot-restore sync, Task 8) --
@@ -397,8 +444,10 @@ describe('GuestSession', () => {
 
     const saved = storage.peek();
     const restored = decodeActiveRun(saved!);
-    expect(restored.recentCommands.map((entry) => entry.command.commandId))
-      .toEqual(['command.guest-0000000000', 'command.guest-0000000001']);
+    expect(restored.recentCommands.map((entry) => entry.command.commandId)).toEqual([
+      'command.guest-0000000000',
+      'command.guest-0000000001',
+    ]);
     expect(storage.peek(COMMAND_SEQUENCE_KEY)).toBe('2');
   });
 
@@ -527,7 +576,9 @@ describe('GuestSession', () => {
       };
       const withNeighbor: ActiveRun = {
         ...fresh,
-        actors: [...fresh.actors, neighbor].sort((left, right) => (left.actorId < right.actorId ? -1 : 1)),
+        actors: [...fresh.actors, neighbor].sort((left, right) =>
+          left.actorId < right.actorId ? -1 : 1,
+        ),
       };
       const storage = fakeStorage();
       storage.set(SAVE_KEY, encodeActiveRun(withNeighbor));
@@ -578,7 +629,10 @@ describe('GuestSession', () => {
 
       // Guarded, not re-fired on a subsequent publish (dispatch resets `notice` to null first).
       session.dispatch({ type: 'wait' });
-      expect(session.getSnapshot().notice).not.toEqual({ kind: 'data-reset', source: 'onboarding' });
+      expect(session.getSnapshot().notice).not.toEqual({
+        kind: 'data-reset',
+        source: 'onboarding',
+      });
     });
 
     it('a corrupted sighting-cache blob resets to the empty cache AND surfaces a dismissible data-reset notice', () => {
@@ -608,13 +662,16 @@ describe('GuestSession', () => {
       const hero = fresh.actors.find((actor) => actor.playerControlled)!;
       return {
         ...fresh,
-        actors: fresh.actors.map((actor) => (actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor)),
+        actors: fresh.actors.map((actor) =>
+          actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+        ),
         conclusion: {
           completionType: 'died',
           // The fresh guest run starts in town (depth 0), and this fixture never moves the hero
           // anywhere else before killing them.
           cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
-          concludedAtRevision: fresh.revision, finalized: false,
+          concludedAtRevision: fresh.revision,
+          finalized: false,
         },
       };
     }
@@ -641,14 +698,20 @@ describe('GuestSession', () => {
       const session = new GuestSession({ pack, storage });
 
       const repository = createSessionRunRecordRepository(storage);
-      const projection = session.finalizeConcludedRun(repository, { achievedAt: 'Run #1', portraitGlyph: '@' });
+      const projection = session.finalizeConcludedRun(repository, {
+        achievedAt: 'Run #1',
+        portraitGlyph: '@',
+      });
 
       expect(projection.finalized).toBe(true);
       expect(projection.score).not.toBeNull();
       expect(projection.heirloom).not.toBeNull();
       expect(repository.records()).toHaveLength(1);
 
-      const second = session.finalizeConcludedRun(repository, { achievedAt: 'Run #2', portraitGlyph: '&' });
+      const second = session.finalizeConcludedRun(repository, {
+        achievedAt: 'Run #2',
+        portraitGlyph: '&',
+      });
       expect(repository.records()).toHaveLength(1);
       expect(second).toEqual(projection);
     });
@@ -659,16 +722,20 @@ describe('GuestSession', () => {
       const session = new GuestSession({ pack, storage });
 
       const repository = createSessionRunRecordRepository(storage);
-      const projection = session.finalizeConcludedRun(repository, { achievedAt: 'Run #1', portraitGlyph: '@' });
+      const projection = session.finalizeConcludedRun(repository, {
+        achievedAt: 'Run #1',
+        portraitGlyph: '@',
+      });
 
       const reloadedRun = decodeActiveRun(storage.peek()!);
       expect(reloadedRun.conclusion?.finalized).toBe(true);
 
       const reloadedSession = new GuestSession({ pack, storage });
       const reloadedRepository = createSessionRunRecordRepository(storage);
-      const reloadedProjection = reloadedSession.finalizeConcludedRun(
-        reloadedRepository, { achievedAt: 'Run #2', portraitGlyph: '&' },
-      );
+      const reloadedProjection = reloadedSession.finalizeConcludedRun(reloadedRepository, {
+        achievedAt: 'Run #2',
+        portraitGlyph: '&',
+      });
 
       expect(reloadedRepository.records()).toHaveLength(1);
       expect(reloadedProjection).toEqual(projection);
@@ -684,7 +751,8 @@ describe('GuestSession', () => {
         conclusion: {
           completionType: 'died',
           cause: { killerContentId: null, depth: 0, turn: 0, worldTime: 0 },
-          concludedAtRevision: 0, finalized: true,
+          concludedAtRevision: 0,
+          finalized: true,
         },
       };
       storage.set(SAVE_KEY, encodeActiveRun(deadFinalizedRun));
@@ -693,7 +761,10 @@ describe('GuestSession', () => {
 
       let projection: ReturnType<typeof session.finalizeConcludedRun>;
       expect(() => {
-        projection = session.finalizeConcludedRun(emptyRepository, { achievedAt: 'Run #1', portraitGlyph: '@' });
+        projection = session.finalizeConcludedRun(emptyRepository, {
+          achievedAt: 'Run #1',
+          portraitGlyph: '@',
+        });
       }).not.toThrow();
 
       expect(projection!.finalized).toBe(false);

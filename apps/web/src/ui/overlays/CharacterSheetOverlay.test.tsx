@@ -5,7 +5,11 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  applyCondition, DEFAULT_GUEST_HERO, createNewRun, heroActor, projectGameplayState,
+  applyCondition,
+  DEFAULT_GUEST_HERO,
+  createNewRun,
+  heroActor,
+  projectGameplayState,
   type ActiveRun,
 } from '@woven-deep/engine';
 import type { GuestSession, SessionSnapshot } from '../../session/guest-session.js';
@@ -20,14 +24,25 @@ let baseRun: ActiveRun;
 const SEED = [11, 22, 33, 44] as const;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../../../content'),
+  });
   baseRun = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
 });
 
 function snapshotFor(run: ActiveRun): SessionSnapshot {
   const projection = projectGameplayState({ state: run, content: pack });
   return {
-    projection, log: [], lastEvents: [], pendingDecision: null, notice: null, houseOpen: false, conclusion: null, sightings: { monsterIds: [], itemIds: [], landmarks: [] }, heroClassTags: [], onboarding: { counts: {}, dismissed: [] },
+    projection,
+    log: [],
+    lastEvents: [],
+    pendingDecision: null,
+    notice: null,
+    houseOpen: false,
+    conclusion: null,
+    sightings: { monsterIds: [], itemIds: [], landmarks: [] },
+    heroClassTags: [],
+    onboarding: { counts: {}, dismissed: [] },
   };
 }
 
@@ -41,7 +56,12 @@ function stubSession(snapshot: SessionSnapshot): GuestSession {
 
 function renderSheet(snapshot: SessionSnapshot) {
   return render(
-    <UiProviders pack={pack} settings={DEFAULT_SETTINGS} onChangeSettings={() => {}} session={stubSession(snapshot)}>
+    <UiProviders
+      pack={pack}
+      settings={DEFAULT_SETTINGS}
+      onChangeSettings={() => {}}
+      session={stubSession(snapshot)}
+    >
       <CharacterSheetOverlay />
     </UiProviders>,
   );
@@ -83,27 +103,41 @@ describe('CharacterSheetOverlay', () => {
   it('renders a sample attribute value', () => {
     const snapshot = snapshotFor(baseRun);
     renderSheet(snapshot);
-    const hero = snapshot.projection.hero as unknown as { attributes: Readonly<Record<string, number>> };
+    const hero = snapshot.projection.hero as unknown as {
+      attributes: Readonly<Record<string, number>>;
+    };
 
-    const attributesSection = within(screen.getByRole('heading', { name: 'Attributes' }).closest('section')!);
-    expect(attributesSection.getByText('Might').nextElementSibling).toHaveTextContent(String(hero.attributes.might));
+    const attributesSection = within(
+      screen.getByRole('heading', { name: 'Attributes' }).closest('section')!,
+    );
+    expect(attributesSection.getByText('Might').nextElementSibling).toHaveTextContent(
+      String(hero.attributes.might),
+    );
   });
 
   it('renders a condition badge with its inline color', () => {
     const hero = heroActor(baseRun);
     const applied = applyCondition({
-      actors: baseRun.actors, content: pack, targetActorId: hero.actorId, sourceActorId: hero.actorId,
-      conditionId: 'condition.disengaged', worldTime: baseRun.worldTime, eventId: 'event.test-condition',
+      actors: baseRun.actors,
+      content: pack,
+      targetActorId: hero.actorId,
+      sourceActorId: hero.actorId,
+      conditionId: 'condition.disengaged',
+      worldTime: baseRun.worldTime,
+      eventId: 'event.test-condition',
     });
     const dungeonFloor = { ...baseRun.floors[0]!, depth: 1 };
     const dungeonRun: ActiveRun = {
-      ...baseRun, actors: applied.actors,
+      ...baseRun,
+      actors: applied.actors,
       floors: [dungeonFloor, ...baseRun.floors.slice(1)],
     };
     const snapshot = snapshotFor(dungeonRun);
-    const condition = (snapshot.projection.hero as unknown as {
-      conditions: readonly { name: string; color: string }[];
-    }).conditions[0]!;
+    const condition = (
+      snapshot.projection.hero as unknown as {
+        conditions: readonly { name: string; color: string }[];
+      }
+    ).conditions[0]!;
 
     renderSheet(snapshot);
 
@@ -114,19 +148,27 @@ describe('CharacterSheetOverlay', () => {
   it('shows "Permanent" (no countdown) for a permanent condition outside town', () => {
     const hero = heroActor(baseRun);
     const applied = applyCondition({
-      actors: baseRun.actors, content: pack, targetActorId: hero.actorId, sourceActorId: hero.actorId,
-      conditionId: 'condition.incapacitated', worldTime: baseRun.worldTime, eventId: 'event.test-permanent',
+      actors: baseRun.actors,
+      content: pack,
+      targetActorId: hero.actorId,
+      sourceActorId: hero.actorId,
+      conditionId: 'condition.incapacitated',
+      worldTime: baseRun.worldTime,
+      eventId: 'event.test-permanent',
     });
     const dungeonFloor = { ...baseRun.floors[0]!, depth: 1 };
     const dungeonRun: ActiveRun = {
-      ...baseRun, actors: applied.actors,
+      ...baseRun,
+      actors: applied.actors,
       floors: [dungeonFloor, ...baseRun.floors.slice(1)],
     };
     const snapshot = snapshotFor(dungeonRun);
     expect(snapshot.projection.floor.town).toBe(false);
-    const condition = (snapshot.projection.hero as unknown as {
-      conditions: readonly { name: string; remaining: number | null }[];
-    }).conditions[0]!;
+    const condition = (
+      snapshot.projection.hero as unknown as {
+        conditions: readonly { name: string; remaining: number | null }[];
+      }
+    ).conditions[0]!;
     expect(condition.remaining).toBeNull();
 
     renderSheet(snapshot);
@@ -138,15 +180,22 @@ describe('CharacterSheetOverlay', () => {
   it('shows the frozen-time marker for the same permanent condition while in town', () => {
     const hero = heroActor(baseRun);
     const applied = applyCondition({
-      actors: baseRun.actors, content: pack, targetActorId: hero.actorId, sourceActorId: hero.actorId,
-      conditionId: 'condition.incapacitated', worldTime: baseRun.worldTime, eventId: 'event.test-permanent-town',
+      actors: baseRun.actors,
+      content: pack,
+      targetActorId: hero.actorId,
+      sourceActorId: hero.actorId,
+      conditionId: 'condition.incapacitated',
+      worldTime: baseRun.worldTime,
+      eventId: 'event.test-permanent-town',
     });
     const townRun: ActiveRun = { ...baseRun, actors: applied.actors };
     const snapshot = snapshotFor(townRun);
     expect(snapshot.projection.floor.town).toBe(true);
-    const condition = (snapshot.projection.hero as unknown as {
-      conditions: readonly { name: string; remaining: number | null }[];
-    }).conditions[0]!;
+    const condition = (
+      snapshot.projection.hero as unknown as {
+        conditions: readonly { name: string; remaining: number | null }[];
+      }
+    ).conditions[0]!;
     expect(condition.remaining).toBeNull();
 
     renderSheet(snapshot);
@@ -167,13 +216,17 @@ describe('CharacterSheetOverlay', () => {
     const derivedSection = sectionFor('Derived stats');
 
     for (const statName of playerVisibleDerivedStats()) {
-      const derived = (snapshot.projection.hero as unknown as {
-        derived: Record<string, { value: number; formula: Record<string, number> }>;
-      }).derived[statName]!;
+      const derived = (
+        snapshot.projection.hero as unknown as {
+          derived: Record<string, { value: number; formula: Record<string, number> }>;
+        }
+      ).derived[statName]!;
       for (const operand of Object.keys(derived.formula)) {
         expect(derivedSection.getAllByText(new RegExp(operand, 'i')).length).toBeGreaterThan(0);
       }
-      expect(derivedSection.getAllByText(new RegExp(`^${derived.value}$`)).length).toBeGreaterThan(0);
+      expect(derivedSection.getAllByText(new RegExp(`^${derived.value}$`)).length).toBeGreaterThan(
+        0,
+      );
     }
   });
 
@@ -202,7 +255,10 @@ describe('CharacterSheetOverlay', () => {
   it('shows hunger stage and sight radius plainly', () => {
     const snapshot = snapshotFor(baseRun);
     renderSheet(snapshot);
-    const hero = snapshot.projection.hero as unknown as { hungerStage: string; sightRadius: number };
+    const hero = snapshot.projection.hero as unknown as {
+      hungerStage: string;
+      sightRadius: number;
+    };
     const vitalsSection = sectionFor('Vitals');
     expect(vitalsSection.getByText(hero.hungerStage)).toBeInTheDocument();
     expect(vitalsSection.getByText(String(hero.sightRadius))).toBeInTheDocument();
@@ -212,8 +268,18 @@ describe('CharacterSheetOverlay', () => {
     const runWithMetrics: ActiveRun = {
       ...baseRun,
       metrics: {
-        ...baseRun.metrics, kills: 3, damageDealt: 40, damageTaken: 12, itemsCollected: 5, itemsIdentified: 2,
-        currencyEarned: 100, currencySpent: 30, floorsEntered: 4, deepestDepth: 3, turnsElapsed: 250, restsCompleted: 2,
+        ...baseRun.metrics,
+        kills: 3,
+        damageDealt: 40,
+        damageTaken: 12,
+        itemsCollected: 5,
+        itemsIdentified: 2,
+        currencyEarned: 100,
+        currencySpent: 30,
+        floorsEntered: 4,
+        deepestDepth: 3,
+        turnsElapsed: 250,
+        restsCompleted: 2,
       },
     };
     const snapshot = snapshotFor(runWithMetrics);
@@ -221,12 +287,22 @@ describe('CharacterSheetOverlay', () => {
     const metricsSection = sectionFor('Run statistics');
 
     const expectedValues: Readonly<Record<string, string>> = {
-      kills: '3', damageDealt: '40', damageTaken: '12', itemsCollected: '5', itemsIdentified: '2',
-      currencyEarned: '100', currencySpent: '30', floorsEntered: '4', deepestDepth: '3', turnsElapsed: '250',
+      kills: '3',
+      damageDealt: '40',
+      damageTaken: '12',
+      itemsCollected: '5',
+      itemsIdentified: '2',
+      currencyEarned: '100',
+      currencySpent: '30',
+      floorsEntered: '4',
+      deepestDepth: '3',
+      turnsElapsed: '250',
       restsCompleted: '2',
     };
     for (const { key, label } of METRIC_ROWS) {
-      expect(metricsSection.getByText(label).nextElementSibling).toHaveTextContent(expectedValues[key]!);
+      expect(metricsSection.getByText(label).nextElementSibling).toHaveTextContent(
+        expectedValues[key]!,
+      );
     }
   });
 

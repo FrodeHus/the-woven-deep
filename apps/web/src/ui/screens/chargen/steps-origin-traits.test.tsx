@@ -14,13 +14,14 @@ let pack: CompiledContentPack;
 const SEED: Uint32State = [11, 22, 33, 44];
 
 const CARAVAN_GUARD = 'background.caravan-guard';
-const DEEP_MINER = 'background.deep-miner';
 const KEEN_EYED = 'trait.keen-eyed';
 const SURE_FOOTED = 'trait.sure-footed';
 const STEADY_HANDS = 'trait.steady-hands';
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../../../../content'),
+  });
 });
 
 function stubState(overrides: Partial<WizardState> = {}): WizardState {
@@ -33,7 +34,10 @@ describe('OriginStep', () => {
     const dispatch = vi.fn();
     render(<OriginStep state={stubState()} pack={pack} dispatch={dispatch} />);
     await user.click(screen.getByRole('option', { name: /Caravan guard/ }));
-    expect(dispatch).toHaveBeenCalledWith({ type: 'choose-background', backgroundId: CARAVAN_GUARD });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'choose-background',
+      backgroundId: CARAVAN_GUARD,
+    });
   });
 
   it('shows the background stat modifier as meta text', () => {
@@ -45,8 +49,17 @@ describe('OriginStep', () => {
 
   it('reflects the selected background', () => {
     const dispatch = vi.fn();
-    render(<OriginStep state={stubState({ backgroundId: CARAVAN_GUARD })} pack={pack} dispatch={dispatch} />);
-    expect(screen.getByRole('option', { name: /Caravan guard/ })).toHaveAttribute('aria-selected', 'true');
+    render(
+      <OriginStep
+        state={stubState({ backgroundId: CARAVAN_GUARD })}
+        pack={pack}
+        dispatch={dispatch}
+      />,
+    );
+    expect(screen.getByRole('option', { name: /Caravan guard/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 });
 
@@ -61,7 +74,9 @@ describe('TraitsStep', () => {
 
   it('shows the n/2 selection indicator reflecting traitIds length', () => {
     const dispatch = vi.fn();
-    render(<TraitsStep state={stubState({ traitIds: [KEEN_EYED] })} pack={pack} dispatch={dispatch} />);
+    render(
+      <TraitsStep state={stubState({ traitIds: [KEEN_EYED] })} pack={pack} dispatch={dispatch} />,
+    );
     expect(screen.getByText('1/2')).toBeInTheDocument();
   });
 
@@ -91,6 +106,8 @@ describe('TraitsStep', () => {
       />,
     );
     await user.click(screen.getByRole('option', { name: /Steady hands/ }));
-    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'toggle-trait', traitId: STEADY_HANDS }));
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'toggle-trait', traitId: STEADY_HANDS }),
+    );
   });
 });

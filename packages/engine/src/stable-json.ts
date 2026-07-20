@@ -50,7 +50,7 @@ function serializeArray(value: unknown[], ancestors: Set<object>): string {
 }
 
 function serializeObject(value: object, ancestors: Set<object>): string {
-  const prototype = Object.getPrototypeOf(value);
+  const prototype: unknown = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) {
     throw new TypeError('stable JSON objects must be plain');
   }
@@ -84,8 +84,14 @@ function serialize(value: unknown, ancestors: Set<object>): string {
   if (typeof value === 'string') return JSON.stringify(value);
   if (typeof value === 'boolean') return String(value);
   if (typeof value === 'number') {
-    if (!Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER || Object.is(value, -0)) {
-      throw new TypeError('stable JSON numbers must be finite, unambiguous, and within safe magnitude');
+    if (
+      !Number.isFinite(value) ||
+      Math.abs(value) > Number.MAX_SAFE_INTEGER ||
+      Object.is(value, -0)
+    ) {
+      throw new TypeError(
+        'stable JSON numbers must be finite, unambiguous, and within safe magnitude',
+      );
     }
     return String(value);
   }

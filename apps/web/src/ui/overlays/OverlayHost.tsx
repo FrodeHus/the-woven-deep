@@ -15,7 +15,11 @@ import { CodexOverlay } from './CodexOverlay.js';
 import { SettingsOverlay } from './SettingsOverlay.js';
 import { HelpOverlay } from './HelpOverlay.js';
 
-const SHEET_OVERLAYS: ReadonlySet<OverlayId> = new Set(['inventory', 'character-sheet', 'map-journal']);
+const SHEET_OVERLAYS: ReadonlySet<OverlayId> = new Set([
+  'inventory',
+  'character-sheet',
+  'map-journal',
+]);
 
 export interface OverlayHostProps {
   readonly overlay: OverlayId | null;
@@ -39,7 +43,14 @@ export interface OverlayHostProps {
  * `closeOverlay`/`onCloseOverlay` already uses, so it stays a single source of truth regardless of
  * whether the close came from Escape, the scrim, or the close button.
  */
-export function OverlayHost({ overlay, onClose, isPlayActive, records, onClearGuestSession, sightings }: Readonly<OverlayHostProps>): JSX.Element | null {
+export function OverlayHost({
+  overlay,
+  onClose,
+  isPlayActive,
+  records,
+  onClearGuestSession,
+  sightings,
+}: Readonly<OverlayHostProps>): JSX.Element | null {
   const pack = usePack();
   const sessionCtx = useSessionCtx();
 
@@ -48,7 +59,9 @@ export function OverlayHost({ overlay, onClose, isPlayActive, records, onClearGu
   if (!canOpenOverlay(definition, isPlayActive)) return null;
 
   const body = renderBody(overlay, {
-    pack, records, onClearGuestSession,
+    pack,
+    records,
+    onClearGuestSession,
     snapshot: sessionCtx?.snapshot,
     sightings: sightings ?? sessionCtx?.snapshot.sightings,
   });

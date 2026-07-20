@@ -44,12 +44,14 @@ function isStringArray(value: unknown): value is readonly string[] {
 function isLandmark(value: unknown): value is Landmark {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as Readonly<Record<string, unknown>>;
-  return typeof candidate.floorId === 'string'
-    && typeof candidate.name === 'string'
-    && typeof candidate.x === 'number'
-    && typeof candidate.y === 'number'
-    && typeof candidate.kind === 'string'
-    && (LANDMARK_KINDS as readonly string[]).includes(candidate.kind);
+  return (
+    typeof candidate.floorId === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.x === 'number' &&
+    typeof candidate.y === 'number' &&
+    typeof candidate.kind === 'string' &&
+    (LANDMARK_KINDS as readonly string[]).includes(candidate.kind)
+  );
 }
 
 function isLandmarkArray(value: unknown): value is readonly Landmark[] {
@@ -59,7 +61,9 @@ function isLandmarkArray(value: unknown): value is readonly Landmark[] {
 /** `landmarks` is forward-tolerant: an OLD blob written before this field existed simply omits
  * it -- that is a fresh-to-this-feature session, not corruption, so it loads as `[]`. A PRESENT
  * but malformed `landmarks` is corruption like any other shape failure. */
-function isSightings(value: unknown): value is Omit<Sightings, 'landmarks'> & { readonly landmarks?: readonly Landmark[] } {
+function isSightings(
+  value: unknown,
+): value is Omit<Sightings, 'landmarks'> & { readonly landmarks?: readonly Landmark[] } {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as Readonly<Record<string, unknown>>;
   if (!isStringArray(candidate.monsterIds) || !isStringArray(candidate.itemIds)) return false;
@@ -94,7 +98,9 @@ function dedupeLandmarks(landmarks: readonly Landmark[]): readonly Landmark[] {
  * empty cache. Callers (here, `GuestSession`) turn `corrupted` into the standard storage notice;
  * this module itself never touches React or notices.
  */
-export function loadSightings(storage: SessionStorageLike): Readonly<{ sightings: Sightings; corrupted: boolean }> {
+export function loadSightings(
+  storage: SessionStorageLike,
+): Readonly<{ sightings: Sightings; corrupted: boolean }> {
   const raw = storage.get(SIGHTINGS_KEY);
   if (raw === null) return { sightings: EMPTY_SIGHTINGS, corrupted: false };
   let parsed: unknown;
@@ -182,22 +188,44 @@ interface SightedSlot {
  * `projection.ts`'s `slots` doc comment); merchants from any visible actor carrying a
  * `factionName`, uniformly in town or a dungeon.
  */
-function capturedLandmarks(floor: SightedFloor, actors: readonly LandmarkActor[], slots: readonly SightedSlot[]): readonly Landmark[] {
+function capturedLandmarks(
+  floor: SightedFloor,
+  actors: readonly LandmarkActor[],
+  slots: readonly SightedSlot[],
+): readonly Landmark[] {
   const captured: Landmark[] = [];
 
   for (const cell of floor.cells) {
     if (cell.knowledge === 'unknown') continue;
     if (cell.tileId === STAIR_UP_TILE_ID) {
-      captured.push({ floorId: floor.floorId, kind: 'stair-up', name: 'Stairs up', x: cell.x, y: cell.y });
+      captured.push({
+        floorId: floor.floorId,
+        kind: 'stair-up',
+        name: 'Stairs up',
+        x: cell.x,
+        y: cell.y,
+      });
     } else if (cell.tileId === STAIR_DOWN_TILE_ID) {
-      captured.push({ floorId: floor.floorId, kind: 'stair-down', name: 'Stairs down', x: cell.x, y: cell.y });
+      captured.push({
+        floorId: floor.floorId,
+        kind: 'stair-down',
+        name: 'Stairs down',
+        x: cell.x,
+        y: cell.y,
+      });
     }
   }
 
   if (floor.town) {
     for (const slot of slots) {
       if (slot.tags.includes('house-door')) {
-        captured.push({ floorId: floor.floorId, kind: 'house', name: 'The house', x: slot.x, y: slot.y });
+        captured.push({
+          floorId: floor.floorId,
+          kind: 'house',
+          name: 'The house',
+          x: slot.x,
+          y: slot.y,
+        });
       }
     }
   }
@@ -210,7 +238,11 @@ function capturedLandmarks(floor: SightedFloor, actors: readonly LandmarkActor[]
     // is still captured here for a future cross-run codex (Milestone 6) that outlives the current
     // session's live projection.
     captured.push({
-      floorId: floor.floorId, kind: 'merchant', name: actor.name ?? actor.factionName, x: actor.x, y: actor.y,
+      floorId: floor.floorId,
+      kind: 'merchant',
+      name: actor.name ?? actor.factionName,
+      x: actor.x,
+      y: actor.y,
     });
   }
 
@@ -224,8 +256,14 @@ function capturedLandmarks(floor: SightedFloor, actors: readonly LandmarkActor[]
  * persisted" half the brief describes: `MapJournalOverlay`'s `landmarksFor` stays the fresh,
  * per-render derivation (the live half); this is the accumulating, storage-backed half.
  */
-export function accumulateLandmarks(prev: readonly Landmark[], projection: GameplayProjection): readonly Landmark[] {
-  return dedupeLandmarks([...prev, ...capturedLandmarks(projection.floor, actorsOf(projection), projection.slots)]);
+export function accumulateLandmarks(
+  prev: readonly Landmark[],
+  projection: GameplayProjection,
+): readonly Landmark[] {
+  return dedupeLandmarks([
+    ...prev,
+    ...capturedLandmarks(projection.floor, actorsOf(projection), projection.slots),
+  ]);
 }
 
 /**

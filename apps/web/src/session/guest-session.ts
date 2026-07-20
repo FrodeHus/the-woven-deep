@@ -1,21 +1,51 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
-  ascendToPreviousFloor, createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, deriveHallRecordId,
-  descendToNextFloor, encodeActiveRun,
-  finalizeRun, projectDecision, projectDomainEvents, projectGameplayState, projectRunConclusion,
-  RECENT_COMMAND_LIMIT, resolveCommand, SaveLoadError,
-  type ActiveRun, type CommandResolution, type GameCommand, type GameplayProjection, type HallRecordEnrichment,
-  type NewRunHero, type PublicDecision, type PublicEvent, type RunConclusionProjection, type RunRecordRepository,
-  type StoredHallRecord, type Uint32State,
+  ascendToPreviousFloor,
+  createNewRun,
+  decodeActiveRun,
+  DEFAULT_GUEST_HERO,
+  deriveHallRecordId,
+  descendToNextFloor,
+  encodeActiveRun,
+  finalizeRun,
+  projectDecision,
+  projectDomainEvents,
+  projectGameplayState,
+  projectRunConclusion,
+  RECENT_COMMAND_LIMIT,
+  resolveCommand,
+  SaveLoadError,
+  type ActiveRun,
+  type CommandResolution,
+  type GameCommand,
+  type GameplayProjection,
+  type HallRecordEnrichment,
+  type NewRunHero,
+  type PublicDecision,
+  type PublicEvent,
+  type RunConclusionProjection,
+  type RunRecordRepository,
+  type StoredHallRecord,
+  type Uint32State,
 } from '@woven-deep/engine';
 import { buildIntent } from './command-builder.js';
 import { accumulateSightings, loadSightings, saveSightings, type Sightings } from './codex.js';
 import { foldEventsIntoLog, LOG_CAPACITY, type LogLine } from './event-log.js';
 import type { PlayerIntent } from './intents.js';
-import { dismissHint, loadOnboarding, recordIntent, saveOnboarding, type OnboardingState } from './onboarding.js';
+import {
+  dismissHint,
+  loadOnboarding,
+  recordIntent,
+  saveOnboarding,
+  type OnboardingState,
+} from './onboarding.js';
 import { randomSeed } from './seed.js';
 import {
-  classifyStorageFailure, COMMAND_SEQUENCE_KEY, SAVE_KEY, type SessionStorageLike, type StorageFailure,
+  classifyStorageFailure,
+  COMMAND_SEQUENCE_KEY,
+  SAVE_KEY,
+  type SessionStorageLike,
+  type StorageFailure,
 } from './storage.js';
 
 /** Width of the zero-padded counter component of a command id — comfortably above what any
@@ -79,8 +109,12 @@ function inMemoryLocalStorage(): SessionStorageLike {
   const values = new Map<string, string>();
   return {
     get: (key: string) => values.get(key) ?? null,
-    set: (key: string, value: string) => { values.set(key, value); },
-    remove: (key: string) => { values.delete(key); },
+    set: (key: string, value: string) => {
+      values.set(key, value);
+    },
+    remove: (key: string) => {
+      values.delete(key);
+    },
   };
 }
 
@@ -129,7 +163,10 @@ export class GuestSession {
 
   constructor(
     input: Readonly<{
-      pack: CompiledContentPack; storage: SessionStorageLike; seed?: Uint32State; hero?: NewRunHero;
+      pack: CompiledContentPack;
+      storage: SessionStorageLike;
+      seed?: Uint32State;
+      hero?: NewRunHero;
       /** Device-persistent (`localStorage`) store for the onboarding mastery ledger only -- see
        * `inMemoryLocalStorage`'s doc comment above for why this is optional rather than required. */
       localStorage?: SessionStorageLike;
@@ -164,7 +201,8 @@ export class GuestSession {
   }
 
   private boot(
-    seed: Uint32State | undefined, startFresh: boolean,
+    seed: Uint32State | undefined,
+    startFresh: boolean,
   ): Readonly<{ run: ActiveRun; notice: SessionNotice; commandSequence: number }> {
     const raw = startFresh ? null : this.storage.get(SAVE_KEY);
     if (raw === null) {
@@ -174,14 +212,23 @@ export class GuestSession {
       const restored = decodeActiveRun(raw);
       if (restored.contentHash !== this.pack.hash) {
         return {
-          run: this.freshRun(seed), notice: { kind: 'save-discarded', reason: 'content_hash_mismatch' },
+          run: this.freshRun(seed),
+          notice: { kind: 'save-discarded', reason: 'content_hash_mismatch' },
           commandSequence: 0,
         };
       }
-      return { run: restored, notice: { kind: 'restored' }, commandSequence: this.readCommandSequence(restored) };
+      return {
+        run: restored,
+        notice: { kind: 'restored' },
+        commandSequence: this.readCommandSequence(restored),
+      };
     } catch (error) {
       if (error instanceof SaveLoadError) {
-        return { run: this.freshRun(seed), notice: { kind: 'save-discarded', reason: error.kind }, commandSequence: 0 };
+        return {
+          run: this.freshRun(seed),
+          notice: { kind: 'save-discarded', reason: error.kind },
+          commandSequence: 0,
+        };
       }
       throw error;
     }
@@ -239,7 +286,11 @@ export class GuestSession {
     const projection = this.currentProjection();
     const commandId = this.nextCommandId();
     const built = buildIntent({
-      intent, projection, commandId, expectedRevision: this.run.revision, pack: this.pack,
+      intent,
+      projection,
+      commandId,
+      expectedRevision: this.run.revision,
+      pack: this.pack,
     });
 
     if (built.kind === 'rejected') {
@@ -251,7 +302,10 @@ export class GuestSession {
     if (built.kind === 'descend') {
       const transition = descendToNextFloor(this.run, { content: this.pack });
       const events = projectDomainEvents({
-        state: transition.state, content: this.pack, heroId: transition.state.hero.actorId, events: transition.events,
+        state: transition.state,
+        content: this.pack,
+        heroId: transition.state.hero.actorId,
+        events: transition.events,
       });
       this.noteOnboardingIntent('descend');
       this.applyNewState(transition.state, events);
@@ -265,7 +319,10 @@ export class GuestSession {
       // routing it identically keeps the two floor-change paths symmetric.
       const transition = ascendToPreviousFloor(this.run, { content: this.pack });
       const events = projectDomainEvents({
-        state: transition.state, content: this.pack, heroId: transition.state.hero.actorId, events: transition.events,
+        state: transition.state,
+        content: this.pack,
+        heroId: transition.state.hero.actorId,
+        events: transition.events,
       });
       this.applyNewState(transition.state, events);
       return;
@@ -277,7 +334,10 @@ export class GuestSession {
     }
 
     const masteryIntentType = onboardingIntentType(intent);
-    this.handleResolution(resolveCommand(this.run, built.command, { content: this.pack }), masteryIntentType);
+    this.handleResolution(
+      resolveCommand(this.run, built.command, { content: this.pack }),
+      masteryIntentType,
+    );
   }
 
   answerDecision(confirmed: boolean): void {
@@ -293,8 +353,10 @@ export class GuestSession {
     }
 
     const command: GameCommand = {
-      type: 'attack', targetActorId: decision.targetActorId,
-      commandId: this.nextCommandId(), expectedRevision: this.run.revision,
+      type: 'attack',
+      targetActorId: decision.targetActorId,
+      commandId: this.nextCommandId(),
+      expectedRevision: this.run.revision,
     };
     this.handleResolution(resolveCommand(this.run, command, { content: this.pack }));
   }
@@ -308,15 +370,18 @@ export class GuestSession {
   private handleResolution(resolution: CommandResolution, masteryIntentType?: string | null): void {
     const { result } = resolution;
     if (result.status === 'decision_required') {
-      this.pendingDecision = projectDecision({ state: this.run, content: this.pack, decision: result.decision })
-        ?? result.decision;
+      this.pendingDecision =
+        projectDecision({ state: this.run, content: this.pack, decision: result.decision }) ??
+        result.decision;
       this.lastEvents = [];
       this.publish();
       return;
     }
     if (result.status === 'rejected') {
       this.appendSystemLine(
-        result.reason === 'stale_revision' ? 'That action is out of date.' : 'That action was already handled.',
+        result.reason === 'stale_revision'
+          ? 'That action is out of date.'
+          : 'That action was already handled.',
       );
       this.publish();
       return;
@@ -456,7 +521,10 @@ export class GuestSession {
    * run through the usual codec, folds the finalize events into the log, republishes the snapshot,
    * and returns the full projection (score, heirloom, achievement grants).
    */
-  finalizeConcludedRun(repository: RunRecordRepository, enrichment: HallRecordEnrichment): RunConclusionProjection {
+  finalizeConcludedRun(
+    repository: RunRecordRepository,
+    enrichment: HallRecordEnrichment,
+  ): RunConclusionProjection {
     const { conclusion } = this.run;
     if (conclusion === null) {
       throw new Error('finalizeConcludedRun requires a concluded run');
@@ -464,7 +532,8 @@ export class GuestSession {
 
     if (conclusion.finalized) {
       const recordId = deriveHallRecordId(this.run.runSeed, this.run.contentHash);
-      const record = repository.records().find((candidate) => candidate.recordId === recordId) ?? null;
+      const record =
+        repository.records().find((candidate) => candidate.recordId === recordId) ?? null;
       const projection = projectRunConclusion({ run: this.run, record, achievements: [] });
       if (projection === null) {
         throw new Error('internal invariant: an already-concluded run projected to null');
@@ -472,7 +541,11 @@ export class GuestSession {
       return projection;
     }
 
-    const finalized = finalizeRun({ run: this.run, content: this.pack, lifetime: repository.lifetime() });
+    const finalized = finalizeRun({
+      run: this.run,
+      content: this.pack,
+      lifetime: repository.lifetime(),
+    });
     const stored: StoredHallRecord = { ...finalized.record, enrichment };
     repository.appendRecord(stored);
     repository.applyDeltas(finalized.deltas);
@@ -488,7 +561,9 @@ export class GuestSession {
     this.persist();
 
     const projection = projectRunConclusion({
-      run: this.run, record: stored, achievements: finalized.deltas.achievementGrants,
+      run: this.run,
+      record: stored,
+      achievements: finalized.deltas.achievementGrants,
     });
     if (projection === null) {
       throw new Error('internal invariant: a just-finalized run projected to null');
@@ -499,7 +574,9 @@ export class GuestSession {
 
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
-    return () => { this.listeners.delete(listener); };
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   getSnapshot(): SessionSnapshot {
@@ -514,8 +591,10 @@ export class GuestSession {
       pendingDecision: this.pendingDecision,
       notice: this.notice,
       houseOpen: this.houseOpen,
-      conclusion: this.run.conclusion === null ? null
-        : projectRunConclusion({ run: this.run, record: null, achievements: [] }),
+      conclusion:
+        this.run.conclusion === null
+          ? null
+          : projectRunConclusion({ run: this.run, record: null, achievements: [] }),
       sightings: this.sightings,
       heroClassTags: [...this.run.hero.classTags],
       onboarding: this.onboarding,

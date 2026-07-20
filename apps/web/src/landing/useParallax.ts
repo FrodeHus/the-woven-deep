@@ -1,7 +1,10 @@
 import { useEffect, type RefObject } from 'react';
 
 function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+  );
 }
 
 /**
@@ -10,7 +13,10 @@ function prefersReducedMotion(): boolean {
  * entirely under `prefers-reduced-motion` (no listener attached, so the elements simply keep
  * whatever static position the CSS gives them).
  */
-export function useParallax(coverRef: RefObject<HTMLElement | null>, heartRef: RefObject<HTMLElement | null>): void {
+export function useParallax(
+  coverRef: RefObject<HTMLElement | null>,
+  heartRef: RefObject<HTMLElement | null>,
+): void {
   useEffect(() => {
     if (prefersReducedMotion()) return;
 

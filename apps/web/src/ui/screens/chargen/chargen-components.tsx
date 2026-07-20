@@ -64,7 +64,7 @@ export function TagChip({
       onClick={onClick}
       className={cn(
         'rounded px-2 py-0.5 text-xs font-mono',
-        selected ? 'bg-accent text-deep' : 'border border-line text-muted'
+        selected ? 'bg-accent text-deep' : 'border border-line text-muted',
       )}
     >
       {label}

@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  deriveRngStreams,
-  expandLegacySeed,
-  nextUint32,
-  type Uint32State,
-} from '../src/index.js';
+import { deriveRngStreams, expandLegacySeed, nextUint32, type Uint32State } from '../src/index.js';
 
 describe('xoshiro128**', () => {
   it('rejects the forbidden all-zero state at the public step boundary', () => {
@@ -22,9 +17,7 @@ describe('xoshiro128**', () => {
   });
 
   it('expands the same legacy seed identically', () => {
-    expect(expandLegacySeed(0x12345678)).toEqual([
-      2986037511, 744488920, 2204577711, 2810942300,
-    ]);
+    expect(expandLegacySeed(0x12345678)).toEqual([2986037511, 744488920, 2204577711, 2810942300]);
   });
 
   it('derives isolated named streams', () => {

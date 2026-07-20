@@ -4,7 +4,12 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
-import { DEFAULT_GUEST_HERO, createNewRun, projectGameplayState, type GameplayProjection } from '@woven-deep/engine';
+import {
+  DEFAULT_GUEST_HERO,
+  createNewRun,
+  projectGameplayState,
+  type GameplayProjection,
+} from '@woven-deep/engine';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import { HeroStatusAnnouncer } from './HeroStatusAnnouncer.js';
 
@@ -14,7 +19,9 @@ let baseProjection: GameplayProjection;
 const SEED = [11, 22, 33, 44] as const;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../../../content'),
+  });
   const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
   baseProjection = projectGameplayState({ state: run, content: pack });
 });
@@ -36,17 +43,25 @@ function snapshotOf(projection: GameplayProjection): SessionSnapshot {
 
 function heroWith(overrides: Record<string, unknown>): GameplayProjection {
   const heroData = baseProjection.hero as unknown as Record<string, unknown>;
-  return { ...baseProjection, hero: { ...heroData, ...overrides } } as unknown as GameplayProjection;
+  return {
+    ...baseProjection,
+    hero: { ...heroData, ...overrides },
+  } as unknown as GameplayProjection;
 }
 
 function floorWith(overrides: Record<string, unknown>): GameplayProjection {
   const floorData = baseProjection.floor as unknown as Record<string, unknown>;
-  return { ...baseProjection, floor: { ...floorData, ...overrides } } as unknown as GameplayProjection;
+  return {
+    ...baseProjection,
+    floor: { ...floorData, ...overrides },
+  } as unknown as GameplayProjection;
 }
 
 describe('HeroStatusAnnouncer', () => {
   it('renders a visually-hidden polite status region that is silent on first mount', () => {
-    render(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 100, maxHealth: 100 }))} />);
+    render(
+      <HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 100, maxHealth: 100 }))} />,
+    );
     const region = screen.getByRole('status');
     expect(region).toHaveClass('sr-only');
     expect(region).toHaveAttribute('aria-live', 'polite');
@@ -58,7 +73,9 @@ describe('HeroStatusAnnouncer', () => {
       <HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 100, maxHealth: 100 }))} />,
     );
     const region = screen.getByRole('status');
-    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 40, maxHealth: 100 }))} />);
+    rerender(
+      <HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 40, maxHealth: 100 }))} />,
+    );
     expect(region.textContent).toContain('Health low.');
   });
 
@@ -67,7 +84,9 @@ describe('HeroStatusAnnouncer', () => {
       <HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 100, maxHealth: 100 }))} />,
     );
     const region = screen.getByRole('status');
-    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 60, maxHealth: 100 }))} />);
+    rerender(
+      <HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ health: 60, maxHealth: 100 }))} />,
+    );
     expect(region.textContent).toBe('');
   });
 
@@ -76,9 +95,23 @@ describe('HeroStatusAnnouncer', () => {
       <HeroStatusAnnouncer snapshot={snapshotOf(heroWith({ conditions: [] }))} />,
     );
     const region = screen.getByRole('status');
-    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(heroWith({
-      conditions: [{ conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50 }],
-    }))} />);
+    rerender(
+      <HeroStatusAnnouncer
+        snapshot={snapshotOf(
+          heroWith({
+            conditions: [
+              {
+                conditionId: 'condition.poisoned',
+                name: 'Poisoned',
+                color: '#7ac86a',
+                stacks: 1,
+                remaining: 50,
+              },
+            ],
+          }),
+        )}
+      />,
+    );
     expect(region.textContent).toContain('Afflicted: Poisoned.');
   });
 
@@ -88,34 +121,56 @@ describe('HeroStatusAnnouncer', () => {
   });
 
   it('stays silent on mount even when booting directly into a dungeon depth (no announce-on-restore)', () => {
-    render(<HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-003', depth: 3, town: false }))} />);
+    render(
+      <HeroStatusAnnouncer
+        snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-003', depth: 3, town: false }))}
+      />,
+    );
     expect(screen.getByRole('status').textContent).toBe('');
   });
 
   it('announces descending from town into depth 1', () => {
     const { rerender } = render(
-      <HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.town', depth: 0, town: true }))} />,
+      <HeroStatusAnnouncer
+        snapshot={snapshotOf(floorWith({ floorId: 'floor.town', depth: 0, town: true }))}
+      />,
     );
     const region = screen.getByRole('status');
-    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))} />);
+    rerender(
+      <HeroStatusAnnouncer
+        snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))}
+      />,
+    );
     expect(region.textContent).toContain('Depth 1.');
   });
 
   it('announces returning to town from a depth', () => {
     const { rerender } = render(
-      <HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))} />,
+      <HeroStatusAnnouncer
+        snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))}
+      />,
     );
     const region = screen.getByRole('status');
-    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.town', depth: 0, town: true }))} />);
+    rerender(
+      <HeroStatusAnnouncer
+        snapshot={snapshotOf(floorWith({ floorId: 'floor.town', depth: 0, town: true }))}
+      />,
+    );
     expect(region.textContent).toContain('Returned to the town.');
   });
 
   it('stays silent when the floor is unchanged across projection churn', () => {
     const { rerender } = render(
-      <HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))} />,
+      <HeroStatusAnnouncer
+        snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))}
+      />,
     );
     const region = screen.getByRole('status');
-    rerender(<HeroStatusAnnouncer snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))} />);
+    rerender(
+      <HeroStatusAnnouncer
+        snapshot={snapshotOf(floorWith({ floorId: 'floor.depth-001', depth: 1, town: false }))}
+      />,
+    );
     expect(region.textContent).toBe('');
   });
 });

@@ -1,7 +1,10 @@
 import type { ActiveRun } from './model.js';
 import { SaveLoadError } from './save-error.js';
 import {
-  legacyActiveRunV4Schema, legacyActiveRunV5Schema, legacyActiveRunV6Schema, legacyActiveRunV7Schema,
+  legacyActiveRunV4Schema,
+  legacyActiveRunV5Schema,
+  legacyActiveRunV6Schema,
+  legacyActiveRunV7Schema,
   validateActiveRun,
 } from './save-schema.js';
 import { deriveRngStreams } from './random.js';
@@ -65,30 +68,41 @@ function migrateV7ToV8(input: unknown): unknown {
 
 function migrateLegacy(input: unknown, schemaVersion: 4 | 5 | 6 | 7): ActiveRun {
   try {
-    const migrated = schemaVersion === 4
-      ? migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input))))
-      : schemaVersion === 5
-        ? migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input)))
-        : schemaVersion === 6
-          ? migrateV7ToV8(migrateV6ToV7(input))
-          : migrateV7ToV8(input);
+    const migrated =
+      schemaVersion === 4
+        ? migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input))))
+        : schemaVersion === 5
+          ? migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input)))
+          : schemaVersion === 6
+            ? migrateV7ToV8(migrateV6ToV7(input))
+            : migrateV7ToV8(input);
     return validateActiveRun(migrated);
   } catch (cause) {
     if (cause instanceof SaveLoadError) throw cause;
-    const issue = (cause as { issues?: readonly { path: readonly PropertyKey[]; message: string }[] }).issues?.[0];
+    const issue = (
+      cause as { issues?: readonly { path: readonly PropertyKey[]; message: string }[] }
+    ).issues?.[0];
     const path = issue?.path.map(String).join('.') || '$';
-    throw new SaveLoadError('invalid_save', path,
-      `Invalid save at ${path}: ${issue?.message ?? 'legacy schema validation failed'}`, { cause });
+    throw new SaveLoadError(
+      'invalid_save',
+      path,
+      `Invalid save at ${path}: ${issue?.message ?? 'legacy schema validation failed'}`,
+      { cause },
+    );
   }
 }
 
 export function decodeActiveRun(json: string): ActiveRun {
   let input: unknown;
-  try { input = JSON.parse(json); }
-  catch (cause) { throw new SaveLoadError('malformed_json', '$', 'Save is not valid JSON', { cause }); }
-  const schemaVersion = typeof input === 'object' && input !== null
-    ? (input as Readonly<Record<string, unknown>>).schemaVersion
-    : undefined;
+  try {
+    input = JSON.parse(json);
+  } catch (cause) {
+    throw new SaveLoadError('malformed_json', '$', 'Save is not valid JSON', { cause });
+  }
+  const schemaVersion =
+    typeof input === 'object' && input !== null
+      ? (input as Readonly<Record<string, unknown>>).schemaVersion
+      : undefined;
   if (schemaVersion === 4 || schemaVersion === 5 || schemaVersion === 6 || schemaVersion === 7) {
     return migrateLegacy(input, schemaVersion);
   }

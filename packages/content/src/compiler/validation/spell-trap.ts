@@ -8,7 +8,8 @@ export function spellTrapIssues(
 ): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
   for (const { entry, file } of locatedEntries) {
-    if (entry.kind === 'spell' || entry.kind === 'trap') issues.push(...effectIssues(file, entry.id, entry.effects, byId));
+    if (entry.kind === 'spell' || entry.kind === 'trap')
+      issues.push(...effectIssues(file, entry.id, entry.effects, byId));
   }
   return issues;
 }

@@ -4,8 +4,14 @@ import fc from 'fast-check';
 import type { BalanceContentEntry, CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  ATTRIBUTE_ORDER, heroFromChoices, pointBuyCost, pointBuyValid, rerollAttributes,
-  rollAttributes, validateHeroChoices, type HeroChoices,
+  ATTRIBUTE_ORDER,
+  heroFromChoices,
+  pointBuyCost,
+  pointBuyValid,
+  rerollAttributes,
+  rollAttributes,
+  validateHeroChoices,
+  type HeroChoices,
 } from '../src/index.js';
 import type { Uint32State } from '../src/index.js';
 
@@ -13,7 +19,9 @@ let pack: CompiledContentPack;
 let balance: BalanceContentEntry;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
   balance = pack.entries.find((entry) => entry.kind === 'balance') as BalanceContentEntry;
 });
 
@@ -72,7 +80,12 @@ describe('rollAttributes', () => {
   it('is deterministic and bounded across many seeds (property)', () => {
     fc.assert(
       fc.property(
-        fc.tuple(fc.integer({ min: 1, max: 0xffffffff }), fc.nat(0xffffffff), fc.nat(0xffffffff), fc.nat(0xffffffff)),
+        fc.tuple(
+          fc.integer({ min: 1, max: 0xffffffff }),
+          fc.nat(0xffffffff),
+          fc.nat(0xffffffff),
+          fc.nat(0xffffffff),
+        ),
         ([a, b, c, d]) => {
           const seed: Uint32State = [a, b, c, d];
           const first = rollAttributes(seed);
@@ -129,7 +142,11 @@ describe('validateHeroChoices', () => {
     ['locked class', (c) => ({ ...c, classId: 'class.archivist' }), /classId/],
     ['unknown class', (c) => ({ ...c, classId: 'class.nonexistent' }), /classId/],
     ['foreign kitId', (c) => ({ ...c, kitId: 'lantern' }), /kitId/],
-    ['unknown background', (c) => ({ ...c, backgroundId: 'background.nonexistent' }), /backgroundId/],
+    [
+      'unknown background',
+      (c) => ({ ...c, backgroundId: 'background.nonexistent' }),
+      /backgroundId/,
+    ],
     [
       '3 traits',
       (c) => ({ ...c, traitIds: ['trait.keen-eyed', 'trait.sure-footed', 'trait.brawler'] }),
@@ -191,9 +208,22 @@ describe('heroFromChoices', () => {
 
   it('output always passes validateHeroChoices (property)', () => {
     const classIds = ['class.wayfarer', 'class.lamplighter'] as const;
-    const kitsByClass: Record<string, readonly string[]> = { 'class.wayfarer': ['blade', 'ranger'], 'class.lamplighter': ['lantern', 'torchbearer'] };
-    const backgroundIds = ['background.caravan-guard', 'background.deep-miner', 'background.ratcatcher'] as const;
-    const traitIds = ['trait.keen-eyed', 'trait.sure-footed', 'trait.steady-hands', 'trait.brawler', 'trait.sharpshooter'] as const;
+    const kitsByClass: Record<string, readonly string[]> = {
+      'class.wayfarer': ['blade', 'ranger'],
+      'class.lamplighter': ['lantern', 'torchbearer'],
+    };
+    const backgroundIds = [
+      'background.caravan-guard',
+      'background.deep-miner',
+      'background.ratcatcher',
+    ] as const;
+    const traitIds = [
+      'trait.keen-eyed',
+      'trait.sure-footed',
+      'trait.steady-hands',
+      'trait.brawler',
+      'trait.sharpshooter',
+    ] as const;
 
     const arb = fc.record({
       seed: fc.tuple(
@@ -247,7 +277,8 @@ describe('heroFromChoices', () => {
       }),
     };
     const choices = wayfarerBladeChoices({
-      backgroundId: 'background.caravan-guard', traitIds: ['trait.keen-eyed'],
+      backgroundId: 'background.caravan-guard',
+      traitIds: ['trait.keen-eyed'],
     });
 
     expect(() => heroFromChoices({ pack: poisonedPack, choices })).toThrow(RangeError);

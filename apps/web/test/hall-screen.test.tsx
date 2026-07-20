@@ -3,46 +3,106 @@ import { render, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type {
-  FallenChampionTemplateContentEntry, ItemContentEntry, MonsterContentEntry,
+  FallenChampionTemplateContentEntry,
+  ItemContentEntry,
+  MonsterContentEntry,
 } from '@woven-deep/content';
 import {
-  createDemoContentPack, createDemoRun, createInMemoryRunRecordRepository, emptyRunMetrics, finalizeRun,
-  type ActiveRun, type LifetimeState, type RunMetrics, type RunRecordRepository, type StoredHallRecord,
+  createDemoContentPack,
+  createDemoRun,
+  createInMemoryRunRecordRepository,
+  emptyRunMetrics,
+  finalizeRun,
+  type ActiveRun,
+  type LifetimeState,
+  type RunMetrics,
+  type RunRecordRepository,
+  type StoredHallRecord,
   type Uint32State,
 } from '@woven-deep/engine';
 import type { CompletionType } from '@woven-deep/content';
 import { HallScreen } from '../src/ui/screens/HallScreen.js';
 
 const fallenChampionTemplate: FallenChampionTemplateContentEntry = {
-  kind: 'fallen-champion-template', id: 'fallen-champion-template.core', name: "The Deep's Champion",
-  tags: ['champion'], fallbackMonsterId: 'monster.boss', fallbackItemId: 'item.fallback',
-  minimumHealth: 30, maximumHealth: 100, attributeMaximum: 20, damageMaximum: 24, abilityLimit: 2,
-  echoAppearanceChance: 0.5, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70,
-  echoDefensePercent: 80, echoAbilityLimit: 1, echoLootTableId: 'loot-table.boss',
-  heirloomSelection: { rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 }, qualityRankBonus: 2 },
+  kind: 'fallen-champion-template',
+  id: 'fallen-champion-template.core',
+  name: "The Deep's Champion",
+  tags: ['champion'],
+  fallbackMonsterId: 'monster.boss',
+  fallbackItemId: 'item.fallback',
+  minimumHealth: 30,
+  maximumHealth: 100,
+  attributeMaximum: 20,
+  damageMaximum: 24,
+  abilityLimit: 2,
+  echoAppearanceChance: 0.5,
+  maximumEchoesPerRun: 2,
+  echoHealthPercent: 65,
+  echoDamagePercent: 70,
+  echoDefensePercent: 80,
+  echoAbilityLimit: 1,
+  echoLootTableId: 'loot-table.boss',
+  heirloomSelection: {
+    rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 },
+    qualityRankBonus: 2,
+  },
 };
 
 const fallbackItem: ItemContentEntry = {
-  kind: 'item', id: 'item.fallback', name: 'Fallback item', tags: [], glyph: ')', color: '#c0c0c0',
-  category: 'weapon', stackLimit: 1, price: 10, rarity: 'common', heirloomEligible: true, minDepth: 1, maxDepth: 20,
-  actionCost: 100, equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
-  combat: null, light: null, identification: { mode: 'known', poolId: null }, effects: [],
+  kind: 'item',
+  id: 'item.fallback',
+  name: 'Fallback item',
+  tags: [],
+  glyph: ')',
+  color: '#c0c0c0',
+  category: 'weapon',
+  stackLimit: 1,
+  price: 10,
+  rarity: 'common',
+  heirloomEligible: true,
+  minDepth: 1,
+  maxDepth: 20,
+  actionCost: 100,
+  equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
+  combat: null,
+  light: null,
+  identification: { mode: 'known', poolId: null },
+  effects: [],
 };
 
 const fallbackMonster: MonsterContentEntry = {
-  kind: 'monster', id: 'monster.boss', name: 'Boss', glyph: 'B', color: '#aa4444', tags: [],
-  minDepth: 1, maxDepth: 20,
+  kind: 'monster',
+  id: 'monster.boss',
+  name: 'Boss',
+  glyph: 'B',
+  color: '#aa4444',
+  tags: [],
+  minDepth: 1,
+  maxDepth: 20,
   attributes: { might: 5, agility: 5, vitality: 5, wits: 5, resolve: 5 },
-  health: 10, speed: 100, accuracy: 100, defense: 8, perception: 8,
-  damage: { count: 1, sides: 1, bonus: 0 }, armor: 0,
+  health: 10,
+  speed: 100,
+  accuracy: 100,
+  defense: 8,
+  perception: 8,
+  damage: { count: 1, sides: 1, bonus: 0 },
+  armor: 0,
   resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 },
-  disposition: 'hostile', behaviorId: 'behavior.approach-and-attack', behaviorParameters: {},
-  rarity: 'common', threat: 4, lootTableId: null, dropChance: 1,
+  disposition: 'hostile',
+  behaviorId: 'behavior.approach-and-attack',
+  behaviorParameters: {},
+  rarity: 'common',
+  threat: 4,
+  lootTableId: null,
+  dropChance: 1,
 };
 
 function emptyLifetime(): LifetimeState {
   return {
-    conqueredChampionRecordIds: [], grantedAchievementIds: [], discoveryProtection: [], totals: emptyRunMetrics(),
+    conqueredChampionRecordIds: [],
+    grantedAchievementIds: [],
+    discoveryProtection: [],
+    totals: emptyRunMetrics(),
   };
 }
 
@@ -50,17 +110,22 @@ function emptyLifetime(): LifetimeState {
  * `run-records-storage.test.ts`'s approach) over a demo run whose seed, hero identity, conclusion
  * and metrics are overridden directly — this varies completion type/score without needing a full
  * command-by-command simulation for every outcome. */
-function genuineRecord(input: Readonly<{
-  runSeed: Uint32State;
-  heroName: string;
-  classTags: readonly string[];
-  completionType: CompletionType;
-  metrics: Partial<RunMetrics>;
-  achievedAt: string;
-  portraitGlyph: string;
-}>): StoredHallRecord {
+function genuineRecord(
+  input: Readonly<{
+    runSeed: Uint32State;
+    heroName: string;
+    classTags: readonly string[];
+    completionType: CompletionType;
+    metrics: Partial<RunMetrics>;
+    achievedAt: string;
+    portraitGlyph: string;
+  }>,
+): StoredHallRecord {
   const base = createDemoContentPack();
-  const content = { ...base, entries: [...base.entries, fallenChampionTemplate, fallbackItem, fallbackMonster] };
+  const content = {
+    ...base,
+    entries: [...base.entries, fallenChampionTemplate, fallbackItem, fallbackMonster],
+  };
   const demo = createDemoRun();
   const metrics: RunMetrics = { ...emptyRunMetrics(), ...input.metrics };
   const run: ActiveRun = {
@@ -76,25 +141,47 @@ function genuineRecord(input: Readonly<{
     },
   };
   const finalized = finalizeRun({ run, content, lifetime: emptyLifetime() });
-  return { ...finalized.record, enrichment: { achievedAt: input.achievedAt, portraitGlyph: input.portraitGlyph } };
+  return {
+    ...finalized.record,
+    enrichment: { achievedAt: input.achievedAt, portraitGlyph: input.portraitGlyph },
+  };
 }
 
 /** Three genuine records with deliberately non-monotonic tier/score: `diedHighScore` outscores
  * everything on raw depth alone, but its `died` tier is the lowest, so a correct
  * `compareHallRecords` sort must still place it LAST — this exercises tier-before-score, not just
  * an already-sorted list. */
-function threeRecords(): { diedHighScore: StoredHallRecord; becameHeart: StoredHallRecord; brokeCycle: StoredHallRecord } {
+function threeRecords(): {
+  diedHighScore: StoredHallRecord;
+  becameHeart: StoredHallRecord;
+  brokeCycle: StoredHallRecord;
+} {
   const diedHighScore = genuineRecord({
-    runSeed: [1, 1, 1, 1], heroName: 'Ada', classTags: ['fighter'], completionType: 'died',
-    metrics: { deepestDepth: 20 }, achievedAt: 'Run #1', portraitGlyph: '@',
+    runSeed: [1, 1, 1, 1],
+    heroName: 'Ada',
+    classTags: ['fighter'],
+    completionType: 'died',
+    metrics: { deepestDepth: 20 },
+    achievedAt: 'Run #1',
+    portraitGlyph: '@',
   });
   const becameHeart = genuineRecord({
-    runSeed: [2, 2, 2, 2], heroName: 'Bryn', classTags: ['mage'], completionType: 'became-heart',
-    metrics: { deepestDepth: 1 }, achievedAt: 'Run #2', portraitGlyph: '&',
+    runSeed: [2, 2, 2, 2],
+    heroName: 'Bryn',
+    classTags: ['mage'],
+    completionType: 'became-heart',
+    metrics: { deepestDepth: 1 },
+    achievedAt: 'Run #2',
+    portraitGlyph: '&',
   });
   const brokeCycle = genuineRecord({
-    runSeed: [3, 3, 3, 3], heroName: 'Corin', classTags: ['ranger'], completionType: 'broke-cycle',
-    metrics: { deepestDepth: 1 }, achievedAt: 'Run #3', portraitGlyph: '%',
+    runSeed: [3, 3, 3, 3],
+    heroName: 'Corin',
+    classTags: ['ranger'],
+    completionType: 'broke-cycle',
+    metrics: { deepestDepth: 1 },
+    achievedAt: 'Run #3',
+    portraitGlyph: '%',
   });
   return { diedHighScore, becameHeart, brokeCycle };
 }
@@ -135,7 +222,9 @@ describe('HallScreen', () => {
     expect(within(row).getByText('@')).toBeInTheDocument();
     expect(within(row).getByText('Ada')).toBeInTheDocument();
     expect(within(row).getByText(/fighter/)).toBeInTheDocument();
-    expect(within(row).getByText(new RegExp(String(diedHighScore.deepestDepth)))).toBeInTheDocument();
+    expect(
+      within(row).getByText(new RegExp(String(diedHighScore.deepestDepth))),
+    ).toBeInTheDocument();
     expect(within(row).getByText(String(diedHighScore.score.total))).toBeInTheDocument();
     expect(within(row).getByText('Run #1')).toBeInTheDocument();
   });

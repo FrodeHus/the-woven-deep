@@ -18,7 +18,10 @@ interface OverlayErrorBoundaryState {
  * Isolates a throwing overlay body so a render error shows a contained alert instead of crashing
  * the client.
  */
-export class OverlayErrorBoundary extends Component<OverlayErrorBoundaryProps, OverlayErrorBoundaryState> {
+export class OverlayErrorBoundary extends Component<
+  OverlayErrorBoundaryProps,
+  OverlayErrorBoundaryState
+> {
   public override state: OverlayErrorBoundaryState = { hasError: false };
 
   public static getDerivedStateFromError(): OverlayErrorBoundaryState {
@@ -26,7 +29,6 @@ export class OverlayErrorBoundary extends Component<OverlayErrorBoundaryProps, O
   }
 
   public override componentDidCatch(error: unknown, info: ErrorInfo): void {
-    // eslint-disable-next-line no-console -- surfaced visibly below too; this is the developer trail.
     console.error('Overlay content failed to render:', error, info.componentStack);
   }
 

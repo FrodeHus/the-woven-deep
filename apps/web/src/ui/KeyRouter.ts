@@ -7,7 +7,8 @@ import type { ActionId, ResolvedKeymap } from '../session/settings.js';
  * module stays free of a dependency on the overlay registry -- it happens to be the exact same
  * string set as `OverlayId` (registry.ts), `inventory` included: `i` routes through this same
  * registry path as every other overlay. */
-export type OverlayActionId = 'inventory' | 'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help';
+export type OverlayActionId =
+  'inventory' | 'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help';
 
 /** Everything `routeKey` can hand back to the caller besides a `PlayerIntent`: opening a registry
  * overlay, or closing whatever overlay is currently open. */
@@ -25,21 +26,38 @@ export type RouterOutcome =
  * in `settings.ts`'s `DEFAULT_BINDINGS` / the resolved keymap passed into `routeKey`.
  */
 const HARDWIRED_DIRECTION_KEYS: Readonly<Record<string, Direction>> = {
-  ArrowUp: 'north', ArrowDown: 'south', ArrowLeft: 'west', ArrowRight: 'east',
-  '8': 'north', '2': 'south', '4': 'west', '6': 'east',
-  '7': 'northwest', '9': 'northeast', '1': 'southwest', '3': 'southeast',
+  ArrowUp: 'north',
+  ArrowDown: 'south',
+  ArrowLeft: 'west',
+  ArrowRight: 'east',
+  '8': 'north',
+  '2': 'south',
+  '4': 'west',
+  '6': 'east',
+  '7': 'northwest',
+  '9': 'northeast',
+  '1': 'southwest',
+  '3': 'southeast',
 };
 
 function directionForMoveAction(action: MoveActionId): Direction {
   switch (action) {
-    case 'move.n': return 'north';
-    case 'move.ne': return 'northeast';
-    case 'move.e': return 'east';
-    case 'move.se': return 'southeast';
-    case 'move.s': return 'south';
-    case 'move.sw': return 'southwest';
-    case 'move.w': return 'west';
-    case 'move.nw': return 'northwest';
+    case 'move.n':
+      return 'north';
+    case 'move.ne':
+      return 'northeast';
+    case 'move.e':
+      return 'east';
+    case 'move.se':
+      return 'southeast';
+    case 'move.s':
+      return 'south';
+    case 'move.sw':
+      return 'southwest';
+    case 'move.w':
+      return 'west';
+    case 'move.nw':
+      return 'northwest';
   }
 }
 
@@ -64,13 +82,20 @@ function outcomeForAction(action: ActionId): RouterOutcome {
   }
   const nonMoveAction: NonMoveActionId = action;
   switch (nonMoveAction) {
-    case 'wait': return { type: 'wait' };
-    case 'rest': return { type: 'rest' };
-    case 'pickup': return { type: 'pickup' };
-    case 'descend': return { type: 'descend' };
-    case 'ascend': return { type: 'ascend' };
-    case 'house': return { type: 'house' };
-    case 'trade': return { type: 'trade-open' };
+    case 'wait':
+      return { type: 'wait' };
+    case 'rest':
+      return { type: 'rest' };
+    case 'pickup':
+      return { type: 'pickup' };
+    case 'descend':
+      return { type: 'descend' };
+    case 'ascend':
+      return { type: 'ascend' };
+    case 'house':
+      return { type: 'house' };
+    case 'trade':
+      return { type: 'trade-open' };
     case 'inventory':
     case 'character-sheet':
     case 'map-journal':
@@ -110,11 +135,13 @@ function lookupAction(keymap: ResolvedKeymap, key: string, shiftKey: boolean): A
  * never rebindable); arrows/numpad stay hardwired to movement (see `HARDWIRED_DIRECTION_KEYS`)
  * regardless of `keymap`.
  */
-export function routeKey(input: Readonly<{
-  event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'target' | 'ctrlKey' | 'metaKey'>;
-  overlayOpen: boolean;
-  keymap: ResolvedKeymap;
-}>): RouterOutcome {
+export function routeKey(
+  input: Readonly<{
+    event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'target' | 'ctrlKey' | 'metaKey'>;
+    overlayOpen: boolean;
+    keymap: ResolvedKeymap;
+  }>,
+): RouterOutcome {
   const { event, overlayOpen, keymap } = input;
 
   if (isFormFieldTarget(event.target)) return null;
@@ -137,7 +164,9 @@ export interface KeyDispatchHandlers {
   readonly dismissHint: () => void;
 }
 
-export type KeyDispatcher = (event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'target' | 'repeat' | 'ctrlKey' | 'metaKey'>) => void;
+export type KeyDispatcher = (
+  event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'target' | 'repeat' | 'ctrlKey' | 'metaKey'>,
+) => void;
 
 /** OS key auto-repeat fires at roughly 30/sec; this is the minimum gap enforced between two
  * accepted `repeat: true` keydowns (see `createKeyDispatcher`). */

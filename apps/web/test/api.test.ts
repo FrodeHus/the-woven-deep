@@ -6,8 +6,13 @@ import { contentPack } from './content-pack-fixture.js';
 function fetcher(kinds: readonly ContentKind[]) {
   const hash = 'c'.repeat(64);
   const pack = contentPack(hash, kinds);
-  return vi.fn()
-    .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', contentHash: hash, entries: pack.entries.length })))
+  return vi
+    .fn()
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ status: 'ok', contentHash: hash, entries: pack.entries.length }),
+      ),
+    )
     .mockResolvedValueOnce(new Response(JSON.stringify(pack)));
 }
 
@@ -18,9 +23,23 @@ describe('content summary counts', () => {
     const summary = await loadContentSummary(request as typeof fetch);
 
     expect(summary.counts).toEqual({
-      monster: 1, npc: 0, 'npc-faction': 0, item: 1, spell: 1, trap: 1, 'loot-table': 1, balance: 1,
-      vault: 1, condition: 1, 'identification-pool': 1, encounter: 0, 'fallen-champion-template': 0,
-      achievement: 0, class: 0, background: 0, trait: 0,
+      monster: 1,
+      npc: 0,
+      'npc-faction': 0,
+      item: 1,
+      spell: 1,
+      trap: 1,
+      'loot-table': 1,
+      balance: 1,
+      vault: 1,
+      condition: 1,
+      'identification-pool': 1,
+      encounter: 0,
+      'fallen-champion-template': 0,
+      achievement: 0,
+      class: 0,
+      background: 0,
+      trait: 0,
     });
   });
 
@@ -34,10 +53,15 @@ describe('content summary counts', () => {
 
   it('rejects unsupported content before counting it', async () => {
     const hash = 'c'.repeat(64);
-    const request = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', contentHash: hash, entries: 0 })))
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'ok', contentHash: hash, entries: 0 })),
+      )
       .mockResolvedValueOnce(new Response(JSON.stringify({ schemaVersion: 1, hash, entries: [] })));
-    await expect(loadContentSummary(request as typeof fetch)).rejects.toThrow(/unsupported content schema version 1/i);
+    await expect(loadContentSummary(request as typeof fetch)).rejects.toThrow(
+      /unsupported content schema version 1/i,
+    );
   });
 });
 
@@ -55,9 +79,12 @@ describe('loadContentPack', () => {
 
   it('rejects unsupported content before returning it', async () => {
     const hash = 'c'.repeat(64);
-    const request = vi.fn()
+    const request = vi
+      .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ schemaVersion: 1, hash, entries: [] })));
 
-    await expect(loadContentPack(request as typeof fetch)).rejects.toThrow(/unsupported content schema version 1/i);
+    await expect(loadContentPack(request as typeof fetch)).rejects.toThrow(
+      /unsupported content schema version 1/i,
+    );
   });
 });

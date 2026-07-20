@@ -76,6 +76,7 @@ export function usePaneMeasurement(floor: GameplayProjection['floor']): PaneMeas
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-measure only when the floor's id changes; `floor`'s other fields do not affect the zoom computation, and depending on the whole object would re-measure on every render that rebuilds it.
   }, [floor.floorId]);
 
   // Applying `--zoom` (on `.playfield`) changes the probe's OWN box size (it is pinned to

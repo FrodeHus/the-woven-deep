@@ -130,7 +130,9 @@ describe('http guards', () => {
 
     it('allows a request with a valid CSRF token for the session', async () => {
       app = await buildTestApp();
-      app.get('/csrf-token', async (_request, reply) => ({ csrfToken: await reply.generateCsrf() }));
+      app.get('/csrf-token', async (_request, reply) => ({
+        csrfToken: await reply.generateCsrf(),
+      }));
       app.post('/guarded', { preHandler: requireCsrf(app) }, async () => ({ ok: true }));
 
       const tokenResponse = await app.inject({ method: 'GET', url: '/csrf-token' });

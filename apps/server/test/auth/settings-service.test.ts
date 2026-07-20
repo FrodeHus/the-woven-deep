@@ -35,7 +35,11 @@ describe('createSettingsService', () => {
     profiles = new ProfileRepository(database);
     clock = new FakeClock('2026-07-17T00:00:00.000Z');
     profileId = 'profile-settings-1';
-    profiles.create({ id: profileId, normalizedEmail: 'settings@example.com', nowIso: clock.now().toISOString() });
+    profiles.create({
+      id: profileId,
+      normalizedEmail: 'settings@example.com',
+      nowIso: clock.now().toISOString(),
+    });
   });
 
   function makeService() {
@@ -59,7 +63,9 @@ describe('createSettingsService', () => {
   it('rejects an over-size blob without overwriting an existing one', () => {
     const service = makeService();
     const goodJson = JSON.stringify({ theme: 'high-contrast' });
-    expect(service.write({ profileId, settingsJson: goodJson, settingsVersion: 1 })).toEqual({ ok: true });
+    expect(service.write({ profileId, settingsJson: goodJson, settingsVersion: 1 })).toEqual({
+      ok: true,
+    });
 
     const tooLargeJson = JSON.stringify({ padding: 'x'.repeat(SETTINGS_MAX_BYTES) });
     const result = service.write({ profileId, settingsJson: tooLargeJson, settingsVersion: 2 });
@@ -70,33 +76,51 @@ describe('createSettingsService', () => {
 
   it('rejects a bare-string JSON payload', () => {
     const service = makeService();
-    const result = service.write({ profileId, settingsJson: JSON.stringify('just a string'), settingsVersion: 1 });
+    const result = service.write({
+      profileId,
+      settingsJson: JSON.stringify('just a string'),
+      settingsVersion: 1,
+    });
     expect(result).toEqual({ ok: false, reason: 'not-json-object' });
   });
 
   it('rejects an array JSON payload', () => {
     const service = makeService();
-    const result = service.write({ profileId, settingsJson: JSON.stringify([1, 2]), settingsVersion: 1 });
+    const result = service.write({
+      profileId,
+      settingsJson: JSON.stringify([1, 2]),
+      settingsVersion: 1,
+    });
     expect(result).toEqual({ ok: false, reason: 'not-json-object' });
   });
 
   it('rejects syntactically-invalid JSON', () => {
     const service = makeService();
-    const result = service.write({ profileId, settingsJson: '{not valid json', settingsVersion: 1 });
+    const result = service.write({
+      profileId,
+      settingsJson: '{not valid json',
+      settingsVersion: 1,
+    });
     expect(result).toEqual({ ok: false, reason: 'not-json-object' });
   });
 
   it('rejects a bare number and a literal null payload', () => {
     const service = makeService();
-    expect(service.write({ profileId, settingsJson: '5', settingsVersion: 1 }))
-      .toEqual({ ok: false, reason: 'not-json-object' });
-    expect(service.write({ profileId, settingsJson: 'null', settingsVersion: 1 }))
-      .toEqual({ ok: false, reason: 'not-json-object' });
+    expect(service.write({ profileId, settingsJson: '5', settingsVersion: 1 })).toEqual({
+      ok: false,
+      reason: 'not-json-object',
+    });
+    expect(service.write({ profileId, settingsJson: 'null', settingsVersion: 1 })).toEqual({
+      ok: false,
+      reason: 'not-json-object',
+    });
   });
 
   it('accepts an empty object', () => {
     const service = makeService();
-    expect(service.write({ profileId, settingsJson: '{}', settingsVersion: 1 })).toEqual({ ok: true });
+    expect(service.write({ profileId, settingsJson: '{}', settingsVersion: 1 })).toEqual({
+      ok: true,
+    });
     expect(service.read(profileId)).toEqual({ settingsJson: '{}', settingsVersion: 1 });
   });
 

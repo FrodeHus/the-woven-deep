@@ -28,40 +28,60 @@ entries:
     behaviorParameters: {}
     selfPreservationThresholdBps: 3500
 `;
-    expect(parseContentFile({ path: 'npcs/lampwright.yaml', source: validNpcYaml })[0]).toMatchObject({
-      kind: 'npc', factionId: 'npc-faction.lampwrights', disposition: 'neutral',
-      behaviorId: 'npc-behavior.travelling-merchant', selfPreservationThresholdBps: 3500,
+    expect(
+      parseContentFile({ path: 'npcs/lampwright.yaml', source: validNpcYaml })[0],
+    ).toMatchObject({
+      kind: 'npc',
+      factionId: 'npc-faction.lampwrights',
+      disposition: 'neutral',
+      behaviorId: 'npc-behavior.travelling-merchant',
+      selfPreservationThresholdBps: 3500,
     });
     for (const replacement of [
-      'disposition: hostile', 'health: 0', 'selfPreservationThresholdBps: 0',
-      'factionId: lampwrights', 'unknownField: true',
+      'disposition: hostile',
+      'health: 0',
+      'selfPreservationThresholdBps: 0',
+      'factionId: lampwrights',
+      'unknownField: true',
     ]) {
-      const source = replacement.startsWith('disposition:') ? validNpcYaml.replace('disposition: neutral', replacement)
-        : replacement.startsWith('health:') ? validNpcYaml.replace('health: 20', replacement)
-          : replacement.startsWith('selfPreservation') ? validNpcYaml.replace('selfPreservationThresholdBps: 3500', replacement)
-            : replacement.startsWith('factionId:') ? validNpcYaml.replace('factionId: npc-faction.lampwrights', replacement)
-              : validNpcYaml.replace('    selfPreservationThresholdBps: 3500', `    selfPreservationThresholdBps: 3500\n    ${replacement}`);
+      const source = replacement.startsWith('disposition:')
+        ? validNpcYaml.replace('disposition: neutral', replacement)
+        : replacement.startsWith('health:')
+          ? validNpcYaml.replace('health: 20', replacement)
+          : replacement.startsWith('selfPreservation')
+            ? validNpcYaml.replace('selfPreservationThresholdBps: 3500', replacement)
+            : replacement.startsWith('factionId:')
+              ? validNpcYaml.replace('factionId: npc-faction.lampwrights', replacement)
+              : validNpcYaml.replace(
+                  '    selfPreservationThresholdBps: 3500',
+                  `    selfPreservationThresholdBps: 3500\n    ${replacement}`,
+                );
       expect(() => parseContentFile({ path: 'npcs/invalid.yaml', source })).toThrow();
     }
   });
 
   it('rejects schema v4 after the schema-v7 upgrade', () => {
-    expect(() => parseContentFile({ path: 'legacy.yaml', source: 'schemaVersion: 4\nentries: []\n' }))
-      .toThrow(/expected 7/i);
+    expect(() =>
+      parseContentFile({ path: 'legacy.yaml', source: 'schemaVersion: 4\nentries: []\n' }),
+    ).toThrow(/expected 7/i);
   });
   it('rejects source schema v2 with a stable version diagnostic', () => {
-    expect(() => parseContentFile({
-      path: 'legacy.yaml',
-      source: 'schemaVersion: 2\nentries: []\n',
-    })).toThrow(/legacy\.yaml.*schemaVersion.*expected 7/i);
+    expect(() =>
+      parseContentFile({
+        path: 'legacy.yaml',
+        source: 'schemaVersion: 2\nentries: []\n',
+      }),
+    ).toThrow(/legacy\.yaml.*schemaVersion.*expected 7/i);
   });
   it('rejects schema v5 after the schema-v7 upgrade', () => {
-    expect(() => parseContentFile({ path: 'legacy.yaml', source: 'schemaVersion: 5\nentries: []\n' }))
-      .toThrow(/schema version|schemaVersion/i);
+    expect(() =>
+      parseContentFile({ path: 'legacy.yaml', source: 'schemaVersion: 5\nentries: []\n' }),
+    ).toThrow(/schema version|schemaVersion/i);
   });
   it('rejects schema v6 after the schema-v7 upgrade', () => {
-    expect(() => parseContentFile({ path: 'legacy.yaml', source: 'schemaVersion: 6\nentries: []\n' }))
-      .toThrow(/schema version|schemaVersion/i);
+    expect(() =>
+      parseContentFile({ path: 'legacy.yaml', source: 'schemaVersion: 6\nentries: []\n' }),
+    ).toThrow(/schema version|schemaVersion/i);
   });
 
   it('publishes and parses strict schema-v5 achievement content', () => {
@@ -74,18 +94,47 @@ entries:
     description: Defeat the Deep's Champion for the first time.
     criteriaId: first-champion-defeat
 `;
-    expect(parseContentFile({ path: 'achievements/first-defeats.yaml', source: validAchievementYaml })[0]).toMatchObject({
-      kind: 'achievement', criteriaId: 'first-champion-defeat',
+    expect(
+      parseContentFile({
+        path: 'achievements/first-defeats.yaml',
+        source: validAchievementYaml,
+      })[0],
+    ).toMatchObject({
+      kind: 'achievement',
+      criteriaId: 'first-champion-defeat',
       name: "Defeated the Deep's Champion",
     });
     for (const [label, source] of [
-      ['unknown field', validAchievementYaml.replace('    criteriaId: first-champion-defeat',
-        '    criteriaId: first-champion-defeat\n    reward: 100')],
-      ['unknown criteria', validAchievementYaml.replace('criteriaId: first-champion-defeat', 'criteriaId: first-boss-defeat')],
-      ['empty description', validAchievementYaml.replace("description: Defeat the Deep's Champion for the first time.", 'description: " "')],
-      ['missing criteria', validAchievementYaml.replace('    criteriaId: first-champion-defeat\n', '')],
+      [
+        'unknown field',
+        validAchievementYaml.replace(
+          '    criteriaId: first-champion-defeat',
+          '    criteriaId: first-champion-defeat\n    reward: 100',
+        ),
+      ],
+      [
+        'unknown criteria',
+        validAchievementYaml.replace(
+          'criteriaId: first-champion-defeat',
+          'criteriaId: first-boss-defeat',
+        ),
+      ],
+      [
+        'empty description',
+        validAchievementYaml.replace(
+          "description: Defeat the Deep's Champion for the first time.",
+          'description: " "',
+        ),
+      ],
+      [
+        'missing criteria',
+        validAchievementYaml.replace('    criteriaId: first-champion-defeat\n', ''),
+      ],
     ] as const) {
-      expect(() => parseContentFile({ path: 'achievements/invalid.yaml', source }), `expected rejection: ${label}`).toThrow();
+      expect(
+        () => parseContentFile({ path: 'achievements/invalid.yaml', source }),
+        `expected rejection: ${label}`,
+      ).toThrow();
     }
   });
 
@@ -96,47 +145,73 @@ entries:
 `;
     expect(parseContentFile({ path: 'balance.yaml', source: validBalanceYaml })[0]).toMatchObject({
       score: {
-        depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5,
+        depthCoefficient: 100,
+        bossDefeatCoefficient: 250,
+        threatCoefficient: 5,
         discoveryCoefficient: 25,
         completionBonus: { died: 0, refused: 400, 'became-heart': 800, 'broke-cycle': 1500 },
-        turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200,
+        turnEfficiencyBudget: 500,
+        turnEfficiencyDecayInterval: 200,
       },
     });
     for (const [label, needle, substitute] of [
       ['negative coefficient', 'depthCoefficient: 100', 'depthCoefficient: -1'],
-      ['unsafe coefficient', 'bossDefeatCoefficient: 250', `bossDefeatCoefficient: ${Number.MAX_SAFE_INTEGER + 1}`],
+      [
+        'unsafe coefficient',
+        'bossDefeatCoefficient: 250',
+        `bossDefeatCoefficient: ${Number.MAX_SAFE_INTEGER + 1}`,
+      ],
       ['fractional coefficient', 'threatCoefficient: 5', 'threatCoefficient: 0.5'],
       ['negative completion bonus', 'refused: 400', 'refused: -400'],
       ['missing completion bonus key', 'became-heart: 800, ', ''],
       ['unknown completion bonus key', 'died: 0', 'died: 0, fled: 1'],
       ['zero decay interval', 'turnEfficiencyDecayInterval: 200', 'turnEfficiencyDecayInterval: 0'],
-      ['unknown score field', 'turnEfficiencyBudget: 500', 'turnEfficiencyBudget: 500, styleBonus: 1'],
-      ['missing score block', ', score: { depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200 }', ''],
+      [
+        'unknown score field',
+        'turnEfficiencyBudget: 500',
+        'turnEfficiencyBudget: 500, styleBonus: 1',
+      ],
+      [
+        'missing score block',
+        ', score: { depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200 }',
+        '',
+      ],
     ] as const) {
       const source = validBalanceYaml.replace(needle, substitute);
       expect(source, `replacement applied: ${label}`).not.toBe(validBalanceYaml);
-      expect(() => parseContentFile({ path: 'balance.yaml', source }), `expected rejection: ${label}`).toThrow();
+      expect(
+        () => parseContentFile({ path: 'balance.yaml', source }),
+        `expected rejection: ${label}`,
+      ).toThrow();
     }
   });
 
   it('parses the point-buy attribute table on the balance entry', () => {
-    const pointBuyCosts = '[{value: 0, cost: 0}, {value: 1, cost: 0}, {value: 2, cost: 0}, {value: 3, cost: 0}, {value: 4, cost: 0}, {value: 5, cost: 0}, {value: 6, cost: 1}, {value: 7, cost: 2}, {value: 8, cost: 3}, {value: 9, cost: 4}, {value: 10, cost: 5}, {value: 11, cost: 6}, {value: 12, cost: 7}, {value: 13, cost: 8}, {value: 14, cost: 9}, {value: 15, cost: 10}, {value: 16, cost: 11}, {value: 17, cost: 12}, {value: 18, cost: 13}, {value: 19, cost: 14}, {value: 20, cost: 15}, {value: 21, cost: 16}, {value: 22, cost: 17}, {value: 23, cost: 18}, {value: 24, cost: 19}, {value: 25, cost: 20}, {value: 26, cost: 21}, {value: 27, cost: 22}, {value: 28, cost: 23}, {value: 29, cost: 24}, {value: 30, cost: 25}]';
+    const pointBuyCosts =
+      '[{value: 0, cost: 0}, {value: 1, cost: 0}, {value: 2, cost: 0}, {value: 3, cost: 0}, {value: 4, cost: 0}, {value: 5, cost: 0}, {value: 6, cost: 1}, {value: 7, cost: 2}, {value: 8, cost: 3}, {value: 9, cost: 4}, {value: 10, cost: 5}, {value: 11, cost: 6}, {value: 12, cost: 7}, {value: 13, cost: 8}, {value: 14, cost: 9}, {value: 15, cost: 10}, {value: 16, cost: 11}, {value: 17, cost: 12}, {value: 18, cost: 13}, {value: 19, cost: 14}, {value: 20, cost: 15}, {value: 21, cost: 16}, {value: 22, cost: 17}, {value: 23, cost: 18}, {value: 24, cost: 19}, {value: 25, cost: 20}, {value: 26, cost: 21}, {value: 27, cost: 22}, {value: 28, cost: 23}, {value: 29, cost: 24}, {value: 30, cost: 25}]';
     const validBalanceWithPointBuy = `schemaVersion: 7
 entries:
   - { kind: balance, startingCurrency: 40, id: balance.core, name: Core, tags: [], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000, hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 }, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, restMaximumDuration: 5000, recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }, hungerStageModifiers: { sated: {}, hungry: {}, weak: {}, starving: {} }, formulas: { health: { base: 8, vitality: 2 } }, actionCosts: { action.move: 100 }, score: { depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200 }, pointBuy: { budget: 30, costs: ${pointBuyCosts} }, restockMilestones: [5, 10, 15, 20], house: { baseCapacity: 6, strongboxIncrement: 4 }, encounterDensity: { cellsPerEncounter: 2000 } }
 `;
-    expect(parseContentFile({ path: 'balance.yaml', source: validBalanceWithPointBuy })[0]).toMatchObject({
+    expect(
+      parseContentFile({ path: 'balance.yaml', source: validBalanceWithPointBuy })[0],
+    ).toMatchObject({
       pointBuy: { budget: 30, costs: expect.arrayContaining([{ value: 3, cost: 0 }]) },
     });
     const gappedCosts = pointBuyCosts.replace('{value: 15, cost: 10}, ', '');
     const gapped = validBalanceWithPointBuy.replace(pointBuyCosts, gappedCosts);
-    expect(() => parseContentFile({ path: 'balance.yaml', source: gapped }))
-      .toThrow(/cover|gap|value/i);
+    expect(() => parseContentFile({ path: 'balance.yaml', source: gapped })).toThrow(
+      /cover|gap|value/i,
+    );
     const decreasingCosts = pointBuyCosts.replace('{value: 9, cost: 4}', '{value: 9, cost: 0}');
     const decreasing = validBalanceWithPointBuy.replace(pointBuyCosts, decreasingCosts);
-    expect(() => parseContentFile({ path: 'balance.yaml', source: decreasing }))
-      .toThrow(/non-decreasing/i);
-    const missingPointBuy = validBalanceWithPointBuy.replace(`, pointBuy: { budget: 30, costs: ${pointBuyCosts} }`, '');
+    expect(() => parseContentFile({ path: 'balance.yaml', source: decreasing })).toThrow(
+      /non-decreasing/i,
+    );
+    const missingPointBuy = validBalanceWithPointBuy.replace(
+      `, pointBuy: { budget: 30, costs: ${pointBuyCosts} }`,
+      '',
+    );
     expect(() => parseContentFile({ path: 'balance.yaml', source: missingPointBuy })).toThrow();
   });
 
@@ -151,40 +226,73 @@ entries:
       encounterDensity: { cellsPerEncounter: 2000 },
     });
 
-    const nonIncreasing = validBalanceYaml.replace('restockMilestones: [5, 10, 15, 20]', 'restockMilestones: [5, 10, 10, 20]');
-    expect(() => parseContentFile({ path: 'balance.yaml', source: nonIncreasing })).toThrow(/strictly increasing/i);
+    const nonIncreasing = validBalanceYaml.replace(
+      'restockMilestones: [5, 10, 15, 20]',
+      'restockMilestones: [5, 10, 10, 20]',
+    );
+    expect(() => parseContentFile({ path: 'balance.yaml', source: nonIncreasing })).toThrow(
+      /strictly increasing/i,
+    );
 
-    const descending = validBalanceYaml.replace('restockMilestones: [5, 10, 15, 20]', 'restockMilestones: [10, 5, 15, 20]');
-    expect(() => parseContentFile({ path: 'balance.yaml', source: descending })).toThrow(/strictly increasing/i);
+    const descending = validBalanceYaml.replace(
+      'restockMilestones: [5, 10, 15, 20]',
+      'restockMilestones: [10, 5, 15, 20]',
+    );
+    expect(() => parseContentFile({ path: 'balance.yaml', source: descending })).toThrow(
+      /strictly increasing/i,
+    );
 
-    const missingHouse = validBalanceYaml.replace(', house: { baseCapacity: 6, strongboxIncrement: 4 }', '');
+    const missingHouse = validBalanceYaml.replace(
+      ', house: { baseCapacity: 6, strongboxIncrement: 4 }',
+      '',
+    );
     expect(() => parseContentFile({ path: 'balance.yaml', source: missingHouse })).toThrow();
 
-    const nonPositiveDensity = validBalanceYaml.replace('cellsPerEncounter: 2000', 'cellsPerEncounter: 0');
-    expect(() => parseContentFile({ path: 'balance.yaml', source: nonPositiveDensity })).toThrow(/cellsPerEncounter/);
+    const nonPositiveDensity = validBalanceYaml.replace(
+      'cellsPerEncounter: 2000',
+      'cellsPerEncounter: 0',
+    );
+    expect(() => parseContentFile({ path: 'balance.yaml', source: nonPositiveDensity })).toThrow(
+      /cellsPerEncounter/,
+    );
   });
 
   it('cross-validates permanent merchants against lifetime fields', () => {
-    const baseDefinition = 'npcId: npc.town-provisioner, stockLootTableId: loot-table.town-provisioner, minimumStockRolls: 1, maximumStockRolls: 1, merchantSaleBps: 12000, merchantPurchaseBps: 6000, acceptedCategories: [food], services: []';
+    const baseDefinition =
+      'npcId: npc.town-provisioner, stockLootTableId: loot-table.town-provisioner, minimumStockRolls: 1, maximumStockRolls: 1, merchantSaleBps: 12000, merchantPurchaseBps: 6000, acceptedCategories: [food], services: []';
     const encounterYaml = (definition: string) => `schemaVersion: 7
 entries:
   - { kind: encounter, id: encounter.town-provisioner, name: Provisioner, tags: [], model: merchant, minDepth: 1, maxDepth: 1, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: common, runAppearanceChance: 1, maximumInstancesPerRun: 1, placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: required }, intentPresentation: { visible: true }, definition: { ${definition} } }
 `;
-    const permanentWithoutLifetime = encounterYaml(`${baseDefinition}, permanent: true, aggressionResponse: flee, commerceReputationDelta: 0, aggressionReputationDelta: 0, deathReputationDelta: 0, stockDropFraction: 0`);
-    expect(parseContentFile({ path: 'encounters/town.yaml', source: permanentWithoutLifetime })[0]).toMatchObject({
+    const permanentWithoutLifetime = encounterYaml(
+      `${baseDefinition}, permanent: true, aggressionResponse: flee, commerceReputationDelta: 0, aggressionReputationDelta: 0, deathReputationDelta: 0, stockDropFraction: 0`,
+    );
+    expect(
+      parseContentFile({ path: 'encounters/town.yaml', source: permanentWithoutLifetime })[0],
+    ).toMatchObject({
       definition: { permanent: true },
     });
 
-    const permanentWithLifetime = encounterYaml(`${baseDefinition}, permanent: true, minimumLifetime: 100, maximumLifetime: 200, departureWarningThresholds: [50], aggressionResponse: flee, commerceReputationDelta: 0, aggressionReputationDelta: 0, deathReputationDelta: 0, stockDropFraction: 0`);
-    expect(() => parseContentFile({ path: 'encounters/invalid.yaml', source: permanentWithLifetime }))
-      .toThrow(/permanent merchant must not declare/i);
+    const permanentWithLifetime = encounterYaml(
+      `${baseDefinition}, permanent: true, minimumLifetime: 100, maximumLifetime: 200, departureWarningThresholds: [50], aggressionResponse: flee, commerceReputationDelta: 0, aggressionReputationDelta: 0, deathReputationDelta: 0, stockDropFraction: 0`,
+    );
+    expect(() =>
+      parseContentFile({ path: 'encounters/invalid.yaml', source: permanentWithLifetime }),
+    ).toThrow(/permanent merchant must not declare/i);
 
-    const nonPermanentWithoutLifetime = encounterYaml(`${baseDefinition}, permanent: false, aggressionResponse: flee, commerceReputationDelta: 0, aggressionReputationDelta: 0, deathReputationDelta: 0, stockDropFraction: 0`);
-    expect(() => parseContentFile({ path: 'encounters/invalid.yaml', source: nonPermanentWithoutLifetime }))
-      .toThrow(/non-permanent merchant requires/i);
+    const nonPermanentWithoutLifetime = encounterYaml(
+      `${baseDefinition}, permanent: false, aggressionResponse: flee, commerceReputationDelta: 0, aggressionReputationDelta: 0, deathReputationDelta: 0, stockDropFraction: 0`,
+    );
+    expect(() =>
+      parseContentFile({ path: 'encounters/invalid.yaml', source: nonPermanentWithoutLifetime }),
+    ).toThrow(/non-permanent merchant requires/i);
 
-    const nonPermanentWithLifetime = encounterYaml(`${baseDefinition}, permanent: false, minimumLifetime: 100, maximumLifetime: 200, departureWarningThresholds: [50], aggressionResponse: flee, commerceReputationDelta: 0, aggressionReputationDelta: 0, deathReputationDelta: 0, stockDropFraction: 0`);
-    expect(parseContentFile({ path: 'encounters/town.yaml', source: nonPermanentWithLifetime })[0]).toMatchObject({
+    const nonPermanentWithLifetime = encounterYaml(
+      `${baseDefinition}, permanent: false, minimumLifetime: 100, maximumLifetime: 200, departureWarningThresholds: [50], aggressionResponse: flee, commerceReputationDelta: 0, aggressionReputationDelta: 0, deathReputationDelta: 0, stockDropFraction: 0`,
+    );
+    expect(
+      parseContentFile({ path: 'encounters/town.yaml', source: nonPermanentWithLifetime })[0],
+    ).toMatchObject({
       definition: { permanent: false, minimumLifetime: 100, maximumLifetime: 200 },
     });
   });
@@ -196,13 +304,19 @@ entries:
 entries:
   - { kind: encounter, id: encounter.town-provisioner, name: Provisioner, tags: [], model: merchant, minDepth: 1, maxDepth: 1, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: common, runAppearanceChance: 1, maximumInstancesPerRun: 1, placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: required }, intentPresentation: { visible: true }, definition: { npcId: npc.town-provisioner, stockLootTableId: loot-table.town-provisioner, minimumStockRolls: 1, maximumStockRolls: 1, merchantSaleBps: 12000, merchantPurchaseBps: 6000, acceptedCategories: [food], services: [${servicesEntry}], permanent: true, aggressionResponse: flee, commerceReputationDelta: 0, aggressionReputationDelta: 0, deathReputationDelta: 0, stockDropFraction: 0 } }
 `;
-    expect(parseContentFile({ path: 'encounters/town.yaml', source: encounterYaml(service(1, 1)) })[0]).toMatchObject({
-      definition: { services: [{ serviceId: 'merchant-service.strongbox', minimumUses: 1, maximumUses: 1 }] },
+    expect(
+      parseContentFile({ path: 'encounters/town.yaml', source: encounterYaml(service(1, 1)) })[0],
+    ).toMatchObject({
+      definition: {
+        services: [{ serviceId: 'merchant-service.strongbox', minimumUses: 1, maximumUses: 1 }],
+      },
     });
-    expect(() => parseContentFile({ path: 'encounters/invalid.yaml', source: encounterYaml(service(0, 1)) }))
-      .toThrow(/strongbox service requires minimumUses and maximumUses of exactly 1/i);
-    expect(() => parseContentFile({ path: 'encounters/invalid.yaml', source: encounterYaml(service(1, 2)) }))
-      .toThrow(/strongbox service requires minimumUses and maximumUses of exactly 1/i);
+    expect(() =>
+      parseContentFile({ path: 'encounters/invalid.yaml', source: encounterYaml(service(0, 1)) }),
+    ).toThrow(/strongbox service requires minimumUses and maximumUses of exactly 1/i);
+    expect(() =>
+      parseContentFile({ path: 'encounters/invalid.yaml', source: encounterYaml(service(1, 2)) }),
+    ).toThrow(/strongbox service requires minimumUses and maximumUses of exactly 1/i);
   });
 
   it('publishes and parses strict schema-v6 class content', () => {
@@ -226,22 +340,32 @@ entries:
         backpack:
           - { contentId: item.travel-ration, quantity: 3 }
 `;
-    const [parsedClass] = parseContentFile({ path: 'classes/wayfarer.yaml', source: validClassYaml });
+    const [parsedClass] = parseContentFile({
+      path: 'classes/wayfarer.yaml',
+      source: validClassYaml,
+    });
     expect(parsedClass).toMatchObject({
-      kind: 'class', playable: true, classTags: ['wayfarer'],
+      kind: 'class',
+      playable: true,
+      classTags: ['wayfarer'],
       kits: [expect.objectContaining({ kitId: 'blade', equipped: expect.any(Array) })],
     });
     // `enabled` is optional (not defaulted) -- an equipped line that omits it
     // must parse with `enabled` left undefined, not silently defaulted to true.
-    const equipped = (parsedClass as { kits: readonly { equipped: readonly { contentId: string; enabled?: boolean }[] }[] })
-      .kits[0]!.equipped;
+    const equipped = (
+      parsedClass as {
+        kits: readonly { equipped: readonly { contentId: string; enabled?: boolean }[] }[];
+      }
+    ).kits[0]!.equipped;
     expect(equipped.find((item) => item.contentId === 'item.iron-sword')?.enabled).toBeUndefined();
     expect(equipped.find((item) => item.contentId === 'item.pitch-torch')?.enabled).toBe(true);
 
     const lockedClassWithoutHint = validClassYaml
       .replace('playable: true', 'playable: false')
       .replace(/\n {4}kits:[\s\S]*$/, '\n    kits: []\n');
-    expect(() => parseContentFile({ path: 'classes/invalid.yaml', source: lockedClassWithoutHint })).toThrow(/unlockHint/);
+    expect(() =>
+      parseContentFile({ path: 'classes/invalid.yaml', source: lockedClassWithoutHint }),
+    ).toThrow(/unlockHint/);
   });
 
   it('rejects a trait declaring more than one modifier', () => {
@@ -254,11 +378,19 @@ entries:
     description: Sharp senses spot hidden things.
     modifiers: { search: 2, defense: 1 }
 `;
-    expect(() => parseContentFile({ path: 'traits/invalid.yaml', source: traitWithTwoModifiers })).toThrow(/exactly one/i);
+    expect(() =>
+      parseContentFile({ path: 'traits/invalid.yaml', source: traitWithTwoModifiers }),
+    ).toThrow(/exactly one/i);
 
-    const traitWithOneModifier = traitWithTwoModifiers.replace('modifiers: { search: 2, defense: 1 }', 'modifiers: { search: 2 }');
-    expect(parseContentFile({ path: 'traits/keen-eyed.yaml', source: traitWithOneModifier })[0]).toMatchObject({
-      kind: 'trait', modifiers: { search: 2 },
+    const traitWithOneModifier = traitWithTwoModifiers.replace(
+      'modifiers: { search: 2, defense: 1 }',
+      'modifiers: { search: 2 }',
+    );
+    expect(
+      parseContentFile({ path: 'traits/keen-eyed.yaml', source: traitWithOneModifier })[0],
+    ).toMatchObject({
+      kind: 'trait',
+      modifiers: { search: 2 },
     });
   });
 
@@ -273,12 +405,19 @@ entries:
     modifiers: { toughness: 1 }
     extraItems: []
 `;
-    expect(() => parseContentFile({ path: 'backgrounds/invalid.yaml', source: backgroundWithUnknownStat }))
-      .toThrow(/meleeAccuracy|defense|search|Invalid/);
+    expect(() =>
+      parseContentFile({ path: 'backgrounds/invalid.yaml', source: backgroundWithUnknownStat }),
+    ).toThrow(/meleeAccuracy|defense|search|Invalid/);
 
-    const validBackground = backgroundWithUnknownStat.replace('modifiers: { toughness: 1 }', 'modifiers: { defense: 1 }');
-    expect(parseContentFile({ path: 'backgrounds/caravan-guard.yaml', source: validBackground })[0]).toMatchObject({
-      kind: 'background', modifiers: { defense: 1 },
+    const validBackground = backgroundWithUnknownStat.replace(
+      'modifiers: { toughness: 1 }',
+      'modifiers: { defense: 1 }',
+    );
+    expect(
+      parseContentFile({ path: 'backgrounds/caravan-guard.yaml', source: validBackground })[0],
+    ).toMatchObject({
+      kind: 'background',
+      modifiers: { defense: 1 },
     });
   });
 
@@ -306,16 +445,23 @@ entries:
     threat: 1
     rarity: common
 `;
-    expect(parseContentFile({ path: 'monsters/rat.yaml', source: validMonsterYaml })[0]).toMatchObject({ threat: 1 });
+    expect(
+      parseContentFile({ path: 'monsters/rat.yaml', source: validMonsterYaml })[0],
+    ).toMatchObject({ threat: 1 });
     for (const [label, replacement] of [
       ['negative threat', 'threat: -1'],
       ['fractional threat', 'threat: 0.5'],
       ['unsafe threat', `threat: ${Number.MAX_SAFE_INTEGER + 1}`],
       ['missing threat', ''],
     ] as const) {
-      const source = validMonsterYaml.replace('    threat: 1\n', replacement === '' ? '' : `    ${replacement}\n`);
-      expect(() => parseContentFile({ path: 'monsters/invalid.yaml', source }), `expected rejection: ${label}`)
-        .toThrow(/threat/);
+      const source = validMonsterYaml.replace(
+        '    threat: 1\n',
+        replacement === '' ? '' : `    ${replacement}\n`,
+      );
+      expect(
+        () => parseContentFile({ path: 'monsters/invalid.yaml', source }),
+        `expected rejection: ${label}`,
+      ).toThrow(/threat/);
     }
   });
 
@@ -361,13 +507,18 @@ entries:
     intentPresentation: { visible: true }
     definition: { monsterId: monster.cave-rat, minimumQuantity: 1, maximumQuantity: 2 }
 `;
-    expect(parseContentFile({ path: 'encounters/rats.yaml', source }).map((entry) => entry.kind))
-      .toEqual(['monster', 'encounter']);
-    expect(() => parseContentFile({
-      path: 'monsters/bad.yaml',
-      source: source.replace('behaviorId: behavior.approach-and-attack\n    rarity',
-        'behaviorId: behavior.approach-and-attack\n    runAppearanceChance: 1\n    rarity'),
-    })).toThrow(/runAppearanceChance/i);
+    expect(
+      parseContentFile({ path: 'encounters/rats.yaml', source }).map((entry) => entry.kind),
+    ).toEqual(['monster', 'encounter']);
+    expect(() =>
+      parseContentFile({
+        path: 'monsters/bad.yaml',
+        source: source.replace(
+          'behaviorId: behavior.approach-and-attack\n    rarity',
+          'behaviorId: behavior.approach-and-attack\n    runAppearanceChance: 1\n    rarity',
+        ),
+      }),
+    ).toThrow(/runAppearanceChance/i);
   });
 
   it('parses strict group, swarm, boss, and champion-template definitions', () => {
@@ -378,8 +529,9 @@ entries:
   - { kind: encounter, id: encounter.warden, name: Warden, tags: [], model: boss, minDepth: 5, maxDepth: 5, environmentTags: [], requiredVaultTags: [boss-arena], weight: 1, rarity: legendary, runAppearanceChance: 0.08, discoveryProtectionIncrement: 0.03, discoveryProtectionCap: 0.35, maximumInstancesPerRun: 1, placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: required }, intentPresentation: { visible: true }, definition: { monsterId: monster.warden, phases: [{ phaseId: enraged, healthThresholdPercent: 50, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, modifiers: { accuracy: 2, defense: 0, damage: 2 }, effects: [] }], recoveryPerWorldTime: 0.01, recoveryCapPercent: 25, uniqueItemId: item.warden-key, enhancedLootTableId: loot-table.warden, vaultTags: [boss-arena] } }
   - { kind: fallen-champion-template, id: fallen-champion-template.core, name: Deep's Champion, tags: [], fallbackMonsterId: monster.guard, fallbackItemId: item.fallback-relic, minimumHealth: 10, maximumHealth: 200, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 3, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 2, echoLootTableId: loot-table.echo, heirloomSelection: { rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 }, qualityRankBonus: 2 } }
 `;
-    expect(parseContentFile({ path: 'population.yaml', source }).map((entry) => entry.kind))
-      .toEqual(['encounter', 'encounter', 'encounter', 'fallen-champion-template']);
+    expect(
+      parseContentFile({ path: 'population.yaml', source }).map((entry) => entry.kind),
+    ).toEqual(['encounter', 'encounter', 'encounter', 'fallen-champion-template']);
   });
 
   it('applies defaults to a strict monster entry', () => {
@@ -448,7 +600,11 @@ entries:
 `,
     });
 
-    expect(entry).toMatchObject({ id: 'monster.cave-rat', lootTableId: 'loot-table.cave-rat', dropChance: 0.25 });
+    expect(entry).toMatchObject({
+      id: 'monster.cave-rat',
+      lootTableId: 'loot-table.cave-rat',
+      dropChance: 0.25,
+    });
   });
 
   it('rejects a monster dropChance outside 0..1', () => {
@@ -508,20 +664,42 @@ entries:
 `,
     });
 
-    expect(entries).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'condition', id: 'condition.stunned' }),
-      expect.objectContaining({ kind: 'condition', id: 'condition.warded' }),
-    ]));
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'condition', id: 'condition.stunned' }),
+        expect.objectContaining({ kind: 'condition', id: 'condition.warded' }),
+      ]),
+    );
   });
 
   it.each([
     ['unknown modifier', 'modifiersPerStack: { luck: 1 }', /modifiersPerStack\.luck/i],
     ['unknown trait', 'traits: [condition-trait.unknown]', /traits\.0/i],
-    ['duplicate traits', 'traits: [condition-trait.incapacitated, condition-trait.incapacitated]', /unique and sorted/i],
-    ['unsorted traits', 'traits: [condition-trait.suppresses-reactions, condition-trait.incapacitated]', /unique and sorted/i],
-    ['default above maximum', 'duration: { mode: timed, default: 501, maximum: 500 }', /default duration/i],
-    ['permanent numeric duration', 'duration: { mode: permanent, default: 100, maximum: 100 }', /duration\.default/i],
-    ['refresh with multiple stacks', 'stacking: { mode: refresh, maximumStacks: 2 }', /maximumStacks/i],
+    [
+      'duplicate traits',
+      'traits: [condition-trait.incapacitated, condition-trait.incapacitated]',
+      /unique and sorted/i,
+    ],
+    [
+      'unsorted traits',
+      'traits: [condition-trait.suppresses-reactions, condition-trait.incapacitated]',
+      /unique and sorted/i,
+    ],
+    [
+      'default above maximum',
+      'duration: { mode: timed, default: 501, maximum: 500 }',
+      /default duration/i,
+    ],
+    [
+      'permanent numeric duration',
+      'duration: { mode: permanent, default: 100, maximum: 100 }',
+      /duration\.default/i,
+    ],
+    [
+      'refresh with multiple stacks',
+      'stacking: { mode: refresh, maximumStacks: 2 }',
+      /maximumStacks/i,
+    ],
   ])('rejects condition with %s', (_label, replacement, message) => {
     const base = `schemaVersion: 7
 entries:
@@ -559,7 +737,13 @@ entries:
 `,
     });
 
-    expect(entries.map((entry) => entry.kind)).toEqual(['item', 'spell', 'trap', 'loot-table', 'balance']);
+    expect(entries.map((entry) => entry.kind)).toEqual([
+      'item',
+      'spell',
+      'trap',
+      'loot-table',
+      'balance',
+    ]);
     expect(entries[1]).toMatchObject({ effects: [{ requiresLivingTarget: false }] });
   });
 
@@ -592,7 +776,11 @@ entries:
   });
 
   it.each([
-    ['dice count', 'damage: { count: 0, sides: 3, bonus: 0 }', /entries\.monster\.cave-rat\.damage\.count/],
+    [
+      'dice count',
+      'damage: { count: 0, sides: 3, bonus: 0 }',
+      /entries\.monster\.cave-rat\.damage\.count/,
+    ],
     ['non-positive speed', 'speed: 100', /entries\.monster\.cave-rat\.speed/],
   ])('rejects invalid %s with a stable path', (_name, replacement, path) => {
     const source = `schemaVersion: 7
@@ -617,22 +805,31 @@ entries:
     disposition: hostile
     behaviorId: behavior.approach-and-attack
     rarity: common
-`.replace(replacement === 'speed: 100' ? replacement : 'damage: { count: 1, sides: 3, bonus: 0 }', replacement === 'speed: 100' ? 'speed: 0' : replacement);
+`.replace(
+      replacement === 'speed: 100' ? replacement : 'damage: { count: 1, sides: 3, bonus: 0 }',
+      replacement === 'speed: 100' ? 'speed: 0' : replacement,
+    );
     expect(() => parseContentFile({ path: 'invalid.yaml', source })).toThrow(path);
   });
 
   it('rejects unknown targeting rules with a stable path', () => {
-    expect(() => parseContentFile({
-      path: 'spell.yaml',
-      source: 'schemaVersion: 7\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.unknown, range: 1, actionCost: 100, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
-    })).toThrow(/entries\.spell\.bad\.targetingId/);
+    expect(() =>
+      parseContentFile({
+        path: 'spell.yaml',
+        source:
+          'schemaVersion: 7\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.unknown, range: 1, actionCost: 100, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
+      }),
+    ).toThrow(/entries\.spell\.bad\.targetingId/);
   });
 
   it('rejects a negative action cost with a stable path', () => {
-    expect(() => parseContentFile({
-      path: 'spell.yaml',
-      source: 'schemaVersion: 7\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.self, range: 0, actionCost: -1, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
-    })).toThrow(/entries\.spell\.bad\.actionCost/);
+    expect(() =>
+      parseContentFile({
+        path: 'spell.yaml',
+        source:
+          'schemaVersion: 7\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.self, range: 0, actionCost: -1, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
+      }),
+    ).toThrow(/entries\.spell\.bad\.actionCost/);
   });
 
   it('materializes defaults and derived metadata for a strict vault entry', () => {
@@ -680,9 +877,10 @@ entries:
   });
 
   it('rejects unknown properties with a field path', () => {
-    expect(() => parseContentFile({
-      path: 'monsters/bad.yaml',
-      source: `schemaVersion: 7
+    expect(() =>
+      parseContentFile({
+        path: 'monsters/bad.yaml',
+        source: `schemaVersion: 7
 entries:
   - kind: monster
     id: monster.bad
@@ -706,7 +904,8 @@ entries:
     rarity: common
     surpriseProperty: true
 `,
-    })).toThrowError(ContentCompileError);
+      }),
+    ).toThrowError(ContentCompileError);
   });
 
   it('identifies a vault in structural numeric and fixture diagnostics', () => {
@@ -745,18 +944,20 @@ entries:
     }
 
     expect(error).toBeInstanceOf(ContentCompileError);
-    expect((error as ContentCompileError).issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        file: 'vaults/bad-room.yaml',
-        path: '$.entries.vault.bad-room.minDepth',
-        message: expect.stringMatching(/expected number to be >0/i),
-      }),
-      expect.objectContaining({
-        file: 'vaults/bad-room.yaml',
-        path: '$.entries.vault.bad-room.legend.*.light.radius',
-        message: expect.stringMatching(/expected number to be >0/i),
-      }),
-    ]));
+    expect((error as ContentCompileError).issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          file: 'vaults/bad-room.yaml',
+          path: '$.entries.vault.bad-room.minDepth',
+          message: expect.stringMatching(/expected number to be >0/i),
+        }),
+        expect.objectContaining({
+          file: 'vaults/bad-room.yaml',
+          path: '$.entries.vault.bad-room.legend.*.light.radius',
+          message: expect.stringMatching(/expected number to be >0/i),
+        }),
+      ]),
+    );
   });
 
   it('keeps index-only structural paths when a raw vault ID is invalid', () => {
@@ -786,18 +987,19 @@ entries:
     }
 
     expect(error).toBeInstanceOf(ContentCompileError);
-    expect((error as ContentCompileError).issues.map((issue) => issue.path)).toEqual(expect.arrayContaining([
-      '$.entries.0.id',
-      '$.entries.0.minDepth',
-    ]));
+    expect((error as ContentCompileError).issues.map((issue) => issue.path)).toEqual(
+      expect.arrayContaining(['$.entries.0.id', '$.entries.0.minDepth']),
+    );
     expect((error as Error).message).not.toContain('vault.Bad secret');
   });
 
   it('rejects aliases', () => {
-    expect(() => parseContentFile({
-      path: 'monsters/alias.yaml',
-      source: 'schemaVersion: 7\nentries: &entries [*entries]\n',
-    })).toThrow(/alias|YAML/i);
+    expect(() =>
+      parseContentFile({
+        path: 'monsters/alias.yaml',
+        source: 'schemaVersion: 7\nentries: &entries [*entries]\n',
+      }),
+    ).toThrow(/alias|YAML/i);
   });
 
   it('rejects custom tags with file context', () => {

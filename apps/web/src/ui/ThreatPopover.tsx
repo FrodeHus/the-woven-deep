@@ -31,10 +31,20 @@ export interface ThreatPopoverProps {
  * `compact`/`minimal` tiers. Non-focusable and dismissed by the caller on mouseleave, scroll, or a
  * new session snapshot (see `PlayScreen`), so it never gets stranded pointing at a stale cell.
  */
-export function ThreatPopover({ actor, col, row, paneCols, paneRows, cellPx }: ThreatPopoverProps): JSX.Element {
+export function ThreatPopover({
+  actor,
+  col,
+  row,
+  paneCols,
+  paneRows,
+  cellPx,
+}: ThreatPopoverProps): JSX.Element {
   const clampedCol = Math.max(0, Math.min(col, Math.max(paneCols - 1, 0)));
   const clampedRow = Math.max(0, Math.min(row, Math.max(paneRows - 1, 0)));
-  const style: CSSProperties = { left: `${clampedCol * cellPx.width}px`, top: `${clampedRow * cellPx.height}px` };
+  const style: CSSProperties = {
+    left: `${clampedCol * cellPx.width}px`,
+    top: `${clampedRow * cellPx.height}px`,
+  };
 
   return (
     <div role="tooltip" className="threat-popover framed" style={style}>

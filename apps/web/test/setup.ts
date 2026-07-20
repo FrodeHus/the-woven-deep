@@ -40,7 +40,8 @@ class ResizeObserverStub {
     this.callback([{ target: element } as ResizeObserverEntry], this as unknown as ResizeObserver);
   }
 }
-(globalThis as unknown as { ResizeObserver: typeof ResizeObserverStub }).ResizeObserver = ResizeObserverStub;
+(globalThis as unknown as { ResizeObserver: typeof ResizeObserverStub }).ResizeObserver =
+  ResizeObserverStub;
 
 /**
  * Test-only: simulates the browser firing a ResizeObserver callback for `element`, for every

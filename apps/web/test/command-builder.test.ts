@@ -12,7 +12,9 @@ let baseProjection: GameplayProjection;
 const SEED = [11, 22, 33, 44] as const;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
   const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
   baseProjection = projectGameplayState({ state: run, content: pack });
 });
@@ -22,13 +24,24 @@ function heroPosition(projection: GameplayProjection): { x: number; y: number } 
   return { x: hero.x, y: hero.y };
 }
 
-function withActorEast(projection: GameplayProjection, disposition: 'hostile' | 'neutral' | 'friendly'): GameplayProjection {
+function withActorEast(
+  projection: GameplayProjection,
+  disposition: 'hostile' | 'neutral' | 'friendly',
+): GameplayProjection {
   const { x, y } = heroPosition(projection);
   return {
     ...projection,
     actors: [
       ...projection.actors,
-      { actorId: 'actor.target', contentId: null, x: x + 1, y, disposition, health: 10, maxHealth: 10 },
+      {
+        actorId: 'actor.target',
+        contentId: null,
+        x: x + 1,
+        y,
+        disposition,
+        health: 10,
+        maxHealth: 10,
+      },
     ],
   };
 }
@@ -50,7 +63,14 @@ function withGroundItemUnderHero(projection: GameplayProjection): GameplayProjec
     ...projection,
     groundItems: [
       ...projection.groundItems,
-      { itemId: 'item.on-floor', contentId: 'item.iron-sword', name: 'Iron sword', quantity: 1, x, y },
+      {
+        itemId: 'item.on-floor',
+        contentId: 'item.iron-sword',
+        name: 'Iron sword',
+        quantity: 1,
+        x,
+        y,
+      },
     ],
   };
 }
@@ -61,7 +81,9 @@ function withStairDownUnderHero(projection: GameplayProjection): GameplayProject
     ...projection,
     floor: {
       ...projection.floor,
-      cells: projection.floor.cells.map((cell) => (cell.x === x && cell.y === y ? { ...cell, tileId: 5 as const } : cell)),
+      cells: projection.floor.cells.map((cell) =>
+        cell.x === x && cell.y === y ? { ...cell, tileId: 5 as const } : cell,
+      ),
     },
   };
 }
@@ -72,13 +94,19 @@ function withStairUpUnderHero(projection: GameplayProjection): GameplayProjectio
     ...projection,
     floor: {
       ...projection.floor,
-      cells: projection.floor.cells.map((cell) => (cell.x === x && cell.y === y ? { ...cell, tileId: 4 as const } : cell)),
+      cells: projection.floor.cells.map((cell) =>
+        cell.x === x && cell.y === y ? { ...cell, tileId: 4 as const } : cell,
+      ),
     },
   };
 }
 
 function houseDoorSlot(projection: GameplayProjection): { x: number; y: number } {
-  const slots = projection.slots as unknown as readonly { tags: readonly string[]; x: number; y: number }[];
+  const slots = projection.slots as unknown as readonly {
+    tags: readonly string[];
+    x: number;
+    y: number;
+  }[];
   const found = slots.find((slot) => slot.tags.includes('house-door'));
   if (!found) throw new Error('test fixture town projection is missing its house-door slot');
   return { x: found.x, y: found.y };
@@ -96,14 +124,16 @@ interface ProjectedMerchantActor {
 }
 
 function firstMerchantActor(projection: GameplayProjection): ProjectedMerchantActor {
-  const merchant = (projection.actors as unknown as readonly ProjectedMerchantActor[])
-    .find((actor) => typeof actor.factionName === 'string');
+  const merchant = (projection.actors as unknown as readonly ProjectedMerchantActor[]).find(
+    (actor) => typeof actor.factionName === 'string',
+  );
   if (!merchant) throw new Error('test fixture town projection is missing a merchant actor');
   return merchant;
 }
 
 function withActiveTrade(
-  projection: GameplayProjection, overrides: Partial<NonNullable<GameplayProjection['trade']>> = {},
+  projection: GameplayProjection,
+  overrides: Partial<NonNullable<GameplayProjection['trade']>> = {},
 ): GameplayProjection {
   return {
     ...projection,
@@ -132,7 +162,12 @@ describe('buildIntent', () => {
     });
     expect(built).toEqual({
       kind: 'command',
-      command: { type: 'move', direction: 'east', commandId: 'command.guest-000001', expectedRevision: 0 },
+      command: {
+        type: 'move',
+        direction: 'east',
+        commandId: 'command.guest-000001',
+        expectedRevision: 0,
+      },
     });
   });
 
@@ -146,7 +181,12 @@ describe('buildIntent', () => {
     });
     expect(built).toEqual({
       kind: 'command',
-      command: { type: 'attack', targetActorId: 'actor.target', commandId: 'command.guest-000002', expectedRevision: 1 },
+      command: {
+        type: 'attack',
+        targetActorId: 'actor.target',
+        commandId: 'command.guest-000002',
+        expectedRevision: 1,
+      },
     });
   });
 
@@ -160,7 +200,12 @@ describe('buildIntent', () => {
     });
     expect(built).toEqual({
       kind: 'command',
-      command: { type: 'open-door', featureId: 'feature.door-1', commandId: 'command.guest-000003', expectedRevision: 2 },
+      command: {
+        type: 'open-door',
+        featureId: 'feature.door-1',
+        commandId: 'command.guest-000003',
+        expectedRevision: 2,
+      },
     });
   });
 
@@ -174,7 +219,13 @@ describe('buildIntent', () => {
     });
     expect(built).toEqual({
       kind: 'command',
-      command: { type: 'pickup', itemId: 'item.on-floor', quantity: 1, commandId: 'command.guest-000004', expectedRevision: 3 },
+      command: {
+        type: 'pickup',
+        itemId: 'item.on-floor',
+        quantity: 1,
+        commandId: 'command.guest-000004',
+        expectedRevision: 3,
+      },
     });
   });
 
@@ -198,7 +249,13 @@ describe('buildIntent', () => {
     });
     expect(built).toEqual({
       kind: 'command',
-      command: { type: 'rest', until: 'healed', maximumDuration: 500, commandId: 'command.guest-000006', expectedRevision: 5 },
+      command: {
+        type: 'rest',
+        until: 'healed',
+        maximumDuration: 500,
+        commandId: 'command.guest-000006',
+        expectedRevision: 5,
+      },
     });
   });
 
@@ -222,7 +279,9 @@ describe('buildIntent', () => {
   });
 
   it('builds equip with the definition slot, use-item with null target, drop quantity 1, toggle-light flipping enabled', () => {
-    const backpack = baseProjection.hero as unknown as { backpack: readonly Readonly<Record<string, unknown>>[] };
+    const backpack = baseProjection.hero as unknown as {
+      backpack: readonly Readonly<Record<string, unknown>>[];
+    };
     const ration = backpack.backpack.find((item) => item.contentId === 'item.travel-ration')!;
 
     const use = buildIntent({
@@ -233,7 +292,13 @@ describe('buildIntent', () => {
     });
     expect(use).toEqual({
       kind: 'command',
-      command: { type: 'use-item', itemId: ration.itemId, target: null, commandId: 'command.guest-000009', expectedRevision: 7 },
+      command: {
+        type: 'use-item',
+        itemId: ration.itemId,
+        target: null,
+        commandId: 'command.guest-000009',
+        expectedRevision: 7,
+      },
     });
 
     const drop = buildIntent({
@@ -244,10 +309,18 @@ describe('buildIntent', () => {
     });
     expect(drop).toEqual({
       kind: 'command',
-      command: { type: 'drop', itemId: ration.itemId, quantity: 1, commandId: 'command.guest-000010', expectedRevision: 8 },
+      command: {
+        type: 'drop',
+        itemId: ration.itemId,
+        quantity: 1,
+        commandId: 'command.guest-000010',
+        expectedRevision: 8,
+      },
     });
 
-    const equippedTorch = baseProjection.hero as unknown as { equipment: Readonly<Record<string, Readonly<Record<string, unknown>> | null>> };
+    const equippedTorch = baseProjection.hero as unknown as {
+      equipment: Readonly<Record<string, Readonly<Record<string, unknown>> | null>>;
+    };
     const torch = equippedTorch.equipment['off-hand']!;
     const toggle = buildIntent({
       intent: { type: 'backpack', action: 'toggle-light', itemId: torch.itemId as string },
@@ -259,12 +332,21 @@ describe('buildIntent', () => {
     expect(toggle).toEqual({
       kind: 'command',
       command: {
-        type: 'toggle-light', itemId: torch.itemId, enabled: false,
-        commandId: 'command.guest-000011', expectedRevision: 9,
+        type: 'toggle-light',
+        itemId: torch.itemId,
+        enabled: false,
+        commandId: 'command.guest-000011',
+        expectedRevision: 9,
       },
     });
 
-    const bow = { itemId: 'item.on-floor-bow', contentId: 'item.hunting-bow', name: 'Hunting bow', quantity: 1, identified: true };
+    const bow = {
+      itemId: 'item.on-floor-bow',
+      contentId: 'item.hunting-bow',
+      name: 'Hunting bow',
+      quantity: 1,
+      identified: true,
+    };
     const projectionWithBow: GameplayProjection = {
       ...baseProjection,
       hero: { ...baseProjection.hero, backpack: [...backpack.backpack, bow] },
@@ -278,21 +360,42 @@ describe('buildIntent', () => {
     });
     expect(equip).toEqual({
       kind: 'command',
-      command: { type: 'equip', itemId: bow.itemId, slot: 'main-hand', commandId: 'command.guest-000012', expectedRevision: 10 },
+      command: {
+        type: 'equip',
+        itemId: bow.itemId,
+        slot: 'main-hand',
+        commandId: 'command.guest-000012',
+        expectedRevision: 10,
+      },
     });
   });
 
   it('builds a refuel command from a fuel intent, targeting the equipped light with the fuel stack quantity', () => {
     // The default guest hero equips a pitch torch (fuelTags: []) and carries no lamp oil, so a
     // brass lantern + lamp oil pairing is grafted onto the base projection here.
-    const oil = { itemId: 'item.oil-stack', contentId: 'item.lamp-oil', name: 'Lamp oil', quantity: 5, identified: true };
-    const lantern = { itemId: 'item.lantern-1', contentId: 'item.brass-lantern', name: 'Brass lantern', identified: true };
+    const oil = {
+      itemId: 'item.oil-stack',
+      contentId: 'item.lamp-oil',
+      name: 'Lamp oil',
+      quantity: 5,
+      identified: true,
+    };
+    const lantern = {
+      itemId: 'item.lantern-1',
+      contentId: 'item.brass-lantern',
+      name: 'Brass lantern',
+      identified: true,
+    };
     const projectionWithFuel: GameplayProjection = {
       ...baseProjection,
       hero: {
         ...baseProjection.hero,
         backpack: [oil],
-        equipment: { ...(baseProjection.hero as unknown as { equipment: Readonly<Record<string, unknown>> }).equipment, 'off-hand': lantern },
+        equipment: {
+          ...(baseProjection.hero as unknown as { equipment: Readonly<Record<string, unknown>> })
+            .equipment,
+          'off-hand': lantern,
+        },
       },
     };
 
@@ -305,16 +408,22 @@ describe('buildIntent', () => {
     expect(built).toEqual({
       kind: 'command',
       command: {
-        type: 'refuel', itemId: lantern.itemId, fuelItemId: oil.itemId, quantity: oil.quantity,
-        commandId: 'command.guest-000050', expectedRevision: 5,
+        type: 'refuel',
+        itemId: lantern.itemId,
+        fuelItemId: oil.itemId,
+        quantity: oil.quantity,
+        commandId: 'command.guest-000050',
+        expectedRevision: 5,
       },
     });
   });
 
   it('builds an unequip command for an equipped item, finding its slot from the projection', () => {
-    const equipment = (baseProjection.hero as unknown as {
-      equipment: Readonly<Record<string, Readonly<{ itemId: string }> | null>>;
-    }).equipment;
+    const equipment = (
+      baseProjection.hero as unknown as {
+        equipment: Readonly<Record<string, Readonly<{ itemId: string }> | null>>;
+      }
+    ).equipment;
     const sword = equipment['main-hand']!;
     const built = buildIntent({
       intent: { type: 'backpack', action: 'unequip', itemId: sword.itemId },
@@ -325,12 +434,19 @@ describe('buildIntent', () => {
     });
     expect(built).toEqual({
       kind: 'command',
-      command: { type: 'unequip', slot: 'main-hand', commandId: 'command.guest-000099', expectedRevision: 42 },
+      command: {
+        type: 'unequip',
+        slot: 'main-hand',
+        commandId: 'command.guest-000099',
+        expectedRevision: 42,
+      },
     });
   });
 
   it('rejects equip of a non-equipment item with the item name in the message', () => {
-    const backpack = baseProjection.hero as unknown as { backpack: readonly Readonly<Record<string, unknown>>[] };
+    const backpack = baseProjection.hero as unknown as {
+      backpack: readonly Readonly<Record<string, unknown>>[];
+    };
     const ration = backpack.backpack.find((item) => item.contentId === 'item.travel-ration')!;
     const built = buildIntent({
       intent: { type: 'backpack', action: 'equip', itemId: ration.itemId as string },
@@ -383,12 +499,14 @@ describe('buildIntent', () => {
     expect(rejected.kind).toBe('rejected');
 
     const onTopOfDoor = withHeroAt(baseProjection, door.x, door.y);
-    expect(buildIntent({
-      intent: { type: 'house' },
-      projection: onTopOfDoor,
-      commandId: 'command.guest-000018',
-      expectedRevision: 13,
-    }).kind).toBe('rejected');
+    expect(
+      buildIntent({
+        intent: { type: 'house' },
+        projection: onTopOfDoor,
+        commandId: 'command.guest-000018',
+        expectedRevision: 13,
+      }).kind,
+    ).toBe('rejected');
   });
 
   it('builds house-deposit/house-withdraw commands for house-transfer intents', () => {
@@ -401,8 +519,11 @@ describe('buildIntent', () => {
     expect(deposit).toEqual({
       kind: 'command',
       command: {
-        type: 'house-deposit', itemId: 'item.some-item', quantity: 2,
-        commandId: 'command.guest-000019', expectedRevision: 14,
+        type: 'house-deposit',
+        itemId: 'item.some-item',
+        quantity: 2,
+        commandId: 'command.guest-000019',
+        expectedRevision: 14,
       },
     });
 
@@ -415,8 +536,11 @@ describe('buildIntent', () => {
     expect(withdraw).toEqual({
       kind: 'command',
       command: {
-        type: 'house-withdraw', itemId: 'item.some-item', quantity: 1,
-        commandId: 'command.guest-000020', expectedRevision: 15,
+        type: 'house-withdraw',
+        itemId: 'item.some-item',
+        quantity: 1,
+        commandId: 'command.guest-000020',
+        expectedRevision: 15,
       },
     });
   });
@@ -433,8 +557,10 @@ describe('buildIntent', () => {
     expect(built).toEqual({
       kind: 'command',
       command: {
-        type: 'trade-open', merchantActorId: merchant.actorId,
-        commandId: 'command.guest-000021', expectedRevision: 16,
+        type: 'trade-open',
+        merchantActorId: merchant.actorId,
+        commandId: 'command.guest-000021',
+        expectedRevision: 16,
       },
     });
 
@@ -448,12 +574,14 @@ describe('buildIntent', () => {
     expect(rejected.kind).toBe('rejected');
 
     const onTopOfMerchant = withHeroAt(baseProjection, merchant.x, merchant.y);
-    expect(buildIntent({
-      intent: { type: 'trade-open' },
-      projection: onTopOfMerchant,
-      commandId: 'command.guest-000023',
-      expectedRevision: 16,
-    }).kind).toBe('rejected');
+    expect(
+      buildIntent({
+        intent: { type: 'trade-open' },
+        projection: onTopOfMerchant,
+        commandId: 'command.guest-000023',
+        expectedRevision: 16,
+      }).kind,
+    ).toBe('rejected');
   });
 
   it('rejects trade-buy/trade-sell/trade-service/trade-close when no trade session is open', () => {
@@ -474,7 +602,11 @@ describe('buildIntent', () => {
     expect(sell.kind).toBe('rejected');
 
     const service = buildIntent({
-      intent: { type: 'trade-service', serviceId: 'merchant-service.strongbox', targetItemId: null },
+      intent: {
+        type: 'trade-service',
+        serviceId: 'merchant-service.strongbox',
+        targetItemId: null,
+      },
       projection: baseProjection,
       commandId: 'command.guest-000026',
       expectedRevision: 17,
@@ -490,7 +622,7 @@ describe('buildIntent', () => {
     expect(close.kind).toBe('rejected');
   });
 
-  it('builds trade-buy/trade-sell/trade-service/trade-close against the open session\'s merchant population', () => {
+  it("builds trade-buy/trade-sell/trade-service/trade-close against the open session's merchant population", () => {
     const projection = withActiveTrade(baseProjection);
 
     const buy = buildIntent({
@@ -502,8 +634,12 @@ describe('buildIntent', () => {
     expect(buy).toEqual({
       kind: 'command',
       command: {
-        type: 'trade-buy', merchantPopulationId: 'population.town-provisioner',
-        itemId: 'item.some-stock', quantity: 2, commandId: 'command.guest-000028', expectedRevision: 18,
+        type: 'trade-buy',
+        merchantPopulationId: 'population.town-provisioner',
+        itemId: 'item.some-stock',
+        quantity: 2,
+        commandId: 'command.guest-000028',
+        expectedRevision: 18,
       },
     });
 
@@ -516,13 +652,21 @@ describe('buildIntent', () => {
     expect(sell).toEqual({
       kind: 'command',
       command: {
-        type: 'trade-sell', merchantPopulationId: 'population.town-provisioner',
-        itemId: 'item.some-offer', quantity: 1, commandId: 'command.guest-000029', expectedRevision: 18,
+        type: 'trade-sell',
+        merchantPopulationId: 'population.town-provisioner',
+        itemId: 'item.some-offer',
+        quantity: 1,
+        commandId: 'command.guest-000029',
+        expectedRevision: 18,
       },
     });
 
     const service = buildIntent({
-      intent: { type: 'trade-service', serviceId: 'merchant-service.strongbox', targetItemId: null },
+      intent: {
+        type: 'trade-service',
+        serviceId: 'merchant-service.strongbox',
+        targetItemId: null,
+      },
       projection,
       commandId: 'command.guest-000030',
       expectedRevision: 18,
@@ -530,14 +674,21 @@ describe('buildIntent', () => {
     expect(service).toEqual({
       kind: 'command',
       command: {
-        type: 'trade-service', merchantPopulationId: 'population.town-provisioner',
-        serviceId: 'merchant-service.strongbox', targetItemId: null,
-        commandId: 'command.guest-000030', expectedRevision: 18,
+        type: 'trade-service',
+        merchantPopulationId: 'population.town-provisioner',
+        serviceId: 'merchant-service.strongbox',
+        targetItemId: null,
+        commandId: 'command.guest-000030',
+        expectedRevision: 18,
       },
     });
 
     const identifyService = buildIntent({
-      intent: { type: 'trade-service', serviceId: 'merchant-service.identify', targetItemId: 'item.mystery' },
+      intent: {
+        type: 'trade-service',
+        serviceId: 'merchant-service.identify',
+        targetItemId: 'item.mystery',
+      },
       projection,
       commandId: 'command.guest-000031',
       expectedRevision: 18,
@@ -545,9 +696,12 @@ describe('buildIntent', () => {
     expect(identifyService).toEqual({
       kind: 'command',
       command: {
-        type: 'trade-service', merchantPopulationId: 'population.town-provisioner',
-        serviceId: 'merchant-service.identify', targetItemId: 'item.mystery',
-        commandId: 'command.guest-000031', expectedRevision: 18,
+        type: 'trade-service',
+        merchantPopulationId: 'population.town-provisioner',
+        serviceId: 'merchant-service.identify',
+        targetItemId: 'item.mystery',
+        commandId: 'command.guest-000031',
+        expectedRevision: 18,
       },
     });
 
@@ -560,8 +714,10 @@ describe('buildIntent', () => {
     expect(close).toEqual({
       kind: 'command',
       command: {
-        type: 'trade-close', merchantPopulationId: 'population.town-provisioner',
-        commandId: 'command.guest-000032', expectedRevision: 18,
+        type: 'trade-close',
+        merchantPopulationId: 'population.town-provisioner',
+        commandId: 'command.guest-000032',
+        expectedRevision: 18,
       },
     });
   });

@@ -10,9 +10,13 @@ export function Nav(): JSX.Element {
       </div>
       <div className="wd-nav-links">
         {NAV_LINKS.map((link) => (
-          <a key={link.href} href={link.href} className="wd-nav-link">{link.label}</a>
+          <a key={link.href} href={link.href} className="wd-nav-link">
+            {link.label}
+          </a>
         ))}
-        <a href={PLAY_ROUTE} className="wd-nav-cta">Play Free</a>
+        <a href={PLAY_ROUTE} className="wd-nav-cta">
+          Play Free
+        </a>
       </div>
     </nav>
   );

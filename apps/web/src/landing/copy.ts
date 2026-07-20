@@ -31,14 +31,15 @@ export const HERO = {
     after: ' must be recovered before the prison unravels.',
   },
   italicTagline: 'Descend into the depths. Recover the Heart. Escape alive.',
-  coverAlt: 'The Woven Deep: an adventurer stands at the lantern-lit edge of a vast woven labyrinth, a glowing Heart in its depths',
+  coverAlt:
+    'The Woven Deep: an adventurer stands at the lantern-lit edge of a vast woven labyrinth, a glowing Heart in its depths',
 };
 
 export const LORE = {
   eyebrow: 'The prison beneath the world',
   heading: 'A labyrinth that remembers the dead',
   paragraphs: [
-    "Long ago, the gods wove an impossible labyrinth beneath the world to imprison an ancient horror. The prison became known as The Woven Deep, and at its center they set the Heart of the Deep, an ancient power that binds the weave together and holds the darkness below contained.",
+    'Long ago, the gods wove an impossible labyrinth beneath the world to imprison an ancient horror. The prison became known as The Woven Deep, and at its center they set the Heart of the Deep, an ancient power that binds the weave together and holds the darkness below contained.',
     'For centuries, adventurers have descended seeking the Heart. Few return. Those who perish are not forgotten: the Deep remembers them. Their stories, treasures, failures, and ghosts become woven into the labyrinth itself. Every expedition leaves traces, and the dungeon shifts and tangles as the weave grows ever more knotted.',
     'Now the weave is beginning to unravel. The Heart must be found before the prison fails, and only a new adventurer, descending with nothing but a lantern and a blade, remains to answer.',
   ],
@@ -173,7 +174,8 @@ export const FAQS = [
 export const FINAL_CTA = {
   eyebrow: 'The weave is failing',
   heading: ['Will you answer', 'the descent?'],
-  supporting: 'No download. No cost. Open the Deep in your browser and take your first step into the dark.',
+  supporting:
+    'No download. No cost. Open the Deep in your browser and take your first step into the dark.',
   primaryCta: 'Play Free: Descend Now',
   secondaryCta: 'Or register to be remembered',
 };

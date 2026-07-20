@@ -1,6 +1,14 @@
 import type {
-  BackgroundContentEntry, BalanceContentEntry, ClassContentEntry, CompiledContentPack, ContentEntry,
-  ContentKind, ItemContentEntry, MonsterContentEntry, SpellContentEntry, TraitContentEntry,
+  BackgroundContentEntry,
+  BalanceContentEntry,
+  ClassContentEntry,
+  CompiledContentPack,
+  ContentEntry,
+  ContentKind,
+  ItemContentEntry,
+  MonsterContentEntry,
+  SpellContentEntry,
+  TraitContentEntry,
 } from '@woven-deep/content';
 
 /**
@@ -15,13 +23,22 @@ import type {
 type EntryOfKind<K extends ContentKind> = Extract<ContentEntry, { readonly kind: K }>;
 
 /** Every entry of the given kind, in the pack's own entry order. */
-export function entriesByKind<K extends ContentKind>(pack: CompiledContentPack, kind: K): readonly EntryOfKind<K>[] {
+export function entriesByKind<K extends ContentKind>(
+  pack: CompiledContentPack,
+  kind: K,
+): readonly EntryOfKind<K>[] {
   return pack.entries.filter((entry): entry is EntryOfKind<K> => entry.kind === kind);
 }
 
 /** The first entry of the given kind whose id matches, or `undefined`. */
-export function entryById<K extends ContentKind>(pack: CompiledContentPack, kind: K, id: string): EntryOfKind<K> | undefined {
-  return pack.entries.find((entry): entry is EntryOfKind<K> => entry.kind === kind && entry.id === id);
+export function entryById<K extends ContentKind>(
+  pack: CompiledContentPack,
+  kind: K,
+  id: string,
+): EntryOfKind<K> | undefined {
+  return pack.entries.find(
+    (entry): entry is EntryOfKind<K> => entry.kind === kind && entry.id === id,
+  );
 }
 
 /** The pack's balance entry (the first one), or `undefined`. */
@@ -37,7 +54,10 @@ export function classEntries(pack: CompiledContentPack): readonly ClassContentEn
   return entriesByKind(pack, 'class');
 }
 
-export function backgroundById(pack: CompiledContentPack, id: string): BackgroundContentEntry | undefined {
+export function backgroundById(
+  pack: CompiledContentPack,
+  id: string,
+): BackgroundContentEntry | undefined {
   return entryById(pack, 'background', id);
 }
 

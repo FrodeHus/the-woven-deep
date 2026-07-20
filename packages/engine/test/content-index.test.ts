@@ -7,7 +7,12 @@ function entry(kind: string, id: string, extra: Record<string, unknown> = {}): C
 }
 
 function pack(entries: readonly ContentEntry[]): CompiledContentPack {
-  return { schemaVersion: 1, hash: 'x', entries, generationReport: { foundationalCategories: [] } } as unknown as CompiledContentPack;
+  return {
+    schemaVersion: 1,
+    hash: 'x',
+    entries,
+    generationReport: { foundationalCategories: [] },
+  } as unknown as CompiledContentPack;
 }
 
 const content = pack([
@@ -38,11 +43,15 @@ describe('requireItem', () => {
   });
 
   it('throws when the id is unknown', () => {
-    expect(() => requireItem(content, 'item.missing')).toThrow(/item definition item.missing does not exist/);
+    expect(() => requireItem(content, 'item.missing')).toThrow(
+      /item definition item.missing does not exist/,
+    );
   });
 
   it('throws when the id resolves to a different kind', () => {
-    expect(() => requireItem(content, 'monster.rat')).toThrow(/item definition monster.rat does not exist/);
+    expect(() => requireItem(content, 'monster.rat')).toThrow(
+      /item definition monster.rat does not exist/,
+    );
   });
 });
 
@@ -52,14 +61,20 @@ describe('requireEncounter', () => {
   });
 
   it('throws when the encounter has a different model', () => {
-    expect(() => requireEncounter(content, 'encounter.pack', 'boss')).toThrow(/boss encounter encounter.pack does not exist/);
+    expect(() => requireEncounter(content, 'encounter.pack', 'boss')).toThrow(
+      /boss encounter encounter.pack does not exist/,
+    );
   });
 
   it('throws when the id is unknown', () => {
-    expect(() => requireEncounter(content, 'encounter.void', 'group')).toThrow(/group encounter encounter.void does not exist/);
+    expect(() => requireEncounter(content, 'encounter.void', 'group')).toThrow(
+      /group encounter encounter.void does not exist/,
+    );
   });
 
   it('throws when the id resolves to a non-encounter kind', () => {
-    expect(() => requireEncounter(content, 'item.sword', 'group')).toThrow(/group encounter item.sword does not exist/);
+    expect(() => requireEncounter(content, 'item.sword', 'group')).toThrow(
+      /group encounter item.sword does not exist/,
+    );
   });
 });

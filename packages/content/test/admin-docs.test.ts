@@ -3,9 +3,17 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
-  CONDITION_TRAIT_IDS, CONTENT_KIND_IDS, MAX_ENCOUNTER_MEMBERS, MAX_LOOT_CHOICE_QUANTITY,
-  MAX_LOOT_CREATED_UNITS, MAX_LOOT_TABLE_ROLLS, MAX_LOOT_WEIGHT_TOTAL, MAX_RANDOM_WEIGHT_TOTAL,
-  MAX_SWARM_FLOOR_ACTORS, MAX_SWARM_LIVING_CHILDREN, MAX_SWARM_LIVING_MEMBERS,
+  CONDITION_TRAIT_IDS,
+  CONTENT_KIND_IDS,
+  MAX_ENCOUNTER_MEMBERS,
+  MAX_LOOT_CHOICE_QUANTITY,
+  MAX_LOOT_CREATED_UNITS,
+  MAX_LOOT_TABLE_ROLLS,
+  MAX_LOOT_WEIGHT_TOTAL,
+  MAX_RANDOM_WEIGHT_TOTAL,
+  MAX_SWARM_FLOOR_ACTORS,
+  MAX_SWARM_LIVING_CHILDREN,
+  MAX_SWARM_LIVING_MEMBERS,
   MAX_SWARM_SPAWN_QUANTITY,
 } from '../src/index.js';
 import {
@@ -44,9 +52,10 @@ describe('server-admin content documentation', () => {
       const record = value as Record<string, unknown>;
       const properties = record.properties as Record<string, unknown> | undefined;
       const kind = properties?.kind as Record<string, unknown> | undefined;
-      const populationEntry = insidePopulationEntry
-        || kind?.const === 'encounter'
-        || kind?.const === 'fallen-champion-template';
+      const populationEntry =
+        insidePopulationEntry ||
+        kind?.const === 'encounter' ||
+        kind?.const === 'fallen-champion-template';
       if (populationEntry && properties) {
         for (const field of Object.keys(properties)) terms.add(field);
       }
@@ -62,10 +71,10 @@ describe('server-admin content documentation', () => {
   }
 
   it('documents every YAML content kind and closed registry ID', async () => {
-    const reference = await readFile(resolve(
-      import.meta.dirname,
-      '../../../docs/server-admin/content-configuration.md',
-    ), 'utf8');
+    const reference = await readFile(
+      resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
+      'utf8',
+    );
     const required = [
       ...CONTENT_KIND_IDS,
       ...damageTypes,
@@ -89,109 +98,178 @@ describe('server-admin content documentation', () => {
       ...ACHIEVEMENT_CRITERIA_IDS,
     ];
     for (const identifier of required) {
-      expect(reference, `missing admin documentation for ${identifier}`)
-        .toContain(`\`${identifier}\``);
+      expect(reference, `missing admin documentation for ${identifier}`).toContain(
+        `\`${identifier}\``,
+      );
     }
     for (const category of ['defense', 'food', 'healing', 'identification', 'light', 'offense']) {
-      expect(reference, `missing foundational category documentation for ${category}`)
-        .toContain(`\`${category}\``);
+      expect(reference, `missing foundational category documentation for ${category}`).toContain(
+        `\`${category}\``,
+      );
     }
     for (const field of [
-      'runAppearanceChance', 'discoveryProtectionIncrement', 'discoveryProtectionCap',
-      'maximumInstancesPerRun', 'minimumStairDistance', 'minimumObjectiveDistance',
-      'maximumMemberDistance', 'allowedTerrainTags', 'requiresVaultSlot', 'failureMode',
-      'minimumQuantity', 'maximumQuantity', 'communicationRadius', 'leaderChance',
-      'leaderRoleId', 'leaderDeathResponse', 'supernaturalBond', 'collapseRewards',
-      'spawnInterval', 'maximumLivingChildren', 'maximumLivingMembers', 'maximumFloorActors',
-      'sourceDestructionResponse', 'healthThresholdPercent', 'recoveryPerWorldTime',
-      'recoveryCapPercent', 'uniqueItemId', 'enhancedLootTableId',
-      'fallbackMonsterId', 'fallbackItemId', 'echoAppearanceChance', 'maximumEchoesPerRun',
-      'echoHealthPercent', 'echoDamagePercent', 'echoDefensePercent', 'echoAbilityLimit',
-      'echoLootTableId', 'rarityWeights', 'qualityRankBonus',
+      'runAppearanceChance',
+      'discoveryProtectionIncrement',
+      'discoveryProtectionCap',
+      'maximumInstancesPerRun',
+      'minimumStairDistance',
+      'minimumObjectiveDistance',
+      'maximumMemberDistance',
+      'allowedTerrainTags',
+      'requiresVaultSlot',
+      'failureMode',
+      'minimumQuantity',
+      'maximumQuantity',
+      'communicationRadius',
+      'leaderChance',
+      'leaderRoleId',
+      'leaderDeathResponse',
+      'supernaturalBond',
+      'collapseRewards',
+      'spawnInterval',
+      'maximumLivingChildren',
+      'maximumLivingMembers',
+      'maximumFloorActors',
+      'sourceDestructionResponse',
+      'healthThresholdPercent',
+      'recoveryPerWorldTime',
+      'recoveryCapPercent',
+      'uniqueItemId',
+      'enhancedLootTableId',
+      'fallbackMonsterId',
+      'fallbackItemId',
+      'echoAppearanceChance',
+      'maximumEchoesPerRun',
+      'echoHealthPercent',
+      'echoDamagePercent',
+      'echoDefensePercent',
+      'echoAbilityLimit',
+      'echoLootTableId',
+      'rarityWeights',
+      'qualityRankBonus',
     ]) {
-      expect(reference, `missing encounter field documentation for ${field}`).toContain(`\`${field}\``);
+      expect(reference, `missing encounter field documentation for ${field}`).toContain(
+        `\`${field}\``,
+      );
     }
   });
 
   it('documents the achievement kind, score coefficients, and monster threat', async () => {
-    const reference = await readFile(resolve(
-      import.meta.dirname,
-      '../../../docs/server-admin/content-configuration.md',
-    ), 'utf8');
+    const reference = await readFile(
+      resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
+      'utf8',
+    );
     for (const identifier of [
-      'achievement', 'criteriaId', 'description',
+      'achievement',
+      'criteriaId',
+      'description',
       ...ACHIEVEMENT_CRITERIA_IDS,
-      'score', 'threat',
-      'depthCoefficient', 'bossDefeatCoefficient', 'threatCoefficient', 'discoveryCoefficient',
-      'completionBonus', 'died', 'became-heart', 'refused', 'broke-cycle',
-      'turnEfficiencyBudget', 'turnEfficiencyDecayInterval',
+      'score',
+      'threat',
+      'depthCoefficient',
+      'bossDefeatCoefficient',
+      'threatCoefficient',
+      'discoveryCoefficient',
+      'completionBonus',
+      'died',
+      'became-heart',
+      'refused',
+      'broke-cycle',
+      'turnEfficiencyBudget',
+      'turnEfficiencyDecayInterval',
     ]) {
-      expect(reference, `missing run-record documentation for ${identifier}`)
-        .toContain(`\`${identifier}\``);
+      expect(reference, `missing run-record documentation for ${identifier}`).toContain(
+        `\`${identifier}\``,
+      );
     }
   });
 
   it('documents the class, background, trait kinds and the point-buy table', async () => {
-    const reference = await readFile(resolve(
-      import.meta.dirname,
-      '../../../docs/server-admin/content-configuration.md',
-    ), 'utf8');
+    const reference = await readFile(
+      resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
+      'utf8',
+    );
     for (const identifier of [
-      'class', 'background', 'trait', 'pointBuy', 'unlockHint',
-      'playable', 'silhouetteGlyph', 'classTags', 'kits', 'kitId', 'equipped', 'backpack',
-      'modifiers', 'extraItems', 'budget', 'costs',
+      'class',
+      'background',
+      'trait',
+      'pointBuy',
+      'unlockHint',
+      'playable',
+      'silhouetteGlyph',
+      'classTags',
+      'kits',
+      'kitId',
+      'equipped',
+      'backpack',
+      'modifiers',
+      'extraItems',
+      'budget',
+      'costs',
     ]) {
-      expect(reference, `missing chargen documentation for ${identifier}`)
-        .toContain(`\`${identifier}\``);
+      expect(reference, `missing chargen documentation for ${identifier}`).toContain(
+        `\`${identifier}\``,
+      );
     }
   });
 
   it('documents permanent merchants, the strongbox service, restock milestones, encounter density, and town vaults', async () => {
-    const reference = await readFile(resolve(
-      import.meta.dirname,
-      '../../../docs/server-admin/content-configuration.md',
-    ), 'utf8');
+    const reference = await readFile(
+      resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
+      'utf8',
+    );
     for (const identifier of [
-      'permanent', 'merchant-service.strongbox', 'restockMilestones',
-      'house', 'baseCapacity', 'strongboxIncrement', 'encounterDensity', 'cellsPerEncounter', 'town',
+      'permanent',
+      'merchant-service.strongbox',
+      'restockMilestones',
+      'house',
+      'baseCapacity',
+      'strongboxIncrement',
+      'encounterDensity',
+      'cellsPerEncounter',
+      'town',
     ]) {
-      expect(reference, `missing town documentation for ${identifier}`)
-        .toContain(`\`${identifier}\``);
+      expect(reference, `missing town documentation for ${identifier}`).toContain(
+        `\`${identifier}\``,
+      );
     }
   });
 
   it('documents the optional per-choice loot-table depth band', async () => {
-    const reference = await readFile(resolve(
-      import.meta.dirname,
-      '../../../docs/server-admin/content-configuration.md',
-    ), 'utf8');
+    const reference = await readFile(
+      resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
+      'utf8',
+    );
     for (const identifier of ['choices[].minDepth', 'choices[].maxDepth']) {
-      expect(reference, `missing loot-table depth band documentation for ${identifier}`)
-        .toContain(`\`${identifier}\``);
+      expect(reference, `missing loot-table depth band documentation for ${identifier}`).toContain(
+        `\`${identifier}\``,
+      );
     }
-    expect(reference, 'missing loot-table depth band absent-means-unbanded contract')
-      .toContain('Absent means unbanded');
+    expect(reference, 'missing loot-table depth band absent-means-unbanded contract').toContain(
+      'Absent means unbanded',
+    );
   });
 
   it('derives exhaustive encounter and fallen-template field coverage from the source schema', async () => {
-    const reference = await readFile(resolve(
-      import.meta.dirname,
-      '../../../docs/server-admin/content-configuration.md',
-    ), 'utf8');
+    const reference = await readFile(
+      resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
+      'utf8',
+    );
     const populationReference = reference.slice(
       reference.indexOf('## Encounter entries'),
       reference.indexOf('## Item entries'),
     );
-    const missing = collectEncounterSchemaTerms(contentSourceEntrySchema)
-      .filter((term) => !populationReference.includes(`\`${term}\``));
+    const missing = collectEncounterSchemaTerms(contentSourceEntrySchema).filter(
+      (term) => !populationReference.includes(`\`${term}\``),
+    );
     expect(missing, 'missing schema-derived admin documentation').toEqual([]);
   });
 
   it('documents every enforced encounter and loot allocation bound with drift-resistant values', async () => {
-    const reference = await readFile(resolve(
-      import.meta.dirname,
-      '../../../docs/server-admin/content-configuration.md',
-    ), 'utf8');
+    const reference = await readFile(
+      resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
+      'utf8',
+    );
     const required = [
       'Positive safe integer validation is necessary but not sufficient',
       `Aggregate encounter selection weight: at most \`${MAX_RANDOM_WEIGHT_TOTAL}\` (\`2^32\`).`,
@@ -214,10 +292,10 @@ describe('server-admin content documentation', () => {
   });
 
   it('documents every merchant commerce, lifecycle, and save-migration contract', async () => {
-    const reference = await readFile(resolve(
-      import.meta.dirname,
-      '../../../docs/server-admin/content-configuration.md',
-    ), 'utf8');
+    const reference = await readFile(
+      resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
+      'utf8',
+    );
     const required = [
       // Price formulas and rounding.
       '`basePrice * merchantSaleBps * tier purchasePriceBps / 10000^2`, rounded up, with a minimum price of `1`',

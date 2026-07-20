@@ -33,8 +33,15 @@ export interface BalanceContentEntry extends BaseContentEntry {
   readonly recoveryInterval: number;
   readonly recoveryAmount: number;
   readonly restMaximumDuration: number;
-  readonly recoveryByHungerStage: Readonly<Record<'sated' | 'hungry' | 'weak' | 'starving', number>>;
-  readonly hungerStageModifiers: Readonly<Record<'sated' | 'hungry' | 'weak' | 'starving', Readonly<Partial<Record<DerivedStatName, number>>>>>;
+  readonly recoveryByHungerStage: Readonly<
+    Record<'sated' | 'hungry' | 'weak' | 'starving', number>
+  >;
+  readonly hungerStageModifiers: Readonly<
+    Record<
+      'sated' | 'hungry' | 'weak' | 'starving',
+      Readonly<Partial<Record<DerivedStatName, number>>>
+    >
+  >;
   readonly formulas: Readonly<Record<string, Readonly<Record<string, number>>>>;
   readonly actionCosts: Readonly<Record<string, number>>;
   readonly score: ScoreCoefficientsDefinition;

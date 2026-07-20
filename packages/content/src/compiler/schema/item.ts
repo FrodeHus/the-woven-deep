@@ -1,7 +1,20 @@
 import { z } from 'zod';
 import {
-  depthRange, diceSchema, effect, equipmentSlots, identificationModes, itemCategories, itemHandedness,
-  itemRarities, presented, rgb, safeInteger, safeNonNegative, safePositive, slugSchema, stableIdSchema,
+  depthRange,
+  diceSchema,
+  effect,
+  equipmentSlots,
+  identificationModes,
+  itemCategories,
+  itemHandedness,
+  itemRarities,
+  presented,
+  rgb,
+  safeInteger,
+  safeNonNegative,
+  safePositive,
+  slugSchema,
+  stableIdSchema,
 } from './common.js';
 
 const equipment = z.strictObject({

@@ -6,8 +6,11 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  DEFAULT_GUEST_HERO, createNewRun, projectGameplayState,
-  type ActiveRun, type GameplayProjection,
+  DEFAULT_GUEST_HERO,
+  createNewRun,
+  projectGameplayState,
+  type ActiveRun,
+  type GameplayProjection,
 } from '@woven-deep/engine';
 import type { GuestSession, SessionSnapshot } from '../../session/guest-session.js';
 import { DEFAULT_SETTINGS } from '../../session/settings.js';
@@ -20,14 +23,23 @@ let baseProjection: GameplayProjection;
 const SEED = [11, 22, 33, 44] as const;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../../../content'),
+  });
   const baseRun: ActiveRun = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
   baseProjection = projectGameplayState({ state: baseRun, content: pack });
 });
 
-function item(overrides: Readonly<Partial<ProjectedItemLike>> & Pick<ProjectedItemLike, 'itemId' | 'name' | 'category'>): ProjectedItemLike {
+function item(
+  overrides: Readonly<Partial<ProjectedItemLike>> &
+    Pick<ProjectedItemLike, 'itemId' | 'name' | 'category'>,
+): ProjectedItemLike {
   return {
-    quantity: 1, identified: true, condition: 100, fuel: null, enabled: null,
+    quantity: 1,
+    identified: true,
+    condition: 100,
+    fuel: null,
+    enabled: null,
     ...overrides,
   };
 }
@@ -46,11 +58,17 @@ function snapshotWithBackpack(
     pendingDecision: null,
     notice: null,
     houseOpen: false,
-    conclusion: null, sightings: { monsterIds: [], itemIds: [], landmarks: [] }, heroClassTags: [], onboarding: { counts: {}, dismissed: [] },
+    conclusion: null,
+    sightings: { monsterIds: [], itemIds: [], landmarks: [] },
+    heroClassTags: [],
+    onboarding: { counts: {}, dismissed: [] },
   };
 }
 
-function stubSession(snapshot: SessionSnapshot): { session: GuestSession; dispatch: ReturnType<typeof vi.fn> } {
+function stubSession(snapshot: SessionSnapshot): {
+  session: GuestSession;
+  dispatch: ReturnType<typeof vi.fn>;
+} {
   const dispatch = vi.fn();
   const session = {
     getSnapshot: () => snapshot,
@@ -62,7 +80,12 @@ function stubSession(snapshot: SessionSnapshot): { session: GuestSession; dispat
 
 function renderInventory(session: GuestSession) {
   return render(
-    <UiProviders pack={pack} settings={DEFAULT_SETTINGS} onChangeSettings={() => {}} session={session}>
+    <UiProviders
+      pack={pack}
+      settings={DEFAULT_SETTINGS}
+      onChangeSettings={() => {}}
+      session={session}
+    >
       <InventoryOverlay />
     </UiProviders>,
   );
@@ -70,10 +93,9 @@ function renderInventory(session: GuestSession) {
 
 describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
   it('shows the equipped slot-grid with the weapon glyph', () => {
-    const snapshot = snapshotWithBackpack(
-      [],
-      { 'main-hand': item({ itemId: 'item.sword', name: 'Iron sword', category: 'weapon' }) },
-    );
+    const snapshot = snapshotWithBackpack([], {
+      'main-hand': item({ itemId: 'item.sword', name: 'Iron sword', category: 'weapon' }),
+    });
     const { session } = stubSession(snapshot);
     renderInventory(session);
 
@@ -124,7 +146,11 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     await user.click(list.getByRole('option', { name: /Iron sword/ }));
     await user.keyboard('e');
 
-    expect(dispatch).toHaveBeenCalledWith({ type: 'backpack', action: 'unequip', itemId: 'item.sword' });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'backpack',
+      action: 'unequip',
+      itemId: 'item.sword',
+    });
   });
 
   it('pressing e on a selected unequipped item dispatches equip', async () => {
@@ -136,7 +162,11 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     renderInventory(session);
 
     await user.keyboard('e');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'backpack', action: 'equip', itemId: 'item.torch' });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'backpack',
+      action: 'equip',
+      itemId: 'item.torch',
+    });
   });
 
   it('pressing d dispatches drop for the selected item', async () => {
@@ -148,7 +178,11 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     renderInventory(session);
 
     await user.keyboard('d');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'backpack', action: 'drop', itemId: 'item.torch' });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'backpack',
+      action: 'drop',
+      itemId: 'item.torch',
+    });
   });
 
   it('pressing u dispatches use, and l dispatches toggle-light, for the selected item', async () => {
@@ -160,9 +194,17 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     renderInventory(session);
 
     await user.keyboard('u');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'backpack', action: 'use', itemId: 'item.torch' });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'backpack',
+      action: 'use',
+      itemId: 'item.torch',
+    });
     await user.keyboard('l');
-    expect(dispatch).toHaveBeenCalledWith({ type: 'backpack', action: 'toggle-light', itemId: 'item.torch' });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'backpack',
+      action: 'toggle-light',
+      itemId: 'item.torch',
+    });
   });
 
   it('the category filter toolbar button cycles through categories and back to all', async () => {
@@ -211,12 +253,21 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
   it('shows a Refuel affordance for fuel matching an equipped light, and dispatches a refuel intent', async () => {
     const user = userEvent.setup();
     const snapshot = snapshotWithBackpack(
-      [item({
-        itemId: 'item.oil-stack', contentId: 'item.lamp-oil', name: 'Lamp oil', category: 'fuel', quantity: 3,
-      })],
+      [
+        item({
+          itemId: 'item.oil-stack',
+          contentId: 'item.lamp-oil',
+          name: 'Lamp oil',
+          category: 'fuel',
+          quantity: 3,
+        }),
+      ],
       {
         'off-hand': item({
-          itemId: 'item.lantern-1', contentId: 'item.brass-lantern', name: 'Brass lantern', category: 'light',
+          itemId: 'item.lantern-1',
+          contentId: 'item.brass-lantern',
+          name: 'Brass lantern',
+          category: 'light',
         }),
       },
     );
@@ -230,14 +281,24 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(refuelButton).toBeInTheDocument();
 
     await user.click(refuelButton);
-    expect(dispatch).toHaveBeenCalledWith({ type: 'refuel', fuelItemId: 'item.oil-stack', targetItemId: 'item.lantern-1' });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'refuel',
+      fuelItemId: 'item.oil-stack',
+      targetItemId: 'item.lantern-1',
+    });
   });
 
   it('shows no Refuel affordance when no equipped light matches the selected fuel', () => {
     const snapshot = snapshotWithBackpack(
-      [item({
-        itemId: 'item.oil-stack', contentId: 'item.lamp-oil', name: 'Lamp oil', category: 'fuel', quantity: 3,
-      })],
+      [
+        item({
+          itemId: 'item.oil-stack',
+          contentId: 'item.lamp-oil',
+          name: 'Lamp oil',
+          category: 'fuel',
+          quantity: 3,
+        }),
+      ],
       { 'main-hand': item({ itemId: 'item.sword', name: 'Iron sword', category: 'weapon' }) },
     );
     const { session } = stubSession(snapshot);

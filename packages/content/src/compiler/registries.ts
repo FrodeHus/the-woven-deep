@@ -13,10 +13,25 @@ const populationModifiers = z.strictObject({
 export const TARGETING_REGISTRY = targetingIds;
 
 export const ACTION_COST_IDS = [
-  'action.attack', 'action.cast', 'action.close-door', 'action.disarm', 'action.drop', 'action.equip',
-  'action.fire', 'action.move', 'action.open-door', 'action.pickup', 'action.refuel', 'action.search',
-  'action.split-stack', 'action.throw-item', 'action.toggle-light', 'action.unequip', 'action.use-item',
-  'action.wait', 'action.spawn',
+  'action.attack',
+  'action.cast',
+  'action.close-door',
+  'action.disarm',
+  'action.drop',
+  'action.equip',
+  'action.fire',
+  'action.move',
+  'action.open-door',
+  'action.pickup',
+  'action.refuel',
+  'action.search',
+  'action.split-stack',
+  'action.throw-item',
+  'action.toggle-light',
+  'action.unequip',
+  'action.use-item',
+  'action.wait',
+  'action.spawn',
 ] as const;
 
 export const BEHAVIOR_PARAMETER_SCHEMAS = {
@@ -30,7 +45,10 @@ export const NPC_BEHAVIOR_PARAMETER_SCHEMAS = {
   'npc-behavior.travelling-merchant': z.strictObject({}),
 } as const;
 
-export const MERCHANT_SERVICE_IDS = ['merchant-service.identify', 'merchant-service.strongbox'] as const;
+export const MERCHANT_SERVICE_IDS = [
+  'merchant-service.identify',
+  'merchant-service.strongbox',
+] as const;
 export const MERCHANT_AGGRESSION_RESPONSES = ['flee', 'self-defense'] as const;
 
 export { ACHIEVEMENT_CRITERIA_IDS } from '../model.js';
@@ -55,7 +73,10 @@ export const EFFECT_PARAMETER_SCHEMAS = {
   'effect.damage': z.strictObject({ damageType: z.enum(damageTypes), dice: diceSchema }),
   'effect.heal': z.strictObject({ dice: diceSchema }),
   'effect.hunger.restore': z.strictObject({ amount: safePositive }),
-  'effect.condition.apply': z.strictObject({ conditionId: stableIdSchema, duration: safePositive.optional() }),
+  'effect.condition.apply': z.strictObject({
+    conditionId: stableIdSchema,
+    duration: safePositive.optional(),
+  }),
   'effect.condition.remove': z.strictObject({ conditionId: stableIdSchema }),
   'effect.force-move': z.strictObject({ distance: safePositive.max(8) }),
   'effect.reveal': z.strictObject({ radius: safePositive.max(32) }),

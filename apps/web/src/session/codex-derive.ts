@@ -24,14 +24,14 @@ export interface CodexState {
  */
 export type CodexEntry =
   | {
-    readonly discovered: true;
-    readonly contentId: string;
-    readonly name: string;
-    readonly glyph: string;
-    readonly color: string;
-    readonly description: string | null;
-    readonly firstSeenRun: number | null;
-  }
+      readonly discovered: true;
+      readonly contentId: string;
+      readonly name: string;
+      readonly glyph: string;
+      readonly color: string;
+      readonly description: string | null;
+      readonly firstSeenRun: number | null;
+    }
   | { readonly discovered: false; readonly silhouetteGlyph: string };
 
 /** The fixed silhouette shown for an undiscovered item/spell/monster -- these three content kinds
@@ -42,7 +42,10 @@ const GENERIC_SILHOUETTE_GLYPH = '?';
 /** 1-based index of the earliest record satisfying `predicate`, or `null` if none does (an
  * active-run-only or sighting-only discovery, per the discovery rules). `records` is already in
  * the Hall's own append order (earliest first) -- see `RunRecordRepository.records()`. */
-function firstSeenRun(records: readonly StoredHallRecord[], predicate: (record: StoredHallRecord) => boolean): number | null {
+function firstSeenRun(
+  records: readonly StoredHallRecord[],
+  predicate: (record: StoredHallRecord) => boolean,
+): number | null {
   const index = records.findIndex(predicate);
   return index === -1 ? null : index + 1;
 }
@@ -52,25 +55,39 @@ function byId<T extends { readonly id: string }>(entries: readonly T[]): readonl
 }
 
 function deriveMonsterCategory(
-  pack: CompiledContentPack, records: readonly StoredHallRecord[], sightings: Sightings,
+  pack: CompiledContentPack,
+  records: readonly StoredHallRecord[],
+  sightings: Sightings,
 ): CodexCategory {
   const entries = byId(monsterEntries(pack));
   const sighted = new Set(sightings.monsterIds);
-  const killed = new Set(records.flatMap((record) => (record.cause.killerContentId === null ? [] : [record.cause.killerContentId])));
+  const killed = new Set(
+    records.flatMap((record) =>
+      record.cause.killerContentId === null ? [] : [record.cause.killerContentId],
+    ),
+  );
   return {
     kind: 'monster',
     entries: entries.map((entry): CodexEntry => {
-      if (!sighted.has(entry.id) && !killed.has(entry.id)) return { discovered: false, silhouetteGlyph: GENERIC_SILHOUETTE_GLYPH };
+      if (!sighted.has(entry.id) && !killed.has(entry.id))
+        return { discovered: false, silhouetteGlyph: GENERIC_SILHOUETTE_GLYPH };
       return {
-        discovered: true, contentId: entry.id, name: entry.name, glyph: entry.glyph, color: entry.color,
-        description: null, firstSeenRun: firstSeenRun(records, (record) => record.cause.killerContentId === entry.id),
+        discovered: true,
+        contentId: entry.id,
+        name: entry.name,
+        glyph: entry.glyph,
+        color: entry.color,
+        description: null,
+        firstSeenRun: firstSeenRun(records, (record) => record.cause.killerContentId === entry.id),
       };
     }),
   };
 }
 
 function deriveItemCategory(
-  pack: CompiledContentPack, records: readonly StoredHallRecord[], sightings: Sightings,
+  pack: CompiledContentPack,
+  records: readonly StoredHallRecord[],
+  sightings: Sightings,
 ): CodexCategory {
   const entries = byId(itemEntries(pack));
   const sighted = new Set(sightings.itemIds);
@@ -78,11 +95,18 @@ function deriveItemCategory(
   return {
     kind: 'item',
     entries: entries.map((entry): CodexEntry => {
-      if (!sighted.has(entry.id) && !equipped.has(entry.id)) return { discovered: false, silhouetteGlyph: GENERIC_SILHOUETTE_GLYPH };
+      if (!sighted.has(entry.id) && !equipped.has(entry.id))
+        return { discovered: false, silhouetteGlyph: GENERIC_SILHOUETTE_GLYPH };
       return {
-        discovered: true, contentId: entry.id, name: entry.name, glyph: entry.glyph, color: entry.color,
+        discovered: true,
+        contentId: entry.id,
+        name: entry.name,
+        glyph: entry.glyph,
+        color: entry.color,
         description: null,
-        firstSeenRun: firstSeenRun(records, (record) => record.build.equippedItemContentIds.includes(entry.id)),
+        firstSeenRun: firstSeenRun(records, (record) =>
+          record.build.equippedItemContentIds.includes(entry.id),
+        ),
       };
     }),
   };
@@ -93,7 +117,13 @@ function deriveItemCategory(
  * renders fully undiscovered rather than inventing one. */
 function deriveSpellCategory(pack: CompiledContentPack): CodexCategory {
   const entries = byId(spellEntries(pack));
-  return { kind: 'spell', entries: entries.map((): CodexEntry => ({ discovered: false, silhouetteGlyph: GENERIC_SILHOUETTE_GLYPH })) };
+  return {
+    kind: 'spell',
+    entries: entries.map((): CodexEntry => ({
+      discovered: false,
+      silhouetteGlyph: GENERIC_SILHOUETTE_GLYPH,
+    })),
+  };
 }
 
 /** Every bundled `ClassContentEntry`, sorted by id -- exported so `CodexOverlay` can zip its own
@@ -123,14 +153,18 @@ function classCoversEntry(entry: ClassContentEntry, tags: readonly string[]): bo
 }
 
 function classDiscovered(
-  entry: ClassContentEntry, records: readonly StoredHallRecord[], heroClassTags: readonly string[] | null,
+  entry: ClassContentEntry,
+  records: readonly StoredHallRecord[],
+  heroClassTags: readonly string[] | null,
 ): boolean {
   if (heroClassTags !== null && classCoversEntry(entry, heroClassTags)) return true;
   return records.some((record) => classCoversEntry(entry, record.classTags));
 }
 
 function deriveClassCategory(
-  pack: CompiledContentPack, records: readonly StoredHallRecord[], snapshot: SessionSnapshot | null,
+  pack: CompiledContentPack,
+  records: readonly StoredHallRecord[],
+  snapshot: SessionSnapshot | null,
 ): CodexCategory {
   const entries = sortedClassEntries(pack);
   const heroClassTags = snapshot?.heroClassTags ?? null;
@@ -141,7 +175,11 @@ function deriveClassCategory(
         return { discovered: false, silhouetteGlyph: entry.silhouetteGlyph };
       }
       return {
-        discovered: true, contentId: entry.id, name: entry.name, glyph: entry.silhouetteGlyph, color: CLASS_ENTRY_COLOR,
+        discovered: true,
+        contentId: entry.id,
+        name: entry.name,
+        glyph: entry.silhouetteGlyph,
+        color: CLASS_ENTRY_COLOR,
         description: entry.description,
         firstSeenRun: firstSeenRun(records, (record) => classCoversEntry(entry, record.classTags)),
       };
@@ -157,12 +195,14 @@ function deriveClassCategory(
  * "active hero's class" discovery source is then simply unavailable, exactly like every other
  * active-run-only source when there is no active run.
  */
-export function deriveCodexState(input: Readonly<{
-  records: readonly StoredHallRecord[];
-  snapshot: SessionSnapshot | null;
-  sightings: Sightings;
-  pack: CompiledContentPack;
-}>): CodexState {
+export function deriveCodexState(
+  input: Readonly<{
+    records: readonly StoredHallRecord[];
+    snapshot: SessionSnapshot | null;
+    sightings: Sightings;
+    pack: CompiledContentPack;
+  }>,
+): CodexState {
   return {
     categories: [
       deriveClassCategory(input.pack, input.records, input.snapshot),

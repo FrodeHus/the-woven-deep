@@ -46,29 +46,57 @@ export interface AppBannersProps {
  * dismissible settings-corrupted notice. The active run survives regardless of any of these: only
  * the affected write (or, on boot, the Hall itself) was affected. */
 export function AppBanners({
-  hallNotice, finalizeWarning, settingsWriteWarning, showSettingsCorrupted, onDismissSettingsCorrupted, children,
+  hallNotice,
+  finalizeWarning,
+  settingsWriteWarning,
+  showSettingsCorrupted,
+  onDismissSettingsCorrupted,
+  children,
 }: AppBannersProps): JSX.Element {
-  if (!hallNotice && !finalizeWarning && !settingsWriteWarning && !showSettingsCorrupted) return children;
+  if (!hallNotice && !finalizeWarning && !settingsWriteWarning && !showSettingsCorrupted)
+    return children;
   return (
     <>
       {showSettingsCorrupted && (
-        <div role="status" aria-label="Settings notice" className="session-banner" data-kind="settings-corrupted">
+        <div
+          role="status"
+          aria-label="Settings notice"
+          className="session-banner"
+          data-kind="settings-corrupted"
+        >
           <p>Stored settings were unreadable and have been reset.</p>
-          <button type="button" onClick={onDismissSettingsCorrupted}>Dismiss</button>
+          <button type="button" onClick={onDismissSettingsCorrupted}>
+            Dismiss
+          </button>
         </div>
       )}
       {hallNotice && (
-        <div role="alert" aria-label="Hall notice" className="storage-warning-banner" data-kind="hall-corrupt">
+        <div
+          role="alert"
+          aria-label="Hall notice"
+          className="storage-warning-banner"
+          data-kind="hall-corrupt"
+        >
           <p>Your Hall of Records could not be read and has been reset. ({hallNotice})</p>
         </div>
       )}
       {finalizeWarning && (
-        <div role="alert" aria-label="Storage warning" className="storage-warning-banner" data-kind="finalize-failed">
+        <div
+          role="alert"
+          aria-label="Storage warning"
+          className="storage-warning-banner"
+          data-kind="finalize-failed"
+        >
           <p>{finalizeWarning}</p>
         </div>
       )}
       {settingsWriteWarning && (
-        <div role="alert" aria-label="Storage warning" className="storage-warning-banner" data-kind="settings-write-failed">
+        <div
+          role="alert"
+          aria-label="Storage warning"
+          className="storage-warning-banner"
+          data-kind="settings-write-failed"
+        >
           <p>{settingsWriteWarning}</p>
         </div>
       )}

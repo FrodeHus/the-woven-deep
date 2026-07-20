@@ -4,8 +4,14 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import { rerollAttributes, rollAttributes, type Uint32State } from '@woven-deep/engine';
 import {
-  initialWizardState, nameIsValid, stepIsSatisfied, wizardChoices, wizardPreview, wizardReduce,
-  type WizardAction, type WizardState,
+  initialWizardState,
+  nameIsValid,
+  stepIsSatisfied,
+  wizardChoices,
+  wizardPreview,
+  wizardReduce,
+  type WizardAction,
+  type WizardState,
 } from '../src/session/wizard-reducer.js';
 
 let pack: CompiledContentPack;
@@ -13,14 +19,20 @@ let pack: CompiledContentPack;
 const SEED: Uint32State = [11, 22, 33, 44];
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 function context(seed: Uint32State = SEED): { pack: CompiledContentPack; seed: Uint32State } {
   return { pack, seed };
 }
 
-function dispatchAll(state: WizardState, actions: readonly WizardAction[], seed: Uint32State = SEED): WizardState {
+function dispatchAll(
+  state: WizardState,
+  actions: readonly WizardAction[],
+  seed: Uint32State = SEED,
+): WizardState {
   return actions.reduce((current, action) => wizardReduce(current, action, context(seed)), state);
 }
 
@@ -35,7 +47,9 @@ const SURE_FOOTED = 'trait.sure-footed';
 const STEADY_HANDS = 'trait.steady-hands';
 
 function wayfarerKitId(): string {
-  const entry = pack.entries.find((candidate) => candidate.kind === 'class' && candidate.id === WAYFARER);
+  const entry = pack.entries.find(
+    (candidate) => candidate.kind === 'class' && candidate.id === WAYFARER,
+  );
   return (entry as { kits: readonly { kitId: string }[] }).kits[0]!.kitId;
 }
 
@@ -53,7 +67,10 @@ describe('wizardReduce', () => {
   });
 
   it('blocks next at step 2 until a class is chosen', () => {
-    const state = dispatchAll(initialWizardState(SEED), [{ type: 'set-name', name: 'Rin' }, { type: 'next' }]);
+    const state = dispatchAll(initialWizardState(SEED), [
+      { type: 'set-name', name: 'Rin' },
+      { type: 'next' },
+    ]);
     expect(state.step).toBe(2);
 
     const blocked = wizardReduce(state, { type: 'next' }, context());
@@ -66,8 +83,10 @@ describe('wizardReduce', () => {
 
   it('blocks next at step 3 until a kit is chosen', () => {
     const state = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Rin' }, { type: 'next' },
-      { type: 'choose-class', classId: WAYFARER }, { type: 'next' },
+      { type: 'set-name', name: 'Rin' },
+      { type: 'next' },
+      { type: 'choose-class', classId: WAYFARER },
+      { type: 'next' },
     ]);
     expect(state.step).toBe(3);
     expect(state.kitId).toBeNull();
@@ -83,8 +102,10 @@ describe('wizardReduce', () => {
 
   it('rolls attributes deterministically from the seed', () => {
     const state = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Rin' }, { type: 'next' },
-      { type: 'choose-method', method: 'roll' }, { type: 'next' },
+      { type: 'set-name', name: 'Rin' },
+      { type: 'next' },
+      { type: 'choose-method', method: 'roll' },
+      { type: 'next' },
     ]);
     const rolled = wizardReduce(state, { type: 'roll' }, context());
     const expected = rollAttributes(SEED);
@@ -95,8 +116,10 @@ describe('wizardReduce', () => {
 
   it('lets reroll run once, then treats further rerolls as a no-op', () => {
     const state = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Rin' }, { type: 'next' },
-      { type: 'choose-method', method: 'roll' }, { type: 'next' },
+      { type: 'set-name', name: 'Rin' },
+      { type: 'next' },
+      { type: 'choose-method', method: 'roll' },
+      { type: 'next' },
       { type: 'roll' },
     ]);
     const firstRoll = rollAttributes(SEED);
@@ -113,7 +136,8 @@ describe('wizardReduce', () => {
 
   it('ignores roll when the method is not roll (no rollState to misbehave against)', () => {
     const state = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Rin' }, { type: 'next' },
+      { type: 'set-name', name: 'Rin' },
+      { type: 'next' },
       { type: 'choose-method', method: 'point-buy' },
     ]);
     expect(state.rollState).toBeNull();
@@ -125,8 +149,10 @@ describe('wizardReduce', () => {
 
   it('treats reroll as a no-op when there is no active roll state yet', () => {
     const state = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Rin' }, { type: 'next' },
-      { type: 'choose-method', method: 'roll' }, { type: 'next' },
+      { type: 'set-name', name: 'Rin' },
+      { type: 'next' },
+      { type: 'choose-method', method: 'roll' },
+      { type: 'next' },
     ]);
     expect(state.rollState).toBeNull();
 
@@ -136,21 +162,32 @@ describe('wizardReduce', () => {
 
   it('does not reset a used reroll when the method is switched away and back (one reroll means one)', () => {
     const state = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Rin' }, { type: 'next' },
-      { type: 'choose-method', method: 'roll' }, { type: 'next' },
+      { type: 'set-name', name: 'Rin' },
+      { type: 'next' },
+      { type: 'choose-method', method: 'roll' },
+      { type: 'next' },
       { type: 'roll' },
     ]);
     const rerolled = wizardReduce(state, { type: 'reroll' }, context());
     expect(rerolled.rerollUsed).toBe(true);
 
-    const switchedAway = wizardReduce(rerolled, { type: 'choose-method', method: 'point-buy' }, context());
-    const switchedBack = wizardReduce(switchedAway, { type: 'choose-method', method: 'roll' }, context());
+    const switchedAway = wizardReduce(
+      rerolled,
+      { type: 'choose-method', method: 'point-buy' },
+      context(),
+    );
+    const switchedBack = wizardReduce(
+      switchedAway,
+      { type: 'choose-method', method: 'roll' },
+      context(),
+    );
     expect(switchedBack.rerollUsed).toBe(true);
   });
 
   it('rejects choosing a locked class as a no-op', () => {
     const state = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Rin' }, { type: 'next' },
+      { type: 'set-name', name: 'Rin' },
+      { type: 'next' },
     ]);
     expect(state.step).toBe(2);
 
@@ -161,9 +198,12 @@ describe('wizardReduce', () => {
 
   it('rejects choosing a kit that belongs to a different class than the one selected', () => {
     const withClass = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Rin' }, { type: 'next' },
-      { type: 'choose-method', method: 'roll' }, { type: 'next' },
-      { type: 'roll' }, { type: 'next' },
+      { type: 'set-name', name: 'Rin' },
+      { type: 'next' },
+      { type: 'choose-method', method: 'roll' },
+      { type: 'next' },
+      { type: 'roll' },
+      { type: 'next' },
       { type: 'choose-class', classId: WAYFARER },
     ]);
     const lamplighterEntry = pack.entries.find(
@@ -171,11 +211,19 @@ describe('wizardReduce', () => {
     ) as { kits: readonly { kitId: string }[] };
     const foreignKitId = lamplighterEntry.kits[0]!.kitId;
 
-    const rejected = wizardReduce(withClass, { type: 'choose-kit', kitId: foreignKitId }, context());
+    const rejected = wizardReduce(
+      withClass,
+      { type: 'choose-kit', kitId: foreignKitId },
+      context(),
+    );
     expect(rejected).toBe(withClass);
     expect(rejected.kitId).toBeNull();
 
-    const accepted = wizardReduce(withClass, { type: 'choose-kit', kitId: wayfarerKitId() }, context());
+    const accepted = wizardReduce(
+      withClass,
+      { type: 'choose-kit', kitId: wayfarerKitId() },
+      context(),
+    );
     expect(accepted.kitId).toBe(wayfarerKitId());
   });
 
@@ -186,30 +234,47 @@ describe('wizardReduce', () => {
     ]);
     expect(withTwoTraits.traitIds).toEqual([KEEN_EYED, SURE_FOOTED]);
 
-    const rejected = wizardReduce(withTwoTraits, { type: 'toggle-trait', traitId: STEADY_HANDS }, context());
+    const rejected = wizardReduce(
+      withTwoTraits,
+      { type: 'toggle-trait', traitId: STEADY_HANDS },
+      context(),
+    );
     expect(rejected).toBe(withTwoTraits);
     expect(rejected.traitIds).toEqual([KEEN_EYED, SURE_FOOTED]);
 
     // Untoggling one of the two frees a slot.
-    const untoggled = wizardReduce(withTwoTraits, { type: 'toggle-trait', traitId: KEEN_EYED }, context());
+    const untoggled = wizardReduce(
+      withTwoTraits,
+      { type: 'toggle-trait', traitId: KEEN_EYED },
+      context(),
+    );
     expect(untoggled.traitIds).toEqual([SURE_FOOTED]);
-    const nowAccepted = wizardReduce(untoggled, { type: 'toggle-trait', traitId: STEADY_HANDS }, context());
+    const nowAccepted = wizardReduce(
+      untoggled,
+      { type: 'toggle-trait', traitId: STEADY_HANDS },
+      context(),
+    );
     expect(nowAccepted.traitIds).toEqual([SURE_FOOTED, STEADY_HANDS]);
   });
 
   it('rejects a point-buy set-attribute that would exceed the budget or bounds', () => {
     const balance = pack.entries.find((entry) => entry.kind === 'balance') as {
-      attributeMaximum: number; attributeMinimum: number; pointBuy: { budget: number };
+      attributeMaximum: number;
+      attributeMinimum: number;
+      pointBuy: { budget: number };
     };
     const withPointBuy = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Rin' }, { type: 'next' },
+      { type: 'set-name', name: 'Rin' },
+      { type: 'next' },
       { type: 'choose-method', method: 'point-buy' },
     ]);
     expect(withPointBuy.attributes).not.toBeNull();
 
     // Out of bounds (above attributeMaximum).
     const outOfBounds = wizardReduce(
-      withPointBuy, { type: 'set-attribute', attribute: 'might', value: balance.attributeMaximum + 1 }, context(),
+      withPointBuy,
+      { type: 'set-attribute', attribute: 'might', value: balance.attributeMaximum + 1 },
+      context(),
     );
     expect(outOfBounds).toBe(withPointBuy);
 
@@ -219,7 +284,9 @@ describe('wizardReduce', () => {
     let rejectedSomewhere = false;
     for (const attributeName of ['might', 'agility', 'vitality', 'wits', 'resolve'] as const) {
       const attempt = wizardReduce(
-        state, { type: 'set-attribute', attribute: attributeName, value: balance.attributeMaximum }, context(),
+        state,
+        { type: 'set-attribute', attribute: attributeName, value: balance.attributeMaximum },
+        context(),
       );
       if (attempt === state) {
         rejectedSomewhere = true;
@@ -230,16 +297,24 @@ describe('wizardReduce', () => {
     expect(rejectedSomewhere).toBe(true);
 
     // A legal, in-budget change is accepted.
-    const accepted = wizardReduce(withPointBuy, { type: 'set-attribute', attribute: 'might', value: 5 }, context());
+    const accepted = wizardReduce(
+      withPointBuy,
+      { type: 'set-attribute', attribute: 'might', value: 5 },
+      context(),
+    );
     expect(accepted.attributes!.might).toBe(5);
   });
 
   it('preserves entered data when going back', () => {
     const state = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Rin' }, { type: 'next' },
-      { type: 'choose-class', classId: WAYFARER }, { type: 'next' },
-      { type: 'choose-kit', kitId: wayfarerKitId() }, { type: 'next' },
-      { type: 'choose-method', method: 'roll' }, { type: 'roll' },
+      { type: 'set-name', name: 'Rin' },
+      { type: 'next' },
+      { type: 'choose-class', classId: WAYFARER },
+      { type: 'next' },
+      { type: 'choose-kit', kitId: wayfarerKitId() },
+      { type: 'next' },
+      { type: 'choose-method', method: 'roll' },
+      { type: 'roll' },
     ]);
     expect(state.step).toBe(4);
 
@@ -256,11 +331,17 @@ describe('wizardReduce', () => {
 
   it('produces null wizardChoices until step 7 is reached with every selection made, then matches the selections', () => {
     const state = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Rin' }, { type: 'next' },
-      { type: 'choose-class', classId: WAYFARER }, { type: 'next' },
-      { type: 'choose-kit', kitId: wayfarerKitId() }, { type: 'next' },
-      { type: 'choose-method', method: 'roll' }, { type: 'roll' }, { type: 'next' },
-      { type: 'choose-background', backgroundId: CARAVAN_GUARD }, { type: 'next' },
+      { type: 'set-name', name: 'Rin' },
+      { type: 'next' },
+      { type: 'choose-class', classId: WAYFARER },
+      { type: 'next' },
+      { type: 'choose-kit', kitId: wayfarerKitId() },
+      { type: 'next' },
+      { type: 'choose-method', method: 'roll' },
+      { type: 'roll' },
+      { type: 'next' },
+      { type: 'choose-background', backgroundId: CARAVAN_GUARD },
+      { type: 'next' },
       { type: 'toggle-trait', traitId: KEEN_EYED },
     ]);
     expect(state.step).toBe(6);
@@ -284,8 +365,10 @@ describe('wizardReduce', () => {
 
   it('reflects background and trait modifiers in the live preview', () => {
     const withAttributesOnly = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Rin' }, { type: 'next' },
-      { type: 'choose-method', method: 'roll' }, { type: 'next' },
+      { type: 'set-name', name: 'Rin' },
+      { type: 'next' },
+      { type: 'choose-method', method: 'roll' },
+      { type: 'next' },
       { type: 'roll' },
     ]);
     const baselinePreview = wizardPreview(withAttributesOnly, pack);
@@ -343,14 +426,19 @@ describe('wizardReduce', () => {
     expect(s.step).toBe(7);
 
     expect(wizardChoices(s)).toMatchObject({
-      name: 'Ash', classId: WAYFARER, kitId: wayfarerKitId(), backgroundId: CARAVAN_GUARD,
+      name: 'Ash',
+      classId: WAYFARER,
+      kitId: wayfarerKitId(),
+      backgroundId: CARAVAN_GUARD,
     });
   });
 
   it('choosing a class on step 2 resets a previously chosen kit', () => {
     const atKitStep = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Ash' }, { type: 'next' },
-      { type: 'choose-class', classId: WAYFARER }, { type: 'next' },
+      { type: 'set-name', name: 'Ash' },
+      { type: 'next' },
+      { type: 'choose-class', classId: WAYFARER },
+      { type: 'next' },
       { type: 'choose-kit', kitId: wayfarerKitId() },
     ]);
     expect(atKitStep.kitId).toBe(wayfarerKitId());
@@ -360,7 +448,9 @@ describe('wizardReduce', () => {
     expect(backToClass.kitId).toBe(wayfarerKitId());
 
     const chosenAnother = wizardReduce(
-      backToClass, { type: 'choose-class', classId: LAMPLIGHTER }, context(),
+      backToClass,
+      { type: 'choose-class', classId: LAMPLIGHTER },
+      context(),
     );
     expect(chosenAnother.classId).toBe(LAMPLIGHTER);
     expect(chosenAnother.kitId).toBeNull();
@@ -368,15 +458,20 @@ describe('wizardReduce', () => {
 
   it('point-buy path also satisfies step 4', () => {
     const atAttributesStep = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Ash' }, { type: 'next' },
-      { type: 'choose-class', classId: WAYFARER }, { type: 'next' },
-      { type: 'choose-kit', kitId: wayfarerKitId() }, { type: 'next' },
+      { type: 'set-name', name: 'Ash' },
+      { type: 'next' },
+      { type: 'choose-class', classId: WAYFARER },
+      { type: 'next' },
+      { type: 'choose-kit', kitId: wayfarerKitId() },
+      { type: 'next' },
     ]);
     expect(atAttributesStep.step).toBe(4);
     expect(wizardReduce(atAttributesStep, { type: 'next' }, context())).toBe(atAttributesStep);
 
     const withPointBuy = wizardReduce(
-      atAttributesStep, { type: 'choose-method', method: 'point-buy' }, context(),
+      atAttributesStep,
+      { type: 'choose-method', method: 'point-buy' },
+      context(),
     );
     expect(withPointBuy.attributes).not.toBeNull();
 
@@ -408,7 +503,9 @@ describe('stepIsSatisfied', () => {
 
     expect(stepIsSatisfied(empty, 4)).toBe(false);
     const rolled = wizardReduce(
-      dispatchAll(empty, [{ type: 'choose-method', method: 'roll' }]), { type: 'roll' }, context(),
+      dispatchAll(empty, [{ type: 'choose-method', method: 'roll' }]),
+      { type: 'roll' },
+      context(),
     );
     expect(stepIsSatisfied(rolled, 4)).toBe(true);
 
@@ -429,16 +526,25 @@ describe('stepIsSatisfied', () => {
       expect(wizardReduce(s, { type: 'next' }, context()) !== s).toBe(stepIsSatisfied(s, step));
       if (!stepIsSatisfied(s, step)) {
         // Fill in whatever this step needs, matching the full-flow test above.
-        s = dispatchAll(s, (() => {
-          switch (step) {
-            case 1: return [{ type: 'set-name', name: 'Ash' }] as const;
-            case 2: return [{ type: 'choose-class', classId: WAYFARER }] as const;
-            case 3: return [{ type: 'choose-kit', kitId: wayfarerKitId() }] as const;
-            case 4: return [{ type: 'choose-method', method: 'roll' }, { type: 'roll' }] as const;
-            case 5: return [{ type: 'choose-background', backgroundId: CARAVAN_GUARD }] as const;
-            case 6: return [] as const;
-          }
-        })());
+        s = dispatchAll(
+          s,
+          (() => {
+            switch (step) {
+              case 1:
+                return [{ type: 'set-name', name: 'Ash' }] as const;
+              case 2:
+                return [{ type: 'choose-class', classId: WAYFARER }] as const;
+              case 3:
+                return [{ type: 'choose-kit', kitId: wayfarerKitId() }] as const;
+              case 4:
+                return [{ type: 'choose-method', method: 'roll' }, { type: 'roll' }] as const;
+              case 5:
+                return [{ type: 'choose-background', backgroundId: CARAVAN_GUARD }] as const;
+              case 6:
+                return [] as const;
+            }
+          })(),
+        );
       }
       expect(stepIsSatisfied(s, step)).toBe(true);
       s = wizardReduce(s, { type: 'next' }, context());

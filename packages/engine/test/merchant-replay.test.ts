@@ -3,14 +3,25 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  MERCHANT_REPLAY_BOUNDARIES, createMerchantDemoRun, decodeActiveRun, encodeActiveRun,
-  merchantDemoCommands, merchantDemoEquivalent, resolveCommand, resolveMerchantDemoCommand,
-  runMerchantDemo, stableJson, type MerchantDemoInput, type MerchantPopulation,
+  MERCHANT_REPLAY_BOUNDARIES,
+  createMerchantDemoRun,
+  decodeActiveRun,
+  encodeActiveRun,
+  merchantDemoCommands,
+  merchantDemoEquivalent,
+  resolveCommand,
+  resolveMerchantDemoCommand,
+  runMerchantDemo,
+  stableJson,
+  type MerchantDemoInput,
+  type MerchantPopulation,
 } from '../src/index.js';
 
 let pack: CompiledContentPack;
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 describe('merchant continuous-versus-split replay', () => {
@@ -19,19 +30,26 @@ describe('merchant continuous-versus-split replay', () => {
     const continuous = runMerchantDemo(pack);
     const split = runMerchantDemo(pack, new Set([index]));
     expect(encodeActiveRun(split.state)).toBe(encodeActiveRun(continuous.state));
-    expect(stableJson(split.records.map((record) => record.commandResult)))
-      .toBe(stableJson(continuous.records.map((record) => record.commandResult)));
-    expect(stableJson(split.records.map((record) => record.authoritativeEvents)))
-      .toBe(stableJson(continuous.records.map((record) => record.authoritativeEvents)));
-    expect(stableJson(split.records.map((record) => record.publicEvents)))
-      .toBe(stableJson(continuous.records.map((record) => record.publicEvents)));
-    expect(stableJson(split.records.map((record) => record.projection)))
-      .toBe(stableJson(continuous.records.map((record) => record.projection)));
+    expect(stableJson(split.records.map((record) => record.commandResult))).toBe(
+      stableJson(continuous.records.map((record) => record.commandResult)),
+    );
+    expect(stableJson(split.records.map((record) => record.authoritativeEvents))).toBe(
+      stableJson(continuous.records.map((record) => record.authoritativeEvents)),
+    );
+    expect(stableJson(split.records.map((record) => record.publicEvents))).toBe(
+      stableJson(continuous.records.map((record) => record.publicEvents)),
+    );
+    expect(stableJson(split.records.map((record) => record.projection))).toBe(
+      stableJson(continuous.records.map((record) => record.projection)),
+    );
   });
 
   it('is equivalent when every named boundary reloads', () => {
     const continuous = runMerchantDemo(pack);
-    const split = runMerchantDemo(pack, new Set(MERCHANT_REPLAY_BOUNDARIES.map((_, index) => index)));
+    const split = runMerchantDemo(
+      pack,
+      new Set(MERCHANT_REPLAY_BOUNDARIES.map((_, index) => index)),
+    );
     expect(merchantDemoEquivalent(split, continuous)).toBe(true);
   });
 
@@ -48,46 +66,78 @@ describe('merchant continuous-versus-split replay', () => {
 
   it('covers every merchant transition the milestone requires', () => {
     const result = runMerchantDemo(pack);
-    const types = new Set(result.records.flatMap((record) =>
-      record.authoritativeEvents.map((event) => event.type)));
+    const types = new Set(
+      result.records.flatMap((record) => record.authoritativeEvents.map((event) => event.type)),
+    );
     for (const type of [
-      'trade.opened', 'trade.bought', 'trade.sold', 'trade.service-purchased', 'trade.closed',
-      'reputation.changed', 'merchant.departure-warning', 'merchant.provoked',
-      'merchant.stock-dropped', 'merchant.died', 'merchant.departed',
-    ]) expect([...types], `expected ${type}`).toContain(type);
+      'trade.opened',
+      'trade.bought',
+      'trade.sold',
+      'trade.service-purchased',
+      'trade.closed',
+      'reputation.changed',
+      'merchant.departure-warning',
+      'merchant.provoked',
+      'merchant.stock-dropped',
+      'merchant.died',
+      'merchant.departed',
+    ])
+      expect([...types], `expected ${type}`).toContain(type);
 
-    const merchants = result.state.populations.filter((population): population is MerchantPopulation =>
-      population.model === 'merchant');
+    const merchants = result.state.populations.filter(
+      (population): population is MerchantPopulation => population.model === 'merchant',
+    );
     expect(merchants).toHaveLength(2);
     expect(new Set(merchants.map((merchant) => merchant.factionId)).size).toBe(1);
     expect(merchants.map((merchant) => merchant.lifecycle).sort()).toEqual(['dead', 'departed']);
 
     const refusal = result.records.find((record) => record.boundary === 'before-refusal')!;
     expect(refusal.commandResult).toMatchObject({ status: 'invalid', reason: 'merchant.refuses' });
-    expect(refusal.authoritativeEvents).toEqual([{
-      type: 'action.invalid', eventId: refusal.command.commandId,
-      commandId: refusal.command.commandId, reason: 'merchant.refuses',
-    }]);
+    expect(refusal.authoritativeEvents).toEqual([
+      {
+        type: 'action.invalid',
+        eventId: refusal.command.commandId,
+        commandId: refusal.command.commandId,
+        reason: 'merchant.refuses',
+      },
+    ]);
 
     const provoke = result.records.find((record) => record.boundary === 'before-provoke')!;
-    const provoked = provoke.authoritativeEvents.find((event) => event.type === 'merchant.provoked');
+    const provoked = provoke.authoritativeEvents.find(
+      (event) => event.type === 'merchant.provoked',
+    );
     expect(provoked).toMatchObject({ response: 'flee' });
-    const dropped = provoke.authoritativeEvents.find((event) => event.type === 'merchant.stock-dropped');
+    const dropped = provoke.authoritativeEvents.find(
+      (event) => event.type === 'merchant.stock-dropped',
+    );
     expect(dropped).toBeDefined();
 
     const departure = result.records.find((record) => record.boundary === 'before-departure')!;
-    const departed = departure.authoritativeEvents.find((event) => event.type === 'merchant.departed');
+    const departed = departure.authoritativeEvents.find(
+      (event) => event.type === 'merchant.departed',
+    );
     expect(departed).toBeDefined();
     const departedMerchant = merchants.find((merchant) => merchant.lifecycle === 'departed')!;
     // The departure resolved while its floor was inactive: no actor turn for the merchant.
     expect(departedMerchant.floorId).not.toBe(result.state.activeFloorId);
-    expect(departure.authoritativeEvents.some((event) => event.type === 'actor.turn.completed'
-      && event.actorId === departedMerchant.actorId)).toBe(false);
+    expect(
+      departure.authoritativeEvents.some(
+        (event) =>
+          event.type === 'actor.turn.completed' && event.actorId === departedMerchant.actorId,
+      ),
+    ).toBe(false);
   });
 
   it('advances no world time from any modal trade command', () => {
     const initial = createMerchantDemoRun(pack);
-    const tradeBoundaries = ['before-open', 'before-buy', 'before-sell', 'before-identify', 'before-close', 'before-refusal'];
+    const tradeBoundaries = [
+      'before-open',
+      'before-buy',
+      'before-sell',
+      'before-identify',
+      'before-close',
+      'before-refusal',
+    ];
     let state = initial;
     for (const input of merchantDemoCommands(initial)) {
       const before = state.worldTime;

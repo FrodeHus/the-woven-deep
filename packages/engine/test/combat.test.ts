@@ -16,24 +16,41 @@ function stateProducing(face: number, sides = 20): Uint32State {
   for (let seed = 1; seed < 100_000; seed += 1) {
     const state = expandLegacySeed(seed);
     const step = nextUint32(state);
-    if (step.value < limit && step.value % sides + 1 === face) return state;
+    if (step.value < limit && (step.value % sides) + 1 === face) return state;
   }
   throw new Error(`no state found for d${sides} face ${face}`);
 }
 
 function actors(targetHealth = 20): readonly ActorState[] {
   const hero = createDemoRun().actors[0]!;
-  return [hero, {
-    ...hero, actorId: 'monster.target', contentId: 'monster.target', playerControlled: false,
-    x: 2, health: targetHealth, maxHealth: targetHealth, disposition: 'hostile',
-  }];
+  return [
+    hero,
+    {
+      ...hero,
+      actorId: 'monster.target',
+      contentId: 'monster.target',
+      playerControlled: false,
+      x: 2,
+      health: targetHealth,
+      maxHealth: targetHealth,
+      disposition: 'hostile',
+    },
+  ];
 }
 
 function attack(overrides: Readonly<Record<string, unknown>> = {}) {
   return {
-    eventId: 'command.attack', attackerId: 'hero.demo', targetActorId: 'monster.target', actors: actors(),
-    combatState: stateProducing(10), accuracy: 5, defense: 10,
-    damage: { count: 1, sides: 6, bonus: 2 }, armor: 0, resistance: 0, immune: false,
+    eventId: 'command.attack',
+    attackerId: 'hero.demo',
+    targetActorId: 'monster.target',
+    actors: actors(),
+    combatState: stateProducing(10),
+    accuracy: 5,
+    defense: 10,
+    damage: { count: 1, sides: 6, bonus: 2 },
+    armor: 0,
+    resistance: 0,
+    immune: false,
     damageType: 'physical' as const,
     ...overrides,
   };
@@ -42,13 +59,21 @@ function attack(overrides: Readonly<Record<string, unknown>> = {}) {
 describe('deterministic combat', () => {
   it('applies population modifiers through pure checked combat arithmetic', () => {
     const profile = { accuracy: 4, defense: 8, damage: { count: 1, sides: 6, bonus: 1 } };
-    expect(applyPopulationCombatModifiers(profile, { accuracy: 2, defense: -1, damage: 3 })).toEqual({
-      accuracy: 6, defense: 7, damage: { count: 1, sides: 6, bonus: 4 },
+    expect(
+      applyPopulationCombatModifiers(profile, { accuracy: 2, defense: -1, damage: 3 }),
+    ).toEqual({
+      accuracy: 6,
+      defense: 7,
+      damage: { count: 1, sides: 6, bonus: 4 },
     });
     expect(profile).toEqual({ accuracy: 4, defense: 8, damage: { count: 1, sides: 6, bonus: 1 } });
-    expect(() => applyPopulationCombatModifiers(profile, {
-      accuracy: Number.MAX_SAFE_INTEGER, defense: 0, damage: 0,
-    })).toThrow(/accuracy.*safe integer/i);
+    expect(() =>
+      applyPopulationCombatModifiers(profile, {
+        accuracy: Number.MAX_SAFE_INTEGER,
+        defense: 0,
+        damage: 0,
+      }),
+    ).toThrow(/accuracy.*safe integer/i);
   });
 
   it('rolls unbiased bounded dice without mutating random state', () => {
@@ -61,11 +86,16 @@ describe('deterministic combat', () => {
 
   it('treats natural one as a miss and natural twenty as doubled damage dice', () => {
     expect(resolveAttack(attack({ combatState: stateProducing(1) })).events[0]).toMatchObject({
-      type: 'attack.missed', naturalRoll: 1,
+      type: 'attack.missed',
+      naturalRoll: 1,
     });
-    expect(resolveAttack(attack({ combatState: stateProducing(20) })).events).toContainEqual(expect.objectContaining({
-      type: 'attack.hit', critical: true, rolledDice: 2,
-    }));
+    expect(resolveAttack(attack({ combatState: stateProducing(20) })).events).toContainEqual(
+      expect.objectContaining({
+        type: 'attack.hit',
+        critical: true,
+        rolledDice: 2,
+      }),
+    );
   });
 
   it('applies armor and resistance with immunity allowed to reach zero', () => {
@@ -76,7 +106,11 @@ describe('deterministic combat', () => {
 
   it('reduces health, publishes effective values, and kills immediately', () => {
     const result = resolveAttack(attack({ combatState: stateProducing(20), actors: actors(1) }));
-    expect(result.events.map((event) => event.type)).toEqual(['attack.hit', 'actor.damaged', 'actor.died']);
+    expect(result.events.map((event) => event.type)).toEqual([
+      'attack.hit',
+      'actor.damaged',
+      'actor.died',
+    ]);
     expect(result.actors.find((actor) => actor.actorId === 'monster.target')?.health).toBe(0);
     expect(result.targetDied).toBe(true);
   });

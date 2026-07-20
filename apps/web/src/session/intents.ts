@@ -18,16 +18,16 @@ export type PlayerIntent =
   // `house-transfer` intents for the actual deposit/withdraw actions.
   | { readonly type: 'house' }
   | {
-    readonly type: 'house-transfer';
-    readonly action: 'deposit' | 'withdraw';
-    readonly itemId: OpaqueId;
-    readonly quantity: number;
-  }
+      readonly type: 'house-transfer';
+      readonly action: 'deposit' | 'withdraw';
+      readonly itemId: OpaqueId;
+      readonly quantity: number;
+    }
   | {
-    readonly type: 'backpack';
-    readonly action: 'equip' | 'unequip' | 'use' | 'drop' | 'toggle-light';
-    readonly itemId: OpaqueId;
-  }
+      readonly type: 'backpack';
+      readonly action: 'equip' | 'unequip' | 'use' | 'drop' | 'toggle-light';
+      readonly itemId: OpaqueId;
+    }
   // Refuels an equipped light source (`targetItemId`) from a backpack fuel stack
   // (`fuelItemId`) -- see command-builder.ts, which builds the engine's `refuel` command from
   // this, sending the fuel stack's full quantity (the engine clamps to the light's remaining
@@ -44,8 +44,8 @@ export type PlayerIntent =
   | { readonly type: 'trade-buy'; readonly itemId: OpaqueId; readonly quantity: number }
   | { readonly type: 'trade-sell'; readonly itemId: OpaqueId; readonly quantity: number }
   | {
-    readonly type: 'trade-service';
-    readonly serviceId: MerchantServiceId;
-    /** `null` for a targetless service (e.g. the strongbox). */
-    readonly targetItemId: OpaqueId | null;
-  };
+      readonly type: 'trade-service';
+      readonly serviceId: MerchantServiceId;
+      /** `null` for a targetless service (e.g. the strongbox). */
+      readonly targetItemId: OpaqueId | null;
+    };

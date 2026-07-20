@@ -10,9 +10,19 @@ import { classifyStorageFailure } from './storage.js';
  */
 export type ActionId =
   | `move.${'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw'}`
-  | 'wait' | 'rest' | 'pickup' | 'descend' | 'ascend'
-  | 'inventory' | 'house' | 'trade'
-  | 'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help'
+  | 'wait'
+  | 'rest'
+  | 'pickup'
+  | 'descend'
+  | 'ascend'
+  | 'inventory'
+  | 'house'
+  | 'trade'
+  | 'character-sheet'
+  | 'map-journal'
+  | 'codex'
+  | 'settings'
+  | 'help'
   // Dismisses the play screen's contextual onboarding hint strip -- rebindable and listed
   // in help/settings exactly like every other action, even though it isn't a game command.
   | 'dismiss-hint';
@@ -55,9 +65,19 @@ const MOVE_SUFFIXES = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'] as const;
 /** Every `ActionId`, in a fixed order -- used to iterate the (closed) union at runtime. */
 export const ACTION_IDS: readonly ActionId[] = [
   ...MOVE_SUFFIXES.map((suffix) => `move.${suffix}` as ActionId),
-  'wait', 'rest', 'pickup', 'descend', 'ascend',
-  'inventory', 'house', 'trade',
-  'character-sheet', 'map-journal', 'codex', 'settings', 'help',
+  'wait',
+  'rest',
+  'pickup',
+  'descend',
+  'ascend',
+  'inventory',
+  'house',
+  'trade',
+  'character-sheet',
+  'map-journal',
+  'codex',
+  'settings',
+  'help',
   'dismiss-hint',
 ];
 
@@ -69,13 +89,28 @@ function chord(key: string, shift = false): KeyChord {
  * (settings rows, conflict-refusal messages, the help overlay's controls section) so no caller
  * needs a raw `ActionId`/key literal to describe what a row means. */
 export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
-  'move.n': 'Move north', 'move.ne': 'Move northeast', 'move.e': 'Move east',
-  'move.se': 'Move southeast', 'move.s': 'Move south', 'move.sw': 'Move southwest',
-  'move.w': 'Move west', 'move.nw': 'Move northwest',
-  wait: 'Wait', rest: 'Rest', pickup: 'Pick up', descend: 'Descend', ascend: 'Ascend',
-  inventory: 'Inventory', house: 'House/Town', trade: 'Trade',
-  'character-sheet': 'Character sheet', 'map-journal': 'Map & journal', codex: 'Codex',
-  settings: 'Settings', help: 'Help', 'dismiss-hint': 'Dismiss hint',
+  'move.n': 'Move north',
+  'move.ne': 'Move northeast',
+  'move.e': 'Move east',
+  'move.se': 'Move southeast',
+  'move.s': 'Move south',
+  'move.sw': 'Move southwest',
+  'move.w': 'Move west',
+  'move.nw': 'Move northwest',
+  wait: 'Wait',
+  rest: 'Rest',
+  pickup: 'Pick up',
+  descend: 'Descend',
+  ascend: 'Ascend',
+  inventory: 'Inventory',
+  house: 'House/Town',
+  trade: 'Trade',
+  'character-sheet': 'Character sheet',
+  'map-journal': 'Map & journal',
+  codex: 'Codex',
+  settings: 'Settings',
+  help: 'Help',
+  'dismiss-hint': 'Dismiss hint',
 };
 
 /**
@@ -120,9 +155,10 @@ export function chordKey(value: KeyChord): string {
  * needs: `byChord` (what does this keystroke do) and `byAction` (what keystroke does this command
  * use, for the settings screen and conflict checks).
  */
-export function resolveKeymap(
-  overrides: Settings['bindings'],
-): Readonly<{ byChord: ReadonlyMap<string, ActionId>; byAction: Readonly<Record<ActionId, KeyChord>> }> {
+export function resolveKeymap(overrides: Settings['bindings']): Readonly<{
+  byChord: ReadonlyMap<string, ActionId>;
+  byAction: Readonly<Record<ActionId, KeyChord>>;
+}> {
   const byAction = { ...DEFAULT_BINDINGS, ...overrides } as Record<ActionId, KeyChord>;
   const byChord = new Map<string, ActionId>();
   for (const actionId of ACTION_IDS) {
@@ -158,8 +194,18 @@ export function bindingConflict(
  * `HARDWIRED_DIRECTION_KEYS` (rather than imported) because `settings.ts` is the lower-level,
  * framework-free module `KeyRouter.ts` itself depends on; keep the two key lists in sync. */
 const HARDWIRED_KEYS: ReadonlySet<string> = new Set([
-  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-  '1', '2', '3', '4', '6', '7', '8', '9',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  '1',
+  '2',
+  '3',
+  '4',
+  '6',
+  '7',
+  '8',
+  '9',
 ]);
 
 /** True if `chordCandidate`'s key is one of the hardwired arrow/numpad synonyms above -- binding
@@ -176,9 +222,12 @@ const THEME_VALUES: readonly Settings['theme'][] = ['tapestry', 'high-contrast']
 const ONBOARDING_VALUES: readonly Settings['onboarding'][] = ['on', 'off'];
 
 function isValidChord(value: unknown): value is KeyChord {
-  return typeof value === 'object' && value !== null
-    && typeof (value as { key?: unknown }).key === 'string'
-    && typeof (value as { shift?: unknown }).shift === 'boolean';
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { key?: unknown }).key === 'string' &&
+    typeof (value as { shift?: unknown }).shift === 'boolean'
+  );
 }
 
 /**
@@ -224,7 +273,9 @@ function parseSettingsJson(
   const fontScale = FONT_SCALES.includes(record.fontScale as Settings['fontScale'])
     ? (record.fontScale as Settings['fontScale'])
     : DEFAULT_SETTINGS.fontScale;
-  const reducedMotion = REDUCED_MOTION_VALUES.includes(record.reducedMotion as Settings['reducedMotion'])
+  const reducedMotion = REDUCED_MOTION_VALUES.includes(
+    record.reducedMotion as Settings['reducedMotion'],
+  )
     ? (record.reducedMotion as Settings['reducedMotion'])
     : DEFAULT_SETTINGS.reducedMotion;
   const theme = THEME_VALUES.includes(record.theme as Settings['theme'])
@@ -234,9 +285,10 @@ function parseSettingsJson(
     ? (record.onboarding as Settings['onboarding'])
     : DEFAULT_SETTINGS.onboarding;
 
-  const rawBindings = typeof record.bindings === 'object' && record.bindings !== null
-    ? record.bindings as Record<string, unknown>
-    : {};
+  const rawBindings =
+    typeof record.bindings === 'object' && record.bindings !== null
+      ? (record.bindings as Record<string, unknown>)
+      : {};
 
   const accepted: Partial<Record<ActionId, KeyChord>> = {};
   const droppedOverrides: ActionId[] = [];
@@ -315,7 +367,8 @@ function hasBindingConflict(bindings: Settings['bindings']): boolean {
  * (which the settings UI itself pre-checks with `bindingConflict`, so a caller should never see the
  * `saveSettings` guard actually fire) as the silent backstop it's meant to be.
  */
-export type SaveSettingsResult = Readonly<{ ok: true }> | Readonly<{ ok: false; reason?: StorageFailure }>;
+export type SaveSettingsResult =
+  Readonly<{ ok: true }> | Readonly<{ ok: false; reason?: StorageFailure }>;
 
 /**
  * Persists `settings` to `storage` as JSON -- but only if `settings.bindings` is conflict-free and

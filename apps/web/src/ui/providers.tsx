@@ -6,9 +6,13 @@ import { useGuestSession } from '../session/store.js';
 
 const PackContext = createContext<CompiledContentPack | null>(null);
 const SettingsContext = createContext<{
-  settings: Settings; onChange: (next: Settings) => void; keymap: ResolvedKeymap;
+  settings: Settings;
+  onChange: (next: Settings) => void;
+  keymap: ResolvedKeymap;
 } | null>(null);
-const SessionContext = createContext<{ session: GuestSession; snapshot: SessionSnapshot } | null>(null);
+const SessionContext = createContext<{ session: GuestSession; snapshot: SessionSnapshot } | null>(
+  null,
+);
 
 export function usePack(): CompiledContentPack {
   const value = useContext(PackContext);
@@ -16,22 +20,40 @@ export function usePack(): CompiledContentPack {
   return value;
 }
 
-export function useSettingsCtx(): { readonly settings: Settings; readonly onChange: (next: Settings) => void; readonly keymap: ResolvedKeymap } {
+export function useSettingsCtx(): {
+  readonly settings: Settings;
+  readonly onChange: (next: Settings) => void;
+  readonly keymap: ResolvedKeymap;
+} {
   const value = useContext(SettingsContext);
   if (!value) throw new Error('useSettingsCtx must be used within UiProviders');
   return value;
 }
 
-export function useSessionCtx(): { readonly session: GuestSession; readonly snapshot: SessionSnapshot } | null {
+export function useSessionCtx(): {
+  readonly session: GuestSession;
+  readonly snapshot: SessionSnapshot;
+} | null {
   return useContext(SessionContext);
 }
 
-function SessionBridge({ session, children }: Readonly<{ session: GuestSession; children: ReactNode }>): JSX.Element {
+function SessionBridge({
+  session,
+  children,
+}: Readonly<{ session: GuestSession; children: ReactNode }>): JSX.Element {
   const snapshot = useGuestSession(session);
-  return <SessionContext.Provider value={{ session, snapshot }}>{children}</SessionContext.Provider>;
+  return (
+    <SessionContext.Provider value={{ session, snapshot }}>{children}</SessionContext.Provider>
+  );
 }
 
-export function UiProviders({ pack, settings, onChangeSettings, session, children }: Readonly<{
+export function UiProviders({
+  pack,
+  settings,
+  onChangeSettings,
+  session,
+  children,
+}: Readonly<{
   pack: CompiledContentPack;
   settings: Settings;
   onChangeSettings: (next: Settings) => void;

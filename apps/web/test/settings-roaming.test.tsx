@@ -12,10 +12,16 @@ import type { SessionStorageLike } from '../src/session/storage.js';
 
 let pack: CompiledContentPack;
 
-const SIGNED_IN_ACCOUNT: AccountState = { status: 'signed-in', email: 'player@example.com', csrfToken: 'tok' };
+const SIGNED_IN_ACCOUNT: AccountState = {
+  status: 'signed-in',
+  email: 'player@example.com',
+  csrfToken: 'tok',
+};
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 afterEach(() => {
@@ -23,11 +29,15 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function fakeStorage(initial?: Readonly<Record<string, string>>): SessionStorageLike & { peek(key: string): string | null } {
+function fakeStorage(
+  initial?: Readonly<Record<string, string>>,
+): SessionStorageLike & { peek(key: string): string | null } {
   const values = new Map<string, string>(Object.entries(initial ?? {}));
   return {
     get: (key: string) => values.get(key) ?? null,
-    set: (key: string, value: string) => { values.set(key, value); },
+    set: (key: string, value: string) => {
+      values.set(key, value);
+    },
     peek: (key: string) => values.get(key) ?? null,
   };
 }
@@ -43,7 +53,10 @@ function routedFetcher(
     if (path.includes('/api/profile/settings')) {
       if (init?.method === 'PUT') {
         const headers = init.headers as Record<string, string> | undefined;
-        puts.push({ body: JSON.parse(init.body as string), csrfToken: headers?.['x-csrf-token'] ?? null });
+        puts.push({
+          body: JSON.parse(init.body as string),
+          csrfToken: headers?.['x-csrf-token'] ?? null,
+        });
         return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
       }
       return Promise.resolve(new Response(JSON.stringify(profileGet), { status: 200 }));
@@ -62,7 +75,12 @@ describe('settings roaming (Task 12)', () => {
     );
 
     const { container } = render(
-      <App fetcher={fetcher} storage={fakeStorage()} localStorage={localStorage} accountOverride={SIGNED_IN_ACCOUNT} />,
+      <App
+        fetcher={fetcher}
+        storage={fakeStorage()}
+        localStorage={localStorage}
+        accountOverride={SIGNED_IN_ACCOUNT}
+      />,
     );
     await screen.findByText(/signed in as/i);
 
@@ -83,13 +101,20 @@ describe('settings roaming (Task 12)', () => {
     const fetcher = routedFetcher({ settings: null, settingsVersion: 0 }, puts);
 
     render(
-      <App fetcher={fetcher} storage={fakeStorage()} localStorage={localStorage} accountOverride={SIGNED_IN_ACCOUNT} />,
+      <App
+        fetcher={fetcher}
+        storage={fakeStorage()}
+        localStorage={localStorage}
+        accountOverride={SIGNED_IN_ACCOUNT}
+      />,
     );
     await screen.findByText(/signed in as/i);
 
     await waitFor(() => expect(puts).toHaveLength(1));
     const seedPut = puts[0]!;
-    expect(JSON.parse((seedPut.body as { settingsJson: string }).settingsJson)).toEqual(DEFAULT_SETTINGS);
+    expect(JSON.parse((seedPut.body as { settingsJson: string }).settingsJson)).toEqual(
+      DEFAULT_SETTINGS,
+    );
     expect(seedPut.csrfToken).toBe('tok');
   });
 
@@ -102,7 +127,12 @@ describe('settings roaming (Task 12)', () => {
     const fetcher = routedFetcher({ settings: null, settingsVersion: 0 }, puts);
 
     render(
-      <App fetcher={fetcher} storage={fakeStorage()} localStorage={localStorage} accountOverride={SIGNED_IN_ACCOUNT} />,
+      <App
+        fetcher={fetcher}
+        storage={fakeStorage()}
+        localStorage={localStorage}
+        accountOverride={SIGNED_IN_ACCOUNT}
+      />,
     );
     await screen.findByRole('grid', { name: /dungeon/i });
     // Let the boot-time roam-seed PUT land before exercising the change-driven debounce below.
@@ -164,7 +194,12 @@ describe('settings roaming (Task 12)', () => {
     const fetcher = routedFetcher({ settings: 'not json{{{', settingsVersion: 9 }, puts);
 
     render(
-      <App fetcher={fetcher} storage={fakeStorage()} localStorage={localStorage} accountOverride={SIGNED_IN_ACCOUNT} />,
+      <App
+        fetcher={fetcher}
+        storage={fakeStorage()}
+        localStorage={localStorage}
+        accountOverride={SIGNED_IN_ACCOUNT}
+      />,
     );
 
     expect(await screen.findByRole('option', { name: /enter the deep/i })).toBeInTheDocument();

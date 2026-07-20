@@ -24,19 +24,25 @@ export function selectPopulationIntent(context: PopulationIntentContext): Popula
   return 'hold';
 }
 
-export function updatePopulationIntent(input: Readonly<{
-  eventId: OpaqueId;
-  actorId: OpaqueId;
-  state: ActorBehaviorState;
-  intent: PopulationIntent;
-  targetCategory: IntentTargetCategory;
-}>): Readonly<{ state: ActorBehaviorState; event: ActorIntentChangedEvent | null }> {
+export function updatePopulationIntent(
+  input: Readonly<{
+    eventId: OpaqueId;
+    actorId: OpaqueId;
+    state: ActorBehaviorState;
+    intent: PopulationIntent;
+    targetCategory: IntentTargetCategory;
+  }>,
+): Readonly<{ state: ActorBehaviorState; event: ActorIntentChangedEvent | null }> {
   if (input.state.intent === input.intent) return { state: input.state, event: null };
   return {
     state: { ...input.state, intent: input.intent },
     event: {
-      type: 'actor.intent-changed', eventId: input.eventId, actorId: input.actorId,
-      intent: input.intent, presentation: `intent.${input.intent}`, targetCategory: input.targetCategory,
+      type: 'actor.intent-changed',
+      eventId: input.eventId,
+      actorId: input.actorId,
+      intent: input.intent,
+      presentation: `intent.${input.intent}`,
+      targetCategory: input.targetCategory,
     },
   };
 }

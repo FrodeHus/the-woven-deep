@@ -4,7 +4,16 @@ import '@testing-library/jest-dom/vitest';
 import { StatusBar } from './StatusBar.js';
 
 const baseProjection = {
-  hero: { name: 'Ashwalker', conditions: [] as { conditionId: string; name: string; color: string; stacks: number; remaining: number }[] },
+  hero: {
+    name: 'Ashwalker',
+    conditions: [] as {
+      conditionId: string;
+      name: string;
+      color: string;
+      stacks: number;
+      remaining: number;
+    }[],
+  },
   floor: { depth: 3, town: false },
   metrics: { turnsElapsed: 42 },
 };
@@ -34,13 +43,21 @@ describe('StatusBar', () => {
     expect(document.querySelector('.condition-badge')).toBeNull();
   });
 
-  it('renders a glyph-plus-name condition badge (not color-only) tinted from the condition\'s projected color', () => {
+  it("renders a glyph-plus-name condition badge (not color-only) tinted from the condition's projected color", () => {
     const withCondition = {
       projection: {
         ...baseProjection,
         hero: {
           ...baseProjection.hero,
-          conditions: [{ conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50 }],
+          conditions: [
+            {
+              conditionId: 'condition.poisoned',
+              name: 'Poisoned',
+              color: '#7ac86a',
+              stacks: 1,
+              remaining: 50,
+            },
+          ],
         },
       },
     } as never;
@@ -58,8 +75,20 @@ describe('StatusBar', () => {
         hero: {
           ...baseProjection.hero,
           conditions: [
-            { conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50 },
-            { conditionId: 'condition.bleeding', name: 'Bleeding', color: '#c85a5a', stacks: 3, remaining: 20 },
+            {
+              conditionId: 'condition.poisoned',
+              name: 'Poisoned',
+              color: '#7ac86a',
+              stacks: 1,
+              remaining: 50,
+            },
+            {
+              conditionId: 'condition.bleeding',
+              name: 'Bleeding',
+              color: '#c85a5a',
+              stacks: 3,
+              remaining: 20,
+            },
           ],
         },
       },

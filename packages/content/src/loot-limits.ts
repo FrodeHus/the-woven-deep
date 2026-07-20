@@ -5,7 +5,13 @@ export const MAX_LOOT_CHOICE_QUANTITY = 256;
 export const MAX_LOOT_CREATED_UNITS = 4096;
 
 export function boundedProduct(left: number, right: number, maximum: number): number {
-  if (!Number.isSafeInteger(left) || left < 0 || !Number.isSafeInteger(right) || right < 0
-    || left > Math.floor(maximum / Math.max(1, right))) return maximum + 1;
+  if (
+    !Number.isSafeInteger(left) ||
+    left < 0 ||
+    !Number.isSafeInteger(right) ||
+    right < 0 ||
+    left > Math.floor(maximum / Math.max(1, right))
+  )
+    return maximum + 1;
   return left * right;
 }

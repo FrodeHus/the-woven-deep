@@ -12,15 +12,25 @@ function fixture(input: Readonly<{ hidden?: boolean; wall?: boolean; range?: num
   const run = createDemoRun();
   const source = { ...run.actors[0]!, x: 1, y: 1 };
   const target: ActorState = {
-    ...source, actorId: 'monster.hidden', contentId: 'monster.hidden', playerControlled: false,
-    x: 4, disposition: 'hostile',
+    ...source,
+    actorId: 'monster.hidden',
+    contentId: 'monster.hidden',
+    playerControlled: false,
+    x: 4,
+    disposition: 'hostile',
   };
   const tiles = Array<TileId>(21).fill(1);
   if (input.wall) tiles[1 * 7 + 3] = 0;
   const floor = { ...run.floors[0]!, width: 7, height: 3, tiles };
-  const visibilityWords = input.hidden ? [0] : computeFieldOfView({
-    width: floor.width, height: floor.height, tiles, origin: source, radius: 10,
-  });
+  const visibilityWords = input.hidden
+    ? [0]
+    : computeFieldOfView({
+        width: floor.width,
+        height: floor.height,
+        tiles,
+        origin: source,
+        radius: 10,
+      });
   return {
     targetingId: 'target.actor' as const,
     sourceActor: source,
@@ -38,7 +48,11 @@ describe('target validation', () => {
   it('accepts a visible unobstructed line target', () => {
     expect(validateTarget(fixture())).toEqual({
       ok: true,
-      cells: [{ x: 2, y: 1 }, { x: 3, y: 1 }, { x: 4, y: 1 }],
+      cells: [
+        { x: 2, y: 1 },
+        { x: 3, y: 1 },
+        { x: 4, y: 1 },
+      ],
       targetActorId: 'monster.hidden',
     });
   });
@@ -54,25 +68,44 @@ describe('target validation', () => {
     const intensity = [...input.illumination.intensity];
     intensity[1 * input.floor.width + 4] = 0;
     expect(validateTarget({ ...input, illumination: { intensity } })).toEqual({
-      ok: false, reason: 'target.not_visible',
+      ok: false,
+      reason: 'target.not_visible',
     });
   });
 
   it('rejects blocked and out-of-range targets with public reasons', () => {
-    expect(validateTarget({
-      ...fixture({ wall: true }), targetingId: 'target.line', targetActorId: null,
-      target: { x: 4, y: 1 }, visibilityWords: [0xffff_ffff],
-    })).toEqual({ ok: false, reason: 'target.blocked' });
-    expect(validateTarget(fixture({ range: 2 }))).toEqual({ ok: false, reason: 'target.out_of_range' });
+    expect(
+      validateTarget({
+        ...fixture({ wall: true }),
+        targetingId: 'target.line',
+        targetActorId: null,
+        target: { x: 4, y: 1 },
+        visibilityWords: [0xffff_ffff],
+      }),
+    ).toEqual({ ok: false, reason: 'target.blocked' });
+    expect(validateTarget(fixture({ range: 2 }))).toEqual({
+      ok: false,
+      reason: 'target.out_of_range',
+    });
   });
 
   it('supports self and visible cell targeting', () => {
     const input = fixture();
     expect(validateTarget({ ...input, targetingId: 'target.self', targetActorId: null })).toEqual({
-      ok: true, cells: [{ x: 1, y: 1 }], targetActorId: 'hero.demo',
+      ok: true,
+      cells: [{ x: 1, y: 1 }],
+      targetActorId: 'hero.demo',
     });
-    expect(validateTarget({ ...input, targetingId: 'target.cell', targetActorId: null, target: { x: 2, y: 1 } })).toEqual({
-      ok: true, cells: [{ x: 2, y: 1 }],
+    expect(
+      validateTarget({
+        ...input,
+        targetingId: 'target.cell',
+        targetActorId: null,
+        target: { x: 2, y: 1 },
+      }),
+    ).toEqual({
+      ok: true,
+      cells: [{ x: 2, y: 1 }],
     });
   });
 });

@@ -2,7 +2,7 @@ services:
   rogue:
     build: .
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       NODE_ENV: production
       DATABASE_PATH: /data/rogue.sqlite
@@ -22,7 +22,13 @@ services:
       - ${CONTENT_SOURCE:-./content}:/app/content:ro
       - rogue-data:/data
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
       interval: 10s
       timeout: 3s
       retries: 5

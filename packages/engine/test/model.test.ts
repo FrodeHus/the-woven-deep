@@ -46,25 +46,32 @@ describe('engine model boundary', () => {
     expect(run.rng).toHaveProperty('merchant-runtime');
     expect(run.rng).toHaveProperty('run-records');
     expect(run.actors[0]?.behaviorState).toEqual({
-      intent: 'hold', goal: null, lastKnownTargets: [], investigation: null,
+      intent: 'hold',
+      goal: null,
+      lastKnownTargets: [],
+      investigation: null,
     });
   });
 
   it('rejects population membership that does not resolve in both directions', () => {
     const run = createDemoRun();
-    expect(() => validateActiveRun({
-      ...run,
-      actors: [{ ...run.actors[0]!, populationId: 'population.missing', populationRoleId: null }],
-    })).toThrow(/populationId|population membership/i);
+    expect(() =>
+      validateActiveRun({
+        ...run,
+        actors: [{ ...run.actors[0]!, populationId: 'population.missing', populationRoleId: null }],
+      }),
+    ).toThrow(/populationId|population membership/i);
   });
 
   it('rejects duplicate actor identifiers', () => {
     const run = createDemoRun();
 
-    expect(() => validateActiveRun({
-      ...run,
-      actors: [run.actors[0]!, run.actors[0]!],
-    })).toThrow(/actors\.1\.actorId.*strictly increasing/i);
+    expect(() =>
+      validateActiveRun({
+        ...run,
+        actors: [run.actors[0]!, run.actors[0]!],
+      }),
+    ).toThrow(/actors\.1\.actorId.*strictly increasing/i);
   });
 
   it('rejects duplicate item identifiers', () => {
@@ -82,8 +89,9 @@ describe('engine model boundary', () => {
       location: { type: 'backpack' as const, actorId: run.hero.actorId },
     };
 
-    expect(() => validateActiveRun({ ...run, items: [item, item] }))
-      .toThrow(/items\.1\.itemId.*strictly increasing/i);
+    expect(() => validateActiveRun({ ...run, items: [item, item] })).toThrow(
+      /items\.1\.itemId.*strictly increasing/i,
+    );
   });
 
   it.each(['run.demo', 'command:001', 'hero-1'])('accepts opaque identifier %s', (id) => {

@@ -3,7 +3,16 @@ import type { ActorBehaviorState, ActorPopulationPresentation } from './populati
 
 export type AttributeName = 'might' | 'agility' | 'vitality' | 'wits' | 'resolve';
 export type Disposition = 'friendly' | 'neutral' | 'hostile';
-export type EquipmentSlot = 'main-hand' | 'off-hand' | 'body' | 'head' | 'hands' | 'feet' | 'neck' | 'left-ring' | 'right-ring';
+export type EquipmentSlot =
+  | 'main-hand'
+  | 'off-hand'
+  | 'body'
+  | 'head'
+  | 'hands'
+  | 'feet'
+  | 'neck'
+  | 'left-ring'
+  | 'right-ring';
 
 export interface BaseAttributes {
   readonly might: number;
@@ -67,12 +76,18 @@ export function emptyEquipment(): EquipmentState {
   };
 }
 
-export function actorById(run: Pick<ActiveRun, 'actors'>, actorId: OpaqueId): ActorState | undefined {
+export function actorById(
+  run: Pick<ActiveRun, 'actors'>,
+  actorId: OpaqueId,
+): ActorState | undefined {
   return run.actors.find((actor) => actor.actorId === actorId);
 }
 
-export function replaceActor(actors: readonly ActorState[], actor: ActorState): readonly ActorState[] {
-  return actors.map((candidate) => candidate.actorId === actor.actorId ? actor : candidate);
+export function replaceActor(
+  actors: readonly ActorState[],
+  actor: ActorState,
+): readonly ActorState[] {
+  return actors.map((candidate) => (candidate.actorId === actor.actorId ? actor : candidate));
 }
 
 export function withActor(state: ActiveRun, actor: ActorState): ActiveRun {

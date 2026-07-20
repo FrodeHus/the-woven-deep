@@ -3,13 +3,24 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import type { HeroChoices, Uint32State } from '@woven-deep/engine';
 import { DEFAULT_SETTINGS, type Settings } from '../../session/settings.js';
 import {
-  initialWizardState, wizardChoices, wizardReduce, type WizardAction, type WizardState,
+  initialWizardState,
+  wizardChoices,
+  wizardReduce,
+  type WizardAction,
+  type WizardState,
 } from '../../session/wizard-reducer.js';
 import { Button } from '../components/button.js';
 import { HeroRecord } from './chargen/HeroRecord.js';
 import { STEP_LABELS, StepMenu } from './chargen/StepMenu.js';
 import {
-  AttributesStep, CallingStep, IdentityStep, KitStep, OriginStep, ReviewStep, TraitsStep, type StepProps,
+  AttributesStep,
+  CallingStep,
+  IdentityStep,
+  KitStep,
+  OriginStep,
+  ReviewStep,
+  TraitsStep,
+  type StepProps,
 } from './chargen/steps.js';
 
 export interface ChargenScreenProps {
@@ -36,9 +47,15 @@ export interface ChargenScreenProps {
  * unrepresentable in exactly one place.
  */
 export function ChargenScreen({
-  pack, seed, settings = DEFAULT_SETTINGS, onChangeSettings = () => {}, onConfirm,
+  pack,
+  seed,
+  settings = DEFAULT_SETTINGS,
+  onChangeSettings = () => {},
+  onConfirm,
 }: ChargenScreenProps): JSX.Element {
-  const [state, setState] = useState<WizardState>(() => initialWizardState(seed, settings.onboarding === 'on'));
+  const [state, setState] = useState<WizardState>(() =>
+    initialWizardState(seed, settings.onboarding === 'on'),
+  );
   const context = useMemo(() => ({ pack, seed }), [pack, seed]);
 
   const dispatch = (action: WizardAction): void => {
@@ -76,7 +93,10 @@ export function ChargenScreen({
 
   return (
     <div className="flex h-screen flex-col gap-2 bg-deep p-2 text-fg font-mono">
-      <header aria-label={`Step ${state.step} of 7: ${STEP_LABELS[state.step]}`} className="flex items-baseline gap-2 border-b border-line px-1 pb-2">
+      <header
+        aria-label={`Step ${state.step} of 7: ${STEP_LABELS[state.step]}`}
+        className="flex items-baseline gap-2 border-b border-line px-1 pb-2"
+      >
         <h1 className="m-0 font-serif text-lg text-accent-strong">Weave a hero</h1>
         <span className="text-sm uppercase tracking-wide text-muted">{`Step ${state.step} of 7 — ${STEP_LABELS[state.step]}`}</span>
       </header>
@@ -95,12 +115,21 @@ export function ChargenScreen({
             {state.step === 7 && <ReviewStep {...stepProps} />}
           </main>
           <nav className="flex items-center justify-between gap-2 border-t border-line pt-2">
-            <Button type="button" variant="outline" onClick={() => dispatch({ type: 'back' })} disabled={state.step === 1}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => dispatch({ type: 'back' })}
+              disabled={state.step === 1}
+            >
               {'◂ BACK'}
             </Button>
             <span className="text-sm text-muted">{`${state.step} / 7`}</span>
             {state.step < 7 && (
-              <Button type="button" onClick={() => dispatch({ type: 'next' })} disabled={!canAdvance}>
+              <Button
+                type="button"
+                onClick={() => dispatch({ type: 'next' })}
+                disabled={!canAdvance}
+              >
                 {'NEXT ▸'}
               </Button>
             )}

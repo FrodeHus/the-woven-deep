@@ -4,7 +4,7 @@ import { DERIVED_STAT_LABELS, playerVisibleDerivedStats } from '@/ui/derived-sta
 import { wizardPreview } from '../../../../session/wizard-reducer.js';
 import { backgroundEntries, classEntries, traitEntries } from '../../../../session/pack-queries.js';
 import { DotLeaderRow } from '../chargen-components.js';
-import { type StepProps } from './step-content.js';
+import type { StepProps } from './step-content.js';
 
 export function ReviewStep({ state, pack }: StepProps): JSX.Element {
   const classEntry = classEntries(pack).find((entry) => entry.id === state.classId);
@@ -22,7 +22,9 @@ export function ReviewStep({ state, pack }: StepProps): JSX.Element {
         <DotLeaderRow label="Origin" value={background?.name ?? '—'} />
         <DotLeaderRow
           label="Traits"
-          value={chosenTraits.length > 0 ? chosenTraits.map((trait) => trait.name).join(', ') : 'None'}
+          value={
+            chosenTraits.length > 0 ? chosenTraits.map((trait) => trait.name).join(', ') : 'None'
+          }
         />
       </div>
       <div className="flex flex-col gap-1 border-t border-line pt-2">
@@ -39,7 +41,11 @@ export function ReviewStep({ state, pack }: StepProps): JSX.Element {
         <div className="flex flex-col gap-1 border-t border-line pt-2">
           <h3 className="m-0 text-sm font-semibold text-fg-strong">Derived stats</h3>
           {playerVisibleDerivedStats().map((statName) => (
-            <DotLeaderRow key={statName} label={DERIVED_STAT_LABELS[statName]} value={String(stats[statName])} />
+            <DotLeaderRow
+              key={statName}
+              label={DERIVED_STAT_LABELS[statName]}
+              value={String(stats[statName])}
+            />
           ))}
         </div>
       )}

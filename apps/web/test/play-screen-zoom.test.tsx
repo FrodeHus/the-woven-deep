@@ -5,7 +5,10 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  DEFAULT_GUEST_HERO, createNewRun, encodeActiveRun, type ActiveRun,
+  DEFAULT_GUEST_HERO,
+  createNewRun,
+  encodeActiveRun,
+  type ActiveRun,
 } from '@woven-deep/engine';
 import { GuestSession } from '../src/session/guest-session.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
@@ -18,14 +21,18 @@ let pack: CompiledContentPack;
 const SEED = [11, 22, 33, 44] as const;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 function fakeStorage(): SessionStorageLike {
   const store = new Map<string, string>();
   return {
     get: (key: string) => store.get(key) ?? null,
-    set: (key: string, value: string) => { store.set(key, value); },
+    set: (key: string, value: string) => {
+      store.set(key, value);
+    },
   };
 }
 
@@ -41,8 +48,11 @@ function sessionAtTownStairs(): GuestSession {
   const town = fresh.floors.find((floor) => floor.floorId === heroActor.floorId)!;
   const atStairDown: ActiveRun = {
     ...fresh,
-    actors: fresh.actors.map((actor) => actor.actorId === heroActor.actorId
-      ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y } : actor),
+    actors: fresh.actors.map((actor) =>
+      actor.actorId === heroActor.actorId
+        ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y }
+        : actor,
+    ),
   };
   const storage = fakeStorage();
   storage.set(SAVE_KEY, encodeActiveRun(atStairDown));
@@ -53,7 +63,15 @@ function sessionAtTownStairs(): GuestSession {
  * jsdom's real (always-zero) layout box, and independent of any other mocked element. */
 function stubRect(element: Element, width: number, height = 600): void {
   vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
-    width, height, top: 0, left: 0, right: width, bottom: height, x: 0, y: 0, toJSON: () => ({}),
+    width,
+    height,
+    top: 0,
+    left: 0,
+    right: width,
+    bottom: height,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
   } as DOMRect);
 }
 
@@ -70,7 +88,9 @@ afterEach(() => {
 // no separate container-width measurement to drive.
 describe('PlayScreen playfield zoom', () => {
   it('applies a --zoom > 1 to .playfield when a small floor (town) sits in a spacious pane', () => {
-    const { container } = render(withUiProviders(pack, <PlayScreen session={session()} pack={pack} />));
+    const { container } = render(
+      withUiProviders(pack, <PlayScreen session={session()} pack={pack} />),
+    );
     const mapPane = container.querySelector('.map-pane')!;
     const probe = container.querySelector('.cell-probe')!;
     // `.cell-probe-base` is what `zoomForFloor` is actually fed (see PlayScreen's measure effect):
@@ -92,7 +112,9 @@ describe('PlayScreen playfield zoom', () => {
   });
 
   it('leaves --zoom at 1 when the floor already fills the pane at 1x (dungeon-sized floor case)', () => {
-    const { container } = render(withUiProviders(pack, <PlayScreen session={session()} pack={pack} />));
+    const { container } = render(
+      withUiProviders(pack, <PlayScreen session={session()} pack={pack} />),
+    );
     const mapPane = container.querySelector('.map-pane')!;
     const probe = container.querySelector('.cell-probe')!;
     const probeBase = container.querySelector('.cell-probe-base')!;
@@ -116,7 +138,9 @@ describe('PlayScreen playfield zoom', () => {
   // dependency to `[]` and confirming this test goes red, then restoring it.
   it('re-derives --zoom when the floor changes (a descend), without any new pane resize event', () => {
     const guestSession = sessionAtTownStairs();
-    const { container } = render(withUiProviders(pack, <PlayScreen session={guestSession} pack={pack} />));
+    const { container } = render(
+      withUiProviders(pack, <PlayScreen session={guestSession} pack={pack} />),
+    );
     const mapPane = container.querySelector('.map-pane')!;
     const probe = container.querySelector('.cell-probe')!;
     const probeBase = container.querySelector('.cell-probe-base')!;

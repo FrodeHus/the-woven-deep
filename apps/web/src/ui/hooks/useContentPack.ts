@@ -24,7 +24,10 @@ export function useContentPack(fetcher: typeof fetch): UseContentPackResult {
         if (!cancelled) setPack(loaded);
       },
       (reason: unknown) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : 'The content service is unavailable.');
+        if (!cancelled)
+          setError(
+            reason instanceof Error ? reason.message : 'The content service is unavailable.',
+          );
       },
     );
     return () => {

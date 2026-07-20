@@ -22,7 +22,7 @@ export async function runServerStartup(input: {
   const lifecycle = registerShutdownHandlers({
     database: input.database,
     signals: input.signals,
-    onError: input.onShutdownError,
+    onError: (error) => input.onShutdownError(error),
   });
 
   try {
@@ -46,11 +46,9 @@ export async function runServerStartup(input: {
     try {
       await lifecycle.shutdown();
     } catch (cleanupError) {
-      throw new AggregateError(
-        [error, cleanupError],
-        'Server startup and cleanup both failed',
-        { cause: error },
-      );
+      throw new AggregateError([error, cleanupError], 'Server startup and cleanup both failed', {
+        cause: error,
+      });
     }
     throw error;
   }

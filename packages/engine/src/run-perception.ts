@@ -18,13 +18,16 @@ export interface FloorPerception extends RefreshedPerception {
  * entities and living-or-dead actors, the effective feature tiles, the hero's sight, and the
  * item light sources on that floor.
  */
-export function floorPerception(input: Readonly<{
-  state: ActiveRun;
-  content: CompiledContentPack;
-  actorId?: OpaqueId;
-  floorId?: OpaqueId;
-}>): FloorPerception {
-  const actor = input.actorId === undefined ? heroActor(input.state) : actorById(input.state, input.actorId);
+export function floorPerception(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    actorId?: OpaqueId;
+    floorId?: OpaqueId;
+  }>,
+): FloorPerception {
+  const actor =
+    input.actorId === undefined ? heroActor(input.state) : actorById(input.state, input.actorId);
   if (!actor) throw new Error(`internal invariant: actor ${input.actorId} does not exist`);
   const floorId = input.floorId ?? actor.floorId;
   const floor = input.state.floors.find((candidate) => candidate.floorId === floorId);
@@ -40,15 +43,21 @@ export function floorPerception(input: Readonly<{
     floor: effectiveFloor,
     hero: heroPerception(input.state.hero, actor),
     actors: positions,
-    additionalLights: itemLightSources({ run: input.state, content: input.content, floorId: floor.floorId }),
+    additionalLights: itemLightSources({
+      run: input.state,
+      content: input.content,
+      floorId: floor.floorId,
+    }),
   });
   return { actor, floor: effectiveFloor, ...perception };
 }
 
 /** The hero's perception of its own active floor. */
-export function heroFloorPerception(input: Readonly<{
-  state: ActiveRun;
-  content: CompiledContentPack;
-}>): FloorPerception {
+export function heroFloorPerception(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+  }>,
+): FloorPerception {
   return floorPerception(input);
 }

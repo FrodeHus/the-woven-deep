@@ -3,22 +3,37 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { TILE_DEFINITIONS } from '@woven-deep/engine';
 import { HINTS } from '../../session/onboarding.js';
 import {
-  ACTION_IDS, ACTION_LABELS, chordKey, type ActionId, type ResolvedKeymap,
+  ACTION_IDS,
+  ACTION_LABELS,
+  chordKey,
+  type ActionId,
+  type ResolvedKeymap,
 } from '../../session/settings.js';
 import { humanize } from '../labels.js';
 import { usePack, useSettingsCtx } from '../providers.js';
 
 const MOVEMENT_ACTIONS: readonly ActionId[] = ACTION_IDS.filter((id) => id.startsWith('move.'));
-const SCREEN_ACTIONS: readonly ActionId[] = ['character-sheet', 'map-journal', 'codex', 'settings', 'help'];
+const SCREEN_ACTIONS: readonly ActionId[] = [
+  'character-sheet',
+  'map-journal',
+  'codex',
+  'settings',
+  'help',
+];
 const ACTION_ACTIONS: readonly ActionId[] = ACTION_IDS.filter(
   (id) => !MOVEMENT_ACTIONS.includes(id) && !SCREEN_ACTIONS.includes(id),
 );
 
-function ControlsRow({ action, keymap }: Readonly<{ action: ActionId; keymap: ResolvedKeymap }>): JSX.Element {
+function ControlsRow({
+  action,
+  keymap,
+}: Readonly<{ action: ActionId; keymap: ResolvedKeymap }>): JSX.Element {
   return (
     <li className="flex items-center gap-3">
       <span className="min-w-40 text-sm">{ACTION_LABELS[action]}</span>
-      <span className="min-w-16 font-mono text-sm text-muted">{chordKey(keymap.byAction[action])}</span>
+      <span className="min-w-16 font-mono text-sm text-muted">
+        {chordKey(keymap.byAction[action])}
+      </span>
     </li>
   );
 }
@@ -34,22 +49,32 @@ function ControlsRow({ action, keymap }: Readonly<{ action: ActionId; keymap: Re
 function ControlsSection({ keymap }: Readonly<{ keymap: ResolvedKeymap }>): JSX.Element {
   return (
     <section aria-labelledby="help-controls-heading" className="flex flex-col gap-2">
-      <h3 id="help-controls-heading" className="text-sm font-semibold text-fg-strong">Controls</h3>
+      <h3 id="help-controls-heading" className="text-sm font-semibold text-fg-strong">
+        Controls
+      </h3>
 
       <h4 className="text-sm font-semibold text-fg-strong">Movement</h4>
       <ul className="flex flex-col gap-1">
-        {MOVEMENT_ACTIONS.map((action) => <ControlsRow key={action} action={action} keymap={keymap} />)}
+        {MOVEMENT_ACTIONS.map((action) => (
+          <ControlsRow key={action} action={action} keymap={keymap} />
+        ))}
       </ul>
-      <p className="text-sm text-muted">Arrow keys and the numpad always move too -- always available, not rebindable.</p>
+      <p className="text-sm text-muted">
+        Arrow keys and the numpad always move too -- always available, not rebindable.
+      </p>
 
       <h4 className="text-sm font-semibold text-fg-strong">Actions</h4>
       <ul className="flex flex-col gap-1">
-        {ACTION_ACTIONS.map((action) => <ControlsRow key={action} action={action} keymap={keymap} />)}
+        {ACTION_ACTIONS.map((action) => (
+          <ControlsRow key={action} action={action} keymap={keymap} />
+        ))}
       </ul>
 
       <h4 className="text-sm font-semibold text-fg-strong">Screens</h4>
       <ul className="flex flex-col gap-1">
-        {SCREEN_ACTIONS.map((action) => <ControlsRow key={action} action={action} keymap={keymap} />)}
+        {SCREEN_ACTIONS.map((action) => (
+          <ControlsRow key={action} action={action} keymap={keymap} />
+        ))}
       </ul>
       <p className="text-sm text-muted">Escape closes whatever screen is currently open.</p>
     </section>
@@ -65,17 +90,28 @@ function rgbToCss(color: readonly [number, number, number]): string {
  * vaults reuse the same fixture presentation). Derived from the pack's own vault entries -- no
  * hand-maintained fixture list.
  */
-function collectLightFixtures(pack: CompiledContentPack): ReadonlyArray<Readonly<{
-  token: string; glyph: string; color: readonly [number, number, number];
-}>> {
-  const seen = new Map<string, Readonly<{ token: string; glyph: string; color: readonly [number, number, number] }>>();
+function collectLightFixtures(pack: CompiledContentPack): ReadonlyArray<
+  Readonly<{
+    token: string;
+    glyph: string;
+    color: readonly [number, number, number];
+  }>
+> {
+  const seen = new Map<
+    string,
+    Readonly<{ token: string; glyph: string; color: readonly [number, number, number] }>
+  >();
   for (const entry of pack.entries) {
     if (entry.kind !== 'vault') continue;
     for (const legendEntry of Object.values(entry.legend)) {
       const light = legendEntry.light;
       if (!light || !light.enabled) continue;
       if (seen.has(light.presentationToken)) continue;
-      seen.set(light.presentationToken, { token: light.presentationToken, glyph: light.glyph, color: light.color });
+      seen.set(light.presentationToken, {
+        token: light.presentationToken,
+        glyph: light.glyph,
+        color: light.color,
+      });
     }
   }
   return Array.from(seen.values());
@@ -97,7 +133,9 @@ function GlyphLegendSection({ pack }: Readonly<{ pack: CompiledContentPack }>): 
 
   return (
     <section aria-labelledby="help-legend-heading" className="flex flex-col gap-2">
-      <h3 id="help-legend-heading" className="text-sm font-semibold text-fg-strong">Glyph legend</h3>
+      <h3 id="help-legend-heading" className="text-sm font-semibold text-fg-strong">
+        Glyph legend
+      </h3>
 
       <h4 className="text-sm font-semibold text-fg-strong">Hero</h4>
       <ul className="flex flex-col gap-1">
@@ -111,7 +149,9 @@ function GlyphLegendSection({ pack }: Readonly<{ pack: CompiledContentPack }>): 
       <ul className="flex flex-col gap-1">
         {monsters.map((monster) => (
           <li key={monster.id} className="flex items-center gap-3">
-            <span className="min-w-6 font-mono text-sm" style={{ color: monster.color }}>{monster.glyph}</span>
+            <span className="min-w-6 font-mono text-sm" style={{ color: monster.color }}>
+              {monster.glyph}
+            </span>
             <span className="text-sm">{monster.name}</span>
           </li>
         ))}
@@ -121,7 +161,9 @@ function GlyphLegendSection({ pack }: Readonly<{ pack: CompiledContentPack }>): 
       <ul className="flex flex-col gap-1">
         {items.map((item) => (
           <li key={item.id} className="flex items-center gap-3">
-            <span className="min-w-6 font-mono text-sm" style={{ color: item.color }}>{item.glyph}</span>
+            <span className="min-w-6 font-mono text-sm" style={{ color: item.color }}>
+              {item.glyph}
+            </span>
             <span className="text-sm">{item.name}</span>
             <span className="text-sm text-muted">({item.category})</span>
           </li>
@@ -132,7 +174,9 @@ function GlyphLegendSection({ pack }: Readonly<{ pack: CompiledContentPack }>): 
       <ul className="flex flex-col gap-1">
         {TILE_DEFINITIONS.map((tile) => (
           <li key={tile.id} className="flex items-center gap-3">
-            <span className="min-w-6 font-mono text-sm">{tile.glyph === ' ' ? ' ' : tile.glyph}</span>
+            <span className="min-w-6 font-mono text-sm">
+              {tile.glyph === ' ' ? ' ' : tile.glyph}
+            </span>
             <span className="text-sm">{tile.name}</span>
           </li>
         ))}
@@ -142,7 +186,9 @@ function GlyphLegendSection({ pack }: Readonly<{ pack: CompiledContentPack }>): 
       <ul className="flex flex-col gap-1">
         {fixtures.map((fixture) => (
           <li key={fixture.token} className="flex items-center gap-3">
-            <span className="min-w-6 font-mono text-sm" style={{ color: rgbToCss(fixture.color) }}>{fixture.glyph}</span>
+            <span className="min-w-6 font-mono text-sm" style={{ color: rgbToCss(fixture.color) }}>
+              {fixture.glyph}
+            </span>
             <span className="text-sm">{humanize(fixture.token)}</span>
           </li>
         ))}
@@ -160,7 +206,9 @@ function GlyphLegendSection({ pack }: Readonly<{ pack: CompiledContentPack }>): 
 function MechanicsSection(): JSX.Element {
   return (
     <section aria-labelledby="help-mechanics-heading" className="flex flex-col gap-2">
-      <h3 id="help-mechanics-heading" className="text-sm font-semibold text-fg-strong">Mechanics notes</h3>
+      <h3 id="help-mechanics-heading" className="text-sm font-semibold text-fg-strong">
+        Mechanics notes
+      </h3>
       <dl className="flex flex-col gap-2 text-sm">
         <dt className="font-semibold text-fg-strong">Hunger</dt>
         <dd>
@@ -211,9 +259,13 @@ function MechanicsSection(): JSX.Element {
 function GuidanceSection({ keymap }: Readonly<{ keymap: ResolvedKeymap }>): JSX.Element {
   return (
     <section aria-labelledby="help-guidance-heading" className="flex flex-col gap-2">
-      <h3 id="help-guidance-heading" className="text-sm font-semibold text-fg-strong">Guidance</h3>
+      <h3 id="help-guidance-heading" className="text-sm font-semibold text-fg-strong">
+        Guidance
+      </h3>
       <ul className="flex flex-col gap-1 text-sm">
-        {HINTS.map((hint) => <li key={hint.id}>{hint.copy(keymap)}</li>)}
+        {HINTS.map((hint) => (
+          <li key={hint.id}>{hint.copy(keymap)}</li>
+        ))}
       </ul>
     </section>
   );

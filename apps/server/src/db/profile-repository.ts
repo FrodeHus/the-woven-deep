@@ -84,7 +84,17 @@ export class ProfileRepository {
     };
   }
 
-  updateSettings(input: { id: string; settingsJson: string; settingsVersion: number; nowIso: string }): void {
-    this.updateSettingsStatement.run(input.settingsJson, input.settingsVersion, input.nowIso, input.id);
+  updateSettings(input: {
+    id: string;
+    settingsJson: string;
+    settingsVersion: number;
+    nowIso: string;
+  }): void {
+    this.updateSettingsStatement.run(
+      input.settingsJson,
+      input.settingsVersion,
+      input.nowIso,
+      input.id,
+    );
   }
 }

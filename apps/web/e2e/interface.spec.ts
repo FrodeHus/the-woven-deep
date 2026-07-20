@@ -46,12 +46,110 @@ const SEED_QUERY = '/play?quickstart=1&seed=11.22.33.44';
 
 /** Depth 1: chase the intercepting monster and bump-attack until a Training beetle dies at (27,10).
  * Lifted verbatim from `town-loop`/`guest-play` -- same descend origin, same deterministic floor. */
-const KILL = ['4', '7', '8', '8', '8', '8', '8', '8', '8', '7', '7', '7', '8', '8', '8', '8', '8', '8', '8', '8', '8', '8', '7', '4', '1', '2', '2', '2', '2', '2', '2', '2', '1', '4', '4'];
+const KILL = [
+  '4',
+  '7',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '7',
+  '7',
+  '7',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '7',
+  '4',
+  '1',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '1',
+  '4',
+  '4',
+];
 /** Depth 1: from the post-KILL cell back to the stair-up at (38,23). Lifted from `town-loop`. */
-const TO_STAIR_UP = ['6', '9', '8', '8', '8', '8', '8', '8', '8', '9', '6', '3', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '3', '3', '3', '2', '3', '6'];
+const TO_STAIR_UP = [
+  '6',
+  '9',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '9',
+  '6',
+  '3',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '3',
+  '3',
+  '3',
+  '2',
+  '3',
+  '6',
+];
 /** Town: from the stair cell (6,10) up to the walkway and east into the curios stall's mouth,
  * ending directly south of the dealer at (25,3) -- Chebyshev-adjacent, so trade can open. */
-const TO_CURIOS = ['8', '8', '8', '8', '8', '8', '6', '6', '6', '6', '6', '6', '6', '6', '6', '6', '6', '6', '6', '6', '6', '6', '6', '6', '6', '8'];
+const TO_CURIOS = [
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '8',
+];
 
 async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
   for (const key of keys) await page.keyboard.press(key);
@@ -63,8 +161,10 @@ async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
 async function awaitKeyboardReady(page: Page): Promise<void> {
   await expect(async () => {
     await page.keyboard.press('g');
-    await expect(page.getByRole('log', { name: /adventure log/i }))
-      .toContainText(/nothing here to pick up/i, { timeout: 250 });
+    await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(
+      /nothing here to pick up/i,
+      { timeout: 250 },
+    );
   }).toPass();
 }
 
@@ -79,7 +179,9 @@ async function cycleOverlay(page: Page, key: string, testId: string): Promise<vo
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
 }
 
-test('the guest interface: overlays, rebinding, font scale, codex discovery, identify, and reset', async ({ page }) => {
+test('the guest interface: overlays, rebinding, font scale, codex discovery, identify, and reset', async ({
+  page,
+}) => {
   await page.goto(SEED_QUERY);
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
@@ -208,7 +310,9 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   // `KeyRouter.ts`'s `routeKey` ignores any keydown with `ctrlKey`/`metaKey` held, so the bare `k`
   // chord it shares with the default "Move north" binding does not also reach the game dispatcher
   // -- asserted directly below by checking the hero's cell is unchanged across the whole sequence.
-  const heroLabelBeforePalette = await page.getByLabel(/^Hero at \d+, \d+$/).getAttribute('aria-label');
+  const heroLabelBeforePalette = await page
+    .getByLabel(/^Hero at \d+, \d+$/)
+    .getAttribute('aria-label');
   await page.keyboard.press('Meta+k');
   const palette = page.getByTestId('command-palette');
   if (!(await palette.isVisible().catch(() => false))) {
@@ -252,7 +356,9 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
         'woven-deep.guest-portrait',
         'woven-deep.guest-codex',
       ].filter((key) => sessionStorage.getItem(key) !== null),
-      local: ['woven-deep.settings.v1', 'woven-deep.onboarding.v1'].filter((key) => localStorage.getItem(key) !== null),
+      local: ['woven-deep.settings.v1', 'woven-deep.onboarding.v1'].filter(
+        (key) => localStorage.getItem(key) !== null,
+      ),
     }));
     expect(remaining.session).toEqual([]);
     expect(remaining.local).toEqual([]);

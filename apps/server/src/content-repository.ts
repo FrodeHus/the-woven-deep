@@ -5,11 +5,15 @@ export class ContentPackRepository {
   constructor(private readonly database: Database.Database) {}
 
   put(pack: CompiledContentPack): void {
-    this.database.prepare(`
+    this.database
+      .prepare(
+        `
       insert into content_packs(hash, schema_version, content_json, created_at)
       values (?, ?, ?, ?)
       on conflict(hash) do nothing
-    `).run(pack.hash, pack.schemaVersion, JSON.stringify(pack), new Date().toISOString());
+    `,
+      )
+      .run(pack.hash, pack.schemaVersion, JSON.stringify(pack), new Date().toISOString());
   }
 
   get(hash: string): CompiledContentPack | undefined {

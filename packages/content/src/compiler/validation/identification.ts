@@ -1,4 +1,8 @@
-import type { ContentEntry, IdentificationPoolContentEntry, ItemContentEntry } from '../../model.js';
+import type {
+  ContentEntry,
+  IdentificationPoolContentEntry,
+  ItemContentEntry,
+} from '../../model.js';
 import type { ContentCompileIssue } from '../error.js';
 import { issue, type LocatedContentEntry } from './shared.js';
 
@@ -19,7 +23,9 @@ function identificationIssues(
       issues.push(issue(located.file, `${path}.nouns`, 'identification pool nouns must be unique'));
     }
     if (new Set(pool.visuals.map((visual) => visual.id)).size !== pool.visuals.length) {
-      issues.push(issue(located.file, `${path}.visuals`, 'identification pool visual IDs must be unique'));
+      issues.push(
+        issue(located.file, `${path}.visuals`, 'identification pool visual IDs must be unique'),
+      );
     }
   }
   for (const located of items) {
@@ -27,27 +33,51 @@ function identificationIssues(
     const path = `$.entries.${item.id}.identification`;
     if (item.identification.mode === 'known') {
       if (item.identification.poolId !== null) {
-        issues.push(issue(located.file, `${path}.poolId`, 'known items cannot declare an identification pool'));
+        issues.push(
+          issue(
+            located.file,
+            `${path}.poolId`,
+            'known items cannot declare an identification pool',
+          ),
+        );
       }
       continue;
     }
     if (item.identification.poolId === null) {
-      issues.push(issue(located.file, `${path}.poolId`, 'unidentified items require an identification pool'));
+      issues.push(
+        issue(located.file, `${path}.poolId`, 'unidentified items require an identification pool'),
+      );
       continue;
     }
     const pool = byId.get(item.identification.poolId);
     if (!pool) {
-      issues.push(issue(located.file, `${path}.poolId`, `unknown identification pool ${item.identification.poolId}`));
+      issues.push(
+        issue(
+          located.file,
+          `${path}.poolId`,
+          `unknown identification pool ${item.identification.poolId}`,
+        ),
+      );
       continue;
     }
     if (pool.kind !== 'identification-pool') {
-      issues.push(issue(located.file, `${path}.poolId`,
-        `identification pool reference ${item.identification.poolId} resolves to ${pool.kind}`));
+      issues.push(
+        issue(
+          located.file,
+          `${path}.poolId`,
+          `identification pool reference ${item.identification.poolId} resolves to ${pool.kind}`,
+        ),
+      );
       continue;
     }
     if (pool.category !== item.category) {
-      issues.push(issue(located.file, `${path}.poolId`,
-        `identification pool ${pool.id} is for ${pool.category}, not ${item.category}`));
+      issues.push(
+        issue(
+          located.file,
+          `${path}.poolId`,
+          `identification pool ${pool.id} is for ${pool.category}, not ${item.category}`,
+        ),
+      );
     }
     const users = usersByPool.get(pool.id) ?? [];
     users.push({ item, file: located.file });
@@ -57,8 +87,13 @@ function identificationIssues(
     const pool = byId.get(poolId) as IdentificationPoolContentEntry;
     if (pool.verbs.length * pool.nouns.length >= users.length) continue;
     for (const { item, file } of users) {
-      issues.push(issue(file, `$.entries.${item.id}.identification.poolId`,
-        `identification pool ${poolId} can create ${pool.verbs.length * pool.nouns.length} unique names for ${users.length} items`));
+      issues.push(
+        issue(
+          file,
+          `$.entries.${item.id}.identification.poolId`,
+          `identification pool ${poolId} can create ${pool.verbs.length * pool.nouns.length} unique names for ${users.length} items`,
+        ),
+      );
     }
   }
   return issues;

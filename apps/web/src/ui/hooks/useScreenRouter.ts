@@ -35,7 +35,10 @@ type ScreenRouterAction =
   | { readonly type: 'hall'; readonly returnTo: 'title' | 'conclusion' }
   | { readonly type: 'return-from-hall'; readonly returnTo: 'title' | 'conclusion' };
 
-function screenRouterReducer(state: ScreenRouterState, action: ScreenRouterAction): ScreenRouterState {
+function screenRouterReducer(
+  state: ScreenRouterState,
+  action: ScreenRouterAction,
+): ScreenRouterState {
   switch (action.type) {
     case 'title':
       return { screen: { screen: 'title' }, fadeToken: state.fadeToken };
@@ -77,7 +80,10 @@ export function useScreenRouter(quickstart: boolean): ScreenRouter {
   const [state, dispatch] = useReducer(
     screenRouterReducer,
     quickstart,
-    (qs): ScreenRouterState => ({ screen: qs ? { screen: 'play' } : { screen: 'title' }, fadeToken: 0 }),
+    (qs): ScreenRouterState => ({
+      screen: qs ? { screen: 'play' } : { screen: 'title' },
+      fadeToken: 0,
+    }),
   );
 
   return {

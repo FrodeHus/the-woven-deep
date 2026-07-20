@@ -36,9 +36,7 @@ export function deriveSeed(seed: Uint32State, discriminator: number): Uint32Stat
   let cursor = discriminator >>> 0;
   const words: number[] = [];
   for (let index = 0; index < seed.length; index += 1) {
-    cursor = splitMixWord(
-      (cursor ^ seed[index]! ^ Math.imul(index + 1, GOLDEN_GAMMA)) >>> 0,
-    );
+    cursor = splitMixWord((cursor ^ seed[index]! ^ Math.imul(index + 1, GOLDEN_GAMMA)) >>> 0);
     words.push(cursor);
   }
   const state = words as unknown as Uint32State;
@@ -65,7 +63,7 @@ export function rollDie(state: Uint32State, sides: number): RandomStep {
   for (;;) {
     const step = nextUint32(cursor);
     cursor = step.state;
-    if (step.value < limit) return { value: step.value % sides + 1, state: cursor };
+    if (step.value < limit) return { value: (step.value % sides) + 1, state: cursor };
   }
 }
 
@@ -74,14 +72,15 @@ export function isNonZeroState(state: Uint32State): boolean {
 }
 
 export function nextUint32(state: Uint32State): RandomStep {
-  if (!isNonZeroState(state)) throw new Error('internal invariant: random state must not be all zero');
+  if (!isNonZeroState(state))
+    throw new Error('internal invariant: random state must not be all zero');
   const [initial0, initial1, initial2, initial3] = state;
   const value = Math.imul(rotateLeft(Math.imul(initial1, 5) >>> 0, 7), 9) >>> 0;
   const shifted = (initial1 << 9) >>> 0;
   let s2 = (initial2 ^ initial0) >>> 0;
   let s3 = (initial3 ^ initial1) >>> 0;
-  let s1 = (initial1 ^ s2) >>> 0;
-  let s0 = (initial0 ^ s3) >>> 0;
+  const s1 = (initial1 ^ s2) >>> 0;
+  const s0 = (initial0 ^ s3) >>> 0;
   s2 = (s2 ^ shifted) >>> 0;
   s3 = rotateLeft(s3, 11);
   return { value, state: [s0, s1, s2, s3] };
@@ -101,9 +100,7 @@ export function expandLegacySeed(seed: number): Uint32State {
 function deriveStream(runSeed: Uint32State, discriminator: number): Uint32State {
   let cursor = discriminator >>> 0;
   for (let index = 0; index < runSeed.length; index += 1) {
-    cursor = splitMixWord(
-      (cursor ^ runSeed[index]! ^ Math.imul(index + 1, GOLDEN_GAMMA)) >>> 0,
-    );
+    cursor = splitMixWord((cursor ^ runSeed[index]! ^ Math.imul(index + 1, GOLDEN_GAMMA)) >>> 0);
   }
   const state = expandLegacySeed(cursor);
   return isNonZeroState(state) ? state : [0, 0, 0, NON_ZERO_FALLBACK];

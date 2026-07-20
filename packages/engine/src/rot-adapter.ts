@@ -1,20 +1,21 @@
 import { Path, RNG } from 'rot-js';
 import type { Point } from './model.js';
 
-export function rotAStarPath(input: Readonly<{
-  topology: 4 | 8;
-  origin: Point;
-  destination: Point;
-  isPassable: (x: number, y: number) => boolean;
-}>): readonly Point[] | null {
+export function rotAStarPath(
+  input: Readonly<{
+    topology: 4 | 8;
+    origin: Point;
+    destination: Point;
+    isPassable: (x: number, y: number) => boolean;
+  }>,
+): readonly Point[] | null {
   const points: Point[] = [];
-  const path = new Path.AStar(
-    input.destination.x,
-    input.destination.y,
-    input.isPassable,
-    { topology: input.topology },
-  );
-  path.compute(input.origin.x, input.origin.y, (x, y) => { points.push({ x, y }); });
+  const path = new Path.AStar(input.destination.x, input.destination.y, input.isPassable, {
+    topology: input.topology,
+  });
+  path.compute(input.origin.x, input.origin.y, (x, y) => {
+    points.push({ x, y });
+  });
   return points.length === 0 ? null : points;
 }
 

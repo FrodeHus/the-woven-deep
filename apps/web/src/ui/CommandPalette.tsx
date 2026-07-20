@@ -1,19 +1,36 @@
 import type { JSX } from 'react';
 import { ACTION_LABELS, chordKey, type ActionId } from '../session/settings.js';
 import type { PlayerIntent } from '../session/intents.js';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from './components/command.js';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandShortcut,
+} from './components/command.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './components/dialog.js';
 import { OVERLAY_REGISTRY, type OverlayId } from './overlays/registry.js';
 import { useSessionCtx, useSettingsCtx } from './providers.js';
 import type { OverlayActionId } from './KeyRouter.js';
 
-const OVERLAY_ENTRIES: readonly OverlayId[] = ['inventory', 'character-sheet', 'map-journal', 'codex', 'settings', 'help'];
+const OVERLAY_ENTRIES: readonly OverlayId[] = [
+  'inventory',
+  'character-sheet',
+  'map-journal',
+  'codex',
+  'settings',
+  'help',
+];
 
 /** Static action -> intent map for every non-overlay verb the palette can dispatch. Deliberately
  * excludes every `move.*` action -- the palette is a discovery surface for VERBS, not a parallel
  * way to take a step (see the task brief). `house`/`trade` are further gated at render time by
  * `isTownContext`/`tradeAvailable`. */
-const INTENT_ENTRIES: Readonly<Record<'wait' | 'rest' | 'pickup' | 'descend' | 'ascend' | 'house' | 'trade', PlayerIntent>> = {
+const INTENT_ENTRIES: Readonly<
+  Record<'wait' | 'rest' | 'pickup' | 'descend' | 'ascend' | 'house' | 'trade', PlayerIntent>
+> = {
   wait: { type: 'wait' },
   rest: { type: 'rest' },
   pickup: { type: 'pickup' },
@@ -38,7 +55,11 @@ export interface CommandPaletteProps {
  * `onOpenOverlay`/`session.dispatch` a keypress would.
  */
 export function CommandPalette({
-  open, onOpenChange, onOpenOverlay, isTownContext, tradeAvailable,
+  open,
+  onOpenChange,
+  onOpenOverlay,
+  isTownContext,
+  tradeAvailable,
 }: Readonly<CommandPaletteProps>): JSX.Element {
   const sessionCtx = useSessionCtx();
   const { keymap } = useSettingsCtx();
@@ -59,7 +80,11 @@ export function CommandPalette({
   };
 
   const intentActions: readonly (keyof typeof INTENT_ENTRIES)[] = [
-    'wait', 'rest', 'pickup', 'descend', 'ascend',
+    'wait',
+    'rest',
+    'pickup',
+    'descend',
+    'ascend',
     ...(isTownContext ? (['house'] as const) : []),
     ...(tradeAvailable ? (['trade'] as const) : []),
   ];
@@ -74,7 +99,9 @@ export function CommandPalette({
          * this is a short, fixed verb list, and fuzzy subsequence matching produces surprising
          * false positives here (e.g. "rest" is a letter-subsequence of "Character sheet"),
          * which a discovery surface should never do. */}
-        <Command filter={(value, search) => value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0}>
+        <Command
+          filter={(value, search) => (value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}
+        >
           <CommandInput placeholder="Type a command..." />
           <CommandList>
             <CommandEmpty>No matching command.</CommandEmpty>
@@ -96,7 +123,11 @@ export function CommandPalette({
                 const label = ACTION_LABELS[action];
                 const shortcut = hint(action);
                 return (
-                  <CommandItem key={action} value={label} onSelect={() => runIntent(INTENT_ENTRIES[action])}>
+                  <CommandItem
+                    key={action}
+                    value={label}
+                    onSelect={() => runIntent(INTENT_ENTRIES[action])}
+                  >
                     <span>{label}</span>
                     {shortcut && <CommandShortcut>{shortcut}</CommandShortcut>}
                   </CommandItem>

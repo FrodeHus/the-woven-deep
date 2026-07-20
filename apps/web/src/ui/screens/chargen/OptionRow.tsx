@@ -1,21 +1,36 @@
 import { forwardRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { cn } from '@/ui/lib/cn.js';
 
-export const OptionRow = forwardRef<HTMLDivElement, {
-  glyph?: string;
-  glyphColor?: string;
-  name: string;
-  meta?: string;
-  description?: string;
-  tags?: readonly string[];
-  marker: 'single' | 'multi';
-  selected: boolean;
-  locked?: boolean;
-  lockHint?: string;
-  onSelect: () => void;
-}>(function OptionRow(
-  { glyph, glyphColor, name, meta, description, tags, marker, selected, locked, lockHint, onSelect },
-  ref
+export const OptionRow = forwardRef<
+  HTMLDivElement,
+  {
+    glyph?: string;
+    glyphColor?: string;
+    name: string;
+    meta?: string;
+    description?: string;
+    tags?: readonly string[];
+    marker: 'single' | 'multi';
+    selected: boolean;
+    locked?: boolean;
+    lockHint?: string;
+    onSelect: () => void;
+  }
+>(function OptionRow(
+  {
+    glyph,
+    glyphColor,
+    name,
+    meta,
+    description,
+    tags,
+    marker,
+    selected,
+    locked,
+    lockHint,
+    onSelect,
+  },
+  ref,
 ) {
   const markerText = locked
     ? '⊘'
@@ -49,7 +64,7 @@ export const OptionRow = forwardRef<HTMLDivElement, {
         locked
           ? 'cursor-not-allowed border-dashed border-line opacity-60'
           : 'cursor-pointer border-line',
-        selected && !locked ? 'border-accent bg-raised' : undefined
+        selected && !locked ? 'border-accent bg-raised' : undefined,
       )}
     >
       <span className="text-fg-strong">{markerText}</span>
@@ -71,7 +86,10 @@ export const OptionRow = forwardRef<HTMLDivElement, {
         {tags && tags.length > 0 ? (
           <span className="flex flex-wrap gap-1">
             {tags.map((tag) => (
-              <span key={tag} className="rounded border border-line px-1.5 py-0.5 text-xs text-muted">
+              <span
+                key={tag}
+                className="rounded border border-line px-1.5 py-0.5 text-xs text-muted"
+              >
                 {tag}
               </span>
             ))}

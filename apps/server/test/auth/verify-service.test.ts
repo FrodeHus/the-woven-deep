@@ -103,7 +103,9 @@ describe('createVerifyService.verify', () => {
 
     // returned session tokens must not equal the stored hash, and stored rows are hashes.
     expect(resultA?.sessionToken).not.toBe(hashToken(resultA?.sessionToken ?? ''));
-    const storedHashes = (sessionRowsAfterB as Array<{ token_hash: string }>).map((r) => r.token_hash);
+    const storedHashes = (sessionRowsAfterB as Array<{ token_hash: string }>).map(
+      (r) => r.token_hash,
+    );
     expect(storedHashes).toContain(hashToken(resultA!.sessionToken));
     expect(storedHashes).toContain(hashToken(resultB!.sessionToken));
   });
@@ -131,7 +133,9 @@ describe('createVerifyService.verify', () => {
     const result = service.verify({ token });
     expect(result).toBeNull();
 
-    const row = database.prepare('select consumed_at from login_tokens where token_hash = ?').get(hashToken(token)) as {
+    const row = database
+      .prepare('select consumed_at from login_tokens where token_hash = ?')
+      .get(hashToken(token)) as {
       consumed_at: string | null;
     };
     expect(row.consumed_at).toBeNull();

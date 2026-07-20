@@ -2,7 +2,8 @@ import type { BaseAttributes } from './actor-model.js';
 import type { OpaqueId, Uint32State } from './model.js';
 import type { MerchantPopulation } from './merchant-model.js';
 
-export type PopulationIntent = 'approach' | 'attack' | 'hold' | 'regroup' | 'flee' | 'protect' | 'spawn' | 'phase-change';
+export type PopulationIntent =
+  'approach' | 'attack' | 'hold' | 'regroup' | 'flee' | 'protect' | 'spawn' | 'phase-change';
 
 export type ActorGoal =
   | Readonly<{ type: 'actor'; targetActorId: OpaqueId }>
@@ -61,7 +62,9 @@ export interface PopulationBase {
   readonly formerMemberIds: readonly OpaqueId[];
 }
 
-export interface IndividualPopulation extends PopulationBase { readonly model: 'individual' }
+export interface IndividualPopulation extends PopulationBase {
+  readonly model: 'individual';
+}
 export interface GroupPopulation extends PopulationBase {
   readonly model: 'group';
   readonly leaderActorId: OpaqueId | null;
@@ -116,8 +119,14 @@ export interface EchoPopulation extends PopulationBase {
   readonly abilityIds: readonly OpaqueId[];
 }
 
-export type PopulationInstance = IndividualPopulation | GroupPopulation | SwarmPopulation
-  | BossPopulation | ChampionPopulation | EchoPopulation | MerchantPopulation;
+export type PopulationInstance =
+  | IndividualPopulation
+  | GroupPopulation
+  | SwarmPopulation
+  | BossPopulation
+  | ChampionPopulation
+  | EchoPopulation
+  | MerchantPopulation;
 
 export interface RecordedHeirloomSnapshot {
   readonly contentId: OpaqueId;

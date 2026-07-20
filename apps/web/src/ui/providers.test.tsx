@@ -7,7 +7,11 @@ function Probe() {
   const pack = usePack() as unknown as { id: string };
   const { keymap } = useSettingsCtx();
   const session = useSessionCtx();
-  return <output>{pack.id}:{keymap.byAction.inventory.key}:{session ? 'session' : 'none'}</output>;
+  return (
+    <output>
+      {pack.id}:{keymap.byAction.inventory.key}:{session ? 'session' : 'none'}
+    </output>
+  );
 }
 
 describe('UiProviders', () => {

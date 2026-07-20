@@ -23,12 +23,24 @@ describe('createMailTransport dev transport', () => {
   it('stores and returns the last link per email, and a second link overwrites the first', async () => {
     const transport = createMailTransport(authConfig({ mailgun: null }));
 
-    await transport.sendLoginLink({ email: 'Player@Example.com', link: 'http://localhost:3000/verify?token=one' });
-    expect(transport.lastLinkFor?.('Player@Example.com')).toBe('http://localhost:3000/verify?token=one');
-    expect(transport.lastLinkFor?.('player@example.com')).toBe('http://localhost:3000/verify?token=one');
+    await transport.sendLoginLink({
+      email: 'Player@Example.com',
+      link: 'http://localhost:3000/verify?token=one',
+    });
+    expect(transport.lastLinkFor?.('Player@Example.com')).toBe(
+      'http://localhost:3000/verify?token=one',
+    );
+    expect(transport.lastLinkFor?.('player@example.com')).toBe(
+      'http://localhost:3000/verify?token=one',
+    );
 
-    await transport.sendLoginLink({ email: 'player@example.com', link: 'http://localhost:3000/verify?token=two' });
-    expect(transport.lastLinkFor?.('Player@Example.com')).toBe('http://localhost:3000/verify?token=two');
+    await transport.sendLoginLink({
+      email: 'player@example.com',
+      link: 'http://localhost:3000/verify?token=two',
+    });
+    expect(transport.lastLinkFor?.('Player@Example.com')).toBe(
+      'http://localhost:3000/verify?token=two',
+    );
   });
 
   it('returns undefined for an email with no stored link', () => {
@@ -41,14 +53,21 @@ describe('createMailTransport dev transport', () => {
     const transport = createMailTransport(authConfig({ mailgun: null }));
 
     await expect(
-      transport.sendLoginLink({ email: 'a@example.com', link: 'http://localhost:3000/verify?token=x' }),
+      transport.sendLoginLink({
+        email: 'a@example.com',
+        link: 'http://localhost:3000/verify?token=x',
+      }),
     ).resolves.toBeUndefined();
   });
 });
 
 describe('createMailTransport mailgun transport', () => {
   const mailgunConfig = authConfig({
-    mailgun: { apiKey: 'key-123', domain: 'mail.example.com', sender: 'Woven Deep <noreply@mail.example.com>' },
+    mailgun: {
+      apiKey: 'key-123',
+      domain: 'mail.example.com',
+      sender: 'Woven Deep <noreply@mail.example.com>',
+    },
   });
 
   it('does not expose lastLinkFor', () => {
@@ -61,7 +80,10 @@ describe('createMailTransport mailgun transport', () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 } as Response);
     const transport = createMailTransport(mailgunConfig, fetchImpl as unknown as typeof fetch);
 
-    await transport.sendLoginLink({ email: 'player@example.com', link: 'http://localhost:3000/verify?token=abc' });
+    await transport.sendLoginLink({
+      email: 'player@example.com',
+      link: 'http://localhost:3000/verify?token=abc',
+    });
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
@@ -81,11 +103,18 @@ describe('createMailTransport mailgun transport', () => {
   });
 
   it('throws on a non-2xx response', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error' } as Response);
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+    } as Response);
     const transport = createMailTransport(mailgunConfig, fetchImpl as unknown as typeof fetch);
 
     await expect(
-      transport.sendLoginLink({ email: 'player@example.com', link: 'http://localhost:3000/verify?token=abc' }),
+      transport.sendLoginLink({
+        email: 'player@example.com',
+        link: 'http://localhost:3000/verify?token=abc',
+      }),
     ).rejects.toThrow();
   });
 });

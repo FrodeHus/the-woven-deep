@@ -117,14 +117,24 @@ function generatedViews(run) {
       {
         lightId: 'light.demo-blue-carried',
         location: { type: 'actor', actorId: run.hero.actorId },
-        color: [0, 0, 255], radius: 7, strength: 255, enabled: true,
-        falloff: 'linear', vaultPlacementId: null, presentation: null,
+        color: [0, 0, 255],
+        radius: 7,
+        strength: 255,
+        enabled: true,
+        falloff: 'linear',
+        vaultPlacementId: null,
+        presentation: null,
       },
       {
         lightId: 'light.demo-red-fixed',
         location: { type: 'fixed', x: redPosition.x, y: redPosition.y },
-        color: [255, 0, 0], radius: 7, strength: 255, enabled: true,
-        falloff: 'linear', vaultPlacementId: null, presentation: null,
+        color: [255, 0, 0],
+        radius: 7,
+        strength: 255,
+        enabled: true,
+        falloff: 'linear',
+        vaultPlacementId: null,
+        presentation: null,
       },
     ],
   };
@@ -135,14 +145,21 @@ function generatedViews(run) {
   const preview3 = perceive(lowAmbientFloor, run, { ...torch, radius: 3 });
   const preview7 = perceive(lowAmbientFloor, run, { ...torch, radius: 7 });
 
-  assert(absoluteDarkness.cells.every((cell) => cell.knowledge === 'unknown'),
-    'absolute darkness exposed terrain without an enabled source');
-  assert(lowAmbient.cells.some((cell) => cell.knowledge === 'visible' && cell.intensity === 3),
-    'ambient strength 3 did not expose dim terrain');
+  assert(
+    absoluteDarkness.cells.every((cell) => cell.knowledge === 'unknown'),
+    'absolute darkness exposed terrain without an enabled source',
+  );
+  assert(
+    lowAmbient.cells.some((cell) => cell.knowledge === 'visible' && cell.intensity === 3),
+    'ambient strength 3 did not expose dim terrain',
+  );
   const tints = overlappingColor.cells
     .filter((cell) => cell.knowledge === 'visible')
     .map((cell) => cell.tint);
-  assert(tints.some((tint) => tint[0] > 0 && tint[2] > 0), 'red and blue lights did not overlap');
+  assert(
+    tints.some((tint) => tint[0] > 0 && tint[2] > 0),
+    'red and blue lights did not overlap',
+  );
   return { absoluteDarkness, lowAmbient, preview3, preview7, overlappingColor };
 }
 
@@ -151,22 +168,36 @@ function sealedCornerView() {
   const height = 5;
   const index = (x, y) => y * width + x;
   const lines = ['#####', '#.#.#', '##..#', '#...#', '#####'];
-  const tiles = lines.flatMap((line) => [...line].map((glyph) => glyph === '#' ? 0 : 1));
+  const tiles = lines.flatMap((line) => [...line].map((glyph) => (glyph === '#' ? 0 : 1)));
   const hero = { heroId: 'hero.corner', x: 1, y: 1, sightRadius: 5 };
   const light = {
-    lightId: 'light.corner', location: { type: 'actor', actorId: hero.heroId },
-    color: [255, 255, 255], radius: 4, strength: 255, enabled: true,
-    falloff: 'linear', vaultPlacementId: null, presentation: null,
+    lightId: 'light.corner',
+    location: { type: 'actor', actorId: hero.heroId },
+    color: [255, 255, 255],
+    radius: 4,
+    strength: 255,
+    enabled: true,
+    falloff: 'linear',
+    vaultPlacementId: null,
+    presentation: null,
   };
   const floor = {
-    floorId: 'floor.sealed-corner', depth: 1, width, height, tiles,
-    ambient: { color: [0, 0, 0], strength: 0 }, lights: [light],
+    floorId: 'floor.sealed-corner',
+    depth: 1,
+    width,
+    height,
+    tiles,
+    ambient: { color: [0, 0, 0], strength: 0 },
+    lights: [light],
     knowledge: createUnknownKnowledge(width * height),
   };
   const perception = refreshKnowledge({ floor, hero, actors: new Map([[hero.heroId, hero]]) });
   const target = index(2, 2);
-  assert(!isVisible(perception.visibilityWords, target) && perception.illumination.intensity[target] === 0,
-    'two orthogonal blockers did not seal sight and light');
+  assert(
+    !isVisible(perception.visibilityWords, target) &&
+      perception.illumination.intensity[target] === 0,
+    'two orthogonal blockers did not seal sight and light',
+  );
 
   const oneBlockerTiles = [...tiles];
   oneBlockerTiles[index(1, 2)] = 1;
@@ -176,8 +207,10 @@ function sealedCornerView() {
     hero,
     actors: new Map([[hero.heroId, hero]]),
   });
-  assert(isVisible(oneBlocker.visibilityWords, target) && oneBlocker.illumination.intensity[target] > 0,
-    'one orthogonal blocker incorrectly sealed sight or light');
+  assert(
+    isVisible(oneBlocker.visibilityWords, target) && oneBlocker.illumination.intensity[target] > 0,
+    'one orthogonal blocker incorrectly sealed sight or light',
+  );
 
   return projectFloor({
     floor: { ...floor, knowledge: perception.knowledge },
@@ -209,26 +242,43 @@ function rememberedView(initialRun, content) {
   let run = initialRun;
   for (let index = 1; index < steps.length; index += 1) {
     const destination = steps[index];
-    assert(tileDefinition(floor.tiles[destination.y * floor.width + destination.x]).walkable,
-      'remembered route requires a blocked terrain cell');
-    const resolution = resolveCommand(run, {
-      type: 'move',
-      commandId: `command.dungeon-demo-${index}`,
-      expectedRevision: run.revision,
-      direction: direction(steps[index - 1], destination),
-    }, { content });
-    assert(resolution.result.status === 'applied', 'valid remembered route movement was not applied');
+    assert(
+      tileDefinition(floor.tiles[destination.y * floor.width + destination.x]).walkable,
+      'remembered route requires a blocked terrain cell',
+    );
+    const resolution = resolveCommand(
+      run,
+      {
+        type: 'move',
+        commandId: `command.dungeon-demo-${index}`,
+        expectedRevision: run.revision,
+        direction: direction(steps[index - 1], destination),
+      },
+      { content },
+    );
+    assert(
+      resolution.result.status === 'applied',
+      'valid remembered route movement was not applied',
+    );
     run = resolution.state;
   }
   const movedFloor = activeFloor(run);
   const projection = perceive(movedFloor, run);
-  assert(projection.cells.some((cell) => cell.knowledge === 'remembered'),
-    'valid hero movement did not leave remembered terrain');
+  assert(
+    projection.cells.some((cell) => cell.knowledge === 'remembered'),
+    'valid hero movement did not leave remembered terrain',
+  );
   return { run, projection };
 }
 
 const dimGlyph = new Map([
-  [0, '%'], [1, ','], [2, '='], [3, 'o'], [4, '{'], [5, '}'], [6, ' '],
+  [0, '%'],
+  [1, ','],
+  [2, '='],
+  [3, 'o'],
+  [4, '{'],
+  [5, '}'],
+  [6, ' '],
 ]);
 
 function renderDiagnostic(floor) {
@@ -257,7 +307,8 @@ function renderProjection(projection, hero, mode = 'terrain') {
         const [red, , blue] = cell.tint;
         glyph = red > 0 && blue > 0 ? 'm' : red > 0 ? 'r' : blue > 0 ? 'b' : '.';
       }
-      if (hero !== undefined && x === hero.x && y === hero.y && cell.knowledge === 'visible') glyph = '@';
+      if (hero !== undefined && x === hero.x && y === hero.y && cell.knowledge === 'visible')
+        glyph = '@';
       line += glyph;
     }
     lines.push(line);
@@ -266,9 +317,11 @@ function renderProjection(projection, hero, mode = 'terrain') {
 }
 
 function sameProjectionSet(left, right) {
-  return stableJson(left.absoluteDarkness) === stableJson(right.absoluteDarkness)
-    && stableJson(left.lowAmbient) === stableJson(right.lowAmbient)
-    && stableJson(left.overlappingColor) === stableJson(right.overlappingColor);
+  return (
+    stableJson(left.absoluteDarkness) === stableJson(right.absoluteDarkness) &&
+    stableJson(left.lowAmbient) === stableJson(right.lowAmbient) &&
+    stableJson(left.overlappingColor) === stableJson(right.overlappingColor)
+  );
 }
 
 async function verifyReviewedHashes(hashes) {
@@ -281,21 +334,34 @@ async function main() {
   const pack = await compileContentDirectory({ rootDir: options.contentDirectory });
   const first = createGeneratedDemoRun(pack);
   const second = createGeneratedDemoRun(pack);
-  assert(stableJson(first.generated.floor) === stableJson(second.generated.floor),
-    'generated floor bytes diverged');
-  assert(stableJson(first.generated.report) === stableJson(second.generated.report),
-    'generation report bytes diverged');
+  assert(
+    stableJson(first.generated.floor) === stableJson(second.generated.floor),
+    'generated floor bytes diverged',
+  );
+  assert(
+    stableJson(first.generated.report) === stableJson(second.generated.report),
+    'generation report bytes diverged',
+  );
 
   const floor = activeFloor(first.run);
   const views = generatedViews(first.run);
   const sealedCorner = sealedCornerView();
   const remembered = rememberedView(first.run, pack);
   const restoredRun = decodeActiveRun(encodeActiveRun(first.run));
-  assert(encodeActiveRun(restoredRun) === encodeActiveRun(first.run), 'decoded generated run bytes diverged');
-  assert(sameProjectionSet(views, generatedViews(restoredRun)), 'decoded generated projections diverged');
+  assert(
+    encodeActiveRun(restoredRun) === encodeActiveRun(first.run),
+    'decoded generated run bytes diverged',
+  );
+  assert(
+    sameProjectionSet(views, generatedViews(restoredRun)),
+    'decoded generated projections diverged',
+  );
   const restoredRemembered = decodeActiveRun(encodeActiveRun(remembered.run));
-  assert(stableJson(remembered.projection) === stableJson(perceive(activeFloor(restoredRemembered), restoredRemembered)),
-    'decoded remembered projection diverged');
+  assert(
+    stableJson(remembered.projection) ===
+      stableJson(perceive(activeFloor(restoredRemembered), restoredRemembered)),
+    'decoded remembered projection diverged',
+  );
 
   const hashes = {
     'floor-state': hash(first.generated.floor),
@@ -315,10 +381,14 @@ async function main() {
   const seed = floor.seed.map((word) => word.toString(16).padStart(8, '0')).join(' ');
   console.log('diagnostic terrain');
   console.log(renderDiagnostic(floor));
-  console.log(`floor ${floor.floorId} ${floor.width}x${floor.height} generator ${floor.generatorVersion}`);
+  console.log(
+    `floor ${floor.floorId} ${floor.width}x${floor.height} generator ${floor.generatorVersion}`,
+  );
   console.log(`seed ${seed} attempt ${attempt}`);
   console.log(`rooms ${report.roomCount} corridors ${report.corridorCount} vault ${vault.vaultId}`);
-  console.log(`stairs ${report.stairUp.x},${report.stairUp.y} -> ${report.stairDown.x},${report.stairDown.y} distance ${report.stairDistance}`);
+  console.log(
+    `stairs ${report.stairUp.x},${report.stairUp.y} -> ${report.stairDown.x},${report.stairDown.y} distance ${report.stairDistance}`,
+  );
   console.log('view absolute-darkness');
   console.log(renderProjection(views.absoluteDarkness, heroActor(first.run)));
   console.log('view low-ambient');

@@ -1,5 +1,10 @@
 import type {
-  DerivedStatFormula, DerivedStatName, GameplayProjection, ObservableTradeProjection, OpaqueId, TileId,
+  DerivedStatFormula,
+  DerivedStatName,
+  GameplayProjection,
+  ObservableTradeProjection,
+  OpaqueId,
+  TileId,
 } from '@woven-deep/engine';
 import type { ItemCategory } from '@woven-deep/content';
 
@@ -154,15 +159,17 @@ export type TradeView = Omit<ObservableTradeProjection, 'stock'> & {
   readonly stock: readonly TradeStockEntry[];
 };
 
-type ProjectionView =
-  Omit<GameplayProjection, 'hero' | 'actors' | 'features' | 'groundItems' | 'house' | 'trade'> & {
-    readonly hero: HeroView;
-    readonly actors: readonly ActorView[];
-    readonly features: readonly FeatureView[];
-    readonly groundItems: readonly GroundItemView[];
-    readonly house: HouseView;
-    readonly trade?: TradeView;
-  };
+type ProjectionView = Omit<
+  GameplayProjection,
+  'hero' | 'actors' | 'features' | 'groundItems' | 'house' | 'trade'
+> & {
+  readonly hero: HeroView;
+  readonly actors: readonly ActorView[];
+  readonly features: readonly FeatureView[];
+  readonly groundItems: readonly GroundItemView[];
+  readonly house: HouseView;
+  readonly trade?: TradeView;
+};
 
 // The one reviewed cast in the web client. Everything below reads typed fields off the result.
 function view(projection: GameplayProjection): ProjectionView {
@@ -202,12 +209,19 @@ export function slotsOf(projection: GameplayProjection): GameplayProjection['slo
 
 /** The hero-owned item with the given id, found in the backpack first, then equipment. */
 export function ownedItemOf(hero: HeroView, itemId: OpaqueId): OwnedItemView | undefined {
-  return hero.backpack.find((item) => item.itemId === itemId)
-    ?? Object.values(hero.equipment).find((item): item is OwnedItemView => item !== null && item.itemId === itemId);
+  return (
+    hero.backpack.find((item) => item.itemId === itemId) ??
+    Object.values(hero.equipment).find(
+      (item): item is OwnedItemView => item !== null && item.itemId === itemId,
+    )
+  );
 }
 
 /** The Chebyshev (king-move) distance between two grid positions. */
-export function chebyshev(a: Readonly<{ x: number; y: number }>, b: Readonly<{ x: number; y: number }>): number {
+export function chebyshev(
+  a: Readonly<{ x: number; y: number }>,
+  b: Readonly<{ x: number; y: number }>,
+): number {
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 }
 
@@ -232,6 +246,7 @@ export function adjacentMerchant(projection: GameplayProjection): ActorView | un
  * the hero with `tradeAvailable` not explicitly `false`. */
 export function tradeIsAvailable(projection: GameplayProjection): boolean {
   const hero = heroOf(projection);
-  return merchantActors(projection).some((merchant) => chebyshev(hero, merchant) === 1
-    && merchant.tradeAvailable !== false);
+  return merchantActors(projection).some(
+    (merchant) => chebyshev(hero, merchant) === 1 && merchant.tradeAvailable !== false,
+  );
 }

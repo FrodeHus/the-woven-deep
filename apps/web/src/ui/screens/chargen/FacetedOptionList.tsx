@@ -23,7 +23,12 @@ export interface FacetedOptionListEntry {
  * renders between the filter bar and the listbox, for a step that needs to show something there
  * (e.g. a selection counter). */
 export function FacetedOptionList<T extends FacetedOptionListEntry>({
-  entries, ariaLabel, marker, selected, onSelect, children,
+  entries,
+  ariaLabel,
+  marker,
+  selected,
+  onSelect,
+  children,
 }: {
   readonly entries: readonly T[];
   readonly ariaLabel: string;

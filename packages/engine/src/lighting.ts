@@ -29,7 +29,12 @@ function assertPositiveDimension(value: number, label: string): void {
   }
 }
 
-function assertIntegerRange(value: unknown, minimum: number, maximum: number, label: string): asserts value is number {
+function assertIntegerRange(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+  label: string,
+): asserts value is number {
   if (!Number.isSafeInteger(value) || (value as number) < minimum || (value as number) > maximum) {
     throw new RangeError(`${label} must be a safe integer from ${minimum} through ${maximum}`);
   }
@@ -48,12 +53,15 @@ function validateTiles(input: IlluminationInput): number {
   assertPositiveDimension(input.width, 'field width');
   assertPositiveDimension(input.height, 'field height');
   const cellCount = input.width * input.height;
-  if (!Number.isSafeInteger(cellCount)) throw new RangeError('field cell count must be a safe integer');
+  if (!Number.isSafeInteger(cellCount))
+    throw new RangeError('field cell count must be a safe integer');
   if (!Array.isArray(input.tiles) || input.tiles.length !== cellCount) {
     throw new RangeError(`tile length must be ${cellCount}`);
   }
   for (let index = 0; index < cellCount; index += 1) {
-    const tile = input.tiles[index];
+    // `Array.isArray` above widens the declared `readonly TileId[]` to `any[]`; read each element
+    // back as `unknown` and validate it defensively.
+    const tile: unknown = input.tiles[index];
     if (!Number.isInteger(tile) || (tile as number) < 0 || (tile as number) > TILE_ID_MAX) {
       throw new TypeError(`tile ${index} must be a valid tile ID`);
     }
@@ -72,7 +80,8 @@ function validatePresentation(source: Record<string, unknown>, label: string): v
   const presentation = source.presentation;
   if (owner !== null) assertOpaqueId(owner, `${label} vaultPlacementId`);
   if (presentation !== null) {
-    if (!isRecord(presentation)) throw new TypeError(`${label} presentation must be an object or null`);
+    if (!isRecord(presentation))
+      throw new TypeError(`${label} presentation must be an object or null`);
     if (typeof presentation.glyph !== 'string' || [...presentation.glyph].length !== 1) {
       throw new TypeError(`${label} presentation glyph must be one Unicode glyph`);
     }
@@ -88,14 +97,20 @@ function resolveLocation(
   if (!isRecord(source.location)) throw new TypeError(`${label} location must be an object`);
   const location = source.location;
   if (location.type === 'fixed') {
-    if (!Number.isSafeInteger(location.x) || !Number.isSafeInteger(location.y)
-      || (location.x as number) < 0 || (location.x as number) >= input.width
-      || (location.y as number) < 0 || (location.y as number) >= input.height) {
+    if (
+      !Number.isSafeInteger(location.x) ||
+      !Number.isSafeInteger(location.y) ||
+      (location.x as number) < 0 ||
+      (location.x as number) >= input.width ||
+      (location.y as number) < 0 ||
+      (location.y as number) >= input.height
+    ) {
       throw new RangeError(`${label} location must be an integer point within the field`);
     }
     const x = location.x as number;
     const y = location.y as number;
-    if (input.tiles[y * input.width + x] === 6) throw new RangeError(`${label} location cannot be void`);
+    if (input.tiles[y * input.width + x] === 6)
+      throw new RangeError(`${label} location cannot be void`);
     if (source.vaultPlacementId !== null && source.presentation === null) {
       throw new TypeError(`${label} vaultPlacementId requires presentation`);
     }
@@ -103,13 +118,23 @@ function resolveLocation(
   }
   if (location.type === 'actor') {
     assertOpaqueId(location.actorId, `${label} actorId`);
-    if (source.vaultPlacementId !== null) throw new TypeError(`${label} actor location cannot have vaultPlacementId`);
-    if (source.presentation !== null) throw new TypeError(`${label} actor location cannot have presentation`);
+    if (source.vaultPlacementId !== null)
+      throw new TypeError(`${label} actor location cannot have vaultPlacementId`);
+    if (source.presentation !== null)
+      throw new TypeError(`${label} actor location cannot have presentation`);
     const point = input.actors.get(location.actorId);
     if (!point) throw new RangeError(`${label} cannot resolve actor ${location.actorId}`);
-    if (!Number.isSafeInteger(point.x) || !Number.isSafeInteger(point.y)
-      || point.x < 0 || point.x >= input.width || point.y < 0 || point.y >= input.height) {
-      throw new RangeError(`${label} actor ${location.actorId} must be at an integer point within the field`);
+    if (
+      !Number.isSafeInteger(point.x) ||
+      !Number.isSafeInteger(point.y) ||
+      point.x < 0 ||
+      point.x >= input.width ||
+      point.y < 0 ||
+      point.y >= input.height
+    ) {
+      throw new RangeError(
+        `${label} actor ${location.actorId} must be at an integer point within the field`,
+      );
     }
     return { x: point.x, y: point.y };
   }
@@ -120,7 +145,9 @@ function validateLights(input: IlluminationInput): readonly ResolvedLight[] {
   if (!Array.isArray(input.lights)) throw new TypeError('lights must be an array');
   const records: Record<string, unknown>[] = [];
   for (let index = 0; index < input.lights.length; index += 1) {
-    const source = input.lights[index];
+    // `Array.isArray` above widens the declared `readonly LightSource[]` to `any[]`; read each
+    // element back as `unknown` before the structural checks below.
+    const source: unknown = input.lights[index];
     if (!isRecord(source)) throw new TypeError('light source must be an object');
     records.push(source);
   }
@@ -132,7 +159,8 @@ function validateLights(input: IlluminationInput): readonly ResolvedLight[] {
   });
   for (let index = 1; index < records.length; index += 1) {
     const lightId = records[index]!.lightId as string;
-    if (lightId === records[index - 1]!.lightId) throw new TypeError(`duplicate light ID ${lightId}`);
+    if (lightId === records[index - 1]!.lightId)
+      throw new TypeError(`duplicate light ID ${lightId}`);
   }
 
   const resolved: ResolvedLight[] = [];
@@ -142,7 +170,8 @@ function validateLights(input: IlluminationInput): readonly ResolvedLight[] {
     validateColor(source.color, `${label} color`);
     assertIntegerRange(source.radius, 1, 32, `${label} radius`);
     assertIntegerRange(source.strength, 1, 255, `${label} strength`);
-    if (typeof source.enabled !== 'boolean') throw new TypeError(`${label} enabled must be boolean`);
+    if (typeof source.enabled !== 'boolean')
+      throw new TypeError(`${label} enabled must be boolean`);
     if (source.falloff !== 'linear') throw new TypeError(`${label} falloff must be linear`);
     if (source.vaultPlacementId !== null && source.vaultPlacementId === undefined) {
       throw new TypeError(`${label} vaultPlacementId must be an opaque ID or null`);
@@ -158,17 +187,24 @@ function validateLights(input: IlluminationInput): readonly ResolvedLight[] {
 }
 
 function ambientChannel(channel: number, strength: number): number {
-  return Math.floor(channel * strength / 255);
+  return Math.floor((channel * strength) / 255);
 }
 
 export function computeIllumination(input: IlluminationInput): IlluminationField {
   const cellCount = validateTiles(input);
   validateAmbient(input.ambient);
-  if (!input.actors || typeof input.actors.get !== 'function') throw new TypeError('actors must be a read-only map');
+  if (!input.actors || typeof input.actors.get !== 'function')
+    throw new TypeError('actors must be a read-only map');
   const lights = validateLights(input);
-  const red = Array<number>(cellCount).fill(ambientChannel(input.ambient.color[0], input.ambient.strength));
-  const green = Array<number>(cellCount).fill(ambientChannel(input.ambient.color[1], input.ambient.strength));
-  const blue = Array<number>(cellCount).fill(ambientChannel(input.ambient.color[2], input.ambient.strength));
+  const red = Array<number>(cellCount).fill(
+    ambientChannel(input.ambient.color[0], input.ambient.strength),
+  );
+  const green = Array<number>(cellCount).fill(
+    ambientChannel(input.ambient.color[1], input.ambient.strength),
+  );
+  const blue = Array<number>(cellCount).fill(
+    ambientChannel(input.ambient.color[2], input.ambient.strength),
+  );
 
   for (const light of lights) {
     const source = light.source;
@@ -186,10 +222,12 @@ export function computeIllumination(input: IlluminationInput): IlluminationField
       const y = Math.floor(index / input.width);
       const distance = Math.ceil(Math.sqrt((x - light.x) ** 2 + (y - light.y) ** 2));
       if (distance > source.radius) continue;
-      const scalar = Math.floor(source.strength * (source.radius + 1 - distance) / (source.radius + 1));
-      red[index] = Math.min(255, red[index]! + Math.floor(source.color[0] * scalar / 255));
-      green[index] = Math.min(255, green[index]! + Math.floor(source.color[1] * scalar / 255));
-      blue[index] = Math.min(255, blue[index]! + Math.floor(source.color[2] * scalar / 255));
+      const scalar = Math.floor(
+        (source.strength * (source.radius + 1 - distance)) / (source.radius + 1),
+      );
+      red[index] = Math.min(255, red[index]! + Math.floor((source.color[0] * scalar) / 255));
+      green[index] = Math.min(255, green[index]! + Math.floor((source.color[1] * scalar) / 255));
+      blue[index] = Math.min(255, blue[index]! + Math.floor((source.color[2] * scalar) / 255));
     }
   }
 

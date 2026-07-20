@@ -32,8 +32,14 @@ export function createLoginService(
       // Both checks always run and each records a hit on its own key, even when the other one
       // blocks. That over-counts slightly on the non-blocking key but is intentionally the more
       // conservative choice (a short-circuit would let the second key escape counting).
-      const emailAllowed = rateLimiter.check(`email:${normalizedEmail}`, config.loginRateLimit.perEmailPerHour);
-      const sourceAllowed = rateLimiter.check(`src:${input.sourceAddress}`, config.loginRateLimit.perSourcePerHour);
+      const emailAllowed = rateLimiter.check(
+        `email:${normalizedEmail}`,
+        config.loginRateLimit.perEmailPerHour,
+      );
+      const sourceAllowed = rateLimiter.check(
+        `src:${input.sourceAddress}`,
+        config.loginRateLimit.perSourcePerHour,
+      );
 
       if (!emailAllowed || !sourceAllowed) {
         return;

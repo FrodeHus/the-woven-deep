@@ -6,7 +6,10 @@ import { TOWN_VAULT_REQUIRED_SLOT_IDS } from './schema/vault.js';
 export { TOWN_VAULT_REQUIRED_SLOT_IDS };
 
 const potentiallyTraversable = new Set<VaultTerrainName>([
-  'floor', 'closed-door', 'stair-up', 'stair-down',
+  'floor',
+  'closed-door',
+  'stair-up',
+  'stair-down',
 ]);
 
 function compareText(left: string, right: string): number {
@@ -75,7 +78,10 @@ export function validateVaultEntry(
   for (const symbol of Object.keys(entry.legend).sort(compareText)) {
     const legend = entry.legend[symbol]!;
     if ([...symbol].length !== 1) {
-      add(`$.entries.${entry.id}.legend.${symbol}`, `legend key ${symbol} must be one Unicode code point`);
+      add(
+        `$.entries.${entry.id}.legend.${symbol}`,
+        `legend key ${symbol} must be one Unicode code point`,
+      );
     }
     if (!usedSymbols.has(symbol)) {
       add(`$.entries.${entry.id}.legend.${symbol}`, `legend symbol ${symbol} is unused`);
@@ -100,9 +106,19 @@ export function validateVaultEntry(
         if (setCount !== 1) {
           add(slotPath, `item slot ${slot.id} must set exactly one of lootTableId or contentId`);
         } else if (slot.lootTableId !== null) {
-          issues.push(...referencedKindIssue(file, `${slotPath}.lootTableId`, slot.lootTableId, 'loot-table', byId));
+          issues.push(
+            ...referencedKindIssue(
+              file,
+              `${slotPath}.lootTableId`,
+              slot.lootTableId,
+              'loot-table',
+              byId,
+            ),
+          );
         } else if (slot.contentId !== null) {
-          issues.push(...referencedKindIssue(file, `${slotPath}.contentId`, slot.contentId, 'item', byId));
+          issues.push(
+            ...referencedKindIssue(file, `${slotPath}.contentId`, slot.contentId, 'item', byId),
+          );
         }
       } else if (slot.lootTableId !== null || slot.contentId !== null) {
         add(slotPath, `${slot.kind} slot ${slot.id} may not set item loot fields`);
@@ -114,12 +130,16 @@ export function validateVaultEntry(
     add(`$.entries.${entry.id}.legend`, 'vault must declare at least one entrance');
   }
 
-  for (const [slotId, locations] of [...slotLocations].sort(([left], [right]) => compareText(left, right))) {
+  for (const [slotId, locations] of [...slotLocations].sort(([left], [right]) =>
+    compareText(left, right),
+  )) {
     if (locations.length > 1) {
       add(`$.entries.${entry.id}.legend`, `duplicate slot ${slotId}`);
     }
   }
-  for (const [suffix, locations] of [...fixtureLocations].sort(([left], [right]) => compareText(left, right))) {
+  for (const [suffix, locations] of [...fixtureLocations].sort(([left], [right]) =>
+    compareText(left, right),
+  )) {
     if (locations.length > 1) {
       add(`$.entries.${entry.id}.legend`, `duplicate fixture suffix ${suffix}`);
     }
@@ -134,11 +154,15 @@ export function validateVaultEntry(
     }
     const expectedSlotIds = TOWN_VAULT_REQUIRED_SLOT_IDS;
     const missingSlotIds = expectedSlotIds.filter((id) => !requiredSlotIds.has(id));
-    const extraSlotIds = [...requiredSlotIds].filter((id) => !(expectedSlotIds as readonly string[]).includes(id));
+    const extraSlotIds = [...requiredSlotIds].filter(
+      (id) => !(expectedSlotIds as readonly string[]).includes(id),
+    );
     if (missingSlotIds.length > 0 || extraSlotIds.length > 0) {
-      add(`$.entries.${entry.id}.requiredSlotIds`,
-        `a town vault must declare exactly the required slots ${expectedSlotIds.join(', ')}; `
-        + `missing ${missingSlotIds.join(', ') || 'none'}, extra ${extraSlotIds.join(', ') || 'none'}`);
+      add(
+        `$.entries.${entry.id}.requiredSlotIds`,
+        `a town vault must declare exactly the required slots ${expectedSlotIds.join(', ')}; ` +
+          `missing ${missingSlotIds.join(', ') || 'none'}, extra ${extraSlotIds.join(', ') || 'none'}`,
+      );
     }
     if (fixtureLocations.size === 0) {
       add(`$.entries.${entry.id}.legend`, 'a town vault must declare at least one light fixture');
@@ -148,7 +172,10 @@ export function validateVaultEntry(
       const [entranceX, entranceY] = entranceLocations[0]!;
       const entranceTerrain = entry.legend[rows[entranceY]?.[entranceX] ?? '']?.terrain;
       if (entranceTerrain !== 'stair-down') {
-        add(`$.entries.${entry.id}.legend`, 'the dungeon-entrance slot of a town vault must sit on stair-down terrain');
+        add(
+          `$.entries.${entry.id}.legend`,
+          'the dungeon-entrance slot of a town vault must sit on stair-down terrain',
+        );
       }
     }
   }
@@ -157,7 +184,12 @@ export function validateVaultEntry(
   const queue = [...entrances];
   let cursor = 0;
   for (const [x, y] of entrances) reachable.add(`${x},${y}`);
-  const neighbors = [[0, -1], [1, 0], [0, 1], [-1, 0]] as const;
+  const neighbors = [
+    [0, -1],
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+  ] as const;
   while (cursor < queue.length) {
     const [x, y] = queue[cursor++]!;
     for (const [dx, dy] of neighbors) {
@@ -174,13 +206,18 @@ export function validateVaultEntry(
     }
   }
 
-  for (const [slotId, locations] of [...slotLocations].sort(([left], [right]) => compareText(left, right))) {
-    const slot = locations[0] ? entry.legend[rows[locations[0][1]]?.[locations[0][0]] ?? '']?.slot : null;
+  for (const [slotId, locations] of [...slotLocations].sort(([left], [right]) =>
+    compareText(left, right),
+  )) {
+    const slot = locations[0]
+      ? entry.legend[rows[locations[0][1]]?.[locations[0][0]] ?? '']?.slot
+      : null;
     if (slot?.required && locations.every(([x, y]) => !reachable.has(`${x},${y}`))) {
       add(`$.entries.${entry.id}.legend`, `required slot ${slotId} is unreachable`);
     }
   }
 
-  return issues.sort((left, right) =>
-    compareText(left.path, right.path) || compareText(left.message, right.message));
+  return issues.sort(
+    (left, right) => compareText(left.path, right.path) || compareText(left.message, right.message),
+  );
 }

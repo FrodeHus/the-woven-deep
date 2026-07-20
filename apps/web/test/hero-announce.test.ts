@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  floorAnnouncement, healthBand, heroAnnouncements, type FloorAnnounceSnapshot, type HeroAnnounceSnapshot,
+  floorAnnouncement,
+  healthBand,
+  heroAnnouncements,
+  type FloorAnnounceSnapshot,
+  type HeroAnnounceSnapshot,
 } from '../src/ui/hero-announce.js';
 
 function snap(overrides: Partial<HeroAnnounceSnapshot> = {}): HeroAnnounceSnapshot {
@@ -32,7 +36,9 @@ describe('heroAnnouncements', () => {
   });
 
   it('announces crossing below 25% health', () => {
-    expect(heroAnnouncements(snap({ health: 45 }), snap({ health: 20 }))).toEqual(['Health critical.']);
+    expect(heroAnnouncements(snap({ health: 45 }), snap({ health: 20 }))).toEqual([
+      'Health critical.',
+    ]);
   });
 
   it('does NOT announce a health drop that stays within the same band (no screen-reader spam)', () => {
@@ -41,12 +47,15 @@ describe('heroAnnouncements', () => {
   });
 
   it('announces recovery when the band improves', () => {
-    expect(heroAnnouncements(snap({ health: 20 }), snap({ health: 80 }))).toEqual(['Health recovering.']);
+    expect(heroAnnouncements(snap({ health: 20 }), snap({ health: 80 }))).toEqual([
+      'Health recovering.',
+    ]);
   });
 
   it('announces a hunger stage change', () => {
-    expect(heroAnnouncements(snap({ hungerStage: 'Fed' }), snap({ hungerStage: 'Hungry' })))
-      .toEqual(['Hunger: Hungry.']);
+    expect(
+      heroAnnouncements(snap({ hungerStage: 'Fed' }), snap({ hungerStage: 'Hungry' })),
+    ).toEqual(['Hunger: Hungry.']);
   });
 
   it('announces a newly gained condition by name', () => {
@@ -67,8 +76,16 @@ describe('heroAnnouncements', () => {
 
   it('can emit several announcements at once', () => {
     const prev = snap({ health: 80, hungerStage: 'Fed' });
-    const next = snap({ health: 20, hungerStage: 'Starving', conditions: [{ conditionId: 'c.bleed', name: 'Bleeding' }] });
-    expect(heroAnnouncements(prev, next)).toEqual(['Health critical.', 'Hunger: Starving.', 'Afflicted: Bleeding.']);
+    const next = snap({
+      health: 20,
+      hungerStage: 'Starving',
+      conditions: [{ conditionId: 'c.bleed', name: 'Bleeding' }],
+    });
+    expect(heroAnnouncements(prev, next)).toEqual([
+      'Health critical.',
+      'Hunger: Starving.',
+      'Afflicted: Bleeding.',
+    ]);
   });
 });
 
@@ -78,13 +95,19 @@ function floor(overrides: Partial<FloorAnnounceSnapshot> = {}): FloorAnnounceSna
 
 describe('floorAnnouncement', () => {
   it('is silent when there is no previous floor (mount, or a restore straight into a depth)', () => {
-    expect(floorAnnouncement(null, floor({ floorId: 'floor.town', depth: 0, town: true }))).toBeNull();
-    expect(floorAnnouncement(null, floor({ floorId: 'floor.depth-003', depth: 3, town: false }))).toBeNull();
+    expect(
+      floorAnnouncement(null, floor({ floorId: 'floor.town', depth: 0, town: true })),
+    ).toBeNull();
+    expect(
+      floorAnnouncement(null, floor({ floorId: 'floor.depth-003', depth: 3, town: false })),
+    ).toBeNull();
   });
 
   it('is silent when the floorId is unchanged across projection churn', () => {
     const same = floor({ floorId: 'floor.depth-001', depth: 1, town: false });
-    expect(floorAnnouncement(same, floor({ floorId: 'floor.depth-001', depth: 1, town: false }))).toBeNull();
+    expect(
+      floorAnnouncement(same, floor({ floorId: 'floor.depth-001', depth: 1, town: false })),
+    ).toBeNull();
   });
 
   it('announces the new depth when descending from town', () => {

@@ -11,7 +11,9 @@ import { HelpOverlay } from './HelpOverlay.js';
 let pack: CompiledContentPack;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../../../content'),
+  });
 });
 
 /** Renders `HelpOverlay` exactly the way `OverlayHost`'s help case does: through `UiProviders`
@@ -59,7 +61,9 @@ describe('HelpOverlay', () => {
     const legend = screen.getByRole('region', { name: /glyph legend/i });
     expect(within(legend).getByText('@')).toBeInTheDocument();
 
-    const caveRat = pack.entries.find((entry) => entry.kind === 'monster' && entry.id === 'monster.cave-rat');
+    const caveRat = pack.entries.find(
+      (entry) => entry.kind === 'monster' && entry.id === 'monster.cave-rat',
+    );
     expect(caveRat).toBeDefined();
     const monsterRow = within(legend).getByText('Cave rat').closest('li')!;
     expect(monsterRow).toHaveTextContent((caveRat as { glyph: string }).glyph);

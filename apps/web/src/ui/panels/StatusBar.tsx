@@ -22,10 +22,12 @@ export function StatusBar({ snapshot }: PanelProps): JSX.Element {
         <span
           className="condition-badge rounded border px-1.5 text-xs"
           title={primaryCondition.name}
-          style={{
-            '--condition-color': primaryCondition.color,
-            borderColor: 'var(--condition-color)',
-          } as CSSProperties}
+          style={
+            {
+              '--condition-color': primaryCondition.color,
+              borderColor: 'var(--condition-color)',
+            } as CSSProperties
+          }
         >
           <span aria-hidden="true">{'✺'}</span>
           {` ${primaryCondition.name}`}

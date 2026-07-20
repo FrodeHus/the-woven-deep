@@ -9,16 +9,26 @@ import { App } from '../src/App.js';
 import { GuestSession } from '../src/session/guest-session.js';
 import { UiProviders } from '../src/ui/providers.js';
 import {
-  DEFAULT_BINDINGS, DEFAULT_SETTINGS, SETTINGS_KEY, type Settings,
+  DEFAULT_BINDINGS,
+  DEFAULT_SETTINGS,
+  SETTINGS_KEY,
+  type Settings,
 } from '../src/session/settings.js';
-import { COMMAND_SEQUENCE_KEY, PORTRAIT_KEY, SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
+import {
+  COMMAND_SEQUENCE_KEY,
+  PORTRAIT_KEY,
+  SAVE_KEY,
+  type SessionStorageLike,
+} from '../src/session/storage.js';
 import { RECORDS_KEY } from '../src/session/run-records-storage.js';
 import { SettingsOverlay } from '../src/ui/overlays/SettingsOverlay.js';
 
 let pack: CompiledContentPack;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 afterEach(() => {
@@ -34,8 +44,12 @@ function fakeStorage(initial?: Readonly<Record<string, string>>): SessionStorage
   const values = new Map<string, string>(Object.entries(initial ?? {}));
   return {
     get: (key: string) => values.get(key) ?? null,
-    set: (key: string, value: string) => { values.set(key, value); },
-    remove: (key: string) => { values.delete(key); },
+    set: (key: string, value: string) => {
+      values.set(key, value);
+    },
+    remove: (key: string) => {
+      values.delete(key);
+    },
   };
 }
 
@@ -47,7 +61,9 @@ function bindingRow(label: string): HTMLElement {
 /** Opens a shadcn `Select` by its trigger's accessible name, then clicks the option with `option`
  * text -- the two-step interaction every restyled radio group below now requires. */
 async function chooseSelectOption(
-  user: ReturnType<typeof userEvent.setup>, triggerName: string | RegExp, optionName: string | RegExp,
+  user: ReturnType<typeof userEvent.setup>,
+  triggerName: string | RegExp,
+  optionName: string | RegExp,
 ): Promise<void> {
   await user.click(screen.getByRole('combobox', { name: triggerName }));
   await user.click(await screen.findByRole('option', { name: optionName }));
@@ -126,9 +142,11 @@ describe('SettingsOverlay (component-level)', () => {
     await user.keyboard('{Enter}');
     expect(within(waitRow).getByRole('textbox')).toHaveFocus();
     await user.keyboard('z');
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-      bindings: expect.objectContaining({ wait: { key: 'z', shift: false } }),
-    }));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bindings: expect.objectContaining({ wait: { key: 'z', shift: false } }),
+      }),
+    );
   });
 
   it('conflict refusal: capturing "g" for Inventory names Pick up, and leaves both bindings intact', async () => {
@@ -139,7 +157,9 @@ describe('SettingsOverlay (component-level)', () => {
     await user.keyboard('g');
 
     expect(onChange).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent(/Inventory could not be rebound.*Pick up already uses it/i);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /Inventory could not be rebound.*Pick up already uses it/i,
+    );
     // Both rows keep their original chords.
     expect(bindingRow('Inventory')).toHaveTextContent('i');
     expect(bindingRow('Pick up')).toHaveTextContent('g');
@@ -170,9 +190,11 @@ describe('SettingsOverlay (component-level)', () => {
 
     // The capture is still live: a real key now commits normally.
     await user.keyboard('z');
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-      bindings: expect.objectContaining({ wait: { key: 'z', shift: false } }),
-    }));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bindings: expect.objectContaining({ wait: { key: 'z', shift: false } }),
+      }),
+    );
   });
 
   it('Escape while capturing cancels the capture without committing a chord or closing (the row reverts to its Rebind button)', async () => {
@@ -185,12 +207,16 @@ describe('SettingsOverlay (component-level)', () => {
     expect(within(waitRow).getByRole('button', { name: 'Rebind' })).toBeInTheDocument();
   });
 
-  it('per-row reset drops just that action\'s override', () => {
-    const { onChange } = harness({ bindings: { wait: { key: 'z', shift: false }, pickup: { key: 'p', shift: false } } });
+  it("per-row reset drops just that action's override", () => {
+    const { onChange } = harness({
+      bindings: { wait: { key: 'z', shift: false }, pickup: { key: 'p', shift: false } },
+    });
     within(bindingRow('Wait')).getByRole('button', { name: 'Reset' }).click();
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
-      bindings: { pickup: { key: 'p', shift: false } },
-    }));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bindings: { pickup: { key: 'p', shift: false } },
+      }),
+    );
   });
 
   it('global reset restores DEFAULT_BINDINGS (an empty overrides map)', () => {
@@ -218,10 +244,13 @@ describe('SettingsOverlay (component-level)', () => {
 });
 
 describe('SettingsOverlay composed with PlayScreen/App', () => {
-  function bootStorage(): SessionStorageLike { return fakeStorage(); }
+  function bootStorage(): SessionStorageLike {
+    return fakeStorage();
+  }
 
   async function bootIntoPlay(
-    storage: SessionStorageLike = bootStorage(), localStorage: SessionStorageLike = bootStorage(),
+    storage: SessionStorageLike = bootStorage(),
+    localStorage: SessionStorageLike = bootStorage(),
   ): Promise<void> {
     window.history.pushState({}, '', '/play?quickstart=1');
     render(<App fetcher={packFetcher()} storage={storage} localStorage={localStorage} />);
@@ -287,7 +316,9 @@ describe('SettingsOverlay composed with PlayScreen/App', () => {
     expect(bindingRow('Move west')).toHaveTextContent('z');
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset all bindings' }));
-    expect(await within(bindingRow('Move west')).findByText(chordKeyOf(DEFAULT_BINDINGS['move.w']))).toBeInTheDocument();
+    expect(
+      await within(bindingRow('Move west')).findByText(chordKeyOf(DEFAULT_BINDINGS['move.w'])),
+    ).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: 'Escape' });
 
@@ -313,7 +344,9 @@ describe('SettingsOverlay composed with PlayScreen/App', () => {
     // the root immediately, no further interaction needed.
     screen.getByRole('dialog', { name: 'Settings' }); // still open in the first render
     window.history.pushState({}, '', '/play?quickstart=1');
-    const { container } = render(<App fetcher={packFetcher()} storage={bootStorage()} localStorage={localStorage} />);
+    const { container } = render(
+      <App fetcher={packFetcher()} storage={bootStorage()} localStorage={localStorage} />,
+    );
     await within(container).findByRole('grid', { name: /dungeon/i });
     const root = container.firstElementChild as HTMLElement;
     expect(root.className).toMatch(/\bmotion-reduced\b/);
@@ -322,9 +355,14 @@ describe('SettingsOverlay composed with PlayScreen/App', () => {
 
   it('clear guest session requires the exact word, wipes every guest-session key, and lands on the title screen', async () => {
     const storage = fakeStorage({
-      [SAVE_KEY]: 'run-blob', [COMMAND_SEQUENCE_KEY]: '3', [RECORDS_KEY]: 'hall-blob', [PORTRAIT_KEY]: '@',
+      [SAVE_KEY]: 'run-blob',
+      [COMMAND_SEQUENCE_KEY]: '3',
+      [RECORDS_KEY]: 'hall-blob',
+      [PORTRAIT_KEY]: '@',
     });
-    const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify({ ...DEFAULT_SETTINGS, fontScale: 1.5 }) });
+    const localStorage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({ ...DEFAULT_SETTINGS, fontScale: 1.5 }),
+    });
     await bootIntoPlay(storage, localStorage);
     await openSettings();
 
@@ -344,39 +382,71 @@ describe('SettingsOverlay composed with PlayScreen/App', () => {
 
   it('clear guest session forces the memoized Hall repository to reload: a seeded record is gone from the Hall screen after the wipe, not served stale from cache', async () => {
     const seededHall = {
-      records: [{
-        recordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
-        heroName: 'Ada',
-        classTags: ['fighter'],
-        completionType: 'died',
-        cause: { killerContentId: 'monster.cave-rat', depth: 3, turn: 12, worldTime: 12 },
-        deepestDepth: 3,
-        score: { lines: [], total: 40 },
-        metrics: {
-          kills: 0, killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },
-          bossKills: 0, championKills: 0, echoKills: 0, threatDefeated: 0,
-          damageDealt: 0, damageTaken: 0, itemsCollected: 0, itemsIdentified: 0,
-          currencyEarned: 0, currencySpent: 0, tradesCompleted: 0,
-          floorsEntered: 0, deepestDepth: 3, discoveriesRevealed: 0,
-          turnsElapsed: 0, restsCompleted: 0,
+      records: [
+        {
+          recordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+          heroName: 'Ada',
+          classTags: ['fighter'],
+          completionType: 'died',
+          cause: { killerContentId: 'monster.cave-rat', depth: 3, turn: 12, worldTime: 12 },
+          deepestDepth: 3,
+          score: { lines: [], total: 40 },
+          metrics: {
+            kills: 0,
+            killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },
+            bossKills: 0,
+            championKills: 0,
+            echoKills: 0,
+            threatDefeated: 0,
+            damageDealt: 0,
+            damageTaken: 0,
+            itemsCollected: 0,
+            itemsIdentified: 0,
+            currencyEarned: 0,
+            currencySpent: 0,
+            tradesCompleted: 0,
+            floorsEntered: 0,
+            deepestDepth: 3,
+            discoveriesRevealed: 0,
+            turnsElapsed: 0,
+            restsCompleted: 0,
+          },
+          reputations: [],
+          heirloom: null,
+          build: {
+            attributes: { might: 14, agility: 12, vitality: 16, wits: 10, resolve: 12 },
+            equippedItemContentIds: [],
+            signatureAbilityIds: [],
+          },
+          runSeed: 'aaaaaaaa00000000',
+          contentHash: 'b'.repeat(64),
+          enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
         },
-        reputations: [],
-        heirloom: null,
-        build: { attributes: { might: 14, agility: 12, vitality: 16, wits: 10, resolve: 12 }, equippedItemContentIds: [], signatureAbilityIds: [] },
-        runSeed: 'aaaaaaaa00000000',
-        contentHash: 'b'.repeat(64),
-        enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
-      }],
+      ],
       heart: null,
       lifetime: {
-        conqueredChampionRecordIds: [], grantedAchievementIds: [], discoveryProtection: [],
+        conqueredChampionRecordIds: [],
+        grantedAchievementIds: [],
+        discoveryProtection: [],
         totals: {
-          kills: 0, killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },
-          bossKills: 0, championKills: 0, echoKills: 0, threatDefeated: 0,
-          damageDealt: 0, damageTaken: 0, itemsCollected: 0, itemsIdentified: 0,
-          currencyEarned: 0, currencySpent: 0, tradesCompleted: 0,
-          floorsEntered: 0, deepestDepth: 0, discoveriesRevealed: 0,
-          turnsElapsed: 0, restsCompleted: 0,
+          kills: 0,
+          killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },
+          bossKills: 0,
+          championKills: 0,
+          echoKills: 0,
+          threatDefeated: 0,
+          damageDealt: 0,
+          damageTaken: 0,
+          itemsCollected: 0,
+          itemsIdentified: 0,
+          currencyEarned: 0,
+          currencySpent: 0,
+          tradesCompleted: 0,
+          floorsEntered: 0,
+          deepestDepth: 0,
+          discoveriesRevealed: 0,
+          turnsElapsed: 0,
+          restsCompleted: 0,
         },
       },
       appliedDeltaRecordIds: [],

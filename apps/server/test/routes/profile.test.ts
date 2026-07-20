@@ -62,7 +62,10 @@ async function verifyAndGetCookies(
   return Array.isArray(setCookie) ? setCookie : [String(setCookie)];
 }
 
-async function getCsrfToken(app: FastifyInstance, sessionCookies: string[]): Promise<{ csrfToken: string; cookies: string[] }> {
+async function getCsrfToken(
+  app: FastifyInstance,
+  sessionCookies: string[],
+): Promise<{ csrfToken: string; cookies: string[] }> {
   const response = await app.inject({
     method: 'GET',
     url: '/api/auth/session',
@@ -109,7 +112,11 @@ describe('profile routes', () => {
     const response = await app.inject({
       method: 'PUT',
       url: '/api/profile/settings',
-      headers: { origin: PUBLIC_URL, cookie: cookieHeader(sessionCookies), 'content-type': 'application/json' },
+      headers: {
+        origin: PUBLIC_URL,
+        cookie: cookieHeader(sessionCookies),
+        'content-type': 'application/json',
+      },
       payload: { settingsJson: '{}', settingsVersion: 1 },
     });
     expect(response.statusCode).toBe(403);
@@ -210,7 +217,11 @@ describe('profile routes', () => {
   });
 
   it('PUT with a non-integer settingsVersion returns 400 invalid_body', async () => {
-    const sessionCookies = await verifyAndGetCookies(app, database, 'non-integer-version@example.com');
+    const sessionCookies = await verifyAndGetCookies(
+      app,
+      database,
+      'non-integer-version@example.com',
+    );
     const { csrfToken, cookies } = await getCsrfToken(app, sessionCookies);
 
     const response = await app.inject({
@@ -258,7 +269,9 @@ describe('profile routes', () => {
     const mailgunDatabase = freshDatabase();
     const mailgunBundle = createAuthBundle({
       db: mailgunDatabase,
-      config: makeConfig({ mailgun: { apiKey: 'key', domain: 'mg.example.com', sender: 'noreply@example.com' } }),
+      config: makeConfig({
+        mailgun: { apiKey: 'key', domain: 'mg.example.com', sender: 'noreply@example.com' },
+      }),
     });
     const mailgunApp = buildApp({ pack, auth: mailgunBundle });
 

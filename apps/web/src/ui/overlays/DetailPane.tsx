@@ -3,7 +3,11 @@ import { effectLabel } from '../labels.js';
 import { Button } from '../components/button.js';
 import type { MenuEntry, ProjectedItemLike } from './inventory-model.js';
 
-function ActionButton({ label, chord, onClick }: Readonly<{ label: string; chord: string; onClick: () => void }>): JSX.Element {
+function ActionButton({
+  label,
+  chord,
+  onClick,
+}: Readonly<{ label: string; chord: string; onClick: () => void }>): JSX.Element {
   return (
     <Button type="button" variant="outline" size="sm" onClick={onClick}>
       {`${label} (${chord})`}
@@ -12,7 +16,13 @@ function ActionButton({ label, chord, onClick }: Readonly<{ label: string; chord
 }
 
 export function DetailPane({
-  entry, refuelTarget, onEquip, onUse, onDrop, onToggleLight, onRefuel,
+  entry,
+  refuelTarget,
+  onEquip,
+  onUse,
+  onDrop,
+  onToggleLight,
+  onRefuel,
 }: Readonly<{
   entry: MenuEntry | undefined;
   /** The equipped light `entry`'s item can refuel, if any -- see `equippedLightMatchingFuel`. */
@@ -67,8 +77,12 @@ export function DetailPane({
         <ActionButton label={equipped ? 'Unequip' : 'Equip'} chord="e" onClick={onEquip} />
         <ActionButton label="Use" chord="u" onClick={onUse} />
         <ActionButton label="Drop" chord="d" onClick={onDrop} />
-        {item.category === 'light' && <ActionButton label="Toggle light" chord="l" onClick={onToggleLight} />}
-        {refuelTarget && <ActionButton label={`Refuel ${refuelTarget.name}`} chord="r" onClick={onRefuel} />}
+        {item.category === 'light' && (
+          <ActionButton label="Toggle light" chord="l" onClick={onToggleLight} />
+        )}
+        {refuelTarget && (
+          <ActionButton label={`Refuel ${refuelTarget.name}`} chord="r" onClick={onRefuel} />
+        )}
       </div>
     </div>
   );

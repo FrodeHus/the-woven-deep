@@ -20,9 +20,13 @@ export const MIGRATIONS: readonly Migration[] = [
     id: 1,
     name: 'content_packs',
     up: (database) => {
-      const columns = database.prepare(`
+      const columns = database
+        .prepare(
+          `
         select name from pragma_table_info('content_packs') order by cid
-      `).all() as Array<{ name: string }>;
+      `,
+        )
+        .all() as Array<{ name: string }>;
 
       if (columns.length > 0 && !columns.some(({ name }) => name === 'content_json')) {
         database.exec('alter table content_packs rename to content_packs_legacy');

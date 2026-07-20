@@ -1,5 +1,8 @@
 import type {
-  CompiledContentPack, ContentEntry, EncounterContentEntry, EncounterModel,
+  CompiledContentPack,
+  ContentEntry,
+  EncounterContentEntry,
+  EncounterModel,
   ItemContentEntry,
 } from '@woven-deep/content';
 import type { OpaqueId } from './model.js';

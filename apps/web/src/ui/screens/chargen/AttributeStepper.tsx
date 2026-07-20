@@ -36,7 +36,12 @@ export function AttributeStepper({
           <span className="text-fg">{label}</span>
           <span className="text-subtle">{cost} pts</span>
         </span>
-        <BlockBar value={value} max={max} cells={max} {...(abbrColor ? { color: abbrColor } : {})} />
+        <BlockBar
+          value={value}
+          max={max}
+          cells={max}
+          {...(abbrColor ? { color: abbrColor } : {})}
+        />
       </span>
       <button
         type="button"

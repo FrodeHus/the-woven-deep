@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type JSX,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import type { OpaqueId } from '@woven-deep/engine';
 import type { MerchantServiceId } from '@woven-deep/content';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
-import {
-  heroOf, ownedItemOf, tradeOf, type TradeView,
-} from '../../session/projection-view.js';
+import { heroOf, ownedItemOf, tradeOf, type TradeView } from '../../session/projection-view.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
 import { Button } from '../components/button.js';
@@ -28,7 +33,9 @@ function trade(snapshot: SessionSnapshot): TradeView | undefined {
  * `ownedItem` performs. Falls back to the raw id if the backpack projection is ever out of sync
  * with the offer list (should not happen, but a fallback beats a blank row). */
 function backpackItemName(snapshot: SessionSnapshot, itemId: OpaqueId): string {
-  return heroOf(snapshot.projection).backpack.find((item) => item.itemId === itemId)?.name ?? itemId;
+  return (
+    heroOf(snapshot.projection).backpack.find((item) => item.itemId === itemId)?.name ?? itemId
+  );
 }
 
 /** Identify targets can be backpacked OR equipped (see `identifyTargetIds` in
@@ -42,7 +49,11 @@ function ownedItemRef(snapshot: SessionSnapshot, itemId: OpaqueId): ProjectedIte
 type FocusedList = 'buy' | 'sell' | 'services';
 
 const LIST_ORDER: readonly FocusedList[] = ['buy', 'sell', 'services'];
-const LIST_LABEL: Readonly<Record<FocusedList, string>> = { buy: 'Buy', sell: 'Sell', services: 'Services' };
+const LIST_LABEL: Readonly<Record<FocusedList, string>> = {
+  buy: 'Buy',
+  sell: 'Sell',
+  services: 'Services',
+};
 const PICKER_LABEL = 'Identify target';
 
 /** `MerchantServiceId` is a closed, hardcoded union (`packages/content/src/model.ts`) rather than a
@@ -109,7 +120,11 @@ export interface TradeScreenProps {
  * close through `onOpenChange` -- closing the picker first when it is open, otherwise the whole dialog
  * via `onClose`.
  */
-export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps): JSX.Element | null {
+export function TradeScreen({
+  snapshot,
+  onDispatch,
+  onClose,
+}: TradeScreenProps): JSX.Element | null {
   const session = trade(snapshot);
   const [focusedList, setFocusedList] = useState<FocusedList>('buy');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -125,9 +140,10 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
   const pickerServiceIdRef = useRef<MerchantServiceId | null>(pickerServiceId);
   pickerServiceIdRef.current = pickerServiceId;
 
-  const pickerService = pickerServiceId === null
-    ? null
-    : (session?.services.find((entry) => entry.serviceId === pickerServiceId) ?? null);
+  const pickerService =
+    pickerServiceId === null
+      ? null
+      : (session?.services.find((entry) => entry.serviceId === pickerServiceId) ?? null);
 
   const rows = useMemo((): Readonly<Record<FocusedList, readonly TradeRow[]>> => {
     if (!session) return { buy: [], sell: [], services: [] };
@@ -247,7 +263,11 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
         // `Dialog` mounts its popup contents behind an enter transition, so a mount-time `.focus()`
         // effect runs before the container exists; the popup's own post-enter `initialFocus` hook is
         // the transition-aware place to seat focus on the active listbox for the first open.
-        initialFocus={() => (containerRef.current ? focusActiveList(containerRef.current, pickerServiceIdRef.current !== null) : false)}
+        initialFocus={() =>
+          containerRef.current
+            ? focusActiveList(containerRef.current, pickerServiceIdRef.current !== null)
+            : false
+        }
       >
         <DialogHeader>
           <DialogTitle>Trade</DialogTitle>
@@ -255,16 +275,25 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
         <p className="text-sm text-fg-strong">{session.merchantName}</p>
         <p className="text-sm text-muted">{session.reputationTier}</p>
         <p className="text-sm font-mono text-fg">{`${session.currency}g`}</p>
-        <div ref={containerRef} tabIndex={-1} className="flex flex-col gap-2 outline-none" onKeyDown={handleKeyDown}>
+        <div
+          ref={containerRef}
+          tabIndex={-1}
+          className="flex flex-col gap-2 outline-none"
+          onKeyDown={handleKeyDown}
+        >
           <Tabs value={focusedList} onValueChange={(value) => switchList(value as FocusedList)}>
             <TabsList aria-label="Trade lists">
-              {LIST_ORDER.map((list) => <TabsTrigger key={list} value={list}>{LIST_LABEL[list]}</TabsTrigger>)}
+              {LIST_ORDER.map((list) => (
+                <TabsTrigger key={list} value={list}>
+                  {LIST_LABEL[list]}
+                </TabsTrigger>
+              ))}
             </TabsList>
           </Tabs>
           {/* One list panel for the active tab, rendered outside `Tabs` so its `ListDetail` listbox
-            * is a single persistent DOM node whose items change as the tab switches -- keyboard focus
-            * never has to survive a listbox unmount/remount (which would race the `Dialog`'s focus
-            * trap). An empty list drops the listbox entirely and shows the placeholder instead. */}
+           * is a single persistent DOM node whose items change as the tab switches -- keyboard focus
+           * never has to survive a listbox unmount/remount (which would race the `Dialog`'s focus
+           * trap). An empty list drops the listbox entirely and shows the placeholder instead. */}
           <div className="flex flex-col gap-1">
             {activeRows.length === 0 && <p className="text-sm text-muted">Nothing here.</p>}
             {activeRows.length > 0 && (
@@ -273,20 +302,20 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
                 items={toListItems(activeRows)}
                 selectedIndex={selectedIndex}
                 onSelect={setSelectedIndex}
-                renderDetail={(item) => (
-                  item
-                    ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => activeRows.find((row) => row.id === item.id)?.run()}
-                      >
-                        {actionLabel}
-                      </Button>
-                    )
-                    : <p className="text-sm text-muted">Nothing selected.</p>
-                )}
+                renderDetail={(item) =>
+                  item ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => activeRows.find((row) => row.id === item.id)?.run()}
+                    >
+                      {actionLabel}
+                    </Button>
+                  ) : (
+                    <p className="text-sm text-muted">Nothing selected.</p>
+                  )
+                }
               />
             )}
           </div>
@@ -297,32 +326,42 @@ export function TradeScreen({ snapshot, onDispatch, onClose }: TradeScreenProps)
                 listLabel={PICKER_LABEL}
                 items={pickerService.targetItemIds.map((itemId) => {
                   const ref = ownedItemRef(snapshot, itemId);
-                  return { id: itemId, label: ref.name, ...(ref.glyph ? { glyph: ref.glyph } : {}) };
+                  return {
+                    id: itemId,
+                    label: ref.name,
+                    ...(ref.glyph ? { glyph: ref.glyph } : {}),
+                  };
                 })}
                 selectedIndex={pickerIndex}
                 onSelect={setPickerIndex}
-                renderDetail={(item) => (
-                  item
-                    ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          onDispatch({ type: 'trade-service', serviceId: pickerService.serviceId, targetItemId: item.id });
-                          setPickerServiceId(null);
-                        }}
-                      >
-                        Identify
-                      </Button>
-                    )
-                    : <p className="text-sm text-muted">Nothing selected.</p>
-                )}
+                renderDetail={(item) =>
+                  item ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        onDispatch({
+                          type: 'trade-service',
+                          serviceId: pickerService.serviceId,
+                          targetItemId: item.id,
+                        });
+                        setPickerServiceId(null);
+                      }}
+                    >
+                      Identify
+                    </Button>
+                  ) : (
+                    <p className="text-sm text-muted">Nothing selected.</p>
+                  )
+                }
               />
               <p className="text-xs text-muted">↑↓ select · Enter identify · Esc back</p>
             </div>
           )}
-          <p className="text-xs text-muted">↑↓ select · Tab switch list · Enter trade · Esc close</p>
+          <p className="text-xs text-muted">
+            ↑↓ select · Tab switch list · Enter trade · Esc close
+          </p>
         </div>
       </DialogContent>
     </Dialog>

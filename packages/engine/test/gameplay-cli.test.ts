@@ -20,8 +20,12 @@ describe('gameplay demonstration CLI', () => {
     expect(first.status, first.stderr).toBe(0);
     expect(second.status, second.stderr).toBe(0);
     expect(first.stdout).toBe(second.stdout);
-    expect(first.stdout).toMatch(/movement and reactions\n[\s\S]*combat\n[\s\S]*items and identity\n/);
-    expect(first.stdout).toMatch(/survival and features\n[\s\S]*public projection\n[\s\S]*stable hashes\n/);
+    expect(first.stdout).toMatch(
+      /movement and reactions\n[\s\S]*combat\n[\s\S]*items and identity\n/,
+    );
+    expect(first.stdout).toMatch(
+      /survival and features\n[\s\S]*public projection\n[\s\S]*stable hashes\n/,
+    );
     expect(first.stdout).toContain('deterministic core gameplay replay verified\n');
   });
 

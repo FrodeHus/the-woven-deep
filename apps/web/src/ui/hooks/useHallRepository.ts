@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 import type { RunRecordRepository } from '@woven-deep/engine';
-import { createSessionRunRecordRepository, SessionHallCorruptError } from '../../session/run-records-storage.js';
+import {
+  createSessionRunRecordRepository,
+  SessionHallCorruptError,
+} from '../../session/run-records-storage.js';
 import type { SessionStorageLike } from '../../session/storage.js';
 
 /**
@@ -27,7 +30,6 @@ export function useHallRepository(
       }
       throw thrown;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `storageEpoch` is a deliberate
-    // reconstruction trigger, not a value read inside the memo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- storageEpoch is intentionally a dependency to force reconstruction after a session wipe, even though it is not read inside the memo.
   }, [storage, storageEpoch]);
 }

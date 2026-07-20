@@ -32,7 +32,14 @@ describe('LandingPage structure', () => {
     expect(screen.getByRole('navigation', { name: /primary/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: /few return/i })).toBeInTheDocument();
 
-    const sectionNames = [/labyrinth that remembers the dead/i, /the deep remembers/i, /descend as a shade/i, /notable features/i, /before you descend/i, /will you answer/i];
+    const sectionNames = [
+      /labyrinth that remembers the dead/i,
+      /the deep remembers/i,
+      /descend as a shade/i,
+      /notable features/i,
+      /before you descend/i,
+      /will you answer/i,
+    ];
     for (const name of sectionNames) {
       expect(screen.getByRole('region', { name })).toBeInTheDocument();
     }

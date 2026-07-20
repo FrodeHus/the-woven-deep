@@ -18,7 +18,10 @@ export type ReducedMotionSetting = 'system' | 'on' | 'off';
 export function effectiveReducedMotion(setting: ReducedMotionSetting): boolean {
   if (setting === 'on') return true;
   if (setting === 'off') return false;
-  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+  );
 }
 
 export interface ScreenFadeProps {
@@ -48,7 +51,11 @@ export interface ScreenFadeProps {
  * normal case, plus a timeout backup, because a reduced-motion `animation: none` (the CSS-side
  * belt-and-suspenders declared in all four motion blocks) never fires `animationend`.
  */
-export function ScreenFade({ transitionKey, reducedMotion, children }: ScreenFadeProps): JSX.Element {
+export function ScreenFade({
+  transitionKey,
+  reducedMotion,
+  children,
+}: ScreenFadeProps): JSX.Element {
   const previousKeyRef = useRef(transitionKey);
   const [fading, setFading] = useState(false);
 

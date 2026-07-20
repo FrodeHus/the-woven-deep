@@ -1,8 +1,19 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
-  ATTRIBUTE_ORDER, HERO_NAME_RULES, deriveActorStats, pointBuyCost, rerollAttributes, rollAttributes,
-  type AttributeName, type AttributeRoll, type BaseAttributes, type DerivedActorStats, type DerivedStatModifier,
-  type HeroChoices, type OpaqueId, type Uint32State,
+  ATTRIBUTE_ORDER,
+  HERO_NAME_RULES,
+  deriveActorStats,
+  pointBuyCost,
+  rerollAttributes,
+  rollAttributes,
+  type AttributeName,
+  type AttributeRoll,
+  type BaseAttributes,
+  type DerivedActorStats,
+  type DerivedStatModifier,
+  type HeroChoices,
+  type OpaqueId,
+  type Uint32State,
 } from '@woven-deep/engine';
 import { backgroundById, balanceEntry, classById, traitById } from './pack-queries.js';
 
@@ -80,9 +91,11 @@ function normalizedName(name: string): string {
 
 export function nameIsValid(name: string): boolean {
   const normalized = normalizedName(name);
-  return normalized.length >= HERO_NAME_RULES.minLength
-    && normalized.length <= HERO_NAME_RULES.maxLength
-    && HERO_NAME_RULES.pattern.test(normalized);
+  return (
+    normalized.length >= HERO_NAME_RULES.minLength &&
+    normalized.length <= HERO_NAME_RULES.maxLength &&
+    HERO_NAME_RULES.pattern.test(normalized)
+  );
 }
 
 /** Whether the given step's own field has been chosen. Step 7 (Review) has no field of its own
@@ -91,17 +104,28 @@ export function nameIsValid(name: string): boolean {
  * completion without re-implementing these rules. */
 export function stepIsSatisfied(state: WizardState, step: WizardState['step']): boolean {
   switch (step) {
-    case 1: return nameIsValid(state.name);          // Identity
-    case 2: return state.classId !== null;            // Calling
-    case 3: return state.kitId !== null;               // Kit
-    case 4: return state.attributes !== null;          // Attributes (method + values)
-    case 5: return state.backgroundId !== null;        // Origin
-    case 6: return true;                                // Traits (optional, capped in toggle-trait)
-    case 7: return false;                               // Review (terminal)
+    case 1:
+      return nameIsValid(state.name); // Identity
+    case 2:
+      return state.classId !== null; // Calling
+    case 3:
+      return state.kitId !== null; // Kit
+    case 4:
+      return state.attributes !== null; // Attributes (method + values)
+    case 5:
+      return state.backgroundId !== null; // Origin
+    case 6:
+      return true; // Traits (optional, capped in toggle-trait)
+    case 7:
+      return false; // Review (terminal)
   }
 }
 
-export function wizardReduce(state: WizardState, action: WizardAction, context: WizardContext): WizardState {
+export function wizardReduce(
+  state: WizardState,
+  action: WizardAction,
+  context: WizardContext,
+): WizardState {
   switch (action.type) {
     case 'set-name':
       return { ...state, name: action.name };
@@ -146,7 +170,8 @@ export function wizardReduce(state: WizardState, action: WizardAction, context: 
       if (state.method !== 'point-buy' || state.attributes === null) return state;
       const balance = balanceEntry(context.pack);
       if (!balance) return state;
-      if (action.value < balance.attributeMinimum || action.value > balance.attributeMaximum) return state;
+      if (action.value < balance.attributeMinimum || action.value > balance.attributeMaximum)
+        return state;
       const candidate = { ...state.attributes, [action.attribute]: action.value };
       let cost: number;
       try {
@@ -184,7 +209,10 @@ export function wizardReduce(state: WizardState, action: WizardAction, context: 
       const entry = traitById(context.pack, action.traitId);
       if (!entry) return state;
       if (state.traitIds.includes(action.traitId)) {
-        return { ...state, traitIds: state.traitIds.filter((traitId) => traitId !== action.traitId) };
+        return {
+          ...state,
+          traitIds: state.traitIds.filter((traitId) => traitId !== action.traitId),
+        };
       }
       if (state.traitIds.length >= MAX_TRAITS) return state;
       return { ...state, traitIds: [...state.traitIds, action.traitId] };
@@ -207,14 +235,15 @@ export function wizardReduce(state: WizardState, action: WizardAction, context: 
 
 export function wizardChoices(state: WizardState): HeroChoices | null {
   if (
-    state.step !== 7
-    || !nameIsValid(state.name)
-    || state.method === null
-    || state.attributes === null
-    || state.classId === null
-    || state.kitId === null
-    || state.backgroundId === null
-  ) return null;
+    state.step !== 7 ||
+    !nameIsValid(state.name) ||
+    state.method === null ||
+    state.attributes === null ||
+    state.classId === null ||
+    state.kitId === null ||
+    state.backgroundId === null
+  )
+    return null;
 
   return {
     name: state.name,
@@ -231,7 +260,10 @@ export function wizardChoices(state: WizardState): HeroChoices | null {
  * `deriveActorStats` the background's and each selected trait's modifiers directly as separate
  * `heroModifiers` entries — it sums across all of them per stat, so pre-merging into one object
  * first (as `heroFromChoices` does for the persisted `NewRunHero`) is unnecessary here. */
-export function wizardPreview(state: WizardState, pack: CompiledContentPack): DerivedActorStats | null {
+export function wizardPreview(
+  state: WizardState,
+  pack: CompiledContentPack,
+): DerivedActorStats | null {
   if (state.attributes === null) return null;
   const balance = balanceEntry(pack);
   if (!balance) return null;

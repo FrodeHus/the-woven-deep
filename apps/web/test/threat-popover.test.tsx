@@ -4,7 +4,6 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
-import { DEFAULT_GUEST_HERO, createNewRun, projectGameplayState, type GameplayProjection } from '@woven-deep/engine';
 import { GuestSession } from '../src/session/guest-session.js';
 import type { SessionStorageLike } from '../src/session/storage.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
@@ -12,33 +11,41 @@ import { ThreatPopover } from '../src/ui/ThreatPopover.js';
 import { withUiProviders } from './with-ui-providers.js';
 
 let pack: CompiledContentPack;
-let baseProjection: GameplayProjection;
 
 const SEED = [11, 22, 33, 44] as const;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
-  const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
-  baseProjection = projectGameplayState({ state: run, content: pack });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 function fakeStorage(): SessionStorageLike {
   const store = new Map<string, string>();
   return {
     get: (key: string) => store.get(key) ?? null,
-    set: (key: string, value: string) => { store.set(key, value); },
+    set: (key: string, value: string) => {
+      store.set(key, value);
+    },
   };
 }
 
 describe('ThreatPopover', () => {
-  it('renders as a non-focusable tooltip with the actor\'s fields', () => {
+  it("renders as a non-focusable tooltip with the actor's fields", () => {
     render(
       <ThreatPopover
         actor={{
-          name: 'Cave rat', glyph: 'r', disposition: 'hostile',
-          healthPresentation: { band: 'wounded' }, intentPresentation: 'intent.approach',
+          name: 'Cave rat',
+          glyph: 'r',
+          disposition: 'hostile',
+          healthPresentation: { band: 'wounded' },
+          intentPresentation: 'intent.approach',
         }}
-        col={2} row={3} paneCols={20} paneRows={10} cellPx={{ width: 8, height: 16 }}
+        col={2}
+        row={3}
+        paneCols={20}
+        paneRows={10}
+        cellPx={{ width: 8, height: 16 }}
       />,
     );
     const tooltip = screen.getByRole('tooltip');
@@ -52,8 +59,16 @@ describe('ThreatPopover', () => {
   it('positions itself in pixels derived from the measured cell size, not a CSS custom property', () => {
     render(
       <ThreatPopover
-        actor={{ name: 'Cave rat', disposition: 'hostile', healthPresentation: { band: 'healthy' } }}
-        col={2} row={3} paneCols={20} paneRows={10} cellPx={{ width: 10, height: 18 }}
+        actor={{
+          name: 'Cave rat',
+          disposition: 'hostile',
+          healthPresentation: { band: 'healthy' },
+        }}
+        col={2}
+        row={3}
+        paneCols={20}
+        paneRows={10}
+        cellPx={{ width: 10, height: 18 }}
       />,
     );
     const style = screen.getByRole('tooltip').getAttribute('style')!;
@@ -66,8 +81,16 @@ describe('ThreatPopover', () => {
   it('clamps its position so it never renders past the pane bounds', () => {
     render(
       <ThreatPopover
-        actor={{ name: 'Cave rat', disposition: 'hostile', healthPresentation: { band: 'healthy' } }}
-        col={999} row={-5} paneCols={20} paneRows={10} cellPx={{ width: 8, height: 16 }}
+        actor={{
+          name: 'Cave rat',
+          disposition: 'hostile',
+          healthPresentation: { band: 'healthy' },
+        }}
+        col={999}
+        row={-5}
+        paneCols={20}
+        paneRows={10}
+        cellPx={{ width: 8, height: 16 }}
       />,
     );
     const style = screen.getByRole('tooltip').getAttribute('style')!;
@@ -99,10 +122,17 @@ describe('PlayScreen threat hover integration (compact tier)', () => {
       ...snapshot,
       projection: {
         ...snapshot.projection,
-        actors: [{
-          actorId: 'actor.rat', name: 'Cave rat', glyph: 'r', disposition: 'hostile',
-          healthPresentation: { band: 'wounded' }, x: hero.x + 1, y: hero.y,
-        }],
+        actors: [
+          {
+            actorId: 'actor.rat',
+            name: 'Cave rat',
+            glyph: 'r',
+            disposition: 'hostile',
+            healthPresentation: { band: 'wounded' },
+            x: hero.x + 1,
+            y: hero.y,
+          },
+        ],
       },
     };
     const fakeSession = {

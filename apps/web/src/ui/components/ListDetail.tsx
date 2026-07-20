@@ -87,12 +87,17 @@ export function ListDetail(props: Readonly<ListDetailProps>): JSX.Element {
                   </span>
                 )}
                 {item.glyph && (
-                  <span className="font-mono" style={item.glyphColor ? { color: item.glyphColor } : undefined}>
+                  <span
+                    className="font-mono"
+                    style={item.glyphColor ? { color: item.glyphColor } : undefined}
+                  >
                     {item.glyph}
                   </span>
                 )}
                 <span className="flex-1">{item.label}</span>
-                {item.quantity !== undefined && <span className="text-muted">{`x${item.quantity}`}</span>}
+                {item.quantity !== undefined && (
+                  <span className="text-muted">{`x${item.quantity}`}</span>
+                )}
                 {item.badge && <span className="text-xs text-muted">{item.badge}</span>}
               </div>
             );

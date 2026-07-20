@@ -3,14 +3,25 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  POPULATION_REPLAY_BOUNDARIES, createPopulationDemoRun, decodeActiveRun, encodeActiveRun,
-  populationDemoCommands, populationDemoEquivalent, populationDemoScenario, resolveCommand,
-  resolvePopulationDemoCommand, runPopulationDemo, stableJson, type PopulationDemoInput,
+  POPULATION_REPLAY_BOUNDARIES,
+  createPopulationDemoRun,
+  decodeActiveRun,
+  encodeActiveRun,
+  populationDemoCommands,
+  populationDemoEquivalent,
+  populationDemoScenario,
+  resolveCommand,
+  resolvePopulationDemoCommand,
+  runPopulationDemo,
+  stableJson,
+  type PopulationDemoInput,
 } from '../src/index.js';
 
 let pack: CompiledContentPack;
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 describe('population continuous-versus-split replay', () => {
@@ -19,19 +30,26 @@ describe('population continuous-versus-split replay', () => {
     const continuous = runPopulationDemo(pack);
     const split = runPopulationDemo(pack, new Set([index]));
     expect(encodeActiveRun(split.state)).toBe(encodeActiveRun(continuous.state));
-    expect(stableJson(split.records.map((record) => record.commandResult)))
-      .toBe(stableJson(continuous.records.map((record) => record.commandResult)));
-    expect(stableJson(split.records.map((record) => record.authoritativeEvents)))
-      .toBe(stableJson(continuous.records.map((record) => record.authoritativeEvents)));
-    expect(stableJson(split.records.map((record) => record.publicEvents)))
-      .toBe(stableJson(continuous.records.map((record) => record.publicEvents)));
-    expect(stableJson(split.records.map((record) => record.projection)))
-      .toBe(stableJson(continuous.records.map((record) => record.projection)));
+    expect(stableJson(split.records.map((record) => record.commandResult))).toBe(
+      stableJson(continuous.records.map((record) => record.commandResult)),
+    );
+    expect(stableJson(split.records.map((record) => record.authoritativeEvents))).toBe(
+      stableJson(continuous.records.map((record) => record.authoritativeEvents)),
+    );
+    expect(stableJson(split.records.map((record) => record.publicEvents))).toBe(
+      stableJson(continuous.records.map((record) => record.publicEvents)),
+    );
+    expect(stableJson(split.records.map((record) => record.projection))).toBe(
+      stableJson(continuous.records.map((record) => record.projection)),
+    );
   });
 
   it('is equivalent when every named boundary reloads', () => {
     const continuous = runPopulationDemo(pack);
-    const split = runPopulationDemo(pack, new Set(POPULATION_REPLAY_BOUNDARIES.map((_, index) => index)));
+    const split = runPopulationDemo(
+      pack,
+      new Set(POPULATION_REPLAY_BOUNDARIES.map((_, index) => index)),
+    );
     expect(populationDemoEquivalent(split, continuous)).toBe(true);
   });
 
@@ -49,18 +67,28 @@ describe('population continuous-versus-split replay', () => {
 
   it('persists varied production commands and their authoritative/public artifacts', () => {
     const result = runPopulationDemo(pack);
-    expect(new Set(result.records.map((record) => record.command.type))).toEqual(new Set(['wait', 'attack']));
+    expect(new Set(result.records.map((record) => record.command.type))).toEqual(
+      new Set(['wait', 'attack']),
+    );
     const attackRecords = result.records.filter((record) => record.command.type === 'attack');
     expect(attackRecords).toHaveLength(5);
-    expect(attackRecords.every((record) => record.authoritativeEvents.some((event) => event.type === 'actor.died'
-      && event.actorId === record.command.targetActorId))).toBe(true);
+    expect(
+      attackRecords.every((record) =>
+        record.authoritativeEvents.some(
+          (event) => event.type === 'actor.died' && event.actorId === record.command.targetActorId,
+        ),
+      ),
+    ).toBe(true);
     expect(result.state.recentCommands).toHaveLength(POPULATION_REPLAY_BOUNDARIES.length);
-    expect(stableJson(result.state.recentCommands.map((record) => record.command)))
-      .toBe(stableJson(result.records.map((record) => record.command)));
-    expect(stableJson(result.state.recentCommands.map((record) => record.events)))
-      .toBe(stableJson(result.records.map((record) => record.authoritativeEvents)));
-    expect(stableJson(result.state.recentCommands.map((record) => record.publicEvents)))
-      .toBe(stableJson(result.records.map((record) => record.publicEvents)));
+    expect(stableJson(result.state.recentCommands.map((record) => record.command))).toBe(
+      stableJson(result.records.map((record) => record.command)),
+    );
+    expect(stableJson(result.state.recentCommands.map((record) => record.events))).toBe(
+      stableJson(result.records.map((record) => record.authoritativeEvents)),
+    );
+    expect(stableJson(result.state.recentCommands.map((record) => record.publicEvents))).toBe(
+      stableJson(result.records.map((record) => record.publicEvents)),
+    );
   });
 
   it('deduplicates a persisted command after save and reload', () => {
@@ -75,9 +103,15 @@ describe('population continuous-versus-split replay', () => {
 
   it('rejects stale new command ids without changing persisted history', () => {
     const result = runPopulationDemo(pack);
-    const stale = resolveCommand(result.state, {
-      type: 'wait', commandId: 'command.population-demo-stale', expectedRevision: result.initial.revision,
-    }, { content: pack });
+    const stale = resolveCommand(
+      result.state,
+      {
+        type: 'wait',
+        commandId: 'command.population-demo-stale',
+        expectedRevision: result.initial.revision,
+      },
+      { content: pack },
+    );
     expect(stale.result).toMatchObject({ status: 'rejected', reason: 'stale_revision' });
     expect(encodeActiveRun(stale.state)).toBe(encodeActiveRun(result.state));
   });

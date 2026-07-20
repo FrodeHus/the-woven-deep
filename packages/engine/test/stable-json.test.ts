@@ -11,8 +11,9 @@ describe('compareCodeUnits', () => {
 
 describe('stableJson', () => {
   it('sorts object keys recursively and retains array order', () => {
-    expect(stableJson({ z: 1, a: { beta: 2, alpha: 1 }, list: [3, 2, 1] }))
-      .toBe('{"a":{"alpha":1,"beta":2},"list":[3,2,1],"z":1}');
+    expect(stableJson({ z: 1, a: { beta: 2, alpha: 1 }, list: [3, 2, 1] })).toBe(
+      '{"a":{"alpha":1,"beta":2},"list":[3,2,1],"z":1}',
+    );
     expect(stableJson({ 2: 'two', 10: 'ten' })).toBe('{"10":"ten","2":"two"}');
     expect(stableJson({ probability: 0.65 })).toBe('{"probability":0.65}');
   });
@@ -22,14 +23,15 @@ describe('stableJson', () => {
     (value) => expect(() => stableJson({ value })).toThrow(),
   );
 
-  it.each([() => undefined, 1n, Symbol('value')])(
-    'rejects unsupported primitive %s',
-    (value) => expect(() => stableJson(value)).toThrow(/unsupported/),
+  it.each([() => undefined, 1n, Symbol('value')])('rejects unsupported primitive %s', (value) =>
+    expect(() => stableJson(value)).toThrow(/unsupported/),
   );
 
   it('rejects sparse arrays, cycles, non-plain objects, and undefined children', () => {
-    const sparse = Array(2); sparse[1] = 1;
-    const cyclic: Record<string, unknown> = {}; cyclic.self = cyclic;
+    const sparse = Array(2);
+    sparse[1] = 1;
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
     expect(() => stableJson(sparse)).toThrow(/sparse/);
     expect(() => stableJson(cyclic)).toThrow(/cycle/);
     expect(() => stableJson(new (class Value {})())).toThrow(/plain/);

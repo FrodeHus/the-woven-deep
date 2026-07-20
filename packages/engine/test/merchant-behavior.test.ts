@@ -48,26 +48,51 @@ const HERO_ID = 'hero.demo';
 const BEETLE_ID = 'monster.threat-01';
 
 beforeAll(async () => {
-  content = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
-  encounter = content.entries.find((entry): entry is MerchantEncounterContentEntry =>
-    entry.kind === 'encounter' && entry.model === 'merchant' && !entry.definition.permanent)!;
+  content = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
+  encounter = content.entries.find(
+    (entry): entry is MerchantEncounterContentEntry =>
+      entry.kind === 'encounter' && entry.model === 'merchant' && !entry.definition.permanent,
+  )!;
   npc = content.entries.find((entry): entry is NpcContentEntry => entry.kind === 'npc')!;
-  faction = content.entries.find((entry): entry is NpcFactionContentEntry => entry.kind === 'npc-faction')!;
+  faction = content.entries.find(
+    (entry): entry is NpcFactionContentEntry => entry.kind === 'npc-faction',
+  )!;
 });
 
 const context = () => ({ content });
 
-function item(itemId: string, contentId: string, quantity: number, location: ItemInstance['location']): ItemInstance {
-  return { itemId, contentId, quantity, condition: 100, enchantment: null, identified: true,
-    charges: null, fuel: null, enabled: null, location };
+function item(
+  itemId: string,
+  contentId: string,
+  quantity: number,
+  location: ItemInstance['location'],
+): ItemInstance {
+  return {
+    itemId,
+    contentId,
+    quantity,
+    condition: 100,
+    enchantment: null,
+    identified: true,
+    charges: null,
+    fuel: null,
+    enabled: null,
+    location,
+  };
 }
 
 function merchantDecisions(encountered: boolean, instancesCreated: number) {
-  return content.entries.filter((entry) => entry.kind === 'encounter')
-    .sort((left, right) => left.id < right.id ? -1 : 1)
+  return content.entries
+    .filter((entry) => entry.kind === 'encounter')
+    .sort((left, right) => (left.id < right.id ? -1 : 1))
     .map((entry) => ({
-      encounterId: entry.id, baseProbability: entry.runAppearanceChance, protectionBonus: 0,
-      effectiveProbability: entry.runAppearanceChance, eligible: true,
+      encounterId: entry.id,
+      baseProbability: entry.runAppearanceChance,
+      protectionBonus: 0,
+      effectiveProbability: entry.runAppearanceChance,
+      eligible: true,
       reachedEligibleDepth: entry.id === encounter.id && encountered,
       encountered: entry.id === encounter.id ? encountered : false,
       instancesCreated: entry.id === encounter.id ? instancesCreated : 0,
@@ -87,22 +112,35 @@ function merchantRun(): ActiveRun {
     encounterDecisions: merchantDecisions(true, 1),
   };
   const materialized = materializeMerchant({
-    run, content, encounter, populationId: POPULATION_ID,
-    floorId: 'floor.demo', position: { x: 2, y: 1 },
+    run,
+    content,
+    encounter,
+    populationId: POPULATION_ID,
+    floorId: 'floor.demo',
+    position: { x: 2, y: 1 },
   });
   const stock: ItemInstance[] = [
-    item('item.stock.lamp-oil', 'item.lamp-oil', 4, { type: 'merchant-stock', populationId: POPULATION_ID }),
-    item('item.stock.ration', 'item.travel-ration', 2, { type: 'merchant-stock', populationId: POPULATION_ID }),
+    item('item.stock.lamp-oil', 'item.lamp-oil', 4, {
+      type: 'merchant-stock',
+      populationId: POPULATION_ID,
+    }),
+    item('item.stock.ration', 'item.travel-ration', 2, {
+      type: 'merchant-stock',
+      populationId: POPULATION_ID,
+    }),
   ];
   const stockIds = stock.map((entry) => entry.itemId).sort();
   const population: MerchantPopulation = {
-    ...materialized.population, initialStockItemIds: stockIds, stockItemIds: stockIds,
+    ...materialized.population,
+    initialStockItemIds: stockIds,
+    stockItemIds: stockIds,
   };
   return {
     ...run,
     rng: { ...run.rng, 'merchant-stock': materialized.nextMerchantStockState },
-    actors: [...run.actors, materialized.actor]
-      .sort((left, right) => left.actorId < right.actorId ? -1 : 1),
+    actors: [...run.actors, materialized.actor].sort((left, right) =>
+      left.actorId < right.actorId ? -1 : 1,
+    ),
     items: stock,
     populations: [population],
   };
@@ -110,14 +148,27 @@ function merchantRun(): ActiveRun {
 
 function beetle(overrides: Partial<ActorState> = {}): ActorState {
   return {
-    actorId: BEETLE_ID, contentId: 'monster.training-beetle', playerControlled: false,
-    floorId: 'floor.demo', x: 5, y: 3,
+    actorId: BEETLE_ID,
+    contentId: 'monster.training-beetle',
+    playerControlled: false,
+    floorId: 'floor.demo',
+    x: 5,
+    y: 3,
     attributes: { might: 4, agility: 3, vitality: 6, wits: 1, resolve: 3 },
-    health: 7, maxHealth: 7, energy: 0, speed: 75, reactionReady: true, disposition: 'hostile',
-    awareActorIds: [], conditions: [], equipment: emptyEquipment(),
+    health: 7,
+    maxHealth: 7,
+    energy: 0,
+    speed: 75,
+    reactionReady: true,
+    disposition: 'hostile',
+    awareActorIds: [],
+    conditions: [],
+    equipment: emptyEquipment(),
     behaviorId: 'behavior.approach-and-attack',
     behaviorState: { intent: 'hold', goal: null, lastKnownTargets: [], investigation: null },
-    populationId: null, populationRoleId: null, populationPresentation: null,
+    populationId: null,
+    populationRoleId: null,
+    populationPresentation: null,
     ...overrides,
   };
 }
@@ -125,21 +176,29 @@ function beetle(overrides: Partial<ActorState> = {}): ActorState {
 function withActor(run: ActiveRun, actor: ActorState): ActiveRun {
   return {
     ...run,
-    actors: [...run.actors, actor].sort((left, right) => left.actorId < right.actorId ? -1 : 1),
+    actors: [...run.actors, actor].sort((left, right) => (left.actorId < right.actorId ? -1 : 1)),
   };
 }
 
 function updateActor(run: ActiveRun, actorId: string, overrides: Partial<ActorState>): ActiveRun {
   return {
     ...run,
-    actors: run.actors.map((actor) => actor.actorId === actorId ? { ...actor, ...overrides } : actor),
+    actors: run.actors.map((actor) =>
+      actor.actorId === actorId ? { ...actor, ...overrides } : actor,
+    ),
   };
 }
 
 function merchantPopulation(run: ActiveRun): MerchantPopulation {
-  return run.populations.find((population): population is MerchantPopulation =>
-    population.model === 'merchant' && population.populationId === POPULATION_ID)
-    ?? run.populations.find((population): population is MerchantPopulation => population.model === 'merchant')!;
+  return (
+    run.populations.find(
+      (population): population is MerchantPopulation =>
+        population.model === 'merchant' && population.populationId === POPULATION_ID,
+    ) ??
+    run.populations.find(
+      (population): population is MerchantPopulation => population.model === 'merchant',
+    )!
+  );
 }
 
 function merchantActor(run: ActiveRun): ActorState {
@@ -151,52 +210,86 @@ function withMerchantDefinition(
 ): CompiledContentPack {
   return {
     ...content,
-    entries: content.entries.map((entry) => entry.kind === 'encounter' && entry.model === 'merchant'
-      ? { ...entry, definition: { ...entry.definition, ...overrides } } : entry),
+    entries: content.entries.map((entry) =>
+      entry.kind === 'encounter' && entry.model === 'merchant'
+        ? { ...entry, definition: { ...entry.definition, ...overrides } }
+        : entry,
+    ),
   };
 }
 
 function groundUnits(run: ActiveRun): number {
-  return run.items.filter((entry) => entry.location.type === 'floor')
+  return run.items
+    .filter((entry) => entry.location.type === 'floor')
     .reduce((total, entry) => total + entry.quantity, 0);
 }
 
 function stockUnits(run: ActiveRun): number {
-  return run.items.filter((entry) => entry.location.type === 'merchant-stock')
+  return run.items
+    .filter((entry) => entry.location.type === 'merchant-stock')
     .reduce((total, entry) => total + entry.quantity, 0);
 }
 
 function openCommand(): GameCommand {
-  return { type: 'trade-open', commandId: 'command.trade-open', expectedRevision: 0,
-    merchantActorId: MERCHANT_ACTOR_ID };
+  return {
+    type: 'trade-open',
+    commandId: 'command.trade-open',
+    expectedRevision: 0,
+    merchantActorId: MERCHANT_ACTOR_ID,
+  };
 }
 
 function openedRun(): ActiveRun {
   const run = merchantRun();
   const opened = resolveCommand(run, openCommand(), context());
-  if (opened.result.status !== 'applied') throw new Error(`fixture open failed: ${stableJson(opened.result)}`);
+  if (opened.result.status !== 'applied')
+    throw new Error(`fixture open failed: ${stableJson(opened.result)}`);
   return opened.state;
 }
 
 function generatedFloor(
   floorId = 'floor.generated-01',
-  floorSeed: FloorSeedAllocation['floorSeed'] = allocateFloorSeed(createDemoRun().rng.generation).floorSeed,
+  floorSeed: FloorSeedAllocation['floorSeed'] = allocateFloorSeed(createDemoRun().rng.generation)
+    .floorSeed,
 ): GeneratedFloor {
-  const floor = JSON.parse(readFileSync(new URL('./fixtures/generated-floor-seed-1.json', import.meta.url), 'utf8')) as GeneratedFloor['floor'];
+  const floor = JSON.parse(
+    readFileSync(new URL('./fixtures/generated-floor-seed-1.json', import.meta.url), 'utf8'),
+  ) as GeneratedFloor['floor'];
   return {
     floor: {
-      ...floor, floorId, seed: floorSeed,
-      vaults: floor.vaults.map((vault) => ({ ...vault, placementId: `${vault.placementId}.${floorId}` })),
-      placementSlots: floor.placementSlots.map((slot) => ({ ...slot,
-        slotId: `${slot.slotId}.${floorId}`, vaultPlacementId: `${slot.vaultPlacementId}.${floorId}` })),
-      lights: floor.lights.map((light) => ({ ...light,
+      ...floor,
+      floorId,
+      seed: floorSeed,
+      vaults: floor.vaults.map((vault) => ({
+        ...vault,
+        placementId: `${vault.placementId}.${floorId}`,
+      })),
+      placementSlots: floor.placementSlots.map((slot) => ({
+        ...slot,
+        slotId: `${slot.slotId}.${floorId}`,
+        vaultPlacementId: `${slot.vaultPlacementId}.${floorId}`,
+      })),
+      lights: floor.lights.map((light) => ({
+        ...light,
         lightId: `${light.lightId}.${floorId}`,
-        ...(light.vaultPlacementId === undefined ? {} : { vaultPlacementId: `${light.vaultPlacementId}.${floorId}` }) })),
+        ...(light.vaultPlacementId === undefined
+          ? {}
+          : { vaultPlacementId: `${light.vaultPlacementId}.${floorId}` }),
+      })),
     },
     report: {
-      generatorVersion: 2, attempt: 0, fallback: false, roomCount: 8, corridorCount: 7,
-      vaults: [], stairUp: floor.stairUp!, stairDown: floor.stairDown!, stairDistance: 42,
-      traversableCellCount: 400, connected: true, rejectionCounts: { 'topology.empty': 1 },
+      generatorVersion: 2,
+      attempt: 0,
+      fallback: false,
+      roomCount: 8,
+      corridorCount: 7,
+      vaults: [],
+      stairUp: floor.stairUp!,
+      stairDown: floor.stairDown!,
+      stairDistance: 42,
+      traversableCellCount: 400,
+      connected: true,
+      rejectionCounts: { 'topology.empty': 1 },
     },
   };
 }
@@ -213,21 +306,31 @@ function offFloorRun(): ActiveRun {
     reputations: [{ factionId: faction.id, value: 0 }],
     encounterDecisions: merchantDecisions(false, 0),
   };
-  const integrated = integrateGeneratedFloor(run, generatedFloor(), allocateFloorSeed(run.rng.generation), {
-    content, forcedEncounterId: encounter.id,
-  });
+  const integrated = integrateGeneratedFloor(
+    run,
+    generatedFloor(),
+    allocateFloorSeed(run.rng.generation),
+    {
+      content,
+      forcedEncounterId: encounter.id,
+    },
+  );
   return {
     ...integrated.state,
     encounterDecisions: integrated.state.encounterDecisions.map((decision) =>
       decision.encounterId === encounter.id
         ? { ...decision, encountered: true, reachedEligibleDepth: true }
-        : decision),
+        : decision,
+    ),
   };
 }
 
 describe('merchant neutral threat response', () => {
   it('keeps unrelated hostile monsters neutral toward merchants so they ignore them', () => {
-    const run = withActor(merchantRun(), beetle({ x: 3, y: 1, awareActorIds: [MERCHANT_ACTOR_ID] }));
+    const run = withActor(
+      merchantRun(),
+      beetle({ x: 3, y: 1, awareActorIds: [MERCHANT_ACTOR_ID] }),
+    );
     expect(relationshipBetween(run, BEETLE_ID, MERCHANT_ACTOR_ID)).toBe('neutral');
     const action = chooseBehaviorAction({ state: run, actorId: BEETLE_ID, content });
     expect(action.type).toBe('wait');
@@ -236,11 +339,18 @@ describe('merchant neutral threat response', () => {
   it('creates a threat from monster damage without any hero reputation or stock consequence', () => {
     const base = withActor(merchantRun(), beetle({ x: 3, y: 1 }));
     const damaged: DomainEvent = {
-      type: 'actor.damaged', eventId: 'event.monster-hit', actorId: MERCHANT_ACTOR_ID,
-      sourceActorId: BEETLE_ID, amount: 2, health: 18,
+      type: 'actor.damaged',
+      eventId: 'event.monster-hit',
+      actorId: MERCHANT_ACTOR_ID,
+      sourceActorId: BEETLE_ID,
+      amount: 2,
+      health: 18,
     };
     const outcome = resolveMerchantCombatOutcomes({
-      state: base, content, events: [damaged], eventId: 'event.monster-hit',
+      state: base,
+      content,
+      events: [damaged],
+      eventId: 'event.monster-hit',
     });
     expect(outcome.events.map((event) => event.type)).toEqual(['relationship.changed']);
     expect(relationshipBetween(outcome.state, BEETLE_ID, MERCHANT_ACTOR_ID)).toBe('hostile');
@@ -251,7 +361,11 @@ describe('merchant neutral threat response', () => {
     expect(outcome.state.reputations).toEqual(base.reputations);
     expect(groundUnits(outcome.state)).toBe(0);
     // The remembered damage makes the beetle a known threat the merchant now flees.
-    const action = merchantBehaviorAction({ state: outcome.state, content, actorId: MERCHANT_ACTOR_ID });
+    const action = merchantBehaviorAction({
+      state: outcome.state,
+      content,
+      actorId: MERCHANT_ACTOR_ID,
+    });
     expect(action).toMatchObject({ type: 'move', to: { x: 1, y: 2 } });
   });
 
@@ -275,10 +389,13 @@ describe('merchant neutral threat response', () => {
     let run = withActor(merchantRun(), beetle({ x: 3, y: 1 }));
     run = updateActor(run, MERCHANT_ACTOR_ID, { awareActorIds: [BEETLE_ID] });
     // Aware but neutral: no attack.
-    expect(merchantBehaviorAction({ state: run, content: selfDefense, actorId: MERCHANT_ACTOR_ID }).type).toBe('wait');
+    expect(
+      merchantBehaviorAction({ state: run, content: selfDefense, actorId: MERCHANT_ACTOR_ID }).type,
+    ).toBe('wait');
     const hostile = setRelationship(run, BEETLE_ID, MERCHANT_ACTOR_ID, 'hostile');
-    expect(merchantBehaviorAction({ state: hostile, content: selfDefense, actorId: MERCHANT_ACTOR_ID }))
-      .toMatchObject({ type: 'bump-attack', targetActorId: BEETLE_ID });
+    expect(
+      merchantBehaviorAction({ state: hostile, content: selfDefense, actorId: MERCHANT_ACTOR_ID }),
+    ).toMatchObject({ type: 'bump-attack', targetActorId: BEETLE_ID });
   });
 
   it('never attacks a remembered position after the target escapes perception', () => {
@@ -286,8 +403,11 @@ describe('merchant neutral threat response', () => {
     // Hero (1,1) provokes while adjacent to the merchant (2,1): the merchant remembers the
     // hero at the adjacent cell and switches to the defending lifecycle.
     const provoked = provokeMerchant({
-      state: merchantRun(), content: selfDefense, merchantPopulationId: POPULATION_ID,
-      sourceActorId: HERO_ID, eventId: 'event.provoke',
+      state: merchantRun(),
+      content: selfDefense,
+      merchantPopulationId: POPULATION_ID,
+      sourceActorId: HERO_ID,
+      eventId: 'event.provoke',
     });
     expect(merchantPopulation(provoked.state).lifecycle).toBe('defending');
     // The hero steps away out of the merchant's perception; only the stale memory remains.
@@ -295,7 +415,11 @@ describe('merchant neutral threat response', () => {
     run = updateActor(run, MERCHANT_ACTOR_ID, {
       awareActorIds: merchantActor(run).awareActorIds.filter((actorId) => actorId !== HERO_ID),
     });
-    const action = merchantBehaviorAction({ state: run, content: selfDefense, actorId: MERCHANT_ACTOR_ID });
+    const action = merchantBehaviorAction({
+      state: run,
+      content: selfDefense,
+      actorId: MERCHANT_ACTOR_ID,
+    });
     // The live hero is far away: attacking the remembered cell would hit at arbitrary range.
     expect(action.type).not.toBe('bump-attack');
     expect(action).toMatchObject({ type: 'move', to: { x: 1, y: 1 } });
@@ -307,24 +431,37 @@ describe('merchant neutral threat response', () => {
     run = setRelationship(run, BEETLE_ID, MERCHANT_ACTOR_ID, 'hostile');
     // 6 / 20 health = 3000 bps, below the authored 3500 bps threshold.
     run = updateActor(run, MERCHANT_ACTOR_ID, { awareActorIds: [BEETLE_ID], health: 6 });
-    const action = merchantBehaviorAction({ state: run, content: selfDefense, actorId: MERCHANT_ACTOR_ID });
+    const action = merchantBehaviorAction({
+      state: run,
+      content: selfDefense,
+      actorId: MERCHANT_ACTOR_ID,
+    });
     expect(action).toMatchObject({ type: 'move', to: { x: 1, y: 2 } });
   });
 
   it('never grants a neutral merchant movement an opportunity reaction', () => {
     let run = withActor(merchantRun(), beetle({ x: 3, y: 1, awareActorIds: [MERCHANT_ACTOR_ID] }));
     run = updateActor(run, MERCHANT_ACTOR_ID, { x: 2, y: 2 });
-    expect(eligibleOpportunityAttackers({
-      run, content, moverActorId: MERCHANT_ACTOR_ID,
-      from: { x: 2, y: 2 }, to: { x: 1, y: 2 },
-    })).toEqual([]);
+    expect(
+      eligibleOpportunityAttackers({
+        run,
+        content,
+        moverActorId: MERCHANT_ACTOR_ID,
+        from: { x: 2, y: 2 },
+        to: { x: 1, y: 2 },
+      }),
+    ).toEqual([]);
   });
 
   it('does not act on inactive floors', () => {
     const base = offFloorRun();
     const population = merchantPopulation(base);
     const before = base.actors.find((actor) => actor.actorId === population.actorId)!;
-    const stepped = resolveCommand(base, { type: 'wait', commandId: 'command.wait-1', expectedRevision: 0 }, context());
+    const stepped = resolveCommand(
+      base,
+      { type: 'wait', commandId: 'command.wait-1', expectedRevision: 0 },
+      context(),
+    );
     expect(stepped.result.status).toBe('applied');
     const after = stepped.state.actors.find((actor) => actor.actorId === population.actorId)!;
     expect({ ...after, energy: before.energy }).toEqual(before);
@@ -335,18 +472,27 @@ describe('merchant provocation and stock loss', () => {
   it('closes trade, applies one aggression penalty, turns hostile, and drops the stock fraction', () => {
     const state = openedRun();
     const provoked = provokeMerchant({
-      state, content, merchantPopulationId: merchantPopulation(state).populationId,
-      sourceActorId: state.hero.actorId, eventId: 'command.attack',
+      state,
+      content,
+      merchantPopulationId: merchantPopulation(state).populationId,
+      sourceActorId: state.hero.actorId,
+      eventId: 'command.attack',
     });
     expect(provoked.events.map((event) => event.type)).toEqual([
-      'trade.closed', 'reputation.changed', 'relationship.changed',
-      'merchant.provoked', 'merchant.stock-dropped',
+      'trade.closed',
+      'reputation.changed',
+      'relationship.changed',
+      'merchant.provoked',
+      'merchant.stock-dropped',
     ]);
-    expect(groundUnits(provoked.state)).toBe(Math.ceil(stockUnits(state) * encounter.definition.stockDropFraction));
+    expect(groundUnits(provoked.state)).toBe(
+      Math.ceil(stockUnits(state) * encounter.definition.stockDropFraction),
+    );
     expect(provoked.state.activeTrade).toBeNull();
     expect(provoked.events[0]).toMatchObject({ type: 'trade.closed', reason: 'aggression' });
     expect(provoked.events[1]).toMatchObject({
-      type: 'reputation.changed', reason: 'aggression',
+      type: 'reputation.changed',
+      reason: 'aggression',
       delta: encounter.definition.aggressionReputationDelta,
     });
     expect(relationshipBetween(provoked.state, HERO_ID, MERCHANT_ACTOR_ID)).toBe('hostile');
@@ -370,22 +516,35 @@ describe('merchant provocation and stock loss', () => {
     // top: actors may legally stand there, so the dropped stock must be saveable there too.
     const state: ActiveRun = {
       ...base,
-      floors: [{ ...floor, tiles: floor.tiles.map((tile, index) => index === 9 ? 2 : tile) }],
-      features: [{
-        featureId: 'door.open', type: 'door', floorId: floor.floorId, x: 2, y: 1,
-        contentId: null, coverTileId: 2, state: 'open',
-      }],
+      floors: [{ ...floor, tiles: floor.tiles.map((tile, index) => (index === 9 ? 2 : tile)) }],
+      features: [
+        {
+          featureId: 'door.open',
+          type: 'door',
+          floorId: floor.floorId,
+          x: 2,
+          y: 1,
+          contentId: null,
+          coverTileId: 2,
+          state: 'open',
+        },
+      ],
     };
     const provoked = provokeMerchant({
-      state, content, merchantPopulationId: POPULATION_ID,
-      sourceActorId: HERO_ID, eventId: 'command.attack',
+      state,
+      content,
+      merchantPopulationId: POPULATION_ID,
+      sourceActorId: HERO_ID,
+      eventId: 'command.attack',
     });
     const dropped = provoked.state.items.filter((entry) => entry.location.type === 'floor');
     expect(dropped.length).toBeGreaterThan(0);
     for (const entry of dropped) {
       expect(entry.location).toMatchObject({ floorId: 'floor.demo', x: 2, y: 1 });
     }
-    expect(groundUnits(provoked.state)).toBe(Math.ceil(stockUnits(state) * encounter.definition.stockDropFraction));
+    expect(groundUnits(provoked.state)).toBe(
+      Math.ceil(stockUnits(state) * encounter.definition.stockDropFraction),
+    );
     const restored = decodeActiveRun(encodeActiveRun(provoked.state));
     expect(stableJson(restored)).toBe(stableJson(provoked.state));
   });
@@ -393,12 +552,18 @@ describe('merchant provocation and stock loss', () => {
   it('uses split identifiers under the population drop namespace and selects units deterministically', () => {
     const state = merchantRun();
     const first = provokeMerchant({
-      state, content, merchantPopulationId: POPULATION_ID,
-      sourceActorId: HERO_ID, eventId: 'command.attack',
+      state,
+      content,
+      merchantPopulationId: POPULATION_ID,
+      sourceActorId: HERO_ID,
+      eventId: 'command.attack',
     });
     const second = provokeMerchant({
-      state, content, merchantPopulationId: POPULATION_ID,
-      sourceActorId: HERO_ID, eventId: 'command.attack',
+      state,
+      content,
+      merchantPopulationId: POPULATION_ID,
+      sourceActorId: HERO_ID,
+      eventId: 'command.attack',
     });
     expect(stableJson(first.state)).toBe(stableJson(second.state));
     // 3 of 6 units drop, so the 4-unit lamp-oil stack always splits into a drop-namespaced stack.
@@ -407,31 +572,43 @@ describe('merchant provocation and stock loss', () => {
       .map((entry) => entry.itemId);
     expect(dropIds.length).toBeGreaterThan(0);
     for (const dropId of dropIds) {
-      expect(dropId).toMatch(new RegExp(`^item\\.${POPULATION_ID.replaceAll('.', '\\.')}\\.drop\\.\\d+$`));
+      expect(dropId).toMatch(
+        new RegExp(`^item\\.${POPULATION_ID.replaceAll('.', '\\.')}\\.drop\\.\\d+$`),
+      );
     }
     const stockDropped = first.events.find((event) => event.type === 'merchant.stock-dropped')!;
     expect(stockDropped).toMatchObject({ populationId: POPULATION_ID, units: 3 });
     // The population stock list matches the retained merchant-stock items exactly.
-    const retained = first.state.items.filter((entry) => entry.location.type === 'merchant-stock')
-      .map((entry) => entry.itemId).sort();
+    const retained = first.state.items
+      .filter((entry) => entry.location.type === 'merchant-stock')
+      .map((entry) => entry.itemId)
+      .sort();
     expect([...merchantPopulation(first.state).stockItemIds]).toEqual(retained);
   });
 
   it('drops nothing at fraction zero and everything at fraction one', () => {
     const state = merchantRun();
     const zero = provokeMerchant({
-      state, content: withMerchantDefinition({ stockDropFraction: 0 }),
-      merchantPopulationId: POPULATION_ID, sourceActorId: HERO_ID, eventId: 'command.attack',
+      state,
+      content: withMerchantDefinition({ stockDropFraction: 0 }),
+      merchantPopulationId: POPULATION_ID,
+      sourceActorId: HERO_ID,
+      eventId: 'command.attack',
     });
     expect(groundUnits(zero.state)).toBe(0);
     expect(stockUnits(zero.state)).toBe(6);
     expect(merchantPopulation(zero.state).stockLossResolved).toBe(true);
-    expect(zero.events.find((event) => event.type === 'merchant.stock-dropped'))
-      .toMatchObject({ units: 0, itemIds: [] });
+    expect(zero.events.find((event) => event.type === 'merchant.stock-dropped')).toMatchObject({
+      units: 0,
+      itemIds: [],
+    });
 
     const everything = provokeMerchant({
-      state, content: withMerchantDefinition({ stockDropFraction: 1 }),
-      merchantPopulationId: POPULATION_ID, sourceActorId: HERO_ID, eventId: 'command.attack',
+      state,
+      content: withMerchantDefinition({ stockDropFraction: 1 }),
+      merchantPopulationId: POPULATION_ID,
+      sourceActorId: HERO_ID,
+      eventId: 'command.attack',
     });
     expect(groundUnits(everything.state)).toBe(6);
     expect(stockUnits(everything.state)).toBe(0);
@@ -441,12 +618,18 @@ describe('merchant provocation and stock loss', () => {
   it('grants the aggression and stock consequences at most once per merchant', () => {
     const state = merchantRun();
     const first = provokeMerchant({
-      state, content, merchantPopulationId: POPULATION_ID,
-      sourceActorId: HERO_ID, eventId: 'command.attack',
+      state,
+      content,
+      merchantPopulationId: POPULATION_ID,
+      sourceActorId: HERO_ID,
+      eventId: 'command.attack',
     });
     const again = provokeMerchant({
-      state: first.state, content, merchantPopulationId: POPULATION_ID,
-      sourceActorId: HERO_ID, eventId: 'command.attack-2',
+      state: first.state,
+      content,
+      merchantPopulationId: POPULATION_ID,
+      sourceActorId: HERO_ID,
+      eventId: 'command.attack-2',
     });
     expect(again.events).toEqual([]);
     expect(again.state).toBe(first.state);
@@ -455,31 +638,50 @@ describe('merchant provocation and stock loss', () => {
   it('uses the defending lifecycle for the authored self-defense response', () => {
     const selfDefense = withMerchantDefinition({ aggressionResponse: 'self-defense' });
     const provoked = provokeMerchant({
-      state: merchantRun(), content: selfDefense, merchantPopulationId: POPULATION_ID,
-      sourceActorId: HERO_ID, eventId: 'command.attack',
+      state: merchantRun(),
+      content: selfDefense,
+      merchantPopulationId: POPULATION_ID,
+      sourceActorId: HERO_ID,
+      eventId: 'command.attack',
     });
     expect(merchantPopulation(provoked.state).lifecycle).toBe('defending');
-    expect(provoked.events.find((event) => event.type === 'merchant.provoked'))
-      .toMatchObject({ response: 'self-defense', sourceActorId: HERO_ID });
+    expect(provoked.events.find((event) => event.type === 'merchant.provoked')).toMatchObject({
+      response: 'self-defense',
+      sourceActorId: HERO_ID,
+    });
     // Once perception confirms the adjacent hero (as prepareMerchantTurn does before every
     // scheduled turn), the provoked merchant attacks the hero it stands next to.
     const aware = updateActor(provoked.state, MERCHANT_ACTOR_ID, { awareActorIds: [HERO_ID] });
-    expect(merchantBehaviorAction({ state: aware, content: selfDefense, actorId: MERCHANT_ACTOR_ID }))
-      .toMatchObject({ type: 'bump-attack', targetActorId: HERO_ID });
+    expect(
+      merchantBehaviorAction({ state: aware, content: selfDefense, actorId: MERCHANT_ACTOR_ID }),
+    ).toMatchObject({ type: 'bump-attack', targetActorId: HERO_ID });
   });
 
   it('provokes before the ordinary explicit adjacent attack resolves, even on a miss', () => {
     const run = merchantRun();
-    const attacked = resolveCommand(run, {
-      type: 'attack', commandId: 'command.attack', expectedRevision: 0,
-      targetActorId: MERCHANT_ACTOR_ID,
-    }, context());
+    const attacked = resolveCommand(
+      run,
+      {
+        type: 'attack',
+        commandId: 'command.attack',
+        expectedRevision: 0,
+        targetActorId: MERCHANT_ACTOR_ID,
+      },
+      context(),
+    );
     expect(attacked.result.status).toBe('applied');
     const record = attacked.state.recentCommands.at(-1)!;
     const types = record.events.map((event) => event.type);
-    const attackIndex = types.findIndex((type) => type === 'attack.hit' || type === 'attack.missed');
+    const attackIndex = types.findIndex(
+      (type) => type === 'attack.hit' || type === 'attack.missed',
+    );
     expect(attackIndex).toBeGreaterThan(-1);
-    for (const provocation of ['reputation.changed', 'relationship.changed', 'merchant.provoked', 'merchant.stock-dropped']) {
+    for (const provocation of [
+      'reputation.changed',
+      'relationship.changed',
+      'merchant.provoked',
+      'merchant.stock-dropped',
+    ]) {
       const index = types.indexOf(provocation as DomainEvent['type']);
       expect(index).toBeGreaterThan(-1);
       expect(index).toBeLessThan(attackIndex);
@@ -489,10 +691,16 @@ describe('merchant provocation and stock loss', () => {
     // The provoked state satisfies every save invariant, survives a round trip, and replays.
     const restored = decodeActiveRun(encodeActiveRun(attacked.state));
     expect(restored).toEqual(attacked.state);
-    const replayed = resolveCommand(attacked.state, {
-      type: 'attack', commandId: 'command.attack', expectedRevision: 0,
-      targetActorId: MERCHANT_ACTOR_ID,
-    }, context());
+    const replayed = resolveCommand(
+      attacked.state,
+      {
+        type: 'attack',
+        commandId: 'command.attack',
+        expectedRevision: 0,
+        targetActorId: MERCHANT_ACTOR_ID,
+      },
+      context(),
+    );
     expect(replayed.result).toEqual(attacked.result);
     expect(replayed.state).toBe(attacked.state);
   });
@@ -500,19 +708,32 @@ describe('merchant provocation and stock loss', () => {
   it('provokes on the first hero-sourced ranged or effect damage', () => {
     const state = merchantRun();
     const damaged: DomainEvent = {
-      type: 'actor.damaged', eventId: 'command.fire', actorId: MERCHANT_ACTOR_ID,
-      sourceActorId: HERO_ID, amount: 3, health: 17,
+      type: 'actor.damaged',
+      eventId: 'command.fire',
+      actorId: MERCHANT_ACTOR_ID,
+      sourceActorId: HERO_ID,
+      amount: 3,
+      health: 17,
     };
     const outcome = resolveMerchantCombatOutcomes({
-      state, content, events: [damaged], eventId: 'command.fire',
+      state,
+      content,
+      events: [damaged],
+      eventId: 'command.fire',
     });
     expect(outcome.events.map((event) => event.type)).toEqual([
-      'reputation.changed', 'relationship.changed', 'merchant.provoked', 'merchant.stock-dropped',
+      'reputation.changed',
+      'relationship.changed',
+      'merchant.provoked',
+      'merchant.stock-dropped',
     ]);
     expect(merchantPopulation(outcome.state).provoked).toBe(true);
     // A second hero-sourced hit adds no further consequence.
     const again = resolveMerchantCombatOutcomes({
-      state: outcome.state, content, events: [damaged], eventId: 'command.fire-2',
+      state: outcome.state,
+      content,
+      events: [damaged],
+      eventId: 'command.fire-2',
     });
     expect(again.events).toEqual([]);
   });
@@ -526,12 +747,20 @@ describe('merchant death consequences', () => {
   it('destroys held stock, applies one hero-credited death penalty, and marks the merchant dead', () => {
     const state = deadMerchantRun();
     const death = resolveMerchantDeath({
-      state, content, merchantPopulationId: POPULATION_ID,
-      killerActorId: HERO_ID, eventId: 'event.death',
+      state,
+      content,
+      merchantPopulationId: POPULATION_ID,
+      killerActorId: HERO_ID,
+      eventId: 'event.death',
     });
-    expect(death.events.map((event) => event.type)).toEqual(['reputation.changed', 'merchant.died']);
+    expect(death.events.map((event) => event.type)).toEqual([
+      'reputation.changed',
+      'merchant.died',
+    ]);
     expect(death.events[0]).toMatchObject({
-      type: 'reputation.changed', reason: 'death', delta: encounter.definition.deathReputationDelta,
+      type: 'reputation.changed',
+      reason: 'death',
+      delta: encounter.definition.deathReputationDelta,
     });
     // Held stock is destroyed, never dropped.
     expect(death.state.items).toEqual([]);
@@ -548,8 +777,11 @@ describe('merchant death consequences', () => {
     expect(restored).toEqual(death.state);
     // The consequence resolves at most once.
     const again = resolveMerchantDeath({
-      state: death.state, content, merchantPopulationId: POPULATION_ID,
-      killerActorId: HERO_ID, eventId: 'event.death-2',
+      state: death.state,
+      content,
+      merchantPopulationId: POPULATION_ID,
+      killerActorId: HERO_ID,
+      eventId: 'event.death-2',
     });
     expect(again.events).toEqual([]);
     expect(again.state).toBe(death.state);
@@ -558,8 +790,11 @@ describe('merchant death consequences', () => {
   it('applies no reputation delta when a monster is credited with the kill', () => {
     const state = withActor(deadMerchantRun(), beetle({ x: 3, y: 1 }));
     const death = resolveMerchantDeath({
-      state, content, merchantPopulationId: POPULATION_ID,
-      killerActorId: BEETLE_ID, eventId: 'event.death',
+      state,
+      content,
+      merchantPopulationId: POPULATION_ID,
+      killerActorId: BEETLE_ID,
+      eventId: 'event.death',
     });
     expect(death.events.map((event) => event.type)).toEqual(['merchant.died']);
     expect(death.state.reputations).toEqual(state.reputations);
@@ -572,10 +807,17 @@ describe('merchant death consequences', () => {
     const opened = openedRun();
     const state = updateActor(opened, MERCHANT_ACTOR_ID, { health: 0 });
     const death = resolveMerchantDeath({
-      state, content, merchantPopulationId: POPULATION_ID,
-      killerActorId: HERO_ID, eventId: 'event.death',
+      state,
+      content,
+      merchantPopulationId: POPULATION_ID,
+      killerActorId: HERO_ID,
+      eventId: 'event.death',
     });
-    expect(death.events.map((event) => event.type)).toEqual(['trade.closed', 'reputation.changed', 'merchant.died']);
+    expect(death.events.map((event) => event.type)).toEqual([
+      'trade.closed',
+      'reputation.changed',
+      'merchant.died',
+    ]);
     expect(death.events[0]).toMatchObject({ type: 'trade.closed', reason: 'death' });
     expect(death.state.activeTrade).toBeNull();
   });
@@ -583,12 +825,28 @@ describe('merchant death consequences', () => {
   it('resolves hero provocation and death together when one hit kills an unprovoked merchant', () => {
     const state = deadMerchantRun();
     const events: readonly DomainEvent[] = [
-      { type: 'actor.damaged', eventId: 'command.fire', actorId: MERCHANT_ACTOR_ID,
-        sourceActorId: HERO_ID, amount: 20, health: 0 },
-      { type: 'actor.died', eventId: 'command.fire', actorId: MERCHANT_ACTOR_ID,
-        contentId: npc.id, killerActorId: HERO_ID },
+      {
+        type: 'actor.damaged',
+        eventId: 'command.fire',
+        actorId: MERCHANT_ACTOR_ID,
+        sourceActorId: HERO_ID,
+        amount: 20,
+        health: 0,
+      },
+      {
+        type: 'actor.died',
+        eventId: 'command.fire',
+        actorId: MERCHANT_ACTOR_ID,
+        contentId: npc.id,
+        killerActorId: HERO_ID,
+      },
     ];
-    const outcome = resolveMerchantCombatOutcomes({ state, content, events, eventId: 'command.fire' });
+    const outcome = resolveMerchantCombatOutcomes({
+      state,
+      content,
+      events,
+      eventId: 'command.fire',
+    });
     const reputationReasons = outcome.events
       .filter((event) => event.type === 'reputation.changed')
       .map((event) => (event as Extract<DomainEvent, { type: 'reputation.changed' }>).reason);
@@ -607,14 +865,23 @@ describe('merchant death consequences', () => {
 describe('active-floor merchant world steps', () => {
   it('lets a provoked merchant take a real turn after the hero attack without crashing', () => {
     const run = merchantRun();
-    const attacked = resolveCommand(run, {
-      type: 'attack', commandId: 'command.attack', expectedRevision: 0,
-      targetActorId: MERCHANT_ACTOR_ID,
-    }, context());
+    const attacked = resolveCommand(
+      run,
+      {
+        type: 'attack',
+        commandId: 'command.attack',
+        expectedRevision: 0,
+        targetActorId: MERCHANT_ACTOR_ID,
+      },
+      context(),
+    );
     expect(attacked.result.status).toBe('applied');
     const record = attacked.state.recentCommands.at(-1)!;
-    expect(record.events.some((event) => event.type === 'actor.turn.completed'
-      && event.actorId === MERCHANT_ACTOR_ID)).toBe(true);
+    expect(
+      record.events.some(
+        (event) => event.type === 'actor.turn.completed' && event.actorId === MERCHANT_ACTOR_ID,
+      ),
+    ).toBe(true);
     // Fleeing lifecycle: the merchant moved away from the hero rather than standing still.
     const survivor = attacked.state.actors.find((actor) => actor.actorId === MERCHANT_ACTOR_ID);
     if (survivor && survivor.health > 0) {
@@ -629,19 +896,36 @@ describe('active-floor merchant world steps', () => {
     run = setRelationship(run, BEETLE_ID, MERCHANT_ACTOR_ID, 'hostile');
     const population = merchantPopulation(run);
     // The next world-time boundary crosses the departure deadline.
-    run = { ...run, worldTime: population.departureAt - 1, activeFloorEnteredAt: population.departureAt - 1 };
-    const stepped = resolveCommand(run, { type: 'wait', commandId: 'command.wait-1', expectedRevision: 0 }, context());
+    run = {
+      ...run,
+      worldTime: population.departureAt - 1,
+      activeFloorEnteredAt: population.departureAt - 1,
+    };
+    const stepped = resolveCommand(
+      run,
+      { type: 'wait', commandId: 'command.wait-1', expectedRevision: 0 },
+      context(),
+    );
     expect(stepped.result.status).toBe('applied');
     const record = stepped.state.recentCommands.at(-1)!;
     expect(record.events.some((event) => event.type === 'merchant.departed')).toBe(true);
     // The merchant acted (its threat changed its intent) before departing, yet no dangling
     // intent reference survives in the recorded command.
-    expect(record.events.some((event) => event.type === 'actor.turn.completed'
-      && event.actorId === MERCHANT_ACTOR_ID)).toBe(true);
-    expect(record.events.some((event) => event.type === 'actor.intent-changed'
-      && event.actorId === MERCHANT_ACTOR_ID)).toBe(false);
-    expect(record.publicEvents.some((event) => event.type === 'actor.intent-changed'
-      && event.actorId === MERCHANT_ACTOR_ID)).toBe(false);
+    expect(
+      record.events.some(
+        (event) => event.type === 'actor.turn.completed' && event.actorId === MERCHANT_ACTOR_ID,
+      ),
+    ).toBe(true);
+    expect(
+      record.events.some(
+        (event) => event.type === 'actor.intent-changed' && event.actorId === MERCHANT_ACTOR_ID,
+      ),
+    ).toBe(false);
+    expect(
+      record.publicEvents.some(
+        (event) => event.type === 'actor.intent-changed' && event.actorId === MERCHANT_ACTOR_ID,
+      ),
+    ).toBe(false);
     expect(stepped.state.actors.some((actor) => actor.actorId === MERCHANT_ACTOR_ID)).toBe(false);
     const restored = decodeActiveRun(encodeActiveRun(stepped.state));
     expect(restored).toEqual(stepped.state);

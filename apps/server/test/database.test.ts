@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
-import { assertMigrationsWellFormed, MIGRATIONS, openDatabase, runMigrations, type Migration } from '../src/database.js';
+import {
+  assertMigrationsWellFormed,
+  MIGRATIONS,
+  openDatabase,
+  runMigrations,
+  type Migration,
+} from '../src/database.js';
 
 describe('openDatabase', () => {
   it('enables WAL mode', () => {
@@ -23,9 +29,15 @@ describe('openDatabase', () => {
     const database = openDatabase(join(directory, 'rogue.sqlite'));
 
     try {
-      expect(database.prepare(`
+      expect(
+        database
+          .prepare(
+            `
         select strict from pragma_table_list where name = 'content_packs'
-      `).get()).toEqual({ strict: 1 });
+      `,
+          )
+          .get(),
+      ).toEqual({ strict: 1 });
     } finally {
       database.close();
       rmSync(directory, { recursive: true, force: true });
@@ -38,10 +50,16 @@ describe('openDatabase', () => {
 
     try {
       expect(database.pragma('foreign_keys', { simple: true })).toBe(1);
-      expect(() => database.prepare(`
+      expect(() =>
+        database
+          .prepare(
+            `
         insert into sessions(token_hash, profile_id, created_at, last_seen_at, expires_at)
         values ('h', 'no-such-profile', 't', 't', 't')
-      `).run()).toThrow();
+      `,
+          )
+          .run(),
+      ).toThrow();
     } finally {
       database.close();
       rmSync(directory, { recursive: true, force: true });
@@ -57,11 +75,20 @@ describe('runMigrations', () => {
       runMigrations(database);
 
       expect(database.pragma('user_version', { simple: true })).toBe(MIGRATIONS.length);
-      expect(database.prepare(`
+      expect(
+        database
+          .prepare(
+            `
         select strict from pragma_table_list where name = 'content_packs'
-      `).get()).toEqual({ strict: 1 });
-      expect((database.pragma('table_info(content_packs)') as Array<{ name: string }>).map(({ name }) => name))
-        .toEqual(['hash', 'schema_version', 'content_json', 'created_at']);
+      `,
+          )
+          .get(),
+      ).toEqual({ strict: 1 });
+      expect(
+        (database.pragma('table_info(content_packs)') as Array<{ name: string }>).map(
+          ({ name }) => name,
+        ),
+      ).toEqual(['hash', 'schema_version', 'content_json', 'created_at']);
     } finally {
       database.close();
     }
@@ -85,22 +112,41 @@ describe('runMigrations', () => {
           created_at text not null
         ) strict;
       `);
-      database.prepare('insert into content_packs values (?, ?, ?, ?)')
+      database
+        .prepare('insert into content_packs values (?, ?, ?, ?)')
         .run(hash, 1, payload, createdAt);
 
       runMigrations(database);
 
       expect(database.pragma('user_version', { simple: true })).toBe(MIGRATIONS.length);
-      expect((database.pragma('table_info(content_packs)') as Array<{ name: string }>).map(({ name }) => name))
-        .toEqual(['hash', 'schema_version', 'content_json', 'created_at']);
-      expect(database.prepare(`
+      expect(
+        (database.pragma('table_info(content_packs)') as Array<{ name: string }>).map(
+          ({ name }) => name,
+        ),
+      ).toEqual(['hash', 'schema_version', 'content_json', 'created_at']);
+      expect(
+        database
+          .prepare(
+            `
         select strict from pragma_table_list where name = 'content_packs'
-      `).get()).toEqual({ strict: 1 });
-      expect(database.prepare('select hash, schema_version, content_json, created_at from content_packs').all())
-        .toEqual([{ hash, schema_version: 1, content_json: payload, created_at: createdAt }]);
-      expect(database.prepare(`
+      `,
+          )
+          .get(),
+      ).toEqual({ strict: 1 });
+      expect(
+        database
+          .prepare('select hash, schema_version, content_json, created_at from content_packs')
+          .all(),
+      ).toEqual([{ hash, schema_version: 1, content_json: payload, created_at: createdAt }]);
+      expect(
+        database
+          .prepare(
+            `
         select count(*) as count from sqlite_schema where type = 'table' and name = 'content_packs_legacy'
-      `).get()).toEqual({ count: 0 });
+      `,
+          )
+          .get(),
+      ).toEqual({ count: 0 });
     } finally {
       database.close();
     }
@@ -112,13 +158,18 @@ describe('runMigrations', () => {
     try {
       runMigrations(database);
       const hash = 'b'.repeat(64);
-      database.prepare('insert into content_packs(hash, schema_version, content_json, created_at) values (?, ?, ?, ?)')
+      database
+        .prepare(
+          'insert into content_packs(hash, schema_version, content_json, created_at) values (?, ?, ?, ?)',
+        )
         .run(hash, 3, '{}', '2026-07-15T00:00:00.000Z');
 
       expect(() => runMigrations(database)).not.toThrow();
 
       expect(database.pragma('user_version', { simple: true })).toBe(MIGRATIONS.length);
-      expect(database.prepare('select count(*) as count from content_packs').get()).toEqual({ count: 1 });
+      expect(database.prepare('select count(*) as count from content_packs').get()).toEqual({
+        count: 1,
+      });
     } finally {
       database.close();
     }

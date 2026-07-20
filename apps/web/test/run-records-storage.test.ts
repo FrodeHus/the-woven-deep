@@ -1,12 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import type { FallenChampionTemplateContentEntry, ItemContentEntry, MonsterContentEntry } from '@woven-deep/content';
+import type {
+  FallenChampionTemplateContentEntry,
+  ItemContentEntry,
+  MonsterContentEntry,
+} from '@woven-deep/content';
 import {
-  createDemoContentPack, createDemoRun, finalizeRun, emptyRunMetrics, resolveCommand,
-  type ActiveRun, type GameCommand, type HeartLineageRecord, type LifetimeDeltas, type OpaqueId,
-  type RunMetrics, type StoredHallRecord,
+  createDemoContentPack,
+  createDemoRun,
+  finalizeRun,
+  emptyRunMetrics,
+  resolveCommand,
+  type ActiveRun,
+  type GameCommand,
+  type HeartLineageRecord,
+  type LifetimeDeltas,
+  type OpaqueId,
+  type RunMetrics,
+  type StoredHallRecord,
 } from '@woven-deep/engine';
 import {
-  createSessionRunRecordRepository, RECORDS_KEY, SessionHallCorruptError,
+  createSessionRunRecordRepository,
+  RECORDS_KEY,
+  SessionHallCorruptError,
 } from '../src/session/run-records-storage.js';
 import type { SessionStorageLike } from '../src/session/storage.js';
 
@@ -14,7 +29,9 @@ function fakeStorage(): SessionStorageLike & { peek(key: string): string | null 
   const values = new Map<string, string>();
   return {
     get: (key: string) => values.get(key) ?? null,
-    set: (key: string, value: string) => { values.set(key, value); },
+    set: (key: string, value: string) => {
+      values.set(key, value);
+    },
     peek: (key: string) => values.get(key) ?? null,
   };
 }
@@ -35,9 +52,17 @@ function storedRecord(overrides: Partial<StoredHallRecord> = {}): StoredHallReco
     metrics: metrics({ deepestDepth: 3 }),
     reputations: [],
     heirloom: {
-      contentId: 'item.iron-sword', sourceItemId: null, enchantment: null, condition: 100,
-      charges: null, fuel: null, qualityRank: 1, displayName: "Ada's Iron Sword",
-      glyph: ')', color: '#d8d8d8', originatingHallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+      contentId: 'item.iron-sword',
+      sourceItemId: null,
+      enchantment: null,
+      condition: 100,
+      charges: null,
+      fuel: null,
+      qualityRank: 1,
+      displayName: "Ada's Iron Sword",
+      glyph: ')',
+      color: '#d8d8d8',
+      originatingHallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
     },
     build: {
       attributes: { might: 14, agility: 12, vitality: 16, wits: 10, resolve: 12 },
@@ -59,56 +84,121 @@ function secondStoredRecord(): StoredHallRecord {
     cause: { killerContentId: 'monster.cave-rat', depth: 5, turn: 20, worldTime: 20 },
     deepestDepth: 5,
     heirloom: {
-      contentId: 'item.iron-sword', sourceItemId: null, enchantment: null, condition: 100,
-      charges: null, fuel: null, qualityRank: 1, displayName: "Bryn's Iron Sword",
-      glyph: ')', color: '#d8d8d8', originatingHallRecordId: 'record.bbbbbbbb00000000.bbbbbbbbbbbbbbbb',
+      contentId: 'item.iron-sword',
+      sourceItemId: null,
+      enchantment: null,
+      condition: 100,
+      charges: null,
+      fuel: null,
+      qualityRank: 1,
+      displayName: "Bryn's Iron Sword",
+      glyph: ')',
+      color: '#d8d8d8',
+      originatingHallRecordId: 'record.bbbbbbbb00000000.bbbbbbbbbbbbbbbb',
     },
   });
 }
 
 const fallenChampionTemplate: FallenChampionTemplateContentEntry = {
-  kind: 'fallen-champion-template', id: 'fallen-champion-template.core', name: "The Deep's Champion",
-  tags: ['champion'], fallbackMonsterId: 'monster.boss', fallbackItemId: 'item.fallback',
-  minimumHealth: 30, maximumHealth: 100, attributeMaximum: 20, damageMaximum: 24, abilityLimit: 2,
-  echoAppearanceChance: 0.5, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70,
-  echoDefensePercent: 80, echoAbilityLimit: 1, echoLootTableId: 'loot-table.boss',
-  heirloomSelection: { rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 }, qualityRankBonus: 2 },
+  kind: 'fallen-champion-template',
+  id: 'fallen-champion-template.core',
+  name: "The Deep's Champion",
+  tags: ['champion'],
+  fallbackMonsterId: 'monster.boss',
+  fallbackItemId: 'item.fallback',
+  minimumHealth: 30,
+  maximumHealth: 100,
+  attributeMaximum: 20,
+  damageMaximum: 24,
+  abilityLimit: 2,
+  echoAppearanceChance: 0.5,
+  maximumEchoesPerRun: 2,
+  echoHealthPercent: 65,
+  echoDamagePercent: 70,
+  echoDefensePercent: 80,
+  echoAbilityLimit: 1,
+  echoLootTableId: 'loot-table.boss',
+  heirloomSelection: {
+    rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 },
+    qualityRankBonus: 2,
+  },
 };
 
 const fallbackItem: ItemContentEntry = {
-  kind: 'item', id: 'item.fallback', name: 'Fallback item', tags: [], glyph: ')', color: '#c0c0c0',
-  category: 'weapon', stackLimit: 1, price: 10, rarity: 'common', heirloomEligible: true, minDepth: 1, maxDepth: 20,
-  actionCost: 100, equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
-  combat: null, light: null, identification: { mode: 'known', poolId: null }, effects: [],
+  kind: 'item',
+  id: 'item.fallback',
+  name: 'Fallback item',
+  tags: [],
+  glyph: ')',
+  color: '#c0c0c0',
+  category: 'weapon',
+  stackLimit: 1,
+  price: 10,
+  rarity: 'common',
+  heirloomEligible: true,
+  minDepth: 1,
+  maxDepth: 20,
+  actionCost: 100,
+  equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
+  combat: null,
+  light: null,
+  identification: { mode: 'known', poolId: null },
+  effects: [],
 };
 
 const fallbackMonster: MonsterContentEntry = {
-  kind: 'monster', id: 'monster.boss', name: 'Boss', glyph: 'B', color: '#aa4444', tags: [],
-  minDepth: 1, maxDepth: 20,
+  kind: 'monster',
+  id: 'monster.boss',
+  name: 'Boss',
+  glyph: 'B',
+  color: '#aa4444',
+  tags: [],
+  minDepth: 1,
+  maxDepth: 20,
   attributes: { might: 5, agility: 5, vitality: 5, wits: 5, resolve: 5 },
-  health: 10, speed: 100, accuracy: 100, defense: 8, perception: 8,
-  damage: { count: 1, sides: 1, bonus: 0 }, armor: 0,
+  health: 10,
+  speed: 100,
+  accuracy: 100,
+  defense: 8,
+  perception: 8,
+  damage: { count: 1, sides: 1, bonus: 0 },
+  armor: 0,
   resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 },
-  disposition: 'hostile', behaviorId: 'behavior.approach-and-attack', behaviorParameters: {},
-  rarity: 'common', threat: 4, lootTableId: null, dropChance: 1,
+  disposition: 'hostile',
+  behaviorId: 'behavior.approach-and-attack',
+  behaviorParameters: {},
+  rarity: 'common',
+  threat: 4,
+  lootTableId: null,
+  dropChance: 1,
 };
 
 /** Builds a genuine `StoredHallRecord` by driving a real demo run to death via `resolveCommand`
  * and finalizing it through the real engine — following `run-finalize.test.ts`'s fixtures. */
 function realHallRecord(): StoredHallRecord {
   const base = createDemoContentPack();
-  const content = { ...base, entries: [...base.entries, fallenChampionTemplate, fallbackItem, fallbackMonster] };
+  const content = {
+    ...base,
+    entries: [...base.entries, fallenChampionTemplate, fallbackItem, fallbackMonster],
+  };
   const demo = createDemoRun();
   const hero = { ...demo.actors[0]!, health: 1 };
   const starving: ActiveRun = {
-    ...demo, actors: [hero],
+    ...demo,
+    actors: [hero],
     survival: { ...demo.survival, hungerReserve: 0, hungerStage: 'starving', nextStarvationAt: 1 },
   };
   const command: GameCommand = { type: 'wait', commandId: 'command.fatal', expectedRevision: 0 };
   const killing = resolveCommand(starving, command, { content });
   const finalized = finalizeRun({
-    run: killing.state, content,
-    lifetime: { conqueredChampionRecordIds: [], grantedAchievementIds: [], discoveryProtection: [], totals: emptyRunMetrics() },
+    run: killing.state,
+    content,
+    lifetime: {
+      conqueredChampionRecordIds: [],
+      grantedAchievementIds: [],
+      discoveryProtection: [],
+      totals: emptyRunMetrics(),
+    },
   });
   return { ...finalized.record, enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' } };
 }
@@ -123,15 +213,18 @@ describe('createSessionRunRecordRepository', () => {
     const records = repository.records();
     expect(records).toEqual([storedRecordA, second]);
     expect(Object.isFrozen(records[0])).toBe(true);
-    expect(() => { (records as StoredHallRecord[]).push(storedRecordA); }).toThrow();
+    expect(() => {
+      (records as StoredHallRecord[]).push(storedRecordA);
+    }).toThrow();
   });
 
   it('rejects appending a duplicate record ID, including a mutated re-append', () => {
     const repository = createSessionRunRecordRepository(fakeStorage());
     const storedRecordA = storedRecord();
     repository.appendRecord(storedRecordA);
-    expect(() => repository.appendRecord({ ...storedRecordA, heroName: 'Impostor' }))
-      .toThrow(/immutable append-only Hall/);
+    expect(() => repository.appendRecord({ ...storedRecordA, heroName: 'Impostor' })).toThrow(
+      /immutable append-only Hall/,
+    );
     expect(() => repository.appendRecord(storedRecordA)).toThrow(/immutable append-only Hall/);
   });
 
@@ -151,8 +244,11 @@ describe('createSessionRunRecordRepository', () => {
     const storedRecordA = storedRecord();
     repository.appendRecord(storedRecordA);
     expect(repository.standings(10)[0]).toMatchObject({
-      rank: 1, hallRecordId: storedRecordA.recordId, deathDepth: storedRecordA.cause.depth,
-      heirloom: storedRecordA.heirloom, sourceContentHash: storedRecordA.contentHash,
+      rank: 1,
+      hallRecordId: storedRecordA.recordId,
+      deathDepth: storedRecordA.cause.depth,
+      heirloom: storedRecordA.heirloom,
+      sourceContentHash: storedRecordA.contentHash,
     });
   });
 
@@ -160,11 +256,15 @@ describe('createSessionRunRecordRepository', () => {
     const repository = createSessionRunRecordRepository(fakeStorage());
     expect(repository.currentHeart()).toBeNull();
     const first: HeartLineageRecord = {
-      heroName: 'Ada', classTags: ['fighter'], hallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+      heroName: 'Ada',
+      classTags: ['fighter'],
+      hallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
       enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
     };
     const second: HeartLineageRecord = {
-      heroName: 'Bryn', classTags: ['ranger'], hallRecordId: 'record.bbbbbbbb00000000.bbbbbbbbbbbbbbbb',
+      heroName: 'Bryn',
+      classTags: ['ranger'],
+      hallRecordId: 'record.bbbbbbbb00000000.bbbbbbbbbbbbbbbb',
       enrichment: { achievedAt: 'Run #2', portraitGlyph: '&' },
     };
     repository.recordHeart(first);
@@ -176,7 +276,9 @@ describe('createSessionRunRecordRepository', () => {
   it('deep-freezes recorded Hearts so mutations of the caller original do not affect currentHeart', () => {
     const repository = createSessionRunRecordRepository(fakeStorage());
     const mutableHeart = structuredClone({
-      heroName: 'Ada', classTags: ['fighter'], hallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+      heroName: 'Ada',
+      classTags: ['fighter'],
+      hallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
       enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
     }) as HeartLineageRecord;
     repository.recordHeart(mutableHeart);
@@ -217,11 +319,16 @@ describe('createSessionRunRecordRepository', () => {
     const storedRecordA = storedRecord();
     first.appendRecord(storedRecordA);
     first.applyDeltas({
-      recordId: storedRecordA.recordId, newlyConqueredChampionRecordIds: [], achievementGrants: [],
-      discoveryProtectionUpdates: [], metrics: metrics({ kills: 2 }),
+      recordId: storedRecordA.recordId,
+      newlyConqueredChampionRecordIds: [],
+      achievementGrants: [],
+      discoveryProtectionUpdates: [],
+      metrics: metrics({ kills: 2 }),
     });
     const heart: HeartLineageRecord = {
-      heroName: 'Ada', classTags: [], hallRecordId: storedRecordA.recordId,
+      heroName: 'Ada',
+      classTags: [],
+      hallRecordId: storedRecordA.recordId,
       enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
     };
     first.recordHeart(heart);
@@ -235,8 +342,11 @@ describe('createSessionRunRecordRepository', () => {
 
     // Re-applying the same delta a second time (against the reloaded instance) stays idempotent.
     second.applyDeltas({
-      recordId: storedRecordA.recordId, newlyConqueredChampionRecordIds: [], achievementGrants: [],
-      discoveryProtectionUpdates: [], metrics: metrics({ kills: 99 }),
+      recordId: storedRecordA.recordId,
+      newlyConqueredChampionRecordIds: [],
+      achievementGrants: [],
+      discoveryProtectionUpdates: [],
+      metrics: metrics({ kills: 99 }),
     });
     expect(second.lifetime()).toEqual(first.lifetime());
   });

@@ -1,13 +1,30 @@
 import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type {
-  BackgroundContentEntry, BalanceContentEntry, ClassContentEntry, CompiledContentPack,
-  ItemContentEntry, MonsterContentEntry, SpellContentEntry, TraitContentEntry,
+  BackgroundContentEntry,
+  BalanceContentEntry,
+  ClassContentEntry,
+  CompiledContentPack,
+  ItemContentEntry,
+  MonsterContentEntry,
+  SpellContentEntry,
+  TraitContentEntry,
 } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  backgroundById, backgroundEntries, balanceEntry, classById, classEntries, entriesByKind, entryById,
-  itemById, itemEntries, monsterEntries, spellEntries, traitById, traitEntries,
+  backgroundById,
+  backgroundEntries,
+  balanceEntry,
+  classById,
+  classEntries,
+  entriesByKind,
+  entryById,
+  itemById,
+  itemEntries,
+  monsterEntries,
+  spellEntries,
+  traitById,
+  traitEntries,
 } from '../src/session/pack-queries.js';
 
 // Every helper is exercised against a REAL compiled pack and pinned to the exact entry (or entries,
@@ -16,12 +33,16 @@ import {
 let pack: CompiledContentPack;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 describe('entriesByKind', () => {
-  it('returns every entry of the kind in the pack\'s own order', () => {
-    const expected = pack.entries.filter((entry): entry is ClassContentEntry => entry.kind === 'class');
+  it("returns every entry of the kind in the pack's own order", () => {
+    const expected = pack.entries.filter(
+      (entry): entry is ClassContentEntry => entry.kind === 'class',
+    );
     expect(entriesByKind(pack, 'class')).toEqual(expected);
   });
 
@@ -51,7 +72,9 @@ describe('entryById', () => {
 
 describe('typed helpers match their hand-written predicates', () => {
   it('balanceEntry returns the first balance entry', () => {
-    const expected = pack.entries.find((entry): entry is BalanceContentEntry => entry.kind === 'balance');
+    const expected = pack.entries.find(
+      (entry): entry is BalanceContentEntry => entry.kind === 'balance',
+    );
     expect(balanceEntry(pack)).toBe(expected);
   });
 
@@ -62,7 +85,9 @@ describe('typed helpers match their hand-written predicates', () => {
   });
 
   it('backgroundById / backgroundEntries', () => {
-    const all = pack.entries.filter((entry): entry is BackgroundContentEntry => entry.kind === 'background');
+    const all = pack.entries.filter(
+      (entry): entry is BackgroundContentEntry => entry.kind === 'background',
+    );
     expect(backgroundEntries(pack)).toEqual(all);
     expect(backgroundById(pack, all[0]!.id)).toBe(all[0]);
   });
@@ -80,7 +105,9 @@ describe('typed helpers match their hand-written predicates', () => {
   });
 
   it('monsterEntries', () => {
-    const all = pack.entries.filter((entry): entry is MonsterContentEntry => entry.kind === 'monster');
+    const all = pack.entries.filter(
+      (entry): entry is MonsterContentEntry => entry.kind === 'monster',
+    );
     expect(monsterEntries(pack)).toEqual(all);
   });
 

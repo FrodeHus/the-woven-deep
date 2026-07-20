@@ -2,7 +2,9 @@ import { useEffect, type RefObject } from 'react';
 
 function focusableElements(container: HTMLElement): readonly HTMLElement[] {
   return Array.from(
-    container.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'),
+    container.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    ),
   ).filter((element) => !element.hasAttribute('disabled'));
 }
 

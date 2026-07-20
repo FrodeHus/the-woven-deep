@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import {
-  floorAnnouncement, heroAnnouncements, type FloorAnnounceSnapshot, type HeroAnnounceSnapshot,
+  floorAnnouncement,
+  heroAnnouncements,
+  type FloorAnnounceSnapshot,
+  type HeroAnnounceSnapshot,
 } from '../hero-announce.js';
 import { hero, type PanelProps, type ProjectedHero } from './types.js';
 
@@ -10,7 +13,10 @@ function announceSnapshot(heroData: ProjectedHero): HeroAnnounceSnapshot {
     health: heroData.health,
     maxHealth: heroData.maxHealth,
     hungerStage: heroData.hungerStage,
-    conditions: heroData.conditions.map((condition) => ({ conditionId: condition.conditionId, name: condition.name })),
+    conditions: heroData.conditions.map((condition) => ({
+      conditionId: condition.conditionId,
+      name: condition.name,
+    })),
   };
 }
 
@@ -54,6 +60,8 @@ export function HeroStatusAnnouncer({ snapshot }: PanelProps): JSX.Element {
   }, [current.health, current.maxHealth, current.hungerStage, conditionKey, currentFloor.floorId]);
 
   return (
-    <div className="sr-only" role="status" aria-live="polite" aria-label="Hero status">{message}</div>
+    <div className="sr-only" role="status" aria-live="polite" aria-label="Hero status">
+      {message}
+    </div>
   );
 }

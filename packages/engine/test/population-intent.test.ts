@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { emptyActorBehaviorState, selectPopulationIntent, updatePopulationIntent } from '../src/index.js';
+import {
+  emptyActorBehaviorState,
+  selectPopulationIntent,
+  updatePopulationIntent,
+} from '../src/index.js';
 
 describe('broad population intent', () => {
   it.each([
@@ -17,13 +21,29 @@ describe('broad population intent', () => {
 
   it('emits only changes and exposes a target category without goal coordinates or path', () => {
     const first = updatePopulationIntent({
-      eventId: 'event.intent.1', actorId: 'monster.one', state: emptyActorBehaviorState(),
-      intent: 'approach', targetCategory: 'hero',
+      eventId: 'event.intent.1',
+      actorId: 'monster.one',
+      state: emptyActorBehaviorState(),
+      intent: 'approach',
+      targetCategory: 'hero',
     });
-    expect(first.event).toEqual({ type: 'actor.intent-changed', eventId: 'event.intent.1', actorId: 'monster.one',
-      intent: 'approach', presentation: 'intent.approach', targetCategory: 'hero' });
+    expect(first.event).toEqual({
+      type: 'actor.intent-changed',
+      eventId: 'event.intent.1',
+      actorId: 'monster.one',
+      intent: 'approach',
+      presentation: 'intent.approach',
+      targetCategory: 'hero',
+    });
     expect(JSON.stringify(first.event)).not.toMatch(/goal|path|"x":|"y":/);
-    expect(updatePopulationIntent({ eventId: 'event.intent.2', actorId: 'monster.one', state: first.state,
-      intent: 'approach', targetCategory: 'position' }).event).toBeNull();
+    expect(
+      updatePopulationIntent({
+        eventId: 'event.intent.2',
+        actorId: 'monster.one',
+        state: first.state,
+        intent: 'approach',
+        targetCategory: 'position',
+      }).event,
+    ).toBeNull();
   });
 });

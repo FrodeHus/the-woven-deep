@@ -3,8 +3,17 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  ascendToPreviousFloor, createNewRun, DEFAULT_GUEST_HERO, decodeActiveRun, descendToNextFloor,
-  encodeActiveRun, enterStoredFloor, heroActor, resolveCommand, stableJson, validateActiveRun,
+  ascendToPreviousFloor,
+  createNewRun,
+  DEFAULT_GUEST_HERO,
+  decodeActiveRun,
+  descendToNextFloor,
+  encodeActiveRun,
+  enterStoredFloor,
+  heroActor,
+  resolveCommand,
+  stableJson,
+  validateActiveRun,
   depthFloorId,
   type ActiveRun,
   type FloorSnapshot,
@@ -32,7 +41,9 @@ function teleportHeroTo(run: ActiveRun, position: Readonly<{ x: number; y: numbe
   const hero = heroActor(run);
   const teleported: ActiveRun = {
     ...run,
-    actors: run.actors.map((actor) => actor.actorId === hero.actorId ? { ...actor, x: position.x, y: position.y } : actor),
+    actors: run.actors.map((actor) =>
+      actor.actorId === hero.actorId ? { ...actor, x: position.x, y: position.y } : actor,
+    ),
   };
   return validateActiveRun(teleported);
 }
@@ -80,7 +91,9 @@ describe('descendToNextFloor', () => {
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const onStairs = teleportHeroTo(run, run.floors[0]!.stairDown!);
     const direct = descendToNextFloor(onStairs, { content: pack });
-    const reloaded = descendToNextFloor(decodeActiveRun(encodeActiveRun(onStairs)), { content: pack });
+    const reloaded = descendToNextFloor(decodeActiveRun(encodeActiveRun(onStairs)), {
+      content: pack,
+    });
     expect(encodeActiveRun(direct.state)).toBe(encodeActiveRun(reloaded.state));
   });
 
@@ -106,11 +119,20 @@ describe('descendToNextFloor', () => {
     const stairDown = run.floors[0]!.stairDown!;
 
     // Directions paired with the offset that lands on stairDown from an adjacent tile.
-    const directionsFromOffset: ReadonlyArray<{ direction: 'north' | 'northeast' | 'east' | 'southeast' | 'south' | 'southwest' | 'west' | 'northwest'; dx: number; dy: number }> = [
-      { direction: 'south', dx: 0, dy: -1 }, { direction: 'north', dx: 0, dy: 1 },
-      { direction: 'east', dx: -1, dy: 0 }, { direction: 'west', dx: 1, dy: 0 },
-      { direction: 'southeast', dx: -1, dy: -1 }, { direction: 'northwest', dx: 1, dy: 1 },
-      { direction: 'southwest', dx: 1, dy: -1 }, { direction: 'northeast', dx: -1, dy: 1 },
+    const directionsFromOffset: ReadonlyArray<{
+      direction:
+        'north' | 'northeast' | 'east' | 'southeast' | 'south' | 'southwest' | 'west' | 'northwest';
+      dx: number;
+      dy: number;
+    }> = [
+      { direction: 'south', dx: 0, dy: -1 },
+      { direction: 'north', dx: 0, dy: 1 },
+      { direction: 'east', dx: -1, dy: 0 },
+      { direction: 'west', dx: 1, dy: 0 },
+      { direction: 'southeast', dx: -1, dy: -1 },
+      { direction: 'northwest', dx: 1, dy: 1 },
+      { direction: 'southwest', dx: 1, dy: -1 },
+      { direction: 'northeast', dx: -1, dy: 1 },
     ];
 
     let walked: ActiveRun | undefined;
@@ -122,15 +144,27 @@ describe('descendToNextFloor', () => {
       } catch {
         continue;
       }
-      const command: GameCommand = { type: 'move', commandId: `command.walk-${direction}`, expectedRevision: staged.revision, direction };
+      const command: GameCommand = {
+        type: 'move',
+        commandId: `command.walk-${direction}`,
+        expectedRevision: staged.revision,
+        direction,
+      };
       const resolution = resolveCommand(staged, command, { content: pack });
       const hero = heroActor(resolution.state);
-      if (resolution.result.status === 'applied' && hero.x === stairDown.x && hero.y === stairDown.y) {
+      if (
+        resolution.result.status === 'applied' &&
+        hero.x === stairDown.x &&
+        hero.y === stairDown.y
+      ) {
         walked = resolution.state;
         break;
       }
     }
-    if (!walked) throw new Error('test setup failure: could not walk the hero onto stair-down from an adjacent tile');
+    if (!walked)
+      throw new Error(
+        'test setup failure: could not walk the hero onto stair-down from an adjacent tile',
+      );
     expect(walked.recentCommands.length).toBeGreaterThan(0);
     // Sanity: the walked state is itself a valid save on floor 1 before we ever descend.
     validateActiveRun(walked);
@@ -149,7 +183,10 @@ describe('ascendToPreviousFloor / stored-floor descent round-trip', () => {
     const d1FloorId = toD1.state.activeFloorId;
     const d1Snapshot = stableJson(floorById(toD1.state, d1FloorId));
 
-    const onD1StairUp = teleportHeroTo(toD1.state, toD1.state.floors.find((floor) => floor.floorId === d1FloorId)!.stairUp!);
+    const onD1StairUp = teleportHeroTo(
+      toD1.state,
+      toD1.state.floors.find((floor) => floor.floorId === d1FloorId)!.stairUp!,
+    );
     const ascended = ascendToPreviousFloor(onD1StairUp, { content: pack });
     expect(ascended.events).toEqual([]);
     expect(ascended.state.activeFloorId).toBe(depthFloorId(0));
@@ -177,12 +214,18 @@ describe('ascendToPreviousFloor / stored-floor descent round-trip', () => {
 
     // Town has no stair-up at all: ascending from town must be guarded off.
     const backInTown = ascendToPreviousFloor(
-      teleportHeroTo(toD1.state, toD1.state.floors.find((floor) => floor.floorId === toD1.state.activeFloorId)!.stairUp!),
+      teleportHeroTo(
+        toD1.state,
+        toD1.state.floors.find((floor) => floor.floorId === toD1.state.activeFloorId)!.stairUp!,
+      ),
       { content: pack },
     );
     expect(() => ascendToPreviousFloor(backInTown.state, { content: pack })).toThrow(/stair/i);
 
-    const onD1StairUp = teleportHeroTo(toD1.state, toD1.state.floors.find((floor) => floor.floorId === toD1.state.activeFloorId)!.stairUp!);
+    const onD1StairUp = teleportHeroTo(
+      toD1.state,
+      toD1.state.floors.find((floor) => floor.floorId === toD1.state.activeFloorId)!.stairUp!,
+    );
     const concluded: ActiveRun = {
       ...onD1StairUp,
       conclusion: {
@@ -206,16 +249,27 @@ describe('enterStoredFloor', () => {
     const tiles = townFloor.tiles;
     let blockedIndex = -1;
     for (let index = 0; index < tiles.length; index += 1) {
-      if (tiles[index] === 0) { blockedIndex = index; break; }
+      if (tiles[index] === 0) {
+        blockedIndex = index;
+        break;
+      }
     }
-    if (blockedIndex === -1) throw new Error('test setup failure: town floor has no wall tile to test against');
-    const blocked = { x: blockedIndex % townFloor.width, y: Math.floor(blockedIndex / townFloor.width) };
-    expect(() => enterStoredFloor(run, { floorId: townFloor.floorId, arrival: blocked })).toThrow(/walkable/i);
+    if (blockedIndex === -1)
+      throw new Error('test setup failure: town floor has no wall tile to test against');
+    const blocked = {
+      x: blockedIndex % townFloor.width,
+      y: Math.floor(blockedIndex / townFloor.width),
+    };
+    expect(() => enterStoredFloor(run, { floorId: townFloor.floorId, arrival: blocked })).toThrow(
+      /walkable/i,
+    );
   });
 
   it('rejects a floorId that does not exist in run.floors', () => {
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
-    expect(() => enterStoredFloor(run, { floorId: depthFloorId(7), arrival: { x: 0, y: 0 } })).toThrow(/exist/i);
+    expect(() =>
+      enterStoredFloor(run, { floorId: depthFloorId(7), arrival: { x: 0, y: 0 } }),
+    ).toThrow(/exist/i);
   });
 });
 
@@ -224,7 +278,9 @@ describe('floorsEntered accounting across stored traversal', () => {
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(run.metrics.floorsEntered).toBe(0);
 
-    const toD1 = descendToNextFloor(teleportHeroTo(run, run.floors[0]!.stairDown!), { content: pack });
+    const toD1 = descendToNextFloor(teleportHeroTo(run, run.floors[0]!.stairDown!), {
+      content: pack,
+    });
     expect(toD1.state.metrics.floorsEntered).toBe(1);
 
     const d1 = toD1.state.floors.find((floor) => floor.floorId === toD1.state.activeFloorId)!;
@@ -232,21 +288,29 @@ describe('floorsEntered accounting across stored traversal', () => {
     expect(toD2.state.metrics.floorsEntered).toBe(2);
 
     const d2 = toD2.state.floors.find((floor) => floor.floorId === toD2.state.activeFloorId)!;
-    const ascendToD1 = ascendToPreviousFloor(teleportHeroTo(toD2.state, d2.stairUp!), { content: pack });
+    const ascendToD1 = ascendToPreviousFloor(teleportHeroTo(toD2.state, d2.stairUp!), {
+      content: pack,
+    });
     expect(ascendToD1.state.metrics.floorsEntered).toBe(2);
     expect(ascendToD1.state.activeFloorId).toBe(d1.floorId);
 
-    const ascendToTown = ascendToPreviousFloor(teleportHeroTo(ascendToD1.state, d1.stairUp!), { content: pack });
+    const ascendToTown = ascendToPreviousFloor(teleportHeroTo(ascendToD1.state, d1.stairUp!), {
+      content: pack,
+    });
     expect(ascendToTown.state.metrics.floorsEntered).toBe(2);
     expect(ascendToTown.state.activeFloorId).toBe(depthFloorId(0));
 
     const descendToD1Again = descendToNextFloor(
-      teleportHeroTo(ascendToTown.state, ascendToTown.state.floors[0]!.stairDown!), { content: pack },
+      teleportHeroTo(ascendToTown.state, ascendToTown.state.floors[0]!.stairDown!),
+      { content: pack },
     );
     expect(descendToD1Again.state.metrics.floorsEntered).toBe(2);
     expect(descendToD1Again.state.activeFloorId).toBe(d1.floorId);
 
-    const descendToD2Again = descendToNextFloor(teleportHeroTo(descendToD1Again.state, d1.stairDown!), { content: pack });
+    const descendToD2Again = descendToNextFloor(
+      teleportHeroTo(descendToD1Again.state, d1.stairDown!),
+      { content: pack },
+    );
     expect(descendToD2Again.state.metrics.floorsEntered).toBe(2);
     expect(descendToD2Again.state.activeFloorId).toBe(d2.floorId);
   });

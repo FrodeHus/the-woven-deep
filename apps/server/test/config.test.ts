@@ -23,11 +23,13 @@ describe('readConfig', () => {
   });
 
   it('resolves explicit production path overrides unchanged', () => {
-    expect(readConfig({
-      DATABASE_PATH: '/data/rogue.sqlite',
-      CONTENT_DIR: '/app/content',
-      WEB_DIST_DIR: '/app/apps/web/dist',
-    })).toMatchObject({
+    expect(
+      readConfig({
+        DATABASE_PATH: '/data/rogue.sqlite',
+        CONTENT_DIR: '/app/content',
+        WEB_DIST_DIR: '/app/apps/web/dist',
+      }),
+    ).toMatchObject({
       databasePath: '/data/rogue.sqlite',
       contentDir: '/app/content',
       webDistDir: '/app/apps/web/dist',
@@ -79,7 +81,9 @@ describe('readConfig auth', () => {
   };
 
   it('requires a cookie secret for a production-shaped public URL', () => {
-    expect(() => readConfig({ PUBLIC_URL: 'https://example.com', ...fullMailgun })).toThrow(/COOKIE_SECRET/);
+    expect(() => readConfig({ PUBLIC_URL: 'https://example.com', ...fullMailgun })).toThrow(
+      /COOKIE_SECRET/,
+    );
   });
 
   it('rejects a short cookie secret for a production-shaped public URL', () => {
@@ -161,7 +165,9 @@ describe('readConfig auth', () => {
   });
 
   it('requires an explicit PUBLIC_URL when NODE_ENV=production', () => {
-    expect(() => readConfig({ NODE_ENV: 'production' })).toThrow(/PUBLIC_URL is required when NODE_ENV=production/);
+    expect(() => readConfig({ NODE_ENV: 'production' })).toThrow(
+      /PUBLIC_URL is required when NODE_ENV=production/,
+    );
     // An empty-string placeholder (the compose/Docker default) counts as unset.
     expect(() => readConfig({ NODE_ENV: 'production', PUBLIC_URL: '' })).toThrow(
       /PUBLIC_URL is required when NODE_ENV=production/,
@@ -169,9 +175,9 @@ describe('readConfig auth', () => {
   });
 
   it('rejects a localhost PUBLIC_URL when NODE_ENV=production', () => {
-    expect(() => readConfig({ NODE_ENV: 'production', PUBLIC_URL: 'http://localhost:3000' })).toThrow(
-      /PUBLIC_URL must be a non-localhost URL when NODE_ENV=production/,
-    );
+    expect(() =>
+      readConfig({ NODE_ENV: 'production', PUBLIC_URL: 'http://localhost:3000' }),
+    ).toThrow(/PUBLIC_URL must be a non-localhost URL when NODE_ENV=production/);
     expect(() => readConfig({ NODE_ENV: 'production', PUBLIC_URL: 'https://127.0.0.1' })).toThrow(
       /PUBLIC_URL must be a non-localhost URL when NODE_ENV=production/,
     );

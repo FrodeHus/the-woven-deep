@@ -1,23 +1,36 @@
 import type {
-  BaseContentEntry, BehaviorId, ContentId, EffectDefinition, ItemCategory, ItemRarity, MerchantServiceId,
+  BaseContentEntry,
+  BehaviorId,
+  ContentId,
+  EffectDefinition,
+  ItemCategory,
+  ItemRarity,
+  MerchantServiceId,
 } from './common.js';
 
 export const ENCOUNTER_MODELS = ['individual', 'group', 'swarm', 'boss', 'merchant'] as const;
-export type EncounterModel = typeof ENCOUNTER_MODELS[number];
+export type EncounterModel = (typeof ENCOUNTER_MODELS)[number];
 export const ENCOUNTER_FORMATIONS = ['cluster', 'line', 'screen', 'wedge', 'surround'] as const;
-export type EncounterFormation = typeof ENCOUNTER_FORMATIONS[number];
+export type EncounterFormation = (typeof ENCOUNTER_FORMATIONS)[number];
 export const FORMATION_PREFERENCES = ['front', 'center', 'rear', 'flank', 'free'] as const;
-export type FormationPreference = typeof FORMATION_PREFERENCES[number];
-export const LEADER_DEATH_RESPONSES = ['weaken', 'panic', 'disband', 'surrender', 'frenzy', 'collapse'] as const;
-export type LeaderDeathResponse = typeof LEADER_DEATH_RESPONSES[number];
+export type FormationPreference = (typeof FORMATION_PREFERENCES)[number];
+export const LEADER_DEATH_RESPONSES = [
+  'weaken',
+  'panic',
+  'disband',
+  'surrender',
+  'frenzy',
+  'collapse',
+] as const;
+export type LeaderDeathResponse = (typeof LEADER_DEATH_RESPONSES)[number];
 export const SWARM_DESTRUCTION_RESPONSES = ['stop', 'flee', 'decay', 'frenzy'] as const;
-export type SwarmDestructionResponse = typeof SWARM_DESTRUCTION_RESPONSES[number];
+export type SwarmDestructionResponse = (typeof SWARM_DESTRUCTION_RESPONSES)[number];
 export const ENCOUNTER_PLACEMENT_FAILURE_MODES = ['optional', 'required'] as const;
-export type EncounterPlacementFailureMode = typeof ENCOUNTER_PLACEMENT_FAILURE_MODES[number];
+export type EncounterPlacementFailureMode = (typeof ENCOUNTER_PLACEMENT_FAILURE_MODES)[number];
 export const GROUP_COLLAPSE_REWARDS_VALUES = ['none', 'individual'] as const;
-export type GroupCollapseRewards = typeof GROUP_COLLAPSE_REWARDS_VALUES[number];
+export type GroupCollapseRewards = (typeof GROUP_COLLAPSE_REWARDS_VALUES)[number];
 export const MERCHANT_AGGRESSION_RESPONSES = ['flee', 'self-defense'] as const;
-export type MerchantAggressionResponse = typeof MERCHANT_AGGRESSION_RESPONSES[number];
+export type MerchantAggressionResponse = (typeof MERCHANT_AGGRESSION_RESPONSES)[number];
 
 export interface EncounterPlacementDefinition {
   readonly minimumStairDistance: number;
@@ -109,22 +122,33 @@ export interface BossEncounterDefinition {
 }
 
 export interface MerchantServiceOfferDefinition {
-  readonly serviceId: MerchantServiceId; readonly basePrice: number;
-  readonly minimumUses: number; readonly maximumUses: number; readonly tierIds: readonly string[];
+  readonly serviceId: MerchantServiceId;
+  readonly basePrice: number;
+  readonly minimumUses: number;
+  readonly maximumUses: number;
+  readonly tierIds: readonly string[];
 }
 
 export interface MerchantEncounterDefinition {
-  readonly npcId: ContentId; readonly stockLootTableId: ContentId;
-  readonly minimumStockRolls: number; readonly maximumStockRolls: number;
-  readonly merchantSaleBps: number; readonly merchantPurchaseBps: number;
-  readonly acceptedCategories: readonly ItemCategory[]; readonly services: readonly MerchantServiceOfferDefinition[];
+  readonly npcId: ContentId;
+  readonly stockLootTableId: ContentId;
+  readonly minimumStockRolls: number;
+  readonly maximumStockRolls: number;
+  readonly merchantSaleBps: number;
+  readonly merchantPurchaseBps: number;
+  readonly acceptedCategories: readonly ItemCategory[];
+  readonly services: readonly MerchantServiceOfferDefinition[];
   // `permanent` merchants (town shopkeepers) never depart and must omit every lifetime field below.
   // Non-permanent (dungeon-wandering) merchants must declare all three.
   readonly permanent: boolean;
-  readonly minimumLifetime?: number; readonly maximumLifetime?: number;
-  readonly departureWarningThresholds?: readonly number[]; readonly aggressionResponse: MerchantAggressionResponse;
-  readonly commerceReputationDelta: number; readonly aggressionReputationDelta: number;
-  readonly deathReputationDelta: number; readonly stockDropFraction: number;
+  readonly minimumLifetime?: number;
+  readonly maximumLifetime?: number;
+  readonly departureWarningThresholds?: readonly number[];
+  readonly aggressionResponse: MerchantAggressionResponse;
+  readonly commerceReputationDelta: number;
+  readonly aggressionReputationDelta: number;
+  readonly deathReputationDelta: number;
+  readonly stockDropFraction: number;
 }
 
 interface BaseEncounterContentEntry extends BaseContentEntry {
@@ -165,8 +189,13 @@ export interface BossEncounterContentEntry extends BaseEncounterContentEntry {
 }
 
 export interface MerchantEncounterContentEntry extends BaseEncounterContentEntry {
-  readonly model: 'merchant'; readonly definition: MerchantEncounterDefinition;
+  readonly model: 'merchant';
+  readonly definition: MerchantEncounterDefinition;
 }
 
-export type EncounterContentEntry = IndividualEncounterContentEntry | GroupEncounterContentEntry
-  | SwarmEncounterContentEntry | BossEncounterContentEntry | MerchantEncounterContentEntry;
+export type EncounterContentEntry =
+  | IndividualEncounterContentEntry
+  | GroupEncounterContentEntry
+  | SwarmEncounterContentEntry
+  | BossEncounterContentEntry
+  | MerchantEncounterContentEntry;

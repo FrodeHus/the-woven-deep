@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type JSX,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import { heroOf } from '../../session/projection-view.js';
 import { usePack, useSessionCtx } from '../providers.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
@@ -7,12 +13,20 @@ import { useItemActionKeys } from '../hooks/useItemActionKeys.js';
 import { DetailPane } from './DetailPane.js';
 import { EquipmentSlots } from './EquipmentSlots.js';
 import {
-  CATEGORY_FILTER_LABEL, CATEGORY_FILTER_ORDER, CATEGORY_GLYPH,
-  equippedLightMatchingFuel, visibleEntries,
-  type CategoryFilter, type MenuEntry, type ProjectedItemLike,
+  CATEGORY_FILTER_LABEL,
+  CATEGORY_FILTER_ORDER,
+  CATEGORY_GLYPH,
+  equippedLightMatchingFuel,
+  visibleEntries,
+  type CategoryFilter,
+  type MenuEntry,
 } from './inventory-model.js';
 
-export { CATEGORY_FILTER_ORDER, type CategoryFilter, type ProjectedItemLike } from './inventory-model.js';
+export {
+  CATEGORY_FILTER_ORDER,
+  type CategoryFilter,
+  type ProjectedItemLike,
+} from './inventory-model.js';
 
 function toListItem(entry: MenuEntry): ListDetailItem {
   return {
@@ -58,22 +72,24 @@ export function InventoryOverlay(): JSX.Element | null {
     containerRef.current?.querySelector<HTMLElement>('[role="listbox"]')?.focus();
   }, []);
 
-  if (!sessionCtx) return null;
-  const { session, snapshot } = sessionCtx;
-  const hero = heroOf(snapshot.projection);
-
-  const entries = visibleEntries(hero, filter, sortByName);
+  const hero = sessionCtx ? heroOf(sessionCtx.snapshot.projection) : undefined;
+  const entries = hero ? visibleEntries(hero, filter, sortByName) : [];
   const selected = entries[selectedIndex];
-  const refuelTarget = selected ? equippedLightMatchingFuel(pack, hero, selected.item) : undefined;
+  const refuelTarget =
+    hero && selected ? equippedLightMatchingFuel(pack, hero, selected.item) : undefined;
 
   function dispatchAction(action: 'equip' | 'unequip' | 'use' | 'drop' | 'toggle-light'): void {
-    if (!selected) return;
-    session.dispatch({ type: 'backpack', action, itemId: selected.item.itemId });
+    if (!selected || !sessionCtx) return;
+    sessionCtx.session.dispatch({ type: 'backpack', action, itemId: selected.item.itemId });
   }
 
   function dispatchRefuel(): void {
-    if (!selected || !refuelTarget) return;
-    session.dispatch({ type: 'refuel', fuelItemId: selected.item.itemId, targetItemId: refuelTarget.itemId });
+    if (!selected || !refuelTarget || !sessionCtx) return;
+    sessionCtx.session.dispatch({
+      type: 'refuel',
+      fuelItemId: selected.item.itemId,
+      targetItemId: refuelTarget.itemId,
+    });
   }
 
   function cycleFilter(): void {
@@ -82,6 +98,8 @@ export function InventoryOverlay(): JSX.Element | null {
     setSelectedIndex(0);
   }
 
+  // Called unconditionally so hook order stays stable across renders (an empty session yields no
+  // selection); the returned handler is a no-op until an item is selected.
   const handleItemActionKey = useItemActionKeys<MenuEntry>(selected, {
     e: (entry) => dispatchAction(entry.equipped ? 'unequip' : 'equip'),
     u: () => dispatchAction('use'),
@@ -104,6 +122,8 @@ export function InventoryOverlay(): JSX.Element | null {
     handleItemActionKey(event);
   }
 
+  if (!hero) return null;
+
   return (
     <div ref={containerRef} className="flex flex-col gap-2" onKeyDown={handleKeyDown}>
       <ListDetail
@@ -112,14 +132,9 @@ export function InventoryOverlay(): JSX.Element | null {
         selectedIndex={selectedIndex}
         onSelect={setSelectedIndex}
         slots={<EquipmentSlots equipment={hero.equipment} />}
-        toolbar={(
+        toolbar={
           <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={cycleFilter}
-            >
+            <Button type="button" variant="ghost" size="sm" onClick={cycleFilter}>
               {`Filter: ${CATEGORY_FILTER_LABEL[filter]} (f)`}
             </Button>
             <Button
@@ -131,7 +146,7 @@ export function InventoryOverlay(): JSX.Element | null {
               {sortByName ? 'Sort: Name (s)' : 'Sort: Default (s)'}
             </Button>
           </>
-        )}
+        }
         renderDetail={() => (
           <DetailPane
             entry={selected}

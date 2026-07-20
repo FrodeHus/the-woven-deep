@@ -9,7 +9,9 @@ import { DEFAULT_SETTINGS, type Settings } from '../src/session/settings.js';
  * `useSettingsCtx`/`usePack`) standalone instead of through `App`.
  */
 export function withUiProviders(
-  pack: CompiledContentPack, ui: ReactElement, settings: Settings = DEFAULT_SETTINGS,
+  pack: CompiledContentPack,
+  ui: ReactElement,
+  settings: Settings = DEFAULT_SETTINGS,
 ): ReactElement {
   return (
     <UiProviders pack={pack} settings={settings} onChangeSettings={() => {}}>

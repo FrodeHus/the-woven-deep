@@ -23,9 +23,10 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
       return { text: `You take ${event.amount} damage.`, tone: 'combat' };
     case 'combat.observed':
       return {
-        text: event.outcome === 'hit'
-          ? `${event.attackerName ?? 'Something'} hits ${event.targetName ?? 'something'}.`
-          : `${event.attackerName ?? 'Something'} misses ${event.targetName ?? 'something'}.`,
+        text:
+          event.outcome === 'hit'
+            ? `${event.attackerName ?? 'Something'} hits ${event.targetName ?? 'something'}.`
+            : `${event.attackerName ?? 'Something'} misses ${event.targetName ?? 'something'}.`,
         tone: 'combat',
       };
     case 'item.picked-up':
@@ -39,7 +40,10 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
     case 'item.refueled':
       return { text: 'You refill your light source.', tone: 'info' };
     case 'fuel.warning':
-      return { text: `Your light is running low on fuel (${event.fuel} remaining).`, tone: 'warning' };
+      return {
+        text: `Your light is running low on fuel (${event.fuel} remaining).`,
+        tone: 'warning',
+      };
     case 'hunger.stage-changed':
       return { text: `You grow more ${event.stage}.`, tone: 'warning' };
     case 'rest.completed':

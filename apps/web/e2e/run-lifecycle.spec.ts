@@ -36,9 +36,51 @@ const DESCEND_PREFIX = ['3'];
 /** Depth 1: march into the far monster room and kill one of the packed group, leaving a live cave
  * rat adjacent at (9,2) with the hero at (10,2) (see `guest-play.spec.ts`'s derivation notes). */
 const CLUSTER_KILL = [
-  '4', '7', '8', '8', '8', '8', '8', '8', '8', '7', '7', '7', '8', '8', '8', '8', '8', '8', '8',
-  '8', '8', '8', '7', '4', '4', '1', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4',
-  '4', '4', '4', '4', '4', '4', '4',
+  '4',
+  '7',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '7',
+  '7',
+  '7',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '7',
+  '4',
+  '4',
+  '1',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
 ];
 
 async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
@@ -50,12 +92,16 @@ async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
 async function awaitKeyboardReady(page: Page): Promise<void> {
   await expect(async () => {
     await page.keyboard.press('g');
-    await expect(page.getByRole('log', { name: /adventure log/i }))
-      .toContainText(/nothing here to pick up/i, { timeout: 250 });
+    await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(
+      /nothing here to pick up/i,
+      { timeout: 250 },
+    );
   }).toPass();
 }
 
-test('a guest builds a Lamplighter through the seven-step console and enters play', async ({ page }) => {
+test('a guest builds a Lamplighter through the seven-step console and enters play', async ({
+  page,
+}) => {
   await page.goto(WIZARD_SEED_QUERY);
 
   // Title -> Enter the Deep.

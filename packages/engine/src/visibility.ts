@@ -33,9 +33,14 @@ function validateInput(input: FieldOfViewInput): number {
     throw new RangeError('field cell count must be a safe integer');
   }
 
-  if (!Number.isSafeInteger(input.origin.x) || !Number.isSafeInteger(input.origin.y)
-    || input.origin.x < 0 || input.origin.x >= input.width
-    || input.origin.y < 0 || input.origin.y >= input.height) {
+  if (
+    !Number.isSafeInteger(input.origin.x) ||
+    !Number.isSafeInteger(input.origin.y) ||
+    input.origin.x < 0 ||
+    input.origin.x >= input.width ||
+    input.origin.y < 0 ||
+    input.origin.y >= input.height
+  ) {
     throw new RangeError('field origin must be an integer point within the field');
   }
   if (!Number.isSafeInteger(input.radius) || input.radius < 0) {
@@ -50,11 +55,7 @@ function validateInput(input: FieldOfViewInput): number {
   return cellCount;
 }
 
-function crossesSealedCorner(
-  input: FieldOfViewInput,
-  targetX: number,
-  targetY: number,
-): boolean {
+function crossesSealedCorner(input: FieldOfViewInput, targetX: number, targetY: number): boolean {
   const deltaX = targetX - input.origin.x;
   const deltaY = targetY - input.origin.y;
   const stepX = Math.sign(deltaX);
@@ -67,8 +68,8 @@ function crossesSealedCorner(
   let y = input.origin.y;
 
   while (completedHorizontal < horizontalSteps || completedVertical < verticalSteps) {
-    const decision = (1 + 2 * completedHorizontal) * verticalSteps
-      - (1 + 2 * completedVertical) * horizontalSteps;
+    const decision =
+      (1 + 2 * completedHorizontal) * verticalSteps - (1 + 2 * completedVertical) * horizontalSteps;
     if (decision === 0) {
       const horizontalSide = input.tiles[y * input.width + x + stepX]!;
       const verticalSide = input.tiles[(y + stepY) * input.width + x]!;
@@ -97,11 +98,15 @@ function setVisible(words: number[], cellIndex: number): void {
 export function computeFieldOfView(input: FieldOfViewInput): readonly number[] {
   const cellCount = validateInput(input);
   const candidates = new Set<number>();
-  const inBounds = (x: number, y: number): boolean => x >= 0 && x < input.width && y >= 0 && y < input.height;
-  const sight = new FOV.PreciseShadowcasting((x, y) => {
-    if (!inBounds(x, y)) return false;
-    return !tileDefinition(input.tiles[y * input.width + x]!).opaque;
-  }, { topology: 8 });
+  const inBounds = (x: number, y: number): boolean =>
+    x >= 0 && x < input.width && y >= 0 && y < input.height;
+  const sight = new FOV.PreciseShadowcasting(
+    (x, y) => {
+      if (!inBounds(x, y)) return false;
+      return !tileDefinition(input.tiles[y * input.width + x]!).opaque;
+    },
+    { topology: 8 },
+  );
 
   sight.compute(input.origin.x, input.origin.y, input.radius, (x, y) => {
     if (!inBounds(x, y)) return;
@@ -120,7 +125,9 @@ export function computeFieldOfView(input: FieldOfViewInput): readonly number[] {
 
 export function isVisible(words: readonly number[], index: number): boolean {
   if (!Number.isSafeInteger(index) || index < 0 || index >= words.length * 32) {
-    throw new RangeError('visibility index must be a nonnegative safe integer within the packed storage');
+    throw new RangeError(
+      'visibility index must be a nonnegative safe integer within the packed storage',
+    );
   }
   const word = words[Math.floor(index / 32)]!;
   if (!Number.isInteger(word) || word < 0 || word > UNSIGNED_32_BIT_MAX) {

@@ -1,4 +1,8 @@
-import type { BalanceContentEntry, CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
+import type {
+  BalanceContentEntry,
+  CompiledContentPack,
+  ItemContentEntry,
+} from '@woven-deep/content';
 import { heroActor, type EquipmentSlot } from './actor-model.js';
 import { entryById } from './content-index.js';
 import { movementAction } from './movement.js';
@@ -11,7 +15,12 @@ import { parseEffectParameters } from './parameter-contracts.js';
 import { equipItem, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
 import { closeDoor, openDoor } from './features.js';
 import type {
-  ActiveRun, DecisionRequiredResult, GameCommand, InvalidActionReason, OpaqueId, Point,
+  ActiveRun,
+  DecisionRequiredResult,
+  GameCommand,
+  InvalidActionReason,
+  OpaqueId,
+  Point,
 } from './model.js';
 import { isDispatchableActionType } from './action-dispatch.js';
 
@@ -31,7 +40,11 @@ export interface WaitAction {
   readonly actorId: OpaqueId;
   readonly cost: number;
 }
-export interface SwarmSpawnAction { readonly type: 'swarm-spawn'; readonly actorId: OpaqueId; readonly cost: number }
+export interface SwarmSpawnAction {
+  readonly type: 'swarm-spawn';
+  readonly actorId: OpaqueId;
+  readonly cost: number;
+}
 
 export interface BumpAttackAction {
   readonly type: 'bump-attack';
@@ -40,59 +53,123 @@ export interface BumpAttackAction {
   readonly cost: number;
 }
 export interface PickupAction {
-  readonly type: 'pickup'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
-  readonly quantity: number; readonly newItemId: OpaqueId; readonly cost: number;
+  readonly type: 'pickup';
+  readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly quantity: number;
+  readonly newItemId: OpaqueId;
+  readonly cost: number;
 }
 export interface DropAction {
-  readonly type: 'drop'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
-  readonly quantity: number; readonly newItemId: OpaqueId; readonly cost: number;
+  readonly type: 'drop';
+  readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly quantity: number;
+  readonly newItemId: OpaqueId;
+  readonly cost: number;
 }
 export interface SplitStackAction {
-  readonly type: 'split-stack'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
-  readonly quantity: number; readonly newItemId: OpaqueId; readonly cost: number;
+  readonly type: 'split-stack';
+  readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly quantity: number;
+  readonly newItemId: OpaqueId;
+  readonly cost: number;
 }
 export interface FireAction {
-  readonly type: 'fire'; readonly actorId: OpaqueId; readonly weaponItemId: OpaqueId;
-  readonly ammunitionItemId: OpaqueId; readonly targetActorId: OpaqueId; readonly cost: number;
+  readonly type: 'fire';
+  readonly actorId: OpaqueId;
+  readonly weaponItemId: OpaqueId;
+  readonly ammunitionItemId: OpaqueId;
+  readonly targetActorId: OpaqueId;
+  readonly cost: number;
 }
 export interface ThrowItemAction {
-  readonly type: 'throw-item'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
-  readonly quantity: number; readonly newItemId: OpaqueId; readonly target: Point; readonly cost: number;
+  readonly type: 'throw-item';
+  readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly quantity: number;
+  readonly newItemId: OpaqueId;
+  readonly target: Point;
+  readonly cost: number;
 }
 export interface UseItemAction {
-  readonly type: 'use-item'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
-  readonly targetActorId: OpaqueId; readonly cost: number;
+  readonly type: 'use-item';
+  readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly targetActorId: OpaqueId;
+  readonly cost: number;
 }
 export interface EquipAction {
-  readonly type: 'equip'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
-  readonly slot: EquipmentSlot; readonly cost: number;
+  readonly type: 'equip';
+  readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly slot: EquipmentSlot;
+  readonly cost: number;
 }
 export interface UnequipAction {
-  readonly type: 'unequip'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
-  readonly slot: EquipmentSlot; readonly cost: number;
+  readonly type: 'unequip';
+  readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly slot: EquipmentSlot;
+  readonly cost: number;
 }
 export interface ToggleLightAction {
-  readonly type: 'toggle-light'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
-  readonly enabled: boolean; readonly cost: number;
+  readonly type: 'toggle-light';
+  readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly enabled: boolean;
+  readonly cost: number;
 }
 export interface RefuelAction {
-  readonly type: 'refuel'; readonly actorId: OpaqueId; readonly itemId: OpaqueId;
-  readonly fuelItemId: OpaqueId; readonly quantity: number; readonly cost: number;
+  readonly type: 'refuel';
+  readonly actorId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly fuelItemId: OpaqueId;
+  readonly quantity: number;
+  readonly cost: number;
 }
-export type DoorAction = Readonly<{ type: 'open-door'; actorId: OpaqueId; featureId: OpaqueId; cost: number }>
+export type DoorAction =
+  | Readonly<{ type: 'open-door'; actorId: OpaqueId; featureId: OpaqueId; cost: number }>
   | Readonly<{ type: 'close-door'; actorId: OpaqueId; featureId: OpaqueId; cost: number }>;
-export interface SearchAction { readonly type: 'search'; readonly actorId: OpaqueId; readonly cost: number }
+export interface SearchAction {
+  readonly type: 'search';
+  readonly actorId: OpaqueId;
+  readonly cost: number;
+}
 export interface DisarmAction {
-  readonly type: 'disarm'; readonly actorId: OpaqueId; readonly featureId: OpaqueId; readonly cost: number;
+  readonly type: 'disarm';
+  readonly actorId: OpaqueId;
+  readonly featureId: OpaqueId;
+  readonly cost: number;
 }
 export interface RestAction {
-  readonly type: 'rest'; readonly actorId: OpaqueId; readonly until: 'healed' | 'interrupted';
-  readonly maximumDuration: number; readonly cost: number;
+  readonly type: 'rest';
+  readonly actorId: OpaqueId;
+  readonly until: 'healed' | 'interrupted';
+  readonly maximumDuration: number;
+  readonly cost: number;
 }
 
-export type GameAction = MoveAction | WaitAction | SwarmSpawnAction | BumpAttackAction | PickupAction | DropAction | SplitStackAction
-  | FireAction | ThrowItemAction | UseItemAction | EquipAction | UnequipAction | ToggleLightAction | RefuelAction
-  | DoorAction | SearchAction | DisarmAction | RestAction;
+export type GameAction =
+  | MoveAction
+  | WaitAction
+  | SwarmSpawnAction
+  | BumpAttackAction
+  | PickupAction
+  | DropAction
+  | SplitStackAction
+  | FireAction
+  | ThrowItemAction
+  | UseItemAction
+  | EquipAction
+  | UnequipAction
+  | ToggleLightAction
+  | RefuelAction
+  | DoorAction
+  | SearchAction
+  | DisarmAction
+  | RestAction;
 
 export interface InvalidActionValidation {
   readonly status: 'invalid';
@@ -102,23 +179,34 @@ export interface InvalidActionValidation {
 export type PlayerActionValidation = GameAction | InvalidActionValidation | DecisionRequiredResult;
 
 export function balanceEntry(content: CompiledContentPack): BalanceContentEntry {
-  const entries = content.entries.filter((entry): entry is BalanceContentEntry => entry.kind === 'balance');
-  if (entries.length !== 1) throw new Error(`internal invariant: expected one balance entry; found ${entries.length}`);
+  const entries = content.entries.filter(
+    (entry): entry is BalanceContentEntry => entry.kind === 'balance',
+  );
+  if (entries.length !== 1)
+    throw new Error(`internal invariant: expected one balance entry; found ${entries.length}`);
   return entries[0]!;
 }
 
 export function actionCostFor(entry: BalanceContentEntry, actionId: string): number {
   const cost = entry.actionCosts[actionId] ?? entry.normalActionCost;
-  if (!Number.isSafeInteger(cost) || cost < 0) throw new Error(`internal invariant: invalid action cost ${actionId}`);
+  if (!Number.isSafeInteger(cost) || cost < 0)
+    throw new Error(`internal invariant: invalid action cost ${actionId}`);
   return cost;
 }
 
-function itemEntry(content: CompiledContentPack, contentId: OpaqueId): ItemContentEntry | undefined {
+function itemEntry(
+  content: CompiledContentPack,
+  contentId: OpaqueId,
+): ItemContentEntry | undefined {
   const entry = entryById(content, contentId);
   return entry?.kind === 'item' ? entry : undefined;
 }
 
-function targetContext(state: ActiveRun, actor: ReturnType<typeof heroActor>, content: CompiledContentPack) {
+function targetContext(
+  state: ActiveRun,
+  actor: ReturnType<typeof heroActor>,
+  content: CompiledContentPack,
+) {
   const perception = floorPerception({ state, content, actorId: actor.actorId });
   return {
     floor: perception.floor,
@@ -128,21 +216,29 @@ function targetContext(state: ActiveRun, actor: ReturnType<typeof heroActor>, co
   };
 }
 
-export function validatePlayerAction(input: Readonly<{
-  state: ActiveRun;
-  command: GameCommand;
-  context: ResolutionContext;
-}>): PlayerActionValidation {
+export function validatePlayerAction(
+  input: Readonly<{
+    state: ActiveRun;
+    command: GameCommand;
+    context: ResolutionContext;
+  }>,
+): PlayerActionValidation {
   if (input.context.content.hash !== input.state.contentHash) {
-    throw new Error(`internal invariant: content hash ${input.context.content.hash} does not match run ${input.state.contentHash}`);
+    throw new Error(
+      `internal invariant: content hash ${input.context.content.hash} does not match run ${input.state.contentHash}`,
+    );
   }
   const actor = heroActor(input.state);
   const rules = balanceEntry(input.context.content);
   if (actorHasConditionTrait(actor, 'condition-trait.incapacitated', input.context.content)) {
     return { status: 'invalid', reason: 'action.unavailable' };
   }
-  if (input.command.type === 'trade-open' || input.command.type === 'trade-buy'
-    || input.command.type === 'trade-sell' || input.command.type === 'trade-close') {
+  if (
+    input.command.type === 'trade-open' ||
+    input.command.type === 'trade-buy' ||
+    input.command.type === 'trade-sell' ||
+    input.command.type === 'trade-close'
+  ) {
     // Trade commands are modal and revision-only; the reducer dispatches them before this
     // world-step action path, so reaching here means the command cannot become a GameAction.
     return { status: 'invalid', reason: 'action.unavailable' };
@@ -151,13 +247,19 @@ export function validatePlayerAction(input: Readonly<{
     return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };
   }
   if (input.command.type === 'rest') {
-    if (!Number.isSafeInteger(input.command.maximumDuration) || input.command.maximumDuration <= 0
-      || input.command.maximumDuration > rules.restMaximumDuration) {
+    if (
+      !Number.isSafeInteger(input.command.maximumDuration) ||
+      input.command.maximumDuration <= 0 ||
+      input.command.maximumDuration > rules.restMaximumDuration
+    ) {
       return { status: 'invalid', reason: 'action.unavailable' };
     }
     return {
-      type: 'rest', actorId: actor.actorId, until: input.command.until,
-      maximumDuration: input.command.maximumDuration, cost: actionCostFor(rules, 'action.wait'),
+      type: 'rest',
+      actorId: actor.actorId,
+      until: input.command.until,
+      maximumDuration: input.command.maximumDuration,
+      cost: actionCostFor(rules, 'action.wait'),
     };
   }
   if (input.command.type === 'move') {
@@ -167,67 +269,108 @@ export function validatePlayerAction(input: Readonly<{
     const floor = input.state.floors.find((candidate) => candidate.floorId === actor.floorId);
     if (!floor) throw new Error(`internal invariant: active floor ${actor.floorId} is missing`);
     const movement = movementAction({
-      actor, floor, actors: input.state.actors, features: input.state.features,
-      relationships: input.state.relationships, direction: input.command.direction,
+      actor,
+      floor,
+      actors: input.state.actors,
+      features: input.state.features,
+      relationships: input.state.relationships,
+      direction: input.command.direction,
       cost: actionCostFor(rules, 'action.move'),
     });
     if (movement.status === 'invalid') return movement;
     if (movement.status === 'decision_required') {
       return {
-        status: 'decision_required', commandId: input.command.commandId, revision: input.state.revision,
-        turn: input.state.turn, decision: movement.decision,
+        status: 'decision_required',
+        commandId: input.command.commandId,
+        revision: input.state.revision,
+        turn: input.state.turn,
+        decision: movement.decision,
       };
     }
-    const action: GameAction = movement.status === 'move'
-      ? { type: 'move', actorId: actor.actorId, to: movement.to, cost: movement.cost }
-      : { type: 'bump-attack', actorId: actor.actorId, targetActorId: movement.targetActorId, cost: movement.cost };
-    return isDispatchableActionType(action.type) ? action : { status: 'invalid', reason: 'action.unavailable' };
+    const action: GameAction =
+      movement.status === 'move'
+        ? { type: 'move', actorId: actor.actorId, to: movement.to, cost: movement.cost }
+        : {
+            type: 'bump-attack',
+            actorId: actor.actorId,
+            targetActorId: movement.targetActorId,
+            cost: movement.cost,
+          };
+    return isDispatchableActionType(action.type)
+      ? action
+      : { status: 'invalid', reason: 'action.unavailable' };
   }
   if (input.command.type === 'attack') {
     const targetActorId = input.command.targetActorId;
     const target = input.state.actors.find((candidate) => candidate.actorId === targetActorId);
-    if (!target || target.health === 0 || target.floorId !== actor.floorId
-      || Math.max(Math.abs(target.x - actor.x), Math.abs(target.y - actor.y)) !== 1) {
+    if (
+      !target ||
+      target.health === 0 ||
+      target.floorId !== actor.floorId ||
+      Math.max(Math.abs(target.x - actor.x), Math.abs(target.y - actor.y)) !== 1
+    ) {
       return { status: 'invalid', reason: 'action.unavailable' };
     }
     return {
-      type: 'bump-attack', actorId: actor.actorId, targetActorId: target.actorId,
+      type: 'bump-attack',
+      actorId: actor.actorId,
+      targetActorId: target.actorId,
       cost: actionCostFor(rules, 'action.attack'),
     };
   }
   if (input.command.type === 'pickup') {
     const transition = pickupItem({
-      run: input.state, content: input.context.content, actorId: actor.actorId,
-      itemId: input.command.itemId, quantity: input.command.quantity, newItemId: input.command.commandId,
+      run: input.state,
+      content: input.context.content,
+      actorId: actor.actorId,
+      itemId: input.command.itemId,
+      quantity: input.command.quantity,
+      newItemId: input.command.commandId,
     });
     if (!transition.ok) return { status: 'invalid', reason: transition.reason };
     return {
-      type: 'pickup', actorId: actor.actorId, itemId: input.command.itemId,
-      quantity: input.command.quantity, newItemId: input.command.commandId,
+      type: 'pickup',
+      actorId: actor.actorId,
+      itemId: input.command.itemId,
+      quantity: input.command.quantity,
+      newItemId: input.command.commandId,
       cost: actionCostFor(rules, 'action.pickup'),
     };
   }
   if (input.command.type === 'drop') {
     const transition = dropItem({
-      run: input.state, actorId: actor.actorId, itemId: input.command.itemId,
-      quantity: input.command.quantity, newItemId: input.command.commandId,
+      run: input.state,
+      actorId: actor.actorId,
+      itemId: input.command.itemId,
+      quantity: input.command.quantity,
+      newItemId: input.command.commandId,
     });
     if (!transition.ok) return { status: 'invalid', reason: transition.reason };
     return {
-      type: 'drop', actorId: actor.actorId, itemId: input.command.itemId,
-      quantity: input.command.quantity, newItemId: input.command.commandId,
+      type: 'drop',
+      actorId: actor.actorId,
+      itemId: input.command.itemId,
+      quantity: input.command.quantity,
+      newItemId: input.command.commandId,
       cost: actionCostFor(rules, 'action.drop'),
     };
   }
   if (input.command.type === 'split-stack') {
     const transition = splitStack({
-      run: input.state, content: input.context.content, actorId: actor.actorId,
-      itemId: input.command.itemId, quantity: input.command.quantity, newItemId: input.command.newItemId,
+      run: input.state,
+      content: input.context.content,
+      actorId: actor.actorId,
+      itemId: input.command.itemId,
+      quantity: input.command.quantity,
+      newItemId: input.command.newItemId,
     });
     if (!transition.ok) return { status: 'invalid', reason: transition.reason };
     return {
-      type: 'split-stack', actorId: actor.actorId, itemId: input.command.itemId,
-      quantity: input.command.quantity, newItemId: input.command.newItemId,
+      type: 'split-stack',
+      actorId: actor.actorId,
+      itemId: input.command.itemId,
+      quantity: input.command.quantity,
+      newItemId: input.command.newItemId,
       cost: actionCostFor(rules, 'action.split-stack'),
     };
   }
@@ -235,70 +378,127 @@ export function validatePlayerAction(input: Readonly<{
     const command = input.command;
     const weapon = input.state.items.find((item) => item.itemId === command.itemId);
     const definition = weapon ? itemEntry(input.context.content, weapon.contentId) : undefined;
-    if (!weapon || weapon.location.type !== 'equipped' || weapon.location.actorId !== actor.actorId
-      || !definition?.combat?.damage || !definition.combat.ammunitionTag) {
+    if (
+      !weapon ||
+      weapon.location.type !== 'equipped' ||
+      weapon.location.actorId !== actor.actorId ||
+      !definition?.combat?.damage ||
+      !definition.combat.ammunitionTag
+    ) {
       return { status: 'invalid', reason: 'item.unavailable' };
     }
     const ammoTag = definition.combat.ammunitionTag;
-    const ammunition = input.state.items.filter((item) => item.location.type === 'backpack'
-      && item.location.actorId === actor.actorId)
+    const ammunition = input.state.items
+      .filter(
+        (item) => item.location.type === 'backpack' && item.location.actorId === actor.actorId,
+      )
       .filter((item) => {
         const candidate = itemEntry(input.context.content, item.contentId);
         return candidate?.category === 'ammunition' && candidate.tags.includes(ammoTag);
-      }).sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)[0];
+      })
+      .sort((left, right) =>
+        left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0,
+      )[0];
     if (!ammunition) return { status: 'invalid', reason: 'item.missing' };
-    const targetActor = input.state.actors.find((candidate) => candidate.floorId === actor.floorId
-      && candidate.health > 0 && candidate.x === command.target.x && candidate.y === command.target.y);
+    const targetActor = input.state.actors.find(
+      (candidate) =>
+        candidate.floorId === actor.floorId &&
+        candidate.health > 0 &&
+        candidate.x === command.target.x &&
+        candidate.y === command.target.y,
+    );
     if (!targetActor) return { status: 'invalid', reason: 'target.invalid' };
     const perception = targetContext(input.state, actor, input.context.content);
     const target = validateTarget({
-      targetingId: 'target.line', sourceActor: actor, targetActorId: targetActor.actorId,
-      target: command.target, floor: perception.floor, actors: input.state.actors,
-      visibilityWords: perception.visibilityWords, illumination: perception.illumination, range: definition.combat.range,
+      targetingId: 'target.line',
+      sourceActor: actor,
+      targetActorId: targetActor.actorId,
+      target: command.target,
+      floor: perception.floor,
+      actors: input.state.actors,
+      visibilityWords: perception.visibilityWords,
+      illumination: perception.illumination,
+      range: definition.combat.range,
     });
     if (!target.ok) return { status: 'invalid', reason: target.reason };
     return {
-      type: 'fire', actorId: actor.actorId, weaponItemId: weapon.itemId,
-      ammunitionItemId: ammunition.itemId, targetActorId: targetActor.actorId, cost: definition.actionCost,
+      type: 'fire',
+      actorId: actor.actorId,
+      weaponItemId: weapon.itemId,
+      ammunitionItemId: ammunition.itemId,
+      targetActorId: targetActor.actorId,
+      cost: definition.actionCost,
     };
   }
   if (input.command.type === 'throw-item') {
     const command = input.command;
     const source = input.state.items.find((item) => item.itemId === command.itemId);
-    if (!source || source.location.type !== 'backpack' || source.location.actorId !== actor.actorId) {
+    if (
+      !source ||
+      source.location.type !== 'backpack' ||
+      source.location.actorId !== actor.actorId
+    ) {
       return { status: 'invalid', reason: 'item.unavailable' };
     }
     const transition = dropItem({
-      run: input.state, actorId: actor.actorId, itemId: source.itemId,
-      quantity: command.quantity, newItemId: command.commandId,
+      run: input.state,
+      actorId: actor.actorId,
+      itemId: source.itemId,
+      quantity: command.quantity,
+      newItemId: command.commandId,
     });
     if (!transition.ok) return { status: 'invalid', reason: transition.reason };
     const definition = itemEntry(input.context.content, source.contentId);
     if (!definition) return { status: 'invalid', reason: 'item.missing' };
     const perception = targetContext(input.state, actor, input.context.content);
     const target = validateTarget({
-      targetingId: 'target.cell', sourceActor: actor, targetActorId: null, target: command.target,
-      floor: perception.floor, actors: input.state.actors, visibilityWords: perception.visibilityWords,
-      illumination: perception.illumination, range: definition.combat?.range ?? 5,
+      targetingId: 'target.cell',
+      sourceActor: actor,
+      targetActorId: null,
+      target: command.target,
+      floor: perception.floor,
+      actors: input.state.actors,
+      visibilityWords: perception.visibilityWords,
+      illumination: perception.illumination,
+      range: definition.combat?.range ?? 5,
     });
     if (!target.ok) return { status: 'invalid', reason: target.reason };
-    const consumes = definition.effects.filter((effect) => effect.effectId === 'effect.item.consume');
+    const consumes = definition.effects.filter(
+      (effect) => effect.effectId === 'effect.item.consume',
+    );
     if (consumes.length > 0) {
-      if (consumes.length !== 1 || parseEffectParameters(consumes[0]!, 'effect.item.consume').quantity !== command.quantity) {
+      if (
+        consumes.length !== 1 ||
+        parseEffectParameters(consumes[0]!, 'effect.item.consume').quantity !== command.quantity
+      ) {
         return { status: 'invalid', reason: 'item.quantity' };
       }
-      const targetActor = input.state.actors.find((candidate) => candidate.floorId === actor.floorId
-        && candidate.health > 0 && candidate.x === command.target.x && candidate.y === command.target.y);
+      const targetActor = input.state.actors.find(
+        (candidate) =>
+          candidate.floorId === actor.floorId &&
+          candidate.health > 0 &&
+          candidate.x === command.target.x &&
+          candidate.y === command.target.y,
+      );
       if (!targetActor) return { status: 'invalid', reason: 'target.invalid' };
       try {
         resolveEffectSequence({
-          effects: definition.effects, actors: input.state.actors, items: input.state.items,
-          content: input.context.content, sourceActorId: actor.actorId, sourceItemId: source.itemId,
-          targetActorId: targetActor.actorId, effectsState: input.state.rng.effects,
+          effects: definition.effects,
+          actors: input.state.actors,
+          items: input.state.items,
+          content: input.context.content,
+          sourceActorId: actor.actorId,
+          sourceItemId: source.itemId,
+          targetActorId: targetActor.actorId,
+          effectsState: input.state.rng.effects,
           survival: input.state.survival,
           survivalActorId: input.state.hero.actorId,
-          worldTime: input.state.worldTime, eventId: command.commandId,
-          forceMoveDirection: { x: Math.sign(targetActor.x - actor.x), y: Math.sign(targetActor.y - actor.y) },
+          worldTime: input.state.worldTime,
+          eventId: command.commandId,
+          forceMoveDirection: {
+            x: Math.sign(targetActor.x - actor.x),
+            y: Math.sign(targetActor.y - actor.y),
+          },
           operations: {},
         });
       } catch {
@@ -306,110 +506,203 @@ export function validatePlayerAction(input: Readonly<{
       }
     }
     return {
-      type: 'throw-item', actorId: actor.actorId, itemId: source.itemId,
-      quantity: command.quantity, newItemId: command.commandId,
-      target: command.target, cost: definition.actionCost,
+      type: 'throw-item',
+      actorId: actor.actorId,
+      itemId: source.itemId,
+      quantity: command.quantity,
+      newItemId: command.commandId,
+      target: command.target,
+      cost: definition.actionCost,
     };
   }
   if (input.command.type === 'use-item') {
     const command = input.command;
     const source = input.state.items.find((item) => item.itemId === command.itemId);
     const definition = source ? itemEntry(input.context.content, source.contentId) : undefined;
-    if (!source || source.location.type !== 'backpack' || source.location.actorId !== actor.actorId
-      || !definition || definition.effects.length === 0) {
+    if (
+      !source ||
+      source.location.type !== 'backpack' ||
+      source.location.actorId !== actor.actorId ||
+      !definition ||
+      definition.effects.length === 0
+    ) {
       return { status: 'invalid', reason: 'item.unavailable' };
     }
-    const consumption = definition.effects.filter((effect) => effect.effectId === 'effect.item.consume')
-      .reduce((total, effect) => total + parseEffectParameters(effect, 'effect.item.consume').quantity, 0);
+    const consumption = definition.effects
+      .filter((effect) => effect.effectId === 'effect.item.consume')
+      .reduce(
+        (total, effect) => total + parseEffectParameters(effect, 'effect.item.consume').quantity,
+        0,
+      );
     if (!Number.isSafeInteger(consumption) || consumption > source.quantity) {
       return { status: 'invalid', reason: 'item.quantity' };
     }
     let targetActor = actor;
     if (command.target !== null) {
-      const candidate = input.state.actors.find((entry) => entry.floorId === actor.floorId
-        && entry.health > 0 && entry.x === command.target!.x && entry.y === command.target!.y);
+      const candidate = input.state.actors.find(
+        (entry) =>
+          entry.floorId === actor.floorId &&
+          entry.health > 0 &&
+          entry.x === command.target!.x &&
+          entry.y === command.target!.y,
+      );
       if (!candidate) return { status: 'invalid', reason: 'target.invalid' };
       const perception = targetContext(input.state, actor, input.context.content);
       const target = validateTarget({
-        targetingId: 'target.actor', sourceActor: actor, targetActorId: candidate.actorId, target: command.target,
-        floor: perception.floor, actors: input.state.actors, visibilityWords: perception.visibilityWords,
-        illumination: perception.illumination, range: definition.combat?.range ?? 5,
+        targetingId: 'target.actor',
+        sourceActor: actor,
+        targetActorId: candidate.actorId,
+        target: command.target,
+        floor: perception.floor,
+        actors: input.state.actors,
+        visibilityWords: perception.visibilityWords,
+        illumination: perception.illumination,
+        range: definition.combat?.range ?? 5,
       });
       if (!target.ok) return { status: 'invalid', reason: target.reason };
       targetActor = candidate;
     }
     try {
       resolveEffectSequence({
-        effects: definition.effects, actors: input.state.actors, items: input.state.items,
-        content: input.context.content, sourceActorId: actor.actorId, sourceItemId: source.itemId,
-        targetActorId: targetActor.actorId, effectsState: input.state.rng.effects,
+        effects: definition.effects,
+        actors: input.state.actors,
+        items: input.state.items,
+        content: input.context.content,
+        sourceActorId: actor.actorId,
+        sourceItemId: source.itemId,
+        targetActorId: targetActor.actorId,
+        effectsState: input.state.rng.effects,
         survival: input.state.survival,
         survivalActorId: input.state.hero.actorId,
-        worldTime: input.state.worldTime, eventId: command.commandId,
-        forceMoveDirection: targetActor.actorId === actor.actorId ? { x: 1, y: 0 } : {
-          x: Math.sign(targetActor.x - actor.x), y: Math.sign(targetActor.y - actor.y),
-        },
+        worldTime: input.state.worldTime,
+        eventId: command.commandId,
+        forceMoveDirection:
+          targetActor.actorId === actor.actorId
+            ? { x: 1, y: 0 }
+            : {
+                x: Math.sign(targetActor.x - actor.x),
+                y: Math.sign(targetActor.y - actor.y),
+              },
         operations: {},
       });
     } catch {
       return { status: 'invalid', reason: 'action.unavailable' };
     }
     return {
-      type: 'use-item', actorId: actor.actorId, itemId: source.itemId,
-      targetActorId: targetActor.actorId, cost: definition.actionCost,
+      type: 'use-item',
+      actorId: actor.actorId,
+      itemId: source.itemId,
+      targetActorId: targetActor.actorId,
+      cost: definition.actionCost,
     };
   }
   if (input.command.type === 'equip') {
     const command = input.command;
     const transition = equipItem({
-      run: input.state, content: input.context.content, actorId: actor.actorId,
-      itemId: command.itemId, slot: command.slot,
+      run: input.state,
+      content: input.context.content,
+      actorId: actor.actorId,
+      itemId: command.itemId,
+      slot: command.slot,
     });
     if (!transition.ok) return { status: 'invalid', reason: transition.reason };
-    const definition = itemEntry(input.context.content,
-      input.state.items.find((item) => item.itemId === command.itemId)!.contentId)!;
-    return { type: 'equip', actorId: actor.actorId, itemId: command.itemId,
-      slot: command.slot, cost: definition.actionCost };
+    const definition = itemEntry(
+      input.context.content,
+      input.state.items.find((item) => item.itemId === command.itemId)!.contentId,
+    )!;
+    return {
+      type: 'equip',
+      actorId: actor.actorId,
+      itemId: command.itemId,
+      slot: command.slot,
+      cost: definition.actionCost,
+    };
   }
   if (input.command.type === 'unequip') {
     const itemId = actor.equipment[input.command.slot];
-    const transition = unequipItem({ run: input.state, actorId: actor.actorId, slot: input.command.slot });
-    if (!transition.ok || !itemId) return { status: 'invalid', reason: transition.ok ? 'item.unavailable' : transition.reason };
-    const definition = itemEntry(input.context.content,
-      input.state.items.find((item) => item.itemId === itemId)!.contentId)!;
-    return { type: 'unequip', actorId: actor.actorId, itemId,
-      slot: input.command.slot, cost: definition.actionCost };
+    const transition = unequipItem({
+      run: input.state,
+      actorId: actor.actorId,
+      slot: input.command.slot,
+    });
+    if (!transition.ok || !itemId)
+      return { status: 'invalid', reason: transition.ok ? 'item.unavailable' : transition.reason };
+    const definition = itemEntry(
+      input.context.content,
+      input.state.items.find((item) => item.itemId === itemId)!.contentId,
+    )!;
+    return {
+      type: 'unequip',
+      actorId: actor.actorId,
+      itemId,
+      slot: input.command.slot,
+      cost: definition.actionCost,
+    };
   }
   if (input.command.type === 'toggle-light') {
     const command = input.command;
-    const transition = toggleItemLight({ run: input.state, content: input.context.content,
-      actorId: actor.actorId, itemId: command.itemId, enabled: command.enabled });
+    const transition = toggleItemLight({
+      run: input.state,
+      content: input.context.content,
+      actorId: actor.actorId,
+      itemId: command.itemId,
+      enabled: command.enabled,
+    });
     if (!transition.ok) return { status: 'invalid', reason: transition.reason };
-    const definition = itemEntry(input.context.content,
-      input.state.items.find((item) => item.itemId === command.itemId)!.contentId)!;
-    return { type: 'toggle-light', actorId: actor.actorId, itemId: command.itemId,
-      enabled: command.enabled, cost: definition.actionCost };
+    const definition = itemEntry(
+      input.context.content,
+      input.state.items.find((item) => item.itemId === command.itemId)!.contentId,
+    )!;
+    return {
+      type: 'toggle-light',
+      actorId: actor.actorId,
+      itemId: command.itemId,
+      enabled: command.enabled,
+      cost: definition.actionCost,
+    };
   }
   if (input.command.type === 'refuel') {
     const command = input.command;
-    const transition = refuelItem({ run: input.state, content: input.context.content,
-      actorId: actor.actorId, itemId: command.itemId, fuelItemId: command.fuelItemId,
-      quantity: command.quantity });
+    const transition = refuelItem({
+      run: input.state,
+      content: input.context.content,
+      actorId: actor.actorId,
+      itemId: command.itemId,
+      fuelItemId: command.fuelItemId,
+      quantity: command.quantity,
+    });
     if (!transition.ok || transition.quantity === undefined) {
       return { status: 'invalid', reason: transition.ok ? 'item.unavailable' : transition.reason };
     }
-    const definition = itemEntry(input.context.content,
-      input.state.items.find((item) => item.itemId === command.itemId)!.contentId)!;
-    return { type: 'refuel', actorId: actor.actorId, itemId: command.itemId,
-      fuelItemId: command.fuelItemId, quantity: transition.quantity, cost: definition.actionCost };
+    const definition = itemEntry(
+      input.context.content,
+      input.state.items.find((item) => item.itemId === command.itemId)!.contentId,
+    )!;
+    return {
+      type: 'refuel',
+      actorId: actor.actorId,
+      itemId: command.itemId,
+      fuelItemId: command.fuelItemId,
+      quantity: transition.quantity,
+      cost: definition.actionCost,
+    };
   }
   if (input.command.type === 'open-door' || input.command.type === 'close-door') {
-    const transition = input.command.type === 'open-door'
-      ? openDoor({ run: input.state, actorId: actor.actorId, featureId: input.command.featureId })
-      : closeDoor({ run: input.state, actorId: actor.actorId, featureId: input.command.featureId });
+    const transition =
+      input.command.type === 'open-door'
+        ? openDoor({ run: input.state, actorId: actor.actorId, featureId: input.command.featureId })
+        : closeDoor({
+            run: input.state,
+            actorId: actor.actorId,
+            featureId: input.command.featureId,
+          });
     if (!transition.ok) return { status: 'invalid', reason: transition.reason };
-    return { type: input.command.type, actorId: actor.actorId, featureId: input.command.featureId,
-      cost: actionCostFor(rules, `action.${input.command.type}`) };
+    return {
+      type: input.command.type,
+      actorId: actor.actorId,
+      featureId: input.command.featureId,
+      cost: actionCostFor(rules, `action.${input.command.type}`),
+    };
   }
   if (input.command.type === 'search') {
     return { type: 'search', actorId: actor.actorId, cost: actionCostFor(rules, 'action.search') };
@@ -417,14 +710,22 @@ export function validatePlayerAction(input: Readonly<{
   if (input.command.type === 'disarm') {
     const featureId = input.command.featureId;
     const feature = input.state.features.find((candidate) => candidate.featureId === featureId);
-    if (!feature || feature.type !== 'trap' || feature.state !== 'armed'
-      || !feature.discovery.discoveredByActorIds.includes(actor.actorId)
-      || feature.floorId !== actor.floorId
-      || Math.max(Math.abs(feature.x - actor.x), Math.abs(feature.y - actor.y)) !== 1) {
+    if (
+      !feature ||
+      feature.type !== 'trap' ||
+      feature.state !== 'armed' ||
+      !feature.discovery.discoveredByActorIds.includes(actor.actorId) ||
+      feature.floorId !== actor.floorId ||
+      Math.max(Math.abs(feature.x - actor.x), Math.abs(feature.y - actor.y)) !== 1
+    ) {
       return { status: 'invalid', reason: 'action.unavailable' };
     }
-    return { type: 'disarm', actorId: actor.actorId, featureId: feature.featureId,
-      cost: actionCostFor(rules, 'action.disarm') };
+    return {
+      type: 'disarm',
+      actorId: actor.actorId,
+      featureId: feature.featureId,
+      cost: actionCostFor(rules, 'action.disarm'),
+    };
   }
   return { status: 'invalid', reason: 'action.unavailable' };
 }

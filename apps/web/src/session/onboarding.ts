@@ -47,8 +47,9 @@ function chebyshevDistance(a: Position, b: Position): number {
  * this is a narrow, independent read of the same projected surface). */
 function heroNearMerchant(projection: GameplayProjection): boolean {
   const hero = heroOf(projection);
-  return actorsOf(projection)
-    .some((actor) => typeof actor.factionName === 'string' && chebyshevDistance(hero, actor) <= 1);
+  return actorsOf(projection).some(
+    (actor) => typeof actor.factionName === 'string' && chebyshevDistance(hero, actor) <= 1,
+  );
 }
 
 /** True when the hero is standing on, or Chebyshev-adjacent to, a stairs-down cell (`tileId` 5,
@@ -56,10 +57,15 @@ function heroNearMerchant(projection: GameplayProjection): boolean {
  * dungeon-entry hint. */
 function heroNearStairsDown(projection: GameplayProjection): boolean {
   const hero = heroOf(projection);
-  return projection.floor.cells.some((cell) => cell.tileId === 5 && chebyshevDistance(hero, cell) <= 1);
+  return projection.floor.cells.some(
+    (cell) => cell.tileId === 5 && chebyshevDistance(hero, cell) <= 1,
+  );
 }
 
-function moveChord(keymap: ResolvedKeymap, action: 'move.n' | 'move.s' | 'move.e' | 'move.w'): string {
+function moveChord(
+  keymap: ResolvedKeymap,
+  action: 'move.n' | 'move.s' | 'move.e' | 'move.w',
+): string {
   return chordKey(keymap.byAction[action]);
 }
 
@@ -77,17 +83,17 @@ export const HINTS: readonly HintDefinition[] = [
     priority: 0,
     mastery: { kind: 'intent-count', intentType: 'move', count: 10 },
     trigger: (projection) => projection.floor.town,
-    copy: (keymap) => (
-      `The dark waits on your step. Move with ${moveChord(keymap, 'move.n')} ${moveChord(keymap, 'move.s')} `
-      + `${moveChord(keymap, 'move.e')} ${moveChord(keymap, 'move.w')} -- arrows and numpad answer too.`
-    ),
+    copy: (keymap) =>
+      `The dark waits on your step. Move with ${moveChord(keymap, 'move.n')} ${moveChord(keymap, 'move.s')} ` +
+      `${moveChord(keymap, 'move.e')} ${moveChord(keymap, 'move.w')} -- arrows and numpad answer too.`,
   },
   {
     id: 'inspection',
     priority: 1,
     mastery: { kind: 'intent-count', intentType: 'open-character-sheet', count: 1 },
     trigger: () => true,
-    copy: (keymap) => `Press ${chordKey(keymap.byAction['character-sheet'])} to read your own measure.`,
+    copy: (keymap) =>
+      `Press ${chordKey(keymap.byAction['character-sheet'])} to read your own measure.`,
   },
   {
     id: 'inventory',
@@ -101,7 +107,8 @@ export const HINTS: readonly HintDefinition[] = [
     priority: 3,
     mastery: { kind: 'intent-count', intentType: 'toggle-light', count: 1 },
     trigger: () => true,
-    copy: (keymap) => `Open your pack with ${chordKey(keymap.byAction.inventory)} and tend your light before the dark closes in.`,
+    copy: (keymap) =>
+      `Open your pack with ${chordKey(keymap.byAction.inventory)} and tend your light before the dark closes in.`,
   },
   {
     id: 'commerce',
@@ -120,8 +127,12 @@ export const HINTS: readonly HintDefinition[] = [
 ];
 
 function isCountRecord(value: unknown): value is Record<string, number> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    && Object.values(value as Record<string, unknown>).every((entry) => typeof entry === 'number');
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value as Record<string, unknown>).every((entry) => typeof entry === 'number')
+  );
 }
 
 function isStringArray(value: unknown): value is readonly string[] {
@@ -146,7 +157,9 @@ function isOnboardingState(value: unknown): value is OnboardingState {
  * === null` (no stored value at all -- a fresh device/session) is deliberately NOT `corrupted`,
  * exactly like the other two loaders: only a JSON-parse or shape failure counts.
  */
-export function loadOnboarding(storage: SessionStorageLike): Readonly<{ state: OnboardingState; corrupted: boolean }> {
+export function loadOnboarding(
+  storage: SessionStorageLike,
+): Readonly<{ state: OnboardingState; corrupted: boolean }> {
   const raw = storage.get(ONBOARDING_KEY);
   if (raw === null) return { state: EMPTY_ONBOARDING, corrupted: false };
   let parsed: unknown;

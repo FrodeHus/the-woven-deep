@@ -18,7 +18,9 @@ import { buildVaultTags } from './vault-tags.js';
 export type { LocatedContentEntry } from './shared.js';
 export { referencedKindIssue } from './shared.js';
 
-export function validateContentEntries(locatedEntries: readonly LocatedContentEntry[]): ContentCompileIssue[] {
+export function validateContentEntries(
+  locatedEntries: readonly LocatedContentEntry[],
+): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
   issues.push(...achievementIssues(locatedEntries));
   const byId = buildById(locatedEntries);
@@ -35,7 +37,10 @@ export function validateContentEntries(locatedEntries: readonly LocatedContentEn
   issues.push(...lootIssues(locatedEntries, byId));
   issues.push(...championTemplateEntriesIssues(locatedEntries, byId));
   issues.push(...balanceEntriesIssues(locatedEntries));
-  return issues.sort((left, right) => compareCodeUnits(left.file, right.file)
-    || compareCodeUnits(left.path, right.path)
-    || compareCodeUnits(left.message, right.message));
+  return issues.sort(
+    (left, right) =>
+      compareCodeUnits(left.file, right.file) ||
+      compareCodeUnits(left.path, right.path) ||
+      compareCodeUnits(left.message, right.message),
+  );
 }

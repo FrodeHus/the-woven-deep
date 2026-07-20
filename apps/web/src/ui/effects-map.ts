@@ -37,7 +37,9 @@ export function pickPrimaryCondition(
   conditions: readonly ProjectedCondition[],
 ): ProjectedCondition | undefined {
   if (conditions.length === 0) return undefined;
-  return conditions.reduce((best, candidate) => (candidate.stacks > best.stacks ? candidate : best));
+  return conditions.reduce((best, candidate) =>
+    candidate.stacks > best.stacks ? candidate : best,
+  );
 }
 
 /**
@@ -56,11 +58,14 @@ export function pickPrimaryCondition(
  * point.
  */
 export function effectsForEvents(
-  events: readonly PublicEvent[], heroId: OpaqueId, positions: ActorPositions = new Map(),
+  events: readonly PublicEvent[],
+  heroId: OpaqueId,
+  positions: ActorPositions = new Map(),
 ): readonly TransientEffect[] {
   const effects: TransientEffect[] = [];
 
-  const at = (actorId: OpaqueId): Readonly<{ x: number; y: number }> | undefined => positions.get(actorId);
+  const at = (actorId: OpaqueId): Readonly<{ x: number; y: number }> | undefined =>
+    positions.get(actorId);
 
   /*
    * Ember-bolt / spell-cast discriminator (Task 7 finding): `CombatObservedPublicEvent` -- the
@@ -90,19 +95,28 @@ export function effectsForEvents(
       }
       case 'actor.damaged': {
         const origin = at(event.actorId);
-        if (origin) effects.push({ key: event.eventId, kind: 'hit-flash', x: origin.x, y: origin.y });
+        if (origin)
+          effects.push({ key: event.eventId, kind: 'hit-flash', x: origin.x, y: origin.y });
         break;
       }
       case 'actor.damage-observed': {
         const origin = at(event.actorId);
-        if (origin) effects.push({ key: event.eventId, kind: 'hit-flash', x: origin.x, y: origin.y });
+        if (origin)
+          effects.push({ key: event.eventId, kind: 'hit-flash', x: origin.x, y: origin.y });
         break;
       }
       case 'combat.observed': {
         const from = at(event.attackerActorId);
         const to = at(event.targetActorId);
         if (from && to) {
-          effects.push({ key: event.eventId, kind: 'attack-streak', x: from.x, y: from.y, toX: to.x, toY: to.y });
+          effects.push({
+            key: event.eventId,
+            kind: 'attack-streak',
+            x: from.x,
+            y: from.y,
+            toX: to.x,
+            toY: to.y,
+          });
         }
         break;
       }
@@ -110,20 +124,26 @@ export function effectsForEvents(
         const from = at(event.actorId);
         if (from) {
           effects.push({
-            key: event.eventId, kind: 'attack-streak',
-            x: from.x, y: from.y, toX: event.to.x, toY: event.to.y,
+            key: event.eventId,
+            kind: 'attack-streak',
+            x: from.x,
+            y: from.y,
+            toX: event.to.x,
+            toY: event.to.y,
           });
         }
         break;
       }
       case 'actor.died': {
         const origin = at(event.actorId);
-        if (origin) effects.push({ key: event.eventId, kind: 'death-burst', x: origin.x, y: origin.y });
+        if (origin)
+          effects.push({ key: event.eventId, kind: 'death-burst', x: origin.x, y: origin.y });
         break;
       }
       case 'actor.death-observed': {
         const origin = at(event.actorId);
-        if (origin) effects.push({ key: event.eventId, kind: 'death-burst', x: origin.x, y: origin.y });
+        if (origin)
+          effects.push({ key: event.eventId, kind: 'death-burst', x: origin.x, y: origin.y });
         break;
       }
       default:

@@ -32,9 +32,11 @@ export function useListNavigation(length: number): {
 
   const setSelectedIndex = (index: number): void => setSelectedIndexState(index);
 
-  const registerItem = (index: number) => (element: HTMLElement | null): void => {
-    itemRefs.current[index] = element;
-  };
+  const registerItem =
+    (index: number) =>
+    (element: HTMLElement | null): void => {
+      itemRefs.current[index] = element;
+    };
 
   const handleArrowKeys = (event: ReactKeyboardEvent): boolean => {
     if (length === 0) return false;

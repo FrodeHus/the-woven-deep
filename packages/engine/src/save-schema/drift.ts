@@ -6,13 +6,14 @@
 // and absent on the other, or a changed field type. `Expect<Equals<...>>` turns
 // any such disagreement into a `tsc` error.
 
-export type Clean<T> =
-  T extends readonly (infer E)[] ? readonly Clean<E>[]
-    : T extends object ? { -readonly [K in keyof T]-?: Clean<Exclude<T[K], undefined>> }
-      : T;
+export type Clean<T> = T extends readonly (infer E)[]
+  ? readonly Clean<E>[]
+  : T extends object
+    ? { -readonly [K in keyof T]-?: Clean<Exclude<T[K], undefined>> }
+    : T;
 
 export type Equals<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 
 export type Expect<T extends true> = T;
 

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { GameplayProjection } from '@woven-deep/engine';
 import {
-  adjacentMerchant, chebyshev, merchantActors, tradeIsAvailable,
+  adjacentMerchant,
+  chebyshev,
+  merchantActors,
+  tradeIsAvailable,
 } from '../src/session/projection-view.js';
 
 // The merchant-adjacency predicates only read `hero.{x,y}` and each actor's
@@ -15,12 +18,19 @@ interface TestActor {
   readonly tradeAvailable?: boolean;
 }
 
-function projectionOf(hero: { x: number; y: number }, actors: readonly TestActor[]): GameplayProjection {
+function projectionOf(
+  hero: { x: number; y: number },
+  actors: readonly TestActor[],
+): GameplayProjection {
   return { hero, actors } as unknown as GameplayProjection;
 }
 
 const merchant = (over: Partial<TestActor>): TestActor => ({
-  actorId: 'actor.merchant', x: 6, y: 5, factionName: 'Provisioners Guild', ...over,
+  actorId: 'actor.merchant',
+  x: 6,
+  y: 5,
+  factionName: 'Provisioners Guild',
+  ...over,
 });
 
 describe('chebyshev', () => {
@@ -64,7 +74,9 @@ describe('adjacentMerchant', () => {
   });
 
   it('returns an adjacent merchant regardless of trade availability', () => {
-    const projection = projectionOf({ x: 5, y: 5 }, [merchant({ x: 6, y: 5, tradeAvailable: false })]);
+    const projection = projectionOf({ x: 5, y: 5 }, [
+      merchant({ x: 6, y: 5, tradeAvailable: false }),
+    ]);
     expect(adjacentMerchant(projection)?.actorId).toBe('actor.merchant');
   });
 
@@ -83,8 +95,10 @@ describe('tradeIsAvailable', () => {
     expect(tradeIsAvailable(projection)).toBe(true);
   });
 
-  it('is false when the adjacent merchant\'s trade is unavailable', () => {
-    const projection = projectionOf({ x: 5, y: 5 }, [merchant({ x: 6, y: 5, tradeAvailable: false })]);
+  it("is false when the adjacent merchant's trade is unavailable", () => {
+    const projection = projectionOf({ x: 5, y: 5 }, [
+      merchant({ x: 6, y: 5, tradeAvailable: false }),
+    ]);
     expect(tradeIsAvailable(projection)).toBe(false);
   });
 

@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
-  heroFromChoices, type HeroChoices, type RunConclusionProjection, type RunRecordRepository, type Uint32State,
+  heroFromChoices,
+  type HeroChoices,
+  type RunConclusionProjection,
+  type RunRecordRepository,
+  type Uint32State,
 } from '@woven-deep/engine';
 import { logout } from './api.js';
 import { GUEST_ACCOUNT, type AccountState } from './session/account.js';
@@ -10,14 +14,21 @@ import type { LogLine } from './session/event-log.js';
 import { GuestSession } from './session/guest-session.js';
 import { clearGuestSession } from './session/clear-guest-session.js';
 import { randomSeed } from './session/seed.js';
-import {
-  DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings,
-} from './session/settings.js';
+import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from './session/settings.js';
 import { useGuestSession } from './session/store.js';
 import {
-  browserLocalStorage, browserSessionStorage, classifyStorageFailure, PORTRAIT_KEY, type SessionStorageLike,
+  browserLocalStorage,
+  browserSessionStorage,
+  classifyStorageFailure,
+  PORTRAIT_KEY,
+  type SessionStorageLike,
 } from './session/storage.js';
-import { AppBanners, isStorageNotice, noticeMessage, storageWarningMessage } from './ui/AppBanners.js';
+import {
+  AppBanners,
+  isStorageNotice,
+  noticeMessage,
+  storageWarningMessage,
+} from './ui/AppBanners.js';
 import { RootStyling } from './ui/RootStyling.js';
 import { useAccount } from './ui/hooks/useAccount.js';
 import { useContentPack } from './ui/hooks/useContentPack.js';
@@ -126,9 +137,17 @@ interface GameRootProps {
  * `finalized` flag makes a repeat call safe, but `finalizedRef` also stops this component from
  * calling it again on every subsequent render before `onConcluded` swaps the screen away. */
 function GameRoot({
-  session, pack, repository, portraitGlyph, onConcluded, onFinalizeError,
-  overlay, onOpenOverlay, onCloseOverlay,
-  onClearGuestSession, onboardingEnabled,
+  session,
+  pack,
+  repository,
+  portraitGlyph,
+  onConcluded,
+  onFinalizeError,
+  overlay,
+  onOpenOverlay,
+  onCloseOverlay,
+  onClearGuestSession,
+  onboardingEnabled,
 }: GameRootProps): JSX.Element {
   const snapshot = useGuestSession(session);
   const [dismissed, setDismissed] = useState(false);
@@ -171,14 +190,26 @@ function GameRoot({
   return (
     <div className="app-root">
       {storageNotice && (
-        <div role="alert" aria-label="Storage warning" className="storage-warning-banner" data-kind="storage">
+        <div
+          role="alert"
+          aria-label="Storage warning"
+          className="storage-warning-banner"
+          data-kind="storage"
+        >
           <p>{storageWarningMessage(storageNotice)}</p>
         </div>
       )}
       {dismissibleNotice && !dismissed && (
-        <div role="status" aria-label="Session notice" className="session-banner" data-kind={dismissibleNotice.kind}>
+        <div
+          role="status"
+          aria-label="Session notice"
+          className="session-banner"
+          data-kind={dismissibleNotice.kind}
+        >
           <p>{noticeMessage(dismissibleNotice)}</p>
-          <button type="button" onClick={() => setDismissed(true)}>Dismiss</button>
+          <button type="button" onClick={() => setDismissed(true)}>
+            Dismiss
+          </button>
         </div>
       )}
       <PlayScreen
@@ -206,7 +237,10 @@ function GameRoot({
  * banner in `GameRoot`, covering storage being unavailable/full and save-discard notices alike).
  */
 export function App({
-  fetcher = fetch, storage: storageOverride, localStorage: localStorageOverride, accountOverride,
+  fetcher = fetch,
+  storage: storageOverride,
+  localStorage: localStorageOverride,
+  accountOverride,
 }: AppProps): JSX.Element {
   const { pack, error, retry } = useContentPack(fetcher);
 
@@ -238,7 +272,13 @@ export function App({
 
   // Settings roaming: server-adopt/seed on sign-in, plus the debounced push
   // (`pushSettings`) `handleSettingsChange` below calls on every change while signed in.
-  const { pushSettings } = useSettingsRoaming(account, fetcher, settings, localStorageInstance, setSettings);
+  const { pushSettings } = useSettingsRoaming(
+    account,
+    fetcher,
+    settings,
+    localStorageInstance,
+    setSettings,
+  );
 
   /**
    * The settings overlay's `onChange`. Persists first (`saveSettings` re-validates
@@ -256,11 +296,13 @@ export function App({
     const result = saveSettings(localStorageInstance, next);
     if (!result.ok && result.reason === undefined) return;
     setSettings(next);
-    setSettingsWriteWarning(result.ok ? undefined : (
-      result.reason === 'full'
-        ? 'Your browser storage is full, so settings changes will not be saved.'
-        : 'Saving settings is unavailable in this browser -- changes apply for this visit only.'
-    ));
+    setSettingsWriteWarning(
+      result.ok
+        ? undefined
+        : result.reason === 'full'
+          ? 'Your browser storage is full, so settings changes will not be saved.'
+          : 'Saving settings is unavailable in this browser -- changes apply for this visit only.',
+    );
 
     // Signed-in players roam settings across devices. The localStorage write above is
     // unconditional (guest and signed-in alike); `pushSettings` is the signed-in-only extra --
@@ -289,7 +331,8 @@ export function App({
   const [chargenSeed, setChargenSeed] = useState<Uint32State>();
   const [portraitGlyph, setPortraitGlyph] = useState<string>();
   const [conclusion, setConclusion] = useState<{
-    projection: RunConclusionProjection; logTail: readonly LogLine[];
+    projection: RunConclusionProjection;
+    logTail: readonly LogLine[];
   }>();
   const [finalizeWarning, setFinalizeWarning] = useState<string>();
   const [chargenError, setChargenError] = useState<string>();
@@ -352,7 +395,9 @@ export function App({
           <p className="eyebrow">The Woven Deep</p>
           <h1>The archive would not answer.</h1>
           <p role="alert">{error}</p>
-          <button type="button" onClick={retry}>Retry</button>
+          <button type="button" onClick={retry}>
+            Retry
+          </button>
         </main>
       </RootStyling>
     );
@@ -424,7 +469,9 @@ export function App({
             <p className="eyebrow">The Woven Deep</p>
             <h1>Something went wrong building your hero.</h1>
             <p role="alert">{chargenError}</p>
-            <button type="button" onClick={() => setChargenError(undefined)}>Back</button>
+            <button type="button" onClick={() => setChargenError(undefined)}>
+              Back
+            </button>
           </main>
         );
       }
@@ -443,7 +490,9 @@ export function App({
             } catch (thrown) {
               // A client bug (a malformed choice heroFromChoices' own validation somehow missed
               // upstream) must never fail silently -- surface it visibly rather than only logging.
-              setChargenError(thrown instanceof Error ? thrown.message : 'Hero creation failed unexpectedly.');
+              setChargenError(
+                thrown instanceof Error ? thrown.message : 'Hero creation failed unexpectedly.',
+              );
               return;
             }
             try {
@@ -453,7 +502,16 @@ export function App({
               // the run itself is unaffected if this particular write fails.
             }
             setPortraitGlyph(glyph);
-            setSession(new GuestSession({ pack, storage, seed, hero, startFresh: true, localStorage: localStorageInstance }));
+            setSession(
+              new GuestSession({
+                pack,
+                storage,
+                seed,
+                hero,
+                startFresh: true,
+                localStorage: localStorageInstance,
+              }),
+            );
             router.toPlay();
           }}
         />
@@ -539,7 +597,12 @@ export function App({
         showSettingsCorrupted={settingsLoad.corrupted && !settingsCorruptedDismissed}
         onDismissSettingsCorrupted={() => setSettingsCorruptedDismissed(true)}
       >
-        <UiProviders pack={pack} settings={settings} onChangeSettings={handleSettingsChange} session={session}>
+        <UiProviders
+          pack={pack}
+          settings={settings}
+          onChangeSettings={handleSettingsChange}
+          session={session}
+        >
           {renderScreen(pack)}
         </UiProviders>
       </AppBanners>

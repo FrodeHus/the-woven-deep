@@ -32,7 +32,8 @@ function parseArguments(arguments_) {
     if (argument === '--content-dir') {
       if (sawContentDirectory) throw new Error('--content-dir may only be supplied once');
       const value = arguments_[index + 1];
-      if (value === undefined || value.startsWith('--')) throw new Error('--content-dir requires a path');
+      if (value === undefined || value.startsWith('--'))
+        throw new Error('--content-dir requires a path');
       contentDirectory = resolve(value);
       sawContentDirectory = true;
       index += 1;
@@ -53,8 +54,14 @@ function hash(value) {
 
 function directionTo(from, to) {
   const directions = {
-    '0:-1': 'north', '1:-1': 'northeast', '1:0': 'east', '1:1': 'southeast',
-    '0:1': 'south', '-1:1': 'southwest', '-1:0': 'west', '-1:-1': 'northwest',
+    '0:-1': 'north',
+    '1:-1': 'northeast',
+    '1:0': 'east',
+    '1:1': 'southeast',
+    '0:1': 'south',
+    '-1:1': 'southwest',
+    '-1:0': 'west',
+    '-1:-1': 'northwest',
   };
   const direction = directions[`${Math.sign(to.x - from.x)}:${Math.sign(to.y - from.y)}`];
   if (direction === undefined) throw new Error('scenario target is not adjacent to the hero');
@@ -90,10 +97,14 @@ function execute(initial, content, commands, reloadAfter) {
   const records = [];
   for (const [index, command] of commands.entries()) {
     const resolution = resolveCommand(state, command, { content });
-    assert(resolution.result.status === 'applied',
-      `${command.commandId} was ${resolution.result.status}: ${stableJson(resolution.events)}`);
+    assert(
+      resolution.result.status === 'applied',
+      `${command.commandId} was ${resolution.result.status}: ${stableJson(resolution.events)}`,
+    );
     state = resolution.state;
-    const recorded = state.recentCommands.find((entry) => entry.command.commandId === command.commandId);
+    const recorded = state.recentCommands.find(
+      (entry) => entry.command.commandId === command.commandId,
+    );
     assert(recorded !== undefined, `${command.commandId} was not recorded`);
     records.push({
       command,
@@ -117,8 +128,10 @@ function materialize(initial, content, ids) {
       expectedRevision: state.revision,
     };
     const resolution = resolveCommand(state, command, { content });
-    assert(resolution.result.status === 'applied',
-      `${command.commandId} was ${resolution.result.status}: ${stableJson(resolution.events)}`);
+    assert(
+      resolution.result.status === 'applied',
+      `${command.commandId} was ${resolution.result.status}: ${stableJson(resolution.events)}`,
+    );
     commands.push(command);
     state = resolution.state;
   }
@@ -126,7 +139,8 @@ function materialize(initial, content, ids) {
 }
 
 function eventLines(records, accepted) {
-  return records.flatMap((record) => record.authoritativeEvents)
+  return records
+    .flatMap((record) => record.authoritativeEvents)
     .filter((event) => accepted.has(event.type))
     .map((event) => stableJson(event));
 }
@@ -143,8 +157,14 @@ async function main() {
   const commands = materialize(fixture.run, content, fixture.ids);
   const continuous = execute(fixture.run, content, commands, new Set());
   const split = execute(fixture.run, content, commands, new Set([2, 5, 8]));
-  assert(encodeActiveRun(split.state) === encodeActiveRun(continuous.state), 'split final save bytes diverged');
-  assert(stableJson(split.records) === stableJson(continuous.records), 'split replay records diverged');
+  assert(
+    encodeActiveRun(split.state) === encodeActiveRun(continuous.state),
+    'split final save bytes diverged',
+  );
+  assert(
+    stableJson(split.records) === stableJson(continuous.records),
+    'split replay records diverged',
+  );
 
   const authoritativeEvents = continuous.records.flatMap((record) => record.authoritativeEvents);
   const publicEvents = continuous.records.flatMap((record) => record.publicEvents);
@@ -160,28 +180,68 @@ async function main() {
   if (options.verify) await verifyReviewedHashes(hashes);
 
   console.log('movement and reactions');
-  for (const line of eventLines(continuous.records,
-    new Set(['hero.moved', 'actor.moved', 'reaction.triggered']))) console.log(line);
+  for (const line of eventLines(
+    continuous.records,
+    new Set(['hero.moved', 'actor.moved', 'reaction.triggered']),
+  ))
+    console.log(line);
   console.log('combat');
-  for (const line of eventLines(continuous.records,
-    new Set(['attack.hit', 'attack.missed', 'actor.damaged', 'actor.died', 'hero.damaged']))) console.log(line);
+  for (const line of eventLines(
+    continuous.records,
+    new Set(['attack.hit', 'attack.missed', 'actor.damaged', 'actor.died', 'hero.damaged']),
+  ))
+    console.log(line);
   console.log('items and identity');
-  for (const line of eventLines(continuous.records,
-    new Set(['item.equipped', 'item.unequipped', 'item.used', 'item.consumed',
-      'identification.appearance-revealed', 'item.identified']))) console.log(line);
+  for (const line of eventLines(
+    continuous.records,
+    new Set([
+      'item.equipped',
+      'item.unequipped',
+      'item.used',
+      'item.consumed',
+      'identification.appearance-revealed',
+      'item.identified',
+    ]),
+  ))
+    console.log(line);
   console.log('survival and features');
-  for (const line of eventLines(continuous.records,
-    new Set(['hunger.stage-changed', 'hunger.restored', 'fuel.warning', 'item.light-extinguished',
-      'door.opened', 'door.closed', 'feature.revealed', 'feature.searched', 'trap.disarmed',
-      'trap.triggered', 'trap.disarm-failed', 'rest.completed']))) console.log(line);
+  for (const line of eventLines(
+    continuous.records,
+    new Set([
+      'hunger.stage-changed',
+      'hunger.restored',
+      'fuel.warning',
+      'item.light-extinguished',
+      'door.opened',
+      'door.closed',
+      'feature.revealed',
+      'feature.searched',
+      'trap.disarmed',
+      'trap.triggered',
+      'trap.disarm-failed',
+      'rest.completed',
+    ]),
+  ))
+    console.log(line);
   const hero = continuous.state.actors.find((actor) => actor.actorId === fixture.ids.hero);
   const lantern = continuous.state.items.find((item) => item.itemId === fixture.ids.lantern);
-  console.log(stableJson({ worldTime: continuous.state.worldTime, hunger: continuous.state.survival,
-    hero: { health: hero.health, maxHealth: hero.maxHealth, equipment: hero.equipment },
-    lantern: { fuel: lantern.fuel, enabled: lantern.enabled } }));
+  console.log(
+    stableJson({
+      worldTime: continuous.state.worldTime,
+      hunger: continuous.state.survival,
+      hero: { health: hero.health, maxHealth: hero.maxHealth, equipment: hero.equipment },
+      lantern: { fuel: lantern.fuel, enabled: lantern.enabled },
+    }),
+  );
   console.log('public projection');
-  console.log(stableJson({ hero: finalProjection.hero, actors: finalProjection.actors,
-    features: finalProjection.features, groundItems: finalProjection.groundItems }));
+  console.log(
+    stableJson({
+      hero: finalProjection.hero,
+      actors: finalProjection.actors,
+      features: finalProjection.features,
+      groundItems: finalProjection.groundItems,
+    }),
+  );
   console.log('stable hashes');
   for (const [label, value] of Object.entries(hashes)) console.log(`${label} ${value}`);
   if (options.verify) console.log('deterministic core gameplay replay verified');

@@ -1,11 +1,21 @@
 import type { CompiledContentPack } from '@woven-deep/content';
-import { type HeroView, type OwnedItemView } from '../../session/projection-view.js';
+import type { HeroView, OwnedItemView } from '../../session/projection-view.js';
 import { itemById } from '../../session/pack-queries.js';
 
 /** The real item-category vocabulary the content model/engine projection actually emits (see
  * `packages/content/src/model.ts`'s `ItemCategory`) -- never invented. */
 export type ProjectedItemCategory =
-  | 'weapon' | 'ammunition' | 'armor' | 'shield' | 'light' | 'fuel' | 'food' | 'potion' | 'scroll' | 'ring' | 'misc';
+  | 'weapon'
+  | 'ammunition'
+  | 'armor'
+  | 'shield'
+  | 'light'
+  | 'fuel'
+  | 'food'
+  | 'potion'
+  | 'scroll'
+  | 'ring'
+  | 'misc';
 
 /** The five buckets the overlay's category filter cycles through, plus `all`. Grouped from the
  * real vocabulary above by rough kind, not invented categories: weapon/ammunition (things you
@@ -13,19 +23,39 @@ export type ProjectedItemCategory =
  * light/fuel (light-source management), ring/misc (everything left over). */
 export type CategoryFilter = 'all' | 'weapons' | 'armor' | 'consumables' | 'light' | 'other';
 
-export const CATEGORY_FILTER_ORDER: readonly CategoryFilter[] =
-  ['all', 'weapons', 'armor', 'consumables', 'light', 'other'];
+export const CATEGORY_FILTER_ORDER: readonly CategoryFilter[] = [
+  'all',
+  'weapons',
+  'armor',
+  'consumables',
+  'light',
+  'other',
+];
 
 export const CATEGORY_FILTER_LABEL: Readonly<Record<CategoryFilter, string>> = {
-  all: 'All', weapons: 'Weapons', armor: 'Armor', consumables: 'Consumables', light: 'Light', other: 'Other',
+  all: 'All',
+  weapons: 'Weapons',
+  armor: 'Armor',
+  consumables: 'Consumables',
+  light: 'Light',
+  other: 'Other',
 };
 
 /** Plain-ASCII glyph per category -- traditional roguelike shorthand, purely presentational (no
  * content-pack lookup: an unidentified item's projection omits `contentId` entirely, so a glyph
  * derived from `category` alone is the only one guaranteed to always be available). */
 export const CATEGORY_GLYPH: Readonly<Record<ProjectedItemCategory, string>> = {
-  weapon: ')', ammunition: '↑', armor: '[', shield: '[', light: '~', fuel: '~',
-  food: '%', potion: '!', scroll: '?', ring: '=', misc: '*',
+  weapon: ')',
+  ammunition: '↑',
+  armor: '[',
+  shield: '[',
+  light: '~',
+  fuel: '~',
+  food: '%',
+  potion: '!',
+  scroll: '?',
+  ring: '=',
+  misc: '*',
 };
 
 export function bucketFor(category: ProjectedItemCategory): Exclude<CategoryFilter, 'all'> {
@@ -87,7 +117,9 @@ export function byNameStable(left: MenuEntry, right: MenuEntry): number {
 }
 
 export function visibleEntries(
-  hero: HeroView, filter: CategoryFilter, sortByName: boolean,
+  hero: HeroView,
+  filter: CategoryFilter,
+  sortByName: boolean,
 ): readonly MenuEntry[] {
   const filtered = allMenuEntries(hero).filter((entry) => matchesFilter(entry.item, filter));
   if (!sortByName) return filtered;
@@ -105,18 +137,26 @@ export function visibleEntries(
  * a fuel tag, so "first match" is unambiguous in practice.
  */
 export function equippedLightMatchingFuel(
-  pack: CompiledContentPack, hero: HeroView, fuelItem: ProjectedItemLike,
+  pack: CompiledContentPack,
+  hero: HeroView,
+  fuelItem: ProjectedItemLike,
 ): ProjectedItemLike | undefined {
   if (fuelItem.contentId === undefined) return undefined;
   const fuelEntry = itemById(pack, fuelItem.contentId);
   if (!fuelEntry) return undefined;
   const fuelTags = fuelEntry.tags;
   return Object.values(hero.equipment)
-    .filter((item): item is ProjectedItemLike => item !== null && item.category === 'light' && item.contentId !== undefined)
+    .filter(
+      (item): item is ProjectedItemLike =>
+        item !== null && item.category === 'light' && item.contentId !== undefined,
+    )
     .find((item) => {
       if (item.contentId === undefined) return false;
       const lightEntry = itemById(pack, item.contentId);
-      return lightEntry !== undefined && lightEntry.light !== null
-        && lightEntry.light.fuelTags.some((tag) => fuelTags.includes(tag));
+      return (
+        lightEntry !== undefined &&
+        lightEntry.light !== null &&
+        lightEntry.light.fuelTags.some((tag) => fuelTags.includes(tag))
+      );
     });
 }

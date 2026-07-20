@@ -2,8 +2,13 @@
   "name": "the-woven-deep",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.12.0" },
-  "workspaces": ["apps/*", "packages/*"],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "build": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && npm run build --workspace @woven-deep/web && npm run build --workspace @woven-deep/server",
     "content:validate": "npm run build --workspace @woven-deep/content && node packages/content/dist/cli.js",
@@ -16,11 +21,28 @@
     "run-records:demo": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && node scripts/run-records-demo.mjs --verify",
     "engine:demo": "npm run build --workspace @woven-deep/engine && node scripts/engine-demo.mjs --verify packages/engine/fixtures/demo.commands",
     "smoke": "node scripts/smoke.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "knip": "knip",
+    "depcruise": "depcruise packages apps --config .dependency-cruiser.cjs --ignore-known",
     "test": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && npm run test --workspaces --if-present",
-    "typecheck": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && npm run typecheck --workspaces --if-present",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run depcruise && npm run knip && npm run test"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "dependency-cruiser": "^16.10.4",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.26",
+    "globals": "^16.5.0",
+    "knip": "^5.88.1",
+    "prettier": "^3.9.5",
     "typescript": "^5.8.0",
+    "typescript-eslint": "^8.64.0",
     "vitest": "^3.2.0"
   }
 }

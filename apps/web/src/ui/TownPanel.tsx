@@ -25,8 +25,7 @@ export function TownPanel({ snapshot, keymap }: TownPanelProps): JSX.Element {
   const hero = heroOf(projection);
   const merchants = merchantActors(projection);
   const houseDoor = projection.slots.find((slot) => slot.tags.includes('house-door'));
-  const houseAdjacent = houseDoor !== undefined
-    && chebyshev(hero, houseDoor) === 1;
+  const houseAdjacent = houseDoor !== undefined && chebyshev(hero, houseDoor) === 1;
 
   return (
     <section aria-label="Town" className="town-panel">
@@ -37,11 +36,20 @@ export function TownPanel({ snapshot, keymap }: TownPanelProps): JSX.Element {
             const adjacent = chebyshev(hero, merchant) === 1;
             const canTrade = adjacent && merchant.tradeAvailable !== false;
             return (
-              <li key={merchant.actorId} className={adjacent ? 'town-merchant town-merchant--nearby' : 'town-merchant'}>
+              <li
+                key={merchant.actorId}
+                className={adjacent ? 'town-merchant town-merchant--nearby' : 'town-merchant'}
+              >
                 <span>{merchant.name ?? merchant.factionName}</span>
-                {merchant.reputationTier !== undefined && <span className="town-merchant-reputation">{merchant.reputationTier}</span>}
-                {merchant.tradeAvailable === false && <span className="town-merchant-unavailable">unavailable</span>}
-                {canTrade && <span className="town-merchant-trade-hint">{`press ${tradeChord} to trade`}</span>}
+                {merchant.reputationTier !== undefined && (
+                  <span className="town-merchant-reputation">{merchant.reputationTier}</span>
+                )}
+                {merchant.tradeAvailable === false && (
+                  <span className="town-merchant-unavailable">unavailable</span>
+                )}
+                {canTrade && (
+                  <span className="town-merchant-trade-hint">{`press ${tradeChord} to trade`}</span>
+                )}
               </li>
             );
           })}

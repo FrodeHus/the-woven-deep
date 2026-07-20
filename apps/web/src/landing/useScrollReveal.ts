@@ -7,7 +7,10 @@ const HARD_FALLBACK_MS = 1600;
 const VIEWPORT_ENTRY_FRACTION = 0.92;
 
 function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+  );
 }
 
 /**

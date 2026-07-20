@@ -21,12 +21,14 @@ const lines = [
   '#.......#',
   '#########',
 ] as const;
-const tiles = lines.flatMap((line) => [...line].map<TileId>((glyph) => {
-  if (glyph === '#') return 0;
-  if (glyph === '+') return 2;
-  if (glyph === 'O') return 3;
-  return 1;
-}));
+const tiles = lines.flatMap((line) =>
+  [...line].map<TileId>((glyph) => {
+    if (glyph === '#') return 0;
+    if (glyph === '+') return 2;
+    if (glyph === 'O') return 3;
+    return 1;
+  }),
+);
 const at = (x: number, y: number): number => y * width + x;
 const dark: AmbientLight = { color: [255, 255, 255], strength: 0 };
 const ambient: AmbientLight = { color: [80, 100, 120], strength: 5 };
@@ -79,7 +81,9 @@ describe('knowledge refresh', () => {
 
     for (let index = 0; index < width * height; index += 1) {
       const inFov = ((result.visibilityWords[Math.floor(index / 32)]! >>> (index % 32)) & 1) === 1;
-      expect(isExplored(result.knowledge, index)).toBe(inFov && result.illumination.intensity[index]! > 0);
+      expect(isExplored(result.knowledge, index)).toBe(
+        inFov && result.illumination.intensity[index]! > 0,
+      );
     }
     expect(isExplored(result.knowledge, at(2, 3))).toBe(true);
     expect(isExplored(result.knowledge, at(8, 6))).toBe(false);
@@ -126,16 +130,22 @@ describe('knowledge refresh', () => {
       actors: new Map([[hero.heroId, hiddenHero]]),
     });
 
-    expect(((hidden.visibilityWords[0]! >>> at(4, 3)) & 1)).toBe(0);
+    expect((hidden.visibilityWords[0]! >>> at(4, 3)) & 1).toBe(0);
     expect(rememberedTile(hidden.knowledge, at(4, 3))).toBe(2);
   });
 
   it('moves actor-attached light when the hero position changes', () => {
-    const first = refreshKnowledge({ floor: floor({ lights: [carriedTorch] }), hero,
-      actors: new Map([[hero.heroId, hero]]) });
+    const first = refreshKnowledge({
+      floor: floor({ lights: [carriedTorch] }),
+      hero,
+      actors: new Map([[hero.heroId, hero]]),
+    });
     const movedHero = { ...hero, x: 2, y: 5 };
-    const moved = refreshKnowledge({ floor: floor({ lights: [carriedTorch] }), hero: movedHero,
-      actors: new Map([[hero.heroId, movedHero]]) });
+    const moved = refreshKnowledge({
+      floor: floor({ lights: [carriedTorch] }),
+      hero: movedHero,
+      actors: new Map([[hero.heroId, movedHero]]),
+    });
 
     expect(first.illumination.intensity[at(2, 3)]).toBe(255);
     expect(moved.illumination.intensity[at(2, 5)]).toBe(255);
@@ -149,7 +159,9 @@ describe('knowledge refresh', () => {
       lights: Object.freeze([Object.freeze(carriedTorch), Object.freeze(fixedBlue)]),
       knowledge: Object.freeze({
         exploredWords: Object.freeze([0, 0]),
-        rememberedTerrainWords: Object.freeze(createUnknownKnowledge(width * height).rememberedTerrainWords),
+        rememberedTerrainWords: Object.freeze(
+          createUnknownKnowledge(width * height).rememberedTerrainWords,
+        ),
       }),
     });
     const actors = new Map([[hero.heroId, Object.freeze({ x: hero.x, y: hero.y })]]);
@@ -163,7 +175,9 @@ describe('knowledge refresh', () => {
     expect(first).not.toBe(second);
     expect(first.knowledge).not.toBe(second.knowledge);
     expect(first.knowledge.exploredWords).not.toBe(second.knowledge.exploredWords);
-    expect(first.knowledge.rememberedTerrainWords).not.toBe(second.knowledge.rememberedTerrainWords);
+    expect(first.knowledge.rememberedTerrainWords).not.toBe(
+      second.knowledge.rememberedTerrainWords,
+    );
     expect(first.visibilityWords).not.toBe(second.visibilityWords);
     expect(first.illumination.intensity).not.toBe(second.illumination.intensity);
   });
@@ -173,11 +187,26 @@ describe('knowledge refresh', () => {
     sparseTiles.fill(1);
     delete sparseTiles[4];
 
-    expect(() => refreshKnowledge({ floor: floor({ tiles: sparseTiles }), hero,
-      actors: new Map([[hero.heroId, hero]]) })).toThrow(/tile 4/);
-    expect(() => refreshKnowledge({ floor: floor(), hero: { ...hero, sightRadius: -1 },
-      actors: new Map([[hero.heroId, hero]]) })).toThrow(/radius/);
-    expect(() => refreshKnowledge({ floor: floor({ floorId: 'Bad ID' }), hero,
-      actors: new Map([[hero.heroId, hero]]) })).toThrow(/floorId/);
+    expect(() =>
+      refreshKnowledge({
+        floor: floor({ tiles: sparseTiles }),
+        hero,
+        actors: new Map([[hero.heroId, hero]]),
+      }),
+    ).toThrow(/tile 4/);
+    expect(() =>
+      refreshKnowledge({
+        floor: floor(),
+        hero: { ...hero, sightRadius: -1 },
+        actors: new Map([[hero.heroId, hero]]),
+      }),
+    ).toThrow(/radius/);
+    expect(() =>
+      refreshKnowledge({
+        floor: floor({ floorId: 'Bad ID' }),
+        hero,
+        actors: new Map([[hero.heroId, hero]]),
+      }),
+    ).toThrow(/floorId/);
   });
 });

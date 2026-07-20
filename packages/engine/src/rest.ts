@@ -11,9 +11,18 @@ import type { ActiveRun, DomainEvent, OpaqueId, PublicEvent, RestCompletedEvent 
 import { tileIndex } from './model.js';
 import { isVisible } from './visibility.js';
 
-export type RestStopReason = 'full-health' | 'maximum-duration' | 'visible-danger' | 'aware-hostile'
-  | 'damage' | 'meaningful-sound' | 'hunger-warning' | 'fuel-warning' | 'condition-change'
-  | 'decision-required' | 'hero-death';
+export type RestStopReason =
+  | 'full-health'
+  | 'maximum-duration'
+  | 'visible-danger'
+  | 'aware-hostile'
+  | 'damage'
+  | 'meaningful-sound'
+  | 'hunger-warning'
+  | 'fuel-warning'
+  | 'condition-change'
+  | 'decision-required'
+  | 'hero-death';
 
 export interface RestObservation {
   readonly fullHealth: boolean;
@@ -45,7 +54,10 @@ export function restStopReason(observation: RestObservation): RestStopReason | n
   return null;
 }
 
-function danger(state: ActiveRun, content: CompiledContentPack): Pick<RestObservation, 'visibleDanger' | 'awareHostile'> {
+function danger(
+  state: ActiveRun,
+  content: CompiledContentPack,
+): Pick<RestObservation, 'visibleDanger' | 'awareHostile'> {
   const hero = heroActor(state);
   const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
   if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
@@ -53,12 +65,19 @@ function danger(state: ActiveRun, content: CompiledContentPack): Pick<RestObserv
   let visibleDanger = false;
   let awareHostile = false;
   for (const actor of state.actors) {
-    if (actor.actorId === hero.actorId || actor.floorId !== hero.floorId || actor.health === 0
-      || relationshipBetween(state, hero.actorId, actor.actorId) !== 'hostile') continue;
+    if (
+      actor.actorId === hero.actorId ||
+      actor.floorId !== hero.floorId ||
+      actor.health === 0 ||
+      relationshipBetween(state, hero.actorId, actor.actorId) !== 'hostile'
+    )
+      continue;
     awareHostile ||= actor.awareActorIds.includes(hero.actorId);
     const index = tileIndex(floor, actor.x, actor.y);
-    visibleDanger ||= index !== undefined && isVisible(perception.visibilityWords, index)
-      && perception.illumination.intensity[index]! > 0;
+    visibleDanger ||=
+      index !== undefined &&
+      isVisible(perception.visibilityWords, index) &&
+      perception.illumination.intensity[index]! > 0;
   }
   return { visibleDanger, awareHostile };
 }
@@ -68,17 +87,29 @@ function hasInterruptingCondition(state: ActiveRun, content: CompiledContentPack
 }
 
 function interruptingConditionKey(state: ActiveRun, content: CompiledContentPack): string {
-  return heroActor(state).conditions
-    .filter((condition) => conditionDefinition(content, condition.conditionId).traits
-      .includes('condition-trait.interrupts-rest'))
-    .map((condition) => `${condition.conditionId}:${condition.stacks}:${condition.expiresAt ?? 'permanent'}`)
-    .sort().join('|');
+  return heroActor(state)
+    .conditions.filter((condition) =>
+      conditionDefinition(content, condition.conditionId).traits.includes(
+        'condition-trait.interrupts-rest',
+      ),
+    )
+    .map(
+      (condition) =>
+        `${condition.conditionId}:${condition.stacks}:${condition.expiresAt ?? 'permanent'}`,
+    )
+    .sort()
+    .join('|');
 }
 
 function meaningfulSound(events: readonly DomainEvent[], heroId: OpaqueId): boolean {
-  return events.some((event) => (event.type === 'actor.moved' && event.actorId !== heroId)
-    || ((event.type === 'attack.hit' || event.type === 'attack.missed') && event.actorId !== heroId)
-    || (event.type === 'door.opened' || event.type === 'door.closed'));
+  return events.some(
+    (event) =>
+      (event.type === 'actor.moved' && event.actorId !== heroId) ||
+      ((event.type === 'attack.hit' || event.type === 'attack.missed') &&
+        event.actorId !== heroId) ||
+      event.type === 'door.opened' ||
+      event.type === 'door.closed',
+  );
 }
 
 export interface RestResult {
@@ -90,49 +121,78 @@ export interface RestResult {
   readonly effectiveHealing: number;
 }
 
-function completedEvent(eventId: OpaqueId, stopReason: RestStopReason, elapsed: number, effectiveHealing: number): RestCompletedEvent {
+function completedEvent(
+  eventId: OpaqueId,
+  stopReason: RestStopReason,
+  elapsed: number,
+  effectiveHealing: number,
+): RestCompletedEvent {
   return { type: 'rest.completed', eventId, stopReason, elapsed, effectiveHealing };
 }
 
-export function resolveRest(input: Readonly<{
-  state: ActiveRun;
-  content: CompiledContentPack;
-  eventId: OpaqueId;
-  until: 'healed' | 'interrupted';
-  maximumDuration: number;
-  maxInternalActions?: number;
-}>): RestResult {
+export function resolveRest(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    eventId: OpaqueId;
+    until: 'healed' | 'interrupted';
+    maximumDuration: number;
+    maxInternalActions?: number;
+  }>,
+): RestResult {
   if (!Number.isSafeInteger(input.maximumDuration) || input.maximumDuration <= 0) {
     throw new RangeError('rest maximum duration must be a positive safe integer');
   }
   const rules = balanceEntry(input.content);
   if (input.maximumDuration > rules.restMaximumDuration) {
-    throw new RangeError(`rest maximum duration cannot exceed balance limit ${rules.restMaximumDuration}`);
+    throw new RangeError(
+      `rest maximum duration cannot exceed balance limit ${rules.restMaximumDuration}`,
+    );
   }
   const start = input.state;
   const startHero = heroActor(start);
   const initialDanger = danger(start, input.content);
   const initialReason = restStopReason({
     fullHealth: input.until === 'healed' && startHero.health === startHero.maxHealth,
-    maximumDurationReached: false, ...initialDanger, damaged: false, forcedMovement: false,
-    meaningfulSound: false, hungerWarning: false, fuelWarning: false,
+    maximumDurationReached: false,
+    ...initialDanger,
+    damaged: false,
+    forcedMovement: false,
+    meaningfulSound: false,
+    hungerWarning: false,
+    fuelWarning: false,
     interruptingConditionChanged: hasInterruptingCondition(start, input.content),
-    decisionRequired: false, heroDead: startHero.health === 0,
+    decisionRequired: false,
+    heroDead: startHero.health === 0,
   });
   if (initialReason) {
     // Rest that completes without a substep still observes the global merchant deadlines, so an
     // already-due merchant (e.g. straight after load) resolves at this boundary too.
     const lifecycle = advanceMerchantLifecycle({
-      state: start, content: input.content, previousWorldTime: start.worldTime,
-      nextWorldTime: start.worldTime, eventId: input.eventId,
+      state: start,
+      content: input.content,
+      previousWorldTime: start.worldTime,
+      nextWorldTime: start.worldTime,
+      eventId: input.eventId,
     });
-    const lifecyclePublic = lifecycle.events.length === 0 ? [] : projectDomainEvents({
-      state: lifecycle.state, content: input.content, heroId: startHero.actorId, events: lifecycle.events,
-    });
+    const lifecyclePublic =
+      lifecycle.events.length === 0
+        ? []
+        : projectDomainEvents({
+            state: lifecycle.state,
+            content: input.content,
+            heroId: startHero.actorId,
+            events: lifecycle.events,
+          });
     const completed = completedEvent(input.eventId, initialReason, 0, 0);
-    return { state: lifecycle.state, events: [...lifecycle.events, completed],
+    return {
+      state: lifecycle.state,
+      events: [...lifecycle.events, completed],
       publicEvents: [...lifecyclePublic, completed],
-      stopReason: initialReason, elapsed: 0, effectiveHealing: 0 };
+      stopReason: initialReason,
+      elapsed: 0,
+      effectiveHealing: 0,
+    };
   }
 
   let state = start;
@@ -145,17 +205,32 @@ export function resolveRest(input: Readonly<{
   while (internalActions < limit) {
     const before = heroActor(state);
     const chargedEnergy = before.energy - waitCost;
-    const nextStepDuration = chargedEnergy >= rules.readinessThreshold ? 0
-      : Math.ceil((rules.readinessThreshold - chargedEnergy) / before.speed);
+    const nextStepDuration =
+      chargedEnergy >= rules.readinessThreshold
+        ? 0
+        : Math.ceil((rules.readinessThreshold - chargedEnergy) / before.speed);
     const elapsedBeforeStep = state.worldTime - start.worldTime;
     if (elapsedBeforeStep + nextStepDuration > input.maximumDuration) {
-      const completed = completedEvent(input.eventId, 'maximum-duration', elapsedBeforeStep, effectiveHealing);
-      return { state, events: [...events, completed], publicEvents: [...publicEvents, completed],
-        stopReason: 'maximum-duration', elapsed: elapsedBeforeStep, effectiveHealing };
+      const completed = completedEvent(
+        input.eventId,
+        'maximum-duration',
+        elapsedBeforeStep,
+        effectiveHealing,
+      );
+      return {
+        state,
+        events: [...events, completed],
+        publicEvents: [...publicEvents, completed],
+        stopReason: 'maximum-duration',
+        elapsed: elapsedBeforeStep,
+        effectiveHealing,
+      };
     }
     const beforeInterrupting = interruptingConditionKey(state, input.content);
     const step = resolveWorldStep({
-      state, content: input.content, eventId: input.eventId,
+      state,
+      content: input.content,
+      eventId: input.eventId,
       action: { type: 'wait', actorId: before.actorId, cost: waitCost },
       maxInternalActions: limit - internalActions - 1,
     });
@@ -168,7 +243,8 @@ export function resolveRest(input: Readonly<{
     scrubDepartedIntentEvents({ events, publicEvents, departureEvents: step.events });
     const after = heroActor(state);
     for (const event of step.events) {
-      if (event.type === 'actor.healed' && event.actorId === after.actorId) effectiveHealing += event.amount;
+      if (event.type === 'actor.healed' && event.actorId === after.actorId)
+        effectiveHealing += event.amount;
     }
     const elapsed = state.worldTime - start.worldTime;
     const currentDanger = danger(state, input.content);
@@ -176,19 +252,32 @@ export function resolveRest(input: Readonly<{
       fullHealth: input.until === 'healed' && after.health === after.maxHealth,
       maximumDurationReached: elapsed >= input.maximumDuration,
       ...currentDanger,
-      damaged: step.events.some((event) => event.type === 'actor.damaged' && event.actorId === after.actorId),
-      forcedMovement: step.events.some((event) => event.type === 'actor.forced-move' && event.actorId === after.actorId),
+      damaged: step.events.some(
+        (event) => event.type === 'actor.damaged' && event.actorId === after.actorId,
+      ),
+      forcedMovement: step.events.some(
+        (event) => event.type === 'actor.forced-move' && event.actorId === after.actorId,
+      ),
       meaningfulSound: meaningfulSound(step.events, after.actorId),
       hungerWarning: step.events.some((event) => event.type === 'hunger.stage-changed'),
-      fuelWarning: step.events.some((event) => event.type === 'fuel.warning' || event.type === 'item.light-extinguished'),
-      interruptingConditionChanged: beforeInterrupting !== interruptingConditionKey(state, input.content),
+      fuelWarning: step.events.some(
+        (event) => event.type === 'fuel.warning' || event.type === 'item.light-extinguished',
+      ),
+      interruptingConditionChanged:
+        beforeInterrupting !== interruptingConditionKey(state, input.content),
       decisionRequired: false,
       heroDead: after.health === 0,
     });
     if (reason) {
       const completed = completedEvent(input.eventId, reason, elapsed, effectiveHealing);
-      return { state, events: [...events, completed], publicEvents: [...publicEvents, completed],
-        stopReason: reason, elapsed, effectiveHealing };
+      return {
+        state,
+        events: [...events, completed],
+        publicEvents: [...publicEvents, completed],
+        stopReason: reason,
+        elapsed,
+        effectiveHealing,
+      };
     }
   }
   throw new Error(`rest internal action safety limit ${limit} exceeded`);

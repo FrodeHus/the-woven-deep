@@ -31,52 +31,95 @@ function invalidRequest(message: string): never {
 }
 
 export function validateTopologyRequest(request: GenerateTopologyRequest): number {
-  if (typeof request !== 'object' || request === null) invalidRequest('generation request must be an object');
+  if (typeof request !== 'object' || request === null)
+    invalidRequest('generation request must be an object');
   try {
     assertOpaqueId(request.floorId, 'floorId');
   } catch {
     invalidRequest('floorId must be a nonempty opaque identifier');
   }
-  if (!Number.isSafeInteger(request.width) || request.width < 20 || request.width > 160
-    || !Number.isSafeInteger(request.height) || request.height < 12 || request.height > 100) {
+  if (
+    !Number.isSafeInteger(request.width) ||
+    request.width < 20 ||
+    request.width > 160 ||
+    !Number.isSafeInteger(request.height) ||
+    request.height < 12 ||
+    request.height > 100
+  ) {
     invalidRequest('generation dimensions are outside the supported range');
   }
-  if (!Number.isSafeInteger(request.depth) || request.depth < 0) invalidRequest('depth must be a nonnegative safe integer');
-  if (!Array.isArray(request.floorSeed) || request.floorSeed.length !== 4 || request.floorSeed.some((word) => !Number.isInteger(word) || word < 0 || word > 0xffff_ffff)
-    || !isNonZeroState(request.floorSeed)) invalidRequest('floor seed must be a nonzero unsigned four-word state');
+  if (!Number.isSafeInteger(request.depth) || request.depth < 0)
+    invalidRequest('depth must be a nonnegative safe integer');
+  if (
+    !Array.isArray(request.floorSeed) ||
+    request.floorSeed.length !== 4 ||
+    request.floorSeed.some((word) => !Number.isInteger(word) || word < 0 || word > 0xffff_ffff) ||
+    !isNonZeroState(request.floorSeed)
+  )
+    invalidRequest('floor seed must be a nonzero unsigned four-word state');
   const attemptLimit = request.attemptLimit ?? DEFAULT_ATTEMPT_LIMIT;
-  if (!Number.isSafeInteger(attemptLimit) || attemptLimit < 1 || attemptLimit > 32) invalidRequest('attempt limit must be from 1 through 32');
+  if (!Number.isSafeInteger(attemptLimit) || attemptLimit < 1 || attemptLimit > 32)
+    invalidRequest('attempt limit must be from 1 through 32');
   const { theme } = request;
-  if (typeof theme !== 'object' || theme === null) throw new GenerationError('generation.invalid-theme', 'theme must be an object');
+  if (typeof theme !== 'object' || theme === null)
+    throw new GenerationError('generation.invalid-theme', 'theme must be an object');
   try {
     assertOpaqueId(theme.themeId, 'themeId');
   } catch {
-    throw new GenerationError('generation.invalid-theme', 'themeId must be a nonempty opaque identifier');
+    throw new GenerationError(
+      'generation.invalid-theme',
+      'themeId must be a nonempty opaque identifier',
+    );
   }
-  if (!Number.isSafeInteger(theme.minimumRooms) || theme.minimumRooms < 1
-    || !Number.isSafeInteger(theme.minimumStairDistance) || theme.minimumStairDistance < 1) {
-    throw new GenerationError('generation.invalid-theme', 'theme generation budgets must be positive safe integers');
+  if (
+    !Number.isSafeInteger(theme.minimumRooms) ||
+    theme.minimumRooms < 1 ||
+    !Number.isSafeInteger(theme.minimumStairDistance) ||
+    theme.minimumStairDistance < 1
+  ) {
+    throw new GenerationError(
+      'generation.invalid-theme',
+      'theme generation budgets must be positive safe integers',
+    );
   }
-  if (typeof theme.ambient !== 'object' || theme.ambient === null || !Array.isArray(theme.ambient.color)) {
+  if (
+    typeof theme.ambient !== 'object' ||
+    theme.ambient === null ||
+    !Array.isArray(theme.ambient.color)
+  ) {
     throw new GenerationError('generation.invalid-theme', 'theme ambient light is invalid');
   }
   const { color, strength } = theme.ambient;
-  if (color.length !== 3 || color.some((value) => !Number.isInteger(value) || value < 0 || value > 255)
-    || !Number.isInteger(strength) || strength < 0 || strength > 255) {
+  if (
+    color.length !== 3 ||
+    color.some((value) => !Number.isInteger(value) || value < 0 || value > 255) ||
+    !Number.isInteger(strength) ||
+    strength < 0 ||
+    strength > 255
+  ) {
     throw new GenerationError('generation.invalid-theme', 'theme ambient light is invalid');
   }
-  if (!Array.isArray(theme.maskWords)) throw new GenerationError('generation.invalid-theme', 'theme mask must be a dense word array');
-  if (request.topologyFactory !== undefined && typeof request.topologyFactory !== 'function') invalidRequest('topology factory must be a function');
-  validateThemeMask(request.width, request.height, theme.maskWords, theme.minimumRooms, theme.minimumStairDistance);
+  if (!Array.isArray(theme.maskWords))
+    throw new GenerationError('generation.invalid-theme', 'theme mask must be a dense word array');
+  if (request.topologyFactory !== undefined && typeof request.topologyFactory !== 'function')
+    invalidRequest('topology factory must be a function');
+  validateThemeMask(
+    request.width,
+    request.height,
+    theme.maskWords,
+    theme.minimumRooms,
+    theme.minimumStairDistance,
+  );
   return attemptLimit;
 }
 
 function roomCells(room: RoomBounds, width: number, tiles: readonly TileId[]): number[] {
   const cells: number[] = [];
-  for (let y = room.top; y <= room.bottom; y += 1) for (let x = room.left; x <= room.right; x += 1) {
-    const index = y * width + x;
-    if (tileDefinition(tiles[index]!).potentiallyTraversable) cells.push(index);
-  }
+  for (let y = room.top; y <= room.bottom; y += 1)
+    for (let x = room.left; x <= room.right; x += 1) {
+      const index = y * width + x;
+      if (tileDefinition(tiles[index]!).potentiallyTraversable) cells.push(index);
+    }
   return cells;
 }
 
@@ -103,7 +146,10 @@ function placeStairs(
     for (const candidate of roomCells(rooms[roomIndex]!, width, tiles)) {
       const target = { x: candidate % width, y: Math.floor(candidate / width) };
       const distance = analyzeConnectivity({ width, height, tiles, start: up, target }).distance;
-      if (distance !== null && (distance > bestDistance || (distance === bestDistance && candidate < bestIndex))) {
+      if (
+        distance !== null &&
+        (distance > bestDistance || (distance === bestDistance && candidate < bestIndex))
+      ) {
         bestIndex = candidate;
         bestDistance = distance;
       }
@@ -129,9 +175,19 @@ function finalRejection(
 ): GenerationRejectionCode | null {
   if (tiles.length !== request.width * request.height) return 'topology.outside-mask';
   for (let index = 0; index < tiles.length; index += 1) {
-    if (!(index in tiles) || !Number.isInteger(tiles[index]) || tiles[index]! < 0 || tiles[index]! > 6
-      || (tileDefinition(tiles[index]!).potentiallyTraversable
-        && !maskHas(request.theme.maskWords, request.width, index % request.width, Math.floor(index / request.width)))) {
+    if (
+      !(index in tiles) ||
+      !Number.isInteger(tiles[index]) ||
+      tiles[index]! < 0 ||
+      tiles[index]! > 6 ||
+      (tileDefinition(tiles[index]!).potentiallyTraversable &&
+        !maskHas(
+          request.theme.maskWords,
+          request.width,
+          index % request.width,
+          Math.floor(index / request.width),
+        ))
+    ) {
       return 'topology.outside-mask';
     }
   }
@@ -143,21 +199,40 @@ function finalRejection(
     if (!(index in rooms)) return 'topology.invalid-geometry';
     const room = rooms[index]!;
     const expectedRoomId = fallbackRoomIds ? `room.fallback.${index}` : `room.${index}`;
-    if (room.roomId !== expectedRoomId || roomIds.has(room.roomId)
-      || ![room.left, room.top, room.right, room.bottom].every(Number.isSafeInteger)
-      || room.left < 0 || room.top < 0 || room.right >= request.width || room.bottom >= request.height
-      || room.left > room.right || room.top > room.bottom) return 'topology.invalid-geometry';
+    if (
+      room.roomId !== expectedRoomId ||
+      roomIds.has(room.roomId) ||
+      ![room.left, room.top, room.right, room.bottom].every(Number.isSafeInteger) ||
+      room.left < 0 ||
+      room.top < 0 ||
+      room.right >= request.width ||
+      room.bottom >= request.height ||
+      room.left > room.right ||
+      room.top > room.bottom
+    )
+      return 'topology.invalid-geometry';
     roomIds.add(room.roomId);
-    if (previousRoom && (previousRoom.top > room.top
-      || (previousRoom.top === room.top && previousRoom.left > room.left)
-      || (previousRoom.top === room.top && previousRoom.left === room.left && previousRoom.bottom > room.bottom)
-      || (previousRoom.top === room.top && previousRoom.left === room.left && previousRoom.bottom === room.bottom
-        && previousRoom.right > room.right))) return 'topology.invalid-geometry';
+    if (
+      previousRoom &&
+      (previousRoom.top > room.top ||
+        (previousRoom.top === room.top && previousRoom.left > room.left) ||
+        (previousRoom.top === room.top &&
+          previousRoom.left === room.left &&
+          previousRoom.bottom > room.bottom) ||
+        (previousRoom.top === room.top &&
+          previousRoom.left === room.left &&
+          previousRoom.bottom === room.bottom &&
+          previousRoom.right > room.right))
+    )
+      return 'topology.invalid-geometry';
     let potentialCells = 0;
-    for (let y = room.top; y <= room.bottom; y += 1) for (let x = room.left; x <= room.right; x += 1) {
-      if (!maskHas(request.theme.maskWords, request.width, x, y)) return 'topology.invalid-geometry';
-      if (tileDefinition(tiles[y * request.width + x]!).potentiallyTraversable) potentialCells += 1;
-    }
+    for (let y = room.top; y <= room.bottom; y += 1)
+      for (let x = room.left; x <= room.right; x += 1) {
+        if (!maskHas(request.theme.maskWords, request.width, x, y))
+          return 'topology.invalid-geometry';
+        if (tileDefinition(tiles[y * request.width + x]!).potentiallyTraversable)
+          potentialCells += 1;
+      }
     if (potentialCells === 0) return 'topology.invalid-geometry';
     previousRoom = room;
   }
@@ -167,35 +242,68 @@ function finalRejection(
   for (let index = 0; index < corridors.length; index += 1) {
     if (!(index in corridors)) return 'topology.invalid-geometry';
     const corridor = corridors[index]!;
-    const expectedCorridorId = fallbackCorridorIds ? `corridor.fallback.${index}` : `corridor.${index}`;
-    if (corridor.corridorId !== expectedCorridorId || corridorIds.has(corridor.corridorId)) return 'topology.invalid-geometry';
+    const expectedCorridorId = fallbackCorridorIds
+      ? `corridor.fallback.${index}`
+      : `corridor.${index}`;
+    if (corridor.corridorId !== expectedCorridorId || corridorIds.has(corridor.corridorId))
+      return 'topology.invalid-geometry';
     corridorIds.add(corridor.corridorId);
     for (const endpoint of [corridor.start, corridor.end]) {
-      if (!Number.isSafeInteger(endpoint.x) || !Number.isSafeInteger(endpoint.y)
-        || endpoint.x < 0 || endpoint.y < 0 || endpoint.x >= request.width || endpoint.y >= request.height
-        || !maskHas(request.theme.maskWords, request.width, endpoint.x, endpoint.y)) return 'topology.invalid-geometry';
+      if (
+        !Number.isSafeInteger(endpoint.x) ||
+        !Number.isSafeInteger(endpoint.y) ||
+        endpoint.x < 0 ||
+        endpoint.y < 0 ||
+        endpoint.x >= request.width ||
+        endpoint.y >= request.height ||
+        !maskHas(request.theme.maskWords, request.width, endpoint.x, endpoint.y)
+      )
+        return 'topology.invalid-geometry';
     }
-    if (previousCorridor && (previousCorridor.start.y > corridor.start.y
-      || (previousCorridor.start.y === corridor.start.y && previousCorridor.start.x > corridor.start.x)
-      || (previousCorridor.start.y === corridor.start.y && previousCorridor.start.x === corridor.start.x
-        && previousCorridor.end.y > corridor.end.y)
-      || (previousCorridor.start.y === corridor.start.y && previousCorridor.start.x === corridor.start.x
-        && previousCorridor.end.y === corridor.end.y && previousCorridor.end.x > corridor.end.x))) {
+    if (
+      previousCorridor &&
+      (previousCorridor.start.y > corridor.start.y ||
+        (previousCorridor.start.y === corridor.start.y &&
+          previousCorridor.start.x > corridor.start.x) ||
+        (previousCorridor.start.y === corridor.start.y &&
+          previousCorridor.start.x === corridor.start.x &&
+          previousCorridor.end.y > corridor.end.y) ||
+        (previousCorridor.start.y === corridor.start.y &&
+          previousCorridor.start.x === corridor.start.x &&
+          previousCorridor.end.y === corridor.end.y &&
+          previousCorridor.end.x > corridor.end.x))
+    ) {
       return 'topology.invalid-geometry';
     }
     previousCorridor = corridor;
   }
-  let upCount = 0; let downCount = 0;
-  for (const tile of tiles) { if (tile === 4) upCount += 1; if (tile === 5) downCount += 1; }
-  if (upCount !== 1 || downCount !== 1
-    || tiles[stairUp.y * request.width + stairUp.x] !== 4
-    || tiles[stairDown.y * request.width + stairDown.x] !== 5) return 'topology.invalid-geometry';
+  let upCount = 0;
+  let downCount = 0;
+  for (const tile of tiles) {
+    if (tile === 4) upCount += 1;
+    if (tile === 5) downCount += 1;
+  }
+  if (
+    upCount !== 1 ||
+    downCount !== 1 ||
+    tiles[stairUp.y * request.width + stairUp.x] !== 4 ||
+    tiles[stairDown.y * request.width + stairDown.x] !== 5
+  )
+    return 'topology.invalid-geometry';
   const connectivity = analyzeConnectivity({
-    width: request.width, height: request.height, tiles, start: stairUp, target: stairDown,
+    width: request.width,
+    height: request.height,
+    tiles,
+    start: stairUp,
+    target: stairDown,
   });
   if (!connectivity.connected) return 'connectivity.disconnected';
-  if (connectivity.distance === null || connectivity.distance !== expectedDistance
-    || connectivity.distance < request.theme.minimumStairDistance) return 'stairs.no-valid-pair';
+  if (
+    connectivity.distance === null ||
+    connectivity.distance !== expectedDistance ||
+    connectivity.distance < request.theme.minimumStairDistance
+  )
+    return 'stairs.no-valid-pair';
   return null;
 }
 
@@ -224,23 +332,51 @@ function report(
   };
 }
 
-export function generateTopologyAttempt(request: GenerateTopologyRequest, attempt: number): TopologyAttemptResult {
+export function generateTopologyAttempt(
+  request: GenerateTopologyRequest,
+  attempt: number,
+): TopologyAttemptResult {
   validateTopologyRequest(request);
-  if (!Number.isSafeInteger(attempt) || attempt < 0 || attempt >= 32) invalidRequest('attempt must be from 0 through 31');
+  if (!Number.isSafeInteger(attempt) || attempt < 0 || attempt >= 32)
+    invalidRequest('attempt must be from 0 through 31');
   const attemptState = deriveAttemptSeed(request.floorSeed, attempt);
-  const generated = createRotTopology(request.width, request.height, request.theme.maskWords, attemptState);
+  const generated = createRotTopology(
+    request.width,
+    request.height,
+    request.theme.maskWords,
+    attemptState,
+  );
   if (!generated.ok) return generated;
   const { tiles: sourceTiles, rooms, corridors } = generated.topology;
   if (rooms.length < request.theme.minimumRooms) return { ok: false, code: 'topology.room-budget' };
   if (corridors.length === 0) return { ok: false, code: 'topology.invalid-geometry' };
-  const stairs = placeStairs(request.width, request.height, sourceTiles, rooms, request.theme.minimumStairDistance, attemptState);
+  const stairs = placeStairs(
+    request.width,
+    request.height,
+    sourceTiles,
+    rooms,
+    request.theme.minimumStairDistance,
+    attemptState,
+  );
   if (!stairs) return { ok: false, code: 'stairs.no-valid-pair' };
   const tiles = [...sourceTiles];
   tiles[stairs.stairUp.y * request.width + stairs.stairUp.x] = 4;
   tiles[stairs.stairDown.y * request.width + stairs.stairDown.x] = 5;
-  const rejection = finalRejection(request, tiles, rooms, corridors, stairs.stairUp, stairs.stairDown, stairs.stairDistance);
+  const rejection = finalRejection(
+    request,
+    tiles,
+    rooms,
+    corridors,
+    stairs.stairUp,
+    stairs.stairDown,
+    stairs.stairDistance,
+  );
   if (rejection) return { ok: false, code: rejection };
-  const traversable = analyzeConnectivity({ width: request.width, height: request.height, tiles }).traversableCellCount;
+  const traversable = analyzeConnectivity({
+    width: request.width,
+    height: request.height,
+    tiles,
+  }).traversableCellCount;
   const draft: TopologyDraft = {
     floorId: request.floorId,
     floorSeed: [...request.floorSeed] as unknown as Uint32State,
@@ -285,8 +421,16 @@ export function generateTopology(request: GenerateTopologyRequest): TopologyDraf
     fallback.stairDown,
     fallback.stairDistance,
   );
-  if (rejection) throw new GenerationError('generation.fallback-invariant', `deterministic fallback failed: ${rejection}`);
-  const traversable = analyzeConnectivity({ width: request.width, height: request.height, tiles: fallback.tiles }).traversableCellCount;
+  if (rejection)
+    throw new GenerationError(
+      'generation.fallback-invariant',
+      `deterministic fallback failed: ${rejection}`,
+    );
+  const traversable = analyzeConnectivity({
+    width: request.width,
+    height: request.height,
+    tiles: fallback.tiles,
+  }).traversableCellCount;
   return {
     floorId: request.floorId,
     floorSeed: [...request.floorSeed] as unknown as Uint32State,
@@ -300,6 +444,14 @@ export function generateTopology(request: GenerateTopologyRequest): TopologyDraf
     stairUp: fallback.stairUp,
     stairDown: fallback.stairDown,
     vaultState,
-    report: report(null, true, fallback.rooms, fallback.corridors.length, fallback, traversable, rejectionCounts),
+    report: report(
+      null,
+      true,
+      fallback.rooms,
+      fallback.corridors.length,
+      fallback,
+      traversable,
+      rejectionCounts,
+    ),
   };
 }

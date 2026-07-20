@@ -4,8 +4,14 @@
  * floorId and feeds it back in on the next call.
  */
 
-export interface CameraViewport { readonly width: number; readonly height: number }
-export interface CameraOrigin { readonly x: number; readonly y: number }
+export interface CameraViewport {
+  readonly width: number;
+  readonly height: number;
+}
+export interface CameraOrigin {
+  readonly x: number;
+  readonly y: number;
+}
 
 /**
  * The deadzone margin equals the hero's sight radius, clamped per axis to
@@ -16,7 +22,8 @@ export interface CameraOrigin { readonly x: number; readonly y: number }
  * an accepted trade-off.
  */
 export function cameraMargin(
-  sightRadius: number, viewport: CameraViewport,
+  sightRadius: number,
+  viewport: CameraViewport,
 ): Readonly<{ x: number; y: number }> {
   const maxX = Math.floor((viewport.width - 1) / 2);
   const maxY = Math.floor((viewport.height - 1) / 2);
@@ -37,7 +44,10 @@ function centeredAxis(heroPosition: number, viewportSize: number, floorSize: num
  * origin untouched. Applied before floor-bounds clamping.
  */
 function scrolledAxis(
-  previousOrigin: number, heroPosition: number, margin: number, viewportSize: number,
+  previousOrigin: number,
+  heroPosition: number,
+  margin: number,
+  viewportSize: number,
 ): number {
   const leftEdge = previousOrigin + margin;
   const rightEdge = previousOrigin + viewportSize - 1 - margin;
@@ -46,13 +56,15 @@ function scrolledAxis(
   return previousOrigin;
 }
 
-export function computeCamera(input: Readonly<{
-  hero: Readonly<{ x: number; y: number }>;
-  sightRadius: number;
-  floor: Readonly<{ width: number; height: number }>;
-  viewport: CameraViewport;
-  previous: CameraOrigin | null;
-}>): CameraOrigin {
+export function computeCamera(
+  input: Readonly<{
+    hero: Readonly<{ x: number; y: number }>;
+    sightRadius: number;
+    floor: Readonly<{ width: number; height: number }>;
+    viewport: CameraViewport;
+    previous: CameraOrigin | null;
+  }>,
+): CameraOrigin {
   const { hero, sightRadius, floor, viewport, previous } = input;
 
   if (previous === null) {

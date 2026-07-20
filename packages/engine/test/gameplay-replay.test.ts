@@ -16,21 +16,38 @@ import {
 let pack: CompiledContentPack;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
-type CommandFactory = (state: ActiveRun, index: number) => Omit<GameCommand, 'commandId' | 'expectedRevision'>;
+type CommandFactory = (
+  state: ActiveRun,
+  index: number,
+) => Omit<GameCommand, 'commandId' | 'expectedRevision'>;
 
-function directionTo(from: Readonly<{ x: number; y: number }>, to: Readonly<{ x: number; y: number }>) {
+function directionTo(
+  from: Readonly<{ x: number; y: number }>,
+  to: Readonly<{ x: number; y: number }>,
+) {
   const key = `${Math.sign(to.x - from.x)}:${Math.sign(to.y - from.y)}`;
   const directions = {
-    '0:-1': 'north', '1:-1': 'northeast', '1:0': 'east', '1:1': 'southeast',
-    '0:1': 'south', '-1:1': 'southwest', '-1:0': 'west', '-1:-1': 'northwest',
+    '0:-1': 'north',
+    '1:-1': 'northeast',
+    '1:0': 'east',
+    '1:1': 'southeast',
+    '0:1': 'south',
+    '-1:1': 'southwest',
+    '-1:0': 'west',
+    '-1:-1': 'northwest',
   } as const;
   return directions[key as keyof typeof directions];
 }
 
-function materializeScenario(initial: ActiveRun, ids: ReturnType<typeof createGameplayDemoRun>['ids']): readonly GameCommand[] {
+function materializeScenario(
+  initial: ActiveRun,
+  ids: ReturnType<typeof createGameplayDemoRun>['ids'],
+): readonly GameCommand[] {
   const factories: readonly CommandFactory[] = [
     () => ({ type: 'open-door', featureId: ids.door }),
     (state) => {
@@ -61,20 +78,28 @@ function materializeScenario(initial: ActiveRun, ids: ReturnType<typeof createGa
       expectedRevision: state.revision,
     } as GameCommand;
     const resolution = resolveCommand(state, command, { content: pack });
-    expect(resolution.result.status, stableJson({ command, events: resolution.events })).toBe('applied');
+    expect(resolution.result.status, stableJson({ command, events: resolution.events })).toBe(
+      'applied',
+    );
     commands.push(command);
     state = resolution.state;
   }
   return commands;
 }
 
-function execute(initial: ActiveRun, commands: readonly GameCommand[], reloadAfter: ReadonlySet<number>) {
+function execute(
+  initial: ActiveRun,
+  commands: readonly GameCommand[],
+  reloadAfter: ReadonlySet<number>,
+) {
   let state = initial;
   const records: unknown[] = [];
   for (const [index, command] of commands.entries()) {
     const resolution = resolveCommand(state, command, { content: pack });
     state = resolution.state;
-    const recorded = state.recentCommands.find((entry) => entry.command.commandId === command.commandId);
+    const recorded = state.recentCommands.find(
+      (entry) => entry.command.commandId === command.commandId,
+    );
     records.push({
       command,
       result: resolution.result,
@@ -97,19 +122,28 @@ describe('core gameplay replay', () => {
     expect(encodeActiveRun(split.state)).toBe(encodeActiveRun(continuous.state));
     expect(stableJson(split.records)).toBe(stableJson(continuous.records));
     expect(continuous.records).toHaveLength(12);
-    const eventTypes = continuous.state.recentCommands.flatMap((record) => record.events.map((event) => event.type));
-    expect(eventTypes).toEqual(expect.arrayContaining([
-      'door.opened',
-      'reaction.triggered',
-      'attack.hit',
-      'item.equipped',
-      'identification.appearance-revealed',
-      'feature.revealed',
-      'rest.completed',
-    ]));
-    expect(eventTypes.some((type) => type === 'trap.disarmed' || type === 'trap.triggered'
-      || type === 'trap.disarm-failed')).toBe(true);
-    expect(continuous.state.features.find((feature) => feature.featureId === fixture.ids.secret))
-      .toMatchObject({ type: 'secret', state: 'revealed' });
+    const eventTypes = continuous.state.recentCommands.flatMap((record) =>
+      record.events.map((event) => event.type),
+    );
+    expect(eventTypes).toEqual(
+      expect.arrayContaining([
+        'door.opened',
+        'reaction.triggered',
+        'attack.hit',
+        'item.equipped',
+        'identification.appearance-revealed',
+        'feature.revealed',
+        'rest.completed',
+      ]),
+    );
+    expect(
+      eventTypes.some(
+        (type) =>
+          type === 'trap.disarmed' || type === 'trap.triggered' || type === 'trap.disarm-failed',
+      ),
+    ).toBe(true);
+    expect(
+      continuous.state.features.find((feature) => feature.featureId === fixture.ids.secret),
+    ).toMatchObject({ type: 'secret', state: 'revealed' });
   });
 });

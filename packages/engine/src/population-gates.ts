@@ -33,15 +33,20 @@ export function maximumDiscoveryProtectionBonus(encounter: EncounterContentEntry
 }
 
 export function effectiveEncounterProbability(
-  encounter: EncounterContentEntry, protectionBonus: number,
+  encounter: EncounterContentEntry,
+  protectionBonus: number,
 ): number {
-  return probability(Math.min(
-    Math.max(encounter.discoveryProtectionCap, encounter.runAppearanceChance),
-    probability(encounter.runAppearanceChance + protectionBonus),
-  ));
+  return probability(
+    Math.min(
+      Math.max(encounter.discoveryProtectionCap, encounter.runAppearanceChance),
+      probability(encounter.runAppearanceChance + protectionBonus),
+    ),
+  );
 }
 
-function sortedEncounters(encounters: readonly EncounterContentEntry[]): readonly EncounterContentEntry[] {
+function sortedEncounters(
+  encounters: readonly EncounterContentEntry[],
+): readonly EncounterContentEntry[] {
   const sorted = [...encounters].sort((left, right) => compareCodeUnits(left.id, right.id));
   for (let index = 1; index < sorted.length; index += 1) {
     if (sorted[index - 1]!.id === sorted[index]!.id) {
@@ -58,7 +63,8 @@ function bonusMap(
   const result = new Map<string, number>();
   let previousId: string | null = null;
   for (const entry of bonuses) {
-    if (entry.encounterId === previousId) throw new RangeError(`duplicate protection bonus ${entry.encounterId}`);
+    if (entry.encounterId === previousId)
+      throw new RangeError(`duplicate protection bonus ${entry.encounterId}`);
     if (previousId !== null && compareCodeUnits(previousId, entry.encounterId) >= 0) {
       throw new RangeError('protection bonuses must be sorted by encounter ID');
     }
@@ -66,11 +72,15 @@ function bonusMap(
     if (!encounter) throw new RangeError(`unknown encounter protection bonus ${entry.encounterId}`);
     const maximum = maximumDiscoveryProtectionBonus(encounter);
     if (!Number.isFinite(entry.bonus) || entry.bonus < 0) {
-      throw new RangeError(`protection bonus for ${entry.encounterId} must be a non-negative probability`);
+      throw new RangeError(
+        `protection bonus for ${entry.encounterId} must be a non-negative probability`,
+      );
     }
     const normalizedBonus = probability(entry.bonus);
     if (normalizedBonus > maximum) {
-      throw new RangeError(`protection bonus for ${entry.encounterId} exceeds its discovery protection cap`);
+      throw new RangeError(
+        `protection bonus for ${entry.encounterId} exceeds its discovery protection cap`,
+      );
     }
     result.set(entry.encounterId, normalizedBonus);
     previousId = entry.encounterId;
@@ -78,7 +88,9 @@ function bonusMap(
   return result;
 }
 
-function encounterMap(encounters: readonly EncounterContentEntry[]): ReadonlyMap<string, EncounterContentEntry> {
+function encounterMap(
+  encounters: readonly EncounterContentEntry[],
+): ReadonlyMap<string, EncounterContentEntry> {
   return new Map(sortedEncounters(encounters).map((entry) => [entry.id, entry]));
 }
 
@@ -86,23 +98,28 @@ function validateDecisionSet(
   decisions: readonly EncounterRunDecision[],
   encounters: ReadonlyMap<string, EncounterContentEntry>,
 ): void {
-  if (decisions.length !== encounters.size) throw new RangeError('encounter decisions do not match current encounters');
+  if (decisions.length !== encounters.size)
+    throw new RangeError('encounter decisions do not match current encounters');
   let previousId: string | null = null;
   for (const decision of decisions) {
     if (previousId !== null && compareCodeUnits(previousId, decision.encounterId) >= 0) {
       throw new RangeError('encounter decisions must be uniquely sorted by encounter ID');
     }
-    if (!encounters.has(decision.encounterId)) throw new RangeError(`unknown encounter decision ${decision.encounterId}`);
+    if (!encounters.has(decision.encounterId))
+      throw new RangeError(`unknown encounter decision ${decision.encounterId}`);
     previousId = decision.encounterId;
   }
 }
 
-export function createEncounterRunDecisions(input: Readonly<{
-  encounters: readonly EncounterContentEntry[];
-  protectionBonuses?: readonly DiscoveryProtectionBonus[];
-  state: Uint32State;
-}>): EncounterDecisionResult {
-  if (!isNonZeroState(input.state)) throw new RangeError('population gate random state must not be all zero');
+export function createEncounterRunDecisions(
+  input: Readonly<{
+    encounters: readonly EncounterContentEntry[];
+    protectionBonuses?: readonly DiscoveryProtectionBonus[];
+    state: Uint32State;
+  }>,
+): EncounterDecisionResult {
+  if (!isNonZeroState(input.state))
+    throw new RangeError('population gate random state must not be all zero');
   const encounters = sortedEncounters(input.encounters);
   const byId = new Map(encounters.map((entry) => [entry.id, entry]));
   const bonuses = bonusMap(input.protectionBonuses ?? [], byId);
@@ -126,11 +143,13 @@ export function createEncounterRunDecisions(input: Readonly<{
   return { decisions, state };
 }
 
-export function recordReachedEncounterDepths(input: Readonly<{
-  decisions: readonly EncounterRunDecision[];
-  encounters: readonly EncounterContentEntry[];
-  reachedDepths: readonly number[];
-}>): readonly EncounterRunDecision[] {
+export function recordReachedEncounterDepths(
+  input: Readonly<{
+    decisions: readonly EncounterRunDecision[];
+    encounters: readonly EncounterContentEntry[];
+    reachedDepths: readonly number[];
+  }>,
+): readonly EncounterRunDecision[] {
   const encounters = encounterMap(input.encounters);
   validateDecisionSet(input.decisions, encounters);
   if (input.reachedDepths.some((depth) => !Number.isSafeInteger(depth) || depth < 0)) {
@@ -139,43 +158,66 @@ export function recordReachedEncounterDepths(input: Readonly<{
   return input.decisions.map((decision) => {
     if (decision.reachedEligibleDepth) return decision;
     const encounter = encounters.get(decision.encounterId)!;
-    const reached = input.reachedDepths.some((depth) => depth >= encounter.minDepth && depth <= encounter.maxDepth);
+    const reached = input.reachedDepths.some(
+      (depth) => depth >= encounter.minDepth && depth <= encounter.maxDepth,
+    );
     return reached ? { ...decision, reachedEligibleDepth: true } : decision;
   });
 }
 
 export function markEncounterObserved(
-  decisions: readonly EncounterRunDecision[], encounterId: string,
+  decisions: readonly EncounterRunDecision[],
+  encounterId: string,
 ): readonly EncounterRunDecision[] {
   const index = decisions.findIndex((decision) => decision.encounterId === encounterId);
   if (index < 0) throw new RangeError(`unknown encounter decision ${encounterId}`);
   const decision = decisions[index]!;
-  if (decision.instancesCreated === 0) throw new RangeError('cannot observe an encounter without a created instance');
+  if (decision.instancesCreated === 0)
+    throw new RangeError('cannot observe an encounter without a created instance');
   if (decision.encountered) return decisions;
-  return decisions.map((entry, entryIndex) => entryIndex === index
-    ? { ...entry, reachedEligibleDepth: true, encountered: true } : entry);
+  return decisions.map((entry, entryIndex) =>
+    entryIndex === index ? { ...entry, reachedEligibleDepth: true, encountered: true } : entry,
+  );
 }
 
-export function evaluateDiscoveryProtection(input: Readonly<{
-  decisions: readonly EncounterRunDecision[];
-  encounters: readonly EncounterContentEntry[];
-}>): readonly DiscoveryProtectionUpdate[] {
+export function evaluateDiscoveryProtection(
+  input: Readonly<{
+    decisions: readonly EncounterRunDecision[];
+    encounters: readonly EncounterContentEntry[];
+  }>,
+): readonly DiscoveryProtectionUpdate[] {
   const encounters = encounterMap(input.encounters);
   validateDecisionSet(input.decisions, encounters);
   return input.decisions.map((decision): DiscoveryProtectionUpdate => {
     const encounter = encounters.get(decision.encounterId)!;
     if (decision.encountered) {
-      return { encounterId: decision.encounterId, previousBonus: decision.protectionBonus,
-        nextBonus: 0, outcome: 'encountered' };
+      return {
+        encounterId: decision.encounterId,
+        previousBonus: decision.protectionBonus,
+        nextBonus: 0,
+        outcome: 'encountered',
+      };
     }
     if (!decision.reachedEligibleDepth) {
-      return { encounterId: decision.encounterId, previousBonus: decision.protectionBonus,
-        nextBonus: decision.protectionBonus, outcome: 'unreached' };
+      return {
+        encounterId: decision.encounterId,
+        previousBonus: decision.protectionBonus,
+        nextBonus: decision.protectionBonus,
+        outcome: 'unreached',
+      };
     }
     const maximum = maximumDiscoveryProtectionBonus(encounter);
-    const nextBonus = probability(Math.min(maximum,
-      probability(decision.protectionBonus + encounter.discoveryProtectionIncrement)));
-    return { encounterId: decision.encounterId, previousBonus: decision.protectionBonus,
-      nextBonus, outcome: 'reached-unseen' };
+    const nextBonus = probability(
+      Math.min(
+        maximum,
+        probability(decision.protectionBonus + encounter.discoveryProtectionIncrement),
+      ),
+    );
+    return {
+      encounterId: decision.encounterId,
+      previousBonus: decision.protectionBonus,
+      nextBonus,
+      outcome: 'reached-unseen',
+    };
   });
 }

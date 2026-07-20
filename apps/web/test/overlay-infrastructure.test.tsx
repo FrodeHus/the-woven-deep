@@ -18,7 +18,9 @@ import { withUiProviders } from './with-ui-providers.js';
 let pack: CompiledContentPack;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 afterEach(() => {
@@ -33,7 +35,9 @@ function fakeStorage(initial?: Readonly<Record<string, string>>): SessionStorage
   const values = new Map<string, string>(Object.entries(initial ?? {}));
   return {
     get: (key: string) => values.get(key) ?? null,
-    set: (key: string, value: string) => { values.set(key, value); },
+    set: (key: string, value: string) => {
+      values.set(key, value);
+    },
   };
 }
 
@@ -42,7 +46,12 @@ function fakeStorage(initial?: Readonly<Record<string, string>>): SessionStorage
  * loop below asserts every OTHER id's placeholder status (real bodies must NOT show "Coming in a
  * later task", remaining placeholders must); inventory's own routing/rendering is covered directly
  * by `key-router.test.ts` and `inventory-overlay.test.tsx`. */
-const OVERLAY_KEYS: Readonly<Record<'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help', Readonly<{ key: string; shift: boolean }>>> = {
+const OVERLAY_KEYS: Readonly<
+  Record<
+    'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help',
+    Readonly<{ key: string; shift: boolean }>
+  >
+> = {
   'character-sheet': { key: 'c', shift: false },
   'map-journal': { key: 'm', shift: false },
   codex: { key: 'x', shift: false },
@@ -143,15 +152,16 @@ describe('registry overlay infrastructure', () => {
       const onCloseOverlay = vi.fn();
 
       render(
-        withUiProviders(pack, (
+        withUiProviders(
+          pack,
           <PlayScreen
             session={freshSession()}
             pack={pack}
             overlay="codex"
             onOpenOverlay={() => {}}
             onCloseOverlay={onCloseOverlay}
-          />
-        )),
+          />,
+        ),
       );
       expect(screen.getByRole('dialog', { name: 'Codex' })).toBeInTheDocument();
 
@@ -191,7 +201,9 @@ describe('registry overlay infrastructure', () => {
       );
 
       expect(screen.getByTestId('play-surface')).toHaveTextContent('the run is unaffected');
-      expect(screen.getByRole('alert')).toHaveTextContent(/hit a bug.*Esc to close.*run is unaffected/i);
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /hit a bug.*Esc to close.*run is unaffected/i,
+      );
 
       consoleError.mockRestore();
     });
@@ -199,7 +211,13 @@ describe('registry overlay infrastructure', () => {
 
   describe('font-scale and reduced-motion settings applied at the app root', () => {
     it('applies fontScale as an inline calc(1rem * scale) style, and reducedMotion "on" as a motion-reduced class', async () => {
-      const settings: Settings = { fontScale: 1.3, reducedMotion: 'on', theme: 'tapestry', onboarding: 'on', bindings: {} };
+      const settings: Settings = {
+        fontScale: 1.3,
+        reducedMotion: 'on',
+        theme: 'tapestry',
+        onboarding: 'on',
+        bindings: {},
+      };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
 
       const { container } = render(
@@ -216,7 +234,13 @@ describe('registry overlay infrastructure', () => {
     });
 
     it('applies neither motion class when reducedMotion is "system" (defers to the OS media query)', async () => {
-      const settings: Settings = { fontScale: 1, reducedMotion: 'system', theme: 'tapestry', onboarding: 'on', bindings: {} };
+      const settings: Settings = {
+        fontScale: 1,
+        reducedMotion: 'system',
+        theme: 'tapestry',
+        onboarding: 'on',
+        bindings: {},
+      };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
 
       const { container } = render(
@@ -230,7 +254,13 @@ describe('registry overlay infrastructure', () => {
     });
 
     it('applies no theme class when theme is "tapestry" (the default palette needs no override)', async () => {
-      const settings: Settings = { fontScale: 1, reducedMotion: 'system', theme: 'tapestry', onboarding: 'on', bindings: {} };
+      const settings: Settings = {
+        fontScale: 1,
+        reducedMotion: 'system',
+        theme: 'tapestry',
+        onboarding: 'on',
+        bindings: {},
+      };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
 
       const { container } = render(
@@ -243,7 +273,13 @@ describe('registry overlay infrastructure', () => {
     });
 
     it('applies the theme-high-contrast class at the app root when theme is "high-contrast"', async () => {
-      const settings: Settings = { fontScale: 1, reducedMotion: 'system', theme: 'high-contrast', onboarding: 'on', bindings: {} };
+      const settings: Settings = {
+        fontScale: 1,
+        reducedMotion: 'system',
+        theme: 'high-contrast',
+        onboarding: 'on',
+        bindings: {},
+      };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
 
       const { container } = render(
@@ -256,7 +292,13 @@ describe('registry overlay infrastructure', () => {
     });
 
     it('applies the motion-full class when reducedMotion is "off", so a guest can force animations back on over an OS-level reduced-motion preference', async () => {
-      const settings: Settings = { fontScale: 1, reducedMotion: 'off', theme: 'tapestry', onboarding: 'on', bindings: {} };
+      const settings: Settings = {
+        fontScale: 1,
+        reducedMotion: 'off',
+        theme: 'tapestry',
+        onboarding: 'on',
+        bindings: {},
+      };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
 
       const { container } = render(

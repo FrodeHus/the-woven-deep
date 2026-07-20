@@ -1,0 +1,9 @@
+**/dist/**
+**/coverage/**
+**/*.css
+.worktrees/**
+.claude/**
+**/*.md
+content/**
+packages/engine/fixtures/**
+packages/engine/test/fixtures/**

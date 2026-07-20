@@ -11,7 +11,16 @@ import {
   stableJson,
 } from '../packages/engine/dist/index.js';
 
-const directions = new Set(['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest']);
+const directions = new Set([
+  'north',
+  'northeast',
+  'east',
+  'southeast',
+  'south',
+  'southwest',
+  'west',
+  'northwest',
+]);
 const context = { content: createDemoContentPack() };
 
 function lineError(lineNumber, message) {
@@ -38,7 +47,12 @@ function revision(value, lineNumber) {
 function parseCommand(fields, lineNumber) {
   const [directive, idValue, revisionValue, direction, ...extra] = fields;
   if (directive === 'move') {
-    if (idValue === undefined || revisionValue === undefined || direction === undefined || extra.length > 0) {
+    if (
+      idValue === undefined ||
+      revisionValue === undefined ||
+      direction === undefined ||
+      extra.length > 0
+    ) {
       throw lineError(lineNumber, 'move requires <id> <expectedRevision> <direction>');
     }
     if (!directions.has(direction)) throw lineError(lineNumber, `invalid direction ${direction}`);
@@ -50,7 +64,12 @@ function parseCommand(fields, lineNumber) {
     };
   }
   if (directive === 'wait') {
-    if (idValue === undefined || revisionValue === undefined || direction !== undefined || extra.length > 0) {
+    if (
+      idValue === undefined ||
+      revisionValue === undefined ||
+      direction !== undefined ||
+      extra.length > 0
+    ) {
       throw lineError(lineNumber, 'wait requires <id> <expectedRevision>');
     }
     return {
@@ -135,15 +154,19 @@ async function main() {
   const verify = args[0] === '--verify';
   const path = verify ? args[1] : args[0];
   if (path === undefined || (verify ? args.length < 2 || args.length > 3 : args.length !== 1)) {
-    throw new Error('usage: engine-demo <commands> | engine-demo --verify <split-commands> [continuous-comparison-commands]');
+    throw new Error(
+      'usage: engine-demo <commands> | engine-demo --verify <split-commands> [continuous-comparison-commands]',
+    );
   }
 
   const run = await runProgram(path, true);
   printRun(run);
   if (verify) {
     const continuous = await runProgram(args[2] ?? path, false);
-    if (encodeActiveRun(run.state) !== encodeActiveRun(continuous.state)
-      || stableJson(run.steps) !== stableJson(continuous.steps)) {
+    if (
+      encodeActiveRun(run.state) !== encodeActiveRun(continuous.state) ||
+      stableJson(run.steps) !== stableJson(continuous.steps)
+    ) {
       throw new Error('deterministic replay diverged');
     }
     process.stdout.write('deterministic replay verified\n');

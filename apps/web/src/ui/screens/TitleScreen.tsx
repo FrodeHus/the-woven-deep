@@ -51,18 +51,31 @@ function canContinue(storage: SessionStorageLike): boolean {
  * listbox convention as the chargen wizard's option lists.
  */
 export function TitleScreen({
-  storage, onEnterTheDeep, onContinue, onHall, onOpenOverlay, account, onSignIn, onSignOut,
+  storage,
+  onEnterTheDeep,
+  onContinue,
+  onHall,
+  onOpenOverlay,
+  account,
+  onSignIn,
+  onSignOut,
 }: TitleScreenProps): JSX.Element {
   const signedIn = account.status === 'signed-in';
-  const options: readonly { readonly key: string; readonly label: string; readonly onSelect: () => void }[] = [
+  const options: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly onSelect: () => void;
+  }[] = [
     { key: 'enter', label: 'Enter the Deep', onSelect: onEnterTheDeep },
     ...(canContinue(storage) ? [{ key: 'continue', label: 'Continue', onSelect: onContinue }] : []),
     { key: 'hall', label: 'Hall of Records', onSelect: onHall },
-    ...(onOpenOverlay ? [
-      { key: 'codex', label: 'Codex', onSelect: () => onOpenOverlay('codex') },
-      { key: 'settings', label: 'Settings', onSelect: () => onOpenOverlay('settings') },
-      { key: 'help', label: 'Help', onSelect: () => onOpenOverlay('help') },
-    ] : []),
+    ...(onOpenOverlay
+      ? [
+          { key: 'codex', label: 'Codex', onSelect: () => onOpenOverlay('codex') },
+          { key: 'settings', label: 'Settings', onSelect: () => onOpenOverlay('settings') },
+          { key: 'help', label: 'Help', onSelect: () => onOpenOverlay('help') },
+        ]
+      : []),
     ...(signedIn
       ? [{ key: 'sign-out', label: 'Sign out', onSelect: onSignOut }]
       : [{ key: 'sign-in', label: 'Sign in with email', onSelect: onSignIn }]),
@@ -74,7 +87,12 @@ export function TitleScreen({
       <p className="text-xs uppercase tracking-widest text-muted">The Woven Deep</p>
       <h1 className="framed-title font-serif text-4xl text-accent-strong">The Woven Deep</h1>
       {signedIn && <p className="text-sm text-muted">Signed in as {account.email}</p>}
-      <div role="listbox" aria-label="Title menu" className="flex max-w-xs flex-col gap-1.5" onKeyDown={handleArrowKeys}>
+      <div
+        role="listbox"
+        aria-label="Title menu"
+        className="flex max-w-xs flex-col gap-1.5"
+        onKeyDown={handleArrowKeys}
+      >
         {options.map((option, index) => (
           <button
             key={option.key}
@@ -84,7 +102,8 @@ export function TitleScreen({
             ref={registerItem(index)}
             className={cn(
               'rounded-md border border-line bg-surface px-3.5 py-2.5 text-left text-sm text-fg hover:bg-raised',
-              index === selectedIndex && 'outline outline-2 outline-accent outline-offset-2 border-accent',
+              index === selectedIndex &&
+                'outline outline-2 outline-accent outline-offset-2 border-accent',
             )}
             onClick={option.onSelect}
           >

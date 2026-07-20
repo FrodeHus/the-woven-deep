@@ -17,11 +17,15 @@ const CARAVAN_GUARD = 'background.caravan-guard';
 const KEEN_EYED = 'trait.keen-eyed';
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 function wayfarerKit(): { kitId: string; name: string } {
-  const entry = pack.entries.find((candidate) => candidate.kind === 'class' && candidate.id === WAYFARER) as {
+  const entry = pack.entries.find(
+    (candidate) => candidate.kind === 'class' && candidate.id === WAYFARER,
+  ) as {
     kits: readonly { kitId: string; name: string }[];
   };
   return entry.kits[0]!;

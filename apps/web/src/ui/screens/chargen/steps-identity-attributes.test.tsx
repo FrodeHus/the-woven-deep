@@ -14,7 +14,9 @@ let pack: CompiledContentPack;
 const SEED: Uint32State = [11, 22, 33, 44];
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../../../../content'),
+  });
 });
 
 function stubState(overrides: Partial<WizardState> = {}): WizardState {
@@ -55,7 +57,13 @@ describe('IdentityStep', () => {
   it('dispatches set-onboarding-enabled when the checkbox is toggled', async () => {
     const user = userEvent.setup();
     const dispatch = vi.fn();
-    render(<IdentityStep state={stubState({ onboardingEnabled: true })} pack={pack} dispatch={dispatch} />);
+    render(
+      <IdentityStep
+        state={stubState({ onboardingEnabled: true })}
+        pack={pack}
+        dispatch={dispatch}
+      />,
+    );
     await user.click(screen.getByRole('checkbox'));
     expect(dispatch).toHaveBeenCalledWith({ type: 'set-onboarding-enabled', enabled: false });
   });
@@ -70,7 +78,9 @@ describe('AttributesStep', () => {
     expect(dispatch).toHaveBeenCalledWith({ type: 'choose-method', method: 'roll' });
 
     dispatch.mockClear();
-    render(<AttributesStep state={stubState({ method: 'roll' })} pack={pack} dispatch={dispatch} />);
+    render(
+      <AttributesStep state={stubState({ method: 'roll' })} pack={pack} dispatch={dispatch} />,
+    );
     await user.click(screen.getByRole('button', { name: /roll attributes/i }));
     expect(dispatch).toHaveBeenCalledWith({ type: 'roll' });
   });
@@ -79,7 +89,11 @@ describe('AttributesStep', () => {
     const dispatch = vi.fn();
     render(
       <AttributesStep
-        state={stubState({ method: 'roll', attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 }, rerollUsed: true })}
+        state={stubState({
+          method: 'roll',
+          attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
+          rerollUsed: true,
+        })}
         pack={pack}
         dispatch={dispatch}
       />,
@@ -95,7 +109,13 @@ describe('AttributesStep', () => {
       pointBuy: { costs: readonly { value: number; cost: number }[] };
     };
     const startValue = balance.attributeMinimum;
-    const attributes = { might: startValue, agility: startValue, vitality: startValue, wits: startValue, resolve: startValue };
+    const attributes = {
+      might: startValue,
+      agility: startValue,
+      vitality: startValue,
+      wits: startValue,
+      resolve: startValue,
+    };
     render(
       <AttributesStep
         state={stubState({ method: 'point-buy', attributes })}
@@ -105,7 +125,11 @@ describe('AttributesStep', () => {
     );
     const incrementButtons = screen.getAllByRole('button', { name: '+' });
     await user.click(incrementButtons[0]!);
-    expect(dispatch).toHaveBeenCalledWith({ type: 'set-attribute', attribute: 'might', value: startValue + 1 });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'set-attribute',
+      attribute: 'might',
+      value: startValue + 1,
+    });
   });
 
   it('point-buy: + is disabled (no dispatch) once the budget is exhausted', async () => {
@@ -119,7 +143,8 @@ describe('AttributesStep', () => {
     // Push every attribute up to whatever value first meets or exceeds the budget on its own,
     // so incrementing any further attribute would necessarily exceed it.
     const sorted = [...balance.pointBuy.costs].sort((a, b) => a.value - b.value);
-    const overBudgetRow = sorted.find((row) => row.cost >= balance.pointBuy.budget) ?? sorted[sorted.length - 1]!;
+    const overBudgetRow =
+      sorted.find((row) => row.cost >= balance.pointBuy.budget) ?? sorted[sorted.length - 1]!;
     const attributes = {
       might: overBudgetRow.value,
       agility: balance.attributeMinimum,

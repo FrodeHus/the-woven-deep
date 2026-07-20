@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import {
-  effect, presented, safeNonNegative, safePositive, targetingIds, trapDisarmOutcomes, trapResetModes,
+  effect,
+  presented,
+  safeNonNegative,
+  safePositive,
+  targetingIds,
+  trapDisarmOutcomes,
+  trapResetModes,
 } from './common.js';
 
 export const trapEntry = z.strictObject({
