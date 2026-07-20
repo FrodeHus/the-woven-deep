@@ -41,6 +41,8 @@ export interface GameplayDemoIds {
   readonly rat: 'monster.cave-rat.1';
   readonly beetle: 'monster.training-beetle.1';
   readonly door: 'feature.gameplay-demo.door';
+  readonly chest: 'feature.gameplay-demo.chest';
+  readonly lockedDoor: 'feature.gameplay-demo.locked-door';
   readonly secret: 'feature.gameplay-demo.secret';
   readonly trap: 'feature.gameplay-demo.trap';
   readonly ashenPotion: 'item.gameplay-demo.ashen-potion';
@@ -56,6 +58,8 @@ export interface GameplayDemoIds {
   readonly sword: 'item.gameplay-demo.sword';
   readonly torch: 'item.gameplay-demo.torch';
   readonly ration: 'item.gameplay-demo.travel-ration';
+  readonly lockpick: 'item.gameplay-demo.lockpick';
+  readonly key: 'item.gameplay-demo.iron-key';
 }
 
 export interface GameplayDemoRun {
@@ -68,6 +72,8 @@ const IDS: GameplayDemoIds = {
   rat: 'monster.cave-rat.1',
   beetle: 'monster.training-beetle.1',
   door: 'feature.gameplay-demo.door',
+  chest: 'feature.gameplay-demo.chest',
+  lockedDoor: 'feature.gameplay-demo.locked-door',
   secret: 'feature.gameplay-demo.secret',
   trap: 'feature.gameplay-demo.trap',
   ashenPotion: 'item.gameplay-demo.ashen-potion',
@@ -83,6 +89,8 @@ const IDS: GameplayDemoIds = {
   sword: 'item.gameplay-demo.sword',
   torch: 'item.gameplay-demo.torch',
   ration: 'item.gameplay-demo.travel-ration',
+  lockpick: 'item.gameplay-demo.lockpick',
+  key: 'item.gameplay-demo.iron-key',
 };
 
 function ordered<T>(values: readonly T[], id: (value: T) => string): readonly T[] {
@@ -321,6 +329,22 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
     throw new Error('generated gameplay floor requires a walkable approach to its door');
   const secret = selectSecretCell(generated.floor, doorApproach);
   const featureCells = new Set([door, secret, trap].map(cellKey));
+  // The hero opens and steps onto the terrain `door` cell, then fights from there for the rest
+  // of the scripted run, so the locked chest and door sit on that cell's far (east) side. Keeping
+  // them east of the door leaves the rat's north-west approach corridor clear, so the melee
+  // scripting is undisturbed, and the hero ends adjacent to both to pick them after combat.
+  const lockCells = rowMajorCells(
+    generated.floor,
+    (point, tile) =>
+      tileDefinition(tile).walkable &&
+      distance(point, door) === 1 &&
+      point.x > door.x &&
+      !featureCells.has(cellKey(point)),
+  ).slice(0, 2);
+  if (lockCells.length !== 2)
+    throw new Error('generated gameplay floor requires two lock feature cells beside its door');
+  const [chestCell, lockedDoorCell] = lockCells as [Point, Point];
+  const reservedCells = new Set([...featureCells, cellKey(chestCell), cellKey(lockedDoorCell)]);
   const demonstrationVault = generated.floor.vaults.find(
     (placement) => placement.vaultId === 'vault.lampwright-cache',
   );
@@ -337,9 +361,9 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
         point.y < demonstrationVault.y + demonstrationVault.height,
     ).map(cellKey),
   );
-  const positions = selectActorCells(generated.floor, featureCells, doorApproach, beetleCells);
+  const positions = selectActorCells(generated.floor, reservedCells, doorApproach, beetleCells);
   const occupied = new Set([
-    ...featureCells,
+    ...reservedCells,
     cellKey(positions.hero),
     cellKey(positions.rat),
     cellKey(positions.beetle),
@@ -430,6 +454,8 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
       item(contentEntry(pack, 'item.travel-ration', 'item'), IDS.ration, backpack(), {
         quantity: 2,
       }),
+      item(contentEntry(pack, 'item.lockpick', 'item'), IDS.lockpick, backpack(), { quantity: 3 }),
+      item(contentEntry(pack, 'item.iron-key', 'item'), IDS.key, backpack()),
     ],
     (candidate) => candidate.itemId,
   );
@@ -444,6 +470,29 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
         contentId: null,
         coverTileId: 2,
         state: 'closed',
+      },
+      {
+        featureId: IDS.chest,
+        type: 'chest',
+        floorId: FLOOR_ID,
+        ...chestCell,
+        contentId: null,
+        coverTileId: generated.floor.tiles[tileIndex(generated.floor, chestCell.x, chestCell.y)!]!,
+        state: 'locked',
+        lock: { difficulty: 12, keyContentId: null },
+        lootTableId: 'loot-table.early-provisions',
+        lootContentId: null,
+      },
+      {
+        featureId: IDS.lockedDoor,
+        type: 'door',
+        floorId: FLOOR_ID,
+        ...lockedDoorCell,
+        contentId: null,
+        coverTileId:
+          generated.floor.tiles[tileIndex(generated.floor, lockedDoorCell.x, lockedDoorCell.y)!]!,
+        state: 'locked',
+        lock: { difficulty: 15, keyContentId: 'item.iron-key' },
       },
       {
         featureId: IDS.secret,
