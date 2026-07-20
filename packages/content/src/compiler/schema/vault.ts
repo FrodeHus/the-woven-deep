@@ -1,8 +1,12 @@
 import { z } from 'zod';
 import {
-  base, glyph, rgb, safeNonNegative, safePositive, slugSchema, stableIdSchema, tags,
+  base, glyph, itemRarities, rgb, safeNonNegative, safePositive, slugSchema, stableIdSchema, tags,
   vaultPlacementKinds,
 } from './common.js';
+
+export const TOWN_VAULT_REQUIRED_SLOT_IDS = [
+  'dungeon-entrance', 'house-door', 'merchant-provisioner', 'merchant-arms', 'merchant-curios',
+] as const;
 
 const slot = z.strictObject({
   id: slugSchema,
@@ -40,9 +44,6 @@ const rotations = z.array(z.union([z.literal(0), z.literal(90), z.literal(180), 
     }
   });
 const layoutRow = z.string().min(1).refine((value) => [...value].length <= 160, 'layout row exceeds 160 code points');
-export const TOWN_VAULT_REQUIRED_SLOT_IDS = [
-  'dungeon-entrance', 'house-door', 'merchant-provisioner', 'merchant-arms', 'merchant-curios',
-] as const;
 
 export const vaultEntry = z.strictObject({
   ...base,
@@ -51,7 +52,7 @@ export const vaultEntry = z.strictObject({
   minDepth: safeNonNegative,
   maxDepth: safeNonNegative,
   kind: z.literal('vault'),
-  rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
+  rarity: z.enum(itemRarities),
   weight: safePositive,
   maxPerFloor: safePositive,
   margin: safeNonNegative,

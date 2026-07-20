@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  depthRange, diceSchema, effect, equipmentSlots, itemCategories, presented, rgb,
+  depthRange, diceSchema, effect, equipmentSlots, itemCategories, itemRarities, presented, rgb,
   safeInteger, safeNonNegative, safePositive, slugSchema, stableIdSchema,
 } from './common.js';
 
@@ -41,7 +41,7 @@ export const itemEntry = z.strictObject({
   category: z.enum(itemCategories),
   stackLimit: safePositive,
   price: safeNonNegative,
-  rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
+  rarity: z.enum(itemRarities),
   heirloomEligible: z.boolean().default(true),
   actionCost: safeNonNegative,
   equipment: equipment.nullable(),

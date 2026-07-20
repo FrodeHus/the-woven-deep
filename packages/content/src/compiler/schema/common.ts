@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  DAMAGE_TYPES, DISPOSITIONS, ENCOUNTER_FORMATIONS, ENCOUNTER_MODELS, EQUIPMENT_SLOTS,
+  FORMATION_PREFERENCES, ITEM_CATEGORIES, ITEM_RARITIES, LEADER_DEATH_RESPONSES,
+  MERCHANT_SERVICE_IDS, SWARM_DESTRUCTION_RESPONSES, TARGETING_IDS, VAULT_PLACEMENT_KINDS,
+} from '../../model.js';
 
 export const stableIdSchema = z.string().regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/);
 export const slugSchema = z.string().regex(/^[a-z][a-z0-9-]*$/);
@@ -12,17 +17,19 @@ export const probability = z.number().finite().min(0).max(1);
 export const jsonObject = z.record(z.string(), z.json());
 export const tags = z.array(slugSchema).default([]);
 
-export const damageTypes = ['physical', 'fire', 'cold', 'lightning', 'poison', 'arcane'] as const;
-export const targetingIds = ['target.self', 'target.actor', 'target.line', 'target.cell'] as const;
-export const equipmentSlots = ['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring'] as const;
-export const vaultPlacementKinds = ['monster', 'item', 'trap', 'npc', 'fixture', 'objective'] as const;
-export const encounterModels = ['individual', 'group', 'swarm', 'boss', 'merchant'] as const;
-export const encounterFormations = ['cluster', 'line', 'screen', 'wedge', 'surround'] as const;
-export const formationPreferences = ['front', 'center', 'rear', 'flank', 'free'] as const;
-export const leaderDeathResponses = ['weaken', 'panic', 'disband', 'surrender', 'frenzy', 'collapse'] as const;
-export const swarmDestructionResponses = ['stop', 'flee', 'decay', 'frenzy'] as const;
-export const itemCategories = ['weapon', 'ammunition', 'armor', 'shield', 'light', 'fuel', 'food', 'potion', 'scroll', 'ring', 'misc'] as const;
-export const merchantServiceIds = ['merchant-service.identify', 'merchant-service.strongbox'] as const;
+export const damageTypes = DAMAGE_TYPES;
+export const targetingIds = TARGETING_IDS;
+export const equipmentSlots = EQUIPMENT_SLOTS;
+export const vaultPlacementKinds = VAULT_PLACEMENT_KINDS;
+export const encounterModels = ENCOUNTER_MODELS;
+export const encounterFormations = ENCOUNTER_FORMATIONS;
+export const formationPreferences = FORMATION_PREFERENCES;
+export const leaderDeathResponses = LEADER_DEATH_RESPONSES;
+export const swarmDestructionResponses = SWARM_DESTRUCTION_RESPONSES;
+export const itemCategories = ITEM_CATEGORIES;
+export const itemRarities = ITEM_RARITIES;
+export const merchantServiceIds = MERCHANT_SERVICE_IDS;
+export const dispositions = DISPOSITIONS;
 
 export const diceSchema = z.strictObject({
   count: safePositive.max(100),

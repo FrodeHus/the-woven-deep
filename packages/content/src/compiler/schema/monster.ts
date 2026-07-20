@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
-  attributes, diceSchema, depthRange, presented, probability, resistances,
-  safeInteger, safeNonNegative, safePositive, stableIdSchema, jsonObject,
+  attributes, depthRange, diceSchema, dispositions, itemRarities, jsonObject, presented,
+  probability, resistances, safeInteger, safeNonNegative, safePositive, stableIdSchema,
 } from './common.js';
 
 export const monsterEntry = z.strictObject({
@@ -17,11 +17,11 @@ export const monsterEntry = z.strictObject({
   damage: diceSchema,
   armor: safeNonNegative,
   resistances,
-  disposition: z.enum(['friendly', 'neutral', 'hostile']),
+  disposition: z.enum(dispositions),
   behaviorId: stableIdSchema,
   behaviorParameters: jsonObject.default({}),
   threat: safeNonNegative,
-  rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
+  rarity: z.enum(itemRarities),
   lootTableId: stableIdSchema.nullable().default(null),
   dropChance: probability.default(1),
 }).superRefine((entry, context) => {

@@ -1,9 +1,10 @@
-import type { BaseContentEntry, ContentId } from './common.js';
+import type { BaseContentEntry, ContentId, ItemRarity } from './common.js';
 
 export type VaultTerrainName = 'wall' | 'floor' | 'closed-door' | 'pillar' | 'stair-up' | 'stair-down' | 'void';
-export type VaultPlacementKind = 'monster' | 'item' | 'trap' | 'npc' | 'fixture' | 'objective';
+export const VAULT_PLACEMENT_KINDS = ['monster', 'item', 'trap', 'npc', 'fixture', 'objective'] as const;
+export type VaultPlacementKind = typeof VAULT_PLACEMENT_KINDS[number];
 export type VaultRotation = 0 | 90 | 180 | 270;
-export type VaultRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
+export type VaultRarity = ItemRarity;
 
 export interface VaultPlacementSlot {
   readonly id: string;

@@ -2,11 +2,16 @@ import type {
   BaseContentEntry, ContentId, EffectDefinition, ItemCategory, ItemRarity, MerchantServiceId,
 } from './common.js';
 
-export type EncounterModel = 'individual' | 'group' | 'swarm' | 'boss' | 'merchant';
-export type EncounterFormation = 'cluster' | 'line' | 'screen' | 'wedge' | 'surround';
-export type FormationPreference = 'front' | 'center' | 'rear' | 'flank' | 'free';
-export type LeaderDeathResponse = 'weaken' | 'panic' | 'disband' | 'surrender' | 'frenzy' | 'collapse';
-export type SwarmDestructionResponse = 'stop' | 'flee' | 'decay' | 'frenzy';
+export const ENCOUNTER_MODELS = ['individual', 'group', 'swarm', 'boss', 'merchant'] as const;
+export type EncounterModel = typeof ENCOUNTER_MODELS[number];
+export const ENCOUNTER_FORMATIONS = ['cluster', 'line', 'screen', 'wedge', 'surround'] as const;
+export type EncounterFormation = typeof ENCOUNTER_FORMATIONS[number];
+export const FORMATION_PREFERENCES = ['front', 'center', 'rear', 'flank', 'free'] as const;
+export type FormationPreference = typeof FORMATION_PREFERENCES[number];
+export const LEADER_DEATH_RESPONSES = ['weaken', 'panic', 'disband', 'surrender', 'frenzy', 'collapse'] as const;
+export type LeaderDeathResponse = typeof LEADER_DEATH_RESPONSES[number];
+export const SWARM_DESTRUCTION_RESPONSES = ['stop', 'flee', 'decay', 'frenzy'] as const;
+export type SwarmDestructionResponse = typeof SWARM_DESTRUCTION_RESPONSES[number];
 
 export interface EncounterPlacementDefinition {
   readonly minimumStairDistance: number;

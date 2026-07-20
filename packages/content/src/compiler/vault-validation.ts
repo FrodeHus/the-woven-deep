@@ -1,14 +1,13 @@
 import type { ContentEntry, VaultContentEntry, VaultTerrainName } from '../model.js';
 import type { ContentCompileIssue } from './error.js';
 import { referencedKindIssue } from './content-validation.js';
+import { TOWN_VAULT_REQUIRED_SLOT_IDS } from './schema/vault.js';
+
+export { TOWN_VAULT_REQUIRED_SLOT_IDS };
 
 const potentiallyTraversable = new Set<VaultTerrainName>([
   'floor', 'closed-door', 'stair-up', 'stair-down',
 ]);
-
-export const TOWN_VAULT_REQUIRED_SLOT_IDS = [
-  'dungeon-entrance', 'house-door', 'merchant-provisioner', 'merchant-arms', 'merchant-curios',
-] as const;
 
 function compareText(left: string, right: string): number {
   if (left < right) return -1;
