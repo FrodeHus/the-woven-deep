@@ -11,7 +11,10 @@ import {
   type GameplayProjection,
 } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../../session/guest-session.js';
+import { DEFAULT_SETTINGS, resolveKeymap } from '../../session/settings.js';
 import { ThreatPanel } from './ThreatPanel.js';
+
+const DEFAULT_KEYMAP = resolveKeymap(DEFAULT_SETTINGS.bindings);
 
 let pack: CompiledContentPack;
 let baseProjection: GameplayProjection;
@@ -41,6 +44,40 @@ function snapshotOf(projection: GameplayProjection): SessionSnapshot {
   };
 }
 
+function heroPosition(projection: GameplayProjection): { x: number; y: number } {
+  const heroCore = projection.hero as unknown as { x: number; y: number };
+  return { x: heroCore.x, y: heroCore.y };
+}
+
+function withLockedDoorEast(projection: GameplayProjection): GameplayProjection {
+  const { x, y } = heroPosition(projection);
+  return {
+    ...projection,
+    features: [
+      ...projection.features,
+      { featureId: 'feature.door-locked-1', type: 'door', state: 'locked', x: x + 1, y },
+    ],
+  };
+}
+
+function withLockpickInBackpack(projection: GameplayProjection): GameplayProjection {
+  return {
+    ...projection,
+    hero: {
+      ...projection.hero,
+      backpack: [
+        ...(projection.hero as unknown as { backpack: readonly unknown[] }).backpack,
+        {
+          itemId: 'item.a-lockpick',
+          contentId: 'item.lockpick',
+          name: 'Bent lockpick',
+          quantity: 1,
+        },
+      ],
+    },
+  };
+}
+
 describe('ThreatPanel', () => {
   it('lists visible hostile actors with intent and health band, and ground items', () => {
     const projection: GameplayProjection = {
@@ -58,7 +95,7 @@ describe('ThreatPanel', () => {
       groundItems: [{ itemId: 'item.floor-sword', name: 'Iron sword' }],
     } as unknown as GameplayProjection;
 
-    render(<ThreatPanel snapshot={snapshotOf(projection)} />);
+    render(<ThreatPanel snapshot={snapshotOf(projection)} keymap={DEFAULT_KEYMAP} pack={pack} />);
     expect(screen.getByText(/Cave rat/)).toBeInTheDocument();
     expect(screen.getByText(/wounded/)).toBeInTheDocument();
     expect(screen.getByText(/intent\.approach/)).toBeInTheDocument();
@@ -68,7 +105,7 @@ describe('ThreatPanel', () => {
 
   it('renders a "nothing nearby" placeholder on an empty-threat snapshot', () => {
     const projection: GameplayProjection = { ...baseProjection, actors: [], groundItems: [] };
-    render(<ThreatPanel snapshot={snapshotOf(projection)} />);
+    render(<ThreatPanel snapshot={snapshotOf(projection)} keymap={DEFAULT_KEYMAP} pack={pack} />);
     expect(screen.getByText(/nothing nearby/i)).toBeInTheDocument();
   });
 
@@ -86,8 +123,32 @@ describe('ThreatPanel', () => {
       ],
       groundItems: [],
     } as unknown as GameplayProjection;
-    render(<ThreatPanel snapshot={snapshotOf(projection)} />);
+    render(<ThreatPanel snapshot={snapshotOf(projection)} keymap={DEFAULT_KEYMAP} pack={pack} />);
     expect(screen.queryByText(/Merchant/)).not.toBeInTheDocument();
     expect(screen.getByText(/nothing nearby/i)).toBeInTheDocument();
+  });
+
+  it('offers the pick-lock action only when a locked door/chest is adjacent and the hero holds a lockpick', () => {
+    const projection: GameplayProjection = {
+      ...baseProjection,
+      actors: [],
+      groundItems: [],
+    };
+    render(<ThreatPanel snapshot={snapshotOf(projection)} keymap={DEFAULT_KEYMAP} pack={pack} />);
+    expect(screen.queryByText(/press p to pick it/i)).not.toBeInTheDocument();
+
+    const withLockedDoor = withLockedDoorEast(projection);
+    render(
+      <ThreatPanel snapshot={snapshotOf(withLockedDoor)} keymap={DEFAULT_KEYMAP} pack={pack} />,
+    );
+    // Adjacent to a locked door but not carrying a key/lockpick: named, but no press-to-pick hint.
+    expect(
+      screen.getByText(/locked door is here, but you have no key or lockpick/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/press p to pick it/i)).not.toBeInTheDocument();
+
+    const withPick = withLockpickInBackpack(withLockedDoor);
+    render(<ThreatPanel snapshot={snapshotOf(withPick)} keymap={DEFAULT_KEYMAP} pack={pack} />);
+    expect(screen.getByText(/press p to pick it/i)).toBeInTheDocument();
   });
 });

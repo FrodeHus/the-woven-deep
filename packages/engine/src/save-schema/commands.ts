@@ -88,6 +88,7 @@ export const commandBaseOptions = [
   z.strictObject({ ...commandBase, type: z.literal('close-door'), featureId: identifier }),
   z.strictObject({ ...commandBase, type: z.literal('search') }),
   z.strictObject({ ...commandBase, type: z.literal('disarm'), featureId: identifier }),
+  z.strictObject({ ...commandBase, type: z.literal('pick-lock'), featureId: identifier }),
   z.strictObject({
     ...commandBase,
     type: z.literal('rest'),

@@ -18,6 +18,7 @@ import {
   disarmTrap,
   featureTiles,
   openDoor,
+  pickLock,
   searchFeatures,
   triggerTrap,
 } from './features.js';
@@ -206,6 +207,17 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
   },
   disarm: ({ state, action, actor, content, eventId, events }) => {
     const result = disarmTrap({
+      run: state,
+      content,
+      actorId: actor.actorId,
+      featureId: action.featureId,
+      eventId,
+    });
+    events.push(...result.events);
+    return { state: result.run, chargeEnergy: true };
+  },
+  'pick-lock': ({ state, action, actor, content, eventId, events }) => {
+    const result = pickLock({
       run: state,
       content,
       actorId: actor.actorId,

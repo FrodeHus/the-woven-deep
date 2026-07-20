@@ -4,19 +4,16 @@ Upcoming features and deferred polish, kept short — enough to remember the int
 full spec. When one of these gets designed for real, it gets its own spec under
 `docs/superpowers/specs/` and a summary lands in the relevant doc in this directory.
 
-## In active development now
+## Recently shipped
 
-- **G5 — findable items.** Monster on-death loot via loot tables, and filling vault
-  item-slots. Loot tables and vault item-placement-slot infrastructure already exist
-  (`content-pipeline.md`, `dungeon-generation-and-light.md`); today only bosses and
-  champions actually drop anything (`guest-client.md`'s town section notes the 5C
-  economy loop had to route around this by selling starting gear instead of monster
-  drops). This wires ordinary monster defeat into loot resolution and resolves vault
-  item slots into real ground items.
-- **G7 — locks and lockpicking.** Vault-only locked doors and locked chests.
-  Lockpicking is a skill check against the `disarm` derived stat (the same stat traps
-  use, see `core-gameplay-survival.md`), which breaks a stackable lockpick item on
-  failure. Optional keys can open doors without a check.
+- **G5 — findable items.** Monster on-death loot via loot tables, and vault item-slots
+  resolved into real ground items. Shipped.
+- **G7 — locks and lockpicking.** Vault-only locked doors and locked chests, opened by a
+  lockpick skill check against the `disarm` derived stat; ordinary failure consumes a
+  stackable lockpick, a natural-1 permanently jams a chest, and optional keys open doors
+  without a check. This milestone also built the production feature spawner (authored
+  vault door/chest slots become real `DungeonFeature`s) and the client pick-lock action.
+  See `locks-and-lockpicking.md`. Shipped.
 
 ## Planned feats (light-out mechanic)
 

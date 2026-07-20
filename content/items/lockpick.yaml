@@ -1,0 +1,20 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.lockpick
+    name: Bent lockpick
+    glyph: "\\"
+    color: "#9a9a8c"
+    tags: [tool, lockpick]
+    minDepth: 1
+    maxDepth: 20
+    category: misc
+    stackLimit: 5
+    price: 6
+    rarity: common
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []

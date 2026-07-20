@@ -89,6 +89,8 @@ function commandFactories(ids) {
     () => ({ type: 'equip', itemId: ids.lantern, slot: 'off-hand' }),
     () => ({ type: 'use-item', itemId: ids.crimsonPotion, target: null }),
     () => ({ type: 'rest', until: 'interrupted', maximumDuration: 12 }),
+    () => ({ type: 'pick-lock', featureId: ids.chest }),
+    () => ({ type: 'pick-lock', featureId: ids.lockedDoor }),
   ];
 }
 
@@ -219,6 +221,11 @@ async function main() {
       'trap.disarmed',
       'trap.triggered',
       'trap.disarm-failed',
+      'lock.picked',
+      'lock.pick-failed',
+      'door.unlocked',
+      'chest.jammed',
+      'loot.dropped',
       'rest.completed',
     ]),
   ))

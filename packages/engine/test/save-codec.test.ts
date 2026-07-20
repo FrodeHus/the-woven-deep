@@ -17,6 +17,8 @@ import {
   SaveLoadError,
   validateActiveRun,
   validateContentBoundRun,
+  type ChestFeature,
+  type DoorFeature,
   type GameCommand,
 } from '../src/index.js';
 
@@ -1475,6 +1477,125 @@ describe('active-run save codec', () => {
     const encoded = encodeActiveRun(state);
     expect(decodeActiveRun(encoded)).toEqual(state);
     expect(encoded).not.toMatch(/visibilityWords|illumination|projection|generationReport/);
+  });
+
+  function lockedDoorRun(): ReturnType<typeof createDemoRun> & {
+    features: readonly [DoorFeature];
+  } {
+    const base = createDemoRun();
+    const door: DoorFeature = {
+      featureId: 'door.locked.1',
+      type: 'door',
+      floorId: base.floors[0]!.floorId,
+      x: 3,
+      y: 2,
+      contentId: null,
+      coverTileId: 0,
+      state: 'locked',
+      lock: { difficulty: 12, keyContentId: 'item.key.locked' },
+    };
+    return { ...base, features: [door] };
+  }
+
+  function chestRun(
+    state: 'locked' | 'closed' | 'looted' | 'jammed',
+  ): ReturnType<typeof createDemoRun> & { features: readonly [ChestFeature] } {
+    const base = createDemoRun();
+    const chest: ChestFeature = {
+      featureId: 'chest.1',
+      type: 'chest',
+      floorId: base.floors[0]!.floorId,
+      x: 1,
+      y: 1,
+      contentId: null,
+      coverTileId: 0,
+      state,
+      lock: state === 'locked' ? { difficulty: 14, keyContentId: null } : null,
+      lootTableId: state === 'looted' || state === 'jammed' ? null : 'loot-table.chest',
+      lootContentId: null,
+    };
+    return { ...base, features: [chest] };
+  }
+
+  it('round-trips a locked door carrying its lock payload', () => {
+    const state = lockedDoorRun();
+    expect(decodeActiveRun(encodeActiveRun(state))).toEqual(state);
+  });
+
+  it('round-trips a door without a lock payload once unlocked', () => {
+    const state = lockedDoorRun();
+    const { lock: _lock, ...doorWithoutLock } = state.features[0]!;
+    const unlocked = {
+      ...state,
+      features: [{ ...doorWithoutLock, state: 'closed' as const }],
+    };
+    expect(decodeActiveRun(encodeActiveRun(unlocked))).toEqual(unlocked);
+  });
+
+  it.each(['locked', 'closed', 'looted', 'jammed'] as const)('round-trips a %s chest', (state) => {
+    const run = chestRun(state);
+    expect(decodeActiveRun(encodeActiveRun(run))).toEqual(run);
+  });
+
+  it('rejects a locked door with no lock payload', () => {
+    const state = lockedDoorRun();
+    const { lock: _lock, ...doorWithoutLock } = state.features[0]!;
+    const malformed = { ...state, features: [doorWithoutLock] };
+    expectInvalidSave(malformed, 'features.0.lock');
+  });
+
+  it('rejects a closed door that still carries a lock payload', () => {
+    const state = lockedDoorRun();
+    const malformed = { ...state, features: [{ ...state.features[0]!, state: 'closed' as const }] };
+    expectInvalidSave(malformed, 'features.0.lock');
+  });
+
+  it('rejects a locked chest with no lock payload', () => {
+    const run = chestRun('locked');
+    const malformed = { ...run, features: [{ ...run.features[0]!, lock: null }] };
+    expectInvalidSave(malformed, 'features.0.lock');
+  });
+
+  it('rejects a closed chest that still carries a lock payload', () => {
+    const run = chestRun('closed');
+    const malformed = {
+      ...run,
+      features: [{ ...run.features[0]!, lock: { difficulty: 10, keyContentId: null } }],
+    };
+    expectInvalidSave(malformed, 'features.0.lock');
+  });
+
+  it('rejects a jammed chest still holding a live loot pointer', () => {
+    const run = chestRun('jammed');
+    const malformed = {
+      ...run,
+      features: [{ ...run.features[0]!, lootTableId: 'loot-table.chest' }],
+    };
+    expectInvalidSave(malformed, 'features.0.lootTableId');
+  });
+
+  it('rejects a looted chest still holding a live loot pointer', () => {
+    const run = chestRun('looted');
+    const malformed = {
+      ...run,
+      features: [{ ...run.features[0]!, lootContentId: 'item.gold' }],
+    };
+    expectInvalidSave(malformed, 'features.0.lootTableId');
+  });
+
+  it('rejects an unlooted chest with no loot pointer at all', () => {
+    const run = chestRun('locked');
+    const malformed = { ...run, features: [{ ...run.features[0]!, lootTableId: null }] };
+    expectInvalidSave(malformed, 'features.0.lootTableId');
+  });
+
+  it('rejects a chest naming both a loot table and a loot content id', () => {
+    const run = chestRun('closed');
+    const malformed = {
+      ...run,
+      features: [{ ...run.features[0]!, lootContentId: 'item.gold' }],
+    };
+    expectInvalidSave(malformed, 'features.0.lootTableId');
   });
 
   it('round-trips durable group behavior and fallen-hero run decisions', () => {

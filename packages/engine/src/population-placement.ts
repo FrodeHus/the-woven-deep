@@ -8,16 +8,18 @@ import type {
 } from '@woven-deep/content';
 import { emptyEquipment, type ActorState } from './actor-model.js';
 import { analyzeConnectivity, preservesRequiredRoutes } from './connectivity.js';
+import type { DungeonFeature } from './feature-model.js';
 import { createFloorItem, createFloorLootFromTable } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
 import { materializeMerchant } from './merchant-stock.js';
-import type {
-  ActiveRun,
-  DomainEvent,
-  FloorSnapshot,
-  OpaqueId,
-  Point,
-  Uint32State,
+import {
+  tileIndex,
+  type ActiveRun,
+  type DomainEvent,
+  type FloorSnapshot,
+  type OpaqueId,
+  type Point,
+  type Uint32State,
 } from './model.js';
 import {
   emptyActorBehaviorState,
@@ -50,6 +52,7 @@ export interface PopulationPlaced extends PlacementBase {
   readonly createdActors: readonly ActorState[];
   readonly population: PopulationInstance;
   readonly createdItems: readonly ItemInstance[];
+  readonly createdFeatures: readonly DungeonFeature[];
   readonly nextMerchantStockState: Uint32State | null;
 }
 
@@ -536,6 +539,86 @@ function fillItemSlots(
   return { items, state: currentState };
 }
 
+function unfilledFeatureSlots(
+  input: PlacePopulationInput,
+): readonly (FloorSnapshot['placementSlots'][number] & { kind: 'door' | 'chest' })[] {
+  const filledPositions = new Set(
+    input.run.features
+      .filter((feature) => feature.floorId === input.floor.floorId)
+      .map((feature) => `${feature.x},${feature.y}`),
+  );
+  return input.floor.placementSlots.filter(
+    (slot): slot is FloorSnapshot['placementSlots'][number] & { kind: 'door' | 'chest' } =>
+      (slot.kind === 'door' || slot.kind === 'chest') &&
+      !filledPositions.has(`${slot.x},${slot.y}`),
+  );
+}
+
+/**
+ * Fills every not-yet-filled `kind:'door'|'chest'` vault slot on the floor with a locked
+ * `DoorFeature`/`ChestFeature` built from its originating `VaultPlacementSlot`'s authored
+ * `difficulty`/`keyContentId`/loot pointer, via the same `originatingVaultSlot` resolution
+ * `fillItemSlots` uses. Chests never materialize their loot at spawn -- the authored
+ * `lootTableId`/`contentId` is only stored on the feature and rolled on a successful open.
+ * Placement is purely deterministic (position and identity come from the slot itself), so unlike
+ * `fillItemSlots` no RNG stream is threaded. Checking already-filled positions against
+ * `run.features` makes repeated calls across `placeFloorPopulations`' multiple attempts on one
+ * floor idempotent.
+ */
+function fillFeatureSlots(input: PlacePopulationInput): readonly DungeonFeature[] {
+  const features: DungeonFeature[] = [];
+  for (const slot of unfilledFeatureSlots(input)) {
+    const vaultSlot = originatingVaultSlot(input, slot);
+    if (vaultSlot.difficulty === undefined) {
+      throw new Error(
+        `internal invariant: ${slot.kind} slot ${slot.slotId} has no authored difficulty`,
+      );
+    }
+    const index = tileIndex(input.floor, slot.x, slot.y);
+    if (index === undefined) {
+      throw new Error(`internal invariant: feature slot ${slot.slotId} is outside its floor`);
+    }
+    const base = {
+      featureId: `feature.vault.${slot.slotId}`,
+      floorId: input.floor.floorId,
+      x: slot.x,
+      y: slot.y,
+      contentId: null,
+      coverTileId: input.floor.tiles[index]!,
+    };
+    switch (slot.kind) {
+      case 'door': {
+        features.push({
+          ...base,
+          type: 'door',
+          state: 'locked',
+          lock: { difficulty: vaultSlot.difficulty, keyContentId: vaultSlot.keyContentId ?? null },
+        });
+        break;
+      }
+      case 'chest': {
+        const lootTableId = vaultSlot.lootTableId;
+        const lootContentId = vaultSlot.contentId;
+        if (Number(lootTableId !== null) + Number(lootContentId !== null) !== 1) {
+          throw new Error(
+            `internal invariant: chest slot ${slot.slotId} must set exactly one of lootTableId/contentId`,
+          );
+        }
+        features.push({
+          ...base,
+          type: 'chest',
+          state: 'locked',
+          lock: { difficulty: vaultSlot.difficulty, keyContentId: null },
+          lootTableId,
+          lootContentId,
+        });
+        break;
+      }
+    }
+  }
+  return features;
+}
+
 function selectCells(
   input: PlacePopulationInput,
   encounter: EncounterContentEntry,
@@ -719,6 +802,7 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
       population: merchant.population,
       floor: input.floor,
       createdItems: [...merchant.items, ...itemSlots.items],
+      createdFeatures: fillFeatureSlots(input),
       nextMerchantStockState: merchant.nextMerchantStockState,
     };
   }
@@ -838,6 +922,7 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
     population,
     floor: input.floor,
     createdItems: itemSlots.items,
+    createdFeatures: fillFeatureSlots(input),
     nextMerchantStockState: null,
   };
 }
@@ -879,6 +964,10 @@ function sortByItemId(items: readonly ItemInstance[]): ItemInstance[] {
 
 function sortByPopulationId(items: readonly PopulationInstance[]): PopulationInstance[] {
   return [...items].sort((left, right) => compareId(left.populationId, right.populationId));
+}
+
+function sortByFeatureId(features: readonly DungeonFeature[]): DungeonFeature[] {
+  return [...features].sort((left, right) => compareId(left.featureId, right.featureId));
 }
 
 export interface FloorPopulationsResult {
@@ -935,6 +1024,10 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
           placement.createdItems.length === 0
             ? run.items
             : sortByItemId([...run.items, ...placement.createdItems]),
+        features:
+          placement.createdFeatures.length === 0
+            ? run.features
+            : sortByFeatureId([...run.features, ...placement.createdFeatures]),
         populations: sortByPopulationId([...run.populations, placement.population]),
       };
       events.push({

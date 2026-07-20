@@ -119,9 +119,10 @@ describe('seeded gameplay fixture', () => {
       Math.max(Math.abs(hero.x - beetle.x), Math.abs(hero.y - beetle.y)),
     ).toBeGreaterThanOrEqual(6);
 
-    // 13 pre-existing demo items plus one item created from `vault.lampwright-cache`'s filled
-    // item slot (`item-cache`, `loot-table.travelling-lampwright-stock`).
-    expect(run.items).toHaveLength(14);
+    // 13 base demo items, the lockpick and iron key the hero carries to exercise the lock
+    // mechanic, plus one item created from `vault.lampwright-cache`'s filled item slot
+    // (`item-cache`, `loot-table.travelling-lampwright-stock`).
+    expect(run.items).toHaveLength(16);
     expect(run.items.find((item) => item.itemId === ids.lantern)).toMatchObject({
       contentId: 'item.brass-lantern',
       fuel: 1800,
@@ -144,6 +145,25 @@ describe('seeded gameplay fixture', () => {
       type: 'secret',
       state: 'hidden',
       discovery: { discoveredByActorIds: [] },
+    });
+    expect(run.features.find((feature) => feature.featureId === ids.chest)).toMatchObject({
+      type: 'chest',
+      state: 'locked',
+      lock: { difficulty: 12, keyContentId: null },
+      lootTableId: 'loot-table.early-provisions',
+      lootContentId: null,
+    });
+    expect(run.features.find((feature) => feature.featureId === ids.lockedDoor)).toMatchObject({
+      type: 'door',
+      state: 'locked',
+      lock: { difficulty: 15, keyContentId: 'item.iron-key' },
+    });
+    expect(run.items.find((item) => item.itemId === ids.lockpick)).toMatchObject({
+      contentId: 'item.lockpick',
+      quantity: 3,
+    });
+    expect(run.items.find((item) => item.itemId === ids.key)).toMatchObject({
+      contentId: 'item.iron-key',
     });
   });
 

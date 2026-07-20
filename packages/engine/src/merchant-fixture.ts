@@ -235,6 +235,9 @@ export function createMerchantDemoRun(pack: CompiledContentPack): ActiveRun {
       items: [...run.items, ...placement.createdItems].sort((left, right) =>
         compareCodeUnits(left.itemId, right.itemId),
       ),
+      features: [...run.features, ...placement.createdFeatures].sort((left, right) =>
+        compareCodeUnits(left.featureId, right.featureId),
+      ),
       floors: run.floors.map((floor) =>
         floor.floorId === placement.floor.floorId ? placement.floor : floor,
       ),

@@ -57,6 +57,28 @@ function withClosedDoorEast(projection: GameplayProjection): GameplayProjection 
   };
 }
 
+function withLockedDoorEast(projection: GameplayProjection): GameplayProjection {
+  const { x, y } = heroPosition(projection);
+  return {
+    ...projection,
+    features: [
+      ...projection.features,
+      { featureId: 'feature.door-locked-1', type: 'door', state: 'locked', x: x + 1, y },
+    ],
+  };
+}
+
+function withLockedChestSouth(projection: GameplayProjection): GameplayProjection {
+  const { x, y } = heroPosition(projection);
+  return {
+    ...projection,
+    features: [
+      ...projection.features,
+      { featureId: 'feature.chest-locked-1', type: 'chest', state: 'locked', x, y: y + 1 },
+    ],
+  };
+}
+
 function withGroundItemUnderHero(projection: GameplayProjection): GameplayProjection {
   const { x, y } = heroPosition(projection);
   return {
@@ -207,6 +229,62 @@ describe('buildIntent', () => {
         expectedRevision: 2,
       },
     });
+  });
+
+  it('blocks a move into a locked door: rejects without dispatching any command (never auto-picks)', () => {
+    const projection = withLockedDoorEast(baseProjection);
+    const built = buildIntent({
+      intent: { type: 'move', direction: 'east' },
+      projection,
+      commandId: 'command.guest-lock-001',
+      expectedRevision: 2,
+    });
+    expect(built.kind).toBe('rejected');
+    expect((built as { message: string }).message).toMatch(/locked/i);
+  });
+
+  it('builds pick-lock against the adjacent locked door/chest, and rejects when none is adjacent', () => {
+    const withDoor = withLockedDoorEast(baseProjection);
+    const built = buildIntent({
+      intent: { type: 'pick-lock' },
+      projection: withDoor,
+      commandId: 'command.guest-lock-002',
+      expectedRevision: 3,
+    });
+    expect(built).toEqual({
+      kind: 'command',
+      command: {
+        type: 'pick-lock',
+        featureId: 'feature.door-locked-1',
+        commandId: 'command.guest-lock-002',
+        expectedRevision: 3,
+      },
+    });
+
+    const withChest = withLockedChestSouth(baseProjection);
+    const builtChest = buildIntent({
+      intent: { type: 'pick-lock' },
+      projection: withChest,
+      commandId: 'command.guest-lock-003',
+      expectedRevision: 3,
+    });
+    expect(builtChest).toEqual({
+      kind: 'command',
+      command: {
+        type: 'pick-lock',
+        featureId: 'feature.chest-locked-1',
+        commandId: 'command.guest-lock-003',
+        expectedRevision: 3,
+      },
+    });
+
+    const rejected = buildIntent({
+      intent: { type: 'pick-lock' },
+      projection: baseProjection,
+      commandId: 'command.guest-lock-004',
+      expectedRevision: 3,
+    });
+    expect(rejected.kind).toBe('rejected');
   });
 
   it('builds pickup for the top ground item under the hero with its full quantity', () => {

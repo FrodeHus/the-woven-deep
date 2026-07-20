@@ -7,6 +7,7 @@ import {
   featureTiles,
   openDoor,
   refreshKnowledge,
+  type ChestFeature,
   type DoorFeature,
   applyPassiveDiscovery,
   decodeActiveRun,
@@ -29,6 +30,22 @@ function door(state: DoorFeature['state'] = 'closed'): DoorFeature {
     contentId: null,
     coverTileId: 0,
     state,
+  };
+}
+
+function chest(state: ChestFeature['state'] = 'locked'): ChestFeature {
+  return {
+    featureId: 'chest.1',
+    type: 'chest',
+    floorId: 'floor.demo',
+    x: 3,
+    y: 2,
+    contentId: null,
+    coverTileId: 0,
+    state,
+    lock: state === 'locked' ? { difficulty: 12, keyContentId: null } : null,
+    lootTableId: state === 'looted' || state === 'jammed' ? null : 'loot-table.chest',
+    lootContentId: null,
   };
 }
 
@@ -286,6 +303,21 @@ describe('mutable dungeon features', () => {
       eventId: 'event.disarm-boosted',
     });
     expect(boosted.events.some((event) => event.type === 'trap.disarmed')).toBe(true);
+  });
+
+  it.each([
+    ['locked', true],
+    ['closed', true],
+    ['looted', false],
+    ['jammed', false],
+  ] as const)('blocks movement for a %s chest: %s', (state, blocks) => {
+    expect(featureBlocksMovement(chest(state))).toBe(blocks);
+  });
+
+  it('projects a chest with its own state, unconditioned by discovery', () => {
+    const json = stableJson(projectFeature(chest('locked'), 'hero.demo'));
+    expect(json).toContain('"chest.1"');
+    expect(json).toContain('"locked"');
   });
 
   it('projects an undiscovered secret as cover terrain without its identifier', () => {

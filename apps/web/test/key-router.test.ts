@@ -148,6 +148,12 @@ describe('routeKey', () => {
     ).toBeNull();
   });
 
+  it('maps p to pick-lock -- a deliberate keypress, never emitted by movement', () => {
+    expect(routeKey({ event: keyEvent('p'), overlayOpen: false, keymap: defaultKeymap })).toEqual({
+      type: 'pick-lock',
+    });
+  });
+
   it('returns null for any movement or action key while an overlay is open (except Escape)', () => {
     const keysToBlock = ['ArrowUp', 'h', '.', 'g', '>', 'i'];
     for (const key of keysToBlock) {

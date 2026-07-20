@@ -143,6 +143,12 @@ export interface DisarmAction {
   readonly featureId: OpaqueId;
   readonly cost: number;
 }
+export interface PickLockAction {
+  readonly type: 'pick-lock';
+  readonly actorId: OpaqueId;
+  readonly featureId: OpaqueId;
+  readonly cost: number;
+}
 export interface RestAction {
   readonly type: 'rest';
   readonly actorId: OpaqueId;
@@ -169,6 +175,7 @@ export type GameAction =
   | DoorAction
   | SearchAction
   | DisarmAction
+  | PickLockAction
   | RestAction;
 
 export interface InvalidActionValidation {
@@ -725,6 +732,43 @@ export function validatePlayerAction(
       actorId: actor.actorId,
       featureId: feature.featureId,
       cost: actionCostFor(rules, 'action.disarm'),
+    };
+  }
+  if (input.command.type === 'pick-lock') {
+    const featureId = input.command.featureId;
+    const feature = input.state.features.find((candidate) => candidate.featureId === featureId);
+    if (
+      !feature ||
+      (feature.type !== 'door' && feature.type !== 'chest') ||
+      feature.state !== 'locked' ||
+      feature.floorId !== actor.floorId ||
+      Math.max(Math.abs(feature.x - actor.x), Math.abs(feature.y - actor.y)) !== 1
+    ) {
+      return { status: 'invalid', reason: 'action.unavailable' };
+    }
+    const lock = feature.lock;
+    if (!lock) return { status: 'invalid', reason: 'action.unavailable' };
+    const held = input.state.items.filter(
+      (item) =>
+        (item.location.type === 'backpack' || item.location.type === 'equipped') &&
+        item.location.actorId === actor.actorId,
+    );
+    const holdsLockpick = held.some((item) => {
+      const entry = entryById(input.context.content, item.contentId);
+      return entry?.kind === 'item' && entry.tags.includes('lockpick');
+    });
+    const holdsKey =
+      feature.type === 'door' &&
+      lock.keyContentId !== null &&
+      held.some((item) => item.contentId === lock.keyContentId);
+    if (!holdsLockpick && !holdsKey) {
+      return { status: 'invalid', reason: 'action.unavailable' };
+    }
+    return {
+      type: 'pick-lock',
+      actorId: actor.actorId,
+      featureId: feature.featureId,
+      cost: actionCostFor(rules, 'action.pick-lock'),
     };
   }
   return { status: 'invalid', reason: 'action.unavailable' };

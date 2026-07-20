@@ -15,9 +15,23 @@ interface FeatureBase {
   readonly coverTileId: TileId;
 }
 
+export interface LockData {
+  readonly difficulty: number;
+  readonly keyContentId: string | null;
+}
+
 export interface DoorFeature extends FeatureBase {
   readonly type: 'door';
   readonly state: 'open' | 'closed' | 'locked';
+  readonly lock?: LockData;
+}
+
+export interface ChestFeature extends FeatureBase {
+  readonly type: 'chest';
+  readonly state: 'locked' | 'closed' | 'looted' | 'jammed';
+  readonly lock: LockData | null;
+  readonly lootTableId: string | null;
+  readonly lootContentId: string | null;
 }
 
 export interface TrapFeature extends FeatureBase {
@@ -34,4 +48,4 @@ export interface SecretFeature extends FeatureBase {
   readonly discovery: DiscoveryState;
 }
 
-export type DungeonFeature = DoorFeature | TrapFeature | SecretFeature;
+export type DungeonFeature = DoorFeature | TrapFeature | SecretFeature | ChestFeature;

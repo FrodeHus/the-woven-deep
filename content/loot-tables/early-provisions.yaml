@@ -12,3 +12,4 @@ entries:
       - { contentId: item.iron-sword, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.leather-armor, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.wooden-shield, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.lockpick, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 2 }

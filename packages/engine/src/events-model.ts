@@ -152,6 +152,7 @@ export interface ActorTurnCompletedEvent {
     | 'close-door'
     | 'search'
     | 'disarm'
+    | 'pick-lock'
     | 'swarm-spawn';
 }
 export interface ActorMovedEvent {
@@ -300,6 +301,12 @@ export interface FeatureSearchEvent {
 }
 export interface TrapStateEvent {
   readonly type: 'trap.triggered' | 'trap.disarmed' | 'trap.disarm-failed';
+  readonly eventId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly featureId: OpaqueId;
+}
+export interface LockOutcomeEvent {
+  readonly type: 'lock.picked' | 'lock.pick-failed' | 'door.unlocked' | 'chest.jammed';
   readonly eventId: OpaqueId;
   readonly actorId: OpaqueId;
   readonly featureId: OpaqueId;
@@ -788,6 +795,7 @@ export type DomainEvent =
   | FeatureRevealedEvent
   | FeatureSearchEvent
   | TrapStateEvent
+  | LockOutcomeEvent
   | PopulationDomainEvent
   | ReputationChangedEvent
   | TradeDomainEvent

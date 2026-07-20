@@ -1227,7 +1227,30 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     ) {
       fail(`${path}.coverTileId`, 'door cover tile does not match its floor terrain');
     }
-    if (featureValue.type !== 'door') {
+    if (featureValue.type === 'door') {
+      if ((featureValue.state === 'locked') !== (featureValue.lock !== undefined)) {
+        fail(`${path}.lock`, 'door lock is present if and only if it is locked');
+      }
+    }
+    if (featureValue.type === 'chest') {
+      if ((featureValue.state === 'locked') !== (featureValue.lock !== null)) {
+        fail(`${path}.lock`, 'chest lock is present if and only if it is locked');
+      }
+      const hasLootPointer =
+        featureValue.lootTableId !== null || featureValue.lootContentId !== null;
+      if (featureValue.state === 'looted' || featureValue.state === 'jammed') {
+        if (hasLootPointer)
+          fail(`${path}.lootTableId`, 'looted or jammed chest must not carry a live loot pointer');
+      } else if (!hasLootPointer) {
+        fail(`${path}.lootTableId`, 'locked or closed chest requires loot contents');
+      } else if (featureValue.lootTableId !== null && featureValue.lootContentId !== null) {
+        fail(
+          `${path}.lootTableId`,
+          'chest loot must name exactly one of lootTableId/lootContentId',
+        );
+      }
+    }
+    if (featureValue.type !== 'door' && featureValue.type !== 'chest') {
       validateOrderedIds(
         featureValue.discovery.discoveredByActorIds,
         `${path}.discovery.discoveredByActorIds`,
@@ -1521,42 +1544,52 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                                                   entry.actorId === run.hero.actorId &&
                                                   entry.featureId === commandFeatureId,
                                               )
-                                            : recordValue.command.type === 'rest'
+                                            : recordValue.command.type === 'pick-lock'
                                               ? recordValue.events.find(
-                                                  (entry) => entry.type === 'rest.completed',
+                                                  (entry) =>
+                                                    (entry.type === 'lock.picked' ||
+                                                      entry.type === 'lock.pick-failed' ||
+                                                      entry.type === 'door.unlocked' ||
+                                                      entry.type === 'chest.jammed') &&
+                                                    entry.actorId === run.hero.actorId &&
+                                                    entry.featureId === commandFeatureId,
                                                 )
-                                              : recordValue.command.type === 'trade-open'
+                                              : recordValue.command.type === 'rest'
                                                 ? recordValue.events.find(
-                                                    (entry) => entry.type === 'trade.opened',
+                                                    (entry) => entry.type === 'rest.completed',
                                                   )
-                                                : recordValue.command.type === 'trade-buy'
+                                                : recordValue.command.type === 'trade-open'
                                                   ? recordValue.events.find(
-                                                      (entry) =>
-                                                        entry.type === 'trade.bought' &&
-                                                        entry.itemId === commandItemId &&
-                                                        entry.quantity === commandQuantity,
+                                                      (entry) => entry.type === 'trade.opened',
                                                     )
-                                                  : recordValue.command.type === 'trade-sell'
+                                                  : recordValue.command.type === 'trade-buy'
                                                     ? recordValue.events.find(
                                                         (entry) =>
-                                                          entry.type === 'trade.sold' &&
+                                                          entry.type === 'trade.bought' &&
                                                           entry.itemId === commandItemId &&
                                                           entry.quantity === commandQuantity,
                                                       )
-                                                    : recordValue.command.type === 'trade-service'
+                                                    : recordValue.command.type === 'trade-sell'
                                                       ? recordValue.events.find(
                                                           (entry) =>
-                                                            entry.type ===
-                                                              'trade.service-purchased' &&
-                                                            entry.targetItemId ===
-                                                              commandTargetItemId,
+                                                            entry.type === 'trade.sold' &&
+                                                            entry.itemId === commandItemId &&
+                                                            entry.quantity === commandQuantity,
                                                         )
-                                                      : recordValue.command.type === 'trade-close'
+                                                      : recordValue.command.type === 'trade-service'
                                                         ? recordValue.events.find(
                                                             (entry) =>
-                                                              entry.type === 'trade.closed',
+                                                              entry.type ===
+                                                                'trade.service-purchased' &&
+                                                              entry.targetItemId ===
+                                                                commandTargetItemId,
                                                           )
-                                                        : undefined;
+                                                        : recordValue.command.type === 'trade-close'
+                                                          ? recordValue.events.find(
+                                                              (entry) =>
+                                                                entry.type === 'trade.closed',
+                                                            )
+                                                          : undefined;
       if (!eventValue) fail(`${path}.events`, 'processed result has no matching event');
       if (recordValue.result.status === 'invalid') {
         if (
@@ -1693,6 +1726,16 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         eventValue.featureId === recordValue.command.featureId
       ) {
         // Trap state and the effects random stream store the outcome.
+      } else if (
+        recordValue.command.type === 'pick-lock' &&
+        (eventValue.type === 'lock.picked' ||
+          eventValue.type === 'lock.pick-failed' ||
+          eventValue.type === 'door.unlocked' ||
+          eventValue.type === 'chest.jammed') &&
+        eventValue.actorId === run.hero.actorId &&
+        eventValue.featureId === recordValue.command.featureId
+      ) {
+        // Feature state, any dropped loot, and the effects random stream store the outcome.
       } else if (recordValue.command.type === 'rest' && eventValue.type === 'rest.completed') {
         if (eventValue.elapsed > recordValue.command.maximumDuration) {
           fail(`${path}.events`, 'rest event exceeds requested maximum duration');
@@ -1957,6 +2000,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       recordValue.command.type === 'close-door' ||
       recordValue.command.type === 'search' ||
       recordValue.command.type === 'disarm' ||
+      recordValue.command.type === 'pick-lock' ||
       recordValue.command.type === 'rest' ||
       recordValue.command.type === 'house-deposit' ||
       recordValue.command.type === 'house-withdraw' ||

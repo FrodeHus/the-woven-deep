@@ -64,6 +64,10 @@ export const discovery = z.strictObject({
   progressByActorId: z.record(identifier, safeNonNegative).readonly(),
   attemptedContextKeys: z.array(z.string().min(1).max(256)).readonly(),
 });
+export const lockData = z.strictObject({
+  difficulty: safeNonNegative,
+  keyContentId: nullableIdentifier,
+});
 export const featureBase = {
   featureId: identifier,
   floorId: identifier,
@@ -77,6 +81,7 @@ export const feature = z.discriminatedUnion('type', [
     ...featureBase,
     type: z.literal('door'),
     state: z.enum(['open', 'closed', 'locked']),
+    lock: lockData.optional(),
   }),
   z.strictObject({
     ...featureBase,
@@ -91,6 +96,14 @@ export const feature = z.discriminatedUnion('type', [
     state: z.enum(['hidden', 'revealed']),
     discoveryDifficulty: safeNonNegative,
     discovery,
+  }),
+  z.strictObject({
+    ...featureBase,
+    type: z.literal('chest'),
+    state: z.enum(['locked', 'closed', 'looted', 'jammed']),
+    lock: lockData.nullable(),
+    lootTableId: nullableIdentifier,
+    lootContentId: nullableIdentifier,
   }),
 ]);
 

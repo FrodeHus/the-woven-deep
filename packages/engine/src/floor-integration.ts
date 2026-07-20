@@ -130,6 +130,16 @@ export function integrateGeneratedFloor(
                 : [...run.items, ...placement.createdItems].sort((left, right) =>
                     left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0,
                   ),
+            features:
+              placement.createdFeatures.length === 0
+                ? run.features
+                : [...run.features, ...placement.createdFeatures].sort((left, right) =>
+                    left.featureId < right.featureId
+                      ? -1
+                      : left.featureId > right.featureId
+                        ? 1
+                        : 0,
+                  ),
             populations: [...run.populations, placement.population].sort((left, right) =>
               left.populationId < right.populationId
                 ? -1

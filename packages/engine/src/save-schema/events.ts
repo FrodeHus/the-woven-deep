@@ -150,6 +150,7 @@ export const actorTurnCompletedEvent = z.strictObject({
     'close-door',
     'search',
     'disarm',
+    'pick-lock',
     'swarm-spawn',
   ]),
 });
@@ -309,6 +310,12 @@ export const trapDisarmedEvent = z.strictObject({
 });
 export const trapDisarmFailedEvent = z.strictObject({
   type: z.literal('trap.disarm-failed'),
+  eventId: identifier,
+  actorId: identifier,
+  featureId: identifier,
+});
+export const lockOutcomeEvent = z.strictObject({
+  type: z.enum(['lock.picked', 'lock.pick-failed', 'door.unlocked', 'chest.jammed']),
   eventId: identifier,
   actorId: identifier,
   featureId: identifier,
@@ -783,6 +790,7 @@ export const eventOptions = [
   trapTriggeredEvent,
   trapDisarmedEvent,
   trapDisarmFailedEvent,
+  lockOutcomeEvent,
   itemDamagedEvent,
   actorIntentChangedEvent,
   populationEncounteredEvent,
@@ -958,6 +966,7 @@ import type {
   ItemThrownEvent,
   ItemUnequippedEvent,
   ItemUsedEvent,
+  LockOutcomeEvent,
   LootDroppedEvent,
   MerchantDepartedEvent,
   MerchantDepartureWarningEvent,
@@ -1085,6 +1094,7 @@ type _FeatureSearchDrift = Expect<
   SchemaMatches<z.infer<typeof featureSearchedEvent>, FeatureSearchEvent>
 >;
 type _ItemDamagedDrift = Expect<SchemaMatches<z.infer<typeof itemDamagedEvent>, ItemDamagedEvent>>;
+type _LockOutcomeDrift = Expect<SchemaMatches<z.infer<typeof lockOutcomeEvent>, LockOutcomeEvent>>;
 type _ActorIntentChangedDrift = Expect<
   SchemaMatches<z.infer<typeof actorIntentChangedEvent>, ActorIntentChangedEvent>
 >;

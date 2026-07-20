@@ -140,6 +140,9 @@ function publishPlacement(
     items: [...run.items, ...placement.createdItems].sort((a, b) =>
       compareCodeUnits(a.itemId, b.itemId),
     ),
+    features: [...run.features, ...placement.createdFeatures].sort((a, b) =>
+      compareCodeUnits(a.featureId, b.featureId),
+    ),
     floors: run.floors.map((floor) =>
       floor.floorId === placement.floor.floorId ? placement.floor : floor,
     ),

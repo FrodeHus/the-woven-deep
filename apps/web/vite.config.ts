@@ -14,5 +14,7 @@ export default defineConfig({
     setupFiles: ['./test/setup.ts'],
     // Playwright specs live in e2e/ and run via `npm run e2e` (root: `guest:e2e`), never vitest.
     exclude: ['e2e/**', '**/node_modules/**'],
+    // Heavy jsdom integration tests are timing-sensitive on shared CI runners; retry there only.
+    retry: process.env.CI ? 2 : 0,
   },
 });

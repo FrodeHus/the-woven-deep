@@ -876,6 +876,106 @@ entries:
     });
   });
 
+  it('materializes a locked door and locked chest slot', () => {
+    const [entry] = parseContentFile({
+      path: 'vaults/locked-room.yaml',
+      source: `schemaVersion: 7
+entries:
+  - kind: vault
+    id: vault.locked-room
+    name: Locked room
+    tags: [test]
+    minDepth: 1
+    maxDepth: 5
+    rarity: common
+    weight: 10
+    maxPerFloor: 1
+    margin: 1
+    transforms: { rotations: [0], reflectHorizontal: false }
+    layout: ["+DC"]
+    legend:
+      "+": { terrain: floor, entrance: true }
+      "D":
+        terrain: closed-door
+        slot:
+          id: vault-door
+          kind: door
+          required: true
+          tags: []
+          difficulty: 12
+          keyContentId: item.rusty-key
+      "C":
+        terrain: floor
+        slot:
+          id: vault-chest
+          kind: chest
+          required: false
+          tags: []
+          difficulty: 8
+          contentId: item.crimson-potion
+`,
+    });
+
+    expect(entry).toMatchObject({
+      legend: {
+        D: {
+          terrain: 'closed-door',
+          slot: {
+            id: 'vault-door',
+            kind: 'door',
+            difficulty: 12,
+            keyContentId: 'item.rusty-key',
+            lootTableId: null,
+            contentId: null,
+          },
+        },
+        C: {
+          terrain: 'floor',
+          slot: {
+            id: 'vault-chest',
+            kind: 'chest',
+            difficulty: 8,
+            contentId: 'item.crimson-potion',
+            lootTableId: null,
+          },
+        },
+      },
+    });
+  });
+
+  it('rejects an out-of-range lock difficulty with a field path', () => {
+    expect(() =>
+      parseContentFile({
+        path: 'vaults/bad-difficulty.yaml',
+        source: `schemaVersion: 7
+entries:
+  - kind: vault
+    id: vault.bad-difficulty
+    name: Bad difficulty
+    tags: [test]
+    minDepth: 1
+    maxDepth: 5
+    rarity: common
+    weight: 10
+    maxPerFloor: 1
+    margin: 1
+    transforms: { rotations: [0], reflectHorizontal: false }
+    layout: ["+D"]
+    legend:
+      "+": { terrain: floor, entrance: true }
+      "D":
+        terrain: closed-door
+        slot:
+          id: vault-door
+          kind: door
+          required: true
+          tags: []
+          difficulty: 31
+`,
+      }),
+    ).toThrow(/entries\.vault\.bad-difficulty\.legend\.D\.slot\.difficulty/);
+  });
+
   it('rejects unknown properties with a field path', () => {
     expect(() =>
       parseContentFile({

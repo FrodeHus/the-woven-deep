@@ -13,6 +13,11 @@ export type PlayerIntent =
   | { readonly type: 'pickup' }
   | { readonly type: 'descend' }
   | { readonly type: 'ascend' }
+  // Attempts to pick whichever locked door/chest the hero is currently Chebyshev-adjacent to (see
+  // command-builder.ts's `adjacentLockedFeature` resolution) -- carries no payload, exactly like
+  // `trade-open` resolving its merchant from adjacency, so a bare keypress or affordance click
+  // never has to look up a `featureId` itself.
+  | { readonly type: 'pick-lock' }
   // Opens the house transfer screen; only accepted when the hero is Chebyshev-adjacent to the
   // town's house door (see command-builder.ts). Carries no payload -- the screen itself dispatches
   // `house-transfer` intents for the actual deposit/withdraw actions.

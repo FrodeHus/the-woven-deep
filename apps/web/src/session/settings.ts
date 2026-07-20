@@ -18,6 +18,7 @@ export type ActionId =
   | 'inventory'
   | 'house'
   | 'trade'
+  | 'pick-lock'
   | 'character-sheet'
   | 'map-journal'
   | 'codex'
@@ -73,6 +74,7 @@ export const ACTION_IDS: readonly ActionId[] = [
   'inventory',
   'house',
   'trade',
+  'pick-lock',
   'character-sheet',
   'map-journal',
   'codex',
@@ -105,6 +107,7 @@ export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
   inventory: 'Inventory',
   house: 'House/Town',
   trade: 'Trade',
+  'pick-lock': 'Pick lock',
   'character-sheet': 'Character sheet',
   'map-journal': 'Map & journal',
   codex: 'Codex',
@@ -136,6 +139,7 @@ export const DEFAULT_BINDINGS: Readonly<Record<ActionId, KeyChord>> = {
   inventory: chord('i'),
   house: chord('H', true),
   trade: chord('T', true),
+  'pick-lock': chord('p'),
   'character-sheet': chord('c'),
   'map-journal': chord('m'),
   codex: chord('x'),

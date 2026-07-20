@@ -52,13 +52,14 @@ function blockReasonAt(
   if (index === undefined) return 'blocked.bounds';
   const feature = input.features.find(
     (candidate) =>
-      (candidate.type === 'door' || candidate.type === 'secret') &&
+      (candidate.type === 'door' || candidate.type === 'secret' || candidate.type === 'chest') &&
       candidate.floorId === input.floor.floorId &&
       candidate.x === point.x &&
       candidate.y === point.y,
   );
   if (feature && !featureBlocksMovement(feature)) return undefined;
   if (feature?.type === 'door') return 'blocked.door';
+  if (feature?.type === 'chest') return 'blocked.chest';
   return movementBlockReason(input.floor.tiles[index]!);
 }
 

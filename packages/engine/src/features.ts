@@ -1,5 +1,5 @@
 import { actorById } from './actor-model.js';
-import type { DoorFeature, DungeonFeature } from './feature-model.js';
+import type { ChestFeature, DoorFeature, DungeonFeature } from './feature-model.js';
 import {
   tileIndex,
   type ActiveRun,
@@ -13,6 +13,9 @@ import { applyEffectResult, resolveEffectSequence, withRngStream } from './effec
 import { deriveActorStats } from './attributes.js';
 import { conditionModifiers } from './conditions.js';
 import { equipmentModifiers } from './equipment.js';
+import { consumeItemQuantity, createFloorItem, createFloorLootFromTable } from './inventory.js';
+import { compareCodeUnits } from './stable-json.js';
+import type { ItemInstance } from './item-model.js';
 
 export function featureAt(
   input: Readonly<{
@@ -31,6 +34,7 @@ export function featureAt(
 export function featureBlocksMovement(feature: DungeonFeature): boolean {
   if (feature.type === 'door') return feature.state !== 'open';
   if (feature.type === 'secret') return feature.state === 'hidden';
+  if (feature.type === 'chest') return feature.state === 'locked' || feature.state === 'closed';
   return false;
 }
 
@@ -139,7 +143,8 @@ export function closeDoor(
 }
 
 function discovered(feature: DungeonFeature, actorId: OpaqueId): boolean {
-  return feature.type === 'door' || feature.discovery.discoveredByActorIds.includes(actorId);
+  if (feature.type === 'door' || feature.type === 'chest') return true;
+  return feature.discovery.discoveredByActorIds.includes(actorId);
 }
 
 export function discoveryContextKey(
@@ -169,7 +174,10 @@ export function discoveryContextKey(
   return `context.${actor.actorId}.${actor.x}.${actor.y}.${band}.${conditions}.${tools}`;
 }
 
-function reveal(feature: Exclude<DungeonFeature, DoorFeature>, actorId: OpaqueId): DungeonFeature {
+function reveal(
+  feature: Exclude<DungeonFeature, DoorFeature | ChestFeature>,
+  actorId: OpaqueId,
+): DungeonFeature {
   const discoveredByActorIds = [
     ...new Set([...feature.discovery.discoveredByActorIds, actorId]),
   ].sort();
@@ -195,6 +203,7 @@ function discoveryAttempt(
   const features = input.run.features.map((feature): DungeonFeature => {
     if (
       feature.type === 'door' ||
+      feature.type === 'chest' ||
       feature.floorId !== actor.floorId ||
       discovered(feature, actor.actorId) ||
       Math.max(Math.abs(feature.x - actor.x), Math.abs(feature.y - actor.y)) > input.radius
@@ -459,11 +468,223 @@ export function disarmTrap(
   };
 }
 
+function replaceFeature(run: ActiveRun, feature: DungeonFeature): ActiveRun {
+  return {
+    ...run,
+    features: run.features.map((candidate) =>
+      candidate.featureId === feature.featureId ? feature : candidate,
+    ),
+  };
+}
+
+function heldByActor(run: ActiveRun, actorId: OpaqueId): readonly ItemInstance[] {
+  return run.items.filter(
+    (item) =>
+      (item.location.type === 'backpack' || item.location.type === 'equipped') &&
+      item.location.actorId === actorId,
+  );
+}
+
+function actorLockpicks(
+  run: ActiveRun,
+  content: CompiledContentPack,
+  actorId: OpaqueId,
+): readonly ItemInstance[] {
+  return heldByActor(run, actorId)
+    .filter((item) => itemTags(content, item.contentId).includes('lockpick'))
+    .sort((left, right) => compareCodeUnits(left.itemId, right.itemId));
+}
+
+function actorHoldsKey(run: ActiveRun, actorId: OpaqueId, keyContentId: string | null): boolean {
+  if (keyContentId === null) return false;
+  return heldByActor(run, actorId).some((item) => item.contentId === keyContentId);
+}
+
+function unlockedDoor(door: DoorFeature): DoorFeature {
+  // A `closed` door must not carry a `lock` record: the save schema enforces the lock is
+  // present if and only if the door is `locked`, so the payload is dropped on unlock.
+  return {
+    featureId: door.featureId,
+    floorId: door.floorId,
+    x: door.x,
+    y: door.y,
+    contentId: door.contentId,
+    coverTileId: door.coverTileId,
+    type: 'door',
+    state: 'closed',
+  };
+}
+
+function openedChest(chest: ChestFeature, state: 'looted' | 'jammed'): ChestFeature {
+  // A `looted`/`jammed` chest holds no live lock or loot pointer, matching the save-schema
+  // cross-validation that forbids either on a terminal chest.
+  return {
+    featureId: chest.featureId,
+    floorId: chest.floorId,
+    x: chest.x,
+    y: chest.y,
+    contentId: chest.contentId,
+    coverTileId: chest.coverTileId,
+    type: 'chest',
+    state,
+    lock: null,
+    lootTableId: null,
+    lootContentId: null,
+  };
+}
+
+function materialiseChestLoot(
+  run: ActiveRun,
+  content: CompiledContentPack,
+  chest: ChestFeature,
+): Readonly<{ run: ActiveRun; created: readonly ItemInstance[] }> {
+  const itemIdPrefix = `item.chest.${chest.featureId}`;
+  let lootState = run.rng.loot;
+  let created: readonly ItemInstance[] = [];
+  if (chest.lootTableId !== null) {
+    const loot = createFloorLootFromTable({
+      content,
+      tableId: chest.lootTableId,
+      state: run.rng.loot,
+      itemIdPrefix,
+      floorId: chest.floorId,
+      x: chest.x,
+      y: chest.y,
+    });
+    lootState = loot.state;
+    created = loot.items;
+  } else if (chest.lootContentId !== null) {
+    created = [
+      createFloorItem({
+        content,
+        contentId: chest.lootContentId,
+        itemId: itemIdPrefix,
+        floorId: chest.floorId,
+        x: chest.x,
+        y: chest.y,
+      }),
+    ];
+  }
+  for (const item of created)
+    if (run.items.some((entry) => entry.itemId === item.itemId))
+      throw new Error(`internal invariant: chest loot item ${item.itemId} already exists`);
+  const items =
+    created.length === 0
+      ? run.items
+      : [...run.items, ...created].sort((left, right) =>
+          compareCodeUnits(left.itemId, right.itemId),
+        );
+  return {
+    run: { ...run, items, rng: { ...run.rng, loot: lootState } },
+    created,
+  };
+}
+
+export function pickLock(
+  input: Readonly<{
+    run: ActiveRun;
+    content: CompiledContentPack;
+    actorId: OpaqueId;
+    featureId: OpaqueId;
+    eventId: OpaqueId;
+  }>,
+): Readonly<{ run: ActiveRun; events: readonly DomainEvent[] }> {
+  const { run, content, eventId } = input;
+  const actor = actorById(run, input.actorId);
+  const feature = run.features.find((candidate) => candidate.featureId === input.featureId);
+  if (
+    !actor ||
+    !feature ||
+    (feature.type !== 'door' && feature.type !== 'chest') ||
+    feature.state !== 'locked' ||
+    feature.floorId !== actor.floorId ||
+    Math.max(Math.abs(feature.x - actor.x), Math.abs(feature.y - actor.y)) !== 1
+  )
+    throw new Error('lock is unavailable');
+  const lock = feature.lock;
+  if (!lock) throw new Error('internal invariant: locked feature has no lock data');
+
+  if (feature.type === 'door' && actorHoldsKey(run, actor.actorId, lock.keyContentId)) {
+    return {
+      run: replaceFeature(run, unlockedDoor(feature)),
+      events: [
+        { type: 'door.unlocked', eventId, actorId: actor.actorId, featureId: feature.featureId },
+      ],
+    };
+  }
+
+  const balance = content.entries.find((entry) => entry.kind === 'balance')!;
+  // Uses `deriveActorStats` directly, NOT `deriveRunActorStats`: the latter folds in hunger,
+  // which must not shift a lock's difficulty (same nuance the trap disarm check documents).
+  const stats = deriveActorStats({
+    attributes: actor.attributes,
+    formulas: balance.formulas,
+    equipmentModifiers: equipmentModifiers({ run, content, actorId: actor.actorId }).map(
+      (source) => source.modifiers,
+    ),
+    conditionModifiers: conditionModifiers(actor, content),
+    heroModifiers: actor.actorId === run.hero.actorId ? [run.hero.statModifiers] : [],
+  });
+  const rolled = rollDie(run.rng.effects, 20);
+  const rolledRun = withRngStream(run, 'effects', rolled.state);
+  const total = rolled.value + stats.disarm;
+
+  // A natural 1 always fails, even when the modifier would otherwise clear the difficulty,
+  // matching the trap disarm check.
+  if (rolled.value !== 1 && total >= lock.difficulty) {
+    if (feature.type === 'door') {
+      return {
+        run: replaceFeature(rolledRun, unlockedDoor(feature)),
+        events: [
+          { type: 'lock.picked', eventId, actorId: actor.actorId, featureId: feature.featureId },
+        ],
+      };
+    }
+    const looted = materialiseChestLoot(rolledRun, content, feature);
+    const events: DomainEvent[] = [
+      { type: 'lock.picked', eventId, actorId: actor.actorId, featureId: feature.featureId },
+    ];
+    if (looted.created.length > 0)
+      events.push({
+        type: 'loot.dropped',
+        eventId,
+        actorId: actor.actorId,
+        contentId: actor.contentId,
+        x: feature.x,
+        y: feature.y,
+        itemIds: looted.created.map((item) => item.itemId).sort(compareCodeUnits),
+      });
+    return { run: replaceFeature(looted.run, openedChest(feature, 'looted')), events };
+  }
+
+  if (rolled.value === 1 && feature.type === 'chest') {
+    return {
+      run: replaceFeature(rolledRun, openedChest(feature, 'jammed')),
+      events: [
+        { type: 'chest.jammed', eventId, actorId: actor.actorId, featureId: feature.featureId },
+      ],
+    };
+  }
+
+  const pick = actorLockpicks(rolledRun, content, actor.actorId)[0];
+  if (!pick) throw new Error('internal invariant: ordinary lock failure requires a lockpick');
+  const consumed = consumeItemQuantity({ run: rolledRun, itemId: pick.itemId, quantity: 1 });
+  if (!consumed.ok)
+    throw new Error(`internal invariant: lockpick consume failed with ${consumed.reason}`);
+  return {
+    run: consumed.run,
+    events: [
+      { type: 'item.consumed', eventId, actorId: actor.actorId, itemId: pick.itemId, quantity: 1 },
+      { type: 'lock.pick-failed', eventId, actorId: actor.actorId, featureId: feature.featureId },
+    ],
+  };
+}
+
 export function projectFeature(
   feature: DungeonFeature,
   actorId: OpaqueId,
 ): Readonly<Record<string, unknown>> | undefined {
-  if (feature.type === 'door')
+  if (feature.type === 'door' || feature.type === 'chest')
     return {
       featureId: feature.featureId,
       type: feature.type,

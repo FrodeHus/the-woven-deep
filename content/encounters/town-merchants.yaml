@@ -22,7 +22,7 @@ entries:
       maximumStockRolls: 1
       merchantSaleBps: 12000
       merchantPurchaseBps: 6000
-      acceptedCategories: [food, fuel, light]
+      acceptedCategories: [food, fuel, light, misc]
       services:
         - { serviceId: merchant-service.strongbox, basePrice: 45, minimumUses: 1, maximumUses: 1, tierIds: [neutral, refused, trusted, wary] }
       permanent: true

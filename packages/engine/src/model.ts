@@ -72,7 +72,7 @@ export interface VaultPlacement {
 export interface FloorPlacementSlot {
   readonly slotId: OpaqueId;
   readonly vaultPlacementId: OpaqueId;
-  readonly kind: 'monster' | 'item' | 'trap' | 'npc' | 'fixture' | 'objective';
+  readonly kind: 'monster' | 'item' | 'trap' | 'npc' | 'fixture' | 'objective' | 'door' | 'chest';
   readonly required: boolean;
   readonly tags: readonly string[];
   readonly x: number;

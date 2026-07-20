@@ -1,0 +1,20 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.iron-key
+    name: Tarnished iron key
+    glyph: "k"
+    color: "#8c7853"
+    tags: [key]
+    minDepth: 1
+    maxDepth: 20
+    category: misc
+    stackLimit: 1
+    price: 1
+    rarity: common
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []
