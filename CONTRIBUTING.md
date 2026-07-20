@@ -45,7 +45,7 @@ Most of these rules are not abstract: they were earned. A 2026 code review of th
   - `npm run format` / `npm run format:check` — Prettier. Formatting is not a review topic; let the tool decide. CSS is excluded (hand-authored, and glyph tests pin its source).
   - `npm run knip` — dead files, exports, and dependencies. Keep it at zero; delete dead code rather than exporting it "just in case".
   - `npm run depcruise` — forbids runtime import cycles (type-only cycles are allowed) and enforces the layer boundaries (engine ⇏ apps, content ⇏ engine/apps, `model` ⇏ `compiler`, server ⇏ web). The 13 pre-existing runtime cycles are baselined in `.dependency-cruiser-known-violations.json`; do not add new ones, and prefer removing baselined ones (see the burn-down issue).
-  - `npm run verify` runs the whole chain (typecheck → lint → format:check → depcruise → knip → test) — the one command that stands in for the full gate.
+  - `npm run verify` runs the whole chain (typecheck → lint → format:check → depcruise → knip → test) — the one command that stands in for the full gate. **CI runs `npm run verify` plus the demo-hash replays on every push and PR to `main`** (`.github/workflows/ci.yml`), so a red gate blocks merge; run it locally first.
 
 ---
 

@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify (typecheck, lint, format, depcruise, knip, tests)
+        run: npm run verify
+      - name: Determinism (demo hash replays)
+        run: |
+          npm run dungeon:demo
+          npm run gameplay:demo
+          npm run merchant:demo
+          npm run population:demo
+          npm run run-records:demo
+          npm run engine:demo
