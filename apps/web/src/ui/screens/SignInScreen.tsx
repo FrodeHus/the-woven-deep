@@ -53,8 +53,12 @@ export function SignInScreen({ fetcher = fetch, onBack }: SignInScreenProps): JS
   if (submitted) {
     return (
       <section aria-label="Sign in" className="mx-auto flex max-w-md flex-col gap-3 p-6">
-        <p role="status" className="text-sm text-fg">{CONFIRMATION_MESSAGE}</p>
-        <Button type="button" variant="outline" className="self-start" onClick={onBack}>Back to title</Button>
+        <p role="status" className="text-sm text-fg">
+          {CONFIRMATION_MESSAGE}
+        </p>
+        <Button type="button" variant="outline" className="self-start" onClick={onBack}>
+          Back to title
+        </Button>
       </section>
     );
   }
@@ -62,7 +66,12 @@ export function SignInScreen({ fetcher = fetch, onBack }: SignInScreenProps): JS
   return (
     <section aria-label="Sign in" className="mx-auto flex max-w-md flex-col gap-3 p-6">
       <h1 className="font-serif text-2xl text-accent-strong">Sign in with email</h1>
-      <form className="flex flex-col gap-3" onSubmit={(event) => { void handleSubmit(event); }}>
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(event) => {
+          void handleSubmit(event);
+        }}
+      >
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="signin-email">Email</Label>
           <Input
@@ -74,9 +83,13 @@ export function SignInScreen({ fetcher = fetch, onBack }: SignInScreenProps): JS
             autoFocus
           />
         </div>
-        <Button type="submit" className="self-start">Send sign-in link</Button>
+        <Button type="submit" className="self-start">
+          Send sign-in link
+        </Button>
       </form>
-      <Button type="button" variant="outline" className="self-start" onClick={onBack}>Back</Button>
+      <Button type="button" variant="outline" className="self-start" onClick={onBack}>
+        Back
+      </Button>
     </section>
   );
 }

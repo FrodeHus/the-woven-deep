@@ -1,14 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionStorageLike } from '../src/session/storage.js';
 import {
-  ACTION_IDS, bindingConflict, chordKey, chordReserved, DEFAULT_BINDINGS, DEFAULT_SETTINGS,
-  loadSettings, resolveKeymap, saveSettings, SETTINGS_KEY, type ActionId, type KeyChord, type Settings,
+  ACTION_IDS,
+  bindingConflict,
+  chordKey,
+  chordReserved,
+  DEFAULT_BINDINGS,
+  DEFAULT_SETTINGS,
+  loadSettings,
+  resolveKeymap,
+  saveSettings,
+  SETTINGS_KEY,
+  type ActionId,
+  type KeyChord,
+  type Settings,
 } from '../src/session/settings.js';
 
 /** An in-memory `SessionStorageLike` fake, mirroring the pattern used for `GuestSession`'s
  * storage-seam tests: no DOM, and `throwOnSet` lets a test force `saveSettings`'s write path to
  * fail so the failure-classification branch is exercised. */
-function fakeStorage(initial: Readonly<Record<string, string>> = {}, throwOnSet: Error | null = null): SessionStorageLike {
+function fakeStorage(
+  initial: Readonly<Record<string, string>> = {},
+  throwOnSet: Error | null = null,
+): SessionStorageLike {
   const store = new Map<string, string>(Object.entries(initial));
   return {
     get(key) {
@@ -34,7 +48,21 @@ describe('DEFAULT_BINDINGS', () => {
   });
 
   it('does not collide with the hardwired arrow/numpad/Escape keys or the new overlay keys', () => {
-    const reserved = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', '1', '2', '3', '4', '6', '7', '8', '9', 'Escape'];
+    const reserved = [
+      'ArrowUp',
+      'ArrowDown',
+      'ArrowLeft',
+      'ArrowRight',
+      '1',
+      '2',
+      '3',
+      '4',
+      '6',
+      '7',
+      '8',
+      '9',
+      'Escape',
+    ];
     const boundChords = new Set(ACTION_IDS.map((action) => chordKey(DEFAULT_BINDINGS[action])));
     for (const key of reserved) {
       expect(boundChords.has(key)).toBe(false);
@@ -89,7 +117,20 @@ describe('bindingConflict', () => {
 
 describe('chordReserved', () => {
   it('reports true for every hardwired arrow/numpad key routeKey resolves before the keymap', () => {
-    const reserved = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', '1', '2', '3', '4', '6', '7', '8', '9'];
+    const reserved = [
+      'ArrowUp',
+      'ArrowDown',
+      'ArrowLeft',
+      'ArrowRight',
+      '1',
+      '2',
+      '3',
+      '4',
+      '6',
+      '7',
+      '8',
+      '9',
+    ];
     for (const key of reserved) {
       expect(chordReserved({ key, shift: false })).toBe(true);
     }
@@ -130,7 +171,11 @@ describe('loadSettings / saveSettings round-trip', () => {
   it('falls back to "on" for an invalid stored onboarding value, without marking corrupted', () => {
     const storage = fakeStorage({
       [SETTINGS_KEY]: JSON.stringify({
-        fontScale: 1, reducedMotion: 'system', theme: 'tapestry', onboarding: 'nonsense', bindings: {},
+        fontScale: 1,
+        reducedMotion: 'system',
+        theme: 'tapestry',
+        onboarding: 'nonsense',
+        bindings: {},
       }),
     });
     const result = loadSettings(storage);
@@ -141,7 +186,10 @@ describe('loadSettings / saveSettings round-trip', () => {
   it('forward-tolerates a stored blob with no onboarding field at all (pre-Task-8 blob), defaulting to "on"', () => {
     const storage = fakeStorage({
       [SETTINGS_KEY]: JSON.stringify({
-        fontScale: 1, reducedMotion: 'system', theme: 'tapestry', bindings: {},
+        fontScale: 1,
+        reducedMotion: 'system',
+        theme: 'tapestry',
+        bindings: {},
       }),
     });
     const result = loadSettings(storage);
@@ -162,7 +210,12 @@ describe('loadSettings / saveSettings round-trip', () => {
 
   it('falls back to "tapestry" for an invalid stored theme value, without marking corrupted', () => {
     const storage = fakeStorage({
-      [SETTINGS_KEY]: JSON.stringify({ fontScale: 1, reducedMotion: 'system', theme: 'nonsense', bindings: {} }),
+      [SETTINGS_KEY]: JSON.stringify({
+        fontScale: 1,
+        reducedMotion: 'system',
+        theme: 'nonsense',
+        bindings: {},
+      }),
     });
     const result = loadSettings(storage);
     expect(result.corrupted).toBe(false);
@@ -183,7 +236,7 @@ describe('loadSettings / saveSettings round-trip', () => {
     expect(saveSettings(storage, DEFAULT_SETTINGS)).toEqual({ ok: false, reason: 'unavailable' });
   });
 
-  it('saveSettings rejects bindings colliding with another action\'s default, writing nothing', () => {
+  it("saveSettings rejects bindings colliding with another action's default, writing nothing", () => {
     const storage = fakeStorage();
     const settings: Settings = {
       ...DEFAULT_SETTINGS,
@@ -219,12 +272,20 @@ describe('loadSettings / saveSettings round-trip', () => {
 
   it('treats a corrupted (non-JSON) blob as DEFAULT_SETTINGS with corrupted: true', () => {
     const storage = fakeStorage({ [SETTINGS_KEY]: 'not json{{{' });
-    expect(loadSettings(storage)).toEqual({ settings: DEFAULT_SETTINGS, corrupted: true, droppedOverrides: [] });
+    expect(loadSettings(storage)).toEqual({
+      settings: DEFAULT_SETTINGS,
+      corrupted: true,
+      droppedOverrides: [],
+    });
   });
 
   it('treats a JSON value that is not an object (e.g. an array or a string) as corrupted', () => {
     const storage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify([1, 2, 3]) });
-    expect(loadSettings(storage)).toEqual({ settings: DEFAULT_SETTINGS, corrupted: true, droppedOverrides: [] });
+    expect(loadSettings(storage)).toEqual({
+      settings: DEFAULT_SETTINGS,
+      corrupted: true,
+      droppedOverrides: [],
+    });
   });
 
   it('drops unknown top-level and bindings fields (forward tolerance), without marking corrupted', () => {
@@ -232,7 +293,10 @@ describe('loadSettings / saveSettings round-trip', () => {
       [SETTINGS_KEY]: JSON.stringify({
         fontScale: 1.15,
         reducedMotion: 'off',
-        bindings: { wait: { key: 'z', shift: false }, 'not-a-real-action': { key: 'q', shift: false } },
+        bindings: {
+          wait: { key: 'z', shift: false },
+          'not-a-real-action': { key: 'q', shift: false },
+        },
         futureField: 'ignored',
       }),
     });
@@ -272,7 +336,7 @@ describe('loadSettings / saveSettings round-trip', () => {
     expect(result.settings.bindings).toEqual({});
   });
 
-  it('drops a stored override that collides with another action\'s default, reporting it in droppedOverrides', () => {
+  it("drops a stored override that collides with another action's default, reporting it in droppedOverrides", () => {
     const storage = fakeStorage({
       [SETTINGS_KEY]: JSON.stringify({
         fontScale: 1,

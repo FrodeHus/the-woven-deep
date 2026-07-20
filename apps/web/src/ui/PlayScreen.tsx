@@ -12,7 +12,14 @@ import { HintStrip } from './HintStrip.js';
 import type { OverlayActionId } from './KeyRouter.js';
 import { activeHint, HINTS } from '../session/onboarding.js';
 import { viewportForPane, type LayoutTier } from './layout.js';
-import { HeroPanel, HeroStatusAnnouncer, LogPanel, MinimapPanel, StatusBar, ThreatPanel } from './panels.js';
+import {
+  HeroPanel,
+  HeroStatusAnnouncer,
+  LogPanel,
+  MinimapPanel,
+  StatusBar,
+  ThreatPanel,
+} from './panels.js';
 import type { OverlayId } from './overlays/registry.js';
 import { DecisionPrompt } from './overlays/DecisionPrompt.js';
 import { OverlayHost } from './overlays/OverlayHost.js';
@@ -66,10 +73,14 @@ export interface PlayScreenProps {
  * palette) are each their own hook so this component stays layout + composition.
  */
 export function PlayScreen({
-  session, pack,
-  overlay = null, onOpenOverlay = () => {}, onCloseOverlay = () => {},
+  session,
+  pack,
+  overlay = null,
+  onOpenOverlay = () => {},
+  onCloseOverlay = () => {},
   onClearGuestSession = () => {},
-  records = [], onboardingEnabled = true,
+  records = [],
+  onboardingEnabled = true,
 }: PlayScreenProps): JSX.Element {
   const { settings, keymap } = useSettingsCtx();
   const snapshot = useGuestSession(session);
@@ -84,9 +95,8 @@ export function PlayScreen({
   const activeHintRef = useRef<string | null>(null);
   activeHintRef.current = hint?.id ?? null;
 
-  const {
-    mapPaneRef, cellProbeRef, cellProbeBaseRef, paneSize, cellSize, zoom,
-  } = usePaneMeasurement(projection.floor);
+  const { mapPaneRef, cellProbeRef, cellProbeBaseRef, paneSize, cellSize, zoom } =
+    usePaneMeasurement(projection.floor);
 
   usePlayKeyDispatcher({
     session,
@@ -104,7 +114,8 @@ export function PlayScreen({
 
   const cameraRef = useRef<Readonly<{ floorId: string; origin: CameraOrigin }> | null>(null);
   const heroPosition = heroOf(projection);
-  const previousOrigin = cameraRef.current?.floorId === projection.floor.floorId ? cameraRef.current.origin : null;
+  const previousOrigin =
+    cameraRef.current?.floorId === projection.floor.floorId ? cameraRef.current.origin : null;
   const camera = computeCamera({
     hero: heroPosition,
     sightRadius: heroPosition.sightRadius,
@@ -114,8 +125,11 @@ export function PlayScreen({
   });
   cameraRef.current = { floorId: projection.floor.floorId, origin: camera };
 
-  const isModalActive = overlay !== null || snapshot.houseOpen || projection.trade !== undefined
-    || snapshot.pendingDecision !== null;
+  const isModalActive =
+    overlay !== null ||
+    snapshot.houseOpen ||
+    projection.trade !== undefined ||
+    snapshot.pendingDecision !== null;
   const [paletteOpen, setPaletteOpen] = useCommandPaletteHotkey(isModalActive);
 
   const { hover, handlers } = useCellHover(snapshot);
@@ -125,7 +139,10 @@ export function PlayScreen({
       transitionKey={projection.floor.floorId}
       reducedMotion={effectiveReducedMotion(settings.reducedMotion)}
     >
-      <div className="flex min-h-screen flex-col gap-2 bg-deep p-2 text-fg" data-testid="play-layout">
+      <div
+        className="flex min-h-screen flex-col gap-2 bg-deep p-2 text-fg"
+        data-testid="play-layout"
+      >
         <StatusBar snapshot={snapshot} />
         <HeroStatusAnnouncer snapshot={snapshot} />
 
@@ -137,17 +154,24 @@ export function PlayScreen({
             onMouseLeave={handlers.onMouseLeave}
           >
             <div
-              className={[
-                'playfield',
-                projection.floor.town ? 'playfield-town' : '',
-              ].filter(Boolean).join(' ')}
+              className={['playfield', projection.floor.town ? 'playfield-town' : '']
+                .filter(Boolean)
+                .join(' ')}
               style={{ '--zoom': zoom } as CSSProperties}
             >
-              <span ref={cellProbeRef} className="cell cell-probe" aria-hidden="true">0</span>
-              <span ref={cellProbeBaseRef} className="cell cell-probe-base" aria-hidden="true">0</span>
+              <span ref={cellProbeRef} className="cell cell-probe" aria-hidden="true">
+                0
+              </span>
+              <span ref={cellProbeBaseRef} className="cell cell-probe-base" aria-hidden="true">
+                0
+              </span>
               <GridRenderer projection={projection} camera={camera} viewport={viewport} />
               <EffectsLayer
-                projection={projection} pack={pack} lastEvents={snapshot.lastEvents} camera={camera} viewport={viewport}
+                projection={projection}
+                pack={pack}
+                lastEvents={snapshot.lastEvents}
+                camera={camera}
+                viewport={viewport}
               />
             </div>
             {hover && (
@@ -168,7 +192,11 @@ export function PlayScreen({
           >
             <HeroPanel snapshot={snapshot} />
             <MinimapPanel snapshot={snapshot} />
-            {projection.floor.town ? <TownPanel snapshot={snapshot} keymap={keymap} /> : <ThreatPanel snapshot={snapshot} />}
+            {projection.floor.town ? (
+              <TownPanel snapshot={snapshot} keymap={keymap} />
+            ) : (
+              <ThreatPanel snapshot={snapshot} />
+            )}
           </aside>
 
           <div className="col-span-2 row-start-2 flex flex-col gap-1">

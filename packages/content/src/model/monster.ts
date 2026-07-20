@@ -1,5 +1,11 @@
 import type {
-  BaseAttributeDefinition, BehaviorId, DamageType, DiceDefinition, Disposition, ContentId, ItemRarity,
+  BaseAttributeDefinition,
+  BehaviorId,
+  DamageType,
+  DiceDefinition,
+  Disposition,
+  ContentId,
+  ItemRarity,
   PresentedContentEntry,
 } from './common.js';
 

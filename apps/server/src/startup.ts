@@ -46,11 +46,9 @@ export async function runServerStartup(input: {
     try {
       await lifecycle.shutdown();
     } catch (cleanupError) {
-      throw new AggregateError(
-        [error, cleanupError],
-        'Server startup and cleanup both failed',
-        { cause: error },
-      );
+      throw new AggregateError([error, cleanupError], 'Server startup and cleanup both failed', {
+        cause: error,
+      });
     }
     throw error;
   }

@@ -10,9 +10,25 @@ export function npcIssues(
   const issues: ContentCompileIssue[] = [];
   for (const { entry, file } of locatedEntries) {
     if (entry.kind !== 'npc') continue;
-    issues.push(...referencedKindIssue(file, `$.entries.${entry.id}.factionId`, entry.factionId, 'npc-faction', byId));
-    issues.push(...validateParameters(file, `$.entries.${entry.id}.behavior`, entry.behaviorId,
-      entry.behaviorParameters, NPC_BEHAVIOR_PARAMETER_SCHEMAS, 'NPC behavior'));
+    issues.push(
+      ...referencedKindIssue(
+        file,
+        `$.entries.${entry.id}.factionId`,
+        entry.factionId,
+        'npc-faction',
+        byId,
+      ),
+    );
+    issues.push(
+      ...validateParameters(
+        file,
+        `$.entries.${entry.id}.behavior`,
+        entry.behaviorId,
+        entry.behaviorParameters,
+        NPC_BEHAVIOR_PARAMETER_SCHEMAS,
+        'NPC behavior',
+      ),
+    );
   }
   return issues;
 }

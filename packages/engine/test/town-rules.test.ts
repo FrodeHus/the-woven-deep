@@ -3,14 +3,21 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  createNewRun, DEFAULT_GUEST_HERO, heroActor, resolveCommand,
-  type ActiveRun, type GameCommand, type ResolutionContext,
+  createNewRun,
+  DEFAULT_GUEST_HERO,
+  heroActor,
+  resolveCommand,
+  type ActiveRun,
+  type GameCommand,
+  type ResolutionContext,
 } from '../src/index.js';
 
 let pack: CompiledContentPack;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 const SEED = [7, 14, 21, 28] as const;
@@ -32,7 +39,11 @@ describe('town step contract', () => {
     const initialItems = state.items;
 
     for (let index = 0; index < 50; index += 1) {
-      const command: GameCommand = { type: 'wait', commandId: `command.town-wait-${index}`, expectedRevision: state.revision };
+      const command: GameCommand = {
+        type: 'wait',
+        commandId: `command.town-wait-${index}`,
+        expectedRevision: state.revision,
+      };
       const resolution = resolveCommand(state, command, context());
       expect(resolution.result.status).toBe('applied');
       state = resolution.state;
@@ -55,18 +66,48 @@ describe('town step contract', () => {
     const revisionBefore = state.revision;
     const turnBefore = state.turn;
     const commands: readonly GameCommand[] = [
-      { type: 'attack', commandId: 'command.town-attack', expectedRevision: state.revision, targetActorId: hero.actorId },
-      { type: 'fire', commandId: 'command.town-fire', expectedRevision: state.revision, itemId: 'item.hunting-bow', target: { x: hero.x, y: hero.y } },
-      { type: 'cast', commandId: 'command.town-cast', expectedRevision: state.revision, spellId: 'spell.ember-bolt', target: { x: hero.x, y: hero.y } },
-      { type: 'throw-item', commandId: 'command.town-throw', expectedRevision: state.revision, itemId: 'item.pitch-torch', quantity: 1, target: { x: hero.x, y: hero.y } },
+      {
+        type: 'attack',
+        commandId: 'command.town-attack',
+        expectedRevision: state.revision,
+        targetActorId: hero.actorId,
+      },
+      {
+        type: 'fire',
+        commandId: 'command.town-fire',
+        expectedRevision: state.revision,
+        itemId: 'item.hunting-bow',
+        target: { x: hero.x, y: hero.y },
+      },
+      {
+        type: 'cast',
+        commandId: 'command.town-cast',
+        expectedRevision: state.revision,
+        spellId: 'spell.ember-bolt',
+        target: { x: hero.x, y: hero.y },
+      },
+      {
+        type: 'throw-item',
+        commandId: 'command.town-throw',
+        expectedRevision: state.revision,
+        itemId: 'item.pitch-torch',
+        quantity: 1,
+        target: { x: hero.x, y: hero.y },
+      },
     ];
 
     for (const command of commands) {
       const resolution = resolveCommand(state, command, context());
       expect(resolution.result).toMatchObject({
-        status: 'invalid', reason: 'town.truce', revision: revisionBefore, turn: turnBefore,
+        status: 'invalid',
+        reason: 'town.truce',
+        revision: revisionBefore,
+        turn: turnBefore,
       });
-      expect(resolution.events.at(-1)).toMatchObject({ type: 'action.invalid', reason: 'town.truce' });
+      expect(resolution.events.at(-1)).toMatchObject({
+        type: 'action.invalid',
+        reason: 'town.truce',
+      });
       expect(resolution.state.revision).toBe(revisionBefore);
       expect(resolution.state.turn).toBe(turnBefore);
       expect(resolution.state.rng).toEqual(rngBefore);
@@ -78,11 +119,20 @@ describe('town step contract', () => {
   it('rejects rest in town with town.rest, leaving every RNG stream untouched', () => {
     const state = townRun();
     const rngBefore = state.rng;
-    const command: GameCommand = { type: 'rest', commandId: 'command.town-rest', expectedRevision: state.revision, until: 'healed', maximumDuration: 500 };
+    const command: GameCommand = {
+      type: 'rest',
+      commandId: 'command.town-rest',
+      expectedRevision: state.revision,
+      until: 'healed',
+      maximumDuration: 500,
+    };
 
     const resolution = resolveCommand(state, command, context());
     expect(resolution.result).toMatchObject({
-      status: 'invalid', reason: 'town.rest', revision: state.revision, turn: state.turn,
+      status: 'invalid',
+      reason: 'town.rest',
+      revision: state.revision,
+      turn: state.turn,
     });
     expect(resolution.events.at(-1)).toMatchObject({ type: 'action.invalid', reason: 'town.rest' });
     expect(resolution.state.rng).toEqual(rngBefore);
@@ -94,8 +144,9 @@ describe('town step contract', () => {
     // The town starts with the hero plus the three permanent shopkeepers; the town-step
     // contract's scheduler invariant depends on every one of them carrying `behaviorId: null`,
     // so none of them can ever be selected for a turn.
-    const townActors = state.actors.filter((actor) => actor.actorId !== state.hero.actorId
-      && actor.floorId === state.activeFloorId);
+    const townActors = state.actors.filter(
+      (actor) => actor.actorId !== state.hero.actorId && actor.floorId === state.activeFloorId,
+    );
     expect(townActors).toHaveLength(3);
     expect(townActors.every((actor) => actor.behaviorId === null)).toBe(true);
   });

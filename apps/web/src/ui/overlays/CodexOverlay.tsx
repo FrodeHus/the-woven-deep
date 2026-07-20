@@ -2,7 +2,11 @@ import { useState, type JSX, type ReactNode } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { StoredHallRecord } from '@woven-deep/engine';
 import {
-  deriveCodexState, sortedClassEntries, type CodexCategory as CodexCategoryData, type CodexEntry, type Sightings,
+  deriveCodexState,
+  sortedClassEntries,
+  type CodexCategory as CodexCategoryData,
+  type CodexEntry,
+  type Sightings,
 } from '../../session/codex.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/tabs.js';
@@ -11,7 +15,10 @@ import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
 const CATEGORY_ORDER: readonly CodexCategoryData['kind'][] = ['class', 'item', 'spell', 'monster'];
 
 const CATEGORY_LABEL: Readonly<Record<CodexCategoryData['kind'], string>> = {
-  class: 'Classes', item: 'Items', spell: 'Spells', monster: 'Monsters',
+  class: 'Classes',
+  item: 'Items',
+  spell: 'Spells',
+  monster: 'Monsters',
 };
 
 /** A locked class's `unlockHint`, zipped by index against the SAME `sortedClassEntries` order
@@ -20,7 +27,11 @@ const CATEGORY_LABEL: Readonly<Record<CodexCategoryData['kind'], string>> = {
  * itself a spoiler: the Calling step of chargen already discloses it, unlocked or not. `null` for
  * every OTHER category, and for a discovered class (chargen shows no hint once a class is
  * playable). */
-function unlockHintFor(pack: CompiledContentPack, category: CodexCategoryData, index: number): string | null {
+function unlockHintFor(
+  pack: CompiledContentPack,
+  category: CodexCategoryData,
+  index: number,
+): string | null {
   if (category.kind !== 'class') return null;
   const entry = category.entries[index];
   if (!entry || entry.discovered) return null;
@@ -44,7 +55,10 @@ function toListItem(entry: CodexEntry, index: number): ListDetailItem {
   };
 }
 
-function DetailPane({ entry, unlockHint }: Readonly<{ entry: CodexEntry | undefined; unlockHint: string | null }>): ReactNode {
+function DetailPane({
+  entry,
+  unlockHint,
+}: Readonly<{ entry: CodexEntry | undefined; unlockHint: string | null }>): ReactNode {
   if (!entry) return <p className="text-muted">Nothing selected.</p>;
 
   if (!entry.discovered) {
@@ -53,7 +67,9 @@ function DetailPane({ entry, unlockHint }: Readonly<{ entry: CodexEntry | undefi
         <dt className="text-muted">Name</dt>
         <dd>???</dd>
         <dt className="text-muted">Glyph</dt>
-        <dd aria-hidden="true" className="font-mono">{entry.silhouetteGlyph}</dd>
+        <dd aria-hidden="true" className="font-mono">
+          {entry.silhouetteGlyph}
+        </dd>
         {unlockHint && (
           <>
             <dt className="text-muted">Unlock</dt>
@@ -69,7 +85,9 @@ function DetailPane({ entry, unlockHint }: Readonly<{ entry: CodexEntry | undefi
       <dt className="text-muted">Name</dt>
       <dd>{entry.name}</dd>
       <dt className="text-muted">Glyph</dt>
-      <dd style={{ color: entry.color }} aria-hidden="true" className="font-mono">{entry.glyph}</dd>
+      <dd style={{ color: entry.color }} aria-hidden="true" className="font-mono">
+        {entry.glyph}
+      </dd>
       {entry.description && (
         <>
           <dt className="text-muted">Description</dt>
@@ -82,8 +100,16 @@ function DetailPane({ entry, unlockHint }: Readonly<{ entry: CodexEntry | undefi
   );
 }
 
-function CategoryPanel({ category, pack, selectedIndex, onSelect }: Readonly<{
-  category: CodexCategoryData; pack: CompiledContentPack; selectedIndex: number; onSelect: (index: number) => void;
+function CategoryPanel({
+  category,
+  pack,
+  selectedIndex,
+  onSelect,
+}: Readonly<{
+  category: CodexCategoryData;
+  pack: CompiledContentPack;
+  selectedIndex: number;
+  onSelect: (index: number) => void;
 }>): JSX.Element {
   const { entries } = category;
   return (
@@ -106,7 +132,12 @@ export interface CodexOverlayProps {
   readonly pack: CompiledContentPack;
 }
 
-const EMPTY_SELECTION: Readonly<Record<CodexCategoryData['kind'], number>> = { class: 0, item: 0, spell: 0, monster: 0 };
+const EMPTY_SELECTION: Readonly<Record<CodexCategoryData['kind'], number>> = {
+  class: 0,
+  item: 0,
+  spell: 0,
+  monster: 0,
+};
 
 /**
  * The unlock codex: one category tab per content kind (classes/items/spells/monsters, the spec's
@@ -122,7 +153,12 @@ const EMPTY_SELECTION: Readonly<Record<CodexCategoryData['kind'], number>> = { c
  * `MapJournalOverlay` established: `activateOnFocus` on `TabsList` so arrow keys switch the active
  * tab immediately. Within a panel, `ListDetail` owns list selection (ArrowUp/ArrowDown/Home/End).
  */
-export function CodexOverlay({ records, snapshot, sightings, pack }: Readonly<CodexOverlayProps>): JSX.Element {
+export function CodexOverlay({
+  records,
+  snapshot,
+  sightings,
+  pack,
+}: Readonly<CodexOverlayProps>): JSX.Element {
   const state = deriveCodexState({ records, snapshot, sightings, pack });
   // One selection cursor per category, so switching tabs never loses (or cross-contaminates) the
   // guest's place in a different category's list -- mirrors each category panel's independent
@@ -132,7 +168,11 @@ export function CodexOverlay({ records, snapshot, sightings, pack }: Readonly<Co
   return (
     <Tabs defaultValue="class" className="flex flex-col gap-3">
       <TabsList aria-label="Codex categories" activateOnFocus>
-        {CATEGORY_ORDER.map((kind) => <TabsTrigger key={kind} value={kind}>{CATEGORY_LABEL[kind]}</TabsTrigger>)}
+        {CATEGORY_ORDER.map((kind) => (
+          <TabsTrigger key={kind} value={kind}>
+            {CATEGORY_LABEL[kind]}
+          </TabsTrigger>
+        ))}
       </TabsList>
       {CATEGORY_ORDER.map((kind) => {
         const category = state.categories.find((candidate) => candidate.kind === kind)!;
@@ -147,7 +187,9 @@ export function CodexOverlay({ records, snapshot, sightings, pack }: Readonly<Co
           </TabsContent>
         );
       })}
-      <p className="text-sm text-muted">Session-only, like your Hall records — nothing here is confirmed by a server yet.</p>
+      <p className="text-sm text-muted">
+        Session-only, like your Hall records — nothing here is confirmed by a server yet.
+      </p>
     </Tabs>
   );
 }

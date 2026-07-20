@@ -1,14 +1,14 @@
-import * as React from "react"
-import { Select as SelectPrimitive } from "@base-ui/react/select"
-import { Check, ChevronDown, ChevronUp } from "lucide-react"
+import * as React from 'react';
+import { Select as SelectPrimitive } from '@base-ui/react/select';
+import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 
-import { cn } from "@/ui/lib/cn.js"
+import { cn } from '@/ui/lib/cn.js';
 
-const Select = SelectPrimitive.Root
+const Select = SelectPrimitive.Root;
 
-const SelectGroup = SelectPrimitive.Group
+const SelectGroup = SelectPrimitive.Group;
 
-const SelectValue = SelectPrimitive.Value
+const SelectValue = SelectPrimitive.Value;
 
 function SelectTrigger({
   className,
@@ -19,8 +19,8 @@ function SelectTrigger({
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        "flex h-10 w-full items-center justify-between rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg data-[placeholder]:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
-        className
+        'flex h-10 w-full items-center justify-between rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg data-[placeholder]:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
+        className,
       )}
       {...props}
     >
@@ -29,7 +29,7 @@ function SelectTrigger({
         <ChevronDown className="h-4 w-4 opacity-50" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
-  )
+  );
 }
 
 function SelectScrollUpButton({
@@ -39,12 +39,12 @@ function SelectScrollUpButton({
   return (
     <SelectPrimitive.ScrollUpArrow
       data-slot="select-scroll-up-button"
-      className={cn("flex cursor-default items-center justify-center py-1 text-fg", className)}
+      className={cn('flex cursor-default items-center justify-center py-1 text-fg', className)}
       {...props}
     >
       <ChevronUp className="h-4 w-4" />
     </SelectPrimitive.ScrollUpArrow>
-  )
+  );
 }
 
 function SelectScrollDownButton({
@@ -54,12 +54,12 @@ function SelectScrollDownButton({
   return (
     <SelectPrimitive.ScrollDownArrow
       data-slot="select-scroll-down-button"
-      className={cn("flex cursor-default items-center justify-center py-1 text-fg", className)}
+      className={cn('flex cursor-default items-center justify-center py-1 text-fg', className)}
       {...props}
     >
       <ChevronDown className="h-4 w-4" />
     </SelectPrimitive.ScrollDownArrow>
-  )
+  );
 }
 
 function SelectContent({
@@ -74,8 +74,8 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            "relative min-w-[8rem] max-h-[var(--available-height)] overflow-hidden rounded-md border border-line bg-surface text-fg shadow-md outline-none transition-[transform,opacity] data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0",
-            className
+            'relative min-w-[8rem] max-h-[var(--available-height)] overflow-hidden rounded-md border border-line bg-surface text-fg shadow-md outline-none transition-[transform,opacity] data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0',
+            className,
           )}
           {...props}
         >
@@ -87,7 +87,7 @@ function SelectContent({
         </SelectPrimitive.Popup>
       </SelectPrimitive.Positioner>
     </SelectPrimitive.Portal>
-  )
+  );
 }
 
 function SelectLabel({
@@ -97,10 +97,10 @@ function SelectLabel({
   return (
     <SelectPrimitive.GroupLabel
       data-slot="select-label"
-      className={cn("py-1.5 pl-8 pr-2 text-sm font-semibold text-fg-strong", className)}
+      className={cn('py-1.5 pl-8 pr-2 text-sm font-semibold text-fg-strong', className)}
       {...props}
     />
-  )
+  );
 }
 
 function SelectItem({
@@ -112,8 +112,8 @@ function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm text-fg outline-none data-highlighted:bg-accent data-highlighted:text-deep data-disabled:pointer-events-none data-disabled:opacity-50",
-        className
+        'relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm text-fg outline-none data-highlighted:bg-accent data-highlighted:text-deep data-disabled:pointer-events-none data-disabled:opacity-50',
+        className,
       )}
       {...props}
     >
@@ -125,7 +125,7 @@ function SelectItem({
 
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
     </SelectPrimitive.Item>
-  )
+  );
 }
 
 function SelectSeparator({
@@ -135,10 +135,10 @@ function SelectSeparator({
   return (
     <SelectPrimitive.Separator
       data-slot="select-separator"
-      className={cn("-mx-1 my-1 h-px bg-line", className)}
+      className={cn('-mx-1 my-1 h-px bg-line', className)}
       {...props}
     />
-  )
+  );
 }
 
 export {
@@ -152,4 +152,4 @@ export {
   SelectSeparator,
   SelectScrollUpButton,
   SelectScrollDownButton,
-}
+};

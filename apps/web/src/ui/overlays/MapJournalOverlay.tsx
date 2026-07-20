@@ -1,7 +1,9 @@
 import type { CSSProperties, JSX } from 'react';
 import {
-  isStairDown, isStairUp,
-  type ObservableFloorProjection, type ObservablePlacementSlot,
+  isStairDown,
+  isStairUp,
+  type ObservableFloorProjection,
+  type ObservablePlacementSlot,
 } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import { actorsOf, heroOf, type ActorView, type HeroView } from '../../session/projection-view.js';
@@ -47,7 +49,11 @@ const MAP_CELL_STYLE = { width: 'var(--map-cell)', height: 'var(--map-cell)' } a
  * the brief -- so a future reader diffing this against `GridRenderer` (which does layer ground
  * items) should read that as intentional scope, not an oversight.
  */
-function MapPane({ floor, hero, actors }: Readonly<{
+function MapPane({
+  floor,
+  hero,
+  actors,
+}: Readonly<{
   floor: ObservableFloorProjection;
   hero: HeroView;
   actors: readonly ActorView[];
@@ -60,16 +66,30 @@ function MapPane({ floor, hero, actors }: Readonly<{
         role="grid"
         aria-label="Floor map"
         className="grid font-mono leading-none"
-        style={{ gridTemplateColumns: `repeat(${floor.width}, var(--map-cell))`, gridAutoRows: 'var(--map-cell)', fontSize: 'var(--map-cell)' }}
+        style={{
+          gridTemplateColumns: `repeat(${floor.width}, var(--map-cell))`,
+          gridAutoRows: 'var(--map-cell)',
+          fontSize: 'var(--map-cell)',
+        }}
       >
         {floor.cells.map((cell) => {
           if (cell.knowledge === 'unknown') {
-            return <span key={cell.index} className="block text-center text-transparent" style={MAP_CELL_STYLE} />;
+            return (
+              <span
+                key={cell.index}
+                className="block text-center text-transparent"
+                style={MAP_CELL_STYLE}
+              />
+            );
           }
 
           if (cell.knowledge === 'remembered') {
             return (
-              <span key={cell.index} className="block text-center text-subtle opacity-55 saturate-50" style={MAP_CELL_STYLE}>
+              <span
+                key={cell.index}
+                className="block text-center text-subtle opacity-55 saturate-50"
+                style={MAP_CELL_STYLE}
+              >
                 {cell.glyph ?? ''}
               </span>
             );
@@ -78,7 +98,10 @@ function MapPane({ floor, hero, actors }: Readonly<{
           const isHero = cell.x === hero.x && cell.y === hero.y;
           const actor = actorsByCell.get(`${cell.x},${cell.y}`);
           const glyph = isHero ? '@' : (actor?.glyph ?? cell.fixture?.glyph ?? cell.glyph ?? '');
-          const style: CellCustomProperties = { ...MAP_CELL_STYLE, '--light': String(cell.intensity / 255) };
+          const style: CellCustomProperties = {
+            ...MAP_CELL_STYLE,
+            '--light': String(cell.intensity / 255),
+          };
           if (cell.tint) style['--fg'] = visibleForeground(cell.tint, cell.intensity);
 
           return (
@@ -130,13 +153,29 @@ interface Landmark {
  *   the same floor: town always has slots (never actors duplicating the same three merchants
  *   in this list), a dungeon floor never has slots at all.
  */
-function landmarksFor(floor: ObservableFloorProjection, actors: readonly ActorView[], slots: readonly ObservablePlacementSlot[]): readonly Landmark[] {
+function landmarksFor(
+  floor: ObservableFloorProjection,
+  actors: readonly ActorView[],
+  slots: readonly ObservablePlacementSlot[],
+): readonly Landmark[] {
   const landmarks: Landmark[] = [];
 
-  const stairUpCell = floor.cells.find((cell) => cell.knowledge !== 'unknown' && isStairUp(cell.tileId));
-  if (stairUpCell) landmarks.push({ key: `stair-up:${stairUpCell.x}:${stairUpCell.y}`, label: 'Stairs up (seen)' });
-  const stairDownCell = floor.cells.find((cell) => cell.knowledge !== 'unknown' && isStairDown(cell.tileId));
-  if (stairDownCell) landmarks.push({ key: `stair-down:${stairDownCell.x}:${stairDownCell.y}`, label: 'Stairs down (seen)' });
+  const stairUpCell = floor.cells.find(
+    (cell) => cell.knowledge !== 'unknown' && isStairUp(cell.tileId),
+  );
+  if (stairUpCell)
+    landmarks.push({
+      key: `stair-up:${stairUpCell.x}:${stairUpCell.y}`,
+      label: 'Stairs up (seen)',
+    });
+  const stairDownCell = floor.cells.find(
+    (cell) => cell.knowledge !== 'unknown' && isStairDown(cell.tileId),
+  );
+  if (stairDownCell)
+    landmarks.push({
+      key: `stair-down:${stairDownCell.x}:${stairDownCell.y}`,
+      label: 'Stairs down (seen)',
+    });
 
   if (floor.town) {
     for (const slot of slots) {
@@ -149,7 +188,8 @@ function landmarksFor(floor: ObservableFloorProjection, actors: readonly ActorVi
         // `curios`) -- see `content/vaults/town.yaml`'s merchant slot tags.
         const trade = slot.tags.find((tag) => tag !== 'town' && tag !== 'merchant') ?? 'merchant';
         landmarks.push({
-          key: `merchant:${slot.x}:${slot.y}`, label: `${trade.charAt(0).toUpperCase()}${trade.slice(1)} (met)`,
+          key: `merchant:${slot.x}:${slot.y}`,
+          label: `${trade.charAt(0).toUpperCase()}${trade.slice(1)} (met)`,
         });
       }
     }
@@ -159,7 +199,11 @@ function landmarksFor(floor: ObservableFloorProjection, actors: readonly ActorVi
   for (const actor of actors) {
     if (typeof actor.factionName !== 'string') continue;
     const name = actor.name ?? actor.factionName;
-    landmarks.push({ key: `merchant:${actor.x}:${actor.y}`, label: `${name} (met)`, merchantName: name });
+    landmarks.push({
+      key: `merchant:${actor.x}:${actor.y}`,
+      label: `${name} (met)`,
+      merchantName: name,
+    });
   }
   return landmarks;
 }
@@ -175,7 +219,9 @@ interface PersistedLandmark {
   readonly y: number;
 }
 
-const PERSISTED_LANDMARK_LABEL: Readonly<Record<PersistedLandmark['kind'], (name: string) => string>> = {
+const PERSISTED_LANDMARK_LABEL: Readonly<
+  Record<PersistedLandmark['kind'], (name: string) => string>
+> = {
   'stair-up': () => 'Stairs up (seen)',
   'stair-down': () => 'Stairs down (seen)',
   house: () => 'The house',
@@ -187,7 +233,10 @@ const PERSISTED_LANDMARK_LABEL: Readonly<Record<PersistedLandmark['kind'], (name
  * storage for when Milestone 6's cross-run codex wants it) into the same `Landmark` row shape
  * `landmarksFor` produces, using the identical `${kind}:${x}:${y}` key so `mergeLandmarks` can tell
  * a persisted row apart from its still-live twin. */
-function persistedLandmarksFor(floorId: string, persisted: readonly PersistedLandmark[]): readonly Landmark[] {
+function persistedLandmarksFor(
+  floorId: string,
+  persisted: readonly PersistedLandmark[],
+): readonly Landmark[] {
   return persisted
     .filter((landmark) => landmark.floorId === floorId)
     .map((landmark) => ({
@@ -209,14 +258,19 @@ function persistedLandmarksFor(floorId: string, persisted: readonly PersistedLan
  * they never move, so position IS their identity, and this pass only ever touches entries carrying
  * `merchantName` (town's slot-derived merchant landmarks never set it, so town's already-safe
  * position dedup is untouched). */
-function mergeLandmarks(live: readonly Landmark[], persisted: readonly Landmark[]): readonly Landmark[] {
+function mergeLandmarks(
+  live: readonly Landmark[],
+  persisted: readonly Landmark[],
+): readonly Landmark[] {
   const byKey = new Map<string, Landmark>();
   for (const landmark of live) byKey.set(landmark.key, landmark);
   for (const landmark of persisted) if (!byKey.has(landmark.key)) byKey.set(landmark.key, landmark);
 
   const liveKeys = new Set(live.map((landmark) => landmark.key));
   const liveMerchantNames = new Set(
-    live.flatMap((landmark) => (landmark.merchantName !== undefined ? [landmark.merchantName] : [])),
+    live.flatMap((landmark) =>
+      landmark.merchantName !== undefined ? [landmark.merchantName] : [],
+    ),
   );
 
   return [...byKey.values()].filter((landmark) => {
@@ -255,25 +309,39 @@ function JournalPane({ snapshot }: Readonly<{ snapshot: SessionSnapshot }>): JSX
       <p className="italic text-accent">{JOURNAL_OBJECTIVE}</p>
 
       <section aria-labelledby="journal-landmarks-heading" className="flex flex-col gap-2">
-        <h3 id="journal-landmarks-heading" className="font-serif text-sm text-fg-strong">Landmarks</h3>
-        {landmarks.length === 0
-          ? <p className="text-sm text-muted">Nothing landmark-worthy seen yet.</p>
-          : (
-            <ul className="flex list-none flex-col gap-1 p-0 text-sm" aria-label="Landmarks">
-              {landmarks.map((landmark) => <li key={landmark.key}>{landmark.label}</li>)}
-            </ul>
-          )}
+        <h3 id="journal-landmarks-heading" className="font-serif text-sm text-fg-strong">
+          Landmarks
+        </h3>
+        {landmarks.length === 0 ? (
+          <p className="text-sm text-muted">Nothing landmark-worthy seen yet.</p>
+        ) : (
+          <ul className="flex list-none flex-col gap-1 p-0 text-sm" aria-label="Landmarks">
+            {landmarks.map((landmark) => (
+              <li key={landmark.key}>{landmark.label}</li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section aria-labelledby="journal-log-heading" className="flex flex-col gap-2">
-        <h3 id="journal-log-heading" className="font-serif text-sm text-fg-strong">Adventure log</h3>
+        <h3 id="journal-log-heading" className="font-serif text-sm text-fg-strong">
+          Adventure log
+        </h3>
         {/* The FULL retained log history (up to `LOG_CAPACITY` = 200 lines), not the 8-line
             conclusion tail `App.tsx` shows on the run-ending screen -- `snapshot.log` is the same
             array either consumer reads, this one just never slices it. Newest last, matching the
             order `foldEventsIntoLog` already appends in (oldest first). */}
-        <ul className="flex max-h-[40vh] list-none flex-col gap-0.5 overflow-auto p-0 text-sm" aria-label="Adventure log">
+        <ul
+          className="flex max-h-[40vh] list-none flex-col gap-0.5 overflow-auto p-0 text-sm"
+          aria-label="Adventure log"
+        >
           {snapshot.log.map((line) => (
-            <li key={line.id} className={cn(LOG_TONE_CLASS[line.tone], LOG_REINFORCEMENT_CLASS[line.tone])}>{line.text}</li>
+            <li
+              key={line.id}
+              className={cn(LOG_TONE_CLASS[line.tone], LOG_REINFORCEMENT_CLASS[line.tone])}
+            >
+              {line.text}
+            </li>
           ))}
         </ul>
       </section>

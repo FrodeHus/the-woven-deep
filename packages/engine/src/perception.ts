@@ -37,7 +37,9 @@ export interface RefreshedPerception {
 }
 
 export function isPerceivedCell(
-  visibilityWords: readonly number[], illumination: Readonly<{ intensity: readonly number[] }>, index: number,
+  visibilityWords: readonly number[],
+  illumination: Readonly<{ intensity: readonly number[] }>,
+  index: number,
 ): boolean {
   return isVisible(visibilityWords, index) && (illumination.intensity[index] ?? 0) > 0;
 }

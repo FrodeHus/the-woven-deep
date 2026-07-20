@@ -15,7 +15,9 @@ import { CodexOverlay } from './CodexOverlay.js';
 let pack: CompiledContentPack;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../../../content'),
+  });
 });
 
 const EMPTY_SIGHTINGS: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
@@ -32,9 +34,17 @@ function record(overrides: Partial<StoredHallRecord> = {}): StoredHallRecord {
     metrics: emptyRunMetrics(),
     reputations: [],
     heirloom: {
-      contentId: 'item.iron-sword', sourceItemId: null, enchantment: null, condition: 100,
-      charges: null, fuel: null, qualityRank: 1, displayName: "Ada's Iron Sword",
-      glyph: ')', color: '#d8d8d8', originatingHallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+      contentId: 'item.iron-sword',
+      sourceItemId: null,
+      enchantment: null,
+      condition: 100,
+      charges: null,
+      fuel: null,
+      qualityRank: 1,
+      displayName: "Ada's Iron Sword",
+      glyph: ')',
+      color: '#d8d8d8',
+      originatingHallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
     },
     build: {
       attributes: { might: 14, agility: 12, vitality: 16, wits: 10, resolve: 12 },
@@ -52,7 +62,9 @@ function record(overrides: Partial<StoredHallRecord> = {}): StoredHallRecord {
  * `UiProviders` with NO `session` prop (so `usePack`-only context is available, mirroring the
  * title screen where `useSessionCtx()` is null) and `sightings`/`records`/`snapshot`/`pack` handed
  * in as the SAME resolved props `OverlayHost.tsx`'s `renderBody` codex case passes. */
-function renderCodex(props: Readonly<{ records: readonly StoredHallRecord[]; sightings?: Sightings }>) {
+function renderCodex(
+  props: Readonly<{ records: readonly StoredHallRecord[]; sightings?: Sightings }>,
+) {
   return render(
     <UiProviders pack={pack} settings={DEFAULT_SETTINGS} onChangeSettings={() => {}}>
       <CodexOverlay
@@ -87,7 +99,7 @@ describe('CodexOverlay', () => {
     expect(screen.getByRole('tab', { name: 'Spells' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('shows a discovered monster\'s name and glyph in the list and detail pane', async () => {
+  it("shows a discovered monster's name and glyph in the list and detail pane", async () => {
     const user = userEvent.setup();
     renderCodex({ records: [record()] });
 
@@ -130,12 +142,14 @@ describe('CodexOverlay', () => {
     for (const option of options) expect(option).toHaveTextContent('???');
   });
 
-  it('shows a locked class\'s unlockHint in the detail pane, per the chargen convention', async () => {
+  it("shows a locked class's unlockHint in the detail pane, per the chargen convention", async () => {
     const user = userEvent.setup();
     renderCodex({ records: [] });
     // Class tab is the default; select the Archivist row (a known-locked class).
     const list = screen.getByRole('listbox', { name: 'Classes' });
-    const archivistOption = within(list).getAllByRole('option').find((option) => option.textContent?.includes('A'));
+    const archivistOption = within(list)
+      .getAllByRole('option')
+      .find((option) => option.textContent?.includes('A'));
     expect(archivistOption).toBeDefined();
     await user.click(archivistOption!);
     expect(screen.getByText(/Read three lore fragments/)).toBeInTheDocument();

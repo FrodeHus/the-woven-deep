@@ -1,14 +1,28 @@
 import type {
-  AchievementContentEntry, AchievementCriteriaId, CompiledContentPack, EncounterContentEntry,
+  AchievementContentEntry,
+  AchievementCriteriaId,
+  CompiledContentPack,
+  EncounterContentEntry,
   FallenChampionTemplateContentEntry,
 } from '@woven-deep/content';
 import { heroActor } from './actor-model.js';
-import type { AchievementGrantedEvent, ActiveRun, DomainEvent, OpaqueId, RunFinalizedEvent } from './model.js';
+import type {
+  AchievementGrantedEvent,
+  ActiveRun,
+  DomainEvent,
+  OpaqueId,
+  RunFinalizedEvent,
+} from './model.js';
 import { evaluateDiscoveryProtection } from './population-gates.js';
 import type { FallenHeroRunDecision } from './population-model.js';
 import {
-  deriveHallRecordId, encodeRunSeed,
-  type AchievementGrant, type FallenHeroBuildSnapshot, type HallRecord, type LifetimeDeltas, type LifetimeState,
+  deriveHallRecordId,
+  encodeRunSeed,
+  type AchievementGrant,
+  type FallenHeroBuildSnapshot,
+  type HallRecord,
+  type LifetimeDeltas,
+  type LifetimeState,
 } from './run-records-model.js';
 import { scoreRun } from './score-run.js';
 import { selectHeirloom } from './heirloom-selection.js';
@@ -16,8 +30,11 @@ import { compareCodeUnits } from './stable-json.js';
 
 function fallenChampionTemplate(content: CompiledContentPack): FallenChampionTemplateContentEntry {
   const template = content.entries.find(
-    (entry): entry is FallenChampionTemplateContentEntry => entry.kind === 'fallen-champion-template');
-  if (!template) throw new Error('internal invariant: content pack is missing a fallen-champion-template entry');
+    (entry): entry is FallenChampionTemplateContentEntry =>
+      entry.kind === 'fallen-champion-template',
+  );
+  if (!template)
+    throw new Error('internal invariant: content pack is missing a fallen-champion-template entry');
   return template;
 }
 
@@ -33,31 +50,54 @@ function buildSnapshot(run: ActiveRun): FallenHeroBuildSnapshot {
   };
 }
 
-function isFirstDefeat(decision: FallenHeroRunDecision, role: FallenHeroRunDecision['role'],
-  lifetime: LifetimeState): boolean {
-  return decision.role === role && decision.retained && decision.defeated
-    && (role !== 'champion' || !lifetime.conqueredChampionRecordIds.includes(decision.hallRecordId));
+function isFirstDefeat(
+  decision: FallenHeroRunDecision,
+  role: FallenHeroRunDecision['role'],
+  lifetime: LifetimeState,
+): boolean {
+  return (
+    decision.role === role &&
+    decision.retained &&
+    decision.defeated &&
+    (role !== 'champion' || !lifetime.conqueredChampionRecordIds.includes(decision.hallRecordId))
+  );
 }
 
-function achievementGrants(input: Readonly<{
-  decisions: readonly FallenHeroRunDecision[];
-  lifetime: LifetimeState;
-  content: CompiledContentPack;
-}>): readonly AchievementGrant[] {
+function achievementGrants(
+  input: Readonly<{
+    decisions: readonly FallenHeroRunDecision[];
+    lifetime: LifetimeState;
+    content: CompiledContentPack;
+  }>,
+): readonly AchievementGrant[] {
   const { decisions, lifetime, content } = input;
   const earnedCriteria: readonly AchievementCriteriaId[] = [
-    ...decisions.some((decision) => isFirstDefeat(decision, 'champion', lifetime)) ? ['first-champion-defeat' as const] : [],
-    ...decisions.some((decision) => isFirstDefeat(decision, 'echo', lifetime)) ? ['first-echo-defeat' as const] : [],
+    ...(decisions.some((decision) => isFirstDefeat(decision, 'champion', lifetime))
+      ? ['first-champion-defeat' as const]
+      : []),
+    ...(decisions.some((decision) => isFirstDefeat(decision, 'echo', lifetime))
+      ? ['first-echo-defeat' as const]
+      : []),
   ];
   return content.entries
-    .filter((entry): entry is AchievementContentEntry => entry.kind === 'achievement'
-      && earnedCriteria.includes(entry.criteriaId) && !lifetime.grantedAchievementIds.includes(entry.id))
-    .map((entry): AchievementGrant => ({ achievementId: entry.id, criteriaId: entry.criteriaId, name: entry.name }))
+    .filter(
+      (entry): entry is AchievementContentEntry =>
+        entry.kind === 'achievement' &&
+        earnedCriteria.includes(entry.criteriaId) &&
+        !lifetime.grantedAchievementIds.includes(entry.id),
+    )
+    .map((entry): AchievementGrant => ({
+      achievementId: entry.id,
+      criteriaId: entry.criteriaId,
+      name: entry.name,
+    }))
     .sort((left, right) => compareCodeUnits(left.achievementId, right.achievementId));
 }
 
-function newlyConqueredChampionRecordIds(decisions: readonly FallenHeroRunDecision[],
-  lifetime: LifetimeState): readonly OpaqueId[] {
+function newlyConqueredChampionRecordIds(
+  decisions: readonly FallenHeroRunDecision[],
+  lifetime: LifetimeState,
+): readonly OpaqueId[] {
   const conquered = decisions
     .filter((decision) => isFirstDefeat(decision, 'champion', lifetime))
     .map((decision) => decision.hallRecordId);
@@ -71,11 +111,13 @@ function newlyConqueredChampionRecordIds(decisions: readonly FallenHeroRunDecisi
  * is plain data for the host to apply — the engine never touches the repository. Event IDs derive
  * from the deterministic record ID, so replaying finalization reproduces identical events.
  */
-export function finalizeRun(input: Readonly<{
-  run: ActiveRun;
-  content: CompiledContentPack;
-  lifetime: LifetimeState;
-}>): Readonly<{
+export function finalizeRun(
+  input: Readonly<{
+    run: ActiveRun;
+    content: CompiledContentPack;
+    lifetime: LifetimeState;
+  }>,
+): Readonly<{
   run: ActiveRun;
   record: HallRecord;
   deltas: LifetimeDeltas;
@@ -87,7 +129,12 @@ export function finalizeRun(input: Readonly<{
   const conclusion = run.conclusion;
 
   const recordId = deriveHallRecordId(run.runSeed, run.contentHash);
-  const heirloom = selectHeirloom({ run, content, template: fallenChampionTemplate(content), recordId });
+  const heirloom = selectHeirloom({
+    run,
+    content,
+    template: fallenChampionTemplate(content),
+    recordId,
+  });
   const score = scoreRun({ run, content });
 
   const record: HallRecord = {
@@ -107,23 +154,36 @@ export function finalizeRun(input: Readonly<{
   };
 
   const grants = achievementGrants({ decisions: run.fallenHeroDecisions, lifetime, content });
-  const encounters = content.entries.filter((entry): entry is EncounterContentEntry => entry.kind === 'encounter');
+  const encounters = content.entries.filter(
+    (entry): entry is EncounterContentEntry => entry.kind === 'encounter',
+  );
   const deltas: LifetimeDeltas = {
     recordId,
-    newlyConqueredChampionRecordIds: newlyConqueredChampionRecordIds(run.fallenHeroDecisions, lifetime),
+    newlyConqueredChampionRecordIds: newlyConqueredChampionRecordIds(
+      run.fallenHeroDecisions,
+      lifetime,
+    ),
     achievementGrants: grants,
-    discoveryProtectionUpdates: [...evaluateDiscoveryProtection({ decisions: run.encounterDecisions, encounters })]
-      .sort((left, right) => compareCodeUnits(left.encounterId, right.encounterId)),
+    discoveryProtectionUpdates: [
+      ...evaluateDiscoveryProtection({ decisions: run.encounterDecisions, encounters }),
+    ].sort((left, right) => compareCodeUnits(left.encounterId, right.encounterId)),
     metrics: run.metrics,
   };
 
   const eventId = `event.finalize.${recordId}`;
   const finalizedEvent: RunFinalizedEvent = {
-    type: 'run.finalized', eventId, recordId, completionType: conclusion.completionType, scoreTotal: score.total,
+    type: 'run.finalized',
+    eventId,
+    recordId,
+    completionType: conclusion.completionType,
+    scoreTotal: score.total,
   };
   const grantEvents = grants.map((grant): AchievementGrantedEvent => ({
-    type: 'achievement.granted', eventId,
-    achievementId: grant.achievementId, criteriaId: grant.criteriaId, name: grant.name,
+    type: 'achievement.granted',
+    eventId,
+    achievementId: grant.achievementId,
+    criteriaId: grant.criteriaId,
+    name: grant.name,
   }));
 
   return {

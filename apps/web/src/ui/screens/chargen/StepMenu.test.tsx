@@ -15,7 +15,9 @@ const WAYFARER = 'class.wayfarer';
 let pack: CompiledContentPack;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../../../../content'),
+  });
 });
 
 function stubState(overrides: Partial<WizardState> = {}): WizardState {
@@ -88,7 +90,9 @@ describe('StepMenu', () => {
 
   it('resolves the Calling row to the class NAME (not the raw content id) when given a pack', () => {
     const onJump = vi.fn();
-    const classEntry = pack.entries.find((entry) => entry.kind === 'class' && entry.id === WAYFARER) as { name: string };
+    const classEntry = pack.entries.find(
+      (entry) => entry.kind === 'class' && entry.id === WAYFARER,
+    ) as { name: string };
     render(
       <StepMenu
         state={stubState({ name: 'Rin', classId: WAYFARER })}

@@ -34,16 +34,91 @@ const DESCEND_PREFIX = ['3'];
 /** Depth 1: chase the intercepting monster and bump-attack until it dies at (27,10) (hero (28,10),
  * no hostiles left nearby — a calm spot for the drop/pickup/consume/rest beats). */
 const KILL = [
-  '4', '7', '8', '8', '8', '8', '8', '8', '8', '7', '7', '7', '8', '8', '8', '8', '8', '8', '8',
-  '8', '8', '8', '7', '4', '1', '2', '2', '2', '2', '2', '2', '2', '1', '4', '4',
+  '4',
+  '7',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '7',
+  '7',
+  '7',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '7',
+  '4',
+  '1',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '1',
+  '4',
+  '4',
 ];
 
 /** Depth 1: march into the far monster room and kill one of the packed group, leaving a live cave
  * rat adjacent at (9,2) with the hero at (10,2). */
 const CLUSTER_KILL = [
-  '4', '7', '8', '8', '8', '8', '8', '8', '8', '7', '7', '7', '8', '8', '8', '8', '8', '8', '8',
-  '8', '8', '8', '7', '4', '4', '1', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4',
-  '4', '4', '4', '4', '4', '4', '4',
+  '4',
+  '7',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '7',
+  '7',
+  '7',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '7',
+  '4',
+  '4',
+  '1',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
 ];
 
 async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
@@ -58,8 +133,10 @@ async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
 async function awaitKeyboardReady(page: Page): Promise<void> {
   await expect(async () => {
     await page.keyboard.press('g');
-    await expect(page.getByRole('log', { name: /adventure log/i }))
-      .toContainText(/nothing here to pick up/i, { timeout: 250 });
+    await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(
+      /nothing here to pick up/i,
+      { timeout: 250 },
+    );
   }).toPass();
 }
 

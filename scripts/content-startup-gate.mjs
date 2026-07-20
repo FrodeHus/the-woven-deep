@@ -82,18 +82,28 @@ async function createDirectories(root) {
 // exercises content startup, not auth, so supply well-formed throwaway values (never real secrets)
 // so a production-shaped container can boot and serve /api/health and content.
 const GATE_AUTH_ENV = [
-  '--env', 'PUBLIC_URL=http://startup-gate.invalid:3000',
-  '--env', 'COOKIE_SECRET=content-startup-gate-throwaway-cookie-secret',
-  '--env', 'MAILGUN_API_KEY=startup-gate-not-real',
-  '--env', 'MAILGUN_DOMAIN=startup-gate.invalid',
-  '--env', 'MAILGUN_SENDER=gate@startup-gate.invalid',
+  '--env',
+  'PUBLIC_URL=http://startup-gate.invalid:3000',
+  '--env',
+  'COOKIE_SECRET=content-startup-gate-throwaway-cookie-secret',
+  '--env',
+  'MAILGUN_API_KEY=startup-gate-not-real',
+  '--env',
+  'MAILGUN_DOMAIN=startup-gate.invalid',
+  '--env',
+  'MAILGUN_SENDER=gate@startup-gate.invalid',
 ];
 
 function containerArguments(name, image, content, data, detached) {
   return [
-    'run', ...(detached ? ['--detach'] : []), '--name', name,
-    '--mount', `type=bind,src=${content},dst=/app/content,readonly`,
-    '--mount', `type=bind,src=${data},dst=/data`,
+    'run',
+    ...(detached ? ['--detach'] : []),
+    '--name',
+    name,
+    '--mount',
+    `type=bind,src=${content},dst=/app/content,readonly`,
+    '--mount',
+    `type=bind,src=${data},dst=/data`,
     ...GATE_AUTH_ENV,
     ...(detached ? ['--publish', '127.0.0.1::3000'] : []),
     image,
@@ -110,11 +120,15 @@ async function main() {
     const paths = await createDirectories(root);
     const runtime = {
       async startValid() {
-        await command('docker', containerArguments(validName, image, paths.valid, paths.data, true));
+        await command(
+          'docker',
+          containerArguments(validName, image, paths.valid, paths.data, true),
+        );
       },
       async assertReadOnly() {
         const inspected = await command('docker', [
-          'inspect', '--format',
+          'inspect',
+          '--format',
           '{{range .Mounts}}{{if eq .Destination "/app/content"}}{{.RW}}{{end}}{{end}}',
           validName,
         ]);
@@ -135,9 +149,10 @@ async function main() {
         // Match smoke-runner's own output contract (see verifyOnce in
         // scripts/smoke-runner.mjs) rather than re-deriving it here, so the
         // gate stays in sync as smoke-runner's reported facts change.
-        const health = /^ok ([a-f0-9]{64}) (\d+) entries, ([1-9]\d*) merchant encounters, ([1-9]\d*) achievements\n$/.exec(
-          output,
-        );
+        const health =
+          /^ok ([a-f0-9]{64}) (\d+) entries, ([1-9]\d*) merchant encounters, ([1-9]\d*) achievements\n$/.exec(
+            output,
+          );
         if (!health) throw new Error(`unexpected smoke output: ${output}`);
         return { contentHash: health[1], entries: Number(health[2]) };
       },
@@ -147,11 +162,15 @@ async function main() {
       async snapshotPublications() {
         const database = new Database(join(paths.data, 'rogue.sqlite'), { readonly: true });
         try {
-          return database.prepare(`
+          return database
+            .prepare(
+              `
             select hash, schema_version as schemaVersion
             from content_packs
             order by hash
-          `).all();
+          `,
+            )
+            .all();
         } finally {
           database.close();
         }

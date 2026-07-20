@@ -2,8 +2,8 @@ import type { BalanceContentEntry, CompiledContentPack, CompletionType } from '@
 import type { ActiveRun, OpaqueId } from './model.js';
 import { compareCodeUnits } from './stable-json.js';
 
-export type ScoreLineId = 'depth' | 'boss-defeats' | 'threat' | 'discoveries'
-  | 'completion-bonus' | 'turn-efficiency';
+export type ScoreLineId =
+  'depth' | 'boss-defeats' | 'threat' | 'discoveries' | 'completion-bonus' | 'turn-efficiency';
 
 export interface ScoreLine {
   readonly lineId: ScoreLineId;
@@ -66,17 +66,21 @@ function multipliedLine(lineId: ScoreLineId, quantity: number, coefficient: numb
  * turn efficiency divides via floor quotient/remainder, matching the commerce style. Consumers
  * never recompute — the breakdown carries every line plus the total.
  */
-export function scoreRun(input: Readonly<{
-  run: ActiveRun;
-  content: CompiledContentPack;
-}>): ScoreBreakdown {
+export function scoreRun(
+  input: Readonly<{
+    run: ActiveRun;
+    content: CompiledContentPack;
+  }>,
+): ScoreBreakdown {
   const { run, content } = input;
   const conclusion = run.conclusion;
   if (conclusion === null) {
     throw new Error('scoreRun requires a concluded run');
   }
 
-  const balance = content.entries.find((entry): entry is BalanceContentEntry => entry.kind === 'balance');
+  const balance = content.entries.find(
+    (entry): entry is BalanceContentEntry => entry.kind === 'balance',
+  );
   if (!balance) {
     throw new Error('internal invariant: content pack is missing a balance entry');
   }
@@ -84,27 +88,53 @@ export function scoreRun(input: Readonly<{
   const metrics = run.metrics;
 
   const depthLine = multipliedLine('depth', metrics.deepestDepth, coefficients.depthCoefficient);
-  const bossLine = multipliedLine('boss-defeats', metrics.bossKills, coefficients.bossDefeatCoefficient);
-  const threatLine = multipliedLine('threat', metrics.threatDefeated, coefficients.threatCoefficient);
-  const discoveriesLine = multipliedLine('discoveries', metrics.discoveriesRevealed, coefficients.discoveryCoefficient);
+  const bossLine = multipliedLine(
+    'boss-defeats',
+    metrics.bossKills,
+    coefficients.bossDefeatCoefficient,
+  );
+  const threatLine = multipliedLine(
+    'threat',
+    metrics.threatDefeated,
+    coefficients.threatCoefficient,
+  );
+  const discoveriesLine = multipliedLine(
+    'discoveries',
+    metrics.discoveriesRevealed,
+    coefficients.discoveryCoefficient,
+  );
   const completionLine: ScoreLine = {
     lineId: 'completion-bonus',
     quantity: 1,
     coefficient: 0,
     amount: coefficients.completionBonus[conclusion.completionType],
   };
-  const turnDecayIntervals = floorQuotient(metrics.turnsElapsed, coefficients.turnEfficiencyDecayInterval);
+  const turnDecayIntervals = floorQuotient(
+    metrics.turnsElapsed,
+    coefficients.turnEfficiencyDecayInterval,
+  );
   const turnEfficiencyLine: ScoreLine = {
     lineId: 'turn-efficiency',
     quantity: turnDecayIntervals,
     coefficient: 1,
-    amount: Math.max(0, checkedSubtract(coefficients.turnEfficiencyBudget, turnDecayIntervals, 'turn-efficiency')),
+    amount: Math.max(
+      0,
+      checkedSubtract(coefficients.turnEfficiencyBudget, turnDecayIntervals, 'turn-efficiency'),
+    ),
   };
 
   const lines: readonly ScoreLine[] = [
-    depthLine, bossLine, threatLine, discoveriesLine, completionLine, turnEfficiencyLine,
+    depthLine,
+    bossLine,
+    threatLine,
+    discoveriesLine,
+    completionLine,
+    turnEfficiencyLine,
   ];
-  const total = checkedSum(lines.map((line) => line.amount), 'score total');
+  const total = checkedSum(
+    lines.map((line) => line.amount),
+    'score total',
+  );
 
   return { lines, total };
 }

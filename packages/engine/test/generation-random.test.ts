@@ -25,7 +25,9 @@ describe('generation random states', () => {
 
   it('derives stable, distinct nonzero attempt states', () => {
     const seed = [11_520, 0, 5_927_040, 70_819_200] as const;
-    expect(deriveAttemptSeed(seed, 0)).toEqual([3_695_093_596, 1_050_304_191, 2_863_447_750, 3_493_573_262]);
+    expect(deriveAttemptSeed(seed, 0)).toEqual([
+      3_695_093_596, 1_050_304_191, 2_863_447_750, 3_493_573_262,
+    ]);
     expect(deriveAttemptSeed(seed, 0)).toEqual(deriveAttemptSeed(seed, 0));
     const attempts = Array.from({ length: 8 }, (_, attempt) => deriveAttemptSeed(seed, attempt));
     expect(new Set(attempts.map((state) => state.join(','))).size).toBe(8);

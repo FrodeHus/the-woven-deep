@@ -18,7 +18,9 @@ export function CallingStep({ state, pack, dispatch }: StepProps): JSX.Element {
         ariaLabel="Calling"
         marker="single"
         selected={(entry) => state.classId === entry.id}
-        onSelect={(entry) => { if (entry.playable) dispatch({ type: 'choose-class', classId: entry.id }); }}
+        onSelect={(entry) => {
+          if (entry.playable) dispatch({ type: 'choose-class', classId: entry.id });
+        }}
       />
     </section>
   );

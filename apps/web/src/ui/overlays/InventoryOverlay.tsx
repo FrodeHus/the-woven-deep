@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type JSX,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import { heroOf } from '../../session/projection-view.js';
 import { usePack, useSessionCtx } from '../providers.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
@@ -7,12 +13,21 @@ import { useItemActionKeys } from '../hooks/useItemActionKeys.js';
 import { DetailPane } from './DetailPane.js';
 import { EquipmentSlots } from './EquipmentSlots.js';
 import {
-  CATEGORY_FILTER_LABEL, CATEGORY_FILTER_ORDER, CATEGORY_GLYPH,
-  equippedLightMatchingFuel, visibleEntries,
-  type CategoryFilter, type MenuEntry, type ProjectedItemLike,
+  CATEGORY_FILTER_LABEL,
+  CATEGORY_FILTER_ORDER,
+  CATEGORY_GLYPH,
+  equippedLightMatchingFuel,
+  visibleEntries,
+  type CategoryFilter,
+  type MenuEntry,
+  type ProjectedItemLike,
 } from './inventory-model.js';
 
-export { CATEGORY_FILTER_ORDER, type CategoryFilter, type ProjectedItemLike } from './inventory-model.js';
+export {
+  CATEGORY_FILTER_ORDER,
+  type CategoryFilter,
+  type ProjectedItemLike,
+} from './inventory-model.js';
 
 function toListItem(entry: MenuEntry): ListDetailItem {
   return {
@@ -73,7 +88,11 @@ export function InventoryOverlay(): JSX.Element | null {
 
   function dispatchRefuel(): void {
     if (!selected || !refuelTarget) return;
-    session.dispatch({ type: 'refuel', fuelItemId: selected.item.itemId, targetItemId: refuelTarget.itemId });
+    session.dispatch({
+      type: 'refuel',
+      fuelItemId: selected.item.itemId,
+      targetItemId: refuelTarget.itemId,
+    });
   }
 
   function cycleFilter(): void {
@@ -112,14 +131,9 @@ export function InventoryOverlay(): JSX.Element | null {
         selectedIndex={selectedIndex}
         onSelect={setSelectedIndex}
         slots={<EquipmentSlots equipment={hero.equipment} />}
-        toolbar={(
+        toolbar={
           <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={cycleFilter}
-            >
+            <Button type="button" variant="ghost" size="sm" onClick={cycleFilter}>
               {`Filter: ${CATEGORY_FILTER_LABEL[filter]} (f)`}
             </Button>
             <Button
@@ -131,7 +145,7 @@ export function InventoryOverlay(): JSX.Element | null {
               {sortByName ? 'Sort: Name (s)' : 'Sort: Default (s)'}
             </Button>
           </>
-        )}
+        }
         renderDetail={() => (
           <DetailPane
             entry={selected}

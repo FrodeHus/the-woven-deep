@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
-import { heroOf, houseOf, type HouseView, type OwnedItemView } from '../../session/projection-view.js';
+import {
+  heroOf,
+  houseOf,
+  type HouseView,
+  type OwnedItemView,
+} from '../../session/projection-view.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
 import { Button } from '../components/button.js';
@@ -116,7 +121,12 @@ export function HouseScreen({ snapshot, onDispatch, onClose }: HouseScreenProps)
   const toListItems = (items: readonly ProjectedItem[]): readonly ListDetailItem[] =>
     items.map((item) => ({ id: item.itemId, label: item.name }));
 
-  const listPanel = (list: FocusedList, items: readonly ProjectedItem[], selectedIndex: number, onSelect: (index: number) => void): JSX.Element => (
+  const listPanel = (
+    list: FocusedList,
+    items: readonly ProjectedItem[],
+    selectedIndex: number,
+    onSelect: (index: number) => void,
+  ): JSX.Element => (
     <div className="flex flex-col gap-1">
       {items.length === 0 && <p className="text-sm text-muted">Empty.</p>}
       {items.length > 0 && (
@@ -128,27 +138,38 @@ export function HouseScreen({ snapshot, onDispatch, onClose }: HouseScreenProps)
             setFocusedList(list);
             onSelect(index);
           }}
-          renderDetail={(item) => (
-            item
-              ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => { setFocusedList(list); transfer(list, items.findIndex((entry) => entry.itemId === item.id)); }}
-                >
-                  {list === 'backpack' ? 'Deposit' : 'Withdraw'}
-                </Button>
-              )
-              : <p className="text-sm text-muted">Nothing selected.</p>
-          )}
+          renderDetail={(item) =>
+            item ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setFocusedList(list);
+                  transfer(
+                    list,
+                    items.findIndex((entry) => entry.itemId === item.id),
+                  );
+                }}
+              >
+                {list === 'backpack' ? 'Deposit' : 'Withdraw'}
+              </Button>
+            ) : (
+              <p className="text-sm text-muted">Nothing selected.</p>
+            )
+          }
         />
       )}
     </div>
   );
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>House</DialogTitle>
@@ -156,7 +177,11 @@ export function HouseScreen({ snapshot, onDispatch, onClose }: HouseScreenProps)
         <p className="text-sm font-mono text-muted">{`House (${house.items.length}/${house.capacity})`}</p>
         <Tabs value={focusedList} onValueChange={(value) => setFocusedList(value as FocusedList)}>
           <TabsList aria-label="House lists">
-            {LIST_ORDER.map((list) => <TabsTrigger key={list} value={list}>{LIST_LABEL[list]}</TabsTrigger>)}
+            {LIST_ORDER.map((list) => (
+              <TabsTrigger key={list} value={list}>
+                {LIST_LABEL[list]}
+              </TabsTrigger>
+            ))}
           </TabsList>
           <TabsContent value="backpack">
             {listPanel('backpack', backpack, backpackIndex, setBackpackIndex)}
@@ -165,7 +190,9 @@ export function HouseScreen({ snapshot, onDispatch, onClose }: HouseScreenProps)
             {listPanel('house', house.items, houseIndex, setHouseIndex)}
           </TabsContent>
         </Tabs>
-        <p className="text-xs text-muted">↑↓ select · Tab switch list · Enter transfer · Esc close</p>
+        <p className="text-xs text-muted">
+          ↑↓ select · Tab switch list · Enter transfer · Esc close
+        </p>
       </DialogContent>
     </Dialog>
   );

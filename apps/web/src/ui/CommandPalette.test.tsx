@@ -6,8 +6,11 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  DEFAULT_GUEST_HERO, createNewRun, projectGameplayState,
-  type ActiveRun, type GameplayProjection,
+  DEFAULT_GUEST_HERO,
+  createNewRun,
+  projectGameplayState,
+  type ActiveRun,
+  type GameplayProjection,
 } from '@woven-deep/engine';
 import type { GuestSession, SessionSnapshot } from '../session/guest-session.js';
 import { DEFAULT_SETTINGS } from '../session/settings.js';
@@ -20,7 +23,9 @@ let baseProjection: GameplayProjection;
 const SEED = [11, 22, 33, 44] as const;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../../content'),
+  });
   const baseRun: ActiveRun = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
   baseProjection = projectGameplayState({ state: baseRun, content: pack });
 });
@@ -33,7 +38,10 @@ function snapshot(): SessionSnapshot {
     pendingDecision: null,
     notice: null,
     houseOpen: false,
-    conclusion: null, sightings: { monsterIds: [], itemIds: [], landmarks: [] }, heroClassTags: [], onboarding: { counts: {}, dismissed: [] },
+    conclusion: null,
+    sightings: { monsterIds: [], itemIds: [], landmarks: [] },
+    heroClassTags: [],
+    onboarding: { counts: {}, dismissed: [] },
   };
 }
 
@@ -48,17 +56,24 @@ function stubSession(): { session: GuestSession; dispatch: ReturnType<typeof vi.
   return { session, dispatch };
 }
 
-function harness(overrides: Readonly<{
-  isTownContext?: boolean;
-  tradeAvailable?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  onOpenOverlay?: (overlay: string) => void;
-}> = {}) {
+function harness(
+  overrides: Readonly<{
+    isTownContext?: boolean;
+    tradeAvailable?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    onOpenOverlay?: (overlay: string) => void;
+  }> = {},
+) {
   const { session, dispatch } = stubSession();
   const onOpenChange = overrides.onOpenChange ?? vi.fn();
   const onOpenOverlay = overrides.onOpenOverlay ?? vi.fn();
   render(
-    <UiProviders pack={pack} settings={DEFAULT_SETTINGS} onChangeSettings={() => {}} session={session}>
+    <UiProviders
+      pack={pack}
+      settings={DEFAULT_SETTINGS}
+      onChangeSettings={() => {}}
+      session={session}
+    >
       <CommandPalette
         open
         onOpenChange={onOpenChange}

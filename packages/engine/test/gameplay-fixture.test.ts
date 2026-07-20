@@ -27,26 +27,58 @@ describe('seeded gameplay fixture', () => {
   function withBeetlePopulation(): ReturnType<typeof createGameplayDemoRun>['run'] {
     const fixture = createGameplayDemoRun(pack);
     const beetle = fixture.run.actors.find((actor) => actor.actorId === fixture.ids.beetle)!;
-    const fallenGuard = { ...beetle, actorId: 'monster.training-beetle.former', health: 0,
-      populationId: 'population.beetles.1', populationRoleId: 'guard' };
+    const fallenGuard = {
+      ...beetle,
+      actorId: 'monster.training-beetle.former',
+      health: 0,
+      populationId: 'population.beetles.1',
+      populationRoleId: 'guard',
+    };
     return {
       ...fixture.run,
-      actors: [...fixture.run.actors.map((actor) => actor.actorId === beetle.actorId ? {
-        ...actor, populationId: 'population.beetles.1', populationRoleId: 'guard',
-      } : actor), fallenGuard].sort((left, right) => left.actorId.localeCompare(right.actorId)),
+      actors: [
+        ...fixture.run.actors.map((actor) =>
+          actor.actorId === beetle.actorId
+            ? {
+                ...actor,
+                populationId: 'population.beetles.1',
+                populationRoleId: 'guard',
+              }
+            : actor,
+        ),
+        fallenGuard,
+      ].sort((left, right) => left.actorId.localeCompare(right.actorId)),
       encounterDecisions: fixture.run.encounterDecisions.map((decision) =>
         decision.encounterId === 'encounter.beetle-patrol'
-          ? { ...decision, eligible: true, reachedEligibleDepth: true,
-            instancesCreated: decision.instancesCreated + 1 }
-          : decision),
-      populations: [...fixture.run.populations, {
-        populationId: 'population.beetles.1', encounterId: 'encounter.beetle-patrol',
-        floorId: beetle.floorId, createdAt: 0, model: 'group',
-        livingMemberIds: [beetle.actorId], formerMemberIds: [fallenGuard.actorId], leaderActorId: null,
-        bonusActive: false, roleMembership: [{ actorId: beetle.actorId, roleId: 'guard' },
-          { actorId: fallenGuard.actorId, roleId: 'guard' }],
-        sharedKnowledge: [], leaderResponseApplied: false, leaderResponseExpiresAt: null,
-      }].sort((left, right) => left.populationId < right.populationId ? -1 : 1),
+          ? {
+              ...decision,
+              eligible: true,
+              reachedEligibleDepth: true,
+              instancesCreated: decision.instancesCreated + 1,
+            }
+          : decision,
+      ),
+      populations: [
+        ...fixture.run.populations,
+        {
+          populationId: 'population.beetles.1',
+          encounterId: 'encounter.beetle-patrol',
+          floorId: beetle.floorId,
+          createdAt: 0,
+          model: 'group',
+          livingMemberIds: [beetle.actorId],
+          formerMemberIds: [fallenGuard.actorId],
+          leaderActorId: null,
+          bonusActive: false,
+          roleMembership: [
+            { actorId: beetle.actorId, roleId: 'guard' },
+            { actorId: fallenGuard.actorId, roleId: 'guard' },
+          ],
+          sharedKnowledge: [],
+          leaderResponseApplied: false,
+          leaderResponseExpiresAt: null,
+        },
+      ].sort((left, right) => (left.populationId < right.populationId ? -1 : 1)),
     };
   }
 
@@ -83,7 +115,9 @@ describe('seeded gameplay fixture', () => {
     expect(tileDefinition(floor.tiles[heroIndex]!).walkable).toBe(true);
     expect(isExplored(floor.knowledge, ratIndex)).toBe(true);
     expect(Math.max(Math.abs(hero.x - rat.x), Math.abs(hero.y - rat.y))).toBeGreaterThanOrEqual(3);
-    expect(Math.max(Math.abs(hero.x - beetle.x), Math.abs(hero.y - beetle.y))).toBeGreaterThanOrEqual(6);
+    expect(
+      Math.max(Math.abs(hero.x - beetle.x), Math.abs(hero.y - beetle.y)),
+    ).toBeGreaterThanOrEqual(6);
 
     // 13 pre-existing demo items plus one item created from `vault.lampwright-cache`'s filled
     // item slot (`item-cache`, `loot-table.travelling-lampwright-stock`).
@@ -123,7 +157,9 @@ describe('seeded gameplay fixture', () => {
     expect(() => validateContentBoundRun(badProbability, pack)).toThrow(/decision.*definition/i);
 
     const badRole = structuredClone(run);
-    const group = badRole.populations.find((population) => population.populationId === 'population.beetles.1')!;
+    const group = badRole.populations.find(
+      (population) => population.populationId === 'population.beetles.1',
+    )!;
     (group as any).roleMembership[0].roleId = 'missing';
     expect(() => validateContentBoundRun(badRole, pack)).toThrow(/role missing is invalid/i);
   });
@@ -131,7 +167,9 @@ describe('seeded gameplay fixture', () => {
   it('drops findable loot on the floor when a wired early monster is defeated', () => {
     const fixture = createGameplayDemoRun(pack);
     const { ids } = fixture;
-    const commandFactories: readonly ((state: ReturnType<typeof createGameplayDemoRun>['run']) => GameCommand)[] = [
+    const commandFactories: readonly ((
+      state: ReturnType<typeof createGameplayDemoRun>['run'],
+    ) => GameCommand)[] = [
       () => ({ type: 'open-door', featureId: ids.door }) as GameCommand,
       (state) => {
         const hero = state.actors.find((actor) => actor.actorId === ids.hero)!;
@@ -146,8 +184,11 @@ describe('seeded gameplay fixture', () => {
 
     let state = fixture.run;
     for (const [index, factory] of commandFactories.entries()) {
-      const command = { ...factory(state), commandId: `command.loot-fixture-${index + 1}`,
-        expectedRevision: state.revision } as GameCommand;
+      const command = {
+        ...factory(state),
+        commandId: `command.loot-fixture-${index + 1}`,
+        expectedRevision: state.revision,
+      } as GameCommand;
       const resolution = resolveCommand(state, command, { content: pack });
       expect(resolution.result.status, stableJson(resolution.events)).toBe('applied');
       state = resolution.state;
@@ -155,16 +196,27 @@ describe('seeded gameplay fixture', () => {
 
     const rat = state.actors.find((actor) => actor.actorId === ids.rat)!;
     expect(rat.health).toBe(0);
-    const floorItemsAtDeathTile = state.items.filter((item) =>
-      item.location.type === 'floor' && item.location.x === rat.x && item.location.y === rat.y);
+    const floorItemsAtDeathTile = state.items.filter(
+      (item) =>
+        item.location.type === 'floor' && item.location.x === rat.x && item.location.y === rat.y,
+    );
     expect(floorItemsAtDeathTile.length).toBeGreaterThanOrEqual(1);
   });
 });
 
-function directionTo(from: Readonly<{ x: number; y: number }>, to: Readonly<{ x: number; y: number }>): Direction {
+function directionTo(
+  from: Readonly<{ x: number; y: number }>,
+  to: Readonly<{ x: number; y: number }>,
+): Direction {
   const directions: Record<string, Direction> = {
-    '0:-1': 'north', '1:-1': 'northeast', '1:0': 'east', '1:1': 'southeast',
-    '0:1': 'south', '-1:1': 'southwest', '-1:0': 'west', '-1:-1': 'northwest',
+    '0:-1': 'north',
+    '1:-1': 'northeast',
+    '1:0': 'east',
+    '1:1': 'southeast',
+    '0:1': 'south',
+    '-1:1': 'southwest',
+    '-1:0': 'west',
+    '-1:-1': 'northwest',
   };
   const direction = directions[`${Math.sign(to.x - from.x)}:${Math.sign(to.y - from.y)}`];
   if (direction === undefined) throw new Error('target is not adjacent to the hero');

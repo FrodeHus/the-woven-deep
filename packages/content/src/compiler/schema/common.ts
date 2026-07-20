@@ -1,17 +1,34 @@
 import { z } from 'zod';
 import {
-  CONDITION_STACKING_MODES, DAMAGE_TYPES, DISPOSITIONS, ENCOUNTER_FORMATIONS,
-  ENCOUNTER_MODELS, ENCOUNTER_PLACEMENT_FAILURE_MODES, EQUIPMENT_SLOTS,
-  FORMATION_PREFERENCES, GROUP_COLLAPSE_REWARDS_VALUES, IDENTIFICATION_MODES,
-  ITEM_CATEGORIES, ITEM_HANDEDNESS_VALUES, ITEM_RARITIES, LEADER_DEATH_RESPONSES,
-  MERCHANT_AGGRESSION_RESPONSES, MERCHANT_SERVICE_IDS, SWARM_DESTRUCTION_RESPONSES,
-  TARGETING_IDS, TRAP_DISARM_OUTCOMES, TRAP_RESET_MODES, VAULT_PLACEMENT_KINDS,
+  CONDITION_STACKING_MODES,
+  DAMAGE_TYPES,
+  DISPOSITIONS,
+  ENCOUNTER_FORMATIONS,
+  ENCOUNTER_MODELS,
+  ENCOUNTER_PLACEMENT_FAILURE_MODES,
+  EQUIPMENT_SLOTS,
+  FORMATION_PREFERENCES,
+  GROUP_COLLAPSE_REWARDS_VALUES,
+  IDENTIFICATION_MODES,
+  ITEM_CATEGORIES,
+  ITEM_HANDEDNESS_VALUES,
+  ITEM_RARITIES,
+  LEADER_DEATH_RESPONSES,
+  MERCHANT_AGGRESSION_RESPONSES,
+  MERCHANT_SERVICE_IDS,
+  SWARM_DESTRUCTION_RESPONSES,
+  TARGETING_IDS,
+  TRAP_DISARM_OUTCOMES,
+  TRAP_RESET_MODES,
+  VAULT_PLACEMENT_KINDS,
   VAULT_TERRAIN_NAMES,
 } from '../../model.js';
 
 export const stableIdSchema = z.string().regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/);
 export const slugSchema = z.string().regex(/^[a-z][a-z0-9-]*$/);
-export const glyph = z.string().refine((value) => [...value].length === 1, 'must be one Unicode glyph');
+export const glyph = z
+  .string()
+  .refine((value) => [...value].length === 1, 'must be one Unicode glyph');
 export const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 export const safeInteger = z.number().int().safe();
 export const safeNonNegative = safeInteger.nonnegative();
@@ -58,7 +75,11 @@ export const attributes = z.strictObject({
   resolve: safeNonNegative,
 });
 export const positiveAttributes = z.strictObject({
-  might: safePositive, agility: safePositive, vitality: safePositive, wits: safePositive, resolve: safePositive,
+  might: safePositive,
+  agility: safePositive,
+  vitality: safePositive,
+  wits: safePositive,
+  resolve: safePositive,
 });
 
 export const resistances = z.strictObject({

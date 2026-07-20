@@ -7,8 +7,15 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  DEFAULT_GUEST_HERO, createNewRun, descendToNextFloor, emptyEquipment, encodeActiveRun, projectGameplayState,
-  type ActiveRun, type ActorState, type GameplayProjection,
+  DEFAULT_GUEST_HERO,
+  createNewRun,
+  descendToNextFloor,
+  emptyEquipment,
+  encodeActiveRun,
+  projectGameplayState,
+  type ActiveRun,
+  type ActorState,
+  type GameplayProjection,
 } from '@woven-deep/engine';
 import { GuestSession } from '../src/session/guest-session.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
@@ -22,14 +29,21 @@ let baseProjection: GameplayProjection;
 const SEED = [11, 22, 33, 44] as const;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
   const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
   baseProjection = projectGameplayState({ state: run, content: pack });
 });
 
 function fakeStorage(): SessionStorageLike {
   let value: string | null = null;
-  return { get: () => value, set: (v: string) => { value = v; } };
+  return {
+    get: () => value,
+    set: (v: string) => {
+      value = v;
+    },
+  };
 }
 
 describe('PlayScreen camera wiring', () => {
@@ -37,19 +51,26 @@ describe('PlayScreen camera wiring', () => {
   // this floor is generously larger than that on both axes — see camera.ts's `scrolledAxis` for
   // how the projected hero's `sightRadius` (now read straight off the projection) sizes the
   // deadzone margin.
-  function unknownCell(index: number, x: number, y: number): GameplayProjection['floor']['cells'][number] {
+  function unknownCell(
+    index: number,
+    x: number,
+    y: number,
+  ): GameplayProjection['floor']['cells'][number] {
     return { index, x, y, knowledge: 'unknown', intensity: 0 };
   }
 
   function floorProjection(floorId: string, hero: { x: number; y: number }): GameplayProjection {
-    const width = 100; const height = 60;
+    const width = 100;
+    const height = 60;
     const cells = [];
-    for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) cells.push(unknownCell(y * width + x, x, y));
+    for (let y = 0; y < height; y += 1)
+      for (let x = 0; x < width; x += 1) cells.push(unknownCell(y * width + x, x, y));
     return {
       ...baseProjection,
       floor: { floorId, width, height, cells },
       hero: { ...baseProjection.hero, x: hero.x, y: hero.y },
-      actors: [], groundItems: [],
+      actors: [],
+      groundItems: [],
     } as unknown as GameplayProjection;
   }
 
@@ -76,17 +97,23 @@ describe('PlayScreen camera wiring', () => {
 
   it('keeps the same camera origin across a small in-floor hero move (deadzone holds)', () => {
     const first = floorProjection('floor.depth-001', { x: 50, y: 30 });
-    const { rerender } = render(withUiProviders(pack, <PlayScreen session={fakeSession(first)} pack={pack} />));
+    const { rerender } = render(
+      withUiProviders(pack, <PlayScreen session={fakeSession(first)} pack={pack} />),
+    );
     const originAfterFirst = topLeftDataCell();
 
     const movedSlightly = floorProjection('floor.depth-001', { x: 51, y: 30 });
-    rerender(withUiProviders(pack, <PlayScreen session={fakeSession(movedSlightly)} pack={pack} />));
+    rerender(
+      withUiProviders(pack, <PlayScreen session={fakeSession(movedSlightly)} pack={pack} />),
+    );
     expect(topLeftDataCell()).toBe(originAfterFirst);
   });
 
   it('recenters on the new hero position when the floorId changes (a descend)', () => {
     const first = floorProjection('floor.depth-001', { x: 50, y: 30 });
-    const { rerender } = render(withUiProviders(pack, <PlayScreen session={fakeSession(first)} pack={pack} />));
+    const { rerender } = render(
+      withUiProviders(pack, <PlayScreen session={fakeSession(first)} pack={pack} />),
+    );
     const originOnFirstFloor = topLeftDataCell();
 
     const nextFloor = floorProjection('floor.depth-002', { x: 5, y: 5 });
@@ -103,7 +130,9 @@ describe('PlayScreen keyboard routing', () => {
     const values = new Map<string, string>();
     return {
       get: (key: string) => values.get(key) ?? null,
-      set: (key: string, value: string) => { values.set(key, value); },
+      set: (key: string, value: string) => {
+        values.set(key, value);
+      },
     };
   }
 
@@ -119,13 +148,19 @@ describe('PlayScreen keyboard routing', () => {
     const town = fresh.floors.find((floor) => floor.floorId === freshHero.floorId)!;
     const atStairDown: ActiveRun = {
       ...fresh,
-      actors: fresh.actors.map((actor) => actor.actorId === freshHero.actorId
-        ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y } : actor),
+      actors: fresh.actors.map((actor) =>
+        actor.actorId === freshHero.actorId
+          ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y }
+          : actor,
+      ),
     };
     const run = descendToNextFloor(atStairDown, { content: pack }).state;
     const heroActor = run.actors.find((actor) => actor.playerControlled)!;
-    const doused = run.items.map((item) => item.location.type === 'equipped' && item.location.slot === 'off-hand'
-      ? { ...item, enabled: false } : item);
+    const doused = run.items.map((item) =>
+      item.location.type === 'equipped' && item.location.slot === 'off-hand'
+        ? { ...item, enabled: false }
+        : item,
+    );
     const hiddenNeighbor: ActorState = {
       ...heroActor,
       actorId: 'npc.hidden-bystander',
@@ -141,7 +176,9 @@ describe('PlayScreen keyboard routing', () => {
     const withHiddenNeighbor: ActiveRun = {
       ...run,
       items: doused,
-      actors: [...run.actors, hiddenNeighbor].sort((left, right) => (left.actorId < right.actorId ? -1 : 1)),
+      actors: [...run.actors, hiddenNeighbor].sort((left, right) =>
+        left.actorId < right.actorId ? -1 : 1,
+      ),
     };
     const storage = fakeStorage();
     storage.set(SAVE_KEY, encodeActiveRun(withHiddenNeighbor));
@@ -157,15 +194,16 @@ describe('PlayScreen keyboard routing', () => {
     // `App` so the test can drive `i`/Escape the same way a real guest would.
     function Harness(): JSX.Element {
       const [overlay, setOverlay] = useState<OverlayId | null>(null);
-      return withUiProviders(pack, (
+      return withUiProviders(
+        pack,
         <PlayScreen
           session={session}
           pack={pack}
           overlay={overlay}
           onOpenOverlay={setOverlay}
           onCloseOverlay={() => setOverlay(null)}
-        />
-      ));
+        />,
+      );
     }
     render(<Harness />);
 
@@ -221,15 +259,16 @@ describe('PlayScreen command palette shortcut', () => {
     const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
     function Harness(): JSX.Element {
       const [overlay, setOverlay] = useState<OverlayId | null>(null);
-      return withUiProviders(pack, (
+      return withUiProviders(
+        pack,
         <PlayScreen
           session={session}
           pack={pack}
           overlay={overlay}
           onOpenOverlay={setOverlay}
           onCloseOverlay={() => setOverlay(null)}
-        />
-      ));
+        />,
+      );
     }
     render(<Harness />);
 
@@ -255,10 +294,17 @@ describe('PlayScreen threat hover scroll-dismiss', () => {
       ...snapshot,
       projection: {
         ...snapshot.projection,
-        actors: [{
-          actorId: 'actor.rat', name: 'Cave rat', glyph: 'r', disposition: 'hostile',
-          healthPresentation: { band: 'wounded' }, x: hero.x + 1, y: hero.y,
-        }],
+        actors: [
+          {
+            actorId: 'actor.rat',
+            name: 'Cave rat',
+            glyph: 'r',
+            disposition: 'hostile',
+            healthPresentation: { band: 'wounded' },
+            x: hero.x + 1,
+            y: hero.y,
+          },
+        ],
       },
     };
     const fakeHoverSession = {
@@ -285,14 +331,19 @@ describe('PlayScreen Layout A composition', () => {
     const town = fresh.floors.find((floor) => floor.floorId === heroActor.floorId)!;
     const atStairDown: ActiveRun = {
       ...fresh,
-      actors: fresh.actors.map((actor) => actor.actorId === heroActor.actorId
-        ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y } : actor),
+      actors: fresh.actors.map((actor) =>
+        actor.actorId === heroActor.actorId
+          ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y }
+          : actor,
+      ),
     };
     const depth1 = descendToNextFloor(atStairDown, { content: pack }).state;
     const storage = new Map<string, string>();
     const keyedStorage: SessionStorageLike = {
       get: (key) => storage.get(key) ?? null,
-      set: (key, value) => { storage.set(key, value); },
+      set: (key, value) => {
+        storage.set(key, value);
+      },
     };
     keyedStorage.set(SAVE_KEY, encodeActiveRun(depth1));
     return new GuestSession({ pack, storage: keyedStorage });

@@ -23,8 +23,15 @@ export interface PlayKeyDispatcherParams {
  * can't outpace what the player can perceive (see `KeyRouter.ts`'s input-flood guard).
  */
 export function usePlayKeyDispatcher({
-  session, overlay, houseOpen, trade, pendingDecision,
-  onOpenOverlay, onCloseOverlay, keymap, activeHintRef,
+  session,
+  overlay,
+  houseOpen,
+  trade,
+  pendingDecision,
+  onOpenOverlay,
+  onCloseOverlay,
+  keymap,
+  activeHintRef,
 }: PlayKeyDispatcherParams): void {
   useEffect(() => {
     const dispatcher = createKeyDispatcher(
@@ -35,8 +42,10 @@ export function usePlayKeyDispatcher({
           // "inspection"/"inventory" mastery is a one-time open, which never goes through
           // `session.dispatch` at all (opening an overlay is client-side UI state, not a
           // `PlayerIntent`), so it's folded in right here instead.
-          if (overlayActionId === 'character-sheet') session.recordOnboardingIntent('open-character-sheet');
-          else if (overlayActionId === 'inventory') session.recordOnboardingIntent('open-inventory');
+          if (overlayActionId === 'character-sheet')
+            session.recordOnboardingIntent('open-character-sheet');
+          else if (overlayActionId === 'inventory')
+            session.recordOnboardingIntent('open-inventory');
           onOpenOverlay(overlayActionId);
         },
         dismissHint: () => {
@@ -46,7 +55,10 @@ export function usePlayKeyDispatcher({
         closeOverlay: () => {
           // `inventory` is a registry overlay like every other one, so this first branch already
           // covers it.
-          if (overlay !== null) { onCloseOverlay(); return; }
+          if (overlay !== null) {
+            onCloseOverlay();
+            return;
+          }
           if (houseOpen) session.setHouseOpen(false);
           // Unlike the house overlay (a pure client-side toggle), an open trade session is engine
           // state (`projection.trade`): closing it means dispatching `trade-close`, not flipping a
@@ -55,14 +67,10 @@ export function usePlayKeyDispatcher({
           else if (pendingDecision) session.answerDecision(false);
         },
       },
-      () => overlay !== null || houseOpen || trade !== undefined
-        || pendingDecision !== null,
+      () => overlay !== null || houseOpen || trade !== undefined || pendingDecision !== null,
       () => keymap,
     );
     window.addEventListener('keydown', dispatcher);
     return () => window.removeEventListener('keydown', dispatcher);
-  }, [
-    session, houseOpen, trade, pendingDecision,
-    overlay, onOpenOverlay, onCloseOverlay, keymap,
-  ]);
+  }, [session, houseOpen, trade, pendingDecision, overlay, onOpenOverlay, onCloseOverlay, keymap]);
 }

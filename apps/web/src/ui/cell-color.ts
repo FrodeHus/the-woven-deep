@@ -89,14 +89,19 @@ const ROUNDING_SAFETY_MARGIN = 0.002;
  */
 function liftToFloor(rgb: RgbTuple): RgbTuple {
   const linear = rgb.map(srgbToLinear) as [number, number, number];
-  const luminance = (l: readonly [number, number, number]) => 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
+  const luminance = (l: readonly [number, number, number]) =>
+    0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
   const currentLuminance = luminance(linear);
   if (currentLuminance >= FLOOR_LUMINANCE) return rgb.map(Math.round) as unknown as RgbTuple;
 
   const target = FLOOR_LUMINANCE + ROUNDING_SAFETY_MARGIN;
   const scaled: [number, number, number] =
     currentLuminance > 0
-      ? (linear.map((c) => Math.min(1, (c * target) / currentLuminance)) as [number, number, number])
+      ? (linear.map((c) => Math.min(1, (c * target) / currentLuminance)) as [
+          number,
+          number,
+          number,
+        ])
       : [0, 0, 0];
   const scaledLuminance = luminance(scaled);
   if (scaledLuminance >= target) {
@@ -154,10 +159,16 @@ function isDefaultFloorBase(base: RgbTuple): boolean {
   return base[0] === FLOOR_RGB[0] && base[1] === FLOOR_RGB[1] && base[2] === FLOOR_RGB[2];
 }
 
-export function visibleForeground(tint: RgbTuple, intensity: number, base: RgbTuple = FLOOR_RGB): string {
+export function visibleForeground(
+  tint: RgbTuple,
+  intensity: number,
+  base: RgbTuple = FLOOR_RGB,
+): string {
   const rawT = Math.max(0, Math.min(255, intensity)) / 255;
   const t = isDefaultFloorBase(base) ? rawT : Math.min(rawT, MATERIAL_MAX_BLEND_T);
-  const blended = [0, 1, 2].map((index) => base[index]! + t * (tint[index]! - base[index]!)) as unknown as RgbTuple;
+  const blended = [0, 1, 2].map(
+    (index) => base[index]! + t * (tint[index]! - base[index]!),
+  ) as unknown as RgbTuple;
   const [r, g, b] = liftToFloor(blended);
   return `rgb(${r}, ${g}, ${b})`;
 }

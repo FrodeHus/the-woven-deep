@@ -46,11 +46,21 @@ describe('createSessionService', () => {
   });
 
   function makeService() {
-    return createSessionService({ clock, sessions, profiles, hashToken, sessionTtlMs: SESSION_TTL_MS });
+    return createSessionService({
+      clock,
+      sessions,
+      profiles,
+      hashToken,
+      sessionTtlMs: SESSION_TTL_MS,
+    });
   }
 
   function seedSessionFor(profileEmail: string): string {
-    const profile = profiles.create({ id: `profile-${profileEmail}`, normalizedEmail: profileEmail, nowIso: clock.now().toISOString() });
+    const profile = profiles.create({
+      id: `profile-${profileEmail}`,
+      normalizedEmail: profileEmail,
+      nowIso: clock.now().toISOString(),
+    });
     const token = generateToken();
     const now = clock.now().toISOString();
     sessions.insert({
@@ -97,7 +107,9 @@ describe('createSessionService', () => {
     const service = makeService();
     const tokenHash = hashToken(token);
 
-    const rowBefore = database.prepare('select last_seen_at, expires_at from sessions where token_hash = ?').get(tokenHash) as {
+    const rowBefore = database
+      .prepare('select last_seen_at, expires_at from sessions where token_hash = ?')
+      .get(tokenHash) as {
       last_seen_at: string;
       expires_at: string;
     };
@@ -105,7 +117,9 @@ describe('createSessionService', () => {
     clock.advance(30_000); // under the 60s threshold
     service.authenticate(token);
 
-    const rowAfterShortDelay = database.prepare('select last_seen_at, expires_at from sessions where token_hash = ?').get(tokenHash) as {
+    const rowAfterShortDelay = database
+      .prepare('select last_seen_at, expires_at from sessions where token_hash = ?')
+      .get(tokenHash) as {
       last_seen_at: string;
       expires_at: string;
     };
@@ -114,12 +128,16 @@ describe('createSessionService', () => {
     clock.advance(31_000); // now cumulatively 61s past last touch
     service.authenticate(token);
 
-    const rowAfterThreshold = database.prepare('select last_seen_at, expires_at from sessions where token_hash = ?').get(tokenHash) as {
+    const rowAfterThreshold = database
+      .prepare('select last_seen_at, expires_at from sessions where token_hash = ?')
+      .get(tokenHash) as {
       last_seen_at: string;
       expires_at: string;
     };
     expect(rowAfterThreshold.last_seen_at).toBe(clock.now().toISOString());
-    expect(rowAfterThreshold.expires_at).toBe(new Date(clock.now().getTime() + SESSION_TTL_MS).toISOString());
+    expect(rowAfterThreshold.expires_at).toBe(
+      new Date(clock.now().getTime() + SESSION_TTL_MS).toISOString(),
+    );
     expect(rowAfterThreshold).not.toEqual(rowBefore);
   });
 
@@ -134,7 +152,9 @@ describe('createSessionService', () => {
 
   it('never stores the plaintext session token, only its hash', () => {
     const token = seedSessionFor('hashed@example.com');
-    const rows = database.prepare('select token_hash from sessions').all() as Array<{ token_hash: string }>;
+    const rows = database.prepare('select token_hash from sessions').all() as Array<{
+      token_hash: string;
+    }>;
     expect(rows.map((r) => r.token_hash)).toContain(hashToken(token));
     expect(rows.map((r) => r.token_hash)).not.toContain(token);
   });

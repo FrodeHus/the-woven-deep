@@ -4,34 +4,26 @@ import { OptionRow } from './OptionRow.js';
 
 describe('OptionRow', () => {
   it('shows (•) and aria-selected="true" when selected in single mode', () => {
-    render(
-      <OptionRow name="Warrior" marker="single" selected onSelect={() => {}} />
-    );
+    render(<OptionRow name="Warrior" marker="single" selected onSelect={() => {}} />);
     const row = screen.getByRole('option');
     expect(row).toHaveAttribute('aria-selected', 'true');
     expect(row.textContent).toContain('(•)');
   });
 
   it('shows ( ) when not selected in single mode', () => {
-    render(
-      <OptionRow name="Warrior" marker="single" selected={false} onSelect={() => {}} />
-    );
+    render(<OptionRow name="Warrior" marker="single" selected={false} onSelect={() => {}} />);
     const row = screen.getByRole('option');
     expect(row).toHaveAttribute('aria-selected', 'false');
     expect(row.textContent).toContain('( )');
   });
 
   it('shows [×] when selected in multi mode', () => {
-    render(
-      <OptionRow name="Stealth" marker="multi" selected onSelect={() => {}} />
-    );
+    render(<OptionRow name="Stealth" marker="multi" selected onSelect={() => {}} />);
     expect(screen.getByRole('option').textContent).toContain('[×]');
   });
 
   it('shows [ ] when not selected in multi mode', () => {
-    render(
-      <OptionRow name="Stealth" marker="multi" selected={false} onSelect={() => {}} />
-    );
+    render(<OptionRow name="Stealth" marker="multi" selected={false} onSelect={() => {}} />);
     expect(screen.getByRole('option').textContent).toContain('[ ]');
   });
 
@@ -45,7 +37,7 @@ describe('OptionRow', () => {
         locked
         lockHint="Requires level 5"
         onSelect={onSelect}
-      />
+      />,
     );
     const row = screen.getByRole('option');
     expect(row).toHaveAttribute('aria-disabled', 'true');
@@ -57,17 +49,13 @@ describe('OptionRow', () => {
 
   it('calls onSelect when clicked and not locked', () => {
     const onSelect = vi.fn();
-    render(
-      <OptionRow name="Warrior" marker="single" selected={false} onSelect={onSelect} />
-    );
+    render(<OptionRow name="Warrior" marker="single" selected={false} onSelect={onSelect} />);
     screen.getByRole('option').click();
     expect(onSelect).toHaveBeenCalledOnce();
   });
 
   it('applies selected styling classes', () => {
-    render(
-      <OptionRow name="Warrior" marker="single" selected onSelect={() => {}} />
-    );
+    render(<OptionRow name="Warrior" marker="single" selected onSelect={() => {}} />);
     const row = screen.getByRole('option');
     expect(row.className).toContain('border-accent');
     expect(row.className).toContain('bg-raised');
@@ -83,7 +71,7 @@ describe('OptionRow', () => {
         description="A stalwart fighter."
         tags={['Melee', 'Tank']}
         onSelect={() => {}}
-      />
+      />,
     );
     expect(screen.getByText('STR +2')).toBeInTheDocument();
     expect(screen.getByText('A stalwart fighter.')).toBeInTheDocument();
@@ -93,9 +81,7 @@ describe('OptionRow', () => {
 
   it('calls onSelect when Enter or Space is pressed on a focused option', () => {
     const onSelect = vi.fn();
-    render(
-      <OptionRow name="Warrior" marker="single" selected={false} onSelect={onSelect} />
-    );
+    render(<OptionRow name="Warrior" marker="single" selected={false} onSelect={onSelect} />);
     const row = screen.getByRole('option');
     fireEvent.keyDown(row, { key: 'Enter' });
     expect(onSelect).toHaveBeenCalledTimes(1);
@@ -106,7 +92,7 @@ describe('OptionRow', () => {
   it('does not call onSelect on Enter or Space when locked', () => {
     const onSelect = vi.fn();
     render(
-      <OptionRow name="Paladin" marker="single" selected={false} locked onSelect={onSelect} />
+      <OptionRow name="Paladin" marker="single" selected={false} locked onSelect={onSelect} />,
     );
     const row = screen.getByRole('option');
     fireEvent.keyDown(row, { key: 'Enter' });
@@ -123,7 +109,7 @@ describe('OptionRow', () => {
         glyph="⚔"
         glyphColor="#d99a2b"
         onSelect={() => {}}
-      />
+      />,
     );
     expect(screen.getByText('⚔')).toBeInTheDocument();
   });

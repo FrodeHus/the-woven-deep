@@ -20,12 +20,22 @@ export interface RootStylingProps {
  * cannot suppress an element's existence).
  */
 export function RootStyling({ settings, fadeToken, children }: RootStylingProps): JSX.Element {
-  const motionClass = settings.reducedMotion === 'on' ? ' motion-reduced'
-    : settings.reducedMotion === 'off' ? ' motion-full' : '';
+  const motionClass =
+    settings.reducedMotion === 'on'
+      ? ' motion-reduced'
+      : settings.reducedMotion === 'off'
+        ? ' motion-full'
+        : '';
   const themeClass = settings.theme === 'high-contrast' ? ' theme-high-contrast' : '';
   return (
-    <div className={`guest-app-root${motionClass}${themeClass}`} style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}>
-      <ScreenFade transitionKey={fadeToken} reducedMotion={effectiveReducedMotion(settings.reducedMotion)}>
+    <div
+      className={`guest-app-root${motionClass}${themeClass}`}
+      style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}
+    >
+      <ScreenFade
+        transitionKey={fadeToken}
+        reducedMotion={effectiveReducedMotion(settings.reducedMotion)}
+      >
         {children}
       </ScreenFade>
     </div>

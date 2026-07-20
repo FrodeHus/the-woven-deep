@@ -4,7 +4,12 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
-import { DEFAULT_GUEST_HERO, createNewRun, projectGameplayState, type GameplayProjection } from '@woven-deep/engine';
+import {
+  DEFAULT_GUEST_HERO,
+  createNewRun,
+  projectGameplayState,
+  type GameplayProjection,
+} from '@woven-deep/engine';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import { ThreatPanel } from './ThreatPanel.js';
 
@@ -14,7 +19,9 @@ let baseProjection: GameplayProjection;
 const SEED = [11, 22, 33, 44] as const;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../../../content'),
+  });
   const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
   baseProjection = projectGameplayState({ state: run, content: pack });
 });
@@ -40,8 +47,12 @@ describe('ThreatPanel', () => {
       ...baseProjection,
       actors: [
         {
-          actorId: 'actor.rat', name: 'Cave rat', glyph: 'r', disposition: 'hostile',
-          healthPresentation: { band: 'wounded' }, intentPresentation: 'intent.approach',
+          actorId: 'actor.rat',
+          name: 'Cave rat',
+          glyph: 'r',
+          disposition: 'hostile',
+          healthPresentation: { band: 'wounded' },
+          intentPresentation: 'intent.approach',
         },
       ],
       groundItems: [{ itemId: 'item.floor-sword', name: 'Iron sword' }],
@@ -64,10 +75,15 @@ describe('ThreatPanel', () => {
   it('ignores non-hostile visible actors', () => {
     const projection: GameplayProjection = {
       ...baseProjection,
-      actors: [{
-        actorId: 'actor.merchant', name: 'Merchant', glyph: 'm', disposition: 'friendly',
-        healthPresentation: { band: 'healthy' },
-      }],
+      actors: [
+        {
+          actorId: 'actor.merchant',
+          name: 'Merchant',
+          glyph: 'm',
+          disposition: 'friendly',
+          healthPresentation: { band: 'healthy' },
+        },
+      ],
       groundItems: [],
     } as unknown as GameplayProjection;
     render(<ThreatPanel snapshot={snapshotOf(projection)} />);

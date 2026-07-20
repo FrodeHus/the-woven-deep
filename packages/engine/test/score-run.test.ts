@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
-  compareHallRecords, createDemoContentPack, createDemoRun, scoreRun,
-  type ActiveRun, type HallRecordOrdering, type ScoreBreakdown,
+  compareHallRecords,
+  createDemoContentPack,
+  createDemoRun,
+  scoreRun,
+  type ActiveRun,
+  type HallRecordOrdering,
+  type ScoreBreakdown,
 } from '../src/index.js';
 
 function withMetrics(run: ActiveRun, metrics: Partial<ActiveRun['metrics']>): ActiveRun {
@@ -80,7 +85,9 @@ describe('scoreRun', () => {
       finalized: false,
     });
     const breakdown = scoreRun({ run, content });
-    const completionLine = breakdown.lines.find((candidate) => candidate.lineId === 'completion-bonus')!;
+    const completionLine = breakdown.lines.find(
+      (candidate) => candidate.lineId === 'completion-bonus',
+    )!;
     expect(completionLine.amount).toBe(0);
   });
 
@@ -108,7 +115,11 @@ describe('scoreRun', () => {
 });
 
 describe('compareHallRecords', () => {
-  function record(recordId: string, completionType: HallRecordOrdering['completionType'], total: number): HallRecordOrdering {
+  function record(
+    recordId: string,
+    completionType: HallRecordOrdering['completionType'],
+    total: number,
+  ): HallRecordOrdering {
     return { recordId, completionType, score: breakdownWith(total) };
   }
 

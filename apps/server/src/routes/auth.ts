@@ -5,7 +5,12 @@ import type { VerifyService } from '../auth/verify-service.js';
 import type { SessionService } from '../auth/session-service.js';
 import type { SettingsService } from '../auth/settings-service.js';
 import type { MailTransport } from '../auth/mail-transport.js';
-import { requireOrigin, requireCsrf, readSessionToken, SESSION_COOKIE_NAME } from '../auth/http-guards.js';
+import {
+  requireOrigin,
+  requireCsrf,
+  readSessionToken,
+  SESSION_COOKIE_NAME,
+} from '../auth/http-guards.js';
 
 const SESSION_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 

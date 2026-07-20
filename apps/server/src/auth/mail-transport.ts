@@ -52,7 +52,10 @@ function createMailgunTransport(
   };
 }
 
-export function createMailTransport(config: AuthConfig, fetchImpl: typeof fetch = fetch): MailTransport {
+export function createMailTransport(
+  config: AuthConfig,
+  fetchImpl: typeof fetch = fetch,
+): MailTransport {
   if (config.mailgun === null) {
     return createDevMailTransport();
   }

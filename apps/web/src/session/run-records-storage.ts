@@ -1,7 +1,13 @@
 import {
   standingsFromRecords,
-  type DiscoveryProtectionBonus, type DiscoveryProtectionUpdate, type HeartLineageRecord,
-  type LifetimeDeltas, type LifetimeState, type OpaqueId, type RunMetrics, type RunRecordRepository,
+  type DiscoveryProtectionBonus,
+  type DiscoveryProtectionUpdate,
+  type HeartLineageRecord,
+  type LifetimeDeltas,
+  type LifetimeState,
+  type OpaqueId,
+  type RunMetrics,
+  type RunRecordRepository,
   type StoredHallRecord,
 } from '@woven-deep/engine';
 import type { SessionStorageLike } from './storage.js';
@@ -29,12 +35,24 @@ interface PersistedHallState {
 
 function emptyLifetimeMetrics(): RunMetrics {
   return {
-    kills: 0, killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },
-    bossKills: 0, championKills: 0, echoKills: 0, threatDefeated: 0,
-    damageDealt: 0, damageTaken: 0, itemsCollected: 0, itemsIdentified: 0,
-    currencyEarned: 0, currencySpent: 0, tradesCompleted: 0,
-    floorsEntered: 0, deepestDepth: 0, discoveriesRevealed: 0,
-    turnsElapsed: 0, restsCompleted: 0,
+    kills: 0,
+    killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },
+    bossKills: 0,
+    championKills: 0,
+    echoKills: 0,
+    threatDefeated: 0,
+    damageDealt: 0,
+    damageTaken: 0,
+    itemsCollected: 0,
+    itemsIdentified: 0,
+    currencyEarned: 0,
+    currencySpent: 0,
+    tradesCompleted: 0,
+    floorsEntered: 0,
+    deepestDepth: 0,
+    discoveriesRevealed: 0,
+    turnsElapsed: 0,
+    restsCompleted: 0,
   };
 }
 
@@ -43,7 +61,9 @@ function emptyPersistedState(): PersistedHallState {
     records: [],
     heart: null,
     lifetime: {
-      conqueredChampionRecordIds: [], grantedAchievementIds: [], discoveryProtection: [],
+      conqueredChampionRecordIds: [],
+      grantedAchievementIds: [],
+      discoveryProtection: [],
       totals: emptyLifetimeMetrics(),
     },
     appliedDeltaRecordIds: [],
@@ -86,7 +106,11 @@ function mergeMetrics(totals: RunMetrics, delta: RunMetrics): RunMetrics {
   return {
     kills: checkedAdd(totals.kills, delta.kills, 'kills'),
     killsByModel: {
-      individual: checkedAdd(totals.killsByModel.individual, delta.killsByModel.individual, 'killsByModel.individual'),
+      individual: checkedAdd(
+        totals.killsByModel.individual,
+        delta.killsByModel.individual,
+        'killsByModel.individual',
+      ),
       group: checkedAdd(totals.killsByModel.group, delta.killsByModel.group, 'killsByModel.group'),
       swarm: checkedAdd(totals.killsByModel.swarm, delta.killsByModel.swarm, 'killsByModel.swarm'),
       boss: checkedAdd(totals.killsByModel.boss, delta.killsByModel.boss, 'killsByModel.boss'),
@@ -104,7 +128,11 @@ function mergeMetrics(totals: RunMetrics, delta: RunMetrics): RunMetrics {
     tradesCompleted: checkedAdd(totals.tradesCompleted, delta.tradesCompleted, 'tradesCompleted'),
     floorsEntered: checkedAdd(totals.floorsEntered, delta.floorsEntered, 'floorsEntered'),
     deepestDepth: Math.max(totals.deepestDepth, delta.deepestDepth),
-    discoveriesRevealed: checkedAdd(totals.discoveriesRevealed, delta.discoveriesRevealed, 'discoveriesRevealed'),
+    discoveriesRevealed: checkedAdd(
+      totals.discoveriesRevealed,
+      delta.discoveriesRevealed,
+      'discoveriesRevealed',
+    ),
     turnsElapsed: checkedAdd(totals.turnsElapsed, delta.turnsElapsed, 'turnsElapsed'),
     restsCompleted: checkedAdd(totals.restsCompleted, delta.restsCompleted, 'restsCompleted'),
   };
@@ -114,7 +142,10 @@ function compareCodeUnits(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function mergedSortedUnion(existing: readonly OpaqueId[], additions: readonly OpaqueId[]): readonly OpaqueId[] {
+function mergedSortedUnion(
+  existing: readonly OpaqueId[],
+  additions: readonly OpaqueId[],
+): readonly OpaqueId[] {
   return [...new Set([...existing, ...additions])].sort(compareCodeUnits);
 }
 
@@ -145,7 +176,8 @@ function isValidPersistedState(value: unknown): value is PersistedHallState {
   if (!Array.isArray(lifetimeRecord['conqueredChampionRecordIds'])) return false;
   if (!Array.isArray(lifetimeRecord['grantedAchievementIds'])) return false;
   if (!Array.isArray(lifetimeRecord['discoveryProtection'])) return false;
-  if (lifetimeRecord['totals'] === null || typeof lifetimeRecord['totals'] !== 'object') return false;
+  if (lifetimeRecord['totals'] === null || typeof lifetimeRecord['totals'] !== 'object')
+    return false;
   if (!Array.isArray(candidate['appliedDeltaRecordIds'])) return false;
   return true;
 }
@@ -174,7 +206,9 @@ export function createSessionRunRecordRepository(storage: SessionStorageLike): R
     }
     if (!valid) {
       storage.set(RECORDS_KEY, JSON.stringify(emptyPersistedState()));
-      throw new SessionHallCorruptError('the stored Hall of Records blob is corrupt and has been reset');
+      throw new SessionHallCorruptError(
+        'the stored Hall of Records blob is corrupt and has been reset',
+      );
     }
     state = parsed as PersistedHallState;
   }
@@ -186,7 +220,10 @@ export function createSessionRunRecordRepository(storage: SessionStorageLike): R
 
   function persist(): void {
     const toPersist: PersistedHallState = {
-      records: hall, heart, lifetime, appliedDeltaRecordIds: [...appliedDeltaRecordIds],
+      records: hall,
+      heart,
+      lifetime,
+      appliedDeltaRecordIds: [...appliedDeltaRecordIds],
     };
     storage.set(RECORDS_KEY, JSON.stringify(toPersist));
   }
@@ -200,7 +237,9 @@ export function createSessionRunRecordRepository(storage: SessionStorageLike): R
     },
     appendRecord(stored) {
       if (hall.some((existing) => existing.recordId === stored.recordId)) {
-        throw new Error(`the immutable append-only Hall already contains record ${stored.recordId}`);
+        throw new Error(
+          `the immutable append-only Hall already contains record ${stored.recordId}`,
+        );
       }
       hall.push(deepFreezeCopy(stored));
       persist();
@@ -220,10 +259,17 @@ export function createSessionRunRecordRepository(storage: SessionStorageLike): R
       appliedDeltaRecordIds.add(deltas.recordId);
       lifetime = {
         conqueredChampionRecordIds: mergedSortedUnion(
-          lifetime.conqueredChampionRecordIds, deltas.newlyConqueredChampionRecordIds),
+          lifetime.conqueredChampionRecordIds,
+          deltas.newlyConqueredChampionRecordIds,
+        ),
         grantedAchievementIds: mergedSortedUnion(
-          lifetime.grantedAchievementIds, deltas.achievementGrants.map((grant) => grant.achievementId)),
-        discoveryProtection: mergedDiscoveryProtection(lifetime.discoveryProtection, deltas.discoveryProtectionUpdates),
+          lifetime.grantedAchievementIds,
+          deltas.achievementGrants.map((grant) => grant.achievementId),
+        ),
+        discoveryProtection: mergedDiscoveryProtection(
+          lifetime.discoveryProtection,
+          deltas.discoveryProtectionUpdates,
+        ),
         totals: mergeMetrics(lifetime.totals, deltas.metrics),
       };
       persist();

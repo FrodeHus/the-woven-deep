@@ -39,7 +39,11 @@ describe('createAuthBundle', () => {
     });
 
     const profiles = new ProfileRepository(database);
-    profiles.create({ id: 'profile-1', normalizedEmail: 'expired@example.com', nowIso: evenEarlier });
+    profiles.create({
+      id: 'profile-1',
+      normalizedEmail: 'expired@example.com',
+      nowIso: evenEarlier,
+    });
 
     const sessions = new SessionRepository(database);
     sessions.insert({

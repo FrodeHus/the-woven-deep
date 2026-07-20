@@ -29,13 +29,18 @@ export function deriveRunActorStats(input: RunActorStatsInput): DerivedActorStat
   return deriveActorStats({
     attributes: input.actor.attributes,
     formulas: balance.formulas,
-    equipmentModifiers: equipmentModifiers({ run: input.state, content: input.content, actorId: input.actor.actorId })
-      .map((source) => source.modifiers),
+    equipmentModifiers: equipmentModifiers({
+      run: input.state,
+      content: input.content,
+      actorId: input.actor.actorId,
+    }).map((source) => source.modifiers),
     conditionModifiers: [
       ...conditionModifiers(input.actor, input.content),
       hungerModifiers({ stage: input.state.survival.hungerStage, balance }),
     ],
-    heroModifiers: input.state.hero !== undefined && input.actor.actorId === input.state.hero.actorId
-      ? [input.state.hero.statModifiers] : [],
+    heroModifiers:
+      input.state.hero !== undefined && input.actor.actorId === input.state.hero.actorId
+        ? [input.state.hero.statModifiers]
+        : [],
   });
 }

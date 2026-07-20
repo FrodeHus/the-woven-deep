@@ -9,13 +9,19 @@ import type { PanelProps } from './types.js';
  * renders dim, `visible` renders lit (both colored from the cell's own `tint`, same as `MapPane`)
  * -- the same knowledge-driven read-only rendering, without any scrolling viewport (the whole
  * floor is laid out; the rail itself scrolls if it overflows). */
-function MinimapCell({ cell, isHero }: Readonly<{ cell: ObservableCell; isHero: boolean }>): JSX.Element {
+function MinimapCell({
+  cell,
+  isHero,
+}: Readonly<{ cell: ObservableCell; isHero: boolean }>): JSX.Element {
   if (cell.knowledge === 'unknown') return <span className="block bg-transparent" />;
   if (isHero) return <span className="block bg-accent" />;
 
   const style: CSSProperties = {};
   if (cell.tint) {
-    style.backgroundColor = visibleForeground(cell.tint, cell.knowledge === 'remembered' ? 0 : cell.intensity);
+    style.backgroundColor = visibleForeground(
+      cell.tint,
+      cell.knowledge === 'remembered' ? 0 : cell.intensity,
+    );
   }
 
   return <span className="block bg-muted" style={style} />;

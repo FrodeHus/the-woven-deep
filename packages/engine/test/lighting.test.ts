@@ -23,32 +23,64 @@ const fixed = (lightId: string, x: number, y: number, color: RgbColor): LightSou
 
 describe('illumination values', () => {
   it('uses exact integer linear falloff', () => {
-    const field = computeIllumination({ width, height, tiles, ambient: dark,
-      lights: [fixed('light.red', 3, 2, [255, 0, 0])], actors: new Map() });
+    const field = computeIllumination({
+      width,
+      height,
+      tiles,
+      ambient: dark,
+      lights: [fixed('light.red', 3, 2, [255, 0, 0])],
+      actors: new Map(),
+    });
 
     expect([field.red[at(3, 2)], field.red[at(4, 2)], field.red[at(5, 2)]]).toEqual([255, 170, 85]);
   });
 
   it('floors source strength before flooring each colored channel', () => {
     const source = { ...fixed('light.dim', 3, 2, [100, 50, 25]), strength: 100 };
-    const field = computeIllumination({ width, height, tiles, ambient: dark, lights: [source], actors: new Map() });
+    const field = computeIllumination({
+      width,
+      height,
+      tiles,
+      ambient: dark,
+      lights: [source],
+      actors: new Map(),
+    });
 
     expect([field.red[at(3, 2)], field.green[at(3, 2)], field.blue[at(3, 2)]]).toEqual([39, 19, 9]);
     expect([field.red[at(4, 2)], field.green[at(4, 2)], field.blue[at(4, 2)]]).toEqual([25, 12, 6]);
   });
 
   it('uses ceiling Euclidean distance bands', () => {
-    const field = computeIllumination({ width, height, tiles, ambient: dark,
-      lights: [fixed('light.red', 3, 2, [255, 0, 0])], actors: new Map() });
+    const field = computeIllumination({
+      width,
+      height,
+      tiles,
+      ambient: dark,
+      lights: [fixed('light.red', 3, 2, [255, 0, 0])],
+      actors: new Map(),
+    });
 
     expect(field.red[at(4, 3)]).toBe(85);
     expect(field.red[at(5, 4)]).toBe(0);
   });
 
   it('supports absolute darkness and low colored ambient light', () => {
-    const absolute = computeIllumination({ width, height, tiles, ambient: dark, lights: [], actors: new Map() });
-    const low = computeIllumination({ width, height, tiles,
-      ambient: { color: [80, 100, 120], strength: 5 }, lights: [], actors: new Map() });
+    const absolute = computeIllumination({
+      width,
+      height,
+      tiles,
+      ambient: dark,
+      lights: [],
+      actors: new Map(),
+    });
+    const low = computeIllumination({
+      width,
+      height,
+      tiles,
+      ambient: { color: [80, 100, 120], strength: 5 },
+      lights: [],
+      actors: new Map(),
+    });
 
     expect([absolute.red[0], absolute.green[0], absolute.blue[0]]).toEqual([0, 0, 0]);
     expect([low.red[0], low.green[0], low.blue[0]]).toEqual([1, 1, 2]);
@@ -56,21 +88,36 @@ describe('illumination values', () => {
   });
 
   it('adds differently colored sources and caps every channel', () => {
-    const field = computeIllumination({ width, height, tiles, ambient: dark, actors: new Map(), lights: [
-      fixed('light.blue', 3, 2, [0, 0, 255]),
-      fixed('light.red-a', 3, 2, [255, 0, 0]),
-      fixed('light.red-b', 3, 2, [255, 0, 0]),
-    ] });
+    const field = computeIllumination({
+      width,
+      height,
+      tiles,
+      ambient: dark,
+      actors: new Map(),
+      lights: [
+        fixed('light.blue', 3, 2, [0, 0, 255]),
+        fixed('light.red-a', 3, 2, [255, 0, 0]),
+        fixed('light.red-b', 3, 2, [255, 0, 0]),
+      ],
+    });
 
-    expect([field.red[at(3, 2)], field.green[at(3, 2)], field.blue[at(3, 2)]]).toEqual([255, 0, 255]);
+    expect([field.red[at(3, 2)], field.green[at(3, 2)], field.blue[at(3, 2)]]).toEqual([
+      255, 0, 255,
+    ]);
     expect(field.intensity[at(3, 2)]).toBe(255);
   });
 
   it('occludes light behind a wall while lighting the wall', () => {
     const blocked = [...tiles];
     blocked[at(3, 2)] = 0;
-    const field = computeIllumination({ width, height, tiles: blocked, ambient: dark,
-      lights: [fixed('light.red', 3, 3, [255, 0, 0])], actors: new Map() });
+    const field = computeIllumination({
+      width,
+      height,
+      tiles: blocked,
+      ambient: dark,
+      lights: [fixed('light.red', 3, 3, [255, 0, 0])],
+      actors: new Map(),
+    });
 
     expect(field.red[at(3, 2)]).toBeGreaterThan(0);
     expect(field.red[at(3, 1)]).toBe(0);
@@ -82,10 +129,22 @@ describe('illumination values', () => {
       location: { type: 'actor', actorId: 'hero.demo' },
     };
 
-    const first = computeIllumination({ width, height, tiles, ambient: dark, lights: [source],
-      actors: new Map([['hero.demo', { x: 3, y: 2 }]]) });
-    const moved = computeIllumination({ width, height, tiles, ambient: dark, lights: [source],
-      actors: new Map([['hero.demo', { x: 1, y: 1 }]]) });
+    const first = computeIllumination({
+      width,
+      height,
+      tiles,
+      ambient: dark,
+      lights: [source],
+      actors: new Map([['hero.demo', { x: 3, y: 2 }]]),
+    });
+    const moved = computeIllumination({
+      width,
+      height,
+      tiles,
+      ambient: dark,
+      lights: [source],
+      actors: new Map([['hero.demo', { x: 1, y: 1 }]]),
+    });
 
     expect(first.intensity[at(3, 2)]).toBe(255);
     expect(moved.intensity[at(1, 1)]).toBe(255);
@@ -95,7 +154,14 @@ describe('illumination values', () => {
 
   it('ignores disabled sources after validating them', () => {
     const disabled = { ...fixed('light.off', 3, 2, [255, 0, 0]), enabled: false };
-    const field = computeIllumination({ width, height, tiles, ambient: dark, lights: [disabled], actors: new Map() });
+    const field = computeIllumination({
+      width,
+      height,
+      tiles,
+      ambient: dark,
+      lights: [disabled],
+      actors: new Map(),
+    });
 
     expect(field.red.every((channel) => channel === 0)).toBe(true);
   });
@@ -107,8 +173,22 @@ describe('illumination values', () => {
       fixed('light.green', 3, 1, [0, 255, 0]),
     ];
 
-    const forward = computeIllumination({ width, height, tiles, ambient: dark, lights: sources, actors: new Map() });
-    const reverse = computeIllumination({ width, height, tiles, ambient: dark, lights: [...sources].reverse(), actors: new Map() });
+    const forward = computeIllumination({
+      width,
+      height,
+      tiles,
+      ambient: dark,
+      lights: sources,
+      actors: new Map(),
+    });
+    const reverse = computeIllumination({
+      width,
+      height,
+      tiles,
+      ambient: dark,
+      lights: [...sources].reverse(),
+      actors: new Map(),
+    });
 
     expect(JSON.stringify(forward)).toBe(JSON.stringify(reverse));
   });
@@ -123,8 +203,22 @@ describe('illumination values', () => {
     const actors = new Map([['hero.demo', Object.freeze({ x: 1, y: 1 })]]);
     const before = JSON.stringify({ ambient, source, floor, actors: [...actors] });
 
-    const field = computeIllumination({ width, height, tiles: floor, ambient, lights: Object.freeze([source]), actors });
-    const next = computeIllumination({ width, height, tiles: floor, ambient, lights: Object.freeze([source]), actors });
+    const field = computeIllumination({
+      width,
+      height,
+      tiles: floor,
+      ambient,
+      lights: Object.freeze([source]),
+      actors,
+    });
+    const next = computeIllumination({
+      width,
+      height,
+      tiles: floor,
+      ambient,
+      lights: Object.freeze([source]),
+      actors,
+    });
 
     expect(JSON.stringify({ ambient, source, floor, actors: [...actors] })).toBe(before);
     expect(new Set([field.red, field.green, field.blue, field.intensity])).toHaveLength(4);
@@ -136,15 +230,16 @@ describe('illumination values', () => {
 });
 
 describe('illumination input validation', () => {
-  const calculate = (overrides: Record<string, unknown> = {}): unknown => computeIllumination({
-    width,
-    height,
-    tiles,
-    ambient: dark,
-    lights: [],
-    actors: new Map(),
-    ...overrides,
-  } as Parameters<typeof computeIllumination>[0]);
+  const calculate = (overrides: Record<string, unknown> = {}): unknown =>
+    computeIllumination({
+      width,
+      height,
+      tiles,
+      ambient: dark,
+      lights: [],
+      actors: new Map(),
+      ...overrides,
+    } as Parameters<typeof computeIllumination>[0]);
 
   it.each([
     ['zero width', { width: 0 }],
@@ -169,7 +264,10 @@ describe('illumination input validation', () => {
   it.each([
     ['fractional ambient color', { color: [1.5, 2, 3], strength: 1 }],
     ['out-of-range ambient color', { color: [1, 2, 256], strength: 1 }],
-    ['sparse ambient color', { color: Object.assign(Array<number>(3), { 0: 1, 2: 3 }), strength: 1 }],
+    [
+      'sparse ambient color',
+      { color: Object.assign(Array<number>(3), { 0: 1, 2: 3 }), strength: 1 },
+    ],
     ['fractional ambient strength', { color: [1, 2, 3], strength: 1.5 }],
     ['negative ambient strength', { color: [1, 2, 3], strength: -1 }],
     ['excess ambient strength', { color: [1, 2, 3], strength: 256 }],
@@ -198,7 +296,9 @@ describe('illumination input validation', () => {
     ['unsupported falloff', { falloff: 'quadratic' }],
     ['invalid light ID', { lightId: 'Light Bad' }],
   ])('rejects a source with %s', (_label, change) => {
-    expect(() => calculate({ lights: [{ ...fixed('light.valid', 1, 1, [1, 2, 3]), ...change }] })).toThrow();
+    expect(() =>
+      calculate({ lights: [{ ...fixed('light.valid', 1, 1, [1, 2, 3]), ...change }] }),
+    ).toThrow();
   });
 
   it('validates disabled sources and their actor attachment', () => {
@@ -269,14 +369,19 @@ describe('illumination input validation', () => {
     ['fractional fixed coordinate', { x: 1.5, y: 1 }],
     ['out-of-bounds fixed coordinate', { x: width, y: 1 }],
   ])('rejects %s', (_label, coordinates) => {
-    const source = { ...fixed('light.fixed', 1, 1, [1, 2, 3]), location: { type: 'fixed', ...coordinates } };
+    const source = {
+      ...fixed('light.fixed', 1, 1, [1, 2, 3]),
+      location: { type: 'fixed', ...coordinates },
+    };
     expect(() => calculate({ lights: [source] })).toThrow(/location/);
   });
 
   it('rejects a fixed source on void terrain', () => {
     const floor = [...tiles];
     floor[at(1, 1)] = 6;
-    expect(() => calculate({ tiles: floor, lights: [fixed('light.void', 1, 1, [1, 2, 3])] })).toThrow(/void/);
+    expect(() =>
+      calculate({ tiles: floor, lights: [fixed('light.void', 1, 1, [1, 2, 3])] }),
+    ).toThrow(/void/);
   });
 
   it('rejects unresolved and malformed actor locations', () => {
@@ -286,8 +391,12 @@ describe('illumination input validation', () => {
     };
 
     expect(() => calculate({ lights: [source] })).toThrow(/actor.hero/);
-    expect(() => calculate({ lights: [source], actors: new Map([['actor.hero', { x: 1.5, y: 1 }]]) })).toThrow(/actor.hero/);
-    expect(() => calculate({ lights: [source], actors: new Map([['actor.hero', { x: width, y: 1 }]]) })).toThrow(/actor.hero/);
+    expect(() =>
+      calculate({ lights: [source], actors: new Map([['actor.hero', { x: 1.5, y: 1 }]]) }),
+    ).toThrow(/actor.hero/);
+    expect(() =>
+      calculate({ lights: [source], actors: new Map([['actor.hero', { x: width, y: 1 }]]) }),
+    ).toThrow(/actor.hero/);
   });
 
   it('rejects actor-attached ownership and presentation', () => {
@@ -297,23 +406,38 @@ describe('illumination input validation', () => {
     };
     const actors = new Map([['actor.hero', { x: 1, y: 1 }]]);
 
-    expect(() => calculate({ actors, lights: [{ ...actor, vaultPlacementId: 'vault.1' }] })).toThrow(/vaultPlacementId/);
-    expect(() => calculate({ actors, lights: [{ ...actor, presentation: { glyph: '*', token: 'fixture.lamp' } }] })).toThrow(/presentation/);
+    expect(() =>
+      calculate({ actors, lights: [{ ...actor, vaultPlacementId: 'vault.1' }] }),
+    ).toThrow(/vaultPlacementId/);
+    expect(() =>
+      calculate({
+        actors,
+        lights: [{ ...actor, presentation: { glyph: '*', token: 'fixture.lamp' } }],
+      }),
+    ).toThrow(/presentation/);
   });
 
   it('requires vault-owned fixed sources to be presented and allows non-vault presentation', () => {
     const base = fixed('light.vault', 1, 1, [1, 2, 3]);
     const presentation = { glyph: '*', token: 'fixture.lamp' };
 
-    expect(() => calculate({ lights: [{ ...base, vaultPlacementId: 'vault.1' }] })).toThrow(/presentation/);
+    expect(() => calculate({ lights: [{ ...base, vaultPlacementId: 'vault.1' }] })).toThrow(
+      /presentation/,
+    );
     expect(() => calculate({ lights: [{ ...base, presentation }] })).not.toThrow();
-    expect(() => calculate({ lights: [{ ...base, vaultPlacementId: 'vault.1', presentation }] })).not.toThrow();
+    expect(() =>
+      calculate({ lights: [{ ...base, vaultPlacementId: 'vault.1', presentation }] }),
+    ).not.toThrow();
   });
 
   it('validates presented source glyphs and tokens', () => {
     const base = { ...fixed('light.vault', 1, 1, [1, 2, 3]), vaultPlacementId: 'vault.1' };
 
-    expect(() => calculate({ lights: [{ ...base, presentation: { glyph: '**', token: 'fixture.lamp' } }] })).toThrow(/glyph/);
-    expect(() => calculate({ lights: [{ ...base, presentation: { glyph: '*', token: 'Bad Token' } }] })).toThrow(/token/);
+    expect(() =>
+      calculate({ lights: [{ ...base, presentation: { glyph: '**', token: 'fixture.lamp' } }] }),
+    ).toThrow(/glyph/);
+    expect(() =>
+      calculate({ lights: [{ ...base, presentation: { glyph: '*', token: 'Bad Token' } }] }),
+    ).toThrow(/token/);
   });
 });

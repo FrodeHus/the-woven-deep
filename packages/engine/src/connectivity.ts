@@ -39,7 +39,13 @@ function candidateNeighbors(index: number, width: number, height: number): reado
 
 export function analyzeConnectivity(input: ConnectivityInput): ConnectivityAnalysis {
   const { width, height, tiles } = input;
-  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0 || tiles.length !== width * height) {
+  if (
+    !Number.isSafeInteger(width) ||
+    !Number.isSafeInteger(height) ||
+    width <= 0 ||
+    height <= 0 ||
+    tiles.length !== width * height
+  ) {
     throw new RangeError('connectivity dimensions and dense tile count must agree');
   }
   let traversableCellCount = 0;
@@ -52,20 +58,39 @@ export function analyzeConnectivity(input: ConnectivityInput): ConnectivityAnaly
     }
   }
   const pointIndex = (point: Readonly<{ x: number; y: number }>, label: string): number => {
-    if (!Number.isSafeInteger(point.x) || !Number.isSafeInteger(point.y) || point.x < 0 || point.y < 0 || point.x >= width || point.y >= height) {
+    if (
+      !Number.isSafeInteger(point.x) ||
+      !Number.isSafeInteger(point.y) ||
+      point.x < 0 ||
+      point.y < 0 ||
+      point.x >= width ||
+      point.y >= height
+    ) {
       throw new RangeError(`${label} is out of bounds`);
     }
     const index = point.y * width + point.x;
-    if (!tileDefinition(tiles[index]!).potentiallyTraversable) throw new RangeError(`${label} is not traversable`);
+    if (!tileDefinition(tiles[index]!).potentiallyTraversable)
+      throw new RangeError(`${label} is not traversable`);
     return index;
   };
   const start = input.start ? pointIndex(input.start, 'start') : first;
   const target = input.target ? pointIndex(input.target, 'target') : -1;
   const visitedWords = Array(Math.ceil(tiles.length / 32)).fill(0) as number[];
-  if (start === -1) return { visitedWords, componentSize: 0, traversableCellCount: 0, connected: true, distance: null, route: [] };
-  const distance = new Int32Array(tiles.length); distance.fill(-1);
-  const previous = new Int32Array(tiles.length); previous.fill(-1);
-  const queue = [start]; distance[start] = 0;
+  if (start === -1)
+    return {
+      visitedWords,
+      componentSize: 0,
+      traversableCellCount: 0,
+      connected: true,
+      distance: null,
+      route: [],
+    };
+  const distance = new Int32Array(tiles.length);
+  distance.fill(-1);
+  const previous = new Int32Array(tiles.length);
+  previous.fill(-1);
+  const queue = [start];
+  distance[start] = 0;
   visitedWords[start >>> 5] = (visitedWords[start >>> 5]! | ((1 << (start & 31)) >>> 0)) >>> 0;
   for (let cursor = 0; cursor < queue.length; cursor += 1) {
     const current = queue[cursor]!;
@@ -94,30 +119,49 @@ export function analyzeConnectivity(input: ConnectivityInput): ConnectivityAnaly
 
 export function preservesRequiredRoutes(input: RequiredRouteInput): boolean {
   const { width, height, tiles } = input;
-  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height)
-    || width <= 0 || height <= 0 || tiles.length !== width * height) {
+  if (
+    !Number.isSafeInteger(width) ||
+    !Number.isSafeInteger(height) ||
+    width <= 0 ||
+    height <= 0 ||
+    tiles.length !== width * height
+  ) {
     throw new RangeError('required route dimensions and dense tile count must agree');
   }
   if (input.requiredPoints.length < 2) return true;
   const indexOf = (point: Readonly<{ x: number; y: number }>, label: string): number => {
-    if (!Number.isSafeInteger(point.x) || !Number.isSafeInteger(point.y)
-      || point.x < 0 || point.y < 0 || point.x >= width || point.y >= height) {
+    if (
+      !Number.isSafeInteger(point.x) ||
+      !Number.isSafeInteger(point.y) ||
+      point.x < 0 ||
+      point.y < 0 ||
+      point.x >= width ||
+      point.y >= height
+    ) {
       throw new RangeError(`${label} is out of bounds`);
     }
     return point.y * width + point.x;
   };
   const blocked = new Set(input.blockedPoints.map((point) => indexOf(point, 'blocked point')));
   const required = input.requiredPoints.map((point) => indexOf(point, 'required point'));
-  if (required.some((index) => blocked.has(index)
-    || !tileDefinition(tiles[index]!).potentiallyTraversable)) return false;
+  if (
+    required.some(
+      (index) => blocked.has(index) || !tileDefinition(tiles[index]!).potentiallyTraversable,
+    )
+  )
+    return false;
   const visited = new Uint8Array(tiles.length);
   const queue = [required[0]!];
   visited[required[0]!] = 1;
   for (let cursor = 0; cursor < queue.length; cursor += 1) {
     const current = queue[cursor]!;
     for (const next of candidateNeighbors(current, width, height)) {
-      if (visited[next] === 1 || blocked.has(next)
-        || !tileDefinition(tiles[next]!).potentiallyTraversable) continue;
+      if (
+        visited[next] === 1 ||
+        blocked.has(next) ||
+        !tileDefinition(tiles[next]!).potentiallyTraversable
+      )
+        continue;
       visited[next] = 1;
       queue.push(next);
     }

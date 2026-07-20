@@ -7,7 +7,13 @@ import type { ItemInstance } from './item-model.js';
 import { createUnknownKnowledge } from './knowledge.js';
 import type { MerchantPopulation } from './merchant-model.js';
 import type {
-  ActiveRun, CommandResult, DomainEvent, FloorSnapshot, GameCommand, PublicEvent, TileId,
+  ActiveRun,
+  CommandResult,
+  DomainEvent,
+  FloorSnapshot,
+  GameCommand,
+  PublicEvent,
+  TileId,
 } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { placePopulation } from './population-placement.js';
@@ -33,15 +39,21 @@ const BOSS_DEPTH = 5;
 const HERO_WEAPON_ID = 'item.run-records-demo.sword';
 
 export const RUN_RECORDS_REPLAY_BOUNDARIES = [
-  'before-group-fight', 'before-swarm', 'before-boss', 'before-trade',
-  'before-merchant-attack', 'before-death', 'before-finalize',
+  'before-group-fight',
+  'before-swarm',
+  'before-boss',
+  'before-trade',
+  'before-merchant-attack',
+  'before-death',
+  'before-finalize',
 ] as const;
 
-export type RunRecordsBoundary = typeof RUN_RECORDS_REPLAY_BOUNDARIES[number];
+export type RunRecordsBoundary = (typeof RUN_RECORDS_REPLAY_BOUNDARIES)[number];
 
 /** Boundaries whose transition is a persisted player command; `before-finalize` is finalization. */
 const COMMAND_BOUNDARIES = RUN_RECORDS_REPLAY_BOUNDARIES.filter(
-  (boundary) => boundary !== 'before-finalize');
+  (boundary) => boundary !== 'before-finalize',
+);
 
 export interface RunRecordsDemoRecord {
   readonly boundary: RunRecordsBoundary;
@@ -73,7 +85,9 @@ export interface RunRecordsDemoInput {
  * content packs can never perturb which encounter the fixed-depth demo selects.
  */
 function encounter(pack: CompiledContentPack, id: string): EncounterContentEntry {
-  const result = pack.entries.find((entry): entry is EncounterContentEntry => entry.kind === 'encounter' && entry.id === id);
+  const result = pack.entries.find(
+    (entry): entry is EncounterContentEntry => entry.kind === 'encounter' && entry.id === id,
+  );
   if (!result) throw new Error(`run-records fixture requires the ${id} encounter`);
   return result;
 }
@@ -85,55 +99,92 @@ function demoFloor(run: ActiveRun, floorId: string, depth: number): FloorSnapsho
     return x === 0 || y === 0 || x === WIDTH - 1 || y === HEIGHT - 1 ? 0 : 1;
   });
   const base: FloorSnapshot = {
-    ...run.floors[0]!, floorId, width: WIDTH, height: HEIGHT, depth, tiles, entities: [],
-    stairUp: null, stairDown: null, vaults: [], placementSlots: [],
-    knowledge: createUnknownKnowledge(tiles.length), lights: [],
+    ...run.floors[0]!,
+    floorId,
+    width: WIDTH,
+    height: HEIGHT,
+    depth,
+    tiles,
+    entities: [],
+    stairUp: null,
+    stairDown: null,
+    vaults: [],
+    placementSlots: [],
+    knowledge: createUnknownKnowledge(tiles.length),
+    lights: [],
   };
   const hero = run.actors[0]!;
   const actor = { ...hero, floorId };
   return {
     ...base,
     knowledge: refreshKnowledge({
-      floor: base, hero: heroPerception(run.hero, actor),
+      floor: base,
+      hero: heroPerception(run.hero, actor),
       actors: new Map([[actor.actorId, actor]]),
     }).knowledge,
   };
 }
 
-function publishPlacement(run: ActiveRun,
-  placement: Extract<ReturnType<typeof placePopulation>, { status: 'placed' }>): ActiveRun {
+function publishPlacement(
+  run: ActiveRun,
+  placement: Extract<ReturnType<typeof placePopulation>, { status: 'placed' }>,
+): ActiveRun {
   return {
     ...run,
-    actors: [...run.actors, ...placement.createdActors]
-      .sort((a, b) => compareCodeUnits(a.actorId, b.actorId)),
-    populations: [...run.populations, placement.population]
-      .sort((a, b) => compareCodeUnits(a.populationId, b.populationId)),
-    items: [...run.items, ...placement.createdItems]
-      .sort((a, b) => compareCodeUnits(a.itemId, b.itemId)),
-    floors: run.floors.map((floor) => floor.floorId === placement.floor.floorId ? placement.floor : floor),
+    actors: [...run.actors, ...placement.createdActors].sort((a, b) =>
+      compareCodeUnits(a.actorId, b.actorId),
+    ),
+    populations: [...run.populations, placement.population].sort((a, b) =>
+      compareCodeUnits(a.populationId, b.populationId),
+    ),
+    items: [...run.items, ...placement.createdItems].sort((a, b) =>
+      compareCodeUnits(a.itemId, b.itemId),
+    ),
+    floors: run.floors.map((floor) =>
+      floor.floorId === placement.floor.floorId ? placement.floor : floor,
+    ),
     encounterDecisions: placement.encounterDecisions,
     rng: {
-      ...run.rng, encounters: placement.nextEncounterState,
-      ...(placement.nextMerchantStockState === null ? {} : { 'merchant-stock': placement.nextMerchantStockState }),
+      ...run.rng,
+      encounters: placement.nextEncounterState,
+      ...(placement.nextMerchantStockState === null
+        ? {}
+        : { 'merchant-stock': placement.nextMerchantStockState }),
     },
   };
 }
 
 function heroWeapon(actorId: string): ItemInstance {
   return {
-    itemId: HERO_WEAPON_ID, contentId: 'item.iron-sword', quantity: 1, condition: 100,
-    enchantment: null, identified: true, charges: null, fuel: null, enabled: null,
+    itemId: HERO_WEAPON_ID,
+    contentId: 'item.iron-sword',
+    quantity: 1,
+    condition: 100,
+    enchantment: null,
+    identified: true,
+    charges: null,
+    fuel: null,
+    enabled: null,
     location: { type: 'equipped', actorId, slot: 'main-hand' },
   };
 }
 
-function place(run: ActiveRun, floorId: string, encounterId: string, pack: CompiledContentPack): ActiveRun {
+function place(
+  run: ActiveRun,
+  floorId: string,
+  encounterId: string,
+  pack: CompiledContentPack,
+): ActiveRun {
   const placement = placePopulation({
-    run, floor: run.floors.find((floor) => floor.floorId === floorId)!,
-    content: pack, forcedEncounterId: encounterId,
+    run,
+    floor: run.floors.find((floor) => floor.floorId === floorId)!,
+    content: pack,
+    forcedEncounterId: encounterId,
   });
   if (placement.status !== 'placed') {
-    throw new Error(`run-records fixture could not place ${encounterId} on ${floorId}: ${placement.reason}`);
+    throw new Error(
+      `run-records fixture could not place ${encounterId} on ${floorId}: ${placement.reason}`,
+    );
   }
   return publishPlacement(run, placement);
 }
@@ -162,15 +213,26 @@ export function createRunRecordsDemoRun(pack: CompiledContentPack): ActiveRun {
     rng: identified.rng,
     activeFloorId: HOME_FLOOR_ID,
     actors: base.actors.map((actor) => ({
-      ...actor, floorId: HOME_FLOOR_ID, x: 9, y: 6, health: 100_000, maxHealth: 100_000,
+      ...actor,
+      floorId: HOME_FLOOR_ID,
+      x: 9,
+      y: 6,
+      health: 100_000,
+      maxHealth: 100_000,
     })),
     floors: [home, bossFloor].sort((left, right) => compareCodeUnits(left.floorId, right.floorId)),
-    encounterDecisions: pack.entries.filter((entry): entry is EncounterContentEntry => entry.kind === 'encounter')
+    encounterDecisions: pack.entries
+      .filter((entry): entry is EncounterContentEntry => entry.kind === 'encounter')
       .sort((left, right) => compareCodeUnits(left.id, right.id))
       .map((entry) => ({
-        encounterId: entry.id, baseProbability: entry.runAppearanceChance, protectionBonus: 0,
-        effectiveProbability: entry.runAppearanceChance, eligible: true, reachedEligibleDepth: false,
-        encountered: false, instancesCreated: 0,
+        encounterId: entry.id,
+        baseProbability: entry.runAppearanceChance,
+        protectionBonus: 0,
+        effectiveProbability: entry.runAppearanceChance,
+        eligible: true,
+        reachedEligibleDepth: false,
+        encountered: false,
+        instancesCreated: 0,
       })),
   };
   run = place(run, HOME_FLOOR_ID, group.id, pack);
@@ -179,16 +241,23 @@ export function createRunRecordsDemoRun(pack: CompiledContentPack): ActiveRun {
   run = place(run, BOSS_FLOOR_ID, boss.id, pack);
 
   // Force a leader onto the group even when the authored leaderChance did not roll one.
-  const groupPopulation = run.populations.find((population): population is GroupPopulation =>
-    population.model === 'group')!;
+  const groupPopulation = run.populations.find(
+    (population): population is GroupPopulation => population.model === 'group',
+  )!;
   if (groupPopulation.leaderActorId === null) {
     const leaderId = groupPopulation.livingMemberIds[0]!;
     run = {
       ...run,
-      populations: run.populations.map((population) => population.populationId === groupPopulation.populationId
-        ? { ...groupPopulation, leaderActorId: leaderId, bonusActive: true } : population),
-      actors: run.actors.map((actor) => actor.actorId === leaderId
-        ? { ...actor, populationPresentation: { ...actor.populationPresentation!, leader: true } } : actor),
+      populations: run.populations.map((population) =>
+        population.populationId === groupPopulation.populationId
+          ? { ...groupPopulation, leaderActorId: leaderId, bonusActive: true }
+          : population,
+      ),
+      actors: run.actors.map((actor) =>
+        actor.actorId === leaderId
+          ? { ...actor, populationPresentation: { ...actor.populationPresentation!, leader: true } }
+          : actor,
+      ),
     };
   }
 
@@ -196,8 +265,11 @@ export function createRunRecordsDemoRun(pack: CompiledContentPack): ActiveRun {
   run = {
     ...run,
     items: [...run.items, heroWeapon(heroId)].sort((a, b) => compareCodeUnits(a.itemId, b.itemId)),
-    actors: run.actors.map((actor) => actor.actorId === heroId
-      ? { ...actor, equipment: { ...actor.equipment, 'main-hand': HERO_WEAPON_ID } } : actor),
+    actors: run.actors.map((actor) =>
+      actor.actorId === heroId
+        ? { ...actor, equipment: { ...actor.equipment, 'main-hand': HERO_WEAPON_ID } }
+        : actor,
+    ),
   };
   run = recordFloorEntered(run, HOME_DEPTH);
   validateRunRecordsInvariants(run, pack);
@@ -215,8 +287,11 @@ export function validateRunRecordsInvariants(run: ActiveRun, pack: CompiledConte
       throw new Error(`run-records invariant: metric ${name} must be a non-negative safe integer`);
     }
   }
-  const modelSum = metrics.killsByModel.individual + metrics.killsByModel.group
-    + metrics.killsByModel.swarm + metrics.killsByModel.boss;
+  const modelSum =
+    metrics.killsByModel.individual +
+    metrics.killsByModel.group +
+    metrics.killsByModel.swarm +
+    metrics.killsByModel.boss;
   if (metrics.kills < modelSum) {
     throw new Error('run-records invariant: kills must be at least the killsByModel sum');
   }
@@ -227,19 +302,38 @@ export function validateRunRecordsInvariants(run: ActiveRun, pack: CompiledConte
 }
 
 function merchantOnFloor(run: ActiveRun): MerchantPopulation {
-  const population = run.populations.find((candidate): candidate is MerchantPopulation =>
-    candidate.model === 'merchant');
+  const population = run.populations.find(
+    (candidate): candidate is MerchantPopulation => candidate.model === 'merchant',
+  );
   if (!population) throw new Error('run-records fixture requires a merchant');
   return population;
 }
 
-function freeCellAround(run: ActiveRun, floorId: string, target: Readonly<{ x: number; y: number }>,
-  excludedActorId: string): Readonly<{ x: number; y: number }> {
+function freeCellAround(
+  run: ActiveRun,
+  floorId: string,
+  target: Readonly<{ x: number; y: number }>,
+  excludedActorId: string,
+): Readonly<{ x: number; y: number }> {
   const floor = run.floors.find((candidate) => candidate.floorId === floorId)!;
-  const occupied = new Set(run.actors
-    .filter((actor) => actor.actorId !== excludedActorId && actor.floorId === floorId && actor.health > 0)
-    .map((actor) => `${actor.x}:${actor.y}`));
-  for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+  const occupied = new Set(
+    run.actors
+      .filter(
+        (actor) =>
+          actor.actorId !== excludedActorId && actor.floorId === floorId && actor.health > 0,
+      )
+      .map((actor) => `${actor.x}:${actor.y}`),
+  );
+  for (const [dx, dy] of [
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+    [0, -1],
+    [1, 1],
+    [-1, 1],
+    [1, -1],
+    [-1, -1],
+  ] as const) {
     const x = target.x + dx;
     const y = target.y + dy;
     if (x < 0 || y < 0 || x >= floor.width || y >= floor.height) continue;
@@ -257,7 +351,7 @@ function combatCritState(state: ActiveRun): ActiveRun {
   for (let seed = 1; seed < 100_000; seed += 1) {
     const rigged = expandLegacySeed(seed);
     const step = nextUint32(rigged);
-    if (step.value < limit && step.value % sides + 1 === sides) {
+    if (step.value < limit && (step.value % sides) + 1 === sides) {
       return { ...state, rng: { ...state.rng, combat: rigged } };
     }
   }
@@ -265,8 +359,11 @@ function combatCritState(state: ActiveRun): ActiveRun {
 }
 
 /** Positions the hero adjacent to the target and rigs a guaranteed critical hit for an attack. */
-function prepareHeroAttack(state: ActiveRun, targetActorId: string,
-  targetHealth: number | null): ActiveRun {
+function prepareHeroAttack(
+  state: ActiveRun,
+  targetActorId: string,
+  targetHealth: number | null,
+): ActiveRun {
   const hero = state.actors.find((actor) => actor.actorId === state.hero.actorId)!;
   const target = state.actors.find((actor) => actor.actorId === targetActorId);
   if (!target) throw new Error(`run-records fixture attack target ${targetActorId} is missing`);
@@ -276,14 +373,19 @@ function prepareHeroAttack(state: ActiveRun, targetActorId: string,
   const destination = freeCellAround(state, hero.floorId, hero, targetActorId);
   const positioned: ActiveRun = {
     ...state,
-    actors: state.actors.map((actor) => actor.actorId === state.hero.actorId
-      ? { ...actor, energy: 100 }
-      : actor.actorId === targetActorId
-        ? {
-          ...actor, ...destination,
-          ...(targetHealth === null ? {} : { health: targetHealth, maxHealth: Math.max(actor.maxHealth, targetHealth) }),
-        }
-        : actor),
+    actors: state.actors.map((actor) =>
+      actor.actorId === state.hero.actorId
+        ? { ...actor, energy: 100 }
+        : actor.actorId === targetActorId
+          ? {
+              ...actor,
+              ...destination,
+              ...(targetHealth === null
+                ? {}
+                : { health: targetHealth, maxHealth: Math.max(actor.maxHealth, targetHealth) }),
+            }
+          : actor,
+    ),
   };
   return combatCritState(positioned);
 }
@@ -291,31 +393,42 @@ function prepareHeroAttack(state: ActiveRun, targetActorId: string,
 /** Fixture floor change: only production `hero.moved` events relocate the hero cell itself. */
 function moveHeroToFloor(state: ActiveRun, floorId: string): ActiveRun {
   const depth = state.floors.find((floor) => floor.floorId === floorId)?.depth;
-  if (depth === undefined) throw new Error(`run-records fixture cannot enter unknown floor ${floorId}`);
-  return recordFloorEntered({
-    ...state,
-    activeFloorId: floorId,
-    activeFloorEnteredAt: state.worldTime,
-    actors: state.actors.map((actor) => actor.actorId === state.hero.actorId
-      ? { ...actor, floorId } : actor),
-  }, depth);
+  if (depth === undefined)
+    throw new Error(`run-records fixture cannot enter unknown floor ${floorId}`);
+  return recordFloorEntered(
+    {
+      ...state,
+      activeFloorId: floorId,
+      activeFloorEnteredAt: state.worldTime,
+      actors: state.actors.map((actor) =>
+        actor.actorId === state.hero.actorId ? { ...actor, floorId } : actor,
+      ),
+    },
+    depth,
+  );
 }
 
-function prepareBoundary(state: ActiveRun, boundary: RunRecordsBoundary,
-  pack: CompiledContentPack): ActiveRun {
+function prepareBoundary(
+  state: ActiveRun,
+  boundary: RunRecordsBoundary,
+  pack: CompiledContentPack,
+): ActiveRun {
   if (boundary === 'before-group-fight') {
-    const group = state.populations.find((population): population is GroupPopulation =>
-      population.model === 'group')!;
+    const group = state.populations.find(
+      (population): population is GroupPopulation => population.model === 'group',
+    )!;
     return prepareHeroAttack(state, group.leaderActorId!, 1);
   }
   if (boundary === 'before-swarm') {
-    const swarm = state.populations.find((population): population is SwarmPopulation =>
-      population.model === 'swarm')!;
+    const swarm = state.populations.find(
+      (population): population is SwarmPopulation => population.model === 'swarm',
+    )!;
     return prepareHeroAttack(state, swarm.sourceActorId, 1);
   }
   if (boundary === 'before-boss') {
-    const boss = state.populations.find((population): population is BossPopulation =>
-      population.model === 'boss')!;
+    const boss = state.populations.find(
+      (population): population is BossPopulation => population.model === 'boss',
+    )!;
     const bossActor = state.actors.find((actor) => actor.actorId === boss.actorId)!;
     // Bring the boss just above its first phase threshold so one non-lethal hit crosses it.
     const threshold = Math.floor(bossActor.maxHealth * 0.65) + 5;
@@ -329,8 +442,9 @@ function prepareBoundary(state: ActiveRun, boundary: RunRecordsBoundary,
     const cell = freeCellAround(home, HOME_FLOOR_ID, merchantActor, home.hero.actorId);
     return {
       ...home,
-      actors: home.actors.map((actor) => actor.actorId === home.hero.actorId
-        ? { ...actor, ...cell } : actor),
+      actors: home.actors.map((actor) =>
+        actor.actorId === home.hero.actorId ? { ...actor, ...cell } : actor,
+      ),
     };
   }
   if (boundary === 'before-merchant-attack') {
@@ -344,42 +458,64 @@ function prepareBoundary(state: ActiveRun, boundary: RunRecordsBoundary,
     // A surviving hostile group member lands a fatal opportunity attack as the 1-HP hero steps
     // away, crediting the killer inside the same transition.
     const hero = state.actors.find((actor) => actor.actorId === state.hero.actorId)!;
-    const killer = state.actors.find((actor) => actor.actorId !== hero.actorId
-      && actor.floorId === hero.floorId && actor.health > 0 && actor.populationId !== null
-      && state.populations.find((population) => population.populationId === actor.populationId)?.model === 'group');
-    if (!killer) throw new Error('run-records fixture requires a surviving group member to fell the hero');
+    const killer = state.actors.find(
+      (actor) =>
+        actor.actorId !== hero.actorId &&
+        actor.floorId === hero.floorId &&
+        actor.health > 0 &&
+        actor.populationId !== null &&
+        state.populations.find((population) => population.populationId === actor.populationId)
+          ?.model === 'group',
+    );
+    if (!killer)
+      throw new Error('run-records fixture requires a surviving group member to fell the hero');
     const east = { x: hero.x + 1, y: hero.y };
     const withKiller = {
       ...state,
-      actors: state.actors.map((actor) => actor.actorId === hero.actorId
-        ? { ...actor, health: 1 }
-        : actor.actorId === killer.actorId
-          ? { ...actor, ...east, reactionReady: true, awareActorIds: [hero.actorId], disposition: 'hostile' as const }
-          : { ...actor, reactionReady: false }),
+      actors: state.actors.map((actor) =>
+        actor.actorId === hero.actorId
+          ? { ...actor, health: 1 }
+          : actor.actorId === killer.actorId
+            ? {
+                ...actor,
+                ...east,
+                reactionReady: true,
+                awareActorIds: [hero.actorId],
+                disposition: 'hostile' as const,
+              }
+            : { ...actor, reactionReady: false },
+      ),
     };
     return combatCritState(withKiller);
   }
   return state;
 }
 
-function boundaryCommand(state: ActiveRun, boundary: RunRecordsBoundary, index: number): GameCommand {
+function boundaryCommand(
+  state: ActiveRun,
+  boundary: RunRecordsBoundary,
+  index: number,
+): GameCommand {
   const common = {
     commandId: `command.run-records-demo-${String(index + 1).padStart(2, '0')}`,
     expectedRevision: state.revision,
   };
   if (boundary === 'before-group-fight') {
-    const group = state.populations.find((population): population is GroupPopulation =>
-      population.model === 'group')!;
+    const group = state.populations.find(
+      (population): population is GroupPopulation => population.model === 'group',
+    )!;
     return { ...common, type: 'attack', targetActorId: group.leaderActorId! };
   }
   if (boundary === 'before-swarm') {
-    const swarm = state.populations.find((population): population is SwarmPopulation =>
-      population.model === 'swarm')!;
+    const swarm = state.populations.find(
+      (population): population is SwarmPopulation => population.model === 'swarm',
+    )!;
     return { ...common, type: 'attack', targetActorId: swarm.sourceActorId };
   }
   if (boundary === 'before-boss') {
-    const boss = state.populations.find((population): population is BossPopulation =>
-      population.model === 'boss')!;
+    const boss = state.populations.find(
+      (population): population is BossPopulation => population.model === 'boss',
+    )!;
     return { ...common, type: 'attack', targetActorId: boss.actorId };
   }
   if (boundary === 'before-trade') {
@@ -394,36 +530,59 @@ function boundaryCommand(state: ActiveRun, boundary: RunRecordsBoundary, index: 
   return { ...common, type: 'move', direction: 'west' };
 }
 
-export function resolveRunRecordsDemoCommand(state: ActiveRun, boundary: RunRecordsBoundary,
-  index: number, pack: CompiledContentPack): Readonly<{
-    state: ActiveRun; command: GameCommand; result: CommandResult;
-    authoritativeEvents: readonly DomainEvent[]; publicEvents: readonly PublicEvent[];
-    projection: GameplayProjection;
-  }> {
+export function resolveRunRecordsDemoCommand(
+  state: ActiveRun,
+  boundary: RunRecordsBoundary,
+  index: number,
+  pack: CompiledContentPack,
+): Readonly<{
+  state: ActiveRun;
+  command: GameCommand;
+  result: CommandResult;
+  authoritativeEvents: readonly DomainEvent[];
+  publicEvents: readonly PublicEvent[];
+  projection: GameplayProjection;
+}> {
   const prepared = prepareBoundary(state, boundary, pack);
   const command = boundaryCommand(prepared, boundary, index);
   const replay = replayCommands(prepared, [command], { content: pack });
   const step = replay.steps[0]!;
-  const recorded = replay.state.recentCommands.find((entry) => entry.command.commandId === command.commandId);
+  const recorded = replay.state.recentCommands.find(
+    (entry) => entry.command.commandId === command.commandId,
+  );
   if (step.result.status === 'applied' && !recorded) {
     throw new Error(`run-records demo command ${command.commandId} was not persisted`);
   }
   validateRunRecordsInvariants(replay.state, pack);
   return {
-    state: replay.state, command, result: step.result,
-    authoritativeEvents: recorded?.events ?? [], publicEvents: step.events,
+    state: replay.state,
+    command,
+    result: step.result,
+    authoritativeEvents: recorded?.events ?? [],
+    publicEvents: step.events,
     projection: projectGameplayState({ state: replay.state, content: pack }),
   };
 }
 
 /** Finalizes the concluded run through `finalizeRun` with a fresh in-memory repository lifetime. */
-export function finalizeRunRecordsDemo(state: ActiveRun, pack: CompiledContentPack): Readonly<{
-  state: ActiveRun; record: HallRecord; deltas: LifetimeDeltas; events: readonly DomainEvent[];
+export function finalizeRunRecordsDemo(
+  state: ActiveRun,
+  pack: CompiledContentPack,
+): Readonly<{
+  state: ActiveRun;
+  record: HallRecord;
+  deltas: LifetimeDeltas;
+  events: readonly DomainEvent[];
 }> {
   const repository = createInMemoryRunRecordRepository();
   const finalized = finalizeRun({ run: state, content: pack, lifetime: repository.lifetime() });
   validateRunRecordsInvariants(finalized.run, pack);
-  return { state: finalized.run, record: finalized.record, deltas: finalized.deltas, events: finalized.events };
+  return {
+    state: finalized.run,
+    record: finalized.record,
+    deltas: finalized.deltas,
+    events: finalized.events,
+  };
 }
 
 /**
@@ -431,8 +590,10 @@ export function finalizeRunRecordsDemo(state: ActiveRun, pack: CompiledContentPa
  * named boundaries (including `before-finalize`), so continuous and fully split execution can be
  * proven byte-identical.
  */
-export function runRunRecordsDemo(pack: CompiledContentPack,
-  reloadBefore: ReadonlySet<number> = new Set()): RunRecordsDemoResult {
+export function runRunRecordsDemo(
+  pack: CompiledContentPack,
+  reloadBefore: ReadonlySet<number> = new Set(),
+): RunRecordsDemoResult {
   const initial = createRunRecordsDemoRun(pack);
   let state = initial;
   const records: RunRecordsDemoRecord[] = [];
@@ -442,14 +603,21 @@ export function runRunRecordsDemo(pack: CompiledContentPack,
     state = resolved.state;
     if (boundary === 'before-merchant-attack') {
       if (resolved.result.status !== 'applied') {
-        throw new Error(`run-records demo merchant attack was rejected: ${stableJson(resolved.result)}`);
+        throw new Error(
+          `run-records demo merchant attack was rejected: ${stableJson(resolved.result)}`,
+        );
       }
     } else if (resolved.result.status !== 'applied') {
-      throw new Error(`run-records demo command ${resolved.command.commandId} was rejected: ${stableJson(resolved.result)}`);
+      throw new Error(
+        `run-records demo command ${resolved.command.commandId} was rejected: ${stableJson(resolved.result)}`,
+      );
     }
     records.push({
-      boundary, command: resolved.command, commandResult: resolved.result,
-      authoritativeEvents: resolved.authoritativeEvents, publicEvents: resolved.publicEvents,
+      boundary,
+      command: resolved.command,
+      commandResult: resolved.result,
+      authoritativeEvents: resolved.authoritativeEvents,
+      publicEvents: resolved.publicEvents,
       projection: resolved.projection,
     });
   }
@@ -458,15 +626,26 @@ export function runRunRecordsDemo(pack: CompiledContentPack,
   if (reloadBefore.has(finalizeIndex)) state = decodeActiveRun(encodeActiveRun(state));
   const finalization = finalizeRunRecordsDemo(state, pack);
   return {
-    initial, state: finalization.state, records,
-    finalization: { record: finalization.record, deltas: finalization.deltas, events: finalization.events },
+    initial,
+    state: finalization.state,
+    records,
+    finalization: {
+      record: finalization.record,
+      deltas: finalization.deltas,
+      events: finalization.events,
+    },
   };
 }
 
-export function runRecordsDemoEquivalent(left: RunRecordsDemoResult, right: RunRecordsDemoResult): boolean {
-  return encodeActiveRun(left.state) === encodeActiveRun(right.state)
-    && stableJson(left.records) === stableJson(right.records)
-    && stableJson(left.finalization?.record) === stableJson(right.finalization?.record)
-    && stableJson(left.finalization?.deltas) === stableJson(right.finalization?.deltas)
-    && stableJson(left.finalization?.events) === stableJson(right.finalization?.events);
+export function runRecordsDemoEquivalent(
+  left: RunRecordsDemoResult,
+  right: RunRecordsDemoResult,
+): boolean {
+  return (
+    encodeActiveRun(left.state) === encodeActiveRun(right.state) &&
+    stableJson(left.records) === stableJson(right.records) &&
+    stableJson(left.finalization?.record) === stableJson(right.finalization?.record) &&
+    stableJson(left.finalization?.deltas) === stableJson(right.finalization?.deltas) &&
+    stableJson(left.finalization?.events) === stableJson(right.finalization?.events)
+  );
 }

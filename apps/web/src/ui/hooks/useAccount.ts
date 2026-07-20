@@ -10,7 +10,10 @@ export interface UseAccountResult {
  * proves otherwise. `accountOverride` is the test-only seam that skips the network fetch entirely, seeding
  * state directly. `setAccount` is exposed so callers can flip the account themselves (e.g. on
  * sign-out). */
-export function useAccount(fetcher: typeof fetch, accountOverride?: AccountState): UseAccountResult {
+export function useAccount(
+  fetcher: typeof fetch,
+  accountOverride?: AccountState,
+): UseAccountResult {
   const [account, setAccount] = useState<AccountState>(accountOverride ?? GUEST_ACCOUNT);
   useEffect(() => {
     if (accountOverride) return;

@@ -22,7 +22,7 @@ describe('FacetedOptionList', () => {
         marker="single"
         selected={() => false}
         onSelect={() => {}}
-      />
+      />,
     );
     expect(screen.queryByPlaceholderText('Search...')).not.toBeInTheDocument();
   });
@@ -36,7 +36,7 @@ describe('FacetedOptionList', () => {
         marker="single"
         selected={() => false}
         onSelect={() => {}}
-      />
+      />,
     );
     const search = screen.getByPlaceholderText('Search...');
     expect(search).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe('FacetedOptionList', () => {
         marker="single"
         selected={(entry) => entry.id === 'entry-1'}
         onSelect={onSelect}
-      />
+      />,
     );
     const list = screen.getByRole('listbox', { name: 'Test list' });
     expect(list).not.toHaveAttribute('aria-multiselectable');
@@ -77,9 +77,12 @@ describe('FacetedOptionList', () => {
         marker="multi"
         selected={(entry) => entry.id === 'entry-0'}
         onSelect={() => {}}
-      />
+      />,
     );
-    expect(screen.getByRole('listbox', { name: 'Test list' })).toHaveAttribute('aria-multiselectable', 'true');
+    expect(screen.getByRole('listbox', { name: 'Test list' })).toHaveAttribute(
+      'aria-multiselectable',
+      'true',
+    );
     expect(screen.getByRole('option', { name: /Entry 0/ }).textContent).toContain('[×]');
     expect(screen.getByRole('option', { name: /Entry 1/ }).textContent).toContain('[ ]');
   });
@@ -96,7 +99,7 @@ describe('FacetedOptionList', () => {
         marker="single"
         selected={() => false}
         onSelect={() => {}}
-      />
+      />,
     );
     expect(screen.getByText('+2 defense')).toBeInTheDocument();
     const lockedOption = screen.getByRole('option', { name: /B/ });
@@ -114,7 +117,7 @@ describe('FacetedOptionList', () => {
         onSelect={() => {}}
       >
         <span data-testid="slot">0/2</span>
-      </FacetedOptionList>
+      </FacetedOptionList>,
     );
     expect(screen.getByTestId('slot')).toBeInTheDocument();
   });

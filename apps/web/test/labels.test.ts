@@ -21,12 +21,15 @@ describe('effectLabel', () => {
   });
 
   it('phrases a heal effect with a positive bonus', () => {
-    expect(effectLabel('effect.heal', { dice: { count: 1, sides: 4, bonus: 1 } })).toBe('Heal 1d4+1');
+    expect(effectLabel('effect.heal', { dice: { count: 1, sides: 4, bonus: 1 } })).toBe(
+      'Heal 1d4+1',
+    );
   });
 
   it('phrases a damage effect with its dice and damage type', () => {
-    expect(effectLabel('effect.damage', { damageType: 'fire', dice: { count: 1, sides: 6, bonus: 1 } }))
-      .toBe('Deal 1d6+1 fire damage');
+    expect(
+      effectLabel('effect.damage', { damageType: 'fire', dice: { count: 1, sides: 6, bonus: 1 } }),
+    ).toBe('Deal 1d6+1 fire damage');
   });
 
   it('phrases a hunger-restore effect with its amount', () => {

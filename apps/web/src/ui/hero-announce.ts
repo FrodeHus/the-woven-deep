@@ -55,7 +55,10 @@ export interface HeroAnnounceSnapshot {
  *    dropped off the list since last tick ("X has faded."), keyed by conditionId so a stack/duration
  *    change on an already-present condition is silent.
  */
-export function heroAnnouncements(prev: HeroAnnounceSnapshot, next: HeroAnnounceSnapshot): string[] {
+export function heroAnnouncements(
+  prev: HeroAnnounceSnapshot,
+  next: HeroAnnounceSnapshot,
+): string[] {
   const messages: string[] = [];
 
   const prevBand = healthBand(prev.health, prev.maxHealth);
@@ -105,7 +108,10 @@ export interface FloorAnnounceSnapshot {
  *  - Entering the town announces "Returned to the town."; entering a dungeon depth announces
  *    "Depth N."
  */
-export function floorAnnouncement(prev: FloorAnnounceSnapshot | null, next: FloorAnnounceSnapshot): string | null {
+export function floorAnnouncement(
+  prev: FloorAnnounceSnapshot | null,
+  next: FloorAnnounceSnapshot,
+): string | null {
   if (prev === null || prev.floorId === next.floorId) return null;
   return next.town ? 'Returned to the town.' : `Depth ${next.depth}.`;
 }

@@ -7,7 +7,13 @@ import type { ItemInstance } from './item-model.js';
 import { createUnknownKnowledge } from './knowledge.js';
 import type { MerchantPopulation } from './merchant-model.js';
 import type {
-  ActiveRun, CommandResult, DomainEvent, FloorSnapshot, GameCommand, PublicEvent, TileId,
+  ActiveRun,
+  CommandResult,
+  DomainEvent,
+  FloorSnapshot,
+  GameCommand,
+  PublicEvent,
+  TileId,
 } from './model.js';
 import { refreshKnowledge } from './perception.js';
 import { placePopulation } from './population-placement.js';
@@ -28,13 +34,21 @@ const SWORD_ITEM_ID = 'item.merchant-demo.sword';
 const RING_ITEM_ID = 'item.merchant-demo.ring';
 
 export const MERCHANT_REPLAY_BOUNDARIES = [
-  'before-open', 'before-buy', 'before-sell', 'before-identify', 'before-close',
-  'before-warning', 'before-provoke', 'before-death', 'before-refusal',
-  'before-return', 'before-departure',
+  'before-open',
+  'before-buy',
+  'before-sell',
+  'before-identify',
+  'before-close',
+  'before-warning',
+  'before-provoke',
+  'before-death',
+  'before-refusal',
+  'before-return',
+  'before-departure',
 ] as const;
 
 export interface MerchantDemoRecord {
-  readonly boundary: typeof MERCHANT_REPLAY_BOUNDARIES[number];
+  readonly boundary: (typeof MERCHANT_REPLAY_BOUNDARIES)[number];
   readonly command: GameCommand;
   readonly commandResult: CommandResult;
   readonly authoritativeEvents: readonly DomainEvent[];
@@ -49,15 +63,19 @@ export interface MerchantDemoResult {
 }
 
 export interface MerchantDemoInput {
-  readonly boundary: typeof MERCHANT_REPLAY_BOUNDARIES[number];
+  readonly boundary: (typeof MERCHANT_REPLAY_BOUNDARIES)[number];
   readonly command: GameCommand;
 }
 
 function merchantEncounterEntry(pack: CompiledContentPack): MerchantEncounterContentEntry {
   // Permanent (town) merchants are never materialized through population placement, so this
   // fixture only ever selects a non-permanent, dungeon-wandering merchant encounter.
-  const entry = pack.entries.find((candidate): candidate is MerchantEncounterContentEntry =>
-    candidate.kind === 'encounter' && candidate.model === 'merchant' && !candidate.definition.permanent);
+  const entry = pack.entries.find(
+    (candidate): candidate is MerchantEncounterContentEntry =>
+      candidate.kind === 'encounter' &&
+      candidate.model === 'merchant' &&
+      !candidate.definition.permanent,
+  );
   if (!entry) throw new Error('merchant fixture requires a merchant encounter');
   return entry;
 }
@@ -69,35 +87,66 @@ function demoFloor(run: ActiveRun, floorId: string, depth: number): FloorSnapsho
     return x === 0 || y === 0 || x === WIDTH - 1 || y === HEIGHT - 1 ? 0 : 1;
   });
   const base: FloorSnapshot = {
-    ...run.floors[0]!, floorId, width: WIDTH, height: HEIGHT, depth, tiles, entities: [],
-    stairUp: null, stairDown: null, vaults: [], placementSlots: [],
-    knowledge: createUnknownKnowledge(tiles.length), lights: [],
+    ...run.floors[0]!,
+    floorId,
+    width: WIDTH,
+    height: HEIGHT,
+    depth,
+    tiles,
+    entities: [],
+    stairUp: null,
+    stairDown: null,
+    vaults: [],
+    placementSlots: [],
+    knowledge: createUnknownKnowledge(tiles.length),
+    lights: [],
   };
   const hero = run.actors[0]!;
   const actor = { ...hero, floorId };
   return {
     ...base,
     knowledge: refreshKnowledge({
-      floor: base, hero: heroPerception(run.hero, actor),
+      floor: base,
+      hero: heroPerception(run.hero, actor),
       actors: new Map([[actor.actorId, actor]]),
     }).knowledge,
   };
 }
 
 function merchantOnFloor(run: ActiveRun, floorId: string): MerchantPopulation {
-  const population = run.populations.find((candidate): candidate is MerchantPopulation =>
-    candidate.model === 'merchant' && candidate.floorId === floorId);
+  const population = run.populations.find(
+    (candidate): candidate is MerchantPopulation =>
+      candidate.model === 'merchant' && candidate.floorId === floorId,
+  );
   if (!population) throw new Error(`merchant fixture requires a merchant on ${floorId}`);
   return population;
 }
 
-function adjacentFreeCell(run: ActiveRun, floorId: string, target: Readonly<{ x: number; y: number }>,
-  excludedActorId: string): Readonly<{ x: number; y: number }> {
+function adjacentFreeCell(
+  run: ActiveRun,
+  floorId: string,
+  target: Readonly<{ x: number; y: number }>,
+  excludedActorId: string,
+): Readonly<{ x: number; y: number }> {
   const floor = run.floors.find((candidate) => candidate.floorId === floorId)!;
-  const occupied = new Set(run.actors
-    .filter((actor) => actor.actorId !== excludedActorId && actor.floorId === floorId && actor.health > 0)
-    .map((actor) => `${actor.x}:${actor.y}`));
-  for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+  const occupied = new Set(
+    run.actors
+      .filter(
+        (actor) =>
+          actor.actorId !== excludedActorId && actor.floorId === floorId && actor.health > 0,
+      )
+      .map((actor) => `${actor.x}:${actor.y}`),
+  );
+  for (const [dx, dy] of [
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+    [0, -1],
+    [1, 1],
+    [-1, 1],
+    [1, -1],
+    [-1, -1],
+  ] as const) {
     const x = target.x + dx;
     const y = target.y + dy;
     if (x < 0 || y < 0 || x >= floor.width || y >= floor.height) continue;
@@ -108,10 +157,23 @@ function adjacentFreeCell(run: ActiveRun, floorId: string, target: Readonly<{ x:
   throw new Error(`merchant fixture cannot stand adjacent to ${target.x}:${target.y}`);
 }
 
-function heroItem(itemId: string, contentId: string, identified: boolean, actorId: string): ItemInstance {
+function heroItem(
+  itemId: string,
+  contentId: string,
+  identified: boolean,
+  actorId: string,
+): ItemInstance {
   return {
-    itemId, contentId, quantity: 1, condition: 100, enchantment: null, identified,
-    charges: null, fuel: null, enabled: null, location: { type: 'backpack', actorId },
+    itemId,
+    contentId,
+    quantity: 1,
+    condition: 100,
+    enchantment: null,
+    identified,
+    charges: null,
+    fuel: null,
+    enabled: null,
+    location: { type: 'backpack', actorId },
   };
 }
 
@@ -136,35 +198,53 @@ export function createMerchantDemoRun(pack: CompiledContentPack): ActiveRun {
     activeFloorId: HOME_FLOOR_ID,
     actors: base.actors.map((actor) => ({ ...actor, floorId: HOME_FLOOR_ID, x: 9, y: 6 })),
     floors: [away, home].sort((left, right) => compareCodeUnits(left.floorId, right.floorId)),
-    encounterDecisions: pack.entries.filter((entry) => entry.kind === 'encounter')
+    encounterDecisions: pack.entries
+      .filter((entry) => entry.kind === 'encounter')
       .sort((left, right) => compareCodeUnits(left.id, right.id))
       .map((entry) => ({
-        encounterId: entry.id, baseProbability: entry.runAppearanceChance, protectionBonus: 0,
-        effectiveProbability: entry.runAppearanceChance, eligible: true, reachedEligibleDepth: false,
-        encountered: false, instancesCreated: 0,
+        encounterId: entry.id,
+        baseProbability: entry.runAppearanceChance,
+        protectionBonus: 0,
+        effectiveProbability: entry.runAppearanceChance,
+        eligible: true,
+        reachedEligibleDepth: false,
+        encountered: false,
+        instancesCreated: 0,
       })),
   };
   for (const floorId of [HOME_FLOOR_ID, AWAY_FLOOR_ID]) {
     const placement = placePopulation({
-      run, floor: run.floors.find((floor) => floor.floorId === floorId)!,
-      content: pack, forcedEncounterId: encounter.id,
+      run,
+      floor: run.floors.find((floor) => floor.floorId === floorId)!,
+      content: pack,
+      forcedEncounterId: encounter.id,
     });
     if (placement.status !== 'placed') {
-      throw new Error(`merchant fixture could not place ${encounter.id} on ${floorId}: ${placement.reason}`);
+      throw new Error(
+        `merchant fixture could not place ${encounter.id} on ${floorId}: ${placement.reason}`,
+      );
     }
     run = {
       ...run,
-      actors: [...run.actors, ...placement.createdActors]
-        .sort((left, right) => compareCodeUnits(left.actorId, right.actorId)),
-      populations: [...run.populations, placement.population]
-        .sort((left, right) => compareCodeUnits(left.populationId, right.populationId)),
-      items: [...run.items, ...placement.createdItems]
-        .sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
-      floors: run.floors.map((floor) => floor.floorId === placement.floor.floorId ? placement.floor : floor),
+      actors: [...run.actors, ...placement.createdActors].sort((left, right) =>
+        compareCodeUnits(left.actorId, right.actorId),
+      ),
+      populations: [...run.populations, placement.population].sort((left, right) =>
+        compareCodeUnits(left.populationId, right.populationId),
+      ),
+      items: [...run.items, ...placement.createdItems].sort((left, right) =>
+        compareCodeUnits(left.itemId, right.itemId),
+      ),
+      floors: run.floors.map((floor) =>
+        floor.floorId === placement.floor.floorId ? placement.floor : floor,
+      ),
       encounterDecisions: placement.encounterDecisions,
       rng: {
-        ...run.rng, encounters: placement.nextEncounterState,
-        ...(placement.nextMerchantStockState === null ? {} : { 'merchant-stock': placement.nextMerchantStockState }),
+        ...run.rng,
+        encounters: placement.nextEncounterState,
+        ...(placement.nextMerchantStockState === null
+          ? {}
+          : { 'merchant-stock': placement.nextMerchantStockState }),
       },
     };
   }
@@ -174,7 +254,9 @@ export function createMerchantDemoRun(pack: CompiledContentPack): ActiveRun {
   const heroCell = adjacentFreeCell(run, HOME_FLOOR_ID, merchantActor, heroId);
   run = {
     ...run,
-    actors: run.actors.map((actor) => actor.actorId === heroId ? { ...actor, ...heroCell } : actor),
+    actors: run.actors.map((actor) =>
+      actor.actorId === heroId ? { ...actor, ...heroCell } : actor,
+    ),
     items: [
       ...run.items,
       heroItem(SWORD_ITEM_ID, 'item.iron-sword', true, heroId),
@@ -184,14 +266,23 @@ export function createMerchantDemoRun(pack: CompiledContentPack): ActiveRun {
   const hero = run.actors.find((actor) => actor.actorId === heroId)!;
   const homeFloor = run.floors.find((floor) => floor.floorId === HOME_FLOOR_ID)!;
   const knowledge = refreshKnowledge({
-    floor: homeFloor, hero: heroPerception(run.hero, hero),
-    actors: new Map(run.actors.filter((actor) => actor.floorId === HOME_FLOOR_ID)
-      .map((actor) => [actor.actorId, actor] as const)),
+    floor: homeFloor,
+    hero: heroPerception(run.hero, hero),
+    actors: new Map(
+      run.actors
+        .filter((actor) => actor.floorId === HOME_FLOOR_ID)
+        .map((actor) => [actor.actorId, actor] as const),
+    ),
   }).knowledge;
-  run = recordFloorEntered({
-    ...run,
-    floors: run.floors.map((floor) => floor.floorId === HOME_FLOOR_ID ? { ...floor, knowledge } : floor),
-  }, home.depth);
+  run = recordFloorEntered(
+    {
+      ...run,
+      floors: run.floors.map((floor) =>
+        floor.floorId === HOME_FLOOR_ID ? { ...floor, knowledge } : floor,
+      ),
+    },
+    home.depth,
+  );
   validateActiveRun(run);
   validateContentBoundRun(run, pack);
   validateMerchantInvariants(run, pack);
@@ -206,13 +297,18 @@ export function validateMerchantInvariants(run: ActiveRun, pack: CompiledContent
     throw new Error('merchant invariant: hero currency must be a non-negative safe integer');
   }
   const factionIds = run.reputations.map((entry) => entry.factionId);
-  if (new Set(factionIds).size !== factionIds.length
-    || stableJson(factionIds) !== stableJson([...factionIds].sort(compareCodeUnits))) {
+  if (
+    new Set(factionIds).size !== factionIds.length ||
+    stableJson(factionIds) !== stableJson([...factionIds].sort(compareCodeUnits))
+  ) {
     throw new Error('merchant invariant: reputations must be sorted and unique by faction');
   }
-  const merchants = run.populations.filter((population): population is MerchantPopulation =>
-    population.model === 'merchant');
-  const living = new Set(run.actors.filter((actor) => actor.health > 0).map((actor) => actor.actorId));
+  const merchants = run.populations.filter(
+    (population): population is MerchantPopulation => population.model === 'merchant',
+  );
+  const living = new Set(
+    run.actors.filter((actor) => actor.health > 0).map((actor) => actor.actorId),
+  );
   const stockByPopulation = new Map<string, string[]>();
   for (const item of run.items) {
     if (item.location.type !== 'merchant-stock') continue;
@@ -221,13 +317,19 @@ export function validateMerchantInvariants(run: ActiveRun, pack: CompiledContent
     stockByPopulation.set(item.location.populationId, owned);
   }
   for (const merchant of merchants) {
-    if (stableJson(merchant.stockItemIds)
-      !== stableJson([...new Set(merchant.stockItemIds)].sort(compareCodeUnits))) {
-      throw new Error(`merchant invariant: ${merchant.populationId} stock ids must be sorted and unique`);
+    if (
+      stableJson(merchant.stockItemIds) !==
+      stableJson([...new Set(merchant.stockItemIds)].sort(compareCodeUnits))
+    ) {
+      throw new Error(
+        `merchant invariant: ${merchant.populationId} stock ids must be sorted and unique`,
+      );
     }
     const held = (stockByPopulation.get(merchant.populationId) ?? []).sort(compareCodeUnits);
     if (stableJson(held) !== stableJson([...merchant.stockItemIds])) {
-      throw new Error(`merchant invariant: ${merchant.populationId} stock ids and item locations diverged`);
+      throw new Error(
+        `merchant invariant: ${merchant.populationId} stock ids and item locations diverged`,
+      );
     }
     const serviceIds = merchant.services.map((service) => service.serviceId);
     if (new Set(serviceIds).size !== serviceIds.length) {
@@ -235,22 +337,35 @@ export function validateMerchantInvariants(run: ActiveRun, pack: CompiledContent
     }
     for (const service of merchant.services) {
       if (service.remainingUses < 0 || !Number.isSafeInteger(service.remainingUses)) {
-        throw new Error(`merchant invariant: ${merchant.populationId} service uses must stay non-negative`);
+        throw new Error(
+          `merchant invariant: ${merchant.populationId} service uses must stay non-negative`,
+        );
       }
-      if (stableJson(service.tierIds) !== stableJson([...new Set(service.tierIds)].sort(compareCodeUnits))) {
-        throw new Error(`merchant invariant: ${merchant.populationId} service tiers must be sorted and unique`);
+      if (
+        stableJson(service.tierIds) !==
+        stableJson([...new Set(service.tierIds)].sort(compareCodeUnits))
+      ) {
+        throw new Error(
+          `merchant invariant: ${merchant.populationId} service tiers must be sorted and unique`,
+        );
       }
     }
     if (merchant.lifecycle === 'departed' || merchant.lifecycle === 'dead') {
-      if (merchant.stockItemIds.length > 0 || merchant.livingMemberIds.length > 0
-        || living.has(merchant.actorId)) {
-        throw new Error(`merchant invariant: ${merchant.populationId} is gone but still owns an actor or stock`);
+      if (
+        merchant.stockItemIds.length > 0 ||
+        merchant.livingMemberIds.length > 0 ||
+        living.has(merchant.actorId)
+      ) {
+        throw new Error(
+          `merchant invariant: ${merchant.populationId} is gone but still owns an actor or stock`,
+        );
       }
     }
   }
   if (run.activeTrade !== null) {
-    const active = merchants.filter((merchant) =>
-      merchant.populationId === run.activeTrade!.merchantPopulationId);
+    const active = merchants.filter(
+      (merchant) => merchant.populationId === run.activeTrade!.merchantPopulationId,
+    );
     if (active.length !== 1) {
       throw new Error('merchant invariant: the active trade must reference exactly one merchant');
     }
@@ -274,30 +389,50 @@ export function merchantDemoCommands(initial: ActiveRun): readonly MerchantDemoI
       commandId: `command.merchant-demo-${String(index + 1).padStart(2, '0')}`,
       expectedRevision,
     };
-    const command: GameCommand = boundary === 'before-open'
-      ? { ...common, type: 'trade-open', merchantActorId: home.actorId }
-      : boundary === 'before-buy'
-        ? { ...common, type: 'trade-buy', merchantPopulationId: home.populationId, itemId: buyItemId, quantity: 1 }
-        : boundary === 'before-sell'
-          ? { ...common, type: 'trade-sell', merchantPopulationId: home.populationId, itemId: SWORD_ITEM_ID, quantity: 1 }
-          : boundary === 'before-identify'
-            ? {
-              ...common, type: 'trade-service', merchantPopulationId: home.populationId,
-              serviceId: 'merchant-service.identify', targetItemId: RING_ITEM_ID,
+    const command: GameCommand =
+      boundary === 'before-open'
+        ? { ...common, type: 'trade-open', merchantActorId: home.actorId }
+        : boundary === 'before-buy'
+          ? {
+              ...common,
+              type: 'trade-buy',
+              merchantPopulationId: home.populationId,
+              itemId: buyItemId,
+              quantity: 1,
             }
-            : boundary === 'before-close'
-              ? { ...common, type: 'trade-close', merchantPopulationId: home.populationId }
-              : boundary === 'before-provoke' || boundary === 'before-death'
-                ? { ...common, type: 'attack', targetActorId: home.actorId }
-                : boundary === 'before-refusal'
-                  ? { ...common, type: 'trade-open', merchantActorId: away.actorId }
-                  : { ...common, type: 'wait' };
+          : boundary === 'before-sell'
+            ? {
+                ...common,
+                type: 'trade-sell',
+                merchantPopulationId: home.populationId,
+                itemId: SWORD_ITEM_ID,
+                quantity: 1,
+              }
+            : boundary === 'before-identify'
+              ? {
+                  ...common,
+                  type: 'trade-service',
+                  merchantPopulationId: home.populationId,
+                  serviceId: 'merchant-service.identify',
+                  targetItemId: RING_ITEM_ID,
+                }
+              : boundary === 'before-close'
+                ? { ...common, type: 'trade-close', merchantPopulationId: home.populationId }
+                : boundary === 'before-provoke' || boundary === 'before-death'
+                  ? { ...common, type: 'attack', targetActorId: home.actorId }
+                  : boundary === 'before-refusal'
+                    ? { ...common, type: 'trade-open', merchantActorId: away.actorId }
+                    : { ...common, type: 'wait' };
     if (boundary !== 'before-refusal') expectedRevision += 1;
     return { boundary, command };
   });
 }
 
-function prepareCommandAttack(state: ActiveRun, targetActorId: string, targetHealth: number): ActiveRun {
+function prepareCommandAttack(
+  state: ActiveRun,
+  targetActorId: string,
+  targetHealth: number,
+): ActiveRun {
   const target = state.actors.find((actor) => actor.actorId === targetActorId);
   if (!target) throw new Error(`merchant fixture attack target ${targetActorId} does not exist`);
   const hero = state.actors.find((actor) => actor.actorId === state.hero.actorId)!;
@@ -315,14 +450,18 @@ function prepareCommandAttack(state: ActiveRun, targetActorId: string, targetHea
   }
   return {
     ...state,
-    actors: state.actors.map((actor) => actor.actorId === state.hero.actorId
-      ? { ...actor, energy: 100 }
-      : actor.actorId === targetActorId
-        ? {
-          ...actor, ...destination, health: targetHealth,
-          maxHealth: Math.max(actor.maxHealth, targetHealth),
-        }
-        : actor),
+    actors: state.actors.map((actor) =>
+      actor.actorId === state.hero.actorId
+        ? { ...actor, energy: 100 }
+        : actor.actorId === targetActorId
+          ? {
+              ...actor,
+              ...destination,
+              health: targetHealth,
+              maxHealth: Math.max(actor.maxHealth, targetHealth),
+            }
+          : actor,
+    ),
     rng: { ...state.rng, combat: combatState },
   };
 }
@@ -334,15 +473,20 @@ function prepareCommandAttack(state: ActiveRun, targetActorId: string, targetHea
 function moveHeroToFloor(state: ActiveRun, floorId: string, worldTime: number): ActiveRun {
   if (worldTime < state.worldTime) throw new Error('merchant fixture cannot reverse world time');
   const depth = state.floors.find((floor) => floor.floorId === floorId)?.depth;
-  if (depth === undefined) throw new Error(`merchant fixture cannot enter unknown floor ${floorId}`);
-  return recordFloorEntered({
-    ...state,
-    worldTime,
-    activeFloorId: floorId,
-    activeFloorEnteredAt: worldTime,
-    actors: state.actors.map((actor) => actor.actorId === state.hero.actorId
-      ? { ...actor, floorId } : actor),
-  }, depth);
+  if (depth === undefined)
+    throw new Error(`merchant fixture cannot enter unknown floor ${floorId}`);
+  return recordFloorEntered(
+    {
+      ...state,
+      worldTime,
+      activeFloorId: floorId,
+      activeFloorEnteredAt: worldTime,
+      actors: state.actors.map((actor) =>
+        actor.actorId === state.hero.actorId ? { ...actor, floorId } : actor,
+      ),
+    },
+    depth,
+  );
 }
 
 function prepareMerchantDemoBoundary(state: ActiveRun, input: MerchantDemoInput): ActiveRun {
@@ -354,7 +498,8 @@ function prepareMerchantDemoBoundary(state: ActiveRun, input: MerchantDemoInput)
       .filter((population): population is MerchantPopulation => population.model === 'merchant')
       .map((population) => population.departureAt!);
     const target = Math.min(...departures) - 1001;
-    if (target < state.worldTime) throw new Error('merchant fixture warning window has already passed');
+    if (target < state.worldTime)
+      throw new Error('merchant fixture warning window has already passed');
     return { ...state, worldTime: target };
   }
   if (boundary === 'before-provoke') {
@@ -369,34 +514,46 @@ function prepareMerchantDemoBoundary(state: ActiveRun, input: MerchantDemoInput)
     const cell = adjacentFreeCell(state, AWAY_FLOOR_ID, hero, away.actorId);
     const relocated = {
       ...state,
-      actors: state.actors.map((actor) => actor.actorId === away.actorId ? { ...actor, ...cell } : actor),
+      actors: state.actors.map((actor) =>
+        actor.actorId === away.actorId ? { ...actor, ...cell } : actor,
+      ),
     };
     return moveHeroToFloor(relocated, AWAY_FLOOR_ID, state.worldTime);
   }
   if (boundary === 'before-return') {
     const away = merchantOnFloor(state, AWAY_FLOOR_ID);
     const target = away.departureAt! - 101;
-    if (target < state.worldTime) throw new Error('merchant fixture departure window has already passed');
+    if (target < state.worldTime)
+      throw new Error('merchant fixture departure window has already passed');
     return moveHeroToFloor(state, HOME_FLOOR_ID, target);
   }
   if (boundary === 'before-departure') {
     const away = merchantOnFloor(state, AWAY_FLOOR_ID);
     const target = away.departureAt! - 1;
-    if (target < state.worldTime) throw new Error('merchant fixture departure deadline has already passed');
+    if (target < state.worldTime)
+      throw new Error('merchant fixture departure deadline has already passed');
     return { ...state, worldTime: target };
   }
   return state;
 }
 
-export function resolveMerchantDemoCommand(state: ActiveRun, input: MerchantDemoInput,
-  pack: CompiledContentPack): Readonly<{
-    state: ActiveRun; result: CommandResult; authoritativeEvents: readonly DomainEvent[];
-    publicEvents: readonly PublicEvent[]; projection: GameplayProjection;
-  }> {
+export function resolveMerchantDemoCommand(
+  state: ActiveRun,
+  input: MerchantDemoInput,
+  pack: CompiledContentPack,
+): Readonly<{
+  state: ActiveRun;
+  result: CommandResult;
+  authoritativeEvents: readonly DomainEvent[];
+  publicEvents: readonly PublicEvent[];
+  projection: GameplayProjection;
+}> {
   const prepared = prepareMerchantDemoBoundary(state, input);
   const replay = replayCommands(prepared, [input.command], { content: pack });
   const step = replay.steps[0]!;
-  const recorded = replay.state.recentCommands.find((entry) => entry.command.commandId === input.command.commandId);
+  const recorded = replay.state.recentCommands.find(
+    (entry) => entry.command.commandId === input.command.commandId,
+  );
   if (step.result.status === 'applied' && !recorded) {
     throw new Error(`merchant demo command ${input.command.commandId} was not persisted`);
   }
@@ -405,13 +562,18 @@ export function resolveMerchantDemoCommand(state: ActiveRun, input: MerchantDemo
   }
   validateMerchantInvariants(replay.state, pack);
   return {
-    state: replay.state, result: step.result, authoritativeEvents: recorded?.events ?? [],
-    publicEvents: step.events, projection: projectGameplayState({ state: replay.state, content: pack }),
+    state: replay.state,
+    result: step.result,
+    authoritativeEvents: recorded?.events ?? [],
+    publicEvents: step.events,
+    projection: projectGameplayState({ state: replay.state, content: pack }),
   };
 }
 
-export function runMerchantDemo(pack: CompiledContentPack,
-  reloadBefore: ReadonlySet<number> = new Set()): MerchantDemoResult {
+export function runMerchantDemo(
+  pack: CompiledContentPack,
+  reloadBefore: ReadonlySet<number> = new Set(),
+): MerchantDemoResult {
   const initial = createMerchantDemoRun(pack);
   let state = initial;
   const records: MerchantDemoRecord[] = [];
@@ -421,21 +583,33 @@ export function runMerchantDemo(pack: CompiledContentPack,
     state = resolved.state;
     if (input.boundary === 'before-refusal') {
       if (resolved.result.status !== 'invalid' || resolved.result.reason !== 'merchant.refuses') {
-        throw new Error(`merchant demo expected a same-faction refusal, got ${stableJson(resolved.result)}`);
+        throw new Error(
+          `merchant demo expected a same-faction refusal, got ${stableJson(resolved.result)}`,
+        );
       }
     } else if (resolved.result.status !== 'applied') {
-      throw new Error(`merchant demo command ${input.command.commandId} was rejected: ${stableJson(resolved.result)}`);
+      throw new Error(
+        `merchant demo command ${input.command.commandId} was rejected: ${stableJson(resolved.result)}`,
+      );
     }
     records.push({
-      boundary: input.boundary, command: input.command, commandResult: resolved.result,
-      authoritativeEvents: resolved.authoritativeEvents, publicEvents: resolved.publicEvents,
+      boundary: input.boundary,
+      command: input.command,
+      commandResult: resolved.result,
+      authoritativeEvents: resolved.authoritativeEvents,
+      publicEvents: resolved.publicEvents,
       projection: resolved.projection,
     });
   }
   return { initial, state, records };
 }
 
-export function merchantDemoEquivalent(left: MerchantDemoResult, right: MerchantDemoResult): boolean {
-  return encodeActiveRun(left.state) === encodeActiveRun(right.state)
-    && stableJson(left.records) === stableJson(right.records);
+export function merchantDemoEquivalent(
+  left: MerchantDemoResult,
+  right: MerchantDemoResult,
+): boolean {
+  return (
+    encodeActiveRun(left.state) === encodeActiveRun(right.state) &&
+    stableJson(left.records) === stableJson(right.records)
+  );
 }

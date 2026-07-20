@@ -34,7 +34,9 @@ test('sign in by magic link, roam a setting to a fresh device, and sign out', as
   await expect(page.getByRole('status')).toContainText(/link is on its way/i);
 
   // --- Retrieve the magic link from the dev-echo endpoint (no Mailgun configured in e2e). ---
-  const linkResponse = await request.get(`/api/dev/last-login-link?email=${encodeURIComponent(email)}`);
+  const linkResponse = await request.get(
+    `/api/dev/last-login-link?email=${encodeURIComponent(email)}`,
+  );
   expect(linkResponse.ok()).toBeTruthy();
   const { link } = (await linkResponse.json()) as { link: string };
   expect(link).toContain('/api/auth/verify?token=');

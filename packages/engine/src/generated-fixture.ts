@@ -25,7 +25,9 @@ export function createGeneratedDemoRun(pack: CompiledContentPack): GeneratedDemo
   const identified = allocateIdentificationMap({ content: pack, rng: base.rng });
   const encounters = pack.entries.filter((entry) => entry.kind === 'encounter');
   const gates = createEncounterRunDecisions({
-    encounters, protectionBonuses: [], state: identified.rng['population-gates'],
+    encounters,
+    protectionBonuses: [],
+    state: identified.rng['population-gates'],
   });
   const initialized = {
     ...base,
@@ -65,17 +67,22 @@ export function createGeneratedDemoRun(pack: CompiledContentPack): GeneratedDemo
   };
   const floor: FloorSnapshot = {
     ...generated.floor,
-    lights: [...generated.floor.lights, carriedLight]
-      .sort((left, right) => left.lightId < right.lightId ? -1 : left.lightId > right.lightId ? 1 : 0),
+    lights: [...generated.floor.lights, carriedLight].sort((left, right) =>
+      left.lightId < right.lightId ? -1 : left.lightId > right.lightId ? 1 : 0,
+    ),
   };
   const transitional: ActiveRun = {
     ...initialized,
     contentHash: pack.hash,
     runId: 'run.generated-demo',
-    actors: initialized.actors.map((actor) => actor.actorId === movedHeroActor.actorId ? movedHeroActor : actor),
+    actors: initialized.actors.map((actor) =>
+      actor.actorId === movedHeroActor.actorId ? movedHeroActor : actor,
+    ),
     activeFloorId: generated.floor.floorId,
     activeFloorEnteredAt: 0,
   };
-  const run = addGeneratedFloor(transitional, { ...generated, floor }, allocation, { content: pack });
+  const run = addGeneratedFloor(transitional, { ...generated, floor }, allocation, {
+    content: pack,
+  });
   return { run, generated, allocation };
 }

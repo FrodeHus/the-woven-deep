@@ -40,8 +40,10 @@ const TEN_TOWN_STEPS = ['6', '6', '6', '6', '4', '4', '4', '4', '6', '4'];
 async function awaitKeyboardReady(page: Page): Promise<void> {
   await expect(async () => {
     await page.keyboard.press('g');
-    await expect(page.getByRole('log', { name: /adventure log/i }))
-      .toContainText(/nothing here to pick up/i, { timeout: 250 });
+    await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(
+      /nothing here to pick up/i,
+      { timeout: 250 },
+    );
   }).toPass();
 }
 
@@ -87,13 +89,22 @@ async function buildHeroAndEnterTown(page: Page): Promise<void> {
   await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
 }
 
-test('the guest polish: onboarding, theme, the descend fade, and a clean reset', async ({ page }) => {
+test('the guest polish: onboarding, theme, the descend fade, and a clean reset', async ({
+  page,
+}) => {
   // Seed the settings blob BEFORE boot: onboarding on (explicit) and motion forced full so the
   // descend fade element is guaranteed to render (see the file header).
   await page.addInitScript(() => {
-    window.localStorage.setItem('woven-deep.settings.v1', JSON.stringify({
-      fontScale: 1, reducedMotion: 'off', theme: 'tapestry', onboarding: 'on', bindings: {},
-    }));
+    window.localStorage.setItem(
+      'woven-deep.settings.v1',
+      JSON.stringify({
+        fontScale: 1,
+        reducedMotion: 'off',
+        theme: 'tapestry',
+        onboarding: 'on',
+        bindings: {},
+      }),
+    );
   });
 
   await page.goto(SEED_QUERY);
@@ -143,9 +154,9 @@ test('the guest polish: onboarding, theme, the descend fade, and a clean reset',
   await page.getByRole('option', { name: /High contrast/ }).click();
   await expect(page.locator('.guest-app-root')).toHaveClass(/theme-high-contrast/);
   await expect(async () => {
-    const ink = await page.evaluate(() => getComputedStyle(
-      document.querySelector('.guest-app-root')!,
-    ).getPropertyValue('--ink').trim());
+    const ink = await page.evaluate(() =>
+      getComputedStyle(document.querySelector('.guest-app-root')!).getPropertyValue('--ink').trim(),
+    );
     expect(ink).toBe('#ffffff');
   }).toPass();
 
@@ -190,10 +201,9 @@ test('the guest polish: onboarding, theme, the descend fade, and a clean reset',
         'woven-deep.guest-portrait',
         'woven-deep.guest-codex',
       ].filter((key) => sessionStorage.getItem(key) !== null),
-      local: [
-        'woven-deep.settings.v1',
-        'woven-deep.onboarding.v1',
-      ].filter((key) => localStorage.getItem(key) !== null),
+      local: ['woven-deep.settings.v1', 'woven-deep.onboarding.v1'].filter(
+        (key) => localStorage.getItem(key) !== null,
+      ),
     }));
     expect(remaining.session).toEqual([]);
     expect(remaining.local).toEqual([]);

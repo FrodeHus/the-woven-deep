@@ -27,7 +27,8 @@ module.exports = {
     {
       name: 'engine-not-into-web-or-server',
       severity: 'error',
-      comment: 'The deterministic engine must not depend on app layers (web/server) or content compiler internals.',
+      comment:
+        'The deterministic engine must not depend on app layers (web/server) or content compiler internals.',
       from: { path: '^packages/engine/src' },
       to: { path: '^(apps/web|apps/server)/src' },
     },
@@ -41,7 +42,8 @@ module.exports = {
     {
       name: 'model-not-into-compiler',
       severity: 'error',
-      comment: 'Content model modules must not import from the compiler layer (keeps the vocabulary source one-directional).',
+      comment:
+        'Content model modules must not import from the compiler layer (keeps the vocabulary source one-directional).',
       from: { path: '^packages/content/src/model' },
       to: { path: '^packages/content/src/compiler' },
     },

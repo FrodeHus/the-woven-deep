@@ -26,14 +26,29 @@ export function DecisionPrompt({ snapshot, session }: DecisionPromptProps): JSX.
       className="decision-prompt"
       tabIndex={-1}
       onKeyDown={(event) => {
-        if (event.key === 'Escape') { event.preventDefault(); answer(false); return; }
-        if (event.key === 'y' || event.key === 'Y') { event.preventDefault(); answer(true); return; }
-        if (event.key === 'n' || event.key === 'N') { event.preventDefault(); answer(false); }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          answer(false);
+          return;
+        }
+        if (event.key === 'y' || event.key === 'Y') {
+          event.preventDefault();
+          answer(true);
+          return;
+        }
+        if (event.key === 'n' || event.key === 'N') {
+          event.preventDefault();
+          answer(false);
+        }
       }}
     >
       <p>Attack this target?</p>
-      <button type="button" onClick={() => answer(true)}>Yes (y)</button>
-      <button type="button" onClick={() => answer(false)}>No (n)</button>
+      <button type="button" onClick={() => answer(true)}>
+        Yes (y)
+      </button>
+      <button type="button" onClick={() => answer(false)}>
+        No (n)
+      </button>
     </div>
   );
 }

@@ -29,7 +29,9 @@ function assertUnsignedWord(word: number, label: string): void {
 
 function assertStorageIndex(index: number, capacity: number): void {
   if (!Number.isSafeInteger(index) || index < 0 || index >= capacity) {
-    throw new RangeError('knowledge index must be a nonnegative safe integer within the packed storage');
+    throw new RangeError(
+      'knowledge index must be a nonnegative safe integer within the packed storage',
+    );
   }
 }
 
@@ -55,7 +57,9 @@ export const rememberedWordCount = (cellCount: number): number => {
 
 export function createUnknownKnowledge(cellCount: number): FloorKnowledge {
   const exploredWords = Array<number>(exploredWordCount(cellCount)).fill(0);
-  const rememberedTerrainWords = Array<number>(rememberedWordCount(cellCount)).fill(UNSIGNED_32_BIT_MAX);
+  const rememberedTerrainWords = Array<number>(rememberedWordCount(cellCount)).fill(
+    UNSIGNED_32_BIT_MAX,
+  );
   const valuesInLastWord = cellCount % 8;
 
   if (valuesInLastWord !== 0) {
@@ -95,7 +99,9 @@ export function rememberTiles(
   const indexes = new Set<number>();
   for (const entry of tiles) {
     if (!Number.isSafeInteger(entry.index) || entry.index < 0 || entry.index >= cellCount) {
-      throw new RangeError('remembered tile index must be a nonnegative safe integer within the floor');
+      throw new RangeError(
+        'remembered tile index must be a nonnegative safe integer within the floor',
+      );
     }
     assertTileId(entry.tile);
     if (indexes.has(entry.index)) {
@@ -109,14 +115,15 @@ export function rememberTiles(
 
   for (const entry of tiles) {
     const exploredWordIndex = Math.floor(entry.index / 32);
-    exploredWords[exploredWordIndex] = (exploredWords[exploredWordIndex]! | (1 << (entry.index % 32))) >>> 0;
+    exploredWords[exploredWordIndex] =
+      (exploredWords[exploredWordIndex]! | (1 << (entry.index % 32))) >>> 0;
 
     const terrainWordIndex = Math.floor(entry.index / 8);
     const shift = (entry.index % 8) * 4;
     const clearTerrainValue = ~(0xf << shift);
-    rememberedTerrainWords[terrainWordIndex] = (
-      (rememberedTerrainWords[terrainWordIndex]! & clearTerrainValue) | (entry.tile << shift)
-    ) >>> 0;
+    rememberedTerrainWords[terrainWordIndex] =
+      ((rememberedTerrainWords[terrainWordIndex]! & clearTerrainValue) | (entry.tile << shift)) >>>
+      0;
   }
 
   return { exploredWords, rememberedTerrainWords };
@@ -137,7 +144,10 @@ export function validateKnowledgePacking(knowledge: FloorKnowledge, cellCount: n
     assertUnsignedWord(knowledge.exploredWords[index]!, `explored word ${index}`);
   }
   for (let index = 0; index < expectedRememberedWords; index += 1) {
-    assertUnsignedWord(knowledge.rememberedTerrainWords[index]!, `remembered terrain word ${index}`);
+    assertUnsignedWord(
+      knowledge.rememberedTerrainWords[index]!,
+      `remembered terrain word ${index}`,
+    );
   }
 
   const exploredBitsInLastWord = cellCount % 32;

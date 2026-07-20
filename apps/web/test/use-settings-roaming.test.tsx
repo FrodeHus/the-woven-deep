@@ -6,7 +6,11 @@ import { DEFAULT_SETTINGS, SETTINGS_KEY, type Settings } from '../src/session/se
 import type { SessionStorageLike } from '../src/session/storage.js';
 
 const GUEST: AccountState = { status: 'guest', email: null, csrfToken: null };
-const SIGNED_IN: AccountState = { status: 'signed-in', email: 'player@example.com', csrfToken: 'tok' };
+const SIGNED_IN: AccountState = {
+  status: 'signed-in',
+  email: 'player@example.com',
+  csrfToken: 'tok',
+};
 
 afterEach(() => {
   vi.useRealTimers();
@@ -16,7 +20,9 @@ function fakeLocalStorage(): SessionStorageLike & { peek(): string | null } {
   const values = new Map<string, string>();
   return {
     get: (key: string) => values.get(key) ?? null,
-    set: (key: string, value: string) => { values.set(key, value); },
+    set: (key: string, value: string) => {
+      values.set(key, value);
+    },
     peek: () => values.get(SETTINGS_KEY) ?? null,
   };
 }
@@ -31,7 +37,10 @@ function routedFetcher(
   return vi.fn((_url: unknown, init?: RequestInit) => {
     if (init?.method === 'PUT') {
       const headers = init.headers as Record<string, string> | undefined;
-      puts.push({ body: JSON.parse(init.body as string), csrfToken: headers?.['x-csrf-token'] ?? null });
+      puts.push({
+        body: JSON.parse(init.body as string),
+        csrfToken: headers?.['x-csrf-token'] ?? null,
+      });
       return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     }
     return Promise.resolve(new Response(JSON.stringify(profileGet), { status: 200 }));
@@ -45,7 +54,9 @@ describe('useSettingsRoaming', () => {
     const localStorage = fakeLocalStorage();
     const setSettings = vi.fn();
 
-    const { result } = renderHook(() => useSettingsRoaming(GUEST, fetcher, DEFAULT_SETTINGS, localStorage, setSettings));
+    const { result } = renderHook(() =>
+      useSettingsRoaming(GUEST, fetcher, DEFAULT_SETTINGS, localStorage, setSettings),
+    );
 
     vi.useFakeTimers();
     result.current.pushSettings({ ...DEFAULT_SETTINGS, theme: 'high-contrast' });
@@ -58,11 +69,16 @@ describe('useSettingsRoaming', () => {
     const puts: Array<{ body: unknown; csrfToken: string | null }> = [];
     // A non-empty server profile: the roam-on-sign-in effect adopts it (no PUT of its own), so
     // every PUT captured below comes from `pushSettings` alone.
-    const fetcher = routedFetcher({ settings: JSON.stringify(DEFAULT_SETTINGS), settingsVersion: 1 }, puts);
+    const fetcher = routedFetcher(
+      { settings: JSON.stringify(DEFAULT_SETTINGS), settingsVersion: 1 },
+      puts,
+    );
     const localStorage = fakeLocalStorage();
     const setSettings = vi.fn();
 
-    const { result } = renderHook(() => useSettingsRoaming(SIGNED_IN, fetcher, DEFAULT_SETTINGS, localStorage, setSettings));
+    const { result } = renderHook(() =>
+      useSettingsRoaming(SIGNED_IN, fetcher, DEFAULT_SETTINGS, localStorage, setSettings),
+    );
     await waitFor(() => expect(setSettings).toHaveBeenCalled());
 
     vi.useFakeTimers();
@@ -89,11 +105,16 @@ describe('useSettingsRoaming', () => {
     const puts: Array<{ body: unknown; csrfToken: string | null }> = [];
     // Non-empty server profile at version 10: roam adopts it (no PUT), seeding
     // `settingsVersionRef` to 10 -- the next two pushes must count up from there (11, 12).
-    const fetcher = routedFetcher({ settings: JSON.stringify(DEFAULT_SETTINGS), settingsVersion: 10 }, puts);
+    const fetcher = routedFetcher(
+      { settings: JSON.stringify(DEFAULT_SETTINGS), settingsVersion: 10 },
+      puts,
+    );
     const localStorage = fakeLocalStorage();
     const setSettings = vi.fn();
 
-    const { result } = renderHook(() => useSettingsRoaming(SIGNED_IN, fetcher, DEFAULT_SETTINGS, localStorage, setSettings));
+    const { result } = renderHook(() =>
+      useSettingsRoaming(SIGNED_IN, fetcher, DEFAULT_SETTINGS, localStorage, setSettings),
+    );
     await waitFor(() => expect(setSettings).toHaveBeenCalled());
 
     vi.useFakeTimers();
@@ -109,16 +130,23 @@ describe('useSettingsRoaming', () => {
 
   it('roam-on-sign-in: a non-empty server profile is adopted (server-wins) and written to localStorage, without triggering a PUT', async () => {
     const puts: Array<{ body: unknown; csrfToken: string | null }> = [];
-    const fetcher = routedFetcher({ settings: JSON.stringify({ theme: 'high-contrast' }), settingsVersion: 5 }, puts);
+    const fetcher = routedFetcher(
+      { settings: JSON.stringify({ theme: 'high-contrast' }), settingsVersion: 5 },
+      puts,
+    );
     const localStorage = fakeLocalStorage();
     const setSettings = vi.fn();
 
-    renderHook(() => useSettingsRoaming(SIGNED_IN, fetcher, DEFAULT_SETTINGS, localStorage, setSettings));
+    renderHook(() =>
+      useSettingsRoaming(SIGNED_IN, fetcher, DEFAULT_SETTINGS, localStorage, setSettings),
+    );
 
     await waitFor(() => expect(setSettings).toHaveBeenCalled());
     expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ theme: 'high-contrast' }));
     await waitFor(() => expect(localStorage.peek()).not.toBeNull());
-    expect(JSON.parse(localStorage.peek()!)).toEqual(expect.objectContaining({ theme: 'high-contrast' }));
+    expect(JSON.parse(localStorage.peek()!)).toEqual(
+      expect.objectContaining({ theme: 'high-contrast' }),
+    );
     expect(puts).toHaveLength(0);
   });
 
@@ -143,7 +171,8 @@ describe('useSettingsRoaming', () => {
     const setSettings = vi.fn();
 
     const { rerender } = renderHook(
-      ({ account }: { account: AccountState }) => useSettingsRoaming(account, fetcher, DEFAULT_SETTINGS, localStorage, setSettings),
+      ({ account }: { account: AccountState }) =>
+        useSettingsRoaming(account, fetcher, DEFAULT_SETTINGS, localStorage, setSettings),
       { initialProps: { account: SIGNED_IN } },
     );
 
@@ -163,7 +192,8 @@ describe('useSettingsRoaming', () => {
     const setSettings = vi.fn();
 
     const { rerender } = renderHook(
-      ({ account }: { account: AccountState }) => useSettingsRoaming(account, fetcher, DEFAULT_SETTINGS, localStorage, setSettings),
+      ({ account }: { account: AccountState }) =>
+        useSettingsRoaming(account, fetcher, DEFAULT_SETTINGS, localStorage, setSettings),
       { initialProps: { account: SIGNED_IN } },
     );
     await waitFor(() => expect(puts).toHaveLength(1));
@@ -180,7 +210,9 @@ describe('useSettingsRoaming', () => {
     const localStorage = fakeLocalStorage();
     const setSettings = vi.fn();
 
-    renderHook(() => useSettingsRoaming(SIGNED_IN, fetcher, DEFAULT_SETTINGS, localStorage, setSettings));
+    renderHook(() =>
+      useSettingsRoaming(SIGNED_IN, fetcher, DEFAULT_SETTINGS, localStorage, setSettings),
+    );
 
     await waitFor(() => expect(setSettings).toHaveBeenCalled());
     expect(setSettings).toHaveBeenCalledWith(DEFAULT_SETTINGS);
@@ -192,7 +224,9 @@ describe('useSettingsRoaming', () => {
     const setSettings = vi.fn();
 
     expect(() => {
-      renderHook(() => useSettingsRoaming(SIGNED_IN, fetcher, DEFAULT_SETTINGS, localStorage, setSettings));
+      renderHook(() =>
+        useSettingsRoaming(SIGNED_IN, fetcher, DEFAULT_SETTINGS, localStorage, setSettings),
+      );
     }).not.toThrow();
 
     await waitFor(() => expect(fetcher).toHaveBeenCalled());

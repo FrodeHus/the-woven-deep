@@ -16,7 +16,10 @@ function Harness({ onSelect, initial = 0 }: { onSelect: (i: number) => void; ini
       items={items}
       listLabel="Pack"
       selectedIndex={sel}
-      onSelect={(i) => { setSel(i); onSelect(i); }}
+      onSelect={(i) => {
+        setSel(i);
+        onSelect(i);
+      }}
       renderDetail={(item) => <p>{item ? item.label : 'nothing'}</p>}
     />
   );
@@ -103,7 +106,10 @@ describe('ListDetail', () => {
     expect(listbox).toHaveAttribute('aria-activedescendant', expect.stringContaining(firstItem.id));
 
     await user.keyboard('{ArrowDown}');
-    expect(listbox).toHaveAttribute('aria-activedescendant', expect.stringContaining(secondItem.id));
+    expect(listbox).toHaveAttribute(
+      'aria-activedescendant',
+      expect.stringContaining(secondItem.id),
+    );
 
     await user.keyboard('{ArrowDown}');
     expect(listbox).toHaveAttribute('aria-activedescendant', expect.stringContaining(lastItem.id));

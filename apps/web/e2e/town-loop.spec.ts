@@ -31,19 +31,245 @@ import { expect, test, type Page } from '@playwright/test';
 const SEED_QUERY = '/play?quickstart=1&seed=11.22.33.44';
 
 /** Depth-1 walks. */
-const TO_STAIR = ['4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '7', '7', '7', '7'];
-const KILL = ['4', '7', '8', '8', '8', '8', '8', '8', '8', '7', '7', '7', '8', '8', '8', '8', '8', '8', '8', '8', '8', '8', '7', '4', '1', '2', '2', '2', '2', '2', '2', '2', '1', '4', '4'];
-const TO_STAIR_UP = ['6', '9', '8', '8', '8', '8', '8', '8', '8', '9', '6', '3', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '3', '3', '3', '2', '3', '6'];
+const TO_STAIR = [
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '7',
+  '7',
+  '7',
+  '7',
+];
+const KILL = [
+  '4',
+  '7',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '7',
+  '7',
+  '7',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '7',
+  '4',
+  '1',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '1',
+  '4',
+  '4',
+];
+const TO_STAIR_UP = [
+  '6',
+  '9',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '9',
+  '6',
+  '3',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '3',
+  '3',
+  '3',
+  '2',
+  '3',
+  '6',
+];
 // After re-descending: walk the hero back onto the corpse cell (27,10), then to the stair-up (38,23).
-const TO_CORPSE = ['4', '7', '8', '8', '8', '8', '8', '8', '8', '7', '7', '7', '8', '8', '8', '8', '8', '8', '8', '8', '8', '8', '7', '4', '1', '2', '2', '2', '2', '2', '2', '2', '1', '4', '4'];
-const TO_STAIR_UP_2 = ['6', '6', '9', '8', '8', '8', '8', '8', '8', '8', '9', '6', '3', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '2', '3', '3', '3', '2', '3', '6'];
+const TO_CORPSE = [
+  '4',
+  '7',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '7',
+  '7',
+  '7',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '7',
+  '4',
+  '1',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '1',
+  '4',
+  '4',
+];
+const TO_STAIR_UP_2 = [
+  '6',
+  '6',
+  '9',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '8',
+  '9',
+  '6',
+  '3',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '3',
+  '3',
+  '3',
+  '2',
+  '3',
+  '6',
+];
 // Town walks.
 const TO_PROVISIONER = ['8', '8', '8', '8', '8', '9'];
-const TO_HOUSE = ['6', '6', '3', '6', '6', '6', '6', '3', '3', '3', '3', '3', '3', '3', '3', '3', '3', '6', '6', '6'];
+const TO_HOUSE = [
+  '6',
+  '6',
+  '3',
+  '6',
+  '6',
+  '6',
+  '6',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '6',
+  '6',
+  '6',
+];
 const TO_ARMORER = ['6', '6', '9', '9', '9', '9', '9', '9', '9'];
 const TO_PROVISIONER_2 = ['1', '4', '4', '4', '4', '4', '7', '7'];
-const TO_HOUSE_2 = ['3', '3', '6', '6', '6', '6', '3', '3', '3', '3', '3', '3', '3', '3', '3', '3', '6', '6', '6'];
-const TO_STAIR_2 = ['4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '4', '7', '7', '7', '7'];
+const TO_HOUSE_2 = [
+  '3',
+  '3',
+  '6',
+  '6',
+  '6',
+  '6',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '6',
+  '6',
+  '6',
+];
+const TO_STAIR_2 = [
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '7',
+  '7',
+  '7',
+  '7',
+];
 
 async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
   for (const key of keys) await page.keyboard.press(key);
@@ -54,8 +280,10 @@ async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
 async function awaitKeyboardReady(page: Page): Promise<void> {
   await expect(async () => {
     await page.keyboard.press('g');
-    await expect(page.getByRole('log', { name: /adventure log/i }))
-      .toContainText(/nothing here to pick up/i, { timeout: 250 });
+    await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(
+      /nothing here to pick up/i,
+      { timeout: 250 },
+    );
   }).toPass();
 }
 
@@ -81,7 +309,9 @@ function houseCapacityText(dialog: ReturnType<Page['getByRole']>) {
   return dialog.getByText(/^House \(\d+\/\d+\)$/);
 }
 
-test('the town loop: buy, store, descend, kill, return, sell, upgrade, retrieve, descend', async ({ page }) => {
+test('the town loop: buy, store, descend, kill, return, sell, upgrade, retrieve, descend', async ({
+  page,
+}) => {
   await page.goto(SEED_QUERY);
   await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
   const trade = page.getByRole('dialog', { name: /trade/i });

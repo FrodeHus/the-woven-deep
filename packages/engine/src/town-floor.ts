@@ -48,9 +48,14 @@ const TERRAIN_TILE_IDS = Object.fromEntries(
 // The eight neighbors of the dungeon-entrance slot, in the fixed scan order used to break ties
 // deterministically: lowest y first, then lowest x.
 const NEIGHBOR_OFFSETS: readonly Point[] = [
-  { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
-  { x: -1, y: 0 }, { x: 1, y: 0 },
-  { x: -1, y: 1 }, { x: 0, y: 1 }, { x: 1, y: 1 },
+  { x: -1, y: -1 },
+  { x: 0, y: -1 },
+  { x: 1, y: -1 },
+  { x: -1, y: 0 },
+  { x: 1, y: 0 },
+  { x: -1, y: 1 },
+  { x: 0, y: 1 },
+  { x: 1, y: 1 },
 ];
 
 function compareText(left: string, right: string): number {
@@ -69,7 +74,9 @@ function townVaultEntry(pack: CompiledContentPack): VaultContentEntry {
     (entry): entry is VaultContentEntry => entry.kind === 'vault' && entry.tags.includes('town'),
   );
   if (candidates.length !== 1) {
-    throw new Error(`generateTownFloor requires exactly one vault tagged "town", found ${candidates.length}`);
+    throw new Error(
+      `generateTownFloor requires exactly one vault tagged "town", found ${candidates.length}`,
+    );
   }
   return candidates[0]!;
 }
@@ -85,16 +92,29 @@ function slotPoint(slots: readonly TransformedVaultSlot[], slotId: string): Poin
 // the nearest walkable floor tile next to it instead. Deterministic tie-break: lowest y, then
 // lowest x, among its eight neighbors.
 function entrancePlazaFrom(
-  tiles: readonly TileId[], width: number, height: number, entrance: Point,
+  tiles: readonly TileId[],
+  width: number,
+  height: number,
+  entrance: Point,
 ): Point {
-  const candidates = NEIGHBOR_OFFSETS
-    .map((offset) => ({ x: entrance.x + offset.x, y: entrance.y + offset.y }))
-    .filter((point) => point.x >= 0 && point.x < width && point.y >= 0 && point.y < height
-      && tiles[point.y * width + point.x] === TERRAIN_TILE_IDS.floor)
+  const candidates = NEIGHBOR_OFFSETS.map((offset) => ({
+    x: entrance.x + offset.x,
+    y: entrance.y + offset.y,
+  }))
+    .filter(
+      (point) =>
+        point.x >= 0 &&
+        point.x < width &&
+        point.y >= 0 &&
+        point.y < height &&
+        tiles[point.y * width + point.x] === TERRAIN_TILE_IDS.floor,
+    )
     .sort((left, right) => left.y - right.y || left.x - right.x);
   const chosen = candidates[0];
   if (!chosen) {
-    throw new Error('generateTownFloor requires a walkable floor tile adjacent to the dungeon entrance');
+    throw new Error(
+      'generateTownFloor requires a walkable floor tile adjacent to the dungeon entrance',
+    );
   }
   return chosen;
 }
@@ -119,40 +139,49 @@ export function generateTownFloor(pack: CompiledContentPack): TownFloorResult {
   // The save schema requires both `lights` and `placementSlots` to be strictly increasing by id;
   // the vault's row-major cell order does not match alphabetical id order, so both are re-sorted
   // by id here (mirroring `placeVaults`'s own final sort in vault-placement.ts).
-  const lights: LightSource[] = transformed.fixtures.map(({ x, y, fixture }): LightSource => {
-    const lightId = `light.depth-000.0.${fixture.idSuffix}`;
-    assertOpaqueId(lightId, 'town light id');
-    return {
-      lightId,
-      location: { type: 'fixed', x, y },
-      color: [...fixture.color] as [number, number, number],
-      radius: fixture.radius,
-      strength: fixture.strength,
-      enabled: fixture.enabled,
-      falloff: 'linear',
-      vaultPlacementId: TOWN_VAULT_PLACEMENT_ID,
-      presentation: { glyph: fixture.glyph, token: fixture.presentationToken },
-    };
-  }).sort((left, right) => compareText(left.lightId, right.lightId));
+  const lights: LightSource[] = transformed.fixtures
+    .map(({ x, y, fixture }): LightSource => {
+      const lightId = `light.depth-000.0.${fixture.idSuffix}`;
+      assertOpaqueId(lightId, 'town light id');
+      return {
+        lightId,
+        location: { type: 'fixed', x, y },
+        color: [...fixture.color] as [number, number, number],
+        radius: fixture.radius,
+        strength: fixture.strength,
+        enabled: fixture.enabled,
+        falloff: 'linear',
+        vaultPlacementId: TOWN_VAULT_PLACEMENT_ID,
+        presentation: { glyph: fixture.glyph, token: fixture.presentationToken },
+      };
+    })
+    .sort((left, right) => compareText(left.lightId, right.lightId));
 
-  const placementSlots: FloorPlacementSlot[] = transformed.slots.map(({ x, y, slot }): FloorPlacementSlot => {
-    const slotId = `slot.depth-000.0.${slot.id}`;
-    assertOpaqueId(slotId, 'town slot id');
-    return {
-      slotId,
-      vaultPlacementId: TOWN_VAULT_PLACEMENT_ID,
-      kind: slot.kind,
-      required: slot.required,
-      tags: [...slot.tags],
-      x, y,
-    };
-  }).sort((left, right) => compareText(left.slotId, right.slotId));
+  const placementSlots: FloorPlacementSlot[] = transformed.slots
+    .map(({ x, y, slot }): FloorPlacementSlot => {
+      const slotId = `slot.depth-000.0.${slot.id}`;
+      assertOpaqueId(slotId, 'town slot id');
+      return {
+        slotId,
+        vaultPlacementId: TOWN_VAULT_PLACEMENT_ID,
+        kind: slot.kind,
+        required: slot.required,
+        tags: [...slot.tags],
+        x,
+        y,
+      };
+    })
+    .sort((left, right) => compareText(left.slotId, right.slotId));
 
   const vaultPlacement: VaultPlacement = {
     placementId: TOWN_VAULT_PLACEMENT_ID,
     vaultId: vault.id,
-    x: 0, y: 0, width, height,
-    rotation: 0, reflected: false,
+    x: 0,
+    y: 0,
+    width,
+    height,
+    rotation: 0,
+    reflected: false,
     entrances: transformed.entrances.map(({ x, y }) => ({ x, y })),
   };
 
@@ -168,7 +197,8 @@ export function generateTownFloor(pack: CompiledContentPack): TownFloorResult {
     floorId: TOWN_FLOOR_ID,
     seed: TOWN_FLOOR_SEED,
     generatorVersion: 2,
-    width, height,
+    width,
+    height,
     depth: 0,
     tiles,
     entities: [],

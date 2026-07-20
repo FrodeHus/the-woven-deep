@@ -6,7 +6,13 @@ import type { GameplayProjection } from '@woven-deep/engine';
 import { createNewRun, DEFAULT_GUEST_HERO, projectGameplayState } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../src/session/guest-session.js';
 import {
-  activeHint, dismissHint, HINTS, loadOnboarding, ONBOARDING_KEY, recordIntent, saveOnboarding,
+  activeHint,
+  dismissHint,
+  HINTS,
+  loadOnboarding,
+  ONBOARDING_KEY,
+  recordIntent,
+  saveOnboarding,
   type OnboardingState,
 } from '../src/session/onboarding.js';
 import { DEFAULT_SETTINGS, resolveKeymap } from '../src/session/settings.js';
@@ -20,7 +26,9 @@ const EMPTY: OnboardingState = { counts: {}, dismissed: [] };
 const KEYMAP = resolveKeymap(DEFAULT_SETTINGS.bindings);
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
   const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
   townProjection = projectGameplayState({ state: run, content: pack });
 });
@@ -29,8 +37,12 @@ function fakeStorage(): SessionStorageLike {
   const values = new Map<string, string>();
   return {
     get: (key: string) => values.get(key) ?? null,
-    set: (key: string, value: string) => { values.set(key, value); },
-    remove: (key: string) => { values.delete(key); },
+    set: (key: string, value: string) => {
+      values.set(key, value);
+    },
+    remove: (key: string) => {
+      values.delete(key);
+    },
   };
 }
 
@@ -49,7 +61,16 @@ function withMerchantAdjacent(projection: GameplayProjection): GameplayProjectio
     ...projection,
     actors: [
       ...projection.actors,
-      { actorId: 'actor.merchant', contentId: null, x: x + 1, y, disposition: 'neutral', factionName: 'Lampwrights', health: 10, maxHealth: 10 },
+      {
+        actorId: 'actor.merchant',
+        contentId: null,
+        x: x + 1,
+        y,
+        disposition: 'neutral',
+        factionName: 'Lampwrights',
+        health: 10,
+        maxHealth: 10,
+      },
     ],
   };
 }
@@ -60,7 +81,9 @@ function withStairDownUnderHero(projection: GameplayProjection): GameplayProject
     ...projection,
     floor: {
       ...projection.floor,
-      cells: projection.floor.cells.map((cell) => (cell.x === x && cell.y === y ? { ...cell, tileId: 5 as const } : cell)),
+      cells: projection.floor.cells.map((cell) =>
+        cell.x === x && cell.y === y ? { ...cell, tileId: 5 as const } : cell,
+      ),
     },
   };
 }
@@ -131,8 +154,17 @@ describe('loadOnboarding / saveOnboarding round-trip', () => {
 
 describe('HINTS', () => {
   it('is ordered movement -> inspection -> inventory -> light -> commerce -> dungeon-entry by priority', () => {
-    const ids = [...HINTS].sort((left, right) => left.priority - right.priority).map((hint) => hint.id);
-    expect(ids).toEqual(['movement', 'inspection', 'inventory', 'light', 'commerce', 'dungeon-entry']);
+    const ids = [...HINTS]
+      .sort((left, right) => left.priority - right.priority)
+      .map((hint) => hint.id);
+    expect(ids).toEqual([
+      'movement',
+      'inspection',
+      'inventory',
+      'light',
+      'commerce',
+      'dungeon-entry',
+    ]);
   });
 
   it('every copy interpolates a live chord from the resolved keymap (rebind test)', () => {
@@ -168,7 +200,10 @@ describe('activeHint', () => {
   });
 
   it('"commerce" only triggers when the hero is adjacent to a merchant', () => {
-    const mastered = { counts: { move: 10, 'open-character-sheet': 1, 'open-inventory': 1, 'toggle-light': 1 }, dismissed: [] };
+    const mastered = {
+      counts: { move: 10, 'open-character-sheet': 1, 'open-inventory': 1, 'toggle-light': 1 },
+      dismissed: [],
+    };
     expect(activeHint(mastered, HINTS, townProjection, snapshot, true)?.id).not.toBe('commerce');
     const withMerchant = withMerchantAdjacent(townProjection);
     expect(activeHint(mastered, HINTS, withMerchant, snapshot, true)?.id).toBe('commerce');
@@ -176,7 +211,13 @@ describe('activeHint', () => {
 
   it('"dungeon-entry" only triggers when the hero is on/near a stairs-down cell', () => {
     const mastered = {
-      counts: { move: 10, 'open-character-sheet': 1, 'open-inventory': 1, 'toggle-light': 1, 'trade-complete': 1 },
+      counts: {
+        move: 10,
+        'open-character-sheet': 1,
+        'open-inventory': 1,
+        'toggle-light': 1,
+        'trade-complete': 1,
+      },
       dismissed: [],
     };
     // The town floor's own authored stairs down might already be near the hero's default spawn --
@@ -198,8 +239,12 @@ describe('activeHint', () => {
   it('returns null once every hint is mastered or dismissed', () => {
     const allMastered: OnboardingState = {
       counts: {
-        move: 10, 'open-character-sheet': 1, 'open-inventory': 1, 'toggle-light': 1,
-        'trade-complete': 1, descend: 1,
+        move: 10,
+        'open-character-sheet': 1,
+        'open-inventory': 1,
+        'toggle-light': 1,
+        'trade-complete': 1,
+        descend: 1,
       },
       dismissed: [],
     };

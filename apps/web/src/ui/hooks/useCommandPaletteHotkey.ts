@@ -6,7 +6,9 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
  * `createKeyDispatcher` rather than another routed `ActionId` -- guarded to fire only when nothing
  * else modal is already active, exactly like that dispatcher's own guard.
  */
-export function useCommandPaletteHotkey(isModalActive: boolean): [boolean, Dispatch<SetStateAction<boolean>>] {
+export function useCommandPaletteHotkey(
+  isModalActive: boolean,
+): [boolean, Dispatch<SetStateAction<boolean>>] {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const isModalActiveRef = useRef(isModalActive);
   isModalActiveRef.current = isModalActive;

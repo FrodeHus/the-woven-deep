@@ -43,11 +43,13 @@ function clampAxis(rawCells: number, minCells: number, floorCells: number): numb
   return Math.min(Math.max(rawCells, minCells), floorCells);
 }
 
-export function viewportForPane(input: Readonly<{
-  panePx: Readonly<{ width: number; height: number }>;
-  cellPx: Readonly<{ width: number; height: number }>;
-  floor: Readonly<{ width: number; height: number }>;
-}>): CameraViewport {
+export function viewportForPane(
+  input: Readonly<{
+    panePx: Readonly<{ width: number; height: number }>;
+    cellPx: Readonly<{ width: number; height: number }>;
+    floor: Readonly<{ width: number; height: number }>;
+  }>,
+): CameraViewport {
   const rawWidth = Math.floor(input.panePx.width / input.cellPx.width);
   const rawHeight = Math.floor(input.panePx.height / input.cellPx.height);
   return {
@@ -63,7 +65,7 @@ export function viewportForPane(input: Readonly<{
  * map and starts reading as a magnifying glass.
  */
 export const ZOOM_STEPS = [1, 1.25, 1.5, 1.75, 2] as const;
-export type ZoomFactor = typeof ZOOM_STEPS[number];
+export type ZoomFactor = (typeof ZOOM_STEPS)[number];
 
 /**
  * Picks the highest zoom step at which the WHOLE floor still fits inside the pane on both axes, so
@@ -75,11 +77,13 @@ export type ZoomFactor = typeof ZOOM_STEPS[number];
  * value computed independently, so this stays the single source of truth `viewportForPane` and the
  * popover pixel math also read from (see PlayScreen's measure pass).
  */
-export function zoomForFloor(input: Readonly<{
-  panePx: Readonly<{ width: number; height: number }>;
-  cellPx: Readonly<{ width: number; height: number }>;
-  floor: Readonly<{ width: number; height: number }>;
-}>): ZoomFactor {
+export function zoomForFloor(
+  input: Readonly<{
+    panePx: Readonly<{ width: number; height: number }>;
+    cellPx: Readonly<{ width: number; height: number }>;
+    floor: Readonly<{ width: number; height: number }>;
+  }>,
+): ZoomFactor {
   let best: ZoomFactor = 1;
   for (const step of ZOOM_STEPS) {
     const fitsWidth = input.floor.width * input.cellPx.width * step <= input.panePx.width;

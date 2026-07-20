@@ -17,7 +17,9 @@ const WAYFARER = 'class.wayfarer';
 const ARCHIVIST = 'class.archivist';
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../../../../content'),
+  });
 });
 
 function stubState(overrides: Partial<WizardState> = {}): WizardState {
@@ -42,7 +44,9 @@ describe('CallingStep', () => {
     expect(archivistOption.textContent).toMatch(/Read three lore fragments/);
 
     await user.click(archivistOption);
-    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'choose-class', classId: ARCHIVIST }));
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'choose-class', classId: ARCHIVIST }),
+    );
   });
 
   it('dispatches choose-class when a class row is reached via arrow keys and selected with Enter', async () => {
@@ -72,7 +76,9 @@ describe('KitStep', () => {
   it('renders the chosen class kits and dispatches choose-kit on selection', async () => {
     const user = userEvent.setup();
     const dispatch = vi.fn();
-    const classEntry = pack.entries.find((entry) => entry.kind === 'class' && entry.id === WAYFARER) as {
+    const classEntry = pack.entries.find(
+      (entry) => entry.kind === 'class' && entry.id === WAYFARER,
+    ) as {
       kits: readonly { kitId: string; name: string }[];
     };
     const kit = classEntry.kits[0]!;
@@ -86,14 +92,18 @@ describe('KitStep', () => {
   it('dispatches choose-kit when a kit row is reached via arrow keys and selected with Enter', async () => {
     const user = userEvent.setup();
     const dispatch = vi.fn();
-    const classEntry = pack.entries.find((entry) => entry.kind === 'class' && entry.id === WAYFARER) as {
+    const classEntry = pack.entries.find(
+      (entry) => entry.kind === 'class' && entry.id === WAYFARER,
+    ) as {
       kits: readonly { kitId: string; name: string }[];
     };
     const kit = classEntry.kits[0]!;
     render(<KitStep state={stubState({ classId: WAYFARER })} pack={pack} dispatch={dispatch} />);
 
     const options = screen.getAllByRole('option');
-    const targetIndex = options.findIndex((option) => new RegExp(kit.name).test(option.textContent ?? ''));
+    const targetIndex = options.findIndex((option) =>
+      new RegExp(kit.name).test(option.textContent ?? ''),
+    );
     expect(targetIndex).toBeGreaterThanOrEqual(0);
 
     options[0]!.focus();

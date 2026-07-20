@@ -1,9 +1,16 @@
 import type {
-  CompiledContentPack, MonsterContentEntry, NpcContentEntry, PopulationCombatModifiers,
+  CompiledContentPack,
+  MonsterContentEntry,
+  NpcContentEntry,
+  PopulationCombatModifiers,
 } from '@woven-deep/content';
 import type { ActorState } from './actor-model.js';
 import { entryById, requireItem } from './content-index.js';
-import { applyPopulationCombatModifiers, composePopulationCombatModifiers, resolveAttack } from './combat.js';
+import {
+  applyPopulationCombatModifiers,
+  composePopulationCombatModifiers,
+  resolveAttack,
+} from './combat.js';
 import { deriveRunActorStats } from './stats.js';
 import { groupCombatModifiers } from './group-behavior.js';
 import { swarmCombatModifiers } from './swarm-behavior.js';
@@ -21,28 +28,38 @@ export interface CombatProfile {
   readonly immune: boolean;
 }
 
-export function monsterDefinition(content: CompiledContentPack, actor: ActorState): MonsterContentEntry | undefined {
+export function monsterDefinition(
+  content: CompiledContentPack,
+  actor: ActorState,
+): MonsterContentEntry | undefined {
   const entry = entryById(content, actor.contentId);
   return entry?.kind === 'monster' ? entry : undefined;
 }
 
-function npcDefinition(content: CompiledContentPack, actor: ActorState): NpcContentEntry | undefined {
+function npcDefinition(
+  content: CompiledContentPack,
+  actor: ActorState,
+): NpcContentEntry | undefined {
   const entry = entryById(content, actor.contentId);
   return entry?.kind === 'npc' ? entry : undefined;
 }
 
-type PopulationCombatModifierResolver = (input: Readonly<{
-  state: Pick<ActiveRun, 'actors' | 'populations' | 'worldTime' | 'fallenHeroStandings'>;
-  content: CompiledContentPack;
-  actorId: OpaqueId;
-}>) => PopulationCombatModifiers;
+type PopulationCombatModifierResolver = (
+  input: Readonly<{
+    state: Pick<ActiveRun, 'actors' | 'populations' | 'worldTime' | 'fallenHeroStandings'>;
+    content: CompiledContentPack;
+    actorId: OpaqueId;
+  }>,
+) => PopulationCombatModifiers;
 
 // Each resolver returns ZERO modifiers unless the actor belongs to a population of its own model, so
 // iterating the whole registry sums exactly one model's contribution. fallenHeroCombatModifiers serves
 // both champion and echo actors, so a single `champion` entry covers both. Object.values preserves the
 // group -> swarm -> boss -> fallen order that composePopulationCombatModifiers composes additively.
-const populationCombatModifierResolvers: Record<'group' | 'swarm' | 'boss' | 'champion',
-  PopulationCombatModifierResolver> = {
+const populationCombatModifierResolvers: Record<
+  'group' | 'swarm' | 'boss' | 'champion',
+  PopulationCombatModifierResolver
+> = {
   group: groupCombatModifiers,
   swarm: swarmCombatModifiers,
   boss: bossCombatModifiers,
@@ -63,70 +80,111 @@ export function profile(
   const monster = monsterDefinition(content, actor);
   const populationModifiers = composePopulationCombatModifiers(
     Object.values(populationCombatModifierResolvers).map((resolve) =>
-      resolve({ state: { actors, populations, worldTime, fallenHeroStandings }, content, actorId: actor.actorId })));
+      resolve({
+        state: { actors, populations, worldTime, fallenHeroStandings },
+        content,
+        actorId: actor.actorId,
+      }),
+    ),
+  );
   const npc = monster === undefined ? npcDefinition(content, actor) : undefined;
-  if (npc) return applyPopulationCombatModifiers({
-    accuracy: npc.accuracy,
-    defense: npc.defense,
-    damage: npc.damage,
-    armor: npc.armor,
-    resistance: npc.resistances.physical,
-    immune: npc.resistances.physical === 100,
-  }, populationModifiers);
-  if (monster) return applyPopulationCombatModifiers({
-    accuracy: monster.accuracy,
-    defense: monster.defense,
-    damage: monster.damage,
-    armor: monster.armor,
-    resistance: monster.resistances.physical,
-    immune: monster.resistances.physical === 100,
-  }, populationModifiers);
+  if (npc)
+    return applyPopulationCombatModifiers(
+      {
+        accuracy: npc.accuracy,
+        defense: npc.defense,
+        damage: npc.damage,
+        armor: npc.armor,
+        resistance: npc.resistances.physical,
+        immune: npc.resistances.physical === 100,
+      },
+      populationModifiers,
+    );
+  if (monster)
+    return applyPopulationCombatModifiers(
+      {
+        accuracy: monster.accuracy,
+        defense: monster.defense,
+        damage: monster.damage,
+        armor: monster.armor,
+        resistance: monster.resistances.physical,
+        immune: monster.resistances.physical === 100,
+      },
+      populationModifiers,
+    );
   const stats = deriveRunActorStats({
     state: { actors, items, survival: survival ?? { hungerStage: 'sated' }, hero },
     content,
     actor,
   });
-  const equipped = items.filter((item) => item.location.type === 'equipped'
-    && item.location.actorId === actor.actorId);
+  const equipped = items.filter(
+    (item) => item.location.type === 'equipped' && item.location.actorId === actor.actorId,
+  );
   const mainHandId = actor.equipment['main-hand'];
   const mainHand = mainHandId ? equipped.find((item) => item.itemId === mainHandId) : undefined;
   const weapon = mainHand ? requireItem(content, mainHand.contentId).combat : undefined;
-  const damage = weapon?.damage && weapon.ammunitionTag === null
-    ? { ...weapon.damage, bonus: weapon.damage.bonus + stats.meleeDamageBonus }
-    : { count: 1, sides: 4, bonus: stats.meleeDamageBonus };
-  const armor = equipped.reduce((total, item) => total
-    + (requireItem(content, item.contentId).combat?.armor ?? 0), 0);
-  return applyPopulationCombatModifiers({
-    accuracy: stats.meleeAccuracy,
-    defense: stats.defense,
-    damage,
-    armor,
-    resistance: 0,
-    immune: false,
-  }, populationModifiers);
+  const damage =
+    weapon?.damage && weapon.ammunitionTag === null
+      ? { ...weapon.damage, bonus: weapon.damage.bonus + stats.meleeDamageBonus }
+      : { count: 1, sides: 4, bonus: stats.meleeDamageBonus };
+  const armor = equipped.reduce(
+    (total, item) => total + (requireItem(content, item.contentId).combat?.armor ?? 0),
+    0,
+  );
+  return applyPopulationCombatModifiers(
+    {
+      accuracy: stats.meleeAccuracy,
+      defense: stats.defense,
+      damage,
+      armor,
+      resistance: 0,
+      immune: false,
+    },
+    populationModifiers,
+  );
 }
 
-export function combat(input: Readonly<{
-  actors: readonly ActorState[];
-  combatState: Uint32State;
-  attackerId: OpaqueId;
-  targetActorId: OpaqueId;
-  eventId: OpaqueId;
-  content: CompiledContentPack;
-  items: ActiveRun['items'];
-  survival: ActiveRun['survival'];
-  populations: ActiveRun['populations'];
-  fallenHeroStandings: ActiveRun['fallenHeroStandings'];
-  worldTime: number;
-  hero: HeroState;
-}>): ReactionAttackResult {
+export function combat(
+  input: Readonly<{
+    actors: readonly ActorState[];
+    combatState: Uint32State;
+    attackerId: OpaqueId;
+    targetActorId: OpaqueId;
+    eventId: OpaqueId;
+    content: CompiledContentPack;
+    items: ActiveRun['items'];
+    survival: ActiveRun['survival'];
+    populations: ActiveRun['populations'];
+    fallenHeroStandings: ActiveRun['fallenHeroStandings'];
+    worldTime: number;
+    hero: HeroState;
+  }>,
+): ReactionAttackResult {
   const attacker = input.actors.find((candidate) => candidate.actorId === input.attackerId);
   const target = input.actors.find((candidate) => candidate.actorId === input.targetActorId);
   if (!attacker || !target) throw new Error('internal invariant: combat actors must exist');
-  const attack = profile(attacker, input.content, input.items, input.actors, input.survival,
-    input.populations, input.fallenHeroStandings, input.worldTime, input.hero);
-  const defense = profile(target, input.content, input.items, input.actors, input.survival,
-    input.populations, input.fallenHeroStandings, input.worldTime, input.hero);
+  const attack = profile(
+    attacker,
+    input.content,
+    input.items,
+    input.actors,
+    input.survival,
+    input.populations,
+    input.fallenHeroStandings,
+    input.worldTime,
+    input.hero,
+  );
+  const defense = profile(
+    target,
+    input.content,
+    input.items,
+    input.actors,
+    input.survival,
+    input.populations,
+    input.fallenHeroStandings,
+    input.worldTime,
+    input.hero,
+  );
   return resolveAttack({
     ...input,
     accuracy: attack.accuracy,

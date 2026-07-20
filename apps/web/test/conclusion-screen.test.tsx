@@ -14,11 +14,24 @@ function projection(overrides: Partial<RunConclusionProjection> = {}): RunConclu
     completionType: 'died',
     cause: { killerContentId: 'monster.rat', depth: 3, turn: 42, worldTime: 4200 },
     metrics: {
-      kills: 2, killsByModel: { individual: 2, group: 0, swarm: 0, boss: 0 },
-      bossKills: 0, championKills: 0, echoKills: 0, threatDefeated: 6,
-      damageDealt: 30, damageTaken: 12, itemsCollected: 3, itemsIdentified: 1,
-      currencyEarned: 0, currencySpent: 0, tradesCompleted: 0,
-      floorsEntered: 3, deepestDepth: 3, discoveriesRevealed: 1, turnsElapsed: 42, restsCompleted: 0,
+      kills: 2,
+      killsByModel: { individual: 2, group: 0, swarm: 0, boss: 0 },
+      bossKills: 0,
+      championKills: 0,
+      echoKills: 0,
+      threatDefeated: 6,
+      damageDealt: 30,
+      damageTaken: 12,
+      itemsCollected: 3,
+      itemsIdentified: 1,
+      currencyEarned: 0,
+      currencySpent: 0,
+      tradesCompleted: 0,
+      floorsEntered: 3,
+      deepestDepth: 3,
+      discoveriesRevealed: 1,
+      turnsElapsed: 42,
+      restsCompleted: 0,
     },
     finalized: true,
     score: {
@@ -30,12 +43,24 @@ function projection(overrides: Partial<RunConclusionProjection> = {}): RunConclu
       total: 330,
     },
     heirloom: {
-      contentId: 'item.lantern', sourceItemId: null, enchantment: null, condition: 100,
-      charges: null, fuel: null, qualityRank: 1, displayName: "Ada's Lantern",
-      glyph: '¤', color: '#eeeeaa', originatingHallRecordId: 'record.test',
+      contentId: 'item.lantern',
+      sourceItemId: null,
+      enchantment: null,
+      condition: 100,
+      charges: null,
+      fuel: null,
+      qualityRank: 1,
+      displayName: "Ada's Lantern",
+      glyph: '¤',
+      color: '#eeeeaa',
+      originatingHallRecordId: 'record.test',
     },
     achievements: [
-      { achievementId: 'achievement.first-blood', criteriaId: 'first-champion-defeat', name: 'First Blood' },
+      {
+        achievementId: 'achievement.first-blood',
+        criteriaId: 'first-champion-defeat',
+        name: 'First Blood',
+      },
     ],
     ...overrides,
   };
@@ -70,7 +95,9 @@ describe('ConclusionScreen', () => {
   it('attributes an environmental death to no named killer', () => {
     render(
       <ConclusionScreen
-        projection={projection({ cause: { killerContentId: null, depth: 2, turn: 10, worldTime: 1000 } })}
+        projection={projection({
+          cause: { killerContentId: null, depth: 2, turn: 10, worldTime: 1000 },
+        })}
         pack={pack}
         logTail={logTail()}
         onHall={vi.fn()}

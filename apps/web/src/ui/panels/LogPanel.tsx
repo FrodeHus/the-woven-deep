@@ -38,7 +38,9 @@ export function LogPanel({ snapshot }: PanelProps): JSX.Element {
         className="max-h-40 overflow-y-auto font-mono text-xs leading-relaxed"
       >
         {log.map((line) => (
-          <p key={line.id} className={cn(TONE_CLASS[line.tone], REINFORCEMENT_CLASS[line.tone])}>{line.text}</p>
+          <p key={line.id} className={cn(TONE_CLASS[line.tone], REINFORCEMENT_CLASS[line.tone])}>
+            {line.text}
+          </p>
         ))}
       </div>
     </div>

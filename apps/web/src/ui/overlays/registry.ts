@@ -5,7 +5,8 @@ import type { ActionId } from '../../session/settings.js';
  * overlay ids -- `i` routes exactly like the other five overlay-open keys (see `KeyRouter.ts`'s
  * `OverlayActionId`).
  */
-export type OverlayId = 'inventory' | 'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help';
+export type OverlayId =
+  'inventory' | 'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help';
 
 export interface OverlayDefinition {
   readonly id: OverlayId;
@@ -27,8 +28,18 @@ export const OVERLAY_REGISTRY: Readonly<Record<OverlayId, OverlayDefinition>> = 
   // verbatim. The keymap ACTION label (settings/help rows) stays "Inventory"
   // (`ACTION_LABELS.inventory` in settings.ts) -- that's a separate, unaffected string.
   inventory: { id: 'inventory', title: 'Backpack', scope: 'play', action: 'inventory' },
-  'character-sheet': { id: 'character-sheet', title: 'Character Sheet', scope: 'play', action: 'character-sheet' },
-  'map-journal': { id: 'map-journal', title: 'Map & Journal', scope: 'play', action: 'map-journal' },
+  'character-sheet': {
+    id: 'character-sheet',
+    title: 'Character Sheet',
+    scope: 'play',
+    action: 'character-sheet',
+  },
+  'map-journal': {
+    id: 'map-journal',
+    title: 'Map & Journal',
+    scope: 'play',
+    action: 'map-journal',
+  },
   codex: { id: 'codex', title: 'Codex', scope: 'global', action: 'codex' },
   settings: { id: 'settings', title: 'Settings', scope: 'global', action: 'settings' },
   help: { id: 'help', title: 'Help', scope: 'global', action: 'help' },

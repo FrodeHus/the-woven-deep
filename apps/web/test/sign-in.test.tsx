@@ -15,7 +15,9 @@ describe('SignInScreen', () => {
 
   it('calls requestLogin with the typed email, then shows the uniform confirmation, on success', async () => {
     const user = userEvent.setup();
-    const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
 
     render(<SignInScreen fetcher={fetcher as unknown as typeof fetch} onBack={vi.fn()} />);
 
@@ -23,10 +25,13 @@ describe('SignInScreen', () => {
     await user.click(screen.getByRole('button', { name: /send sign-in link/i }));
 
     expect(await screen.findByText(CONFIRMATION)).toBeInTheDocument();
-    expect(fetcher).toHaveBeenCalledWith('/api/auth/login', expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({ email: 'player@example.com' }),
-    }));
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/auth/login',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ email: 'player@example.com' }),
+      }),
+    );
   });
 
   it('shows the SAME uniform confirmation even when the request rejects outright -- no existence/error leak', async () => {
@@ -62,7 +67,9 @@ describe('SignInScreen', () => {
   it('after the confirmation panel, "Back to title" still returns to title via onBack', async () => {
     const user = userEvent.setup();
     const onBack = vi.fn();
-    const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
 
     render(<SignInScreen fetcher={fetcher as unknown as typeof fetch} onBack={onBack} />);
     await user.type(screen.getByLabelText(/email/i), 'player@example.com');

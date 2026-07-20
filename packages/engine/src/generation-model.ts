@@ -34,7 +34,8 @@ export type GenerationRejectionCode =
   | 'connectivity.disconnected';
 
 export class GenerationError extends Error {
-  readonly code: 'generation.invalid-request' | 'generation.invalid-theme' | 'generation.fallback-invariant';
+  readonly code:
+    'generation.invalid-request' | 'generation.invalid-theme' | 'generation.fallback-invariant';
 
   constructor(code: GenerationError['code'], message: string) {
     super(message);
@@ -63,7 +64,11 @@ export interface GenerationReport {
   readonly fallback: boolean;
   readonly roomCount: number;
   readonly corridorCount: number;
-  readonly vaults: readonly Readonly<{ vaultId: OpaqueId; rotation: 0 | 90 | 180 | 270; reflected: boolean }>[];
+  readonly vaults: readonly Readonly<{
+    vaultId: OpaqueId;
+    rotation: 0 | 90 | 180 | 270;
+    reflected: boolean;
+  }>[];
   readonly stairUp: Readonly<{ x: number; y: number }>;
   readonly stairDown: Readonly<{ x: number; y: number }>;
   readonly stairDistance: number;
@@ -92,7 +97,10 @@ export type TopologyAttemptResult =
   | { readonly ok: true; readonly draft: TopologyDraft }
   | { readonly ok: false; readonly code: GenerationRejectionCode };
 
-export type TopologyFactory = (request: GenerateTopologyRequest, attempt: number) => TopologyAttemptResult;
+export type TopologyFactory = (
+  request: GenerateTopologyRequest,
+  attempt: number,
+) => TopologyAttemptResult;
 
 export interface GenerateTopologyRequest {
   readonly floorId: OpaqueId;

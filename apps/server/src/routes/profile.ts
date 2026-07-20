@@ -27,7 +27,8 @@ export function registerProfileRoutes(app: FastifyInstance, auth: AuthBundle): v
         return;
       }
 
-      const body = request.body as { settingsJson?: unknown; settingsVersion?: unknown } | undefined;
+      const body = request.body as
+        { settingsJson?: unknown; settingsVersion?: unknown } | undefined;
       if (
         typeof body?.settingsJson !== 'string' ||
         typeof body?.settingsVersion !== 'number' ||

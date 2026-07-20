@@ -37,25 +37,50 @@ const MERCHANT_ACTOR_ID = `actor.${POPULATION_ID}.001`;
 const HERO_ID = 'hero.demo';
 
 beforeAll(async () => {
-  content = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
-  encounter = content.entries.find((entry): entry is MerchantEncounterContentEntry =>
-    entry.kind === 'encounter' && entry.model === 'merchant' && !entry.definition.permanent)!;
-  faction = content.entries.find((entry): entry is NpcFactionContentEntry => entry.kind === 'npc-faction')!;
+  content = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
+  encounter = content.entries.find(
+    (entry): entry is MerchantEncounterContentEntry =>
+      entry.kind === 'encounter' && entry.model === 'merchant' && !entry.definition.permanent,
+  )!;
+  faction = content.entries.find(
+    (entry): entry is NpcFactionContentEntry => entry.kind === 'npc-faction',
+  )!;
 });
 
 const context = () => ({ content });
 
-function item(itemId: string, contentId: string, quantity: number, location: ItemInstance['location']): ItemInstance {
-  return { itemId, contentId, quantity, condition: 100, enchantment: null, identified: true,
-    charges: null, fuel: null, enabled: null, location };
+function item(
+  itemId: string,
+  contentId: string,
+  quantity: number,
+  location: ItemInstance['location'],
+): ItemInstance {
+  return {
+    itemId,
+    contentId,
+    quantity,
+    condition: 100,
+    enchantment: null,
+    identified: true,
+    charges: null,
+    fuel: null,
+    enabled: null,
+    location,
+  };
 }
 
 function merchantDecisions(encountered: boolean, instancesCreated: number) {
-  return content.entries.filter((entry) => entry.kind === 'encounter')
-    .sort((left, right) => left.id < right.id ? -1 : 1)
+  return content.entries
+    .filter((entry) => entry.kind === 'encounter')
+    .sort((left, right) => (left.id < right.id ? -1 : 1))
     .map((entry) => ({
-      encounterId: entry.id, baseProbability: entry.runAppearanceChance, protectionBonus: 0,
-      effectiveProbability: entry.runAppearanceChance, eligible: true,
+      encounterId: entry.id,
+      baseProbability: entry.runAppearanceChance,
+      protectionBonus: 0,
+      effectiveProbability: entry.runAppearanceChance,
+      eligible: true,
       reachedEligibleDepth: entry.id === encounter.id && encountered,
       encountered: entry.id === encounter.id ? encountered : false,
       instancesCreated: entry.id === encounter.id ? instancesCreated : 0,
@@ -75,22 +100,35 @@ function merchantRun(): ActiveRun {
     encounterDecisions: merchantDecisions(true, 1),
   };
   const materialized = materializeMerchant({
-    run, content, encounter, populationId: POPULATION_ID,
-    floorId: 'floor.demo', position: { x: 2, y: 1 },
+    run,
+    content,
+    encounter,
+    populationId: POPULATION_ID,
+    floorId: 'floor.demo',
+    position: { x: 2, y: 1 },
   });
   const stock: ItemInstance[] = [
-    item('item.stock.lamp-oil', 'item.lamp-oil', 4, { type: 'merchant-stock', populationId: POPULATION_ID }),
-    item('item.stock.ration', 'item.travel-ration', 2, { type: 'merchant-stock', populationId: POPULATION_ID }),
+    item('item.stock.lamp-oil', 'item.lamp-oil', 4, {
+      type: 'merchant-stock',
+      populationId: POPULATION_ID,
+    }),
+    item('item.stock.ration', 'item.travel-ration', 2, {
+      type: 'merchant-stock',
+      populationId: POPULATION_ID,
+    }),
   ];
   const stockIds = stock.map((entry) => entry.itemId).sort();
   const population: MerchantPopulation = {
-    ...materialized.population, initialStockItemIds: stockIds, stockItemIds: stockIds,
+    ...materialized.population,
+    initialStockItemIds: stockIds,
+    stockItemIds: stockIds,
   };
   return {
     ...run,
     rng: { ...run.rng, 'merchant-stock': materialized.nextMerchantStockState },
-    actors: [...run.actors, materialized.actor]
-      .sort((left, right) => left.actorId < right.actorId ? -1 : 1),
+    actors: [...run.actors, materialized.actor].sort((left, right) =>
+      left.actorId < right.actorId ? -1 : 1,
+    ),
     items: stock,
     populations: [population],
   };
@@ -98,23 +136,47 @@ function merchantRun(): ActiveRun {
 
 function generatedFloor(
   floorId = 'floor.generated-01',
-  floorSeed: FloorSeedAllocation['floorSeed'] = allocateFloorSeed(createDemoRun().rng.generation).floorSeed,
+  floorSeed: FloorSeedAllocation['floorSeed'] = allocateFloorSeed(createDemoRun().rng.generation)
+    .floorSeed,
 ): GeneratedFloor {
-  const floor = JSON.parse(readFileSync(new URL('./fixtures/generated-floor-seed-1.json', import.meta.url), 'utf8')) as GeneratedFloor['floor'];
+  const floor = JSON.parse(
+    readFileSync(new URL('./fixtures/generated-floor-seed-1.json', import.meta.url), 'utf8'),
+  ) as GeneratedFloor['floor'];
   return {
     floor: {
-      ...floor, floorId, seed: floorSeed,
-      vaults: floor.vaults.map((vault) => ({ ...vault, placementId: `${vault.placementId}.${floorId}` })),
-      placementSlots: floor.placementSlots.map((slot) => ({ ...slot,
-        slotId: `${slot.slotId}.${floorId}`, vaultPlacementId: `${slot.vaultPlacementId}.${floorId}` })),
-      lights: floor.lights.map((light) => ({ ...light,
+      ...floor,
+      floorId,
+      seed: floorSeed,
+      vaults: floor.vaults.map((vault) => ({
+        ...vault,
+        placementId: `${vault.placementId}.${floorId}`,
+      })),
+      placementSlots: floor.placementSlots.map((slot) => ({
+        ...slot,
+        slotId: `${slot.slotId}.${floorId}`,
+        vaultPlacementId: `${slot.vaultPlacementId}.${floorId}`,
+      })),
+      lights: floor.lights.map((light) => ({
+        ...light,
         lightId: `${light.lightId}.${floorId}`,
-        ...(light.vaultPlacementId === undefined ? {} : { vaultPlacementId: `${light.vaultPlacementId}.${floorId}` }) })),
+        ...(light.vaultPlacementId === undefined
+          ? {}
+          : { vaultPlacementId: `${light.vaultPlacementId}.${floorId}` }),
+      })),
     },
     report: {
-      generatorVersion: 2, attempt: 0, fallback: false, roomCount: 8, corridorCount: 7,
-      vaults: [], stairUp: floor.stairUp!, stairDown: floor.stairDown!, stairDistance: 42,
-      traversableCellCount: 400, connected: true, rejectionCounts: { 'topology.empty': 1 },
+      generatorVersion: 2,
+      attempt: 0,
+      fallback: false,
+      roomCount: 8,
+      corridorCount: 7,
+      vaults: [],
+      stairUp: floor.stairUp!,
+      stairDown: floor.stairDown!,
+      stairDistance: 42,
+      traversableCellCount: 400,
+      connected: true,
+      rejectionCounts: { 'topology.empty': 1 },
     },
   };
 }
@@ -131,21 +193,33 @@ function offFloorRun(encountered = true): ActiveRun {
     reputations: [{ factionId: faction.id, value: 0 }],
     encounterDecisions: merchantDecisions(false, 0),
   };
-  const integrated = integrateGeneratedFloor(run, generatedFloor(), allocateFloorSeed(run.rng.generation), {
-    content, forcedEncounterId: encounter.id,
-  });
+  const integrated = integrateGeneratedFloor(
+    run,
+    generatedFloor(),
+    allocateFloorSeed(run.rng.generation),
+    {
+      content,
+      forcedEncounterId: encounter.id,
+    },
+  );
   return {
     ...integrated.state,
     encounterDecisions: integrated.state.encounterDecisions.map((decision) =>
       decision.encounterId === encounter.id
-        ? { ...decision, encountered, reachedEligibleDepth: encountered || decision.reachedEligibleDepth }
-        : decision),
+        ? {
+            ...decision,
+            encountered,
+            reachedEligibleDepth: encountered || decision.reachedEligibleDepth,
+          }
+        : decision,
+    ),
   };
 }
 
 function merchantPopulation(run: ActiveRun): MerchantPopulation {
-  return run.populations.find((population): population is MerchantPopulation =>
-    population.model === 'merchant')!;
+  return run.populations.find(
+    (population): population is MerchantPopulation => population.model === 'merchant',
+  )!;
 }
 
 function merchantActor(run: ActiveRun): ActorState {
@@ -156,15 +230,23 @@ function atWorldTime(run: ActiveRun, worldTime: number): ActiveRun {
   return { ...run, worldTime };
 }
 
-function openCommand(overrides: Partial<Extract<GameCommand, { type: 'trade-open' }>> = {}): GameCommand {
-  return { type: 'trade-open', commandId: 'command.trade-open', expectedRevision: 0,
-    merchantActorId: MERCHANT_ACTOR_ID, ...overrides };
+function openCommand(
+  overrides: Partial<Extract<GameCommand, { type: 'trade-open' }>> = {},
+): GameCommand {
+  return {
+    type: 'trade-open',
+    commandId: 'command.trade-open',
+    expectedRevision: 0,
+    merchantActorId: MERCHANT_ACTOR_ID,
+    ...overrides,
+  };
 }
 
 function openedRun(): ActiveRun {
   const run = merchantRun();
   const opened = resolveCommand(run, openCommand(), context());
-  if (opened.result.status !== 'applied') throw new Error(`fixture open failed: ${stableJson(opened.result)}`);
+  if (opened.result.status !== 'applied')
+    throw new Error(`fixture open failed: ${stableJson(opened.result)}`);
   return opened.state;
 }
 
@@ -184,10 +266,22 @@ describe('advanceMerchantLifecycle', () => {
       eventId: 'event.warnings-1',
     });
     expect(first.events).toEqual([
-      { type: 'merchant.departure-warning', eventId: 'event.warnings-1', populationId: POPULATION_ID,
-        actorId: MERCHANT_ACTOR_ID, threshold: 1000, remaining: 400 },
-      { type: 'merchant.departure-warning', eventId: 'event.warnings-1', populationId: POPULATION_ID,
-        actorId: MERCHANT_ACTOR_ID, threshold: 500, remaining: 400 },
+      {
+        type: 'merchant.departure-warning',
+        eventId: 'event.warnings-1',
+        populationId: POPULATION_ID,
+        actorId: MERCHANT_ACTOR_ID,
+        threshold: 1000,
+        remaining: 400,
+      },
+      {
+        type: 'merchant.departure-warning',
+        eventId: 'event.warnings-1',
+        populationId: POPULATION_ID,
+        actorId: MERCHANT_ACTOR_ID,
+        threshold: 500,
+        remaining: 400,
+      },
     ]);
     expect(merchantPopulation(first.state).emittedWarningThresholds).toEqual([1000, 500]);
     expect(first.state.actors).toEqual(run.actors);
@@ -201,8 +295,14 @@ describe('advanceMerchantLifecycle', () => {
       eventId: 'event.warnings-2',
     });
     expect(second.events).toEqual([
-      { type: 'merchant.departure-warning', eventId: 'event.warnings-2', populationId: POPULATION_ID,
-        actorId: MERCHANT_ACTOR_ID, threshold: 100, remaining: 50 },
+      {
+        type: 'merchant.departure-warning',
+        eventId: 'event.warnings-2',
+        populationId: POPULATION_ID,
+        actorId: MERCHANT_ACTOR_ID,
+        threshold: 100,
+        remaining: 50,
+      },
     ]);
     expect(merchantPopulation(second.state).emittedWarningThresholds).toEqual([1000, 500, 100]);
 
@@ -224,13 +324,19 @@ describe('advanceMerchantLifecycle', () => {
     const secondId = 'population.zzz-merchant';
     const secondActorId = `actor.${secondId}.001`;
     const second: MerchantPopulation = {
-      ...population, populationId: secondId, actorId: secondActorId,
-      livingMemberIds: [secondActorId], initialStockItemIds: [], stockItemIds: [],
+      ...population,
+      populationId: secondId,
+      actorId: secondActorId,
+      livingMemberIds: [secondActorId],
+      initialStockItemIds: [],
+      stockItemIds: [],
     };
     const run: ActiveRun = {
       ...base,
-      actors: [...base.actors, { ...actor, actorId: secondActorId, populationId: secondId, x: 3, y: 1 }]
-        .sort((left, right) => left.actorId < right.actorId ? -1 : 1),
+      actors: [
+        ...base.actors,
+        { ...actor, actorId: secondActorId, populationId: secondId, x: 3, y: 1 },
+      ].sort((left, right) => (left.actorId < right.actorId ? -1 : 1)),
       populations: [second, population],
     };
     const advanced = advanceMerchantLifecycle({
@@ -240,8 +346,11 @@ describe('advanceMerchantLifecycle', () => {
       nextWorldTime: population.departureAt - 900,
       eventId: 'event.ordering',
     });
-    expect(advanced.events.map((event) => event.type === 'merchant.departure-warning' ? event.populationId : event.type))
-      .toEqual([POPULATION_ID, secondId]);
+    expect(
+      advanced.events.map((event) =>
+        event.type === 'merchant.departure-warning' ? event.populationId : event.type,
+      ),
+    ).toEqual([POPULATION_ID, secondId]);
   });
 
   it('never repeats a warning threshold after save and load', () => {
@@ -279,12 +388,21 @@ describe('advanceMerchantLifecycle', () => {
       eventId: 'event.deadlines',
     });
     expect(advanced.events.map((event) => event.type)).toContain('merchant.departed');
-    expect(advanced.events).toEqual([{
-      type: 'merchant.departed', eventId: 'event.deadlines', populationId: population.populationId,
-      actorId: population.actorId, stockItemIds: population.stockItemIds,
-    }]);
-    expect(advanced.state.actors).not.toContainEqual(expect.objectContaining({ actorId: before.actorId }));
-    expect(advanced.state.items.some((entry) => entry.location.type === 'merchant-stock')).toBe(false);
+    expect(advanced.events).toEqual([
+      {
+        type: 'merchant.departed',
+        eventId: 'event.deadlines',
+        populationId: population.populationId,
+        actorId: population.actorId,
+        stockItemIds: population.stockItemIds,
+      },
+    ]);
+    expect(advanced.state.actors).not.toContainEqual(
+      expect.objectContaining({ actorId: before.actorId }),
+    );
+    expect(advanced.state.items.some((entry) => entry.location.type === 'merchant-stock')).toBe(
+      false,
+    );
     const departed = merchantPopulation(advanced.state);
     expect(departed.lifecycle).toBe('departed');
     expect(departed.livingMemberIds).toEqual([]);
@@ -299,22 +417,33 @@ describe('advanceMerchantLifecycle', () => {
   it('scrubs recorded intent events referencing the departed merchant so the run stays saveable', () => {
     const opened = openedRun();
     const population = merchantPopulation(opened);
-    const closed = resolveCommand(opened, {
-      type: 'trade-close', commandId: 'command.trade-close-1', expectedRevision: 1,
-      merchantPopulationId: population.populationId,
-    }, context());
+    const closed = resolveCommand(
+      opened,
+      {
+        type: 'trade-close',
+        commandId: 'command.trade-close-1',
+        expectedRevision: 1,
+        merchantPopulationId: population.populationId,
+      },
+      context(),
+    );
     expect(closed.result.status).toBe('applied');
     // A provoked merchant records an intent change within the recent-command window.
     const intentEvent: DomainEvent = {
-      type: 'actor.intent-changed', eventId: 'command.trade-open',
-      actorId: MERCHANT_ACTOR_ID, intent: 'flee', presentation: 'intent.flee', targetCategory: null,
+      type: 'actor.intent-changed',
+      eventId: 'command.trade-open',
+      actorId: MERCHANT_ACTOR_ID,
+      intent: 'flee',
+      presentation: 'intent.flee',
+      targetCategory: null,
     };
     const provoked: ActiveRun = {
       ...closed.state,
       recentCommands: closed.state.recentCommands.map((record) =>
         record.command.commandId === 'command.trade-open'
           ? { ...record, events: [...record.events, intentEvent] }
-          : record),
+          : record,
+      ),
     };
     // While the merchant still exists the recorded intent event satisfies every save invariant.
     expect(() => encodeActiveRun(provoked)).not.toThrow();
@@ -326,13 +455,20 @@ describe('advanceMerchantLifecycle', () => {
       eventId: 'event.depart-intent',
     });
     expect(advanced.events.map((event) => event.type)).toContain('merchant.departed');
-    expect(advanced.state.recentCommands.some((record) => record.events.some((event) =>
-      event.type === 'actor.intent-changed' && event.actorId === MERCHANT_ACTOR_ID))).toBe(false);
+    expect(
+      advanced.state.recentCommands.some((record) =>
+        record.events.some(
+          (event) => event.type === 'actor.intent-changed' && event.actorId === MERCHANT_ACTOR_ID,
+        ),
+      ),
+    ).toBe(false);
     // The command records themselves survive for dedup and replay, keeping their other events.
-    expect(advanced.state.recentCommands.map((record) => record.command.commandId))
-      .toEqual(provoked.recentCommands.map((record) => record.command.commandId));
-    expect(advanced.state.recentCommands.at(-1)!.events.some((event) =>
-      event.type === 'trade.closed')).toBe(true);
+    expect(advanced.state.recentCommands.map((record) => record.command.commandId)).toEqual(
+      provoked.recentCommands.map((record) => record.command.commandId),
+    );
+    expect(
+      advanced.state.recentCommands.at(-1)!.events.some((event) => event.type === 'trade.closed'),
+    ).toBe(true);
     const restored = decodeActiveRun(encodeActiveRun(advanced.state));
     expect(restored).toEqual(advanced.state);
   });
@@ -342,10 +478,22 @@ describe('advanceMerchantLifecycle', () => {
     const population = merchantPopulation(run);
     const withCondition: ActiveRun = {
       ...run,
-      actors: run.actors.map((actor) => actor.actorId === HERO_ID
-        ? { ...actor, conditions: [{ conditionId: 'condition.disengaged', sourceActorId: MERCHANT_ACTOR_ID,
-          appliedAt: 0, expiresAt: population.departureAt + 1000, stacks: 1 }] }
-        : actor),
+      actors: run.actors.map((actor) =>
+        actor.actorId === HERO_ID
+          ? {
+              ...actor,
+              conditions: [
+                {
+                  conditionId: 'condition.disengaged',
+                  sourceActorId: MERCHANT_ACTOR_ID,
+                  appliedAt: 0,
+                  expiresAt: population.departureAt + 1000,
+                  stacks: 1,
+                },
+              ],
+            }
+          : actor,
+      ),
     };
     const advanced = advanceMerchantLifecycle({
       state: atWorldTime(withCondition, population.departureAt + 1),
@@ -357,8 +505,15 @@ describe('advanceMerchantLifecycle', () => {
     expect(advanced.events.map((event) => event.type)).toContain('merchant.departed');
     const hero = advanced.state.actors.find((actor) => actor.actorId === HERO_ID)!;
     // The condition itself survives departure; only its stale source reference is cleared.
-    expect(hero.conditions).toEqual([{ conditionId: 'condition.disengaged', sourceActorId: null,
-      appliedAt: 0, expiresAt: population.departureAt + 1000, stacks: 1 }]);
+    expect(hero.conditions).toEqual([
+      {
+        conditionId: 'condition.disengaged',
+        sourceActorId: null,
+        appliedAt: 0,
+        expiresAt: population.departureAt + 1000,
+        stacks: 1,
+      },
+    ]);
     const restored = decodeActiveRun(encodeActiveRun(advanced.state));
     expect(restored).toEqual(advanced.state);
   });
@@ -386,7 +541,8 @@ describe('advanceMerchantLifecycle', () => {
     const separated: ActiveRun = {
       ...atWorldTime(opened, population.departureAt),
       actors: opened.actors.map((actor) =>
-        actor.actorId === population.actorId ? { ...actor, x: 5, y: 3 } : actor),
+        actor.actorId === population.actorId ? { ...actor, x: 5, y: 3 } : actor,
+      ),
     };
     const advanced = advanceMerchantLifecycle({
       state: separated,
@@ -395,8 +551,14 @@ describe('advanceMerchantLifecycle', () => {
       nextWorldTime: population.departureAt,
       eventId: 'event.auto-close',
     });
-    expect(advanced.events.map((event) => event.type)).toEqual(['trade.closed', 'merchant.departed']);
-    expect(advanced.events[0]).toMatchObject({ type: 'trade.closed', merchantPopulationId: population.populationId });
+    expect(advanced.events.map((event) => event.type)).toEqual([
+      'trade.closed',
+      'merchant.departed',
+    ]);
+    expect(advanced.events[0]).toMatchObject({
+      type: 'trade.closed',
+      merchantPopulationId: population.populationId,
+    });
     expect(advanced.state.activeTrade).toBeNull();
     expect(merchantPopulation(advanced.state).lifecycle).toBe('departed');
     expect(advanced.state.actors.some((actor) => actor.actorId === population.actorId)).toBe(false);
@@ -409,19 +571,27 @@ describe('world-step merchant deadlines', () => {
     const population = merchantPopulation(base);
     const primed: ActiveRun = {
       ...atWorldTime(base, population.departureAt - 100),
-      populations: base.populations.map((candidate) => candidate.populationId === population.populationId
-        ? { ...population, emittedWarningThresholds: [1000, 500] } : candidate),
+      populations: base.populations.map((candidate) =>
+        candidate.populationId === population.populationId
+          ? { ...population, emittedWarningThresholds: [1000, 500] }
+          : candidate,
+      ),
     };
     const before = merchantActor(primed);
     const stepped = resolveCommand(primed, waitCommand(), context());
     expect(stepped.result.status).toBe('applied');
     const record = stepped.state.recentCommands.at(-1)!;
     const warnings = record.events.filter((event) => event.type === 'merchant.departure-warning');
-    expect(warnings).toEqual([{
-      type: 'merchant.departure-warning', eventId: 'command.wait-1',
-      populationId: population.populationId, actorId: population.actorId,
-      threshold: 100, remaining: 99,
-    }]);
+    expect(warnings).toEqual([
+      {
+        type: 'merchant.departure-warning',
+        eventId: 'command.wait-1',
+        populationId: population.populationId,
+        actorId: population.actorId,
+        threshold: 100,
+        remaining: 99,
+      },
+    ]);
     // The off-floor merchant is not visible, so the player receives no public warning; the
     // authoritative record above still carries it for replay.
     expect(stepped.events).toEqual([expect.objectContaining({ type: 'hero.waited' })]);
@@ -446,15 +616,20 @@ describe('world-step merchant deadlines', () => {
     const population = merchantPopulation(base);
     const primed: ActiveRun = {
       ...atWorldTime(base, population.departureAt - 1),
-      populations: base.populations.map((candidate) => candidate.populationId === population.populationId
-        ? { ...population, emittedWarningThresholds: [1000, 500, 100] } : candidate),
+      populations: base.populations.map((candidate) =>
+        candidate.populationId === population.populationId
+          ? { ...population, emittedWarningThresholds: [1000, 500, 100] }
+          : candidate,
+      ),
     };
     const stepped = resolveCommand(primed, waitCommand(), context());
     expect(stepped.result.status).toBe('applied');
     const record = stepped.state.recentCommands.at(-1)!;
     expect(record.events.some((event) => event.type === 'merchant.departed')).toBe(true);
     expect(stepped.state.actors.some((actor) => actor.actorId === population.actorId)).toBe(false);
-    expect(stepped.state.items.some((entry) => entry.location.type === 'merchant-stock')).toBe(false);
+    expect(stepped.state.items.some((entry) => entry.location.type === 'merchant-stock')).toBe(
+      false,
+    );
     expect(merchantPopulation(stepped.state).lifecycle).toBe('departed');
     // The departed state satisfies every save invariant and survives a round trip.
     const restored = decodeActiveRun(encodeActiveRun(stepped.state));
@@ -478,12 +653,21 @@ describe('rest merchant deadlines', () => {
     const population = merchantPopulation(base);
     const primed: ActiveRun = {
       ...atWorldTime(base, population.departureAt - 150),
-      actors: base.actors.map((actor) => actor.actorId === HERO_ID ? { ...actor, health: 10 } : actor),
+      actors: base.actors.map((actor) =>
+        actor.actorId === HERO_ID ? { ...actor, health: 10 } : actor,
+      ),
     };
-    const rested = resolveCommand(primed, {
-      type: 'rest', commandId: 'command.rest-1', expectedRevision: 0,
-      until: 'interrupted', maximumDuration: 400,
-    }, context());
+    const rested = resolveCommand(
+      primed,
+      {
+        type: 'rest',
+        commandId: 'command.rest-1',
+        expectedRevision: 0,
+        until: 'interrupted',
+        maximumDuration: 400,
+      },
+      context(),
+    );
     expect(rested.result.status).toBe('applied');
     const record = rested.state.recentCommands.at(-1)!;
     expect(record.events.some((event) => event.type === 'merchant.departed')).toBe(true);
@@ -494,10 +678,17 @@ describe('rest merchant deadlines', () => {
     const base = offFloorRun();
     const population = merchantPopulation(base);
     const due = atWorldTime(base, population.departureAt);
-    const rested = resolveCommand(due, {
-      type: 'rest', commandId: 'command.rest-2', expectedRevision: 0,
-      until: 'healed', maximumDuration: 400,
-    }, context());
+    const rested = resolveCommand(
+      due,
+      {
+        type: 'rest',
+        commandId: 'command.rest-2',
+        expectedRevision: 0,
+        until: 'healed',
+        maximumDuration: 400,
+      },
+      context(),
+    );
     expect(rested.result.status).toBe('applied');
     const record = rested.state.recentCommands.at(-1)!;
     expect(record.events.some((event) => event.type === 'merchant.departed')).toBe(true);
@@ -522,16 +713,26 @@ describe('trade boundaries and merchant deadlines', () => {
     const opened = openedRun();
     const population = merchantPopulation(opened);
     const due = atWorldTime(opened, population.departureAt);
-    const closed = resolveCommand(due, {
-      type: 'trade-close', commandId: 'command.trade-close', expectedRevision: 1,
-      merchantPopulationId: population.populationId,
-    }, context());
+    const closed = resolveCommand(
+      due,
+      {
+        type: 'trade-close',
+        commandId: 'command.trade-close',
+        expectedRevision: 1,
+        merchantPopulationId: population.populationId,
+      },
+      context(),
+    );
     const record = closed.state.recentCommands.at(-1)!;
-    expect(record.events.map((event) => event.type).filter((type) =>
-      type === 'trade.closed' || type === 'merchant.departed'))
-      .toEqual(['trade.closed', 'merchant.departed']);
-    expect(record.events.find((event) => event.type === 'trade.closed'))
-      .toMatchObject({ reason: 'departure', completedCommerce: false });
+    expect(
+      record.events
+        .map((event) => event.type)
+        .filter((type) => type === 'trade.closed' || type === 'merchant.departed'),
+    ).toEqual(['trade.closed', 'merchant.departed']);
+    expect(record.events.find((event) => event.type === 'trade.closed')).toMatchObject({
+      reason: 'departure',
+      completedCommerce: false,
+    });
     expect(closed.state.activeTrade).toBeNull();
     expect(merchantPopulation(closed.state).lifecycle).toBe('departed');
     expect(closed.state.actors.some((actor) => actor.actorId === population.actorId)).toBe(false);
@@ -550,10 +751,14 @@ describe('floor-transition merchant deadlines', () => {
       { content },
     );
     expect(integrated.events.some((event) => event.type === 'merchant.departed')).toBe(true);
-    const departed = integrated.state.populations.find((candidate): candidate is MerchantPopulation =>
-      candidate.model === 'merchant' && candidate.populationId === population.populationId)!;
+    const departed = integrated.state.populations.find(
+      (candidate): candidate is MerchantPopulation =>
+        candidate.model === 'merchant' && candidate.populationId === population.populationId,
+    )!;
     expect(departed.lifecycle).toBe('departed');
     expect(departed.stockItemIds).toEqual([]);
-    expect(integrated.state.actors.some((actor) => actor.actorId === population.actorId)).toBe(false);
+    expect(integrated.state.actors.some((actor) => actor.actorId === population.actorId)).toBe(
+      false,
+    );
   });
 });

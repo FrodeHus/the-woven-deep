@@ -66,8 +66,10 @@ export function EmberCanvas({ emberStyle = 'both', motion }: EmberCanvasProps): 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const reduce = motion === false
-      || (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true);
+    const reduce =
+      motion === false ||
+      (typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true);
     if (reduce) return;
 
     const canvas = canvasRef.current;
@@ -144,7 +146,8 @@ export function EmberCanvas({ emberStyle = 'both', motion }: EmberCanvasProps): 
           ? (0.5 + 0.5 * Math.sin(p.tw)) * (0.85 + 0.15 * Math.sin(p.tw * 2.7))
           : 0.78 + 0.22 * Math.sin(p.tw);
         const verticalFalloff = Math.min(1, Math.max(0, p.y / height));
-        const alpha = p.peak * envelope * flicker * (0.08 + 0.92 * verticalFalloff * verticalFalloff);
+        const alpha =
+          p.peak * envelope * flicker * (0.08 + 0.92 * verticalFalloff * verticalFalloff);
         if (alpha <= 0.003) continue;
 
         const dx = p.x - px;
@@ -155,7 +158,12 @@ export function EmberCanvas({ emberStyle = 'both', motion }: EmberCanvasProps): 
         if (streakLen > 1.4) {
           const nx = dx / speed;
           const ny = dy / speed;
-          const gradient = ctx.createLinearGradient(p.x, p.y, p.x - nx * streakLen, p.y - ny * streakLen);
+          const gradient = ctx.createLinearGradient(
+            p.x,
+            p.y,
+            p.x - nx * streakLen,
+            p.y - ny * streakLen,
+          );
           gradient.addColorStop(0, `rgba(${col},${alpha})`);
           gradient.addColorStop(1, `rgba(${col},0)`);
           ctx.strokeStyle = gradient;

@@ -2,13 +2,26 @@ import { describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { HeroView } from '../../session/projection-view.js';
 import {
-  allMenuEntries, bucketFor, byNameStable, equippedLightMatchingFuel, matchesFilter, visibleEntries,
-  type MenuEntry, type ProjectedItemLike,
+  allMenuEntries,
+  bucketFor,
+  byNameStable,
+  equippedLightMatchingFuel,
+  matchesFilter,
+  visibleEntries,
+  type MenuEntry,
+  type ProjectedItemLike,
 } from './inventory-model.js';
 
-function item(overrides: Readonly<Partial<ProjectedItemLike>> & Pick<ProjectedItemLike, 'itemId' | 'name' | 'category'>): ProjectedItemLike {
+function item(
+  overrides: Readonly<Partial<ProjectedItemLike>> &
+    Pick<ProjectedItemLike, 'itemId' | 'name' | 'category'>,
+): ProjectedItemLike {
   return {
-    quantity: 1, identified: true, condition: 100, fuel: null, enabled: null,
+    quantity: 1,
+    identified: true,
+    condition: 100,
+    fuel: null,
+    enabled: null,
     ...overrides,
   };
 }
@@ -50,7 +63,9 @@ describe('bucketFor', () => {
 
 describe('matchesFilter', () => {
   it('matches everything under "all"', () => {
-    expect(matchesFilter(item({ itemId: 'i1', name: 'Sword', category: 'weapon' }), 'all')).toBe(true);
+    expect(matchesFilter(item({ itemId: 'i1', name: 'Sword', category: 'weapon' }), 'all')).toBe(
+      true,
+    );
   });
 
   it('matches only items whose bucket equals the filter', () => {
@@ -83,8 +98,14 @@ describe('allMenuEntries', () => {
 
 describe('byNameStable', () => {
   it('orders by plain codepoint name comparison, not localeCompare', () => {
-    const apple: MenuEntry = { item: item({ itemId: 'a', name: 'Apple', category: 'food' }), equipped: false };
-    const zebra: MenuEntry = { item: item({ itemId: 'z', name: 'Zebra pelt', category: 'misc' }), equipped: false };
+    const apple: MenuEntry = {
+      item: item({ itemId: 'a', name: 'Apple', category: 'food' }),
+      equipped: false,
+    };
+    const zebra: MenuEntry = {
+      item: item({ itemId: 'z', name: 'Zebra pelt', category: 'misc' }),
+      equipped: false,
+    };
     expect(byNameStable(apple, zebra)).toBeLessThan(0);
     expect(byNameStable(zebra, apple)).toBeGreaterThan(0);
     expect(byNameStable(apple, apple)).toBe(0);
@@ -119,13 +140,23 @@ describe('equippedLightMatchingFuel', () => {
     return { entries } as unknown as CompiledContentPack;
   }
 
-  it('returns the equipped light whose fuelTags intersect the fuel item\'s tags', () => {
+  it("returns the equipped light whose fuelTags intersect the fuel item's tags", () => {
     const pack = packWith([
       { id: 'item.lamp-oil', kind: 'item', tags: ['lamp-oil'] },
       { id: 'item.brass-lantern', kind: 'item', tags: [], light: { fuelTags: ['lamp-oil'] } },
     ]);
-    const lantern = item({ itemId: 'item.lantern-1', contentId: 'item.brass-lantern', name: 'Brass lantern', category: 'light' });
-    const oil = item({ itemId: 'item.oil-stack', contentId: 'item.lamp-oil', name: 'Lamp oil', category: 'fuel' });
+    const lantern = item({
+      itemId: 'item.lantern-1',
+      contentId: 'item.brass-lantern',
+      name: 'Brass lantern',
+      category: 'light',
+    });
+    const oil = item({
+      itemId: 'item.oil-stack',
+      contentId: 'item.lamp-oil',
+      name: 'Lamp oil',
+      category: 'fuel',
+    });
     const result = equippedLightMatchingFuel(pack, hero([], { 'off-hand': lantern }), oil);
     expect(result).toBe(lantern);
   });
@@ -135,8 +166,18 @@ describe('equippedLightMatchingFuel', () => {
       { id: 'item.lamp-oil', kind: 'item', tags: ['lamp-oil'] },
       { id: 'item.sword', kind: 'item', tags: [] },
     ]);
-    const sword = item({ itemId: 'item.sword-1', contentId: 'item.sword', name: 'Iron sword', category: 'weapon' });
-    const oil = item({ itemId: 'item.oil-stack', contentId: 'item.lamp-oil', name: 'Lamp oil', category: 'fuel' });
+    const sword = item({
+      itemId: 'item.sword-1',
+      contentId: 'item.sword',
+      name: 'Iron sword',
+      category: 'weapon',
+    });
+    const oil = item({
+      itemId: 'item.oil-stack',
+      contentId: 'item.lamp-oil',
+      name: 'Lamp oil',
+      category: 'fuel',
+    });
     const result = equippedLightMatchingFuel(pack, hero([], { 'main-hand': sword }), oil);
     expect(result).toBeUndefined();
   });

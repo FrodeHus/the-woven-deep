@@ -4,9 +4,20 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import type { ClassContentEntry } from '@woven-deep/content';
 import {
-  createNewRun, DEFAULT_GUEST_HERO, decodeActiveRun, descendToNextFloor, encodeActiveRun,
-  heroActor, heroFromChoices, itemLightSources, resolveCommand, validateActiveRun, validateContentBoundRun,
-  type ActiveRun, type HeroChoices, type ResolutionContext,
+  createNewRun,
+  DEFAULT_GUEST_HERO,
+  decodeActiveRun,
+  descendToNextFloor,
+  encodeActiveRun,
+  heroActor,
+  heroFromChoices,
+  itemLightSources,
+  resolveCommand,
+  validateActiveRun,
+  validateContentBoundRun,
+  type ActiveRun,
+  type HeroChoices,
+  type ResolutionContext,
 } from '../src/index.js';
 
 let pack: CompiledContentPack;
@@ -47,7 +58,13 @@ describe('createNewRun', () => {
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const hero = heroActor(run);
     expect(hero.playerControlled).toBe(true);
-    expect(hero.attributes).toEqual({ might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 });
+    expect(hero.attributes).toEqual({
+      might: 10,
+      agility: 10,
+      vitality: 10,
+      wits: 10,
+      resolve: 10,
+    });
     expect(run.hero.name).toBe('Wayfarer');
     const floor = run.floors[0]!;
     expect(hero.floorId).toBe(floor.floorId);
@@ -66,9 +83,10 @@ describe('createNewRun', () => {
     expect(rations.quantity).toBe(3);
   });
 
-  it('grants the hero the balance entry\'s startingCurrency, not zero', () => {
+  it("grants the hero the balance entry's startingCurrency, not zero", () => {
     const balance = pack.entries.find((entry) => entry.id === 'balance.core-gameplay');
-    if (balance?.kind !== 'balance') throw new Error('expected balance.core-gameplay content entry');
+    if (balance?.kind !== 'balance')
+      throw new Error('expected balance.core-gameplay content entry');
     expect(balance.startingCurrency).toBeGreaterThan(0);
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(run.hero.currency).toBe(balance.startingCurrency);
@@ -85,7 +103,10 @@ describe('createNewRun', () => {
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(heroActor(run).maxHealth).toBe(20); // 10 + 10*1 with the retuned formula
     expect(heroActor(run).health).toBe(20);
-    const tough = { ...DEFAULT_GUEST_HERO, attributes: { ...DEFAULT_GUEST_HERO.attributes, vitality: 14 } };
+    const tough = {
+      ...DEFAULT_GUEST_HERO,
+      attributes: { ...DEFAULT_GUEST_HERO.attributes, vitality: 14 },
+    };
     const toughRun = createNewRun({ pack, seed: SEED, hero: tough });
     expect(heroActor(toughRun).maxHealth).toBe(24);
     expect(heroActor(toughRun).health).toBe(24);
@@ -93,7 +114,8 @@ describe('createNewRun', () => {
 
   it('carries classTags and statModifiers onto the hero state', () => {
     const run = createNewRun({
-      pack, seed: SEED,
+      pack,
+      seed: SEED,
       hero: { ...DEFAULT_GUEST_HERO, classTags: ['wayfarer'], statModifiers: { search: 1 } },
     });
     expect(run.hero.classTags).toEqual(['wayfarer']);
@@ -102,7 +124,8 @@ describe('createNewRun', () => {
 
   it('ignores an enabled:true override on a non-light equipped item instead of propagating it (a hand-authored hero, or a stale kit, could still carry one)', () => {
     const run = createNewRun({
-      pack, seed: SEED,
+      pack,
+      seed: SEED,
       hero: {
         ...DEFAULT_GUEST_HERO,
         equipped: [
@@ -124,11 +147,19 @@ describe('createNewRun', () => {
   });
 
   it('rejects an all-zero seed and unknown equipment content', () => {
-    expect(() => createNewRun({ pack, seed: [0, 0, 0, 0], hero: DEFAULT_GUEST_HERO })).toThrow(/seed/i);
-    expect(() => createNewRun({
-      pack, seed: SEED,
-      hero: { ...DEFAULT_GUEST_HERO, equipped: [{ contentId: 'item.no-such-thing', slot: 'main-hand' }] },
-    })).toThrow(/item\.no-such-thing/);
+    expect(() => createNewRun({ pack, seed: [0, 0, 0, 0], hero: DEFAULT_GUEST_HERO })).toThrow(
+      /seed/i,
+    );
+    expect(() =>
+      createNewRun({
+        pack,
+        seed: SEED,
+        hero: {
+          ...DEFAULT_GUEST_HERO,
+          equipped: [{ contentId: 'item.no-such-thing', slot: 'main-hand' }],
+        },
+      }),
+    ).toThrow(/item\.no-such-thing/);
   });
 
   // Closes the gap that let the kit-created-hero-crashes-on-first-command regression slip
@@ -139,8 +170,9 @@ describe('createNewRun', () => {
   it('survives chargen, createNewRun, content-bound validation, and a first command for every playable class and kit', () => {
     const backgroundId = 'background.caravan-guard';
     const context: ResolutionContext = { content: pack };
-    const playableClasses = pack.entries
-      .filter((entry): entry is ClassContentEntry => entry.kind === 'class' && entry.playable);
+    const playableClasses = pack.entries.filter(
+      (entry): entry is ClassContentEntry => entry.kind === 'class' && entry.playable,
+    );
     expect(playableClasses.length).toBeGreaterThan(0);
 
     let checked = 0;
@@ -161,7 +193,11 @@ describe('createNewRun', () => {
 
         const wait = resolveCommand(
           run,
-          { type: 'wait', commandId: `command.coverage-${classEntry.id}-${kit.kitId}`, expectedRevision: run.revision },
+          {
+            type: 'wait',
+            commandId: `command.coverage-${classEntry.id}-${kit.kitId}`,
+            expectedRevision: run.revision,
+          },
           context,
         );
         expect(wait.result.status).toBe('applied');
@@ -217,26 +253,39 @@ describe('dead wielders and illumination', () => {
     const startedHero = heroActor(started);
     const onStairs: ActiveRun = validateActiveRun({
       ...started,
-      actors: started.actors.map((actor) => actor.actorId === startedHero.actorId
-        ? { ...actor, x: townStairDown.x, y: townStairDown.y } : actor),
+      actors: started.actors.map((actor) =>
+        actor.actorId === startedHero.actorId
+          ? { ...actor, x: townStairDown.x, y: townStairDown.y }
+          : actor,
+      ),
     });
     const run = descendToNextFloor(onStairs, { content: pack }).state;
     const hero = heroActor(run);
     expect(run.items.find((item) => item.contentId === 'item.pitch-torch')?.enabled).toBe(true);
-    expect(run.actors.filter((actor) => actor.actorId !== hero.actorId && actor.health > 0).length)
-      .toBeGreaterThan(0);
+    expect(
+      run.actors.filter((actor) => actor.actorId !== hero.actorId && actor.health > 0).length,
+    ).toBeGreaterThan(0);
 
     const dyingHero = { ...hero, health: 1 };
     const state = {
       ...run,
-      actors: run.actors.map((actor) => actor.actorId === hero.actorId ? dyingHero : actor),
-      survival: { ...run.survival, hungerReserve: 0, hungerStage: 'starving' as const, nextStarvationAt: 1 },
+      actors: run.actors.map((actor) => (actor.actorId === hero.actorId ? dyingHero : actor)),
+      survival: {
+        ...run.survival,
+        hungerReserve: 0,
+        hungerStage: 'starving' as const,
+        nextStarvationAt: 1,
+      },
     };
 
     const context: ResolutionContext = { content: pack };
     let result: ReturnType<typeof resolveCommand>;
     expect(() => {
-      result = resolveCommand(state, { type: 'wait', commandId: 'command.starve-with-torch', expectedRevision: state.revision }, context);
+      result = resolveCommand(
+        state,
+        { type: 'wait', commandId: 'command.starve-with-torch', expectedRevision: state.revision },
+        context,
+      );
     }).not.toThrow();
     result = result!;
     expect(result.result.status).toBe('applied');

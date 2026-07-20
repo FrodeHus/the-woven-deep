@@ -21,11 +21,18 @@ async function verifyOnce(baseUrl, fetch, timeoutMs) {
   if (!content.ok) throw new Error(`content returned ${content.status}`);
   const pack = await content.json();
   const entries = Array.isArray(pack.entries) ? pack.entries : [];
-  const merchants = entries.filter((entry) => entry.kind === 'encounter' && entry.model === 'merchant');
-  if (merchants.length === 0
-    || !merchants.every((entry) => entries.some((candidate) => candidate.kind === 'npc'
-      && candidate.id === entry.definition?.npcId))
-    || !entries.some((entry) => entry.kind === 'npc-faction')) {
+  const merchants = entries.filter(
+    (entry) => entry.kind === 'encounter' && entry.model === 'merchant',
+  );
+  if (
+    merchants.length === 0 ||
+    !merchants.every((entry) =>
+      entries.some(
+        (candidate) => candidate.kind === 'npc' && candidate.id === entry.definition?.npcId,
+      ),
+    ) ||
+    !entries.some((entry) => entry.kind === 'npc-faction')
+  ) {
     throw new Error('served content is missing the travelling merchant vertical');
   }
   const achievements = entries.filter((entry) => entry.kind === 'achievement');
@@ -47,7 +54,7 @@ export async function runSmoke(baseUrl, options = {}) {
       return await verifyOnce(baseUrl, fetch, timeoutMs);
     } catch (error) {
       if (attempt === attempts - 1) throw error;
-      await sleep(retryDelayMs * (2 ** attempt));
+      await sleep(retryDelayMs * 2 ** attempt);
     }
   }
   throw new Error('smoke test exhausted all attempts');

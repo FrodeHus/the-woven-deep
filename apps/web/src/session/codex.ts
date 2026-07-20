@@ -1,5 +1,9 @@
 export {
-  SIGHTINGS_KEY, loadSightings, saveSightings, accumulateLandmarks, accumulateSightings,
+  SIGHTINGS_KEY,
+  loadSightings,
+  saveSightings,
+  accumulateLandmarks,
+  accumulateSightings,
 } from './codex-storage.js';
 export type { Landmark, Sightings } from './codex-storage.js';
 

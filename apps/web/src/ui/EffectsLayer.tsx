@@ -4,7 +4,10 @@ import type { GameplayProjection, OpaqueId, PublicEvent } from '@woven-deep/engi
 import { actorsOf, heroOf } from '../session/projection-view.js';
 import type { CameraOrigin, CameraViewport } from './camera.js';
 import {
-  effectsForEvents, MAX_TRANSIENT_EFFECTS, pickPrimaryCondition, type TransientEffect,
+  effectsForEvents,
+  MAX_TRANSIENT_EFFECTS,
+  pickPrimaryCondition,
+  type TransientEffect,
 } from './effects-map.js';
 import { equippedLightSource } from './light-sources.js';
 
@@ -25,7 +28,10 @@ export interface EffectsLayerProps {
   readonly viewport: CameraViewport;
 }
 
-interface LiveEffect { readonly id: number; readonly effect: TransientEffect }
+interface LiveEffect {
+  readonly id: number;
+  readonly effect: TransientEffect;
+}
 
 let nextLiveEffectId = 0;
 
@@ -42,7 +48,13 @@ const EFFECT_LIFETIME_MS: Record<TransientEffect['kind'], number> = {
  * CURRENT camera on every render, so a mid-animation scroll moves them with the world instead of
  * stranding them at a stale viewport position.
  */
-export function EffectsLayer({ projection, pack, lastEvents, camera, viewport }: EffectsLayerProps): JSX.Element {
+export function EffectsLayer({
+  projection,
+  pack,
+  lastEvents,
+  camera,
+  viewport,
+}: EffectsLayerProps): JSX.Element {
   const hero = heroOf(projection);
   const heroId = hero.actorId;
 
@@ -88,7 +100,10 @@ export function EffectsLayer({ projection, pack, lastEvents, camera, viewport }:
   }, [lastEvents, projection.floor.floorId, heroId]);
 
   const withinViewport = (x: number, y: number): boolean =>
-    x >= camera.x && x < camera.x + viewport.width && y >= camera.y && y < camera.y + viewport.height;
+    x >= camera.x &&
+    x < camera.x + viewport.width &&
+    y >= camera.y &&
+    y < camera.y + viewport.height;
 
   const light = equippedLightSource(projection, pack);
 
@@ -110,24 +125,28 @@ export function EffectsLayer({ projection, pack, lastEvents, camera, viewport }:
         <div
           className="condition-aura"
           data-condition={primaryCondition.conditionId}
-          style={{
-            '--x': hero.x - camera.x,
-            '--y': hero.y - camera.y,
-            '--aura-color': primaryCondition.color,
-          } as CSSProperties}
+          style={
+            {
+              '--x': hero.x - camera.x,
+              '--y': hero.y - camera.y,
+              '--aura-color': primaryCondition.color,
+            } as CSSProperties
+          }
         />
       )}
       {light && withinViewport(hero.x, hero.y) && (
         <div
           className="glow"
           data-source={light.contentId}
-          style={{
-            '--x': hero.x - camera.x,
-            '--y': hero.y - camera.y,
-            '--glow-color': `rgb(${light.color[0]}, ${light.color[1]}, ${light.color[2]})`,
-            '--glow-radius': light.radius,
-            '--glow-intensity': light.fuelFraction,
-          } as CSSProperties}
+          style={
+            {
+              '--x': hero.x - camera.x,
+              '--y': hero.y - camera.y,
+              '--glow-color': `rgb(${light.color[0]}, ${light.color[1]}, ${light.color[2]})`,
+              '--glow-radius': light.radius,
+              '--glow-intensity': light.fuelFraction,
+            } as CSSProperties
+          }
         />
       )}
       {liveEffects.map(({ id, effect }) => {
@@ -135,10 +154,12 @@ export function EffectsLayer({ projection, pack, lastEvents, camera, viewport }:
         const style: CSSProperties = {
           '--x': effect.x - camera.x,
           '--y': effect.y - camera.y,
-          ...(effect.toX !== undefined && effect.toY !== undefined ? {
-            '--to-x': effect.toX - camera.x,
-            '--to-y': effect.toY - camera.y,
-          } : {}),
+          ...(effect.toX !== undefined && effect.toY !== undefined
+            ? {
+                '--to-x': effect.toX - camera.x,
+                '--to-y': effect.toY - camera.y,
+              }
+            : {}),
         } as CSSProperties;
         return (
           <div

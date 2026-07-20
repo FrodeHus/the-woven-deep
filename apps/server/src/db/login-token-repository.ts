@@ -43,7 +43,9 @@ export class LoginTokenRepository {
     this.markConsumedStatement = this.database.prepare(
       'update login_tokens set consumed_at = ? where token_hash = ? and consumed_at is null',
     );
-    this.deleteExpiredStatement = this.database.prepare('delete from login_tokens where expires_at <= ?');
+    this.deleteExpiredStatement = this.database.prepare(
+      'delete from login_tokens where expires_at <= ?',
+    );
   }
 
   insert(row: Omit<LoginTokenRow, 'consumedAt'>): void {

@@ -4,9 +4,16 @@ import type { SessionSnapshot } from '../../session/guest-session.js';
 import { actorsOf } from '../../session/projection-view.js';
 import type { ThreatPopoverActor } from '../ThreatPopover.js';
 
-interface PositionedActor extends ThreatPopoverActor { readonly x: number; readonly y: number }
+interface PositionedActor extends ThreatPopoverActor {
+  readonly x: number;
+  readonly y: number;
+}
 
-function actorAtCell(projection: GameplayProjection, x: number, y: number): PositionedActor | undefined {
+function actorAtCell(
+  projection: GameplayProjection,
+  x: number,
+  y: number,
+): PositionedActor | undefined {
   return actorsOf(projection).find((actor) => actor.x === x && actor.y === y);
 }
 

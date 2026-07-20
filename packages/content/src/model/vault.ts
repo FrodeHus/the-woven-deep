@@ -1,9 +1,24 @@
 import type { BaseContentEntry, ContentId, ItemRarity } from './common.js';
 
-export const VAULT_TERRAIN_NAMES = ['wall', 'floor', 'closed-door', 'pillar', 'stair-up', 'stair-down', 'void'] as const;
-export type VaultTerrainName = typeof VAULT_TERRAIN_NAMES[number];
-export const VAULT_PLACEMENT_KINDS = ['monster', 'item', 'trap', 'npc', 'fixture', 'objective'] as const;
-export type VaultPlacementKind = typeof VAULT_PLACEMENT_KINDS[number];
+export const VAULT_TERRAIN_NAMES = [
+  'wall',
+  'floor',
+  'closed-door',
+  'pillar',
+  'stair-up',
+  'stair-down',
+  'void',
+] as const;
+export type VaultTerrainName = (typeof VAULT_TERRAIN_NAMES)[number];
+export const VAULT_PLACEMENT_KINDS = [
+  'monster',
+  'item',
+  'trap',
+  'npc',
+  'fixture',
+  'objective',
+] as const;
+export type VaultPlacementKind = (typeof VAULT_PLACEMENT_KINDS)[number];
 export type VaultRotation = 0 | 90 | 180 | 270;
 export type VaultRarity = ItemRarity;
 

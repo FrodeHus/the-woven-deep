@@ -18,15 +18,23 @@ import {
 } from '../src/index.js';
 
 const ambient = { color: [32, 40, 48] as const, strength: 3 };
-const request = (seed = [1, 2, 3, 4] as const, width = 80, height = 25): GenerateTopologyRequest => ({
-  floorId: 'floor.test', floorSeed: seed, depth: 1, width, height,
+const request = (
+  seed = [1, 2, 3, 4] as const,
+  width = 80,
+  height = 25,
+): GenerateTopologyRequest => ({
+  floorId: 'floor.test',
+  floorSeed: seed,
+  depth: 1,
+  width,
+  height,
   theme: createClassicTheme(width, height, { ambient }),
 });
 
 function serpentineTheme(): GenerationTheme {
   const width = 20;
   const height = 12;
-  const maskWords = Array(Math.ceil(width * height / 32)).fill(0) as number[];
+  const maskWords = Array(Math.ceil((width * height) / 32)).fill(0) as number[];
   const set = (x: number, y: number): void => {
     const index = y * width + x;
     maskWords[index >>> 5] = (maskWords[index >>> 5]! | ((1 << (index & 31)) >>> 0)) >>> 0;
@@ -51,21 +59,34 @@ function assertValid(draft: ReturnType<typeof generateTopology>): void {
   expect(draft.tiles[draft.stairDown.y * draft.width + draft.stairDown.x]).toBe(5);
   expect(draft.stairUp).not.toEqual(draft.stairDown);
   const connectivity = analyzeConnectivity({
-    width: draft.width, height: draft.height, tiles: draft.tiles,
-    start: draft.stairUp, target: draft.stairDown,
+    width: draft.width,
+    height: draft.height,
+    tiles: draft.tiles,
+    start: draft.stairUp,
+    target: draft.stairDown,
   });
   expect(connectivity.connected).toBe(true);
   expect(connectivity.distance).toBe(draft.report.stairDistance);
   draft.tiles.forEach((tile, index) => {
     if ([1, 2, 4, 5].includes(tile)) {
-      expect(maskHas(request(draft.floorSeed, draft.width, draft.height).theme.maskWords, draft.width, index % draft.width, Math.floor(index / draft.width))).toBe(true);
+      expect(
+        maskHas(
+          request(draft.floorSeed, draft.width, draft.height).theme.maskWords,
+          draft.width,
+          index % draft.width,
+          Math.floor(index / draft.width),
+        ),
+      ).toBe(true);
     }
   });
 }
 
 describe('classic topology generation', () => {
   it('matches the independently inspected seed-1 topology snapshot', () => {
-    const expected = readFileSync(new URL('./fixtures/classic-topology-seed-1.json', import.meta.url), 'utf8').trimEnd();
+    const expected = readFileSync(
+      new URL('./fixtures/classic-topology-seed-1.json', import.meta.url),
+      'utf8',
+    ).trimEnd();
     expect(stableJson(generateTopology(request()))).toBe(expected);
   });
 
@@ -85,12 +106,14 @@ describe('classic topology generation', () => {
   });
 
   it('succeeds normally or through fallback over 200 deterministic seeds', () => {
-    for (let seed = 1; seed <= 200; seed += 1) assertValid(generateTopology(request(expandLegacySeed(seed), 40, 20)));
+    for (let seed = 1; seed <= 200; seed += 1)
+      assertValid(generateTopology(request(expandLegacySeed(seed), 40, 20)));
   }, 120_000);
 
   it('uses a deterministic connected fallback with no vaults after safe rejection', () => {
     const input: GenerateTopologyRequest = {
-      ...request([9, 8, 7, 6], 40, 20), attemptLimit: 1,
+      ...request([9, 8, 7, 6], 40, 20),
+      attemptLimit: 1,
       topologyFactory: () => ({ ok: false, code: 'topology.empty' }),
     };
     const left = generateTopology(input);
@@ -105,8 +128,13 @@ describe('classic topology generation', () => {
 
   it('builds stable clipped rooms in a one-cell-wide serpentine fallback', () => {
     const input: GenerateTopologyRequest = {
-      floorId: 'floor.serpentine', floorSeed: [7, 11, 13, 17], depth: 2,
-      width: 20, height: 12, theme: serpentineTheme(), attemptLimit: 1,
+      floorId: 'floor.serpentine',
+      floorSeed: [7, 11, 13, 17],
+      depth: 2,
+      width: 20,
+      height: 12,
+      theme: serpentineTheme(),
+      attemptLimit: 1,
       topologyFactory: () => ({ ok: false, code: 'topology.empty' }),
     };
     const first = generateTopology(input);
@@ -118,10 +146,11 @@ describe('classic topology generation', () => {
     expect(first.report.stairDistance).toBeGreaterThanOrEqual(20);
     for (const room of first.rooms) {
       let potentialCells = 0;
-      for (let y = room.top; y <= room.bottom; y += 1) for (let x = room.left; x <= room.right; x += 1) {
-        expect(maskHas(input.theme.maskWords, input.width, x, y)).toBe(true);
-        if ([1, 2, 4, 5].includes(first.tiles[y * input.width + x]!)) potentialCells += 1;
-      }
+      for (let y = room.top; y <= room.bottom; y += 1)
+        for (let x = room.left; x <= room.right; x += 1) {
+          expect(maskHas(input.theme.maskWords, input.width, x, y)).toBe(true);
+          if ([1, 2, 4, 5].includes(first.tiles[y * input.width + x]!)) potentialCells += 1;
+        }
       expect(potentialCells).toBeGreaterThan(0);
     }
     expect(stableJson(first)).toBe(stableJson(second));
@@ -138,9 +167,9 @@ describe('classic topology generation', () => {
   });
 
   it('rejects a malformed pinned ROT corridor shape without exposing partial topology', () => {
-    const getter = vi.spyOn(Map.Digger.prototype, 'getCorridors').mockReturnValue([
-      { _startX: 1, _startY: 1, _endX: Number.NaN, _endY: 2 },
-    ] as never);
+    const getter = vi
+      .spyOn(Map.Digger.prototype, 'getCorridors')
+      .mockReturnValue([{ _startX: 1, _startY: 1, _endX: Number.NaN, _endY: 2 }] as never);
     const result = generateTopology({ ...request(), attemptLimit: 1 });
     expect(result.report.fallback).toBe(true);
     expect(result.report.rejectionCounts).toEqual({ 'topology.invalid-geometry': 1 });
@@ -167,8 +196,12 @@ describe('classic topology generation', () => {
     { ...request(), attemptLimit: 33 },
     { ...request(), floorSeed: [0, 0, 0, 0] as const },
   ])('rejects invalid dimensions, limits, seeds, or mismatched themes', (input) => {
-    if (input.width === 20 && input.height === 12) expect(() => generateTopology(input)).not.toThrow();
-    else expect(() => generateTopology(input)).toThrowError(expect.objectContaining({ code: expect.stringMatching(/^generation\./) }));
+    if (input.width === 20 && input.height === 12)
+      expect(() => generateTopology(input)).not.toThrow();
+    else
+      expect(() => generateTopology(input)).toThrowError(
+        expect.objectContaining({ code: expect.stringMatching(/^generation\./) }),
+      );
   });
 
   // Smoke test for the larger-dungeon baseline (Task 5): 160x50 with a 14-room minimum, matching
@@ -179,7 +212,12 @@ describe('classic topology generation', () => {
     const theme = createClassicTheme(width, height, { ambient, minimumRooms: 14 });
     const started = Date.now();
     const draft = generateTopology({
-      floorId: 'floor.smoke-160x50', floorSeed: [5, 10, 15, 20], depth: 3, width, height, theme,
+      floorId: 'floor.smoke-160x50',
+      floorSeed: [5, 10, 15, 20],
+      depth: 3,
+      width,
+      height,
+      theme,
     });
     const elapsedMs = Date.now() - started;
 
@@ -193,28 +231,38 @@ describe('classic topology generation', () => {
 });
 
 function assertSolidBorder(tiles: readonly number[], width: number, height: number): void {
-  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
-    if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
-      expect(tiles[y * width + x]).toBe(0);
+  for (let y = 0; y < height; y += 1)
+    for (let x = 0; x < width; x += 1) {
+      if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
+        expect(tiles[y * width + x]).toBe(0);
+      }
     }
-  }
 }
 
 describe('outer border rendering', () => {
   it.each([
-    [40, 20], [80, 25],
-  ])('fills the entire %sx%s outer border with wall tiles for the rot-js topology path', (width, height) => {
-    for (const seed of [[1, 2, 3, 4] as const, [5, 10, 15, 20] as const]) {
-      const result = createRotTopology(width, height, classicMask(width, height), seed);
-      expect(result.ok).toBe(true);
-      if (result.ok) assertSolidBorder(result.topology.tiles, width, height);
-    }
-  });
+    [40, 20],
+    [80, 25],
+  ])(
+    'fills the entire %sx%s outer border with wall tiles for the rot-js topology path',
+    (width, height) => {
+      for (const seed of [[1, 2, 3, 4] as const, [5, 10, 15, 20] as const]) {
+        const result = createRotTopology(width, height, classicMask(width, height), seed);
+        expect(result.ok).toBe(true);
+        if (result.ok) assertSolidBorder(result.topology.tiles, width, height);
+      }
+    },
+  );
 
   it.each([
-    [20, 12], [40, 20], [80, 25],
-  ])('fills the entire %sx%s outer border with wall tiles for the fallback topology path', (width, height) => {
-    const topology = createFallbackTopology(width, height, classicMask(width, height), 1);
-    assertSolidBorder(topology.tiles, width, height);
-  });
+    [20, 12],
+    [40, 20],
+    [80, 25],
+  ])(
+    'fills the entire %sx%s outer border with wall tiles for the fallback topology path',
+    (width, height) => {
+      const topology = createFallbackTopology(width, height, classicMask(width, height), 1);
+      assertSolidBorder(topology.tiles, width, height);
+    },
+  );
 });

@@ -10,7 +10,14 @@ const baseLegend: Record<string, VaultLegendEntry> = {
     terrain: 'floor',
     entrance: false,
     light: null,
-    slot: { id: 'monster-main', kind: 'monster', required: true, tags: ['guard'], lootTableId: null, contentId: null },
+    slot: {
+      id: 'monster-main',
+      kind: 'monster',
+      required: true,
+      tags: ['guard'],
+      lootTableId: null,
+      contentId: null,
+    },
   },
 };
 
@@ -51,9 +58,18 @@ describe('validateVaultEntry', () => {
   ] as const;
 
   it.each(cases)('rejects %s', (name, layout, message) => {
-    const legend = name === 'unused legend symbol'
-      ? { ...baseLegend, x: { terrain: 'floor', entrance: false, light: null, slot: null } satisfies VaultLegendEntry }
-      : baseLegend;
+    const legend =
+      name === 'unused legend symbol'
+        ? {
+            ...baseLegend,
+            x: {
+              terrain: 'floor',
+              entrance: false,
+              light: null,
+              slot: null,
+            } satisfies VaultLegendEntry,
+          }
+        : baseLegend;
     const issues = validateVaultEntry(vault(layout, legend), 'vaults/test-room.yaml');
 
     expect(issues.some((issue) => issue.message.includes(message))).toBe(true);
@@ -61,83 +77,140 @@ describe('validateVaultEntry', () => {
 
   it('rejects multi-code-point legend keys and duplicate fixture suffixes in stable issue order', () => {
     const fixture = {
-      terrain: 'floor', entrance: false, slot: null,
+      terrain: 'floor',
+      entrance: false,
+      slot: null,
       light: {
-        idSuffix: 'amber', glyph: '*', presentationToken: 'fixture.lamp',
-        color: [255, 180, 64] as const, radius: 6, strength: 180, enabled: true,
+        idSuffix: 'amber',
+        glyph: '*',
+        presentationToken: 'fixture.lamp',
+        color: [255, 180, 64] as const,
+        radius: 6,
+        strength: 180,
+        enabled: true,
       },
     } satisfies VaultLegendEntry;
-    const issues = validateVaultEntry(vault(['+ab'], {
-      '+': baseLegend['+']!, a: fixture, b: fixture, xy: baseLegend['.']!,
-    }), 'vaults/test-room.yaml');
+    const issues = validateVaultEntry(
+      vault(['+ab'], {
+        '+': baseLegend['+']!,
+        a: fixture,
+        b: fixture,
+        xy: baseLegend['.']!,
+      }),
+      'vaults/test-room.yaml',
+    );
 
-    const compare = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
-    expect(issues).toEqual([...issues].sort((left, right) =>
-      compare(left.path, right.path) || compare(left.message, right.message)));
-    expect(issues.map((issue) => issue.message)).toEqual(expect.arrayContaining([
-      expect.stringContaining('legend key xy must be one Unicode code point'),
-      expect.stringContaining('duplicate fixture suffix amber'),
-    ]));
+    const compare = (left: string, right: string): number =>
+      left < right ? -1 : left > right ? 1 : 0;
+    expect(issues).toEqual(
+      [...issues].sort(
+        (left, right) => compare(left.path, right.path) || compare(left.message, right.message),
+      ),
+    );
+    expect(issues.map((issue) => issue.message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('legend key xy must be one Unicode code point'),
+        expect.stringContaining('duplicate fixture suffix amber'),
+      ]),
+    );
   });
 
   it('rejects an impassable entrance without using it to reach an adjacent required slot', () => {
-    const issues = validateVaultEntry(vault(['+m'], {
-      ...baseLegend,
-      '+': { ...baseLegend['+']!, terrain: 'wall' },
-    }), 'vaults/test-room.yaml');
+    const issues = validateVaultEntry(
+      vault(['+m'], {
+        ...baseLegend,
+        '+': { ...baseLegend['+']!, terrain: 'wall' },
+      }),
+      'vaults/test-room.yaml',
+    );
 
-    expect(issues.map((issue) => issue.message)).toEqual(expect.arrayContaining([
-      'entrance terrain wall is not potentially traversable',
-      'required slot monster-main is unreachable',
-    ]));
+    expect(issues.map((issue) => issue.message)).toEqual(
+      expect.arrayContaining([
+        'entrance terrain wall is not potentially traversable',
+        'required slot monster-main is unreachable',
+      ]),
+    );
   });
 
   it('rejects an optional placement slot authored on void terrain at its vault legend field', () => {
-    const issues = validateVaultEntry(vault(['+s'], {
-      '+': baseLegend['+']!,
-      s: {
-        terrain: 'void', entrance: false, light: null,
-        slot: {
-          id: 'optional-cache', kind: 'item', required: false, tags: ['cache'],
-          lootTableId: 'loot-table.cache', contentId: null,
+    const issues = validateVaultEntry(
+      vault(['+s'], {
+        '+': baseLegend['+']!,
+        s: {
+          terrain: 'void',
+          entrance: false,
+          light: null,
+          slot: {
+            id: 'optional-cache',
+            kind: 'item',
+            required: false,
+            tags: ['cache'],
+            lootTableId: 'loot-table.cache',
+            contentId: null,
+          },
         },
-      },
-    }), 'vaults/test-room.yaml');
+      }),
+      'vaults/test-room.yaml',
+    );
 
     expect(issues).toContainEqual({
       file: 'vaults/test-room.yaml',
       path: '$.entries.vault.test-room.legend.s.slot',
-      message: 'void terrain cannot contain placement slot optional-cache; use non-void terrain or remove the slot',
+      message:
+        'void terrain cannot contain placement slot optional-cache; use non-void terrain or remove the slot',
     });
   });
 
   it('rejects a light authored on void terrain at its vault legend field', () => {
-    const issues = validateVaultEntry(vault(['+l'], {
-      '+': baseLegend['+']!,
-      l: {
-        terrain: 'void', entrance: false, slot: null,
-        light: {
-          idSuffix: 'void-lamp', glyph: '*', presentationToken: 'fixture.lamp',
-          color: [255, 180, 64], radius: 6, strength: 180, enabled: true,
+    const issues = validateVaultEntry(
+      vault(['+l'], {
+        '+': baseLegend['+']!,
+        l: {
+          terrain: 'void',
+          entrance: false,
+          slot: null,
+          light: {
+            idSuffix: 'void-lamp',
+            glyph: '*',
+            presentationToken: 'fixture.lamp',
+            color: [255, 180, 64],
+            radius: 6,
+            strength: 180,
+            enabled: true,
+          },
         },
-      },
-    }), 'vaults/test-room.yaml');
+      }),
+      'vaults/test-room.yaml',
+    );
 
     expect(issues).toContainEqual({
       file: 'vaults/test-room.yaml',
       path: '$.entries.vault.test-room.legend.l.light',
-      message: 'void terrain cannot contain light void-lamp; use non-void terrain or remove the light',
+      message:
+        'void terrain cannot contain light void-lamp; use non-void terrain or remove the light',
     });
   });
 
   it('rejects an item slot that sets neither lootTableId nor contentId', () => {
-    const issues = validateVaultEntry(vault(['+i'], {
-      '+': baseLegend['+']!,
-      i: {
-        terrain: 'floor', entrance: false, light: null,
-        slot: { id: 'item-cache', kind: 'item', required: true, tags: ['cache'], lootTableId: null, contentId: null },
-      },
-    }), 'vaults/test-room.yaml');
+    const issues = validateVaultEntry(
+      vault(['+i'], {
+        '+': baseLegend['+']!,
+        i: {
+          terrain: 'floor',
+          entrance: false,
+          light: null,
+          slot: {
+            id: 'item-cache',
+            kind: 'item',
+            required: true,
+            tags: ['cache'],
+            lootTableId: null,
+            contentId: null,
+          },
+        },
+      }),
+      'vaults/test-room.yaml',
+    );
 
     expect(issues).toContainEqual({
       file: 'vaults/test-room.yaml',
@@ -147,16 +220,25 @@ describe('validateVaultEntry', () => {
   });
 
   it('rejects an item slot that sets both lootTableId and contentId', () => {
-    const issues = validateVaultEntry(vault(['+i'], {
-      '+': baseLegend['+']!,
-      i: {
-        terrain: 'floor', entrance: false, light: null,
-        slot: {
-          id: 'item-cache', kind: 'item', required: true, tags: ['cache'],
-          lootTableId: 'loot-table.cave-rat', contentId: 'item.crimson-potion',
+    const issues = validateVaultEntry(
+      vault(['+i'], {
+        '+': baseLegend['+']!,
+        i: {
+          terrain: 'floor',
+          entrance: false,
+          light: null,
+          slot: {
+            id: 'item-cache',
+            kind: 'item',
+            required: true,
+            tags: ['cache'],
+            lootTableId: 'loot-table.cave-rat',
+            contentId: 'item.crimson-potion',
+          },
         },
-      },
-    }), 'vaults/test-room.yaml');
+      }),
+      'vaults/test-room.yaml',
+    );
 
     expect(issues).toContainEqual({
       file: 'vaults/test-room.yaml',
@@ -166,13 +248,25 @@ describe('validateVaultEntry', () => {
   });
 
   it('rejects a non-item slot that sets lootTableId or contentId', () => {
-    const issues = validateVaultEntry(vault(['+i'], {
-      '+': baseLegend['+']!,
-      i: {
-        terrain: 'floor', entrance: false, light: null,
-        slot: { id: 'trap-loot', kind: 'trap', required: true, tags: [], lootTableId: 'loot-table.cave-rat', contentId: null },
-      },
-    }), 'vaults/test-room.yaml');
+    const issues = validateVaultEntry(
+      vault(['+i'], {
+        '+': baseLegend['+']!,
+        i: {
+          terrain: 'floor',
+          entrance: false,
+          light: null,
+          slot: {
+            id: 'trap-loot',
+            kind: 'trap',
+            required: true,
+            tags: [],
+            lootTableId: 'loot-table.cave-rat',
+            contentId: null,
+          },
+        },
+      }),
+      'vaults/test-room.yaml',
+    );
 
     expect(issues).toContainEqual({
       file: 'vaults/test-room.yaml',
@@ -184,39 +278,84 @@ describe('validateVaultEntry', () => {
   it('accepts an item slot naming a known loot table or item and reports unknown references', () => {
     const byId = new Map<string, ContentEntry>([
       ['monster.rat', { kind: 'monster', id: 'monster.rat' } as unknown as ContentEntry],
-      ['loot-table.cave-rat', { kind: 'loot-table', id: 'loot-table.cave-rat' } as unknown as ContentEntry],
-      ['item.crimson-potion', { kind: 'item', id: 'item.crimson-potion' } as unknown as ContentEntry],
+      [
+        'loot-table.cave-rat',
+        { kind: 'loot-table', id: 'loot-table.cave-rat' } as unknown as ContentEntry,
+      ],
+      [
+        'item.crimson-potion',
+        { kind: 'item', id: 'item.crimson-potion' } as unknown as ContentEntry,
+      ],
     ]);
 
-    const validIssues = validateVaultEntry(vault(['+i'], {
-      '+': baseLegend['+']!,
-      i: {
-        terrain: 'floor', entrance: false, light: null,
-        slot: { id: 'item-cache', kind: 'item', required: true, tags: ['cache'], lootTableId: 'loot-table.cave-rat', contentId: null },
-      },
-    }), 'vaults/test-room.yaml', byId);
+    const validIssues = validateVaultEntry(
+      vault(['+i'], {
+        '+': baseLegend['+']!,
+        i: {
+          terrain: 'floor',
+          entrance: false,
+          light: null,
+          slot: {
+            id: 'item-cache',
+            kind: 'item',
+            required: true,
+            tags: ['cache'],
+            lootTableId: 'loot-table.cave-rat',
+            contentId: null,
+          },
+        },
+      }),
+      'vaults/test-room.yaml',
+      byId,
+    );
     expect(validIssues).toEqual([]);
 
-    const unknownIssues = validateVaultEntry(vault(['+i'], {
-      '+': baseLegend['+']!,
-      i: {
-        terrain: 'floor', entrance: false, light: null,
-        slot: { id: 'item-cache', kind: 'item', required: true, tags: ['cache'], lootTableId: null, contentId: 'item.missing' },
-      },
-    }), 'vaults/test-room.yaml', byId);
+    const unknownIssues = validateVaultEntry(
+      vault(['+i'], {
+        '+': baseLegend['+']!,
+        i: {
+          terrain: 'floor',
+          entrance: false,
+          light: null,
+          slot: {
+            id: 'item-cache',
+            kind: 'item',
+            required: true,
+            tags: ['cache'],
+            lootTableId: null,
+            contentId: 'item.missing',
+          },
+        },
+      }),
+      'vaults/test-room.yaml',
+      byId,
+    );
     expect(unknownIssues).toContainEqual({
       file: 'vaults/test-room.yaml',
       path: '$.entries.vault.test-room.legend.i.slot.contentId',
       message: 'unknown item reference item.missing',
     });
 
-    const wrongKindIssues = validateVaultEntry(vault(['+i'], {
-      '+': baseLegend['+']!,
-      i: {
-        terrain: 'floor', entrance: false, light: null,
-        slot: { id: 'item-cache', kind: 'item', required: true, tags: ['cache'], lootTableId: null, contentId: 'monster.rat' },
-      },
-    }), 'vaults/test-room.yaml', byId);
+    const wrongKindIssues = validateVaultEntry(
+      vault(['+i'], {
+        '+': baseLegend['+']!,
+        i: {
+          terrain: 'floor',
+          entrance: false,
+          light: null,
+          slot: {
+            id: 'item-cache',
+            kind: 'item',
+            required: true,
+            tags: ['cache'],
+            lootTableId: null,
+            contentId: 'monster.rat',
+          },
+        },
+      }),
+      'vaults/test-room.yaml',
+      byId,
+    );
     expect(wrongKindIssues).toContainEqual({
       file: 'vaults/test-room.yaml',
       path: '$.entries.vault.test-room.legend.i.slot.contentId',
@@ -231,30 +370,82 @@ describe('validateVaultEntry (town vault contract)', () => {
     '.': { terrain: 'floor', entrance: false, light: null, slot: null },
     '+': { terrain: 'floor', entrance: true, light: null, slot: null },
     '>': {
-      terrain: 'stair-down', entrance: false, light: null,
-      slot: { id: 'dungeon-entrance', kind: 'fixture', required: true, tags: ['town'], lootTableId: null, contentId: null },
+      terrain: 'stair-down',
+      entrance: false,
+      light: null,
+      slot: {
+        id: 'dungeon-entrance',
+        kind: 'fixture',
+        required: true,
+        tags: ['town'],
+        lootTableId: null,
+        contentId: null,
+      },
     },
     D: {
-      terrain: 'closed-door', entrance: false, light: null,
-      slot: { id: 'house-door', kind: 'fixture', required: true, tags: ['town'], lootTableId: null, contentId: null },
+      terrain: 'closed-door',
+      entrance: false,
+      light: null,
+      slot: {
+        id: 'house-door',
+        kind: 'fixture',
+        required: true,
+        tags: ['town'],
+        lootTableId: null,
+        contentId: null,
+      },
     },
     P: {
-      terrain: 'floor', entrance: false, light: null,
-      slot: { id: 'merchant-provisioner', kind: 'npc', required: true, tags: ['town'], lootTableId: null, contentId: null },
+      terrain: 'floor',
+      entrance: false,
+      light: null,
+      slot: {
+        id: 'merchant-provisioner',
+        kind: 'npc',
+        required: true,
+        tags: ['town'],
+        lootTableId: null,
+        contentId: null,
+      },
     },
     A: {
-      terrain: 'floor', entrance: false, light: null,
-      slot: { id: 'merchant-arms', kind: 'npc', required: true, tags: ['town'], lootTableId: null, contentId: null },
+      terrain: 'floor',
+      entrance: false,
+      light: null,
+      slot: {
+        id: 'merchant-arms',
+        kind: 'npc',
+        required: true,
+        tags: ['town'],
+        lootTableId: null,
+        contentId: null,
+      },
     },
     C: {
-      terrain: 'floor', entrance: false, light: null,
-      slot: { id: 'merchant-curios', kind: 'npc', required: true, tags: ['town'], lootTableId: null, contentId: null },
+      terrain: 'floor',
+      entrance: false,
+      light: null,
+      slot: {
+        id: 'merchant-curios',
+        kind: 'npc',
+        required: true,
+        tags: ['town'],
+        lootTableId: null,
+        contentId: null,
+      },
     },
     L: {
-      terrain: 'floor', entrance: false, slot: null,
+      terrain: 'floor',
+      entrance: false,
+      slot: null,
       light: {
-        idSuffix: 'town-lamp', glyph: 'L', presentationToken: 'fixture.lamp',
-        color: [255, 180, 64], radius: 6, strength: 180, enabled: true,
+        idSuffix: 'town-lamp',
+        glyph: 'L',
+        presentationToken: 'fixture.lamp',
+        color: [255, 180, 64],
+        radius: 6,
+        strength: 180,
+        enabled: true,
       },
     },
   };
@@ -278,7 +469,13 @@ describe('validateVaultEntry (town vault contract)', () => {
       layout,
       legend,
       entranceCount: 1,
-      requiredSlotIds: ['dungeon-entrance', 'house-door', 'merchant-arms', 'merchant-curios', 'merchant-provisioner'],
+      requiredSlotIds: [
+        'dungeon-entrance',
+        'house-door',
+        'merchant-arms',
+        'merchant-curios',
+        'merchant-provisioner',
+      ],
     };
   }
 
@@ -292,8 +489,15 @@ describe('validateVaultEntry (town vault contract)', () => {
   it('rejects a town vault missing a required slot', () => {
     const layoutWithoutHouseDoor = ['+>PAC.', '......', '..L...'] as const;
     const legendWithoutDoor = { ...townLegend, D: townLegend['.']! };
-    const issues = validateVaultEntry(townVault(layoutWithoutHouseDoor, legendWithoutDoor), 'vaults/town.yaml');
-    expect(issues.some((issue) => issue.message.includes('a town vault must declare exactly the required slots'))).toBe(true);
+    const issues = validateVaultEntry(
+      townVault(layoutWithoutHouseDoor, legendWithoutDoor),
+      'vaults/town.yaml',
+    );
+    expect(
+      issues.some((issue) =>
+        issue.message.includes('a town vault must declare exactly the required slots'),
+      ),
+    ).toBe(true);
   });
 
   it('rejects a town vault declaring an extra required slot', () => {
@@ -301,30 +505,50 @@ describe('validateVaultEntry (town vault contract)', () => {
     const legendWithExtra: Record<string, VaultLegendEntry> = {
       ...townLegend,
       X: {
-        terrain: 'floor', entrance: false, light: null,
+        terrain: 'floor',
+        entrance: false,
+        light: null,
         slot: {
-          id: 'extra-slot', kind: 'item', required: true, tags: ['town'],
-          lootTableId: 'loot-table.extra', contentId: null,
+          id: 'extra-slot',
+          kind: 'item',
+          required: true,
+          tags: ['town'],
+          lootTableId: 'loot-table.extra',
+          contentId: null,
         },
       },
     };
     const issues = validateVaultEntry(townVault(layout, legendWithExtra), 'vaults/town.yaml');
-    expect(issues.some((issue) => issue.message.includes('a town vault must declare exactly the required slots'))).toBe(true);
+    expect(
+      issues.some((issue) =>
+        issue.message.includes('a town vault must declare exactly the required slots'),
+      ),
+    ).toBe(true);
   });
 
   it('rejects a town vault with no light fixture', () => {
     const layoutWithoutLight = ['+>PAC.', '.....D', '......'] as const;
     const issues = validateVaultEntry(townVault(layoutWithoutLight), 'vaults/town.yaml');
-    expect(issues).toContainEqual(expect.objectContaining({
-      message: 'a town vault must declare at least one light fixture',
-    }));
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        message: 'a town vault must declare at least one light fixture',
+      }),
+    );
   });
 
   it('rejects a town vault whose dungeon-entrance slot is not on stair-down terrain', () => {
-    const legendWithFloorEntrance = { ...townLegend, '>': { ...townLegend['>']!, terrain: 'floor' as const } };
-    const issues = validateVaultEntry(townVault(validLayout, legendWithFloorEntrance), 'vaults/town.yaml');
-    expect(issues).toContainEqual(expect.objectContaining({
-      message: 'the dungeon-entrance slot of a town vault must sit on stair-down terrain',
-    }));
+    const legendWithFloorEntrance = {
+      ...townLegend,
+      '>': { ...townLegend['>']!, terrain: 'floor' as const },
+    };
+    const issues = validateVaultEntry(
+      townVault(validLayout, legendWithFloorEntrance),
+      'vaults/town.yaml',
+    );
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        message: 'the dungeon-entrance slot of a town vault must sit on stair-down terrain',
+      }),
+    );
   });
 });

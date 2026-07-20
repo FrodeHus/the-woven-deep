@@ -6,8 +6,17 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  createNewRun, DEFAULT_GUEST_HERO, encodeActiveRun, heroActor, heroPerception, refreshKnowledge,
-  validateActiveRun, type ActiveRun, type FloorSnapshot, type ItemInstance, type MerchantPopulation,
+  createNewRun,
+  DEFAULT_GUEST_HERO,
+  encodeActiveRun,
+  heroActor,
+  heroPerception,
+  refreshKnowledge,
+  validateActiveRun,
+  type ActiveRun,
+  type FloorSnapshot,
+  type ItemInstance,
+  type MerchantPopulation,
 } from '@woven-deep/engine';
 import { GuestSession } from '../src/session/guest-session.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
@@ -19,14 +28,18 @@ let pack: CompiledContentPack;
 const SEED = [3, 5, 7, 9] as const;
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 function fakeStorage(): SessionStorageLike {
   const store = new Map<string, string>();
   return {
     get: (key: string) => store.get(key) ?? null,
-    set: (key: string, value: string) => { store.set(key, value); },
+    set: (key: string, value: string) => {
+      store.set(key, value);
+    },
   };
 }
 
@@ -44,26 +57,50 @@ function teleportHero(run: ActiveRun, position: Readonly<{ x: number; y: number 
   const hero = heroActor(run);
   const moved: ActiveRun = {
     ...run,
-    actors: run.actors.map((actor) => actor.actorId === hero.actorId ? { ...actor, ...position } : actor),
+    actors: run.actors.map((actor) =>
+      actor.actorId === hero.actorId ? { ...actor, ...position } : actor,
+    ),
   };
   const floor = townFloor(moved);
   const movedHero = heroActor(moved);
   const knowledge = refreshKnowledge({
-    floor, hero: heroPerception(moved.hero, movedHero),
-    actors: new Map(moved.actors.filter((actor) => actor.floorId === floor.floorId).map((actor) => [actor.actorId, actor] as const)),
+    floor,
+    hero: heroPerception(moved.hero, movedHero),
+    actors: new Map(
+      moved.actors
+        .filter((actor) => actor.floorId === floor.floorId)
+        .map((actor) => [actor.actorId, actor] as const),
+    ),
   }).knowledge;
   return validateActiveRun({
     ...moved,
-    floors: moved.floors.map((candidate) => candidate.floorId === floor.floorId ? { ...candidate, knowledge } : candidate),
+    floors: moved.floors.map((candidate) =>
+      candidate.floorId === floor.floorId ? { ...candidate, knowledge } : candidate,
+    ),
   });
 }
 
 /** Stands the hero directly beside (Chebyshev distance 1 from) the given point. */
-function adjacentFreeCell(run: ActiveRun, target: Readonly<{ x: number; y: number }>): Readonly<{ x: number; y: number }> {
+function adjacentFreeCell(
+  run: ActiveRun,
+  target: Readonly<{ x: number; y: number }>,
+): Readonly<{ x: number; y: number }> {
   const floor = townFloor(run);
-  const occupied = new Set(run.actors.filter((actor) => actor.floorId === floor.floorId && actor.health > 0)
-    .map((actor) => `${actor.x}:${actor.y}`));
-  for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+  const occupied = new Set(
+    run.actors
+      .filter((actor) => actor.floorId === floor.floorId && actor.health > 0)
+      .map((actor) => `${actor.x}:${actor.y}`),
+  );
+  for (const [dx, dy] of [
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+    [0, -1],
+    [1, 1],
+    [-1, 1],
+    [1, -1],
+    [-1, -1],
+  ] as const) {
     const x = target.x + dx;
     const y = target.y + dy;
     if (x < 0 || y < 0 || x >= floor.width || y >= floor.height) continue;
@@ -77,7 +114,9 @@ function adjacentFreeCell(run: ActiveRun, target: Readonly<{ x: number; y: numbe
  * `{ type: 'trade-open' }` directly without walking there first. */
 function sessionAdjacentToMerchant(): GuestSession {
   const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
-  const merchant = fresh.populations.find((population): population is MerchantPopulation => population.model === 'merchant')!;
+  const merchant = fresh.populations.find(
+    (population): population is MerchantPopulation => population.model === 'merchant',
+  )!;
   const actor = fresh.actors.find((candidate) => candidate.actorId === merchant.actorId)!;
   const heroCell = adjacentFreeCell(fresh, actor);
   const positioned = teleportHero(fresh, heroCell);
@@ -98,16 +137,27 @@ function sessionAdjacentToCuriosDealerWithUnidentifiedItem(): GuestSession {
   let run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
   const hero = heroActor(run);
   const unidentified: ItemInstance = {
-    itemId: 'item.hero.test-potion-a', contentId: 'item.crimson-potion', quantity: 1, condition: 100,
-    enchantment: null, identified: false, charges: null, fuel: null, enabled: null,
+    itemId: 'item.hero.test-potion-a',
+    contentId: 'item.crimson-potion',
+    quantity: 1,
+    condition: 100,
+    enchantment: null,
+    identified: false,
+    charges: null,
+    fuel: null,
+    enabled: null,
     location: { type: 'backpack', actorId: hero.actorId },
   };
   run = validateActiveRun({
     ...run,
-    items: [...run.items, unidentified].sort((left, right) => left.itemId < right.itemId ? -1 : 1),
+    items: [...run.items, unidentified].sort((left, right) =>
+      left.itemId < right.itemId ? -1 : 1,
+    ),
   });
-  const curiosDealer = run.populations.find((population): population is MerchantPopulation =>
-    population.model === 'merchant' && population.encounterId === 'encounter.town-curios-dealer')!;
+  const curiosDealer = run.populations.find(
+    (population): population is MerchantPopulation =>
+      population.model === 'merchant' && population.encounterId === 'encounter.town-curios-dealer',
+  )!;
   const merchantActor = run.actors.find((actor) => actor.actorId === curiosDealer.actorId)!;
   const positioned = teleportHero(run, adjacentFreeCell(run, merchantActor));
 
@@ -182,7 +232,9 @@ describe('closing trade with Escape', () => {
     await user.keyboard('{Escape}');
 
     expect(screen.queryByRole('dialog', { name: 'Trade' })).not.toBeInTheDocument();
-    expect(dispatchSpy.mock.calls.filter(([intent]) => intent.type === 'trade-close')).toHaveLength(1);
+    expect(dispatchSpy.mock.calls.filter(([intent]) => intent.type === 'trade-close')).toHaveLength(
+      1,
+    );
     expect(log).not.toHaveTextContent('There is no open trade session.');
   });
 });

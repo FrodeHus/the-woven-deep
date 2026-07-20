@@ -1,12 +1,22 @@
 import type { JSX } from 'react';
 import type {
-  ClassKitBackpackItem, ClassKitEquippedItem, CompiledContentPack,
+  ClassKitBackpackItem,
+  ClassKitEquippedItem,
+  CompiledContentPack,
 } from '@woven-deep/content';
 import { ATTRIBUTE_ORDER, DERIVED_STAT_NAMES, type DerivedStatName } from '@woven-deep/engine';
 import {
-  PORTRAIT_GLYPHS, wizardPreview, type WizardState,
+  PORTRAIT_GLYPHS,
+  wizardPreview,
+  type WizardState,
 } from '../../../session/wizard-reducer.js';
-import { backgroundById, balanceEntry, classById, itemById, traitEntries } from '../../../session/pack-queries.js';
+import {
+  backgroundById,
+  balanceEntry,
+  classById,
+  itemById,
+  traitEntries,
+} from '../../../session/pack-queries.js';
 import { BlockBar, DotLeaderRow } from './chargen-components.js';
 import { Button } from '../../components/button.js';
 import { cn } from '../../lib/cn.js';
@@ -15,8 +25,12 @@ import { DERIVED_STAT_LABELS, playerVisibleDerivedStats } from '../../derived-st
 /** Mirrors `wizardPreview`'s modifier collection, but returns the raw per-stat sums instead of
  * feeding them into `deriveActorStats` -- this is exactly the delta a hero picks up from their
  * background and traits, since `deriveActorStats` sums `heroModifiers` onto the formula result. */
-function heroModifierDeltas(state: WizardState, pack: CompiledContentPack): Readonly<Partial<Record<DerivedStatName, number>>> {
-  const background = state.backgroundId === null ? undefined : backgroundById(pack, state.backgroundId);
+function heroModifierDeltas(
+  state: WizardState,
+  pack: CompiledContentPack,
+): Readonly<Partial<Record<DerivedStatName, number>>> {
+  const background =
+    state.backgroundId === null ? undefined : backgroundById(pack, state.backgroundId);
   const traits = traitEntries(pack).filter((entry) => state.traitIds.includes(entry.id));
   const deltas: Partial<Record<DerivedStatName, number>> = {};
   for (const modifiers of [background?.modifiers, ...traits.map((trait) => trait.modifiers)]) {
@@ -47,7 +61,11 @@ function equippedRow(pack: CompiledContentPack, item: ClassKitEquippedItem): Loa
   };
 }
 
-function backpackRow(pack: CompiledContentPack, item: ClassKitBackpackItem, keyPrefix: string): LoadoutRow {
+function backpackRow(
+  pack: CompiledContentPack,
+  item: ClassKitBackpackItem,
+  keyPrefix: string,
+): LoadoutRow {
   const entry = itemById(pack, item.contentId);
   return {
     key: `${keyPrefix}:${item.contentId}`,
@@ -58,7 +76,10 @@ function backpackRow(pack: CompiledContentPack, item: ClassKitBackpackItem, keyP
 }
 
 export function HeroRecord({
-  state, pack, onWeave, canWeave,
+  state,
+  pack,
+  onWeave,
+  canWeave,
 }: {
   readonly state: WizardState;
   readonly pack: CompiledContentPack;
@@ -67,7 +88,8 @@ export function HeroRecord({
 }): JSX.Element {
   const classEntry = state.classId === null ? undefined : classById(pack, state.classId);
   const kit = classEntry?.kits.find((candidate) => candidate.kitId === state.kitId);
-  const background = state.backgroundId === null ? undefined : backgroundById(pack, state.backgroundId);
+  const background =
+    state.backgroundId === null ? undefined : backgroundById(pack, state.backgroundId);
   const balance = balanceEntry(pack);
   const stats = wizardPreview(state, pack);
   const deltas = heroModifierDeltas(state, pack);
@@ -88,7 +110,9 @@ export function HeroRecord({
           aria-hidden="true"
           className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-line bg-surface text-2xl text-accent"
         >
-          {classEntry ? classEntry.silhouetteGlyph : (state.portraitGlyph.replace(/·.*$/, '') || PORTRAIT_GLYPHS[0])}
+          {classEntry
+            ? classEntry.silhouetteGlyph
+            : state.portraitGlyph.replace(/·.*$/, '') || PORTRAIT_GLYPHS[0]}
         </div>
         <div className="flex flex-col gap-0.5">
           <h2 className="m-0 font-serif text-xl text-fg-strong">
@@ -103,7 +127,9 @@ export function HeroRecord({
                 </span>
                 <span className="sr-only">Unnamed hero</span>
               </>
-            ) : state.name}
+            ) : (
+              state.name
+            )}
           </h2>
           <p className="m-0 text-sm text-muted">
             {`${classEntry?.name ?? '—'} · ${kit?.name ?? '—'}`}
@@ -116,14 +142,21 @@ export function HeroRecord({
         {ATTRIBUTE_ORDER.map((attributeName) => (
           <div key={attributeName} className="flex items-center gap-2 text-sm">
             <span className="w-16 shrink-0 capitalize text-fg">{attributeName}</span>
-            <BlockBar value={state.attributes?.[attributeName] ?? 0} max={attributeMax} cells={10} />
+            <BlockBar
+              value={state.attributes?.[attributeName] ?? 0}
+              max={attributeMax}
+              cells={10}
+            />
             <span className="text-fg-strong">{state.attributes?.[attributeName] ?? '—'}</span>
           </div>
         ))}
       </section>
 
       {stats && (
-        <section aria-label="Derived stats" className="flex flex-col gap-1 border-t border-line pt-2">
+        <section
+          aria-label="Derived stats"
+          className="flex flex-col gap-1 border-t border-line pt-2"
+        >
           <h3 className="m-0 text-sm font-semibold text-fg-strong">Derived stats</h3>
           {playerVisibleDerivedStats().map((statName) => {
             const delta = deltas[statName];
@@ -149,7 +182,9 @@ export function HeroRecord({
               <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-sm text-fg">
                 {equippedRows.map((row) => (
                   <li key={row.key} className="flex items-center gap-2">
-                    <span aria-hidden="true" className="text-accent">{row.glyph}</span>
+                    <span aria-hidden="true" className="text-accent">
+                      {row.glyph}
+                    </span>
                     <span>{row.name}</span>
                     {row.detail && <span className="text-muted">{row.detail}</span>}
                   </li>

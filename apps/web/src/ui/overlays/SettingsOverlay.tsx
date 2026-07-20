@@ -1,13 +1,24 @@
 import { useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
-  ACTION_IDS, ACTION_LABELS, bindingConflict, chordKey, chordReserved,
-  type ActionId, type KeyChord,
+  ACTION_IDS,
+  ACTION_LABELS,
+  bindingConflict,
+  chordKey,
+  chordReserved,
+  type ActionId,
+  type KeyChord,
 } from '../../session/settings.js';
 import { useSettingsCtx } from '../providers.js';
 import { Button } from '../components/button.js';
 import { Input } from '../components/input.js';
 import { Label } from '../components/label.js';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/select.js';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/select.js';
 import { Switch } from '../components/switch.js';
 
 export interface SettingsOverlayProps {
@@ -17,7 +28,8 @@ export interface SettingsOverlayProps {
 const FONT_SCALE_STEPS: readonly (1 | 1.15 | 1.3 | 1.5)[] = [1, 1.15, 1.3, 1.5];
 
 const THEME_LABELS: Readonly<Record<string, string>> = {
-  tapestry: 'Tapestry (dark fantasy)', 'high-contrast': 'High contrast',
+  tapestry: 'Tapestry (dark fantasy)',
+  'high-contrast': 'High contrast',
 };
 
 const REDUCED_MOTION_LABELS: Readonly<Record<string, string>> = {
@@ -52,7 +64,9 @@ type CaptureRefusal =
  * `OverlayHost`. The only local state here is transient UI-only (which row is armed for capture,
  * the pending conflict notice, and the clear-confirmation text).
  */
-export function SettingsOverlay({ onClearGuestSession }: Readonly<SettingsOverlayProps>): JSX.Element {
+export function SettingsOverlay({
+  onClearGuestSession,
+}: Readonly<SettingsOverlayProps>): JSX.Element {
   const { settings, onChange, keymap } = useSettingsCtx();
   const [capturing, setCapturing] = useState<ActionId | null>(null);
   const [conflict, setConflict] = useState<CaptureRefusal | null>(null);
@@ -125,35 +139,48 @@ export function SettingsOverlay({ onClearGuestSession }: Readonly<SettingsOverla
   return (
     <div className="flex flex-col gap-6">
       <section aria-labelledby="settings-font-scale-heading" className="flex flex-col gap-2">
-        <h3 id="settings-font-scale-heading" className="text-sm font-semibold text-fg-strong">Font scale</h3>
+        <h3 id="settings-font-scale-heading" className="text-sm font-semibold text-fg-strong">
+          Font scale
+        </h3>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="settings-font-scale">Font scale</Label>
           <Select
             value={settings.fontScale}
-            onValueChange={(value) => onChange({ ...settings, fontScale: value as typeof settings.fontScale })}
+            onValueChange={(value) =>
+              onChange({ ...settings, fontScale: value as typeof settings.fontScale })
+            }
           >
             <SelectTrigger id="settings-font-scale" className="max-w-48">
               <SelectValue>{(value: number) => `${Math.round(value * 100)}%`}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {FONT_SCALE_STEPS.map((scale) => (
-                <SelectItem key={scale} value={scale}>{Math.round(scale * 100)}%</SelectItem>
+                <SelectItem key={scale} value={scale}>
+                  {Math.round(scale * 100)}%
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
-        <p className="text-sm text-muted" style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}>
+        <p
+          className="text-sm text-muted"
+          style={{ fontSize: `calc(1rem * ${settings.fontScale})` }}
+        >
           The Woven Deep awaits.
         </p>
       </section>
 
       <section aria-labelledby="settings-display-heading" className="flex flex-col gap-2">
-        <h3 id="settings-display-heading" className="text-sm font-semibold text-fg-strong">Display</h3>
+        <h3 id="settings-display-heading" className="text-sm font-semibold text-fg-strong">
+          Display
+        </h3>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="settings-theme">Theme</Label>
           <Select
             value={settings.theme}
-            onValueChange={(value) => onChange({ ...settings, theme: value as typeof settings.theme })}
+            onValueChange={(value) =>
+              onChange({ ...settings, theme: value as typeof settings.theme })
+            }
           >
             <SelectTrigger id="settings-theme" className="max-w-48">
               <SelectValue>{(value: string) => THEME_LABELS[value]}</SelectValue>
@@ -167,7 +194,9 @@ export function SettingsOverlay({ onClearGuestSession }: Readonly<SettingsOverla
       </section>
 
       <section aria-labelledby="settings-onboarding-heading" className="flex flex-col gap-2">
-        <h3 id="settings-onboarding-heading" className="text-sm font-semibold text-fg-strong">Onboarding hints</h3>
+        <h3 id="settings-onboarding-heading" className="text-sm font-semibold text-fg-strong">
+          Onboarding hints
+        </h3>
         <div className="flex items-center gap-2">
           <Label htmlFor="settings-onboarding">
             Show contextual guidance while learning the ropes
@@ -175,33 +204,45 @@ export function SettingsOverlay({ onClearGuestSession }: Readonly<SettingsOverla
           <Switch
             id="settings-onboarding"
             checked={settings.onboarding === 'on'}
-            onCheckedChange={(checked) => onChange({ ...settings, onboarding: checked ? 'on' : 'off' })}
+            onCheckedChange={(checked) =>
+              onChange({ ...settings, onboarding: checked ? 'on' : 'off' })
+            }
           />
         </div>
       </section>
 
       <section aria-labelledby="settings-motion-heading" className="flex flex-col gap-2">
-        <h3 id="settings-motion-heading" className="text-sm font-semibold text-fg-strong">Reduce motion</h3>
+        <h3 id="settings-motion-heading" className="text-sm font-semibold text-fg-strong">
+          Reduce motion
+        </h3>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="settings-reduced-motion">Reduce motion</Label>
           <Select
             value={settings.reducedMotion}
-            onValueChange={(value) => onChange({ ...settings, reducedMotion: value as typeof settings.reducedMotion })}
+            onValueChange={(value) =>
+              onChange({ ...settings, reducedMotion: value as typeof settings.reducedMotion })
+            }
           >
             <SelectTrigger id="settings-reduced-motion" className="max-w-64">
               <SelectValue>{(value: string) => REDUCED_MOTION_LABELS[value]}</SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="system">System (follow this device&apos;s own reduced-motion preference)</SelectItem>
+              <SelectItem value="system">
+                System (follow this device&apos;s own reduced-motion preference)
+              </SelectItem>
               <SelectItem value="on">Always (turn off glow/flash animations)</SelectItem>
-              <SelectItem value="off">Never (keep animations on, even if the device asks for reduced motion)</SelectItem>
+              <SelectItem value="off">
+                Never (keep animations on, even if the device asks for reduced motion)
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
       </section>
 
       <section aria-labelledby="settings-bindings-heading" className="flex flex-col gap-2">
-        <h3 id="settings-bindings-heading" className="text-sm font-semibold text-fg-strong">Key bindings</h3>
+        <h3 id="settings-bindings-heading" className="text-sm font-semibold text-fg-strong">
+          Key bindings
+        </h3>
         {conflict && conflict.reason === 'conflict' && (
           <p role="alert" className="text-sm text-danger">
             {ACTION_LABELS[conflict.action]} could not be rebound to that key --{' '}
@@ -235,7 +276,12 @@ export function SettingsOverlay({ onClearGuestSession }: Readonly<SettingsOverla
                     onBlur={cancelCapture}
                   />
                 ) : (
-                  <Button type="button" variant="outline" size="sm" onClick={() => armCapture(action)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => armCapture(action)}
+                  >
                     Rebind
                   </Button>
                 )}
@@ -252,7 +298,9 @@ export function SettingsOverlay({ onClearGuestSession }: Readonly<SettingsOverla
       </section>
 
       <section aria-labelledby="settings-clear-heading" className="flex flex-col gap-2">
-        <h3 id="settings-clear-heading" className="text-sm font-semibold text-fg-strong">Clear guest session</h3>
+        <h3 id="settings-clear-heading" className="text-sm font-semibold text-fg-strong">
+          Clear guest session
+        </h3>
         <p className="text-sm text-muted">
           Wipes your active run, Hall of Records, discovery log, guidance progress, and settings on
           this device, then returns to the title screen. This cannot be undone.

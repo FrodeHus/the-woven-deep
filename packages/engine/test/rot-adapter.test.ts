@@ -6,7 +6,8 @@ import { withRotSeed } from '../src/rot-adapter.js';
 
 describe('ROT.js adapter', () => {
   it('repeats the same values for the same seed', () => {
-    const draw = (): readonly number[] => withRotSeed(123, () => [RNG.getUniform(), RNG.getUniform()]);
+    const draw = (): readonly number[] =>
+      withRotSeed(123, () => [RNG.getUniform(), RNG.getUniform()]);
 
     expect(draw()).toEqual(draw());
   });
@@ -23,10 +24,12 @@ describe('ROT.js adapter', () => {
     const callerState = [...RNG.getState()];
     const failure = new Error('operation failed');
 
-    expect(() => withRotSeed(123, () => {
-      RNG.getUniform();
-      throw failure;
-    })).toThrow(failure);
+    expect(() =>
+      withRotSeed(123, () => {
+        RNG.getUniform();
+        throw failure;
+      }),
+    ).toThrow(failure);
     expect(RNG.getState()).toEqual(callerState);
   });
 

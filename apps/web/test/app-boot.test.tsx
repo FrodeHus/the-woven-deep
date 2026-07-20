@@ -7,12 +7,20 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  createNewRun, decodeActiveRun, DEFAULT_GUEST_HERO, encodeActiveRun, heroFromChoices,
-  type ActiveRun, type Uint32State,
+  createNewRun,
+  decodeActiveRun,
+  DEFAULT_GUEST_HERO,
+  encodeActiveRun,
+  heroFromChoices,
+  type ActiveRun,
+  type Uint32State,
 } from '@woven-deep/engine';
 import { App, PORTRAIT_KEY } from '../src/App.js';
 import type { AccountState } from '../src/session/account.js';
-import { createSessionRunRecordRepository, RECORDS_KEY } from '../src/session/run-records-storage.js';
+import {
+  createSessionRunRecordRepository,
+  RECORDS_KEY,
+} from '../src/session/run-records-storage.js';
 import { PORTRAIT_GLYPHS } from '../src/session/wizard-reducer.js';
 import { SETTINGS_KEY } from '../src/session/settings.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
@@ -29,7 +37,9 @@ const SEED: Uint32State = [11, 22, 33, 44];
 const WAYFARER = 'class.wayfarer';
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 afterEach(() => {
@@ -40,15 +50,21 @@ function packFetcher(): typeof fetch {
   // A fresh `Response` per call (not a single shared instance) -- Task 12's roam-on-sign-in effect
   // can issue a second fetch (`/api/profile/settings`) alongside the content-pack fetch, and a
   // shared `Response`'s body can only be read once.
-  return vi.fn(() => Promise.resolve(new Response(JSON.stringify(pack)))) as unknown as typeof fetch;
+  return vi.fn(() =>
+    Promise.resolve(new Response(JSON.stringify(pack))),
+  ) as unknown as typeof fetch;
 }
 
-function fakeStorage(initial: string | null = null): SessionStorageLike & { peek(key?: string): string | null } {
+function fakeStorage(
+  initial: string | null = null,
+): SessionStorageLike & { peek(key?: string): string | null } {
   const values = new Map<string, string>();
   if (initial !== null) values.set(SAVE_KEY, initial);
   return {
     get: (key: string) => values.get(key) ?? null,
-    set: (key: string, value: string) => { values.set(key, value); },
+    set: (key: string, value: string) => {
+      values.set(key, value);
+    },
     peek: (key: string = SAVE_KEY) => values.get(key) ?? null,
   };
 }
@@ -60,12 +76,16 @@ function decodableSave(seed: Uint32State = SEED): string {
 /** A `localStorage`-shaped fake, keyed like `fakeStorage` above but distinct (settings and the
  * onboarding ledger live in `localStorage`, never the run-save `sessionStorage`). `peek` defaults
  * to `SETTINGS_KEY` since that's this file's only `localStorage` fixture need today. */
-function fakeLocalStorage(initial?: Readonly<{ key: string; value: string }>): SessionStorageLike & { peek(key?: string): string | null } {
+function fakeLocalStorage(
+  initial?: Readonly<{ key: string; value: string }>,
+): SessionStorageLike & { peek(key?: string): string | null } {
   const values = new Map<string, string>();
   if (initial) values.set(initial.key, initial.value);
   return {
     get: (key: string) => values.get(key) ?? null,
-    set: (key: string, value: string) => { values.set(key, value); },
+    set: (key: string, value: string) => {
+      values.set(key, value);
+    },
     peek: (key: string = SETTINGS_KEY) => values.get(key) ?? null,
   };
 }
@@ -81,19 +101,24 @@ function deadRunSave(seed: Uint32State = SEED): string {
   const hero = fresh.actors.find((actor) => actor.playerControlled)!;
   return encodeActiveRun({
     ...fresh,
-    actors: fresh.actors.map((actor) => (actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor)),
+    actors: fresh.actors.map((actor) =>
+      actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+    ),
     conclusion: {
       completionType: 'died',
       // The fresh guest run starts in town (depth 0), and this fixture never moves the hero
       // anywhere else before killing them.
       cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
-      concludedAtRevision: fresh.revision, finalized: false,
+      concludedAtRevision: fresh.revision,
+      finalized: false,
     },
   });
 }
 
 function wayfarerKit(): { kitId: string; name: string } {
-  const entry = pack.entries.find((candidate) => candidate.kind === 'class' && candidate.id === WAYFARER) as {
+  const entry = pack.entries.find(
+    (candidate) => candidate.kind === 'class' && candidate.id === WAYFARER,
+  ) as {
     kits: readonly { kitId: string; name: string }[];
   };
   return entry.kits[0]!;
@@ -141,14 +166,19 @@ describe('App boot flow', () => {
     // Three canned responses in call order: the failing pack fetch, the boot-time account/session
     // fetch (unauthenticated -- irrelevant to this test, but still a real fetcher call the boot
     // effect makes), then the retried pack fetch succeeding.
-    const fetcher = vi.fn()
+    const fetcher = vi
+      .fn()
       .mockRejectedValueOnce(new Error('The content service is unavailable.'))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ authenticated: false }), { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ authenticated: false }), { status: 401 }),
+      )
       .mockResolvedValueOnce(new Response(JSON.stringify(pack)));
 
     render(<App fetcher={fetcher as unknown as typeof fetch} storage={fakeStorage()} />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('The content service is unavailable.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The content service is unavailable.',
+    );
     const retryButton = screen.getByRole('button', { name: /retry/i });
 
     retryButton.focus();
@@ -194,8 +224,12 @@ describe('App boot flow', () => {
       const values = new Map<string, string>();
       return {
         get: (key: string) => values.get(key) ?? null,
-        set: (key: string, value: string) => { values.set(key, value); },
-        remove: (key: string) => { values.delete(key); },
+        set: (key: string, value: string) => {
+          values.set(key, value);
+        },
+        remove: (key: string) => {
+          values.delete(key);
+        },
         peek: () => values.get(SAVE_KEY) ?? null,
       };
     }
@@ -318,7 +352,9 @@ describe('App boot flow', () => {
     expect(saved.hero.name).toBe('Rin');
     expect(saved.hero.classTags).toContain('wayfarer');
     expect(
-      saved.items.some((item) => item.location.type === 'backpack' || item.location.type === 'equipped'),
+      saved.items.some(
+        (item) => item.location.type === 'backpack' || item.location.type === 'equipped',
+      ),
     ).toBe(true);
   });
 
@@ -334,7 +370,9 @@ describe('App boot flow', () => {
     // The portrait buttons' visible glyph is `aria-hidden`, so they carry no accessible name —
     // select by position within the Portrait listbox (the console's StepMenu is also a listbox of
     // `option`s, so this scopes to the right one rather than `getAllByRole('option')` globally).
-    const portraitOptions = within(screen.getByRole('listbox', { name: 'Portrait' })).getAllByRole('option');
+    const portraitOptions = within(screen.getByRole('listbox', { name: 'Portrait' })).getAllByRole(
+      'option',
+    );
     expect(portraitOptions).toHaveLength(PORTRAIT_GLYPHS.length);
     await user.click(portraitOptions[1]!);
     await driveWizardToSummary(user);
@@ -388,8 +426,11 @@ describe('App boot flow', () => {
       const localStorage = fakeLocalStorage({
         key: SETTINGS_KEY,
         value: JSON.stringify({
-          fontScale: 1, reducedMotion: 'system', theme: 'tapestry',
-          onboarding: 'on', bindings: {},
+          fontScale: 1,
+          reducedMotion: 'system',
+          theme: 'tapestry',
+          onboarding: 'on',
+          bindings: {},
         }),
       });
 
@@ -438,7 +479,11 @@ describe('App boot flow', () => {
  * read once. Build a fresh `Response` per call so double-invocation is harmless, exactly like a
  * real `fetch` would behave. */
 function strictModeSafePackFetcher(): typeof fetch {
-  return vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(pack)))) as unknown as typeof fetch;
+  return vi
+    .fn()
+    .mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify(pack))),
+    ) as unknown as typeof fetch;
 }
 
 describe('App finalize-once (concluded run)', () => {
@@ -532,11 +577,14 @@ describe('App finalize-once (concluded run)', () => {
     const hero = fresh.actors.find((actor) => actor.playerControlled)!;
     const alreadyFinalizedSave = encodeActiveRun({
       ...fresh,
-      actors: fresh.actors.map((actor) => (actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor)),
+      actors: fresh.actors.map((actor) =>
+        actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+      ),
       conclusion: {
         completionType: 'died',
         cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
-        concludedAtRevision: fresh.revision, finalized: true,
+        concludedAtRevision: fresh.revision,
+        finalized: true,
       },
     });
     const storage = fakeStorage(alreadyFinalizedSave);
@@ -553,7 +601,11 @@ describe('App finalize-once (concluded run)', () => {
 });
 
 describe('App identity/account', () => {
-  const SIGNED_IN_ACCOUNT: AccountState = { status: 'signed-in', email: 'player@example.com', csrfToken: 'tok' };
+  const SIGNED_IN_ACCOUNT: AccountState = {
+    status: 'signed-in',
+    email: 'player@example.com',
+    csrfToken: 'tok',
+  };
 
   it('boots as guest by default: title shows "Sign in with email", not an email/Sign-out', async () => {
     render(<App fetcher={packFetcher()} storage={fakeStorage()} />);
@@ -566,7 +618,9 @@ describe('App identity/account', () => {
     // A fetcher that only ever serves the content pack -- if `loadAccount` were still invoked
     // over the network despite the override, this fetcher's single canned pack response would
     // desync the shared Response's body and the boot would surface an error instead of a title.
-    render(<App fetcher={packFetcher()} storage={fakeStorage()} accountOverride={SIGNED_IN_ACCOUNT} />);
+    render(
+      <App fetcher={packFetcher()} storage={fakeStorage()} accountOverride={SIGNED_IN_ACCOUNT} />,
+    );
 
     expect(await screen.findByText(/signed in as/i)).toHaveTextContent('player@example.com');
     expect(screen.getByRole('option', { name: /sign out/i })).toBeInTheDocument();
@@ -577,10 +631,12 @@ describe('App identity/account', () => {
     window.history.pushState({}, '', '/?auth=ok');
     const fetcher = vi.fn((url: string) => {
       if (typeof url === 'string' && url.includes('/api/auth/session')) {
-        return Promise.resolve(new Response(
-          JSON.stringify({ authenticated: true, email: 'player@example.com', csrfToken: 'tok' }),
-          { status: 200 },
-        ));
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ authenticated: true, email: 'player@example.com', csrfToken: 'tok' }),
+            { status: 200 },
+          ),
+        );
       }
       return Promise.resolve(new Response(JSON.stringify(pack), { status: 200 }));
     }) as unknown as typeof fetch;
@@ -616,6 +672,9 @@ describe('App identity/account', () => {
 
     expect(await screen.findByRole('option', { name: /sign in with email/i })).toBeInTheDocument();
     expect(screen.queryByText(/signed in as/i)).not.toBeInTheDocument();
-    expect(fetcher).toHaveBeenCalledWith('/api/auth/logout', expect.objectContaining({ method: 'POST' }));
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/auth/logout',
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 });

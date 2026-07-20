@@ -17,12 +17,14 @@ describe('migration 2 (auth tables)', () => {
 
     try {
       const tables = database
-        .prepare(`
+        .prepare(
+          `
           select sqlite_master.name as name, pragma_table_list.strict as strict
           from sqlite_master
           join pragma_table_list on sqlite_master.name = pragma_table_list.name
           where sqlite_master.type = 'table' and sqlite_master.name in ('profiles','login_tokens','sessions')
-        `)
+        `,
+        )
         .all() as Array<{ name: string; strict: number }>;
 
       expect(tables).toHaveLength(3);
@@ -45,7 +47,11 @@ describe('ProfileRepository', () => {
   });
 
   it('creates a profile and finds it by email and id', () => {
-    const created = repository.create({ id: 'p1', normalizedEmail: 'a@example.com', nowIso: '2026-07-17T00:00:00.000Z' });
+    const created = repository.create({
+      id: 'p1',
+      normalizedEmail: 'a@example.com',
+      nowIso: '2026-07-17T00:00:00.000Z',
+    });
 
     expect(created).toEqual({
       id: 'p1',
@@ -64,15 +70,27 @@ describe('ProfileRepository', () => {
   });
 
   it('enforces the normalized_email UNIQUE constraint', () => {
-    repository.create({ id: 'p1', normalizedEmail: 'dup@example.com', nowIso: '2026-07-17T00:00:00.000Z' });
+    repository.create({
+      id: 'p1',
+      normalizedEmail: 'dup@example.com',
+      nowIso: '2026-07-17T00:00:00.000Z',
+    });
 
     expect(() =>
-      repository.create({ id: 'p2', normalizedEmail: 'dup@example.com', nowIso: '2026-07-17T00:00:00.000Z' }),
+      repository.create({
+        id: 'p2',
+        normalizedEmail: 'dup@example.com',
+        nowIso: '2026-07-17T00:00:00.000Z',
+      }),
     ).toThrow();
   });
 
   it('updateSettings persists blob, version, and updated_at', () => {
-    repository.create({ id: 'p1', normalizedEmail: 'a@example.com', nowIso: '2026-07-17T00:00:00.000Z' });
+    repository.create({
+      id: 'p1',
+      normalizedEmail: 'a@example.com',
+      nowIso: '2026-07-17T00:00:00.000Z',
+    });
 
     repository.updateSettings({
       id: 'p1',
@@ -119,7 +137,10 @@ describe('LoginTokenRepository', () => {
       consumedAt: null,
     });
 
-    const consumed = repository.markConsumed({ tokenHash: 'hash1', nowIso: '2026-07-17T00:05:00.000Z' });
+    const consumed = repository.markConsumed({
+      tokenHash: 'hash1',
+      nowIso: '2026-07-17T00:05:00.000Z',
+    });
     expect(consumed).toBe(true);
 
     expect(repository.findUnconsumed('hash1')).toBeUndefined();
@@ -133,12 +154,18 @@ describe('LoginTokenRepository', () => {
       createdAt: '2026-07-17T00:00:00.000Z',
     });
 
-    expect(repository.markConsumed({ tokenHash: 'hash2', nowIso: '2026-07-17T00:05:00.000Z' })).toBe(true);
-    expect(repository.markConsumed({ tokenHash: 'hash2', nowIso: '2026-07-17T00:06:00.000Z' })).toBe(false);
+    expect(
+      repository.markConsumed({ tokenHash: 'hash2', nowIso: '2026-07-17T00:05:00.000Z' }),
+    ).toBe(true);
+    expect(
+      repository.markConsumed({ tokenHash: 'hash2', nowIso: '2026-07-17T00:06:00.000Z' }),
+    ).toBe(false);
   });
 
   it('markConsumed on an unknown token returns false', () => {
-    expect(repository.markConsumed({ tokenHash: 'missing', nowIso: '2026-07-17T00:05:00.000Z' })).toBe(false);
+    expect(
+      repository.markConsumed({ tokenHash: 'missing', nowIso: '2026-07-17T00:05:00.000Z' }),
+    ).toBe(false);
   });
 
   it('deleteExpired removes only past-expiry rows', () => {
@@ -172,7 +199,11 @@ describe('SessionRepository', () => {
     database = freshDatabase();
     profiles = new ProfileRepository(database);
     repository = new SessionRepository(database);
-    profiles.create({ id: 'p1', normalizedEmail: 'a@example.com', nowIso: '2026-07-17T00:00:00.000Z' });
+    profiles.create({
+      id: 'p1',
+      normalizedEmail: 'a@example.com',
+      nowIso: '2026-07-17T00:00:00.000Z',
+    });
   });
 
   it('inserts, finds, and touches a session', () => {

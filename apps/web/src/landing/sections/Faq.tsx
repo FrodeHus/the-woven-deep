@@ -9,7 +9,9 @@ export function Faq(): JSX.Element {
 
   return (
     <section className="wd-section wd-faq" aria-labelledby="faq-heading">
-      <h2 id="faq-heading" data-reveal className="wd-h2 wd-faq-heading">Before you descend</h2>
+      <h2 id="faq-heading" data-reveal className="wd-h2 wd-faq-heading">
+        Before you descend
+      </h2>
       <div className="wd-faq-list">
         {FAQS.map((item, index) => {
           const open = openIndex === index;
@@ -26,7 +28,9 @@ export function Faq(): JSX.Element {
                 onClick={() => setOpenIndex((current) => (current === index ? -1 : index))}
               >
                 <span>{item.q}</span>
-                <span aria-hidden="true" className="wd-faq-sign">{open ? '−' : '+'}</span>
+                <span aria-hidden="true" className="wd-faq-sign">
+                  {open ? '−' : '+'}
+                </span>
               </button>
               {open && (
                 <p id={panelId} role="region" aria-labelledby={buttonId} className="wd-faq-answer">

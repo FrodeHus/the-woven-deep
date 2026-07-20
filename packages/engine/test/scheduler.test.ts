@@ -18,11 +18,21 @@ describe('integer-energy scheduler', () => {
   function contentWithCondition(id: string, traits: readonly any[]) {
     const content = createDemoContentPack();
     const condition = {
-      kind: 'condition' as const, id, name: id, description: id, tags: [], color: '#ffffff',
+      kind: 'condition' as const,
+      id,
+      name: id,
+      description: id,
+      tags: [],
+      color: '#ffffff',
       duration: { mode: 'permanent' as const, default: null, maximum: null },
-      stacking: { mode: 'refresh' as const, maximumStacks: 1 }, modifiersPerStack: {}, traits,
+      stacking: { mode: 'refresh' as const, maximumStacks: 1 },
+      modifiersPerStack: {},
+      traits,
     };
-    return { ...content, entries: [...content.entries.filter((entry) => entry.id !== id), condition] };
+    return {
+      ...content,
+      entries: [...content.entries.filter((entry) => entry.id !== id), condition],
+    };
   }
 
   it('lets equal-speed enemies act once between normal hero actions', () => {
@@ -31,7 +41,9 @@ describe('integer-energy scheduler', () => {
     expect(selectReadyActor([hero, enemy], demoContent)?.actorId).toBe('monster.a');
 
     const afterEnemy = chargeActionEnergy(enemy, 100);
-    expect(advanceToNextReady({ worldTime: 0, actors: [hero, afterEnemy], content: demoContent })).toMatchObject({
+    expect(
+      advanceToNextReady({ worldTime: 0, actors: [hero, afterEnemy], content: demoContent }),
+    ).toMatchObject({
       worldTime: 1,
       selectedActorId: 'hero.demo',
     });
@@ -54,7 +66,15 @@ describe('integer-energy scheduler', () => {
     const incapacitated = actor({
       actorId: 'monster.sleeping',
       energy: 1000,
-      conditions: [{ conditionId: 'condition.incapacitated', sourceActorId: null, appliedAt: 0, expiresAt: null, stacks: 1 }],
+      conditions: [
+        {
+          conditionId: 'condition.incapacitated',
+          sourceActorId: null,
+          appliedAt: 0,
+          expiresAt: null,
+          stacks: 1,
+        },
+      ],
     });
     const hero = actor({ actorId: 'hero.demo', playerControlled: true, energy: 100 });
     expect(selectReadyActor([dead, incapacitated, hero], demoContent)?.actorId).toBe('hero.demo');
@@ -63,16 +83,34 @@ describe('integer-energy scheduler', () => {
   it('excludes actors by the incapacitated trait rather than a special ID', () => {
     const content = contentWithCondition('condition.blue', ['condition-trait.incapacitated']);
     const sleeping = actor({
-      actorId: 'monster.sleeping', energy: 1000,
-      conditions: [{ conditionId: 'condition.blue', sourceActorId: null, appliedAt: 0, expiresAt: null, stacks: 1 }],
+      actorId: 'monster.sleeping',
+      energy: 1000,
+      conditions: [
+        {
+          conditionId: 'condition.blue',
+          sourceActorId: null,
+          appliedAt: 0,
+          expiresAt: null,
+          stacks: 1,
+        },
+      ],
     });
     const hero = actor({ actorId: 'hero.demo', playerControlled: true, energy: 100 });
     expect(selectReadyActor([sleeping, hero], content)?.actorId).toBe('hero.demo');
 
     const ordinary = contentWithCondition('condition.incapacitated', []);
-    const namedOnly = { ...sleeping, conditions: [{
-      conditionId: 'condition.incapacitated', sourceActorId: null, appliedAt: 0, expiresAt: null, stacks: 1,
-    }] };
+    const namedOnly = {
+      ...sleeping,
+      conditions: [
+        {
+          conditionId: 'condition.incapacitated',
+          sourceActorId: null,
+          appliedAt: 0,
+          expiresAt: null,
+          stacks: 1,
+        },
+      ],
+    };
     expect(selectReadyActor([namedOnly, hero], ordinary)?.actorId).toBe('monster.sleeping');
   });
 
@@ -83,17 +121,22 @@ describe('integer-energy scheduler', () => {
   });
 
   it('fails deterministically on unsafe arithmetic', () => {
-    expect(() => chargeActionEnergy(actor({ actorId: 'hero.demo', energy: Number.MIN_SAFE_INTEGER }), 1))
-      .toThrow(/energy.*safe integer/i);
-    expect(() => advanceToNextReady({
-      worldTime: Number.MAX_SAFE_INTEGER,
-      actors: [actor({ actorId: 'hero.demo', energy: 0, speed: 100 })],
-      content: demoContent,
-    })).toThrow(/worldTime.*safe integer/i);
-    expect(() => advanceToNextReady({
-      worldTime: 0,
-      actors: [actor({ actorId: 'hero.demo', energy: Number.MIN_SAFE_INTEGER, speed: 1 })],
-      content: demoContent,
-    })).toThrow(/required energy.*safe integer/i);
+    expect(() =>
+      chargeActionEnergy(actor({ actorId: 'hero.demo', energy: Number.MIN_SAFE_INTEGER }), 1),
+    ).toThrow(/energy.*safe integer/i);
+    expect(() =>
+      advanceToNextReady({
+        worldTime: Number.MAX_SAFE_INTEGER,
+        actors: [actor({ actorId: 'hero.demo', energy: 0, speed: 100 })],
+        content: demoContent,
+      }),
+    ).toThrow(/worldTime.*safe integer/i);
+    expect(() =>
+      advanceToNextReady({
+        worldTime: 0,
+        actors: [actor({ actorId: 'hero.demo', energy: Number.MIN_SAFE_INTEGER, speed: 1 })],
+        content: demoContent,
+      }),
+    ).toThrow(/required energy.*safe integer/i);
   });
 });

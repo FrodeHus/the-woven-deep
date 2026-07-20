@@ -10,25 +10,15 @@
     "cycle": [
       {
         "name": "apps/web/src/session/codex-derive.ts",
-        "dependencyTypes": [
-          "local",
-          "export"
-        ]
+        "dependencyTypes": ["local", "export"]
       },
       {
         "name": "apps/web/src/session/guest-session.ts",
-        "dependencyTypes": [
-          "local",
-          "type-only",
-          "import"
-        ]
+        "dependencyTypes": ["local", "type-only", "import"]
       },
       {
         "name": "apps/web/src/session/codex.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       }
     ]
   },
@@ -43,18 +33,11 @@
     "cycle": [
       {
         "name": "apps/web/src/session/onboarding.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "apps/web/src/session/guest-session.ts",
-        "dependencyTypes": [
-          "local",
-          "type-only",
-          "import"
-        ]
+        "dependencyTypes": ["local", "type-only", "import"]
       }
     ]
   },
@@ -69,31 +52,19 @@
     "cycle": [
       {
         "name": "packages/engine/src/combat-profile.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/stats.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/actions.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/action-dispatch.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       }
     ]
   },
@@ -108,24 +79,15 @@
     "cycle": [
       {
         "name": "packages/engine/src/merchant-behavior.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/actions.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/action-dispatch.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       }
     ]
   },
@@ -140,24 +102,15 @@
     "cycle": [
       {
         "name": "packages/engine/src/stats.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/actions.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/action-dispatch.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       }
     ]
   },
@@ -172,24 +125,15 @@
     "cycle": [
       {
         "name": "packages/engine/src/swarm-behavior.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/actions.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/action-dispatch.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       }
     ]
   },
@@ -204,18 +148,11 @@
     "cycle": [
       {
         "name": "packages/engine/src/action-dispatch.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/actions.ts",
-        "dependencyTypes": [
-          "local",
-          "type-only",
-          "import"
-        ]
+        "dependencyTypes": ["local", "type-only", "import"]
       }
     ]
   },
@@ -230,31 +167,19 @@
     "cycle": [
       {
         "name": "packages/engine/src/swarm-behavior.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/actions.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/action-dispatch.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/combat-profile.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       }
     ]
   },
@@ -269,24 +194,15 @@
     "cycle": [
       {
         "name": "packages/engine/src/new-run.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/town-floor.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/floor-transition.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       }
     ]
   },
@@ -301,31 +217,19 @@
     "cycle": [
       {
         "name": "packages/engine/src/trade.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/actions.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/action-dispatch.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/merchant-behavior.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       }
     ]
   },
@@ -340,18 +244,11 @@
     "cycle": [
       {
         "name": "packages/engine/src/commands-model.ts",
-        "dependencyTypes": [
-          "local",
-          "export"
-        ]
+        "dependencyTypes": ["local", "export"]
       },
       {
         "name": "packages/engine/src/model.ts",
-        "dependencyTypes": [
-          "local",
-          "type-only",
-          "import"
-        ]
+        "dependencyTypes": ["local", "type-only", "import"]
       }
     ]
   },
@@ -366,18 +263,11 @@
     "cycle": [
       {
         "name": "packages/engine/src/events-model.ts",
-        "dependencyTypes": [
-          "local",
-          "export"
-        ]
+        "dependencyTypes": ["local", "export"]
       },
       {
         "name": "packages/engine/src/model.ts",
-        "dependencyTypes": [
-          "local",
-          "type-only",
-          "import"
-        ]
+        "dependencyTypes": ["local", "type-only", "import"]
       }
     ]
   },
@@ -392,26 +282,15 @@
     "cycle": [
       {
         "name": "packages/engine/src/actor-model.ts",
-        "dependencyTypes": [
-          "local",
-          "import"
-        ]
+        "dependencyTypes": ["local", "import"]
       },
       {
         "name": "packages/engine/src/model.ts",
-        "dependencyTypes": [
-          "local",
-          "type-only",
-          "import"
-        ]
+        "dependencyTypes": ["local", "type-only", "import"]
       },
       {
         "name": "packages/engine/src/run-conclusion.ts",
-        "dependencyTypes": [
-          "local",
-          "type-only",
-          "import"
-        ]
+        "dependencyTypes": ["local", "type-only", "import"]
       }
     ]
   }

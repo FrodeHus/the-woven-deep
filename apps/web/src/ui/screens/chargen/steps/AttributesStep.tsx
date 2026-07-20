@@ -17,7 +17,9 @@ function AttributeReadout({ state }: { readonly state: StepProps['state'] }): JS
   return (
     <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-sm text-muted">
       {ATTRIBUTE_ORDER.map((attributeName) => (
-        <li key={attributeName}>{`${attributeName}: ${state.attributes?.[attributeName] ?? '—'}`}</li>
+        <li
+          key={attributeName}
+        >{`${attributeName}: ${state.attributes?.[attributeName] ?? '—'}`}</li>
       ))}
     </ul>
   );
@@ -25,7 +27,16 @@ function AttributeReadout({ state }: { readonly state: StepProps['state'] }): JS
 
 function RollAttributes({ state, dispatch }: StepProps): JSX.Element {
   if (state.attributes === null) {
-    return <Button type="button" autoFocus className="self-start" onClick={() => dispatch({ type: 'roll' })}>Roll attributes</Button>;
+    return (
+      <Button
+        type="button"
+        autoFocus
+        className="self-start"
+        onClick={() => dispatch({ type: 'roll' })}
+      >
+        Roll attributes
+      </Button>
+    );
   }
   return (
     <div className="flex flex-col gap-2">
@@ -50,7 +61,8 @@ function PointBuyAttributes({ state, pack, dispatch }: StepProps): JSX.Element {
   const min = balance?.attributeMinimum ?? 0;
   const max = balance?.attributeMaximum ?? 0;
 
-  const costFor = (value: number): number => balance?.pointBuy.costs.find((row) => row.value === value)?.cost ?? 0;
+  const costFor = (value: number): number =>
+    balance?.pointBuy.costs.find((row) => row.value === value)?.cost ?? 0;
 
   const attemptSpent = (attributeName: AttributeName, value: number): number => {
     if (!balance || !state.attributes) return 0;
@@ -59,7 +71,11 @@ function PointBuyAttributes({ state, pack, dispatch }: StepProps): JSX.Element {
 
   const adjust = (attributeName: AttributeName, delta: number): void => {
     if (!state.attributes) return;
-    dispatch({ type: 'set-attribute', attribute: attributeName, value: state.attributes[attributeName] + delta });
+    dispatch({
+      type: 'set-attribute',
+      attribute: attributeName,
+      value: state.attributes[attributeName] + delta,
+    });
   };
 
   return (
@@ -102,7 +118,12 @@ export function AttributesStep({ state, pack, dispatch }: StepProps): JSX.Elemen
 
   return (
     <section aria-label="Attributes" className="flex flex-col gap-3">
-      <div role="listbox" aria-label="Attribute method" className="flex flex-row gap-1.5 font-mono" onKeyDown={handleKeyDown}>
+      <div
+        role="listbox"
+        aria-label="Attribute method"
+        className="flex flex-row gap-1.5 font-mono"
+        onKeyDown={handleKeyDown}
+      >
         {METHOD_OPTIONS.map((option, index) => (
           <button
             key={option.method}
@@ -121,7 +142,9 @@ export function AttributesStep({ state, pack, dispatch }: StepProps): JSX.Elemen
         ))}
       </div>
       {state.method === 'roll' && <RollAttributes state={state} pack={pack} dispatch={dispatch} />}
-      {state.method === 'point-buy' && <PointBuyAttributes state={state} pack={pack} dispatch={dispatch} />}
+      {state.method === 'point-buy' && (
+        <PointBuyAttributes state={state} pack={pack} dispatch={dispatch} />
+      )}
     </section>
   );
 }

@@ -34,7 +34,9 @@ describe('visibleForeground', () => {
 
   it('is monotone non-decreasing in intensity for a fixed tint', () => {
     const samples = [0, 1, 8, 32, 64, 128, 192, 255];
-    const luminances = samples.map((intensity) => relativeLuminance(parseRgb(visibleForeground(TORCH_TINT, intensity))));
+    const luminances = samples.map((intensity) =>
+      relativeLuminance(parseRgb(visibleForeground(TORCH_TINT, intensity))),
+    );
     for (let i = 1; i < luminances.length; i += 1) {
       expect(luminances[i]).toBeGreaterThanOrEqual(luminances[i - 1]!);
     }
@@ -57,8 +59,12 @@ describe('visibleForeground', () => {
       expect(channel).toBeGreaterThanOrEqual(0);
       expect(channel).toBeLessThanOrEqual(255);
     }
-    expect(parseRgb(visibleForeground(TORCH_TINT, -50))).toEqual(parseRgb(visibleForeground(TORCH_TINT, 0)));
-    expect(parseRgb(visibleForeground(TORCH_TINT, 999))).toEqual(parseRgb(visibleForeground(TORCH_TINT, 255)));
+    expect(parseRgb(visibleForeground(TORCH_TINT, -50))).toEqual(
+      parseRgb(visibleForeground(TORCH_TINT, 0)),
+    );
+    expect(parseRgb(visibleForeground(TORCH_TINT, 999))).toEqual(
+      parseRgb(visibleForeground(TORCH_TINT, 255)),
+    );
   });
 });
 
@@ -107,7 +113,9 @@ describe('visibleForeground floor + monotonicity (all hues)', () => {
       // still catches the real bug, which was luminance dropping by tens of percent, not a
       // fraction of a percent.
       const QUANTIZATION_NOISE = 0.004;
-      const luminances = INTENSITY_GRID.map((intensity) => relativeLuminance(parseRgb(visibleForeground(tint, intensity))));
+      const luminances = INTENSITY_GRID.map((intensity) =>
+        relativeLuminance(parseRgb(visibleForeground(tint, intensity))),
+      );
       for (let i = 1; i < luminances.length; i += 1) {
         expect(luminances[i]).toBeGreaterThanOrEqual(luminances[i - 1]! - QUANTIZATION_NOISE);
       }
@@ -160,7 +168,9 @@ describe('visibleForeground floor + monotonicity (all material bases)', () => {
 
     it(`is monotone non-decreasing in intensity for material=${materialName} under the torch tint`, () => {
       const QUANTIZATION_NOISE = 0.004;
-      const luminances = INTENSITY_GRID.map((intensity) => relativeLuminance(parseRgb(visibleForeground(TORCH_TINT, intensity, base))));
+      const luminances = INTENSITY_GRID.map((intensity) =>
+        relativeLuminance(parseRgb(visibleForeground(TORCH_TINT, intensity, base))),
+      );
       for (let i = 1; i < luminances.length; i += 1) {
         expect(luminances[i]).toBeGreaterThanOrEqual(luminances[i - 1]! - QUANTIZATION_NOISE);
       }
@@ -200,7 +210,9 @@ describe('visibleForeground material floor (bounded blend, Task 2)', () => {
 
   it('retains at least 15% of the material base color at intensity 255 (matches the t=0.85-capped blend, pre-floor-lift)', () => {
     for (const [materialName, base] of Object.entries(MATERIAL_BASE_RGB)) {
-      const expected = base.map((channel, index) => Math.round(channel + 0.85 * (TORCH_TINT[index]! - channel)));
+      const expected = base.map((channel, index) =>
+        Math.round(channel + 0.85 * (TORCH_TINT[index]! - channel)),
+      );
       const output = parseRgb(visibleForeground(TORCH_TINT, 255, base));
       // liftToFloor may adjust channels further upward if the capped blend still falls under the
       // remembered floor -- allow for that, but the un-lifted target is the capped blend itself.
@@ -213,7 +225,9 @@ describe('visibleForeground material floor (bounded blend, Task 2)', () => {
   it('still holds the luminance floor at intensity 255 for every material base, even with the blend capped', () => {
     for (const [materialName, base] of Object.entries(MATERIAL_BASE_RGB)) {
       const output = parseRgb(visibleForeground(TORCH_TINT, 255, base));
-      expect(relativeLuminance(output), materialName).toBeGreaterThanOrEqual(FLOOR_LUMINANCE - 1e-9);
+      expect(relativeLuminance(output), materialName).toBeGreaterThanOrEqual(
+        FLOOR_LUMINANCE - 1e-9,
+      );
     }
   });
 
@@ -225,7 +239,9 @@ describe('visibleForeground material floor (bounded blend, Task 2)', () => {
   it('remains monotone non-decreasing in intensity for every material base up to and including the cap', () => {
     const QUANTIZATION_NOISE = 0.004;
     for (const base of Object.values(MATERIAL_BASE_RGB)) {
-      const luminances = INTENSITY_GRID.map((intensity) => relativeLuminance(parseRgb(visibleForeground(TORCH_TINT, intensity, base))));
+      const luminances = INTENSITY_GRID.map((intensity) =>
+        relativeLuminance(parseRgb(visibleForeground(TORCH_TINT, intensity, base))),
+      );
       for (let i = 1; i < luminances.length; i += 1) {
         expect(luminances[i]).toBeGreaterThanOrEqual(luminances[i - 1]! - QUANTIZATION_NOISE);
       }

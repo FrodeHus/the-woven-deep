@@ -56,7 +56,8 @@ export function buildApp(input: {
   if (input.webDistDir) {
     void app.register(fastifyStatic, { root: input.webDistDir, wildcard: false });
     app.setNotFoundHandler((request, reply) => {
-      if (request.method === 'GET' && !isReservedApiUrl(request.url)) return reply.sendFile('index.html');
+      if (request.method === 'GET' && !isReservedApiUrl(request.url))
+        return reply.sendFile('index.html');
       return reply.code(404).send({ error: 'not_found' });
     });
   }

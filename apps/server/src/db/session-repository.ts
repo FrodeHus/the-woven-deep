@@ -48,11 +48,19 @@ export class SessionRepository {
     this.revokeStatement = this.database.prepare(
       'update sessions set revoked_at = ? where token_hash = ? and revoked_at is null',
     );
-    this.deleteExpiredStatement = this.database.prepare('delete from sessions where expires_at <= ?');
+    this.deleteExpiredStatement = this.database.prepare(
+      'delete from sessions where expires_at <= ?',
+    );
   }
 
   insert(row: Omit<SessionRow, 'revokedAt'>): void {
-    this.insertStatement.run(row.tokenHash, row.profileId, row.createdAt, row.lastSeenAt, row.expiresAt);
+    this.insertStatement.run(
+      row.tokenHash,
+      row.profileId,
+      row.createdAt,
+      row.lastSeenAt,
+      row.expiresAt,
+    );
   }
 
   find(tokenHash: string): SessionRow | undefined {

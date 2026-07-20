@@ -37,8 +37,10 @@ export const COMMAND_SEQUENCE_KEY = 'woven-deep.guest-command-seq';
 export type StorageFailure = 'unavailable' | 'full';
 
 function isQuotaExceeded(error: unknown): boolean {
-  return error instanceof DOMException
-    && (error.name === 'QuotaExceededError' || error.code === 22 || error.code === 1014);
+  return (
+    error instanceof DOMException &&
+    (error.name === 'QuotaExceededError' || error.code === 22 || error.code === 1014)
+  );
 }
 
 /**

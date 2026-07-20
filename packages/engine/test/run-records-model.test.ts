@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
-  assertOpaqueId, deriveHallRecordId, emptyRunMetrics, encodeRunSeed,
-  type HallRecord, type HallRecordEnrichment, type HeartLineageRecord, type LifetimeDeltas, type LifetimeState,
-  type StoredHallRecord, type Uint32State,
+  assertOpaqueId,
+  deriveHallRecordId,
+  emptyRunMetrics,
+  encodeRunSeed,
+  type HallRecord,
+  type HallRecordEnrichment,
+  type HeartLineageRecord,
+  type LifetimeDeltas,
+  type LifetimeState,
+  type StoredHallRecord,
+  type Uint32State,
 } from '../src/index.js';
 
 const seed: Uint32State = [1, 2, 3, 4];
@@ -10,8 +18,9 @@ const hash = 'a'.repeat(64);
 
 describe('deriveHallRecordId', () => {
   it('derives the documented record ID from the run seed and content hash', () => {
-    expect(deriveHallRecordId([1, 2, 3, 4], 'a'.repeat(64)))
-      .toBe(`record.00000001000000020000000300000004.${'a'.repeat(16)}`);
+    expect(deriveHallRecordId([1, 2, 3, 4], 'a'.repeat(64))).toBe(
+      `record.00000001000000020000000300000004.${'a'.repeat(16)}`,
+    );
   });
 
   it('is deterministic and matches the opaque-identifier grammar', () => {
@@ -30,7 +39,9 @@ describe('deriveHallRecordId', () => {
 
 describe('encodeRunSeed', () => {
   it('concatenates each word as eight zero-padded lowercase hex digits', () => {
-    expect(encodeRunSeed([0xdead_beef, 0, 1, 0xffff_ffff])).toBe('deadbeef0000000000000001ffffffff');
+    expect(encodeRunSeed([0xdead_beef, 0, 1, 0xffff_ffff])).toBe(
+      'deadbeef0000000000000001ffffffff',
+    );
     expect(encodeRunSeed(seed)).toBe('00000001000000020000000300000004');
     expect(encodeRunSeed(seed)).toMatch(/^[0-9a-f]{32}$/);
   });
@@ -42,17 +53,31 @@ describe('run record shapes', () => {
   it('closes the enrichment vocabulary to the achieved-at date and portrait glyph', () => {
     expect(Object.keys(enrichment).sort()).toEqual(['achievedAt', 'portraitGlyph']);
     // @ts-expect-error the enrichment vocabulary is closed; a third field is rejected
-    const widened: HallRecordEnrichment = { achievedAt: '2026-07-15', portraitGlyph: '@', theme: 'dark' };
+    const widened: HallRecordEnrichment = {
+      achievedAt: '2026-07-15',
+      portraitGlyph: '@',
+      theme: 'dark',
+    };
     expect(widened.achievedAt).toBe('2026-07-15');
   });
 
   it('combines engine-validated lineage identity with the closed enrichment', () => {
     const lineage: HeartLineageRecord = {
-      heroName: 'Ada', classTags: ['fighter'], hallRecordId: deriveHallRecordId(seed, hash), enrichment,
+      heroName: 'Ada',
+      classTags: ['fighter'],
+      hallRecordId: deriveHallRecordId(seed, hash),
+      enrichment,
     };
-    expect(Object.keys(lineage).sort()).toEqual(['classTags', 'enrichment', 'hallRecordId', 'heroName']);
+    expect(Object.keys(lineage).sort()).toEqual([
+      'classTags',
+      'enrichment',
+      'hallRecordId',
+      'heroName',
+    ]);
     const rejected: HeartLineageRecord = {
-      heroName: 'Ada', classTags: ['fighter'], hallRecordId: deriveHallRecordId(seed, hash),
+      heroName: 'Ada',
+      classTags: ['fighter'],
+      hallRecordId: deriveHallRecordId(seed, hash),
       // @ts-expect-error lineage enrichment stays closed to the two host-supplied display fields
       enrichment: { achievedAt: '2026-07-15', portraitGlyph: '@', title: 'the Bold' },
     };
@@ -71,8 +96,16 @@ describe('run record shapes', () => {
       metrics: emptyRunMetrics(),
       reputations: [{ factionId: 'faction.lampwrights', value: 5 }],
       heirloom: {
-        contentId: 'item.fallback', sourceItemId: null, enchantment: null, condition: 100, charges: null,
-        fuel: null, qualityRank: 0, displayName: 'Fallback relic', glyph: ')', color: '#c0c0c0',
+        contentId: 'item.fallback',
+        sourceItemId: null,
+        enchantment: null,
+        condition: 100,
+        charges: null,
+        fuel: null,
+        qualityRank: 0,
+        displayName: 'Fallback relic',
+        glyph: ')',
+        color: '#c0c0c0',
         originatingHallRecordId: deriveHallRecordId(seed, hash),
       },
       build: {
@@ -90,13 +123,29 @@ describe('run record shapes', () => {
 
   it('shapes lifetime state and deltas around the record idempotence key', () => {
     const lifetime: LifetimeState = {
-      conqueredChampionRecordIds: [], grantedAchievementIds: [], discoveryProtection: [], totals: emptyRunMetrics(),
+      conqueredChampionRecordIds: [],
+      grantedAchievementIds: [],
+      discoveryProtection: [],
+      totals: emptyRunMetrics(),
     };
     const deltas: LifetimeDeltas = {
       recordId: deriveHallRecordId(seed, hash),
       newlyConqueredChampionRecordIds: [],
-      achievementGrants: [{ achievementId: 'achievement.first-champion', criteriaId: 'first-champion-defeat', name: 'First champion' }],
-      discoveryProtectionUpdates: [{ encounterId: 'encounter.rats', previousBonus: 0, nextBonus: 0.05, outcome: 'reached-unseen' }],
+      achievementGrants: [
+        {
+          achievementId: 'achievement.first-champion',
+          criteriaId: 'first-champion-defeat',
+          name: 'First champion',
+        },
+      ],
+      discoveryProtectionUpdates: [
+        {
+          encounterId: 'encounter.rats',
+          previousBonus: 0,
+          nextBonus: 0.05,
+          outcome: 'reached-unseen',
+        },
+      ],
       metrics: emptyRunMetrics(),
     };
     expect(lifetime.totals.kills).toBe(0);

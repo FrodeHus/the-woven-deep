@@ -16,7 +16,7 @@ describe('AttributeStepper', () => {
         canIncrement
         onDecrement={() => {}}
         onIncrement={() => {}}
-      />
+      />,
     );
     expect(screen.getByText('STR')).toBeInTheDocument();
     expect(screen.getByText('Strength')).toBeInTheDocument();
@@ -38,7 +38,7 @@ describe('AttributeStepper', () => {
         canIncrement={false}
         onDecrement={() => {}}
         onIncrement={onIncrement}
-      />
+      />,
     );
     const plus = screen.getByRole('button', { name: '+' });
     expect(plus).toBeDisabled();
@@ -60,7 +60,7 @@ describe('AttributeStepper', () => {
         canIncrement
         onDecrement={onDecrement}
         onIncrement={() => {}}
-      />
+      />,
     );
     const minus = screen.getByRole('button', { name: '−' });
     expect(minus).toBeDisabled();
@@ -82,7 +82,7 @@ describe('AttributeStepper', () => {
         canIncrement
         onDecrement={onDecrement}
         onIncrement={() => {}}
-      />
+      />,
     );
     screen.getByRole('button', { name: '−' }).click();
     expect(onDecrement).toHaveBeenCalledOnce();
@@ -102,7 +102,7 @@ describe('AttributeStepper', () => {
         canIncrement
         onDecrement={() => {}}
         onIncrement={onIncrement}
-      />
+      />,
     );
     screen.getByRole('button', { name: '+' }).click();
     expect(onIncrement).toHaveBeenCalledOnce();

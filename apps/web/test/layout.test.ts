@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  layoutTier, MIN_VIEWPORT, viewportForPane, ZOOM_STEPS, zoomForFloor,
+  layoutTier,
+  MIN_VIEWPORT,
+  viewportForPane,
+  ZOOM_STEPS,
+  zoomForFloor,
 } from '../src/ui/layout.js';
 
 describe('layoutTier', () => {

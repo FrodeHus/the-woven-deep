@@ -13,16 +13,18 @@ export interface EquippedLight {
 /** Resolves the hero's currently equipped, enabled light source (if any) from their equipment and
  * the compiled content pack -- `undefined` when no equipped item carries an enabled light. */
 export function equippedLightSource(
-  projection: GameplayProjection, pack: CompiledContentPack,
+  projection: GameplayProjection,
+  pack: CompiledContentPack,
 ): EquippedLight | undefined {
   const hero = heroOf(projection);
   for (const item of Object.values(hero.equipment)) {
     if (!item || !item.enabled || item.contentId === undefined) continue;
     const entry = pack.entries.find((candidate) => candidate.id === item.contentId);
     if (entry?.kind !== 'item' || !entry.light) continue;
-    const fuelFraction = entry.light.fuelCapacity > 0
-      ? Math.max(0, Math.min(1, (item.fuel ?? 0) / entry.light.fuelCapacity))
-      : 0;
+    const fuelFraction =
+      entry.light.fuelCapacity > 0
+        ? Math.max(0, Math.min(1, (item.fuel ?? 0) / entry.light.fuelCapacity))
+        : 0;
     return {
       contentId: item.contentId,
       color: entry.light.color,

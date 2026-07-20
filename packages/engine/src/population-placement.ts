@@ -11,14 +11,25 @@ import { analyzeConnectivity, preservesRequiredRoutes } from './connectivity.js'
 import { createFloorItem, createFloorLootFromTable } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
 import { materializeMerchant } from './merchant-stock.js';
-import type { ActiveRun, DomainEvent, FloorSnapshot, OpaqueId, Point, Uint32State } from './model.js';
-import { emptyActorBehaviorState, type EncounterRunDecision, type PopulationInstance } from './population-model.js';
+import type {
+  ActiveRun,
+  DomainEvent,
+  FloorSnapshot,
+  OpaqueId,
+  Point,
+  Uint32State,
+} from './model.js';
+import {
+  emptyActorBehaviorState,
+  type EncounterRunDecision,
+  type PopulationInstance,
+} from './population-model.js';
 import { nextUint32, rollDie } from './random.js';
 import { tileDefinition } from './terrain.js';
 import { transformVault } from './vault-transform.js';
 
-export type PopulationPlacementFailureReason = 'no-eligible-encounter' | 'no-valid-placement'
-  | 'required-route-blocked';
+export type PopulationPlacementFailureReason =
+  'no-eligible-encounter' | 'no-valid-placement' | 'required-route-blocked';
 
 interface PlacementBase {
   readonly encounterId: OpaqueId | null;
@@ -26,7 +37,9 @@ interface PlacementBase {
   readonly nextEncounterState: Uint32State;
   readonly encounterDecisions: readonly EncounterRunDecision[];
   readonly diagnostics: readonly Readonly<{
-    type: 'population.placement-skipped'; encounterId: OpaqueId; reason: PopulationPlacementFailureReason;
+    type: 'population.placement-skipped';
+    encounterId: OpaqueId;
+    reason: PopulationPlacementFailureReason;
   }>[];
 }
 
@@ -99,64 +112,112 @@ function contentMaps(content: CompiledContentPack): Readonly<{
   const encounters = content.entries
     .filter((entry): entry is EncounterContentEntry => entry.kind === 'encounter')
     .sort((left, right) => compareId(left.id, right.id));
-  const monsters = new Map(content.entries
-    .filter((entry): entry is MonsterContentEntry => entry.kind === 'monster')
-    .map((entry) => [entry.id, entry]));
-  const balances = content.entries.filter((entry): entry is BalanceContentEntry => entry.kind === 'balance');
-  if (balances.length !== 1) throw new Error(`population placement requires one balance definition; found ${balances.length}`);
+  const monsters = new Map(
+    content.entries
+      .filter((entry): entry is MonsterContentEntry => entry.kind === 'monster')
+      .map((entry) => [entry.id, entry]),
+  );
+  const balances = content.entries.filter(
+    (entry): entry is BalanceContentEntry => entry.kind === 'balance',
+  );
+  if (balances.length !== 1)
+    throw new Error(
+      `population placement requires one balance definition; found ${balances.length}`,
+    );
   return { encounters, monsters, balance: balances[0]! };
 }
 
 function preflightEncounters(encounters: readonly EncounterContentEntry[]): void {
-  if (!checkedTotalWithin(encounters.map((entry) => entry.weight), MAX_RANDOM_WEIGHT_TOTAL)) {
-    throw new RangeError('population preflight: encounter weight total exceeds rollDie maximum 2^32');
+  if (
+    !checkedTotalWithin(
+      encounters.map((entry) => entry.weight),
+      MAX_RANDOM_WEIGHT_TOTAL,
+    )
+  ) {
+    throw new RangeError(
+      'population preflight: encounter weight total exceeds rollDie maximum 2^32',
+    );
   }
   for (const encounter of encounters) {
-    if (encounter.model === 'individual' && encounter.definition.maximumQuantity > MAX_ENCOUNTER_MEMBERS) {
-      throw new RangeError(`population preflight: individual quantity exceeds runtime-safe limit ${MAX_ENCOUNTER_MEMBERS}`);
+    if (
+      encounter.model === 'individual' &&
+      encounter.definition.maximumQuantity > MAX_ENCOUNTER_MEMBERS
+    ) {
+      throw new RangeError(
+        `population preflight: individual quantity exceeds runtime-safe limit ${MAX_ENCOUNTER_MEMBERS}`,
+      );
     }
-    if (encounter.model === 'group'
-      && !checkedTotalWithin(encounter.definition.roles.map((role) => role.maximumQuantity), MAX_ENCOUNTER_MEMBERS)) {
-      throw new RangeError(`population preflight: group quantity exceeds runtime-safe limit ${MAX_ENCOUNTER_MEMBERS}`);
+    if (
+      encounter.model === 'group' &&
+      !checkedTotalWithin(
+        encounter.definition.roles.map((role) => role.maximumQuantity),
+        MAX_ENCOUNTER_MEMBERS,
+      )
+    ) {
+      throw new RangeError(
+        `population preflight: group quantity exceeds runtime-safe limit ${MAX_ENCOUNTER_MEMBERS}`,
+      );
     }
     if (encounter.model === 'swarm') {
       const definition = encounter.definition;
-      if (!checkedTotalWithin(definition.spawnRoles.map((role) => role.weight), MAX_RANDOM_WEIGHT_TOTAL)) {
-        throw new RangeError('population preflight: swarm spawn-role weight total exceeds rollDie maximum 2^32');
+      if (
+        !checkedTotalWithin(
+          definition.spawnRoles.map((role) => role.weight),
+          MAX_RANDOM_WEIGHT_TOTAL,
+        )
+      ) {
+        throw new RangeError(
+          'population preflight: swarm spawn-role weight total exceeds rollDie maximum 2^32',
+        );
       }
-      if (definition.maximumSpawnQuantity > MAX_SWARM_SPAWN_QUANTITY
-        || definition.maximumLivingChildren > MAX_SWARM_LIVING_CHILDREN
-        || definition.maximumLivingMembers > MAX_SWARM_LIVING_MEMBERS
-        || definition.maximumFloorActors > MAX_SWARM_FLOOR_ACTORS) {
+      if (
+        definition.maximumSpawnQuantity > MAX_SWARM_SPAWN_QUANTITY ||
+        definition.maximumLivingChildren > MAX_SWARM_LIVING_CHILDREN ||
+        definition.maximumLivingMembers > MAX_SWARM_LIVING_MEMBERS ||
+        definition.maximumFloorActors > MAX_SWARM_FLOOR_ACTORS
+      ) {
         throw new RangeError('population preflight: swarm quantities exceed runtime-safe limits');
       }
     }
   }
 }
 
-function availableVaultTags(floor: FloorSnapshot, content: CompiledContentPack): ReadonlySet<string> {
+function availableVaultTags(
+  floor: FloorSnapshot,
+  content: CompiledContentPack,
+): ReadonlySet<string> {
   const tags = new Set(floor.placementSlots.flatMap((slot) => slot.tags));
   const vaultIds = new Set(floor.vaults.map((vault) => vault.vaultId));
   for (const entry of content.entries) {
-    if (entry.kind === 'vault' && vaultIds.has(entry.id)) entry.tags.forEach((tag) => tags.add(tag));
+    if (entry.kind === 'vault' && vaultIds.has(entry.id))
+      entry.tags.forEach((tag) => tags.add(tag));
   }
   return tags;
 }
 
-function candidates(input: PlacePopulationInput, encounters: readonly EncounterContentEntry[]): readonly EncounterContentEntry[] {
-  const decisions = new Map(input.run.encounterDecisions.map((decision) => [decision.encounterId, decision]));
+function candidates(
+  input: PlacePopulationInput,
+  encounters: readonly EncounterContentEntry[],
+): readonly EncounterContentEntry[] {
+  const decisions = new Map(
+    input.run.encounterDecisions.map((decision) => [decision.encounterId, decision]),
+  );
   const vaultTags = availableVaultTags(input.floor, input.content);
   const environmentTags = new Set(input.environmentTags ?? []);
   return encounters.filter((encounter) => {
     const decision = decisions.get(encounter.id);
-    const requiredTags = encounter.model === 'boss'
-      ? [...encounter.requiredVaultTags, ...encounter.definition.vaultTags]
-      : encounter.requiredVaultTags;
-    return decision?.eligible === true
-      && decision.instancesCreated < encounter.maximumInstancesPerRun
-      && input.floor.depth >= encounter.minDepth && input.floor.depth <= encounter.maxDepth
-      && encounter.environmentTags.every((tag) => environmentTags.has(tag))
-      && requiredTags.every((tag) => vaultTags.has(tag));
+    const requiredTags =
+      encounter.model === 'boss'
+        ? [...encounter.requiredVaultTags, ...encounter.definition.vaultTags]
+        : encounter.requiredVaultTags;
+    return (
+      decision?.eligible === true &&
+      decision.instancesCreated < encounter.maximumInstancesPerRun &&
+      input.floor.depth >= encounter.minDepth &&
+      input.floor.depth <= encounter.maxDepth &&
+      encounter.environmentTags.every((tag) => environmentTags.has(tag)) &&
+      requiredTags.every((tag) => vaultTags.has(tag))
+    );
   });
 }
 
@@ -187,41 +248,59 @@ function composition(
   let state = initialState;
   if (encounter.model === 'individual') {
     const range = encounter.definition.maximumQuantity - encounter.definition.minimumQuantity + 1;
-    const step = rollDie(state, range); state = step.state;
+    const step = rollDie(state, range);
+    state = step.state;
     return {
-      members: Array.from({ length: encounter.definition.minimumQuantity + step.value - 1 }, () => ({
-        monsterId: encounter.definition.monsterId, roleId: null,
-      })),
-      leaderIndex: null, state,
+      members: Array.from(
+        { length: encounter.definition.minimumQuantity + step.value - 1 },
+        () => ({
+          monsterId: encounter.definition.monsterId,
+          roleId: null,
+        }),
+      ),
+      leaderIndex: null,
+      state,
     };
   }
   if (encounter.model === 'group') {
     const members: MemberPlan[] = [];
     for (const role of encounter.definition.roles) {
       const range = role.maximumQuantity - role.minimumQuantity + 1;
-      const step = rollDie(state, range); state = step.state;
+      const step = rollDie(state, range);
+      state = step.state;
       const quantity = role.minimumQuantity + step.value - 1;
       for (let index = 0; index < quantity; index += 1) {
         members.push({ monsterId: role.monsterId, roleId: role.roleId });
       }
     }
-    const leaderRoll = nextUint32(state); state = leaderRoll.state;
-    const leaderIndex = leaderRoll.value / 0x1_0000_0000 < encounter.definition.leaderChance
-      ? members.findIndex((member) => member.roleId === encounter.definition.leaderRoleId) : -1;
+    const leaderRoll = nextUint32(state);
+    state = leaderRoll.state;
+    const leaderIndex =
+      leaderRoll.value / 0x1_0000_0000 < encounter.definition.leaderChance
+        ? members.findIndex((member) => member.roleId === encounter.definition.leaderRoleId)
+        : -1;
     return { members, leaderIndex: leaderIndex < 0 ? null : leaderIndex, state };
   }
   if (encounter.model === 'merchant') {
     // Merchants occupy one cell and roll nothing here; every merchant roll
     // comes from the dedicated merchant-stock stream during materialization.
-    return { members: [{ monsterId: encounter.definition.npcId, roleId: null }], leaderIndex: null, state };
+    return {
+      members: [{ monsterId: encounter.definition.npcId, roleId: null }],
+      leaderIndex: null,
+      state,
+    };
   }
-  const monsterId = encounter.model === 'swarm'
-    ? encounter.definition.sourceMonsterId : encounter.definition.monsterId;
+  const monsterId =
+    encounter.model === 'swarm'
+      ? encounter.definition.sourceMonsterId
+      : encounter.definition.monsterId;
   return { members: [{ monsterId, roleId: null }], leaderIndex: null, state };
 }
 
 function nextPopulationId(input: PlacePopulationInput, memberCount: number): OpaqueId {
-  const usedPopulations = new Set(input.run.populations.map((population) => population.populationId));
+  const usedPopulations = new Set(
+    input.run.populations.map((population) => population.populationId),
+  );
   const usedEntities = new Set([
     ...input.run.actors.map((actor) => actor.actorId),
     ...input.run.floors.flatMap((floor) => floor.entities.map((entity) => entity.entityId)),
@@ -230,48 +309,72 @@ function nextPopulationId(input: PlacePopulationInput, memberCount: number): Opa
   for (let sequence = 1; sequence <= Number.MAX_SAFE_INTEGER; sequence += 1) {
     const id = `population.${String(sequence).padStart(6, '0')}`;
     const actorIdPrefix = `actor.${id}.`;
-    const actorIdsAvailable = Array.from({ length: memberCount }, (_, index) =>
-      `${actorIdPrefix}${String(index + 1).padStart(3, '0')}`)
-      .every((actorId) => !usedEntities.has(actorId));
+    const actorIdsAvailable = Array.from(
+      { length: memberCount },
+      (_, index) => `${actorIdPrefix}${String(index + 1).padStart(3, '0')}`,
+    ).every((actorId) => !usedEntities.has(actorId));
     if (!usedPopulations.has(id) && actorIdsAvailable) return id;
   }
   throw new Error('internal invariant: population identifier space exhausted');
 }
 
-function reservedCellIndexes(input: PlacePopulationInput, includePlacementSlots = true): Set<number> {
+function reservedCellIndexes(
+  input: PlacePopulationInput,
+  includePlacementSlots = true,
+): Set<number> {
   const { floor, run } = input;
   const index = (point: Point) => point.y * floor.width + point.x;
   const reserved = new Set(floor.entities.map(index));
-  for (const actor of run.actors) if (actor.floorId === floor.floorId && actor.health > 0) reserved.add(index(actor));
-  for (const feature of run.features) if (feature.floorId === floor.floorId) reserved.add(index(feature));
+  for (const actor of run.actors)
+    if (actor.floorId === floor.floorId && actor.health > 0) reserved.add(index(actor));
+  for (const feature of run.features)
+    if (feature.floorId === floor.floorId) reserved.add(index(feature));
   for (const item of run.items) {
-    if (item.location.type === 'floor' && item.location.floorId === floor.floorId) reserved.add(index(item.location));
+    if (item.location.type === 'floor' && item.location.floorId === floor.floorId)
+      reserved.add(index(item.location));
   }
-  for (const light of floor.lights) if (light.location.type === 'fixed') reserved.add(index(light.location));
+  for (const light of floor.lights)
+    if (light.location.type === 'fixed') reserved.add(index(light.location));
   if (floor.stairUp) reserved.add(index(floor.stairUp));
   if (floor.stairDown) reserved.add(index(floor.stairDown));
   if (includePlacementSlots) floor.placementSlots.forEach((slot) => reserved.add(index(slot)));
   return reserved;
 }
 
-function satisfiesPlacementDistances(floor: FloorSnapshot, encounter: EncounterContentEntry, cell: Point): boolean {
+function satisfiesPlacementDistances(
+  floor: FloorSnapshot,
+  encounter: EncounterContentEntry,
+  cell: Point,
+): boolean {
   const stairs = [floor.stairUp, floor.stairDown].filter((point): point is Point => point !== null);
   const objectives = floor.placementSlots.filter((slot) => slot.kind === 'objective');
-  return stairs.every((stair) => chebyshev(cell, stair) >= encounter.placement.minimumStairDistance)
-    && objectives.every((objective) => chebyshev(cell, objective) >= encounter.placement.minimumObjectiveDistance);
+  return (
+    stairs.every((stair) => chebyshev(cell, stair) >= encounter.placement.minimumStairDistance) &&
+    objectives.every(
+      (objective) => chebyshev(cell, objective) >= encounter.placement.minimumObjectiveDistance,
+    )
+  );
 }
 
-function legalCells(input: PlacePopulationInput, encounter: EncounterContentEntry): readonly Point[] {
+function legalCells(
+  input: PlacePopulationInput,
+  encounter: EncounterContentEntry,
+): readonly Point[] {
   const { floor } = input;
   const reserved = reservedCellIndexes(input);
   const cells: Point[] = [];
   for (let y = 0; y < floor.height; y += 1) {
     for (let x = 0; x < floor.width; x += 1) {
-      const cell = { x, y }; const index = y * floor.width + x;
+      const cell = { x, y };
+      const index = y * floor.width + x;
       const terrain = tileDefinition(floor.tiles[index]!);
-      if (reserved.has(index) || !terrain.walkable
-        || !encounter.placement.allowedTerrainTags.includes(terrain.name)
-        || !satisfiesPlacementDistances(floor, encounter, cell)) continue;
+      if (
+        reserved.has(index) ||
+        !terrain.walkable ||
+        !encounter.placement.allowedTerrainTags.includes(terrain.name) ||
+        !satisfiesPlacementDistances(floor, encounter, cell)
+      )
+        continue;
       cells.push(cell);
     }
   }
@@ -280,7 +383,8 @@ function legalCells(input: PlacePopulationInput, encounter: EncounterContentEntr
 
 function requiredPoints(floor: FloorSnapshot): readonly Point[] {
   return [
-    floor.stairUp, floor.stairDown,
+    floor.stairUp,
+    floor.stairDown,
     ...floor.placementSlots.filter((slot) => slot.kind === 'objective'),
   ].filter((point): point is Point => point !== null);
 }
@@ -292,7 +396,11 @@ function protectedRouteIndexes(floor: FloorSnapshot): ReadonlySet<number> {
   if (!start) return protectedIndexes;
   for (const target of points.slice(1)) {
     const route = analyzeConnectivity({
-      width: floor.width, height: floor.height, tiles: floor.tiles, start, target,
+      width: floor.width,
+      height: floor.height,
+      tiles: floor.tiles,
+      start,
+      target,
     }).route;
     for (const point of route) protectedIndexes.add(point.y * floor.width + point.x);
   }
@@ -305,10 +413,18 @@ function requiredAnchorTags(encounter: EncounterContentEntry): readonly string[]
     : encounter.requiredVaultTags;
 }
 
-function slotProvidesTags(input: PlacePopulationInput, slot: FloorSnapshot['placementSlots'][number], tags: readonly string[]): boolean {
+function slotProvidesTags(
+  input: PlacePopulationInput,
+  slot: FloorSnapshot['placementSlots'][number],
+  tags: readonly string[],
+): boolean {
   const placement = input.floor.vaults.find((vault) => vault.placementId === slot.vaultPlacementId);
-  const vault = placement === undefined ? undefined : input.content.entries.find((entry) =>
-    entry.kind === 'vault' && entry.id === placement.vaultId);
+  const vault =
+    placement === undefined
+      ? undefined
+      : input.content.entries.find(
+          (entry) => entry.kind === 'vault' && entry.id === placement.vaultId,
+        );
   const available = new Set([...slot.tags, ...(vault?.tags ?? [])]);
   return tags.every((tag) => available.has(tag));
 }
@@ -320,34 +436,56 @@ function slotProvidesTags(input: PlacePopulationInput, slot: FloorSnapshot['plac
  * `vault-placement.ts` used to derive the slot's floor position, then matches by that position --
  * robust to callers (tests, notably) that append their own uniqueness suffixes onto `slotId`.
  */
-function originatingVaultSlot(input: PlacePopulationInput, slot: FloorSnapshot['placementSlots'][number]): VaultPlacementSlot {
+function originatingVaultSlot(
+  input: PlacePopulationInput,
+  slot: FloorSnapshot['placementSlots'][number],
+): VaultPlacementSlot {
   const placement = input.floor.vaults.find((vault) => vault.placementId === slot.vaultPlacementId);
-  const vault = placement === undefined ? undefined : input.content.entries.find((entry): entry is VaultContentEntry =>
-    entry.kind === 'vault' && entry.id === placement.vaultId);
+  const vault =
+    placement === undefined
+      ? undefined
+      : input.content.entries.find(
+          (entry): entry is VaultContentEntry =>
+            entry.kind === 'vault' && entry.id === placement.vaultId,
+        );
   if (placement === undefined || vault === undefined) {
     throw new Error(`internal invariant: item slot ${slot.slotId} has no originating vault`);
   }
   const transformed = transformVault(vault, placement.rotation, placement.reflected);
   const localX = slot.x - placement.x;
   const localY = slot.y - placement.y;
-  const match = transformed.slots.find((candidate) => candidate.x === localX && candidate.y === localY);
+  const match = transformed.slots.find(
+    (candidate) => candidate.x === localX && candidate.y === localY,
+  );
   if (match === undefined) {
-    throw new Error(`internal invariant: vault ${vault.id} has no legend slot at local position (${localX}, ${localY})`);
+    throw new Error(
+      `internal invariant: vault ${vault.id} has no legend slot at local position (${localX}, ${localY})`,
+    );
   }
   return match.slot;
 }
 
-function floorLocation(item: ItemInstance): Extract<ItemInstance['location'], { type: 'floor' }> | null {
+function floorLocation(
+  item: ItemInstance,
+): Extract<ItemInstance['location'], { type: 'floor' }> | null {
   return item.location.type === 'floor' ? item.location : null;
 }
 
-function unfilledItemSlots(input: PlacePopulationInput): readonly FloorSnapshot['placementSlots'][number][] {
-  const filledPositions = new Set(input.run.items
-    .map(floorLocation)
-    .filter((location): location is Extract<ItemInstance['location'], { type: 'floor' }> =>
-      location !== null && location.floorId === input.floor.floorId)
-    .map((location) => `${location.x},${location.y}`));
-  return input.floor.placementSlots.filter((slot) => slot.kind === 'item' && !filledPositions.has(`${slot.x},${slot.y}`));
+function unfilledItemSlots(
+  input: PlacePopulationInput,
+): readonly FloorSnapshot['placementSlots'][number][] {
+  const filledPositions = new Set(
+    input.run.items
+      .map(floorLocation)
+      .filter(
+        (location): location is Extract<ItemInstance['location'], { type: 'floor' }> =>
+          location !== null && location.floorId === input.floor.floorId,
+      )
+      .map((location) => `${location.x},${location.y}`),
+  );
+  return input.floor.placementSlots.filter(
+    (slot) => slot.kind === 'item' && !filledPositions.has(`${slot.x},${slot.y}`),
+  );
 }
 
 /**
@@ -368,18 +506,31 @@ function fillItemSlots(
     const itemId = `item.vault.${slot.slotId}`;
     if (vaultSlot.lootTableId !== null) {
       const loot = createFloorLootFromTable({
-        content: input.content, tableId: vaultSlot.lootTableId, state: currentState,
-        itemIdPrefix: itemId, floorId: input.floor.floorId, x: slot.x, y: slot.y,
+        content: input.content,
+        tableId: vaultSlot.lootTableId,
+        state: currentState,
+        itemIdPrefix: itemId,
+        floorId: input.floor.floorId,
+        x: slot.x,
+        y: slot.y,
       });
       items.push(...loot.items);
       currentState = loot.state;
     } else if (vaultSlot.contentId !== null) {
-      items.push(createFloorItem({
-        content: input.content, contentId: vaultSlot.contentId, itemId,
-        floorId: input.floor.floorId, x: slot.x, y: slot.y,
-      }));
+      items.push(
+        createFloorItem({
+          content: input.content,
+          contentId: vaultSlot.contentId,
+          itemId,
+          floorId: input.floor.floorId,
+          x: slot.x,
+          y: slot.y,
+        }),
+      );
     } else {
-      throw new Error(`internal invariant: item slot ${slot.slotId} has neither lootTableId nor contentId`);
+      throw new Error(
+        `internal invariant: item slot ${slot.slotId} has neither lootTableId nor contentId`,
+      );
     }
   }
   return { items, state: currentState };
@@ -392,24 +543,38 @@ function selectCells(
 ): Readonly<{ cells: readonly Point[]; routeFailure: boolean }> {
   const rawCells = legalCells(input, encounter);
   const protectedIndexes = protectedRouteIndexes(input.floor);
-  const all = rawCells.filter((point) => !protectedIndexes.has(point.y * input.floor.width + point.x));
+  const all = rawCells.filter(
+    (point) => !protectedIndexes.has(point.y * input.floor.width + point.x),
+  );
   const hardReserved = reservedCellIndexes(input, false);
   const anchorTags = requiredAnchorTags(encounter);
   const vaultAnchors = encounter.placement.requiresVaultSlot
-    ? input.floor.placementSlots.filter((slot) => slot.kind === 'monster'
-      && slotProvidesTags(input, slot, anchorTags)) : null;
-  const anchors = vaultAnchors === null ? all : vaultAnchors
-    .filter((slot) => {
-      const index = slot.y * input.floor.width + slot.x;
-      const terrain = tileDefinition(input.floor.tiles[index]!);
-      return !hardReserved.has(index) && terrain.walkable
-        && encounter.placement.allowedTerrainTags.includes(terrain.name)
-        && satisfiesPlacementDistances(input.floor, encounter, slot);
-    })
-    .map(({ x, y }) => ({ x, y }));
+    ? input.floor.placementSlots.filter(
+        (slot) => slot.kind === 'monster' && slotProvidesTags(input, slot, anchorTags),
+      )
+    : null;
+  const anchors =
+    vaultAnchors === null
+      ? all
+      : vaultAnchors
+          .filter((slot) => {
+            const index = slot.y * input.floor.width + slot.x;
+            const terrain = tileDefinition(input.floor.tiles[index]!);
+            return (
+              !hardReserved.has(index) &&
+              terrain.walkable &&
+              encounter.placement.allowedTerrainTags.includes(terrain.name) &&
+              satisfiesPlacementDistances(input.floor, encounter, slot)
+            );
+          })
+          .map(({ x, y }) => ({ x, y }));
   let routeFailure = rawCells.length > all.length;
   const requiredOrdinaryCells = quantity - (vaultAnchors === null ? 0 : 1);
-  if (requiredOrdinaryCells < 0 || requiredOrdinaryCells > all.length || (vaultAnchors !== null && anchors.length === 0)) {
+  if (
+    requiredOrdinaryCells < 0 ||
+    requiredOrdinaryCells > all.length ||
+    (vaultAnchors !== null && anchors.length === 0)
+  ) {
     return { cells: [], routeFailure };
   }
 
@@ -424,20 +589,27 @@ function selectCells(
     }
   }
   const rectangleCount = (left: number, top: number, right: number, bottom: number): number =>
-    prefix[(bottom + 1) * stride + right + 1]!
-    - prefix[top * stride + right + 1]!
-    - prefix[(bottom + 1) * stride + left]!
-    + prefix[top * stride + left]!;
-  const inRectangle = (point: Point, left: number, top: number, right: number, bottom: number): boolean =>
-    point.x >= left && point.x <= right && point.y >= top && point.y <= bottom;
+    prefix[(bottom + 1) * stride + right + 1]! -
+    prefix[top * stride + right + 1]! -
+    prefix[(bottom + 1) * stride + left]! +
+    prefix[top * stride + left]!;
+  const inRectangle = (
+    point: Point,
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
+  ): boolean => point.x >= left && point.x <= right && point.y >= top && point.y <= bottom;
   const maximumDistance = encounter.placement.maximumMemberDistance;
   for (let top = 0; top < input.floor.height; top += 1) {
     const bottom = Math.min(input.floor.height - 1, top + maximumDistance);
     for (let left = 0; left < input.floor.width; left += 1) {
       const right = Math.min(input.floor.width - 1, left + maximumDistance);
       if (rectangleCount(left, top, right, bottom) < requiredOrdinaryCells) continue;
-      const anchor = vaultAnchors === null ? null
-        : anchors.find((point) => inRectangle(point, left, top, right, bottom));
+      const anchor =
+        vaultAnchors === null
+          ? null
+          : anchors.find((point) => inRectangle(point, left, top, right, bottom));
       if (vaultAnchors !== null && anchor === undefined) continue;
       const ordinary = all
         .filter((point) => inRectangle(point, left, top, right, bottom))
@@ -445,8 +617,11 @@ function selectCells(
       const selected = anchor ? [anchor, ...ordinary] : ordinary;
       if (selected.length !== quantity) continue;
       const routeOk = preservesRequiredRoutes({
-        width: input.floor.width, height: input.floor.height, tiles: input.floor.tiles,
-        requiredPoints: requiredPoints(input.floor), blockedPoints: selected,
+        width: input.floor.width,
+        height: input.floor.height,
+        tiles: input.floor.tiles,
+        requiredPoints: requiredPoints(input.floor),
+        blockedPoints: selected,
       });
       if (routeOk) return { cells: selected, routeFailure };
       routeFailure = true;
@@ -462,11 +637,17 @@ function placementFailure(
   encounterDecisions: readonly EncounterRunDecision[],
 ): PopulationSkipped | PopulationRejected {
   const common = {
-    encounterId: encounter.id, reason, nextEncounterState: state, encounterDecisions,
-    diagnostics: [{ type: 'population.placement-skipped' as const, encounterId: encounter.id, reason }],
+    encounterId: encounter.id,
+    reason,
+    nextEncounterState: state,
+    encounterDecisions,
+    diagnostics: [
+      { type: 'population.placement-skipped' as const, encounterId: encounter.id, reason },
+    ],
   };
   return encounter.placement.failureMode === 'required'
-    ? { status: 'rejected', ...common } : { status: 'skipped', ...common };
+    ? { status: 'rejected', ...common }
+    : { status: 'skipped', ...common };
 }
 
 export function placePopulation(input: PlacePopulationInput): PopulationPlacementResult {
@@ -474,21 +655,38 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
   preflightEncounters(maps.encounters);
   const reachedDecisions = input.run.encounterDecisions.map((decision) => {
     const encounter = maps.encounters.find((entry) => entry.id === decision.encounterId);
-    return encounter && input.floor.depth >= encounter.minDepth && input.floor.depth <= encounter.maxDepth
-      ? { ...decision, reachedEligibleDepth: true } : decision;
+    return encounter &&
+      input.floor.depth >= encounter.minDepth &&
+      input.floor.depth <= encounter.maxDepth
+      ? { ...decision, reachedEligibleDepth: true }
+      : decision;
   });
-  const selected = chooseEncounter(input, candidates({ ...input, run: { ...input.run, encounterDecisions: reachedDecisions } }, maps.encounters));
+  const selected = chooseEncounter(
+    input,
+    candidates(
+      { ...input, run: { ...input.run, encounterDecisions: reachedDecisions } },
+      maps.encounters,
+    ),
+  );
   if (!selected) {
     return {
-      status: 'skipped', encounterId: null, reason: 'no-eligible-encounter',
-      nextEncounterState: input.run.rng.encounters, encounterDecisions: reachedDecisions, diagnostics: [],
+      status: 'skipped',
+      encounterId: null,
+      reason: 'no-eligible-encounter',
+      nextEncounterState: input.run.rng.encounters,
+      encounterDecisions: reachedDecisions,
+      diagnostics: [],
     };
   }
   const planned = composition(selected.encounter, selected.state);
   const positions = selectCells(input, selected.encounter, planned.members.length);
   if (positions.cells.length !== planned.members.length) {
-    return placementFailure(selected.encounter, positions.routeFailure
-      ? 'required-route-blocked' : 'no-valid-placement', planned.state, reachedDecisions);
+    return placementFailure(
+      selected.encounter,
+      positions.routeFailure ? 'required-route-blocked' : 'no-valid-placement',
+      planned.state,
+      reachedDecisions,
+    );
   }
 
   const populationId = nextPopulationId(input, planned.members.length);
@@ -496,80 +694,151 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
     // Materialize only after a legal cell exists so skipped or rejected
     // placement never advances the merchant-stock stream or creates items.
     const runWithFloor = input.run.floors.some((floor) => floor.floorId === input.floor.floorId)
-      ? input.run : { ...input.run, floors: [...input.run.floors, input.floor] };
+      ? input.run
+      : { ...input.run, floors: [...input.run.floors, input.floor] };
     const merchant = materializeMerchant({
-      run: runWithFloor, content: input.content, encounter: selected.encounter,
-      populationId, floorId: input.floor.floorId, position: positions.cells[0]!,
+      run: runWithFloor,
+      content: input.content,
+      encounter: selected.encounter,
+      populationId,
+      floorId: input.floor.floorId,
+      position: positions.cells[0]!,
     });
     const itemSlots = fillItemSlots(input, planned.state);
     return {
-      status: 'placed', encounterId: selected.encounter.id, nextEncounterState: itemSlots.state,
-      encounterDecisions: reachedDecisions.map((decision) => decision.encounterId === selected.encounter.id
-        ? { ...decision, instancesCreated: decision.instancesCreated + 1 } : decision),
-      diagnostics: [], createdActors: [merchant.actor], population: merchant.population,
-      floor: input.floor, createdItems: [...merchant.items, ...itemSlots.items],
+      status: 'placed',
+      encounterId: selected.encounter.id,
+      nextEncounterState: itemSlots.state,
+      encounterDecisions: reachedDecisions.map((decision) =>
+        decision.encounterId === selected.encounter.id
+          ? { ...decision, instancesCreated: decision.instancesCreated + 1 }
+          : decision,
+      ),
+      diagnostics: [],
+      createdActors: [merchant.actor],
+      population: merchant.population,
+      floor: input.floor,
+      createdItems: [...merchant.items, ...itemSlots.items],
       nextMerchantStockState: merchant.nextMerchantStockState,
     };
   }
   const createdActors = planned.members.map((member, index): ActorState => {
     const definition = maps.monsters.get(member.monsterId);
-    if (!definition) throw new Error(`population placement monster ${member.monsterId} does not exist`);
+    if (!definition)
+      throw new Error(`population placement monster ${member.monsterId} does not exist`);
     const leader = planned.leaderIndex === index;
     return {
       actorId: `actor.${populationId}.${String(index + 1).padStart(3, '0')}`,
-      contentId: definition.id, playerControlled: false, floorId: input.floor.floorId,
-      ...positions.cells[index]!, attributes: definition.attributes,
-      health: definition.health, maxHealth: definition.health, energy: maps.balance.readinessThreshold,
-      speed: definition.speed, reactionReady: true, disposition: definition.disposition,
-      awareActorIds: [], conditions: [], equipment: emptyEquipment(), behaviorId: definition.behaviorId,
-      behaviorState: emptyActorBehaviorState(), populationId, populationRoleId: member.roleId,
+      contentId: definition.id,
+      playerControlled: false,
+      floorId: input.floor.floorId,
+      ...positions.cells[index]!,
+      attributes: definition.attributes,
+      health: definition.health,
+      maxHealth: definition.health,
+      energy: maps.balance.readinessThreshold,
+      speed: definition.speed,
+      reactionReady: true,
+      disposition: definition.disposition,
+      awareActorIds: [],
+      conditions: [],
+      equipment: emptyEquipment(),
+      behaviorId: definition.behaviorId,
+      behaviorState: emptyActorBehaviorState(),
+      populationId,
+      populationRoleId: member.roleId,
       populationPresentation: {
         name: definition.name,
-        glyph: leader && selected.encounter.model === 'group'
-          ? (selected.encounter.definition.leaderAlternateGlyph ?? definition.glyph) : definition.glyph,
-        color: leader && selected.encounter.model === 'group'
-          ? selected.encounter.definition.leaderAccentColor : definition.color,
+        glyph:
+          leader && selected.encounter.model === 'group'
+            ? (selected.encounter.definition.leaderAlternateGlyph ?? definition.glyph)
+            : definition.glyph,
+        color:
+          leader && selected.encounter.model === 'group'
+            ? selected.encounter.definition.leaderAccentColor
+            : definition.color,
         leader,
       },
     };
   });
   const memberIds = createdActors.map((actor) => actor.actorId).sort(compareId);
   const base = {
-    populationId, encounterId: selected.encounter.id, floorId: input.floor.floorId,
-    createdAt: input.run.worldTime, livingMemberIds: memberIds, formerMemberIds: [],
+    populationId,
+    encounterId: selected.encounter.id,
+    floorId: input.floor.floorId,
+    createdAt: input.run.worldTime,
+    livingMemberIds: memberIds,
+    formerMemberIds: [],
   };
   let population: PopulationInstance;
   if (selected.encounter.model === 'individual') {
     population = { ...base, model: 'individual' };
   } else if (selected.encounter.model === 'group') {
-    const leaderActorId = planned.leaderIndex === null ? null : createdActors[planned.leaderIndex]!.actorId;
+    const leaderActorId =
+      planned.leaderIndex === null ? null : createdActors[planned.leaderIndex]!.actorId;
     population = {
-      ...base, model: 'group', leaderActorId, bonusActive: leaderActorId !== null,
-      roleMembership: createdActors.map((actor) => ({ actorId: actor.actorId, roleId: actor.populationRoleId! })),
-      sharedKnowledge: [], leaderResponseApplied: false, leaderResponseExpiresAt: null,
+      ...base,
+      model: 'group',
+      leaderActorId,
+      bonusActive: leaderActorId !== null,
+      roleMembership: createdActors.map((actor) => ({
+        actorId: actor.actorId,
+        roleId: actor.populationRoleId!,
+      })),
+      sharedKnowledge: [],
+      leaderResponseApplied: false,
+      leaderResponseExpiresAt: null,
     };
   } else if (selected.encounter.model === 'swarm') {
     const nextSpawnAt = input.run.worldTime + selected.encounter.definition.spawnInterval;
-    if (!Number.isSafeInteger(nextSpawnAt)) return placementFailure(selected.encounter,
-      'no-valid-placement', planned.state, reachedDecisions);
+    if (!Number.isSafeInteger(nextSpawnAt))
+      return placementFailure(
+        selected.encounter,
+        'no-valid-placement',
+        planned.state,
+        reachedDecisions,
+      );
     population = {
-      ...base, model: 'swarm', sourceActorId: createdActors[0]!.actorId,
+      ...base,
+      model: 'swarm',
+      sourceActorId: createdActors[0]!.actorId,
       nextSpawnAt,
-      spawnedCount: 0, peakLivingSize: 1, shutdownState: null, emittedCapLevels: [], shutdownExpiresAt: null,
+      spawnedCount: 0,
+      peakLivingSize: 1,
+      shutdownState: null,
+      emittedCapLevels: [],
+      shutdownExpiresAt: null,
     };
   } else {
     population = {
-      ...base, model: 'boss', actorId: createdActors[0]!.actorId, currentPhaseId: null,
-      crossedPhaseIds: [], lastFloorExitAt: null, rewardCreated: false, rewardReceipt: null, recoveryHistory: [],
+      ...base,
+      model: 'boss',
+      actorId: createdActors[0]!.actorId,
+      currentPhaseId: null,
+      crossedPhaseIds: [],
+      lastFloorExitAt: null,
+      rewardCreated: false,
+      rewardReceipt: null,
+      recoveryHistory: [],
     };
   }
-  const encounterDecisions = reachedDecisions.map((decision) => decision.encounterId === selected.encounter.id
-    ? { ...decision, instancesCreated: decision.instancesCreated + 1 } : decision);
+  const encounterDecisions = reachedDecisions.map((decision) =>
+    decision.encounterId === selected.encounter.id
+      ? { ...decision, instancesCreated: decision.instancesCreated + 1 }
+      : decision,
+  );
   const itemSlots = fillItemSlots(input, planned.state);
   return {
-    status: 'placed', encounterId: selected.encounter.id, nextEncounterState: itemSlots.state,
-    encounterDecisions, diagnostics: [], createdActors, population,
-    floor: input.floor, createdItems: itemSlots.items, nextMerchantStockState: null,
+    status: 'placed',
+    encounterId: selected.encounter.id,
+    nextEncounterState: itemSlots.state,
+    encounterDecisions,
+    diagnostics: [],
+    createdActors,
+    population,
+    floor: input.floor,
+    createdItems: itemSlots.items,
+    nextMerchantStockState: null,
   };
 }
 
@@ -581,14 +850,23 @@ const MAXIMUM_FLOOR_POPULATION_ATTEMPTS = 8;
  * encounter density: `floor((width * height) / cellsPerEncounter)`, clamped to [1, 8]. Checked
  * integer division (floor of a non-negative integer quotient) -- never a float approximation.
  */
-function floorPopulationAttempts(floor: Pick<FloorSnapshot, 'width' | 'height'>, cellsPerEncounter: number): number {
+function floorPopulationAttempts(
+  floor: Pick<FloorSnapshot, 'width' | 'height'>,
+  cellsPerEncounter: number,
+): number {
   if (!Number.isSafeInteger(cellsPerEncounter) || cellsPerEncounter <= 0) {
-    throw new RangeError('balance encounterDensity.cellsPerEncounter must be a positive safe integer');
+    throw new RangeError(
+      'balance encounterDensity.cellsPerEncounter must be a positive safe integer',
+    );
   }
   const cellCount = floor.width * floor.height;
-  if (!Number.isSafeInteger(cellCount)) throw new RangeError('floor cell count overflow computing population attempts');
+  if (!Number.isSafeInteger(cellCount))
+    throw new RangeError('floor cell count overflow computing population attempts');
   const raw = Math.floor(cellCount / cellsPerEncounter);
-  return Math.min(MAXIMUM_FLOOR_POPULATION_ATTEMPTS, Math.max(MINIMUM_FLOOR_POPULATION_ATTEMPTS, raw));
+  return Math.min(
+    MAXIMUM_FLOOR_POPULATION_ATTEMPTS,
+    Math.max(MINIMUM_FLOOR_POPULATION_ATTEMPTS, raw),
+  );
 }
 
 function sortByActorId(items: readonly ActorState[]): ActorState[] {
@@ -619,16 +897,23 @@ export interface FloorPopulationsResult {
  */
 export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulationsResult {
   const maps = contentMaps(input.content);
-  const attempts = floorPopulationAttempts(input.floor, maps.balance.encounterDensity.cellsPerEncounter);
+  const attempts = floorPopulationAttempts(
+    input.floor,
+    maps.balance.encounterDensity.cellsPerEncounter,
+  );
   const eventId = `event.${input.floor.floorId}.population`;
   let run = input.run;
   const placements: PopulationPlacementResult[] = [];
   const events: DomainEvent[] = [];
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const placement = placePopulation({
-      run, floor: input.floor, content: input.content,
+      run,
+      floor: input.floor,
+      content: input.content,
       ...(input.environmentTags === undefined ? {} : { environmentTags: input.environmentTags }),
-      ...(input.forcedEncounterId === undefined ? {} : { forcedEncounterId: input.forcedEncounterId }),
+      ...(input.forcedEncounterId === undefined
+        ? {}
+        : { forcedEncounterId: input.forcedEncounterId }),
     });
     placements.push(placement);
     run = {
@@ -637,7 +922,8 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
         ...run.rng,
         encounters: placement.nextEncounterState,
         ...(placement.status === 'placed' && placement.nextMerchantStockState !== null
-          ? { 'merchant-stock': placement.nextMerchantStockState } : {}),
+          ? { 'merchant-stock': placement.nextMerchantStockState }
+          : {}),
       },
       encounterDecisions: placement.encounterDecisions,
     };
@@ -645,23 +931,39 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
       run = {
         ...run,
         actors: sortByActorId([...run.actors, ...placement.createdActors]),
-        items: placement.createdItems.length === 0 ? run.items : sortByItemId([...run.items, ...placement.createdItems]),
+        items:
+          placement.createdItems.length === 0
+            ? run.items
+            : sortByItemId([...run.items, ...placement.createdItems]),
         populations: sortByPopulationId([...run.populations, placement.population]),
       };
       events.push({
-        type: 'population.created', eventId, populationId: placement.population.populationId,
-        encounterId: placement.population.encounterId, floorId: placement.population.floorId,
-        model: placement.population.model, actorIds: placement.population.livingMemberIds,
+        type: 'population.created',
+        eventId,
+        populationId: placement.population.populationId,
+        encounterId: placement.population.encounterId,
+        floorId: placement.population.floorId,
+        model: placement.population.model,
+        actorIds: placement.population.livingMemberIds,
       });
       if (placement.population.model === 'group' && placement.population.leaderActorId !== null) {
         const leaderActorId = placement.population.leaderActorId;
-        const roleId = placement.population.roleMembership.find((role) => role.actorId === leaderActorId)?.roleId;
-        if (roleId === undefined) throw new Error(`internal invariant: group leader ${leaderActorId} has no role`);
-        events.push({ type: 'group.leader-created', eventId, populationId: placement.population.populationId,
-          actorId: leaderActorId, roleId });
+        const roleId = placement.population.roleMembership.find(
+          (role) => role.actorId === leaderActorId,
+        )?.roleId;
+        if (roleId === undefined)
+          throw new Error(`internal invariant: group leader ${leaderActorId} has no role`);
+        events.push({
+          type: 'group.leader-created',
+          eventId,
+          populationId: placement.population.populationId,
+          actorId: leaderActorId,
+          roleId,
+        });
       }
     } else if (placement.status === 'skipped') {
-      for (const diagnostic of placement.diagnostics) events.push({ ...diagnostic, eventId, floorId: input.floor.floorId });
+      for (const diagnostic of placement.diagnostics)
+        events.push({ ...diagnostic, eventId, floorId: input.floor.floorId });
     }
     if (placement.status === 'rejected') break;
   }

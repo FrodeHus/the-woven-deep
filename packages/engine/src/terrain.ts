@@ -1,7 +1,14 @@
 import type { MovementInvalidReason, TileId } from './model.js';
 
-export type TerrainName = 'wall' | 'floor' | 'closed-door' | 'pillar' | 'stair-up' | 'stair-down' | 'void';
-export type TerrainToken = 'terrain.wall' | 'terrain.floor' | 'terrain.door' | 'terrain.pillar' | 'terrain.stair' | 'terrain.void';
+export type TerrainName =
+  'wall' | 'floor' | 'closed-door' | 'pillar' | 'stair-up' | 'stair-down' | 'void';
+export type TerrainToken =
+  | 'terrain.wall'
+  | 'terrain.floor'
+  | 'terrain.door'
+  | 'terrain.pillar'
+  | 'terrain.stair'
+  | 'terrain.void';
 
 export interface TileDefinition {
   readonly id: TileId;
@@ -14,13 +21,69 @@ export interface TileDefinition {
 }
 
 export const TILE_DEFINITIONS: readonly TileDefinition[] = [
-  { id: 0, name: 'wall', glyph: '#', walkable: false, potentiallyTraversable: false, opaque: true, token: 'terrain.wall' },
-  { id: 1, name: 'floor', glyph: '.', walkable: true, potentiallyTraversable: true, opaque: false, token: 'terrain.floor' },
-  { id: 2, name: 'closed-door', glyph: '+', walkable: false, potentiallyTraversable: true, opaque: true, token: 'terrain.door' },
-  { id: 3, name: 'pillar', glyph: 'O', walkable: false, potentiallyTraversable: false, opaque: true, token: 'terrain.pillar' },
-  { id: 4, name: 'stair-up', glyph: '<', walkable: true, potentiallyTraversable: true, opaque: false, token: 'terrain.stair' },
-  { id: 5, name: 'stair-down', glyph: '>', walkable: true, potentiallyTraversable: true, opaque: false, token: 'terrain.stair' },
-  { id: 6, name: 'void', glyph: ' ', walkable: false, potentiallyTraversable: false, opaque: true, token: 'terrain.void' },
+  {
+    id: 0,
+    name: 'wall',
+    glyph: '#',
+    walkable: false,
+    potentiallyTraversable: false,
+    opaque: true,
+    token: 'terrain.wall',
+  },
+  {
+    id: 1,
+    name: 'floor',
+    glyph: '.',
+    walkable: true,
+    potentiallyTraversable: true,
+    opaque: false,
+    token: 'terrain.floor',
+  },
+  {
+    id: 2,
+    name: 'closed-door',
+    glyph: '+',
+    walkable: false,
+    potentiallyTraversable: true,
+    opaque: true,
+    token: 'terrain.door',
+  },
+  {
+    id: 3,
+    name: 'pillar',
+    glyph: 'O',
+    walkable: false,
+    potentiallyTraversable: false,
+    opaque: true,
+    token: 'terrain.pillar',
+  },
+  {
+    id: 4,
+    name: 'stair-up',
+    glyph: '<',
+    walkable: true,
+    potentiallyTraversable: true,
+    opaque: false,
+    token: 'terrain.stair',
+  },
+  {
+    id: 5,
+    name: 'stair-down',
+    glyph: '>',
+    walkable: true,
+    potentiallyTraversable: true,
+    opaque: false,
+    token: 'terrain.stair',
+  },
+  {
+    id: 6,
+    name: 'void',
+    glyph: ' ',
+    walkable: false,
+    potentiallyTraversable: false,
+    opaque: true,
+    token: 'terrain.void',
+  },
 ] as const;
 
 export const STAIR_UP_TILE_ID: TileId = 4;
@@ -35,13 +98,15 @@ export function isStairDown(tileId: TileId | undefined): boolean {
 }
 
 export function isTileId(value: unknown): value is TileId {
-  return typeof value === 'number'
-    && TILE_DEFINITIONS.some((definition) => definition.id === value);
+  return (
+    typeof value === 'number' && TILE_DEFINITIONS.some((definition) => definition.id === value)
+  );
 }
 
 export function tileDefinition(tileId: TileId): TileDefinition {
   const definition = TILE_DEFINITIONS[tileId];
-  if (!definition || definition.id !== tileId) throw new Error(`internal invariant: unknown tile ${tileId}`);
+  if (!definition || definition.id !== tileId)
+    throw new Error(`internal invariant: unknown tile ${tileId}`);
   return definition;
 }
 

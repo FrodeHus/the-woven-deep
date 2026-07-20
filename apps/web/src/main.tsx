@@ -17,4 +17,8 @@ function Root() {
   return isPlayRoute ? <App /> : <LandingPage />;
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <Root />
+  </StrictMode>,
+);

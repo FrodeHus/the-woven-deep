@@ -2,7 +2,10 @@ import type { OpaqueId } from './model.js';
 import type { DiscoveryProtectionBonus } from './population-gates.js';
 import type { FallenHeroStandingSnapshot } from './population-model.js';
 import type {
-  HeartLineageRecord, LifetimeDeltas, LifetimeState, StoredHallRecord,
+  HeartLineageRecord,
+  LifetimeDeltas,
+  LifetimeState,
+  StoredHallRecord,
 } from './run-records-model.js';
 import { emptyRunMetrics, type RunMetrics } from './run-metrics.js';
 import { compareHallRecords } from './score-run.js';
@@ -52,7 +55,11 @@ function mergeMetrics(totals: RunMetrics, delta: RunMetrics): RunMetrics {
   return {
     kills: checkedAdd(totals.kills, delta.kills, 'kills'),
     killsByModel: {
-      individual: checkedAdd(totals.killsByModel.individual, delta.killsByModel.individual, 'killsByModel.individual'),
+      individual: checkedAdd(
+        totals.killsByModel.individual,
+        delta.killsByModel.individual,
+        'killsByModel.individual',
+      ),
       group: checkedAdd(totals.killsByModel.group, delta.killsByModel.group, 'killsByModel.group'),
       swarm: checkedAdd(totals.killsByModel.swarm, delta.killsByModel.swarm, 'killsByModel.swarm'),
       boss: checkedAdd(totals.killsByModel.boss, delta.killsByModel.boss, 'killsByModel.boss'),
@@ -70,13 +77,20 @@ function mergeMetrics(totals: RunMetrics, delta: RunMetrics): RunMetrics {
     tradesCompleted: checkedAdd(totals.tradesCompleted, delta.tradesCompleted, 'tradesCompleted'),
     floorsEntered: checkedAdd(totals.floorsEntered, delta.floorsEntered, 'floorsEntered'),
     deepestDepth: Math.max(totals.deepestDepth, delta.deepestDepth),
-    discoveriesRevealed: checkedAdd(totals.discoveriesRevealed, delta.discoveriesRevealed, 'discoveriesRevealed'),
+    discoveriesRevealed: checkedAdd(
+      totals.discoveriesRevealed,
+      delta.discoveriesRevealed,
+      'discoveriesRevealed',
+    ),
     turnsElapsed: checkedAdd(totals.turnsElapsed, delta.turnsElapsed, 'turnsElapsed'),
     restsCompleted: checkedAdd(totals.restsCompleted, delta.restsCompleted, 'restsCompleted'),
   };
 }
 
-function mergedSortedUnion(existing: readonly OpaqueId[], additions: readonly OpaqueId[]): readonly OpaqueId[] {
+function mergedSortedUnion(
+  existing: readonly OpaqueId[],
+  additions: readonly OpaqueId[],
+): readonly OpaqueId[] {
   return [...new Set([...existing, ...additions])].sort(compareCodeUnits);
 }
 
@@ -100,9 +114,12 @@ function mergedDiscoveryProtection(
  * decided at run creation (4B1), not here.
  */
 export function standingsFromRecords(
-  records: readonly StoredHallRecord[], limit: number,
+  records: readonly StoredHallRecord[],
+  limit: number,
 ): readonly FallenHeroStandingSnapshot[] {
-  const eligible = records.filter((record) => record.completionType === 'died' && record.cause.depth >= 1);
+  const eligible = records.filter(
+    (record) => record.completionType === 'died' && record.cause.depth >= 1,
+  );
   const sorted = [...eligible].sort(compareHallRecords);
   const capped = sorted.slice(0, Math.max(0, Math.min(limit, MAX_STANDINGS)));
   return capped.map((record, index): FallenHeroStandingSnapshot => ({
@@ -159,7 +176,9 @@ export function createInMemoryRunRecordRepository(): RunRecordRepository {
     },
     appendRecord(stored) {
       if (hall.some((existing) => existing.recordId === stored.recordId)) {
-        throw new Error(`the immutable append-only Hall already contains record ${stored.recordId}`);
+        throw new Error(
+          `the immutable append-only Hall already contains record ${stored.recordId}`,
+        );
       }
       hall.push(deepFreezeCopy(stored));
     },
@@ -177,10 +196,17 @@ export function createInMemoryRunRecordRepository(): RunRecordRepository {
       appliedDeltaRecordIds.add(deltas.recordId);
       lifetime = {
         conqueredChampionRecordIds: mergedSortedUnion(
-          lifetime.conqueredChampionRecordIds, deltas.newlyConqueredChampionRecordIds),
+          lifetime.conqueredChampionRecordIds,
+          deltas.newlyConqueredChampionRecordIds,
+        ),
         grantedAchievementIds: mergedSortedUnion(
-          lifetime.grantedAchievementIds, deltas.achievementGrants.map((grant) => grant.achievementId)),
-        discoveryProtection: mergedDiscoveryProtection(lifetime.discoveryProtection, deltas.discoveryProtectionUpdates),
+          lifetime.grantedAchievementIds,
+          deltas.achievementGrants.map((grant) => grant.achievementId),
+        ),
+        discoveryProtection: mergedDiscoveryProtection(
+          lifetime.discoveryProtection,
+          deltas.discoveryProtectionUpdates,
+        ),
         totals: mergeMetrics(lifetime.totals, deltas.metrics),
       };
     },

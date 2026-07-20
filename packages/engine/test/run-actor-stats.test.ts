@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createDemoContentPack, createDemoRun, deriveRunActorStats, heroActor, type ActorState } from '../src/index.js';
+import {
+  createDemoContentPack,
+  createDemoRun,
+  deriveRunActorStats,
+  heroActor,
+  type ActorState,
+} from '../src/index.js';
 
 /**
  * Isolates the hero-vs-non-hero modifier gating: with equipment, conditions, and hunger held

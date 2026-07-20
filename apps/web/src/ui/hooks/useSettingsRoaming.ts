@@ -48,9 +48,12 @@ export function useSettingsRoaming(
   const settingsVersionRef = useRef(0);
   const roamedForSessionRef = useRef(false);
   const settingsPushTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => {
-    if (settingsPushTimerRef.current !== undefined) clearTimeout(settingsPushTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (settingsPushTimerRef.current !== undefined) clearTimeout(settingsPushTimerRef.current);
+    },
+    [],
+  );
 
   function pushSettings(next: Settings): void {
     if (account.status !== 'signed-in') return;
@@ -59,7 +62,10 @@ export function useSettingsRoaming(
     settingsPushTimerRef.current = setTimeout(() => {
       const nextVersion = settingsVersionRef.current + 1;
       settingsVersionRef.current = nextVersion;
-      void putProfileSettings({ settingsJson: JSON.stringify(next), settingsVersion: nextVersion, csrfToken }, fetcher);
+      void putProfileSettings(
+        { settingsJson: JSON.stringify(next), settingsVersion: nextVersion, csrfToken },
+        fetcher,
+      );
     }, 500);
   }
 
@@ -85,7 +91,11 @@ export function useSettingsRoaming(
           const nextVersion = settingsVersionRef.current + 1;
           settingsVersionRef.current = nextVersion;
           await putProfileSettings(
-            { settingsJson: JSON.stringify(settingsRef.current), settingsVersion: nextVersion, csrfToken },
+            {
+              settingsJson: JSON.stringify(settingsRef.current),
+              settingsVersion: nextVersion,
+              csrfToken,
+            },
             fetcher,
           );
         }

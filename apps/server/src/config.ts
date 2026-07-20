@@ -67,14 +67,18 @@ function parsePositiveInt(value: string | undefined, fallback: number, label: st
  * magic links to an in-memory endpoint and signing sessions with a public dev secret. Require an
  * explicit, non-localhost PUBLIC_URL instead so a misconfigured prod boot fails loudly.
  */
-function resolvePublicUrl(
-  env: NodeJS.ProcessEnv,
-): { publicUrl: string; parsedUrl: URL; isProductionShaped: boolean } {
+function resolvePublicUrl(env: NodeJS.ProcessEnv): {
+  publicUrl: string;
+  parsedUrl: URL;
+  isProductionShaped: boolean;
+} {
   const isProduction = env.NODE_ENV === 'production';
   const publicUrlEnv = readNonEmpty(env.PUBLIC_URL);
 
   if (isProduction && publicUrlEnv === undefined) {
-    throw new Error('PUBLIC_URL is required when NODE_ENV=production (set it to the public, non-localhost URL)');
+    throw new Error(
+      'PUBLIC_URL is required when NODE_ENV=production (set it to the public, non-localhost URL)',
+    );
   }
 
   const publicUrl = publicUrlEnv ?? 'http://localhost:3000';
@@ -111,10 +115,14 @@ function resolveMailgunConfig(
     (value) => value !== undefined,
   ).length;
   if (mailgunFieldsPresent > 0 && mailgunFieldsPresent < 3) {
-    throw new Error('MAILGUN_API_KEY, MAILGUN_DOMAIN, and MAILGUN_SENDER must be set together, or not at all');
+    throw new Error(
+      'MAILGUN_API_KEY, MAILGUN_DOMAIN, and MAILGUN_SENDER must be set together, or not at all',
+    );
   }
   if (isProductionShaped && mailgunFieldsPresent === 0) {
-    throw new Error('MAILGUN_API_KEY, MAILGUN_DOMAIN, and MAILGUN_SENDER are required for a non-localhost PUBLIC_URL');
+    throw new Error(
+      'MAILGUN_API_KEY, MAILGUN_DOMAIN, and MAILGUN_SENDER are required for a non-localhost PUBLIC_URL',
+    );
   }
 
   return mailgunFieldsPresent === 3

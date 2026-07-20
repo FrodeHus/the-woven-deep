@@ -17,7 +17,9 @@ const CARAVAN_GUARD = 'background.caravan-guard';
 const KEEN_EYED = 'trait.keen-eyed';
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../../../../content'),
+  });
 });
 
 function stubState(overrides: Partial<WizardState> = {}): WizardState {
@@ -26,7 +28,9 @@ function stubState(overrides: Partial<WizardState> = {}): WizardState {
 
 describe('ReviewStep', () => {
   it('renders the chosen name, calling, kit, background, and traits', () => {
-    const classEntry = pack.entries.find((entry) => entry.kind === 'class' && entry.id === WAYFARER) as {
+    const classEntry = pack.entries.find(
+      (entry) => entry.kind === 'class' && entry.id === WAYFARER,
+    ) as {
       name: string;
       kits: readonly { kitId: string; name: string }[];
     };
@@ -38,7 +42,11 @@ describe('ReviewStep', () => {
           name: 'Rin',
           method: 'point-buy',
           attributes: {
-            might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10,
+            might: 10,
+            agility: 10,
+            vitality: 10,
+            wits: 10,
+            resolve: 10,
           },
           classId: WAYFARER,
           kitId: kit.kitId,
@@ -64,7 +72,11 @@ describe('ReviewStep', () => {
         state={stubState({
           method: 'point-buy',
           attributes: {
-            might: 12, agility: 8, vitality: 9, wits: 11, resolve: 7,
+            might: 12,
+            agility: 8,
+            vitality: 9,
+            wits: 11,
+            resolve: 7,
           },
         })}
         pack={pack}

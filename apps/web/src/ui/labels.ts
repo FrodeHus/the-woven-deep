@@ -26,7 +26,11 @@ interface DiceParameter {
 function isDice(value: unknown): value is DiceParameter {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as Readonly<Record<string, unknown>>;
-  return typeof candidate.count === 'number' && typeof candidate.sides === 'number' && typeof candidate.bonus === 'number';
+  return (
+    typeof candidate.count === 'number' &&
+    typeof candidate.sides === 'number' &&
+    typeof candidate.bonus === 'number'
+  );
 }
 
 /** `1d4+1` / `1d6-1` / `2d6` -- the standard tabletop dice notation, not an invented one; `bonus`
@@ -47,7 +51,10 @@ function formatDice(dice: DiceParameter): string {
  * obvious phrasing beyond restating the number) falls back to plain `humanize(effectId)`, exactly
  * per the brief's "without inventing semantics".
  */
-export function effectLabel(effectId: string, parameters: Readonly<Record<string, unknown>>): string {
+export function effectLabel(
+  effectId: string,
+  parameters: Readonly<Record<string, unknown>>,
+): string {
   if (effectId === 'effect.heal' && isDice(parameters.dice)) {
     return `Heal ${formatDice(parameters.dice)}`;
   }

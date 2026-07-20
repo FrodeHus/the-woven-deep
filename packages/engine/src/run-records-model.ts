@@ -10,19 +10,19 @@ import type { ScoreBreakdown } from './score-run.js';
 
 export interface FallenHeroBuildSnapshot {
   readonly attributes: BaseAttributes;
-  readonly equippedItemContentIds: readonly OpaqueId[];   // sorted unique
-  readonly signatureAbilityIds: readonly OpaqueId[];      // [] in 4B3 (no hero spellbook state yet)
+  readonly equippedItemContentIds: readonly OpaqueId[]; // sorted unique
+  readonly signatureAbilityIds: readonly OpaqueId[]; // [] in 4B3 (no hero spellbook state yet)
 }
 
 export interface HallRecord {
-  readonly recordId: OpaqueId;            // deterministic: derived from run seed + content hash
+  readonly recordId: OpaqueId; // deterministic: derived from run seed + content hash
   readonly heroName: string;
   readonly classTags: readonly string[];
   readonly completionType: CompletionType;
   readonly cause: RunConclusion['cause'];
   readonly deepestDepth: number;
   readonly score: ScoreBreakdown;
-  readonly metrics: RunMetrics;           // copied snapshot
+  readonly metrics: RunMetrics; // copied snapshot
   readonly reputations: readonly FactionReputation[]; // finalized statistics
   readonly heirloom: RecordedHeirloomSnapshot;
   readonly build: FallenHeroBuildSnapshot; // engine facts feeding 4B1 standings normalization
@@ -35,9 +35,9 @@ export interface HallRecord {
  * exactly the achieved-at date and portrait/appearance. The engine never produces either value.
  */
 export interface HallRecordEnrichment {
-  readonly achievedAt: string;            // host-supplied display string, never engine-produced:
-                                          // the guest client uses "Run #N"; the server (M6) uses a date
-  readonly portraitGlyph: string;         // host-supplied appearance; '@' default
+  readonly achievedAt: string; // host-supplied display string, never engine-produced:
+  // the guest client uses "Run #N"; the server (M6) uses a date
+  readonly portraitGlyph: string; // host-supplied appearance; '@' default
 }
 
 export interface StoredHallRecord extends HallRecord {
@@ -46,7 +46,7 @@ export interface StoredHallRecord extends HallRecord {
 
 /** Lineage display combines the closed enrichment with the engine-validated hero identity. */
 export interface HeartLineageRecord {
-  readonly heroName: string;              // engine-validated at record time
+  readonly heroName: string; // engine-validated at record time
   readonly classTags: readonly string[];
   readonly hallRecordId: OpaqueId;
   readonly enrichment: HallRecordEnrichment;
@@ -60,17 +60,17 @@ export interface AchievementGrant {
 
 export interface LifetimeState {
   readonly conqueredChampionRecordIds: readonly OpaqueId[]; // sorted unique
-  readonly grantedAchievementIds: readonly OpaqueId[];      // sorted unique
+  readonly grantedAchievementIds: readonly OpaqueId[]; // sorted unique
   readonly discoveryProtection: readonly DiscoveryProtectionBonus[]; // sorted by encounterId
   readonly totals: RunMetrics;
 }
 
 export interface LifetimeDeltas {
-  readonly recordId: OpaqueId;            // idempotence key at the repository
+  readonly recordId: OpaqueId; // idempotence key at the repository
   readonly newlyConqueredChampionRecordIds: readonly OpaqueId[];
   readonly achievementGrants: readonly AchievementGrant[];
   readonly discoveryProtectionUpdates: readonly DiscoveryProtectionUpdate[];
-  readonly metrics: RunMetrics;           // this run's metrics, merged by the host
+  readonly metrics: RunMetrics; // this run's metrics, merged by the host
 }
 
 /** Encodes the run seed as 32 lowercase hex characters: each word as eight zero-padded digits. */

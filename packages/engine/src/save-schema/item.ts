@@ -1,11 +1,36 @@
 import { z } from 'zod';
-import { heroName, identifier, nullableIdentifier, positiveQuantity, safeNonNegative } from './primitives.js';
+import {
+  heroName,
+  identifier,
+  nullableIdentifier,
+  positiveQuantity,
+  safeNonNegative,
+} from './primitives.js';
 import { tile } from './floor.js';
 
 export const legacyItemLocation = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('backpack'), actorId: identifier }),
-  z.strictObject({ type: z.literal('equipped'), actorId: identifier, slot: z.enum(['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring']) }),
-  z.strictObject({ type: z.literal('floor'), floorId: identifier, x: safeNonNegative, y: safeNonNegative }),
+  z.strictObject({
+    type: z.literal('equipped'),
+    actorId: identifier,
+    slot: z.enum([
+      'main-hand',
+      'off-hand',
+      'body',
+      'head',
+      'hands',
+      'feet',
+      'neck',
+      'left-ring',
+      'right-ring',
+    ]),
+  }),
+  z.strictObject({
+    type: z.literal('floor'),
+    floorId: identifier,
+    x: safeNonNegative,
+    y: safeNonNegative,
+  }),
 ]);
 export const itemLocationV7 = z.discriminatedUnion('type', [
   ...legacyItemLocation.options,
@@ -54,9 +79,25 @@ export const featureBase = {
   coverTileId: tile,
 } as const;
 export const feature = z.discriminatedUnion('type', [
-  z.strictObject({ ...featureBase, type: z.literal('door'), state: z.enum(['open', 'closed', 'locked']) }),
-  z.strictObject({ ...featureBase, type: z.literal('trap'), state: z.enum(['armed', 'disabled', 'spent']), discoveryDifficulty: safeNonNegative, discovery }),
-  z.strictObject({ ...featureBase, type: z.literal('secret'), state: z.enum(['hidden', 'revealed']), discoveryDifficulty: safeNonNegative, discovery }),
+  z.strictObject({
+    ...featureBase,
+    type: z.literal('door'),
+    state: z.enum(['open', 'closed', 'locked']),
+  }),
+  z.strictObject({
+    ...featureBase,
+    type: z.literal('trap'),
+    state: z.enum(['armed', 'disabled', 'spent']),
+    discoveryDifficulty: safeNonNegative,
+    discovery,
+  }),
+  z.strictObject({
+    ...featureBase,
+    type: z.literal('secret'),
+    state: z.enum(['hidden', 'revealed']),
+    discoveryDifficulty: safeNonNegative,
+    discovery,
+  }),
 ]);
 
 import type { ItemInstance } from '../item-model.js';

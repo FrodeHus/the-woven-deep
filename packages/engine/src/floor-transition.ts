@@ -11,7 +11,11 @@ import type { ActiveRun } from './model.js';
 import { validateActiveRun } from './save-schema.js';
 import { compareCodeUnits } from './stable-json.js';
 import { tileDefinition } from './terrain.js';
-import { NEW_RUN_FLOOR_HEIGHT, NEW_RUN_FLOOR_THEME_SETTINGS, NEW_RUN_FLOOR_WIDTH } from './new-run.js';
+import {
+  NEW_RUN_FLOOR_HEIGHT,
+  NEW_RUN_FLOOR_THEME_SETTINGS,
+  NEW_RUN_FLOOR_WIDTH,
+} from './new-run.js';
 
 /**
  * Generates a floor identifier from a depth number with 3-digit zero-padding.
@@ -37,14 +41,19 @@ function nextFloorId(depth: number): string {
  * re-fires it. Milestones are processed in ascending order; each restocks merchants in a fixed
  * populationId order, so a given (seed, milestone) always restocks byte-identically.
  */
-function applyMerchantRestocks(input: Readonly<{
-  state: ActiveRun;
-  content: CompiledContentPack;
-}>): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+function applyMerchantRestocks(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+  }>,
+): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
   const balance = balanceEntry(input.content);
   const dueMilestones = balance.restockMilestones
-    .filter((milestone) => !input.state.restockedMilestones.includes(milestone)
-      && input.state.metrics.deepestDepth >= milestone)
+    .filter(
+      (milestone) =>
+        !input.state.restockedMilestones.includes(milestone) &&
+        input.state.metrics.deepestDepth >= milestone,
+    )
     .sort((left, right) => left - right);
   if (dueMilestones.length === 0) return { state: input.state, events: [] };
   let state = input.state;
@@ -53,9 +62,15 @@ function applyMerchantRestocks(input: Readonly<{
     const permanentMerchantIds = state.populations
       .filter((population) => population.model === 'merchant')
       .filter((population) => {
-        const encounter = input.content.entries.find((entry) => entry.id === population.encounterId);
-        return encounter !== undefined && encounter.kind === 'encounter' && encounter.model === 'merchant'
-          && encounter.definition.permanent;
+        const encounter = input.content.entries.find(
+          (entry) => entry.id === population.encounterId,
+        );
+        return (
+          encounter !== undefined &&
+          encounter.kind === 'encounter' &&
+          encounter.model === 'merchant' &&
+          encounter.definition.permanent
+        );
       })
       .map((population) => population.populationId)
       .sort(compareCodeUnits);
@@ -64,7 +79,12 @@ function applyMerchantRestocks(input: Readonly<{
       state = restocked.state;
       events.push(...restocked.events);
     }
-    state = { ...state, restockedMilestones: [...state.restockedMilestones, milestone].sort((left, right) => left - right) };
+    state = {
+      ...state,
+      restockedMilestones: [...state.restockedMilestones, milestone].sort(
+        (left, right) => left - right,
+      ),
+    };
   }
   return { state, events };
 }
@@ -113,14 +133,20 @@ export function descendToNextFloor(
   }
 
   const allocation = allocateFloorSeed(run.rng.generation);
-  const vaults = context.content.entries.filter((entry): entry is VaultContentEntry => entry.kind === 'vault');
+  const vaults = context.content.entries.filter(
+    (entry): entry is VaultContentEntry => entry.kind === 'vault',
+  );
   const generated = generateFloor({
     floorId,
     floorSeed: allocation.floorSeed,
     depth: nextDepth,
     width: NEW_RUN_FLOOR_WIDTH,
     height: NEW_RUN_FLOOR_HEIGHT,
-    theme: createClassicTheme(NEW_RUN_FLOOR_WIDTH, NEW_RUN_FLOOR_HEIGHT, NEW_RUN_FLOOR_THEME_SETTINGS),
+    theme: createClassicTheme(
+      NEW_RUN_FLOOR_WIDTH,
+      NEW_RUN_FLOOR_HEIGHT,
+      NEW_RUN_FLOOR_THEME_SETTINGS,
+    ),
     vaults,
   });
   const stairUp = generated.floor.stairUp;
@@ -128,9 +154,9 @@ export function descendToNextFloor(
 
   const moved: ActiveRun = {
     ...run,
-    actors: run.actors.map((actor) => actor.actorId === hero.actorId
-      ? { ...actor, floorId, x: stairUp.x, y: stairUp.y }
-      : actor),
+    actors: run.actors.map((actor) =>
+      actor.actorId === hero.actorId ? { ...actor, floorId, x: stairUp.x, y: stairUp.y } : actor,
+    ),
     activeFloorId: floorId,
     activeFloorEnteredAt: run.worldTime,
     // Retained command events (e.g. moves) reference coordinates on the floor being left; the
@@ -140,7 +166,9 @@ export function descendToNextFloor(
     recentCommands: [],
   };
 
-  const integrated = integrateGeneratedFloor(moved, generated, allocation, { content: context.content });
+  const integrated = integrateGeneratedFloor(moved, generated, allocation, {
+    content: context.content,
+  });
   const restocked = applyMerchantRestocks({ state: integrated.state, content: context.content });
   return { state: restocked.state, events: [...integrated.events, ...restocked.events] };
 }
@@ -153,29 +181,43 @@ export function descendToNextFloor(
  * clearing stale command history). Byte-identical RNG streams across a stored re-entry depend on
  * this function never allocating or consuming randomness.
  */
-export function enterStoredFloor(run: ActiveRun, input: Readonly<{
-  floorId: OpaqueId;
-  arrival: Point;
-}>): ActiveRun {
+export function enterStoredFloor(
+  run: ActiveRun,
+  input: Readonly<{
+    floorId: OpaqueId;
+    arrival: Point;
+  }>,
+): ActiveRun {
   const floor = run.floors.find((candidate) => candidate.floorId === input.floorId);
   if (floor === undefined) {
-    throw new Error(`enterStoredFloor requires floor ${input.floorId} to already exist in run.floors`);
+    throw new Error(
+      `enterStoredFloor requires floor ${input.floorId} to already exist in run.floors`,
+    );
   }
   const { x, y } = input.arrival;
-  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || x >= floor.width || y < 0 || y >= floor.height) {
+  if (
+    !Number.isInteger(x) ||
+    !Number.isInteger(y) ||
+    x < 0 ||
+    x >= floor.width ||
+    y < 0 ||
+    y >= floor.height
+  ) {
     throw new RangeError(`enterStoredFloor arrival (${x}, ${y}) is outside floor ${input.floorId}`);
   }
   const tileId = floor.tiles[y * floor.width + x];
   if (tileId === undefined || !tileDefinition(tileId).walkable) {
-    throw new Error(`enterStoredFloor arrival (${x}, ${y}) on floor ${input.floorId} is not walkable`);
+    throw new Error(
+      `enterStoredFloor arrival (${x}, ${y}) on floor ${input.floorId} is not walkable`,
+    );
   }
 
   const hero = heroActor(run);
   const moved: ActiveRun = {
     ...run,
-    actors: run.actors.map((actor) => actor.actorId === hero.actorId
-      ? { ...actor, floorId: input.floorId, x, y }
-      : actor),
+    actors: run.actors.map((actor) =>
+      actor.actorId === hero.actorId ? { ...actor, floorId: input.floorId, x, y } : actor,
+    ),
     activeFloorId: input.floorId,
     activeFloorEnteredAt: run.worldTime,
     // Same rationale as descendToNextFloor: retained command events reference the floor being

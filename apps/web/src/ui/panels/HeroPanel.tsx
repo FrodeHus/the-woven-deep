@@ -16,7 +16,10 @@ export function HeroPanel({ snapshot }: PanelProps): JSX.Element {
       <p>{`${heroData.health}/${heroData.maxHealth} HP`}</p>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-raised" aria-hidden="true">
         <div
-          className={cn('h-full rounded-full', healthRatio <= LOW_HEALTH_RATIO ? 'bg-danger' : 'bg-good')}
+          className={cn(
+            'h-full rounded-full',
+            healthRatio <= LOW_HEALTH_RATIO ? 'bg-danger' : 'bg-good',
+          )}
           style={{ width: `${Math.max(0, Math.min(1, healthRatio)) * 100}%` }}
         />
       </div>
@@ -24,7 +27,9 @@ export function HeroPanel({ snapshot }: PanelProps): JSX.Element {
       <p className="text-muted">{`Light: ${lightStateText(heroData.equipment)}`}</p>
       {heroData.conditions.length > 0 && (
         <ul className="flex flex-col gap-0.5">
-          {heroData.conditions.map((condition) => <li key={condition.conditionId}>{condition.name}</li>)}
+          {heroData.conditions.map((condition) => (
+            <li key={condition.conditionId}>{condition.name}</li>
+          ))}
         </ul>
       )}
       <ul className="flex flex-col gap-0.5 text-xs text-subtle">
@@ -42,7 +47,10 @@ export function HeroPanel({ snapshot }: PanelProps): JSX.Element {
 export function VitalsStrip({ snapshot }: PanelProps): JSX.Element {
   const heroData = hero(snapshot);
   return (
-    <div aria-label="Vitals" className="flex gap-4 border-b border-line bg-surface px-2 py-1 text-xs text-fg">
+    <div
+      aria-label="Vitals"
+      className="flex gap-4 border-b border-line bg-surface px-2 py-1 text-xs text-fg"
+    >
       <span>{`${heroData.health}/${heroData.maxHealth} HP`}</span>
       <span>{`Hunger: ${heroData.hungerStage}`}</span>
       <span>{`Light: ${lightStateText(heroData.equipment)}`}</span>

@@ -7,7 +7,8 @@ const repositoryRoot = fileURLToPath(new URL('../../..', import.meta.url));
 const script = fileURLToPath(new URL('../../../scripts/dungeon-demo.mjs', import.meta.url));
 const missingContent = fileURLToPath(new URL('./fixtures/missing-content', import.meta.url));
 const reviewedHashesPath = new URL('./fixtures/dungeon-demo-hashes.json', import.meta.url);
-const hashLinePattern = /^(floor-state|projection (?:absolute-darkness|low-ambient|overlapping-color|sealed-corner|remembered)) ([a-f0-9]{64})$/gm;
+const hashLinePattern =
+  /^(floor-state|projection (?:absolute-darkness|low-ambient|overlapping-color|sealed-corner|remembered)) ([a-f0-9]{64})$/gm;
 
 function run(...arguments_: string[]) {
   return spawnSync(process.execPath, [script, ...arguments_], {

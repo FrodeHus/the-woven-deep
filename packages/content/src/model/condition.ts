@@ -8,10 +8,10 @@ export const CONDITION_TRAIT_IDS = [
   'condition-trait.prevents-movement',
   'condition-trait.suppresses-reactions',
 ] as const;
-export type ConditionTraitId = typeof CONDITION_TRAIT_IDS[number];
+export type ConditionTraitId = (typeof CONDITION_TRAIT_IDS)[number];
 
 export const CONDITION_STACKING_MODES = ['replace', 'refresh', 'intensify'] as const;
-export type ConditionStackingMode = typeof CONDITION_STACKING_MODES[number];
+export type ConditionStackingMode = (typeof CONDITION_STACKING_MODES)[number];
 
 export interface ConditionContentEntry extends BaseContentEntry {
   readonly kind: 'condition';

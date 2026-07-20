@@ -35,12 +35,30 @@ describe('OverlayHost', () => {
   it('sources the codex body from the sightings prop when no session is present (title screen)', async () => {
     const user = userEvent.setup();
     const caveRat: MonsterContentEntry = {
-      id: 'monster.cave-rat', kind: 'monster', name: 'Cave Rat', tags: [], glyph: 'r', color: '#a00',
-      attributes: { might: 1, agility: 1, vitality: 1, wits: 1, resolve: 1 }, health: 4, speed: 1, accuracy: 1,
-      defense: 1, perception: 1, damage: { count: 1, sides: 4, bonus: 0 }, armor: 0,
-      resistances: {} as MonsterContentEntry['resistances'], disposition: 'hostile', behaviorId: 'behavior.approach-and-attack',
-      behaviorParameters: {}, minDepth: 1, maxDepth: 1, threat: 1, rarity: 'common',
-      lootTableId: null, dropChance: 1,
+      id: 'monster.cave-rat',
+      kind: 'monster',
+      name: 'Cave Rat',
+      tags: [],
+      glyph: 'r',
+      color: '#a00',
+      attributes: { might: 1, agility: 1, vitality: 1, wits: 1, resolve: 1 },
+      health: 4,
+      speed: 1,
+      accuracy: 1,
+      defense: 1,
+      perception: 1,
+      damage: { count: 1, sides: 4, bonus: 0 },
+      armor: 0,
+      resistances: {} as MonsterContentEntry['resistances'],
+      disposition: 'hostile',
+      behaviorId: 'behavior.approach-and-attack',
+      behaviorParameters: {},
+      minDepth: 1,
+      maxDepth: 1,
+      threat: 1,
+      rarity: 'common',
+      lootTableId: null,
+      dropChance: 1,
     };
     const pack = { entries: [caveRat] } as unknown as CompiledContentPack;
 

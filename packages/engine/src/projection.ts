@@ -1,13 +1,22 @@
 import type {
-  CompiledContentPack, CompletionType, ItemContentEntry, MerchantEncounterContentEntry, MerchantServiceId,
+  CompiledContentPack,
+  CompletionType,
+  ItemContentEntry,
+  MerchantEncounterContentEntry,
+  MerchantServiceId,
 } from '@woven-deep/content';
 import { heroActor, heroPerception } from './actor-model.js';
 import { entryById } from './content-index.js';
 import { deriveActorStats } from './attributes.js';
 import { balanceEntry } from './actions.js';
 import {
-  factionReputation, guaranteedUniqueItemIds, merchantAcceptsItem,
-  quoteMerchantPurchase, quoteMerchantSale, quoteMerchantService, reputationTier,
+  factionReputation,
+  guaranteedUniqueItemIds,
+  merchantAcceptsItem,
+  quoteMerchantPurchase,
+  quoteMerchantSale,
+  quoteMerchantService,
+  reputationTier,
 } from './commerce.js';
 import { conditionDefinition } from './conditions.js';
 import { projectFeature } from './features.js';
@@ -16,7 +25,14 @@ import { isExplored, rememberedTile, validateKnowledgePacking } from './knowledg
 import type { IlluminationField, RgbColor } from './light-model.js';
 import { computeIllumination } from './lighting.js';
 import type { MerchantPopulation } from './merchant-model.js';
-import { assertOpaqueId, tileIndex, type ActiveRun, type OpaqueId, type PublicDecision, type TileId } from './model.js';
+import {
+  assertOpaqueId,
+  tileIndex,
+  type ActiveRun,
+  type OpaqueId,
+  type PublicDecision,
+  type TileId,
+} from './model.js';
 import type { RecordedHeirloomSnapshot } from './population-model.js';
 import { type PerceptionFloor, type PerceptionHero } from './perception.js';
 import { heroFloorPerception } from './run-perception.js';
@@ -100,15 +116,18 @@ function assertByte(value: unknown, label: string): asserts value is number {
 }
 
 function validateColor(value: unknown, label: string): asserts value is RgbColor {
-  if (!Array.isArray(value) || value.length !== 3) throw new TypeError(`${label} must contain exactly three channels`);
-  for (let channel = 0; channel < 3; channel += 1) assertByte(value[channel], `${label} channel ${channel}`);
+  if (!Array.isArray(value) || value.length !== 3)
+    throw new TypeError(`${label} must contain exactly three channels`);
+  for (let channel = 0; channel < 3; channel += 1)
+    assertByte(value[channel], `${label} channel ${channel}`);
 }
 
 function validateChannel(channel: readonly number[], cellCount: number, label: string): void {
   if (!Array.isArray(channel) || channel.length !== cellCount) {
     throw new RangeError(`${label} length must be ${cellCount}`);
   }
-  for (let index = 0; index < cellCount; index += 1) assertByte(channel[index], `${label} ${index}`);
+  for (let index = 0; index < cellCount; index += 1)
+    assertByte(channel[index], `${label} ${index}`);
 }
 
 function validateVisibility(words: readonly number[], cellCount: number): void {
@@ -123,12 +142,16 @@ function validateVisibility(words: readonly number[], cellCount: number): void {
     }
   }
   const usedBits = cellCount % 32;
-  if (usedBits !== 0 && ((words[words.length - 1]! >>> usedBits) !== 0)) {
+  if (usedBits !== 0 && words[words.length - 1]! >>> usedBits !== 0) {
     throw new TypeError('visibility word padding must be zero');
   }
 }
 
-function validateDerivedFields(input: ProjectFloorInput, expectedVisibility: readonly number[], cellCount: number): void {
+function validateDerivedFields(
+  input: ProjectFloorInput,
+  expectedVisibility: readonly number[],
+  cellCount: number,
+): void {
   validateVisibility(input.visibilityWords, cellCount);
   for (let index = 0; index < expectedVisibility.length; index += 1) {
     if (input.visibilityWords[index] !== expectedVisibility[index]) {
@@ -153,10 +176,13 @@ function validateDerivedFields(input: ProjectFloorInput, expectedVisibility: rea
 
 function validateRefreshedKnowledge(input: ProjectFloorInput, cellCount: number): void {
   for (let index = 0; index < cellCount; index += 1) {
-    const currentlyVisible = isVisible(input.visibilityWords, index) && input.illumination.intensity[index]! > 0;
+    const currentlyVisible =
+      isVisible(input.visibilityWords, index) && input.illumination.intensity[index]! > 0;
     if (!currentlyVisible) continue;
-    if (!isExplored(input.floor.knowledge, index)
-      || rememberedTile(input.floor.knowledge, index) !== input.floor.tiles[index]) {
+    if (
+      !isExplored(input.floor.knowledge, index) ||
+      rememberedTile(input.floor.knowledge, index) !== input.floor.tiles[index]
+    ) {
       throw new TypeError(`visible cell ${index} must agree with refreshed knowledge`);
     }
   }
@@ -166,18 +192,29 @@ function collectFixtures(floor: PerceptionFloor): ReadonlyMap<number, FixturePre
   const presented = floor.lights
     .filter((light) => light.location.type === 'fixed' && light.presentation !== null)
     .slice()
-    .sort((left, right) => left.lightId < right.lightId ? -1 : left.lightId > right.lightId ? 1 : 0);
+    .sort((left, right) =>
+      left.lightId < right.lightId ? -1 : left.lightId > right.lightId ? 1 : 0,
+    );
   const fixtures = new Map<number, FixturePresentation>();
 
   for (const light of presented) {
     assertOpaqueId(light.lightId, 'fixture lightId');
     if (light.location.type !== 'fixed' || light.presentation === null) continue;
     const { x, y } = light.location;
-    if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)
-      || x < 0 || x >= floor.width || y < 0 || y >= floor.height) {
+    if (
+      !Number.isSafeInteger(x) ||
+      !Number.isSafeInteger(y) ||
+      x < 0 ||
+      x >= floor.width ||
+      y < 0 ||
+      y >= floor.height
+    ) {
       throw new RangeError(`fixture ${light.lightId} location must be within the floor`);
     }
-    if (typeof light.presentation.glyph !== 'string' || [...light.presentation.glyph].length !== 1) {
+    if (
+      typeof light.presentation.glyph !== 'string' ||
+      [...light.presentation.glyph].length !== 1
+    ) {
       throw new TypeError(`fixture ${light.lightId} glyph must be one Unicode glyph`);
     }
     assertOpaqueId(light.presentation.token, `fixture ${light.lightId} token`);
@@ -198,14 +235,16 @@ function computePreview(input: ProjectFloorInput): readonly number[] | undefined
   const cellCount = input.floor.width * input.floor.height;
   const previewTiles: TileId[] = [];
   for (let index = 0; index < cellCount; index += 1) {
-    const currentlyVisible = isVisible(input.visibilityWords, index) && input.illumination.intensity[index]! > 0;
+    const currentlyVisible =
+      isVisible(input.visibilityWords, index) && input.illumination.intensity[index]! > 0;
     if (currentlyVisible) {
       previewTiles.push(input.floor.tiles[index]!);
       continue;
     }
     if (isExplored(input.floor.knowledge, index)) {
       const tileId = rememberedTile(input.floor.knowledge, index);
-      if (tileId === undefined) throw new TypeError(`explored cell ${index} must have remembered terrain`);
+      if (tileId === undefined)
+        throw new TypeError(`explored cell ${index} must have remembered terrain`);
       previewTiles.push(tileId);
       continue;
     }
@@ -216,17 +255,19 @@ function computePreview(input: ProjectFloorInput): readonly number[] | undefined
     height: input.floor.height,
     tiles: previewTiles,
     ambient: { color: [0, 0, 0], strength: 0 },
-    lights: [{
-      lightId: 'preview.light',
-      location: { type: 'fixed', x: input.hero.x, y: input.hero.y },
-      color: input.preview.color,
-      radius: input.preview.radius,
-      strength: input.preview.strength,
-      enabled: true,
-      falloff: input.preview.falloff,
-      vaultPlacementId: null,
-      presentation: null,
-    }],
+    lights: [
+      {
+        lightId: 'preview.light',
+        location: { type: 'fixed', x: input.hero.x, y: input.hero.y },
+        color: input.preview.color,
+        radius: input.preview.radius,
+        strength: input.preview.strength,
+        enabled: true,
+        falloff: input.preview.falloff,
+        vaultPlacementId: null,
+        presentation: null,
+      },
+    ],
     actors: new Map(),
   });
   return field.intensity;
@@ -256,7 +297,8 @@ export function projectFloor(input: ProjectFloorInput): ObservableFloorProjectio
   for (let index = 0; index < cellCount; index += 1) {
     const x = index % input.floor.width;
     const y = Math.floor(index / input.floor.width);
-    const currentlyVisible = isVisible(input.visibilityWords, index) && input.illumination.intensity[index]! > 0;
+    const currentlyVisible =
+      isVisible(input.visibilityWords, index) && input.illumination.intensity[index]! > 0;
     const explored = isExplored(input.floor.knowledge, index);
 
     if (input.lightOut !== undefined) {
@@ -265,9 +307,15 @@ export function projectFloor(input: ProjectFloorInput): ObservableFloorProjectio
         const tileId = input.floor.tiles[index]!;
         const terrain = tileDefinition(tileId);
         cells.push({
-          index, x, y, knowledge: 'visible', tileId,
-          glyph: terrain.glyph, token: terrain.token,
-          intensity: LIGHT_OUT_BUBBLE_INTENSITY, tint: LIGHT_OUT_BUBBLE_TINT,
+          index,
+          x,
+          y,
+          knowledge: 'visible',
+          tileId,
+          glyph: terrain.glyph,
+          token: terrain.token,
+          intensity: LIGHT_OUT_BUBBLE_INTENSITY,
+          tint: LIGHT_OUT_BUBBLE_TINT,
         });
         continue;
       }
@@ -286,11 +334,19 @@ export function projectFloor(input: ProjectFloorInput): ObservableFloorProjectio
       const tileId = rememberedTile(input.floor.knowledge, index)!;
       const terrain = tileDefinition(tileId);
       const cell: ObservableCell = {
-        index, x, y, knowledge: 'remembered', tileId,
-        glyph: terrain.glyph, token: terrain.token, intensity: 24,
+        index,
+        x,
+        y,
+        knowledge: 'remembered',
+        tileId,
+        glyph: terrain.glyph,
+        token: terrain.token,
+        intensity: 24,
       };
       const preview = previewIntensity?.[index];
-      cells.push(preview !== undefined && preview > 0 ? { ...cell, previewIntensity: preview } : cell);
+      cells.push(
+        preview !== undefined && preview > 0 ? { ...cell, previewIntensity: preview } : cell,
+      );
       continue;
     }
 
@@ -302,24 +358,37 @@ export function projectFloor(input: ProjectFloorInput): ObservableFloorProjectio
       input.illumination.blue[index]!,
     ];
     const cell: ObservableCell = {
-      index, x, y, knowledge: 'visible', tileId,
-      glyph: terrain.glyph, token: terrain.token,
-      intensity: input.illumination.intensity[index]!, tint,
+      index,
+      x,
+      y,
+      knowledge: 'visible',
+      tileId,
+      glyph: terrain.glyph,
+      token: terrain.token,
+      intensity: input.illumination.intensity[index]!,
+      tint,
     };
     const preview = previewIntensity?.[index];
-    const withPreview: ObservableCell = preview !== undefined && preview > 0
-      ? { ...cell, previewIntensity: preview }
-      : cell;
+    const withPreview: ObservableCell =
+      preview !== undefined && preview > 0 ? { ...cell, previewIntensity: preview } : cell;
     const fixture = fixtures.get(index);
-    cells.push(fixture === undefined ? withPreview : {
-      ...withPreview,
-      fixture: { lightId: fixture.lightId, glyph: fixture.glyph, token: fixture.token },
-    });
+    cells.push(
+      fixture === undefined
+        ? withPreview
+        : {
+            ...withPreview,
+            fixture: { lightId: fixture.lightId, glyph: fixture.glyph, token: fixture.token },
+          },
+    );
   }
 
   return {
-    floorId: input.floor.floorId, depth: input.floor.depth, town: input.floor.depth === 0,
-    width: input.floor.width, height: input.floor.height, cells,
+    floorId: input.floor.floorId,
+    depth: input.floor.depth,
+    town: input.floor.depth === 0,
+    width: input.floor.width,
+    height: input.floor.height,
+    cells,
   };
 }
 
@@ -330,10 +399,20 @@ export interface ObservableTradeProjection {
   readonly factionName: string;
   readonly reputationTier: string;
   readonly currency: number;
-  readonly stock: readonly Readonly<{ item: Readonly<Record<string, unknown>>; quantity: number; unitPrice: number }>[];
-  readonly saleOffers: readonly Readonly<{ itemId: OpaqueId; quantity: number; unitPrice: number }>[];
+  readonly stock: readonly Readonly<{
+    item: Readonly<Record<string, unknown>>;
+    quantity: number;
+    unitPrice: number;
+  }>[];
+  readonly saleOffers: readonly Readonly<{
+    itemId: OpaqueId;
+    quantity: number;
+    unitPrice: number;
+  }>[];
   readonly services: readonly Readonly<{
-    serviceId: MerchantServiceId; unitPrice: number; remainingUses: number;
+    serviceId: MerchantServiceId;
+    unitPrice: number;
+    remainingUses: number;
     targetItemIds: readonly OpaqueId[];
   }>[];
 }
@@ -362,13 +441,18 @@ export interface GameplayProjection {
    * projection change for the guest-interface milestone (Task 8): it feeds the guest client's
    * session-only sighting cache for the unlock codex, and nothing else reads or requires it.
    */
-  readonly actors: readonly (Readonly<Record<string, unknown>> & { readonly contentId: OpaqueId | null })[];
+  readonly actors: readonly (Readonly<Record<string, unknown>> & {
+    readonly contentId: OpaqueId | null;
+  })[];
   readonly features: readonly Readonly<Record<string, unknown>>[];
   readonly groundItems: readonly Readonly<Record<string, unknown>>[];
   readonly actions: readonly Readonly<{ type: string; cost: number }>[];
   readonly trade?: ObservableTradeProjection;
   readonly metrics: RunMetrics;
-  readonly conclusion: Readonly<{ completionType: CompletionType; cause: RunConclusion['cause'] }> | null;
+  readonly conclusion: Readonly<{
+    completionType: CompletionType;
+    cause: RunConclusion['cause'];
+  }> | null;
   /**
    * The active floor's authored placement slots -- only ever populated on the town floor (depth
    * 0). Dungeon-floor placement slots can mark not-yet-discovered monster/item/trap/objective
@@ -388,18 +472,22 @@ export interface GameplayProjection {
  * identifier, else the caller has attached the wrong hero's Hall record and the projection throws
  * rather than leak it. Returns `null` while the run is still in progress.
  */
-export function projectRunConclusion(input: Readonly<{
-  run: ActiveRun;
-  record: HallRecord | null;
-  achievements: readonly AchievementGrant[];
-}>): RunConclusionProjection | null {
+export function projectRunConclusion(
+  input: Readonly<{
+    run: ActiveRun;
+    record: HallRecord | null;
+    achievements: readonly AchievementGrant[];
+  }>,
+): RunConclusionProjection | null {
   const { run, record, achievements } = input;
   const { conclusion } = run;
   if (conclusion === null) return null;
   if (record !== null) {
     const expectedRecordId = deriveHallRecordId(run.runSeed, run.contentHash);
     if (record.recordId !== expectedRecordId) {
-      throw new Error(`run conclusion record provenance mismatch: expected ${expectedRecordId}, got ${record.recordId}`);
+      throw new Error(
+        `run conclusion record provenance mismatch: expected ${expectedRecordId}, got ${record.recordId}`,
+      );
     }
   }
   return {
@@ -429,19 +517,25 @@ export interface RunConclusionProjection {
  * `departureAt` deadline never influences anything beyond the availability boolean.
  */
 function visibleMerchantState(
-  state: ActiveRun, content: CompiledContentPack, population: MerchantPopulation,
+  state: ActiveRun,
+  content: CompiledContentPack,
+  population: MerchantPopulation,
 ): Readonly<Record<string, unknown>> {
   const faction = merchantFaction(content, population.factionId);
   const tier = reputationTier(factionReputation(state, faction), faction);
-  const urgentWarning = population.emittedWarningThresholds.length === 0
-    ? undefined : Math.min(...population.emittedWarningThresholds);
+  const urgentWarning =
+    population.emittedWarningThresholds.length === 0
+      ? undefined
+      : Math.min(...population.emittedWarningThresholds);
   return {
     factionName: faction.name,
     reputationTier: tier.tierId,
-    tradeAvailable: population.lifecycle === 'available' && tier.acceptsTrade
+    tradeAvailable:
+      population.lifecycle === 'available' &&
+      tier.acceptsTrade &&
       // `null` marks a permanent merchant, which never departs and so is always trade-available
       // with respect to departure.
-      && (population.departureAt === null || population.departureAt > state.worldTime),
+      (population.departureAt === null || population.departureAt > state.worldTime),
     ...(urgentWarning === undefined ? {} : { departureWarning: urgentWarning }),
   };
 }
@@ -453,17 +547,22 @@ function visibleMerchantState(
  * sorted by code-unit identifier.
  */
 function projectActiveTrade(
-  state: ActiveRun, content: CompiledContentPack,
+  state: ActiveRun,
+  content: CompiledContentPack,
 ): ObservableTradeProjection | undefined {
   const trade = state.activeTrade;
   if (trade === null || !activeTradeValidIgnoringDeparture(state, content)) return undefined;
-  const population = state.populations.find((candidate): candidate is MerchantPopulation =>
-    candidate.model === 'merchant' && candidate.populationId === trade.merchantPopulationId);
+  const population = state.populations.find(
+    (candidate): candidate is MerchantPopulation =>
+      candidate.model === 'merchant' && candidate.populationId === trade.merchantPopulationId,
+  );
   const actor = state.actors.find((candidate) => candidate.actorId === trade.merchantActorId);
-  const encounterEntry = population === undefined ? undefined
-    : entryById(content, population.encounterId);
+  const encounterEntry =
+    population === undefined ? undefined : entryById(content, population.encounterId);
   const encounter: MerchantEncounterContentEntry | undefined =
-    encounterEntry?.kind === 'encounter' && encounterEntry.model === 'merchant' ? encounterEntry : undefined;
+    encounterEntry?.kind === 'encounter' && encounterEntry.model === 'merchant'
+      ? encounterEntry
+      : undefined;
   if (!population || !actor || !encounter) return undefined;
   const faction = merchantFaction(content, population.factionId);
   const tier = reputationTier(factionReputation(state, faction), faction);
@@ -472,53 +571,72 @@ function projectActiveTrade(
     const entry = entryById(content, contentId);
     return entry?.kind === 'item' ? entry : undefined;
   };
-  const stock = [...population.stockItemIds]
-    .sort(compareCodeUnits)
-    .flatMap((itemId) => {
-      const item = state.items.find((candidate) => candidate.itemId === itemId);
-      const definition = item === undefined ? undefined : itemEntry(item.contentId);
-      if (!item || !definition) return [];
-      return [{
+  const stock = [...population.stockItemIds].sort(compareCodeUnits).flatMap((itemId) => {
+    const item = state.items.find((candidate) => candidate.itemId === itemId);
+    const definition = item === undefined ? undefined : itemEntry(item.contentId);
+    if (!item || !definition) return [];
+    return [
+      {
         item: projectItem({ run: state, content, itemId }),
         quantity: item.quantity,
-        unitPrice: quoteMerchantPurchase({ basePrice: definition.price,
-          merchantBps: encounter.definition.merchantSaleBps, factionBps: tier.purchasePriceBps }),
-      }];
-    });
+        unitPrice: quoteMerchantPurchase({
+          basePrice: definition.price,
+          merchantBps: encounter.definition.merchantSaleBps,
+          factionBps: tier.purchasePriceBps,
+        }),
+      },
+    ];
+  });
   const uniqueItemIds = guaranteedUniqueItemIds(content);
   const saleOffers = state.items
     .filter((item) => item.location.type === 'backpack' && item.location.actorId === hero.actorId)
     .sort((left, right) => compareCodeUnits(left.itemId, right.itemId))
     .flatMap((item) => {
       const definition = itemEntry(item.contentId);
-      if (!definition || !merchantAcceptsItem(item, definition, encounter, uniqueItemIds)) return [];
-      return [{
-        itemId: item.itemId,
-        quantity: item.quantity,
-        unitPrice: quoteMerchantSale({ basePrice: definition.price,
-          merchantBps: encounter.definition.merchantPurchaseBps, factionBps: tier.salePriceBps }),
-      }];
+      if (!definition || !merchantAcceptsItem(item, definition, encounter, uniqueItemIds))
+        return [];
+      return [
+        {
+          itemId: item.itemId,
+          quantity: item.quantity,
+          unitPrice: quoteMerchantSale({
+            basePrice: definition.price,
+            merchantBps: encounter.definition.merchantPurchaseBps,
+            factionBps: tier.salePriceBps,
+          }),
+        },
+      ];
     });
   const identifyTargetIds = state.items
-    .filter((item) => (item.location.type === 'backpack' || item.location.type === 'equipped')
-      && item.location.actorId === hero.actorId)
+    .filter(
+      (item) =>
+        (item.location.type === 'backpack' || item.location.type === 'equipped') &&
+        item.location.actorId === hero.actorId,
+    )
     .filter((item) => {
       const definition = itemEntry(item.contentId);
       if (!definition) return false;
       const appearanceId = state.identification.appearanceByContentId[item.contentId];
-      const appearanceUnknown = definition.identification.mode === 'shuffled' && appearanceId !== undefined
-        && !state.identification.knownAppearanceIds.includes(appearanceId);
+      const appearanceUnknown =
+        definition.identification.mode === 'shuffled' &&
+        appearanceId !== undefined &&
+        !state.identification.knownAppearanceIds.includes(appearanceId);
       return !item.identified || appearanceUnknown;
     })
     .map((item) => item.itemId)
     .sort(compareCodeUnits);
   const services = [...population.services]
-    .filter((service) => tier.serviceIds.includes(service.serviceId)
-      && service.tierIds.includes(tier.tierId))
+    .filter(
+      (service) =>
+        tier.serviceIds.includes(service.serviceId) && service.tierIds.includes(tier.tierId),
+    )
     .sort((left, right) => compareCodeUnits(left.serviceId, right.serviceId))
     .map((service) => ({
       serviceId: service.serviceId,
-      unitPrice: quoteMerchantService({ basePrice: service.basePrice, factionBps: tier.purchasePriceBps }),
+      unitPrice: quoteMerchantService({
+        basePrice: service.basePrice,
+        factionBps: tier.purchasePriceBps,
+      }),
       remainingUses: service.remainingUses,
       targetItemIds: identifyTargetIds,
     }));
@@ -529,7 +647,9 @@ function projectActiveTrade(
     factionName: faction.name,
     reputationTier: tier.tierId,
     currency: state.hero.currency,
-    stock, saleOffers, services,
+    stock,
+    saleOffers,
+    services,
   };
 }
 
@@ -544,17 +664,29 @@ function projectionPerception(state: ActiveRun, content: CompiledContentPack) {
   };
 }
 
-function visiblyOccupied(input: ReturnType<typeof projectionPerception>, x: number, y: number): boolean {
+function visiblyOccupied(
+  input: ReturnType<typeof projectionPerception>,
+  x: number,
+  y: number,
+): boolean {
   const index = tileIndex(input.floor, x, y);
-  return index !== undefined && isVisible(input.visibilityWords, index)
-    && input.illumination.intensity[index]! > 0;
+  return (
+    index !== undefined &&
+    isVisible(input.visibilityWords, index) &&
+    input.illumination.intensity[index]! > 0
+  );
 }
 
 function projectedOwnedItem(state: ActiveRun, content: CompiledContentPack, itemId: OpaqueId) {
   const item = state.items.find((candidate) => candidate.itemId === itemId)!;
   const projected = projectItem({ run: state, content, itemId });
-  return { ...projected, condition: item.condition,
-    ...('contentId' in projected ? { charges: item.charges } : {}), fuel: item.fuel, enabled: item.enabled };
+  return {
+    ...projected,
+    condition: item.condition,
+    ...('contentId' in projected ? { charges: item.charges } : {}),
+    fuel: item.fuel,
+    enabled: item.enabled,
+  };
 }
 
 type Observed = ReturnType<typeof projectionPerception>;
@@ -567,36 +699,62 @@ type BalanceRules = ReturnType<typeof balanceEntry>;
  * backpack/equipment/conditions. Condition timers freeze in town (depth 0), matching the engine's
  * own town time-freeze.
  */
-function projectHeroView(input: Readonly<{
-  state: ActiveRun; content: CompiledContentPack; observed: Observed;
-  derived: DerivedHeroStats; rules: BalanceRules;
-}>): Readonly<Record<string, unknown>> {
+function projectHeroView(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    observed: Observed;
+    derived: DerivedHeroStats;
+    rules: BalanceRules;
+  }>,
+): Readonly<Record<string, unknown>> {
   const { state, content, observed, derived, rules } = input;
   const { hero } = observed;
   const backpack = state.items
     .filter((item) => item.location.type === 'backpack' && item.location.actorId === hero.actorId)
-    .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)
+    .sort((left, right) => (left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0))
     .map((item) => projectedOwnedItem(state, content, item.itemId));
-  const equipment = Object.fromEntries(Object.entries(hero.equipment).map(([slot, itemId]) => [
-    slot, itemId === null ? null : projectedOwnedItem(state, content, itemId),
-  ]));
+  const equipment = Object.fromEntries(
+    Object.entries(hero.equipment).map(([slot, itemId]) => [
+      slot,
+      itemId === null ? null : projectedOwnedItem(state, content, itemId),
+    ]),
+  );
   const townFrozen = observed.floor.depth === 0;
   const conditions = hero.conditions.map((condition) => {
     const definition = conditionDefinition(content, condition.conditionId);
-    const remaining = condition.expiresAt === null || townFrozen
-      ? null
-      : condition.expiresAt - state.worldTime;
-    return { conditionId: definition.id, name: definition.name, color: definition.color,
-      stacks: condition.stacks, remaining };
+    const remaining =
+      condition.expiresAt === null || townFrozen ? null : condition.expiresAt - state.worldTime;
+    return {
+      conditionId: definition.id,
+      name: definition.name,
+      color: definition.color,
+      stacks: condition.stacks,
+      remaining,
+    };
   });
   return {
-    actorId: hero.actorId, name: state.hero.name, x: hero.x, y: hero.y,
+    actorId: hero.actorId,
+    name: state.hero.name,
+    x: hero.x,
+    y: hero.y,
     attributes: { ...hero.attributes },
-    derived: Object.fromEntries(Object.entries(derived).map(([name, value]) => [name, {
-      value, formula: { ...(rules.formulas[name] ?? {}) },
-    }])),
-    health: hero.health, maxHealth: hero.maxHealth, sightRadius: state.hero.sightRadius,
-    hungerStage: state.survival.hungerStage, conditions, equipment, backpack,
+    derived: Object.fromEntries(
+      Object.entries(derived).map(([name, value]) => [
+        name,
+        {
+          value,
+          formula: { ...(rules.formulas[name] ?? {}) },
+        },
+      ]),
+    ),
+    health: hero.health,
+    maxHealth: hero.maxHealth,
+    sightRadius: state.hero.sightRadius,
+    hungerStage: state.survival.hungerStage,
+    conditions,
+    equipment,
+    backpack,
     backpackCapacity: state.hero.backpackCapacity,
     knownAppearanceIds: [...state.identification.knownAppearanceIds],
   };
@@ -607,28 +765,39 @@ function projectHeroView(input: Readonly<{
  * population-model-specific presentation blocks apply (swarm source / boss phase / merchant trade
  * state / champion-echo loadout / group leadership / visible intent) and its health band.
  */
-function projectActor(input: Readonly<{
-  state: ActiveRun; content: CompiledContentPack; heroActorId: OpaqueId;
-  actor: ActiveRun['actors'][number];
-}>): Readonly<Record<string, unknown>> & { readonly contentId: OpaqueId | null } {
+function projectActor(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    heroActorId: OpaqueId;
+    actor: ActiveRun['actors'][number];
+  }>,
+): Readonly<Record<string, unknown>> & { readonly contentId: OpaqueId | null } {
   const { state, content, heroActorId, actor } = input;
   const definition = entryById(content, actor.contentId);
-  const population = state.populations.find((candidate) => candidate.populationId === actor.populationId);
-  const encounter = population === undefined ? undefined : entryById(content, population.encounterId);
-  const presentation = actor.populationPresentation ?? (definition?.kind === 'monster'
-    ? { name: definition.name, glyph: definition.glyph, color: definition.color } : {});
+  const population = state.populations.find(
+    (candidate) => candidate.populationId === actor.populationId,
+  );
+  const encounter =
+    population === undefined ? undefined : entryById(content, population.encounterId);
+  const presentation =
+    actor.populationPresentation ??
+    (definition?.kind === 'monster'
+      ? { name: definition.name, glyph: definition.glyph, color: definition.color }
+      : {});
   const healthRatio = actor.maxHealth === 0 ? 0 : actor.health / actor.maxHealth;
   const healthBand = healthRatio >= 0.75 ? 'healthy' : healthRatio >= 0.4 ? 'wounded' : 'critical';
-  const sourceState = population?.model === 'swarm' && population.sourceActorId === actor.actorId
-    ? { source: true, sourceState: population.shutdownState === null ? 'active' : population.shutdownState,
-      growthWarning: population.shutdownState === null ? 'may-spawn' : 'contained' }
-    : {};
-  const bossState = population?.model === 'boss'
-    ? { bossPhase: population.currentPhaseId }
-    : {};
-  const merchantState = population?.model === 'merchant'
-    ? visibleMerchantState(state, content, population)
-    : {};
+  const sourceState =
+    population?.model === 'swarm' && population.sourceActorId === actor.actorId
+      ? {
+          source: true,
+          sourceState: population.shutdownState === null ? 'active' : population.shutdownState,
+          growthWarning: population.shutdownState === null ? 'may-spawn' : 'contained',
+        }
+      : {};
+  const bossState = population?.model === 'boss' ? { bossPhase: population.currentPhaseId } : {};
+  const merchantState =
+    population?.model === 'merchant' ? visibleMerchantState(state, content, population) : {};
   // The one permitted projection change this milestone (Task 8): the perceived actor's own
   // content id, so the guest client can accumulate a session sighting cache for the unlock
   // codex. Never the hero -- the hero is already excluded from `actors` entirely (the caller's
@@ -640,62 +809,107 @@ function projectActor(input: Readonly<{
   // `name`/`glyph`/`color` (via `populationPresentation`, above) are the only identity these
   // actors already disclose -- mirroring exactly that (nothing more) is the discipline the
   // brief asks for.
-  const perceivedContentId = (population?.model === 'champion' || population?.model === 'echo')
-    ? null : actor.contentId;
-  return { actorId: actor.actorId, contentId: perceivedContentId, ...presentation,
-    ...((population?.model === 'champion' || population?.model === 'echo') ? {
-      equipmentContentIds: population.equipmentContentIds,
-      abilityIds: population.abilityIds,
-    } : {}),
-    ...sourceState, ...bossState, ...merchantState,
-    x: actor.x, y: actor.y, health: actor.health, maxHealth: actor.maxHealth,
+  const perceivedContentId =
+    population?.model === 'champion' || population?.model === 'echo' ? null : actor.contentId;
+  return {
+    actorId: actor.actorId,
+    contentId: perceivedContentId,
+    ...presentation,
+    ...(population?.model === 'champion' || population?.model === 'echo'
+      ? {
+          equipmentContentIds: population.equipmentContentIds,
+          abilityIds: population.abilityIds,
+        }
+      : {}),
+    ...sourceState,
+    ...bossState,
+    ...merchantState,
+    x: actor.x,
+    y: actor.y,
+    health: actor.health,
+    maxHealth: actor.maxHealth,
     healthPresentation: { current: actor.health, maximum: actor.maxHealth, band: healthBand },
     disposition: relationshipBetween(state, heroActorId, actor.actorId),
-    ...((encounter?.kind === 'encounter' && encounter.intentPresentation.visible) ? {
-      intent: actor.behaviorState.intent,
-      intentPresentation: `intent.${actor.behaviorState.intent}`,
-    } : {}),
+    ...(encounter?.kind === 'encounter' && encounter.intentPresentation.visible
+      ? {
+          intent: actor.behaviorState.intent,
+          intentPresentation: `intent.${actor.behaviorState.intent}`,
+        }
+      : {}),
     ...(population?.model === 'group' && population.leaderActorId === actor.actorId
-      ? { leadershipRole: actor.populationRoleId } : {}),
+      ? { leadershipRole: actor.populationRoleId }
+      : {}),
   };
 }
 
 /** Every currently-perceived non-hero living actor on the hero's floor, sorted by actor id. */
-function projectVisibleActors(input: Readonly<{
-  state: ActiveRun; content: CompiledContentPack; observed: Observed;
-}>): readonly (Readonly<Record<string, unknown>> & { readonly contentId: OpaqueId | null })[] {
+function projectVisibleActors(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    observed: Observed;
+  }>,
+): readonly (Readonly<Record<string, unknown>> & { readonly contentId: OpaqueId | null })[] {
   const { state, content, observed } = input;
   const { hero } = observed;
-  return state.actors.filter((actor) => actor.actorId !== hero.actorId
-    && actor.floorId === hero.floorId && actor.health > 0 && visiblyOccupied(observed, actor.x, actor.y))
-    .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0)
+  return state.actors
+    .filter(
+      (actor) =>
+        actor.actorId !== hero.actorId &&
+        actor.floorId === hero.floorId &&
+        actor.health > 0 &&
+        visiblyOccupied(observed, actor.x, actor.y),
+    )
+    .sort((left, right) =>
+      left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0,
+    )
     .map((actor) => projectActor({ state, content, heroActorId: hero.actorId, actor }));
 }
 
 /** Every currently-perceived feature on the hero's floor, sorted by feature id. */
-function projectVisibleFeatures(input: Readonly<{
-  state: ActiveRun; observed: Observed;
-}>): readonly Readonly<Record<string, unknown>>[] {
+function projectVisibleFeatures(
+  input: Readonly<{
+    state: ActiveRun;
+    observed: Observed;
+  }>,
+): readonly Readonly<Record<string, unknown>>[] {
   const { state, observed } = input;
   const { hero } = observed;
-  return state.features.filter((feature) => feature.floorId === hero.floorId
-    && visiblyOccupied(observed, feature.x, feature.y))
-    .sort((left, right) => left.featureId < right.featureId ? -1 : left.featureId > right.featureId ? 1 : 0)
-    .map((feature) => projectFeature(feature, hero.actorId)).filter((feature) => feature !== undefined);
+  return state.features
+    .filter(
+      (feature) =>
+        feature.floorId === hero.floorId && visiblyOccupied(observed, feature.x, feature.y),
+    )
+    .sort((left, right) =>
+      left.featureId < right.featureId ? -1 : left.featureId > right.featureId ? 1 : 0,
+    )
+    .map((feature) => projectFeature(feature, hero.actorId))
+    .filter((feature) => feature !== undefined);
 }
 
 /** Every currently-perceived floor item on the hero's floor, each tagged with its coordinates. */
-function projectGroundItems(input: Readonly<{
-  state: ActiveRun; content: CompiledContentPack; observed: Observed;
-}>): readonly Readonly<Record<string, unknown>>[] {
+function projectGroundItems(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    observed: Observed;
+  }>,
+): readonly Readonly<Record<string, unknown>>[] {
   const { state, content, observed } = input;
   const { hero } = observed;
-  return state.items.filter((item) => item.location.type === 'floor'
-    && item.location.floorId === hero.floorId && visiblyOccupied(observed, item.location.x, item.location.y))
-    .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)
-    .map((item) => ({ ...projectItem({ run: state, content, itemId: item.itemId }),
+  return state.items
+    .filter(
+      (item) =>
+        item.location.type === 'floor' &&
+        item.location.floorId === hero.floorId &&
+        visiblyOccupied(observed, item.location.x, item.location.y),
+    )
+    .sort((left, right) => (left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0))
+    .map((item) => ({
+      ...projectItem({ run: state, content, itemId: item.itemId }),
       x: item.location.type === 'floor' ? item.location.x : 0,
-      y: item.location.type === 'floor' ? item.location.y : 0 }));
+      y: item.location.type === 'floor' ? item.location.y : 0,
+    }));
 }
 
 /** The hero's stored-away house contents, sorted by item id. */
@@ -705,15 +919,17 @@ function projectHouseView(state: ActiveRun, content: CompiledContentPack): Obser
     upgradesPurchased: state.house.upgradesPurchased,
     items: state.items
       .filter((item) => item.location.type === 'house')
-      .sort((left, right) => left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0)
+      .sort((left, right) => (left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0))
       .map((item) => projectedOwnedItem(state, content, item.itemId)),
   };
 }
 
-export function projectGameplayState(input: Readonly<{
-  state: ActiveRun;
-  content: CompiledContentPack;
-}>): GameplayProjection {
+export function projectGameplayState(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+  }>,
+): GameplayProjection {
   const observed = projectionPerception(input.state, input.content);
   const { hero } = observed;
   const rules = balanceEntry(input.content);
@@ -722,48 +938,82 @@ export function projectGameplayState(input: Readonly<{
   // effective light, never on "carried light out" alone -- a fixture/ambient-lit room stays
   // visible normally even with the hero's carried light extinguished.
   const heroCellIndex = tileIndex(observed.floor, hero.x, hero.y);
-  const heroInDark = heroCellIndex !== undefined && observed.illumination.intensity[heroCellIndex]! <= 0;
-  const lightOut = heroInDark ? {
-    revealRadius: derived.lightOutRevealRadius,
-    rememberedMapPersists: derived.lightOutMemoryPersists > 0,
-  } : undefined;
+  const heroInDark =
+    heroCellIndex !== undefined && observed.illumination.intensity[heroCellIndex]! <= 0;
+  const lightOut = heroInDark
+    ? {
+        revealRadius: derived.lightOutRevealRadius,
+        rememberedMapPersists: derived.lightOutMemoryPersists > 0,
+      }
+    : undefined;
   const trade = projectActiveTrade(input.state, input.content);
-  const slots: readonly ObservablePlacementSlot[] = observed.floor.depth === 0
-    ? observed.floor.placementSlots.map((slot) => ({
-      slotId: slot.slotId, tags: [...slot.tags], x: slot.x, y: slot.y,
-    }))
-    : [];
+  const slots: readonly ObservablePlacementSlot[] =
+    observed.floor.depth === 0
+      ? observed.floor.placementSlots.map((slot) => ({
+          slotId: slot.slotId,
+          tags: [...slot.tags],
+          x: slot.x,
+          y: slot.y,
+        }))
+      : [];
   return {
     ...(trade === undefined ? {} : { trade }),
-    floor: projectFloor({ floor: observed.floor, hero: heroPerception(input.state.hero, hero),
-      visibilityWords: observed.visibilityWords, illumination: observed.illumination,
-      ...(lightOut === undefined ? {} : { lightOut }) }),
+    floor: projectFloor({
+      floor: observed.floor,
+      hero: heroPerception(input.state.hero, hero),
+      visibilityWords: observed.visibilityWords,
+      illumination: observed.illumination,
+      ...(lightOut === undefined ? {} : { lightOut }),
+    }),
     hero: projectHeroView({ state: input.state, content: input.content, observed, derived, rules }),
-    actors: lightOut === undefined ? projectVisibleActors({ state: input.state, content: input.content, observed }) : [],
-    features: lightOut === undefined ? projectVisibleFeatures({ state: input.state, observed }) : [],
-    groundItems: lightOut === undefined ? projectGroundItems({ state: input.state, content: input.content, observed }) : [],
-    slots, house: projectHouseView(input.state, input.content),
+    actors:
+      lightOut === undefined
+        ? projectVisibleActors({ state: input.state, content: input.content, observed })
+        : [],
+    features:
+      lightOut === undefined ? projectVisibleFeatures({ state: input.state, observed }) : [],
+    groundItems:
+      lightOut === undefined
+        ? projectGroundItems({ state: input.state, content: input.content, observed })
+        : [],
+    slots,
+    house: projectHouseView(input.state, input.content),
     actions: ['move', 'wait', 'attack', 'pickup', 'use-item', 'equip', 'rest'].map((type) => ({
-      type, cost: type === 'rest' ? rules.actionCosts['action.wait'] ?? rules.normalActionCost
-        : rules.actionCosts[`action.${type}`] ?? rules.normalActionCost,
+      type,
+      cost:
+        type === 'rest'
+          ? (rules.actionCosts['action.wait'] ?? rules.normalActionCost)
+          : (rules.actionCosts[`action.${type}`] ?? rules.normalActionCost),
     })),
     metrics: input.state.metrics,
-    conclusion: input.state.conclusion === null ? null : {
-      completionType: input.state.conclusion.completionType,
-      cause: input.state.conclusion.cause,
-    },
+    conclusion:
+      input.state.conclusion === null
+        ? null
+        : {
+            completionType: input.state.conclusion.completionType,
+            cause: input.state.conclusion.cause,
+          },
   };
 }
 
-export function projectDecision(input: Readonly<{
-  state: ActiveRun;
-  content: CompiledContentPack;
-  decision: PublicDecision;
-}>): PublicDecision | undefined {
+export function projectDecision(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    decision: PublicDecision;
+  }>,
+): PublicDecision | undefined {
   if (input.decision.type === 'confirm-aggression') {
     const observed = projectionPerception(input.state, input.content);
-    const target = input.state.actors.find((actor) => actor.actorId === input.decision.targetActorId);
-    if (!target || target.floorId !== observed.hero.floorId || !visiblyOccupied(observed, target.x, target.y)) return undefined;
+    const target = input.state.actors.find(
+      (actor) => actor.actorId === input.decision.targetActorId,
+    );
+    if (
+      !target ||
+      target.floorId !== observed.hero.floorId ||
+      !visiblyOccupied(observed, target.x, target.y)
+    )
+      return undefined;
     return { type: 'confirm-aggression', targetActorId: target.actorId };
   }
   return undefined;

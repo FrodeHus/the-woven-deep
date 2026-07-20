@@ -1,7 +1,10 @@
 import type { JSX } from 'react';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import {
-  actorsOf, groundItemsOf, type ActorView, type GroundItemView,
+  actorsOf,
+  groundItemsOf,
+  type ActorView,
+  type GroundItemView,
 } from '../../session/projection-view.js';
 import type { PanelProps } from './types.js';
 
@@ -40,7 +43,9 @@ export function ThreatPanel({ snapshot }: PanelProps): JSX.Element {
         <>
           <p className="text-xs text-muted">On the ground nearby</p>
           <ul className="flex flex-col gap-0.5">
-            {items.map((item) => <li key={item.itemId}>{item.name}</li>)}
+            {items.map((item) => (
+              <li key={item.itemId}>{item.name}</li>
+            ))}
           </ul>
         </>
       )}

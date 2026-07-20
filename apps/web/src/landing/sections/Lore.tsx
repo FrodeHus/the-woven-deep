@@ -10,11 +10,17 @@ export function Lore(): JSX.Element {
 
   return (
     <section id="lore" className="wd-section wd-lore" aria-labelledby="lore-heading">
-      <p data-reveal className="wd-eyebrow wd-centered">{LORE.eyebrow}</p>
-      <h2 data-reveal id="lore-heading" className="wd-h2 wd-centered">{LORE.heading}</h2>
+      <p data-reveal className="wd-eyebrow wd-centered">
+        {LORE.eyebrow}
+      </p>
+      <h2 data-reveal id="lore-heading" className="wd-h2 wd-centered">
+        {LORE.heading}
+      </h2>
       <div data-reveal className="wd-lore-body">
         <p>
-          <span aria-hidden="true" className="wd-drop-cap">{dropCap}</span>
+          <span aria-hidden="true" className="wd-drop-cap">
+            {dropCap}
+          </span>
           {firstRest}
         </p>
         {middle.map((paragraph) => (

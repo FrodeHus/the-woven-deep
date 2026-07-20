@@ -18,7 +18,10 @@ interface OverlayErrorBoundaryState {
  * Isolates a throwing overlay body so a render error shows a contained alert instead of crashing
  * the client.
  */
-export class OverlayErrorBoundary extends Component<OverlayErrorBoundaryProps, OverlayErrorBoundaryState> {
+export class OverlayErrorBoundary extends Component<
+  OverlayErrorBoundaryProps,
+  OverlayErrorBoundaryState
+> {
   public override state: OverlayErrorBoundaryState = { hasError: false };
 
   public static getDerivedStateFromError(): OverlayErrorBoundaryState {

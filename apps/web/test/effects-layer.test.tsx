@@ -5,13 +5,21 @@ import type { GameplayProjection, ObservableCell, PublicEvent } from '@woven-dee
 import { EffectsLayer } from '../src/ui/EffectsLayer.js';
 
 const PITCH_TORCH_LIGHT = {
-  color: [255, 154, 68] as const, radius: 5, strength: 220,
-  fuelCapacity: 800, fuelPerTime: 2, warningThresholds: [200, 80], fuelTags: [],
+  color: [255, 154, 68] as const,
+  radius: 5,
+  strength: 220,
+  fuelCapacity: 800,
+  fuelPerTime: 2,
+  warningThresholds: [200, 80],
+  fuelTags: [],
 };
 
 function pack(entries: readonly Record<string, unknown>[]): CompiledContentPack {
   return {
-    schemaVersion: 5, hash: 'hash.test', entries, generationReport: { foundationalCategories: [] },
+    schemaVersion: 5,
+    hash: 'hash.test',
+    entries,
+    generationReport: { foundationalCategories: [] },
   } as unknown as CompiledContentPack;
 }
 
@@ -19,24 +27,35 @@ function emptyCell(index: number, x: number, y: number): ObservableCell {
   return { index, x, y, knowledge: 'unknown', intensity: 0 };
 }
 
-function makeProjection(input: Readonly<{
-  floorId?: string; heroX: number; heroY: number;
-  equipment?: Record<string, unknown>;
-  actors?: readonly Record<string, unknown>[];
-  conditions?: readonly Record<string, unknown>[];
-}>): GameplayProjection {
-  const width = 20; const height = 10;
+function makeProjection(
+  input: Readonly<{
+    floorId?: string;
+    heroX: number;
+    heroY: number;
+    equipment?: Record<string, unknown>;
+    actors?: readonly Record<string, unknown>[];
+    conditions?: readonly Record<string, unknown>[];
+  }>,
+): GameplayProjection {
+  const width = 20;
+  const height = 10;
   const cells: ObservableCell[] = [];
-  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) cells.push(emptyCell(y * width + x, x, y));
+  for (let y = 0; y < height; y += 1)
+    for (let x = 0; x < width; x += 1) cells.push(emptyCell(y * width + x, x, y));
   return {
     floor: { floorId: input.floorId ?? 'floor.one', width, height, cells },
     hero: {
-      actorId: 'actor.hero', name: 'Ada', x: input.heroX, y: input.heroY,
+      actorId: 'actor.hero',
+      name: 'Ada',
+      x: input.heroX,
+      y: input.heroY,
       equipment: input.equipment ?? {},
       conditions: input.conditions ?? [],
     },
     actors: input.actors ?? [],
-    features: [], groundItems: [], actions: [],
+    features: [],
+    groundItems: [],
+    actions: [],
     metrics: {} as GameplayProjection['metrics'],
     conclusion: null,
   } as unknown as GameplayProjection;
@@ -49,20 +68,29 @@ describe('EffectsLayer', () => {
   it('renders no glow when the hero has no enabled equipped light', () => {
     const projection = makeProjection({ heroX: 5, heroY: 5 });
     const { container } = render(
-      <EffectsLayer projection={projection} pack={pack([])} lastEvents={[]} camera={CAMERA} viewport={VIEWPORT} />,
+      <EffectsLayer
+        projection={projection}
+        pack={pack([])}
+        lastEvents={[]}
+        camera={CAMERA}
+        viewport={VIEWPORT}
+      />,
     );
     expect(container.querySelector('.glow')).toBeNull();
   });
 
   it('renders a glow at the hero cell scaled by remaining fuel, tagged with the light item source', () => {
     const projection = makeProjection({
-      heroX: 5, heroY: 5,
+      heroX: 5,
+      heroY: 5,
       equipment: { 'off-hand': { contentId: 'item.pitch-torch', enabled: true, fuel: 400 } },
     });
     const { container } = render(
       <EffectsLayer
         projection={projection}
-        pack={pack([{ kind: 'item', id: 'item.pitch-torch', name: 'Pitch torch', light: PITCH_TORCH_LIGHT }])}
+        pack={pack([
+          { kind: 'item', id: 'item.pitch-torch', name: 'Pitch torch', light: PITCH_TORCH_LIGHT },
+        ])}
         lastEvents={[]}
         camera={CAMERA}
         viewport={VIEWPORT}
@@ -76,13 +104,16 @@ describe('EffectsLayer', () => {
 
   it('does not glow when the equipped light is disabled', () => {
     const projection = makeProjection({
-      heroX: 5, heroY: 5,
+      heroX: 5,
+      heroY: 5,
       equipment: { 'off-hand': { contentId: 'item.pitch-torch', enabled: false, fuel: 400 } },
     });
     const { container } = render(
       <EffectsLayer
         projection={projection}
-        pack={pack([{ kind: 'item', id: 'item.pitch-torch', name: 'Pitch torch', light: PITCH_TORCH_LIGHT }])}
+        pack={pack([
+          { kind: 'item', id: 'item.pitch-torch', name: 'Pitch torch', light: PITCH_TORCH_LIGHT },
+        ])}
         lastEvents={[]}
         camera={CAMERA}
         viewport={VIEWPORT}
@@ -93,13 +124,28 @@ describe('EffectsLayer', () => {
 
   it('renders a transient hit-flash effect mapped from lastEvents at the actor cell', () => {
     const projection = makeProjection({
-      heroX: 5, heroY: 5, actors: [{ actorId: 'actor.rat', x: 8, y: 5 }],
+      heroX: 5,
+      heroY: 5,
+      actors: [{ actorId: 'actor.rat', x: 8, y: 5 }],
     });
     const events: PublicEvent[] = [
-      { type: 'actor.damaged', eventId: 'event.1', actorId: 'actor.rat', sourceActorId: 'actor.hero', amount: 4, health: 6 },
+      {
+        type: 'actor.damaged',
+        eventId: 'event.1',
+        actorId: 'actor.rat',
+        sourceActorId: 'actor.hero',
+        amount: 4,
+        health: 6,
+      },
     ];
     const { container } = render(
-      <EffectsLayer projection={projection} pack={pack([])} lastEvents={events} camera={CAMERA} viewport={VIEWPORT} />,
+      <EffectsLayer
+        projection={projection}
+        pack={pack([])}
+        lastEvents={events}
+        camera={CAMERA}
+        viewport={VIEWPORT}
+      />,
     );
     const effect = container.querySelector('.effect-hit-flash');
     expect(effect).not.toBeNull();
@@ -109,15 +155,28 @@ describe('EffectsLayer', () => {
 
   it('does not render an effect whose world position falls outside the viewport', () => {
     const projection = makeProjection({
-      heroX: 5, heroY: 5, actors: [{ actorId: 'actor.rat', x: 19, y: 9 }],
+      heroX: 5,
+      heroY: 5,
+      actors: [{ actorId: 'actor.rat', x: 19, y: 9 }],
     });
     const events: PublicEvent[] = [
-      { type: 'actor.damaged', eventId: 'event.1', actorId: 'actor.rat', sourceActorId: 'actor.hero', amount: 4, health: 6 },
+      {
+        type: 'actor.damaged',
+        eventId: 'event.1',
+        actorId: 'actor.rat',
+        sourceActorId: 'actor.hero',
+        amount: 4,
+        health: 6,
+      },
     ];
     const smallViewport = { width: 10, height: 10 };
     const { container } = render(
       <EffectsLayer
-        projection={projection} pack={pack([])} lastEvents={events} camera={CAMERA} viewport={smallViewport}
+        projection={projection}
+        pack={pack([])}
+        lastEvents={events}
+        camera={CAMERA}
+        viewport={smallViewport}
       />,
     );
     expect(container.querySelector('.effect-hit-flash')).toBeNull();
@@ -125,20 +184,40 @@ describe('EffectsLayer', () => {
 
   it('clears live effects when the floor changes, so a burst from the previous floor never renders onto the new one', () => {
     const projection = makeProjection({
-      floorId: 'floor.one', heroX: 5, heroY: 5, actors: [{ actorId: 'actor.rat', x: 8, y: 5 }],
+      floorId: 'floor.one',
+      heroX: 5,
+      heroY: 5,
+      actors: [{ actorId: 'actor.rat', x: 8, y: 5 }],
     });
     const events: PublicEvent[] = [
-      { type: 'actor.damaged', eventId: 'event.1', actorId: 'actor.rat', sourceActorId: 'actor.hero', amount: 4, health: 6 },
+      {
+        type: 'actor.damaged',
+        eventId: 'event.1',
+        actorId: 'actor.rat',
+        sourceActorId: 'actor.hero',
+        amount: 4,
+        health: 6,
+      },
     ];
     const { container, rerender } = render(
-      <EffectsLayer projection={projection} pack={pack([])} lastEvents={events} camera={CAMERA} viewport={VIEWPORT} />,
+      <EffectsLayer
+        projection={projection}
+        pack={pack([])}
+        lastEvents={events}
+        camera={CAMERA}
+        viewport={VIEWPORT}
+      />,
     );
     expect(container.querySelector('.effect-hit-flash')).not.toBeNull();
 
     const nextFloorProjection = makeProjection({ floorId: 'floor.two', heroX: 2, heroY: 2 });
     rerender(
       <EffectsLayer
-        projection={nextFloorProjection} pack={pack([])} lastEvents={[]} camera={CAMERA} viewport={VIEWPORT}
+        projection={nextFloorProjection}
+        pack={pack([])}
+        lastEvents={[]}
+        camera={CAMERA}
+        viewport={VIEWPORT}
       />,
     );
     expect(container.querySelector('.effect-hit-flash')).toBeNull();
@@ -146,26 +225,56 @@ describe('EffectsLayer', () => {
 
   it('removes a transient effect once its animation ends', () => {
     const projection = makeProjection({
-      heroX: 5, heroY: 5, actors: [{ actorId: 'actor.rat', x: 8, y: 5 }],
+      heroX: 5,
+      heroY: 5,
+      actors: [{ actorId: 'actor.rat', x: 8, y: 5 }],
     });
     const events: PublicEvent[] = [
-      { type: 'actor.damaged', eventId: 'event.1', actorId: 'actor.rat', sourceActorId: 'actor.hero', amount: 4, health: 6 },
+      {
+        type: 'actor.damaged',
+        eventId: 'event.1',
+        actorId: 'actor.rat',
+        sourceActorId: 'actor.hero',
+        amount: 4,
+        health: 6,
+      },
     ];
     const { container } = render(
-      <EffectsLayer projection={projection} pack={pack([])} lastEvents={events} camera={CAMERA} viewport={VIEWPORT} />,
+      <EffectsLayer
+        projection={projection}
+        pack={pack([])}
+        lastEvents={events}
+        camera={CAMERA}
+        viewport={VIEWPORT}
+      />,
     );
     const effect = container.querySelector('.effect-hit-flash')!;
     fireEvent.animationEnd(effect);
     expect(container.querySelector('.effect-hit-flash')).toBeNull();
   });
 
-  it('renders a tinted aura at the hero cell while a condition is active, colored from the condition\'s projected color', () => {
+  it("renders a tinted aura at the hero cell while a condition is active, colored from the condition's projected color", () => {
     const projection = makeProjection({
-      heroX: 5, heroY: 5,
-      conditions: [{ conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50 }],
+      heroX: 5,
+      heroY: 5,
+      conditions: [
+        {
+          conditionId: 'condition.poisoned',
+          name: 'Poisoned',
+          color: '#7ac86a',
+          stacks: 1,
+          remaining: 50,
+        },
+      ],
     });
     const { container } = render(
-      <EffectsLayer projection={projection} pack={pack([])} lastEvents={[]} camera={CAMERA} viewport={VIEWPORT} />,
+      <EffectsLayer
+        projection={projection}
+        pack={pack([])}
+        lastEvents={[]}
+        camera={CAMERA}
+        viewport={VIEWPORT}
+      />,
     );
     const aura = container.querySelector('.condition-aura');
     expect(aura).not.toBeNull();
@@ -179,46 +288,100 @@ describe('EffectsLayer', () => {
   it('renders no aura while no condition is active', () => {
     const projection = makeProjection({ heroX: 5, heroY: 5, conditions: [] });
     const { container } = render(
-      <EffectsLayer projection={projection} pack={pack([])} lastEvents={[]} camera={CAMERA} viewport={VIEWPORT} />,
+      <EffectsLayer
+        projection={projection}
+        pack={pack([])}
+        lastEvents={[]}
+        camera={CAMERA}
+        viewport={VIEWPORT}
+      />,
     );
     expect(container.querySelector('.condition-aura')).toBeNull();
   });
 
   it('removes the aura once the condition list empties on a later snapshot (expiry)', () => {
     const withCondition = makeProjection({
-      heroX: 5, heroY: 5,
-      conditions: [{ conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 1 }],
+      heroX: 5,
+      heroY: 5,
+      conditions: [
+        {
+          conditionId: 'condition.poisoned',
+          name: 'Poisoned',
+          color: '#7ac86a',
+          stacks: 1,
+          remaining: 1,
+        },
+      ],
     });
     const { container, rerender } = render(
-      <EffectsLayer projection={withCondition} pack={pack([])} lastEvents={[]} camera={CAMERA} viewport={VIEWPORT} />,
+      <EffectsLayer
+        projection={withCondition}
+        pack={pack([])}
+        lastEvents={[]}
+        camera={CAMERA}
+        viewport={VIEWPORT}
+      />,
     );
     expect(container.querySelector('.condition-aura')).not.toBeNull();
 
     const expired = makeProjection({ heroX: 5, heroY: 5, conditions: [] });
     rerender(
-      <EffectsLayer projection={expired} pack={pack([])} lastEvents={[]} camera={CAMERA} viewport={VIEWPORT} />,
+      <EffectsLayer
+        projection={expired}
+        pack={pack([])}
+        lastEvents={[]}
+        camera={CAMERA}
+        viewport={VIEWPORT}
+      />,
     );
     expect(container.querySelector('.condition-aura')).toBeNull();
   });
 
   it('picks the highest-stacks condition for the aura when several are active', () => {
     const projection = makeProjection({
-      heroX: 5, heroY: 5,
+      heroX: 5,
+      heroY: 5,
       conditions: [
-        { conditionId: 'condition.poisoned', name: 'Poisoned', color: '#7ac86a', stacks: 1, remaining: 50 },
-        { conditionId: 'condition.bleeding', name: 'Bleeding', color: '#c85a5a', stacks: 3, remaining: 20 },
+        {
+          conditionId: 'condition.poisoned',
+          name: 'Poisoned',
+          color: '#7ac86a',
+          stacks: 1,
+          remaining: 50,
+        },
+        {
+          conditionId: 'condition.bleeding',
+          name: 'Bleeding',
+          color: '#c85a5a',
+          stacks: 3,
+          remaining: 20,
+        },
       ],
     });
     const { container } = render(
-      <EffectsLayer projection={projection} pack={pack([])} lastEvents={[]} camera={CAMERA} viewport={VIEWPORT} />,
+      <EffectsLayer
+        projection={projection}
+        pack={pack([])}
+        lastEvents={[]}
+        camera={CAMERA}
+        viewport={VIEWPORT}
+      />,
     );
-    expect(container.querySelector('.condition-aura')!.getAttribute('data-condition')).toBe('condition.bleeding');
+    expect(container.querySelector('.condition-aura')!.getAttribute('data-condition')).toBe(
+      'condition.bleeding',
+    );
   });
 
   it('is entirely decorative: aria-hidden and non-interactive', () => {
     const projection = makeProjection({ heroX: 5, heroY: 5 });
     const { container } = render(
-      <EffectsLayer projection={projection} pack={pack([])} lastEvents={[]} camera={CAMERA} viewport={VIEWPORT} />,
+      <EffectsLayer
+        projection={projection}
+        pack={pack([])}
+        lastEvents={[]}
+        camera={CAMERA}
+        viewport={VIEWPORT}
+      />,
     );
     const layer = container.querySelector('.effects-layer')!;
     expect(layer.getAttribute('aria-hidden')).toBe('true');

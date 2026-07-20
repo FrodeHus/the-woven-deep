@@ -12,7 +12,11 @@ export function Hero({ coverRef, heartRef }: HeroProps): JSX.Element {
       <div className="wd-hero-copy">
         <p className="wd-eyebrow">{HERO.eyebrow}</p>
         <h1 className="wd-h1">
-          Few return<br />from the Deep.<br /><span className="wd-h1-accent">None are forgotten.</span>
+          Few return
+          <br />
+          from the Deep.
+          <br />
+          <span className="wd-h1-accent">None are forgotten.</span>
         </h1>
         <p className="wd-lead">
           {HERO.lead.before}
@@ -21,8 +25,12 @@ export function Hero({ coverRef, heartRef }: HeroProps): JSX.Element {
         </p>
         <p className="wd-hero-tagline">{HERO.italicTagline}</p>
         <div className="wd-hero-ctas">
-          <a href={PLAY_ROUTE} className="wd-cta-primary">Descend Now <span aria-hidden="true">▾</span></a>
-          <a href={PLAY_ROUTE} className="wd-cta-outline">Enter as guest</a>
+          <a href={PLAY_ROUTE} className="wd-cta-primary">
+            Descend Now <span aria-hidden="true">▾</span>
+          </a>
+          <a href={PLAY_ROUTE} className="wd-cta-outline">
+            Enter as guest
+          </a>
         </div>
         <p className="wd-micro">{TAGLINE}</p>
       </div>

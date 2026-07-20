@@ -20,29 +20,71 @@ export const CONTENT_SCHEMA_VERSION = 7 as const;
 
 export type ContentId = string;
 export const CONTENT_KIND_IDS = [
-  'monster', 'item', 'spell', 'trap', 'loot-table', 'balance', 'vault', 'condition',
+  'monster',
+  'item',
+  'spell',
+  'trap',
+  'loot-table',
+  'balance',
+  'vault',
+  'condition',
   'identification-pool',
-  'encounter', 'fallen-champion-template', 'npc', 'npc-faction', 'achievement',
-  'class', 'background', 'trait',
+  'encounter',
+  'fallen-champion-template',
+  'npc',
+  'npc-faction',
+  'achievement',
+  'class',
+  'background',
+  'trait',
 ] as const;
-export type ContentKind = typeof CONTENT_KIND_IDS[number];
+export type ContentKind = (typeof CONTENT_KIND_IDS)[number];
 export const DERIVED_STAT_NAMES = [
-  'maxHealth', 'meleeAccuracy', 'meleeDamageBonus', 'rangedAccuracy',
-  'defense', 'search', 'disarm', 'lightOutRevealRadius', 'lightOutMemoryPersists',
+  'maxHealth',
+  'meleeAccuracy',
+  'meleeDamageBonus',
+  'rangedAccuracy',
+  'defense',
+  'search',
+  'disarm',
+  'lightOutRevealRadius',
+  'lightOutMemoryPersists',
 ] as const;
-export type DerivedStatName = typeof DERIVED_STAT_NAMES[number];
+export type DerivedStatName = (typeof DERIVED_STAT_NAMES)[number];
 export const DAMAGE_TYPES = ['physical', 'fire', 'cold', 'lightning', 'poison', 'arcane'] as const;
-export type DamageType = typeof DAMAGE_TYPES[number];
+export type DamageType = (typeof DAMAGE_TYPES)[number];
 export const DISPOSITIONS = ['friendly', 'neutral', 'hostile'] as const;
-export type Disposition = typeof DISPOSITIONS[number];
-export const EQUIPMENT_SLOTS = ['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring'] as const;
-export type EquipmentSlot = typeof EQUIPMENT_SLOTS[number];
-export const ITEM_CATEGORIES = ['weapon', 'ammunition', 'armor', 'shield', 'light', 'fuel', 'food', 'potion', 'scroll', 'ring', 'misc'] as const;
-export type ItemCategory = typeof ITEM_CATEGORIES[number];
+export type Disposition = (typeof DISPOSITIONS)[number];
+export const EQUIPMENT_SLOTS = [
+  'main-hand',
+  'off-hand',
+  'body',
+  'head',
+  'hands',
+  'feet',
+  'neck',
+  'left-ring',
+  'right-ring',
+] as const;
+export type EquipmentSlot = (typeof EQUIPMENT_SLOTS)[number];
+export const ITEM_CATEGORIES = [
+  'weapon',
+  'ammunition',
+  'armor',
+  'shield',
+  'light',
+  'fuel',
+  'food',
+  'potion',
+  'scroll',
+  'ring',
+  'misc',
+] as const;
+export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
 export const ITEM_RARITIES = ['common', 'uncommon', 'rare', 'legendary'] as const;
-export type ItemRarity = typeof ITEM_RARITIES[number];
+export type ItemRarity = (typeof ITEM_RARITIES)[number];
 export const TARGETING_IDS = ['target.self', 'target.actor', 'target.line', 'target.cell'] as const;
-export type TargetingId = typeof TARGETING_IDS[number];
+export type TargetingId = (typeof TARGETING_IDS)[number];
 
 export interface DiceDefinition {
   readonly count: number;
@@ -78,24 +120,48 @@ export interface PresentedContentEntry extends BaseContentEntry {
 
 export type CompletionType = 'died' | 'became-heart' | 'refused' | 'broke-cycle';
 
-export const MERCHANT_SERVICE_IDS = ['merchant-service.identify', 'merchant-service.strongbox'] as const;
-export type MerchantServiceId = typeof MERCHANT_SERVICE_IDS[number];
+export const MERCHANT_SERVICE_IDS = [
+  'merchant-service.identify',
+  'merchant-service.strongbox',
+] as const;
+export type MerchantServiceId = (typeof MERCHANT_SERVICE_IDS)[number];
 
 export const BEHAVIOR_IDS = ['behavior.approach-and-attack', 'behavior.patrol'] as const;
-export type BehaviorId = typeof BEHAVIOR_IDS[number];
+export type BehaviorId = (typeof BEHAVIOR_IDS)[number];
 
 export const EFFECT_IDS = [
-  'effect.damage', 'effect.heal', 'effect.hunger.restore', 'effect.condition.apply',
-  'effect.condition.remove', 'effect.force-move', 'effect.reveal', 'effect.fuel.transfer',
-  'effect.light.toggle', 'effect.item.consume', 'effect.feature.mutate',
+  'effect.damage',
+  'effect.heal',
+  'effect.hunger.restore',
+  'effect.condition.apply',
+  'effect.condition.remove',
+  'effect.force-move',
+  'effect.reveal',
+  'effect.fuel.transfer',
+  'effect.light.toggle',
+  'effect.item.consume',
+  'effect.feature.mutate',
 ] as const;
-export type EffectId = typeof EFFECT_IDS[number];
+export type EffectId = (typeof EFFECT_IDS)[number];
 
-export type ContentEntry = MonsterContentEntry | ItemContentEntry | SpellContentEntry | TrapContentEntry
-  | LootTableContentEntry | BalanceContentEntry | VaultContentEntry | ConditionContentEntry
-  | IdentificationPoolContentEntry | EncounterContentEntry | FallenChampionTemplateContentEntry
-  | NpcContentEntry | NpcFactionContentEntry | AchievementContentEntry
-  | ClassContentEntry | BackgroundContentEntry | TraitContentEntry;
+export type ContentEntry =
+  | MonsterContentEntry
+  | ItemContentEntry
+  | SpellContentEntry
+  | TrapContentEntry
+  | LootTableContentEntry
+  | BalanceContentEntry
+  | VaultContentEntry
+  | ConditionContentEntry
+  | IdentificationPoolContentEntry
+  | EncounterContentEntry
+  | FallenChampionTemplateContentEntry
+  | NpcContentEntry
+  | NpcFactionContentEntry
+  | AchievementContentEntry
+  | ClassContentEntry
+  | BackgroundContentEntry
+  | TraitContentEntry;
 
 export interface ContentGenerationReport {
   readonly foundationalCategories: readonly string[];

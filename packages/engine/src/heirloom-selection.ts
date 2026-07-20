@@ -1,4 +1,8 @@
-import type { CompiledContentPack, FallenChampionTemplateContentEntry, ItemContentEntry } from '@woven-deep/content';
+import type {
+  CompiledContentPack,
+  FallenChampionTemplateContentEntry,
+  ItemContentEntry,
+} from '@woven-deep/content';
 import { requireItem as itemDefinition } from './content-index.js';
 import { guaranteedUniqueItemIds } from './commerce.js';
 import type { ItemInstance } from './item-model.js';
@@ -20,12 +24,18 @@ function qualityRank(instance: ItemInstance): number {
   return Object.values(instance.enchantment?.modifiers ?? {}).filter((value) => value > 0).length;
 }
 
-function candidateWeight(template: FallenChampionTemplateContentEntry, definition: ItemContentEntry,
-  instance: ItemInstance): number {
-  const weight = template.heirloomSelection.rarityWeights[definition.rarity]
-    + template.heirloomSelection.qualityRankBonus * qualityRank(instance);
+function candidateWeight(
+  template: FallenChampionTemplateContentEntry,
+  definition: ItemContentEntry,
+  instance: ItemInstance,
+): number {
+  const weight =
+    template.heirloomSelection.rarityWeights[definition.rarity] +
+    template.heirloomSelection.qualityRankBonus * qualityRank(instance);
   if (!Number.isSafeInteger(weight) || weight <= 0) {
-    throw new RangeError(`heirloom weight for ${instance.itemId} must be a positive safe integer, got ${weight}`);
+    throw new RangeError(
+      `heirloom weight for ${instance.itemId} must be a positive safe integer, got ${weight}`,
+    );
   }
   return weight;
 }
@@ -36,30 +46,47 @@ function candidateWeight(template: FallenChampionTemplateContentEntry, definitio
  * a two-handed item is one candidate. With no eligible equipment the template's fallback relic is
  * recorded without consuming randomness. Never rerolls and never guarantees a minimum rarity.
  */
-export function selectHeirloom(input: Readonly<{
-  run: ActiveRun;                 // conclusion non-null (dead hero)
-  content: CompiledContentPack;
-  template: FallenChampionTemplateContentEntry;
-  recordId: OpaqueId;
-}>): Readonly<{ snapshot: RecordedHeirloomSnapshot; nextRunRecordsState: Uint32State }> {
+export function selectHeirloom(
+  input: Readonly<{
+    run: ActiveRun; // conclusion non-null (dead hero)
+    content: CompiledContentPack;
+    template: FallenChampionTemplateContentEntry;
+    recordId: OpaqueId;
+  }>,
+): Readonly<{ snapshot: RecordedHeirloomSnapshot; nextRunRecordsState: Uint32State }> {
   const { run, content, template, recordId } = input;
   if (run.conclusion === null) throw new Error('heirloom selection requires a concluded run');
   const uniques = guaranteedUniqueItemIds(content);
   const candidates: readonly HeirloomCandidate[] = run.items
-    .filter((item) => item.location.type === 'equipped' && item.location.actorId === run.hero.actorId)
+    .filter(
+      (item) => item.location.type === 'equipped' && item.location.actorId === run.hero.actorId,
+    )
     .sort((left, right) => compareCodeUnits(left.itemId, right.itemId))
     .flatMap((instance) => {
       const definition = itemDefinition(content, instance.contentId);
-      const excluded = !definition.heirloomEligible || definition.equipment === null
-        || definition.tags.some((tag) => EXCLUDED_TAGS.includes(tag)) || uniques.has(definition.id);
-      return excluded ? [] : [{ instance, definition, weight: candidateWeight(template, definition, instance) }];
+      const excluded =
+        !definition.heirloomEligible ||
+        definition.equipment === null ||
+        definition.tags.some((tag) => EXCLUDED_TAGS.includes(tag)) ||
+        uniques.has(definition.id);
+      return excluded
+        ? []
+        : [{ instance, definition, weight: candidateWeight(template, definition, instance) }];
     });
   if (candidates.length === 0) {
     const fallback = itemDefinition(content, template.fallbackItemId);
     return {
       snapshot: {
-        contentId: fallback.id, sourceItemId: null, enchantment: null, condition: 100, charges: null,
-        fuel: null, qualityRank: 0, displayName: fallback.name, glyph: fallback.glyph, color: fallback.color,
+        contentId: fallback.id,
+        sourceItemId: null,
+        enchantment: null,
+        condition: 100,
+        charges: null,
+        fuel: null,
+        qualityRank: 0,
+        displayName: fallback.name,
+        glyph: fallback.glyph,
+        color: fallback.color,
         originatingHallRecordId: recordId,
       },
       nextRunRecordsState: run.rng['run-records'],
@@ -78,10 +105,16 @@ export function selectHeirloom(input: Readonly<{
   }
   return {
     snapshot: {
-      contentId: chosen.instance.contentId, sourceItemId: chosen.instance.itemId,
-      enchantment: chosen.instance.enchantment, condition: chosen.instance.condition,
-      charges: chosen.instance.charges, fuel: chosen.instance.fuel, qualityRank: qualityRank(chosen.instance),
-      displayName: chosen.definition.name, glyph: chosen.definition.glyph, color: chosen.definition.color,
+      contentId: chosen.instance.contentId,
+      sourceItemId: chosen.instance.itemId,
+      enchantment: chosen.instance.enchantment,
+      condition: chosen.instance.condition,
+      charges: chosen.instance.charges,
+      fuel: chosen.instance.fuel,
+      qualityRank: qualityRank(chosen.instance),
+      displayName: chosen.definition.name,
+      glyph: chosen.definition.glyph,
+      color: chosen.definition.color,
       originatingHallRecordId: recordId,
     },
     nextRunRecordsState: roll.state,
