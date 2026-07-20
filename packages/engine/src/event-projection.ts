@@ -325,6 +325,10 @@ export function projectDomainEvents(
       case 'trap.triggered':
       case 'trap.disarmed':
       case 'trap.disarm-failed':
+      case 'lock.picked':
+      case 'lock.pick-failed':
+      case 'door.unlocked':
+      case 'chest.jammed':
         if (actorVisible(event.actorId) && featureVisible(event.featureId)) output.push(event);
         break;
       case 'feature.searched':

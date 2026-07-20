@@ -92,6 +92,10 @@ export interface DisarmCommand extends CommandEnvelope {
   readonly type: 'disarm';
   readonly featureId: OpaqueId;
 }
+export interface PickLockCommand extends CommandEnvelope {
+  readonly type: 'pick-lock';
+  readonly featureId: OpaqueId;
+}
 export interface RestCommand extends CommandEnvelope {
   readonly type: 'rest';
   readonly until: 'healed' | 'interrupted';
@@ -161,6 +165,7 @@ export type GameCommand =
   | CloseDoorCommand
   | SearchCommand
   | DisarmCommand
+  | PickLockCommand
   | RestCommand
   | TradeCommand
   | HouseCommand;
