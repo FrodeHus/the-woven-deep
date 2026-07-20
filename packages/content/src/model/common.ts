@@ -59,7 +59,7 @@ export interface BaseAttributeDefinition {
 }
 
 export interface EffectDefinition {
-  readonly effectId: string;
+  readonly effectId: EffectId;
   readonly parameters: Readonly<Record<string, unknown>>;
   readonly requiresLivingTarget: boolean;
 }
@@ -80,6 +80,16 @@ export type CompletionType = 'died' | 'became-heart' | 'refused' | 'broke-cycle'
 
 export const MERCHANT_SERVICE_IDS = ['merchant-service.identify', 'merchant-service.strongbox'] as const;
 export type MerchantServiceId = typeof MERCHANT_SERVICE_IDS[number];
+
+export const BEHAVIOR_IDS = ['behavior.approach-and-attack', 'behavior.patrol'] as const;
+export type BehaviorId = typeof BEHAVIOR_IDS[number];
+
+export const EFFECT_IDS = [
+  'effect.damage', 'effect.heal', 'effect.hunger.restore', 'effect.condition.apply',
+  'effect.condition.remove', 'effect.force-move', 'effect.reveal', 'effect.fuel.transfer',
+  'effect.light.toggle', 'effect.item.consume', 'effect.feature.mutate',
+] as const;
+export type EffectId = typeof EFFECT_IDS[number];
 
 export type ContentEntry = MonsterContentEntry | ItemContentEntry | SpellContentEntry | TrapContentEntry
   | LootTableContentEntry | BalanceContentEntry | VaultContentEntry | ConditionContentEntry

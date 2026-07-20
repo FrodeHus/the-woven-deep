@@ -1,5 +1,5 @@
 import type {
-  BaseContentEntry, ContentId, EffectDefinition, ItemCategory, ItemRarity, MerchantServiceId,
+  BaseContentEntry, BehaviorId, ContentId, EffectDefinition, ItemCategory, ItemRarity, MerchantServiceId,
 } from './common.js';
 
 export const ENCOUNTER_MODELS = ['individual', 'group', 'swarm', 'boss', 'merchant'] as const;
@@ -86,7 +86,7 @@ export interface SwarmEncounterDefinition {
 export interface BossPhaseDefinition {
   readonly phaseId: string;
   readonly healthThresholdPercent: number;
-  readonly behaviorId: string;
+  readonly behaviorId: BehaviorId;
   readonly behaviorParameters: Readonly<Record<string, unknown>>;
   readonly modifiers: PopulationCombatModifiers;
   readonly effects: readonly EffectDefinition[];
