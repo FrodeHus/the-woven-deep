@@ -54,15 +54,25 @@ function parsePositiveInt(value: string | undefined, fallback: number, label: st
   return parsed;
 }
 
-function readAuthConfig(env: NodeJS.ProcessEnv): AuthConfig {
+/**
+ * Resolves and validates `PUBLIC_URL`, returning the raw string alongside the parsed `URL` and
+ * whether the URL is "production-shaped" (non-localhost). `isProductionShaped` gates the stricter
+ * validation in {@link resolveMailgunConfig} and {@link resolveCookieSecret}: a deployment can be
+ * production-shaped (a real public hostname) even when `NODE_ENV` isn't `production`, and both
+ * validators key off the URL's shape rather than `NODE_ENV` directly.
+ *
+ * Production guard: `NODE_ENV=production` (the Dockerfile sets it) with no explicit PUBLIC_URL
+ * would otherwise silently fall through to the localhost default, which in turn selects the dev
+ * cookie secret and the dev-echo mail transport — a deployment that looks healthy while leaking
+ * magic links to an in-memory endpoint and signing sessions with a public dev secret. Require an
+ * explicit, non-localhost PUBLIC_URL instead so a misconfigured prod boot fails loudly.
+ */
+function resolvePublicUrl(
+  env: NodeJS.ProcessEnv,
+): { publicUrl: string; parsedUrl: URL; isProductionShaped: boolean } {
   const isProduction = env.NODE_ENV === 'production';
   const publicUrlEnv = readNonEmpty(env.PUBLIC_URL);
 
-  // Production guard: `NODE_ENV=production` (the Dockerfile sets it) with no explicit PUBLIC_URL
-  // would otherwise silently fall through to the localhost default below, which in turn selects the
-  // dev cookie secret and the dev-echo mail transport — a deployment that looks healthy while
-  // leaking magic links to an in-memory endpoint and signing sessions with a public dev secret.
-  // Require an explicit, non-localhost PUBLIC_URL instead so a misconfigured prod boot fails loudly.
   if (isProduction && publicUrlEnv === undefined) {
     throw new Error('PUBLIC_URL is required when NODE_ENV=production (set it to the public, non-localhost URL)');
   }
@@ -82,8 +92,18 @@ function readAuthConfig(env: NodeJS.ProcessEnv): AuthConfig {
     throw new Error('PUBLIC_URL must be a non-localhost URL when NODE_ENV=production');
   }
 
-  const isProductionShaped = !isLocalHost(parsedUrl.hostname);
+  return { publicUrl, parsedUrl, isProductionShaped: !isLocalHost(parsedUrl.hostname) };
+}
 
+/**
+ * Resolves the Mailgun transport config. All three fields must be set together or not at all;
+ * a production-shaped `PUBLIC_URL` requires all three so a live deployment never silently falls
+ * back to the dev-echo mail transport.
+ */
+function resolveMailgunConfig(
+  env: NodeJS.ProcessEnv,
+  isProductionShaped: boolean,
+): AuthConfig['mailgun'] {
   const mailgunApiKey = readNonEmpty(env.MAILGUN_API_KEY);
   const mailgunDomain = readNonEmpty(env.MAILGUN_DOMAIN);
   const mailgunSender = readNonEmpty(env.MAILGUN_SENDER);
@@ -97,45 +117,61 @@ function readAuthConfig(env: NodeJS.ProcessEnv): AuthConfig {
     throw new Error('MAILGUN_API_KEY, MAILGUN_DOMAIN, and MAILGUN_SENDER are required for a non-localhost PUBLIC_URL');
   }
 
-  const mailgun =
-    mailgunFieldsPresent === 3
-      ? {
-          apiKey: mailgunApiKey as string,
-          domain: mailgunDomain as string,
-          sender: mailgunSender as string,
-        }
-      : null;
+  return mailgunFieldsPresent === 3
+    ? {
+        apiKey: mailgunApiKey as string,
+        domain: mailgunDomain as string,
+        sender: mailgunSender as string,
+      }
+    : null;
+}
 
+/**
+ * Resolves the cookie-signing secret. A production-shaped `PUBLIC_URL` requires an explicit
+ * `COOKIE_SECRET` of at least {@link MIN_COOKIE_SECRET_LENGTH} characters; otherwise a fixed dev
+ * secret is used so local development works without configuration.
+ */
+function resolveCookieSecret(env: NodeJS.ProcessEnv, isProductionShaped: boolean): string {
   const cookieSecretEnv = readNonEmpty(env.COOKIE_SECRET);
-  let cookieSecret: string;
   if (cookieSecretEnv !== undefined) {
     if (cookieSecretEnv.length < MIN_COOKIE_SECRET_LENGTH) {
       throw new Error(`COOKIE_SECRET must be at least ${MIN_COOKIE_SECRET_LENGTH} characters`);
     }
-    cookieSecret = cookieSecretEnv;
-  } else if (isProductionShaped) {
-    throw new Error('COOKIE_SECRET is required for a non-localhost PUBLIC_URL');
-  } else {
-    cookieSecret = DEV_COOKIE_SECRET;
+    return cookieSecretEnv;
   }
+  if (isProductionShaped) {
+    throw new Error('COOKIE_SECRET is required for a non-localhost PUBLIC_URL');
+  }
+  return DEV_COOKIE_SECRET;
+}
+
+/** Resolves the login rate limits, falling back to fixed defaults when unset. */
+function resolveRateLimits(env: NodeJS.ProcessEnv): AuthConfig['loginRateLimit'] {
+  return {
+    perEmailPerHour: parsePositiveInt(
+      env.LOGIN_RATE_LIMIT_PER_EMAIL_PER_HOUR,
+      DEFAULT_LOGIN_RATE_LIMIT_PER_EMAIL_PER_HOUR,
+      'LOGIN_RATE_LIMIT_PER_EMAIL_PER_HOUR',
+    ),
+    perSourcePerHour: parsePositiveInt(
+      env.LOGIN_RATE_LIMIT_PER_SOURCE_PER_HOUR,
+      DEFAULT_LOGIN_RATE_LIMIT_PER_SOURCE_PER_HOUR,
+      'LOGIN_RATE_LIMIT_PER_SOURCE_PER_HOUR',
+    ),
+  };
+}
+
+function readAuthConfig(env: NodeJS.ProcessEnv): AuthConfig {
+  const { publicUrl, parsedUrl, isProductionShaped } = resolvePublicUrl(env);
+  const mailgun = resolveMailgunConfig(env, isProductionShaped);
+  const cookieSecret = resolveCookieSecret(env, isProductionShaped);
 
   return {
     publicUrl,
     cookieSecret,
     cookieSecure: parsedUrl.protocol === 'https:',
     mailgun,
-    loginRateLimit: {
-      perEmailPerHour: parsePositiveInt(
-        env.LOGIN_RATE_LIMIT_PER_EMAIL_PER_HOUR,
-        DEFAULT_LOGIN_RATE_LIMIT_PER_EMAIL_PER_HOUR,
-        'LOGIN_RATE_LIMIT_PER_EMAIL_PER_HOUR',
-      ),
-      perSourcePerHour: parsePositiveInt(
-        env.LOGIN_RATE_LIMIT_PER_SOURCE_PER_HOUR,
-        DEFAULT_LOGIN_RATE_LIMIT_PER_SOURCE_PER_HOUR,
-        'LOGIN_RATE_LIMIT_PER_SOURCE_PER_HOUR',
-      ),
-    },
+    loginRateLimit: resolveRateLimits(env),
   };
 }
 

@@ -1,13 +1,10 @@
 import type {
   CompiledContentPack, MonsterContentEntry, NpcContentEntry, PopulationCombatModifiers,
 } from '@woven-deep/content';
-import { balanceEntry } from './actions.js';
 import type { ActorState } from './actor-model.js';
-import { deriveActorStats } from './attributes.js';
+import { entryById, requireItem } from './content-index.js';
 import { applyPopulationCombatModifiers, composePopulationCombatModifiers, resolveAttack } from './combat.js';
-import { conditionModifiers } from './conditions.js';
-import { equipmentModifiers } from './equipment.js';
-import { hungerModifiers } from './survival.js';
+import { deriveRunActorStats } from './stats.js';
 import { groupCombatModifiers } from './group-behavior.js';
 import { swarmCombatModifiers } from './swarm-behavior.js';
 import { bossCombatModifiers } from './boss-behavior.js';
@@ -25,19 +22,13 @@ export interface CombatProfile {
 }
 
 export function monsterDefinition(content: CompiledContentPack, actor: ActorState): MonsterContentEntry | undefined {
-  const entry = content.entries.find((candidate) => candidate.id === actor.contentId);
+  const entry = entryById(content, actor.contentId);
   return entry?.kind === 'monster' ? entry : undefined;
 }
 
 function npcDefinition(content: CompiledContentPack, actor: ActorState): NpcContentEntry | undefined {
-  const entry = content.entries.find((candidate) => candidate.id === actor.contentId);
+  const entry = entryById(content, actor.contentId);
   return entry?.kind === 'npc' ? entry : undefined;
-}
-
-export function requiredItemDefinition(content: CompiledContentPack, contentId: OpaqueId) {
-  const entry = content.entries.find((candidate) => candidate.id === contentId);
-  if (!entry || entry.kind !== 'item') throw new Error(`internal invariant: item definition ${contentId} does not exist`);
-  return entry;
 }
 
 type PopulationCombatModifierResolver = (input: Readonly<{
@@ -90,27 +81,21 @@ export function profile(
     resistance: monster.resistances.physical,
     immune: monster.resistances.physical === 100,
   }, populationModifiers);
-  const stats = deriveActorStats({
-    attributes: actor.attributes,
-    formulas: balanceEntry(content).formulas,
-    equipmentModifiers: equipmentModifiers({ run: { actors, items }, content, actorId: actor.actorId })
-      .map((source) => source.modifiers),
-    conditionModifiers: [
-      ...conditionModifiers(actor, content),
-      hungerModifiers({ stage: survival?.hungerStage ?? 'sated', balance: balanceEntry(content) }),
-    ],
-    heroModifiers: hero && actor.actorId === hero.actorId ? [hero.statModifiers] : [],
+  const stats = deriveRunActorStats({
+    state: { actors, items, survival: survival ?? { hungerStage: 'sated' }, hero },
+    content,
+    actor,
   });
   const equipped = items.filter((item) => item.location.type === 'equipped'
     && item.location.actorId === actor.actorId);
   const mainHandId = actor.equipment['main-hand'];
   const mainHand = mainHandId ? equipped.find((item) => item.itemId === mainHandId) : undefined;
-  const weapon = mainHand ? requiredItemDefinition(content, mainHand.contentId).combat : undefined;
+  const weapon = mainHand ? requireItem(content,mainHand.contentId).combat : undefined;
   const damage = weapon?.damage && weapon.ammunitionTag === null
     ? { ...weapon.damage, bonus: weapon.damage.bonus + stats.meleeDamageBonus }
     : { count: 1, sides: 4, bonus: stats.meleeDamageBonus };
   const armor = equipped.reduce((total, item) => total
-    + (requiredItemDefinition(content, item.contentId).combat?.armor ?? 0), 0);
+    + (requireItem(content,item.contentId).combat?.armor ?? 0), 0);
   return applyPopulationCombatModifiers({
     accuracy: stats.meleeAccuracy,
     defense: stats.defense,

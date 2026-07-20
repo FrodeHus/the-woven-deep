@@ -13,6 +13,7 @@ import { accumulateSightings, loadSightings, saveSightings, type Sightings } fro
 import { foldEventsIntoLog, LOG_CAPACITY, type LogLine } from './event-log.js';
 import type { PlayerIntent } from './intents.js';
 import { dismissHint, loadOnboarding, recordIntent, saveOnboarding, type OnboardingState } from './onboarding.js';
+import { randomSeed } from './seed.js';
 import {
   classifyStorageFailure, COMMAND_SEQUENCE_KEY, SAVE_KEY, type SessionStorageLike, type StorageFailure,
 } from './storage.js';
@@ -94,15 +95,6 @@ function onboardingIntentType(intent: PlayerIntent): string | null {
   if (intent.type === 'backpack' && intent.action === 'toggle-light') return 'toggle-light';
   if (intent.type === 'trade-buy' || intent.type === 'trade-sell') return 'trade-complete';
   return null;
-}
-
-function randomSeed(): Uint32State {
-  // Client-only ambient randomness for the seed of a fresh guest run; the engine itself never
-  // touches non-deterministic sources.
-  const words = new Uint32Array(4);
-  crypto.getRandomValues(words);
-  if (words.every((word) => word === 0)) words[0] = 1;
-  return [words[0]!, words[1]!, words[2]!, words[3]!];
 }
 
 /**

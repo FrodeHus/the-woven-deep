@@ -1,7 +1,7 @@
 import type { JSX, KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { BalanceContentEntry, CompiledContentPack } from '@woven-deep/content';
 import { ATTRIBUTE_ORDER, pointBuyCost, type AttributeName } from '@woven-deep/engine';
 import { Button } from '@/ui/components/button.js';
+import { balanceEntry } from '../../../../session/pack-queries.js';
 import { BlockBar } from '../chargen-components.js';
 import { AttributeStepper } from '../AttributeStepper.js';
 import { useListNavigation } from '../../roving-focus.js';
@@ -12,10 +12,6 @@ const METHOD_OPTIONS = [
   { method: 'point-buy' as const, label: 'POINT-BUY' },
   { method: 'roll' as const, label: 'ROLL 3D6' },
 ];
-
-function balanceEntry(pack: CompiledContentPack): BalanceContentEntry | undefined {
-  return pack.entries.find((entry): entry is BalanceContentEntry => entry.kind === 'balance');
-}
 
 function AttributeReadout({ state }: { readonly state: StepProps['state'] }): JSX.Element {
   return (

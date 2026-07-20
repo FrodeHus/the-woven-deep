@@ -4,8 +4,9 @@ import {
   type EffectDefinition,
   type EffectId,
 } from '@woven-deep/content';
-import type { ActorState } from './actor-model.js';
-import type { DomainEvent, FloorSnapshot, OpaqueId, Point, Uint32State } from './model.js';
+import { replaceActor, type ActorState } from './actor-model.js';
+import type { ActiveRun, DomainEvent, FloorSnapshot, OpaqueId, Point, Uint32State } from './model.js';
+import type { RngStreamName } from './versions.js';
 import { rollDie } from './random.js';
 import { resolveDamage } from './combat.js';
 import { applyCondition, conditionDefinition } from './conditions.js';
@@ -24,6 +25,18 @@ export interface EffectSequenceResult {
   readonly floors: readonly FloorSnapshot[];
   readonly effectsState: Uint32State;
   readonly events: readonly DomainEvent[];
+}
+
+export function withRngStream(state: ActiveRun, name: RngStreamName, next: Uint32State): ActiveRun {
+  return { ...state, rng: { ...state.rng, [name]: next } };
+}
+
+export function applyEffectResult(
+  state: ActiveRun,
+  resolved: Pick<EffectSequenceResult, 'actors' | 'items' | 'survival' | 'effectsState'>,
+): ActiveRun {
+  return { ...state, actors: resolved.actors, items: resolved.items, survival: resolved.survival,
+    rng: { ...state.rng, effects: resolved.effectsState } };
 }
 
 export interface EffectOperationInput {
@@ -87,10 +100,6 @@ function actorById(actors: readonly ActorState[], actorId: OpaqueId): ActorState
   const actor = actors.find((candidate) => candidate.actorId === actorId);
   if (!actor) throw new Error(`internal invariant: actor ${actorId} does not exist`);
   return actor;
-}
-
-function replaceActor(actors: readonly ActorState[], updated: ActorState): readonly ActorState[] {
-  return actors.map((actor) => actor.actorId === updated.actorId ? updated : actor);
 }
 
 function rollDice(state: Uint32State, dice: Readonly<{ count: number; sides: number; bonus: number }>) {

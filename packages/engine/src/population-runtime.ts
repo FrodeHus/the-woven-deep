@@ -1,6 +1,3 @@
-import type {
-  CompiledContentPack, EncounterContentEntry, EncounterModel,
-} from '@woven-deep/content';
 import type { ActorState } from './actor-model.js';
 import type { ActiveRun, OpaqueId } from './model.js';
 import type { PopulationInstance } from './population-model.js';
@@ -21,18 +18,6 @@ export function replacePopulationList(
 
 export function replacePopulation(state: ActiveRun, replacement: PopulationInstance): ActiveRun {
   return { ...state, populations: replacePopulationList(state.populations, replacement) };
-}
-
-export function requireEncounter<M extends EncounterModel>(
-  content: CompiledContentPack,
-  encounterId: OpaqueId,
-  model: M,
-): Extract<EncounterContentEntry, { model: M }> {
-  const entry = content.entries.find((candidate) => candidate.id === encounterId);
-  if (!entry || entry.kind !== 'encounter' || entry.model !== model) {
-    throw new Error(`internal invariant: ${model} encounter ${encounterId} does not exist`);
-  }
-  return entry as Extract<EncounterContentEntry, { model: M }>;
 }
 
 export function deadLivingMembers(

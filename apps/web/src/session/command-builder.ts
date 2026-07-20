@@ -1,12 +1,14 @@
 import type { CompiledContentPack } from '@woven-deep/content';
-import type {
-  Direction, EquipmentSlot, GameCommand, GameplayProjection, OpaqueId,
+import {
+  isStairDown, isStairUp,
+  type Direction, type EquipmentSlot, type GameCommand, type GameplayProjection, type OpaqueId,
 } from '@woven-deep/engine';
 import type { PlayerIntent } from './intents.js';
 import {
-  actorsOf, featuresOf, groundItemsOf, heroOf, ownedItemOf,
+  actorsOf, adjacentMerchant, featuresOf, groundItemsOf, heroOf, ownedItemOf,
   type ActorView, type FeatureView, type GroundItemView, type OwnedItemView,
 } from './projection-view.js';
+import { itemById } from './pack-queries.js';
 
 export type BuiltIntent =
   | { readonly kind: 'command'; readonly command: GameCommand }
@@ -53,13 +55,13 @@ function ownedItem(projection: GameplayProjection, itemId: OpaqueId): OwnedItemV
 function stairDownUnderHero(projection: GameplayProjection): boolean {
   const { x, y } = heroOf(projection);
   const cell = projection.floor.cells.find((candidate) => candidate.x === x && candidate.y === y);
-  return cell?.tileId === 5;
+  return isStairDown(cell?.tileId);
 }
 
 function stairUpUnderHero(projection: GameplayProjection): boolean {
   const { x, y } = heroOf(projection);
   const cell = projection.floor.cells.find((candidate) => candidate.x === x && candidate.y === y);
-  return cell?.tileId === 4;
+  return isStairUp(cell?.tileId);
 }
 
 /** True when the hero is Chebyshev-adjacent (but not standing on) the town's house-door slot --
@@ -71,21 +73,9 @@ function heroAdjacentToHouseDoor(projection: GameplayProjection): boolean {
   return Math.max(Math.abs(x - door.x), Math.abs(y - door.y)) === 1;
 }
 
-/** The merchant actor the hero is Chebyshev-adjacent to (but not standing on), if any -- mirrors
- * `heroAdjacentToHouseDoor` above. When more than one merchant is adjacent, the nearest by
- * actor-id ordering wins; the town's authored merchant stalls never place two merchants close
- * enough for this to matter in practice. */
-function heroAdjacentMerchant(projection: GameplayProjection): ActorView | undefined {
-  const origin = heroOf(projection);
-  return actorsOf(projection)
-    .filter((actor) => typeof actor.factionName === 'string')
-    .filter((actor) => Math.max(Math.abs(actor.x - origin.x), Math.abs(actor.y - origin.y)) === 1)
-    .sort((left, right) => (left.actorId < right.actorId ? -1 : 1))[0];
-}
-
 function equipSlotFor(pack: CompiledContentPack, contentId: OpaqueId, occupiedSlots: ReadonlySet<EquipmentSlot>): EquipmentSlot | undefined {
-  const entry = pack.entries.find((candidate) => candidate.id === contentId);
-  if (!entry || entry.kind !== 'item' || entry.equipment === null) return undefined;
+  const entry = itemById(pack, contentId);
+  if (!entry || entry.equipment === null) return undefined;
   const { slots } = entry.equipment;
   return slots.find((slot) => !occupiedSlots.has(slot)) ?? slots[0];
 }
@@ -233,7 +223,7 @@ export function buildIntent(input: Readonly<{
     };
   }
   if (intent.type === 'trade-open') {
-    const merchant = heroAdjacentMerchant(projection);
+    const merchant = adjacentMerchant(projection);
     if (!merchant) return { kind: 'rejected', message: 'There is no merchant nearby to trade with.' };
     return {
       kind: 'command',

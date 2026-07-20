@@ -2,7 +2,8 @@ import type {
   CompiledContentPack, MerchantEncounterContentEntry, NpcContentEntry, NpcFactionContentEntry,
 } from '@woven-deep/content';
 import { actionCostFor, balanceEntry, type GameAction } from './actions.js';
-import { actorById, type ActorState } from './actor-model.js';
+import { actorById, withActor, type ActorState } from './actor-model.js';
+import { entryById, requireEncounter } from './content-index.js';
 import { changeReputation } from './commerce.js';
 import { itemLightSources } from './equipment.js';
 import { featureTiles } from './features.js';
@@ -26,7 +27,7 @@ export const MERCHANT_BEHAVIOR_ID = 'npc-behavior.travelling-merchant';
 const BPS_DIVISOR = 10_000;
 
 function npcDefinition(content: CompiledContentPack, contentId: OpaqueId): NpcContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === contentId);
+  const entry = entryById(content, contentId);
   if (!entry || entry.kind !== 'npc') {
     throw new Error(`internal invariant: npc definition ${contentId} does not exist`);
   }
@@ -34,15 +35,11 @@ function npcDefinition(content: CompiledContentPack, contentId: OpaqueId): NpcCo
 }
 
 function merchantEncounter(content: CompiledContentPack, encounterId: OpaqueId): MerchantEncounterContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === encounterId);
-  if (!entry || entry.kind !== 'encounter' || entry.model !== 'merchant') {
-    throw new Error(`internal invariant: merchant encounter ${encounterId} does not exist`);
-  }
-  return entry;
+  return requireEncounter(content, encounterId, 'merchant');
 }
 
 function merchantFaction(content: CompiledContentPack, factionId: OpaqueId): NpcFactionContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === factionId);
+  const entry = entryById(content, factionId);
   if (!entry || entry.kind !== 'npc-faction') {
     throw new Error(`internal invariant: merchant faction ${factionId} does not exist`);
   }
@@ -64,10 +61,6 @@ function replaceMerchantPopulation(
 ): readonly ActiveRun['populations'][number][] {
   return state.populations.map((candidate) =>
     candidate.populationId === population.populationId ? population : candidate);
-}
-
-function withActor(state: ActiveRun, actor: ActorState): ActiveRun {
-  return { ...state, actors: state.actors.map((candidate) => candidate.actorId === actor.actorId ? actor : candidate) };
 }
 
 function chebyshev(left: Point, right: Point): number {

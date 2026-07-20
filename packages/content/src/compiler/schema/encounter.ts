@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   base, color, depthRange, effect, encounterFormations, formationPreferences, glyph,
-  itemCategories, jsonObject, leaderDeathResponses, merchantServiceIds, probability,
+  itemCategories, itemRarities, jsonObject, leaderDeathResponses, merchantServiceIds, probability,
   safeInteger, safeNonNegative, safePositive, slugSchema, stableIdSchema,
   swarmDestructionResponses,
 } from './common.js';
@@ -31,7 +31,7 @@ const encounterCommon = {
   environmentTags: z.array(slugSchema),
   requiredVaultTags: z.array(slugSchema),
   weight: safePositive,
-  rarity: z.enum(['common', 'uncommon', 'rare', 'legendary']),
+  rarity: z.enum(itemRarities),
   runAppearanceChance: probability,
   discoveryProtectionIncrement: probability.optional(),
   discoveryProtectionCap: probability.optional(),

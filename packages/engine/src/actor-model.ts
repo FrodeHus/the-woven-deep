@@ -71,6 +71,14 @@ export function actorById(run: Pick<ActiveRun, 'actors'>, actorId: OpaqueId): Ac
   return run.actors.find((actor) => actor.actorId === actorId);
 }
 
+export function replaceActor(actors: readonly ActorState[], actor: ActorState): readonly ActorState[] {
+  return actors.map((candidate) => candidate.actorId === actor.actorId ? actor : candidate);
+}
+
+export function withActor(state: ActiveRun, actor: ActorState): ActiveRun {
+  return { ...state, actors: replaceActor(state.actors, actor) };
+}
+
 export function heroActor(run: Pick<ActiveRun, 'actors' | 'hero'>): ActorState {
   const actor = actorById(run, run.hero.actorId);
   if (actor === undefined || !actor.playerControlled) {

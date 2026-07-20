@@ -1,5 +1,8 @@
 import type { CSSProperties, JSX } from 'react';
-import type { ObservableFloorProjection, ObservablePlacementSlot } from '@woven-deep/engine';
+import {
+  isStairDown, isStairUp,
+  type ObservableFloorProjection, type ObservablePlacementSlot,
+} from '@woven-deep/engine';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import { actorsOf, heroOf, type ActorView, type HeroView } from '../../session/projection-view.js';
 import { visibleForeground } from '../cell-color.js';
@@ -14,12 +17,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/tabs.js'
  * exists today (see the plan's Global Constraints -- this task adds zero new projection fields).
  */
 export const JOURNAL_OBJECTIVE = 'Reach the Heart of the Deep, then find your way back out alive.';
-
-/** Stair tile ids (`packages/engine/src/terrain.ts`'s `TILE_DEFINITIONS`) -- both share the same
- * `terrain.stair` token, so `tileId` (not `token`) is the only field that actually distinguishes
- * up from down; never re-derived here, just read straight off the projected cell. */
-const STAIR_UP_TILE_ID = 4;
-const STAIR_DOWN_TILE_ID = 5;
 
 type CellCustomProperties = CSSProperties & { '--light'?: string; '--fg'?: string };
 
@@ -136,9 +133,9 @@ interface Landmark {
 function landmarksFor(floor: ObservableFloorProjection, actors: readonly ActorView[], slots: readonly ObservablePlacementSlot[]): readonly Landmark[] {
   const landmarks: Landmark[] = [];
 
-  const stairUpCell = floor.cells.find((cell) => cell.knowledge !== 'unknown' && cell.tileId === STAIR_UP_TILE_ID);
+  const stairUpCell = floor.cells.find((cell) => cell.knowledge !== 'unknown' && isStairUp(cell.tileId));
   if (stairUpCell) landmarks.push({ key: `stair-up:${stairUpCell.x}:${stairUpCell.y}`, label: 'Stairs up (seen)' });
-  const stairDownCell = floor.cells.find((cell) => cell.knowledge !== 'unknown' && cell.tileId === STAIR_DOWN_TILE_ID);
+  const stairDownCell = floor.cells.find((cell) => cell.knowledge !== 'unknown' && isStairDown(cell.tileId));
   if (stairDownCell) landmarks.push({ key: `stair-down:${stairDownCell.x}:${stairDownCell.y}`, label: 'Stairs down (seen)' });
 
   if (floor.town) {

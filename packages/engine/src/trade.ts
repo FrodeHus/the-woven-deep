@@ -1,7 +1,8 @@
 import type {
   CompiledContentPack, ItemContentEntry, MerchantEncounterContentEntry, NpcFactionContentEntry,
 } from '@woven-deep/content';
-import { heroActor, heroPerception, type ActorState } from './actor-model.js';
+import { heroActor, type ActorState } from './actor-model.js';
+import { entryById, requireEncounter, requireItem as itemDefinition } from './content-index.js';
 import { balanceEntry } from './actions.js';
 import { actorHasConditionTrait } from './conditions.js';
 import {
@@ -9,8 +10,6 @@ import {
   quoteMerchantPurchase, quoteMerchantSale, quoteMerchantService, reputationTier,
 } from './commerce.js';
 import { identifyItemCompletely } from './identification.js';
-import { itemLightSources } from './equipment.js';
-import { featureTiles } from './features.js';
 import { depositIntoBackpack } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
 import type { MerchantPopulation, MerchantServiceState } from './merchant-model.js';
@@ -20,7 +19,8 @@ import {
   type TradeBuyCommand, type TradeCloseReason, type TradeCommand, type TradeSellCommand,
   type TradeServiceCommand,
 } from './model.js';
-import { isPerceivedCell, refreshKnowledge } from './perception.js';
+import { isPerceivedCell } from './perception.js';
+import { heroFloorPerception } from './run-perception.js';
 import { compareCodeUnits } from './stable-json.js';
 import { relationshipBetween } from './reactions.js';
 
@@ -33,24 +33,12 @@ export function isTradeCommand(command: GameCommand): command is TradeCommand {
     || command.type === 'trade-close';
 }
 
-function itemDefinition(content: CompiledContentPack, contentId: OpaqueId): ItemContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === contentId);
-  if (!entry || entry.kind !== 'item') {
-    throw new Error(`internal invariant: item definition ${contentId} does not exist`);
-  }
-  return entry;
-}
-
 function merchantEncounter(content: CompiledContentPack, encounterId: OpaqueId): MerchantEncounterContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === encounterId);
-  if (!entry || entry.kind !== 'encounter' || entry.model !== 'merchant') {
-    throw new Error(`internal invariant: merchant encounter ${encounterId} does not exist`);
-  }
-  return entry;
+  return requireEncounter(content, encounterId, 'merchant');
 }
 
 export function merchantFaction(content: CompiledContentPack, factionId: OpaqueId): NpcFactionContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === factionId);
+  const entry = entryById(content, factionId);
   if (!entry || entry.kind !== 'npc-faction') {
     throw new Error(`internal invariant: merchant faction ${factionId} does not exist`);
   }
@@ -60,15 +48,7 @@ export function merchantFaction(content: CompiledContentPack, factionId: OpaqueI
 function merchantPerceived(state: ActiveRun, content: CompiledContentPack, hero: ActorState, merchant: ActorState): boolean {
   const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
   if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
-  const positions = new Map<string, Readonly<{ x: number; y: number }>>(
-    floor.entities.map((entity) => [entity.entityId, entity] as const),
-  );
-  for (const candidate of state.actors) if (candidate.floorId === floor.floorId) positions.set(candidate.actorId, candidate);
-  const effectiveFloor = { ...floor, tiles: featureTiles(state, floor.floorId) };
-  const perception = refreshKnowledge({
-    floor: effectiveFloor, hero: heroPerception(state.hero, hero), actors: positions,
-    additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }),
-  });
+  const perception = heroFloorPerception({ state, content });
   const index = tileIndex(floor, merchant.x, merchant.y);
   return index !== undefined && isPerceivedCell(perception.visibilityWords, perception.illumination, index);
 }

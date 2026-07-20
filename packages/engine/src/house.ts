@@ -1,5 +1,6 @@
-import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack } from '@woven-deep/content';
 import { heroActor } from './actor-model.js';
+import { requireItem as itemDefinition } from './content-index.js';
 import { canStack, depositIntoBackpack } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
 import type { ActiveRun, DomainEvent, GameCommand, HouseCommand, InvalidActionReason, OpaqueId } from './model.js';
@@ -7,12 +8,6 @@ import { isTownFloorActive } from './town-floor.js';
 
 export function isHouseCommand(command: GameCommand): command is HouseCommand {
   return command.type === 'house-deposit' || command.type === 'house-withdraw';
-}
-
-function itemDefinition(content: CompiledContentPack, contentId: OpaqueId): ItemContentEntry {
-  const entry = content.entries.find((candidate) => candidate.id === contentId);
-  if (!entry || entry.kind !== 'item') throw new Error(`internal invariant: item definition ${contentId} does not exist`);
-  return entry;
 }
 
 function positiveQuantity(value: number): boolean {

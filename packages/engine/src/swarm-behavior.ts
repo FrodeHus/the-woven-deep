@@ -5,11 +5,12 @@ import { emptyEquipment, type ActorState } from './actor-model.js';
 import { actionCostFor, balanceEntry } from './actions.js';
 import { chargeActionEnergy } from './scheduler.js';
 import { applyCondition } from './conditions.js';
-import { resolveEffectSequence } from './effects.js';
+import { applyEffectResult, resolveEffectSequence } from './effects.js';
 import { featureTiles } from './features.js';
 import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
 import type { SwarmPopulation } from './population-model.js';
-import { deadLivingMembers, replacePopulationList, requireEncounter, sortedPopulations, synchronizeDeath } from './population-runtime.js';
+import { deadLivingMembers, replacePopulationList, sortedPopulations, synchronizeDeath } from './population-runtime.js';
+import { requireEncounter } from './content-index.js';
 import { rollDie } from './random.js';
 import { compareCodeUnits } from './stable-json.js';
 import { movementBlockReason, tileDefinition } from './terrain.js';
@@ -199,8 +200,7 @@ export function advanceSwarms(input: Readonly<{
           effectsState: state.rng.effects, worldTime: state.worldTime, eventId: input.eventId,
           survival: state.survival, survivalActorId: state.hero.actorId,
           forceMoveDirection: { x: 0, y: 0 }, operations: {} });
-        state = { ...state, actors: resolved.actors, items: resolved.items,
-          rng: { ...state.rng, effects: resolved.effectsState }, survival: resolved.survival };
+        state = applyEffectResult(state, resolved);
         events.push(...resolved.events);
       }
       population = syncDeaths({ ...population, nextSpawnAt: deadline(state.worldTime, interval) }, state.actors);

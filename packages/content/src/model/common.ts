@@ -31,12 +31,18 @@ export const DERIVED_STAT_NAMES = [
   'defense', 'search', 'disarm', 'lightOutRevealRadius', 'lightOutMemoryPersists',
 ] as const;
 export type DerivedStatName = typeof DERIVED_STAT_NAMES[number];
-export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'poison' | 'arcane';
-export type Disposition = 'friendly' | 'neutral' | 'hostile';
-export type EquipmentSlot = 'main-hand' | 'off-hand' | 'body' | 'head' | 'hands' | 'feet' | 'neck' | 'left-ring' | 'right-ring';
-export type ItemCategory = 'weapon' | 'ammunition' | 'armor' | 'shield' | 'light' | 'fuel' | 'food' | 'potion' | 'scroll' | 'ring' | 'misc';
-export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
-export type TargetingId = 'target.self' | 'target.actor' | 'target.line' | 'target.cell';
+export const DAMAGE_TYPES = ['physical', 'fire', 'cold', 'lightning', 'poison', 'arcane'] as const;
+export type DamageType = typeof DAMAGE_TYPES[number];
+export const DISPOSITIONS = ['friendly', 'neutral', 'hostile'] as const;
+export type Disposition = typeof DISPOSITIONS[number];
+export const EQUIPMENT_SLOTS = ['main-hand', 'off-hand', 'body', 'head', 'hands', 'feet', 'neck', 'left-ring', 'right-ring'] as const;
+export type EquipmentSlot = typeof EQUIPMENT_SLOTS[number];
+export const ITEM_CATEGORIES = ['weapon', 'ammunition', 'armor', 'shield', 'light', 'fuel', 'food', 'potion', 'scroll', 'ring', 'misc'] as const;
+export type ItemCategory = typeof ITEM_CATEGORIES[number];
+export const ITEM_RARITIES = ['common', 'uncommon', 'rare', 'legendary'] as const;
+export type ItemRarity = typeof ITEM_RARITIES[number];
+export const TARGETING_IDS = ['target.self', 'target.actor', 'target.line', 'target.cell'] as const;
+export type TargetingId = typeof TARGETING_IDS[number];
 
 export interface DiceDefinition {
   readonly count: number;
@@ -72,7 +78,8 @@ export interface PresentedContentEntry extends BaseContentEntry {
 
 export type CompletionType = 'died' | 'became-heart' | 'refused' | 'broke-cycle';
 
-export type MerchantServiceId = 'merchant-service.identify' | 'merchant-service.strongbox';
+export const MERCHANT_SERVICE_IDS = ['merchant-service.identify', 'merchant-service.strongbox'] as const;
+export type MerchantServiceId = typeof MERCHANT_SERVICE_IDS[number];
 
 export type ContentEntry = MonsterContentEntry | ItemContentEntry | SpellContentEntry | TrapContentEntry
   | LootTableContentEntry | BalanceContentEntry | VaultContentEntry | ConditionContentEntry

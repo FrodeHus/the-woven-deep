@@ -2,8 +2,9 @@ import type { JSX } from 'react';
 import { ATTRIBUTE_ORDER } from '@woven-deep/engine';
 import { DERIVED_STAT_LABELS, playerVisibleDerivedStats } from '@/ui/derived-stats-display.js';
 import { wizardPreview } from '../../../../session/wizard-reducer.js';
+import { backgroundEntries, classEntries, traitEntries } from '../../../../session/pack-queries.js';
 import { DotLeaderRow } from '../chargen-components.js';
-import { backgroundEntries, classEntries, traitEntries, type StepProps } from './step-content.js';
+import { type StepProps } from './step-content.js';
 
 export function ReviewStep({ state, pack }: StepProps): JSX.Element {
   const classEntry = classEntries(pack).find((entry) => entry.id === state.classId);

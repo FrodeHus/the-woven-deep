@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { FacetedOptionList } from '../FacetedOptionList.js';
-import { classEntries, type StepProps } from './step-content.js';
+import { classEntries } from '../../../../session/pack-queries.js';
+import { type StepProps } from './step-content.js';
 
 export function CallingStep({ state, pack, dispatch }: StepProps): JSX.Element {
   const entries = classEntries(pack).map((entry) => ({

@@ -1,9 +1,8 @@
-import type {
-  ClassContentEntry, CompiledContentPack, ItemContentEntry, MonsterContentEntry, SpellContentEntry,
-} from '@woven-deep/content';
+import type { ClassContentEntry, CompiledContentPack } from '@woven-deep/content';
 import type { StoredHallRecord } from '@woven-deep/engine';
 import type { SessionSnapshot } from './guest-session.js';
 import type { Sightings } from './codex-storage.js';
+import { classEntries, itemEntries, monsterEntries, spellEntries } from './pack-queries.js';
 
 export interface CodexCategory {
   readonly kind: 'class' | 'item' | 'spell' | 'monster';
@@ -55,7 +54,7 @@ function byId<T extends { readonly id: string }>(entries: readonly T[]): readonl
 function deriveMonsterCategory(
   pack: CompiledContentPack, records: readonly StoredHallRecord[], sightings: Sightings,
 ): CodexCategory {
-  const entries = byId(pack.entries.filter((entry): entry is MonsterContentEntry => entry.kind === 'monster'));
+  const entries = byId(monsterEntries(pack));
   const sighted = new Set(sightings.monsterIds);
   const killed = new Set(records.flatMap((record) => (record.cause.killerContentId === null ? [] : [record.cause.killerContentId])));
   return {
@@ -73,7 +72,7 @@ function deriveMonsterCategory(
 function deriveItemCategory(
   pack: CompiledContentPack, records: readonly StoredHallRecord[], sightings: Sightings,
 ): CodexCategory {
-  const entries = byId(pack.entries.filter((entry): entry is ItemContentEntry => entry.kind === 'item'));
+  const entries = byId(itemEntries(pack));
   const sighted = new Set(sightings.itemIds);
   const equipped = new Set(records.flatMap((record) => record.build.equippedItemContentIds));
   return {
@@ -93,7 +92,7 @@ function deriveItemCategory(
  * milestone) -- per the design amendment, a category whose discovery sources don't exist yet
  * renders fully undiscovered rather than inventing one. */
 function deriveSpellCategory(pack: CompiledContentPack): CodexCategory {
-  const entries = byId(pack.entries.filter((entry): entry is SpellContentEntry => entry.kind === 'spell'));
+  const entries = byId(spellEntries(pack));
   return { kind: 'spell', entries: entries.map((): CodexEntry => ({ discovered: false, silhouetteGlyph: GENERIC_SILHOUETTE_GLYPH })) };
 }
 
@@ -101,7 +100,7 @@ function deriveSpellCategory(pack: CompiledContentPack): CodexCategory {
  * pack lookup against `CodexState`'s spoiler-free class category (by shared index) to find a
  * locked class's `unlockHint`, which `CodexEntry`'s undiscovered variant does not itself carry. */
 export function sortedClassEntries(pack: CompiledContentPack): readonly ClassContentEntry[] {
-  return byId(pack.entries.filter((entry): entry is ClassContentEntry => entry.kind === 'class'));
+  return byId(classEntries(pack));
 }
 
 /** Neither `ClassContentEntry` nor any of its "run" callers project a `color` field for classes (the

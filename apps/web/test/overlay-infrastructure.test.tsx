@@ -8,11 +8,12 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import { App } from '../src/App.js';
 import { GuestSession } from '../src/session/guest-session.js';
-import { resolveKeymap, SETTINGS_KEY, type Settings } from '../src/session/settings.js';
+import { SETTINGS_KEY, type Settings } from '../src/session/settings.js';
 import type { SessionStorageLike } from '../src/session/storage.js';
 import { OverlayErrorBoundary } from '../src/ui/overlays/OverlayErrorBoundary.js';
 import { canOpenOverlay, OVERLAY_REGISTRY } from '../src/ui/overlays/registry.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
+import { withUiProviders } from './with-ui-providers.js';
 
 let pack: CompiledContentPack;
 
@@ -142,14 +143,15 @@ describe('registry overlay infrastructure', () => {
       const onCloseOverlay = vi.fn();
 
       render(
-        <PlayScreen
-          session={freshSession()}
-          pack={pack}
-          overlay="codex"
-          onOpenOverlay={() => {}}
-          onCloseOverlay={onCloseOverlay}
-          keymap={resolveKeymap({})}
-        />,
+        withUiProviders(pack, (
+          <PlayScreen
+            session={freshSession()}
+            pack={pack}
+            overlay="codex"
+            onOpenOverlay={() => {}}
+            onCloseOverlay={onCloseOverlay}
+          />
+        )),
       );
       expect(screen.getByRole('dialog', { name: 'Codex' })).toBeInTheDocument();
 

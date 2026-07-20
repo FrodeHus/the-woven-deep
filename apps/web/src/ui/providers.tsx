@@ -35,7 +35,7 @@ export function UiProviders({ pack, settings, onChangeSettings, session, childre
   pack: CompiledContentPack;
   settings: Settings;
   onChangeSettings: (next: Settings) => void;
-  session?: GuestSession;
+  session?: GuestSession | undefined;
   children: ReactNode;
 }>): JSX.Element {
   const settingsValue = useMemo(

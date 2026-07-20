@@ -1,5 +1,7 @@
 import type { CompiledContentPack, MonsterContentEntry } from '@woven-deep/content';
 import type { ActorState } from './actor-model.js';
+import { entryById } from './content-index.js';
+import { withRngStream } from './effects.js';
 import { createFloorLootFromTable } from './inventory.js';
 import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
 import { rollDie } from './random.js';
@@ -8,7 +10,8 @@ import { compareCodeUnits } from './stable-json.js';
 const DROP_CHANCE_RESOLUTION = 10_000;
 
 function monsterEntry(content: CompiledContentPack, contentId: OpaqueId): MonsterContentEntry | undefined {
-  return content.entries.find((entry): entry is MonsterContentEntry => entry.kind === 'monster' && entry.id === contentId);
+  const entry = entryById(content, contentId);
+  return entry?.kind === 'monster' ? entry : undefined;
 }
 
 export function dropMonsterLoot(input: Readonly<{
@@ -20,7 +23,7 @@ export function dropMonsterLoot(input: Readonly<{
   const chance = rollDie(input.state.rng.loot, DROP_CHANCE_RESOLUTION);
   const threshold = Math.round(monster.dropChance * DROP_CHANCE_RESOLUTION);
   if (chance.value > threshold) {
-    return { state: { ...input.state, rng: { ...input.state.rng, loot: chance.state } }, events: [] };
+    return { state: withRngStream(input.state, 'loot', chance.state), events: [] };
   }
 
   const loot = createFloorLootFromTable({ content: input.content, tableId: monster.lootTableId,
@@ -28,7 +31,7 @@ export function dropMonsterLoot(input: Readonly<{
     floorId: input.deadActor.floorId, x: input.deadActor.x, y: input.deadActor.y });
 
   if (loot.items.length === 0) {
-    return { state: { ...input.state, rng: { ...input.state.rng, loot: loot.state } }, events: [] };
+    return { state: withRngStream(input.state, 'loot', loot.state), events: [] };
   }
   for (const item of loot.items) if (input.state.items.some((entry) => entry.itemId === item.itemId)) {
     throw new Error(`internal invariant: monster loot item ${item.itemId} already exists`);

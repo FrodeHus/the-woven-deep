@@ -11,7 +11,8 @@ import type {
   GroupOutcomeAppliedEvent, OpaqueId,
 } from './model.js';
 import type { GroupPopulation, LastKnownTarget } from './population-model.js';
-import { deadLivingMembers, replacePopulationList, requireEncounter, sortedPopulations, synchronizeDeath } from './population-runtime.js';
+import { deadLivingMembers, replacePopulationList, sortedPopulations, synchronizeDeath } from './population-runtime.js';
+import { requireEncounter } from './content-index.js';
 import { compareCodeUnits } from './stable-json.js';
 import { movementBlockReason } from './terrain.js';
 import { findPath } from './pathfinding.js';

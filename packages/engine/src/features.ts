@@ -3,7 +3,7 @@ import type { DoorFeature, DungeonFeature } from './feature-model.js';
 import { tileIndex, type ActiveRun, type OpaqueId, type TileId } from './model.js';
 import type { CompiledContentPack, TrapContentEntry } from '@woven-deep/content';
 import { rollDie } from './random.js';
-import { resolveEffectSequence } from './effects.js';
+import { applyEffectResult, resolveEffectSequence, withRngStream } from './effects.js';
 import { deriveActorStats } from './attributes.js';
 import { conditionModifiers } from './conditions.js';
 import { equipmentModifiers } from './equipment.js';
@@ -176,9 +176,8 @@ export function triggerTrap(input: Readonly<{
     sourceActorId: input.actorId, targetActorId: input.actorId, effectsState: run.rng.effects,
     worldTime: run.worldTime, eventId: input.eventId, forceMoveDirection: { x: 1, y: 0 }, operations: {} });
   const state = definition.resetMode === 'reset' ? 'armed' : definition.resetMode === 'disabled' ? 'disabled' : 'spent';
-  run = { ...run, actors: resolved.actors, items: resolved.items, survival: resolved.survival,
-    rng: { ...run.rng, effects: resolved.effectsState }, features: run.features.map((candidate) =>
-      candidate.featureId === feature.featureId && candidate.type === 'trap' ? { ...candidate, state } : candidate) };
+  run = { ...applyEffectResult(run, resolved), features: run.features.map((candidate) =>
+    candidate.featureId === feature.featureId && candidate.type === 'trap' ? { ...candidate, state } : candidate) };
   return { run, events: [...events, ...resolved.events] };
 }
 
@@ -199,7 +198,7 @@ export function disarmTrap(input: Readonly<{
   const failed = rolled.value + stats.disarm < definition.disarmDifficulty;
   if (rolled.value === 1 || failed) {
     const mode = rolled.value === 1 ? definition.disarmOutcomes.criticalFailure : definition.disarmOutcomes.failure;
-    const rolledRun = { ...input.run, rng: { ...input.run.rng, effects: rolled.state } };
+    const rolledRun = withRngStream(input.run, 'effects', rolled.state);
     if (mode === 'trigger') return triggerTrap({ ...input, run: rolledRun });
     const events: import('./model.js').DomainEvent[] = [{ type: 'trap.disarm-failed', eventId: input.eventId,
       actorId: actor.actorId, featureId: feature.featureId }];

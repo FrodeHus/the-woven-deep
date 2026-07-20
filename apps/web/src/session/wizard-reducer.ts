@@ -1,11 +1,10 @@
-import type {
-  BackgroundContentEntry, BalanceContentEntry, ClassContentEntry, CompiledContentPack, TraitContentEntry,
-} from '@woven-deep/content';
+import type { CompiledContentPack } from '@woven-deep/content';
 import {
   ATTRIBUTE_ORDER, HERO_NAME_RULES, deriveActorStats, pointBuyCost, rerollAttributes, rollAttributes,
   type AttributeName, type AttributeRoll, type BaseAttributes, type DerivedActorStats, type DerivedStatModifier,
   type HeroChoices, type OpaqueId, type Uint32State,
 } from '@woven-deep/engine';
+import { backgroundById, balanceEntry, classById, traitById } from './pack-queries.js';
 
 /** Portrait glyph ids; `apps/web/src/styles.css` maps each id to an accent color for rendering. */
 export const PORTRAIT_GLYPHS = ['@', '@·gold', '@·ember', '@·mist', '@·moss'] as const;
@@ -75,24 +74,6 @@ export function initialWizardState(seed: Uint32State, onboardingEnabled = true):
   };
 }
 
-function balanceOf(pack: CompiledContentPack): BalanceContentEntry | undefined {
-  return pack.entries.find((entry): entry is BalanceContentEntry => entry.kind === 'balance');
-}
-
-function classOf(pack: CompiledContentPack, classId: OpaqueId): ClassContentEntry | undefined {
-  return pack.entries.find((entry): entry is ClassContentEntry => entry.kind === 'class' && entry.id === classId);
-}
-
-function backgroundOf(pack: CompiledContentPack, backgroundId: OpaqueId): BackgroundContentEntry | undefined {
-  return pack.entries.find(
-    (entry): entry is BackgroundContentEntry => entry.kind === 'background' && entry.id === backgroundId,
-  );
-}
-
-function traitOf(pack: CompiledContentPack, traitId: OpaqueId): TraitContentEntry | undefined {
-  return pack.entries.find((entry): entry is TraitContentEntry => entry.kind === 'trait' && entry.id === traitId);
-}
-
 function normalizedName(name: string): string {
   return name.trim().normalize('NFC');
 }
@@ -139,7 +120,7 @@ export function wizardReduce(state: WizardState, action: WizardAction, context: 
       // an entirely new roll, is what legitimately resets it (see the `roll` case below).
       if (state.method === action.method) return state;
       if (action.method === 'point-buy') {
-        const balance = balanceOf(context.pack);
+        const balance = balanceEntry(context.pack);
         if (!balance) return state;
         const attributes = Object.fromEntries(
           ATTRIBUTE_ORDER.map((attributeName) => [attributeName, balance.attributeMinimum]),
@@ -163,7 +144,7 @@ export function wizardReduce(state: WizardState, action: WizardAction, context: 
 
     case 'set-attribute': {
       if (state.method !== 'point-buy' || state.attributes === null) return state;
-      const balance = balanceOf(context.pack);
+      const balance = balanceEntry(context.pack);
       if (!balance) return state;
       if (action.value < balance.attributeMinimum || action.value > balance.attributeMaximum) return state;
       const candidate = { ...state.attributes, [action.attribute]: action.value };
@@ -178,7 +159,7 @@ export function wizardReduce(state: WizardState, action: WizardAction, context: 
     }
 
     case 'choose-class': {
-      const entry = classOf(context.pack, action.classId);
+      const entry = classById(context.pack, action.classId);
       if (!entry || !entry.playable) return state;
       if (state.classId === action.classId) return state;
       return { ...state, classId: action.classId, kitId: null };
@@ -186,7 +167,7 @@ export function wizardReduce(state: WizardState, action: WizardAction, context: 
 
     case 'choose-kit': {
       if (state.classId === null) return state;
-      const entry = classOf(context.pack, state.classId);
+      const entry = classById(context.pack, state.classId);
       if (!entry) return state;
       const kit = entry.kits.find((candidate) => candidate.kitId === action.kitId);
       if (!kit) return state;
@@ -194,13 +175,13 @@ export function wizardReduce(state: WizardState, action: WizardAction, context: 
     }
 
     case 'choose-background': {
-      const entry = backgroundOf(context.pack, action.backgroundId);
+      const entry = backgroundById(context.pack, action.backgroundId);
       if (!entry) return state;
       return { ...state, backgroundId: action.backgroundId };
     }
 
     case 'toggle-trait': {
-      const entry = traitOf(context.pack, action.traitId);
+      const entry = traitById(context.pack, action.traitId);
       if (!entry) return state;
       if (state.traitIds.includes(action.traitId)) {
         return { ...state, traitIds: state.traitIds.filter((traitId) => traitId !== action.traitId) };
@@ -252,16 +233,16 @@ export function wizardChoices(state: WizardState): HeroChoices | null {
  * first (as `heroFromChoices` does for the persisted `NewRunHero`) is unnecessary here. */
 export function wizardPreview(state: WizardState, pack: CompiledContentPack): DerivedActorStats | null {
   if (state.attributes === null) return null;
-  const balance = balanceOf(pack);
+  const balance = balanceEntry(pack);
   if (!balance) return null;
 
   const heroModifiers: DerivedStatModifier[] = [];
   if (state.backgroundId !== null) {
-    const background = backgroundOf(pack, state.backgroundId);
+    const background = backgroundById(pack, state.backgroundId);
     if (background) heroModifiers.push(background.modifiers);
   }
   for (const traitId of state.traitIds) {
-    const trait = traitOf(pack, traitId);
+    const trait = traitById(pack, traitId);
     if (trait) heroModifiers.push(trait.modifiers);
   }
 

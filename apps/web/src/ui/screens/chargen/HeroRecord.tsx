@@ -1,49 +1,23 @@
 import type { JSX } from 'react';
 import type {
-  BackgroundContentEntry, BalanceContentEntry, ClassContentEntry, ClassKitBackpackItem,
-  ClassKitEquippedItem, CompiledContentPack, ItemContentEntry, TraitContentEntry,
+  ClassKitBackpackItem, ClassKitEquippedItem, CompiledContentPack,
 } from '@woven-deep/content';
 import { ATTRIBUTE_ORDER, DERIVED_STAT_NAMES, type DerivedStatName } from '@woven-deep/engine';
 import {
   PORTRAIT_GLYPHS, wizardPreview, type WizardState,
 } from '../../../session/wizard-reducer.js';
+import { backgroundById, balanceEntry, classById, itemById, traitEntries } from '../../../session/pack-queries.js';
 import { BlockBar, DotLeaderRow } from './chargen-components.js';
 import { Button } from '../../components/button.js';
 import { cn } from '../../lib/cn.js';
 import { DERIVED_STAT_LABELS, playerVisibleDerivedStats } from '../../derived-stats-display.js';
 
-function balanceOf(pack: CompiledContentPack): BalanceContentEntry | undefined {
-  return pack.entries.find((entry): entry is BalanceContentEntry => entry.kind === 'balance');
-}
-
-function classOf(pack: CompiledContentPack, classId: string | null): ClassContentEntry | undefined {
-  if (classId === null) return undefined;
-  return pack.entries.find((entry): entry is ClassContentEntry => entry.kind === 'class' && entry.id === classId);
-}
-
-function backgroundOf(pack: CompiledContentPack, backgroundId: string | null): BackgroundContentEntry | undefined {
-  if (backgroundId === null) return undefined;
-  return pack.entries.find(
-    (entry): entry is BackgroundContentEntry => entry.kind === 'background' && entry.id === backgroundId,
-  );
-}
-
-function traitsOf(pack: CompiledContentPack, traitIds: readonly string[]): readonly TraitContentEntry[] {
-  return pack.entries.filter(
-    (entry): entry is TraitContentEntry => entry.kind === 'trait' && traitIds.includes(entry.id),
-  );
-}
-
-function itemOf(pack: CompiledContentPack, contentId: string): ItemContentEntry | undefined {
-  return pack.entries.find((entry): entry is ItemContentEntry => entry.kind === 'item' && entry.id === contentId);
-}
-
 /** Mirrors `wizardPreview`'s modifier collection, but returns the raw per-stat sums instead of
  * feeding them into `deriveActorStats` -- this is exactly the delta a hero picks up from their
  * background and traits, since `deriveActorStats` sums `heroModifiers` onto the formula result. */
 function heroModifierDeltas(state: WizardState, pack: CompiledContentPack): Readonly<Partial<Record<DerivedStatName, number>>> {
-  const background = backgroundOf(pack, state.backgroundId);
-  const traits = traitsOf(pack, state.traitIds);
+  const background = state.backgroundId === null ? undefined : backgroundById(pack, state.backgroundId);
+  const traits = traitEntries(pack).filter((entry) => state.traitIds.includes(entry.id));
   const deltas: Partial<Record<DerivedStatName, number>> = {};
   for (const modifiers of [background?.modifiers, ...traits.map((trait) => trait.modifiers)]) {
     if (!modifiers) continue;
@@ -64,7 +38,7 @@ interface LoadoutRow {
 }
 
 function equippedRow(pack: CompiledContentPack, item: ClassKitEquippedItem): LoadoutRow {
-  const entry = itemOf(pack, item.contentId);
+  const entry = itemById(pack, item.contentId);
   return {
     key: `equipped:${item.contentId}:${item.slot}`,
     glyph: entry?.glyph ?? '?',
@@ -74,7 +48,7 @@ function equippedRow(pack: CompiledContentPack, item: ClassKitEquippedItem): Loa
 }
 
 function backpackRow(pack: CompiledContentPack, item: ClassKitBackpackItem, keyPrefix: string): LoadoutRow {
-  const entry = itemOf(pack, item.contentId);
+  const entry = itemById(pack, item.contentId);
   return {
     key: `${keyPrefix}:${item.contentId}`,
     glyph: entry?.glyph ?? '?',
@@ -91,10 +65,10 @@ export function HeroRecord({
   readonly onWeave: () => void;
   readonly canWeave: boolean;
 }): JSX.Element {
-  const classEntry = classOf(pack, state.classId);
+  const classEntry = state.classId === null ? undefined : classById(pack, state.classId);
   const kit = classEntry?.kits.find((candidate) => candidate.kitId === state.kitId);
-  const background = backgroundOf(pack, state.backgroundId);
-  const balance = balanceOf(pack);
+  const background = state.backgroundId === null ? undefined : backgroundById(pack, state.backgroundId);
+  const balance = balanceEntry(pack);
   const stats = wizardPreview(state, pack);
   const deltas = heroModifierDeltas(state, pack);
 

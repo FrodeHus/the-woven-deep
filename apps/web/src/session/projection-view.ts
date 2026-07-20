@@ -205,3 +205,33 @@ export function ownedItemOf(hero: HeroView, itemId: OpaqueId): OwnedItemView | u
   return hero.backpack.find((item) => item.itemId === itemId)
     ?? Object.values(hero.equipment).find((item): item is OwnedItemView => item !== null && item.itemId === itemId);
 }
+
+/** The Chebyshev (king-move) distance between two grid positions. */
+export function chebyshev(a: Readonly<{ x: number; y: number }>, b: Readonly<{ x: number; y: number }>): number {
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+}
+
+/** The perceived merchant actors. A merchant carries `factionName` only via `visibleMerchantState`
+ * (the engine's `projection.ts`), so its presence -- rather than any population-model tag lost in
+ * translation -- is the honest signal that an actor is a merchant. */
+export function merchantActors(projection: GameplayProjection): readonly ActorView[] {
+  return actorsOf(projection).filter((actor) => typeof actor.factionName === 'string');
+}
+
+/** The merchant actor the hero is Chebyshev-adjacent to (but not standing on), if any. When more
+ * than one merchant is adjacent, the nearest by actor-id ordering wins; the town's authored
+ * merchant stalls never place two merchants close enough for this to matter in practice. */
+export function adjacentMerchant(projection: GameplayProjection): ActorView | undefined {
+  const origin = heroOf(projection);
+  return merchantActors(projection)
+    .filter((actor) => chebyshev(actor, origin) === 1)
+    .sort((left, right) => (left.actorId < right.actorId ? -1 : 1))[0];
+}
+
+/** Whether a trade session could be opened right now: some merchant actor is Chebyshev-adjacent to
+ * the hero with `tradeAvailable` not explicitly `false`. */
+export function tradeIsAvailable(projection: GameplayProjection): boolean {
+  const hero = heroOf(projection);
+  return merchantActors(projection).some((merchant) => chebyshev(hero, merchant) === 1
+    && merchant.tradeAvailable !== false);
+}

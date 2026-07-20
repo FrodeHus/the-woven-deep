@@ -1,7 +1,8 @@
 import type { JSX } from 'react';
 import { modifiersMeta } from '@/ui/derived-stats-display.js';
 import { FacetedOptionList } from '../FacetedOptionList.js';
-import { traitEntries, type StepProps } from './step-content.js';
+import { traitEntries } from '../../../../session/pack-queries.js';
+import { type StepProps } from './step-content.js';
 
 export function TraitsStep({ state, pack, dispatch }: StepProps): JSX.Element {
   const atCap = state.traitIds.length >= 2;

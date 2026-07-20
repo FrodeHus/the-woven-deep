@@ -1,11 +1,9 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import { actionCostFor, balanceEntry } from './actions.js';
 import { actorHasConditionTrait, conditionDefinition } from './conditions.js';
-import { heroActor, heroPerception } from './actor-model.js';
-import { featureTiles } from './features.js';
-import { itemLightSources } from './equipment.js';
+import { heroActor } from './actor-model.js';
 import { advanceMerchantLifecycle, scrubDepartedIntentEvents } from './merchant-lifecycle.js';
-import { refreshKnowledge } from './perception.js';
+import { heroFloorPerception } from './run-perception.js';
 import { projectDomainEvents } from './event-projection.js';
 import { relationshipBetween } from './reactions.js';
 import { resolveWorldStep } from './world-step.js';
@@ -51,15 +49,7 @@ function danger(state: ActiveRun, content: CompiledContentPack): Pick<RestObserv
   const hero = heroActor(state);
   const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
   if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
-  const positions = new Map<string, Readonly<{ x: number; y: number }>>(
-    floor.entities.map((entity) => [entity.entityId, entity] as const),
-  );
-  for (const actor of state.actors) if (actor.floorId === floor.floorId) positions.set(actor.actorId, actor);
-  const perception = refreshKnowledge({
-    floor: { ...floor, tiles: featureTiles(state, floor.floorId) },
-    hero: heroPerception(state.hero, hero), actors: positions,
-    additionalLights: itemLightSources({ run: state, content, floorId: floor.floorId }),
-  });
+  const perception = heroFloorPerception({ state, content });
   let visibleDanger = false;
   let awareHostile = false;
   for (const actor of state.actors) {

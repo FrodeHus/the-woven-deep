@@ -9,6 +9,7 @@ import { GuestSession } from '../src/session/guest-session.js';
 import type { SessionStorageLike } from '../src/session/storage.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
 import { ThreatPopover } from '../src/ui/ThreatPopover.js';
+import { withUiProviders } from './with-ui-providers.js';
 
 let pack: CompiledContentPack;
 let baseProjection: GameplayProjection;
@@ -79,7 +80,7 @@ describe('ThreatPopover', () => {
 describe('PlayScreen threat hover integration (compact tier)', () => {
   it('hovering an empty grid cell shows nothing', () => {
     const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
-    render(<PlayScreen session={session} pack={pack} tier="compact" />);
+    render(withUiProviders(pack, <PlayScreen session={session} pack={pack} tier="compact" />));
     const grid = screen.getByRole('grid', { name: /dungeon/i });
     const emptyCell = grid.querySelector('[data-cell]')!;
     fireEvent.mouseOver(emptyCell);
@@ -109,7 +110,7 @@ describe('PlayScreen threat hover integration (compact tier)', () => {
       getSnapshot: () => spliced,
     } as unknown as GuestSession;
 
-    render(<PlayScreen session={fakeSession} pack={pack} tier="compact" />);
+    render(withUiProviders(pack, <PlayScreen session={fakeSession} pack={pack} tier="compact" />));
     const grid = screen.getByRole('grid', { name: /dungeon/i });
     const actorCell = grid.querySelector(`[data-cell="${hero.x + 1},${hero.y}"]`)!;
 

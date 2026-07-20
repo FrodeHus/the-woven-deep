@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import type { ClassContentEntry, CompiledContentPack } from '@woven-deep/content';
 import { cn } from '@/ui/lib/cn.js';
 import { stepIsSatisfied, type WizardState } from '../../../session/wizard-reducer.js';
+import { backgroundById, classById } from '../../../session/pack-queries.js';
 import { useListNavigation } from '../roving-focus.js';
 
 export const STEP_LABELS: Readonly<Record<WizardState['step'], string>> = {
@@ -37,7 +38,7 @@ function stepIsReachable(step: WizardState['step'], state: WizardState): boolean
 
 function classEntryOf(pack: CompiledContentPack | undefined, classId: string | null): ClassContentEntry | undefined {
   if (classId === null || !pack) return undefined;
-  return pack.entries.find((entry): entry is ClassContentEntry => entry.kind === 'class' && entry.id === classId);
+  return classById(pack, classId);
 }
 
 /** Resolves a step's current-value line to a human-readable NAME (class/kit/background), rather
@@ -58,7 +59,7 @@ function currentValue(step: WizardState['step'], state: WizardState, pack: Compi
     case 4: return state.method ? (METHOD_LABELS[state.method] ?? state.method) : '—';
     case 5: {
       if (state.backgroundId === null || !pack) return state.backgroundId ?? '—';
-      const entry = pack.entries.find((candidate) => candidate.kind === 'background' && candidate.id === state.backgroundId);
+      const entry = backgroundById(pack, state.backgroundId);
       return entry?.name ?? state.backgroundId;
     }
     case 6: return `${state.traitIds.length}/2 traits`;

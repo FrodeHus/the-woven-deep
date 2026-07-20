@@ -135,6 +135,15 @@ describe('readConfig auth', () => {
     ).toThrow(/MAILGUN/);
   });
 
+  it('reports the mailgun failure before the cookie-secret failure when both are invalid', () => {
+    expect(() =>
+      readConfig({
+        PUBLIC_URL: 'https://example.com',
+        MAILGUN_DOMAIN: 'mail.example.com',
+      }),
+    ).toThrow(/MAILGUN/);
+  });
+
   it('populates mailgun when all three fields are present', () => {
     const config = readConfig({
       PUBLIC_URL: 'https://example.com',

@@ -12,6 +12,7 @@ import {
 import { GuestSession } from '../src/session/guest-session.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
+import { withUiProviders } from './with-ui-providers.js';
 
 let pack: CompiledContentPack;
 
@@ -132,7 +133,7 @@ describe('closing trade with Escape', () => {
     guestSession.dispatch({ type: 'trade-open' });
     expect(guestSession.getSnapshot().projection.trade).toBeDefined();
 
-    render(<PlayScreen session={guestSession} pack={pack} />);
+    render(withUiProviders(pack, <PlayScreen session={guestSession} pack={pack} />));
     expect(screen.getByRole('dialog', { name: 'Trade' })).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
@@ -161,7 +162,7 @@ describe('closing trade with Escape', () => {
     expect(guestSession.getSnapshot().projection.trade).toBeDefined();
     const dispatchSpy = vi.spyOn(guestSession, 'dispatch');
 
-    render(<PlayScreen session={guestSession} pack={pack} />);
+    render(withUiProviders(pack, <PlayScreen session={guestSession} pack={pack} />));
     expect(screen.getByRole('dialog', { name: 'Trade' })).toBeInTheDocument();
 
     await user.keyboard('{Tab}{Tab}'); // buy -> sell -> services

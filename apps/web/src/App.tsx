@@ -9,8 +9,9 @@ import { loadSightings } from './session/codex.js';
 import type { LogLine } from './session/event-log.js';
 import { GuestSession } from './session/guest-session.js';
 import { clearGuestSession } from './session/clear-guest-session.js';
+import { randomSeed } from './session/seed.js';
 import {
-  DEFAULT_SETTINGS, loadSettings, resolveKeymap, saveSettings, type Settings,
+  DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings,
 } from './session/settings.js';
 import { useGuestSession } from './session/store.js';
 import {
@@ -83,17 +84,6 @@ function isQuickstart(search: string): boolean {
   return new URLSearchParams(search).get('quickstart') === '1';
 }
 
-/** Client-only ambient randomness for the chargen wizard's seed when no `?seed=` override is
- * present — mirrors `GuestSession`'s own `randomSeed` (guest-session.ts), duplicated here rather
- * than exported/shared because the chargen screen needs the seed BEFORE any `GuestSession`
- * exists (chargen constructs its session lazily, at confirm — see `App`'s doc comment). */
-function randomSeed(): Uint32State {
-  const words = new Uint32Array(4);
-  crypto.getRandomValues(words);
-  if (words.every((word) => word === 0)) words[0] = 1;
-  return [words[0]!, words[1]!, words[2]!, words[3]!];
-}
-
 /** How much of the adventure log the conclusion screen's "last moments" recap keeps. */
 const CONCLUSION_LOG_TAIL = 8;
 
@@ -112,12 +102,11 @@ interface GameRootProps {
   readonly overlay: OverlayId | null;
   readonly onOpenOverlay: (overlay: OverlayId) => void;
   readonly onCloseOverlay: () => void;
-  readonly keymap: ReturnType<typeof resolveKeymap>;
-  /** Same "just plumbing" note as `overlay`/`keymap` above -- `App` owns the settings state and its
-   * persistence/clear-guest-session handlers; `GameRoot` forwards them to `PlayScreen` so the
-   * settings overlay body works identically whether opened from play or from the title screen. */
-  readonly settings: Settings;
-  readonly onChangeSettings: (next: Settings) => void;
+  /** `App` owns the settings-clear handler; `GameRoot` forwards it to `PlayScreen` so the settings
+   * overlay body's "clear guest session" action works identically whether opened from play or from
+   * the title screen. Settings/keymap themselves reach `PlayScreen` (and every overlay) via
+   * `useSettingsCtx()`, sourced from the single `UiProviders` `App` renders around the whole
+   * authenticated tree. */
   readonly onClearGuestSession: () => void;
   /** Whether the contextual onboarding hint strip may show at all: `settings.onboarding === 'on'`
    * AND not a quickstart boot -- quickstart always forces it off regardless of the stored setting,
@@ -139,8 +128,8 @@ interface GameRootProps {
  * calling it again on every subsequent render before `onConcluded` swaps the screen away. */
 function GameRoot({
   session, pack, repository, portraitGlyph, onConcluded, onFinalizeError,
-  overlay, onOpenOverlay, onCloseOverlay, keymap,
-  settings, onChangeSettings, onClearGuestSession, onboardingEnabled,
+  overlay, onOpenOverlay, onCloseOverlay,
+  onClearGuestSession, onboardingEnabled,
 }: GameRootProps): JSX.Element {
   const snapshot = useGuestSession(session);
   const [dismissed, setDismissed] = useState(false);
@@ -199,9 +188,6 @@ function GameRoot({
         overlay={overlay}
         onOpenOverlay={onOpenOverlay}
         onCloseOverlay={onCloseOverlay}
-        keymap={keymap}
-        settings={settings}
-        onChangeSettings={onChangeSettings}
         onClearGuestSession={onClearGuestSession}
         records={repository.records()}
         onboardingEnabled={onboardingEnabled}
@@ -234,7 +220,6 @@ export function App({
   // below, which persists via `saveSettings` before applying the change in-memory.
   const [settingsLoad] = useState(() => loadSettings(localStorageInstance));
   const [settings, setSettings] = useState(() => settingsLoad.settings);
-  const keymap = useMemo(() => resolveKeymap(settings.bindings), [settings.bindings]);
   const [settingsWriteWarning, setSettingsWriteWarning] = useState<string>();
   // When `loadSettings` detects a corrupt blob at boot it resets to `DEFAULT_SETTINGS` and flags
   // it; this state surfaces the standard dismissible notice for that reset. Read once, at the same
@@ -391,39 +376,37 @@ export function App({
   function renderScreen(pack: CompiledContentPack): JSX.Element {
     if (screen.screen === 'title') {
       return (
-        <UiProviders pack={pack} settings={settings} onChangeSettings={handleSettingsChange}>
-          <main className="shell">
-            <TitleScreen
-              storage={storage}
-              account={account}
-              onEnterTheDeep={() => {
-                closeOverlay();
-                setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
-                router.toChargen();
-              }}
-              onContinue={() => {
-                closeOverlay();
-                setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
-                setSession(new GuestSession({ pack, storage, localStorage: localStorageInstance }));
-                router.toPlay();
-              }}
-              onHall={() => router.toHall('title')}
-              onOpenOverlay={openOverlay}
-              onSignIn={() => router.toSignin()}
-              onSignOut={() => {
-                void logout(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
-              }}
-            />
-            <OverlayHost
-              overlay={overlay}
-              onClose={closeOverlay}
-              isPlayActive={false}
-              records={repository.records()}
-              onClearGuestSession={handleClearGuestSession}
-              sightings={loadSightings(storage).sightings}
-            />
-          </main>
-        </UiProviders>
+        <main className="shell">
+          <TitleScreen
+            storage={storage}
+            account={account}
+            onEnterTheDeep={() => {
+              closeOverlay();
+              setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
+              router.toChargen();
+            }}
+            onContinue={() => {
+              closeOverlay();
+              setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
+              setSession(new GuestSession({ pack, storage, localStorage: localStorageInstance }));
+              router.toPlay();
+            }}
+            onHall={() => router.toHall('title')}
+            onOpenOverlay={openOverlay}
+            onSignIn={() => router.toSignin()}
+            onSignOut={() => {
+              void logout(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
+            }}
+          />
+          <OverlayHost
+            overlay={overlay}
+            onClose={closeOverlay}
+            isPlayActive={false}
+            records={repository.records()}
+            onClearGuestSession={handleClearGuestSession}
+            sightings={loadSightings(storage).sightings}
+          />
+        </main>
       );
     }
 
@@ -529,27 +512,22 @@ export function App({
     }
 
     return (
-      <UiProviders pack={pack} settings={settings} onChangeSettings={handleSettingsChange} session={session}>
-        <GameRoot
-          session={session}
-          pack={pack}
-          repository={repository}
-          portraitGlyph={portraitGlyph}
-          overlay={overlay}
-          onOpenOverlay={openOverlay}
-          onCloseOverlay={closeOverlay}
-          keymap={keymap}
-          settings={settings}
-          onChangeSettings={handleSettingsChange}
-          onClearGuestSession={handleClearGuestSession}
-          onboardingEnabled={settings.onboarding === 'on' && !quickstart}
-          onConcluded={(projection, logTail) => {
-            setConclusion({ projection, logTail });
-            router.toConclusion();
-          }}
-          onFinalizeError={setFinalizeWarning}
-        />
-      </UiProviders>
+      <GameRoot
+        session={session}
+        pack={pack}
+        repository={repository}
+        portraitGlyph={portraitGlyph}
+        overlay={overlay}
+        onOpenOverlay={openOverlay}
+        onCloseOverlay={closeOverlay}
+        onClearGuestSession={handleClearGuestSession}
+        onboardingEnabled={settings.onboarding === 'on' && !quickstart}
+        onConcluded={(projection, logTail) => {
+          setConclusion({ projection, logTail });
+          router.toConclusion();
+        }}
+        onFinalizeError={setFinalizeWarning}
+      />
     );
   }
 
@@ -562,7 +540,9 @@ export function App({
         showSettingsCorrupted={settingsLoad.corrupted && !settingsCorruptedDismissed}
         onDismissSettingsCorrupted={() => setSettingsCorruptedDismissed(true)}
       >
-        {renderScreen(pack)}
+        <UiProviders pack={pack} settings={settings} onChangeSettings={handleSettingsChange} session={session}>
+          {renderScreen(pack)}
+        </UiProviders>
       </AppBanners>
     </RootStyling>
   );

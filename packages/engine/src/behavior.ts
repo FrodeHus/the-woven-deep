@@ -1,6 +1,7 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import { actionCostFor, balanceEntry, type GameAction } from './actions.js';
 import { actorById, type ActorState } from './actor-model.js';
+import { entryById } from './content-index.js';
 import { featureTiles } from './features.js';
 import { MERCHANT_BEHAVIOR_ID, merchantBehaviorAction } from './merchant-behavior.js';
 import { findPath, selectPathStep } from './pathfinding.js';
@@ -19,16 +20,14 @@ export function selectPatrolGoal(input: Readonly<{
   actor: ActorState;
   content: CompiledContentPack;
 }>): ActorGoal | null {
-  const definition = input.content.entries.find((entry) => entry.kind === 'monster'
-    && entry.id === input.actor.contentId);
+  const definition = entryById(input.content, input.actor.contentId);
   if (!definition || definition.kind !== 'monster') {
     throw new Error(`internal invariant: monster definition ${input.actor.contentId} does not exist`);
   }
   const population = input.state.populations.find((candidate) => candidate.populationId === input.actor.populationId);
   const bossPhaseId = population?.model === 'boss' ? population.currentPhaseId : null;
   const bossEncounter = population?.model === 'boss' && bossPhaseId !== null
-    ? input.content.entries.find((entry) => entry.kind === 'encounter' && entry.model === 'boss'
-      && entry.id === population.encounterId) : undefined;
+    ? entryById(input.content, population.encounterId) : undefined;
   const phase = bossEncounter?.kind === 'encounter' && bossEncounter.model === 'boss'
     ? bossEncounter.definition.phases.find((candidate) => candidate.phaseId === bossPhaseId) : undefined;
   const waypoints = (phase?.behaviorParameters ?? definition.behaviorParameters).waypoints;
