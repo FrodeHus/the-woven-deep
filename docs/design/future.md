@@ -15,20 +15,18 @@ full spec. When one of these gets designed for real, it gets its own spec under
   vault door/chest slots become real `DungeonFeature`s) and the client pick-lock action.
   See `locks-and-lockpicking.md`. Shipped.
 
-## Planned feats (light-out mechanic)
+## Light-out feats — shipped
 
-All three plug into the light-out survivability knobs in
-`dungeon-generation-and-light.md` — no feat content exists yet, but the knobs were built
-with these in mind:
+All three ship as chargen-selectable `trait` content (see `light-out-feats.md`):
 
-- **Born in the dark** — darkvision. Sets `lightOutRevealRadius` to 4.
-- **Living compass** — sets `lightOutMemoryPersists`; the remembered map stays visible
-  while dark. Still doesn't commit newly dark-fumbled terrain — it only unhides prior
-  memory.
-- **Dungeon sense** — commits discovered terrain to the remembered map regardless of
-  light on/off. This is the one feat that overrides the "dark discoveries are never
-  committed" rule, and needs a third knob (commit-while-dark) distinct from the two
-  above, added when the feat is actually built.
+- **Born in the Dark** — darkvision. `modifiers: { lightOutRevealRadius: 3 }` → reveal
+  radius 4.
+- **Living Compass** — `modifiers: { lightOutMemoryPersists: 1 }`; the remembered map stays
+  visible while dark. Still doesn't commit newly dark-fumbled terrain — it only unhides
+  prior memory.
+- **Dungeon Sense** — commits discovered terrain to the remembered map regardless of light
+  on/off, the one feat that overrides the "dark discoveries are never committed" rule. Added
+  the third knob `lightOutCommitsMemory` and wired it into the knowledge-commit path.
 
 ## Deferred chargen polish
 
