@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   base, glyph, itemRarities, rgb, safeNonNegative, safePositive, slugSchema, stableIdSchema, tags,
-  vaultPlacementKinds,
+  vaultPlacementKinds, vaultTerrainNames,
 } from './common.js';
 
 export const TOWN_VAULT_REQUIRED_SLOT_IDS = [
@@ -26,7 +26,7 @@ const light = z.strictObject({
   enabled: z.boolean().default(true),
 });
 const legendEntry = z.strictObject({
-  terrain: z.enum(['wall', 'floor', 'closed-door', 'pillar', 'stair-up', 'stair-down', 'void']),
+  terrain: z.enum(vaultTerrainNames),
   entrance: z.boolean().default(false),
   light: light.nullable().default(null),
   slot: slot.nullable().default(null),

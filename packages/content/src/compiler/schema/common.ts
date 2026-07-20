@@ -3,6 +3,7 @@ import {
   DAMAGE_TYPES, DISPOSITIONS, ENCOUNTER_FORMATIONS, ENCOUNTER_MODELS, EQUIPMENT_SLOTS,
   FORMATION_PREFERENCES, ITEM_CATEGORIES, ITEM_RARITIES, LEADER_DEATH_RESPONSES,
   MERCHANT_SERVICE_IDS, SWARM_DESTRUCTION_RESPONSES, TARGETING_IDS, VAULT_PLACEMENT_KINDS,
+  VAULT_TERRAIN_NAMES,
 } from '../../model.js';
 
 export const stableIdSchema = z.string().regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/);
@@ -21,6 +22,7 @@ export const damageTypes = DAMAGE_TYPES;
 export const targetingIds = TARGETING_IDS;
 export const equipmentSlots = EQUIPMENT_SLOTS;
 export const vaultPlacementKinds = VAULT_PLACEMENT_KINDS;
+export const vaultTerrainNames = VAULT_TERRAIN_NAMES;
 export const encounterModels = ENCOUNTER_MODELS;
 export const encounterFormations = ENCOUNTER_FORMATIONS;
 export const formationPreferences = FORMATION_PREFERENCES;
