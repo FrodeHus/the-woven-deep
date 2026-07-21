@@ -1,6 +1,6 @@
 import type { JSX, ReactNode } from 'react';
+import type { CompiledContentPack } from '@woven-deep/content';
 import { effectLabel, formatDice } from '../labels.js';
-import { usePack } from '../providers.js';
 import { itemById } from '../../session/pack-queries.js';
 import type { MenuEntry, ProjectedItemLike } from './inventory-model.js';
 
@@ -35,6 +35,7 @@ function FactRow({ label, value }: Readonly<{ label: string; value: ReactNode }>
 export function DetailPane({
   entry,
   refuelTarget,
+  pack,
   onEquip,
   onUse,
   onDrop,
@@ -44,17 +45,19 @@ export function DetailPane({
   entry: MenuEntry | undefined;
   /** The equipped light `entry`'s item can refuel, if any -- see `equippedLightMatchingFuel`. */
   refuelTarget: ProjectedItemLike | undefined;
+  pack: CompiledContentPack;
   onEquip: () => void;
   onUse: () => void;
   onDrop: () => void;
   onToggleLight: () => void;
   onRefuel: () => void;
 }>): JSX.Element {
-  const pack = usePack();
   if (!entry)
     return <p className="text-subtle">Select an item — ↑↓ to browse, e to equip, u to use.</p>;
   const { item, equipped, slot } = entry;
   const unidentified = item.contentId === undefined;
+  const description =
+    !unidentified && item.contentId ? itemById(pack, item.contentId)?.description : undefined;
 
   /** Static per-content facts (damage/worth/light/armor) live on the compiled pack entry, not the
    * projected instance. The lookup is gated on `contentId`, which the projection omits entirely for
@@ -71,9 +74,6 @@ export function DetailPane({
           </span>
         </div>
       </div>
-
-      {/* Description slot: item lore/description copy is not projected on this branch, so it is
-       * deliberately left empty rather than fabricated. */}
 
       {/* Dotted-leader fact rows. Instance facts come off the projected item; static facts
        * (Damage/Worth/Light radius/Armor) come off the identified content entry (`content`), which
@@ -106,6 +106,8 @@ export function DetailPane({
         {item.enabled !== null && <FactRow label="State" value={item.enabled ? 'Lit' : 'Unlit'} />}
         {item.unknownProperties && <FactRow label="Properties" value="Unknown" />}
       </div>
+
+      {description && <p className="text-sm italic text-muted">{description}</p>}
 
       <div className="flex flex-wrap gap-2">
         <ActionButton label={equipped ? 'Unequip' : 'Equip'} chord="e" onClick={onEquip} />

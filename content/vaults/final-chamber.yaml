@@ -1,0 +1,33 @@
+schemaVersion: 7
+entries:
+  - kind: vault
+    id: vault.final-chamber
+    name: Final Chamber
+    tags: [final-chamber]
+    minDepth: 20
+    maxDepth: 20
+    rarity: common
+    weight: 1
+    maxPerFloor: 1
+    margin: 0
+    transforms:
+      rotations: [0]
+      reflectHorizontal: false
+    layout:
+      - "#########"
+      - "#...+...#"
+      - "#.......#"
+      - "#...H...#"
+      - "#.......#"
+      - "#...^...#"
+      - "#########"
+    legend:
+      "#": { terrain: wall }
+      ".": { terrain: floor }
+      "+": { terrain: floor, entrance: true }
+      "^":
+        terrain: stair-up
+        slot: { id: chamber-entrance, kind: fixture, required: true, tags: [final-chamber, chamber-entrance] }
+      "H":
+        terrain: floor
+        slot: { id: heart, kind: fixture, required: true, tags: [final-chamber, heart] }

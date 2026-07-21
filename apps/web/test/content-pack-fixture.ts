@@ -29,6 +29,7 @@ const entries: readonly ContentEntry[] = [
     starvationDamage: 1,
     recoveryInterval: 500,
     recoveryAmount: 1,
+    weaveRegenAmount: 2,
     restMaximumDuration: 5000,
     recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 },
     hungerStageModifiers: { sated: {}, hungry: {}, weak: {}, starving: {} },
@@ -184,6 +185,7 @@ const entries: readonly ContentEntry[] = [
     targetingId: 'target.actor',
     range: 5,
     actionCost: 100,
+    weaveCost: 3,
     effects: [
       {
         effectId: 'effect.damage',

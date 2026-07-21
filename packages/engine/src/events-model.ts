@@ -144,6 +144,7 @@ export interface ActorTurnCompletedEvent {
     | 'fire'
     | 'throw-item'
     | 'use-item'
+    | 'cast'
     | 'equip'
     | 'unequip'
     | 'toggle-light'

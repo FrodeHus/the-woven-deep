@@ -142,6 +142,7 @@ export const actorTurnCompletedEvent = z.strictObject({
     'fire',
     'throw-item',
     'use-item',
+    'cast',
     'equip',
     'unequip',
     'toggle-light',

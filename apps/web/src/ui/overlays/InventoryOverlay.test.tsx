@@ -56,6 +56,7 @@ function snapshotWithBackpack(
     log: [],
     lastEvents: [],
     pendingDecision: null,
+    pendingFinalChamberChoice: null,
     notice: null,
     houseOpen: false,
     conclusion: null,
@@ -327,7 +328,7 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(screen.queryByRole('button', { name: /Refuel/ })).not.toBeInTheDocument();
   });
 
-  it('shows Damage and Worth fact rows for an identified weapon, from its content entry', () => {
+  it('shows Damage and Worth fact rows and the authored description for an identified weapon', () => {
     const snapshot = snapshotWithBackpack([
       item({
         itemId: 'item.sword-1',
@@ -343,6 +344,7 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(damage.parentElement).toHaveTextContent('1d6');
     const worth = screen.getByText('Worth');
     expect(worth.parentElement).toHaveTextContent('18');
+    expect(screen.getByText(/notched from honest use/i)).toBeInTheDocument();
   });
 
   it('shows a Light radius fact row for an identified light, from its content entry', () => {
@@ -361,7 +363,7 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(radius.parentElement).toHaveTextContent('7');
   });
 
-  it('hides Damage and Worth for an unidentified item (no content entry resolves)', () => {
+  it('hides Damage, Worth, and the description for an unidentified item (no content entry resolves)', () => {
     const snapshot = snapshotWithBackpack([
       item({
         itemId: 'item.mystery',
@@ -375,6 +377,7 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
 
     expect(screen.queryByText('Damage')).not.toBeInTheDocument();
     expect(screen.queryByText('Worth')).not.toBeInTheDocument();
+    expect(screen.queryByText(/notched from honest use/i)).not.toBeInTheDocument();
   });
 
   it('renders nothing when there is no session in context', () => {

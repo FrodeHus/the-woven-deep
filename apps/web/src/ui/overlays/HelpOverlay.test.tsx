@@ -59,7 +59,8 @@ describe('HelpOverlay', () => {
   it('renders the glyph legend from the real pack: hero, a monster with its actual glyph/color, an item, and terrain', () => {
     harness();
     const legend = screen.getByRole('region', { name: /glyph legend/i });
-    expect(within(legend).getByText('@')).toBeInTheDocument();
+    const heroRow = within(legend).getByText('You').closest('li')!;
+    expect(heroRow).toHaveTextContent('@');
 
     const caveRat = pack.entries.find(
       (entry) => entry.kind === 'monster' && entry.id === 'monster.cave-rat',

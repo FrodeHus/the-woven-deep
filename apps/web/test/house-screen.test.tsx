@@ -33,6 +33,7 @@ function snapshotOf(projection: GameplayProjection): SessionSnapshot {
     log: [],
     lastEvents: [],
     pendingDecision: null,
+    pendingFinalChamberChoice: null,
     notice: null,
     houseOpen: true,
     conclusion: null,

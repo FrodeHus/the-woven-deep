@@ -470,6 +470,8 @@ export function placeFallenHeroEncounters(
       attributes: normalized.attributes,
       health: normalized.health,
       maxHealth: normalized.health,
+      weave: 0,
+      maxWeave: 0,
       energy: 100,
       speed: fallback.speed,
       reactionReady: true,

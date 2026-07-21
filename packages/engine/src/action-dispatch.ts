@@ -38,8 +38,9 @@ import { relationshipBetween, resolveOpportunityAttacks, setRelationship } from 
 import { provokeMerchant } from './merchant-behavior.js';
 import type { MerchantPopulation } from './merchant-model.js';
 import { combat, profile } from './combat-profile.js';
-import { requireItem } from './content-index.js';
+import { entryById, requireItem } from './content-index.js';
 import { chargeActionEnergy } from './scheduler.js';
+import { activateHeartBoss } from './final-chamber-boss.js';
 
 function moveActor(state: ActiveRun, actorId: OpaqueId, to: Point): ActiveRun {
   return {
@@ -229,6 +230,16 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
   },
   'open-door': resolveDoor,
   'close-door': resolveDoor,
+  // `become-heart`/`break-cycle` have no world effect: the reducer's post-world-step conclusion
+  // boundary (mirroring `concludeRunOnHeroDeath`) sets `state.conclusion` for them after this
+  // resolver returns. `turn-away` instead activates the weakened Heart as a hostile boss; the
+  // ensuing fight then resolves through the existing boss and combat systems.
+  'final-chamber-choice': ({ state, action, content, eventId, events }) => {
+    if (action.choice !== 'turn-away') return { state, chargeEnergy: false };
+    const activation = activateHeartBoss({ state, content, eventId });
+    events.push(...activation.events);
+    return { state: activation.state, chargeEnergy: false };
+  },
   'toggle-light': ({ state, action, actor, content, eventId, events }) => {
     const transition = toggleItemLight({
       run: state,
@@ -351,6 +362,38 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       events.push(...identified.events);
     }
     events.push(...consumedEvents);
+    return { state: next, chargeEnergy: true };
+  },
+  cast: ({ state, action, actor, content, eventId, events }) => {
+    const definition = entryById(content, action.spellId);
+    if (!definition || definition.kind !== 'spell')
+      throw new Error(`internal invariant: cast spell ${action.spellId} does not exist`);
+    const target = actorById(state, action.targetActorId);
+    if (!target)
+      throw new Error(`internal invariant: spell target ${action.targetActorId} disappeared`);
+    // The Weave powers the casting before the spell's effects resolve: the cost is subtracted from
+    // the caster first, then the effects apply against that post-spend state.
+    let next = withActor(state, { ...actor, weave: actor.weave - action.weaveCost });
+    const resolved = resolveEffectSequence({
+      effects: definition.effects,
+      actors: next.actors,
+      items: next.items,
+      content,
+      sourceActorId: actor.actorId,
+      targetActorId: target.actorId,
+      effectsState: next.rng.effects,
+      worldTime: next.worldTime,
+      eventId,
+      survival: next.survival,
+      survivalActorId: next.hero.actorId,
+      forceMoveDirection:
+        target.actorId === actor.actorId
+          ? { x: 1, y: 0 }
+          : { x: Math.sign(target.x - actor.x), y: Math.sign(target.y - actor.y) },
+      operations: {},
+    });
+    next = applyEffectResult(next, resolved);
+    events.push(...resolved.events);
     return { state: next, chargeEnergy: true };
   },
   fire: ({ state, action, actor, content, eventId, events }) => {

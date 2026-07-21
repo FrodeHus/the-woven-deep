@@ -66,6 +66,7 @@ export const blockReason = z.enum([
   'target.out_of_range',
   'target.blocked',
   'target.invalid',
+  'cast.insufficient-weave',
   'trade.active',
   'trade.required',
   'merchant.unavailable',
@@ -88,6 +89,9 @@ export const blockReason = z.enum([
   'door.already-open',
   'door.already-closed',
   'door.occupied',
+  'final-chamber.unavailable',
+  'final-chamber.fragments-required',
+  'final-chamber.boss-active',
 ]);
 export const completionType = z.enum(['died', 'became-heart', 'refused', 'broke-cycle']);
 export const runConclusionCause = z.strictObject({

@@ -83,6 +83,7 @@ function snapshotWith(overrides: SnapshotOverrides): SessionSnapshot {
     log: overrides.log ?? [],
     lastEvents: [],
     pendingDecision: null,
+    pendingFinalChamberChoice: null,
     notice: null,
     houseOpen: false,
     conclusion: null,

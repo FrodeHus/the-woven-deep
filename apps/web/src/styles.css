@@ -555,6 +555,14 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   font-size: .85rem;
   pointer-events: none;
   white-space: nowrap;
+  max-width: 220px;
+}
+
+.threat-popover-description {
+  margin-top: 4px;
+  white-space: normal;
+  color: var(--muted);
+  font-style: italic;
 }
 
 /* The mouse movement affordance (`CellCursor`): a one-cell highlight under the pointer, sitting

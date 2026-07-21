@@ -5,6 +5,7 @@ entries:
     name: Tallow slither
     glyph: o
     color: "#c9b45f"
+    description: A slick yellow mass that oozes across the stone like melted candle-fat given hunger.
     tags: [ooze, mindless]
     minDepth: 2
     maxDepth: 5
@@ -30,6 +31,7 @@ entries:
     name: Wax crawler
     glyph: o
     color: "#d8cf8a"
+    description: Pale and thin, it drags itself along walls leaving a faint waxy sheen behind.
     tags: [ooze, mindless]
     minDepth: 2
     maxDepth: 4
@@ -55,6 +57,7 @@ entries:
     name: Rendering glut
     glyph: O
     color: "#b39a4a"
+    description: A hardened rind has formed over its bulk, tallow gone tough as boiled leather.
     tags: [ooze, mindless, armored]
     minDepth: 4
     maxDepth: 7
@@ -80,6 +83,7 @@ entries:
     name: Cinder ooze
     glyph: o
     color: "#d07a3a"
+    description: It has soaked up embers until its own body glows dull orange from within.
     tags: [ooze, mindless, fire]
     minDepth: 3
     maxDepth: 6
@@ -105,6 +109,7 @@ entries:
     name: Caustic pool
     glyph: o
     color: "#7fae55"
+    description: Barely more than a puddle, it spits corrosive bile at anything that lingers too near.
     tags: [ooze, mindless, poison, caster]
     minDepth: 4
     maxDepth: 7

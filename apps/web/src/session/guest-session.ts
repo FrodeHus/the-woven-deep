@@ -8,6 +8,9 @@ import {
   descendToNextFloor,
   encodeActiveRun,
   finalizeRun,
+  FINAL_CHAMBER_DEPTH,
+  heroHoldsAllFragments,
+  isHeartBossActive,
   projectDecision,
   projectDomainEvents,
   projectGameplayState,
@@ -17,6 +20,7 @@ import {
   SaveLoadError,
   type ActiveRun,
   type CommandResolution,
+  type FinalChamberChoiceCommand,
   type GameCommand,
   type GameplayProjection,
   type HallRecordEnrichment,
@@ -65,12 +69,25 @@ export type SessionNotice =
    * dismissible notice here uses. */
   | { readonly kind: 'data-reset'; readonly source: 'sightings' | 'onboarding' };
 
+/**
+ * The Final Chamber choice, pending whenever the hero stands on the Chamber floor (`FINAL_CHAMBER_DEPTH`)
+ * with the bound Heart not yet fighting (`isHeartBossActive` false) and the run unconcluded --
+ * mirrors `pendingDecision` below, but this one is never auto-answered: `FinalChamberChoice`
+ * (the overlay) is the only thing that ever turns it into a `final-chamber-choice` command, via
+ * `chooseFinalChamber`. `canBreakCycle` is `heroHoldsAllFragments` -- the "Assemble the tablet"
+ * option only ever appears when this is `true`.
+ */
+export interface PendingFinalChamberChoice {
+  readonly canBreakCycle: boolean;
+}
+
 export interface SessionSnapshot {
   readonly projection: GameplayProjection;
   readonly log: readonly LogLine[];
   /** Public events from the most recent dispatch, for the effects layer. Cleared on next dispatch. */
   readonly lastEvents: readonly PublicEvent[];
   readonly pendingDecision: PublicDecision | null;
+  readonly pendingFinalChamberChoice: PendingFinalChamberChoice | null;
   readonly notice: SessionNotice | null;
   readonly houseOpen: boolean;
   /** Cheap, pure projection of the run's ending once `run.conclusion !== null`: completion facts
@@ -340,6 +357,40 @@ export class GuestSession {
     );
   }
 
+  /**
+   * The current `PendingFinalChamberChoice`, or `null` off the Chamber floor, once the run has
+   * concluded, or once the weakened Heart has already broken loose (`isHeartBossActive` --
+   * `reducer.ts` itself rejects every further choice once that's true, so the overlay must stop
+   * offering one at the same point). Recomputed fresh on every snapshot -- there is no stored
+   * "dismissed" flag, since this choice is never dismissible (see `chooseFinalChamber`'s doc comment).
+   */
+  private computePendingFinalChamberChoice(): PendingFinalChamberChoice | null {
+    if (this.run.conclusion !== null) return null;
+    const activeFloor = this.run.floors.find((floor) => floor.floorId === this.run.activeFloorId);
+    if (!activeFloor || activeFloor.depth !== FINAL_CHAMBER_DEPTH) return null;
+    if (isHeartBossActive(this.run)) return null;
+    return { canBreakCycle: heroHoldsAllFragments(this.run, this.pack) };
+  }
+
+  /**
+   * Dispatches the `final-chamber-choice` command for the given choice -- the ONLY path that ever
+   * produces one; unlike `dispatch`, this never goes through `buildIntent`/`PlayerIntent` (there is
+   * no intent for it), mirroring `answerDecision`'s direct `GameCommand` construction below. A
+   * plain move onto/adjacent to the bound Heart's cell never reaches this method -- the choice is
+   * always the overlay's own deliberate button/key action (`FinalChamberChoice.tsx`), never an
+   * automatic consequence of movement.
+   */
+  chooseFinalChamber(choice: FinalChamberChoiceCommand['choice']): void {
+    this.notice = null;
+    const command: GameCommand = {
+      type: 'final-chamber-choice',
+      choice,
+      commandId: this.nextCommandId(),
+      expectedRevision: this.run.revision,
+    };
+    this.handleResolution(resolveCommand(this.run, command, { content: this.pack }));
+  }
+
   answerDecision(confirmed: boolean): void {
     const decision = this.pendingDecision;
     if (!decision) return;
@@ -549,6 +600,16 @@ export class GuestSession {
     const stored: StoredHallRecord = { ...finalized.record, enrichment };
     repository.appendRecord(stored);
     repository.applyDeltas(finalized.deltas);
+    // Becoming the Heart writes the guest's lineage slot in the same finalize: the next new run
+    // reads it back as its inherited Heart, so this must happen before `this.persist()` below.
+    if (finalized.record.completionType === 'became-heart') {
+      repository.recordHeart({
+        heroName: finalized.record.heroName,
+        classTags: finalized.record.classTags,
+        hallRecordId: finalized.record.recordId,
+        enrichment,
+      });
+    }
 
     this.run = finalized.run;
     // `finalizeRun` only ever emits `run.finalized`/`achievement.granted` (see run-finalize.ts),
@@ -589,6 +650,7 @@ export class GuestSession {
       log: this.log,
       lastEvents: this.lastEvents,
       pendingDecision: this.pendingDecision,
+      pendingFinalChamberChoice: this.computePendingFinalChamberChoice(),
       notice: this.notice,
       houseOpen: this.houseOpen,
       conclusion:

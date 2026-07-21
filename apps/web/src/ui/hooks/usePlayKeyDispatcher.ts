@@ -11,6 +11,11 @@ export interface PlayKeyDispatcherParams {
   readonly houseOpen: SessionSnapshot['houseOpen'];
   readonly trade: GameplayProjection['trade'];
   readonly pendingDecision: SessionSnapshot['pendingDecision'];
+  /** Same posture as `pendingDecision` above: suppresses the global movement/action dispatcher
+   * while the Final Chamber choice overlay is up. Unlike `pendingDecision`, `closeOverlay` never
+   * answers it on Escape -- the choice has no safe "decline" (see `FinalChamberChoice.tsx`'s doc
+   * comment), so Escape is simply absorbed while it's pending. */
+  readonly pendingFinalChamberChoice: SessionSnapshot['pendingFinalChamberChoice'];
   readonly onOpenOverlay: (overlay: OverlayActionId) => void;
   readonly onCloseOverlay: () => void;
   readonly keymap: ResolvedKeymap;
@@ -28,6 +33,7 @@ export function usePlayKeyDispatcher({
   houseOpen,
   trade,
   pendingDecision,
+  pendingFinalChamberChoice,
   onOpenOverlay,
   onCloseOverlay,
   keymap,
@@ -65,9 +71,16 @@ export function usePlayKeyDispatcher({
           // local flag -- the screen unmounts once the resulting projection clears `trade`.
           else if (trade) session.dispatch({ type: 'trade-close' });
           else if (pendingDecision) session.answerDecision(false);
+          // Deliberately no `pendingFinalChamberChoice` branch: the choice is never answered by
+          // Escape (see this param's doc comment above) -- it just stays pending.
         },
       },
-      () => overlay !== null || houseOpen || trade !== undefined || pendingDecision !== null,
+      () =>
+        overlay !== null ||
+        houseOpen ||
+        trade !== undefined ||
+        pendingDecision !== null ||
+        pendingFinalChamberChoice !== null,
       () => keymap,
     );
     window.addEventListener('keydown', dispatcher);
@@ -77,6 +90,7 @@ export function usePlayKeyDispatcher({
     houseOpen,
     trade,
     pendingDecision,
+    pendingFinalChamberChoice,
     overlay,
     onOpenOverlay,
     onCloseOverlay,

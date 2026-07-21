@@ -5,6 +5,7 @@ entries:
     name: Etched ring
     glyph: "="
     color: "#b8c6cc"
+    description: A pale band carved with symbols no living scholar reads anymore. Its true nature reveals itself only with use.
     tags: [identification, ring]
     minDepth: 1
     maxDepth: 20

@@ -176,6 +176,44 @@ describe('ConclusionScreen', () => {
     expect(screen.getByText(/this session only/i)).toBeInTheDocument();
   });
 
+  it.each([
+    {
+      completionType: 'became-heart' as const,
+      headline: /you have become the heart/i,
+      epilogue: /bindings close around you/i,
+    },
+    {
+      completionType: 'refused' as const,
+      headline: /you have refused the deep/i,
+      epilogue: /crumbling passages/i,
+    },
+    {
+      completionType: 'broke-cycle' as const,
+      headline: /you have broken the cycle/i,
+      epilogue: /cycle .* ends here/i,
+    },
+  ])(
+    'renders a distinct headline and epilogue for $completionType',
+    ({ completionType, headline, epilogue }) => {
+      render(
+        <ConclusionScreen
+          projection={projection({
+            completionType,
+            cause: { killerContentId: null, depth: 20, turn: 900, worldTime: 90000 },
+          })}
+          pack={pack}
+          logTail={logTail()}
+          onHall={vi.fn()}
+          onNewHero={vi.fn()}
+          onTitle={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('heading', { name: headline })).toBeInTheDocument();
+      expect(screen.getByText(epilogue)).toBeInTheDocument();
+    },
+  );
+
   it('offers the three actions as keyboard-reachable buttons', async () => {
     const user = userEvent.setup();
     const onHall = vi.fn();

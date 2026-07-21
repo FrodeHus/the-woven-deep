@@ -1,0 +1,20 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.heart-cinder
+    name: Cinder of the Freed Heart
+    glyph: "*"
+    color: "#c9425f"
+    tags: [boss-reward, heart, arcane]
+    minDepth: 20
+    maxDepth: 20
+    category: ring
+    stackLimit: 1
+    price: 260
+    rarity: legendary
+    actionCost: 100
+    equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
+    combat: { accuracy: 1, defense: 1, armor: 1, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []

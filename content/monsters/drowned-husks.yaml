@@ -5,6 +5,7 @@ entries:
     name: Drowned shambler
     glyph: z
     color: "#6a8a8f"
+    description: Bloated with brine and long past caring, it moves toward sound the way driftwood moves toward the shore.
     tags: [undead, drowned, mindless]
     minDepth: 4
     maxDepth: 7
@@ -30,6 +31,7 @@ entries:
     name: Brine skeleton
     glyph: y
     color: "#b8c0b0"
+    description: Salt has picked its bones clean and white, but the old grudge that raised it hasn't loosened its grip.
     tags: [undead, drowned, offense]
     minDepth: 4
     maxDepth: 8
@@ -55,6 +57,7 @@ entries:
     name: Sodden lurcher
     glyph: Z
     color: "#4f6b6a"
+    description: Barnacles have crusted over its ribs like a second, harder skin grown out of drowning.
     tags: [undead, drowned, armored]
     minDepth: 6
     maxDepth: 9
@@ -80,6 +83,7 @@ entries:
     name: Wailing echo
     glyph: "Ψ"
     color: "#7fa0b8"
+    description: A drowning cry that never finished, still looping through the water long after the throat that made it rotted away.
     tags: [undead, echo, caster, arcane]
     minDepth: 5
     maxDepth: 9
@@ -105,6 +109,7 @@ entries:
     name: Tide revenant
     glyph: R
     color: "#3f5f66"
+    description: Something that commanded the drowned once, and still expects to be obeyed.
     tags: [undead, drowned, elite]
     minDepth: 7
     maxDepth: 10

@@ -5,5 +5,6 @@ export interface SpellContentEntry extends BaseContentEntry {
   readonly targetingId: TargetingId;
   readonly range: number;
   readonly actionCost: number;
+  readonly weaveCost: number;
   readonly effects: readonly EffectDefinition[];
 }

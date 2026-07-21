@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { heroName, identifier, safeNonNegative, uint32State, uint32Tuple } from './primitives.js';
+import {
+  heroName,
+  identifier,
+  positiveQuantity,
+  safeNonNegative,
+  uint32State,
+  uint32Tuple,
+} from './primitives.js';
 import { commandV7 } from './commands.js';
 import {
   authoritativeEvent,
@@ -14,6 +21,7 @@ import {
   processedResult,
   publicEvent,
   publicOnlyEventTypes,
+  recorded,
   reputationChangedEvent,
   tradeBoughtEvent,
   tradeClosedEvent,
@@ -22,8 +30,8 @@ import {
   tradeSoldEvent,
 } from './events.js';
 import { floor } from './floor.js';
-import { actor } from './actor.js';
-import { feature, itemFields, itemLocationV7, legacyItemLocation } from './item.js';
+import { legacyActor } from './actor.js';
+import { feature, item, itemFields, itemLocationV7, legacyItemLocation } from './item.js';
 import {
   encounterDecision,
   fallenDecision,
@@ -32,6 +40,7 @@ import {
   heroV6,
   identification,
   legacyPopulation,
+  population,
   populationV7,
   relationship,
   survival,
@@ -158,7 +167,7 @@ export const legacyActiveRunV7Schema = z.strictObject({
       completedCommerce: z.boolean(),
     })
     .nullable(),
-  actors: z.array(actor).min(1).readonly(),
+  actors: z.array(legacyActor).min(1).readonly(),
   items: z.array(itemV7).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
@@ -175,6 +184,54 @@ export const legacyActiveRunV7Schema = z.strictObject({
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: runMetrics,
   conclusion: runConclusionSchema.nullable(),
+});
+
+// The pre-Weave save shape: identical to the current run schema except actors carry no
+// `weave`/`maxWeave`. Spelled out as a frozen literal (not derived from the live
+// `activeRunSchema`) so a future schema bump can't silently change what a real v8 save is
+// validated against.
+export const legacyActiveRunV8Schema = z.strictObject({
+  schemaVersion: z.literal(8),
+  gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  runId: identifier,
+  runSeed: uint32Tuple,
+  rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
+  revision: safeNonNegative,
+  turn: safeNonNegative,
+  worldTime: safeNonNegative,
+  hero,
+  reputations: z
+    .array(z.strictObject({ factionId: identifier, value: z.number().int().safe() }))
+    .readonly(),
+  activeTrade: z
+    .strictObject({
+      merchantPopulationId: identifier,
+      merchantActorId: identifier,
+      openedByCommandId: identifier,
+      openedAtRevision: safeNonNegative,
+      completedCommerce: z.boolean(),
+    })
+    .nullable(),
+  actors: z.array(legacyActor).min(1).readonly(),
+  items: z.array(item).readonly(),
+  features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(),
+  survival,
+  identification,
+  activeFloorId: identifier,
+  activeFloorEnteredAt: safeNonNegative,
+  floors: z.array(floor).min(1).readonly(),
+  recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(),
+  populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+  metrics: runMetrics,
+  conclusion: runConclusionSchema.nullable(),
+  house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
+  restockedMilestones: z.array(positiveQuantity).readonly(),
 });
 
 export const legacyActiveRunV6Schema = z.strictObject({
@@ -200,7 +257,7 @@ export const legacyActiveRunV6Schema = z.strictObject({
       completedCommerce: z.boolean(),
     })
     .nullable(),
-  actors: z.array(actor).min(1).readonly(),
+  actors: z.array(legacyActor).min(1).readonly(),
   items: z.array(itemV7).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
@@ -244,7 +301,7 @@ export const legacyActiveRunV5Schema = z.strictObject({
       completedCommerce: z.boolean(),
     })
     .nullable(),
-  actors: z.array(actor).min(1).readonly(),
+  actors: z.array(legacyActor).min(1).readonly(),
   items: z.array(itemV7).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
@@ -274,7 +331,7 @@ export const legacyActiveRunV4Schema = z.strictObject({
   turn: safeNonNegative,
   worldTime: safeNonNegative,
   hero: legacyHero,
-  actors: z.array(actor).min(1).readonly(),
+  actors: z.array(legacyActor).min(1).readonly(),
   items: z.array(legacyItem).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),

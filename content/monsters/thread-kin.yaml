@@ -5,6 +5,7 @@ entries:
     name: Thread skitter
     glyph: g
     color: "#7c8a5b"
+    description: Small and wiry, wrapped in scavenged thread that marks it as kin to something once human.
     tags: [thread-kin, humanoid, offense]
     minDepth: 1
     maxDepth: 4
@@ -30,6 +31,7 @@ entries:
     name: Spindle cutter
     glyph: j
     color: "#9aa36a"
+    description: Fast and low to the ground, it cuts and withdraws before a blow can be returned.
     tags: [thread-kin, humanoid, skirmisher]
     minDepth: 1
     maxDepth: 4
@@ -55,6 +57,7 @@ entries:
     name: Barb slinger
     glyph: s
     color: "#6f7d4e"
+    description: It hurls barbed shards spun from its own frayed wrappings, keeping its distance and its patience.
     tags: [thread-kin, humanoid, ranged]
     minDepth: 2
     maxDepth: 5
@@ -80,6 +83,7 @@ entries:
     name: Snarl warden
     glyph: k
     color: "#5f6b45"
+    description: Layer upon layer of knotted cord has hardened into something like armor across its shoulders.
     tags: [thread-kin, humanoid, armored]
     minDepth: 3
     maxDepth: 5
@@ -105,6 +109,7 @@ entries:
     name: Loom hexer
     glyph: h
     color: "#8a6fa0"
+    description: It mutters over its own tangled cords, weaving small hexes the way the others weave snares.
     tags: [thread-kin, humanoid, caster, arcane]
     minDepth: 4
     maxDepth: 5

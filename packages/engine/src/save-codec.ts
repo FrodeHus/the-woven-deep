@@ -5,6 +5,7 @@ import {
   legacyActiveRunV5Schema,
   legacyActiveRunV6Schema,
   legacyActiveRunV7Schema,
+  legacyActiveRunV8Schema,
   validateActiveRun,
 } from './save-schema.js';
 import { deriveRngStreams } from './random.js';
@@ -66,16 +67,33 @@ function migrateV7ToV8(input: unknown): unknown {
   };
 }
 
-function migrateLegacy(input: unknown, schemaVersion: 4 | 5 | 6 | 7): ActiveRun {
+function migrateV8ToV9(input: unknown): unknown {
+  const v8 = legacyActiveRunV8Schema.parse(input);
+  return {
+    ...v8,
+    schemaVersion: 9,
+    // Pre-Weave actors load at full Weave. Migrations are content-free: the hero's derived maximum
+    // is `base 4 + wits`, matching the bundled `maxWeave: { base: 4, wits: 1 }` formula; non-hero
+    // actors carry no Weave pool (they never cast).
+    actors: v8.actors.map((actor) => {
+      const maxWeave = actor.playerControlled ? 4 + actor.attributes.wits : 0;
+      return { ...actor, weave: maxWeave, maxWeave };
+    }),
+  };
+}
+
+function migrateLegacy(input: unknown, schemaVersion: 4 | 5 | 6 | 7 | 8): ActiveRun {
   try {
     const migrated =
       schemaVersion === 4
-        ? migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input))))
+        ? migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input)))))
         : schemaVersion === 5
-          ? migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input)))
+          ? migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input))))
           : schemaVersion === 6
-            ? migrateV7ToV8(migrateV6ToV7(input))
-            : migrateV7ToV8(input);
+            ? migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(input)))
+            : schemaVersion === 7
+              ? migrateV8ToV9(migrateV7ToV8(input))
+              : migrateV8ToV9(input);
     return validateActiveRun(migrated);
   } catch (cause) {
     if (cause instanceof SaveLoadError) throw cause;
@@ -103,7 +121,13 @@ export function decodeActiveRun(json: string): ActiveRun {
     typeof input === 'object' && input !== null
       ? (input as Readonly<Record<string, unknown>>).schemaVersion
       : undefined;
-  if (schemaVersion === 4 || schemaVersion === 5 || schemaVersion === 6 || schemaVersion === 7) {
+  if (
+    schemaVersion === 4 ||
+    schemaVersion === 5 ||
+    schemaVersion === 6 ||
+    schemaVersion === 7 ||
+    schemaVersion === 8
+  ) {
     return migrateLegacy(input, schemaVersion);
   }
   if (schemaVersion !== SAVE_SCHEMA_VERSION) {

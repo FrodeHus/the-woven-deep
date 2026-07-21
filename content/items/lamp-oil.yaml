@@ -5,6 +5,7 @@ entries:
     name: Lamp oil
     glyph: ";"
     color: "#d2b45f"
+    description: A stoppered flask of rendered fat and pitch. It smells of the surface, which is reason enough to keep it close.
     tags: [fuel, lamp-oil]
     minDepth: 1
     maxDepth: 20

@@ -4,4 +4,5 @@ export {
   legacyActiveRunV5Schema,
   legacyActiveRunV6Schema,
   legacyActiveRunV7Schema,
+  legacyActiveRunV8Schema,
 } from './migrations.js';

@@ -30,3 +30,4 @@ jobs:
           npm run population:demo
           npm run run-records:demo
           npm run engine:demo
+          npm run endgame:demo

@@ -100,6 +100,14 @@ export interface UseItemAction {
   readonly targetActorId: OpaqueId;
   readonly cost: number;
 }
+export interface CastAction {
+  readonly type: 'cast';
+  readonly actorId: OpaqueId;
+  readonly spellId: OpaqueId;
+  readonly targetActorId: OpaqueId;
+  readonly weaveCost: number;
+  readonly cost: number;
+}
 export interface EquipAction {
   readonly type: 'equip';
   readonly actorId: OpaqueId;
@@ -137,6 +145,12 @@ export interface SearchAction {
   readonly actorId: OpaqueId;
   readonly cost: number;
 }
+export interface FinalChamberChoiceAction {
+  readonly type: 'final-chamber-choice';
+  readonly actorId: OpaqueId;
+  readonly choice: 'become-heart' | 'turn-away' | 'break-cycle';
+  readonly cost: number;
+}
 export interface DisarmAction {
   readonly type: 'disarm';
   readonly actorId: OpaqueId;
@@ -168,6 +182,7 @@ export type GameAction =
   | FireAction
   | ThrowItemAction
   | UseItemAction
+  | CastAction
   | EquipAction
   | UnequipAction
   | ToggleLightAction
@@ -176,7 +191,8 @@ export type GameAction =
   | SearchAction
   | DisarmAction
   | PickLockAction
-  | RestAction;
+  | RestAction
+  | FinalChamberChoiceAction;
 
 export interface InvalidActionValidation {
   readonly status: 'invalid';
@@ -603,6 +619,76 @@ export function validatePlayerAction(
       cost: definition.actionCost,
     };
   }
+  if (input.command.type === 'cast') {
+    const command = input.command;
+    const definition = entryById(input.context.content, command.spellId);
+    if (!definition || definition.kind !== 'spell') {
+      return { status: 'invalid', reason: 'action.unavailable' };
+    }
+    // The Weave gate runs before target resolution: an underpowered cast is rejected without
+    // consuming randomness or advancing the world, like the town-truce and concluded rejections.
+    if (actor.weave < definition.weaveCost) {
+      return { status: 'invalid', reason: 'cast.insufficient-weave' };
+    }
+    const candidate =
+      definition.targetingId === 'target.self'
+        ? actor
+        : input.state.actors.find(
+            (entry) =>
+              command.target !== null &&
+              entry.floorId === actor.floorId &&
+              entry.health > 0 &&
+              entry.x === command.target.x &&
+              entry.y === command.target.y,
+          );
+    if (!candidate) return { status: 'invalid', reason: 'target.invalid' };
+    const perception = targetContext(input.state, actor, input.context.content);
+    const target = validateTarget({
+      targetingId: definition.targetingId,
+      sourceActor: actor,
+      targetActorId: candidate.actorId,
+      target: command.target,
+      floor: perception.floor,
+      actors: input.state.actors,
+      visibilityWords: perception.visibilityWords,
+      illumination: perception.illumination,
+      range: definition.range,
+    });
+    if (!target.ok) return { status: 'invalid', reason: target.reason };
+    try {
+      resolveEffectSequence({
+        effects: definition.effects,
+        actors: input.state.actors,
+        items: input.state.items,
+        content: input.context.content,
+        sourceActorId: actor.actorId,
+        targetActorId: candidate.actorId,
+        effectsState: input.state.rng.effects,
+        survival: input.state.survival,
+        survivalActorId: input.state.hero.actorId,
+        worldTime: input.state.worldTime,
+        eventId: command.commandId,
+        forceMoveDirection:
+          candidate.actorId === actor.actorId
+            ? { x: 1, y: 0 }
+            : {
+                x: Math.sign(candidate.x - actor.x),
+                y: Math.sign(candidate.y - actor.y),
+              },
+        operations: {},
+      });
+    } catch {
+      return { status: 'invalid', reason: 'action.unavailable' };
+    }
+    return {
+      type: 'cast',
+      actorId: actor.actorId,
+      spellId: definition.id,
+      targetActorId: candidate.actorId,
+      weaveCost: definition.weaveCost,
+      cost: definition.actionCost,
+    };
+  }
   if (input.command.type === 'equip') {
     const command = input.command;
     const transition = equipItem({
@@ -713,6 +799,16 @@ export function validatePlayerAction(
   }
   if (input.command.type === 'search') {
     return { type: 'search', actorId: actor.actorId, cost: actionCostFor(rules, 'action.search') };
+  }
+  if (input.command.type === 'final-chamber-choice') {
+    // The Chamber-floor and fragment-set gates run earlier in the reducer (mirroring the
+    // town-truce guard), so reaching here means the choice is already known to be legal.
+    return {
+      type: 'final-chamber-choice',
+      actorId: actor.actorId,
+      choice: input.command.choice,
+      cost: actionCostFor(rules, 'action.final-chamber-choice'),
+    };
   }
   if (input.command.type === 'disarm') {
     const featureId = input.command.featureId;

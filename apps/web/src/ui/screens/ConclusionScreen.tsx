@@ -32,6 +32,28 @@ const COMPLETION_HEADLINE: Readonly<Record<RunConclusionProjection['completionTy
   refused: 'You have refused the Deep.',
 };
 
+/**
+ * Epilogue prose shown beneath the headline for the three non-`died` completions. `became-heart`
+ * reads for both the voluntary choice and the forced loss of the boss fight — the projection
+ * carries no flag distinguishing the two, so a single epilogue stands for both.
+ */
+const COMPLETION_EPILOGUE: Readonly<
+  Partial<Record<RunConclusionProjection['completionType'], string>>
+> = {
+  'became-heart':
+    'The bindings close around you where another once stood. You feel the Deep settle, its ' +
+    'endless hunger answered again. Somewhere above, a life you no longer have goes on without ' +
+    'you. You are the Heart now, and the cycle continues.',
+  refused:
+    'The weakened Heart breaks and falls silent, and the Deep it anchored comes apart around ' +
+    'you. Walls crack; the prisoners it held stir and scatter into the dark, freed. You run for ' +
+    'daylight through the crumbling passages, the last of the Deep collapsing at your back.',
+  'broke-cycle':
+    "The tablet's fragments lock together, whole for the first time in an age, and the binding " +
+    'unravels. The Heart is freed, and no one takes their place. The Deep, unanchored, begins to ' +
+    'quiet at last. The cycle that has run since before memory ends here, with you.',
+};
+
 const LOG_TONE_CLASS: Readonly<Record<LogLine['tone'], string>> = {
   info: 'text-fg',
   combat: 'text-danger-fg',
@@ -84,9 +106,16 @@ export function ConclusionScreen({
         {COMPLETION_HEADLINE[completionType]}
       </h1>
       <p className="text-sm text-muted">
-        {killer ? `Slain by ${killer}` : 'Claimed by the depths'} at depth {cause.depth}, turn{' '}
-        {cause.turn}.
+        {completionType === 'died'
+          ? killer
+            ? `Slain by ${killer}`
+            : 'Claimed by the depths'
+          : 'At the Final Chamber'}{' '}
+        at depth {cause.depth}, turn {cause.turn}.
       </p>
+      {COMPLETION_EPILOGUE[completionType] && (
+        <p className="text-sm text-fg">{COMPLETION_EPILOGUE[completionType]}</p>
+      )}
 
       <section aria-label="Last moments" className="flex flex-col gap-1">
         <h2 className="text-sm font-semibold text-fg-strong">Last moments</h2>

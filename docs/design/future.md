@@ -45,10 +45,10 @@ All three ship as chargen-selectable `trait` content (see `light-out-feats.md`):
 
 - **Stack splitting and quick slots** (inventory) — the engine has no such commands;
   noted during 5D-1 as real engine work, not UI work.
-- **Return-journey reinforcement checks and artifact hazards** — the master design
-  originally attached these to a Heart return journey; deferred to the future Final
-  Chamber / endings milestone, and possibly moot depending on how that milestone's
-  Heart-as-person redesign (`run-records.md`) shapes the return trip.
+- **Return-journey reinforcement checks and artifact hazards** — RETIRED as moot. The
+  endgame design (`endgame-final-chamber.md`) concludes a run *at* the Final Chamber under
+  the Heart-as-person model: there is no return journey and nothing to carry out, so these
+  never apply.
 - **Attackable town NPCs**, reputation fallout, and town-death records — deliberately
   deferred in 5C alongside the town truce mechanic.
 - **More than one strongbox tier** (house capacity upgrades) — 5C shipped exactly one.
@@ -60,6 +60,33 @@ All three ship as chargen-selectable `trait` content (see `light-out-feats.md`):
   fields.
 - **Visibility-polygon lighting** — shipped in 5D-2 as the `smooth` lighting mode; noted
   here only as historical context that it was originally a backlog item promoted forward.
+
+## Named artifacts (idea)
+
+Powerful, **hand-authored** artifacts (not procedurally generated) with specific, authored
+effects and lore — a small set of unique, memorable items, distinct from the ordinary
+depth-banded loot.
+
+- **Not random:** each is a named content entry with a fixed, specific effect and its own
+  lore/description, not a rolled combination of modifiers.
+- **Very rare:** not guaranteed to appear in a run — a low-probability spawn, so finding one
+  is an event.
+- **Depth-banded:** each artifact only spawns within specific depth ranges (reuse the
+  existing `minDepth`/`maxDepth` depth-banding that loot tables and content items already
+  support).
+- **"This place feels special":** when an artifact spawns on a floor, the floor-entry flavor
+  text should signal that the level is special (a distinct entry message), so the player
+  senses something notable is here before finding it. This implies a per-floor "notable
+  content present" signal feeding the floor-entry narration.
+
+When designed for real, decide: whether an artifact is at most one-per-run and unique across
+a profile's history; whether it persists across runs (like the Ancient Tablet fragments in
+`endgame-final-chamber.md`) or is run-scoped and lost on death; whether it is pre-identified
+or goes through the identification system; whether it's equippable/consumable or passive; and
+how it ties into the existing vault/loot placement and the heirloom system. Likely rides on
+the loot-placement + depth-banding machinery plus a new "special-floor flavor" hook and, if
+persistence is wanted, the deferred profile/account store (see the endgame's Part-B account
+store, milestone 6C).
 
 ## Playtest bugs (2026-07 triage) — resolved
 
