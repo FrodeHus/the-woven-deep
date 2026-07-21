@@ -1,6 +1,8 @@
 import type { JSX, ReactNode } from 'react';
+import type { CompiledContentPack } from '@woven-deep/content';
 import { ATTRIBUTE_ORDER, type DerivedStatFormula } from '@woven-deep/engine';
-import { useSessionCtx } from '../providers.js';
+import { useSessionCtx, usePack } from '../providers.js';
+import { classEntries } from '../../session/pack-queries.js';
 import {
   ATTRIBUTE_LABELS,
   DERIVED_STAT_LABELS,
@@ -99,6 +101,22 @@ function Row({ label, value }: Readonly<{ label: string; value: ReactNode }>): J
 }
 
 /**
+ * The hero's class is not projected: the run records only `heroClassTags`, not a class id (see the
+ * design amendment noted in `session/codex-derive.ts`). Its display name is resolved the same way
+ * the unlock codex resolves it -- the bundled classes carry distinctive tags, so the one class whose
+ * every `classTag` the hero carries is the hero's class. `undefined` when no class matches (e.g. the
+ * hero carries no class tags), in which case the line is omitted rather than shown blank.
+ */
+function heroClassName(
+  pack: CompiledContentPack,
+  heroClassTags: readonly string[],
+): string | undefined {
+  return classEntries(pack).find((entry) =>
+    entry.classTags.every((tag) => heroClassTags.includes(tag)),
+  )?.name;
+}
+
+/**
  * Read-only character sheet: base attributes, every player-visible derived stat (`DERIVED_STAT_NAMES`
  * minus the internal knobs in `PLAYER_HIDDEN_DERIVED_STATS`) with its value AND formula, active
  * conditions (stacks + a disclosed expiry marker), hunger stage, sight radius,
@@ -135,6 +153,7 @@ function Row({ label, value }: Readonly<{ label: string; value: ReactNode }>): J
  */
 export function CharacterSheetOverlay(): JSX.Element | null {
   const sessionCtx = useSessionCtx();
+  const pack = usePack();
   if (!sessionCtx) return null;
 
   const { snapshot } = sessionCtx;
@@ -143,11 +162,13 @@ export function CharacterSheetOverlay(): JSX.Element | null {
   const town = floor.town;
   const location = town ? 'Town' : `Depth ${floor.depth}`;
   const metrics = snapshot.projection.metrics;
+  const className = heroClassName(pack, snapshot.heroClassTags);
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Identity header: avatar glyph, hero name, current location. The mockup also shows a class
-       * line, but `projection.hero` projects no class display name -- omitted rather than invented. */}
+      {/* Identity header: avatar glyph, hero name, class, current location. The class name is
+       * resolved from the hero's class tags against the pack (`heroClassName`); it is omitted when
+       * no class matches rather than shown blank. */}
       <header className="flex items-center gap-3.5">
         <div
           aria-hidden="true"
@@ -157,6 +178,7 @@ export function CharacterSheetOverlay(): JSX.Element | null {
         </div>
         <div className="flex flex-col gap-0.5">
           <p className="font-serif text-lg text-fg-strong">{hero.name}</p>
+          {className !== undefined && <p className="text-sm text-fg">{className}</p>}
           <p className="text-xs uppercase tracking-[0.08em] text-subtle">{location}</p>
         </div>
       </header>
