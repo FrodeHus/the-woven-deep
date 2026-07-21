@@ -164,6 +164,32 @@ describe('interruptible rest', () => {
     expect(result.effectiveHealing).toBe(base.actors[0]!.maxHealth - hero.health);
   });
 
+  it('restores Weave to full when a rest runs to full health', () => {
+    const base = createDemoRun();
+    const demoContent = createDemoContentPack();
+    const content = {
+      ...demoContent,
+      entries: demoContent.entries.map((entry) =>
+        entry.kind === 'balance' ? { ...entry, recoveryAmount: 10 } : entry,
+      ),
+    };
+    const hero = {
+      ...base.actors[0]!,
+      health: Math.floor(base.actors[0]!.maxHealth / 2),
+      weave: 1,
+    };
+    const result = resolveRest({
+      state: { ...base, actors: [hero] },
+      content,
+      eventId: 'command.rest',
+      until: 'healed',
+      maximumDuration: 5000,
+    });
+    expect(result.stopReason).toBe('full-health');
+    const rested = result.state.actors.find((actor) => actor.actorId === hero.actorId)!;
+    expect(rested.weave).toBe(hero.maxWeave);
+  });
+
   it('rejects non-positive and server-capped command durations', () => {
     const state = createDemoRun();
     const context = { content: createDemoContentPack() };

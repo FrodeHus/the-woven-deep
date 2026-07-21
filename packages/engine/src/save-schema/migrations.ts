@@ -22,7 +22,7 @@ import {
   tradeSoldEvent,
 } from './events.js';
 import { floor } from './floor.js';
-import { actor } from './actor.js';
+import { legacyActor } from './actor.js';
 import { feature, itemFields, itemLocationV7, legacyItemLocation } from './item.js';
 import {
   encounterDecision,
@@ -36,7 +36,7 @@ import {
   relationship,
   survival,
 } from './population.js';
-import { rngEntries, runConclusionSchema, runMetrics } from './run-record.js';
+import { activeRunSchema, rngEntries, runConclusionSchema, runMetrics } from './run-record.js';
 import { ENGINE_GAME_VERSION, RECENT_COMMAND_LIMIT, type RNG_STREAM_NAMES } from '../versions.js';
 
 export const legacyPopulationCreatedEvent = z.strictObject({
@@ -158,7 +158,7 @@ export const legacyActiveRunV7Schema = z.strictObject({
       completedCommerce: z.boolean(),
     })
     .nullable(),
-  actors: z.array(actor).min(1).readonly(),
+  actors: z.array(legacyActor).min(1).readonly(),
   items: z.array(itemV7).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
@@ -175,6 +175,12 @@ export const legacyActiveRunV7Schema = z.strictObject({
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: runMetrics,
   conclusion: runConclusionSchema.nullable(),
+});
+
+// The pre-Weave save shape: the current run schema with actors that carry no `weave`/`maxWeave`.
+export const legacyActiveRunV8Schema = activeRunSchema.extend({
+  schemaVersion: z.literal(8),
+  actors: z.array(legacyActor).min(1).readonly(),
 });
 
 export const legacyActiveRunV6Schema = z.strictObject({
@@ -200,7 +206,7 @@ export const legacyActiveRunV6Schema = z.strictObject({
       completedCommerce: z.boolean(),
     })
     .nullable(),
-  actors: z.array(actor).min(1).readonly(),
+  actors: z.array(legacyActor).min(1).readonly(),
   items: z.array(itemV7).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
@@ -244,7 +250,7 @@ export const legacyActiveRunV5Schema = z.strictObject({
       completedCommerce: z.boolean(),
     })
     .nullable(),
-  actors: z.array(actor).min(1).readonly(),
+  actors: z.array(legacyActor).min(1).readonly(),
   items: z.array(itemV7).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
@@ -274,7 +280,7 @@ export const legacyActiveRunV4Schema = z.strictObject({
   turn: safeNonNegative,
   worldTime: safeNonNegative,
   hero: legacyHero,
-  actors: z.array(actor).min(1).readonly(),
+  actors: z.array(legacyActor).min(1).readonly(),
   items: z.array(legacyItem).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),

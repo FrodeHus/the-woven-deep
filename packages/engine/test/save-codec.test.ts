@@ -36,6 +36,15 @@ const resolveCommand = (
 ) => resolveCommandWithContext(state, command, context);
 
 describe('active-run save codec', () => {
+  // Pre-Weave saves carry no per-actor weave/maxWeave; drop them so a legacy fixture and the
+  // reciprocal strip both round-trip against the frozen legacy actor shape.
+  const stripActorWeave = (run: Record<string, unknown>): Record<string, unknown> => ({
+    ...run,
+    actors: (run.actors as { weave?: number; maxWeave?: number }[]).map(
+      ({ weave: _weave, maxWeave: _maxWeave, ...actor }) => actor,
+    ),
+  });
+
   function v4Fixture(): Record<string, unknown> {
     const current = structuredClone(createDemoRun()) as any;
     const {
@@ -59,7 +68,7 @@ describe('active-run save codec', () => {
       'run-records': _runRecords,
       ...rng
     } = withoutRunFields.rng;
-    return { ...withoutRunFields, schemaVersion: 4, hero, rng };
+    return stripActorWeave({ ...withoutRunFields, schemaVersion: 4, hero, rng });
   }
 
   function stripToV4Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
@@ -85,7 +94,7 @@ describe('active-run save codec', () => {
       'run-records': _runRecords,
       ...rng
     } = withoutRunFields.rng;
-    return { ...withoutRunFields, schemaVersion: 4, hero, rng };
+    return stripActorWeave({ ...withoutRunFields, schemaVersion: 4, hero, rng });
   }
 
   function v5Fixture(): Record<string, unknown> {
@@ -99,7 +108,7 @@ describe('active-run save codec', () => {
     } = current;
     const { 'run-records': _runRecords, ...rng } = withoutV6Fields.rng;
     const { classTags: _classTags, statModifiers: _statModifiers, ...hero } = withoutV6Fields.hero;
-    return { ...withoutV6Fields, schemaVersion: 5, hero, rng };
+    return stripActorWeave({ ...withoutV6Fields, schemaVersion: 5, hero, rng });
   }
 
   function stripV6Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
@@ -113,7 +122,7 @@ describe('active-run save codec', () => {
     } = current;
     const { 'run-records': _runRecords, ...rng } = withoutV6Fields.rng;
     const { classTags: _classTags, statModifiers: _statModifiers, ...hero } = withoutV6Fields.hero;
-    return { ...withoutV6Fields, schemaVersion: 5, hero, rng };
+    return stripActorWeave({ ...withoutV6Fields, schemaVersion: 5, hero, rng });
   }
 
   function v6Fixture(): Record<string, unknown> {
@@ -124,7 +133,7 @@ describe('active-run save codec', () => {
       restockedMilestones: _restockedMilestones,
       ...withoutV8Fields
     } = current;
-    return { ...withoutV8Fields, schemaVersion: 6, hero };
+    return stripActorWeave({ ...withoutV8Fields, schemaVersion: 6, hero });
   }
 
   function stripV7Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
@@ -135,7 +144,7 @@ describe('active-run save codec', () => {
       restockedMilestones: _restockedMilestones,
       ...withoutV8Fields
     } = current;
-    return { ...withoutV8Fields, schemaVersion: 6, hero };
+    return stripActorWeave({ ...withoutV8Fields, schemaVersion: 6, hero });
   }
 
   function v7Fixture(): Record<string, unknown> {
@@ -145,7 +154,7 @@ describe('active-run save codec', () => {
       restockedMilestones: _restockedMilestones,
       ...withoutV8Fields
     } = current;
-    return { ...withoutV8Fields, schemaVersion: 7 };
+    return stripActorWeave({ ...withoutV8Fields, schemaVersion: 7 });
   }
 
   function stripV8Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
@@ -155,7 +164,7 @@ describe('active-run save codec', () => {
       restockedMilestones: _restockedMilestones,
       ...withoutV8Fields
     } = current;
-    return { ...withoutV8Fields, schemaVersion: 7 };
+    return stripActorWeave({ ...withoutV8Fields, schemaVersion: 7 });
   }
 
   function concludedRun(): ReturnType<typeof createDemoRun> {
@@ -386,11 +395,11 @@ describe('active-run save codec', () => {
     return population;
   }
 
-  it('migrates strict schema v4 state through v5, v6, v7, and v8 and preserves every former field', () => {
+  it('migrates strict schema v4 state through v5, v6, v7, v8, and v9 and preserves every former field', () => {
     const legacy = v4Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(8);
+    expect(decoded.schemaVersion).toBe(9);
     expect(decoded.hero.currency).toBe(0);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
@@ -410,11 +419,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v5 state through v6, v7, and v8 and preserves every former field', () => {
+  it('migrates strict schema v5 state through v6, v7, v8, and v9 and preserves every former field', () => {
     const legacy = v5Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(8);
+    expect(decoded.schemaVersion).toBe(9);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
     expect(decoded.metrics).toEqual(emptyRunMetrics());
@@ -429,11 +438,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v6 state through v7 and v8 and preserves every former field', () => {
+  it('migrates strict schema v6 state through v7, v8, and v9 and preserves every former field', () => {
     const legacy = v6Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(8);
+    expect(decoded.schemaVersion).toBe(9);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
     expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
@@ -444,13 +453,17 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v7 state to v8 and preserves every former field', () => {
+  it('migrates strict schema v7 state to v9 and preserves every former field', () => {
     const legacy = v7Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(8);
+    expect(decoded.schemaVersion).toBe(9);
     expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
     expect(decoded.restockedMilestones).toEqual([]);
+    // A pre-Weave hero migrates to full Weave: maxWeave is base 4 + Wits, and weave starts full.
+    const migratedHero = decoded.actors.find((actor) => actor.actorId === decoded.hero.actorId)!;
+    expect(migratedHero.maxWeave).toBe(4 + migratedHero.attributes.wits);
+    expect(migratedHero.weave).toBe(migratedHero.maxWeave);
     expect(stripV8Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
       encodeActiveRun(decoded),
@@ -2157,7 +2170,7 @@ describe('active-run save codec', () => {
     );
   });
 
-  it.each([0, 1, 2, 3, 9])(
+  it.each([0, 1, 2, 3, 10])(
     'rejects unsupported schema version %i without partial state',
     (schemaVersion) => {
       try {

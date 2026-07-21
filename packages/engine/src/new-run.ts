@@ -167,13 +167,15 @@ export function createNewRun(
   const { pack, seed, hero } = input;
   if (!isNonZeroState(seed)) throw new RangeError('run seed must not be all zero');
   const balance = balanceEntry(pack);
-  const maxHealth = deriveActorStats({
+  const heroStats = deriveActorStats({
     attributes: hero.attributes,
     formulas: balance.formulas,
     equipmentModifiers: [],
     conditionModifiers: [],
     heroModifiers: [hero.statModifiers],
-  }).maxHealth;
+  });
+  const maxHealth = heroStats.maxHealth;
+  const maxWeave = heroStats.maxWeave;
 
   const runId = `run.guest.${encodeRunSeed(seed)}`;
   const rng = deriveRngStreams(seed);
@@ -236,6 +238,8 @@ export function createNewRun(
     attributes: hero.attributes,
     health: maxHealth,
     maxHealth,
+    weave: maxWeave,
+    maxWeave,
     energy: 100,
     speed: 100,
     reactionReady: true,
