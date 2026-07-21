@@ -6,6 +6,7 @@ entries:
     glyph: "="
     color: "#b8c6cc"
     description: A pale band carved with symbols no living scholar reads anymore. Its true nature reveals itself only with use.
+    lore: "The symbols were cut by a hand that trusted the wearer to figure it out later. Later has arrived, and the ring still isn't telling."
     tags: [identification, ring]
     minDepth: 1
     maxDepth: 20

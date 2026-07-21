@@ -6,6 +6,7 @@ entries:
     glyph: "%"
     color: "#c7a66a"
     description: Hard bread and dried meat, wrapped tight against the damp. It tastes of nothing, but it keeps you upright.
+    lore: "Nothing about it improves with distance from the surface, and everything about it keeps you walking anyway."
     tags: [food, provision]
     minDepth: 1
     maxDepth: 20

@@ -5,6 +5,7 @@ entries:
     name: Cinder of the Freed Heart
     glyph: "*"
     color: "#c9425f"
+    lore: "A coal broken loose from something that had been bound far longer than any coal should burn. Freed of the binding, it still remembers the shape of the cage."
     tags: [boss-reward, heart, arcane]
     minDepth: 20
     maxDepth: 20

@@ -6,6 +6,7 @@ entries:
     glyph: "!"
     color: "#a7a29b"
     description: A gritty grey draught that tastes of cold hearth-ash. It knits torn flesh, though never quite all the way.
+    lore: "Lampwrights brew it from hearth-ash and things better left unnamed. It never heals all the way, a reminder, they say, that the Deep keeps a share of everything it touches."
     tags: [healing, identification, potion]
     minDepth: 1
     maxDepth: 20

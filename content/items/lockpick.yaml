@@ -6,6 +6,7 @@ entries:
     glyph: "\\"
     color: "#9a9a8c"
     description: A thin sliver of wire already bowed from someone else's patience. It will break eventually, just maybe not today.
+    lore: "Already bent to the shape of someone else's patience before it ever touched your hands. It remembers every lock that beat it, which is most of them."
     tags: [tool, lockpick]
     minDepth: 1
     maxDepth: 20

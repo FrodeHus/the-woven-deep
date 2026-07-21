@@ -6,6 +6,7 @@ entries:
     glyph: ";"
     color: "#d2b45f"
     description: A stoppered flask of rendered fat and pitch. It smells of the surface, which is reason enough to keep it close.
+    lore: "It smells stubbornly of the surface no matter how far it travels, which lampwrights consider a small, private victory."
     tags: [fuel, lamp-oil]
     minDepth: 1
     maxDepth: 20

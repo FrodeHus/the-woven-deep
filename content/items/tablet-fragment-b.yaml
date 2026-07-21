@@ -5,6 +5,7 @@ entries:
     name: Tablet shard, second seal
     glyph: "="
     color: "#a8b37a"
+    lore: "The middle seal, cut to fit against the other two, though no one alive remembers who cut it."
     tags: [tablet-fragment]
     minDepth: 15
     maxDepth: 20

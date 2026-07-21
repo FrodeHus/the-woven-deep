@@ -6,6 +6,7 @@ entries:
     glyph: "["
     color: "#9f7655"
     description: Stiff, boiled hide stitched over old scars in the leather itself. It turns a glancing blow, nothing more.
+    lore: "The scars stitched into the hide came first; the boiling only set them. Whoever wore it before learned the same lessons the hard way."
     tags: [armor, defense]
     minDepth: 1
     maxDepth: 20

@@ -6,6 +6,7 @@ entries:
     glyph: g
     color: "#7c8a5b"
     description: Small and wiry, wrapped in scavenged thread that marks it as kin to something once human.
+    lore: "The thread it wears was never its own, scavenged from things that needed it less once they stopped needing anything."
     tags: [thread-kin, humanoid, offense]
     minDepth: 1
     maxDepth: 4
@@ -32,6 +33,7 @@ entries:
     glyph: j
     color: "#9aa36a"
     description: Fast and low to the ground, it cuts and withdraws before a blow can be returned.
+    lore: "It learned the lesson every thread-kin learns eventually: the ones who linger after landing a blow are the ones who don't land a second."
     tags: [thread-kin, humanoid, skirmisher]
     minDepth: 1
     maxDepth: 4
@@ -58,6 +60,7 @@ entries:
     glyph: s
     color: "#6f7d4e"
     description: It hurls barbed shards spun from its own frayed wrappings, keeping its distance and its patience.
+    lore: "Every shard it throws is a piece of its own wrapping. It always seems to have more than it should."
     tags: [thread-kin, humanoid, ranged]
     minDepth: 2
     maxDepth: 5
@@ -84,6 +87,7 @@ entries:
     glyph: k
     color: "#5f6b45"
     description: Layer upon layer of knotted cord has hardened into something like armor across its shoulders.
+    lore: "The knots were tied by hands that are long gone, but whoever tied them understood that the Deep never runs out of tangling to do."
     tags: [thread-kin, humanoid, armored]
     minDepth: 3
     maxDepth: 5
@@ -110,6 +114,7 @@ entries:
     glyph: h
     color: "#8a6fa0"
     description: It mutters over its own tangled cords, weaving small hexes the way the others weave snares.
+    lore: "It calls its muttering a prayer. Whatever listens on the other end of the Weave has never once answered kindly."
     tags: [thread-kin, humanoid, caster, arcane]
     minDepth: 4
     maxDepth: 5

@@ -6,6 +6,7 @@ entries:
     glyph: v
     color: "#8a7b5c"
     description: A skittish burrower that surfaces from the silt only when it smells something bleeding.
+    lore: "It has never once been the thing that started the bleeding. It has also never once missed a meal."
     tags: [animal, darkness, vermin]
     minDepth: 1
     maxDepth: 4
@@ -32,6 +33,7 @@ entries:
     glyph: t
     color: "#7fa05a"
     description: Small enough to miss and mean enough to matter, it clings and does not let go easily.
+    lore: "The Deep is full of larger horrors that get all the attention. This one has learned that being overlooked is its own kind of armor."
     tags: [animal, poison, vermin]
     minDepth: 1
     maxDepth: 4
@@ -58,6 +60,7 @@ entries:
     glyph: "&"
     color: "#6f6151"
     description: A heaving mass of hungry little bodies that moves as one starving animal.
+    lore: "Individually none of them would trouble a child. Together, they have stopped being individual."
     tags: [animal, darkness, swarm-source, vermin]
     minDepth: 2
     maxDepth: 5
@@ -84,6 +87,7 @@ entries:
     glyph: m
     color: "#5c6b57"
     description: Caked in dried mud thick as a carapace, it waits low in the muck until the moment it isn't waiting anymore.
+    lore: "It has been mistaken for a stone by things that then never got the chance to correct their mistake."
     tags: [animal, armored, vermin]
     minDepth: 3
     maxDepth: 5
@@ -110,6 +114,7 @@ entries:
     glyph: q
     color: "#7a5a48"
     description: Half-drowned and all fury, it charges through the mire like the water never touched it.
+    lore: "The water should have finished it. Instead it just made the boar angrier about the inconvenience."
     tags: [animal, brute, vermin]
     minDepth: 4
     maxDepth: 5

@@ -6,6 +6,7 @@ entries:
     glyph: "*"
     color: "#ff8c42"
     description: A coal that never cools, pulled from a warden's chest while it still glowed. Wearing it feels like standing too close to a dying fire.
+    lore: "Pried loose before the coal had any sense it was no longer wanted. It has not cooled since, and shows no sign it intends to start."
     tags: [boss-reward, fire, offense]
     minDepth: 5
     maxDepth: 20
@@ -26,6 +27,7 @@ entries:
     glyph: ","
     color: "#9b9488"
     description: A worn keepsake left behind when a fallen champion's story ended without a proper heirloom to pass on.
+    lore: "Every champion who falls in the Deep leaves something behind that never quite explains who they were. This is what's left when even that much goes missing."
     tags: [champion-relic, misc]
     minDepth: 1
     maxDepth: 20
