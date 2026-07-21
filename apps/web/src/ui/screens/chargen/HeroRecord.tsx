@@ -34,16 +34,24 @@ import {
 
 /** Mirrors `wizardPreview`'s modifier collection, but returns the raw per-stat sums instead of
  * feeding them into `deriveActorStats` -- this is exactly the delta a hero picks up from their
- * background and traits, since `deriveActorStats` sums `heroModifiers` onto the formula result. */
+ * class, background, and traits, since `deriveActorStats` sums `heroModifiers` onto the formula
+ * result. A caster class's modifiers can be negative (e.g. the Loomcaller trades melee accuracy
+ * and health for Weave capacity), so the sum here can land below zero -- callers render that as a
+ * penalty, not a bonus. */
 function heroModifierDeltas(
   state: WizardState,
   pack: CompiledContentPack,
 ): Readonly<Partial<Record<DerivedStatName, number>>> {
+  const classEntry = state.classId === null ? undefined : classById(pack, state.classId);
   const background =
     state.backgroundId === null ? undefined : backgroundById(pack, state.backgroundId);
   const traits = traitEntries(pack).filter((entry) => state.traitIds.includes(entry.id));
   const deltas: Partial<Record<DerivedStatName, number>> = {};
-  for (const modifiers of [background?.modifiers, ...traits.map((trait) => trait.modifiers)]) {
+  for (const modifiers of [
+    classEntry?.modifiers,
+    background?.modifiers,
+    ...traits.map((trait) => trait.modifiers),
+  ]) {
     if (!modifiers) continue;
     for (const statName of DERIVED_STAT_NAMES) {
       const amount = modifiers[statName];

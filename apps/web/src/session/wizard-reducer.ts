@@ -281,9 +281,9 @@ export function wizardChoices(state: WizardState): HeroChoices | null {
 }
 
 /** Live derived-stats preview: mirrors `heroFromChoices`'s modifier merge by handing
- * `deriveActorStats` the background's and each selected trait's modifiers directly as separate
- * `heroModifiers` entries — it sums across all of them per stat, so pre-merging into one object
- * first (as `heroFromChoices` does for the persisted `NewRunHero`) is unnecessary here. */
+ * `deriveActorStats` the class's, background's, and each selected trait's modifiers directly as
+ * separate `heroModifiers` entries — it sums across all of them per stat, so pre-merging into one
+ * object first (as `heroFromChoices` does for the persisted `NewRunHero`) is unnecessary here. */
 export function wizardPreview(
   state: WizardState,
   pack: CompiledContentPack,
@@ -293,6 +293,10 @@ export function wizardPreview(
   if (!balance) return null;
 
   const heroModifiers: DerivedStatModifier[] = [];
+  if (state.classId !== null) {
+    const classEntry = classById(pack, state.classId);
+    if (classEntry?.modifiers) heroModifiers.push(classEntry.modifiers);
+  }
   if (state.backgroundId !== null) {
     const background = backgroundById(pack, state.backgroundId);
     if (background) heroModifiers.push(background.modifiers);
