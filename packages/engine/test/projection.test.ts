@@ -12,7 +12,7 @@ import {
   refreshKnowledge,
   stableJson,
 } from '../src/index.js';
-import type { MonsterContentEntry } from '@woven-deep/content';
+import type { MonsterContentEntry, SpellContentEntry } from '@woven-deep/content';
 
 const width = 9;
 const height = 7;
@@ -432,6 +432,20 @@ function monsterDefinition(id: string): MonsterContentEntry {
     behaviorParameters: {},
     runAppearanceChance: 1,
     rarity: 'common',
+  };
+}
+
+function spellDefinition(id: string): SpellContentEntry {
+  return {
+    kind: 'spell',
+    id,
+    name: 'Ember bolt',
+    tags: ['fire', 'offense'],
+    targetingId: 'target.actor',
+    range: 6,
+    actionCost: 100,
+    weaveCost: 3,
+    effects: [],
   };
 }
 
@@ -1012,5 +1026,39 @@ describe('gameplay projection', () => {
     // bubble but outside the default radius-1 bubble.
     const farCell = projected.floor.cells.find((cell) => cell.x === 5 && cell.y === 1)!;
     expect(farCell.knowledge).toBe('visible');
+  });
+
+  it('omits castableSpells for a non-caster hero (knownSpellIds empty/absent)', () => {
+    const base = createDemoRun();
+    const projected = projectGameplayState({ state: base, content: createDemoContentPack() });
+    expect(projected.hero.castableSpells).toBeUndefined();
+    expect(Object.hasOwn(projected.hero, 'castableSpells')).toBe(false);
+  });
+
+  it('resolves castableSpells from knownSpellIds against the content spell registry', () => {
+    const base = createDemoRun();
+    const caster: ActiveRun = {
+      ...base,
+      hero: { ...base.hero, knownSpellIds: ['spell.ember-bolt'] },
+    };
+    const content = {
+      ...createDemoContentPack(),
+      entries: [...createDemoContentPack().entries, spellDefinition('spell.ember-bolt')],
+    };
+    const projected = projectGameplayState({ state: caster, content });
+    expect(projected.hero.castableSpells).toEqual([
+      {
+        spellId: 'spell.ember-bolt',
+        name: 'Ember bolt',
+        weaveCost: 3,
+        range: 6,
+        targetingId: 'target.actor',
+      },
+    ]);
+
+    // Confirm no other hero field moved as a side effect.
+    const { castableSpells, ...restOfHero } = projected.hero;
+    const baseline = projectGameplayState({ state: base, content: createDemoContentPack() });
+    expect(restOfHero).toEqual(baseline.hero);
   });
 });

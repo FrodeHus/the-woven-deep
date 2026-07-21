@@ -4,6 +4,7 @@ import type {
   ItemContentEntry,
   MerchantEncounterContentEntry,
   MerchantServiceId,
+  SpellContentEntry,
 } from '@woven-deep/content';
 import { heroActor, heroPerception } from './actor-model.js';
 import { entryById } from './content-index.js';
@@ -432,9 +433,20 @@ export interface ObservableHouse {
   readonly items: readonly Readonly<Record<string, unknown>>[];
 }
 
+/** One spell the hero currently knows and can cast, resolved from the content spell registry. */
+export interface CastableSpellView {
+  readonly spellId: OpaqueId;
+  readonly name: string;
+  readonly weaveCost: number;
+  readonly range: number;
+  readonly targetingId: string;
+}
+
 export interface GameplayProjection {
   readonly floor: ObservableFloorProjection;
-  readonly hero: Readonly<Record<string, unknown>>;
+  readonly hero: Readonly<Record<string, unknown>> & {
+    readonly castableSpells?: readonly CastableSpellView[];
+  };
   /**
    * `contentId` is the one formally-typed field here (the rest of an actor's shape stays an
    * untyped record, as before) -- the perceived actor's own content id, `null` for the hero (never
@@ -709,9 +721,19 @@ function projectHeroView(
     derived: DerivedHeroStats;
     rules: BalanceRules;
   }>,
-): Readonly<Record<string, unknown>> {
+): Readonly<Record<string, unknown>> & { readonly castableSpells?: readonly CastableSpellView[] } {
   const { state, content, observed, derived, rules } = input;
   const { hero } = observed;
+  const castableSpells: readonly CastableSpellView[] = (state.hero.knownSpellIds ?? [])
+    .map((spellId) => entryById(content, spellId))
+    .filter((entry): entry is SpellContentEntry => entry?.kind === 'spell')
+    .map((entry) => ({
+      spellId: entry.id,
+      name: entry.name,
+      weaveCost: entry.weaveCost,
+      range: entry.range,
+      targetingId: entry.targetingId,
+    }));
   const backpack = state.items
     .filter((item) => item.location.type === 'backpack' && item.location.actorId === hero.actorId)
     .sort((left, right) => (left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0))
@@ -766,6 +788,7 @@ function projectHeroView(
     backpack,
     backpackCapacity: state.hero.backpackCapacity,
     knownAppearanceIds: [...state.identification.knownAppearanceIds],
+    ...(castableSpells.length > 0 ? { castableSpells } : {}),
   };
 }
 
