@@ -53,4 +53,12 @@ export type PlayerIntent =
       readonly serviceId: MerchantServiceId;
       /** `null` for a targetless service (e.g. the strongbox). */
       readonly targetItemId: OpaqueId | null;
+    }
+  // Casts a known spell at a clicked map cell. The target is always the cell, never an actor id --
+  // even for `target.actor` spells the engine resolves whichever actor occupies that cell, so the
+  // client never has to look up an occupant itself (see command-builder.ts).
+  | {
+      readonly type: 'cast';
+      readonly spellId: OpaqueId;
+      readonly target: { x: number; y: number };
     };
