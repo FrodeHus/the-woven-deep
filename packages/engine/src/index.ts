@@ -48,6 +48,7 @@ export * from './new-run.js';
 export * from './chargen.js';
 export * from './floor-transition.js';
 export * from './town-floor.js';
+export * from './final-chamber.js';
 export * from './actor-model.js';
 export * from './attributes.js';
 export * from './stats.js';
