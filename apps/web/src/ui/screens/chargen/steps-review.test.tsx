@@ -95,4 +95,68 @@ describe('ReviewStep', () => {
     render(<ReviewStep state={stubState()} pack={pack} dispatch={dispatch} />);
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
+
+  it('renders the ready banner when every step is satisfied', () => {
+    const classEntry = pack.entries.find(
+      (entry) => entry.kind === 'class' && entry.id === WAYFARER,
+    ) as { kits: readonly { kitId: string }[] };
+    const kit = classEntry.kits[0]!;
+    const dispatch = vi.fn();
+    render(
+      <ReviewStep
+        state={stubState({
+          name: 'Rin',
+          method: 'point-buy',
+          attributes: {
+            might: 10,
+            agility: 10,
+            vitality: 10,
+            wits: 10,
+            resolve: 10,
+          },
+          classId: WAYFARER,
+          kitId: kit.kitId,
+          backgroundId: CARAVAN_GUARD,
+          traitIds: [KEEN_EYED],
+        })}
+        pack={pack}
+        dispatch={dispatch}
+      />,
+    );
+
+    const banner = screen.getByRole('status');
+    expect(banner).toHaveTextContent(
+      'Every thread is in place. Pull it — weave the hero and descend.',
+    );
+    expect(banner).toHaveClass('text-good');
+  });
+
+  it('renders the missing-threads banner naming the incomplete steps', () => {
+    const dispatch = vi.fn();
+    render(
+      <ReviewStep
+        state={stubState({
+          name: 'Rin',
+          method: 'point-buy',
+          attributes: {
+            might: 10,
+            agility: 10,
+            vitality: 10,
+            wits: 10,
+            resolve: 10,
+          },
+          classId: null,
+          kitId: null,
+          backgroundId: CARAVAN_GUARD,
+          traitIds: [],
+        })}
+        pack={pack}
+        dispatch={dispatch}
+      />,
+    );
+
+    const banner = screen.getByRole('status');
+    expect(banner).toHaveTextContent('Threads are missing: Calling, Kit');
+    expect(banner).toHaveClass('text-warn');
+  });
 });

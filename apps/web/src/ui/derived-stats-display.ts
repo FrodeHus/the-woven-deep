@@ -43,6 +43,16 @@ export const ATTRIBUTE_LABELS: Readonly<Record<AttributeName, string>> = {
   resolve: 'Resolve',
 };
 
+/** Three-letter abbreviation for each base attribute, in `ATTRIBUTE_ORDER`, used wherever the
+ * full `ATTRIBUTE_LABELS` name doesn't fit (e.g. the hero-record preview's attribute rows). */
+export const ATTRIBUTE_ABBREVIATIONS: Readonly<Record<AttributeName, string>> = {
+  might: 'MIG',
+  agility: 'AGI',
+  vitality: 'VIT',
+  wits: 'WIT',
+  resolve: 'RES',
+};
+
 /** Summarizes a background/trait's derived-stat modifiers as short `+N Stat` text, e.g. for an
  * option-row's meta line. Only includes player-visible stats; returns `undefined` when there's
  * nothing to show. */

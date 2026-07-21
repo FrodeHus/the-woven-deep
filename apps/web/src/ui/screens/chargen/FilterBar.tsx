@@ -25,7 +25,7 @@ export function FilterBar<T extends Facetable>({ facets }: { facets: ListFacets<
           type="button"
           onClick={() => facets.setActiveTag(null)}
           className={cn(
-            'rounded px-2 py-0.5 text-xs font-mono',
+            'rounded px-2 py-0.5 text-xs font-mono tracking-wide uppercase',
             facets.activeTag === null ? 'bg-accent text-deep' : 'border border-line text-muted',
           )}
         >

@@ -124,4 +124,28 @@ describe('TraitsStep', () => {
       expect.objectContaining({ type: 'toggle-trait', traitId: STEADY_HANDS }),
     );
   });
+
+  it('renders the category chips from the tag taxonomy, not the internal chargen marker', () => {
+    const dispatch = vi.fn();
+    render(<TraitsStep state={stubState()} pack={pack} dispatch={dispatch} />);
+    expect(screen.getByRole('button', { name: 'combat' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'survival' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'perception' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'darkness' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'chargen' })).not.toBeInTheDocument();
+  });
+
+  it('filters the list to the combat category when the combat chip is clicked, and ALL clears it', async () => {
+    const user = userEvent.setup();
+    const dispatch = vi.fn();
+    render(<TraitsStep state={stubState()} pack={pack} dispatch={dispatch} />);
+
+    await user.click(screen.getByRole('button', { name: 'combat' }));
+    expect(screen.getAllByRole('option')).toHaveLength(2);
+    expect(screen.getByRole('option', { name: /Brawler/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Sharpshooter/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'ALL' }));
+    expect(screen.getAllByRole('option')).toHaveLength(8);
+  });
 });

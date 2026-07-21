@@ -11,6 +11,7 @@ export function TraitsStep({ state, pack, dispatch }: StepProps): JSX.Element {
     const meta = modifiersMeta(entry.modifiers);
     return {
       ...entry,
+      tags: entry.tags.filter((tag) => tag !== 'chargen'),
       ...(meta ? { meta } : {}),
       disabled: !selected && atCap,
       ...(!selected && atCap ? { disabledReason: '2/2 traits picked' } : {}),

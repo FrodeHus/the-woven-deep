@@ -152,6 +152,12 @@ async function driveWizardToSummary(user: ReturnType<typeof userEvent.setup>): P
   expect(screen.getByLabelText(/Step 7 of 7/)).toBeInTheDocument();
 }
 
+/** Clicks WEAVE, then confirms the character through the LOOM ACCEPTS modal's DESCEND button. */
+async function weaveAndDescend(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
+  await user.click(await screen.findByRole('button', { name: /DESCEND/ }));
+}
+
 describe('App boot flow', () => {
   it('shows a loading state, then the title screen when the pack loads (default boot: no params, no save)', async () => {
     render(<App fetcher={packFetcher()} storage={fakeStorage()} />);
@@ -343,7 +349,7 @@ describe('App boot flow', () => {
     await user.click(await screen.findByRole('option', { name: /enter the deep/i }));
     await screen.findByLabelText(/Step 1 of 7/);
     await driveWizardToSummary(user);
-    await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
+    await weaveAndDescend(user);
 
     expect(await screen.findByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
     // A fresh session doesn't persist until its first dispatch — force one (harmless: `.` waits).
@@ -377,7 +383,7 @@ describe('App boot flow', () => {
     expect(portraitOptions).toHaveLength(PORTRAIT_GLYPHS.length);
     await user.click(portraitOptions[1]!);
     await driveWizardToSummary(user);
-    await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
+    await weaveAndDescend(user);
 
     await screen.findByRole('grid', { name: /dungeon/i });
     expect(storage.peek(PORTRAIT_KEY)).toBe(PORTRAIT_GLYPHS[1]);
@@ -405,7 +411,7 @@ describe('App boot flow', () => {
     await user.click(await screen.findByRole('option', { name: /enter the deep/i }));
     await screen.findByLabelText(/Step 1 of 7/);
     await driveWizardToSummary(user);
-    await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
+    await weaveAndDescend(user);
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/poisoned choices: boom/);
@@ -449,7 +455,7 @@ describe('App boot flow', () => {
       await user.click(await screen.findByRole('option', { name: /enter the deep/i }));
       await screen.findByLabelText(/Step 1 of 7/);
       await driveWizardToSummary(user);
-      await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
+      await weaveAndDescend(user);
 
       await screen.findByRole('grid', { name: /dungeon/i });
       expect(screen.getByRole('note')).toHaveTextContent(/move/i);
@@ -540,7 +546,7 @@ describe('App finalize-once (concluded run)', () => {
     await user.click(screen.getByRole('option', { name: 'New Hero' }));
     await screen.findByLabelText(/Step 1 of 7/);
     await driveWizardToSummary(user);
-    await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
+    await weaveAndDescend(user);
 
     // The PLAY screen mounts with the new hero, at turn 0 -- NOT the conclusion screen again.
     expect(await screen.findByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
