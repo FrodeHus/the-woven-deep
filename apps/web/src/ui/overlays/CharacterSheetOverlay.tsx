@@ -139,11 +139,28 @@ export function CharacterSheetOverlay(): JSX.Element | null {
 
   const { snapshot } = sessionCtx;
   const hero: HeroView = heroOf(snapshot.projection);
-  const town = snapshot.projection.floor.town;
+  const floor = snapshot.projection.floor;
+  const town = floor.town;
+  const location = town ? 'Town' : `Depth ${floor.depth}`;
   const metrics = snapshot.projection.metrics;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
+      {/* Identity header: avatar glyph, hero name, current location. The mockup also shows a class
+       * line, but `projection.hero` projects no class display name -- omitted rather than invented. */}
+      <header className="flex items-center gap-3.5">
+        <div
+          aria-hidden="true"
+          className="grid size-16 place-items-center border border-double border-accent bg-raised font-serif text-3xl text-accent-strong"
+        >
+          @
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <p className="font-serif text-lg text-fg-strong">{hero.name}</p>
+          <p className="text-xs uppercase tracking-[0.08em] text-subtle">{location}</p>
+        </div>
+      </header>
+
       <Section id="character-sheet-attributes-heading" title="Attributes">
         <DefinitionGrid>
           {ATTRIBUTE_ORDER.map((name) => (
