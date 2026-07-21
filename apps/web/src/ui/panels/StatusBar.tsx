@@ -25,7 +25,10 @@ export function StatusBar({ snapshot }: PanelProps): JSX.Element {
       <span className="tracking-wide text-muted">
         {floor.town ? 'Town' : `Depth ${floor.depth}`}
       </span>
-      <span className="ml-auto text-muted" data-testid="turn-count">{`Turn ${metrics.turnsElapsed}`}</span>
+      <span
+        className="ml-auto text-muted"
+        data-testid="turn-count"
+      >{`Turn ${metrics.turnsElapsed}`}</span>
       {primaryCondition && (
         <span
           className="condition-badge rounded border px-1.5 text-xs"

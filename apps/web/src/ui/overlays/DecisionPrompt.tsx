@@ -50,9 +50,7 @@ export function DecisionPrompt({ snapshot, session }: DecisionPromptProps): JSX.
       </div>
       <div className="flex-1">
         <div className="mb-1 font-serif text-[0.9375rem] text-fg-strong">A wary moment</div>
-        <p className="mb-3 font-serif text-sm italic leading-snug text-fg">
-          “Attack this target?”
-        </p>
+        <p className="mb-3 font-serif text-sm italic leading-snug text-fg">“Attack this target?”</p>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"

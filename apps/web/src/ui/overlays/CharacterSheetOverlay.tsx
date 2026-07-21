@@ -1,4 +1,4 @@
-import { type JSX, type ReactNode } from 'react';
+import type { JSX, ReactNode } from 'react';
 import { ATTRIBUTE_ORDER, type DerivedStatFormula } from '@woven-deep/engine';
 import { useSessionCtx } from '../providers.js';
 import {
@@ -78,9 +78,7 @@ function DefinitionGrid({
   columns = 1,
 }: Readonly<{ children: ReactNode; columns?: 1 | 2 }>): JSX.Element {
   return (
-    <dl
-      className={`grid gap-x-5 gap-y-1 text-sm ${columns === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
-    >
+    <dl className={`grid gap-x-5 gap-y-1 text-sm ${columns === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
       {children}
     </dl>
   );
