@@ -19,6 +19,7 @@
     "merchant:demo": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && node scripts/merchant-demo.mjs --verify",
     "population:demo": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && node scripts/population-demo.mjs --verify",
     "run-records:demo": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && node scripts/run-records-demo.mjs --verify",
+    "endgame:demo": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && node scripts/endgame-demo.mjs --verify",
     "engine:demo": "npm run build --workspace @woven-deep/engine && node scripts/engine-demo.mjs --verify packages/engine/fixtures/demo.commands",
     "smoke": "node scripts/smoke.mjs",
     "lint": "eslint .",

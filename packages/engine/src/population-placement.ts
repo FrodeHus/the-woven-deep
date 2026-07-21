@@ -2,6 +2,7 @@ import type {
   BalanceContentEntry,
   CompiledContentPack,
   EncounterContentEntry,
+  ItemContentEntry,
   MonsterContentEntry,
   VaultContentEntry,
   VaultPlacementSlot,
@@ -9,6 +10,7 @@ import type {
 import { emptyEquipment, type ActorState } from './actor-model.js';
 import { analyzeConnectivity, preservesRequiredRoutes } from './connectivity.js';
 import type { DungeonFeature } from './feature-model.js';
+import { heroHoldsFragment, tabletFragmentIds } from './final-chamber-fragments.js';
 import { createFloorItem, createFloorLootFromTable } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
 import { materializeMerchant } from './merchant-stock.js';
@@ -539,6 +541,89 @@ function fillItemSlots(
   return { items, state: currentState };
 }
 
+/** 1-in-N odds per floor generation: a rare roll, so a full fragment set in one run stays rare. */
+const FRAGMENT_SPAWN_ROLL_DENOMINATOR = 40;
+
+function fragmentItemEntry(content: CompiledContentPack, fragmentId: string): ItemContentEntry {
+  const entry = content.entries.find(
+    (candidate): candidate is ItemContentEntry =>
+      candidate.kind === 'item' && candidate.id === fragmentId,
+  );
+  if (entry === undefined) {
+    throw new Error(`internal invariant: fragment ${fragmentId} has no item content entry`);
+  }
+  return entry;
+}
+
+/**
+ * Fragment ids the spawn roll may pick from this floor: within the fragment's own authored
+ * minDepth/maxDepth band, not already held in the hero's backpack this run (the run-local
+ * no-duplicate rule, via `heroHoldsFragment`), and not already lying on this floor.
+ */
+function eligibleFragmentSpawnIds(input: PlacePopulationInput): readonly OpaqueId[] {
+  return tabletFragmentIds(input.content).filter((fragmentId) => {
+    const entry = fragmentItemEntry(input.content, fragmentId);
+    if (input.floor.depth < entry.minDepth || input.floor.depth > entry.maxDepth) return false;
+    if (heroHoldsFragment(input.run, fragmentId)) return false;
+    return !input.run.items.some(
+      (item) =>
+        item.location.type === 'floor' &&
+        item.location.floorId === input.floor.floorId &&
+        item.contentId === fragmentId,
+    );
+  });
+}
+
+/** Every walkable, unoccupied cell on the floor -- deliberately unrestricted by terrain tags or
+ * anchor/objective distance (unlike encounter `legalCells`): a lying item never blocks movement or
+ * routes, so the only requirement is that nothing else already occupies the cell. */
+function openFloorCells(input: PlacePopulationInput): readonly Point[] {
+  const { floor } = input;
+  const reserved = reservedCellIndexes(input);
+  const cells: Point[] = [];
+  for (let y = 0; y < floor.height; y += 1) {
+    for (let x = 0; x < floor.width; x += 1) {
+      const index = y * floor.width + x;
+      if (reserved.has(index)) continue;
+      if (!tileDefinition(floor.tiles[index]!).walkable) continue;
+      cells.push({ x, y });
+    }
+  }
+  return cells;
+}
+
+/**
+ * Rare, depth-banded Ancient Tablet fragment spawn: rolled once per floor generation from the same
+ * `encounters` stream every other floor-generation-time placement in this file threads (never
+ * `run.rng.loot`, reserved for runtime combat drops). A miss, an empty eligible set (nothing left
+ * in band, or the hero already carries every eligible fragment this run), or no open cell all
+ * consume no more than the roll(s) already made and place nothing.
+ */
+function placeFragmentSpawn(
+  input: PlacePopulationInput,
+  state: Uint32State,
+): Readonly<{ items: readonly ItemInstance[]; state: Uint32State }> {
+  const eligible = eligibleFragmentSpawnIds(input);
+  if (eligible.length === 0) return { items: [], state };
+  const roll = rollDie(state, FRAGMENT_SPAWN_ROLL_DENOMINATOR);
+  if (roll.value !== 1) return { items: [], state: roll.state };
+  const cells = openFloorCells(input);
+  if (cells.length === 0) return { items: [], state: roll.state };
+  const fragmentPick = rollDie(roll.state, eligible.length);
+  const cellPick = rollDie(fragmentPick.state, cells.length);
+  const fragmentId = eligible[fragmentPick.value - 1]!;
+  const cell = cells[cellPick.value - 1]!;
+  const item = createFloorItem({
+    content: input.content,
+    contentId: fragmentId,
+    itemId: `item.fragment-spawn.${input.floor.floorId}`,
+    floorId: input.floor.floorId,
+    x: cell.x,
+    y: cell.y,
+  });
+  return { items: [item], state: cellPick.state };
+}
+
 function unfilledFeatureSlots(
   input: PlacePopulationInput,
 ): readonly (FloorSnapshot['placementSlots'][number] & { kind: 'door' | 'chest' })[] {
@@ -1062,5 +1147,14 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
     }
     if (placement.status === 'rejected') break;
   }
+  const fragmentSpawn = placeFragmentSpawn({ ...input, run }, run.rng.encounters);
+  run = {
+    ...run,
+    items:
+      fragmentSpawn.items.length === 0
+        ? run.items
+        : sortByItemId([...run.items, ...fragmentSpawn.items]),
+    rng: { ...run.rng, encounters: fragmentSpawn.state },
+  };
   return { state: run, placements, events };
 }

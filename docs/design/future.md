@@ -45,10 +45,10 @@ All three ship as chargen-selectable `trait` content (see `light-out-feats.md`):
 
 - **Stack splitting and quick slots** (inventory) — the engine has no such commands;
   noted during 5D-1 as real engine work, not UI work.
-- **Return-journey reinforcement checks and artifact hazards** — the master design
-  originally attached these to a Heart return journey; deferred to the future Final
-  Chamber / endings milestone, and possibly moot depending on how that milestone's
-  Heart-as-person redesign (`run-records.md`) shapes the return trip.
+- **Return-journey reinforcement checks and artifact hazards** — RETIRED as moot. The
+  endgame design (`endgame-final-chamber.md`) concludes a run *at* the Final Chamber under
+  the Heart-as-person model: there is no return journey and nothing to carry out, so these
+  never apply.
 - **Attackable town NPCs**, reputation fallout, and town-death records — deliberately
   deferred in 5C alongside the town truce mechanic.
 - **More than one strongbox tier** (house capacity upgrades) — 5C shipped exactly one.

@@ -88,6 +88,10 @@ export interface CloseDoorCommand extends CommandEnvelope {
 export interface SearchCommand extends CommandEnvelope {
   readonly type: 'search';
 }
+export interface FinalChamberChoiceCommand extends CommandEnvelope {
+  readonly type: 'final-chamber-choice';
+  readonly choice: 'become-heart' | 'turn-away' | 'break-cycle';
+}
 export interface DisarmCommand extends CommandEnvelope {
   readonly type: 'disarm';
   readonly featureId: OpaqueId;
@@ -168,7 +172,8 @@ export type GameCommand =
   | PickLockCommand
   | RestCommand
   | TradeCommand
-  | HouseCommand;
+  | HouseCommand
+  | FinalChamberChoiceCommand;
 
 export type MovementInvalidReason =
   | 'blocked.bounds'
@@ -217,4 +222,7 @@ export type InvalidActionReason =
   | 'target.blocked'
   | 'target.invalid'
   | 'cast.insufficient-weave'
-  | 'run.concluded';
+  | 'run.concluded'
+  | 'final-chamber.unavailable'
+  | 'final-chamber.fragments-required'
+  | 'final-chamber.boss-active';

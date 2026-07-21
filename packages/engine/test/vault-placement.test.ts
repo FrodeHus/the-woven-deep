@@ -19,7 +19,10 @@ beforeAll(async () => {
   const pack = await compileContentDirectory({
     rootDir: resolve(import.meta.dirname, '../../../content'),
   });
-  bundled = pack.entries.find((entry): entry is VaultContentEntry => entry.kind === 'vault')!;
+  bundled = pack.entries.find(
+    (entry): entry is VaultContentEntry =>
+      entry.kind === 'vault' && entry.id === 'vault.lampwright-cache',
+  )!;
 });
 
 function topology(vaultState = [1, 2, 3, 4] as const): TopologyDraft {

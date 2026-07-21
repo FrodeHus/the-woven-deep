@@ -56,6 +56,7 @@ function snapshotWithBackpack(
     log: [],
     lastEvents: [],
     pendingDecision: null,
+    pendingFinalChamberChoice: null,
     notice: null,
     houseOpen: false,
     conclusion: null,

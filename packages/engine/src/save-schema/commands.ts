@@ -142,6 +142,11 @@ export const houseWithdrawCommand = z.strictObject({
   itemId: identifier,
   quantity: positiveQuantity,
 });
+export const finalChamberChoiceCommand = z.strictObject({
+  ...commandBase,
+  type: z.literal('final-chamber-choice'),
+  choice: z.enum(['become-heart', 'turn-away', 'break-cycle']),
+});
 export const commandV7 = z.discriminatedUnion('type', [
   ...commandBaseOptions,
   tradeServiceCommandV7,
@@ -151,6 +156,7 @@ export const command = z.discriminatedUnion('type', [
   tradeServiceCommand,
   houseDepositCommand,
   houseWithdrawCommand,
+  finalChamberChoiceCommand,
 ]);
 
 import type { GameCommand } from '../model.js';

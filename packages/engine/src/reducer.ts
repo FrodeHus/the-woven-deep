@@ -25,8 +25,11 @@ import { isHouseCommand, resolveHouseCommand, validateHouseCommand } from './hou
 import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import { projectDomainEvents } from './event-projection.js';
 import { foldRunMetrics } from './run-metrics.js';
-import { concludeRunOnHeroDeath } from './run-conclusion.js';
+import { concludeRunOnChoice, concludeRunOnHeroDeath } from './run-conclusion.js';
 import { isTownFloorActive } from './town-floor.js';
+import { FINAL_CHAMBER_DEPTH } from './final-chamber.js';
+import { heroHoldsAllFragments } from './final-chamber-fragments.js';
+import { isHeartBossActive, isHeartBossDefeated } from './final-chamber-boss-state.js';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
   return stableJson(left) === stableJson(right);
@@ -150,6 +153,33 @@ export function resolveCommand(
   }
   if (isTownFloorActive(state) && command.type === 'rest') {
     return recordInvalid(state, context.content, command, 'town.rest', [], []);
+  }
+
+  // The Final Chamber choice is gated the same way: off the Chamber floor, or with an
+  // unsatisfied fragment set for `break-cycle`, the rejection consumes no randomness and never
+  // reaches the modal-session normalization or world branches below.
+  if (command.type === 'final-chamber-choice') {
+    const activeFloor = state.floors.find((floor) => floor.floorId === state.activeFloorId);
+    if (!activeFloor || activeFloor.depth !== FINAL_CHAMBER_DEPTH) {
+      return recordInvalid(state, context.content, command, 'final-chamber.unavailable', [], []);
+    }
+    // Turning away is a one-way door: once the weakened Heart is fighting, the choice window is
+    // closed. The only way out is the fight (win -> `refused`, lose -> forced `became-heart`), so
+    // every further choice -- a second `turn-away`, or a late `become-heart`/`break-cycle` -- is
+    // rejected here before it could re-inject the boss or conclude mid-fight.
+    if (isHeartBossActive(state)) {
+      return recordInvalid(state, context.content, command, 'final-chamber.boss-active', [], []);
+    }
+    if (command.choice === 'break-cycle' && !heroHoldsAllFragments(state, context.content)) {
+      return recordInvalid(
+        state,
+        context.content,
+        command,
+        'final-chamber.fragments-required',
+        [],
+        [],
+      );
+    }
   }
 
   // Normalize the modal session first: a session whose merchant no longer satisfies the
@@ -335,25 +365,52 @@ export function resolveCommand(
     turn: result.turn,
     eventId: command.commandId,
   });
-  const conclusionEvents = concluded.events.slice(world.events.length);
+  // The Final Chamber conclusions resolve in this same transition, right after the hero-death
+  // boundary above (a living hero taking these paths never collides with it). Two shapes: the
+  // instant `become-heart`/`broke-cycle` choices conclude the moment they are made; the refused
+  // branch instead concludes `refused` on whatever later step defeats the weakened Heart -- keyed
+  // off the dead boss, not the command type, since the killing blow is an ordinary attack. Both are
+  // guarded against an already-concluded run (a hero killed by the boss concluded `became-heart`
+  // above, so the refused check does not fire).
+  const chamberChoice =
+    validation.type === 'final-chamber-choice' && validation.choice !== 'turn-away'
+      ? concludeRunOnChoice({
+          state: concluded.state,
+          completionType: validation.choice === 'become-heart' ? 'became-heart' : 'broke-cycle',
+          turn: result.turn,
+          eventId: command.commandId,
+        })
+      : concluded.state.conclusion === null && isHeartBossDefeated(concluded.state)
+        ? concludeRunOnChoice({
+            state: concluded.state,
+            completionType: 'refused',
+            turn: result.turn,
+            eventId: command.commandId,
+          })
+        : null;
+  const concludedState = chamberChoice?.state ?? concluded.state;
+  const concludedEvents = chamberChoice
+    ? [...concluded.events, ...chamberChoice.events]
+    : concluded.events;
+  const conclusionEvents = concludedEvents.slice(world.events.length);
   const conclusionPublicEvents =
     conclusionEvents.length === 0
       ? []
       : projectDomainEvents({
-          state: concluded.state,
+          state: concludedState,
           content: context.content,
-          heroId: concluded.state.hero.actorId,
+          heroId: concludedState.hero.actorId,
           events: conclusionEvents,
         });
   const worldPublicEvents =
     conclusionPublicEvents.length === 0
       ? world.publicEvents
       : [...world.publicEvents, ...conclusionPublicEvents];
-  const events = preEvents.length === 0 ? concluded.events : [...preEvents, ...concluded.events];
+  const events = preEvents.length === 0 ? concludedEvents : [...preEvents, ...concludedEvents];
   const publicEvents =
     prePublicEvents.length === 0 ? worldPublicEvents : [...prePublicEvents, ...worldPublicEvents];
   return {
-    state: record(concluded.state, context.content, command, result, events, publicEvents),
+    state: record(concludedState, context.content, command, result, events, publicEvents),
     result,
     events: publicEvents,
   };

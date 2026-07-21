@@ -145,6 +145,12 @@ export interface SearchAction {
   readonly actorId: OpaqueId;
   readonly cost: number;
 }
+export interface FinalChamberChoiceAction {
+  readonly type: 'final-chamber-choice';
+  readonly actorId: OpaqueId;
+  readonly choice: 'become-heart' | 'turn-away' | 'break-cycle';
+  readonly cost: number;
+}
 export interface DisarmAction {
   readonly type: 'disarm';
   readonly actorId: OpaqueId;
@@ -185,7 +191,8 @@ export type GameAction =
   | SearchAction
   | DisarmAction
   | PickLockAction
-  | RestAction;
+  | RestAction
+  | FinalChamberChoiceAction;
 
 export interface InvalidActionValidation {
   readonly status: 'invalid';
@@ -792,6 +799,16 @@ export function validatePlayerAction(
   }
   if (input.command.type === 'search') {
     return { type: 'search', actorId: actor.actorId, cost: actionCostFor(rules, 'action.search') };
+  }
+  if (input.command.type === 'final-chamber-choice') {
+    // The Chamber-floor and fragment-set gates run earlier in the reducer (mirroring the
+    // town-truce guard), so reaching here means the choice is already known to be legal.
+    return {
+      type: 'final-chamber-choice',
+      actorId: actor.actorId,
+      choice: input.command.choice,
+      cost: actionCostFor(rules, 'action.final-chamber-choice'),
+    };
   }
   if (input.command.type === 'disarm') {
     const featureId = input.command.featureId;

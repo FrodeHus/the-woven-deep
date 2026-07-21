@@ -1,5 +1,5 @@
 import type { CompiledContentPack, VaultContentEntry } from '@woven-deep/content';
-import { depthFloorId } from './floor-transition.js';
+import { depthFloorId } from './floor-id.js';
 import { createUnknownKnowledge } from './knowledge.js';
 import type { AmbientLight, LightSource } from './light-model.js';
 import {
@@ -41,7 +41,7 @@ const TOWN_FLOOR_SEED: Uint32State = [0, 0, 0, 0];
 
 const TOWN_AMBIENT: AmbientLight = { color: [24, 22, 30], strength: 9 };
 
-const TERRAIN_TILE_IDS = Object.fromEntries(
+export const TERRAIN_TILE_IDS = Object.fromEntries(
   TILE_DEFINITIONS.map((definition) => [definition.name, definition.id]),
 ) as Record<(typeof TILE_DEFINITIONS)[number]['name'], TileId>;
 

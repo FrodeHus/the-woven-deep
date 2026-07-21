@@ -1,13 +1,17 @@
 import type { CompiledContentPack, VaultContentEntry } from '@woven-deep/content';
 import type { DomainEvent, OpaqueId, Point } from './model.js';
 import { balanceEntry } from './actions.js';
-import { heroActor } from './actor-model.js';
+import { heroActor, heroPerception } from './actor-model.js';
+import { FINAL_CHAMBER_DEPTH, generateFinalChamberFloor } from './final-chamber.js';
+import { depthFloorId } from './floor-id.js';
 import { generateFloor } from './generate-floor.js';
 import { createClassicTheme } from './generation-mask.js';
 import { allocateFloorSeed } from './generation-random.js';
 import { integrateGeneratedFloor, type FloorIntegrationResult } from './floor-integration.js';
 import { restockMerchant } from './merchant-stock.js';
 import type { ActiveRun } from './model.js';
+import { refreshKnowledge } from './perception.js';
+import { recordFloorEntered } from './run-metrics.js';
 import { validateActiveRun } from './save-schema.js';
 import { compareCodeUnits } from './stable-json.js';
 import { tileDefinition } from './terrain.js';
@@ -17,18 +21,7 @@ import {
   NEW_RUN_FLOOR_WIDTH,
 } from './new-run.js';
 
-/**
- * Generates a floor identifier from a depth number with 3-digit zero-padding.
- * Supports depths 0-999 (depth 0 is the authored town); depths >= 1000 throw RangeError.
- * Uses 3-digit padding to ensure lexicographic string comparison matches numeric ordering, so
- * `floor.depth-000` (town) sorts before `floor.depth-001` (the first dungeon floor).
- */
-export function depthFloorId(depth: number): OpaqueId {
-  if (depth < 0 || depth > 999) {
-    throw new RangeError(`floor depth must be between 0 and 999, got ${depth}`);
-  }
-  return `floor.depth-${String(depth).padStart(3, '0')}`;
-}
+export { depthFloorId };
 
 function nextFloorId(depth: number): string {
   return depthFloorId(depth);
@@ -129,6 +122,47 @@ export function descendToNextFloor(
     }
     const entered = enterStoredFloor(run, { floorId, arrival });
     const restocked = applyMerchantRestocks({ state: entered, content: context.content });
+    return { state: restocked.state, events: restocked.events };
+  }
+
+  // The Final Chamber is authored, not generated (mirroring the town's own bootstrap in
+  // new-run.ts): it consumes no randomness, so no floor-seed allocation happens and `rng.generation`
+  // stays untouched by this descent. It is assembled and appended directly here rather than through
+  // `integrateGeneratedFloor`, whose seed-match assertion is scoped to procedurally allocated floors.
+  if (nextDepth === FINAL_CHAMBER_DEPTH) {
+    const chamberFloor = generateFinalChamberFloor(context.content);
+    const chamberStairUp = chamberFloor.stairUp;
+    if (chamberStairUp === null) {
+      throw new Error('internal invariant: final chamber floor must have a stair-up');
+    }
+    const moved: ActiveRun = {
+      ...run,
+      actors: run.actors.map((actor) =>
+        actor.actorId === hero.actorId
+          ? { ...actor, floorId, x: chamberStairUp.x, y: chamberStairUp.y }
+          : actor,
+      ),
+      activeFloorId: floorId,
+      activeFloorEnteredAt: run.worldTime,
+      recentCommands: [],
+    };
+    const movedHero = heroActor(moved);
+    const actorsById = new Map<string, Readonly<{ x: number; y: number }>>(
+      chamberFloor.entities.map((entity) => [entity.entityId, entity] as const),
+    );
+    actorsById.set(movedHero.actorId, movedHero);
+    const litChamberFloor = {
+      ...chamberFloor,
+      knowledge: refreshKnowledge({
+        floor: chamberFloor,
+        hero: heroPerception(moved.hero, movedHero),
+        actors: actorsById,
+      }).knowledge,
+    };
+    const withChamber = validateActiveRun(
+      recordFloorEntered({ ...moved, floors: [...moved.floors, litChamberFloor] }, nextDepth),
+    );
+    const restocked = applyMerchantRestocks({ state: withChamber, content: context.content });
     return { state: restocked.state, events: restocked.events };
   }
 

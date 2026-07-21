@@ -220,6 +220,7 @@ function GameRoot({
         onCloseOverlay={onCloseOverlay}
         onClearGuestSession={onClearGuestSession}
         records={repository.records()}
+        currentHeart={repository.currentHeart()}
         onboardingEnabled={onboardingEnabled}
       />
     </div>

@@ -1,0 +1,9 @@
+schemaVersion: 7
+entries:
+  - kind: loot-table
+    id: loot-table.heart-boss
+    name: Freed Heart remnants
+    tags: [boss, reward, heart]
+    rolls: 1
+    choices:
+      - { contentId: item.crimson-potion, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
