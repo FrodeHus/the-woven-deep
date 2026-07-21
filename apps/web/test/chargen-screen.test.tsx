@@ -91,7 +91,20 @@ describe('ChargenScreen (console)', () => {
     expect(callingRow.textContent).not.toMatch(WAYFARER);
   });
 
-  it('completes the console and calls onConfirm with the wizardChoices payload + portrait glyph when WEAVE is pressed', async () => {
+  it('clicking WEAVE opens THE LOOM ACCEPTS modal without confirming', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    render(<ChargenScreen pack={pack} seed={SEED} onConfirm={onConfirm} />);
+
+    await driveToReview(user);
+    await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
+
+    expect(screen.getByRole('dialog', { name: 'THE LOOM ACCEPTS' })).toBeInTheDocument();
+    expect(screen.getByText('THE LOOM ACCEPTS')).toBeInTheDocument();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('clicking DESCEND calls onConfirm with the wizardChoices payload + portrait glyph', async () => {
     const user = userEvent.setup();
     const onConfirm = vi.fn();
     render(<ChargenScreen pack={pack} seed={SEED} onConfirm={onConfirm} />);
@@ -100,6 +113,7 @@ describe('ChargenScreen (console)', () => {
 
     const rolled = rollAttributes(SEED);
     await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
+    await user.click(screen.getByRole('button', { name: 'DESCEND' }));
 
     expect(onConfirm).toHaveBeenCalledTimes(1);
     const [payload, portraitGlyph] = onConfirm.mock.calls[0] as [HeroChoices, string];
@@ -114,5 +128,37 @@ describe('ChargenScreen (console)', () => {
     });
     expect(typeof portraitGlyph).toBe('string');
     expect(portraitGlyph.length).toBeGreaterThan(0);
+  });
+
+  it('Escape cancels THE LOOM ACCEPTS modal without calling onConfirm', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    render(<ChargenScreen pack={pack} seed={SEED} onConfirm={onConfirm} />);
+
+    await driveToReview(user);
+    await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
+    expect(screen.getByRole('dialog', { name: 'THE LOOM ACCEPTS' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('a backdrop click cancels THE LOOM ACCEPTS modal without calling onConfirm', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    render(<ChargenScreen pack={pack} seed={SEED} onConfirm={onConfirm} />);
+
+    await driveToReview(user);
+    await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
+    expect(screen.getByRole('dialog', { name: 'THE LOOM ACCEPTS' })).toBeInTheDocument();
+
+    const backdrop = document.querySelector('[data-slot="dialog-overlay"]');
+    expect(backdrop).not.toBeNull();
+    await user.click(backdrop as Element);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 });

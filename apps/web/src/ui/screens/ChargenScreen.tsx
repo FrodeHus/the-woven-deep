@@ -11,6 +11,7 @@ import {
 } from '../../session/wizard-reducer.js';
 import { Button } from '../components/button.js';
 import { HeroRecord } from './chargen/HeroRecord.js';
+import { LoomAcceptsModal } from './chargen/LoomAcceptsModal.js';
 import { STEP_LABELS, StepMenu } from './chargen/StepMenu.js';
 import { STEP_SUBTITLES } from './chargen/step-copy.js';
 import {
@@ -57,6 +58,7 @@ export function ChargenScreen({
   const [state, setState] = useState<WizardState>(() =>
     initialWizardState(seed, settings.onboarding === 'on'),
   );
+  const [loomOpen, setLoomOpen] = useState(false);
   const context = useMemo(() => ({ pack, seed }), [pack, seed]);
 
   const dispatch = (action: WizardAction): void => {
@@ -69,9 +71,15 @@ export function ChargenScreen({
 
   const weave = (): void => {
     if (!choices) return;
+    setLoomOpen(true);
+  };
+
+  const descend = (): void => {
+    if (!choices) return;
     if (state.onboardingEnabled !== (settings.onboarding === 'on')) {
       onChangeSettings({ ...settings, onboarding: state.onboardingEnabled ? 'on' : 'off' });
     }
+    setLoomOpen(false);
     onConfirm(choices, state.portraitGlyph);
   };
 
@@ -165,6 +173,13 @@ export function ChargenScreen({
           <HeroRecord state={state} pack={pack} onWeave={weave} canWeave={canWeave} />
         </div>
       </div>
+      <LoomAcceptsModal
+        open={loomOpen}
+        state={state}
+        pack={pack}
+        onDescend={descend}
+        onCancel={() => setLoomOpen(false)}
+      />
     </div>
   );
 }
