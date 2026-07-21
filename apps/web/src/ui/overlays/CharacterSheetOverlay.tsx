@@ -1,4 +1,4 @@
-import { Fragment, type JSX, type ReactNode } from 'react';
+import { type JSX, type ReactNode } from 'react';
 import { ATTRIBUTE_ORDER, type DerivedStatFormula } from '@woven-deep/engine';
 import { useSessionCtx } from '../providers.js';
 import {
@@ -59,28 +59,44 @@ function Section({
   children,
 }: Readonly<{ id: string; title: string; children: ReactNode }>): JSX.Element {
   return (
-    <section
-      aria-labelledby={id}
-      className="flex flex-col gap-2 rounded-md border border-line bg-surface p-3"
-    >
-      <h3 id={id} className="font-serif text-sm text-fg-strong">
+    <section aria-labelledby={id} className="flex flex-col gap-2">
+      <h3
+        id={id}
+        className="flex items-center gap-2 text-[0.625rem] uppercase tracking-[0.14em] text-subtle"
+      >
+        <span aria-hidden="true">·&nbsp;─</span>
         {title}
+        <span aria-hidden="true">─&nbsp;·</span>
       </h3>
       {children}
     </section>
   );
 }
 
-function DefinitionGrid({ children }: Readonly<{ children: ReactNode }>): JSX.Element {
-  return <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">{children}</dl>;
+function DefinitionGrid({
+  children,
+  columns = 1,
+}: Readonly<{ children: ReactNode; columns?: 1 | 2 }>): JSX.Element {
+  return (
+    <dl
+      className={`grid gap-x-5 gap-y-1 text-sm ${columns === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
+    >
+      {children}
+    </dl>
+  );
 }
 
+/** A dotted-leader row: label on the left, value on the right, with the dotted rule drawn on the
+ * value cell itself so `dt` stays the immediate previous sibling of `dd` (the character-sheet tests
+ * read `getByText(label).nextElementSibling` for the value). */
 function Row({ label, value }: Readonly<{ label: string; value: ReactNode }>): JSX.Element {
   return (
-    <Fragment>
-      <dt className="text-muted">{label}</dt>
-      <dd className="text-right text-fg">{value}</dd>
-    </Fragment>
+    <div className="flex items-baseline gap-2">
+      <dt className="shrink-0 text-muted">{label}</dt>
+      <dd className="flex-1 border-b border-dotted border-subtle pb-0.5 text-right text-fg">
+        {value}
+      </dd>
+    </div>
   );
 }
 
@@ -202,7 +218,7 @@ export function CharacterSheetOverlay(): JSX.Element | null {
       </Section>
 
       <Section id="character-sheet-metrics-heading" title="Run statistics">
-        <DefinitionGrid>
+        <DefinitionGrid columns={2}>
           {METRIC_ROWS.map(({ key, label }) => (
             <Row key={key} label={label} value={metrics[key]} />
           ))}
