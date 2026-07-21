@@ -182,6 +182,7 @@ export function PlayScreen({
                 paneCols={viewport.width}
                 paneRows={viewport.height}
                 cellPx={cellSize}
+                pack={pack}
               />
             )}
           </div>

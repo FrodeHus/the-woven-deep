@@ -35,7 +35,7 @@ function isDice(value: unknown): value is DiceParameter {
 
 /** `1d4+1` / `1d6-1` / `2d6` -- the standard tabletop dice notation, not an invented one; `bonus`
  * of exactly `0` is omitted entirely. */
-function formatDice(dice: DiceParameter): string {
+export function formatDice(dice: DiceParameter): string {
   if (dice.bonus === 0) return `${dice.count}d${dice.sides}`;
   const sign = dice.bonus > 0 ? '+' : '-';
   return `${dice.count}d${dice.sides}${sign}${Math.abs(dice.bonus)}`;

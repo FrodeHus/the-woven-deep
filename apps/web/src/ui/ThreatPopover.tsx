@@ -1,4 +1,6 @@
 import type { CSSProperties, JSX } from 'react';
+import type { CompiledContentPack } from '@woven-deep/content';
+import { monsterById } from '../session/pack-queries.js';
 
 export interface ThreatPopoverActor {
   readonly name?: string;
@@ -6,6 +8,7 @@ export interface ThreatPopoverActor {
   readonly disposition: string;
   readonly healthPresentation: { readonly band: string };
   readonly intentPresentation?: string;
+  readonly contentId?: string | null;
 }
 
 export interface ThreatPopoverProps {
@@ -23,6 +26,9 @@ export interface ThreatPopoverProps {
    * from the grid; positioning it in pixels here sidesteps that entirely.
    */
   readonly cellPx: Readonly<{ width: number; height: number }>;
+  /** Looked up by `actor.contentId` to surface the monster's authored `description`, if any --
+   * the pack is the single source for that text, never threaded through the engine projection. */
+  readonly pack: CompiledContentPack;
 }
 
 /**
@@ -38,6 +44,7 @@ export function ThreatPopover({
   paneCols,
   paneRows,
   cellPx,
+  pack,
 }: ThreatPopoverProps): JSX.Element {
   const clampedCol = Math.max(0, Math.min(col, Math.max(paneCols - 1, 0)));
   const clampedRow = Math.max(0, Math.min(row, Math.max(paneRows - 1, 0)));
@@ -45,6 +52,7 @@ export function ThreatPopover({
     left: `${clampedCol * cellPx.width}px`,
     top: `${clampedRow * cellPx.height}px`,
   };
+  const description = actor.contentId ? monsterById(pack, actor.contentId)?.description : undefined;
 
   return (
     <div role="tooltip" className="threat-popover framed" style={style}>
@@ -53,6 +61,7 @@ export function ThreatPopover({
       <div>{`Health: ${actor.healthPresentation.band}`}</div>
       {actor.intentPresentation && <div>{`Intent: ${actor.intentPresentation}`}</div>}
       <div>{`Disposition: ${actor.disposition}`}</div>
+      {description && <p className="threat-popover-description">{description}</p>}
     </div>
   );
 }
