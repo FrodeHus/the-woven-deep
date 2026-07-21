@@ -1,4 +1,4 @@
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 import { effectLabel } from '../labels.js';
 import type { MenuEntry, ProjectedItemLike } from './inventory-model.js';
 
@@ -15,6 +15,18 @@ function ActionButton({
     >
       {label} <span className="opacity-60">[{chord}]</span>
     </button>
+  );
+}
+
+/** A dotted-leader fact row: label on the left, value on the right, the dotted rule filling the
+ * gap between them -- the mockup's "Damage ······ 1d6+2" / "Condition ······ 100" presentation. */
+function FactRow({ label, value }: Readonly<{ label: string; value: ReactNode }>): JSX.Element {
+  return (
+    <div className="flex items-baseline gap-1.5 text-sm">
+      <span className="text-muted">{label}</span>
+      <span aria-hidden="true" className="flex-1 border-b border-dotted border-subtle" />
+      <span className="text-fg">{value}</span>
+    </div>
   );
 }
 
@@ -36,7 +48,8 @@ export function DetailPane({
   onToggleLight: () => void;
   onRefuel: () => void;
 }>): JSX.Element {
-  if (!entry) return <p className="text-muted">Nothing selected.</p>;
+  if (!entry)
+    return <p className="text-subtle">Select an item — ↑↓ to browse, e to equip, u to use.</p>;
   const { item, equipped, slot } = entry;
   const unidentified = item.contentId === undefined;
 
@@ -46,39 +59,36 @@ export function DetailPane({
         <h3 className="font-serif text-lg text-fg-strong">{item.name}</h3>
         <div>
           <span className="border border-muted px-1.5 py-px text-[10px] uppercase tracking-[0.1em] text-muted">
-            {`${item.category} · ${unidentified ? 'Unidentified' : 'Identified'} · Condition ${item.condition}`}
+            {`${item.category} · ${unidentified ? 'Unidentified' : 'Identified'}`}
           </span>
         </div>
       </div>
 
-      {equipped && <p className="text-sm">{`Equipped: ${slot}`}</p>}
+      {/* Description slot: item lore/description copy is not projected on this branch, so it is
+       * deliberately left empty rather than fabricated. */}
 
-      {!unidentified && item.effects && item.effects.length > 0 && (
-        <div>
-          <p className="text-sm font-medium">Effects</p>
-          <ul className="text-sm text-muted">
-            {item.effects.map((effect) => (
-              <li key={effect.effectId}>{effectLabel(effect.effectId, effect.parameters)}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {item.enchantment && (
-        <div>
-          <p className="text-sm font-medium">Enchantment</p>
-          <ul className="text-sm text-muted">
-            {Object.entries(item.enchantment.modifiers).map(([stat, amount]) => (
-              <li key={stat}>{`${stat}: ${amount >= 0 ? '+' : ''}${amount}`}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {item.unknownProperties && <p className="text-sm">Unknown properties</p>}
-
-      {item.charges != null && <p className="text-sm">{`Charges: ${item.charges}`}</p>}
-      {item.fuel != null && <p className="text-sm">{`Fuel: ${item.fuel}`}</p>}
-      {item.enabled !== null && <p className="text-sm">{item.enabled ? 'Lit' : 'Unlit'}</p>}
+      {/* Dotted-leader fact rows, drawn only from projected instance/content fields. Damage and
+       * worth/value are NOT projected for owned items, so they are absent rather than invented. */}
+      <div className="flex flex-col gap-1">
+        {equipped && <FactRow label="Equipped" value={slot} />}
+        {!unidentified &&
+          item.effects?.map((effect) => (
+            <FactRow
+              key={effect.effectId}
+              label="Effect"
+              value={effectLabel(effect.effectId, effect.parameters)}
+            />
+          ))}
+        {item.enchantment &&
+          Object.entries(item.enchantment.modifiers).map(([stat, amount]) => (
+            <FactRow key={stat} label={stat} value={`${amount >= 0 ? '+' : ''}${amount}`} />
+          ))}
+        <FactRow label="Condition" value={item.condition} />
+        {item.charges != null && <FactRow label="Charges" value={item.charges} />}
+        {item.fuel != null && <FactRow label="Fuel" value={item.fuel} />}
+        {item.enabled !== null && <FactRow label="State" value={item.enabled ? 'Lit' : 'Unlit'} />}
+        {item.unknownProperties && <FactRow label="Properties" value="Unknown" />}
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <ActionButton label={equipped ? 'Unequip' : 'Equip'} chord="e" onClick={onEquip} />

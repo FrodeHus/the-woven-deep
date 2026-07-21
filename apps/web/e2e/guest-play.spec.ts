@@ -145,14 +145,14 @@ async function awaitKeyboardReady(page: Page): Promise<void> {
  * onto its own listbox (see `InventoryOverlay`'s `useEffect`), not onto any particular button. */
 async function openBackpack(page: Page): Promise<void> {
   await page.keyboard.press('i');
-  const dialog = page.getByRole('dialog', { name: 'Backpack' });
+  const dialog = page.getByRole('dialog', { name: 'Pack & Gear' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('listbox')).toBeFocused();
 }
 
 async function closeBackpack(page: Page): Promise<void> {
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'Backpack' })).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Pack & Gear' })).toBeHidden();
 }
 
 test('a guest plays, persists, and descends by keyboard alone', async ({ page }) => {
@@ -230,7 +230,7 @@ test('every interactive surface is reachable by keyboard', async ({ page }) => {
   // `i` opens the backpack as a focus-trapped dialog: its mount effect moves focus onto the
   // backpack's own listbox (see `InventoryOverlay`)...
   await page.keyboard.press('i');
-  const dialog = page.getByRole('dialog', { name: 'Backpack' });
+  const dialog = page.getByRole('dialog', { name: 'Pack & Gear' });
   await expect(dialog).toBeVisible();
   const listbox = dialog.getByRole('listbox');
   await expect(listbox).toBeFocused();

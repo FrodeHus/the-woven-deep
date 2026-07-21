@@ -56,8 +56,8 @@ export function ListDetail(props: Readonly<ListDetailProps>): JSX.Element {
 
   return (
     <div className="flex flex-col gap-2">
-      {toolbar && <div className="flex items-center gap-2">{toolbar}</div>}
       {slots && <div className="flex flex-col gap-1">{slots}</div>}
+      {toolbar && <div className="flex flex-wrap items-center gap-1.5">{toolbar}</div>}
       <div className="grid grid-cols-[1.05fr_1fr] gap-3">
         <div
           role="listbox"

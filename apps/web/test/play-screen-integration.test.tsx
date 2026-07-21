@@ -207,12 +207,12 @@ describe('PlayScreen keyboard routing', () => {
     }
     render(<Harness />);
 
-    expect(screen.queryByRole('dialog', { name: /backpack/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /pack & gear/i })).not.toBeInTheDocument();
     await user.keyboard('i');
-    expect(await screen.findByRole('dialog', { name: /backpack/i })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: /pack & gear/i })).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog', { name: /backpack/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /pack & gear/i })).not.toBeInTheDocument();
   });
 
   it('answers a pending confirm-aggression decision with y/n via the decision prompt', async () => {
@@ -273,7 +273,7 @@ describe('PlayScreen command palette shortcut', () => {
     render(<Harness />);
 
     await user.keyboard('i');
-    expect(await screen.findByRole('dialog', { name: /backpack/i })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: /pack & gear/i })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
     expect(screen.queryByTestId('command-palette')).not.toBeInTheDocument();

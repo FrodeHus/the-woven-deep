@@ -207,7 +207,7 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     });
   });
 
-  it('the category filter toolbar button cycles through categories and back to all', async () => {
+  it('clicking a category filter pill narrows the pack list to that bucket', async () => {
     const user = userEvent.setup();
     const snapshot = snapshotWithBackpack([
       item({ itemId: 'item.sword', name: 'Sword', category: 'weapon' }),
@@ -220,17 +220,37 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(list.getByText('Sword')).toBeInTheDocument();
     expect(list.getByText('Shield')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Filter: All/ }));
-    expect(screen.getByRole('button', { name: /Filter: Weapons/ })).toBeInTheDocument();
+    // The "All" pill starts pressed; selecting "Weapons" keeps the sword and drops the shield.
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: 'Weapons' }));
+    expect(screen.getByRole('button', { name: 'Weapons' })).toHaveAttribute('aria-pressed', 'true');
     expect(list.getByText('Sword')).toBeInTheDocument();
     expect(list.queryByText('Shield')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Filter: Weapons/ }));
-    expect(screen.getByRole('button', { name: /Filter: Armor/ })).toBeInTheDocument();
+    // A shield buckets under "Armor" (not "Weapons"), so that pill reveals it.
+    await user.click(screen.getByRole('button', { name: 'Armor' }));
     expect(list.getByText('Shield')).toBeInTheDocument();
+    expect(list.queryByText('Sword')).not.toBeInTheDocument();
   });
 
-  it('the sort toolbar button toggles a stable, locale-free name sort', async () => {
+  it('pressing f cycles the category filter through the buckets', async () => {
+    const user = userEvent.setup();
+    const snapshot = snapshotWithBackpack([
+      item({ itemId: 'item.sword', name: 'Sword', category: 'weapon' }),
+      item({ itemId: 'item.shield', name: 'Shield', category: 'shield' }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    const list = within(screen.getByRole('listbox', { name: 'Backpack items' }));
+    // all -> weapons: only the sword survives.
+    await user.keyboard('f');
+    expect(screen.getByRole('button', { name: 'Weapons' })).toHaveAttribute('aria-pressed', 'true');
+    expect(list.getByText('Sword')).toBeInTheDocument();
+    expect(list.queryByText('Shield')).not.toBeInTheDocument();
+  });
+
+  it('pressing s toggles a stable, locale-free name sort', async () => {
     const user = userEvent.setup();
     const snapshot = snapshotWithBackpack([
       item({ itemId: 'item.zebra', name: 'Zebra pelt', category: 'misc' }),
@@ -244,7 +264,7 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(options[0]).toHaveTextContent('Zebra pelt');
     expect(options[1]).toHaveTextContent('Apple');
 
-    await user.click(screen.getByRole('button', { name: /Sort: Default/ }));
+    await user.keyboard('s');
     options = list.getAllByRole('option');
     expect(options[0]).toHaveTextContent('Apple');
     expect(options[1]).toHaveTextContent('Zebra pelt');

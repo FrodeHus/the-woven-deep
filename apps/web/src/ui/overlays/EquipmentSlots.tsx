@@ -7,15 +7,15 @@ import { CATEGORY_GLYPH, type ProjectedItemLike } from './inventory-model.js';
  * (`packages/engine/src/actor-model.ts`), in a fixed, sensible presentation order -- never
  * invented ("weapon/armor/shield/light/ring/amulet" is loose brief shorthand for these). */
 const SLOT_ORDER: readonly EquipmentSlot[] = [
-  'main-hand',
-  'off-hand',
-  'body',
   'head',
-  'hands',
-  'feet',
   'neck',
+  'main-hand',
+  'body',
+  'off-hand',
+  'hands',
   'left-ring',
   'right-ring',
+  'feet',
 ];
 
 const SLOT_LABEL: Readonly<Record<EquipmentSlot, string>> = {
