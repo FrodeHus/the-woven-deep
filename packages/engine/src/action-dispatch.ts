@@ -40,6 +40,7 @@ import type { MerchantPopulation } from './merchant-model.js';
 import { combat, profile } from './combat-profile.js';
 import { requireItem } from './content-index.js';
 import { chargeActionEnergy } from './scheduler.js';
+import { activateHeartBoss } from './final-chamber-boss.js';
 
 function moveActor(state: ActiveRun, actorId: OpaqueId, to: Point): ActiveRun {
   return {
@@ -229,10 +230,16 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
   },
   'open-door': resolveDoor,
   'close-door': resolveDoor,
-  // The choice itself has no world effect: the reducer's post-world-step conclusion boundary
-  // (mirroring `concludeRunOnHeroDeath`) sets `state.conclusion` for `become-heart`/`break-cycle`
-  // after this resolver returns. `turn-away` is presently inert -- Task 4 wires it to the boss.
-  'final-chamber-choice': ({ state }) => ({ state, chargeEnergy: false }),
+  // `become-heart`/`break-cycle` have no world effect: the reducer's post-world-step conclusion
+  // boundary (mirroring `concludeRunOnHeroDeath`) sets `state.conclusion` for them after this
+  // resolver returns. `turn-away` instead activates the weakened Heart as a hostile boss; the
+  // ensuing fight then resolves through the existing boss and combat systems.
+  'final-chamber-choice': ({ state, action, content, eventId, events }) => {
+    if (action.choice !== 'turn-away') return { state, chargeEnergy: false };
+    const activation = activateHeartBoss({ state, content, eventId });
+    events.push(...activation.events);
+    return { state: activation.state, chargeEnergy: false };
+  },
   'toggle-light': ({ state, action, actor, content, eventId, events }) => {
     const transition = toggleItemLight({
       run: state,

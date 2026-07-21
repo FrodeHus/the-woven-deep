@@ -90,6 +90,7 @@ export const blockReason = z.enum([
   'door.occupied',
   'final-chamber.unavailable',
   'final-chamber.fragments-required',
+  'final-chamber.boss-active',
 ]);
 export const completionType = z.enum(['died', 'became-heart', 'refused', 'broke-cycle']);
 export const runConclusionCause = z.strictObject({

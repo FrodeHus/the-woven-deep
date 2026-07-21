@@ -1,5 +1,6 @@
 import type { CompiledContentPack, CompletionType } from '@woven-deep/content';
 import { heroActor } from './actor-model.js';
+import { isHeartBossActive } from './final-chamber-boss-state.js';
 import type {
   ActiveRun,
   ActorDiedEvent,
@@ -27,11 +28,15 @@ function isHeroDeathEvent(event: DomainEvent, heroId: OpaqueId): event is ActorD
 }
 
 /**
- * Concludes the run with a `died` completion inside the same transition that kills the hero.
- * Living heroes and already-concluded runs pass through unchanged (no event appended). Otherwise
- * the killer is credited from the last `actor.died` event carrying the hero's `actorId`: former
- * killers remain in `state.actors`, so their `contentId` is looked up there, and the killer resolves
- * to `null` both for environmental deaths (no such event in this transition) and hero self-kills.
+ * Concludes the run inside the same transition that kills the hero. Living heroes and
+ * already-concluded runs pass through unchanged (no event appended). An ordinary death concludes
+ * `died`, crediting the killer from the last `actor.died` event carrying the hero's `actorId`:
+ * former killers remain in `state.actors`, so their `contentId` is looked up there, and the killer
+ * resolves to `null` both for environmental deaths (no such event in this transition) and hero
+ * self-kills. The single exception is the refused branch: when the weakened Heart boss is active,
+ * the Heart forcibly makes the fallen hero the new Heart, so the completion is `became-heart`
+ * (killer `null`) rather than `died`. The override is strictly gated on that live boss, so every
+ * death away from the fight stays `died`.
  */
 export function concludeRunOnHeroDeath(
   input: Readonly<{
@@ -47,20 +52,21 @@ export function concludeRunOnHeroDeath(
   const hero = heroActor(state);
   if (hero.health > 0 || state.conclusion !== null) return { state, events: input.events };
 
+  const forcedHeart = isHeartBossActive(state);
   const killingEvent = [...input.events]
     .reverse()
     .find((event) => isHeroDeathEvent(event, hero.actorId));
   const killerActorId = killingEvent?.killerActorId ?? null;
   const killerContentId =
-    killerActorId !== null && killerActorId !== hero.actorId
-      ? (state.actors.find((actor) => actor.actorId === killerActorId)?.contentId ?? null)
-      : null;
+    forcedHeart || killerActorId === null || killerActorId === hero.actorId
+      ? null
+      : (state.actors.find((actor) => actor.actorId === killerActorId)?.contentId ?? null);
 
   const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
   if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
 
   const conclusion: RunConclusion = {
-    completionType: 'died',
+    completionType: forcedHeart ? 'became-heart' : 'died',
     cause: { killerContentId, depth: floor.depth, turn: input.turn, worldTime: state.worldTime },
     concludedAtRevision: input.revision,
     finalized: false,

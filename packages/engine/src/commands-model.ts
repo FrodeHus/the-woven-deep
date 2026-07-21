@@ -223,4 +223,5 @@ export type InvalidActionReason =
   | 'target.invalid'
   | 'run.concluded'
   | 'final-chamber.unavailable'
-  | 'final-chamber.fragments-required';
+  | 'final-chamber.fragments-required'
+  | 'final-chamber.boss-active';
