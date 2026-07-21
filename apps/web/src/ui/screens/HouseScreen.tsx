@@ -174,7 +174,7 @@ export function HouseScreen({ snapshot, onDispatch, onClose }: HouseScreenProps)
         <DialogHeader>
           <DialogTitle>House</DialogTitle>
         </DialogHeader>
-        <p className="text-sm font-mono text-muted">{`House (${house.items.length}/${house.capacity})`}</p>
+        <p className="text-center font-mono text-xs uppercase tracking-[0.1em] text-subtle">{`House (${house.items.length}/${house.capacity})`}</p>
         <Tabs value={focusedList} onValueChange={(value) => setFocusedList(value as FocusedList)}>
           <TabsList aria-label="House lists">
             {LIST_ORDER.map((list) => (
