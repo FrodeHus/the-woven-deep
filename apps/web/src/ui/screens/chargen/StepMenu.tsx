@@ -124,17 +124,18 @@ export function StepMenu({
               onClick={() => attemptJump(step)}
             >
               <span className="flex items-center gap-2">
-                <span className={cn('text-xs tabular-nums', active ? 'text-accent-strong' : 'text-subtle')}>
+                <span
+                  className={cn(
+                    'text-xs tabular-nums',
+                    active ? 'text-accent-strong' : 'text-subtle',
+                  )}
+                >
                   {String(step).padStart(2, '0')}
                 </span>
                 <span aria-hidden="true" className="w-3 text-accent">
                   {active ? '▸' : ''}
                 </span>
-                <span
-                  className={
-                    active ? 'text-fg-strong' : set ? 'text-fg' : 'text-muted'
-                  }
-                >
+                <span className={active ? 'text-fg-strong' : set ? 'text-fg' : 'text-muted'}>
                   {STEP_LABELS[step]}
                 </span>
                 <span aria-hidden="true" className={set ? 'text-good' : 'text-subtle'}>
