@@ -14,6 +14,7 @@ function fixture(): ActorDerivationInput {
     attributes: { might: 10, agility: 12, vitality: 8, wits: 9, resolve: 7 },
     formulas: {
       maxHealth: { base: 8, vitality: 2 },
+      maxWeave: { base: 4, wits: 1 },
       meleeAccuracy: { might: 1 },
       meleeDamageBonus: { might: 1 },
       rangedAccuracy: { agility: 1 },
@@ -47,6 +48,7 @@ describe('deriveActorStats', () => {
 
     expect(deriveActorStats(input)).toEqual({
       maxHealth: 24,
+      maxWeave: 13,
       meleeAccuracy: 3,
       meleeDamageBonus: 2,
       rangedAccuracy: 4,
@@ -58,6 +60,16 @@ describe('deriveActorStats', () => {
       lightOutCommitsMemory: 0,
     });
     expect(input).toEqual(before);
+  });
+
+  it('derives maxWeave from its base and Wits coefficient', () => {
+    const derived = deriveActorStats({
+      attributes: { might: 10, agility: 10, vitality: 10, wits: 9, resolve: 10 },
+      formulas: { ...fixture().formulas, maxWeave: { base: 4, wits: 1 } },
+      equipmentModifiers: [],
+      conditionModifiers: [],
+    });
+    expect(derived.maxWeave).toBe(13);
   });
 
   it('rejects unsafe operands and arithmetic overflow', () => {

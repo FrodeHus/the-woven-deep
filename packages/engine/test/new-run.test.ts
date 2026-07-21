@@ -31,12 +31,12 @@ beforeAll(async () => {
 const SEED = [11, 22, 33, 44] as const;
 
 describe('createNewRun', () => {
-  it('builds a valid, deterministic schema-v8 run starting in the authored town', () => {
+  it('builds a valid, deterministic schema-v9 run starting in the authored town', () => {
     const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(8);
+    expect(first.schemaVersion).toBe(9);
     expect(first.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
     expect(first.restockedMilestones).toEqual([]);
     // The town is the run's only floor at creation -- depth 1 is generated later, on the hero's

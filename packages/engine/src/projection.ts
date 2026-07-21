@@ -752,6 +752,8 @@ function projectHeroView(
     ),
     health: hero.health,
     maxHealth: hero.maxHealth,
+    weave: hero.weave,
+    maxWeave: hero.maxWeave,
     sightRadius: state.hero.sightRadius,
     hungerStage: state.survival.hungerStage,
     conditions,

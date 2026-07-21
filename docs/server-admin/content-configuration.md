@@ -125,6 +125,7 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `starvationDamage` | positive safe integer | Yes | Damage per starvation event. |
 | `recoveryInterval` | positive safe integer | Yes | World-time interval between natural recovery attempts. |
 | `recoveryAmount` | non-negative safe integer | Yes | Base health restored at each recovery interval before hunger scaling. Zero disables natural recovery. |
+| `weaveRegenAmount` | non-negative safe integer | Yes | Weave restored at each recovery interval, clamped to the hero's derived `maxWeave`. Zero disables passive Weave regeneration. |
 | `restMaximumDuration` | positive safe integer | Yes | Hard upper bound, in world-time units, for a single rest command. Player requests may choose a shorter duration but cannot exceed this value. |
 | `recoveryByHungerStage` | object | Yes | Integer percentages from 0 through 100 for `sated`, `hungry`, `weak`, and `starving` recovery. |
 | `hungerStageModifiers` | object | Yes | Derived-stat modifiers for each hunger stage. Each stage accepts the same closed stat names used by condition modifiers. |
@@ -179,6 +180,7 @@ entries:
     starvationDamage: 1
     recoveryInterval: 500
     recoveryAmount: 10
+    weaveRegenAmount: 2
     restMaximumDuration: 5000
     recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }
     hungerStageModifiers:
@@ -188,6 +190,7 @@ entries:
       starving: { meleeAccuracy: -2, meleeDamageBonus: -2, defense: -2 }
     formulas:
       maxHealth: { base: 8, vitality: 2 }
+      maxWeave: { base: 4, wits: 1 }
       meleeAccuracy: { might: 1 }
       meleeDamageBonus: { might: 1 }
       rangedAccuracy: { agility: 1 }
@@ -555,6 +558,7 @@ identification: { mode: shuffled, poolId: identification-pool.potions }
 | `targetingId` | registered ID | Yes | One closed targeting rule below. |
 | `range` | non-negative safe integer | Yes | Chebyshev targeting distance. |
 | `actionCost` | positive safe integer | Yes | Scheduler energy cost. |
+| `weaveCost` | non-negative safe integer | Yes | Weave the caster spends to cast. A cast is rejected (`cast.insufficient-weave`) when the hero's current Weave is below this value. |
 | `effects` | non-empty effect array | Yes | Applied in listed order. |
 
 ```yaml
@@ -567,6 +571,7 @@ entries:
     targetingId: target.self
     range: 0
     actionCost: 100
+    weaveCost: 2
     effects:
       - effectId: effect.heal
         parameters: { dice: { count: 1, sides: 6, bonus: 2 } }

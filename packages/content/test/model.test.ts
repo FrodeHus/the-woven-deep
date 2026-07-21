@@ -80,6 +80,7 @@ describe('content model', () => {
             targetingId: 'target.self',
             range: 0,
             actionCost: 100,
+            weaveCost: 0,
             effects: [
               { effectId: 'effect.heal', parameters: { dice: { count: 1, sides: 4, bonus: 0 } } },
             ],

@@ -116,6 +116,8 @@ function spawnedActor(
     attributes: definition.attributes,
     health: definition.health,
     maxHealth: definition.health,
+    weave: 0,
+    maxWeave: 0,
     energy: 0,
     speed: definition.speed,
     reactionReady: true,

@@ -41,6 +41,7 @@ export const CONTENT_KIND_IDS = [
 export type ContentKind = (typeof CONTENT_KIND_IDS)[number];
 export const DERIVED_STAT_NAMES = [
   'maxHealth',
+  'maxWeave',
   'meleeAccuracy',
   'meleeDamageBonus',
   'rangedAccuracy',

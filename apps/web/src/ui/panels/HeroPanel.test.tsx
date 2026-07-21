@@ -64,6 +64,13 @@ describe('HeroPanel', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders the WEAVE meter value and maximum', () => {
+    render(<HeroPanel snapshot={snapshotOf(baseProjection)} />);
+    const hero = baseProjection.hero as unknown as { weave: number; maxWeave: number };
+    expect(hero.maxWeave).toBeGreaterThan(0);
+    expect(screen.getByText(`${hero.weave}/${hero.maxWeave} WEAVE`)).toBeInTheDocument();
+  });
+
   it('keeps the panel\'s accessible name as "Hero"', () => {
     render(<HeroPanel snapshot={snapshotOf(baseProjection)} />);
     const region = screen.getByRole('region', { name: 'Hero' });

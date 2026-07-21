@@ -32,6 +32,7 @@ export interface BalanceContentEntry extends BaseContentEntry {
   readonly starvationDamage: number;
   readonly recoveryInterval: number;
   readonly recoveryAmount: number;
+  readonly weaveRegenAmount: number;
   readonly restMaximumDuration: number;
   readonly recoveryByHungerStage: Readonly<
     Record<'sated' | 'hungry' | 'weak' | 'starving', number>
