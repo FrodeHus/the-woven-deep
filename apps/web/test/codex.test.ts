@@ -369,7 +369,7 @@ function findEntry(entries: readonly CodexEntry[], contentId: string): CodexEntr
 }
 
 describe('deriveCodexState', () => {
-  it('renders every category, one per content kind, in class/item/spell/monster order', () => {
+  it('renders every category, one per content kind, in class/item/spell/monster/lore order', () => {
     const state = deriveCodexState({
       records: [],
       snapshot: null,
@@ -381,6 +381,7 @@ describe('deriveCodexState', () => {
       'item',
       'spell',
       'monster',
+      'lore',
     ]);
   });
 

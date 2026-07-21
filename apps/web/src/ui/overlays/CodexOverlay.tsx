@@ -12,13 +12,20 @@ import type { SessionSnapshot } from '../../session/guest-session.js';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/tabs.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
 
-const CATEGORY_ORDER: readonly CodexCategoryData['kind'][] = ['class', 'item', 'spell', 'monster'];
+const CATEGORY_ORDER: readonly CodexCategoryData['kind'][] = [
+  'class',
+  'item',
+  'spell',
+  'monster',
+  'lore',
+];
 
 const CATEGORY_LABEL: Readonly<Record<CodexCategoryData['kind'], string>> = {
   class: 'Classes',
   item: 'Items',
   spell: 'Spells',
   monster: 'Monsters',
+  lore: 'Lore',
 };
 
 /** A locked class's `unlockHint`, zipped by index against the SAME `sortedClassEntries` order
@@ -46,12 +53,17 @@ function entryGlyph(entry: CodexEntry): string {
   return entry.discovered ? entry.glyph : entry.silhouetteGlyph;
 }
 
-function toListItem(entry: CodexEntry, index: number): ListDetailItem {
+function toListItem(
+  entry: CodexEntry,
+  index: number,
+  kind: CodexCategoryData['kind'],
+): ListDetailItem {
   return {
     id: String(index),
     glyph: entryGlyph(entry),
     label: entryLabel(entry),
     ...(entry.discovered ? { glyphColor: entry.color } : {}),
+    ...(kind === 'lore' ? { badge: '[revealed]' } : {}),
   };
 }
 
@@ -94,6 +106,12 @@ function DetailPane({
           <dd className="font-serif text-sm leading-relaxed text-fg">{entry.description}</dd>
         </>
       )}
+      {entry.lore && (
+        <>
+          <dt className="text-muted">Lore</dt>
+          <dd className="font-serif text-sm leading-relaxed text-fg">{entry.lore}</dd>
+        </>
+      )}
       <dt className="text-muted">First seen</dt>
       <dd>{entry.firstSeenRun === null ? 'This run' : `Run #${entry.firstSeenRun}`}</dd>
     </dl>
@@ -115,7 +133,7 @@ function CategoryPanel({
   return (
     <ListDetail
       listLabel={CATEGORY_LABEL[category.kind]}
-      items={entries.map(toListItem)}
+      items={entries.map((entry, index) => toListItem(entry, index, category.kind))}
       selectedIndex={selectedIndex}
       onSelect={onSelect}
       renderDetail={(_item, index) => (
@@ -137,6 +155,7 @@ const EMPTY_SELECTION: Readonly<Record<CodexCategoryData['kind'], number>> = {
   item: 0,
   spell: 0,
   monster: 0,
+  lore: 0,
 };
 
 /**
