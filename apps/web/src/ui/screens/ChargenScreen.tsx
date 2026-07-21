@@ -12,6 +12,7 @@ import {
 import { Button } from '../components/button.js';
 import { HeroRecord } from './chargen/HeroRecord.js';
 import { STEP_LABELS, StepMenu } from './chargen/StepMenu.js';
+import { STEP_SUBTITLES } from './chargen/step-copy.js';
 import {
   AttributesStep,
   CallingStep,
@@ -93,18 +94,31 @@ export function ChargenScreen({
 
   return (
     <div className="flex h-screen flex-col gap-2 bg-deep p-2 text-fg font-mono">
-      <header
-        aria-label={`Step ${state.step} of 7: ${STEP_LABELS[state.step]}`}
-        className="flex items-baseline gap-2 border-b border-line px-1 pb-2"
-      >
-        <h1 className="m-0 font-serif text-lg text-accent-strong">Weave a hero</h1>
-        <span className="text-sm uppercase tracking-wide text-muted">{`Step ${state.step} of 7 — ${STEP_LABELS[state.step]}`}</span>
+      <header className="flex items-baseline justify-between gap-2 border-b border-line px-1 pb-2">
+        <div className="flex items-baseline gap-2">
+          <span className="font-serif text-lg tracking-wide text-fg-strong">THE WOVEN DEEP</span>
+          <span aria-hidden="true" className="text-accent">
+            ❦
+          </span>
+          <span className="text-sm uppercase tracking-wide text-muted">
+            CHARACTER GENESIS · THE LOOM AWAITS
+          </span>
+        </div>
+        <span className="text-[11px] text-subtle">↑↓ browse · enter choose · ◂ ▸ steps</span>
       </header>
       <div className="grid min-h-0 flex-1 grid-cols-[236px_1fr_340px] gap-2">
-        <div className="min-h-0 overflow-y-auto rounded-md border border-line bg-surface p-2">
+        <div className="flex min-h-0 flex-col overflow-y-auto rounded-md border border-line bg-surface p-2">
           <StepMenu state={state} current={state.step} onJump={onJump} pack={pack} />
         </div>
         <div className="flex min-h-0 flex-col gap-2 rounded-md border border-line bg-surface p-3">
+          <div
+            aria-label={`Step ${state.step} of 7: ${STEP_LABELS[state.step]}`}
+            className="flex flex-col gap-1 border-b border-line pb-2"
+          >
+            <span className="text-[10px] tracking-[2px] text-subtle">{`STEP ${state.step} OF 7`}</span>
+            <h1 className="m-0 font-serif text-xl text-fg-strong">{STEP_LABELS[state.step]}</h1>
+            <span className="text-xs text-muted">{STEP_SUBTITLES[state.step]}</span>
+          </div>
           <main className="min-h-0 flex-1 overflow-y-auto">
             {state.step === 1 && <IdentityStep {...stepProps} />}
             {state.step === 2 && <CallingStep {...stepProps} />}
@@ -118,15 +132,17 @@ export function ChargenScreen({
             <Button
               type="button"
               variant="outline"
+              className="text-muted disabled:text-subtle"
               onClick={() => dispatch({ type: 'back' })}
               disabled={state.step === 1}
             >
               {'◂ BACK'}
             </Button>
-            <span className="text-sm text-muted">{`${state.step} / 7`}</span>
+            <span className="text-sm text-subtle">{`${state.step} / 7`}</span>
             {state.step < 7 && (
               <Button
                 type="button"
+                className="border border-accent bg-raised text-accent-strong hover:bg-accent hover:text-deep"
                 onClick={() => dispatch({ type: 'next' })}
                 disabled={!canAdvance}
               >
@@ -134,7 +150,12 @@ export function ChargenScreen({
               </Button>
             )}
             {state.step === 7 && (
-              <Button type="button" disabled={!canWeave} onClick={weave}>
+              <Button
+                type="button"
+                className="border border-accent bg-raised text-accent-strong hover:bg-accent hover:text-deep"
+                disabled={!canWeave}
+                onClick={weave}
+              >
                 {'WEAVE ▸'}
               </Button>
             )}

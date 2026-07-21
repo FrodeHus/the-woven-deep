@@ -4,6 +4,7 @@ import { cn } from '@/ui/lib/cn.js';
 import { stepIsSatisfied, type WizardState } from '../../../session/wizard-reducer.js';
 import { backgroundById, classById } from '../../../session/pack-queries.js';
 import { useListNavigation } from '../roving-focus.js';
+import { LOOM_FOOTER_LINES } from './step-copy.js';
 
 export const STEP_LABELS: Readonly<Record<WizardState['step'], string>> = {
   1: 'Identity',
@@ -99,7 +100,7 @@ export function StepMenu({
   };
 
   return (
-    <nav aria-label="Build order" className="flex flex-col gap-0.5 font-mono">
+    <nav aria-label="Build order" className="flex h-full flex-col font-mono">
       <div
         role="listbox"
         aria-label="Build order"
@@ -117,25 +118,41 @@ export function StepMenu({
               aria-selected={active}
               ref={registerItem(index)}
               className={cn(
-                'flex flex-col items-start gap-0.5 rounded-md border border-transparent px-2 py-1 text-left text-sm hover:bg-raised',
-                active && 'border-accent bg-raised',
+                'flex flex-col items-start gap-1 rounded-md border-l-2 border-transparent px-2 py-1.5 text-left text-sm hover:bg-raised',
+                active && 'border-l-accent bg-raised',
               )}
               onClick={() => attemptJump(step)}
             >
               <span className="flex items-center gap-2">
-                <span aria-hidden="true" className="w-3 text-accent">
-                  {active ? '›' : ''}
+                <span className={cn('text-xs tabular-nums', active ? 'text-accent-strong' : 'text-subtle')}>
+                  {String(step).padStart(2, '0')}
                 </span>
-                <span className="text-muted">{String(step).padStart(2, '0')}</span>
-                <span className={active ? 'text-fg-strong' : 'text-fg'}>{STEP_LABELS[step]}</span>
+                <span aria-hidden="true" className="w-3 text-accent">
+                  {active ? '▸' : ''}
+                </span>
+                <span
+                  className={
+                    active ? 'text-fg-strong' : set ? 'text-fg' : 'text-muted'
+                  }
+                >
+                  {STEP_LABELS[step]}
+                </span>
                 <span aria-hidden="true" className={set ? 'text-good' : 'text-subtle'}>
                   {set ? '●' : '○'}
                 </span>
               </span>
-              <span className="pl-9 text-xs text-muted">{currentValue(step, state, pack)}</span>
+              <span className="truncate pl-11 text-xs text-muted">
+                {currentValue(step, state, pack)}
+              </span>
             </button>
           );
         })}
+      </div>
+      <div className="flex-1" />
+      <div className="border-t border-line pt-2 text-[10px] leading-[1.7] text-subtle">
+        {LOOM_FOOTER_LINES.map((line) => (
+          <div key={line}>{line}</div>
+        ))}
       </div>
     </nav>
   );
