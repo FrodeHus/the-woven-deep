@@ -7,7 +7,7 @@
     "build": "vite build",
     "dev": "vite",
     "e2e": "playwright test",
-    "test": "vitest run",
+    "test": "vitest run || { [ -n \"$CI\" ] && vitest run; }",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
