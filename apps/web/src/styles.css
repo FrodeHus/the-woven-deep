@@ -36,7 +36,7 @@
 
   color: var(--ink);
   background: var(--ground);
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   font-synthesis: none;
 }
 /* High-contrast theme: set by `App` as the root class `theme-high-contrast` when
@@ -166,6 +166,20 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   50% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* Overlay entrance motion (Woven Deep): side panels slide in from the right (`.wd-slide-in`),
+   scrims fade (`.wd-fade-in`), and centered modals rise (`.wd-rise-in`). Purely decorative
+   entrance animations, so they follow the same three-way motion contract as everything else in
+   this file: suppressed by the reduced-motion media query and `.motion-reduced`, re-enabled by
+   `.motion-full`. Applied to overlay chrome only, never to a live gameplay surface. */
+@keyframes wd-slide-in { from { transform: translateX(48px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes wd-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes wd-rise-in { from { transform: translateY(16px) scale(0.985); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes wd-flicker { 0%, 100% { opacity: 0.9; } 50% { opacity: 1; } }
+.wd-slide-in { animation: wd-slide-in 0.22s ease-out; }
+.wd-fade-in { animation: wd-fade-in 0.15s ease-out; }
+.wd-rise-in { animation: wd-rise-in 0.2s ease-out; }
+.wd-flicker { animation: wd-flicker 2.4s ease-in-out infinite; }
 
 /* Playfield: the grid renders gameplay truth, the effects layer is a purely decorative overlay
    sharing its coordinate space via --cell-w/--cell-h set on the wrapper. `--zoom` is the single
@@ -424,6 +438,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   .fixture-flicker { animation: none !important; }
   .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: none !important; }
   .condition-aura { animation: none !important; opacity: 0.4; }
+  .wd-slide-in, .wd-fade-in, .wd-rise-in, .wd-flicker { animation: none !important; }
 }
 
 /* Same overrides as the `@media (prefers-reduced-motion: reduce)` block above, applied instead by
@@ -443,6 +458,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   .fixture-flicker { animation: none !important; }
   .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: none !important; }
   .condition-aura { animation: none !important; opacity: 0.4; }
+  .wd-slide-in, .wd-fade-in, .wd-rise-in, .wd-flicker { animation: none !important; }
 }
 
 /* The three-way motion contract (`Settings.reducedMotion`, see `App.tsx`'s `withRootStyling`):
@@ -468,6 +484,10 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   .fixture-flicker { animation: fixture-flicker var(--flicker-duration, 2.2s) ease-in-out var(--flicker-delay, 0s) infinite !important; }
   .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: stair-shimmer 3.4s ease-in-out infinite !important; }
   .condition-aura { animation: condition-aura-pulse 1.8s ease-in-out infinite !important; }
+  .wd-slide-in { animation: wd-slide-in 0.22s ease-out !important; }
+  .wd-fade-in { animation: wd-fade-in 0.15s ease-out !important; }
+  .wd-rise-in { animation: wd-rise-in 0.2s ease-out !important; }
+  .wd-flicker { animation: wd-flicker 2.4s ease-in-out infinite !important; }
 }
 
 .map-pane { position: relative; overflow: hidden; }
