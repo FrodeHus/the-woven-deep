@@ -57,18 +57,21 @@ function projectionOf(input: {
   hero: Point & { health?: number };
   actors?: readonly FakeActor[];
   groundItems?: readonly FakeItem[];
+  walls?: readonly Point[];
 }): GameplayProjection {
+  const wallSet = new Set((input.walls ?? []).map((point) => `${point.x},${point.y}`));
   const cells = [];
   for (let y = 0; y < HEIGHT; y += 1) {
     for (let x = 0; x < WIDTH; x += 1) {
+      const wall = wallSet.has(`${x},${y}`);
       cells.push({
         index: y * WIDTH + x,
         x,
         y,
         knowledge: 'visible' as const,
-        tileId: 1,
-        glyph: '.',
-        token: 'terrain.floor',
+        tileId: wall ? 0 : 1,
+        glyph: wall ? '#' : '.',
+        token: wall ? 'terrain.wall' : 'terrain.floor',
         intensity: 255,
       });
     }
@@ -231,6 +234,33 @@ describe('PlayScreen click-to-move (auto-travel)', () => {
     // Adjacent hostile: a single east move, which `buildIntent` turns into an attack (see
     // travel.test.ts's grounding case).
     expect(session.dispatched).toEqual([{ type: 'move', direction: 'east' }]);
+  });
+});
+
+describe('PlayScreen movement affordance cursor', () => {
+  function cursor(): HTMLElement | null {
+    return screen.queryByTestId('cell-cursor');
+  }
+
+  it('highlights a reachable floor cell as an inviting move target', () => {
+    const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
+    renderPlay(session);
+    const grid = screen.getByRole('grid', { name: /dungeon/i });
+    fireEvent.mouseOver(grid.querySelector('[data-cell="23,10"]')!);
+    expect(cursor()).toHaveAttribute('data-reachable', 'true');
+    expect(cursor()).toHaveClass('cell-cursor-reachable');
+  });
+
+  it('does not invite a move over a non-actionable cell (a wall)', () => {
+    const session = new FakeSession(
+      projectionOf({ hero: { x: 20, y: 10 }, walls: [{ x: 22, y: 10 }] }),
+    );
+    renderPlay(session);
+    const grid = screen.getByRole('grid', { name: /dungeon/i });
+    fireEvent.mouseOver(grid.querySelector('[data-cell="22,10"]')!);
+    // The cursor still tracks the cell, but reads as blocked rather than a move invitation.
+    expect(cursor()).toHaveAttribute('data-reachable', 'false');
+    expect(cursor()).toHaveClass('cell-cursor-blocked');
   });
 });
 

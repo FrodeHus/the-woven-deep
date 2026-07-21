@@ -557,3 +557,23 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   white-space: nowrap;
 }
 
+/* The mouse movement affordance (`CellCursor`): a one-cell highlight under the pointer, sitting
+   above the grid but below the hover popovers. A reachable target gets the inviting accent stroke
+   and faint fill (mirroring the mockup's hovered-cell outline); a non-actionable cell (wall,
+   unknown, own empty cell) gets a dimmed dashed cue so the two read differently. All colour comes
+   from theme tokens -- no literals. */
+.cell-cursor {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.cell-cursor-reachable {
+  border: 1px solid var(--gold);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+}
+.cell-cursor-blocked {
+  border: 1px dashed var(--muted);
+  opacity: .4;
+}
+
