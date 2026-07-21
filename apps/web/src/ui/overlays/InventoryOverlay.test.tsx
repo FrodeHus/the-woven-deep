@@ -327,6 +327,56 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(screen.queryByRole('button', { name: /Refuel/ })).not.toBeInTheDocument();
   });
 
+  it('shows Damage and Worth fact rows for an identified weapon, from its content entry', () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.sword-1',
+        contentId: 'item.iron-sword',
+        name: 'Iron sword',
+        category: 'weapon',
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    const damage = screen.getByText('Damage');
+    expect(damage.parentElement).toHaveTextContent('1d6');
+    const worth = screen.getByText('Worth');
+    expect(worth.parentElement).toHaveTextContent('18');
+  });
+
+  it('shows a Light radius fact row for an identified light, from its content entry', () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.lantern-1',
+        contentId: 'item.brass-lantern',
+        name: 'Brass lantern',
+        category: 'light',
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    const radius = screen.getByText('Light radius');
+    expect(radius.parentElement).toHaveTextContent('7');
+  });
+
+  it('hides Damage and Worth for an unidentified item (no content entry resolves)', () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.mystery',
+        name: 'Cloudy potion',
+        category: 'potion',
+        identified: false,
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.queryByText('Damage')).not.toBeInTheDocument();
+    expect(screen.queryByText('Worth')).not.toBeInTheDocument();
+  });
+
   it('renders nothing when there is no session in context', () => {
     const { container } = render(
       <UiProviders pack={pack} settings={DEFAULT_SETTINGS} onChangeSettings={() => {}}>

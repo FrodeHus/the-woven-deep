@@ -1,5 +1,7 @@
 import type { JSX, ReactNode } from 'react';
-import { effectLabel } from '../labels.js';
+import { effectLabel, formatDice } from '../labels.js';
+import { usePack } from '../providers.js';
+import { itemById } from '../../session/pack-queries.js';
 import type { MenuEntry, ProjectedItemLike } from './inventory-model.js';
 
 function ActionButton({
@@ -48,10 +50,16 @@ export function DetailPane({
   onToggleLight: () => void;
   onRefuel: () => void;
 }>): JSX.Element {
+  const pack = usePack();
   if (!entry)
     return <p className="text-subtle">Select an item — ↑↓ to browse, e to equip, u to use.</p>;
   const { item, equipped, slot } = entry;
   const unidentified = item.contentId === undefined;
+
+  /** Static per-content facts (damage/worth/light/armor) live on the compiled pack entry, not the
+   * projected instance. The lookup is gated on `contentId`, which the projection omits entirely for
+   * an unidentified item -- so an unidentified item resolves no entry and reveals none of these. */
+  const content = item.contentId === undefined ? undefined : itemById(pack, item.contentId);
 
   return (
     <div className="flex flex-col gap-3">
@@ -67,10 +75,19 @@ export function DetailPane({
       {/* Description slot: item lore/description copy is not projected on this branch, so it is
        * deliberately left empty rather than fabricated. */}
 
-      {/* Dotted-leader fact rows, drawn only from projected instance/content fields. Damage and
-       * worth/value are NOT projected for owned items, so they are absent rather than invented. */}
+      {/* Dotted-leader fact rows. Instance facts come off the projected item; static facts
+       * (Damage/Worth/Light radius/Armor) come off the identified content entry (`content`), which
+       * is absent for an unidentified item -- so its hidden stats never leak. */}
       <div className="flex flex-col gap-1">
         {equipped && <FactRow label="Equipped" value={slot} />}
+        {content?.combat?.damage != null && (
+          <FactRow label="Damage" value={formatDice(content.combat.damage)} />
+        )}
+        {content?.combat != null && content.combat.armor > 0 && (
+          <FactRow label="Armor" value={content.combat.armor} />
+        )}
+        {content?.light != null && <FactRow label="Light radius" value={content.light.radius} />}
+        {content != null && <FactRow label="Worth" value={content.price} />}
         {!unidentified &&
           item.effects?.map((effect) => (
             <FactRow
