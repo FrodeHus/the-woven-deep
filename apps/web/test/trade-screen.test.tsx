@@ -477,7 +477,7 @@ describe('TradeScreen roving focus after a sale shrinks the list', () => {
     // keypress would land on <body> and never reach the dialog's key handler.
     await user.keyboard('{Enter}'); // sell the surviving offer (now at index 0)
 
-    await screen.findAllByText('Nothing here.');
+    await screen.findByText('Nothing to sell.');
     expect(screen.queryByRole('listbox', { name: 'Sell' })).not.toBeInTheDocument();
   });
 });
@@ -496,6 +496,14 @@ describe('TradeScreen focus after a dispatch empties the active list', () => {
       const [projection, setProjection] = useState(() =>
         withTrade(baseProjection, {
           saleOffers: [{ itemId: 'item.stock-ration', quantity: 1, unitPrice: 2 }],
+          services: [
+            {
+              serviceId: 'merchant-service.strongbox',
+              unitPrice: 120,
+              remainingUses: 1,
+              targetItemIds: [],
+            },
+          ],
         }),
       );
       return (
@@ -517,14 +525,15 @@ describe('TradeScreen focus after a dispatch empties the active list', () => {
     await user.keyboard('{Tab}'); // buy -> sell
     await user.keyboard('{Enter}'); // sells the only offer, emptying the sell list
 
-    expect(await screen.findByText('Nothing here.')).toBeInTheDocument();
+    expect(await screen.findByText('Nothing to sell.')).toBeInTheDocument();
     expect(screen.queryByRole('listbox', { name: 'Sell' })).not.toBeInTheDocument();
 
     // If focus were stranded off the (now-unmounted) listbox, this Tab would never reach the
-    // container's `onKeyDown`, and the active tab would never advance to Services.
+    // container's `onKeyDown`, and the active side would never advance to Services -- the focus
+    // effect re-seats focus on the Services listbox once it becomes the active side.
     await user.keyboard('{Tab}');
 
-    expect(screen.getByRole('tab', { name: 'Services', selected: true })).toBeInTheDocument();
+    expect(screen.getByRole('listbox', { name: 'Services' })).toHaveFocus();
   });
 });
 

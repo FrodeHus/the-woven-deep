@@ -12,9 +12,8 @@ import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
 import { heroOf, ownedItemOf, tradeOf, type TradeView } from '../../session/projection-view.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
-import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
-import { Button } from '../components/button.js';
-import { Tabs, TabsList, TabsTrigger } from '../components/tabs.js';
+import { LedgerCenter, LedgerList, type LedgerRow } from '../components/LedgerList.js';
+import { cn } from '../lib/cn.js';
 
 /** The minimal owned-item shape the trade rows read -- an owned item's projection, or a bare
  * `{ itemId, name }` fallback when the offer's item is no longer in the hero's own projection. */
@@ -67,19 +66,22 @@ const SERVICE_LABEL: Readonly<Record<MerchantServiceId, string>> = {
 
 interface TradeRow {
   readonly id: string;
-  readonly label: string;
+  readonly name: string;
+  readonly quantity?: number;
+  readonly price: string;
   readonly run: () => void;
 }
 
 /** Seats DOM focus so `handleKeyDown` receives keys. While the picker is open, focus goes to the
- * container itself and `handleKeyDown` drives the picker directly -- moving focus onto the picker's
- * own listbox instead would race the `Dialog`'s focus manager. Otherwise focus goes to the active
- * tab's `ListDetail` listbox so the primitive owns its arrows, falling back to the container when
- * that list is empty. Returns the focused element (shared by the focus effect and `initialFocus`). */
-function focusActiveList(container: HTMLElement, pickerOpen: boolean): HTMLElement {
-  const listbox = pickerOpen
-    ? null
-    : container.querySelector<HTMLElement>(`[role="listbox"]:not([aria-label="${PICKER_LABEL}"])`);
+ * container itself and `handleKeyDown` drives the picker directly (passing `null`). Otherwise focus
+ * goes to the active side's listbox so the container's `onKeyDown` catches its bubbled keys, falling
+ * back to the container when that side is empty (no listbox). Returns the focused element (shared by
+ * the focus effect and `initialFocus`). */
+function focusActiveList(container: HTMLElement, activeLabel: string | null): HTMLElement {
+  const listbox =
+    activeLabel === null
+      ? null
+      : container.querySelector<HTMLElement>(`[role="listbox"][aria-label="${activeLabel}"]`);
   const target = listbox ?? container;
   target.focus();
   return target;
@@ -92,33 +94,29 @@ export interface TradeScreenProps {
 }
 
 /**
- * The merchant trade dialog: one full-width `ListDetail` list at a time (buy from stock, sell from
- * the backpack, purchase a service), switched via the shared `Tabs` primitive (Base UI, the same
- * convention `MapJournalOverlay`/`CodexOverlay` use) so item rows always render at full dialog width
- * instead of splitting the pane three ways. Every price, stock quantity, and offer comes straight
- * from `projection.trade` -- this screen never computes a price itself, it only dispatches the
- * intent and lets the engine's rejection (insufficient funds, stock unavailable, capacity, ...) come
- * back as the usual log line. Renders nothing if the session projection has no active trade
- * (defensive: `PlayScreen` only mounts this while `projection.trade` is set, but an in-flight
- * Esc/close can race a session update that clears it).
+ * The merchant trade dialog, laid out as the mockup's "ledger of exchange": the merchant's STOCK on
+ * the left (buy), the merchant's identity + purse + services in the center, the guest's PACK on the
+ * right (sell) -- all three visible at once, with the focused side highlighted. Every price, stock
+ * quantity, and offer comes straight from `projection.trade`; this screen never computes a price
+ * itself, it only dispatches the intent and lets the engine's rejection (insufficient funds, stock
+ * unavailable, capacity, ...) come back as the usual log line. Renders nothing if the projection has
+ * no active trade (defensive: `PlayScreen` only mounts this while `projection.trade` is set, but an
+ * in-flight Esc/close can race a session update that clears it). Drag-across (shown in the mockup) is
+ * intentionally not implemented -- the engine only supports the discrete `trade-buy`/`trade-sell`/
+ * `trade-service` commands -- so buying/selling is by click or keyboard, not drag.
  *
- * `Tabs` is controlled by `focusedList`, which also names the list a keyboard Tab/Enter acts on so
- * the visible tab and the keyboard target always agree. DOM focus drives selection: the active
- * list's `ListDetail` listbox is focused (on open via the `Dialog` popup's `initialFocus`, and on
- * every tab-switch via a focus effect), so `ListDetail` owns that list's ArrowUp/ArrowDown/Home/End.
- * Enter (act on the selected row) and Tab (advance to the next list) are layered on top by an
- * `onKeyDown` on this screen's own container -- they fire only while focus is inside it, and
- * `stopPropagation()` keeps them from reaching `Tabs`'s tab-button keyboard handling. Clicking a
- * `TabsTrigger` still switches lists via `onValueChange`.
+ * `focusedList` names the side a keyboard Tab/Arrow/Enter acts on, and drives the highlight so the
+ * visible active side and the keyboard target always agree. DOM focus is seated on the active side's
+ * listbox (on open via `initialFocus`, and on every side-switch via a focus effect), so its bubbled
+ * ArrowUp/ArrowDown/Enter/Tab reach this screen's own container `onKeyDown`. `stopPropagation()`
+ * keeps those from escaping the dialog.
  *
- * A service with eligible targets (e.g. identify) opens an inline nested `ListDetail` picker instead
- * of dispatching immediately. While the picker is open, focus rests on the container and its
- * `onKeyDown` drives the picker's Arrow/Enter directly (Tab is swallowed), so the picker never has to
- * win a focus move away from the active list against the `Dialog`'s focus manager. Escape is owned by
- * the `Dialog` primitive: it fires `onOpenChange(false)` (reason `escape-key`) and stops the native
- * event before `PlayScreen`'s window-level dispatcher ever sees it, so this screen routes that single
- * close through `onOpenChange` -- closing the picker first when it is open, otherwise the whole dialog
- * via `onClose`.
+ * A service with eligible targets (e.g. identify) opens an inline nested picker (a listbox at the
+ * foot of the ledger) instead of dispatching immediately. While the picker is open, focus rests on
+ * the container and its `onKeyDown` drives the picker's Arrow/Enter directly. Escape is owned by the
+ * `Dialog` primitive: it fires `onOpenChange(false)` (reason `escape-key`) and stops the native event
+ * before `PlayScreen`'s window-level dispatcher sees it, so this screen routes that single close
+ * through `onOpenChange` -- closing the picker first when it is open, otherwise the whole dialog.
  */
 export function TradeScreen({
   snapshot,
@@ -150,17 +148,22 @@ export function TradeScreen({
     return {
       buy: session.stock.map((entry) => ({
         id: entry.item.itemId,
-        label: `${entry.item.name} (${entry.quantity}) — ${entry.unitPrice}g`,
+        name: entry.item.name,
+        quantity: entry.quantity,
+        price: `${entry.unitPrice}g`,
         run: () => onDispatch({ type: 'trade-buy', itemId: entry.item.itemId, quantity: 1 }),
       })),
       sell: session.saleOffers.map((entry) => ({
         id: entry.itemId,
-        label: `${backpackItemName(snapshot, entry.itemId)} (${entry.quantity}) — ${entry.unitPrice}g`,
+        name: backpackItemName(snapshot, entry.itemId),
+        quantity: entry.quantity,
+        price: `${entry.unitPrice}g`,
         run: () => onDispatch({ type: 'trade-sell', itemId: entry.itemId, quantity: 1 }),
       })),
       services: session.services.map((entry) => ({
         id: entry.serviceId,
-        label: `${SERVICE_LABEL[entry.serviceId]} (${entry.remainingUses} left) — ${entry.unitPrice}g`,
+        name: `${SERVICE_LABEL[entry.serviceId]} (${entry.remainingUses} left)`,
+        price: `${entry.unitPrice}g`,
         // A service with eligible targets (e.g. identify) opens the inline picker instead of guessing
         // which item the player meant; a targetless service (e.g. the strongbox) dispatches straight
         // through.
@@ -178,16 +181,16 @@ export function TradeScreen({
 
   const activeRows = rows[focusedList];
 
-  // Keeps DOM focus on whichever listbox owns keyboard selection: the picker's while it is open,
-  // otherwise the active tab's. Runs on first open, on every tab-switch / picker transition, and
-  // whenever the active list's row count changes -- a dispatch (e.g. selling the last offer) can
-  // empty the list and unmount its listbox without a tab-switch, so `activeRows.length` is also a
-  // dependency. The container itself is the fallback when the active list is empty (no listbox to
-  // focus), so Enter and Tab still reach `handleKeyDown` instead of stranding focus on a tab button.
+  // Keeps DOM focus on whichever listbox owns keyboard selection: the container while the picker is
+  // open (so its `onKeyDown` drives the picker), otherwise the active side's listbox. Runs on first
+  // open, on every side-switch / picker transition, and whenever the active side's row count changes
+  // -- a dispatch (e.g. selling the last offer) can empty the side and unmount its listbox without a
+  // switch, so `activeRows.length` is a dependency. The container is the fallback when the active
+  // side is empty (no listbox), so Enter/Tab still reach `handleKeyDown`.
   useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
-    focusActiveList(root, pickerServiceId !== null);
+    focusActiveList(root, pickerServiceId !== null ? null : LIST_LABEL[focusedList]);
     if (activeRows.length > 0) {
       setSelectedIndex((index) => Math.max(0, Math.min(index, activeRows.length - 1)));
     }
@@ -216,7 +219,7 @@ export function TradeScreen({
         }
         setPickerServiceId(null);
       } else if (event.key === 'Tab') {
-        // List-switching does not apply to the target picker.
+        // Side-switching does not apply to the target picker.
         event.preventDefault();
         event.stopPropagation();
       }
@@ -229,6 +232,14 @@ export function TradeScreen({
       switchList(LIST_ORDER[(LIST_ORDER.indexOf(focusedList) + 1) % LIST_ORDER.length]!);
       return;
     }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (activeRows.length === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const delta = event.key === 'ArrowDown' ? 1 : -1;
+      setSelectedIndex((index) => (index + delta + activeRows.length) % activeRows.length);
+      return;
+    }
     if (event.key === 'Enter') {
       event.preventDefault();
       event.stopPropagation();
@@ -238,10 +249,41 @@ export function TradeScreen({
 
   if (!session) return null;
 
-  const toListItems = (list: readonly TradeRow[]): readonly ListDetailItem[] =>
-    list.map((row) => ({ id: row.id, label: row.label }));
-
-  const actionLabel = focusedList === 'buy' ? 'Buy' : focusedList === 'sell' ? 'Sell' : 'Use';
+  const buildLedger = (
+    list: FocusedList,
+    heading: string,
+    headingHint: string,
+    actionLabel: string,
+    actionClassName: string,
+    priceClassName: string,
+    emptyText: string,
+  ): JSX.Element => {
+    const listRows: readonly LedgerRow[] = rows[list].map((row) => ({
+      id: row.id,
+      name: row.name,
+      ...(row.quantity !== undefined ? { quantity: row.quantity } : {}),
+      price: row.price,
+    }));
+    return (
+      <LedgerList
+        listLabel={LIST_LABEL[list]}
+        heading={heading}
+        headingHint={headingHint}
+        rows={listRows}
+        selectedIndex={list === focusedList ? selectedIndex : -1}
+        active={list === focusedList}
+        onSelect={(index) => {
+          setFocusedList(list);
+          setSelectedIndex(index);
+        }}
+        onAct={(index) => rows[list][index]?.run()}
+        actionLabel={actionLabel}
+        actionClassName={actionClassName}
+        priceClassName={priceClassName}
+        emptyText={emptyText}
+      />
+    );
+  };
 
   return (
     <Dialog
@@ -259,114 +301,128 @@ export function TradeScreen({
       }}
     >
       <DialogContent
-        className="sm:max-w-2xl"
+        className="sm:max-w-4xl"
         // `Dialog` mounts its popup contents behind an enter transition, so a mount-time `.focus()`
         // effect runs before the container exists; the popup's own post-enter `initialFocus` hook is
         // the transition-aware place to seat focus on the active listbox for the first open.
         initialFocus={() =>
           containerRef.current
-            ? focusActiveList(containerRef.current, pickerServiceIdRef.current !== null)
+            ? focusActiveList(
+                containerRef.current,
+                pickerServiceIdRef.current !== null ? null : LIST_LABEL[focusedList],
+              )
             : false
         }
       >
-        <DialogHeader>
-          <DialogTitle>Trade</DialogTitle>
+        <DialogHeader className="text-center sm:text-center">
+          <span aria-hidden="true" className="text-subtle">
+            ─── ❦ ───
+          </span>
+          <DialogTitle className="text-center">Trade</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col items-center gap-0.5 border-y border-dotted border-subtle py-2 text-center">
-          <p className="font-serif text-base text-fg-strong">{session.merchantName}</p>
-          <p className="text-xs uppercase tracking-[0.1em] text-subtle">{session.reputationTier}</p>
-          <p className="font-mono text-accent-strong">
-            <span aria-hidden="true">⛁ </span>
-            <span>{`${session.currency}g`}</span>
-          </p>
-        </div>
         <div
           ref={containerRef}
           tabIndex={-1}
-          className="flex flex-col gap-2 outline-none"
+          className="flex flex-col gap-3 outline-none"
           onKeyDown={handleKeyDown}
         >
-          <Tabs value={focusedList} onValueChange={(value) => switchList(value as FocusedList)}>
-            <TabsList aria-label="Trade lists">
-              {LIST_ORDER.map((list) => (
-                <TabsTrigger key={list} value={list}>
-                  {LIST_LABEL[list]}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-          {/* One list panel for the active tab, rendered outside `Tabs` so its `ListDetail` listbox
-           * is a single persistent DOM node whose items change as the tab switches -- keyboard focus
-           * never has to survive a listbox unmount/remount (which would race the `Dialog`'s focus
-           * trap). An empty list drops the listbox entirely and shows the placeholder instead. */}
-          <div className="flex flex-col gap-1">
-            {activeRows.length === 0 && <p className="text-sm text-muted">Nothing here.</p>}
-            {activeRows.length > 0 && (
-              <ListDetail
-                listLabel={LIST_LABEL[focusedList]}
-                items={toListItems(activeRows)}
-                selectedIndex={selectedIndex}
-                onSelect={setSelectedIndex}
-                renderDetail={(item) =>
-                  item ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => activeRows.find((row) => row.id === item.id)?.run()}
-                    >
-                      {actionLabel}
-                    </Button>
-                  ) : (
-                    <p className="text-sm text-muted">Nothing selected.</p>
-                  )
-                }
-              />
+          <div className="grid h-[min(60vh,30rem)] grid-cols-[1fr_13rem_1fr] border-y border-line">
+            {buildLedger(
+              'buy',
+              "Merchant's stock",
+              '· enter buys',
+              'buy',
+              'border-accent text-accent-strong hover:bg-accent hover:text-deep',
+              'text-accent-strong',
+              'Sold out.',
+            )}
+            <LedgerCenter>
+              <div
+                aria-hidden="true"
+                className="grid size-16 place-items-center border border-double border-accent bg-raised font-serif text-3xl text-accent-strong"
+              >
+                ❦
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <p className="font-serif text-base text-fg-strong">{session.merchantName}</p>
+                <p className="text-xs uppercase tracking-[0.1em] text-subtle">
+                  {session.reputationTier}
+                </p>
+              </div>
+              <div className="w-full border-y border-dotted border-subtle py-2">
+                <p className="text-[0.6875rem] uppercase tracking-[0.12em] text-muted">
+                  Your purse
+                </p>
+                <p className="font-mono text-lg text-accent-strong">
+                  <span aria-hidden="true">⛁ </span>
+                  <span>{`${session.currency}g`}</span>
+                </p>
+              </div>
+              {rows.services.length > 0 && (
+                <div className="w-full">
+                  {buildLedger(
+                    'services',
+                    'Services',
+                    '',
+                    'use',
+                    'border-cool text-cool hover:bg-cool hover:text-deep',
+                    'text-cool',
+                    'No services offered.',
+                  )}
+                </div>
+              )}
+              <div className="mt-auto font-mono text-[0.625rem] leading-relaxed text-subtle">
+                tab switch side · ↑↓ browse
+                <br />
+                enter trade · esc leave
+              </div>
+            </LedgerCenter>
+            {buildLedger(
+              'sell',
+              'Your pack',
+              '· enter sells',
+              'sell',
+              'border-good text-good hover:bg-good hover:text-deep',
+              'text-good',
+              'Nothing to sell.',
             )}
           </div>
           {pickerService && (
-            <div className="flex flex-col gap-1 rounded-md border border-line p-2">
-              <h3 className="text-sm font-semibold text-fg-strong">Identify which item?</h3>
-              <ListDetail
-                listLabel={PICKER_LABEL}
-                items={pickerService.targetItemIds.map((itemId) => {
+            <div className="flex flex-col gap-2 border-t border-line pt-3">
+              <p className="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-cool">
+                ✦ Identify which?{' '}
+                <span className="normal-case text-subtle">· ↑↓ enter · esc back</span>
+              </p>
+              <div role="listbox" aria-label={PICKER_LABEL} className="flex flex-wrap gap-2">
+                {pickerService.targetItemIds.map((itemId, index) => {
                   const ref = ownedItemRef(snapshot, itemId);
-                  return {
-                    id: itemId,
-                    label: ref.name,
-                    ...(ref.glyph ? { glyph: ref.glyph } : {}),
-                  };
-                })}
-                selectedIndex={pickerIndex}
-                onSelect={setPickerIndex}
-                renderDetail={(item) =>
-                  item ? (
-                    <Button
+                  const selected = index === pickerIndex;
+                  return (
+                    <button
+                      key={itemId}
                       type="button"
-                      variant="outline"
-                      size="sm"
+                      role="option"
+                      aria-selected={selected}
                       onClick={() => {
                         onDispatch({
                           type: 'trade-service',
                           serviceId: pickerService.serviceId,
-                          targetItemId: item.id,
+                          targetItemId: itemId,
                         });
                         setPickerServiceId(null);
                       }}
+                      className={cn(
+                        'cursor-pointer border bg-raised px-2.5 py-1 font-mono text-sm text-fg',
+                        selected ? 'border-cool' : 'border-line hover:border-cool',
+                      )}
                     >
-                      Identify
-                    </Button>
-                  ) : (
-                    <p className="text-sm text-muted">Nothing selected.</p>
-                  )
-                }
-              />
-              <p className="text-xs text-muted">↑↓ select · Enter identify · Esc back</p>
+                      {ref.glyph ? `${ref.glyph} ${ref.name}` : ref.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
-          <p className="text-xs text-muted">
-            ↑↓ select · Tab switch list · Enter trade · Esc close
-          </p>
         </div>
       </DialogContent>
     </Dialog>

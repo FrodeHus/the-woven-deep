@@ -8,11 +8,8 @@ import {
   type OwnedItemView,
 } from '../../session/projection-view.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
-import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
-import { Button } from '../components/button.js';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/tabs.js';
-
-type ProjectedItem = OwnedItemView;
+import { LedgerList, type LedgerRow } from '../components/LedgerList.js';
+import { CATEGORY_GLYPH } from '../overlays/inventory-model.js';
 
 type FocusedList = 'backpack' | 'house';
 
@@ -24,8 +21,14 @@ function houseState(snapshot: SessionSnapshot): HouseView {
   return houseOf(snapshot.projection);
 }
 
-const LIST_LABEL: Readonly<Record<FocusedList, string>> = { backpack: 'Backpack', house: 'House' };
-const LIST_ORDER: readonly FocusedList[] = ['backpack', 'house'];
+function toRows(items: readonly OwnedItemView[]): readonly LedgerRow[] {
+  return items.map((item) => ({
+    id: item.itemId,
+    glyph: CATEGORY_GLYPH[item.category],
+    name: item.name,
+    quantity: item.quantity,
+  }));
+}
 
 export interface HouseScreenProps {
   readonly snapshot: SessionSnapshot;
@@ -34,30 +37,25 @@ export interface HouseScreenProps {
 }
 
 /**
- * The hero's house: one full-width `ListDetail` list at a time (backpack, house), switched via the
- * shared `Tabs` primitive (Base UI, the same convention `MapJournalOverlay`/`CodexOverlay` use) so
- * item rows always render at full dialog width instead of splitting the pane two ways. Enter
- * transfers the selected item's full stack across. Deposits/withdrawals dispatch `house-transfer`
- * intents through the normal command path -- this screen never validates capacity itself
- * (`house.full`/backpack-capacity rejections come back as log lines from the engine, same as every
- * other command), it only renders the capacity readout honestly from the projection.
- *
- * `Tabs` is controlled by `focusedList` rather than left to its own uncontrolled `defaultValue`: the
- * SAME state also indexes which list a keyboard Tab/Arrow/Enter should act on, so both the visible
- * tab and the keyboard target always agree.
+ * The hero's house, laid out as the mockup's two-sided ledger: the guest's BACKPACK on the left, the
+ * STRONG CHEST on the right, both lists visible at once with the focused side highlighted. Enter
+ * transfers the selected item's full stack across (deposit from the backpack, withdraw from the
+ * chest). Deposits/withdrawals dispatch `house-transfer` intents through the normal command path --
+ * this screen never validates capacity itself (`house.full`/backpack-capacity rejections come back
+ * as log lines from the engine, same as every other command), it only renders the capacity readout
+ * honestly from the projection. Drag-across (shown in the mockup) is intentionally not implemented --
+ * the engine has no drag transfer, only the click/keyboard `house-transfer` command -- so only the
+ * click-and-keyboard path is offered.
  *
  * Framed by the shared `Dialog` primitive, which owns focus trapping and Escape-dismissal (routed
- * back through `onClose` via `onOpenChange`). The Tab/Enter list-navigation contract is deliberately
- * NOT wired through DOM focus + `ListDetail`'s (or `Tabs`'s) own built-in arrow handling: `Dialog`'s
- * enter transition briefly renders its popup `hidden` (for the CSS transition-in to register a
- * "before" state), during which nothing inside it is focusable, so a mount-time `.focus()` call
- * races that transition. A capture-phase `window` keydown listener sidesteps the race entirely (the
- * same mechanism the `Dialog` primitive itself uses for Escape, via a `document`-level listener) --
- * `ListDetail` still owns the visual list/detail rendering and listbox semantics, this screen just
- * drives its `selectedIndex` externally instead of relying on which element has DOM focus; that same
- * capture-phase `stopPropagation()` keeps a swallowed Tab from ever reaching `Tabs`'s own built-in
- * keyboard handling on the tab buttons, so the two never fight over the same keypress -- clicking a
- * `TabsTrigger` still switches lists normally via `onValueChange`.
+ * back through `onClose` via `onOpenChange`). The Tab/Arrow/Enter list-navigation is driven by a
+ * capture-phase `window` keydown listener rather than DOM focus + a component's own arrow handling:
+ * `Dialog`'s enter transition briefly renders its popup `hidden` (for the CSS transition-in to
+ * register a "before" state), during which nothing inside it is focusable, so a mount-time `.focus()`
+ * call races that transition. The capture-phase listener sidesteps the race entirely (the same
+ * mechanism the `Dialog` primitive itself uses for Escape) and its `stopPropagation()` keeps a
+ * swallowed Tab from reaching anything else. This screen drives each column's `selectedIndex`
+ * externally; clicking a row or its action button still transfers normally.
  */
 export function HouseScreen({ snapshot, onDispatch, onClose }: HouseScreenProps): JSX.Element {
   const backpack = backpackItems(snapshot);
@@ -118,51 +116,6 @@ export function HouseScreen({ snapshot, onDispatch, onClose }: HouseScreenProps)
     return () => window.removeEventListener('keydown', listener, true);
   }, []);
 
-  const toListItems = (items: readonly ProjectedItem[]): readonly ListDetailItem[] =>
-    items.map((item) => ({ id: item.itemId, label: item.name }));
-
-  const listPanel = (
-    list: FocusedList,
-    items: readonly ProjectedItem[],
-    selectedIndex: number,
-    onSelect: (index: number) => void,
-  ): JSX.Element => (
-    <div className="flex flex-col gap-1">
-      {items.length === 0 && <p className="text-sm text-muted">Empty.</p>}
-      {items.length > 0 && (
-        <ListDetail
-          listLabel={LIST_LABEL[list]}
-          items={toListItems(items)}
-          selectedIndex={selectedIndex}
-          onSelect={(index) => {
-            setFocusedList(list);
-            onSelect(index);
-          }}
-          renderDetail={(item) =>
-            item ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setFocusedList(list);
-                  transfer(
-                    list,
-                    items.findIndex((entry) => entry.itemId === item.id),
-                  );
-                }}
-              >
-                {list === 'backpack' ? 'Deposit' : 'Withdraw'}
-              </Button>
-            ) : (
-              <p className="text-sm text-muted">Nothing selected.</p>
-            )
-          }
-        />
-      )}
-    </div>
-  );
-
   return (
     <Dialog
       open
@@ -170,28 +123,61 @@ export function HouseScreen({ snapshot, onDispatch, onClose }: HouseScreenProps)
         if (!open) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>House</DialogTitle>
+      <DialogContent className="sm:max-w-3xl">
+        <DialogHeader className="text-center sm:text-center">
+          <span aria-hidden="true" className="text-subtle">
+            ─── ❦ ───
+          </span>
+          <DialogTitle className="text-center">Your House</DialogTitle>
         </DialogHeader>
-        <p className="text-center font-mono text-xs uppercase tracking-[0.1em] text-subtle">{`House (${house.items.length}/${house.capacity})`}</p>
-        <Tabs value={focusedList} onValueChange={(value) => setFocusedList(value as FocusedList)}>
-          <TabsList aria-label="House lists">
-            {LIST_ORDER.map((list) => (
-              <TabsTrigger key={list} value={list}>
-                {LIST_LABEL[list]}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <TabsContent value="backpack">
-            {listPanel('backpack', backpack, backpackIndex, setBackpackIndex)}
-          </TabsContent>
-          <TabsContent value="house">
-            {listPanel('house', house.items, houseIndex, setHouseIndex)}
-          </TabsContent>
-        </Tabs>
-        <p className="text-xs text-muted">
-          ↑↓ select · Tab switch list · Enter transfer · Esc close
+        <p className="text-center font-mono text-xs text-subtle">
+          <span>{`House (${house.items.length}/${house.capacity})`}</span>
+          <span> · what the Deep cannot take</span>
+        </p>
+        <div className="grid h-[min(60vh,28rem)] grid-cols-2 border-y border-line">
+          <LedgerList
+            listLabel="Backpack"
+            heading="Backpack"
+            headingHint="· enter deposits"
+            rows={toRows(backpack)}
+            selectedIndex={backpackIndex}
+            active={focusedList === 'backpack'}
+            onSelect={(index) => {
+              setFocusedList('backpack');
+              setBackpackIndex(index);
+            }}
+            onAct={(index) => {
+              setFocusedList('backpack');
+              transfer('backpack', index);
+            }}
+            actionLabel="stow ▸"
+            actionClassName="border-accent text-accent-strong hover:bg-accent hover:text-deep"
+            emptyText="Backpack is empty."
+          />
+          <div className="flex min-h-0 flex-col border-l border-line">
+            <LedgerList
+              listLabel="House"
+              heading="Strong chest"
+              headingHint="· enter withdraws"
+              rows={toRows(house.items)}
+              selectedIndex={houseIndex}
+              active={focusedList === 'house'}
+              onSelect={(index) => {
+                setFocusedList('house');
+                setHouseIndex(index);
+              }}
+              onAct={(index) => {
+                setFocusedList('house');
+                transfer('house', index);
+              }}
+              actionLabel="◂ take"
+              actionClassName="border-good text-good hover:bg-good hover:text-deep"
+              emptyText="The chest sits empty."
+            />
+          </div>
+        </div>
+        <p className="text-center font-mono text-xs text-subtle">
+          tab switch side · ↑↓ browse · enter transfer · esc close
         </p>
       </DialogContent>
     </Dialog>
