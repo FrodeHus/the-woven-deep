@@ -52,6 +52,8 @@ function actor(
     attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
     health: input.health,
     maxHealth: Math.max(1, input.health),
+    weave: input.playerControlled ? Math.max(1, input.health) : 0,
+    maxWeave: input.playerControlled ? Math.max(1, input.health) : 0,
     energy: input.energy,
     speed: input.speed,
     reactionReady: true,

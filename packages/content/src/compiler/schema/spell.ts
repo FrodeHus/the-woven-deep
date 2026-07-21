@@ -7,5 +7,6 @@ export const spellEntry = z.strictObject({
   targetingId: z.enum(targetingIds),
   range: safeNonNegative,
   actionCost: safePositive,
+  weaveCost: safeNonNegative,
   effects: z.array(effect).min(1),
 });

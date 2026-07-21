@@ -1,7 +1,7 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import { actionCostFor, balanceEntry } from './actions.js';
 import { actorHasConditionTrait, conditionDefinition } from './conditions.js';
-import { heroActor } from './actor-model.js';
+import { heroActor, withActor } from './actor-model.js';
 import { advanceMerchantLifecycle, scrubDepartedIntentEvents } from './merchant-lifecycle.js';
 import { heroFloorPerception } from './run-perception.js';
 import { projectDomainEvents } from './event-projection.js';
@@ -37,6 +37,17 @@ export interface RestObservation {
   readonly interruptingConditionChanged: boolean;
   readonly decisionRequired: boolean;
   readonly heroDead: boolean;
+}
+
+// A rest that runs its course (heals to full or hits the duration cap) also restores the Weave to
+// full, mirroring the heal-to-full; a rest cut short by danger, damage, or a warning does not.
+function restedToCompletion(reason: RestStopReason): boolean {
+  return reason === 'full-health' || reason === 'maximum-duration';
+}
+
+function restoreHeroWeaveToFull(state: ActiveRun): ActiveRun {
+  const hero = heroActor(state);
+  return hero.weave === hero.maxWeave ? state : withActor(state, { ...hero, weave: hero.maxWeave });
 }
 
 export function restStopReason(observation: RestObservation): RestStopReason | null {
@@ -186,7 +197,9 @@ export function resolveRest(
           });
     const completed = completedEvent(input.eventId, initialReason, 0, 0);
     return {
-      state: lifecycle.state,
+      state: restedToCompletion(initialReason)
+        ? restoreHeroWeaveToFull(lifecycle.state)
+        : lifecycle.state,
       events: [...lifecycle.events, completed],
       publicEvents: [...lifecyclePublic, completed],
       stopReason: initialReason,
@@ -218,7 +231,7 @@ export function resolveRest(
         effectiveHealing,
       );
       return {
-        state,
+        state: restoreHeroWeaveToFull(state),
         events: [...events, completed],
         publicEvents: [...publicEvents, completed],
         stopReason: 'maximum-duration',
@@ -271,7 +284,7 @@ export function resolveRest(
     if (reason) {
       const completed = completedEvent(input.eventId, reason, elapsed, effectiveHealing);
       return {
-        state,
+        state: restedToCompletion(reason) ? restoreHeroWeaveToFull(state) : state,
         events: [...events, completed],
         publicEvents: [...publicEvents, completed],
         stopReason: reason,

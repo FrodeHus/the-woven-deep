@@ -143,6 +143,8 @@ export function materializeMerchant(
     attributes: npc.attributes,
     health: npc.health,
     maxHealth: npc.health,
+    weave: 0,
+    maxWeave: 0,
     energy: balance.readinessThreshold,
     speed: npc.speed,
     reactionReady: true,

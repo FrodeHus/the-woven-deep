@@ -40,6 +40,7 @@ export const balanceEntry = z
     starvationDamage: safePositive,
     recoveryInterval: safePositive,
     recoveryAmount: safeNonNegative,
+    weaveRegenAmount: safeNonNegative,
     restMaximumDuration: safePositive,
     recoveryByHungerStage: z.strictObject({
       sated: safeNonNegative.max(100),

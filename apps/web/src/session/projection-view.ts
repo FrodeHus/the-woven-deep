@@ -87,6 +87,8 @@ export interface HeroView {
   readonly derived: Readonly<Record<DerivedStatName, DerivedStatView>>;
   readonly health: number;
   readonly maxHealth: number;
+  readonly weave: number;
+  readonly maxWeave: number;
   readonly sightRadius: number;
   readonly hungerStage: string;
   readonly conditions: readonly ConditionView[];

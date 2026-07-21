@@ -157,6 +157,8 @@ function beetle(overrides: Partial<ActorState> = {}): ActorState {
     attributes: { might: 4, agility: 3, vitality: 6, wits: 1, resolve: 3 },
     health: 7,
     maxHealth: 7,
+    weave: 0,
+    maxWeave: 0,
     energy: 0,
     speed: 75,
     reactionReady: true,

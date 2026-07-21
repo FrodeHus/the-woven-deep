@@ -42,6 +42,8 @@ export interface ActorState {
   readonly attributes: BaseAttributes;
   readonly health: number;
   readonly maxHealth: number;
+  readonly weave: number;
+  readonly maxWeave: number;
   readonly energy: number;
   readonly speed: number;
   readonly reactionReady: boolean;
