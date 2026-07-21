@@ -239,5 +239,8 @@ export function heroFromChoices(
     backpack,
     classTags: classEntry.classTags,
     statModifiers,
+    ...(classEntry.startingSpellIds && classEntry.startingSpellIds.length > 0
+      ? { knownSpellIds: classEntry.startingSpellIds }
+      : {}),
   };
 }

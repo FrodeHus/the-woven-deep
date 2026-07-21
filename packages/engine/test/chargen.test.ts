@@ -283,4 +283,22 @@ describe('heroFromChoices', () => {
 
     expect(() => heroFromChoices({ pack: poisonedPack, choices })).toThrow(RangeError);
   });
+
+  it('bakes knownSpellIds from the class startingSpellIds when present, and omits it otherwise', () => {
+    const casterPack: CompiledContentPack = {
+      ...pack,
+      entries: pack.entries.map((entry) =>
+        entry.kind === 'class' && entry.id === 'class.wayfarer'
+          ? { ...entry, startingSpellIds: ['spell.ember-bolt'] }
+          : entry,
+      ),
+    };
+
+    const casterHero = heroFromChoices({ pack: casterPack, choices: wayfarerBladeChoices() });
+    expect(casterHero.knownSpellIds).toEqual(['spell.ember-bolt']);
+
+    const nonCasterHero = heroFromChoices({ pack, choices: wayfarerBladeChoices() });
+    expect(nonCasterHero.knownSpellIds).toBeUndefined();
+    expect(Object.hasOwn(nonCasterHero, 'knownSpellIds')).toBe(false);
+  });
 });
