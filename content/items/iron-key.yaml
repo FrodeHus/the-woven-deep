@@ -5,6 +5,7 @@ entries:
     name: Tarnished iron key
     glyph: "k"
     color: "#8c7853"
+    description: Corroded but unbroken, this key still remembers the shape of a lock somewhere below.
     tags: [key]
     minDepth: 1
     maxDepth: 20

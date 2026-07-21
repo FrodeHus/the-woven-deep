@@ -5,6 +5,7 @@ entries:
     name: Brass lantern
     glyph: "¤"
     color: "#e8c879"
+    description: A dented brass housing that throws a steady amber glow. It drinks lamp oil eagerly and does not care how deep you take it.
     tags: [lamp-oil, light, utility]
     minDepth: 1
     maxDepth: 20

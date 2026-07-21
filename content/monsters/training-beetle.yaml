@@ -5,6 +5,7 @@ entries:
     name: Training beetle
     glyph: b
     color: "#6f8f5b"
+    description: A slow, shelled crawler kept near the entrance for the same reason a smith keeps a dull whetstone.
     tags: [insect, training]
     minDepth: 1
     maxDepth: 3

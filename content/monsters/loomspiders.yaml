@@ -5,6 +5,7 @@ entries:
     name: Web stalker
     glyph: x
     color: "#6a5f7a"
+    description: It waits motionless in silk it wove itself, patient as the walls around it.
     tags: [spider, poison, offense]
     minDepth: 3
     maxDepth: 6
@@ -30,6 +31,7 @@ entries:
     name: Gossamer darter
     glyph: x
     color: "#8a7fa0"
+    description: Thin-legged and quick, it darts along its own threads faster than the eye can follow.
     tags: [spider, skirmisher]
     minDepth: 3
     maxDepth: 6
@@ -55,6 +57,7 @@ entries:
     name: Venom spinner
     glyph: x
     color: "#5f7d4e"
+    description: It spits a fine venom thread from a safe distance, content to let the poison do the closing.
     tags: [spider, poison, ranged]
     minDepth: 4
     maxDepth: 7
@@ -80,6 +83,7 @@ entries:
     name: Carapace broodmother
     glyph: M
     color: "#4a4358"
+    description: A swollen matriarch ringed by egg sacs, guarded by a lattice of silk thick enough to stop a blade.
     tags: [spider, armored, swarm-source]
     minDepth: 5
     maxDepth: 8
@@ -105,6 +109,7 @@ entries:
     name: Shroud widow
     glyph: X
     color: "#3f3a4d"
+    description: Black as the space between its own webs, it has outlived every rival that ever shared its den.
     tags: [spider, poison, elite]
     minDepth: 6
     maxDepth: 8

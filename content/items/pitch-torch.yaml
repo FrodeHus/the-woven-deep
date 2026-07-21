@@ -5,6 +5,7 @@ entries:
     name: Pitch torch
     glyph: "!"
     color: "#e49a4a"
+    description: A resin-soaked brand that burns hot and fast. It buys light quickly and spends it just as quickly.
     tags: [light, pitch, torch]
     minDepth: 1
     maxDepth: 20

@@ -5,6 +5,7 @@ entries:
     name: Leather armor
     glyph: "["
     color: "#9f7655"
+    description: Stiff, boiled hide stitched over old scars in the leather itself. It turns a glancing blow, nothing more.
     tags: [armor, defense]
     minDepth: 1
     maxDepth: 20

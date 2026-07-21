@@ -5,6 +5,7 @@ entries:
     name: Mending draught
     glyph: "!"
     color: "#c3484f"
+    description: Thick and blood-dark, this draught sears going down and leaves torn skin closed behind it.
     tags: [healing, identification, potion]
     minDepth: 1
     maxDepth: 20
