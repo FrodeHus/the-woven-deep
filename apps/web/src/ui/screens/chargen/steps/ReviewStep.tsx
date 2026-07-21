@@ -5,7 +5,11 @@ import {
   DERIVED_STAT_LABELS,
   playerVisibleDerivedStats,
 } from '@/ui/derived-stats-display.js';
-import { wizardPreview } from '../../../../session/wizard-reducer.js';
+import {
+  stepIsSatisfied,
+  wizardPreview,
+  type WizardState,
+} from '../../../../session/wizard-reducer.js';
 import {
   backgroundEntries,
   balanceEntry,
@@ -13,7 +17,10 @@ import {
   traitEntries,
 } from '../../../../session/pack-queries.js';
 import { DotLeaderRow } from '../chargen-components.js';
+import { STEP_LABELS } from '../StepMenu.js';
 import type { StepProps } from './step-content.js';
+
+const REVIEW_GATED_STEPS: readonly WizardState['step'][] = [1, 2, 3, 4, 5, 6];
 
 export function ReviewStep({ state, pack }: StepProps): JSX.Element {
   const classEntry = classEntries(pack).find((entry) => entry.id === state.classId);
@@ -29,6 +36,9 @@ export function ReviewStep({ state, pack }: StepProps): JSX.Element {
   ).join(', ');
   const marksSummary =
     chosenTraits.length > 0 ? chosenTraits.map((trait) => trait.name).join(', ') : 'None';
+
+  const missingSteps = REVIEW_GATED_STEPS.filter((step) => !stepIsSatisfied(state, step));
+  const ready = missingSteps.length === 0;
 
   return (
     <section aria-label="Review" className="flex flex-col gap-3 font-mono">
@@ -56,6 +66,15 @@ export function ReviewStep({ state, pack }: StepProps): JSX.Element {
       <p className="m-0 text-sm italic text-muted">
         {`${state.name || 'This hero'} steps into the dark, ${classEntry?.name ?? 'unproven'} and ${background?.name ?? 'unbound by fate'}.`}
       </p>
+      {ready ? (
+        <div role="status" className="rounded-md border border-good px-3 py-2 text-sm text-good">
+          Every thread is in place. Pull it — weave the hero and descend.
+        </div>
+      ) : (
+        <div role="status" className="rounded-md border border-warn px-3 py-2 text-sm text-warn">
+          {`Threads are missing: ${missingSteps.map((step) => STEP_LABELS[step]).join(', ')}. Steps marked ○ in the left rail still need choices.`}
+        </div>
+      )}
     </section>
   );
 }
