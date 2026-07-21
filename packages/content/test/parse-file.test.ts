@@ -778,6 +778,37 @@ entries:
     expect(() => parseContentFile({ path: 'gameplay.yaml', source })).toThrow(ContentCompileError);
   });
 
+  it('parses an optional item lore, leaving it absent by default', () => {
+    const withLore = parseContentFile({
+      path: 'gameplay.yaml',
+      source: `schemaVersion: 7
+entries:
+  - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", lore: "Forged in a smithy long since swallowed by the Deep, this blade remembers hands that no longer live.", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, identification: { mode: known, poolId: null }, effects: [] }
+`,
+    });
+    expect(withLore[0]).toMatchObject({
+      lore: 'Forged in a smithy long since swallowed by the Deep, this blade remembers hands that no longer live.',
+    });
+
+    const withoutLore = parseContentFile({
+      path: 'gameplay.yaml',
+      source: `schemaVersion: 7
+entries:
+  - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, identification: { mode: known, poolId: null }, effects: [] }
+`,
+    });
+    expect(withoutLore[0] as Record<string, unknown>).not.toHaveProperty('lore');
+  });
+
+  it('rejects an item lore beyond the 1200-character bound', () => {
+    const overlong = 'x'.repeat(1201);
+    const source = `schemaVersion: 7
+entries:
+  - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", lore: "${overlong}", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, identification: { mode: known, poolId: null }, effects: [] }
+`;
+    expect(() => parseContentFile({ path: 'gameplay.yaml', source })).toThrow(ContentCompileError);
+  });
+
   it('parses optional per-choice loot-table depth bands, leaving them absent by default', () => {
     const source = `schemaVersion: 7
 entries:

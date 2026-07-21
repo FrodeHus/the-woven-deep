@@ -116,11 +116,13 @@ export interface BaseContentEntry {
 }
 
 export const CONTENT_DESCRIPTION_MAX_LENGTH = 300;
+export const CONTENT_LORE_MAX_LENGTH = 1200;
 
 export interface PresentedContentEntry extends BaseContentEntry {
   readonly glyph: string;
   readonly color: string;
   readonly description?: string;
+  readonly lore?: string;
 }
 
 export type CompletionType = 'died' | 'became-heart' | 'refused' | 'broke-cycle';
