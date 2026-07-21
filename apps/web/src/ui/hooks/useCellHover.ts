@@ -39,7 +39,14 @@ function itemAssetAtCell(
   );
   if (!item) return undefined;
   const detail = item.identified ? humanize(item.category) : 'Unidentified';
-  return { title: item.name, detail, x, y, ...(item.glyph ? { glyph: item.glyph } : {}) };
+  return {
+    title: item.name,
+    detail,
+    x,
+    y,
+    ...(item.glyph ? { glyph: item.glyph } : {}),
+    ...(item.contentId ? { contentId: item.contentId } : {}),
+  };
 }
 
 /** A hovered notable tile (stairs or a door), if the cell is one -- other terrain is not

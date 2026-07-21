@@ -1,7 +1,8 @@
 import type { JSX, ReactNode } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
-import { effectLabel, formatDice } from '../labels.js';
+import { effectLabel } from '../labels.js';
 import { itemById } from '../../session/pack-queries.js';
+import { itemKnownFacts } from '../../session/item-facts.js';
 import type { MenuEntry, ProjectedItemLike } from './inventory-model.js';
 
 function ActionButton({
@@ -80,14 +81,10 @@ export function DetailPane({
        * is absent for an unidentified item -- so its hidden stats never leak. */}
       <div className="flex flex-col gap-1">
         {equipped && <FactRow label="Equipped" value={slot} />}
-        {content?.combat?.damage != null && (
-          <FactRow label="Damage" value={formatDice(content.combat.damage)} />
-        )}
-        {content?.combat != null && content.combat.armor > 0 && (
-          <FactRow label="Armor" value={content.combat.armor} />
-        )}
-        {content?.light != null && <FactRow label="Light radius" value={content.light.radius} />}
-        {content != null && <FactRow label="Worth" value={content.price} />}
+        {content != null &&
+          itemKnownFacts(content).map((fact) => (
+            <FactRow key={fact.label} label={fact.label} value={fact.value} />
+          ))}
         {!unidentified &&
           item.effects?.map((effect) => (
             <FactRow
