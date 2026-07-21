@@ -1,6 +1,10 @@
 import type { JSX } from 'react';
 import { ATTRIBUTE_ORDER } from '@woven-deep/engine';
-import { DERIVED_STAT_LABELS, playerVisibleDerivedStats } from '@/ui/derived-stats-display.js';
+import {
+  ATTRIBUTE_LABELS,
+  DERIVED_STAT_LABELS,
+  playerVisibleDerivedStats,
+} from '@/ui/derived-stats-display.js';
 import { wizardPreview } from '../../../../session/wizard-reducer.js';
 import { backgroundEntries, classEntries, traitEntries } from '../../../../session/pack-queries.js';
 import { DotLeaderRow } from '../chargen-components.js';
@@ -32,7 +36,7 @@ export function ReviewStep({ state, pack }: StepProps): JSX.Element {
         {ATTRIBUTE_ORDER.map((attributeName) => (
           <DotLeaderRow
             key={attributeName}
-            label={attributeName.charAt(0).toUpperCase() + attributeName.slice(1)}
+            label={ATTRIBUTE_LABELS[attributeName]}
             value={String(state.attributes?.[attributeName] ?? '—')}
           />
         ))}

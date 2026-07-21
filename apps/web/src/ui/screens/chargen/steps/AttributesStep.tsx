@@ -1,6 +1,7 @@
 import type { JSX, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { ATTRIBUTE_ORDER, pointBuyCost, type AttributeName } from '@woven-deep/engine';
 import { Button } from '@/ui/components/button.js';
+import { ATTRIBUTE_ABBREVIATIONS, ATTRIBUTE_LABELS } from '@/ui/derived-stats-display.js';
 import { balanceEntry } from '../../../../session/pack-queries.js';
 import { BlockBar } from '../chargen-components.js';
 import { AttributeStepper } from '../AttributeStepper.js';
@@ -92,8 +93,8 @@ function PointBuyAttributes({ state, pack, dispatch }: StepProps): JSX.Element {
           return (
             <AttributeStepper
               key={attributeName}
-              abbr={attributeName.slice(0, 3).toUpperCase()}
-              label={attributeName.charAt(0).toUpperCase() + attributeName.slice(1)}
+              abbr={ATTRIBUTE_ABBREVIATIONS[attributeName]}
+              label={ATTRIBUTE_LABELS[attributeName]}
               cost={costFor(value)}
               value={value}
               max={max}

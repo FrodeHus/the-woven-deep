@@ -4,7 +4,12 @@ import type {
   ClassKitEquippedItem,
   CompiledContentPack,
 } from '@woven-deep/content';
-import { ATTRIBUTE_ORDER, DERIVED_STAT_NAMES, type DerivedStatName } from '@woven-deep/engine';
+import {
+  ATTRIBUTE_ORDER,
+  DERIVED_STAT_NAMES,
+  type AttributeName,
+  type DerivedStatName,
+} from '@woven-deep/engine';
 import {
   PORTRAIT_GLYPHS,
   portraitGlyphColor,
@@ -20,8 +25,12 @@ import {
 } from '../../../session/pack-queries.js';
 import { BlockBar, DotLeaderRow } from './chargen-components.js';
 import { Button } from '../../components/button.js';
-import { cn } from '../../lib/cn.js';
-import { DERIVED_STAT_LABELS, playerVisibleDerivedStats } from '../../derived-stats-display.js';
+import {
+  ATTRIBUTE_ABBREVIATIONS,
+  ATTRIBUTE_LABELS,
+  DERIVED_STAT_LABELS,
+  playerVisibleDerivedStats,
+} from '../../derived-stats-display.js';
 
 /** Mirrors `wizardPreview`'s modifier collection, but returns the raw per-stat sums instead of
  * feeding them into `deriveActorStats` -- this is exactly the delta a hero picks up from their
@@ -43,6 +52,23 @@ function heroModifierDeltas(
     }
   }
   return deltas;
+}
+
+/** The content model only lets a background/trait's `modifiers` target a `DerivedStatName` (see
+ * `heroModifierDeltas` above) -- there is currently no content path that grants a delta to a base
+ * attribute directly, so this is always empty. Kept as its own function (rather than inlining `{}`)
+ * so the attribute row below has a real place to plug in a delta if that ever changes, matching how
+ * `heroModifierDeltas` feeds the derived-stats rows. */
+function heroAttributeDeltas(): Readonly<Partial<Record<AttributeName, number>>> {
+  return {};
+}
+
+function SectionHeader({ label }: { readonly label: string }): JSX.Element {
+  return (
+    <h3 className="m-0 text-center text-[10px] uppercase tracking-[0.2em] text-subtle">
+      {`· ─ ${label} ─ ·`}
+    </h3>
+  );
 }
 
 interface LoadoutRow {
@@ -94,6 +120,8 @@ export function HeroRecord({
   const balance = balanceEntry(pack);
   const stats = wizardPreview(state, pack);
   const deltas = heroModifierDeltas(state, pack);
+  const attributeDeltas = heroAttributeDeltas();
+  const chosenTraits = traitEntries(pack).filter((entry) => state.traitIds.includes(entry.id));
 
   const equippedRows = kit?.equipped.map((item) => equippedRow(pack, item)) ?? [];
   const backpackRows = [
@@ -110,7 +138,7 @@ export function HeroRecord({
         <div
           aria-hidden="true"
           data-testid="hero-record-portrait"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-line bg-surface text-2xl"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border-4 border-double border-accent bg-raised text-2xl"
           style={{ color: portraitGlyphColor(state.portraitGlyph) }}
         >
           {classEntry
@@ -134,49 +162,66 @@ export function HeroRecord({
               state.name
             )}
           </h2>
-          <p className="m-0 text-sm text-muted">
+          <p className="m-0 text-xs uppercase tracking-[0.15em] text-muted">
             {`${classEntry?.name ?? '—'} · ${kit?.name ?? '—'}`}
           </p>
-          <p className="m-0 text-sm text-muted">{background?.name ?? '—'}</p>
         </div>
       </div>
 
-      <section aria-label="Attributes" className="flex flex-col gap-1">
-        {ATTRIBUTE_ORDER.map((attributeName) => (
-          <div key={attributeName} className="flex items-center gap-2 text-sm">
-            <span className="w-16 shrink-0 capitalize text-fg">{attributeName}</span>
-            <BlockBar
-              value={state.attributes?.[attributeName] ?? 0}
-              max={attributeMax}
-              cells={10}
-            />
-            <span className="text-fg-strong">{state.attributes?.[attributeName] ?? '—'}</span>
-          </div>
-        ))}
+      <section aria-label="Attributes" className="flex flex-col gap-2">
+        <SectionHeader label="ATTRIBUTES" />
+        <div className="flex flex-col gap-1">
+          {ATTRIBUTE_ORDER.map((attributeName) => {
+            const value = state.attributes?.[attributeName] ?? 0;
+            const delta = attributeDeltas[attributeName];
+            return (
+              <div key={attributeName} className="flex items-center gap-2 text-sm">
+                <span className="w-8 shrink-0 text-accent-strong">
+                  {ATTRIBUTE_ABBREVIATIONS[attributeName]}
+                  <span className="sr-only">{ATTRIBUTE_LABELS[attributeName]}</span>
+                </span>
+                <BlockBar value={value} max={attributeMax} cells={10} />
+                <span className="text-fg-strong">
+                  {state.attributes ? value : '—'}
+                  {delta !== undefined && (
+                    <span className={delta > 0 ? 'text-good' : 'text-danger'}>
+                      {' '}
+                      {delta > 0 ? '+' : ''}
+                      {delta}
+                    </span>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       {stats && (
         <section
           aria-label="Derived stats"
-          className="flex flex-col gap-1 border-t border-line pt-2"
+          className="flex flex-col gap-2 border-t border-line pt-2"
         >
-          <h3 className="m-0 text-sm font-semibold text-fg-strong">Derived stats</h3>
-          {playerVisibleDerivedStats().map((statName) => {
-            const delta = deltas[statName];
-            return (
-              <DotLeaderRow
-                key={statName}
-                label={DERIVED_STAT_LABELS[statName]}
-                value={String(stats[statName])}
-                {...(delta !== undefined ? { delta } : {})}
-              />
-            );
-          })}
+          <SectionHeader label="DERIVED" />
+          <div className="flex flex-col gap-1">
+            {playerVisibleDerivedStats().map((statName) => {
+              const delta = deltas[statName];
+              return (
+                <DotLeaderRow
+                  key={statName}
+                  label={DERIVED_STAT_LABELS[statName]}
+                  value={String(stats[statName])}
+                  {...(delta !== undefined ? { delta } : {})}
+                />
+              );
+            })}
+            {balance && <DotLeaderRow label="Gold" value={`${balance.startingCurrency}g`} />}
+          </div>
         </section>
       )}
 
       <section aria-label="Loadout" className="flex flex-col gap-2 border-t border-line pt-2">
-        <h3 className="m-0 text-sm font-semibold text-fg-strong">Loadout</h3>
+        <SectionHeader label="LOADOUT" />
         {equippedRows.length === 0 && backpackRows.length === 0 ? (
           <p className="m-0 text-sm text-muted">Choose a class and kit to see your gear.</p>
         ) : (
@@ -198,7 +243,9 @@ export function HeroRecord({
               <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-sm text-muted">
                 {backpackRows.map((row) => (
                   <li key={row.key} className="flex items-center gap-2">
-                    <span aria-hidden="true">{row.glyph}</span>
+                    <span aria-hidden="true" className="text-cool">
+                      {row.glyph}
+                    </span>
                     <span>{row.name}</span>
                     {row.detail && <span>{row.detail}</span>}
                   </li>
@@ -209,16 +256,37 @@ export function HeroRecord({
         )}
       </section>
 
-      <div className="mt-auto pt-2">
+      <section aria-label="Marks" className="flex flex-col gap-2 border-t border-line pt-2">
+        <SectionHeader label="MARKS" />
+        {chosenTraits.length > 0 ? (
+          <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+            {chosenTraits.map((trait) => (
+              <li
+                key={trait.id}
+                className="rounded border border-cool px-2 py-0.5 text-xs text-cool"
+              >
+                {trait.name}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="m-0 text-sm text-muted">Unmarked, as yet.</p>
+        )}
+      </section>
+
+      <div className="mt-auto flex flex-col gap-1 border-t border-line pt-2">
         <Button
           type="button"
-          variant={canWeave ? 'default' : 'outline'}
+          variant={canWeave ? 'default' : 'secondary'}
           disabled={!canWeave}
-          className={cn('w-full', canWeave && 'bg-accent text-deep hover:bg-accent-strong')}
+          className="w-full"
           onClick={onWeave}
         >
           ▸ WEAVE THE HERO
         </Button>
+        <p className="m-0 text-center text-xs text-muted">
+          {canWeave ? 'The Loom is ready.' : 'Complete the ○ steps to weave.'}
+        </p>
       </div>
     </section>
   );

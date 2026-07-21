@@ -67,6 +67,17 @@ describe('HeroRecord', () => {
     expect(screen.getByText(/Lamp oil/i)).toBeInTheDocument();
   });
 
+  it('renders a flat Gold row sourced from the pack balance, with no delta', () => {
+    const state = stubState();
+    render(<HeroRecord state={state} pack={pack} onWeave={vi.fn()} canWeave />);
+
+    const balance = pack.entries.find((entry) => entry.kind === 'balance') as {
+      startingCurrency: number;
+    };
+    expect(screen.getByText('Gold')).toBeInTheDocument();
+    expect(screen.getByText(`${balance.startingCurrency}g`)).toBeInTheDocument();
+  });
+
   it('shows a green delta for a derived stat with a background/trait modifier', () => {
     const state = stubState();
     render(<HeroRecord state={state} pack={pack} onWeave={vi.fn()} canWeave />);
