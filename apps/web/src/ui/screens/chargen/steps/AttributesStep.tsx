@@ -3,7 +3,7 @@ import { ATTRIBUTE_ORDER, pointBuyCost, type AttributeName } from '@woven-deep/e
 import { Button } from '@/ui/components/button.js';
 import { ATTRIBUTE_ABBREVIATIONS, ATTRIBUTE_LABELS } from '@/ui/derived-stats-display.js';
 import { balanceEntry } from '../../../../session/pack-queries.js';
-import { BlockBar } from '../chargen-components.js';
+import { DotLeaderRow } from '../chargen-components.js';
 import { AttributeStepper } from '../AttributeStepper.js';
 import { useListNavigation } from '../../roving-focus.js';
 import { OPTION_SELECTED_CLASS, type StepProps } from './step-content.js';
@@ -49,8 +49,9 @@ function RollAttributes({ state, dispatch }: StepProps): JSX.Element {
         disabled={state.rerollUsed}
         onClick={() => dispatch({ type: 'reroll' })}
       >
-        {state.rerollUsed ? 'Reroll used' : 'Reroll'}
+        {state.rerollUsed ? 'FORGIVENESS SPENT' : '⚄ REROLL ONCE'}
       </Button>
+      <span className="text-xs text-subtle">The Loom casts once, forgives once.</span>
     </div>
   );
 }
@@ -79,11 +80,13 @@ function PointBuyAttributes({ state, pack, dispatch }: StepProps): JSX.Element {
     });
   };
 
+  const remaining = budget - spent;
+
   return (
-    <div className="flex flex-col gap-3 font-mono">
-      <div className="flex items-center gap-2">
-        <span className="text-fg">{`Points: ${spent}/${budget}`}</span>
-        <BlockBar value={spent} max={budget} cells={30} />
+    <div className="flex flex-col gap-2 font-mono">
+      <div className="flex flex-col gap-0.5">
+        <DotLeaderRow label="Budget remaining" value={String(remaining)} />
+        <span className="text-xs text-subtle">{'· above 10 costs double'}</span>
       </div>
       <div className="flex flex-col gap-2">
         {ATTRIBUTE_ORDER.map((attributeName) => {
@@ -122,25 +125,29 @@ export function AttributesStep({ state, pack, dispatch }: StepProps): JSX.Elemen
       <div
         role="listbox"
         aria-label="Attribute method"
-        className="flex flex-row gap-1.5 font-mono"
+        className="flex flex-row gap-1.5 rounded-md border border-line p-1 font-mono"
         onKeyDown={handleKeyDown}
       >
-        {METHOD_OPTIONS.map((option, index) => (
-          <button
-            key={option.method}
-            type="button"
-            role="option"
-            aria-selected={state.method === option.method}
-            ref={registerItem(index)}
-            className={cn(
-              'rounded-md border border-line bg-surface px-2.5 py-2 text-sm text-fg hover:bg-raised',
-              index === selectedIndex && OPTION_SELECTED_CLASS,
-            )}
-            onClick={() => dispatch({ type: 'choose-method', method: option.method })}
-          >
-            {option.label}
-          </button>
-        ))}
+        {METHOD_OPTIONS.map((option, index) => {
+          const active = state.method === option.method;
+          return (
+            <button
+              key={option.method}
+              type="button"
+              role="option"
+              aria-selected={active}
+              ref={registerItem(index)}
+              className={cn(
+                'rounded px-2.5 py-2 text-sm tracking-wide uppercase',
+                active ? 'bg-accent text-deep' : 'text-fg hover:bg-raised',
+                index === selectedIndex && OPTION_SELECTED_CLASS,
+              )}
+              onClick={() => dispatch({ type: 'choose-method', method: option.method })}
+            >
+              {option.label}
+            </button>
+          );
+        })}
       </div>
       {state.method === 'roll' && <RollAttributes state={state} pack={pack} dispatch={dispatch} />}
       {state.method === 'point-buy' && (

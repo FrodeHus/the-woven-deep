@@ -79,7 +79,7 @@ export const OptionRow = forwardRef<
           : effectiveDisabled
             ? 'cursor-not-allowed border-line opacity-40'
             : 'cursor-pointer border-line',
-        selected && !inactive ? 'border-accent bg-raised' : undefined,
+        selected && !inactive ? 'border-accent border-l-2 bg-raised' : undefined,
       )}
     >
       <span className="text-fg-strong">{markerText}</span>
@@ -92,27 +92,29 @@ export const OptionRow = forwardRef<
         </span>
       ) : null}
       <span className="flex flex-1 flex-col gap-1">
-        <span className="flex items-baseline justify-between gap-2">
-          <span className="text-fg-strong">{name}</span>
-          {meta ? <span className="text-muted">{meta}</span> : null}
+        <span className="flex items-start justify-between gap-2">
+          <span className="text-sm text-fg-strong">{name}</span>
+          {tags && tags.length > 0 ? (
+            <span className="flex flex-wrap justify-end gap-1">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded border border-line px-1.5 py-0.5 text-[10px] tracking-wide text-subtle uppercase"
+                >
+                  {tag}
+                </span>
+              ))}
+            </span>
+          ) : null}
         </span>
-        {locked && lockHint ? <span className="text-subtle">{lockHint}</span> : null}
+        {locked && lockHint ? <span className="text-cool">{lockHint}</span> : null}
         {effectiveDisabled && disabledReason ? (
           <span className="text-subtle">{disabledReason}</span>
         ) : null}
-        {description ? <span className="text-muted">{description}</span> : null}
-        {tags && tags.length > 0 ? (
-          <span className="flex flex-wrap gap-1">
-            {tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded border border-line px-1.5 py-0.5 text-xs text-muted"
-              >
-                {tag}
-              </span>
-            ))}
-          </span>
+        {description ? (
+          <span className="text-xs leading-relaxed text-muted">{description}</span>
         ) : null}
+        {meta ? <span className="text-good">{meta}</span> : null}
       </span>
     </div>
   );

@@ -68,7 +68,8 @@ export function IdentityStep({ state, dispatch }: StepProps): JSX.Element {
               aria-selected={state.portraitGlyph === glyph}
               ref={registerItem(index)}
               className={cn(
-                'flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface',
+                'flex h-10 w-10 items-center justify-center rounded-md border border-line bg-surface text-lg hover:bg-raised',
+                state.portraitGlyph === glyph && 'border-accent bg-raised',
                 index === selectedIndex && OPTION_SELECTED_CLASS,
               )}
               data-glyph={glyph}

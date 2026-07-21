@@ -63,7 +63,7 @@ export function TagChip({
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded px-2 py-0.5 text-xs font-mono',
+        'rounded px-2 py-0.5 text-xs font-mono tracking-wide uppercase',
         selected ? 'bg-accent text-deep' : 'border border-line text-muted',
       )}
     >

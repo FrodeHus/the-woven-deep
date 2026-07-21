@@ -119,7 +119,7 @@ describe('AttributesStep', () => {
         dispatch={dispatch}
       />,
     );
-    expect(screen.getByRole('button', { name: /reroll/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /forgiveness spent/i })).toBeDisabled();
   });
 
   it('point-buy: + on an attribute dispatches set-attribute with value = current + 1', async () => {
