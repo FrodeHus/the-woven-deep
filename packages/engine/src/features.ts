@@ -394,6 +394,7 @@ export function disarmTrap(
   const stats = deriveActorStats({
     attributes: actor.attributes,
     formulas: balance.formulas,
+    weaveRegenAmount: balance.weaveRegenAmount,
     equipmentModifiers: equipmentModifiers({
       run: input.run,
       content: input.content,
@@ -619,6 +620,7 @@ export function pickLock(
   const stats = deriveActorStats({
     attributes: actor.attributes,
     formulas: balance.formulas,
+    weaveRegenAmount: balance.weaveRegenAmount,
     equipmentModifiers: equipmentModifiers({ run, content, actorId: actor.actorId }).map(
       (source) => source.modifiers,
     ),

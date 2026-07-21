@@ -742,13 +742,18 @@ function projectHeroView(
     y: hero.y,
     attributes: { ...hero.attributes },
     derived: Object.fromEntries(
-      Object.entries(derived).map(([name, value]) => [
-        name,
-        {
-          value,
-          formula: { ...(rules.formulas[name] ?? {}) },
-        },
-      ]),
+      Object.entries(derived)
+        // `weaveRegen` has no `formulas` entry (it's sourced from `weaveRegenAmount`, not an
+        // attribute-scaled formula) and is player-hidden; survival.ts reads it directly off
+        // `deriveActorStats` rather than through this projection.
+        .filter(([name]) => name !== 'weaveRegen')
+        .map(([name, value]) => [
+          name,
+          {
+            value,
+            formula: { ...(rules.formulas[name] ?? {}) },
+          },
+        ]),
     ),
     health: hero.health,
     maxHealth: hero.maxHealth,

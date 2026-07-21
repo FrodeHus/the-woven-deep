@@ -170,6 +170,7 @@ export function createNewRun(
   const heroStats = deriveActorStats({
     attributes: hero.attributes,
     formulas: balance.formulas,
+    weaveRegenAmount: balance.weaveRegenAmount,
     equipmentModifiers: [],
     conditionModifiers: [],
     heroModifiers: [hero.statModifiers],

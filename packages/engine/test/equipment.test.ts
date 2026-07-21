@@ -177,12 +177,14 @@ describe('equipment planning and item lights', () => {
     const before = deriveActorStats({
       attributes: hero.attributes,
       formulas: createDemoContentPack().entries.find((entry) => entry.kind === 'balance')!.formulas,
+      weaveRegenAmount: 2,
       equipmentModifiers: [],
       conditionModifiers: [],
     });
     const after = deriveActorStats({
       attributes: hero.attributes,
       formulas: createDemoContentPack().entries.find((entry) => entry.kind === 'balance')!.formulas,
+      weaveRegenAmount: 2,
       equipmentModifiers: sources.map((source) => source.modifiers),
       conditionModifiers: [],
     });

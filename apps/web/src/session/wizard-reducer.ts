@@ -305,6 +305,7 @@ export function wizardPreview(
   return deriveActorStats({
     attributes: state.attributes,
     formulas: balance.formulas,
+    weaveRegenAmount: balance.weaveRegenAmount,
     equipmentModifiers: [],
     conditionModifiers: [],
     heroModifiers,

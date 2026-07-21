@@ -199,6 +199,33 @@ describe('survival clocks', () => {
     expect(clamped.state.actors[0]?.weave).toBe(14);
   });
 
+  it('boosts Weave regen by the hero derived-stat modifiers, still clamped to the derived maximum', () => {
+    const input = fixture({ elapsed: 10, hunger: 90 });
+    const trickle = { ...input.state.actors[0]!, weave: 5, maxWeave: 20 };
+    const boosted = advanceSurvival({
+      ...input,
+      state: {
+        ...input.state,
+        hero: { ...input.state.hero, statModifiers: { weaveRegen: 2 } },
+        actors: [trickle],
+      },
+    });
+    // Base weaveRegenAmount 2 + a +2 weaveRegen modifier = 4/interval, across 2 crossed
+    // recovery intervals (interval 5, elapsed 10) -> +8.
+    expect(boosted.state.actors[0]?.weave).toBe(13);
+
+    const nearFull = { ...input.state.actors[0]!, weave: 18, maxWeave: 20 };
+    const clamped = advanceSurvival({
+      ...input,
+      state: {
+        ...input.state,
+        hero: { ...input.state.hero, statModifiers: { weaveRegen: 2 } },
+        actors: [nearFull],
+      },
+    });
+    expect(clamped.state.actors[0]?.weave).toBe(20);
+  });
+
   it('recovers on crossed absolute intervals only when safe and sufficiently fed', () => {
     const input = fixture({ elapsed: 10, hunger: 90 });
     const actor = { ...input.state.actors[0]!, health: 10 };

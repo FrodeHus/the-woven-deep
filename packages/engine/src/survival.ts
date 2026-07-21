@@ -4,8 +4,9 @@ import type {
   ItemContentEntry,
 } from '@woven-deep/content';
 import { replaceActor } from './actor-model.js';
-import { actorHasConditionTrait, advanceConditions } from './conditions.js';
-import type { DerivedStatModifier } from './attributes.js';
+import { actorHasConditionTrait, advanceConditions, conditionModifiers } from './conditions.js';
+import { deriveActorStats, type DerivedStatModifier } from './attributes.js';
+import { equipmentModifiers } from './equipment.js';
 import type { ItemInstance } from './item-model.js';
 import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
 import type { HungerStage, SurvivalState } from './survival-model.js';
@@ -284,9 +285,23 @@ export function advanceSurvival(
       });
     }
     // The Weave trickles back over the same recovery intervals, clamped to the derived maximum.
-    // Deterministic and RNG-free, mirroring the health recovery above.
+    // Deterministic and RNG-free, mirroring the health recovery above. The regen rate is the
+    // hero's derived `weaveRegen` (base `weaveRegenAmount` plus equipment/condition/class
+    // modifiers), not the raw balance constant, so class modifiers can boost it.
+    const heroStats = deriveActorStats({
+      attributes: hero.attributes,
+      formulas: balance.formulas,
+      weaveRegenAmount: balance.weaveRegenAmount,
+      equipmentModifiers: equipmentModifiers({
+        run: { actors, items: input.state.items },
+        content: input.content,
+        actorId: heroId,
+      }).map((source) => source.modifiers),
+      conditionModifiers: conditionModifiers(hero, input.content),
+      heroModifiers: [input.state.hero.statModifiers],
+    });
     const weaveRestored = Math.min(
-      safeInteger('weave regen', balance.weaveRegenAmount * intervals),
+      safeInteger('weave regen', heroStats.weaveRegen * intervals),
       hero.maxWeave - hero.weave,
     );
     if (weaveRestored > 0) {
