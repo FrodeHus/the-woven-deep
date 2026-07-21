@@ -50,6 +50,7 @@ that makes all of this replayable.
 | [`guest-client.md`](guest-client.md) | Shipped | The guest browser experience end to end: play core, character generation, town, the full overlay interface, and the polish/accessibility pass. |
 | [`ui-redesign.md`](ui-redesign.md) | In progress | The shadcn/Base UI/Tailwind/cmdk chrome rebuild (sub-project 1, shipped) and the chargen console flow redesign (sub-project 2, next). |
 | [`identity-and-persistence.md`](identity-and-persistence.md) | In progress | Server-authoritative profiles: magic-link auth, roaming settings (6A, shipped), and the still-to-come server-authoritative runs (6B) and verified Hall (6C). |
+| [`content-descriptions.md`](content-descriptions.md) | Shipped | The optional authored `description` field on presented content, and its client-side pack lookup into the monster hover popover and item inventory detail. |
 | [`future.md`](future.md) | — | Backlog: in-flight features, planned feats, and deferred polish items. |
 
 ## Reading order
