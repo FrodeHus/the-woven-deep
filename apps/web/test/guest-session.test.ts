@@ -12,6 +12,7 @@ import {
   RECENT_COMMAND_LIMIT,
   type ActiveRun,
   type ActorState,
+  type ItemInstance,
   type Uint32State,
 } from '@woven-deep/engine';
 import { SIGHTINGS_KEY } from '../src/session/codex.js';
@@ -808,6 +809,119 @@ describe('GuestSession', () => {
       expect(projection!.finalized).toBe(false);
       expect(projection!.score).toBeNull();
       expect(projection!.heirloom).toBeNull();
+    });
+  });
+
+  describe('lore first-reveal log lines (Task 4)', () => {
+    const REVEAL_TEXT = 'The threads whisper of Cave rat.';
+
+    /** Places a visible, hostile `monster.cave-rat` (a bundled fixture with authored `lore`) one
+     * tile east of the hero -- `behaviorId: null` so it never acts on its own turn, mirroring the
+     * hidden-neighbor fixtures earlier in this suite. Unlike those, this one is NOT hidden by a
+     * doused torch: the ambient/lit conditions of a fresh town run already make it visible, so its
+     * `contentId` reaches the projection (and therefore `accumulateSightings`) immediately. */
+    function withVisibleRat(run: ActiveRun): ActiveRun {
+      const hero = run.actors.find((actor) => actor.playerControlled)!;
+      const rat: ActorState = {
+        ...hero,
+        actorId: 'npc.lore-reveal-rat',
+        contentId: 'monster.cave-rat',
+        playerControlled: false,
+        x: hero.x + 1,
+        y: hero.y,
+        disposition: 'hostile',
+        energy: 0,
+        equipment: emptyEquipment(),
+        behaviorId: null,
+      };
+      return {
+        ...run,
+        actors: [...run.actors, rat].sort((left, right) => (left.actorId < right.actorId ? -1 : 1)),
+      };
+    }
+
+    it('appends exactly one reveal line the first time a lore-bearing monster becomes visible, and none on re-sighting', () => {
+      const storage = fakeStorage();
+      const session = new GuestSession({ pack, storage, seed: SEED });
+      // Mutating the private `run` directly (like the encodeActiveRun regression test above) is the
+      // simplest way to make a NEW monster visible mid-session without re-deriving the engine's own
+      // perception/movement rules.
+      const internals = session as unknown as { run: ActiveRun };
+      internals.run = withVisibleRat(internals.run);
+
+      session.dispatch({ type: 'wait' });
+      const afterFirst = session.getSnapshot().log;
+      expect(afterFirst.filter((line) => line.text === REVEAL_TEXT)).toHaveLength(1);
+
+      session.dispatch({ type: 'wait' });
+      const afterSecond = session.getSnapshot().log;
+      expect(afterSecond.filter((line) => line.text === REVEAL_TEXT)).toHaveLength(1);
+    });
+
+    it('does not emit a reveal line for the initial boot-restore sync of a session whose save already has this monster visible', () => {
+      const storage = fakeStorage();
+      const seedRun = withVisibleRat(createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO }));
+      storage.set(SAVE_KEY, encodeActiveRun(seedRun));
+
+      const session = new GuestSession({ pack, storage });
+
+      expect(session.getSnapshot().log.filter((line) => line.text === REVEAL_TEXT)).toHaveLength(0);
+    });
+
+    it('a restored session with a pre-seen sighting cache does not re-announce the already-seen set', () => {
+      const storage = fakeStorage();
+      const seedRun = withVisibleRat(createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO }));
+      storage.set(SAVE_KEY, encodeActiveRun(seedRun));
+      // The sighting cache already records this monster from a prior page life.
+      storage.set(SIGHTINGS_KEY, JSON.stringify({ monsterIds: ['monster.cave-rat'], itemIds: [] }));
+
+      const session = new GuestSession({ pack, storage });
+      expect(session.getSnapshot().log.filter((line) => line.text === REVEAL_TEXT)).toHaveLength(0);
+
+      // Nor does the next ordinary turn, since the monster is still merely visible, not newly so.
+      session.dispatch({ type: 'wait' });
+      expect(session.getSnapshot().log.filter((line) => line.text === REVEAL_TEXT)).toHaveLength(0);
+    });
+
+    it('appends exactly one reveal line the first time a lore-bearing item becomes identified in the backpack', () => {
+      const storage = fakeStorage();
+      const session = new GuestSession({ pack, storage, seed: SEED });
+      const internals = session as unknown as { run: ActiveRun };
+      const hero = internals.run.actors.find((actor) => actor.playerControlled)!;
+      // `item.hunting-bow` (not `item.iron-sword`, which `DEFAULT_GUEST_HERO` starts already
+      // equipped -- see `new-run.ts` -- and so is already in the sighting cache from boot) is a
+      // lore-bearing item the starting kit never carries, so its first appearance here is genuinely
+      // new.
+      const bow: ItemInstance = {
+        // Sorts after every bundled item id (`z` last-in-run.items, per the save codec's
+        // strictly-increasing-itemId invariant), so appending it keeps the run encodable.
+        itemId: 'item.zzz-lore-reveal-bow',
+        contentId: 'item.hunting-bow',
+        quantity: 1,
+        condition: 100,
+        enchantment: null,
+        identified: true,
+        charges: null,
+        fuel: null,
+        enabled: null,
+        location: { type: 'backpack', actorId: hero.actorId },
+      };
+      internals.run = { ...internals.run, items: [...internals.run.items, bow] };
+
+      session.dispatch({ type: 'wait' });
+
+      expect(
+        session
+          .getSnapshot()
+          .log.filter((line) => line.text === 'The threads whisper of Hunting bow.'),
+      ).toHaveLength(1);
+
+      session.dispatch({ type: 'wait' });
+      expect(
+        session
+          .getSnapshot()
+          .log.filter((line) => line.text === 'The threads whisper of Hunting bow.'),
+      ).toHaveLength(1);
     });
   });
 });

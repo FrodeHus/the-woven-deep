@@ -1,4 +1,6 @@
+import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection } from '@woven-deep/engine';
+import { itemById, monsterById } from './pack-queries.js';
 import { actorsOf, groundItemsOf, heroOf, tradeOf } from './projection-view.js';
 import type { SessionStorageLike } from './storage.js';
 
@@ -297,4 +299,43 @@ export function accumulateSightings(prev: Sightings, projection: GameplayProject
   const landmarks = accumulateLandmarks(prev.landmarks, projection);
 
   return { monsterIds, itemIds, landmarks };
+}
+
+/** The in-voice, first-reveal flavor line for one newly-sighted-or-identified, lore-bearing
+ * content entry (`GuestSession`'s client log, not an engine event) -- a single fixed template so
+ * every reveal reads as one consistent, subtle narrator's voice, never per-entry-authored copy. */
+function revealLine(name: string): string {
+  return `The threads whisper of ${name}.`;
+}
+
+/**
+ * The first-reveal log lines for content ids that are NEW in `next` relative to `prev` (i.e. this
+ * accumulation's freshly-sighted monsters/identified items, per `accumulateSightings`'s own
+ * dedup) AND whose content entry carries authored `lore` -- lore-less entries, and ids already
+ * present in `prev` (a re-sighting), produce nothing here. Pure and order-stable: monsters first,
+ * then items, each in `next`'s own sorted order, so a caller folding these into a log gets a
+ * deterministic sequence even when several entries are discovered in the same turn. `GuestSession`
+ * is the one caller: it diffs its own previously-synced `Sightings` against a freshly-accumulated
+ * one, on every publish EXCEPT the initial boot-restore sync (so a restored session's entire
+ * pre-existing sighting set never re-announces itself).
+ */
+export function newLoreReveals(
+  prev: Sightings,
+  next: Sightings,
+  pack: CompiledContentPack,
+): readonly string[] {
+  const isNew = (ids: readonly string[], id: string): boolean => !ids.includes(id);
+  const monsterLines = next.monsterIds
+    .filter((id) => isNew(prev.monsterIds, id))
+    .flatMap((id) => {
+      const entry = monsterById(pack, id);
+      return entry?.lore ? [revealLine(entry.name)] : [];
+    });
+  const itemLines = next.itemIds
+    .filter((id) => isNew(prev.itemIds, id))
+    .flatMap((id) => {
+      const entry = itemById(pack, id);
+      return entry?.lore ? [revealLine(entry.name)] : [];
+    });
+  return [...monsterLines, ...itemLines];
 }

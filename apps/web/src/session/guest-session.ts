@@ -33,7 +33,13 @@ import {
   type Uint32State,
 } from '@woven-deep/engine';
 import { buildIntent } from './command-builder.js';
-import { accumulateSightings, loadSightings, saveSightings, type Sightings } from './codex.js';
+import {
+  accumulateSightings,
+  loadSightings,
+  newLoreReveals,
+  saveSightings,
+  type Sightings,
+} from './codex.js';
 import { foldEventsIntoLog, LOG_CAPACITY, type LogLine } from './event-log.js';
 import type { PlayerIntent } from './intents.js';
 import {
@@ -212,8 +218,10 @@ export class GuestSession {
     if (onboardingLoad.corrupted) this.markOnboardingCorrupted();
     // "Accumulates ... on boot restore" -- a restored (or freshly-created) run's initial
     // projection may already show visible actors/identified items (e.g. a save restored mid-fight),
-    // so the cache must sync once here too, not only after a subsequent dispatch.
-    this.syncSightings();
+    // so the cache must sync once here too, not only after a subsequent dispatch. Reveals are
+    // suppressed for this call (see `syncSightings`'s `emitReveals` param): a restored session's
+    // entire pre-existing sighting set must never re-announce itself as a fresh discovery.
+    this.syncSightings(false);
     this.snapshot = this.buildSnapshot();
   }
 
@@ -460,6 +468,20 @@ export class GuestSession {
     this.lastEvents = [];
   }
 
+  /** Appends a client-only flavor line (a lore first-reveal, `newLoreReveals`) straight onto the
+   * SAME log the engine's own events fold into (`foldEventsIntoLog`) -- there is no separate
+   * client-log buffer to merge in `LogPanel`; this is deliberately the least-invasive of the two
+   * injection points the task considered. Unlike `appendSystemLine`, this never clears
+   * `lastEvents`: it always runs from inside `syncSightings`, at the tail of a `publish()` that may
+   * have just set `lastEvents` from a real dispatch (e.g. a combat event the effects layer still
+   * needs), and a reveal line must never erase that. */
+  private appendReveal(text: string): void {
+    let entries = [...this.log, { id: this.nextLogId, text, tone: 'info' as const }];
+    this.nextLogId += 1;
+    if (entries.length > LOG_CAPACITY) entries = entries.slice(entries.length - LOG_CAPACITY);
+    this.log = entries;
+  }
+
   private persist(): void {
     // `encodeActiveRun` can throw a `SaveLoadError` when the run violates an engine invariant —
     // that is a bug, not a storage problem, so it must propagate loudly rather than being
@@ -486,11 +508,22 @@ export class GuestSession {
    * persistence is lost, surfaced via the same `storage` notice `persist()` (the run save) uses.
    * Never overwrites an already-pending notice of the SAME kind (e.g. a run-save failure this same
    * turn) with a second, redundant one.
+   *
+   * `emitReveals` gates the lore first-reveal log lines (`newLoreReveals`, diffed against THIS
+   * session's own previously-synced `this.sightings`, never the freshly-reloaded `loaded.sightings`
+   * -- so a sighting some other tab already recorded still reveals here the first time this
+   * session itself observes it): `false` only for the constructor's own boot-restore call, so a
+   * restored session's entire pre-existing sighting set is never re-announced as a fresh discovery.
+   * Every subsequent call, from `publish()`, passes `true`.
    */
-  private syncSightings(): void {
+  private syncSightings(emitReveals: boolean): void {
     const loaded = loadSightings(this.storage);
     if (loaded.corrupted) this.markSightingsCorrupted();
-    this.sightings = accumulateSightings(loaded.sightings, this.currentProjection());
+    const next = accumulateSightings(loaded.sightings, this.currentProjection());
+    if (emitReveals) {
+      for (const line of newLoreReveals(this.sightings, next, this.pack)) this.appendReveal(line);
+    }
+    this.sightings = next;
     try {
       saveSightings(this.storage, this.sightings);
     } catch (error) {
@@ -664,7 +697,7 @@ export class GuestSession {
   }
 
   private publish(): void {
-    this.syncSightings();
+    this.syncSightings(true);
     this.snapshot = this.buildSnapshot();
     for (const listener of this.listeners) listener();
   }
