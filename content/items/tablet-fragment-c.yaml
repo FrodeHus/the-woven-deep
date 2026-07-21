@@ -5,6 +5,7 @@ entries:
     name: Tablet shard, third seal
     glyph: "="
     color: "#7ab3ae"
+    lore: "The last seal. Whole, the three of them are the only argument the Deep has ever accepted for letting a Heart go free."
     tags: [tablet-fragment]
     minDepth: 15
     maxDepth: 20

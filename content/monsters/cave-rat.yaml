@@ -6,6 +6,7 @@ entries:
     glyph: r
     color: "#9e927c"
     description: A rangy rat grown bold in the dark, unafraid of anything that walks on two legs.
+    lore: "It has never seen the surface and doesn't miss what it's never known. The dark taught it everything it needed."
     tags: [animal, darkness, offense]
     minDepth: 1
     maxDepth: 6

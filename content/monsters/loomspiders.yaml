@@ -6,6 +6,7 @@ entries:
     glyph: x
     color: "#6a5f7a"
     description: It waits motionless in silk it wove itself, patient as the walls around it.
+    lore: "It has waited longer than it can remember waiting, and the Deep has taught it that patience always feeds itself eventually."
     tags: [spider, poison, offense]
     minDepth: 3
     maxDepth: 6
@@ -32,6 +33,7 @@ entries:
     glyph: x
     color: "#8a7fa0"
     description: Thin-legged and quick, it darts along its own threads faster than the eye can follow.
+    lore: "It trusts its own silk more than it trusts the ground, and the ground has never given it reason to feel otherwise."
     tags: [spider, skirmisher]
     minDepth: 3
     maxDepth: 6
@@ -58,6 +60,7 @@ entries:
     glyph: x
     color: "#5f7d4e"
     description: It spits a fine venom thread from a safe distance, content to let the poison do the closing.
+    lore: "It learned long ago that closing the distance is a luxury for things that don't need to survive the encounter."
     tags: [spider, poison, ranged]
     minDepth: 4
     maxDepth: 7
@@ -84,6 +87,7 @@ entries:
     glyph: M
     color: "#4a4358"
     description: A swollen matriarch ringed by egg sacs, guarded by a lattice of silk thick enough to stop a blade.
+    lore: "Every strand around her nest is older than the things she's raising in it, and she intends the pattern to outlast them all."
     tags: [spider, armored, swarm-source]
     minDepth: 5
     maxDepth: 8
@@ -110,6 +114,7 @@ entries:
     glyph: X
     color: "#3f3a4d"
     description: Black as the space between its own webs, it has outlived every rival that ever shared its den.
+    lore: "It did not win by being strongest. It won by remembering that everyone else eventually stopped being careful."
     tags: [spider, poison, elite]
     minDepth: 6
     maxDepth: 8

@@ -6,6 +6,7 @@ entries:
     glyph: "]"
     color: "#ad8455"
     description: Banded planks scarred with old claw marks. Heavy enough to matter, light enough to still swing a sword.
+    lore: "The claw marks were already old when it was issued. Whoever it belonged to is not the reason it's still in service."
     tags: [defense, shield]
     minDepth: 1
     maxDepth: 20

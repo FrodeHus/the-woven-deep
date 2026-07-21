@@ -6,6 +6,7 @@ entries:
     glyph: "~"
     color: "#8f8aa8"
     description: A cold sliver of a voice that used to call the deep home. It hums faintly when carried past a familiar cell.
+    lore: "It still recognizes the places it once belonged to, even though nothing down here recognizes it back."
     tags: [echo, ordinary-loot]
     minDepth: 1
     maxDepth: 20

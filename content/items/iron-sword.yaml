@@ -6,6 +6,7 @@ entries:
     glyph: "/"
     color: "#c2c6c8"
     description: A plain blade, notched from honest use. It has killed nothing legendary, only everything necessary.
+    lore: "It has never been anyone's legend. It has simply been present, over and over, at the moment legends get made."
     tags: [melee, offense, weapon]
     minDepth: 1
     maxDepth: 20

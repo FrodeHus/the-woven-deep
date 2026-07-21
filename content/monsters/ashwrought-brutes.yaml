@@ -6,6 +6,7 @@ entries:
     glyph: u
     color: "#c06a3e"
     description: A charred hulk of scar tissue and cinder, still swinging long after the fire that made it went out.
+    lore: "Before the ash claimed it, it was probably called something worse for what it did with its hands. The fire only made the choice more honest."
     tags: [ashwrought, brute, offense]
     minDepth: 6
     maxDepth: 9
@@ -32,6 +33,7 @@ entries:
     glyph: u
     color: "#d0824a"
     description: Quick and brittle-skinned, it darts through embers that would fell slower kin.
+    lore: "Its ancestors burned running. It never stopped."
     tags: [ashwrought, skirmisher]
     minDepth: 6
     maxDepth: 9
@@ -58,6 +60,7 @@ entries:
     glyph: R
     color: "#a8552e"
     description: Its cracked hide has fused into a plate of slag armor, forged by whatever burned it alive.
+    lore: "Somewhere below, the fire that made this thing is still burning, waiting for a hide it hasn't finished forging."
     tags: [ashwrought, brute, armored]
     minDepth: 7
     maxDepth: 11
@@ -84,6 +87,7 @@ entries:
     glyph: h
     color: "#d89a3a"
     description: It cups embers in blistered hands and throws them without flinching, long past feeling the burn.
+    lore: "It stopped flinching long before it stopped feeling anything at all. The Deep keeps some things alive purely to see how much they'll carry."
     tags: [ashwrought, ranged, fire]
     minDepth: 7
     maxDepth: 11
@@ -110,6 +114,7 @@ entries:
     glyph: J
     color: "#8f3f22"
     description: What the ash keeps longest, remade into something that no longer needs air to burn.
+    lore: "Every ashwrought thing began as something smaller that refused to die correctly. This is what happens when the refusal is allowed to keep going."
     tags: [ashwrought, brute, elite]
     minDepth: 9
     maxDepth: 12

@@ -6,6 +6,7 @@ entries:
     glyph: "!"
     color: "#c3484f"
     description: Thick and blood-dark, this draught sears going down and leaves torn skin closed behind it.
+    lore: "Older and cruder than the tonics lampwrights favor. It doesn't ask a wound to heal so much as insist on it."
     tags: [healing, identification, potion]
     minDepth: 1
     maxDepth: 20

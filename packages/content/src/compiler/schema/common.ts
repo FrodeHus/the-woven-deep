@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   CONDITION_STACKING_MODES,
   CONTENT_DESCRIPTION_MAX_LENGTH,
+  CONTENT_LORE_MAX_LENGTH,
   DAMAGE_TYPES,
   DISPOSITIONS,
   ENCOUNTER_FORMATIONS,
@@ -32,6 +33,7 @@ export const glyph = z
   .refine((value) => [...value].length === 1, 'must be one Unicode glyph');
 export const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 export const contentDescription = z.string().trim().min(1).max(CONTENT_DESCRIPTION_MAX_LENGTH);
+export const contentLore = z.string().trim().min(1).max(CONTENT_LORE_MAX_LENGTH);
 export const safeInteger = z.number().int().safe();
 export const safeNonNegative = safeInteger.nonnegative();
 export const safePositive = safeInteger.positive();
@@ -110,6 +112,7 @@ export const presented = {
   glyph,
   color,
   description: contentDescription.optional(),
+  lore: contentLore.optional(),
 } as const;
 
 export const depthRange = {

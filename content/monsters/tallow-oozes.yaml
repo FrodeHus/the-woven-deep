@@ -6,6 +6,7 @@ entries:
     glyph: o
     color: "#c9b45f"
     description: A slick yellow mass that oozes across the stone like melted candle-fat given hunger.
+    lore: "Lampwrights swear a tallow ooze is what's left when a light goes out somewhere no one was watching to relight it."
     tags: [ooze, mindless]
     minDepth: 2
     maxDepth: 5
@@ -32,6 +33,7 @@ entries:
     glyph: o
     color: "#d8cf8a"
     description: Pale and thin, it drags itself along walls leaving a faint waxy sheen behind.
+    lore: "Smaller and paler than its kin, it is the first sign a lampwright looks for when a passage has gone dark too long."
     tags: [ooze, mindless]
     minDepth: 2
     maxDepth: 4
@@ -58,6 +60,7 @@ entries:
     glyph: O
     color: "#b39a4a"
     description: A hardened rind has formed over its bulk, tallow gone tough as boiled leather.
+    lore: "Age has done for it what fire never could, turning soft hunger into something with a hide worth respecting."
     tags: [ooze, mindless, armored]
     minDepth: 4
     maxDepth: 7
@@ -84,6 +87,7 @@ entries:
     glyph: o
     color: "#d07a3a"
     description: It has soaked up embers until its own body glows dull orange from within.
+    lore: "It swallowed a coal it should not have survived, and now carries that mistake as a permanent, dull-orange grudge."
     tags: [ooze, mindless, fire]
     minDepth: 3
     maxDepth: 6
@@ -110,6 +114,7 @@ entries:
     glyph: o
     color: "#7fae55"
     description: Barely more than a puddle, it spits corrosive bile at anything that lingers too near.
+    lore: "Least of the tallow-kin and least forgiving of them, it has traded size for spite and come out ahead."
     tags: [ooze, mindless, poison, caster]
     minDepth: 4
     maxDepth: 7

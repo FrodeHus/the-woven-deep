@@ -5,6 +5,7 @@ entries:
     name: The Weakened Heart
     glyph: "@"
     color: "#c9425f"
+    lore: "Something wears its shape here, worn down by all that binds it to this place. It does not fight out of hatred; pain this old leaves no room for anything else."
     tags: [boss, heart, arcane]
     minDepth: 20
     maxDepth: 20

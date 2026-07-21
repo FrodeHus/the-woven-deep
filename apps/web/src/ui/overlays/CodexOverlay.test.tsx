@@ -104,7 +104,7 @@ describe('CodexOverlay', () => {
     renderCodex({ records: [record()] });
 
     screen.getByRole('tab', { name: 'Classes' }).focus();
-    await user.keyboard('{ArrowLeft}'); // -> monster (wraps from class)
+    await user.keyboard('{ArrowRight}{ArrowRight}{ArrowRight}'); // -> item -> spell -> monster
     expect(screen.getByRole('tab', { name: 'Monsters' })).toHaveAttribute('aria-selected', 'true');
 
     const list = screen.getByRole('listbox', { name: 'Monsters' });
@@ -116,7 +116,7 @@ describe('CodexOverlay', () => {
     const { container } = renderCodex({ records: [] });
     // Monster tab: nothing has been sighted or killed -- every entry is undiscovered.
     screen.getByRole('tab', { name: 'Classes' }).focus();
-    await user.keyboard('{ArrowLeft}');
+    await user.keyboard('{ArrowRight}{ArrowRight}{ArrowRight}'); // -> item -> spell -> monster
     expect(screen.getByRole('tab', { name: 'Monsters' })).toHaveAttribute('aria-selected', 'true');
 
     const html = container.innerHTML;
@@ -158,5 +158,52 @@ describe('CodexOverlay', () => {
   it('shows the session-only footer line', () => {
     renderCodex({ records: [] });
     expect(screen.getByText(/Session-only, like your Hall records/)).toBeInTheDocument();
+  });
+
+  describe('Lore tab', () => {
+    async function openLoreTab(
+      props: Readonly<{ records: readonly StoredHallRecord[]; sightings?: Sightings }>,
+    ) {
+      const user = userEvent.setup();
+      const { container } = renderCodex(props);
+      screen.getByRole('tab', { name: 'Classes' }).focus();
+      await user.keyboard('{ArrowLeft}'); // class -> lore (wraps backward, last tab)
+      expect(screen.getByRole('tab', { name: 'Lore' })).toHaveAttribute('aria-selected', 'true');
+      return { user, container };
+    }
+
+    it('lists a discovered lore-bearing monster and item, each marked [revealed], and shows the lore text on selection', async () => {
+      const { user } = await openLoreTab({ records: [record()] });
+
+      const list = screen.getByRole('listbox', { name: 'Lore' });
+      const rat = within(list).getByText('Cave rat', { exact: false });
+      const sword = within(list).getByText('Iron sword', { exact: false });
+      expect(rat).toBeInTheDocument();
+      expect(sword).toBeInTheDocument();
+      expect(within(list).getAllByText('[revealed]')).toHaveLength(2);
+
+      await user.click(rat);
+      expect(screen.getByText(/dark taught it everything/)).toBeInTheDocument();
+
+      await user.click(sword);
+      expect(screen.getByText(/never been anyone's legend/)).toBeInTheDocument();
+    });
+
+    it('omits an undiscovered lore-bearing entry (training beetle) from the Lore tab, and never leaks its lore', async () => {
+      const { container } = await openLoreTab({ records: [record()] });
+      expect(container.innerHTML).not.toContain('Training beetle');
+      expect(container.innerHTML).not.toContain('monster.training-beetle');
+    });
+
+    it('omits a discovered lore-less entry (wooden arrows) from the Lore tab, though it still appears in Items', async () => {
+      const sightings: Sightings = {
+        monsterIds: [],
+        itemIds: ['item.wooden-arrows'],
+        landmarks: [],
+      };
+      await openLoreTab({ records: [record()], sightings });
+      const loreList = screen.getByRole('listbox', { name: 'Lore' });
+      expect(within(loreList).queryByText('Wooden arrows', { exact: false })).toBeNull();
+    });
   });
 });

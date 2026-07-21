@@ -6,6 +6,7 @@ entries:
     glyph: b
     color: "#6f8f5b"
     description: A slow, shelled crawler kept near the entrance for the same reason a smith keeps a dull whetstone.
+    lore: "It has been struck by more first blades than anything else in the Deep, and it has outlived every hand that swung one."
     tags: [insect, training]
     minDepth: 1
     maxDepth: 3

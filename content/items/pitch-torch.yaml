@@ -6,6 +6,7 @@ entries:
     glyph: "!"
     color: "#e49a4a"
     description: A resin-soaked brand that burns hot and fast. It buys light quickly and spends it just as quickly.
+    lore: "It burns like it's angry about something, and wants the whole passage to know before the fuel runs out."
     tags: [light, pitch, torch]
     minDepth: 1
     maxDepth: 20

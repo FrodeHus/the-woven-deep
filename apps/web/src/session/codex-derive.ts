@@ -2,10 +2,17 @@ import type { ClassContentEntry, CompiledContentPack } from '@woven-deep/content
 import type { StoredHallRecord } from '@woven-deep/engine';
 import type { SessionSnapshot } from './guest-session.js';
 import type { Sightings } from './codex-storage.js';
-import { classEntries, itemEntries, monsterEntries, spellEntries } from './pack-queries.js';
+import {
+  classEntries,
+  itemEntries,
+  itemById,
+  monsterEntries,
+  monsterById,
+  spellEntries,
+} from './pack-queries.js';
 
 export interface CodexCategory {
-  readonly kind: 'class' | 'item' | 'spell' | 'monster';
+  readonly kind: 'class' | 'item' | 'spell' | 'monster' | 'lore';
   readonly entries: readonly CodexEntry[];
 }
 
@@ -30,6 +37,7 @@ export type CodexEntry =
       readonly glyph: string;
       readonly color: string;
       readonly description: string | null;
+      readonly lore: string | null;
       readonly firstSeenRun: number | null;
     }
   | { readonly discovered: false; readonly silhouetteGlyph: string };
@@ -78,6 +86,7 @@ function deriveMonsterCategory(
         glyph: entry.glyph,
         color: entry.color,
         description: null,
+        lore: monsterById(pack, entry.id)?.lore ?? null,
         firstSeenRun: firstSeenRun(records, (record) => record.cause.killerContentId === entry.id),
       };
     }),
@@ -104,6 +113,7 @@ function deriveItemCategory(
         glyph: entry.glyph,
         color: entry.color,
         description: null,
+        lore: itemById(pack, entry.id)?.lore ?? null,
         firstSeenRun: firstSeenRun(records, (record) =>
           record.build.equippedItemContentIds.includes(entry.id),
         ),
@@ -181,19 +191,37 @@ function deriveClassCategory(
         glyph: entry.silhouetteGlyph,
         color: CLASS_ENTRY_COLOR,
         description: entry.description,
+        lore: null,
         firstSeenRun: firstSeenRun(records, (record) => classCoversEntry(entry, record.classTags)),
       };
     }),
   };
 }
 
+/** The Lore tab's own category: every DISCOVERED entry from the monster and item categories
+ * (monsters first, then items, each in the same id-sorted order those categories already use) that
+ * carries non-null `lore` -- entries with no authored lore, and undiscovered entries (whose `lore`
+ * is always `null` above, spoiler-free), never appear here. Derived from the already-built
+ * categories rather than re-walking the pack, so it can never disagree with what the monster/item
+ * tabs themselves show. */
+function deriveLoreCategory(
+  monsterCategory: CodexCategory,
+  itemCategory: CodexCategory,
+): CodexCategory {
+  const hasLore = (entry: CodexEntry): boolean => entry.discovered && entry.lore !== null;
+  return {
+    kind: 'lore',
+    entries: [...monsterCategory.entries.filter(hasLore), ...itemCategory.entries.filter(hasLore)],
+  };
+}
+
 /**
  * Combines the two host-side discovery sources -- genuine record/active-run facts, and the session
  * sighting cache -- into one read-only codex, one category per content kind, in the spec's own
- * listed order (classes, items, spells, monsters). Pure: no storage access, no React. `snapshot` is
- * `null` at the title screen (codex is a `global`-scope overlay, reachable with no live run) -- the
- * "active hero's class" discovery source is then simply unavailable, exactly like every other
- * active-run-only source when there is no active run.
+ * listed order (classes, items, spells, monsters), plus a derived Lore category last. Pure: no
+ * storage access, no React. `snapshot` is `null` at the title screen (codex is a `global`-scope
+ * overlay, reachable with no live run) -- the "active hero's class" discovery source is then simply
+ * unavailable, exactly like every other active-run-only source when there is no active run.
  */
 export function deriveCodexState(
   input: Readonly<{
@@ -203,12 +231,15 @@ export function deriveCodexState(
     pack: CompiledContentPack;
   }>,
 ): CodexState {
+  const itemCategory = deriveItemCategory(input.pack, input.records, input.sightings);
+  const monsterCategory = deriveMonsterCategory(input.pack, input.records, input.sightings);
   return {
     categories: [
       deriveClassCategory(input.pack, input.records, input.snapshot),
-      deriveItemCategory(input.pack, input.records, input.sightings),
+      itemCategory,
       deriveSpellCategory(input.pack),
-      deriveMonsterCategory(input.pack, input.records, input.sightings),
+      monsterCategory,
+      deriveLoreCategory(monsterCategory, itemCategory),
     ],
   };
 }

@@ -6,6 +6,7 @@ entries:
     glyph: "k"
     color: "#8c7853"
     description: Corroded but unbroken, this key still remembers the shape of a lock somewhere below.
+    lore: "It remembers a lock somewhere below, though whatever it was meant to open may have stopped being a room a long time ago."
     tags: [key]
     minDepth: 1
     maxDepth: 20

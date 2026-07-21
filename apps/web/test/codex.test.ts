@@ -8,6 +8,7 @@ import {
   accumulateSightings,
   deriveCodexState,
   loadSightings,
+  newLoreReveals,
   saveSightings,
   sortedClassEntries,
   SIGHTINGS_KEY,
@@ -364,12 +365,65 @@ describe('accumulateSightings', () => {
   });
 });
 
+describe('newLoreReveals', () => {
+  it('appends exactly one reveal line naming a newly-sighted, lore-bearing monster', () => {
+    const prev: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
+    const next: Sightings = { monsterIds: ['monster.cave-rat'], itemIds: [], landmarks: [] };
+
+    expect(newLoreReveals(prev, next, pack)).toEqual(['The threads whisper of Cave rat.']);
+  });
+
+  it('appends nothing for a newly-sighted monster/item id whose content entry has no authored lore', () => {
+    const prev: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
+    // item.wooden-arrows is the one bundled item fixture with no authored `lore`.
+    const next: Sightings = { monsterIds: [], itemIds: ['item.wooden-arrows'], landmarks: [] };
+
+    expect(newLoreReveals(prev, next, pack)).toEqual([]);
+  });
+
+  it('appends nothing for a newly-sighted monster whose entry carries no authored lore (every bundled monster fixture happens to have lore, so this synthesizes a lore-less variant)', () => {
+    const caveRat = pack.entries.find(
+      (entry) => entry.kind === 'monster' && entry.id === 'monster.cave-rat',
+    )!;
+    const { lore: _lore, ...withoutLore } = caveRat as typeof caveRat & { lore?: string };
+    const packWithoutLore: CompiledContentPack = {
+      ...pack,
+      entries: pack.entries.map((entry) => (entry.id === 'monster.cave-rat' ? withoutLore : entry)),
+    };
+    const prev: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
+    const next: Sightings = { monsterIds: ['monster.cave-rat'], itemIds: [], landmarks: [] };
+
+    expect(newLoreReveals(prev, next, packWithoutLore)).toEqual([]);
+  });
+
+  it('appends nothing for a re-sighting: an id already present in prev is not "new"', () => {
+    const prev: Sightings = { monsterIds: ['monster.cave-rat'], itemIds: [], landmarks: [] };
+    const next: Sightings = { monsterIds: ['monster.cave-rat'], itemIds: [], landmarks: [] };
+
+    expect(newLoreReveals(prev, next, pack)).toEqual([]);
+  });
+
+  it('appends exactly one reveal line for a newly-identified, lore-bearing item', () => {
+    const prev: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
+    const next: Sightings = { monsterIds: [], itemIds: ['item.iron-sword'], landmarks: [] };
+
+    expect(newLoreReveals(prev, next, pack)).toEqual(['The threads whisper of Iron sword.']);
+  });
+
+  it('ignores unknown content ids (defensive: never throws on an id the pack does not have)', () => {
+    const prev: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
+    const next: Sightings = { monsterIds: ['monster.does-not-exist'], itemIds: [], landmarks: [] };
+
+    expect(newLoreReveals(prev, next, pack)).toEqual([]);
+  });
+});
+
 function findEntry(entries: readonly CodexEntry[], contentId: string): CodexEntry | undefined {
   return entries.find((entry) => entry.discovered && entry.contentId === contentId);
 }
 
 describe('deriveCodexState', () => {
-  it('renders every category, one per content kind, in class/item/spell/monster order', () => {
+  it('renders every category, one per content kind, in class/item/spell/monster/lore order', () => {
     const state = deriveCodexState({
       records: [],
       snapshot: null,
@@ -381,6 +435,7 @@ describe('deriveCodexState', () => {
       'item',
       'spell',
       'monster',
+      'lore',
     ]);
   });
 

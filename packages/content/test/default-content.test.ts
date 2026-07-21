@@ -334,4 +334,27 @@ describe('bundled content', () => {
       /unknown condition reference condition\.missing/i,
     );
   });
+
+  it('authors non-empty lore on a sampling of monsters and items', async () => {
+    const pack = await compileContentDirectory({
+      rootDir: resolve(import.meta.dirname, '../../../content'),
+    });
+    const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
+    const loreBearingIds = [
+      'monster.cave-rat',
+      'monster.training-beetle',
+      'monster.ashen-warden',
+      'monster.weakened-heart',
+      'item.iron-sword',
+      'item.brass-lantern',
+      'item.ashen-potion',
+    ];
+    for (const id of loreBearingIds) {
+      const lore = (entries.get(id) as any)?.lore;
+      expect(typeof lore).toBe('string');
+      expect(lore.trim().length).toBeGreaterThan(0);
+    }
+    const loreLessId = 'item.wooden-arrows';
+    expect((entries.get(loreLessId) as any)?.lore).toBeUndefined();
+  });
 });

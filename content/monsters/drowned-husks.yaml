@@ -6,6 +6,7 @@ entries:
     glyph: z
     color: "#6a8a8f"
     description: Bloated with brine and long past caring, it moves toward sound the way driftwood moves toward the shore.
+    lore: "It remembers drowning the way a scar remembers the cut, not the pain, just the shape."
     tags: [undead, drowned, mindless]
     minDepth: 4
     maxDepth: 7
@@ -32,6 +33,7 @@ entries:
     glyph: y
     color: "#b8c0b0"
     description: Salt has picked its bones clean and white, but the old grudge that raised it hasn't loosened its grip.
+    lore: "Whatever wronged it is centuries gone. The grudge outlived the grudge-holder's reasons, and now it's all that's left standing."
     tags: [undead, drowned, offense]
     minDepth: 4
     maxDepth: 8
@@ -58,6 +60,7 @@ entries:
     glyph: Z
     color: "#4f6b6a"
     description: Barnacles have crusted over its ribs like a second, harder skin grown out of drowning.
+    lore: "The sea took it once and gave it back changed, the way the Deep gives most things back."
     tags: [undead, drowned, armored]
     minDepth: 6
     maxDepth: 9
@@ -84,6 +87,7 @@ entries:
     glyph: "Ψ"
     color: "#7fa0b8"
     description: A drowning cry that never finished, still looping through the water long after the throat that made it rotted away.
+    lore: "Somewhere the throat that made this sound rotted away years ago. The cry never got the message."
     tags: [undead, echo, caster, arcane]
     minDepth: 5
     maxDepth: 9
@@ -110,6 +114,7 @@ entries:
     glyph: R
     color: "#3f5f66"
     description: Something that commanded the drowned once, and still expects to be obeyed.
+    lore: "It led something once — a crew, a congregation, a cult — and never noticed when the following stopped being alive."
     tags: [undead, drowned, elite]
     minDepth: 7
     maxDepth: 10

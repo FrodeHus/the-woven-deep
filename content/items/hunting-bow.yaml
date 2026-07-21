@@ -6,6 +6,7 @@ entries:
     glyph: ")"
     color: "#a67b4f"
     description: A simple stave of surface wood, strung tight enough to still sing in the dark. Nothing fancy keeps it dependable.
+    lore: "Cut from surface timber before anyone thought to ask whether the Deep would let it keep singing. It does, mostly out of spite."
     tags: [bow, offense, ranged, weapon]
     minDepth: 1
     maxDepth: 20

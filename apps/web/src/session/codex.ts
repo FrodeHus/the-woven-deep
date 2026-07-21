@@ -4,6 +4,7 @@ export {
   saveSightings,
   accumulateLandmarks,
   accumulateSightings,
+  newLoreReveals,
 } from './codex-storage.js';
 export type { Landmark, Sightings } from './codex-storage.js';
 

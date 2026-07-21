@@ -6,6 +6,7 @@ entries:
     glyph: "&"
     color: "#776957"
     description: A writhing knot of rats too tangled to count, dangerous only in how many of them there are.
+    lore: "No single rat in the brood remembers where it came from. The knot remembers for all of them, badly."
     tags: [animal, darkness, swarm-source]
     minDepth: 2
     maxDepth: 8
@@ -32,6 +33,7 @@ entries:
     glyph: W
     color: "#d06a42"
     description: A guardian left behind when its charge burned away, still pacing the ashes of whatever it swore to protect.
+    lore: "It was built to guard something specific, and the something is long gone. The instruction never expired, so neither did the guarding."
     tags: [boss, fire, guardian]
     minDepth: 5
     maxDepth: 12

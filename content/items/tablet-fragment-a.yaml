@@ -5,6 +5,7 @@ entries:
     name: Tablet shard, first seal
     glyph: "="
     color: "#c9b37a"
+    lore: "One of three seals needed to break the cycle without bloodshed. This one carries the coldest half of the binding."
     tags: [tablet-fragment]
     minDepth: 15
     maxDepth: 20
