@@ -55,13 +55,20 @@ function descendToDepth19(run: ActiveRun): ActiveRun {
   }
 }
 
+// Reaching the Chamber walks 20 real floor transitions (~10s), so cache the deterministic
+// result and reuse it: the run is immutable and every test derives new state functionally,
+// never mutating this base. Without the cache each test re-descends and the file runs long
+// enough to outlast Vitest's 60s worker-RPC heartbeat on a 2-core CI runner.
+let cachedChamberRun: ActiveRun | undefined;
 function inChamberRun(): ActiveRun {
+  if (cachedChamberRun !== undefined) return cachedChamberRun;
   const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
   const atDepth19 = descendToDepth19(fresh);
   const activeFloor = atDepth19.floors.find((floor) => floor.floorId === atDepth19.activeFloorId)!;
   const stairDown = activeFloor.stairDown!;
   const onStairs = teleportHeroTo(atDepth19, stairDown);
-  return descendToNextFloor(onStairs, { content: pack }).state;
+  cachedChamberRun = descendToNextFloor(onStairs, { content: pack }).state;
+  return cachedChamberRun;
 }
 
 function turnAway(revision: number): GameCommand {
@@ -77,12 +84,15 @@ function wait(revision: number): GameCommand {
   return { type: 'wait', commandId: `command.wait.${revision}`, expectedRevision: revision };
 }
 
-/** Runs `turn-away` on a fresh Chamber run and returns the post-activation state (boss injected). */
+/** Runs `turn-away` on the Chamber run and returns the post-activation state (boss injected). */
+let cachedActivatedRun: ActiveRun | undefined;
 function activatedRun(): ActiveRun {
+  if (cachedActivatedRun !== undefined) return cachedActivatedRun;
   const run = inChamberRun();
   const resolution = resolveCommand(run, turnAway(run.revision), context());
   expect(resolution.result).toMatchObject({ status: 'applied' });
-  return resolution.state;
+  cachedActivatedRun = resolution.state;
+  return cachedActivatedRun;
 }
 
 function heartBoss(run: ActiveRun): BossPopulation {

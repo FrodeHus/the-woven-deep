@@ -76,12 +76,19 @@ function descendToDepth19(run: ActiveRun): ActiveRun {
   }
 }
 
-/** A fresh run with the hero already standing in the Final Chamber. */
+// A run with the hero standing in the Final Chamber. Reaching it walks 20 real floor
+// transitions (~10s), so cache the deterministic result and reuse it: the run is immutable
+// and every test derives new state functionally, never mutating this base. Without the cache
+// each test re-descends and the file runs long enough to outlast Vitest's 60s worker-RPC
+// heartbeat on a 2-core CI runner.
+let cachedChamberRun: ActiveRun | undefined;
 function inChamberRun(): ActiveRun {
+  if (cachedChamberRun !== undefined) return cachedChamberRun;
   const atDepth19 = descendToDepth19(createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO }));
   const activeFloor = atDepth19.floors.find((floor) => floor.floorId === atDepth19.activeFloorId)!;
   const onStairs = teleportHeroTo(atDepth19, activeFloor.stairDown!);
-  return descendToNextFloor(onStairs, { content: pack }).state;
+  cachedChamberRun = descendToNextFloor(onStairs, { content: pack }).state;
+  return cachedChamberRun;
 }
 
 function fragmentInstance(contentId: string, hero: ActiveRun['hero']): ItemInstance {
