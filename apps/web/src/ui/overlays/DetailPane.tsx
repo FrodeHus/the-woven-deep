@@ -1,6 +1,5 @@
 import type { JSX } from 'react';
 import { effectLabel } from '../labels.js';
-import { Button } from '../components/button.js';
 import type { MenuEntry, ProjectedItemLike } from './inventory-model.js';
 
 function ActionButton({
@@ -9,9 +8,13 @@ function ActionButton({
   onClick,
 }: Readonly<{ label: string; chord: string; onClick: () => void }>): JSX.Element {
   return (
-    <Button type="button" variant="outline" size="sm" onClick={onClick}>
-      {`${label} (${chord})`}
-    </Button>
+    <button
+      type="button"
+      onClick={onClick}
+      className="cursor-pointer border border-accent bg-raised px-3 py-1.5 font-mono text-xs text-accent-strong hover:bg-accent hover:text-deep"
+    >
+      {label} <span className="opacity-60">[{chord}]</span>
+    </button>
   );
 }
 
@@ -39,9 +42,13 @@ export function DetailPane({
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h3 className="text-base font-semibold text-fg-strong">{item.name}</h3>
-        <p className="text-sm text-muted">{`${item.category} · ${unidentified ? 'Unidentified' : 'Identified'} · Condition ${item.condition}`}</p>
+      <div className="flex flex-col gap-1.5">
+        <h3 className="font-serif text-lg text-fg-strong">{item.name}</h3>
+        <div>
+          <span className="border border-muted px-1.5 py-px text-[10px] uppercase tracking-[0.1em] text-muted">
+            {`${item.category} · ${unidentified ? 'Unidentified' : 'Identified'} · Condition ${item.condition}`}
+          </span>
+        </div>
       </div>
 
       {equipped && <p className="text-sm">{`Equipped: ${slot}`}</p>}

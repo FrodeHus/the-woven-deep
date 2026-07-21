@@ -34,16 +34,21 @@ export function EquipmentSlots({
   equipment,
 }: Readonly<{ equipment: Readonly<Record<string, ProjectedItemLike | null>> }>): JSX.Element {
   return (
-    <div className="grid grid-cols-3 gap-1 rounded-md border border-line bg-surface p-2 text-xs">
+    <div className="grid grid-cols-3 gap-1.5 text-xs">
       {SLOT_ORDER.map((slot) => {
         const item = equipment[slot] ?? null;
         return (
           <div
             key={slot}
-            className={cn('flex flex-col gap-0.5 rounded-sm px-1 py-0.5', item && 'bg-raised')}
+            className={cn(
+              'flex min-h-[2.375rem] flex-col gap-0.5 border border-line px-2 py-1',
+              item ? 'bg-raised' : 'bg-surface',
+            )}
           >
-            <span className="text-muted">{SLOT_LABEL[slot]}</span>
-            <span className="font-mono text-fg">
+            <span className="text-[10px] uppercase tracking-[0.08em] text-subtle">
+              {SLOT_LABEL[slot]}
+            </span>
+            <span className="truncate font-mono text-fg">
               {item ? `${CATEGORY_GLYPH[item.category]} ${item.name}` : '—'}
             </span>
           </div>
