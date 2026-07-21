@@ -25,7 +25,7 @@ import {
   type GameCommand,
 } from '../src/index.js';
 import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
-import { actor, propertyRuns, schedulerStateArbitrary } from './arbitraries.js';
+import { actor, schedulerStateArbitrary } from './arbitraries.js';
 
 let gameplayPack: CompiledContentPack;
 let gameplayRun: ActiveRun;
@@ -119,7 +119,7 @@ describe('cross-system gameplay sequence properties', () => {
           expect(projection).not.toContain('rng');
         }
       }),
-      { seed: 0x4a09, numRuns: propertyRuns(500) },
+      { seed: 0x4a09, numRuns: 500 },
     );
   }, 120_000);
 });
@@ -137,7 +137,7 @@ describe('gameplay scheduler properties', () => {
         );
         expect(result.selectedActorId).not.toBeNull();
       }),
-      { seed: 0x4a01, numRuns: propertyRuns(500) },
+      { seed: 0x4a01, numRuns: 500 },
     );
   });
 
@@ -153,7 +153,7 @@ describe('gameplay scheduler properties', () => {
           advanceToNextReady(state).selectedActorId,
         );
       }),
-      { seed: 0x4a02, numRuns: propertyRuns(500) },
+      { seed: 0x4a02, numRuns: 500 },
     );
   });
 
@@ -173,7 +173,7 @@ describe('gameplay scheduler properties', () => {
           expect(() => advanceToNextReady(state)).toThrow(/worldTime.*safe integer/i);
         },
       ),
-      { seed: 0x4a03, numRuns: propertyRuns(500) },
+      { seed: 0x4a03, numRuns: 500 },
     );
   });
 });
@@ -227,7 +227,7 @@ describe('public projection properties', () => {
           );
         },
       ),
-      { seed: 0x4a08, numRuns: propertyRuns(200) },
+      { seed: 0x4a08, numRuns: 200 },
     );
   });
 });
@@ -315,7 +315,7 @@ describe('inventory conservation properties', () => {
           ).toBe(stableJson(first));
         },
       ),
-      { seed: 0x4a04, numRuns: propertyRuns(500) },
+      { seed: 0x4a04, numRuns: 500 },
     );
   });
 });
@@ -387,7 +387,7 @@ describe('item light properties', () => {
           expect(emitted.length).toBe(enabled && fuel > 0 && locationType !== 'backpack' ? 1 : 0);
         },
       ),
-      { seed: 0x4a05, numRuns: propertyRuns(500) },
+      { seed: 0x4a05, numRuns: 500 },
     );
   });
 });
@@ -503,7 +503,7 @@ describe('survival resource properties', () => {
           expect(stableJson(advanceSurvival(input))).toBe(stableJson(result));
         },
       ),
-      { seed: 0x4a06, numRuns: propertyRuns(500) },
+      { seed: 0x4a06, numRuns: 500 },
     );
   });
 
@@ -550,7 +550,7 @@ describe('survival resource properties', () => {
           expect(remaining + filled).toBe(sourceQuantity + targetFuel);
         },
       ),
-      { seed: 0x4a07, numRuns: propertyRuns(500) },
+      { seed: 0x4a07, numRuns: 500 },
     );
   });
 });

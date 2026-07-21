@@ -14,7 +14,6 @@ import {
   type HeroChoices,
 } from '../src/index.js';
 import type { Uint32State } from '../src/index.js';
-import { propertyRuns } from './arbitraries.js';
 
 let pack: CompiledContentPack;
 let balance: BalanceContentEntry;
@@ -103,7 +102,7 @@ describe('rollAttributes', () => {
           }
         },
       ),
-      { numRuns: propertyRuns(200) },
+      { numRuns: 200 },
     );
   });
 });
@@ -256,7 +255,7 @@ describe('heroFromChoices', () => {
         expect(() => validateHeroChoices({ pack, choices })).not.toThrow();
         expect(hero.name).toBe(name);
       }),
-      { numRuns: propertyRuns(200) },
+      { numRuns: 200 },
     );
   });
 
