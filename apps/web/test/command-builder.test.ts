@@ -799,4 +799,23 @@ describe('buildIntent', () => {
       },
     });
   });
+
+  it('builds a cast command with the spellId and cell-based target', () => {
+    const built = buildIntent({
+      intent: { type: 'cast', spellId: 'spell.ember-bolt', target: { x: 3, y: 4 } },
+      projection: baseProjection,
+      commandId: 'command.guest-000033',
+      expectedRevision: 19,
+    });
+    expect(built).toEqual({
+      kind: 'command',
+      command: {
+        type: 'cast',
+        spellId: 'spell.ember-bolt',
+        target: { x: 3, y: 4 },
+        commandId: 'command.guest-000033',
+        expectedRevision: 19,
+      },
+    });
+  });
 });

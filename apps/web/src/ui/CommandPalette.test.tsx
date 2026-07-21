@@ -18,6 +18,7 @@ import { UiProviders } from './providers.js';
 import { CommandPalette } from './CommandPalette.js';
 
 let pack: CompiledContentPack;
+let baseRun: ActiveRun;
 let baseProjection: GameplayProjection;
 
 const SEED = [11, 22, 33, 44] as const;
@@ -26,13 +27,13 @@ beforeAll(async () => {
   pack = await compileContentDirectory({
     rootDir: resolve(import.meta.dirname, '../../../../content'),
   });
-  const baseRun: ActiveRun = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+  baseRun = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
   baseProjection = projectGameplayState({ state: baseRun, content: pack });
 });
 
-function snapshot(): SessionSnapshot {
+function snapshot(projection: GameplayProjection = baseProjection): SessionSnapshot {
   return {
-    projection: baseProjection,
+    projection,
     log: [],
     lastEvents: [],
     pendingDecision: null,
@@ -46,9 +47,12 @@ function snapshot(): SessionSnapshot {
   };
 }
 
-function stubSession(): { session: GuestSession; dispatch: ReturnType<typeof vi.fn> } {
+function stubSession(projection?: GameplayProjection): {
+  session: GuestSession;
+  dispatch: ReturnType<typeof vi.fn>;
+} {
   const dispatch = vi.fn();
-  const snap = snapshot();
+  const snap = snapshot(projection);
   const session = {
     getSnapshot: () => snap,
     subscribe: () => () => {},
@@ -63,11 +67,14 @@ function harness(
     tradeAvailable?: boolean;
     onOpenChange?: (open: boolean) => void;
     onOpenOverlay?: (overlay: string) => void;
+    onCast?: (spellId: string) => void;
+    projection?: GameplayProjection;
   }> = {},
 ) {
-  const { session, dispatch } = stubSession();
+  const { session, dispatch } = stubSession(overrides.projection);
   const onOpenChange = overrides.onOpenChange ?? vi.fn();
   const onOpenOverlay = overrides.onOpenOverlay ?? vi.fn();
+  const onCast = overrides.onCast ?? vi.fn();
   render(
     <UiProviders
       pack={pack}
@@ -81,10 +88,11 @@ function harness(
         onOpenOverlay={onOpenOverlay as never}
         isTownContext={overrides.isTownContext ?? false}
         tradeAvailable={overrides.tradeAvailable ?? false}
+        onCast={onCast}
       />
     </UiProviders>,
   );
-  return { dispatch, onOpenChange, onOpenOverlay };
+  return { dispatch, onOpenChange, onOpenOverlay, onCast };
 }
 
 describe('CommandPalette', () => {
@@ -134,5 +142,42 @@ describe('CommandPalette', () => {
 
     harness({ isTownContext: true });
     expect(screen.getByText('House/Town')).toBeInTheDocument();
+  });
+
+  it('shows no Cast entries for a spell-less hero', () => {
+    harness();
+    expect(screen.queryByText(/^Cast:/)).not.toBeInTheDocument();
+  });
+
+  it('shows a "Cast: Ember bolt" entry for a caster and invokes onCast(spellId) on select', async () => {
+    const caster: ActiveRun = {
+      ...baseRun,
+      hero: { ...baseRun.hero, knownSpellIds: ['spell.ember-bolt'] },
+    };
+    const projection = projectGameplayState({ state: caster, content: pack });
+    const user = userEvent.setup();
+    const { onCast, onOpenChange } = harness({ projection });
+
+    const entry = screen.getByText('Cast: Ember bolt');
+    expect(entry).toBeInTheDocument();
+    await user.click(entry);
+
+    expect(onCast).toHaveBeenCalledWith('spell.ember-bolt');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('omits the Cast entry when the hero cannot afford its Weave cost', () => {
+    const heroActorId = baseRun.hero.actorId;
+    const caster: ActiveRun = {
+      ...baseRun,
+      hero: { ...baseRun.hero, knownSpellIds: ['spell.ember-bolt'] },
+      actors: baseRun.actors.map((actor) =>
+        actor.actorId === heroActorId ? { ...actor, weave: 0 } : actor,
+      ),
+    };
+    const projection = projectGameplayState({ state: caster, content: pack });
+    harness({ projection });
+
+    expect(screen.queryByText('Cast: Ember bolt')).not.toBeInTheDocument();
   });
 });

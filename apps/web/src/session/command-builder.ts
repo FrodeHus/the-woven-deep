@@ -449,6 +449,18 @@ export function buildIntent(
       },
     };
   }
+  if (intent.type === 'cast') {
+    return {
+      kind: 'command',
+      command: {
+        type: 'cast',
+        spellId: intent.spellId,
+        target: intent.target,
+        commandId,
+        expectedRevision,
+      },
+    };
+  }
   return buildBackpackIntent({
     projection,
     commandId,

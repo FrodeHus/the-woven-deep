@@ -1,6 +1,11 @@
 import type { ClassContentEntry, ContentEntry, EquipmentSlot } from '../../model.js';
 import type { ContentCompileIssue } from '../error.js';
-import { backpackItemIssues, issue, type LocatedContentEntry } from './shared.js';
+import {
+  backpackItemIssues,
+  issue,
+  referencedKindIssue,
+  type LocatedContentEntry,
+} from './shared.js';
 
 function classIssues(
   located: LocatedContentEntry & { entry: ClassContentEntry },
@@ -90,6 +95,11 @@ function classIssues(
       }
     }
     issues.push(...backpackItemIssues(file, `${kitPath}.backpack`, kit.backpack, byId));
+  });
+  cls.startingSpellIds?.forEach((spellId, index) => {
+    issues.push(
+      ...referencedKindIssue(file, `${path}.startingSpellIds.${index}`, spellId, 'spell', byId),
+    );
   });
   return issues;
 }

@@ -13,6 +13,10 @@ export type DerivedStatFormula = Readonly<Partial<Record<'base' | AttributeName,
 export interface ActorDerivationInput {
   readonly attributes: BaseAttributes;
   readonly formulas: BalanceContentEntry['formulas'];
+  /** Base Weave regen per recovery interval, from `balance.weaveRegenAmount` -- `weaveRegen` has
+   * no entry in `formulas` (unlike the other derived stats) because it's single-sourced from this
+   * balance constant rather than an attribute-scaled formula. */
+  readonly weaveRegenAmount: number;
   readonly equipmentModifiers: readonly DerivedStatModifier[];
   readonly conditionModifiers: readonly DerivedStatModifier[];
   readonly heroModifiers?: readonly DerivedStatModifier[];
@@ -54,7 +58,8 @@ export function deriveActorStats(input: ActorDerivationInput): DerivedActorStats
     safeInteger(attribute, value);
   const result = Object.fromEntries(
     DERIVED_STAT_NAMES.map((statName) => {
-      const formula = input.formulas[statName] as DerivedStatFormula | undefined;
+      const formula: DerivedStatFormula | undefined =
+        statName === 'weaveRegen' ? { base: input.weaveRegenAmount } : input.formulas[statName];
       if (formula === undefined) throw new TypeError(`${statName} formula is required`);
       let value = 0;
       for (const [operand, coefficient] of Object.entries(formula)) {

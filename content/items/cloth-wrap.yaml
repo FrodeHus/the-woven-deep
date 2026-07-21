@@ -1,0 +1,21 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.cloth-wrap
+    name: Cloth wrap
+    glyph: "["
+    color: "#c9c3b0"
+    description: Threadbare linen bound tight over the ribs. It stops nothing, but it does not slow the hands weaving Weave-threads either.
+    tags: [armor]
+    minDepth: 1
+    maxDepth: 20
+    category: armor
+    stackLimit: 1
+    price: 8
+    rarity: common
+    actionCost: 100
+    equipment: { slots: [body], handedness: none, reservedSlots: [] }
+    combat: { accuracy: 0, defense: 0, armor: 0, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []

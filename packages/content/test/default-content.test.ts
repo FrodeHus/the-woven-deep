@@ -32,7 +32,7 @@ describe('bundled content', () => {
       ),
     ).toEqual({
       monster: 35,
-      item: 22,
+      item: 24,
       spell: 1,
       trap: 1,
       'loot-table': 16,
@@ -44,19 +44,60 @@ describe('bundled content', () => {
       npc: 4,
       'npc-faction': 4,
       achievement: 2,
-      class: 4,
+      class: 5,
       background: 3,
       trait: 8,
     });
     expect(
       pack.entries.filter((entry) => entry.kind === 'class' && (entry as any).playable),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(5);
     expect(pack.entries.map((entry) => entry.id)).toEqual(
       [...pack.entries.map((entry) => entry.id)].sort(),
     );
     expect(validateCompiledContentPack(JSON.parse(JSON.stringify(pack)))).toEqual(pack);
     expect(pack.hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('leaves modifiers and startingSpellIds undefined for existing classes', async () => {
+    const pack = await compileContentDirectory({
+      rootDir: resolve(import.meta.dirname, '../../../content'),
+    });
+    const wayfarer = pack.entries.find((entry) => entry.id === 'class.wayfarer') as {
+      modifiers?: unknown;
+      startingSpellIds?: unknown;
+    };
+    expect(wayfarer).toBeDefined();
+    expect(wayfarer.modifiers).toBeUndefined();
+    expect(wayfarer.startingSpellIds).toBeUndefined();
+  });
+
+  it('ships the Loomcaller as a playable caster with its modifiers, kits, and starting spell', async () => {
+    const pack = await compileContentDirectory({
+      rootDir: resolve(import.meta.dirname, '../../../content'),
+    });
+    const loomcaller = pack.entries.find((entry) => entry.id === 'class.loomcaller') as {
+      playable: boolean;
+      classTags: readonly string[];
+      modifiers?: Record<string, number>;
+      startingSpellIds?: readonly string[];
+      kits: readonly { kitId: string }[];
+    };
+    expect(loomcaller).toBeDefined();
+    expect(loomcaller.playable).toBe(true);
+    expect(loomcaller.classTags).toContain('loomcaller');
+    expect(loomcaller.modifiers).toEqual({
+      meleeAccuracy: -3,
+      meleeDamageBonus: -1,
+      defense: -2,
+      maxHealth: -6,
+      maxWeave: 4,
+      weaveRegen: 2,
+      search: 2,
+    });
+    expect(loomcaller.startingSpellIds).toEqual(['spell.ember-bolt']);
+    expect(loomcaller.kits.length).toBeGreaterThanOrEqual(2);
+    expect(loomcaller.kits.some((kit) => kit.kitId === 'weaveward')).toBe(true);
   });
 
   it('ships the exact Lampwright merchant contract', async () => {

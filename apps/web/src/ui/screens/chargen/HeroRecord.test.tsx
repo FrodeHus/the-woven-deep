@@ -18,6 +18,7 @@ let pack: CompiledContentPack;
 
 const SEED: Uint32State = [11, 22, 33, 44];
 const WAYFARER = 'class.wayfarer';
+const LOOMCALLER = 'class.loomcaller';
 const DEEP_MINER = 'background.deep-miner';
 const KEEN_EYED = 'trait.keen-eyed';
 
@@ -30,6 +31,15 @@ beforeAll(async () => {
 function wayfarerKitId(): string {
   const entry = pack.entries.find(
     (candidate) => candidate.kind === 'class' && candidate.id === WAYFARER,
+  ) as {
+    kits: readonly { kitId: string }[];
+  };
+  return entry.kits[0]!.kitId;
+}
+
+function loomcallerKitId(): string {
+  const entry = pack.entries.find(
+    (candidate) => candidate.kind === 'class' && candidate.id === LOOMCALLER,
   ) as {
     kits: readonly { kitId: string }[];
   };
@@ -84,6 +94,29 @@ describe('HeroRecord', () => {
 
     // deep-miner (+1 search) and keen-eyed (+2 search) combine to +3 search.
     expect(screen.getByText(/\+3/)).toBeInTheDocument();
+  });
+
+  it('shows a warn/danger-toned negative delta for a derived stat with a class penalty', () => {
+    // The Loomcaller's class modifiers include defense: -2 -- a caster penalty, not a bonus.
+    const state = stubState({ classId: LOOMCALLER, kitId: loomcallerKitId() });
+    render(<HeroRecord state={state} pack={pack} onWeave={vi.fn()} canWeave />);
+
+    const defenseDelta = screen.getByText('-2');
+    expect(defenseDelta).toBeInTheDocument();
+    expect(defenseDelta).toHaveClass('text-danger');
+    expect(defenseDelta).not.toHaveClass('text-good');
+  });
+
+  it('shows a good-toned positive delta for a derived stat with a class bonus', () => {
+    // The Loomcaller's class modifiers include search: 2 -- a positive bonus, stacked on top of
+    // deep-miner's +1 and keen-eyed's +2 search from `stubState`'s defaults.
+    const state = stubState({ classId: LOOMCALLER, kitId: loomcallerKitId() });
+    render(<HeroRecord state={state} pack={pack} onWeave={vi.fn()} canWeave />);
+
+    const searchDelta = screen.getByText('+5');
+    expect(searchDelta).toBeInTheDocument();
+    expect(searchDelta).toHaveClass('text-good');
+    expect(searchDelta).not.toHaveClass('text-danger');
   });
 
   it('enables the WEAVE THE HERO button when canWeave and calls onWeave on click', async () => {

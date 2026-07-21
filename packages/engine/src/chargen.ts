@@ -228,6 +228,7 @@ export function heroFromChoices(
   );
 
   const statModifiers = mergeModifiers([
+    classEntry.modifiers ?? {},
     backgroundEntry.modifiers,
     ...traitEntries.map((trait) => trait.modifiers),
   ]);
@@ -239,5 +240,8 @@ export function heroFromChoices(
     backpack,
     classTags: classEntry.classTags,
     statModifiers,
+    ...(classEntry.startingSpellIds && classEntry.startingSpellIds.length > 0
+      ? { knownSpellIds: classEntry.startingSpellIds }
+      : {}),
   };
 }

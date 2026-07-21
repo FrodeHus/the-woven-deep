@@ -1,0 +1,30 @@
+schemaVersion: 7
+entries:
+  - kind: class
+    id: class.loomcaller
+    name: Loomcaller
+    tags: [chargen, playable]
+    description: Speaks to the threads directly -- and now, at last, they answer.
+    playable: true
+    silhouetteGlyph: "Λ"
+    unlockHint: null
+    classTags: [loomcaller]
+    modifiers: { meleeAccuracy: -3, meleeDamageBonus: -1, defense: -2, maxHealth: -6, maxWeave: 4, weaveRegen: 2, search: 2 }
+    startingSpellIds: [spell.ember-bolt]
+    kits:
+      - kitId: weaveward
+        name: Weaveward
+        equipped:
+          - { contentId: item.cloth-wrap, slot: body }
+          - { contentId: item.pitch-torch, slot: off-hand, enabled: true }
+        backpack:
+          - { contentId: item.weave-focus, quantity: 1 }
+          - { contentId: item.travel-ration, quantity: 2 }
+      - kitId: lantern-bound
+        name: Lantern-bound
+        equipped:
+          - { contentId: item.cloth-wrap, slot: body }
+          - { contentId: item.brass-lantern, slot: off-hand, enabled: true }
+        backpack:
+          - { contentId: item.weave-focus, quantity: 1 }
+          - { contentId: item.lamp-oil, quantity: 2 }
