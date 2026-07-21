@@ -228,6 +228,7 @@ export function heroFromChoices(
   );
 
   const statModifiers = mergeModifiers([
+    classEntry.modifiers ?? {},
     backgroundEntry.modifiers,
     ...traitEntries.map((trait) => trait.modifiers),
   ]);
