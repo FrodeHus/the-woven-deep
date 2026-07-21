@@ -17,6 +17,7 @@ import {
   HeroStatusAnnouncer,
   LogPanel,
   MinimapPanel,
+  SpellsPanel,
   StatusBar,
   ThreatPanel,
 } from './panels.js';
@@ -144,6 +145,11 @@ export function PlayScreen({
     snapshot.pendingFinalChamberChoice !== null;
   const [paletteOpen, setPaletteOpen] = useCommandPaletteHotkey(isModalActive);
 
+  // TODO(T10): enter spell-targeting mode
+  const beginSpellTargeting = (spellId: string): void => {
+    void spellId;
+  };
+
   const { hover, cursor, handlers } = useCellHover(snapshot);
   const autoTravel = useAutoTravel({ session, snapshot, disabled: isModalActive });
   const cursorCol = cursor ? cursor.x - camera.x : 0;
@@ -233,6 +239,7 @@ export function PlayScreen({
             className="col-start-2 row-start-1 flex flex-col gap-2 overflow-y-auto"
           >
             <HeroPanel snapshot={snapshot} />
+            <SpellsPanel snapshot={snapshot} onCast={beginSpellTargeting} />
             <MinimapPanel snapshot={snapshot} />
             {projection.floor.town ? (
               <TownPanel snapshot={snapshot} keymap={keymap} />

@@ -5,3 +5,4 @@ export { StatusBar } from './panels/StatusBar.js';
 export { LogPanel } from './panels/LogPanel.js';
 export { HeroStatusAnnouncer } from './panels/HeroStatusAnnouncer.js';
 export { MinimapPanel } from './panels/MinimapPanel.js';
+export { SpellsPanel } from './panels/SpellsPanel.js';
