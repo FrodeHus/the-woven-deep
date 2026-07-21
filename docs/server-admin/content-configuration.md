@@ -241,6 +241,7 @@ The `score` object supplies every coefficient used to compute a deterministic ru
 |---|---|---|---|
 | `glyph` | one Unicode glyph | Yes | Map character. |
 | `color` | `#RRGGBB` | Yes | Presentation color. |
+| `description` | string, 1-300 characters | No | Authored flavor text, trimmed; shown in the web client's monster hover popover when present. |
 | `minDepth`, `maxDepth` | positive safe integers | Yes | Inclusive appearance range; maximum must not be lower than minimum. |
 | `attributes` | object | Yes | Non-negative `might`, `agility`, `vitality`, `wits`, and `resolve`, all within the balance attribute bounds. |
 | `health`, `speed` | positive safe integers | Yes | Base hit points and scheduler speed; speed must be within the balance speed bounds. |
@@ -467,6 +468,7 @@ entries:
 | Field | Type | Required | Rules and meaning |
 |---|---|---|---|
 | `glyph`, `color` | glyph and `#RRGGBB` | Yes | Floor/inventory presentation. |
+| `description` | string, 1-300 characters | No | Authored flavor text, trimmed; shown in the web client's inventory detail pane once the item is identified. Never shown for an unidentified item -- see the identification modes below. |
 | `minDepth`, `maxDepth` | positive safe integers | Yes | Inclusive generation range. |
 | `category` | enum | Yes | `weapon`, `ammunition`, `armor`, `shield`, `light`, `fuel`, `food`, `potion`, `scroll`, `ring`, or `misc`. |
 | `stackLimit` | positive safe integer | Yes | Maximum quantity per stack. |

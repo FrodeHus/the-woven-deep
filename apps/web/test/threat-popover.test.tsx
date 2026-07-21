@@ -46,6 +46,7 @@ describe('ThreatPopover', () => {
         paneCols={20}
         paneRows={10}
         cellPx={{ width: 8, height: 16 }}
+        pack={pack}
       />,
     );
     const tooltip = screen.getByRole('tooltip');
@@ -54,6 +55,47 @@ describe('ThreatPopover', () => {
     expect(tooltip).toHaveTextContent('intent.approach');
     expect(tooltip).toHaveTextContent('hostile');
     expect(tooltip).not.toHaveAttribute('tabindex');
+  });
+
+  it("shows the monster's authored description when its contentId resolves in the pack", () => {
+    render(
+      <ThreatPopover
+        actor={{
+          name: 'Cave rat',
+          glyph: 'r',
+          disposition: 'hostile',
+          healthPresentation: { band: 'wounded' },
+          contentId: 'monster.cave-rat',
+        }}
+        col={2}
+        row={3}
+        paneCols={20}
+        paneRows={10}
+        cellPx={{ width: 8, height: 16 }}
+        pack={pack}
+      />,
+    );
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip).toHaveTextContent(/bold in the dark/i);
+  });
+
+  it('omits any description when the actor has no contentId', () => {
+    render(
+      <ThreatPopover
+        actor={{
+          name: 'Cave rat',
+          disposition: 'hostile',
+          healthPresentation: { band: 'wounded' },
+        }}
+        col={2}
+        row={3}
+        paneCols={20}
+        paneRows={10}
+        cellPx={{ width: 8, height: 16 }}
+        pack={pack}
+      />,
+    );
+    expect(document.querySelector('.threat-popover-description')).not.toBeInTheDocument();
   });
 
   it('positions itself in pixels derived from the measured cell size, not a CSS custom property', () => {
@@ -69,6 +111,7 @@ describe('ThreatPopover', () => {
         paneCols={20}
         paneRows={10}
         cellPx={{ width: 10, height: 18 }}
+        pack={pack}
       />,
     );
     const style = screen.getByRole('tooltip').getAttribute('style')!;
@@ -91,6 +134,7 @@ describe('ThreatPopover', () => {
         paneCols={20}
         paneRows={10}
         cellPx={{ width: 8, height: 16 }}
+        pack={pack}
       />,
     );
     const style = screen.getByRole('tooltip').getAttribute('style')!;

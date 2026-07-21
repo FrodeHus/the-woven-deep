@@ -5,6 +5,7 @@ entries:
     name: Silt nibbler
     glyph: v
     color: "#8a7b5c"
+    description: A skittish burrower that surfaces from the silt only when it smells something bleeding.
     tags: [animal, darkness, vermin]
     minDepth: 1
     maxDepth: 4
@@ -30,6 +31,7 @@ entries:
     name: Bile tick
     glyph: t
     color: "#7fa05a"
+    description: Small enough to miss and mean enough to matter, it clings and does not let go easily.
     tags: [animal, poison, vermin]
     minDepth: 1
     maxDepth: 4
@@ -55,6 +57,7 @@ entries:
     name: Gorge swarm
     glyph: "&"
     color: "#6f6151"
+    description: A heaving mass of hungry little bodies that moves as one starving animal.
     tags: [animal, darkness, swarm-source, vermin]
     minDepth: 2
     maxDepth: 5
@@ -80,6 +83,7 @@ entries:
     name: Mire lurker
     glyph: m
     color: "#5c6b57"
+    description: Caked in dried mud thick as a carapace, it waits low in the muck until the moment it isn't waiting anymore.
     tags: [animal, armored, vermin]
     minDepth: 3
     maxDepth: 5
@@ -105,6 +109,7 @@ entries:
     name: Drowned boar
     glyph: q
     color: "#7a5a48"
+    description: Half-drowned and all fury, it charges through the mire like the water never touched it.
     tags: [animal, brute, vermin]
     minDepth: 4
     maxDepth: 5

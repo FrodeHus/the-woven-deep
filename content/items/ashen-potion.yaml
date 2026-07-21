@@ -5,6 +5,7 @@ entries:
     name: Ashen tonic
     glyph: "!"
     color: "#a7a29b"
+    description: A gritty grey draught that tastes of cold hearth-ash. It knits torn flesh, though never quite all the way.
     tags: [healing, identification, potion]
     minDepth: 1
     maxDepth: 20

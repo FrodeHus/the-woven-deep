@@ -307,6 +307,46 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(screen.queryByRole('button', { name: /Refuel/ })).not.toBeInTheDocument();
   });
 
+  it("shows an identified item's known facts and authored description in the detail pane", async () => {
+    const user = userEvent.setup();
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.sword-1',
+        contentId: 'item.iron-sword',
+        name: 'Iron sword',
+        category: 'weapon',
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    const list = within(screen.getByRole('listbox', { name: 'Backpack items' }));
+    await user.click(list.getByRole('option', { name: /Iron sword/ }));
+
+    expect(screen.getByText(/Slot: main-hand/)).toBeInTheDocument();
+    expect(screen.getByText(/notched from honest use/i)).toBeInTheDocument();
+  });
+
+  it('omits known facts and the description for an unidentified item', async () => {
+    const user = userEvent.setup();
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.mystery-1',
+        name: 'Mystery potion',
+        category: 'potion',
+        identified: false,
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    const list = within(screen.getByRole('listbox', { name: 'Backpack items' }));
+    await user.click(list.getByRole('option', { name: /Mystery potion/ }));
+
+    expect(screen.queryByText(/Slot:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/notched from honest use/i)).not.toBeInTheDocument();
+  });
+
   it('renders nothing when there is no session in context', () => {
     const { container } = render(
       <UiProviders pack={pack} settings={DEFAULT_SETTINGS} onChangeSettings={() => {}}>

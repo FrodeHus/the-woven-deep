@@ -5,6 +5,7 @@ entries:
     name: Hunting bow
     glyph: ")"
     color: "#a67b4f"
+    description: A simple stave of surface wood, strung tight enough to still sing in the dark. Nothing fancy keeps it dependable.
     tags: [bow, offense, ranged, weapon]
     minDepth: 1
     maxDepth: 20

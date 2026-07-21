@@ -115,9 +115,12 @@ export interface BaseContentEntry {
   readonly tags: readonly string[];
 }
 
+export const CONTENT_DESCRIPTION_MAX_LENGTH = 300;
+
 export interface PresentedContentEntry extends BaseContentEntry {
   readonly glyph: string;
   readonly color: string;
+  readonly description?: string;
 }
 
 export type CompletionType = 'died' | 'became-heart' | 'refused' | 'broke-cycle';

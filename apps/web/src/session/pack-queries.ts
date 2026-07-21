@@ -85,6 +85,13 @@ export function monsterEntries(pack: CompiledContentPack): readonly MonsterConte
   return entriesByKind(pack, 'monster');
 }
 
+export function monsterById(
+  pack: CompiledContentPack,
+  id: string,
+): MonsterContentEntry | undefined {
+  return entryById(pack, 'monster', id);
+}
+
 export function spellEntries(pack: CompiledContentPack): readonly SpellContentEntry[] {
   return entriesByKind(pack, 'spell');
 }
