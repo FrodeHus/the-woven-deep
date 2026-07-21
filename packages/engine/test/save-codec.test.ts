@@ -167,6 +167,16 @@ describe('active-run save codec', () => {
     return stripActorWeave({ ...withoutV8Fields, schemaVersion: 7 });
   }
 
+  function v8Fixture(): Record<string, unknown> {
+    const current = structuredClone(createDemoRun()) as any;
+    return stripActorWeave({ ...current, schemaVersion: 8 });
+  }
+
+  function stripV9Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
+    const current = structuredClone(run) as any;
+    return stripActorWeave({ ...current, schemaVersion: 8 });
+  }
+
   function concludedRun(): ReturnType<typeof createDemoRun> {
     const base = createDemoRun();
     const heroActor = { ...base.actors[0]!, health: 0 };
@@ -465,6 +475,27 @@ describe('active-run save codec', () => {
     expect(migratedHero.maxWeave).toBe(4 + migratedHero.attributes.wits);
     expect(migratedHero.weave).toBe(migratedHero.maxWeave);
     expect(stripV8Fields(decoded)).toEqual(legacy);
+    expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
+      encodeActiveRun(decoded),
+    );
+  });
+
+  it('migrates strict schema v8 state to v9 and preserves every former field', () => {
+    const legacy = v8Fixture();
+    const decoded = decodeActiveRun(JSON.stringify(legacy));
+
+    expect(decoded.schemaVersion).toBe(9);
+    // A pre-Weave hero migrates to full Weave: maxWeave is base 4 + Wits, and weave starts full.
+    const migratedHero = decoded.actors.find((actor) => actor.actorId === decoded.hero.actorId)!;
+    expect(migratedHero.maxWeave).toBe(4 + migratedHero.attributes.wits);
+    expect(migratedHero.weave).toBe(migratedHero.maxWeave);
+    for (const actor of decoded.actors) {
+      if (!actor.playerControlled) {
+        expect(actor.weave).toBe(0);
+        expect(actor.maxWeave).toBe(0);
+      }
+    }
+    expect(stripV9Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
       encodeActiveRun(decoded),
     );
