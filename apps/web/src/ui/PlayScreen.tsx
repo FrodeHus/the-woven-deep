@@ -285,6 +285,7 @@ export function PlayScreen({
           onOpenOverlay={onOpenOverlay}
           isTownContext={projection.floor.town}
           tradeAvailable={tradeIsAvailable(projection)}
+          onCast={beginSpellTargeting}
         />
       </div>
     </ScreenFade>

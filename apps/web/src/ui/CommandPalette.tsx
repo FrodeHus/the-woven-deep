@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './components/d
 import { OVERLAY_REGISTRY, type OverlayId } from './overlays/registry.js';
 import { useSessionCtx, useSettingsCtx } from './providers.js';
 import type { OverlayActionId } from './KeyRouter.js';
+import { hero } from './panels/types.js';
 
 const OVERLAY_ENTRIES: readonly OverlayId[] = [
   'inventory',
@@ -46,6 +47,7 @@ export interface CommandPaletteProps {
   readonly onOpenOverlay: (overlay: OverlayActionId) => void;
   readonly isTownContext: boolean;
   readonly tradeAvailable: boolean;
+  readonly onCast: (spellId: string) => void;
 }
 
 /**
@@ -60,6 +62,7 @@ export function CommandPalette({
   onOpenOverlay,
   isTownContext,
   tradeAvailable,
+  onCast,
 }: Readonly<CommandPaletteProps>): JSX.Element {
   const sessionCtx = useSessionCtx();
   const { keymap } = useSettingsCtx();
@@ -78,6 +81,19 @@ export function CommandPalette({
     sessionCtx?.session.dispatch(intent);
     onOpenChange(false);
   };
+
+  const runCast = (spellId: string): void => {
+    onCast(spellId);
+    onOpenChange(false);
+  };
+
+  // Same gating as the HUD Spells panel (Task 7): omit spells the hero can't afford rather than
+  // rendering a disabled entry -- the palette has no built-in "disabled but visible" affordance
+  // used elsewhere, so omission keeps this list consistent with a plain filterable action list.
+  const heroData = sessionCtx ? hero(sessionCtx.snapshot) : undefined;
+  const castableEntries = (heroData?.castableSpells ?? []).filter(
+    (spell) => (heroData?.weave ?? 0) >= spell.weaveCost,
+  );
 
   const intentActions: readonly (keyof typeof INTENT_ENTRIES)[] = [
     'wait',
@@ -134,6 +150,19 @@ export function CommandPalette({
                 );
               })}
             </CommandGroup>
+            {castableEntries.length > 0 && (
+              <CommandGroup heading="Spells">
+                {castableEntries.map((spell) => (
+                  <CommandItem
+                    key={spell.spellId}
+                    value={`Cast: ${spell.name}`}
+                    onSelect={() => runCast(spell.spellId)}
+                  >
+                    <span>{`Cast: ${spell.name}`}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </DialogContent>
