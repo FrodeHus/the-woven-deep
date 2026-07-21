@@ -747,6 +747,37 @@ entries:
     expect(entries[1]).toMatchObject({ effects: [{ requiresLivingTarget: false }] });
   });
 
+  it('parses an optional item description, leaving it absent by default', () => {
+    const withDescription = parseContentFile({
+      path: 'gameplay.yaml',
+      source: `schemaVersion: 7
+entries:
+  - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", description: "A notched blade that has outlived several owners.", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, identification: { mode: known, poolId: null }, effects: [] }
+`,
+    });
+    expect(withDescription[0]).toMatchObject({
+      description: 'A notched blade that has outlived several owners.',
+    });
+
+    const withoutDescription = parseContentFile({
+      path: 'gameplay.yaml',
+      source: `schemaVersion: 7
+entries:
+  - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, identification: { mode: known, poolId: null }, effects: [] }
+`,
+    });
+    expect(withoutDescription[0] as Record<string, unknown>).not.toHaveProperty('description');
+  });
+
+  it('rejects an item description beyond the 300-character bound', () => {
+    const overlong = 'x'.repeat(301);
+    const source = `schemaVersion: 7
+entries:
+  - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", description: "${overlong}", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, identification: { mode: known, poolId: null }, effects: [] }
+`;
+    expect(() => parseContentFile({ path: 'gameplay.yaml', source })).toThrow(ContentCompileError);
+  });
+
   it('parses optional per-choice loot-table depth bands, leaving them absent by default', () => {
     const source = `schemaVersion: 7
 entries:
