@@ -10,6 +10,7 @@ function snapshotOf(log: SessionSnapshot['log']): SessionSnapshot {
     log,
     lastEvents: [],
     pendingDecision: null,
+    pendingFinalChamberChoice: null,
     notice: null,
     houseOpen: false,
     conclusion: null,

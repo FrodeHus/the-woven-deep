@@ -37,6 +37,7 @@ function snapshotFor(run: ActiveRun): SessionSnapshot {
     log: [],
     lastEvents: [],
     pendingDecision: null,
+    pendingFinalChamberChoice: null,
     notice: null,
     houseOpen: false,
     conclusion: null,

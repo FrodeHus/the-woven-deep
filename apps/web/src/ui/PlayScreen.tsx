@@ -1,6 +1,6 @@
 import { useRef, type CSSProperties, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
-import type { StoredHallRecord } from '@woven-deep/engine';
+import type { HeartLineageRecord, StoredHallRecord } from '@woven-deep/engine';
 import type { GuestSession } from '../session/guest-session.js';
 import { useGuestSession } from '../session/store.js';
 import { heroOf, tradeIsAvailable } from '../session/projection-view.js';
@@ -22,6 +22,7 @@ import {
 } from './panels.js';
 import type { OverlayId } from './overlays/registry.js';
 import { DecisionPrompt } from './overlays/DecisionPrompt.js';
+import { FinalChamberChoice } from './overlays/FinalChamberChoice.js';
 import { OverlayHost } from './overlays/OverlayHost.js';
 import { useSettingsCtx } from './providers.js';
 import { HouseScreen } from './screens/HouseScreen.js';
@@ -56,6 +57,11 @@ export interface PlayScreenProps {
    * Hall repository; `PlayScreen` just plumbs this past the overlay host. Defaults keep every
    * pre-existing caller/test (which never opens the codex overlay) compiling unchanged. */
   readonly records?: readonly StoredHallRecord[];
+  /** The guest's bound-Heart lineage record (`repository.currentHeart()`), forwarded straight to
+   * the Final Chamber choice overlay for its predecessor-identity display -- `null` for a guest
+   * whose Hall has never recorded a `became-heart` completion. Defaults to `null` so every
+   * pre-existing caller/test (none of which reach the Chamber) keeps compiling unchanged. */
+  readonly currentHeart?: HeartLineageRecord | null;
   /** Whether the contextual onboarding hint strip may show at all -- `App` computes this
    * from `settings.onboarding` and the quickstart boot flag. Defaults to `true` so every
    * pre-existing caller/test keeps compiling and passing unchanged; those never populate
@@ -80,6 +86,7 @@ export function PlayScreen({
   onCloseOverlay = () => {},
   onClearGuestSession = () => {},
   records = [],
+  currentHeart = null,
   onboardingEnabled = true,
 }: PlayScreenProps): JSX.Element {
   const { settings, keymap } = useSettingsCtx();
@@ -104,6 +111,7 @@ export function PlayScreen({
     houseOpen: snapshot.houseOpen,
     trade: projection.trade,
     pendingDecision: snapshot.pendingDecision,
+    pendingFinalChamberChoice: snapshot.pendingFinalChamberChoice,
     onOpenOverlay,
     onCloseOverlay,
     keymap,
@@ -129,7 +137,8 @@ export function PlayScreen({
     overlay !== null ||
     snapshot.houseOpen ||
     projection.trade !== undefined ||
-    snapshot.pendingDecision !== null;
+    snapshot.pendingDecision !== null ||
+    snapshot.pendingFinalChamberChoice !== null;
   const [paletteOpen, setPaletteOpen] = useCommandPaletteHotkey(isModalActive);
 
   const { hover, handlers } = useCellHover(snapshot);
@@ -220,6 +229,9 @@ export function PlayScreen({
           />
         )}
         {snapshot.pendingDecision && <DecisionPrompt snapshot={snapshot} session={session} />}
+        {snapshot.pendingFinalChamberChoice && (
+          <FinalChamberChoice snapshot={snapshot} session={session} currentHeart={currentHeart} />
+        )}
         <OverlayHost
           overlay={overlay}
           onClose={onCloseOverlay}
