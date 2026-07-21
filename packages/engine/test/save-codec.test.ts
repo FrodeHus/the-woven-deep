@@ -1372,6 +1372,43 @@ describe('active-run save codec', () => {
     expect(encoded.startsWith('{"activeFloorEnteredAt"')).toBe(true);
   });
 
+  it('omits knownSpellIds from the encoded hero when the hero has no known spells (non-caster byte-identity)', () => {
+    const state = createDemoRun();
+    expect(state.hero.knownSpellIds).toBeUndefined();
+
+    const encoded = encodeActiveRun(state);
+    const parsed = JSON.parse(encoded);
+    expect(Object.hasOwn(parsed.hero, 'knownSpellIds')).toBe(false);
+
+    const decoded = decodeActiveRun(encoded);
+    expect(decoded.hero.knownSpellIds).toBeUndefined();
+    expect(encodeActiveRun(decoded)).toBe(encoded);
+  });
+
+  it('round-trips a hero with knownSpellIds present', () => {
+    const state = createDemoRun();
+    const withSpells = { ...state, hero: { ...state.hero, knownSpellIds: ['spell.ember-bolt'] } };
+
+    const encoded = encodeActiveRun(withSpells);
+    const parsed = JSON.parse(encoded);
+    expect(parsed.hero.knownSpellIds).toEqual(['spell.ember-bolt']);
+
+    const decoded = decodeActiveRun(encoded);
+    expect(decoded.hero.knownSpellIds).toEqual(['spell.ember-bolt']);
+    expect(encodeActiveRun(decoded)).toBe(encoded);
+  });
+
+  it('decodes a pre-existing (v9) save lacking knownSpellIds as absent', () => {
+    const legacy = structuredClone(createDemoRun()) as any;
+    expect(Object.hasOwn(legacy.hero, 'knownSpellIds')).toBe(false);
+
+    const decoded = decodeActiveRun(JSON.stringify(legacy));
+    expect(decoded.hero.knownSpellIds).toBeUndefined();
+    expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
+      encodeActiveRun(decoded),
+    );
+  });
+
   it('round-trips every Champion and Echo event through command history and duplicate replay', () => {
     const state = createDemoRun();
     const eventId = 'command.champion-events';

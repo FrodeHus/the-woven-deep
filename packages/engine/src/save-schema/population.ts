@@ -41,6 +41,7 @@ export const heroV6 = z.strictObject({
 export const hero = heroV6.extend({
   classTags: z.array(z.string().trim().min(1)).readonly(),
   statModifiers: z.partialRecord(z.enum(DERIVED_STAT_NAMES), safeInteger),
+  knownSpellIds: z.array(identifier).readonly().optional(),
 });
 export const probability = z.number().finite().min(0).max(1);
 export const encounterDecision = z.strictObject({

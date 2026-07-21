@@ -29,6 +29,7 @@ export function deriveRunActorStats(input: RunActorStatsInput): DerivedActorStat
   return deriveActorStats({
     attributes: input.actor.attributes,
     formulas: balance.formulas,
+    weaveRegenAmount: balance.weaveRegenAmount,
     equipmentModifiers: equipmentModifiers({
       run: input.state,
       content: input.content,

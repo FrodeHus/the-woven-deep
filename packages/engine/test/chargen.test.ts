@@ -5,6 +5,7 @@ import type { BalanceContentEntry, CompiledContentPack } from '@woven-deep/conte
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   ATTRIBUTE_ORDER,
+  deriveActorStats,
   heroFromChoices,
   pointBuyCost,
   pointBuyValid,
@@ -282,5 +283,148 @@ describe('heroFromChoices', () => {
     });
 
     expect(() => heroFromChoices({ pack: poisonedPack, choices })).toThrow(RangeError);
+  });
+
+  it('bakes knownSpellIds from the class startingSpellIds when present, and omits it otherwise', () => {
+    const casterPack: CompiledContentPack = {
+      ...pack,
+      entries: pack.entries.map((entry) =>
+        entry.kind === 'class' && entry.id === 'class.wayfarer'
+          ? { ...entry, startingSpellIds: ['spell.ember-bolt'] }
+          : entry,
+      ),
+    };
+
+    const casterHero = heroFromChoices({ pack: casterPack, choices: wayfarerBladeChoices() });
+    expect(casterHero.knownSpellIds).toEqual(['spell.ember-bolt']);
+
+    const nonCasterHero = heroFromChoices({ pack, choices: wayfarerBladeChoices() });
+    expect(nonCasterHero.knownSpellIds).toBeUndefined();
+    expect(Object.hasOwn(nonCasterHero, 'knownSpellIds')).toBe(false);
+  });
+
+  it("merges a caster class's modifiers into statModifiers alongside background+trait, and applies them via deriveActorStats", () => {
+    const CLASS_MODIFIERS = {
+      meleeAccuracy: -3,
+      defense: -2,
+      maxHealth: -6,
+      maxWeave: 4,
+      weaveRegen: 2,
+      search: 2,
+    } as const;
+    const casterPack: CompiledContentPack = {
+      ...pack,
+      entries: pack.entries.map((entry) =>
+        entry.kind === 'class' && entry.id === 'class.wayfarer'
+          ? { ...entry, modifiers: CLASS_MODIFIERS }
+          : entry,
+      ),
+    };
+
+    // wayfarerBladeChoices() uses background.caravan-guard with no traits: its own modifiers
+    // (if any) must additively compose with the class modifiers above.
+    const choices = wayfarerBladeChoices();
+    const backgroundEntry = pack.entries.find(
+      (entry) => entry.kind === 'background' && entry.id === choices.backgroundId,
+    ) as { modifiers?: Partial<Record<string, number>> } | undefined;
+    const backgroundModifiers = backgroundEntry?.modifiers ?? {};
+
+    const casterHero = heroFromChoices({ pack: casterPack, choices });
+    const expectedStatModifiers = { ...CLASS_MODIFIERS };
+    for (const [key, value] of Object.entries(backgroundModifiers)) {
+      expectedStatModifiers[key as keyof typeof CLASS_MODIFIERS] =
+        ((expectedStatModifiers as Record<string, number>)[key] ?? 0) + (value as number);
+    }
+    expect(casterHero.statModifiers).toEqual(expectedStatModifiers);
+
+    const baselineHero = heroFromChoices({ pack, choices });
+    const baselineStats = deriveActorStats({
+      attributes: baselineHero.attributes,
+      formulas: balance.formulas,
+      weaveRegenAmount: balance.weaveRegenAmount,
+      equipmentModifiers: [],
+      conditionModifiers: [],
+      heroModifiers: [baselineHero.statModifiers],
+    });
+    const casterStats = deriveActorStats({
+      attributes: casterHero.attributes,
+      formulas: balance.formulas,
+      weaveRegenAmount: balance.weaveRegenAmount,
+      equipmentModifiers: [],
+      conditionModifiers: [],
+      heroModifiers: [casterHero.statModifiers],
+    });
+
+    expect(casterStats.meleeAccuracy).toBe(baselineStats.meleeAccuracy - 3);
+    expect(casterStats.defense).toBe(baselineStats.defense - 2);
+    expect(casterStats.maxHealth).toBe(baselineStats.maxHealth - 6);
+    expect(casterStats.maxWeave).toBe(baselineStats.maxWeave + 4);
+    expect(casterStats.weaveRegen).toBe(baselineStats.weaveRegen + 2);
+    expect(casterStats.search).toBe(baselineStats.search + 2);
+  });
+
+  it('leaves statModifiers unchanged for a class with no modifiers (neutrality)', () => {
+    const wayfarerHero = heroFromChoices({ pack, choices: wayfarerBladeChoices() });
+    expect(wayfarerHero.statModifiers).toEqual({ defense: 1 });
+
+    const lamplighterHero = heroFromChoices({ pack, choices: lamplighterLanternChoices() });
+    expect(lamplighterHero.statModifiers).toEqual({ search: 1, defense: 1 });
+  });
+
+  it('bakes knownSpellIds and merges class modifiers for a real Loomcaller from the shipped content pack', () => {
+    const choices: HeroChoices = {
+      name: 'Loomcaller',
+      method: 'roll',
+      attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
+      classId: 'class.loomcaller',
+      kitId: 'weaveward',
+      backgroundId: 'background.caravan-guard',
+      traitIds: [],
+    };
+
+    const hero = heroFromChoices({ pack, choices });
+    expect(hero.classTags).toEqual(['loomcaller']);
+    expect(hero.knownSpellIds).toEqual(['spell.ember-bolt']);
+    expect(hero.equipped).toEqual(
+      expect.arrayContaining([expect.objectContaining({ contentId: 'item.cloth-wrap' })]),
+    );
+    expect(hero.backpack).toEqual(
+      expect.arrayContaining([expect.objectContaining({ contentId: 'item.weave-focus' })]),
+    );
+
+    // background.caravan-guard adds { defense: 1 } on top of the class's own modifiers.
+    expect(hero.statModifiers).toEqual({
+      meleeAccuracy: -3,
+      meleeDamageBonus: -1,
+      defense: -1,
+      maxHealth: -6,
+      maxWeave: 4,
+      weaveRegen: 2,
+      search: 2,
+    });
+
+    const wayfarerHero = heroFromChoices({ pack, choices: wayfarerBladeChoices() });
+    const wayfarerStats = deriveActorStats({
+      attributes: wayfarerHero.attributes,
+      formulas: balance.formulas,
+      weaveRegenAmount: balance.weaveRegenAmount,
+      equipmentModifiers: [],
+      conditionModifiers: [],
+      heroModifiers: [wayfarerHero.statModifiers],
+    });
+    const loomcallerStats = deriveActorStats({
+      attributes: hero.attributes,
+      formulas: balance.formulas,
+      weaveRegenAmount: balance.weaveRegenAmount,
+      equipmentModifiers: [],
+      conditionModifiers: [],
+      heroModifiers: [hero.statModifiers],
+    });
+
+    expect(loomcallerStats.meleeAccuracy).toBe(wayfarerStats.meleeAccuracy - 3);
+    expect(loomcallerStats.maxHealth).toBe(wayfarerStats.maxHealth - 6);
+    expect(loomcallerStats.maxWeave).toBe(wayfarerStats.maxWeave + 4);
+    expect(loomcallerStats.weaveRegen).toBe(wayfarerStats.weaveRegen + 2);
+    expect(loomcallerStats.search).toBe(wayfarerStats.search + 2);
   });
 });

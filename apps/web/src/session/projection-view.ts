@@ -1,4 +1,5 @@
 import type {
+  CastableSpellView,
   DerivedStatFormula,
   DerivedStatName,
   GameplayProjection,
@@ -96,7 +97,10 @@ export interface HeroView {
   readonly backpack: readonly OwnedItemView[];
   readonly backpackCapacity: number;
   readonly knownAppearanceIds: readonly string[];
+  readonly castableSpells?: readonly CastableSpellView[];
 }
+
+export type { CastableSpellView };
 
 export interface ActorHealthPresentation {
   readonly current: number;

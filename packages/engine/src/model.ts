@@ -87,6 +87,7 @@ export interface HeroState {
   readonly currency: number;
   readonly classTags: readonly string[];
   readonly statModifiers: DerivedStatModifier;
+  readonly knownSpellIds?: readonly OpaqueId[];
 }
 
 export interface AppliedCommandResult {

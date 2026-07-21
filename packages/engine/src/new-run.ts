@@ -95,6 +95,7 @@ export interface NewRunHero {
   readonly backpack: readonly NewRunBackpackItem[];
   readonly classTags: readonly string[];
   readonly statModifiers: DerivedStatModifier;
+  readonly knownSpellIds?: readonly OpaqueId[];
 }
 
 export const DEFAULT_GUEST_HERO: NewRunHero = {
@@ -170,6 +171,7 @@ export function createNewRun(
   const heroStats = deriveActorStats({
     attributes: hero.attributes,
     formulas: balance.formulas,
+    weaveRegenAmount: balance.weaveRegenAmount,
     equipmentModifiers: [],
     conditionModifiers: [],
     heroModifiers: [hero.statModifiers],
@@ -272,6 +274,9 @@ export function createNewRun(
       currency: balance.startingCurrency,
       classTags: hero.classTags,
       statModifiers: hero.statModifiers,
+      ...(hero.knownSpellIds && hero.knownSpellIds.length > 0
+        ? { knownSpellIds: hero.knownSpellIds }
+        : {}),
     },
     reputations: [],
     activeTrade: null,

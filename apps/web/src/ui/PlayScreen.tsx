@@ -1,4 +1,4 @@
-import { useRef, type CSSProperties, type JSX } from 'react';
+import { useRef, type CSSProperties, type JSX, type MouseEvent as ReactMouseEvent } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { HeartLineageRecord, StoredHallRecord } from '@woven-deep/engine';
 import type { GuestSession } from '../session/guest-session.js';
@@ -17,6 +17,7 @@ import {
   HeroStatusAnnouncer,
   LogPanel,
   MinimapPanel,
+  SpellsPanel,
   StatusBar,
   ThreatPanel,
 } from './panels.js';
@@ -30,6 +31,7 @@ import { TradeScreen } from './screens/TradeScreen.js';
 import { effectiveReducedMotion, ScreenFade } from './ScreenFade.js';
 import { AssetPopover } from './AssetPopover.js';
 import { CellCursor } from './CellCursor.js';
+import { TargetingOverlay } from './TargetingOverlay.js';
 import { ThreatPopover } from './ThreatPopover.js';
 import { TownPanel } from './TownPanel.js';
 import { useAutoTravel } from './hooks/useAutoTravel.js';
@@ -37,6 +39,7 @@ import { useCellHover } from './hooks/useCellHover.js';
 import { useCommandPaletteHotkey } from './hooks/useCommandPaletteHotkey.js';
 import { usePaneMeasurement } from './hooks/usePaneMeasurement.js';
 import { usePlayKeyDispatcher } from './hooks/usePlayKeyDispatcher.js';
+import { useSpellTargeting } from './hooks/useSpellTargeting.js';
 
 export interface PlayScreenProps {
   readonly session: GuestSession;
@@ -108,6 +111,8 @@ export function PlayScreen({
   const { mapPaneRef, cellProbeRef, cellProbeBaseRef, paneSize, cellSize, zoom } =
     usePaneMeasurement(projection.floor);
 
+  const targeting = useSpellTargeting(session, snapshot);
+
   usePlayKeyDispatcher({
     session,
     overlay,
@@ -119,6 +124,7 @@ export function PlayScreen({
     onCloseOverlay,
     keymap,
     activeHintRef,
+    targetingActive: targeting.activeSpellId !== null,
   });
 
   const viewport = viewportForPane({ panePx: paneSize, cellPx: cellSize, floor: projection.floor });
@@ -141,7 +147,8 @@ export function PlayScreen({
     snapshot.houseOpen ||
     projection.trade !== undefined ||
     snapshot.pendingDecision !== null ||
-    snapshot.pendingFinalChamberChoice !== null;
+    snapshot.pendingFinalChamberChoice !== null ||
+    targeting.activeSpellId !== null;
   const [paletteOpen, setPaletteOpen] = useCommandPaletteHotkey(isModalActive);
 
   const { hover, cursor, handlers } = useCellHover(snapshot);
@@ -154,6 +161,42 @@ export function PlayScreen({
     cursorCol < viewport.width &&
     cursorRow >= 0 &&
     cursorRow < viewport.height;
+
+  // The mouse cursor doubles as the targeting reticle whenever it sits over a currently-valid
+  // target -- otherwise the keyboard reticle (`targeting.reticle`) is what's highlighted. Neither
+  // overrides the other; whichever the player is actively using wins.
+  const targetingHighlight =
+    cursor && targeting.validCells.has(`${cursor.x},${cursor.y}`)
+      ? { x: cursor.x, y: cursor.y }
+      : targeting.reticle;
+
+  /**
+   * The map pane's single click handler: while targeting is active, a click is routed to
+   * `targeting.confirmAt` INSTEAD of auto-travel (a click on an invalid cell is simply ignored --
+   * targeting stays active -- rather than cancelling the whole mode or auto-travelling underneath
+   * it); otherwise it's exactly today's auto-travel click, unchanged.
+   */
+  const handleMapClick = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    if (targeting.activeSpellId) {
+      const cellElement = (event.target as HTMLElement).closest('[data-cell]');
+      if (!cellElement) return;
+      const [xText, yText] = (cellElement.getAttribute('data-cell') ?? '').split(',');
+      const x = Number(xText);
+      const y = Number(yText);
+      if (Number.isFinite(x) && Number.isFinite(y)) targeting.confirmAt({ x, y });
+      return;
+    }
+    autoTravel.onClick(event);
+  };
+
+  /** Right-click cancels targeting without casting -- the second of the two documented cancel
+   * gestures (Escape is the other, handled by `useSpellTargeting`'s own keydown listener). A no-op
+   * (default browser context menu) when targeting isn't active. */
+  const handleMapContextMenu = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    if (!targeting.activeSpellId) return;
+    event.preventDefault();
+    targeting.cancel();
+  };
 
   return (
     <ScreenFade
@@ -173,7 +216,8 @@ export function PlayScreen({
             ref={mapPaneRef}
             onMouseOver={handlers.onMouseOver}
             onMouseLeave={handlers.onMouseLeave}
-            onClick={autoTravel.onClick}
+            onClick={handleMapClick}
+            onContextMenu={handleMapContextMenu}
           >
             <div
               className={['playfield', projection.floor.town ? 'playfield-town' : '']
@@ -196,13 +240,25 @@ export function PlayScreen({
                 viewport={viewport}
               />
             </div>
-            {cursor && cursorInView && (
-              <CellCursor
-                col={cursorCol}
-                row={cursorRow}
-                reachable={cursor.reachable}
+            {targeting.activeSpellId ? (
+              <TargetingOverlay
+                floor={projection.floor}
+                camera={camera}
+                viewport={viewport}
                 cellPx={cellSize}
+                validCells={targeting.validCells}
+                highlighted={targetingHighlight}
               />
+            ) : (
+              cursor &&
+              cursorInView && (
+                <CellCursor
+                  col={cursorCol}
+                  row={cursorRow}
+                  reachable={cursor.reachable}
+                  cellPx={cellSize}
+                />
+              )
             )}
             {hover?.kind === 'actor' && (
               <ThreatPopover
@@ -233,6 +289,7 @@ export function PlayScreen({
             className="col-start-2 row-start-1 flex flex-col gap-2 overflow-y-auto"
           >
             <HeroPanel snapshot={snapshot} />
+            <SpellsPanel snapshot={snapshot} onCast={targeting.begin} />
             <MinimapPanel snapshot={snapshot} />
             {projection.floor.town ? (
               <TownPanel snapshot={snapshot} keymap={keymap} />
@@ -278,6 +335,7 @@ export function PlayScreen({
           onOpenOverlay={onOpenOverlay}
           isTownContext={projection.floor.town}
           tradeAvailable={tradeIsAvailable(projection)}
+          onCast={targeting.begin}
         />
       </div>
     </ScreenFade>

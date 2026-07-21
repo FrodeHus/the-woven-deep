@@ -41,6 +41,8 @@ export const classEntry = z
     unlockHint: z.string().trim().min(1).max(200).nullable(),
     classTags: z.array(slugSchema).min(1),
     kits: z.array(classKitDefinition).max(3),
+    modifiers: derivedStatModifiers.optional(),
+    startingSpellIds: z.array(stableIdSchema).optional(),
   })
   .superRefine((entry, context) => {
     if (entry.playable) {

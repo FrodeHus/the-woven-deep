@@ -20,6 +20,13 @@ export interface PlayKeyDispatcherParams {
   readonly onCloseOverlay: () => void;
   readonly keymap: ResolvedKeymap;
   readonly activeHintRef: RefObject<string | null>;
+  /** Whether spell-targeting mode (Task 10, `useSpellTargeting`) is active. Folded into this
+   * dispatcher's own modal gate so movement/action keys (including the hardwired arrow keys) never
+   * reach the hero while a spell reticle owns them -- `useSpellTargeting`'s own keydown listener is
+   * the one that actually moves the reticle/casts/cancels while this is true. Escape still routes
+   * to `closeOverlay` here, which is a no-op with no overlay/house/trade/decision open, so it
+   * doesn't fight `useSpellTargeting`'s own Escape-cancels-targeting handling. */
+  readonly targetingActive?: boolean;
 }
 
 /**
@@ -38,6 +45,7 @@ export function usePlayKeyDispatcher({
   onCloseOverlay,
   keymap,
   activeHintRef,
+  targetingActive = false,
 }: PlayKeyDispatcherParams): void {
   useEffect(() => {
     const dispatcher = createKeyDispatcher(
@@ -80,7 +88,8 @@ export function usePlayKeyDispatcher({
         houseOpen ||
         trade !== undefined ||
         pendingDecision !== null ||
-        pendingFinalChamberChoice !== null,
+        pendingFinalChamberChoice !== null ||
+        targetingActive,
       () => keymap,
     );
     window.addEventListener('keydown', dispatcher);
@@ -96,5 +105,6 @@ export function usePlayKeyDispatcher({
     onCloseOverlay,
     keymap,
     activeHintRef,
+    targetingActive,
   ]);
 }

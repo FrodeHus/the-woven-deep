@@ -381,6 +381,7 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
   const heroStats = deriveActorStats({
     attributes: heroAttributes,
     formulas: balance.formulas,
+    weaveRegenAmount: balance.weaveRegenAmount,
     equipmentModifiers: [],
     conditionModifiers: [],
   });

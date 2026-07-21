@@ -25,6 +25,7 @@ function fixture(): ActorDerivationInput {
       lightOutMemoryPersists: { base: 0 },
       lightOutCommitsMemory: { base: 0 },
     },
+    weaveRegenAmount: 2,
     equipmentModifiers: [
       {
         meleeAccuracy: -7,
@@ -58,6 +59,7 @@ describe('deriveActorStats', () => {
       lightOutRevealRadius: 1,
       lightOutMemoryPersists: 0,
       lightOutCommitsMemory: 0,
+      weaveRegen: 2,
     });
     expect(input).toEqual(before);
   });
@@ -66,10 +68,18 @@ describe('deriveActorStats', () => {
     const derived = deriveActorStats({
       attributes: { might: 10, agility: 10, vitality: 10, wits: 9, resolve: 10 },
       formulas: { ...fixture().formulas, maxWeave: { base: 4, wits: 1 } },
+      weaveRegenAmount: 2,
       equipmentModifiers: [],
       conditionModifiers: [],
     });
     expect(derived.maxWeave).toBe(13);
+  });
+
+  it('derives weaveRegen from weaveRegenAmount, boosted by a heroModifier', () => {
+    expect(deriveActorStats(fixture()).weaveRegen).toBe(2);
+    expect(deriveActorStats({ ...fixture(), heroModifiers: [{ weaveRegen: 2 }] }).weaveRegen).toBe(
+      4,
+    );
   });
 
   it('rejects unsafe operands and arithmetic overflow', () => {
@@ -120,6 +130,7 @@ describe('deriveActorStats', () => {
       deriveActorStats({
         attributes: TENS,
         formulas,
+        weaveRegenAmount: 2,
         equipmentModifiers: [],
         conditionModifiers: [],
         heroModifiers: [{ search: 2 }],
@@ -129,6 +140,7 @@ describe('deriveActorStats', () => {
       deriveActorStats({
         attributes: TENS,
         formulas,
+        weaveRegenAmount: 2,
         equipmentModifiers: [],
         conditionModifiers: [],
         heroModifiers: [{ notAStat: 1 } as unknown as Partial<Record<'search', number>>],
