@@ -57,18 +57,49 @@ type CompletionType = 'died' | 'became-heart' | 'refused' | 'broke-cycle';
 
 Hall tier order (already implemented): `broke-cycle` > `became-heart` > `refused` > `died`.
 
-- **`died`** — already produced when hero health reaches zero; unchanged.
+- **`died`** — already produced when hero health reaches zero (during ordinary play or the
+  Heart boss fight below has its own override); unchanged for ordinary deaths.
 - **`became-heart`** — the hero takes the bound Heart's place. Writes a `HeartLineageRecord`
   (hero name, class tags, Hall record id, enrichment) via `recordHeart`, making this hero the
-  `currentHeart()` a future run will meet. Second tier.
-- **`refused`** — the hero turns away and ends the descent, leaving the Heart bound. Lowest
-  of the three non-death endings.
+  `currentHeart()` a future run will meet. Second tier. **Reachable two ways, mechanically
+  identical, narrated differently:** *voluntarily* (choosing "Become the Heart"), or
+  *involuntarily* (losing the Heart boss fight — see the refused branch).
+- **`refused`** — the hero turns away, which **angers the weakened Heart into breaking loose
+  and attacking** (a boss fight, below). Winning that fight *is* the `refused` conclusion: the
+  heartless Deep crumbles, its prisoners are released, and the hero escapes amid the
+  destruction (a narrative epilogue). Lowest of the three non-death endings by Hall tier,
+  though winning the boss earns boss-defeat score.
 - **`broke-cycle`** — offered only when the hero carries the full fragment set. The hero
-  assembles the Ancient Tablet, frees the Heart, and ends the cycle. Top tier.
+  assembles the Ancient Tablet, frees the Heart, and ends the cycle. Top tier. Instant (no
+  fight).
 
-All three new types set `ActiveRun.conclusion` exactly as `died` does (completion type, depth,
-turn, worldTime; `killerContentId` is null for these), after which the run is read-only and
-`finalizeRun` proceeds unchanged.
+The instant conclusions (voluntary `became-heart`, `broke-cycle`) set `ActiveRun.conclusion`
+exactly as `died` does (completion type, depth, turn, worldTime; `killerContentId` null) and
+consume no randomness. The `refused` branch resolves through combat (below) before setting its
+conclusion. In all cases the run is then read-only and `finalizeRun` proceeds unchanged.
+
+## The refused branch: the Heart boss fight
+
+Choosing "Turn away" does not end the run immediately. The weakened Heart, enraged at not
+being freed, breaks loose and attacks — a boss fight using the existing combat/boss framework.
+The Heart is an authored boss entry, tuned **challenging but not too hard** (the fiction is
+that it is weakened; difficulty is config-driven), thematically the lineage predecessor turned
+hostile (flavored with their name where available). Two resolutions:
+
+- **Hero wins (Heart defeated)** → `refused`. The Deep, now without a Heart, begins to
+  crumble; every prisoner it held is released into the world; the hero escapes with them and
+  witnesses the destruction. Delivered as an authored **narrative epilogue** (conclusion-screen
+  / dialogue text) — the run concludes at the Chamber, no playable escape. Boss-defeat scoring
+  credits the kill.
+- **Hero loses (would reach zero health during this fight)** → `became-heart` (**forced**).
+  The Heart forcibly replaces itself with the hero, imprisoning them as the new Heart against
+  their will. This **overrides the normal health-zero → `died` transition**: while the Heart
+  boss is the active threat, a would-be-fatal blow to the hero resolves as forced
+  `became-heart` (writing the `HeartLineageRecord`), not `died`. Narrated as involuntary.
+
+The override is scoped strictly to the Heart boss fight (a Chamber/boss-state flag); ordinary
+deaths anywhere else remain `died`. The boss fight consumes combat randomness normally; the
+outcome that sets the conclusion consumes none beyond the fight itself.
 
 ## The Final Chamber
 
@@ -83,9 +114,10 @@ turn, worldTime; `killerContentId` is null for these), after which the run is re
   a session (a `became-heart` run sets the Heart the next run meets); with nothing stored, the
   fallback shows. The Chamber reads the store; it does not require the store to be non-empty.
 - **The choice:** presented inline as an authored dialogue + decision overlay (existing
-  dialog/focus conventions). Two options are always available (Become the Heart → `became-heart`;
-  Turn away → `refused`); the third (Assemble the tablet & free the Heart → `broke-cycle`) is
-  present only when the hero holds all fragments, and carries its own unlock lore.
+  dialog/focus conventions). Two options are always available — **Become the Heart** (instant
+  `became-heart`) and **Turn away** (starts the Heart boss fight, above) — plus a third,
+  **Assemble the tablet & free the Heart** (instant `broke-cycle`), present only when the hero
+  holds all fragments and carrying its own unlock lore.
 
 ## The Ancient Tablet fragments (Part A — single-run)
 
@@ -106,12 +138,19 @@ turn, worldTime; `killerContentId` is null for these), after which the run is re
 ## Architecture, determinism, and data
 
 - **Engine — the choice command:** a new command valid *only* on the Final Chamber floor,
-  carrying the chosen ending. It sets `conclusion.completionType` (records depth/turn/worldTime
-  like `died`; `killerContentId` null), writes the `HeartLineageRecord` on `became-heart`, and
-  leaves the run read-only for `finalizeRun`. It **consumes no randomness** (mirrors the death
-  transition). Rejected off the Chamber floor and after conclusion (`run.concluded`). The
-  `broke-cycle` variant is rejected unless the hero holds the full fragment set (fail-loud
-  invariant, mirroring how other commands validate before dispatch).
+  carrying the chosen ending. Rejected off the Chamber floor and after conclusion
+  (`run.concluded`).
+  - *Voluntary `became-heart`* and *`broke-cycle`* set `conclusion.completionType` immediately
+    (records depth/turn/worldTime like `died`; `killerContentId` null), write the
+    `HeartLineageRecord` on `became-heart`, and consume no randomness. `broke-cycle` is rejected
+    unless the hero holds the full fragment set (fail-loud invariant).
+  - *Turn away* does not conclude the run; it activates the Heart boss (converts the bound-Heart
+    entity into a hostile boss actor). Combat then proceeds through the existing systems. The
+    **conclusion is set on fight resolution:** boss defeated → `refused`; hero would-die while
+    the Heart boss is active → forced `became-heart` (writes the lineage record). The
+    death-transition override is gated on the Heart-boss-active flag and scoped to the Chamber.
+- **Engine — the Heart boss:** an authored boss reusing the existing boss/combat framework;
+  no bespoke combat engine. Its only special behavior is the defeat-override above.
 - **Engine — Chamber generation:** deterministic authored assembly at the deepest depth; no
   new RNG draw for layout. Fragment spawn threads the dedicated seeded stream; the Chamber and
   fragments introduce **no new RNG streams**.
@@ -120,10 +159,12 @@ turn, worldTime; `killerContentId` is null for these), after which the run is re
   limited to what the run-local no-duplicate rule needs (the set of fragment types already
   spawned/held this run) — added only if it cannot be derived from inventory; a save bump only
   if a field is added. A content bump ships the Chamber layout, fragment items, and dialogue.
-- **Content:** the Chamber layout (`vault`-tagged, deepest-depth placement); the 3 fragment
-  items; all ending dialogue and lore (Chamber narration, the three choice texts, the
-  `broke-cycle` unlock lore, the fallback ancestral Heart, and the lineage-Heart
-  presentation).
+- **Content:** the Chamber layout (`vault`-tagged, deepest-depth placement); the **Heart boss
+  entry** (weakened, tuned; flavored with the predecessor's name where available); the 3
+  fragment items; all ending dialogue and lore (Chamber narration, the three choice texts, the
+  `broke-cycle` unlock lore, the **refused-win crumbling-Deep escape epilogue**, the
+  **forced-`became-heart` involuntary narration**, the fallback ancestral Heart, and the
+  lineage-Heart presentation).
 - **Client:** the Chamber choice overlay (dialog/focus conventions; `broke-cycle` gated on the
   full set); fragment display in inventory and codex. The conclusion screen already handles all
   four completion types structurally, so it simply begins receiving the new ones.
@@ -150,12 +191,15 @@ overlay from a projected choice state.
 ## Testing
 
 - **Engine:** Chamber generated at the deepest depth (and only there); the Heart identity from
-  a populated vs empty lineage store (fallback). Each choice command produces the correct
-  completion type, sets conclusion fields, and (for `became-heart`) writes the
-  `HeartLineageRecord`; `finalizeRun` then runs and scores. `broke-cycle` rejected without the
-  full set, accepted with it. The choice rejected off-Chamber and after conclusion. Fragment
-  spawn determinism and run-local no-duplicate. Save round-trip of a concluded run for each
-  new type.
+  a populated vs empty lineage store (fallback). Voluntary `became-heart` and `broke-cycle`
+  produce the correct completion type, set conclusion fields, and (for `became-heart`) write
+  the `HeartLineageRecord`; `finalizeRun` then runs and scores. `broke-cycle` rejected without
+  the full set, accepted with it. The choice rejected off-Chamber and after conclusion.
+  **Refused boss fight:** choosing Turn away activates the Heart boss; defeating it produces
+  `refused`; the hero being reduced to zero health during the fight produces forced
+  `became-heart` (with the lineage write), *not* `died`; an ordinary death elsewhere still
+  produces `died` (override correctly scoped). Fragment spawn determinism and run-local
+  no-duplicate. Save round-trip of a concluded run for each of the four types.
 - **Content:** the Chamber vault, fragment items, and dialogue compile; deepest-depth
   placement validates.
 - **Web:** the Chamber overlay shows two choices by default and three with the full set;
@@ -176,13 +220,16 @@ overlay from a projected choice state.
 
 1. Engine: Final Chamber floor generation at the deepest depth, including the lineage-Heart
    read and fallback.
-2. Engine: the choice command → conclusion wiring for `became-heart` / `refused` /
-   `broke-cycle`, including the `HeartLineageRecord` write and off-Chamber/after-conclusion
-   rejection.
-3. Engine + content: fragment items, rare deep-floor seeded spawn, run-local no-duplicate, and
+2. Engine: the choice command — instant conclusions for voluntary `became-heart` and
+   `broke-cycle` (with the `HeartLineageRecord` write), plus off-Chamber/after-conclusion
+   rejection and the fragment-set gate on `broke-cycle`.
+3. Engine + content: the refused branch — the Heart boss (authored, weakened, reusing the
+   boss/combat framework), its activation on Turn away, and the resolution wiring (defeat →
+   `refused`; hero-would-die → forced `became-heart` via the scoped death-transition override).
+4. Engine + content: fragment items, rare deep-floor seeded spawn, run-local no-duplicate, and
    the full-set assemble gate feeding the `broke-cycle` option.
-4. Content: the Chamber layout and all ending/lore dialogue (including the fallback Heart and
-   lineage presentation).
-5. Client: the Chamber choice overlay and fragment display; conclusion screen receives the new
-   types.
-6. Demo + intentional content-hash-embed regen + whole-milestone verify.
+5. Content: the Chamber layout and all ending/lore/epilogue dialogue (choice texts, refused-win
+   escape epilogue, forced-became-heart narration, fallback Heart, lineage presentation).
+6. Client: the Chamber choice overlay and fragment display; the boss fight uses the existing
+   combat UI; the conclusion screen receives the new types and epilogue text.
+7. Demo + intentional content-hash-embed regen + whole-milestone verify.

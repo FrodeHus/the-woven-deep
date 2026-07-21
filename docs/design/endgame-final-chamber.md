@@ -19,13 +19,22 @@ the next hero meets that predecessor. The lineage store already models this.
 `died` (die anywhere) is unchanged. At the Final Chamber the hero makes one choice:
 
 - **Become the Heart → `became-heart`** — take the bound Heart's place; writes a
-  `HeartLineageRecord` so this hero becomes the Heart a future run meets. Second tier.
-- **Turn away → `refused`** — leave the Heart bound, end the descent. Lowest non-death ending.
+  `HeartLineageRecord` so this hero becomes the Heart a future run meets. Instant. Second tier.
+- **Turn away → the Heart boss fight.** Refusing enrages the weakened Heart, which breaks loose
+  and attacks (a boss fight, existing combat framework, tuned challenging-but-not-too-hard).
+  **Win → `refused`:** the heartless Deep crumbles, its prisoners are freed, and the hero
+  escapes amid the destruction (narrative epilogue; concludes at the Chamber). **Lose → forced
+  `became-heart`:** the Heart forcibly makes the hero the new Heart against their will —
+  overriding the normal health-zero → `died` transition while the Heart boss is active, and
+  writing the lineage record.
 - **Assemble the tablet & free the Heart → `broke-cycle`** — offered only with the full
-  fragment set; end the cycle. Top tier.
+  fragment set; end the cycle peacefully. Instant. Top tier.
 
-Each choice sets `ActiveRun.conclusion` exactly as `died` does, then the existing `finalizeRun`
-runs. The choice consumes no randomness.
+`became-heart` is thus reachable voluntarily (the choice) or involuntarily (losing the boss) —
+mechanically identical, narrated differently. Instant conclusions consume no randomness; the
+refused fight consumes combat randomness. Every ending then runs the existing `finalizeRun`.
+Hall tier order is unchanged (`broke-cycle` > `became-heart` > `refused` > `died`); winning the
+boss is additionally rewarded via boss-defeat score.
 
 ## The Final Chamber
 
