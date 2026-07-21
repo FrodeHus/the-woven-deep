@@ -19,7 +19,11 @@ import {
   type MerchantPopulation,
   type PublicEvent,
 } from '../src/index.js';
-import { merchantPropertyScenarioArbitrary, type MerchantPropertyScenario } from './arbitraries.js';
+import {
+  merchantPropertyScenarioArbitrary,
+  propertyRuns,
+  type MerchantPropertyScenario,
+} from './arbitraries.js';
 
 const POPULATION_ID = 'population.merchant-property';
 const MERCHANT_ACTOR_ID = `actor.${POPULATION_ID}.001`;
@@ -293,7 +297,7 @@ describe('mixed ordinary/trade merchant properties', () => {
         expect(stableJson(split.publicEvents)).toBe(stableJson(continuous.publicEvents));
         expect(stableJson(split.projections)).toBe(stableJson(continuous.projections));
       }),
-      { seed: 0x4b02, numRuns: 512 },
+      { seed: 0x4b02, numRuns: propertyRuns(512) },
     );
   }, 120_000);
 });

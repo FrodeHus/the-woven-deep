@@ -14,7 +14,7 @@ import {
   type EncounterRunDecision,
   type Uint32State,
 } from '../src/index.js';
-import { encounterGateInputArbitrary } from './arbitraries.js';
+import { encounterGateInputArbitrary, propertyRuns } from './arbitraries.js';
 
 function encounter(
   input: Readonly<{
@@ -310,7 +310,7 @@ describe('encounter gate properties', () => {
           evaluateDiscoveryProtection({ decisions: result.decisions, encounters }),
         );
       }),
-      { seed: 0x4b01, numRuns: 500 },
+      { seed: 0x4b01, numRuns: propertyRuns(500) },
     );
   });
 
@@ -339,7 +339,7 @@ describe('encounter gate properties', () => {
           if (placementDraws > 0) expect(placementState).not.toEqual(streams.encounters);
         },
       ),
-      { seed: 0x4b02, numRuns: 500 },
+      { seed: 0x4b02, numRuns: propertyRuns(500) },
     );
   });
 });

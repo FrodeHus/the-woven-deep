@@ -19,6 +19,13 @@ import type {
 
 const identifierPart = fc.stringMatching(/^[a-z][a-z0-9-]{0,15}$/);
 
+// fast-check's synchronous runner never yields between property runs, so a 500-run block of
+// full gameplay simulations blocks the Vitest worker's event loop for many seconds. On a
+// 2-core CI runner that outlasts the worker-RPC heartbeat and surfaces as "Timeout calling
+// onTaskUpdate". Cap the run count under CI so each block stays well under that window while
+// still exercising ~100 seeds per property; local and pre-merge runs keep the full count.
+export const propertyRuns = (full: number): number => (process.env.CI ? Math.min(full, 100) : full);
+
 export const currencyArbitrary = fc.integer({ min: 0, max: Number.MAX_SAFE_INTEGER });
 
 export const factionReputationArbitrary: fc.Arbitrary<FactionReputation> = fc.record({
