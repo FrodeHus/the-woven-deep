@@ -229,6 +229,10 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
   },
   'open-door': resolveDoor,
   'close-door': resolveDoor,
+  // The choice itself has no world effect: the reducer's post-world-step conclusion boundary
+  // (mirroring `concludeRunOnHeroDeath`) sets `state.conclusion` for `become-heart`/`break-cycle`
+  // after this resolver returns. `turn-away` is presently inert -- Task 4 wires it to the boss.
+  'final-chamber-choice': ({ state }) => ({ state, chargeEnergy: false }),
   'toggle-light': ({ state, action, actor, content, eventId, events }) => {
     const transition = toggleItemLight({
       run: state,

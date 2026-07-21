@@ -986,11 +986,19 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   if (savedHeroActor.floorId !== run.activeFloorId)
     fail('hero.actorId', 'hero actor must occupy the active floor');
 
-  if ((savedHeroActor.health === 0) !== (run.conclusion !== null)) {
-    fail(
-      'conclusion',
-      'a dead hero requires a non-null conclusion, and a living hero requires a null conclusion',
-    );
+  // A dead hero always requires a conclusion (`died`), but the reverse no longer holds: the Final
+  // Chamber's voluntary conclusions (`became-heart`, `broke-cycle`) close the run with the hero
+  // still alive, so a living hero may carry either a null conclusion (still playing) or one of
+  // those non-death completions.
+  if (savedHeroActor.health === 0 && run.conclusion === null) {
+    fail('conclusion', 'a dead hero requires a non-null conclusion');
+  }
+  if (
+    savedHeroActor.health > 0 &&
+    run.conclusion !== null &&
+    run.conclusion.completionType === 'died'
+  ) {
+    fail('conclusion', 'a living hero cannot carry a died conclusion');
   }
   if (run.conclusion !== null) {
     const { conclusion } = run;

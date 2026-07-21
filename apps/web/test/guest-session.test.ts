@@ -716,6 +716,44 @@ describe('GuestSession', () => {
       expect(second).toEqual(projection);
     });
 
+    it('finalizing a became-heart conclusion records the guest Hearth lineage', () => {
+      /** Mirrors `deadRun` above, but concluded voluntarily (`became-heart`) rather than by death:
+       * the hero stays alive, matching the Final Chamber choice's non-death conclusion shape. */
+      function heartRun(seed: Uint32State): ActiveRun {
+        const fresh = createNewRun({ pack, seed, hero: DEFAULT_GUEST_HERO });
+        return {
+          ...fresh,
+          conclusion: {
+            completionType: 'became-heart',
+            cause: {
+              killerContentId: null,
+              depth: 0,
+              turn: fresh.turn,
+              worldTime: fresh.worldTime,
+            },
+            concludedAtRevision: fresh.revision,
+            finalized: false,
+          },
+        };
+      }
+
+      const storage = fakeStorage();
+      storage.set(SAVE_KEY, encodeActiveRun(heartRun(SEED)));
+      const session = new GuestSession({ pack, storage });
+
+      const repository = createSessionRunRecordRepository(storage);
+      expect(repository.currentHeart()).toBeNull();
+
+      session.finalizeConcludedRun(repository, { achievedAt: 'Run #1', portraitGlyph: '@' });
+
+      const heart = repository.currentHeart();
+      expect(heart).not.toBeNull();
+      expect(heart?.heroName).toBe(DEFAULT_GUEST_HERO.name);
+      expect(heart?.classTags).toEqual(DEFAULT_GUEST_HERO.classTags);
+      expect(heart?.hallRecordId).toBe(repository.records()[0]!.recordId);
+      expect(heart?.enrichment).toEqual({ achievedAt: 'Run #1', portraitGlyph: '@' });
+    });
+
     it('persists the finalized run (reload sees the engine finalized flag) and does not re-append on finalizeConcludedRun after reload', () => {
       const storage = fakeStorage();
       storage.set(SAVE_KEY, encodeActiveRun(deadRun(SEED)));

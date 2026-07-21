@@ -549,6 +549,16 @@ export class GuestSession {
     const stored: StoredHallRecord = { ...finalized.record, enrichment };
     repository.appendRecord(stored);
     repository.applyDeltas(finalized.deltas);
+    // Becoming the Heart writes the guest's lineage slot in the same finalize: the next new run
+    // reads it back as its inherited Heart, so this must happen before `this.persist()` below.
+    if (finalized.record.completionType === 'became-heart') {
+      repository.recordHeart({
+        heroName: finalized.record.heroName,
+        classTags: finalized.record.classTags,
+        hallRecordId: finalized.record.recordId,
+        enrichment,
+      });
+    }
 
     this.run = finalized.run;
     // `finalizeRun` only ever emits `run.finalized`/`achievement.granted` (see run-finalize.ts),

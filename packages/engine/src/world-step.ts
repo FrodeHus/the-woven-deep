@@ -636,6 +636,8 @@ export function resolveWorldStep(
     });
     if (action.type === 'rest')
       throw new Error('internal invariant: non-player behavior selected rest');
+    if (action.type === 'final-chamber-choice')
+      throw new Error('internal invariant: non-player behavior selected final-chamber-choice');
     resolved = applyAction({ state, action, content: input.content, eventId: input.eventId });
     state = resolved.state;
     state = advanceWorldSystems({
