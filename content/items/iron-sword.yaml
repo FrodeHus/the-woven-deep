@@ -5,6 +5,7 @@ entries:
     name: Iron sword
     glyph: "/"
     color: "#c2c6c8"
+    description: A plain blade, notched from honest use. It has killed nothing legendary, only everything necessary.
     tags: [melee, offense, weapon]
     minDepth: 1
     maxDepth: 20

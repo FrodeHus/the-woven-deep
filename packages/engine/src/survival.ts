@@ -283,6 +283,16 @@ export function advanceSurvival(
         health: hero.health,
       });
     }
+    // The Weave trickles back over the same recovery intervals, clamped to the derived maximum.
+    // Deterministic and RNG-free, mirroring the health recovery above.
+    const weaveRestored = Math.min(
+      safeInteger('weave regen', balance.weaveRegenAmount * intervals),
+      hero.maxWeave - hero.weave,
+    );
+    if (weaveRestored > 0) {
+      hero = { ...hero, weave: hero.weave + weaveRestored };
+      actors = [...replaceActor(actors, hero)];
+    }
   }
 
   const survival: SurvivalState = {

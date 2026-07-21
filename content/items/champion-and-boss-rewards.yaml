@@ -5,6 +5,7 @@ entries:
     name: Warden's Ember
     glyph: "*"
     color: "#ff8c42"
+    description: A coal that never cools, pulled from a warden's chest while it still glowed. Wearing it feels like standing too close to a dying fire.
     tags: [boss-reward, fire, offense]
     minDepth: 5
     maxDepth: 20
@@ -24,6 +25,7 @@ entries:
     name: Weathered Champion's Token
     glyph: ","
     color: "#9b9488"
+    description: A worn keepsake left behind when a fallen champion's story ended without a proper heirloom to pass on.
     tags: [champion-relic, misc]
     minDepth: 1
     maxDepth: 20

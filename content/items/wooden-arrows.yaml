@@ -5,6 +5,7 @@ entries:
     name: Wooden arrows
     glyph: "|"
     color: "#b99a70"
+    description: Straight fletched shafts, tipped with whatever iron could be spared. Most fly true; the rest still fly.
     tags: [ammunition, arrow, offense]
     minDepth: 1
     maxDepth: 20

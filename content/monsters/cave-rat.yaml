@@ -5,6 +5,7 @@ entries:
     name: Cave rat
     glyph: r
     color: "#9e927c"
+    description: A rangy rat grown bold in the dark, unafraid of anything that walks on two legs.
     tags: [animal, darkness, offense]
     minDepth: 1
     maxDepth: 6

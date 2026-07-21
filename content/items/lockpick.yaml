@@ -5,6 +5,7 @@ entries:
     name: Bent lockpick
     glyph: "\\"
     color: "#9a9a8c"
+    description: A thin sliver of wire already bowed from someone else's patience. It will break eventually, just maybe not today.
     tags: [tool, lockpick]
     minDepth: 1
     maxDepth: 20

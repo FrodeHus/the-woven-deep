@@ -100,6 +100,14 @@ export interface UseItemAction {
   readonly targetActorId: OpaqueId;
   readonly cost: number;
 }
+export interface CastAction {
+  readonly type: 'cast';
+  readonly actorId: OpaqueId;
+  readonly spellId: OpaqueId;
+  readonly targetActorId: OpaqueId;
+  readonly weaveCost: number;
+  readonly cost: number;
+}
 export interface EquipAction {
   readonly type: 'equip';
   readonly actorId: OpaqueId;
@@ -174,6 +182,7 @@ export type GameAction =
   | FireAction
   | ThrowItemAction
   | UseItemAction
+  | CastAction
   | EquipAction
   | UnequipAction
   | ToggleLightAction
@@ -607,6 +616,76 @@ export function validatePlayerAction(
       actorId: actor.actorId,
       itemId: source.itemId,
       targetActorId: targetActor.actorId,
+      cost: definition.actionCost,
+    };
+  }
+  if (input.command.type === 'cast') {
+    const command = input.command;
+    const definition = entryById(input.context.content, command.spellId);
+    if (!definition || definition.kind !== 'spell') {
+      return { status: 'invalid', reason: 'action.unavailable' };
+    }
+    // The Weave gate runs before target resolution: an underpowered cast is rejected without
+    // consuming randomness or advancing the world, like the town-truce and concluded rejections.
+    if (actor.weave < definition.weaveCost) {
+      return { status: 'invalid', reason: 'cast.insufficient-weave' };
+    }
+    const candidate =
+      definition.targetingId === 'target.self'
+        ? actor
+        : input.state.actors.find(
+            (entry) =>
+              command.target !== null &&
+              entry.floorId === actor.floorId &&
+              entry.health > 0 &&
+              entry.x === command.target.x &&
+              entry.y === command.target.y,
+          );
+    if (!candidate) return { status: 'invalid', reason: 'target.invalid' };
+    const perception = targetContext(input.state, actor, input.context.content);
+    const target = validateTarget({
+      targetingId: definition.targetingId,
+      sourceActor: actor,
+      targetActorId: candidate.actorId,
+      target: command.target,
+      floor: perception.floor,
+      actors: input.state.actors,
+      visibilityWords: perception.visibilityWords,
+      illumination: perception.illumination,
+      range: definition.range,
+    });
+    if (!target.ok) return { status: 'invalid', reason: target.reason };
+    try {
+      resolveEffectSequence({
+        effects: definition.effects,
+        actors: input.state.actors,
+        items: input.state.items,
+        content: input.context.content,
+        sourceActorId: actor.actorId,
+        targetActorId: candidate.actorId,
+        effectsState: input.state.rng.effects,
+        survival: input.state.survival,
+        survivalActorId: input.state.hero.actorId,
+        worldTime: input.state.worldTime,
+        eventId: command.commandId,
+        forceMoveDirection:
+          candidate.actorId === actor.actorId
+            ? { x: 1, y: 0 }
+            : {
+                x: Math.sign(candidate.x - actor.x),
+                y: Math.sign(candidate.y - actor.y),
+              },
+        operations: {},
+      });
+    } catch {
+      return { status: 'invalid', reason: 'action.unavailable' };
+    }
+    return {
+      type: 'cast',
+      actorId: actor.actorId,
+      spellId: definition.id,
+      targetActorId: candidate.actorId,
+      weaveCost: definition.weaveCost,
       cost: definition.actionCost,
     };
   }

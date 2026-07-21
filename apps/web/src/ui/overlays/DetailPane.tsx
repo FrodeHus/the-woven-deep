@@ -1,7 +1,34 @@
 import type { JSX } from 'react';
-import { effectLabel } from '../labels.js';
+import type { CompiledContentPack } from '@woven-deep/content';
+import { effectLabel, formatDice } from '../labels.js';
+import { itemById } from '../../session/pack-queries.js';
 import { Button } from '../components/button.js';
 import type { MenuEntry, ProjectedItemLike } from './inventory-model.js';
+
+/** The identified item's known content-pack facts (equipment slot, combat, light, price, stack
+ * limit), one short line per fact -- never anything an unidentified item's projection wouldn't
+ * already expose (an unidentified item's `contentId` is absent from the projection entirely). */
+function itemKnownFacts(contentId: string, pack: CompiledContentPack): readonly string[] {
+  const entry = itemById(pack, contentId);
+  if (!entry) return [];
+  const facts: string[] = [];
+  if (entry.equipment) facts.push(`Slot: ${entry.equipment.slots.join(', ')}`);
+  if (entry.combat) {
+    const parts: string[] = [];
+    if (entry.combat.damage) parts.push(`damage ${formatDice(entry.combat.damage)}`);
+    if (entry.combat.accuracy !== 0)
+      parts.push(`accuracy ${entry.combat.accuracy >= 0 ? '+' : ''}${entry.combat.accuracy}`);
+    if (entry.combat.defense !== 0)
+      parts.push(`defense ${entry.combat.defense >= 0 ? '+' : ''}${entry.combat.defense}`);
+    if (entry.combat.armor !== 0) parts.push(`armor +${entry.combat.armor}`);
+    if (parts.length > 0) facts.push(`Combat: ${parts.join(', ')}`);
+  }
+  if (entry.light)
+    facts.push(`Light: radius ${entry.light.radius}, strength ${entry.light.strength}`);
+  facts.push(`Price: ${entry.price}`);
+  if (entry.stackLimit > 1) facts.push(`Stacks to ${entry.stackLimit}`);
+  return facts;
+}
 
 function ActionButton({
   label,
@@ -18,6 +45,7 @@ function ActionButton({
 export function DetailPane({
   entry,
   refuelTarget,
+  pack,
   onEquip,
   onUse,
   onDrop,
@@ -27,6 +55,7 @@ export function DetailPane({
   entry: MenuEntry | undefined;
   /** The equipped light `entry`'s item can refuel, if any -- see `equippedLightMatchingFuel`. */
   refuelTarget: ProjectedItemLike | undefined;
+  pack: CompiledContentPack;
   onEquip: () => void;
   onUse: () => void;
   onDrop: () => void;
@@ -36,6 +65,9 @@ export function DetailPane({
   if (!entry) return <p className="text-muted">Nothing selected.</p>;
   const { item, equipped, slot } = entry;
   const unidentified = item.contentId === undefined;
+  const facts = !unidentified && item.contentId ? itemKnownFacts(item.contentId, pack) : [];
+  const description =
+    !unidentified && item.contentId ? itemById(pack, item.contentId)?.description : undefined;
 
   return (
     <div className="flex flex-col gap-3">
@@ -45,6 +77,14 @@ export function DetailPane({
       </div>
 
       {equipped && <p className="text-sm">{`Equipped: ${slot}`}</p>}
+
+      {facts.length > 0 && (
+        <ul className="text-sm text-muted">
+          {facts.map((fact) => (
+            <li key={fact}>{fact}</li>
+          ))}
+        </ul>
+      )}
 
       {!unidentified && item.effects && item.effects.length > 0 && (
         <div>
@@ -72,6 +112,8 @@ export function DetailPane({
       {item.charges != null && <p className="text-sm">{`Charges: ${item.charges}`}</p>}
       {item.fuel != null && <p className="text-sm">{`Fuel: ${item.fuel}`}</p>}
       {item.enabled !== null && <p className="text-sm">{item.enabled ? 'Lit' : 'Unlit'}</p>}
+
+      {description && <p className="text-sm italic text-muted">{description}</p>}
 
       <div className="flex flex-wrap gap-2">
         <ActionButton label={equipped ? 'Unequip' : 'Equip'} chord="e" onClick={onEquip} />

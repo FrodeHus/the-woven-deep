@@ -394,6 +394,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     ensureActorWalkable(actorFloor, run.features, actorValue.x, actorValue.y, path);
     if (actorValue.health > actorValue.maxHealth)
       fail(`${path}.health`, 'health exceeds maximum health');
+    if (actorValue.weave > actorValue.maxWeave)
+      fail(`${path}.weave`, 'weave exceeds maximum weave');
     validateOrderedIds(actorValue.awareActorIds, `${path}.awareActorIds`, 'aware actor');
     for (const [awareIndex, awareActorId] of actorValue.awareActorIds.entries()) {
       if (awareActorId === actorValue.actorId)

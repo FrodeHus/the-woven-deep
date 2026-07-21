@@ -181,6 +181,24 @@ describe('survival clocks', () => {
     );
   });
 
+  it('regenerates Weave over crossed intervals and clamps it to the derived maximum', () => {
+    const input = fixture({ elapsed: 10, hunger: 90 });
+    const trickle = { ...input.state.actors[0]!, weave: 5, maxWeave: 14 };
+    const regenerated = advanceSurvival({
+      ...input,
+      state: { ...input.state, actors: [trickle] },
+    });
+    // weaveRegenAmount 2 across 2 crossed recovery intervals (interval 5, elapsed 10) -> +4.
+    expect(regenerated.state.actors[0]?.weave).toBe(9);
+
+    const nearFull = { ...input.state.actors[0]!, weave: 13, maxWeave: 14 };
+    const clamped = advanceSurvival({
+      ...input,
+      state: { ...input.state, actors: [nearFull] },
+    });
+    expect(clamped.state.actors[0]?.weave).toBe(14);
+  });
+
   it('recovers on crossed absolute intervals only when safe and sufficiently fed', () => {
     const input = fixture({ elapsed: 10, hunger: 90 });
     const actor = { ...input.state.actors[0]!, health: 10 };

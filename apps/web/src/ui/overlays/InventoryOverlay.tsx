@@ -151,6 +151,7 @@ export function InventoryOverlay(): JSX.Element | null {
           <DetailPane
             entry={selected}
             refuelTarget={refuelTarget}
+            pack={pack}
             onEquip={() => dispatchAction(selected?.equipped ? 'unequip' : 'equip')}
             onUse={() => dispatchAction('use')}
             onDrop={() => dispatchAction('drop')}

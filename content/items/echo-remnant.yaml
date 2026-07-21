@@ -5,6 +5,7 @@ entries:
     name: Faded echo remnant
     glyph: "~"
     color: "#8f8aa8"
+    description: A cold sliver of a voice that used to call the deep home. It hums faintly when carried past a familiar cell.
     tags: [echo, ordinary-loot]
     minDepth: 1
     maxDepth: 20

@@ -5,6 +5,7 @@ entries:
     name: Cinder thug
     glyph: u
     color: "#c06a3e"
+    description: A charred hulk of scar tissue and cinder, still swinging long after the fire that made it went out.
     tags: [ashwrought, brute, offense]
     minDepth: 6
     maxDepth: 9
@@ -30,6 +31,7 @@ entries:
     name: Slag skirmisher
     glyph: u
     color: "#d0824a"
+    description: Quick and brittle-skinned, it darts through embers that would fell slower kin.
     tags: [ashwrought, skirmisher]
     minDepth: 6
     maxDepth: 9
@@ -55,6 +57,7 @@ entries:
     name: Emberclad reaver
     glyph: R
     color: "#a8552e"
+    description: Its cracked hide has fused into a plate of slag armor, forged by whatever burned it alive.
     tags: [ashwrought, brute, armored]
     minDepth: 7
     maxDepth: 11
@@ -80,6 +83,7 @@ entries:
     name: Cinder hurler
     glyph: h
     color: "#d89a3a"
+    description: It cups embers in blistered hands and throws them without flinching, long past feeling the burn.
     tags: [ashwrought, ranged, fire]
     minDepth: 7
     maxDepth: 11
@@ -105,6 +109,7 @@ entries:
     name: Ashen juggernaut
     glyph: J
     color: "#8f3f22"
+    description: What the ash keeps longest, remade into something that no longer needs air to burn.
     tags: [ashwrought, brute, elite]
     minDepth: 9
     maxDepth: 12

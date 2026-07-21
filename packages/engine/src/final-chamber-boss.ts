@@ -103,6 +103,8 @@ function heartBossActor(
     attributes: definition.attributes,
     health: definition.health,
     maxHealth: definition.health,
+    weave: 0,
+    maxWeave: 0,
     energy: balance.readinessThreshold,
     speed: definition.speed,
     reactionReady: true,

@@ -21,6 +21,7 @@ export function playerVisibleDerivedStats(): readonly DerivedStatName[] {
  * hero record, character sheet). */
 export const DERIVED_STAT_LABELS: Readonly<Record<DerivedStatName, string>> = {
   maxHealth: 'Max health',
+  maxWeave: 'Max weave',
   meleeAccuracy: 'Melee accuracy',
   meleeDamageBonus: 'Melee damage bonus',
   rangedAccuracy: 'Ranged accuracy',

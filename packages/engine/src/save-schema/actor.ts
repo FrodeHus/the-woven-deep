@@ -79,7 +79,7 @@ export const populationPresentation = z.strictObject({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   leader: z.boolean(),
 });
-export const actor = z.strictObject({
+const actorFields = {
   actorId: identifier,
   contentId: identifier,
   playerControlled: z.boolean(),
@@ -101,6 +101,12 @@ export const actor = z.strictObject({
   populationId: nullableIdentifier,
   populationRoleId: z.string().min(1).max(80).nullable(),
   populationPresentation: populationPresentation.nullable(),
+};
+export const legacyActor = z.strictObject(actorFields);
+export const actor = z.strictObject({
+  ...actorFields,
+  weave: safeNonNegative,
+  maxWeave: safeNonNegative,
 });
 
 import type { ActorState } from '../actor-model.js';

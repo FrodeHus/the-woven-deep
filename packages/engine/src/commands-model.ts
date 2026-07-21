@@ -221,6 +221,7 @@ export type InvalidActionReason =
   | 'target.out_of_range'
   | 'target.blocked'
   | 'target.invalid'
+  | 'cast.insufficient-weave'
   | 'run.concluded'
   | 'final-chamber.unavailable'
   | 'final-chamber.fragments-required'
