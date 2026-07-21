@@ -585,3 +585,27 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   opacity: .4;
 }
 
+/* Spell-targeting mode (`TargetingOverlay`): rendered instead of `.cell-cursor` while a spell is
+   being targeted. A valid target cell (▓) gets an inviting gold fill/border like a reachable
+   `.cell-cursor`; every other known in-view cell is dimmed (░) toward the void so the valid set
+   reads clearly; the hovered/reticled cell layers `--alert` on top of either so it's distinct from
+   the rest of the valid set. All colour comes from the same named tokens the rest of the map pane
+   uses -- no literals. */
+.targeting-cell {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.targeting-cell-valid {
+  border: 1px solid var(--gold);
+  background: color-mix(in srgb, var(--gold) 22%, transparent);
+}
+.targeting-cell-dim {
+  background: color-mix(in srgb, var(--void-bg) 60%, transparent);
+}
+.targeting-cell-reticle {
+  border: 2px solid var(--alert);
+  background: color-mix(in srgb, var(--alert) 28%, transparent);
+}
+
