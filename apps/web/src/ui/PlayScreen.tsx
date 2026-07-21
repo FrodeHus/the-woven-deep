@@ -27,8 +27,10 @@ import { useSettingsCtx } from './providers.js';
 import { HouseScreen } from './screens/HouseScreen.js';
 import { TradeScreen } from './screens/TradeScreen.js';
 import { effectiveReducedMotion, ScreenFade } from './ScreenFade.js';
+import { AssetPopover } from './AssetPopover.js';
 import { ThreatPopover } from './ThreatPopover.js';
 import { TownPanel } from './TownPanel.js';
+import { useAutoTravel } from './hooks/useAutoTravel.js';
 import { useCellHover } from './hooks/useCellHover.js';
 import { useCommandPaletteHotkey } from './hooks/useCommandPaletteHotkey.js';
 import { usePaneMeasurement } from './hooks/usePaneMeasurement.js';
@@ -133,6 +135,7 @@ export function PlayScreen({
   const [paletteOpen, setPaletteOpen] = useCommandPaletteHotkey(isModalActive);
 
   const { hover, handlers } = useCellHover(snapshot);
+  const autoTravel = useAutoTravel({ session, snapshot, disabled: isModalActive });
 
   return (
     <ScreenFade
@@ -152,6 +155,7 @@ export function PlayScreen({
             ref={mapPaneRef}
             onMouseOver={handlers.onMouseOver}
             onMouseLeave={handlers.onMouseLeave}
+            onClick={autoTravel.onClick}
           >
             <div
               className={['playfield', projection.floor.town ? 'playfield-town' : '']
@@ -174,11 +178,21 @@ export function PlayScreen({
                 viewport={viewport}
               />
             </div>
-            {hover && (
+            {hover?.kind === 'actor' && (
               <ThreatPopover
                 actor={hover.actor}
                 col={hover.actor.x - camera.x}
                 row={hover.actor.y - camera.y}
+                paneCols={viewport.width}
+                paneRows={viewport.height}
+                cellPx={cellSize}
+              />
+            )}
+            {hover?.kind === 'asset' && (
+              <AssetPopover
+                asset={hover.asset}
+                col={hover.asset.x - camera.x}
+                row={hover.asset.y - camera.y}
                 paneCols={viewport.width}
                 paneRows={viewport.height}
                 cellPx={cellSize}
