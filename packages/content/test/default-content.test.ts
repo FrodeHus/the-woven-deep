@@ -59,6 +59,19 @@ describe('bundled content', () => {
     expect(pack.hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it('leaves modifiers and startingSpellIds undefined for existing classes', async () => {
+    const pack = await compileContentDirectory({
+      rootDir: resolve(import.meta.dirname, '../../../content'),
+    });
+    const wayfarer = pack.entries.find((entry) => entry.id === 'class.wayfarer') as {
+      modifiers?: unknown;
+      startingSpellIds?: unknown;
+    };
+    expect(wayfarer).toBeDefined();
+    expect(wayfarer.modifiers).toBeUndefined();
+    expect(wayfarer.startingSpellIds).toBeUndefined();
+  });
+
   it('ships the exact Lampwright merchant contract', async () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),

@@ -1,4 +1,4 @@
-import type { BaseContentEntry, ContentId, EquipmentSlot } from './common.js';
+import type { BaseContentEntry, ContentId, DerivedStatName, EquipmentSlot } from './common.js';
 
 export interface ClassKitEquippedItem {
   readonly contentId: ContentId;
@@ -23,4 +23,6 @@ export interface ClassContentEntry extends BaseContentEntry {
   readonly unlockHint: string | null;
   readonly classTags: readonly string[];
   readonly kits: readonly ClassKitDefinition[];
+  readonly modifiers?: Readonly<Partial<Record<DerivedStatName, number>>>;
+  readonly startingSpellIds?: readonly ContentId[];
 }

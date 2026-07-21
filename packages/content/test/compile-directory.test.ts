@@ -15,6 +15,8 @@ const compactMonster =
   '{kind: monster, id: monster.rat, name: Rat, glyph: r, color: "#aaaaaa", tags: [defense, food, healing, identification, light, offense], minDepth: 1, maxDepth: 5, attributes: {might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2}, health: 4, speed: 110, accuracy: 1, defense: 10, perception: 6, damage: {count: 1, sides: 3, bonus: 0}, armor: 0, resistances: {physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0}, disposition: hostile, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, threat: 2, rarity: common}';
 const compactItem =
   '{kind: item, id: item.lantern, name: Lantern, glyph: "¤", color: "#eeeeaa", tags: [defense, food, healing, identification, light, offense], minDepth: 1, maxDepth: 20, category: light, stackLimit: 1, price: 4, rarity: common, actionCost: 100, equipment: {slots: [off-hand], handedness: one-handed, reservedSlots: []}, combat: null, light: {color: [255, 200, 100], radius: 6, strength: 180, fuelCapacity: 1000, fuelPerTime: 1, warningThresholds: [100], fuelTags: [lamp-oil]}, identification: {mode: known, poolId: null}, effects: []}';
+const compactSpell =
+  '{kind: spell, id: spell.ember-bolt, name: Ember bolt, tags: [], targetingId: target.actor, range: 6, actionCost: 100, weaveCost: 3, effects: [{effectId: effect.damage, parameters: {damageType: fire, dice: {count: 1, sides: 6, bonus: 1}}, requiresLivingTarget: true}]}';
 const compactBalance =
   '{kind: balance, startingCurrency: 40, id: balance.core, name: Core, tags: [core], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 10000, hungerThresholds: {hungry: 3000, weak: 1000, starving: 0}, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, weaveRegenAmount: 2, restMaximumDuration: 5000, recoveryByHungerStage: {sated: 100, hungry: 50, weak: 0, starving: 0}, hungerStageModifiers: {sated: {}, hungry: {}, weak: {}, starving: {}}, formulas: {health: {base: 8, vitality: 2}}, actionCosts: {action.move: 100}, score: {depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: {died: 0, refused: 400, became-heart: 800, broke-cycle: 1500}, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200}, pointBuy: {budget: 1, costs: [{value: 0, cost: 0}, {value: 1, cost: 0}, {value: 2, cost: 0}, {value: 3, cost: 0}, {value: 4, cost: 0}, {value: 5, cost: 0}, {value: 6, cost: 0}, {value: 7, cost: 0}, {value: 8, cost: 0}, {value: 9, cost: 0}, {value: 10, cost: 0}, {value: 11, cost: 0}, {value: 12, cost: 0}, {value: 13, cost: 0}, {value: 14, cost: 0}, {value: 15, cost: 0}, {value: 16, cost: 0}, {value: 17, cost: 0}, {value: 18, cost: 0}, {value: 19, cost: 0}, {value: 20, cost: 0}, {value: 21, cost: 0}, {value: 22, cost: 0}, {value: 23, cost: 0}, {value: 24, cost: 0}, {value: 25, cost: 0}, {value: 26, cost: 0}, {value: 27, cost: 0}, {value: 28, cost: 0}, {value: 29, cost: 0}, {value: 30, cost: 0}]}, restockMilestones: [5, 10, 15, 20], house: {baseCapacity: 6, strongboxIncrement: 4}, encounterDensity: {cellsPerEncounter: 2000}}';
 const compactTimedCondition =
@@ -526,6 +528,56 @@ describe('compileContentDirectory', () => {
     });
     await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
       /kit first sets enabled on non-light item item\.sword/,
+    );
+  });
+
+  it('compiles a class with modifiers (including a negative) and startingSpellIds', async () => {
+    const kit1 = `{kitId: first, name: First, equipped: [{contentId: item.lantern, slot: off-hand, enabled: true}], backpack: []}`;
+    const kit2 = '{kitId: second, name: Second, equipped: [], backpack: []}';
+    const casterClass =
+      `{kind: class, id: class.wayfarer, name: Wayfarer, tags: [], description: A traveller., playable: true, silhouetteGlyph: W, unlockHint: null, classTags: [wayfarer], kits: [${kit1}, ${kit2}], ` +
+      'modifiers: {maxWeave: 4, defense: -1}, startingSpellIds: [spell.ember-bolt]}';
+    const root = await fixture({
+      'content.yaml': contentFile(
+        compactMonster,
+        compactItem,
+        compactVault,
+        compactSpell,
+        casterClass,
+      ),
+    });
+    const pack = await compileContentDirectory({ rootDir: root });
+    const cls = pack.entries.find((entry) => entry.id === 'class.wayfarer') as {
+      modifiers?: Record<string, number>;
+      startingSpellIds?: readonly string[];
+    };
+    expect(cls.modifiers).toEqual({ maxWeave: 4, defense: -1 });
+    expect(cls.startingSpellIds).toEqual(['spell.ember-bolt']);
+  });
+
+  it('leaves modifiers and startingSpellIds undefined for a class that declares neither', async () => {
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, compactItem, compactVault, playableClass(2)),
+    });
+    const pack = await compileContentDirectory({ rootDir: root });
+    const cls = pack.entries.find((entry) => entry.id === 'class.wayfarer') as {
+      modifiers?: unknown;
+      startingSpellIds?: unknown;
+    };
+    expect(cls.modifiers).toBeUndefined();
+    expect(cls.startingSpellIds).toBeUndefined();
+  });
+
+  it('rejects a class with an unknown startingSpellIds reference', async () => {
+    const badSpellClass = playableClass(2).replace(
+      'kits: [',
+      'startingSpellIds: [spell.missing], kits: [',
+    );
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, compactItem, compactVault, badSpellClass),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /unknown spell reference spell\.missing/,
     );
   });
 
