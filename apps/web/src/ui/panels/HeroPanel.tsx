@@ -13,7 +13,12 @@ export function HeroPanel({ snapshot }: PanelProps): JSX.Element {
       className="flex flex-col gap-2 rounded-md border border-line bg-surface p-3 text-sm text-fg"
     >
       <h2 className="font-serif text-lg text-fg-strong">{heroData.name}</h2>
-      <p>{`${heroData.health}/${heroData.maxHealth} HP`}</p>
+      <div className="flex items-baseline justify-between">
+        <span className="text-[0.625rem] uppercase tracking-[0.14em] text-muted">Vitality</span>
+        <span className={healthRatio <= LOW_HEALTH_RATIO ? 'text-danger' : 'text-good'}>
+          {`${heroData.health}/${heroData.maxHealth} HP`}
+        </span>
+      </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-raised" aria-hidden="true">
         <div
           className={cn(
@@ -32,6 +37,12 @@ export function HeroPanel({ snapshot }: PanelProps): JSX.Element {
           ))}
         </ul>
       )}
+      <div
+        aria-hidden="true"
+        className="mt-1 border-t border-line pt-2 text-[0.625rem] uppercase tracking-[0.16em] text-subtle"
+      >
+        ·&nbsp;─ Equipped ─&nbsp;·
+      </div>
       <ul className="flex flex-col gap-0.5 text-xs text-subtle">
         {Object.entries(heroData.equipment).map(([slot, item]) => (
           <li key={slot}>{`${slot}: ${item ? item.name : 'empty'}`}</li>
