@@ -272,9 +272,14 @@ export function TradeScreen({
         <DialogHeader>
           <DialogTitle>Trade</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-fg-strong">{session.merchantName}</p>
-        <p className="text-sm text-muted">{session.reputationTier}</p>
-        <p className="text-sm font-mono text-fg">{`${session.currency}g`}</p>
+        <div className="flex flex-col items-center gap-0.5 border-y border-dotted border-subtle py-2 text-center">
+          <p className="font-serif text-base text-fg-strong">{session.merchantName}</p>
+          <p className="text-xs uppercase tracking-[0.1em] text-subtle">{session.reputationTier}</p>
+          <p className="font-mono text-accent-strong">
+            <span aria-hidden="true">⛁ </span>
+            <span>{`${session.currency}g`}</span>
+          </p>
+        </div>
         <div
           ref={containerRef}
           tabIndex={-1}
