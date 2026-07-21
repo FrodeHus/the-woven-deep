@@ -59,9 +59,7 @@ export function deriveActorStats(input: ActorDerivationInput): DerivedActorStats
   const result = Object.fromEntries(
     DERIVED_STAT_NAMES.map((statName) => {
       const formula: DerivedStatFormula | undefined =
-        statName === 'weaveRegen'
-          ? { base: input.weaveRegenAmount }
-          : (input.formulas[statName]);
+        statName === 'weaveRegen' ? { base: input.weaveRegenAmount } : input.formulas[statName];
       if (formula === undefined) throw new TypeError(`${statName} formula is required`);
       let value = 0;
       for (const [operand, coefficient] of Object.entries(formula)) {

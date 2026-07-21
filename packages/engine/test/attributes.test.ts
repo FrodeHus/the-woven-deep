@@ -77,9 +77,9 @@ describe('deriveActorStats', () => {
 
   it('derives weaveRegen from weaveRegenAmount, boosted by a heroModifier', () => {
     expect(deriveActorStats(fixture()).weaveRegen).toBe(2);
-    expect(
-      deriveActorStats({ ...fixture(), heroModifiers: [{ weaveRegen: 2 }] }).weaveRegen,
-    ).toBe(4);
+    expect(deriveActorStats({ ...fixture(), heroModifiers: [{ weaveRegen: 2 }] }).weaveRegen).toBe(
+      4,
+    );
   });
 
   it('rejects unsafe operands and arithmetic overflow', () => {
