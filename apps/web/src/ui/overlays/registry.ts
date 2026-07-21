@@ -23,14 +23,13 @@ export interface OverlayDefinition {
  * itself a plain data table.
  */
 export const OVERLAY_REGISTRY: Readonly<Record<OverlayId, OverlayDefinition>> = {
-  // Title (and therefore the dialog's accessible name/`<h2>`) is "Backpack", not "Inventory" --
-  // the pinned e2e walks assert `getByRole('dialog', { name: 'Backpack' | /backpack/i })`
-  // verbatim. The keymap ACTION label (settings/help rows) stays "Inventory"
+  // Title (and therefore the drawer's accessible name/`<h2>`) is the mockup's serif heading
+  // "Pack & Gear". The keymap ACTION label (settings/help rows) stays "Inventory"
   // (`ACTION_LABELS.inventory` in settings.ts) -- that's a separate, unaffected string.
-  inventory: { id: 'inventory', title: 'Backpack', scope: 'play', action: 'inventory' },
+  inventory: { id: 'inventory', title: 'Pack & Gear', scope: 'play', action: 'inventory' },
   'character-sheet': {
     id: 'character-sheet',
-    title: 'Character Sheet',
+    title: 'Hero Record',
     scope: 'play',
     action: 'character-sheet',
   },

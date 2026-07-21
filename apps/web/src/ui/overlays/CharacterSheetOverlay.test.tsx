@@ -320,6 +320,20 @@ describe('CharacterSheetOverlay', () => {
     }
   });
 
+  it('resolves and shows the hero class name from the hero class tags', () => {
+    // The default guest hero is named "Wayfarer", so the Lamplighter class (a distinct name)
+    // proves the class line comes from the tags, not from the hero name.
+    const snapshot: SessionSnapshot = { ...snapshotFor(baseRun), heroClassTags: ['lamplighter'] };
+    renderSheet(snapshot);
+    expect(screen.getByText('Lamplighter')).toBeInTheDocument();
+  });
+
+  it('omits the class line when no class matches the hero class tags', () => {
+    const snapshot: SessionSnapshot = { ...snapshotFor(baseRun), heroClassTags: [] };
+    renderSheet(snapshot);
+    expect(screen.queryByText('Lamplighter')).not.toBeInTheDocument();
+  });
+
   it('omits a resistances section entirely, since projection.hero does not carry one', () => {
     const snapshot = snapshotFor(baseRun);
     expect('resistances' in (snapshot.projection.hero as object)).toBe(false);

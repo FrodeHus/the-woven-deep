@@ -13,11 +13,22 @@ export function StatusBar({ snapshot }: PanelProps): JSX.Element {
     <div
       role="group"
       aria-label="Status"
-      className="flex items-baseline gap-6 rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-fg"
+      className="flex items-baseline gap-5 rounded-md border border-line bg-surface px-4 py-1.5 text-sm text-fg"
     >
+      <span aria-hidden="true" className="font-serif tracking-[0.2em] text-fg-strong">
+        THE WOVEN DEEP
+      </span>
+      <span aria-hidden="true" className="text-subtle">
+        ❦
+      </span>
       <span className="font-serif text-fg-strong">{heroData.name}</span>
-      <span className="text-muted">{floor.town ? 'Town' : `Depth ${floor.depth}`}</span>
-      <span data-testid="turn-count">{`Turn ${metrics.turnsElapsed}`}</span>
+      <span className="tracking-wide text-muted">
+        {floor.town ? 'Town' : `Depth ${floor.depth}`}
+      </span>
+      <span
+        className="ml-auto text-muted"
+        data-testid="turn-count"
+      >{`Turn ${metrics.turnsElapsed}`}</span>
       {primaryCondition && (
         <span
           className="condition-badge rounded border px-1.5 text-xs"

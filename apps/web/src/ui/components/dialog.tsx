@@ -39,7 +39,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-line bg-surface p-6 text-fg shadow-lg outline-none transition-[transform,opacity] duration-150 data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0 sm:rounded-lg',
+          'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-double border-accent bg-surface p-6 text-fg shadow-[0_20px_80px_rgba(0,0,0,0.7)] outline-none transition-[transform,opacity] duration-150 data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0 sm:rounded-lg',
           className,
         )}
         {...props}
@@ -78,7 +78,10 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-lg font-semibold leading-none tracking-tight text-fg-strong', className)}
+      className={cn(
+        'font-serif text-lg font-normal uppercase leading-none tracking-[0.14em] text-fg-strong',
+        className,
+      )}
       {...props}
     />
   );

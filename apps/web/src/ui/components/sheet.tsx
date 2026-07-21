@@ -49,9 +49,9 @@ const sheetVariants = cva(
         top: 'w-full border-b data-starting-style:-translate-y-full data-ending-style:-translate-y-full',
         bottom:
           'w-full border-t data-starting-style:translate-y-full data-ending-style:translate-y-full',
-        left: 'h-full w-3/4 border-r data-starting-style:-translate-x-full data-ending-style:-translate-x-full sm:max-w-sm',
+        left: 'h-full w-3/4 border-r data-starting-style:-translate-x-full data-ending-style:-translate-x-full sm:max-w-xl',
         right:
-          'h-full w-3/4 border-l data-starting-style:translate-x-full data-ending-style:translate-x-full sm:max-w-sm',
+          'h-full w-3/4 border-l data-starting-style:translate-x-full data-ending-style:translate-x-full sm:max-w-xl',
       },
     },
     defaultVariants: { side: 'right' },
@@ -124,7 +124,10 @@ function SheetTitle({ className, ...props }: React.ComponentProps<typeof DrawerP
   return (
     <DrawerPrimitive.Title
       data-slot="sheet-title"
-      className={cn('text-lg font-semibold text-fg-strong', className)}
+      className={cn(
+        'font-serif text-base font-normal uppercase tracking-[0.12em] text-fg-strong',
+        className,
+      )}
       {...props}
     />
   );

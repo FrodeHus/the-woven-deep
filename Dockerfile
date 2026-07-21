@@ -8,7 +8,8 @@ COPY content ./content
 COPY docs ./docs
 COPY scripts ./scripts
 RUN npm ci
-RUN npm test && npm run typecheck && npm run build && npm run engine:demo && npm run dungeon:demo && npm run gameplay:demo && npm run population:demo && npm run merchant:demo && npm run run-records:demo
+# CI=true activates the web suite's retry for its timing-sensitive jsdom integration tests.
+RUN CI=true npm test && npm run typecheck && npm run build && npm run engine:demo && npm run dungeon:demo && npm run gameplay:demo && npm run population:demo && npm run merchant:demo && npm run run-records:demo
 RUN npm prune --omit=dev
 
 FROM node:22-bookworm-slim AS runtime

@@ -43,8 +43,11 @@ export function MinimapPanel({ snapshot }: PanelProps): JSX.Element {
     <section
       aria-label="Map"
       data-testid="minimap"
-      className="max-h-40 overflow-auto rounded-md border border-line bg-surface p-2"
+      className="flex max-h-40 flex-col gap-1 overflow-auto rounded-md border border-line bg-surface p-2"
     >
+      <div aria-hidden="true" className="text-[0.625rem] uppercase tracking-[0.16em] text-subtle">
+        ·&nbsp;─ The Floor ─&nbsp;·
+      </div>
       <div
         className="grid"
         style={{

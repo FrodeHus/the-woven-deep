@@ -208,7 +208,7 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     });
   });
 
-  it('the category filter toolbar button cycles through categories and back to all', async () => {
+  it('clicking a category filter pill narrows the pack list to that bucket', async () => {
     const user = userEvent.setup();
     const snapshot = snapshotWithBackpack([
       item({ itemId: 'item.sword', name: 'Sword', category: 'weapon' }),
@@ -221,17 +221,37 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(list.getByText('Sword')).toBeInTheDocument();
     expect(list.getByText('Shield')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Filter: All/ }));
-    expect(screen.getByRole('button', { name: /Filter: Weapons/ })).toBeInTheDocument();
+    // The "All" pill starts pressed; selecting "Weapons" keeps the sword and drops the shield.
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: 'Weapons' }));
+    expect(screen.getByRole('button', { name: 'Weapons' })).toHaveAttribute('aria-pressed', 'true');
     expect(list.getByText('Sword')).toBeInTheDocument();
     expect(list.queryByText('Shield')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Filter: Weapons/ }));
-    expect(screen.getByRole('button', { name: /Filter: Armor/ })).toBeInTheDocument();
+    // A shield buckets under "Armor" (not "Weapons"), so that pill reveals it.
+    await user.click(screen.getByRole('button', { name: 'Armor' }));
     expect(list.getByText('Shield')).toBeInTheDocument();
+    expect(list.queryByText('Sword')).not.toBeInTheDocument();
   });
 
-  it('the sort toolbar button toggles a stable, locale-free name sort', async () => {
+  it('pressing f cycles the category filter through the buckets', async () => {
+    const user = userEvent.setup();
+    const snapshot = snapshotWithBackpack([
+      item({ itemId: 'item.sword', name: 'Sword', category: 'weapon' }),
+      item({ itemId: 'item.shield', name: 'Shield', category: 'shield' }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    const list = within(screen.getByRole('listbox', { name: 'Backpack items' }));
+    // all -> weapons: only the sword survives.
+    await user.keyboard('f');
+    expect(screen.getByRole('button', { name: 'Weapons' })).toHaveAttribute('aria-pressed', 'true');
+    expect(list.getByText('Sword')).toBeInTheDocument();
+    expect(list.queryByText('Shield')).not.toBeInTheDocument();
+  });
+
+  it('pressing s toggles a stable, locale-free name sort', async () => {
     const user = userEvent.setup();
     const snapshot = snapshotWithBackpack([
       item({ itemId: 'item.zebra', name: 'Zebra pelt', category: 'misc' }),
@@ -245,7 +265,7 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(options[0]).toHaveTextContent('Zebra pelt');
     expect(options[1]).toHaveTextContent('Apple');
 
-    await user.click(screen.getByRole('button', { name: /Sort: Default/ }));
+    await user.keyboard('s');
     options = list.getAllByRole('option');
     expect(options[0]).toHaveTextContent('Apple');
     expect(options[1]).toHaveTextContent('Zebra pelt');
@@ -308,8 +328,7 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(screen.queryByRole('button', { name: /Refuel/ })).not.toBeInTheDocument();
   });
 
-  it("shows an identified item's known facts and authored description in the detail pane", async () => {
-    const user = userEvent.setup();
+  it('shows Damage and Worth fact rows and the authored description for an identified weapon', () => {
     const snapshot = snapshotWithBackpack([
       item({
         itemId: 'item.sword-1',
@@ -321,19 +340,34 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     const { session } = stubSession(snapshot);
     renderInventory(session);
 
-    const list = within(screen.getByRole('listbox', { name: 'Backpack items' }));
-    await user.click(list.getByRole('option', { name: /Iron sword/ }));
-
-    expect(screen.getByText(/Slot: main-hand/)).toBeInTheDocument();
+    const damage = screen.getByText('Damage');
+    expect(damage.parentElement).toHaveTextContent('1d6');
+    const worth = screen.getByText('Worth');
+    expect(worth.parentElement).toHaveTextContent('18');
     expect(screen.getByText(/notched from honest use/i)).toBeInTheDocument();
   });
 
-  it('omits known facts and the description for an unidentified item', async () => {
-    const user = userEvent.setup();
+  it('shows a Light radius fact row for an identified light, from its content entry', () => {
     const snapshot = snapshotWithBackpack([
       item({
-        itemId: 'item.mystery-1',
-        name: 'Mystery potion',
+        itemId: 'item.lantern-1',
+        contentId: 'item.brass-lantern',
+        name: 'Brass lantern',
+        category: 'light',
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    const radius = screen.getByText('Light radius');
+    expect(radius.parentElement).toHaveTextContent('7');
+  });
+
+  it('hides Damage, Worth, and the description for an unidentified item (no content entry resolves)', () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.mystery',
+        name: 'Cloudy potion',
         category: 'potion',
         identified: false,
       }),
@@ -341,10 +375,8 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     const { session } = stubSession(snapshot);
     renderInventory(session);
 
-    const list = within(screen.getByRole('listbox', { name: 'Backpack items' }));
-    await user.click(list.getByRole('option', { name: /Mystery potion/ }));
-
-    expect(screen.queryByText(/Slot:/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Damage')).not.toBeInTheDocument();
+    expect(screen.queryByText('Worth')).not.toBeInTheDocument();
     expect(screen.queryByText(/notched from honest use/i)).not.toBeInTheDocument();
   });
 

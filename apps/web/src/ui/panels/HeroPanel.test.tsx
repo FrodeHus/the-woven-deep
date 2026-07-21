@@ -55,7 +55,7 @@ describe('HeroPanel', () => {
       backpackCapacity: number;
     };
     expect(screen.getByText(hero.name)).toBeInTheDocument();
-    expect(screen.getByText(`${hero.health}/${hero.maxHealth} HP`)).toBeInTheDocument();
+    expect(screen.getByText(`${hero.health}/${hero.maxHealth}`)).toBeInTheDocument();
     expect(screen.getByText(`Hunger: ${hero.hungerStage}`)).toBeInTheDocument();
     const mainHand = hero.equipment['main-hand'];
     expect(mainHand).not.toBeNull();
@@ -69,7 +69,7 @@ describe('HeroPanel', () => {
     render(<HeroPanel snapshot={snapshotOf(baseProjection)} />);
     const hero = baseProjection.hero as unknown as { weave: number; maxWeave: number };
     expect(hero.maxWeave).toBeGreaterThan(0);
-    expect(screen.getByText(`${hero.weave}/${hero.maxWeave} WEAVE`)).toBeInTheDocument();
+    expect(screen.getByText(`${hero.weave}/${hero.maxWeave}`)).toBeInTheDocument();
   });
 
   it('keeps the panel\'s accessible name as "Hero"', () => {

@@ -8,7 +8,7 @@ import {
 import { heroOf } from '../../session/projection-view.js';
 import { usePack, useSessionCtx } from '../providers.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
-import { Button } from '../components/button.js';
+import { cn } from '../lib/cn.js';
 import { useItemActionKeys } from '../hooks/useItemActionKeys.js';
 import { DetailPane } from './DetailPane.js';
 import { EquipmentSlots } from './EquipmentSlots.js';
@@ -98,6 +98,11 @@ export function InventoryOverlay(): JSX.Element | null {
     setSelectedIndex(0);
   }
 
+  function selectFilter(next: CategoryFilter): void {
+    setFilter(next);
+    setSelectedIndex(0);
+  }
+
   // Called unconditionally so hook order stays stable across renders (an empty session yields no
   // selection); the returned handler is a no-op until an item is selected.
   const handleItemActionKey = useItemActionKeys<MenuEntry>(selected, {
@@ -125,28 +130,44 @@ export function InventoryOverlay(): JSX.Element | null {
   if (!hero) return null;
 
   return (
-    <div ref={containerRef} className="flex flex-col gap-2" onKeyDown={handleKeyDown}>
+    <div ref={containerRef} className="flex flex-col gap-3" onKeyDown={handleKeyDown}>
       <ListDetail
         listLabel="Backpack items"
         items={entries.map(toListItem)}
         selectedIndex={selectedIndex}
         onSelect={setSelectedIndex}
-        slots={<EquipmentSlots equipment={hero.equipment} />}
-        toolbar={
-          <>
-            <Button type="button" variant="ghost" size="sm" onClick={cycleFilter}>
-              {`Filter: ${CATEGORY_FILTER_LABEL[filter]} (f)`}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setSortByName((value) => !value)}
+        slots={
+          <section aria-labelledby="inventory-equipped-heading" className="flex flex-col gap-2">
+            <h3
+              id="inventory-equipped-heading"
+              className="flex items-center gap-2 text-[0.625rem] uppercase tracking-[0.14em] text-subtle"
             >
-              {sortByName ? 'Sort: Name (s)' : 'Sort: Default (s)'}
-            </Button>
-          </>
+              <span aria-hidden="true">·&nbsp;─</span>
+              Equipped
+              <span aria-hidden="true">─&nbsp;·</span>
+            </h3>
+            <EquipmentSlots equipment={hero.equipment} />
+          </section>
         }
+        toolbar={CATEGORY_FILTER_ORDER.map((option) => {
+          const active = option === filter;
+          return (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={active}
+              onClick={() => selectFilter(option)}
+              className={cn(
+                'cursor-pointer border px-2.5 py-1 font-mono text-[0.6875rem] uppercase tracking-[0.08em]',
+                active
+                  ? 'border-accent bg-accent text-deep'
+                  : 'border-line bg-surface text-muted hover:border-accent hover:text-fg',
+              )}
+            >
+              {CATEGORY_FILTER_LABEL[option]}
+            </button>
+          );
+        })}
         renderDetail={() => (
           <DetailPane
             entry={selected}
@@ -160,7 +181,10 @@ export function InventoryOverlay(): JSX.Element | null {
           />
         )}
       />
-      {entries.length === 0 && <p className="text-muted">Your backpack is empty.</p>}
+      {entries.length === 0 && <p className="text-muted">Your pack is empty.</p>}
+      <p className="mt-1 border-t border-line pt-2 font-mono text-[0.6875rem] text-subtle">
+        ↑↓ browse · e equip · u use · d drop · l light · f filter
+      </p>
     </div>
   );
 }

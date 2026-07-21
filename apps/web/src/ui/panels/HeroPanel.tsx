@@ -9,17 +9,22 @@ function StatMeter({
   label,
   current,
   maximum,
+  valueClass,
   barClass,
 }: {
   readonly label: string;
   readonly current: number;
   readonly maximum: number;
+  readonly valueClass: string;
   readonly barClass: string;
 }): JSX.Element {
   const ratio = maximum > 0 ? current / maximum : 0;
   return (
     <>
-      <p>{`${current}/${maximum} ${label}`}</p>
+      <div className="flex items-baseline justify-between">
+        <span className="text-[0.625rem] uppercase tracking-[0.14em] text-muted">{label}</span>
+        <span className={valueClass}>{`${current}/${maximum}`}</span>
+      </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-raised" aria-hidden="true">
         <div
           className={cn('h-full rounded-full', barClass)}
@@ -40,15 +45,17 @@ export function HeroPanel({ snapshot }: PanelProps): JSX.Element {
     >
       <h2 className="font-serif text-lg text-fg-strong">{heroData.name}</h2>
       <StatMeter
-        label="HP"
+        label="Vitality"
         current={heroData.health}
         maximum={heroData.maxHealth}
+        valueClass={healthRatio <= LOW_HEALTH_RATIO ? 'text-danger' : 'text-good'}
         barClass={healthRatio <= LOW_HEALTH_RATIO ? 'bg-danger' : 'bg-good'}
       />
       <StatMeter
-        label="WEAVE"
+        label="Weave"
         current={heroData.weave}
         maximum={heroData.maxWeave}
+        valueClass="text-cool"
         barClass="bg-cool"
       />
       <p className="text-muted">{`Hunger: ${heroData.hungerStage}`}</p>
@@ -60,6 +67,12 @@ export function HeroPanel({ snapshot }: PanelProps): JSX.Element {
           ))}
         </ul>
       )}
+      <div
+        aria-hidden="true"
+        className="mt-1 border-t border-line pt-2 text-[0.625rem] uppercase tracking-[0.16em] text-subtle"
+      >
+        ·&nbsp;─ Equipped ─&nbsp;·
+      </div>
       <ul className="flex flex-col gap-0.5 text-xs text-subtle">
         {Object.entries(heroData.equipment).map(([slot, item]) => (
           <li key={slot}>{`${slot}: ${item ? item.name : 'empty'}`}</li>

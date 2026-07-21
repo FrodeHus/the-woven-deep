@@ -56,8 +56,8 @@ export function ListDetail(props: Readonly<ListDetailProps>): JSX.Element {
 
   return (
     <div className="flex flex-col gap-2">
-      {toolbar && <div className="flex items-center gap-2">{toolbar}</div>}
       {slots && <div className="flex flex-col gap-1">{slots}</div>}
+      {toolbar && <div className="flex flex-wrap items-center gap-1.5">{toolbar}</div>}
       <div className="grid grid-cols-[1.05fr_1fr] gap-3">
         <div
           role="listbox"
@@ -77,7 +77,7 @@ export function ListDetail(props: Readonly<ListDetailProps>): JSX.Element {
                 aria-selected={selected}
                 onClick={() => onSelect(index)}
                 className={cn(
-                  'flex cursor-pointer items-center gap-2 rounded-sm border-l-2 border-transparent px-2 py-1 text-sm font-sans text-fg',
+                  'flex cursor-pointer items-center gap-2 rounded-sm border-l-2 border-transparent px-2 py-1 font-mono text-sm text-fg hover:bg-raised/50',
                   selected && 'bg-raised border-accent',
                 )}
               >
@@ -98,7 +98,11 @@ export function ListDetail(props: Readonly<ListDetailProps>): JSX.Element {
                 {item.quantity !== undefined && (
                   <span className="text-muted">{`x${item.quantity}`}</span>
                 )}
-                {item.badge && <span className="text-xs text-muted">{item.badge}</span>}
+                {item.badge && (
+                  <span className="border border-accent px-1 text-[10px] leading-tight text-accent-strong">
+                    {item.badge}
+                  </span>
+                )}
               </div>
             );
           })}

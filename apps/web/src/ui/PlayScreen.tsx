@@ -28,8 +28,11 @@ import { useSettingsCtx } from './providers.js';
 import { HouseScreen } from './screens/HouseScreen.js';
 import { TradeScreen } from './screens/TradeScreen.js';
 import { effectiveReducedMotion, ScreenFade } from './ScreenFade.js';
+import { AssetPopover } from './AssetPopover.js';
+import { CellCursor } from './CellCursor.js';
 import { ThreatPopover } from './ThreatPopover.js';
 import { TownPanel } from './TownPanel.js';
+import { useAutoTravel } from './hooks/useAutoTravel.js';
 import { useCellHover } from './hooks/useCellHover.js';
 import { useCommandPaletteHotkey } from './hooks/useCommandPaletteHotkey.js';
 import { usePaneMeasurement } from './hooks/usePaneMeasurement.js';
@@ -141,7 +144,16 @@ export function PlayScreen({
     snapshot.pendingFinalChamberChoice !== null;
   const [paletteOpen, setPaletteOpen] = useCommandPaletteHotkey(isModalActive);
 
-  const { hover, handlers } = useCellHover(snapshot);
+  const { hover, cursor, handlers } = useCellHover(snapshot);
+  const autoTravel = useAutoTravel({ session, snapshot, disabled: isModalActive });
+  const cursorCol = cursor ? cursor.x - camera.x : 0;
+  const cursorRow = cursor ? cursor.y - camera.y : 0;
+  const cursorInView =
+    cursor !== null &&
+    cursorCol >= 0 &&
+    cursorCol < viewport.width &&
+    cursorRow >= 0 &&
+    cursorRow < viewport.height;
 
   return (
     <ScreenFade
@@ -161,6 +173,7 @@ export function PlayScreen({
             ref={mapPaneRef}
             onMouseOver={handlers.onMouseOver}
             onMouseLeave={handlers.onMouseLeave}
+            onClick={autoTravel.onClick}
           >
             <div
               className={['playfield', projection.floor.town ? 'playfield-town' : '']
@@ -183,7 +196,15 @@ export function PlayScreen({
                 viewport={viewport}
               />
             </div>
-            {hover && (
+            {cursor && cursorInView && (
+              <CellCursor
+                col={cursorCol}
+                row={cursorRow}
+                reachable={cursor.reachable}
+                cellPx={cellSize}
+              />
+            )}
+            {hover?.kind === 'actor' && (
               <ThreatPopover
                 actor={hover.actor}
                 col={hover.actor.x - camera.x}
@@ -192,6 +213,16 @@ export function PlayScreen({
                 paneRows={viewport.height}
                 cellPx={cellSize}
                 pack={pack}
+              />
+            )}
+            {hover?.kind === 'asset' && (
+              <AssetPopover
+                asset={hover.asset}
+                col={hover.asset.x - camera.x}
+                row={hover.asset.y - camera.y}
+                paneCols={viewport.width}
+                paneRows={viewport.height}
+                cellPx={cellSize}
               />
             )}
           </div>

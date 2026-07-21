@@ -1,6 +1,8 @@
-import { Fragment, type JSX, type ReactNode } from 'react';
+import type { JSX, ReactNode } from 'react';
+import type { CompiledContentPack } from '@woven-deep/content';
 import { ATTRIBUTE_ORDER, type DerivedStatFormula } from '@woven-deep/engine';
-import { useSessionCtx } from '../providers.js';
+import { useSessionCtx, usePack } from '../providers.js';
+import { classEntries } from '../../session/pack-queries.js';
 import {
   ATTRIBUTE_LABELS,
   DERIVED_STAT_LABELS,
@@ -59,29 +61,59 @@ function Section({
   children,
 }: Readonly<{ id: string; title: string; children: ReactNode }>): JSX.Element {
   return (
-    <section
-      aria-labelledby={id}
-      className="flex flex-col gap-2 rounded-md border border-line bg-surface p-3"
-    >
-      <h3 id={id} className="font-serif text-sm text-fg-strong">
+    <section aria-labelledby={id} className="flex flex-col gap-2">
+      <h3
+        id={id}
+        className="flex items-center gap-2 text-[0.625rem] uppercase tracking-[0.14em] text-subtle"
+      >
+        <span aria-hidden="true">·&nbsp;─</span>
         {title}
+        <span aria-hidden="true">─&nbsp;·</span>
       </h3>
       {children}
     </section>
   );
 }
 
-function DefinitionGrid({ children }: Readonly<{ children: ReactNode }>): JSX.Element {
-  return <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">{children}</dl>;
+function DefinitionGrid({
+  children,
+  columns = 1,
+}: Readonly<{ children: ReactNode; columns?: 1 | 2 }>): JSX.Element {
+  return (
+    <dl className={`grid gap-x-5 gap-y-1 text-sm ${columns === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      {children}
+    </dl>
+  );
 }
 
+/** A dotted-leader row: label on the left, value on the right, with the dotted rule drawn on the
+ * value cell itself so `dt` stays the immediate previous sibling of `dd` (the character-sheet tests
+ * read `getByText(label).nextElementSibling` for the value). */
 function Row({ label, value }: Readonly<{ label: string; value: ReactNode }>): JSX.Element {
   return (
-    <Fragment>
-      <dt className="text-muted">{label}</dt>
-      <dd className="text-right text-fg">{value}</dd>
-    </Fragment>
+    <div className="flex items-baseline gap-2">
+      <dt className="shrink-0 text-muted">{label}</dt>
+      <dd className="flex-1 border-b border-dotted border-subtle pb-0.5 text-right text-fg">
+        {value}
+      </dd>
+    </div>
   );
+}
+
+/**
+ * The hero's class is not projected: the run records only `heroClassTags`, not a class id (see the
+ * design amendment noted in `session/codex-derive.ts`). Its display name is resolved the same way
+ * the unlock codex resolves it -- the bundled classes carry distinctive tags, so the one class whose
+ * every `classTag` the hero carries is the hero's class. `undefined` when no class matches (e.g. the
+ * hero carries no class tags), in which case the line is omitted rather than shown blank.
+ */
+function heroClassName(
+  pack: CompiledContentPack,
+  heroClassTags: readonly string[],
+): string | undefined {
+  return classEntries(pack).find((entry) =>
+    entry.classTags.every((tag) => heroClassTags.includes(tag)),
+  )?.name;
 }
 
 /**
@@ -121,15 +153,36 @@ function Row({ label, value }: Readonly<{ label: string; value: ReactNode }>): J
  */
 export function CharacterSheetOverlay(): JSX.Element | null {
   const sessionCtx = useSessionCtx();
+  const pack = usePack();
   if (!sessionCtx) return null;
 
   const { snapshot } = sessionCtx;
   const hero: HeroView = heroOf(snapshot.projection);
-  const town = snapshot.projection.floor.town;
+  const floor = snapshot.projection.floor;
+  const town = floor.town;
+  const location = town ? 'Town' : `Depth ${floor.depth}`;
   const metrics = snapshot.projection.metrics;
+  const className = heroClassName(pack, snapshot.heroClassTags);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
+      {/* Identity header: avatar glyph, hero name, class, current location. The class name is
+       * resolved from the hero's class tags against the pack (`heroClassName`); it is omitted when
+       * no class matches rather than shown blank. */}
+      <header className="flex items-center gap-3.5">
+        <div
+          aria-hidden="true"
+          className="grid size-16 place-items-center border border-double border-accent bg-raised font-serif text-3xl text-accent-strong"
+        >
+          @
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <p className="font-serif text-lg text-fg-strong">{hero.name}</p>
+          {className !== undefined && <p className="text-sm text-fg">{className}</p>}
+          <p className="text-xs uppercase tracking-[0.08em] text-subtle">{location}</p>
+        </div>
+      </header>
+
       <Section id="character-sheet-attributes-heading" title="Attributes">
         <DefinitionGrid>
           {ATTRIBUTE_ORDER.map((name) => (
@@ -202,7 +255,7 @@ export function CharacterSheetOverlay(): JSX.Element | null {
       </Section>
 
       <Section id="character-sheet-metrics-heading" title="Run statistics">
-        <DefinitionGrid>
+        <DefinitionGrid columns={2}>
           {METRIC_ROWS.map(({ key, label }) => (
             <Row key={key} label={label} value={metrics[key]} />
           ))}

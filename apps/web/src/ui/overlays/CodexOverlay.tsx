@@ -91,7 +91,7 @@ function DetailPane({
       {entry.description && (
         <>
           <dt className="text-muted">Description</dt>
-          <dd>{entry.description}</dd>
+          <dd className="font-serif text-sm leading-relaxed text-fg">{entry.description}</dd>
         </>
       )}
       <dt className="text-muted">First seen</dt>
