@@ -45,6 +45,7 @@ import {
   saveOnboarding,
   type OnboardingState,
 } from './onboarding.js';
+import type { RunSession } from './run-session.js';
 import { randomSeed } from './seed.js';
 import {
   classifyStorageFailure,
@@ -142,7 +143,7 @@ function inMemoryLocalStorage(): SessionStorageLike {
  * turning `PlayerIntent`s into engine commands, and persisting the result after every dispatch
  * that changes the run. Framework-free — `store.ts` is the only file that touches React.
  */
-export class GuestSession {
+export class GuestSession implements RunSession {
   private readonly pack: CompiledContentPack;
   private readonly storage: SessionStorageLike;
   private readonly hero: NewRunHero;
