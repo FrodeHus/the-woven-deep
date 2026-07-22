@@ -8,4 +8,9 @@ describe('session-core public API', () => {
     expect(typeof sessionCore.heroOf).toBe('function');
     expect(typeof sessionCore.chebyshev).toBe('function');
   });
+
+  it('exports the dispatch surface extracted from GuestSession', () => {
+    expect(typeof sessionCore.dispatchIntent).toBe('function');
+    expect(typeof sessionCore.dispatchCommand).toBe('function');
+  });
 });
