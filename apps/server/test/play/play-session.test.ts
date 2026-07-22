@@ -3,7 +3,12 @@ import Database from 'better-sqlite3';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
-import { decodeActiveRun, encodeActiveRun, type Uint32State } from '@woven-deep/engine';
+import {
+  decodeActiveRun,
+  encodeActiveRun,
+  isHeartBossActive,
+  type Uint32State,
+} from '@woven-deep/engine';
 import { runMigrations } from '../../src/database.js';
 import { ActiveRunRepository } from '../../src/db/active-run-repository.js';
 import { ProfileRepository } from '../../src/db/profile-repository.js';
@@ -52,6 +57,18 @@ describe('ServerPlaySession', () => {
     expect(stored!.revision).toBe(snapshot.revision);
     expect(snapshot.conclusion).toBeNull();
     expect(snapshot.pendingDecision).toBeNull();
+  });
+
+  it('reports bossActive as the authoritative, perception-free isHeartBossActive over the raw run -- not something the client can re-derive from the redacted projection', () => {
+    // A fresh run at depth 1 has no heart-boss population yet -- isHeartBossActive(run) is false,
+    // and `snapshot().bossActive` must agree (this is the same predicate the T9 review's fix
+    // requires the client to trust instead of re-deriving from illumination-gated visible actors).
+    const session = newSession(repo);
+    const snapshot = session.open({ seed: SEED });
+    const stored = repo.get(PROFILE)!;
+    const run = decodeActiveRun(stored.runBlob);
+    expect(snapshot.bossActive).toBe(isHeartBossActive(run));
+    expect(snapshot.bossActive).toBe(false);
   });
 
   it('rehydrates a stored run byte-identically on a second open', () => {

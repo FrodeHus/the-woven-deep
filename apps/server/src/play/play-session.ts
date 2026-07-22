@@ -3,6 +3,7 @@ import {
   createNewRun,
   decodeActiveRun,
   encodeActiveRun,
+  isHeartBossActive,
   projectGameplayState,
   projectRunConclusion,
   DEFAULT_GUEST_HERO,
@@ -90,6 +91,12 @@ export interface ServerRunSnapshot {
   readonly conclusion: RunConclusionProjection | null;
   readonly houseOpen: boolean;
   readonly heroClassTags: readonly string[];
+  /** Authoritative, perception-free: whether the Weakened Heart boss is present and alive on the
+   * raw run state (`isHeartBossActive`). The client must use this rather than deriving boss
+   * presence from the redacted, illumination-gated projection's visible actors -- under the
+   * light-out mechanic (0 illumination on the hero's own tile) the boss can be alive but invisible,
+   * and re-deriving from visible actors would wrongly re-offer the Final Chamber choice mid-fight. */
+  readonly bossActive: boolean;
 }
 
 export type ApplyOutcome =
@@ -287,6 +294,7 @@ export class ServerPlaySession {
           : null,
       houseOpen: this.houseOpen,
       heroClassTags: this.run.hero.classTags,
+      bossActive: isHeartBossActive(this.run),
     };
   }
 }

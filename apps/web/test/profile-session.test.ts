@@ -5,6 +5,8 @@ import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   createNewRun,
   DEFAULT_GUEST_HERO,
+  FINAL_CHAMBER_DEPTH,
+  isHeartBossActive,
   projectGameplayState,
   projectRunConclusion,
   type ActiveRun,
@@ -35,7 +37,9 @@ function freshRun(seed: Uint32State = SEED): ActiveRun {
 
 function snapshotOf(
   run: ActiveRun,
-  overrides: Partial<Pick<ServerRunSnapshot, 'lastEvents' | 'pendingDecision' | 'houseOpen'>> = {},
+  overrides: Partial<
+    Pick<ServerRunSnapshot, 'lastEvents' | 'pendingDecision' | 'houseOpen' | 'bossActive'>
+  > = {},
 ): ServerRunSnapshot {
   return {
     projection: projectGameplayState({ state: run, content: pack }),
@@ -48,6 +52,7 @@ function snapshotOf(
         : projectRunConclusion({ run, record: null, achievements: [] }),
     houseOpen: overrides.houseOpen ?? false,
     heroClassTags: [...run.hero.classTags],
+    bossActive: overrides.bossActive ?? isHeartBossActive(run),
   };
 }
 
@@ -215,6 +220,29 @@ describe('ProfileSession', () => {
     });
 
     expect(session.getSnapshot().pendingDecision).toEqual(decision);
+  });
+
+  it('does not offer the Final Chamber choice when the server reports the boss active, even though no boss actor is visible on the projection (hero standing in the dark)', async () => {
+    const { socket, connectPromise } = harness();
+    const run = freshRun();
+    socket().emit(HELLO);
+    // `bossActive: true` simulates the engine-authoritative `isHeartBossActive` while the
+    // projection's visible-actor list stays empty -- exactly what the illumination-gated
+    // projection looks like when the hero's own tile is at 0 illumination. The OLD logic (deriving
+    // "boss active" from `actorsOf(projection).some(...)`) would see no visible boss actor and
+    // wrongly re-offer the choice; the fix must trust `snapshot.bossActive` instead.
+    const base = snapshotOf(run, { bossActive: true });
+    const chamberSnapshot: ServerRunSnapshot = {
+      ...base,
+      projection: {
+        ...base.projection,
+        floor: { ...base.projection.floor, depth: FINAL_CHAMBER_DEPTH },
+      },
+    };
+    socket().emit({ type: 'state', snapshot: chamberSnapshot });
+    const session = await connectPromise;
+
+    expect(session.getSnapshot().pendingFinalChamberChoice).toBeNull();
   });
 
   it('flips to a terminal, read-only notice on superseded and stops reconnecting', async () => {

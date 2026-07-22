@@ -1,8 +1,6 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
-  entryById,
   FINAL_CHAMBER_DEPTH,
-  HEART_BOSS_ENCOUNTER_ID,
   tabletFragmentIds,
   type FinalChamberChoiceCommand,
   type GameplayProjection,
@@ -29,7 +27,7 @@ import {
   saveOnboarding,
   type OnboardingState,
 } from './onboarding.js';
-import { actorsOf, heroOf } from './projection-view.js';
+import { heroOf } from './projection-view.js';
 import type { RunSession } from './run-session.js';
 import { classifyStorageFailure, type SessionStorageLike } from './storage.js';
 import { WsClient, type WebSocketFactory } from './ws-client.js';
@@ -51,6 +49,10 @@ export interface ServerRunSnapshot {
   readonly conclusion: RunConclusionProjection | null;
   readonly houseOpen: boolean;
   readonly heroClassTags: readonly string[];
+  /** Authoritative, perception-free: whether the Weakened Heart boss is present and alive on the
+   * server's raw run state (`isHeartBossActive`). Must be used instead of re-deriving boss
+   * presence from the redacted projection's visible actors -- see `computePendingFinalChamberChoice`. */
+  readonly bossActive: boolean;
 }
 
 /** Client -> server messages, mirroring `apps/server/src/ws-protocol.ts`'s `ClientMessage`. */
@@ -140,24 +142,18 @@ function rejectionLine(reason: string): string {
   return reason;
 }
 
-/** The Weakened Heart boss's monster content id, looked up once per computation rather than
- * hardcoded -- resilient to the id itself changing, since only `HEART_BOSS_ENCOUNTER_ID` (an
- * engine constant) is assumed stable. */
-function heartBossMonsterId(pack: CompiledContentPack): string | null {
-  const entry = entryById(pack, HEART_BOSS_ENCOUNTER_ID);
-  return entry?.kind === 'encounter' && entry.model === 'boss' ? entry.definition.monsterId : null;
-}
-
 /**
  * `ProfileSession`'s counterpart to `GuestSession`'s private `computePendingFinalChamberChoice`.
  * The guest computes this straight off its own held `ActiveRun` (`isHeartBossActive`,
  * `heroHoldsAllFragments`) -- fields the wire's redacted `GameplayProjection` never carries, by
  * design (raw run state never crosses the wire; see `ServerRunSnapshot`'s own doc comment in
- * `play-session.ts`). This re-derives the SAME predicate from what IS on the projection: the boss
- * is "active" iff its monster is present among the currently perceived, living actors (the
- * projection already excludes dead/unperceived actors -- see `projectVisibleActors`), and
- * `canBreakCycle` iff every tablet-fragment content id appears (by `contentId`) in the hero's
- * projected backpack.
+ * `play-session.ts`). The boss-active signal is the server's own authoritative, perception-free
+ * `snapshot.bossActive` (NOT re-derived from the projection's visible actors -- those are
+ * illumination-gated, so the boss can be alive but invisible when the hero's own tile is dark,
+ * which would otherwise wrongly re-offer this choice mid-fight). `canBreakCycle` is still derived
+ * from the projection: every tablet-fragment content id appears (by `contentId`) in the hero's
+ * projected backpack -- tablet fragments are always `identification: { mode: known }`, so their
+ * `contentId` is never redacted.
  */
 function computePendingFinalChamberChoice(
   pack: CompiledContentPack,
@@ -165,12 +161,7 @@ function computePendingFinalChamberChoice(
 ): PendingFinalChamberChoice | null {
   if (snapshot.conclusion !== null) return null;
   if (snapshot.projection.floor.depth !== FINAL_CHAMBER_DEPTH) return null;
-
-  const bossMonsterId = heartBossMonsterId(pack);
-  const bossActive =
-    bossMonsterId !== null &&
-    actorsOf(snapshot.projection).some((actor) => actor.contentId === bossMonsterId);
-  if (bossActive) return null;
+  if (snapshot.bossActive) return null;
 
   const fragmentIds = tabletFragmentIds(pack);
   const backpackContentIds = new Set(
