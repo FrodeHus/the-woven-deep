@@ -207,6 +207,17 @@ export class ServerPlaySession {
     return this.applyResolution(dispatchCommand(this.run, command, { pack: this.pack }), false);
   }
 
+  /**
+   * The "no" branch of a `confirm-aggression` prompt — mirrors the guest's
+   * `answerDecision(false)`: clears the pending decision without ever building or resolving an
+   * engine command (there is nothing to apply; the hero simply holds back). A no-op, returning the
+   * current snapshot, when no decision is pending.
+   */
+  declineDecision(): ApplyOutcome {
+    this.pendingDecision = null;
+    return { kind: 'state', snapshot: this.snapshot() };
+  }
+
   private applyResolution(
     resolution: ReturnType<typeof dispatchCommand>,
     isMoveIntent: boolean,
