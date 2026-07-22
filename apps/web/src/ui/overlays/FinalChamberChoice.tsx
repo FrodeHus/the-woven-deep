@@ -1,11 +1,12 @@
 import { useRef, type JSX } from 'react';
 import type { HeartLineageRecord } from '@woven-deep/engine';
-import type { GuestSession, SessionSnapshot } from '../../session/guest-session.js';
+import type { SessionSnapshot } from '../../session/guest-session.js';
+import type { RunSession } from '../../session/run-session.js';
 import { useDialogFocusTrap } from './focus-trap.js';
 
 interface FinalChamberChoiceProps {
   readonly snapshot: SessionSnapshot;
-  readonly session: GuestSession;
+  readonly session: RunSession;
   /** The predecessor bound Heart, from the guest's lineage store (`repository.currentHeart()`) --
    * `null` when no earlier hero has ever chosen `became-heart` in this browser, in which case an
    * authored, nameless fallback identity is shown instead. */

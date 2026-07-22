@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Point } from '@woven-deep/engine';
-import type { GuestSession, SessionSnapshot } from '../../session/guest-session.js';
+import type { SessionSnapshot } from '../../session/guest-session.js';
 import { actorsOf, heroOf } from '../../session/projection-view.js';
+import type { RunSession } from '../../session/run-session.js';
 import { computeValidTargets, type TargetCandidate } from '../../session/spell-targeting.js';
 
 function cellKey(point: Point): string {
@@ -48,7 +49,7 @@ export interface UseSpellTargetingResult {
  * re-validates on dispatch; nothing here is authoritative.
  */
 export function useSpellTargeting(
-  session: GuestSession,
+  session: RunSession,
   snapshot: SessionSnapshot,
 ): UseSpellTargetingResult {
   const { projection } = snapshot;

@@ -10,7 +10,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && npm run build --workspace @woven-deep/web && npm run build --workspace @woven-deep/server",
+    "build": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && npm run build --workspace @woven-deep/session-core && npm run build --workspace @woven-deep/web && npm run build --workspace @woven-deep/server",
     "content:validate": "npm run build --workspace @woven-deep/content && node packages/content/dist/cli.js",
     "content:startup-gate": "node scripts/content-startup-gate.mjs",
     "dungeon:demo": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && node scripts/dungeon-demo.mjs --verify",
@@ -28,8 +28,8 @@
     "format:check": "prettier --check .",
     "knip": "knip",
     "depcruise": "depcruise packages apps --config .dependency-cruiser.cjs --ignore-known",
-    "test": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && npm run test --workspaces --if-present",
-    "typecheck": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && npm run typecheck --workspaces --if-present",
+    "test": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && npm run build --workspace @woven-deep/session-core && npm run test --workspaces --if-present",
+    "typecheck": "npm run build --workspace @woven-deep/content && npm run build --workspace @woven-deep/engine && npm run build --workspace @woven-deep/session-core && npm run typecheck --workspaces --if-present",
     "verify": "npm run typecheck && npm run lint && npm run format:check && npm run depcruise && npm run knip && npm run test"
   },
   "devDependencies": {

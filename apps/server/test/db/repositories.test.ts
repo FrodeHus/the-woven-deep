@@ -4,6 +4,7 @@ import { runMigrations } from '../../src/database.js';
 import { ProfileRepository } from '../../src/db/profile-repository.js';
 import { LoginTokenRepository } from '../../src/db/login-token-repository.js';
 import { SessionRepository } from '../../src/db/session-repository.js';
+import { ActiveRunRepository } from '../../src/db/active-run-repository.js';
 
 function freshDatabase(): Database.Database {
   const database = new Database(':memory:');
@@ -277,5 +278,101 @@ describe('SessionRepository', () => {
     expect(removed).toBe(1);
     expect(repository.find('expired-session')).toBeUndefined();
     expect(repository.find('active-session')).toBeDefined();
+  });
+});
+
+describe('ActiveRunRepository', () => {
+  let database: Database.Database;
+  let profiles: ProfileRepository;
+  let repository: ActiveRunRepository;
+
+  // A representative encoded-run string, shaped like the real client/engine
+  // encodeActiveRun() output, but this repository stores it opaquely as TEXT
+  // and never parses it, so any string round-trips exactly.
+  const runBlob = JSON.stringify({
+    schemaVersion: 1,
+    seed: 'abc123',
+    hero: { id: 'hero-1', name: 'Test Hero', hp: 12, maxHp: 12 },
+    floor: 1,
+    log: [{ turn: 1, type: 'move', payload: { dx: 1, dy: 0 } }],
+  });
+
+  beforeEach(() => {
+    database = freshDatabase();
+    profiles = new ProfileRepository(database);
+    repository = new ActiveRunRepository(database);
+    profiles.create({
+      id: 'p1',
+      normalizedEmail: 'a@example.com',
+      nowIso: '2026-07-17T00:00:00.000Z',
+    });
+  });
+
+  it('get on a profile with no active run returns undefined', () => {
+    expect(repository.get('p1')).toBeUndefined();
+  });
+
+  it('upsert then get round-trips the run_blob exactly', () => {
+    repository.upsert({
+      profileId: 'p1',
+      runBlob,
+      revision: 1,
+      contentHash: 'c'.repeat(64),
+      updatedAt: '2026-07-17T00:00:00.000Z',
+    });
+
+    expect(repository.get('p1')).toEqual({
+      profileId: 'p1',
+      runBlob,
+      revision: 1,
+      contentHash: 'c'.repeat(64),
+      updatedAt: '2026-07-17T00:00:00.000Z',
+    });
+  });
+
+  it('upsert overwrites the existing row for the same profile', () => {
+    repository.upsert({
+      profileId: 'p1',
+      runBlob,
+      revision: 1,
+      contentHash: 'c'.repeat(64),
+      updatedAt: '2026-07-17T00:00:00.000Z',
+    });
+
+    const updatedBlob = JSON.stringify({ ...JSON.parse(runBlob), floor: 2 });
+    repository.upsert({
+      profileId: 'p1',
+      runBlob: updatedBlob,
+      revision: 2,
+      contentHash: 'd'.repeat(64),
+      updatedAt: '2026-07-17T01:00:00.000Z',
+    });
+
+    expect(repository.get('p1')).toEqual({
+      profileId: 'p1',
+      runBlob: updatedBlob,
+      revision: 2,
+      contentHash: 'd'.repeat(64),
+      updatedAt: '2026-07-17T01:00:00.000Z',
+    });
+  });
+
+  it('clear removes the active run for a profile', () => {
+    repository.upsert({
+      profileId: 'p1',
+      runBlob,
+      revision: 1,
+      contentHash: 'c'.repeat(64),
+      updatedAt: '2026-07-17T00:00:00.000Z',
+    });
+
+    repository.clear('p1');
+
+    expect(repository.get('p1')).toBeUndefined();
+  });
+
+  it('clear on a profile with no active run is a no-op', () => {
+    expect(() => repository.clear('p1')).not.toThrow();
+    expect(repository.get('p1')).toBeUndefined();
   });
 });

@@ -4,7 +4,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection } from '@woven-deep/engine';
 import { DEFAULT_GUEST_HERO, createNewRun, projectGameplayState } from '@woven-deep/engine';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
-import { buildIntent } from '../src/session/command-builder.js';
+import { buildIntent } from '../src/command-builder.js';
 
 let pack: CompiledContentPack;
 let baseProjection: GameplayProjection;

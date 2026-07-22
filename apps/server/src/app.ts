@@ -1,12 +1,16 @@
 import fastifyCookie from '@fastify/cookie';
 import fastifyCsrf from '@fastify/csrf-protection';
 import fastifyStatic from '@fastify/static';
+import fastifyWebsocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
+import type Database from 'better-sqlite3';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { registerAuthRoutes, type AuthBundle } from './routes/auth.js';
 import { registerProfileRoutes } from './routes/profile.js';
 import { registerDevRoutes } from './routes/dev.js';
+import { registerWsPlayRoute } from './routes/ws-play.js';
 import { decorateProfileId } from './auth/http-guards.js';
+import { ActiveRunRepository } from './db/active-run-repository.js';
 
 function isReservedApiUrl(url: string): boolean {
   let pathname = new URL(url, 'http://localhost').pathname;
@@ -26,6 +30,7 @@ export function buildApp(input: {
   pack: CompiledContentPack;
   webDistDir?: string;
   auth?: AuthBundle;
+  database?: Database.Database;
 }): FastifyInstance {
   const app = Fastify({ logger: false });
   app.get('/api/health', () => ({
@@ -51,6 +56,17 @@ export function buildApp(input: {
     const isDevMode = auth.config.mailgun === null;
     if (isDevMode) {
       registerDevRoutes(app, auth);
+    }
+    // The play WebSocket needs both auth (to authenticate the upgrade) and a database (to
+    // persist the authoritative run) — tests that only exercise the HTTP auth/profile routes
+    // build an `AuthBundle` without a database wired in here, so this stays additionally gated.
+    if (input.database) {
+      const repo = new ActiveRunRepository(input.database);
+      void app.register(fastifyWebsocket);
+      void app.register((instance, _opts, done) => {
+        registerWsPlayRoute(instance, { auth, pack: input.pack, repo });
+        done();
+      });
     }
   }
   if (input.webDistDir) {

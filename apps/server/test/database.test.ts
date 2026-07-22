@@ -176,6 +176,65 @@ describe('runMigrations', () => {
   });
 });
 
+describe('migration 3 (active-runs)', () => {
+  it('creates a strict active_runs table on a fresh database', () => {
+    const database = new Database(':memory:');
+
+    try {
+      runMigrations(database);
+
+      expect(database.pragma('user_version', { simple: true })).toBe(MIGRATIONS.length);
+      expect(
+        database
+          .prepare(
+            `
+        select strict from pragma_table_list where name = 'active_runs'
+      `,
+          )
+          .get(),
+      ).toEqual({ strict: 1 });
+      expect(
+        (database.pragma('table_info(active_runs)') as Array<{ name: string }>).map(
+          ({ name }) => name,
+        ),
+      ).toEqual(['profile_id', 'run_blob', 'revision', 'content_hash', 'updated_at']);
+    } finally {
+      database.close();
+    }
+  });
+
+  it('applies cleanly as a forward migration from a 6A database at user_version 2', () => {
+    const database = new Database(':memory:');
+
+    try {
+      // Simulate a pre-existing 6A database that already ran migrations 1-2.
+      const sixAMigrations = MIGRATIONS.filter((migration) => migration.id <= 2);
+      for (const migration of sixAMigrations) {
+        database.transaction(() => {
+          migration.up(database);
+          database.pragma(`user_version = ${migration.id}`);
+        })();
+      }
+      expect(database.pragma('user_version', { simple: true })).toBe(2);
+
+      runMigrations(database);
+
+      expect(database.pragma('user_version', { simple: true })).toBe(MIGRATIONS.length);
+      expect(
+        database
+          .prepare(
+            `
+        select strict from pragma_table_list where name = 'active_runs'
+      `,
+          )
+          .get(),
+      ).toEqual({ strict: 1 });
+    } finally {
+      database.close();
+    }
+  });
+});
+
 describe('assertMigrationsWellFormed', () => {
   it('accepts a contiguous, ascending-from-1 migration list', () => {
     const wellFormed: Migration[] = [

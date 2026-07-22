@@ -17,7 +17,7 @@ await runServerStartup({
   database,
   compilePack: (signal) => compileStartupContent(config.contentDir, signal),
   persistPack: (pack) => repository.put(pack),
-  buildServer: (pack) => buildApp({ pack, webDistDir: config.webDistDir, auth }),
+  buildServer: (pack) => buildApp({ pack, webDistDir: config.webDistDir, auth, database }),
   listenOptions: { host: config.host, port: config.port },
   signals: {
     once(signal, listener) {

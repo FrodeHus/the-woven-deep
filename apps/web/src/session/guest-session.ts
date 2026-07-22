@@ -1,22 +1,18 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
-  ascendToPreviousFloor,
   createNewRun,
   decodeActiveRun,
   DEFAULT_GUEST_HERO,
   deriveHallRecordId,
-  descendToNextFloor,
   encodeActiveRun,
   finalizeRun,
   FINAL_CHAMBER_DEPTH,
   heroHoldsAllFragments,
   isHeartBossActive,
   projectDecision,
-  projectDomainEvents,
   projectGameplayState,
   projectRunConclusion,
   RECENT_COMMAND_LIMIT,
-  resolveCommand,
   SaveLoadError,
   type ActiveRun,
   type CommandResolution,
@@ -32,7 +28,7 @@ import {
   type StoredHallRecord,
   type Uint32State,
 } from '@woven-deep/engine';
-import { buildIntent } from './command-builder.js';
+import { dispatchCommand, dispatchIntent } from '@woven-deep/session-core';
 import {
   accumulateSightings,
   loadSightings,
@@ -49,6 +45,7 @@ import {
   saveOnboarding,
   type OnboardingState,
 } from './onboarding.js';
+import type { RunSession } from './run-session.js';
 import { randomSeed } from './seed.js';
 import {
   classifyStorageFailure,
@@ -73,7 +70,15 @@ export type SessionNotice =
    * (not a `storage` failure -- the write itself succeeded; it's the previously-stored READ that
    * was unreadable), so it flows through the exact same `role="status"` session-banner every other
    * dismissible notice here uses. */
-  | { readonly kind: 'data-reset'; readonly source: 'sightings' | 'onboarding' };
+  | { readonly kind: 'data-reset'; readonly source: 'sightings' | 'onboarding' }
+  /** `ProfileSession`-only (never produced by `GuestSession`): a NEWER connection for the same
+   * profile has taken over the run (the server's `superseded` message, Task 7's newest-wins
+   * eviction) -- this tab's session is now terminal/read-only. */
+  | { readonly kind: 'superseded' }
+  /** `ProfileSession`-only: the server rejected the connection/protocol outright -- a
+   * content-hash or protocol-version mismatch between this build and the server's. Terminal;
+   * the only recovery is a reload once the client has caught up with the server (or vice versa). */
+  | { readonly kind: 'protocol-error'; readonly code: string; readonly message: string };
 
 /**
  * The Final Chamber choice, pending whenever the hero stands on the Chamber floor (`FINAL_CHAMBER_DEPTH`)
@@ -142,24 +147,11 @@ function inMemoryLocalStorage(): SessionStorageLike {
 }
 
 /**
- * Maps an applied `PlayerIntent` to the onboarding mastery vocabulary (`onboarding.ts`'s `HINTS`),
- * or `null` for intents no hint cares about. Deliberately synthetic, not a passthrough of
- * `PlayerIntent['type']` -- `'trade-complete'` in particular folds both `trade-buy` and
- * `trade-sell` into the same mastery count, since either one demonstrates "you traded".
- */
-function onboardingIntentType(intent: PlayerIntent): string | null {
-  if (intent.type === 'move') return 'move';
-  if (intent.type === 'backpack' && intent.action === 'toggle-light') return 'toggle-light';
-  if (intent.type === 'trade-buy' || intent.type === 'trade-sell') return 'trade-complete';
-  return null;
-}
-
-/**
  * Owns the guest's single active run: booting it from storage (or generating a fresh one),
  * turning `PlayerIntent`s into engine commands, and persisting the result after every dispatch
  * that changes the run. Framework-free — `store.ts` is the only file that touches React.
  */
-export class GuestSession {
+export class GuestSession implements RunSession {
   private readonly pack: CompiledContentPack;
   private readonly storage: SessionStorageLike;
   private readonly hero: NewRunHero;
@@ -308,61 +300,31 @@ export class GuestSession {
     // A new intent implicitly dismisses any confirm-aggression prompt left over from a prior,
     // now-stale, dispatch.
     this.pendingDecision = null;
-    const projection = this.currentProjection();
     const commandId = this.nextCommandId();
-    const built = buildIntent({
-      intent,
-      projection,
+    const outcome = dispatchIntent(this.run, intent, {
+      pack: this.pack,
       commandId,
       expectedRevision: this.run.revision,
-      pack: this.pack,
     });
 
-    if (built.kind === 'rejected') {
-      this.appendSystemLine(built.message);
+    if (outcome.kind === 'rejected') {
+      this.appendSystemLine(outcome.message);
       this.publish();
       return;
     }
 
-    if (built.kind === 'descend') {
-      const transition = descendToNextFloor(this.run, { content: this.pack });
-      const events = projectDomainEvents({
-        state: transition.state,
-        content: this.pack,
-        heroId: transition.state.hero.actorId,
-        events: transition.events,
-      });
-      this.noteOnboardingIntent('descend');
-      this.applyNewState(transition.state, events);
-      return;
-    }
-
-    if (built.kind === 'ascend') {
-      // Mirrors the descend branch above exactly: a session-level transition (not a reducer
-      // command), so it goes through `projectDomainEvents` on the returned events and the same
-      // persistence path -- ascending never emits any events (see `ascendToPreviousFloor`), but
-      // routing it identically keeps the two floor-change paths symmetric.
-      const transition = ascendToPreviousFloor(this.run, { content: this.pack });
-      const events = projectDomainEvents({
-        state: transition.state,
-        content: this.pack,
-        heroId: transition.state.hero.actorId,
-        events: transition.events,
-      });
-      this.applyNewState(transition.state, events);
-      return;
-    }
-
-    if (built.kind === 'house') {
+    if (outcome.kind === 'house') {
       this.setHouseOpen(true);
       return;
     }
 
-    const masteryIntentType = onboardingIntentType(intent);
-    this.handleResolution(
-      resolveCommand(this.run, built.command, { content: this.pack }),
-      masteryIntentType,
-    );
+    if (outcome.kind === 'transition') {
+      if (outcome.onboardingIntentType) this.noteOnboardingIntent(outcome.onboardingIntentType);
+      this.applyNewState(outcome.run, outcome.events);
+      return;
+    }
+
+    this.handleResolution(outcome.resolution, outcome.onboardingIntentType);
   }
 
   /**
@@ -396,7 +358,7 @@ export class GuestSession {
       commandId: this.nextCommandId(),
       expectedRevision: this.run.revision,
     };
-    this.handleResolution(resolveCommand(this.run, command, { content: this.pack }));
+    this.handleResolution(dispatchCommand(this.run, command, { pack: this.pack }));
   }
 
   answerDecision(confirmed: boolean): void {
@@ -417,7 +379,7 @@ export class GuestSession {
       commandId: this.nextCommandId(),
       expectedRevision: this.run.revision,
     };
-    this.handleResolution(resolveCommand(this.run, command, { content: this.pack }));
+    this.handleResolution(dispatchCommand(this.run, command, { pack: this.pack }));
   }
 
   /**

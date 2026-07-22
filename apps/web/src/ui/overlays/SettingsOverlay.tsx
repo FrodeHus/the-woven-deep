@@ -23,6 +23,11 @@ import { Switch } from '../components/switch.js';
 
 export interface SettingsOverlayProps {
   readonly onClearGuestSession: () => void;
+  /** Signs the current profile out -- only ever provided for a signed-in `ProfileSession` run
+   * (`App` omits it entirely for a guest), so the "Sign out" section below only renders then. This
+   * is the one reachable way to sign out (and tear down the live `/ws/play` connection) once play
+   * has started -- the title screen's own "Sign out" menu entry is unreachable from inside a run. */
+  readonly onSignOut?: (() => void) | undefined;
 }
 
 const FONT_SCALE_STEPS: readonly (1 | 1.15 | 1.3 | 1.5)[] = [1, 1.15, 1.3, 1.5];
@@ -66,6 +71,7 @@ type CaptureRefusal =
  */
 export function SettingsOverlay({
   onClearGuestSession,
+  onSignOut,
 }: Readonly<SettingsOverlayProps>): JSX.Element {
   const { settings, onChange, keymap } = useSettingsCtx();
   const [capturing, setCapturing] = useState<ActionId | null>(null);
@@ -296,6 +302,20 @@ export function SettingsOverlay({
           Reset all bindings
         </Button>
       </section>
+
+      {onSignOut && (
+        <section aria-labelledby="settings-sign-out-heading" className="flex flex-col gap-2">
+          <h3 id="settings-sign-out-heading" className="text-sm font-semibold text-fg-strong">
+            Sign out
+          </h3>
+          <p className="text-sm text-muted">
+            Ends your session and returns to the title screen. Your run stays saved on the server.
+          </p>
+          <Button type="button" variant="destructive" onClick={onSignOut} className="self-start">
+            Sign out
+          </Button>
+        </section>
+      )}
 
       <section aria-labelledby="settings-clear-heading" className="flex flex-col gap-2">
         <h3 id="settings-clear-heading" className="text-sm font-semibold text-fg-strong">

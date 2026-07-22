@@ -1,10 +1,11 @@
 import { useRef, type JSX } from 'react';
-import type { GuestSession, SessionSnapshot } from '../../session/guest-session.js';
+import type { SessionSnapshot } from '../../session/guest-session.js';
+import type { RunSession } from '../../session/run-session.js';
 import { useDialogFocusTrap } from './focus-trap.js';
 
 interface DecisionPromptProps {
   readonly snapshot: SessionSnapshot;
-  readonly session: GuestSession;
+  readonly session: RunSession;
 }
 
 /** The confirm-aggression prompt: reuses the same dialog primitives as `BackpackMenu` (focus trap,

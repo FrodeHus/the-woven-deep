@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, type MouseEvent as ReactMouseEvent } from 'react';
 import type { Point } from '@woven-deep/engine';
-import type { GuestSession, SessionSnapshot } from '../../session/guest-session.js';
+import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
+import type { RunSession } from '../../session/run-session.js';
 import {
   advanceTravel,
   beginTravel,
@@ -22,7 +23,7 @@ export interface AutoTravelHandlers {
 }
 
 export interface UseAutoTravelParams {
-  readonly session: GuestSession;
+  readonly session: RunSession;
   readonly snapshot: SessionSnapshot;
   /** When a modal (overlay/house/trade/decision) owns input, map clicks are ignored -- the modal is
    * driving, exactly as the design's `canvasClick` bails while an overlay is open. */

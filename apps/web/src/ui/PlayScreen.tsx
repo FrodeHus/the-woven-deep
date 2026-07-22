@@ -1,8 +1,8 @@
 import { useRef, type CSSProperties, type JSX, type MouseEvent as ReactMouseEvent } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { HeartLineageRecord, StoredHallRecord } from '@woven-deep/engine';
-import type { GuestSession } from '../session/guest-session.js';
-import { useGuestSession } from '../session/store.js';
+import type { RunSession } from '../session/run-session.js';
+import { useRunSession } from '../session/store.js';
 import { heroOf, tradeIsAvailable } from '../session/projection-view.js';
 import { computeCamera, type CameraOrigin } from './camera.js';
 import { CommandPalette } from './CommandPalette.js';
@@ -42,7 +42,7 @@ import { usePlayKeyDispatcher } from './hooks/usePlayKeyDispatcher.js';
 import { useSpellTargeting } from './hooks/useSpellTargeting.js';
 
 export interface PlayScreenProps {
-  readonly session: GuestSession;
+  readonly session: RunSession;
   readonly pack: CompiledContentPack;
   /** Accepted for API/test compatibility -- Layout A's composition is a fixed CSS grid that never
    * reflows, so it does not vary by tier. */
@@ -58,6 +58,13 @@ export interface PlayScreenProps {
   readonly onOpenOverlay?: (overlay: OverlayActionId) => void;
   readonly onCloseOverlay?: () => void;
   readonly onClearGuestSession?: () => void;
+  /** Signs the current profile out -- forwarded straight through to the settings overlay body,
+   * exactly like `onClearGuestSession`. Only ever provided for a signed-in `ProfileSession`
+   * (`App` omits it for a guest's `GuestSession`, and `SettingsOverlay` simply doesn't render the
+   * "Sign out" action when it's absent), since this is the one reachable way to tear down a live
+   * `/ws/play` connection from inside a run -- the title screen's own "Sign out" is unreachable
+   * once play has started. */
+  readonly onSignOut?: (() => void) | undefined;
   /** Forwarded straight through to the codex overlay body (`CodexOverlayBody`) when it's the one
    * open -- `codex` is `global`-scope, so it can open mid-play too. `App` (via `GameRoot`) owns the
    * Hall repository; `PlayScreen` just plumbs this past the overlay host. Defaults keep every
@@ -91,12 +98,13 @@ export function PlayScreen({
   onOpenOverlay = () => {},
   onCloseOverlay = () => {},
   onClearGuestSession = () => {},
+  onSignOut,
   records = [],
   currentHeart = null,
   onboardingEnabled = true,
 }: PlayScreenProps): JSX.Element {
   const { settings, keymap } = useSettingsCtx();
-  const snapshot = useGuestSession(session);
+  const snapshot = useRunSession(session);
   const { projection } = snapshot;
 
   // The active onboarding hint, recomputed every render from the live snapshot --
@@ -328,6 +336,7 @@ export function PlayScreen({
           isPlayActive
           records={records}
           onClearGuestSession={onClearGuestSession}
+          onSignOut={onSignOut}
         />
         <CommandPalette
           open={paletteOpen}

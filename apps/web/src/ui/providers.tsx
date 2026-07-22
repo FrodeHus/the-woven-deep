@@ -1,8 +1,9 @@
 import { createContext, useContext, useMemo, type JSX, type ReactNode } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
-import type { GuestSession, SessionSnapshot } from '../session/guest-session.js';
+import type { SessionSnapshot } from '../session/guest-session.js';
+import type { RunSession } from '../session/run-session.js';
 import { resolveKeymap, type ResolvedKeymap, type Settings } from '../session/settings.js';
-import { useGuestSession } from '../session/store.js';
+import { useRunSession } from '../session/store.js';
 
 const PackContext = createContext<CompiledContentPack | null>(null);
 const SettingsContext = createContext<{
@@ -10,7 +11,7 @@ const SettingsContext = createContext<{
   onChange: (next: Settings) => void;
   keymap: ResolvedKeymap;
 } | null>(null);
-const SessionContext = createContext<{ session: GuestSession; snapshot: SessionSnapshot } | null>(
+const SessionContext = createContext<{ session: RunSession; snapshot: SessionSnapshot } | null>(
   null,
 );
 
@@ -31,7 +32,7 @@ export function useSettingsCtx(): {
 }
 
 export function useSessionCtx(): {
-  readonly session: GuestSession;
+  readonly session: RunSession;
   readonly snapshot: SessionSnapshot;
 } | null {
   return useContext(SessionContext);
@@ -40,8 +41,8 @@ export function useSessionCtx(): {
 function SessionBridge({
   session,
   children,
-}: Readonly<{ session: GuestSession; children: ReactNode }>): JSX.Element {
-  const snapshot = useGuestSession(session);
+}: Readonly<{ session: RunSession; children: ReactNode }>): JSX.Element {
+  const snapshot = useRunSession(session);
   return (
     <SessionContext.Provider value={{ session, snapshot }}>{children}</SessionContext.Provider>
   );
@@ -57,7 +58,7 @@ export function UiProviders({
   pack: CompiledContentPack;
   settings: Settings;
   onChangeSettings: (next: Settings) => void;
-  session?: GuestSession | undefined;
+  session?: RunSession | undefined;
   children: ReactNode;
 }>): JSX.Element {
   const settingsValue = useMemo(

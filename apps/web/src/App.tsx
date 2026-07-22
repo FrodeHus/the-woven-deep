@@ -7,15 +7,18 @@ import {
   type RunRecordRepository,
   type Uint32State,
 } from '@woven-deep/engine';
-import { logout } from './api.js';
+import { logout, playWsUrl } from './api.js';
 import { GUEST_ACCOUNT, type AccountState } from './session/account.js';
 import { loadSightings } from './session/codex.js';
 import type { LogLine } from './session/event-log.js';
 import { GuestSession } from './session/guest-session.js';
+import { ProfileSession } from './session/profile-session.js';
+import type { RunSession } from './session/run-session.js';
 import { clearGuestSession } from './session/clear-guest-session.js';
 import { randomSeed } from './session/seed.js';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from './session/settings.js';
-import { useGuestSession } from './session/store.js';
+import { useRunSession } from './session/store.js';
+import type { WebSocketFactory } from './session/ws-client.js';
 import {
   browserLocalStorage,
   browserSessionStorage,
@@ -59,6 +62,11 @@ export interface AppProps {
    * `loadAccount` fetch entirely and seeds `account` state with this value directly -- lets tests
    * assert on a signed-in title/App without wiring a session-shaped fetcher response. */
   readonly accountOverride?: AccountState;
+  /** Test-only escape hatch: injects the transport a signed-in profile's `ProfileSession` opens
+   * `/ws/play` over, exactly like `ProfileSessionInput.createSocket` -- lets tests supply a fully
+   * in-memory fake `WebSocketLike` instead of the real browser `WebSocket`. Never set in
+   * production (the default `WsClient` behaviour -- the real global `WebSocket` -- applies). */
+  readonly createSocket?: WebSocketFactory;
 }
 
 export type { ScreenState } from './ui/hooks/useScreenRouter.js';
@@ -98,7 +106,7 @@ function isQuickstart(search: string): boolean {
 const CONCLUSION_LOG_TAIL = 8;
 
 interface GameRootProps {
-  readonly session: GuestSession;
+  readonly session: RunSession;
   readonly pack: CompiledContentPack;
   readonly repository: RunRecordRepository;
   readonly portraitGlyph: string | undefined;
@@ -108,7 +116,7 @@ interface GameRootProps {
    * in-memory (unfinalized) projection instead of leaving the player on a white screen. */
   readonly onFinalizeError: (message: string) => void;
   /** Forwarded straight through to `PlayScreen` -- `App` owns this state (see the guest-interface
-   * overlay infrastructure), `GameRoot` just plumbs it past the `useGuestSession` split. */
+   * overlay infrastructure), `GameRoot` just plumbs it past the `useRunSession` split. */
   readonly overlay: OverlayId | null;
   readonly onOpenOverlay: (overlay: OverlayId) => void;
   readonly onCloseOverlay: () => void;
@@ -118,15 +126,20 @@ interface GameRootProps {
    * `useSettingsCtx()`, sourced from the single `UiProviders` `App` renders around the whole
    * authenticated tree. */
   readonly onClearGuestSession: () => void;
+  /** Signs the current profile out -- forwarded straight through to `PlayScreen`. `undefined` for
+   * a guest's `GuestSession` (there is no account to sign out of); only ever set for a signed-in
+   * `ProfileSession` run. See `PlayScreenProps.onSignOut`'s doc comment. */
+  readonly onSignOut?: (() => void) | undefined;
   /** Whether the contextual onboarding hint strip may show at all: `settings.onboarding === 'on'`
    * AND not a quickstart boot -- quickstart always forces it off regardless of the stored setting,
    * protecting every pinned e2e walk (see `isQuickstart`'s doc comment). */
   readonly onboardingEnabled: boolean;
 }
 
-/** Everything that needs a live `GuestSession` snapshot: the notice banners and the play screen
- * itself. Split out from `App` so `useGuestSession` (a hook) is only ever called once a session
- * actually exists — `App` renders this conditionally, not the hook.
+/** Everything that needs a live `RunSession` snapshot: the notice banners and the play screen
+ * itself. Split out from `App` so `useRunSession` (a hook) is only ever called once a session
+ * actually exists — `App` renders this conditionally, not the hook. Works identically whether
+ * `session` is a local `GuestSession` or a WebSocket-backed `ProfileSession`.
  *
  * Storage notices (unavailable/full) get their own persistent, non-dismissible `role="alert"`
  * warning per the design spec — play continues unsaved, but the player must keep seeing that.
@@ -147,9 +160,10 @@ function GameRoot({
   onOpenOverlay,
   onCloseOverlay,
   onClearGuestSession,
+  onSignOut,
   onboardingEnabled,
 }: GameRootProps): JSX.Element {
-  const snapshot = useGuestSession(session);
+  const snapshot = useRunSession(session);
   const [dismissed, setDismissed] = useState(false);
   const { notice, conclusion } = snapshot;
   const finalizedRef = useRef(false);
@@ -219,6 +233,7 @@ function GameRoot({
         onOpenOverlay={onOpenOverlay}
         onCloseOverlay={onCloseOverlay}
         onClearGuestSession={onClearGuestSession}
+        onSignOut={onSignOut}
         records={repository.records()}
         currentHeart={repository.currentHeart()}
         onboardingEnabled={onboardingEnabled}
@@ -242,6 +257,7 @@ export function App({
   storage: storageOverride,
   localStorage: localStorageOverride,
   accountOverride,
+  createSocket,
 }: AppProps): JSX.Element {
   const { pack, error, retry } = useContentPack(fetcher);
 
@@ -328,7 +344,7 @@ export function App({
   const [quickstart] = useState(() => isQuickstart(window.location.search));
   const router = useScreenRouter(quickstart);
   const { screen } = router;
-  const [session, setSession] = useState<GuestSession>();
+  const [session, setSession] = useState<RunSession>();
   const [chargenSeed, setChargenSeed] = useState<Uint32State>();
   const [portraitGlyph, setPortraitGlyph] = useState<string>();
   const [conclusion, setConclusion] = useState<{
@@ -337,6 +353,12 @@ export function App({
   }>();
   const [finalizeWarning, setFinalizeWarning] = useState<string>();
   const [chargenError, setChargenError] = useState<string>();
+  // A signed-in profile's `/ws/play` connect failure (content/version mismatch, network error
+  // before the handshake ever completes) -- distinct from the terminal `superseded`/`protocol-error`
+  // notices `ProfileSession` itself surfaces once connected (those flow through `snapshot.notice` ->
+  // `AppBanners` like any other session notice); there is no session object yet to carry a notice
+  // when `ProfileSession.connect` itself rejects, so this is `App`'s own boot-error state for that.
+  const [profileError, setProfileError] = useState<string>();
 
   const closeOverlay = (): void => setOverlay(null);
   /** Play-scope overlays (inventory / character sheet / map-journal) require an actual live run —
@@ -389,6 +411,90 @@ export function App({
     );
   }, [pack, storage, session, screen, localStorageInstance]);
 
+  /** Signs the current profile out: logs out server-side, then flips `account` back to
+   * `GUEST_ACCOUNT` -- the effect below reacts to that transition by tearing down any live
+   * `ProfileSession` and returning to the title screen. Reused by both the title screen's
+   * "Sign out" menu entry and the in-play settings overlay's "Sign out" action (the only two
+   * places `App` ever offers signing out). */
+  function handleSignOut(): void {
+    void logout(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
+  }
+
+  /**
+   * Signed-in profile connect: opens a `ProfileSession` over `/ws/play` once the account is known
+   * signed-in and the content pack is ready. Guarded on `session`/`profileError` both being unset
+   * so this only ever attempts once per sign-in — a successful connect flips `session` (and this
+   * effect never re-fires while it's live); a rejected connect (content/version mismatch, or the
+   * handshake never completing) sets `profileError` instead, surfaced by the title screen's own
+   * boot-error branch below, with a Retry that clears it. Mirrors the quickstart effect just above:
+   * gated so a torn-down session (sign-out, handled by the next effect) is never resurrected --
+   * signing out flips `account.status` back to `'guest'`, which alone (not `session`/`profileError`
+   * clearing) blocks this effect from ever refiring for the same, now-signed-out account.
+   */
+  useEffect(() => {
+    if (!pack) return;
+    if (account.status !== 'signed-in') return;
+    if (session !== undefined) return;
+    if (profileError !== undefined) return;
+    let cancelled = false;
+    void ProfileSession.connect({
+      pack,
+      url: playWsUrl(),
+      ...(createSocket ? { createSocket } : {}),
+    }).then(
+      (profileSession) => {
+        if (cancelled) {
+          profileSession.close();
+          return;
+        }
+        setSession(profileSession);
+        router.toPlay();
+      },
+      (thrown: unknown) => {
+        if (cancelled) return;
+        setProfileError(
+          thrown instanceof Error ? thrown.message : 'Could not reach your saved run.',
+        );
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+    // `router.toPlay` (read above) is a fresh closure every render (see `useScreenRouter`) --
+    // depending on it would re-run (and reconnect) this effect on every unrelated re-render. The
+    // `session`/`profileError` guards above already make this a run-once-per-sign-in effect
+    // regardless.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pack, account.status, session, profileError, createSocket]);
+
+  /** Tears down a signed-in profile's live `ProfileSession` on sign-out: reacts to `account.status`
+   * leaving `'signed-in'` (the only way `handleSignOut` above changes it) by clearing `session`
+   * (the effect below closes the underlying WS as its cleanup) and returning to the title screen --
+   * a no-op for a guest (whose `session`, if any, is a `GuestSession`, never a `ProfileSession`), so
+   * this never touches the guest boot/play path. */
+  useEffect(() => {
+    if (account.status === 'signed-in') return;
+    if (!(session instanceof ProfileSession)) return;
+    setSession(undefined);
+    setProfileError(undefined);
+    closeOverlay();
+    router.toTitle();
+    // Only re-run on an account-status transition; `session`/`router` (read above) are read fresh
+    // at that moment (mirrors `useSettingsRoaming`'s roam-on-sign-in effect, which does the same
+    // for its own one-shot).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account.status]);
+
+  /** Closes the underlying `/ws/play` connection whenever `session` stops being the live
+   * `ProfileSession` -- covers both the sign-out teardown above and the component unmounting
+   * outright. A no-op for a `GuestSession` (or no session at all), so guest behavior is
+   * unaffected. */
+  useEffect(() => {
+    return () => {
+      if (session instanceof ProfileSession) session.close();
+    };
+  }, [session]);
+
   if (error) {
     return (
       <RootStyling settings={settings} fadeToken={router.fadeToken}>
@@ -420,17 +526,37 @@ export function App({
    * only its own inner element. Takes the loaded `pack` so it stays non-nullable throughout. */
   function renderScreen(pack: CompiledContentPack): JSX.Element {
     if (screen.screen === 'title') {
+      // A signed-in profile's `ProfileSession.connect` rejected outright (content/version
+      // mismatch, or the handshake never completing) -- surfaced the same way the content-pack
+      // fetch failure is above, since there is no session/notice to carry this through yet.
+      if (account.status === 'signed-in' && profileError) {
+        return (
+          <main className="shell boot-error">
+            <p className="eyebrow">The Woven Deep</p>
+            <h1>Your run could not be reached.</h1>
+            <p role="alert">{profileError}</p>
+            <button type="button" onClick={() => setProfileError(undefined)}>
+              Retry
+            </button>
+          </main>
+        );
+      }
       return (
         <main className="shell">
           <TitleScreen
             storage={storage}
             account={account}
             onEnterTheDeep={() => {
+              // Guests only -- a signed-in profile's run is server-authoritative and connects
+              // automatically (see the connect effect above); there is no client-side chargen
+              // wizard for it (hero customization for profiles is a later milestone).
+              if (account.status !== 'guest') return;
               closeOverlay();
               setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
               router.toChargen();
             }}
             onContinue={() => {
+              if (account.status !== 'guest') return;
               closeOverlay();
               setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
               setSession(new GuestSession({ pack, storage, localStorage: localStorageInstance }));
@@ -439,9 +565,7 @@ export function App({
             onHall={() => router.toHall('title')}
             onOpenOverlay={openOverlay}
             onSignIn={() => router.toSignin()}
-            onSignOut={() => {
-              void logout(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
-            }}
+            onSignOut={handleSignOut}
           />
           <OverlayHost
             overlay={overlay}
@@ -579,6 +703,7 @@ export function App({
         onOpenOverlay={openOverlay}
         onCloseOverlay={closeOverlay}
         onClearGuestSession={handleClearGuestSession}
+        onSignOut={account.status === 'signed-in' ? handleSignOut : undefined}
         onboardingEnabled={settings.onboarding === 'on' && !quickstart}
         onConcluded={(projection, logTail) => {
           setConclusion({ projection, logTail });

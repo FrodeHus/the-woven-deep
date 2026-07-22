@@ -12,11 +12,15 @@ import {
   DEFAULT_GUEST_HERO,
   encodeActiveRun,
   heroFromChoices,
+  isHeartBossActive,
+  projectGameplayState,
+  projectRunConclusion,
   type ActiveRun,
   type Uint32State,
 } from '@woven-deep/engine';
 import { App, PORTRAIT_KEY } from '../src/App.js';
 import type { AccountState } from '../src/session/account.js';
+import type { ServerMessage, ServerRunSnapshot } from '../src/session/profile-session.js';
 import {
   createSessionRunRecordRepository,
   RECORDS_KEY,
@@ -24,6 +28,7 @@ import {
 import { PORTRAIT_GLYPHS } from '../src/session/wizard-reducer.js';
 import { SETTINGS_KEY } from '../src/session/settings.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
+import type { WebSocketLike } from '../src/session/ws-client.js';
 
 vi.mock('@woven-deep/engine', async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vitest's importOriginal needs the whole module's type; a top-level `import type * as` cannot be used as a type (TS2709) and a value namespace used only in `typeof` is itself flagged, so the inline `typeof import()` is the only working form.
@@ -114,6 +119,70 @@ function deadRunSave(seed: Uint32State = SEED): string {
       finalized: false,
     },
   });
+}
+
+/** A fully in-memory `WebSocketLike` for the signed-in `ProfileSession` boot tests below --
+ * mirrors `profile-session.test.ts`'s own `FakeSocket` exactly (same shape, same `emit` escape
+ * hatch to push a `ServerMessage` as if the server had just sent it). */
+class FakeSocket implements WebSocketLike {
+  readyState = 1;
+  readonly rawSent: string[] = [];
+  onopen: (() => void) | null = null;
+  onclose: (() => void) | null = null;
+  onerror: ((event: unknown) => void) | null = null;
+  onmessage: ((event: Readonly<{ data: unknown }>) => void) | null = null;
+
+  send(data: string): void {
+    this.rawSent.push(data);
+  }
+
+  close(): void {
+    this.readyState = 3;
+    this.onclose?.();
+  }
+
+  emit(message: ServerMessage): void {
+    this.onmessage?.({ data: JSON.stringify(message) });
+  }
+}
+
+const HELLO: ServerMessage = {
+  type: 'hello',
+  protocolVersion: 1,
+  contentHash: 'test-hash',
+  gameVersion: 'test-version',
+  saveSchemaVersion: 1,
+};
+
+function serverSnapshotOf(run: ActiveRun): ServerRunSnapshot {
+  return {
+    projection: projectGameplayState({ state: run, content: pack }),
+    lastEvents: [],
+    revision: run.revision,
+    pendingDecision: null,
+    conclusion:
+      run.conclusion === null
+        ? null
+        : projectRunConclusion({ run, record: null, achievements: [] }),
+    houseOpen: false,
+    heroClassTags: [...run.hero.classTags],
+    bossActive: isHeartBossActive(run),
+  };
+}
+
+/** Captures every fake socket a signed-in boot's `ProfileSession` opens (there is exactly one per
+ * `App` under test, but `createSocket` itself doesn't know that), and answers the handshake
+ * (`hello` + `state`) on the most recently opened one. */
+function profileSocketFactory(): { createSocket: () => WebSocketLike; sockets: FakeSocket[] } {
+  const sockets: FakeSocket[] = [];
+  return {
+    sockets,
+    createSocket: () => {
+      const socket = new FakeSocket();
+      sockets.push(socket);
+      return socket;
+    },
+  };
 }
 
 function wayfarerKit(): { kitId: string; name: string } {
@@ -679,6 +748,74 @@ describe('App identity/account', () => {
 
     expect(await screen.findByRole('option', { name: /sign in with email/i })).toBeInTheDocument();
     expect(screen.queryByText(/signed in as/i)).not.toBeInTheDocument();
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/auth/logout',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+});
+
+describe('App identity/account — ProfileSession routing', () => {
+  const SIGNED_IN_ACCOUNT: AccountState = {
+    status: 'signed-in',
+    email: 'player@example.com',
+    csrfToken: 'tok',
+  };
+
+  it('a signed-in boot opens a ProfileSession over /ws/play and renders play from the server state', async () => {
+    const { createSocket, sockets } = profileSocketFactory();
+
+    render(
+      <App
+        fetcher={packFetcher()}
+        storage={fakeStorage()}
+        accountOverride={SIGNED_IN_ACCOUNT}
+        createSocket={createSocket}
+      />,
+    );
+
+    await waitFor(() => expect(sockets.length).toBe(1));
+    const socket = sockets[0]!;
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    socket.emit(HELLO);
+    socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
+
+    expect(await screen.findByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
+  });
+
+  it('signing out (from the in-play settings overlay) tears down the WS and returns to the guest/title flow', async () => {
+    const user = userEvent.setup();
+    const { createSocket, sockets } = profileSocketFactory();
+    const fetcher = vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('/api/auth/logout')) {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify(pack), { status: 200 }));
+    }) as unknown as typeof fetch;
+
+    render(
+      <App
+        fetcher={fetcher}
+        storage={fakeStorage()}
+        accountOverride={SIGNED_IN_ACCOUNT}
+        createSocket={createSocket}
+      />,
+    );
+
+    await waitFor(() => expect(sockets.length).toBe(1));
+    const socket = sockets[0]!;
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    socket.emit(HELLO);
+    socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
+    await screen.findByRole('grid', { name: /dungeon/i });
+
+    fireEvent.keyDown(window, { key: 'o' });
+    await screen.findByRole('dialog', { name: 'Settings' });
+    await user.click(screen.getByRole('button', { name: /^sign out$/i }));
+
+    expect(socket.readyState).toBe(3);
+    expect(await screen.findByRole('option', { name: /enter the deep/i })).toBeInTheDocument();
+    expect(screen.queryByRole('grid', { name: /dungeon/i })).not.toBeInTheDocument();
     expect(fetcher).toHaveBeenCalledWith(
       '/api/auth/logout',
       expect.objectContaining({ method: 'POST' }),

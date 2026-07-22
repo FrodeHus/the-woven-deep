@@ -76,6 +76,21 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    id: 3,
+    name: 'active-runs',
+    up: (database) => {
+      database.exec(`
+        create table if not exists active_runs (
+          profile_id text primary key references profiles(id),
+          run_blob text not null,
+          revision integer not null,
+          content_hash text not null,
+          updated_at text not null
+        ) strict;
+      `);
+    },
+  },
 ];
 
 /**
