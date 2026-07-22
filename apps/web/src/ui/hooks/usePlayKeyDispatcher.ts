@@ -1,12 +1,13 @@
 import { useEffect, type RefObject } from 'react';
 import type { GameplayProjection } from '@woven-deep/engine';
-import type { GuestSession, SessionSnapshot } from '../../session/guest-session.js';
+import type { SessionSnapshot } from '../../session/guest-session.js';
+import type { RunSession } from '../../session/run-session.js';
 import type { ResolvedKeymap } from '../../session/settings.js';
 import { createKeyDispatcher, type OverlayActionId } from '../KeyRouter.js';
 import type { OverlayId } from '../overlays/registry.js';
 
 export interface PlayKeyDispatcherParams {
-  readonly session: GuestSession;
+  readonly session: RunSession;
   readonly overlay: OverlayId | null;
   readonly houseOpen: SessionSnapshot['houseOpen'];
   readonly trade: GameplayProjection['trade'];

@@ -26,4 +26,11 @@ export interface RunSession {
     repository: RunRecordRepository,
     enrichment: HallRecordEnrichment,
   ): RunConclusionProjection;
+  /** Records a UI-only onboarding milestone that never goes through `dispatch` (e.g. opening the
+   * character-sheet/inventory overlay) -- both `GuestSession` and `ProfileSession` implement this
+   * identically (a purely client-side, device-local concern), and `usePlayKeyDispatcher` calls it
+   * against whichever `RunSession` is live. */
+  recordOnboardingIntent(intentType: string): void;
+  /** Retires an onboarding hint for good -- the hint strip's dedicated dismiss key. */
+  dismissOnboardingHint(hintId: string): void;
 }

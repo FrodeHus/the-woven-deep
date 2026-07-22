@@ -27,6 +27,10 @@ export interface OverlayHostProps {
   readonly isPlayActive: boolean;
   readonly records?: readonly StoredHallRecord[];
   readonly onClearGuestSession?: () => void;
+  /** Signs the current profile out -- forwarded to the settings overlay body alongside
+   * `onClearGuestSession`. See `PlayScreenProps.onSignOut`'s doc comment for why this is the one
+   * reachable "sign out" while a `ProfileSession` run is live. */
+  readonly onSignOut?: (() => void) | undefined;
   /** Explicit override for the codex body's sightings, taking precedence over the live session's
    * `snapshot.sightings` -- the title screen has no session (see `App.tsx`'s TITLE-screen
    * `OverlayHost` call site), so it passes the guest's persisted cross-run sighting cache
@@ -49,6 +53,7 @@ export function OverlayHost({
   isPlayActive,
   records,
   onClearGuestSession,
+  onSignOut,
   sightings,
 }: Readonly<OverlayHostProps>): JSX.Element | null {
   const pack = usePack();
@@ -62,6 +67,7 @@ export function OverlayHost({
     pack,
     records,
     onClearGuestSession,
+    onSignOut,
     snapshot: sessionCtx?.snapshot,
     sightings: sightings ?? sessionCtx?.snapshot.sightings,
   });
@@ -99,6 +105,7 @@ interface RenderBodyContext {
   readonly pack: CompiledContentPack;
   readonly records: readonly StoredHallRecord[] | undefined;
   readonly onClearGuestSession: (() => void) | undefined;
+  readonly onSignOut: (() => void) | undefined;
   readonly snapshot: SessionSnapshot | undefined;
   readonly sightings: Sightings | undefined;
 }
@@ -128,7 +135,9 @@ function renderBody(overlay: OverlayId, ctx: RenderBodyContext): JSX.Element {
       );
     case 'settings':
       if (!ctx.onClearGuestSession) return <p>Settings are unavailable right now.</p>;
-      return <SettingsOverlay onClearGuestSession={ctx.onClearGuestSession} />;
+      return (
+        <SettingsOverlay onClearGuestSession={ctx.onClearGuestSession} onSignOut={ctx.onSignOut} />
+      );
     case 'help':
       return <HelpOverlay />;
   }

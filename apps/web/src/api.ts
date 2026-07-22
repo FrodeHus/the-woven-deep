@@ -77,6 +77,15 @@ export async function fetchProfileSettings(
   return { settingsJson: body.settings, settingsVersion: body.settingsVersion };
 }
 
+/** Derives the `/ws/play` WebSocket URL from the current page's own origin -- same-origin by
+ * construction, matching the CSWSH `requireOrigin` check `registerWsPlayRoute` enforces on the
+ * upgrade (see `apps/server/src/routes/ws-play.ts`). `location` defaults to the browser's global
+ * `window.location`; injectable so a test can derive the URL without a DOM. */
+export function playWsUrl(location: Pick<Location, 'protocol' | 'host'> = window.location): string {
+  const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${wsProtocol}//${location.host}/ws/play`;
+}
+
 export async function putProfileSettings(
   input: { settingsJson: string; settingsVersion: number; csrfToken: string },
   fetcher: typeof fetch = fetch,
