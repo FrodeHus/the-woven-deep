@@ -19,6 +19,12 @@ export function noticeMessage(notice: DismissibleNotice): string {
       ? 'Your discovery log was unreadable and has been reset.'
       : 'Your guidance progress was unreadable and has been reset.';
   }
+  if (notice.kind === 'superseded') {
+    return 'This run was opened elsewhere — this tab is now read-only.';
+  }
+  if (notice.kind === 'protocol-error') {
+    return 'This version is out of date with the server — reload to continue.';
+  }
   return `Your previous save could not be loaded (${notice.reason}) — a new run has begun.`;
 }
 

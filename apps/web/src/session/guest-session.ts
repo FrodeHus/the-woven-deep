@@ -70,7 +70,15 @@ export type SessionNotice =
    * (not a `storage` failure -- the write itself succeeded; it's the previously-stored READ that
    * was unreadable), so it flows through the exact same `role="status"` session-banner every other
    * dismissible notice here uses. */
-  | { readonly kind: 'data-reset'; readonly source: 'sightings' | 'onboarding' };
+  | { readonly kind: 'data-reset'; readonly source: 'sightings' | 'onboarding' }
+  /** `ProfileSession`-only (never produced by `GuestSession`): a NEWER connection for the same
+   * profile has taken over the run (the server's `superseded` message, Task 7's newest-wins
+   * eviction) -- this tab's session is now terminal/read-only. */
+  | { readonly kind: 'superseded' }
+  /** `ProfileSession`-only: the server rejected the connection/protocol outright -- a
+   * content-hash or protocol-version mismatch between this build and the server's. Terminal;
+   * the only recovery is a reload once the client has caught up with the server (or vice versa). */
+  | { readonly kind: 'protocol-error'; readonly code: string; readonly message: string };
 
 /**
  * The Final Chamber choice, pending whenever the hero stands on the Chamber floor (`FINAL_CHAMBER_DEPTH`)
