@@ -17,8 +17,7 @@
     },
     "packages/session-core": {
       "entry": ["src/index.ts"],
-      "project": "src/**/*.ts",
-      "ignoreDependencies": ["@woven-deep/engine", "@woven-deep/content"]
+      "project": "src/**/*.ts"
     },
     "apps/web": {
       "entry": ["index.html"],
