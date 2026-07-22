@@ -223,7 +223,33 @@ describe('/ws/play connection', () => {
 
   it('rejects an unauthenticated upgrade', async () => {
     await app.ready();
-    await expect(app.injectWS('/ws/play')).rejects.toThrow(/401/);
+    // A correct Origin is supplied so this exercises the SESSION guard specifically (a request
+    // with no Origin at all is covered by the CSWSH tests below, which would otherwise reject
+    // for the wrong reason first).
+    await expect(app.injectWS('/ws/play', { headers: { origin: PUBLIC_URL } })).rejects.toThrow(
+      /401/,
+    );
+  });
+
+  it('rejects an upgrade with a mismatched Origin (CSWSH protection)', async () => {
+    await app.ready();
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-cswsh@example.com');
+    await expect(
+      app.injectWS('/ws/play', {
+        headers: {
+          cookie: cookieHeader(sessionCookies),
+          origin: 'https://evil.example.com',
+        },
+      }),
+    ).rejects.toThrow(/403/);
+  });
+
+  it('rejects an upgrade with no Origin header at all', async () => {
+    await app.ready();
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-no-origin@example.com');
+    await expect(
+      app.injectWS('/ws/play', { headers: { cookie: cookieHeader(sessionCookies) } }),
+    ).rejects.toThrow(/403/);
   });
 
   it('authenticated connect receives hello then the initial state, and a command advances the revision', async () => {
@@ -231,7 +257,7 @@ describe('/ws/play connection', () => {
     const sessionCookies = await verifyAndGetCookies(app, database, 'ws-player@example.com');
 
     const ws = await app.injectWS('/ws/play', {
-      headers: { cookie: cookieHeader(sessionCookies) },
+      headers: { cookie: cookieHeader(sessionCookies), origin: PUBLIC_URL },
     });
     try {
       const nextMessage = messageQueue(ws);
@@ -266,7 +292,7 @@ describe('/ws/play connection', () => {
     const sessionCookies = await verifyAndGetCookies(app, database, 'ws-malformed@example.com');
 
     const ws = await app.injectWS('/ws/play', {
-      headers: { cookie: cookieHeader(sessionCookies) },
+      headers: { cookie: cookieHeader(sessionCookies), origin: PUBLIC_URL },
     });
     try {
       const nextMessage = messageQueue(ws);
@@ -293,6 +319,112 @@ describe('/ws/play connection', () => {
       expect(afterCommand.type).toBe('state');
     } finally {
       ws.terminate();
+    }
+  });
+
+  it('a second connection for the same profile supersedes the first (newest-wins eviction)', async () => {
+    await app.ready();
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-evict@example.com');
+    const connectHeaders = { cookie: cookieHeader(sessionCookies), origin: PUBLIC_URL };
+
+    const first = await app.injectWS('/ws/play', { headers: connectHeaders });
+    const firstMessages = messageQueue(first);
+    await firstMessages(); // hello
+    await firstMessages(); // initial state
+
+    const closed = new Promise<void>((resolveClosed) => first.on('close', () => resolveClosed()));
+
+    const second = await app.injectWS('/ws/play', { headers: connectHeaders });
+    try {
+      const secondMessages = messageQueue(second);
+      await secondMessages(); // hello
+      const secondInitialState = await secondMessages(); // initial state (same run, reused session)
+      const revisionBefore =
+        secondInitialState.type === 'state' ? secondInitialState.snapshot.revision : -1;
+
+      const superseded = await firstMessages();
+      expect(superseded).toEqual({ type: 'superseded' });
+      await closed;
+      expect(first.readyState).toBe(first.CLOSED);
+
+      // The second connection is live and controls the run.
+      expect(second.readyState).toBe(second.OPEN);
+      second.send(
+        JSON.stringify({
+          type: 'command',
+          commandId: 'evict-cmd-1',
+          expectedRevision: revisionBefore,
+          intent: { type: 'wait' },
+        }),
+      );
+      const reply = await secondMessages();
+      expect(reply.type).toBe('state');
+      if (reply.type === 'state') {
+        expect(reply.snapshot.revision).toBeGreaterThan(revisionBefore);
+      }
+      expect(second.readyState).toBe(second.OPEN);
+    } finally {
+      second.terminate();
+    }
+  });
+
+  it('a reconnect after a drop rehydrates the same run, and a resent commandId does not double-apply', async () => {
+    await app.ready();
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-reconnect@example.com');
+    const connectHeaders = { cookie: cookieHeader(sessionCookies), origin: PUBLIC_URL };
+
+    const first = await app.injectWS('/ws/play', { headers: connectHeaders });
+    const firstMessages = messageQueue(first);
+    await firstMessages(); // hello
+    const initialState = await firstMessages();
+    const revisionBefore = initialState.type === 'state' ? initialState.snapshot.revision : -1;
+
+    first.send(
+      JSON.stringify({
+        type: 'command',
+        commandId: 'reconnect-cmd-1',
+        expectedRevision: revisionBefore,
+        intent: { type: 'wait' },
+      }),
+    );
+    const applied = await firstMessages();
+    expect(applied.type).toBe('state');
+    const revisionAfterCommand = applied.type === 'state' ? applied.snapshot.revision : -1;
+    expect(revisionAfterCommand).toBeGreaterThan(revisionBefore);
+
+    const closed = new Promise<void>((resolveClosed) => first.on('close', () => resolveClosed()));
+    first.close();
+    await closed;
+
+    // Reconnect: the previous connection is fully gone, so this opens a fresh session that
+    // rehydrates from the persisted (flushed-on-close) run.
+    const second = await app.injectWS('/ws/play', { headers: connectHeaders });
+    try {
+      const secondMessages = messageQueue(second);
+      await secondMessages(); // hello
+      const rehydratedState = await secondMessages();
+      expect(rehydratedState.type).toBe('state');
+      const rehydratedRevision =
+        rehydratedState.type === 'state' ? rehydratedState.snapshot.revision : -1;
+      expect(rehydratedRevision).toBe(revisionAfterCommand);
+
+      // Resending the SAME commandId (as if the client never saw the original reply) must not
+      // double-apply: the engine's commandId dedup returns the cached result.
+      second.send(
+        JSON.stringify({
+          type: 'command',
+          commandId: 'reconnect-cmd-1',
+          expectedRevision: revisionBefore,
+          intent: { type: 'wait' },
+        }),
+      );
+      const resentReply = await secondMessages();
+      expect(resentReply.type).toBe('state');
+      if (resentReply.type === 'state') {
+        expect(resentReply.snapshot.revision).toBe(revisionAfterCommand);
+      }
+    } finally {
+      second.terminate();
     }
   });
 });

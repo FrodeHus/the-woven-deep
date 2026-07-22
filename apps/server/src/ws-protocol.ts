@@ -57,8 +57,10 @@ export interface HelloMessage {
   readonly saveSchemaVersion: number;
 }
 
-/** Server → client messages. `superseded` (Task 7's newest-wins eviction) is deliberately absent
- * here — this task drives exactly one live connection per profile end-to-end. */
+/** Server → client messages. `superseded` is Task 7's newest-wins eviction notice: sent to a
+ * connection's socket when a NEWER connection for the same profile has taken over the run — the
+ * server closes this socket immediately afterward, so the client should treat it as terminal (no
+ * reconnect-and-resume on this same tab; the other connection is now authoritative). */
 export type ServerMessage =
   | HelloMessage
   | { readonly type: 'state'; readonly snapshot: ServerRunSnapshot }
@@ -68,7 +70,8 @@ export type ServerMessage =
       readonly decision: ServerRunSnapshot['pendingDecision'];
       readonly snapshot: ServerRunSnapshot;
     }
-  | { readonly type: 'error'; readonly code: string; readonly message: string };
+  | { readonly type: 'error'; readonly code: string; readonly message: string }
+  | { readonly type: 'superseded' };
 
 export type ParsedClientMessage =
   | { readonly ok: true; readonly value: ClientMessage }

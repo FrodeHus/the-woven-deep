@@ -3,8 +3,10 @@ import type { FastifyInstance } from 'fastify';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { ENGINE_GAME_VERSION, SAVE_SCHEMA_VERSION, type Uint32State } from '@woven-deep/engine';
 import type { AuthBundle } from './auth.js';
-import { requireSession } from '../auth/http-guards.js';
+import { requireOrigin, requireSession } from '../auth/http-guards.js';
 import type { ActiveRunRepository } from '../db/active-run-repository.js';
+import { ConnectionRegistry } from '../play/connection-registry.js';
+import type { PlaySocket } from '../play/play-socket.js';
 import {
   ContentHashMismatchError,
   ServerPlaySession,
@@ -12,14 +14,7 @@ import {
 } from '../play/play-session.js';
 import { parseClientMessage, PROTOCOL_VERSION, type ServerMessage } from '../ws-protocol.js';
 
-/** A minimal shape of what `@fastify/websocket` hands the route handler — just enough of `ws`'s
- * `WebSocket` for this module to send/receive/close without depending on `@types/ws` here. */
-export interface PlaySocket {
-  send(data: string): void;
-  close(code?: number, reason?: string): void;
-  on(event: 'message', listener: (data: unknown) => void): void;
-  on(event: 'close', listener: () => void): void;
-}
+export type { PlaySocket } from '../play/play-socket.js';
 
 /** Generates the server-owned run seed. Never trusts a client-supplied seed (there is no wire path
  * for one) — retries the astronomically unlikely all-zero draw, which `createNewRun` rejects. */
@@ -105,23 +100,44 @@ export function handleMessage(session: ServerPlaySession, raw: unknown): readonl
 }
 
 /**
- * Registers `GET /ws/play`: authenticates the upgrade with the same `wd_session` cookie
- * `requireSession` uses for the HTTP profile routes (rejecting an unauthenticated upgrade before
- * the socket is ever established), opens a `ServerPlaySession` for the profile with a
- * SERVER-generated seed, sends `hello` + the initial `state`, and routes every subsequent message
- * through {@link handleMessage}. Flushes the session's pending checkpoint on close so a dropped
- * connection never loses an unwritten movement checkpoint. Newest-wins eviction and reconnection
- * are Task 7 — this drives exactly one connection per profile end-to-end.
+ * Registers `GET /ws/play`: authenticates the upgrade with the same origin check + `wd_session`
+ * cookie the HTTP mutation routes use (rejecting a cross-site or unauthenticated upgrade before
+ * the socket is ever established — a WS upgrade auto-sends cookies regardless of origin, so
+ * `requireOrigin` is required here even though there is no browser-enforced CORS for WebSockets),
+ * opens or reuses a `ServerPlaySession` for the profile, sends `hello` + the initial `state`, and
+ * routes every subsequent message through {@link handleMessage}.
+ *
+ * Newest-wins eviction + reconnection (Task 7): a `ConnectionRegistry` (one per route
+ * registration, i.e. one per running server) tracks at most one live connection per profile.
+ *
+ * - A SECOND connection for a profile that already has one live reuses that SAME in-memory
+ *   `ServerPlaySession` object (skipping `open()` — which would re-decode a possibly-stale
+ *   persisted blob and lose any unflushed checkpoint moves) and hands it to the new socket; the
+ *   registry evicts the old socket (`superseded` + close) as part of registering the new one.
+ * - A RECONNECT (the profile's previous connection already fully closed, so the registry has no
+ *   entry for it) opens a fresh `ServerPlaySession`, which rehydrates from `active_runs` — the
+ *   prior connection's `close` handler flushed its pending checkpoint before dropping, so the
+ *   fresh `open()` always sees the latest state. This "flush on close, rehydrate from the
+ *   in-memory holder when live / from SQLite otherwise" is the simplest approach that never loses
+ *   or double-holds a run, so it's what's implemented (no separate out-of-band holder needed: the
+ *   registry itself IS the in-memory holder).
+ *
+ * `unregister` is identity-guarded (see `connection-registry.ts`), so the evicted socket's own
+ * (later) `close` event can never accidentally remove the new connection's registry entry.
  */
 export function registerWsPlayRoute(
   app: FastifyInstance,
   input: Readonly<{ auth: AuthBundle; pack: CompiledContentPack; repo: ActiveRunRepository }>,
 ): void {
   const { auth, pack, repo } = input;
+  const registry = new ConnectionRegistry();
 
   app.get(
     '/ws/play',
-    { websocket: true, preValidation: requireSession(auth.session) },
+    {
+      websocket: true,
+      preValidation: [requireOrigin(auth.config.publicUrl), requireSession(auth.session)],
+    },
     (socket: PlaySocket, request) => {
       const profileId = request.profileId;
       if (!profileId) {
@@ -131,7 +147,8 @@ export function registerWsPlayRoute(
         return;
       }
 
-      const session = new ServerPlaySession({ pack, repo, profileId });
+      const existing = registry.get(profileId);
+      const session = existing?.session ?? new ServerPlaySession({ pack, repo, profileId });
 
       // Attach handlers synchronously before any work runs (session.open below is synchronous
       // too, so there's no async gap for a message to slip through unhandled, but this is the
@@ -144,10 +161,15 @@ export function registerWsPlayRoute(
       });
       socket.on('close', () => {
         session.flush();
+        registry.unregister(profileId, socket);
       });
 
       try {
-        const snapshot = session.open({ seed: generateSeed() });
+        // Reusing an already-open (still-live-elsewhere) session skips `open()` entirely — it's
+        // already rehydrated/created, and re-opening would clobber its in-memory state.
+        const snapshot =
+          existing !== undefined ? session.getSnapshot() : session.open({ seed: generateSeed() });
+        registry.register(profileId, socket, session);
         // Deferred one tick: sending in the exact same synchronous tick as the handshake is safe
         // over a real socket (the client's WebSocket parser handles trailing bytes after the
         // upgrade response correctly), but @fastify/websocket's `injectWS` test harness sniffs the
