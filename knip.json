@@ -15,6 +15,11 @@
       "entry": ["src/index.ts"],
       "project": "src/**/*.ts"
     },
+    "packages/session-core": {
+      "entry": ["src/index.ts"],
+      "project": "src/**/*.ts",
+      "ignoreDependencies": ["@woven-deep/engine", "@woven-deep/content"]
+    },
     "apps/web": {
       "entry": ["index.html"],
       "project": "src/**/*.{ts,tsx}",
