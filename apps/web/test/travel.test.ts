@@ -9,7 +9,7 @@ import {
   resolveClick,
   type TravelPlan,
 } from '../src/session/travel.js';
-import { buildIntent } from '../src/session/command-builder.js';
+import { buildIntent } from '@woven-deep/session-core';
 
 const WIDTH = 12;
 const HEIGHT = 8;
