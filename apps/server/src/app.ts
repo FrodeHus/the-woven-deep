@@ -50,7 +50,7 @@ export function buildApp(input: {
     });
     decorateProfileId(app);
     registerAuthRoutes(app, auth, input.database);
-    registerProfileRoutes(app, auth);
+    registerProfileRoutes(app, auth, input.database);
     // Dev mode mirrors the absence of a real mail transport: without Mailgun configured,
     // magic links are only ever delivered through this endpoint, so it must be reachable.
     const isDevMode = auth.config.mailgun === null;

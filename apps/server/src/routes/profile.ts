@@ -1,8 +1,26 @@
 import type { FastifyInstance } from 'fastify';
+import type Database from 'better-sqlite3';
+import { emptyRunMetrics, type LifetimeState } from '@woven-deep/engine';
 import type { AuthBundle } from './auth.js';
+import { ServerRunRecordRepository } from '../db/hall-repository.js';
 import { requireOrigin, requireSession, requireCsrf } from '../auth/http-guards.js';
 
-export function registerProfileRoutes(app: FastifyInstance, auth: AuthBundle): void {
+/** Matches `auth.ts`'s `EMPTY_LIFETIME`: the zeroed `LifetimeState` a profile with no
+ * `hall_state` row (or no database at all, in isolated profile-route tests) gets from
+ * `/api/profile/export` -- kept in lockstep with what `ServerRunRecordRepository.lifetime()`
+ * itself returns for that same profile. */
+const EMPTY_LIFETIME: LifetimeState = {
+  conqueredChampionRecordIds: [],
+  grantedAchievementIds: [],
+  discoveryProtection: [],
+  totals: emptyRunMetrics(),
+};
+
+export function registerProfileRoutes(
+  app: FastifyInstance,
+  auth: AuthBundle,
+  database?: Database.Database,
+): void {
   const sessionPreHandler = requireSession(auth.session);
 
   app.get('/api/profile/settings', async (request, reply) => {
@@ -17,6 +35,37 @@ export function registerProfileRoutes(app: FastifyInstance, auth: AuthBundle): v
 
   const originPreHandler = requireOrigin(auth.config.publicUrl);
   const csrfPreHandler = requireCsrf(app);
+
+  // Export is a read (GET), so it's origin-checked like every other authenticated route but
+  // skips CSRF -- CSRF protects state-changing requests, not reads. The document contains only
+  // the profile's OWN gameplay/settings data (Hall records, lifetime totals, unlocks,
+  // achievements, settings) -- never a session token, cookie, CSRF token, or any auth secret.
+  app.get(
+    '/api/profile/export',
+    { preHandler: [originPreHandler, sessionPreHandler] },
+    async (request, reply) => {
+      const profileId = request.profileId;
+      if (profileId === undefined) {
+        return;
+      }
+
+      const hallRepo = database ? new ServerRunRecordRepository({ database, profileId }) : null;
+      const records = hallRepo ? hallRepo.records() : [];
+      const lifetime = hallRepo ? hallRepo.lifetime() : EMPTY_LIFETIME;
+      const unlocks = hallRepo ? hallRepo.unlocks() : [];
+      const achievements = hallRepo ? hallRepo.achievements() : [];
+      const { settingsJson, settingsVersion } = auth.settings.read(profileId);
+
+      reply.header('Content-Disposition', 'attachment; filename="woven-deep-profile.json"');
+      reply.send({
+        records,
+        lifetime,
+        unlocks,
+        achievements,
+        settings: { settingsJson, settingsVersion },
+      });
+    },
+  );
 
   app.put(
     '/api/profile/settings',

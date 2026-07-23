@@ -1,9 +1,12 @@
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { emptyRunMetrics, type StoredHallRecord } from '@woven-deep/engine';
 import { buildApp } from '../../src/app.js';
 import { runMigrations } from '../../src/database.js';
 import { LoginTokenRepository } from '../../src/db/login-token-repository.js';
+import { ProfileRepository } from '../../src/db/profile-repository.js';
+import { ServerRunRecordRepository } from '../../src/db/hall-repository.js';
 import { createAuthBundle } from '../../src/auth/bundle.js';
 import { generateToken, hashToken } from '../../src/auth/tokens.js';
 import type { AuthConfig } from '../../src/config.js';
@@ -60,6 +63,44 @@ async function verifyAndGetCookies(
   });
   const setCookie = response.headers['set-cookie'];
   return Array.isArray(setCookie) ? setCookie : [String(setCookie)];
+}
+
+/** A minimal but fully-typed `StoredHallRecord` fixture -- hand-built rather than routed through
+ * the engine's `finalizeRun` (unnecessary machinery for a route test that only needs a record
+ * to round-trip through `records()`). */
+function fixtureHallRecord(recordId: string): StoredHallRecord {
+  return {
+    recordId,
+    heroName: 'Test Hero',
+    classTags: ['class.warden'],
+    completionType: 'died',
+    cause: { killerContentId: null, depth: 3, turn: 50, worldTime: 5000 },
+    deepestDepth: 3,
+    score: { lines: [], total: 0 },
+    metrics: emptyRunMetrics(),
+    reputations: [],
+    heirloom: {
+      contentId: 'item.fallback',
+      sourceItemId: null,
+      enchantment: null,
+      condition: 1,
+      charges: null,
+      fuel: null,
+      qualityRank: 1,
+      displayName: 'Test Heirloom',
+      glyph: ')',
+      color: '#c0c0c0',
+      originatingHallRecordId: recordId,
+    },
+    build: {
+      attributes: { might: 5, agility: 5, vitality: 5, wits: 5, resolve: 5 },
+      equippedItemContentIds: [],
+      signatureAbilityIds: [],
+    },
+    runSeed: '00000000000000000000000000000000',
+    contentHash: 'a'.repeat(64),
+    enrichment: { achievedAt: '2026-07-23T00:00:00.000Z', portraitGlyph: '@' },
+  };
 }
 
 async function getCsrfToken(
@@ -283,5 +324,188 @@ describe('profile routes', () => {
 
     await mailgunApp.close();
     mailgunDatabase.close();
+  });
+});
+
+describe('GET /api/profile/export', () => {
+  let app: FastifyInstance;
+  let database: Database.Database;
+  let bundle: AuthBundle;
+
+  beforeEach(() => {
+    database = freshDatabase();
+    bundle = createAuthBundle({ db: database, config: makeConfig() });
+    app = buildApp({ pack, auth: bundle, database });
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('returns 401 when unauthenticated', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/profile/export',
+      headers: { origin: PUBLIC_URL },
+    });
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({ error: 'unauthenticated' });
+  });
+
+  it('returns 403 for a mismatched Origin', async () => {
+    const sessionCookies = await verifyAndGetCookies(
+      app,
+      database,
+      'export-bad-origin@example.com',
+    );
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/profile/export',
+      headers: { origin: 'https://evil.example.com', cookie: cookieHeader(sessionCookies) },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'origin_mismatch' });
+  });
+
+  it('returns 403 when neither Origin nor Referer is present', async () => {
+    const sessionCookies = await verifyAndGetCookies(app, database, 'export-no-origin@example.com');
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/profile/export',
+      headers: { cookie: cookieHeader(sessionCookies) },
+    });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('exports empty records/zeroed lifetime/empty unlocks+achievements for a fresh profile with no hall_state', async () => {
+    const sessionCookies = await verifyAndGetCookies(app, database, 'export-fresh@example.com');
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/profile/export',
+      headers: { origin: PUBLIC_URL, cookie: cookieHeader(sessionCookies) },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.records).toEqual([]);
+    expect(body.unlocks).toEqual([]);
+    expect(body.achievements).toEqual([]);
+    expect(body.lifetime).toEqual({
+      conqueredChampionRecordIds: [],
+      grantedAchievementIds: [],
+      discoveryProtection: [],
+      totals: emptyRunMetrics(),
+    });
+    expect(body.settings).toEqual({ settingsJson: null, settingsVersion: 0 });
+  });
+
+  it("exports the profile's own records, lifetime, unlocks, achievements, and settings", async () => {
+    const email = 'export-full@example.com';
+    const sessionCookies = await verifyAndGetCookies(app, database, email);
+    const profiles = new ProfileRepository(database);
+    const profile = profiles.findByEmail(email);
+    expect(profile).toBeDefined();
+
+    const hallRepo = new ServerRunRecordRepository({ database, profileId: profile!.id });
+    const recordA = fixtureHallRecord('record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa');
+    const recordB = fixtureHallRecord('record.bbbbbbbb00000000.bbbbbbbbbbbbbbbb');
+    hallRepo.appendRecord(recordA);
+    hallRepo.appendRecord(recordB);
+    hallRepo.applyDeltas({
+      recordId: recordA.recordId,
+      newlyConqueredChampionRecordIds: [],
+      achievementGrants: [
+        {
+          achievementId: 'achievement.first-blood',
+          criteriaId: 'first-champion-defeat',
+          name: 'First Blood',
+        },
+      ],
+      discoveryProtectionUpdates: [],
+      metrics: { ...emptyRunMetrics(), kills: 7, deepestDepth: 3 },
+    });
+    hallRepo.appendAchievements([
+      {
+        achievementId: 'achievement.first-blood',
+        criteriaId: 'first-champion-defeat',
+        name: 'First Blood',
+      },
+    ]);
+    hallRepo.setUnlocks(['class.warden']);
+
+    const { csrfToken, cookies } = await getCsrfToken(app, sessionCookies);
+    const putResponse = await app.inject({
+      method: 'PUT',
+      url: '/api/profile/settings',
+      headers: {
+        origin: PUBLIC_URL,
+        cookie: cookieHeader(cookies),
+        'x-csrf-token': csrfToken,
+        'content-type': 'application/json',
+      },
+      payload: { settingsJson: '{"theme":"dark"}', settingsVersion: 1 },
+    });
+    expect(putResponse.statusCode).toBe(200);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/profile/export',
+      headers: { origin: PUBLIC_URL, cookie: cookieHeader(sessionCookies) },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-disposition']).toBe(
+      'attachment; filename="woven-deep-profile.json"',
+    );
+
+    const body = response.json();
+    expect(body.records).toEqual([recordA, recordB]);
+    expect(body.unlocks).toEqual(['class.warden']);
+    expect(body.achievements).toEqual([
+      {
+        achievementId: 'achievement.first-blood',
+        criteriaId: 'first-champion-defeat',
+        name: 'First Blood',
+      },
+    ]);
+    expect(body.lifetime.totals.kills).toBe(7);
+    expect(body.lifetime.totals.deepestDepth).toBe(3);
+    expect(body.settings).toEqual({ settingsJson: '{"theme":"dark"}', settingsVersion: 1 });
+  });
+
+  it('never leaks session/CSRF/auth-secret fields, and exposes exactly the expected safe top-level keys', async () => {
+    const sessionCookies = await verifyAndGetCookies(
+      app,
+      database,
+      'export-leak-guard@example.com',
+    );
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/profile/export',
+      headers: { origin: PUBLIC_URL, cookie: cookieHeader(sessionCookies) },
+    });
+    expect(response.statusCode).toBe(200);
+
+    const body = response.json();
+    expect(Object.keys(body).sort()).toEqual(
+      ['achievements', 'lifetime', 'records', 'settings', 'unlocks'].sort(),
+    );
+
+    const raw = response.body;
+    const forbiddenSubstrings = [
+      'sessionToken',
+      'session_token',
+      'wd_session',
+      'csrfToken',
+      'csrf_token',
+      'cookie',
+      'tokenHash',
+      'token_hash',
+      'password',
+      'magicLink',
+      'magic_link',
+      'secret',
+    ];
+    for (const forbidden of forbiddenSubstrings) {
+      expect(raw.toLowerCase()).not.toContain(forbidden.toLowerCase());
+    }
   });
 });
