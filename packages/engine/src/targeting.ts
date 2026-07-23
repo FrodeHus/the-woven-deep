@@ -1,5 +1,11 @@
 import type { SpellAoeDescriptor, TargetingId } from '@woven-deep/content';
 import type { ActorState } from './actor-model.js';
+import {
+  bresenhamLine,
+  burstCells as sharedBurstCells,
+  coneCells as sharedConeCells,
+  lineCells as sharedLineCells,
+} from './aoe-geometry.js';
 import type { IlluminationField } from './light-model.js';
 import type { FloorSnapshot, OpaqueId, Point } from './model.js';
 import { tileIndex } from './model.js';
@@ -25,30 +31,6 @@ export interface TargetValidationInput {
   readonly aoe?: SpellAoeDescriptor;
 }
 
-function line(from: Point, to: Point): readonly Point[] {
-  const points: Point[] = [];
-  let x = from.x;
-  let y = from.y;
-  const dx = Math.abs(to.x - from.x);
-  const sx = from.x < to.x ? 1 : -1;
-  const dy = -Math.abs(to.y - from.y);
-  const sy = from.y < to.y ? 1 : -1;
-  let error = dx + dy;
-  while (x !== to.x || y !== to.y) {
-    const twice = 2 * error;
-    if (twice >= dy) {
-      error += dy;
-      x += sx;
-    }
-    if (twice <= dx) {
-      error += dx;
-      y += sy;
-    }
-    points.push({ x, y });
-  }
-  return points;
-}
-
 function chebyshev(a: Point, b: Point): number {
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 }
@@ -59,55 +41,24 @@ function isOpaqueCell(input: TargetValidationInput, point: Point): boolean {
   return tileDefinition(input.floor.tiles[index]!).opaque;
 }
 
-/** Filled Chebyshev disc around `center`, deterministically ordered (row-major), in-bounds only. */
+function inBoundsCell(input: TargetValidationInput, point: Point): boolean {
+  return tileIndex(input.floor, point.x, point.y) !== undefined;
+}
+
 function burstCells(input: TargetValidationInput, center: Point, radius: number): readonly Point[] {
-  const cells: Point[] = [];
-  for (let dy = -radius; dy <= radius; dy += 1) {
-    for (let dx = -radius; dx <= radius; dx += 1) {
-      const cell = { x: center.x + dx, y: center.y + dy };
-      if (tileIndex(input.floor, cell.x, cell.y) === undefined) continue;
-      cells.push(cell);
-    }
-  }
-  return cells;
+  return sharedBurstCells(center, radius, { inBounds: (p) => inBoundsCell(input, p) });
 }
 
-/** Bresenham path from the caster toward `aim`, capped at `radius`, stopping at the first opaque tile. */
 function lineCells(input: TargetValidationInput, aim: Point, radius: number): readonly Point[] {
-  const cells: Point[] = [];
-  for (const cell of line(input.sourceActor, aim)) {
-    if (chebyshev(input.sourceActor, cell) > radius) break;
-    if (isOpaqueCell(input, cell)) break;
-    cells.push(cell);
-  }
-  return cells;
+  return sharedLineCells(input.sourceActor, aim, radius, {
+    isOpaque: (p) => isOpaqueCell(input, p),
+  });
 }
 
-/**
- * Wedge of depth `radius` from the caster toward `aim`, correct for all 8 aim
- * directions (cardinal and diagonal). A cell at offset (dx, dy) from the
- * caster is in the cone iff it's within the Chebyshev extent, forward of the
- * caster along the aim direction, and within the 45-degree half-angle of that
- * direction (forward component >= perpendicular component).
- */
 function coneCells(input: TargetValidationInput, aim: Point, radius: number): readonly Point[] {
-  const fx = Math.sign(aim.x - input.sourceActor.x);
-  const fy = Math.sign(aim.y - input.sourceActor.y);
-  const cells: Point[] = [];
-  for (let dy = -radius; dy <= radius; dy += 1) {
-    for (let dx = -radius; dx <= radius; dx += 1) {
-      if (dx === 0 && dy === 0) continue;
-      if (Math.max(Math.abs(dx), Math.abs(dy)) > radius) continue;
-      const forward = dx * fx + dy * fy;
-      if (forward <= 0) continue;
-      const perpendicular = Math.abs(dx * -fy + dy * fx);
-      if (forward < perpendicular) continue;
-      const cell = { x: input.sourceActor.x + dx, y: input.sourceActor.y + dy };
-      if (tileIndex(input.floor, cell.x, cell.y) === undefined) continue;
-      cells.push(cell);
-    }
-  }
-  return cells;
+  return sharedConeCells(input.sourceActor, aim, radius, {
+    inBounds: (p) => inBoundsCell(input, p),
+  });
 }
 
 /**
@@ -149,7 +100,7 @@ function validatePoint(
     Math.abs(point.y - input.sourceActor.y),
   );
   if (distance > input.range) return { ok: false, reason: 'target.out_of_range' };
-  const cells = line(input.sourceActor, point);
+  const cells = bresenhamLine(input.sourceActor, point);
   if (
     cells.slice(0, -1).some((cell) => {
       const cellIndex = tileIndex(input.floor, cell.x, cell.y)!;
