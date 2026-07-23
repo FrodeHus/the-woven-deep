@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import { CONDITION_TRAIT_IDS, DERIVED_STAT_NAMES } from '../../model.js';
-import { base, color, conditionStackingModes, effect, safeInteger, safePositive } from './common.js';
+import {
+  base,
+  color,
+  conditionStackingModes,
+  effect,
+  safeInteger,
+  safePositive,
+} from './common.js';
 
 const conditionDuration = z.discriminatedUnion('mode', [
   z

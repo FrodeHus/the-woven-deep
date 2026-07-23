@@ -34,7 +34,9 @@ const burningCondition: ConditionContentEntry = {
 };
 
 beforeAll(async () => {
-  basePack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  basePack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
   pack = { ...basePack, entries: [...basePack.entries, burningCondition] };
 });
 
@@ -46,7 +48,15 @@ function burningActor(id: string, expiresAt: number): ActorState {
     playerControlled: false,
     health: 10,
     maxHealth: 10,
-    conditions: [{ conditionId: 'condition.burning', sourceActorId: 'hero.demo', appliedAt: 0, expiresAt, stacks: 1 }],
+    conditions: [
+      {
+        conditionId: 'condition.burning',
+        sourceActorId: 'hero.demo',
+        appliedAt: 0,
+        expiresAt,
+        stacks: 1,
+      },
+    ],
   };
 }
 

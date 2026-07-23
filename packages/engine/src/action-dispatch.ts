@@ -371,7 +371,12 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
     if (learnSpellId !== undefined) {
       const known = next.hero.knownSpellIds ?? [];
       next = { ...next, hero: { ...next.hero, knownSpellIds: [...known, learnSpellId] } };
-      events.push({ type: 'spell.learned', eventId, actorId: actor.actorId, spellId: learnSpellId });
+      events.push({
+        type: 'spell.learned',
+        eventId,
+        actorId: actor.actorId,
+        spellId: learnSpellId,
+      });
     }
     events.push(...consumedEvents);
     return { state: next, chargeEnergy: true };

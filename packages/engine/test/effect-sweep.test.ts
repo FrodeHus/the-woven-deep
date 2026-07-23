@@ -7,21 +7,34 @@ import type { CompiledContentPack } from '@woven-deep/content';
 
 let pack: CompiledContentPack;
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 function threeTargets(): { caster: ActorState; targets: ActorState[] } {
   const run = createDemoRun();
   const caster = { ...run.actors[0]!, actorId: 'hero', contentId: 'monster.cave-rat', x: 1, y: 1 };
   const mk = (id: string, x: number): ActorState => ({
-    ...caster, actorId: id, contentId: 'monster.cave-rat', playerControlled: false,
-    x, y: 1, health: 20, maxHealth: 20, disposition: 'hostile',
+    ...caster,
+    actorId: id,
+    contentId: 'monster.cave-rat',
+    playerControlled: false,
+    x,
+    y: 1,
+    health: 20,
+    maxHealth: 20,
+    disposition: 'hostile',
   });
   return { caster, targets: [mk('rat.c', 4), mk('rat.a', 2), mk('rat.b', 3)] };
 }
 
 const damage = [
-  { effectId: 'effect.damage' as const, parameters: { damageType: 'fire', dice: { count: 1, sides: 6, bonus: 0 } }, requiresLivingTarget: true },
+  {
+    effectId: 'effect.damage' as const,
+    parameters: { damageType: 'fire', dice: { count: 1, sides: 6, bonus: 0 } },
+    requiresLivingTarget: true,
+  },
 ];
 
 function sweep(order: ActorState[]) {
@@ -60,11 +73,20 @@ describe('resolveEffectSweep', () => {
     const { caster, targets } = threeTargets();
     const run = createDemoRun();
     const result = resolveEffectSweep({
-      effects: damage, actors: [caster, ...targets], content: pack,
-      sourceActorId: caster.actorId, casterActorId: caster.actorId, includeCaster: false,
+      effects: damage,
+      actors: [caster, ...targets],
+      content: pack,
+      sourceActorId: caster.actorId,
+      casterActorId: caster.actorId,
+      includeCaster: false,
       targetActorIds: [caster.actorId, ...targets.map((t) => t.actorId)],
-      effectsState: run.rng.effects, worldTime: 0, eventId: 'command.sweep',
-      forceMoveDirection: { x: 1, y: 0 }, operations: {}, survival: run.survival, survivalActorId: caster.actorId,
+      effectsState: run.rng.effects,
+      worldTime: 0,
+      eventId: 'command.sweep',
+      forceMoveDirection: { x: 1, y: 0 },
+      operations: {},
+      survival: run.survival,
+      survivalActorId: caster.actorId,
     });
     const casterAfter = result.actors.find((x) => x.actorId === caster.actorId)!;
     expect(casterAfter.health).toBe(caster.health);

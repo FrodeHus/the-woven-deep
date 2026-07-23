@@ -54,7 +54,10 @@ describe('AoE cell computation', () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const xs = result.cells.filter((c) => c.y === 2).map((c) => c.x).sort((a, b) => a - b);
+    const xs = result.cells
+      .filter((c) => c.y === 2)
+      .map((c) => c.x)
+      .sort((a, b) => a - b);
     expect(xs).toEqual([3, 4]); // stops before the wall at x=5, excludes the caster cell itself
   });
 

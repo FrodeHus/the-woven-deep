@@ -236,7 +236,11 @@ export function tickConditions(
       damageType: DamageType,
     ) => Readonly<{ armor: number; resistance: number; immune: boolean }>;
   }>,
-): Readonly<{ actors: readonly ActorState[]; effectsState: Uint32State; events: readonly DomainEvent[] }> {
+): Readonly<{
+  actors: readonly ActorState[];
+  effectsState: Uint32State;
+  events: readonly DomainEvent[];
+}> {
   const orderedActorIds = input.actors
     .map((actor) => actor.actorId)
     .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));

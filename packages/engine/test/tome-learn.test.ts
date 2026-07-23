@@ -15,7 +15,9 @@ const TOME_CONTENT_ID = 'item.test-tome';
 const TOME_SPELL_ID = 'spell.ember-bolt';
 
 beforeAll(async () => {
-  pack = await compileContentDirectory({ rootDir: resolve(import.meta.dirname, '../../../content') });
+  pack = await compileContentDirectory({
+    rootDir: resolve(import.meta.dirname, '../../../content'),
+  });
 });
 
 /** Synthetic tome item entry: an item.spell.learn + effect.item.consume pair, mirroring what a
@@ -115,9 +117,7 @@ describe('tome learning', () => {
 
     expect(result.result.status).toBe('applied');
     expect(result.state.hero.knownSpellIds).toContain(TOME_SPELL_ID);
-    expect(result.state.hero.knownSpellIds).toHaveLength(
-      (run.hero.knownSpellIds ?? []).length + 1,
-    );
+    expect(result.state.hero.knownSpellIds).toHaveLength((run.hero.knownSpellIds ?? []).length + 1);
     expect(result.state.items.find((item) => item.itemId === 'item.tome.1')).toBeUndefined();
   });
 
