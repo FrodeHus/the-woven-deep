@@ -47,13 +47,18 @@ describe('generateTownFloor', () => {
     const { floor, houseDoor, merchantSlots } = generateTownFloor(pack);
     expect(tileAt(floor, houseDoor)).toBe(2); // closed-door tile id
 
-    for (const point of [merchantSlots.provisioner, merchantSlots.arms, merchantSlots.curios]) {
+    for (const point of [
+      merchantSlots.provisioner,
+      merchantSlots.arms,
+      merchantSlots.curios,
+      merchantSlots.spellvendor,
+    ]) {
       expect(tileAt(floor, point)).toBe(1); // floor tile id
     }
 
     const slotIds = floor.placementSlots.map((slot) => slot.slotId);
     expect(slotIds).toEqual([...slotIds].sort());
-    expect(floor.placementSlots).toHaveLength(5);
+    expect(floor.placementSlots).toHaveLength(6);
     expect(floor.placementSlots.every((slot) => slot.required)).toBe(true);
   });
 
@@ -77,7 +82,12 @@ describe('generateTownFloor', () => {
       lights: floor.lights,
       actors: new Map(),
     });
-    for (const point of [merchantSlots.provisioner, merchantSlots.arms, merchantSlots.curios]) {
+    for (const point of [
+      merchantSlots.provisioner,
+      merchantSlots.arms,
+      merchantSlots.curios,
+      merchantSlots.spellvendor,
+    ]) {
       const index = point.y * floor.width + point.x;
       expect(illumination.intensity[index]).toBeGreaterThan(0);
     }

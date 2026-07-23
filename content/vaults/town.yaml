@@ -22,7 +22,7 @@ entries:
       - "#................................#"
       - "#................................#"
       - "#................................#"
-      - "#..........4........5............#"
+      - "#..........4....S...5............#"
       - "#......................#########.#"
       - "#....+>................#.......#.#"
       - "#......................#.......#.#"
@@ -49,6 +49,9 @@ entries:
       "C":
         terrain: floor
         slot: { id: merchant-curios, kind: npc, required: true, tags: [town, merchant, curios] }
+      "S":
+        terrain: floor
+        slot: { id: merchant-spellvendor, kind: npc, required: true, tags: [town, merchant, spellvendor] }
       "1":
         terrain: floor
         light: { idSuffix: provisioner-lamp, glyph: "1", presentationToken: fixture.lamp, color: [255, 179, 71], radius: 6, strength: 180 }

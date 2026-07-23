@@ -141,7 +141,7 @@ describe('permanent town merchant materialization', () => {
   it('never rolls a lifetime, never departs, and never takes a turn', () => {
     const run = townRun();
     const merchants = townMerchants(run);
-    expect(merchants).toHaveLength(3);
+    expect(merchants).toHaveLength(4);
     for (const merchant of merchants) {
       expect(merchant.departureAt).toBeNull();
       expect(merchant.rolledLifetime).toBe(0);
@@ -394,7 +394,7 @@ describe('milestone restock', () => {
     expect(descended.state.metrics.deepestDepth).toBe(14);
     expect(descended.state.restockedMilestones).toEqual([5, 10]);
     const restockEvents = descended.events.filter((event) => event.type === 'merchant.restocked');
-    expect(restockEvents).toHaveLength(6); // 3 permanent merchants x 2 milestones (5 and 10)
+    expect(restockEvents).toHaveLength(8); // 4 permanent merchants x 2 milestones (5 and 10)
 
     // A further descend (into yet another brand-new floor) must not re-fire either milestone.
     const nextFloor = descended.state.floors.find(

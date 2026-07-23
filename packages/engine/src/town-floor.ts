@@ -66,7 +66,9 @@ export interface TownFloorResult {
   readonly floor: FloorSnapshot;
   readonly entrancePlaza: Point;
   readonly houseDoor: Point;
-  readonly merchantSlots: Readonly<Record<'provisioner' | 'arms' | 'curios', Point>>;
+  readonly merchantSlots: Readonly<
+    Record<'provisioner' | 'arms' | 'curios' | 'spellvendor', Point>
+  >;
 }
 
 function townVaultEntry(pack: CompiledContentPack): VaultContentEntry {
@@ -191,6 +193,7 @@ export function generateTownFloor(pack: CompiledContentPack): TownFloorResult {
     provisioner: slotPoint(transformed.slots, 'merchant-provisioner'),
     arms: slotPoint(transformed.slots, 'merchant-arms'),
     curios: slotPoint(transformed.slots, 'merchant-curios'),
+    spellvendor: slotPoint(transformed.slots, 'merchant-spellvendor'),
   };
 
   const floor: FloorSnapshot = {

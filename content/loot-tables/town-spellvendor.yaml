@@ -1,0 +1,16 @@
+schemaVersion: 7
+entries:
+  - kind: loot-table
+    id: loot-table.town-spellvendor-stock
+    name: Town Spell Vendor stock
+    tags: [town, merchant, spellvendor]
+    rolls: 3
+    # Base band (no minDepth/maxDepth) covers the earliest tomes and scrolls a hero can already
+    # use; the table widens at two restock milestones as the run deepens: fireball scroll at
+    # depth 5 and the legendary aegis tome at depth 10.
+    choices:
+      - { contentId: item.frost-shard-tome, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.ember-scroll, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.recall-tome, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.fireball-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 2, minDepth: 5 }
+      - { contentId: item.aegis-tome, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, minDepth: 10 }

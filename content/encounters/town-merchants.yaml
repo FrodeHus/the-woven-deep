@@ -94,3 +94,34 @@ entries:
       aggressionReputationDelta: -300
       deathReputationDelta: -200
       stockDropFraction: 0.5
+
+  - kind: encounter
+    id: encounter.town-spellvendor
+    name: Town Spell Vendor
+    tags: [town, merchant, spellvendor]
+    model: merchant
+    minDepth: 1
+    maxDepth: 1
+    environmentTags: []
+    requiredVaultTags: [town]
+    weight: 1
+    rarity: common
+    runAppearanceChance: 1
+    maximumInstancesPerRun: 1
+    placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: required }
+    intentPresentation: { visible: true }
+    definition:
+      npcId: npc.town-spellvendor
+      stockLootTableId: loot-table.town-spellvendor-stock
+      minimumStockRolls: 1
+      maximumStockRolls: 1
+      merchantSaleBps: 12000
+      merchantPurchaseBps: 6000
+      acceptedCategories: [scroll, misc]
+      services: []
+      permanent: true
+      aggressionResponse: flee
+      commerceReputationDelta: 25
+      aggressionReputationDelta: -300
+      deathReputationDelta: -200
+      stockDropFraction: 0.5
