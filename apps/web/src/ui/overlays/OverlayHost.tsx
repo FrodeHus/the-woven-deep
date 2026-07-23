@@ -3,6 +3,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import type { StoredHallRecord } from '@woven-deep/engine';
 import type { Sightings } from '../../session/codex.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
+import type { AccountState } from '../../session/account.js';
 import { canOpenOverlay, OVERLAY_REGISTRY, type OverlayId } from './registry.js';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/sheet.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
@@ -37,6 +38,10 @@ export interface OverlayHostProps {
    * (`session/codex.ts`'s `loadSightings`) directly here instead. Unset on the play path, where
    * the live session already provides sightings via context. */
   readonly sightings?: Sightings;
+  /** Forwarded straight through to the settings overlay body -- drives its signed-in-only
+   * "Lifetime & achievements" section. Optional so every pre-existing caller/test keeps compiling
+   * unchanged (the section just doesn't render without it). */
+  readonly account?: AccountState | undefined;
 }
 
 /**
@@ -55,6 +60,7 @@ export function OverlayHost({
   onClearGuestSession,
   onSignOut,
   sightings,
+  account,
 }: Readonly<OverlayHostProps>): JSX.Element | null {
   const pack = usePack();
   const sessionCtx = useSessionCtx();
@@ -68,6 +74,7 @@ export function OverlayHost({
     records,
     onClearGuestSession,
     onSignOut,
+    account,
     snapshot: sessionCtx?.snapshot,
     sightings: sightings ?? sessionCtx?.snapshot.sightings,
   });
@@ -106,6 +113,7 @@ interface RenderBodyContext {
   readonly records: readonly StoredHallRecord[] | undefined;
   readonly onClearGuestSession: (() => void) | undefined;
   readonly onSignOut: (() => void) | undefined;
+  readonly account: AccountState | undefined;
   readonly snapshot: SessionSnapshot | undefined;
   readonly sightings: Sightings | undefined;
 }
@@ -136,7 +144,11 @@ function renderBody(overlay: OverlayId, ctx: RenderBodyContext): JSX.Element {
     case 'settings':
       if (!ctx.onClearGuestSession) return <p>Settings are unavailable right now.</p>;
       return (
-        <SettingsOverlay onClearGuestSession={ctx.onClearGuestSession} onSignOut={ctx.onSignOut} />
+        <SettingsOverlay
+          onClearGuestSession={ctx.onClearGuestSession}
+          onSignOut={ctx.onSignOut}
+          account={ctx.account}
+        />
       );
     case 'help':
       return <HelpOverlay />;

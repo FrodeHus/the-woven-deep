@@ -6,7 +6,15 @@ import {
   fetchProfileSettings,
   putProfileSettings,
 } from '../../src/api.js';
+import { emptyRunMetrics } from '@woven-deep/engine';
 import { GUEST_ACCOUNT, loadAccount } from '../../src/session/account.js';
+
+const EMPTY_LIFETIME = {
+  conqueredChampionRecordIds: [],
+  grantedAchievementIds: [],
+  discoveryProtection: [],
+  totals: emptyRunMetrics(),
+};
 
 describe('requestLogin', () => {
   it('posts the email to /api/auth/login and resolves on 200', async () => {
@@ -163,6 +171,8 @@ describe('loadAccount', () => {
       email: 'player@example.com',
       csrfToken: 'tok',
       unlockedClassIds: [],
+      lifetime: EMPTY_LIFETIME,
+      achievements: [],
     });
   });
 
@@ -182,5 +192,44 @@ describe('loadAccount', () => {
     const account = await loadAccount(fetcher as unknown as typeof fetch);
 
     expect(account.unlockedClassIds).toEqual(['class.warden']);
+  });
+
+  it('defaults lifetime/achievements to empty for a guest', async () => {
+    expect(GUEST_ACCOUNT.lifetime).toEqual(EMPTY_LIFETIME);
+    expect(GUEST_ACCOUNT.achievements).toEqual([]);
+  });
+
+  it('maps lifetime and achievements from the session payload when present', async () => {
+    const lifetime = {
+      conqueredChampionRecordIds: ['champion.a'],
+      grantedAchievementIds: ['achievement.first-blood'],
+      discoveryProtection: [],
+      totals: { ...emptyRunMetrics(), kills: 12, deepestDepth: 4 },
+    };
+    const achievements = [
+      {
+        achievementId: 'achievement.first-blood',
+        criteriaId: 'first-champion-defeat',
+        name: 'First Blood',
+      },
+    ];
+    const fetcher = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          authenticated: true,
+          email: 'player@example.com',
+          csrfToken: 'tok',
+          unlockedClassIds: [],
+          lifetime,
+          achievements,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const account = await loadAccount(fetcher as unknown as typeof fetch);
+
+    expect(account.lifetime).toEqual(lifetime);
+    expect(account.achievements).toEqual(achievements);
   });
 });

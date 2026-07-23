@@ -130,6 +130,10 @@ interface GameRootProps {
    * a guest's `GuestSession` (there is no account to sign out of); only ever set for a signed-in
    * `ProfileSession` run. See `PlayScreenProps.onSignOut`'s doc comment. */
   readonly onSignOut?: (() => void) | undefined;
+  /** Forwarded straight through to `PlayScreen`'s settings overlay body -- the current account
+   * (always populated; `GUEST_ACCOUNT` for a guest run), driving the signed-in-only "Lifetime &
+   * achievements" section. */
+  readonly account: AccountState;
   /** Whether the contextual onboarding hint strip may show at all: `settings.onboarding === 'on'`
    * AND not a quickstart boot -- quickstart always forces it off regardless of the stored setting,
    * protecting every pinned e2e walk (see `isQuickstart`'s doc comment). */
@@ -161,6 +165,7 @@ function GameRoot({
   onCloseOverlay,
   onClearGuestSession,
   onSignOut,
+  account,
   onboardingEnabled,
 }: GameRootProps): JSX.Element {
   const snapshot = useRunSession(session);
@@ -234,6 +239,7 @@ function GameRoot({
         onCloseOverlay={onCloseOverlay}
         onClearGuestSession={onClearGuestSession}
         onSignOut={onSignOut}
+        account={account}
         records={repository.records()}
         currentHeart={repository.currentHeart()}
         onboardingEnabled={onboardingEnabled}
@@ -574,6 +580,7 @@ export function App({
             records={repository.records()}
             onClearGuestSession={handleClearGuestSession}
             sightings={loadSightings(storage).sightings}
+            account={account}
           />
         </main>
       );
@@ -705,6 +712,7 @@ export function App({
         onCloseOverlay={closeOverlay}
         onClearGuestSession={handleClearGuestSession}
         onSignOut={account.status === 'signed-in' ? handleSignOut : undefined}
+        account={account}
         onboardingEnabled={settings.onboarding === 'on' && !quickstart}
         onConcluded={(projection, logTail) => {
           setConclusion({ projection, logTail });

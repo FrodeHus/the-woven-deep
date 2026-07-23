@@ -4,6 +4,7 @@ import {
   type CompiledContentPack,
   type ContentKind,
 } from '@woven-deep/content';
+import type { AchievementGrant, LifetimeState } from '@woven-deep/engine';
 
 export interface ContentSummary {
   readonly hash: string;
@@ -51,6 +52,13 @@ export interface SessionInfo {
   email?: string;
   csrfToken?: string;
   unlockedClassIds?: readonly string[];
+  /** The profile's server-persisted lifetime totals (`hall_state.lifetime_json`, replayed and
+   * serialized by `GET /api/auth/session` -- see `ServerRunRecordRepository.lifetime()`).
+   * Undefined only if the session route itself predates this field; `loadAccount` falls back to
+   * the same zeroed shape the server sends for a fresh profile. */
+  lifetime?: LifetimeState;
+  /** The profile's server-persisted granted achievements (`hall_state.achievements_json`). */
+  achievements?: readonly AchievementGrant[];
 }
 
 export async function fetchSession(fetcher: typeof fetch = fetch): Promise<SessionInfo> {

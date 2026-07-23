@@ -1,4 +1,5 @@
 import { useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { RunMetrics } from '@woven-deep/engine';
 import {
   ACTION_IDS,
   ACTION_LABELS,
@@ -8,6 +9,7 @@ import {
   type ActionId,
   type KeyChord,
 } from '../../session/settings.js';
+import type { AccountState } from '../../session/account.js';
 import { useSettingsCtx } from '../providers.js';
 import { Button } from '../components/button.js';
 import { Input } from '../components/input.js';
@@ -28,7 +30,31 @@ export interface SettingsOverlayProps {
    * is the one reachable way to sign out (and tear down the live `/ws/play` connection) once play
    * has started -- the title screen's own "Sign out" menu entry is unreachable from inside a run. */
   readonly onSignOut?: (() => void) | undefined;
+  /** The current account, sourced from `GET /api/auth/session` (`App`'s `useAccount`) -- drives the
+   * "Lifetime & Achievements" section below, which only renders for a signed-in profile (a guest's
+   * lifetime/records stay in their existing session-only Hall UI, untouched by this section).
+   * Optional so every pre-existing caller/test keeps compiling unchanged. */
+  readonly account?: AccountState | undefined;
 }
+
+/** The small, fixed subset of `RunMetrics`' numeric fields this section shows -- excludes
+ * `killsByModel` (an object, not a displayable scalar) and every other field, picked for being
+ * meaningful at a glance rather than an exhaustive dump of every metric. */
+type LifetimeMetricKey = Exclude<keyof RunMetrics, 'killsByModel'>;
+
+const LIFETIME_METRIC_ROWS: readonly {
+  readonly key: LifetimeMetricKey;
+  readonly label: string;
+}[] = [
+  { key: 'kills', label: 'Kills' },
+  { key: 'bossKills', label: 'Boss kills' },
+  { key: 'championKills', label: 'Champion kills' },
+  { key: 'deepestDepth', label: 'Deepest depth' },
+  { key: 'floorsEntered', label: 'Floors entered' },
+  { key: 'itemsCollected', label: 'Items collected' },
+  { key: 'currencyEarned', label: 'Currency earned' },
+  { key: 'turnsElapsed', label: 'Turns elapsed' },
+];
 
 const FONT_SCALE_STEPS: readonly (1 | 1.15 | 1.3 | 1.5)[] = [1, 1.15, 1.3, 1.5];
 
@@ -72,6 +98,7 @@ type CaptureRefusal =
 export function SettingsOverlay({
   onClearGuestSession,
   onSignOut,
+  account,
 }: Readonly<SettingsOverlayProps>): JSX.Element {
   const { settings, onChange, keymap } = useSettingsCtx();
   const [capturing, setCapturing] = useState<ActionId | null>(null);
@@ -302,6 +329,36 @@ export function SettingsOverlay({
           Reset all bindings
         </Button>
       </section>
+
+      {account?.status === 'signed-in' && (
+        <section aria-labelledby="settings-lifetime-heading" className="flex flex-col gap-2">
+          <h3 id="settings-lifetime-heading" className="text-sm font-semibold text-fg-strong">
+            Lifetime & achievements
+          </h3>
+          <p className="text-sm text-muted">
+            Confirmed by the server across every run on this profile.
+          </p>
+          <dl aria-label="Lifetime totals" className="flex flex-col gap-1 text-sm">
+            {LIFETIME_METRIC_ROWS.map(({ key, label }) => (
+              <div key={key} className="flex justify-between gap-4">
+                <dt className="text-muted">{label}</dt>
+                <dd className="font-medium text-fg-strong">{account.lifetime.totals[key]}</dd>
+              </div>
+            ))}
+          </dl>
+          {account.achievements.length === 0 ? (
+            <p role="status" className="text-sm text-muted">
+              No achievements granted yet.
+            </p>
+          ) : (
+            <ul aria-label="Granted achievements" className="flex flex-col gap-1 text-sm">
+              {account.achievements.map((achievement) => (
+                <li key={achievement.achievementId}>{achievement.name}</li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {onSignOut && (
         <section aria-labelledby="settings-sign-out-heading" className="flex flex-col gap-2">
