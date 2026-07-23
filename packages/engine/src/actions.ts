@@ -101,6 +101,7 @@ export interface UseItemAction {
   readonly itemId: OpaqueId;
   readonly targetActorId: OpaqueId;
   readonly cost: number;
+  readonly aimTarget?: Point;
 }
 export interface CastAction {
   readonly type: 'cast';
@@ -573,6 +574,130 @@ export function validatePlayerAction(
       if ((input.state.hero.knownSpellIds ?? []).includes(learnSpellId)) {
         return { status: 'invalid', reason: 'learn.already-known' };
       }
+    }
+    // A scroll (an item carrying spellId but no learn effect) resolves the referenced spell's
+    // own targeting/effects instead of the item's target.actor combat targeting, with no Weave
+    // cost and no caster-aptitude gate: any class can read a scroll.
+    const scrollSpellId = learnSpellId === undefined ? definition.spellId : undefined;
+    if (scrollSpellId !== undefined) {
+      const spell = entryById(input.context.content, scrollSpellId);
+      if (!spell || spell.kind !== 'spell')
+        return { status: 'invalid', reason: 'action.unavailable' };
+      const perception = targetContext(input.state, actor, input.context.content);
+      if (spell.aoe !== undefined) {
+        if (command.target === null) return { status: 'invalid', reason: 'target.invalid' };
+        const area = validateTarget({
+          targetingId: spell.targetingId,
+          sourceActor: actor,
+          targetActorId: null,
+          target: command.target,
+          floor: perception.floor,
+          actors: input.state.actors,
+          visibilityWords: perception.visibilityWords,
+          illumination: perception.illumination,
+          range: spell.range,
+          aoe: spell.aoe,
+        });
+        if (!area.ok) return { status: 'invalid', reason: area.reason };
+        const cellKeys = new Set(area.cells.map((cell) => `${cell.x},${cell.y}`));
+        const targetActorIds = input.state.actors
+          .filter(
+            (entry) =>
+              entry.floorId === actor.floorId &&
+              entry.health > 0 &&
+              entry.actorId !== actor.actorId &&
+              cellKeys.has(`${entry.x},${entry.y}`),
+          )
+          .map((entry) => entry.actorId);
+        try {
+          // Speculative resolve only: this dry-run must not mutate ActiveRun state or RNG. The
+          // commit-time sweep in action-dispatch.ts re-derives the same cells from aimTarget and
+          // performs the real mutation.
+          resolveEffectSweep({
+            effects: spell.effects,
+            actors: input.state.actors,
+            items: input.state.items,
+            content: input.context.content,
+            sourceActorId: actor.actorId,
+            casterActorId: actor.actorId,
+            includeCaster: false,
+            targetActorIds,
+            effectsState: input.state.rng.effects,
+            survival: input.state.survival,
+            survivalActorId: input.state.hero.actorId,
+            worldTime: input.state.worldTime,
+            eventId: command.commandId,
+            forceMoveDirection: { x: 1, y: 0 },
+            operations: {},
+          });
+        } catch {
+          return { status: 'invalid', reason: 'action.unavailable' };
+        }
+        return {
+          type: 'use-item',
+          actorId: actor.actorId,
+          itemId: source.itemId,
+          targetActorId: actor.actorId,
+          cost: definition.actionCost,
+          aimTarget: command.target,
+        };
+      }
+      const candidate =
+        spell.targetingId === 'target.self'
+          ? actor
+          : input.state.actors.find(
+              (entry) =>
+                command.target !== null &&
+                entry.floorId === actor.floorId &&
+                entry.health > 0 &&
+                entry.x === command.target.x &&
+                entry.y === command.target.y,
+            );
+      if (!candidate) return { status: 'invalid', reason: 'target.invalid' };
+      const target = validateTarget({
+        targetingId: spell.targetingId,
+        sourceActor: actor,
+        targetActorId: candidate.actorId,
+        target: command.target,
+        floor: perception.floor,
+        actors: input.state.actors,
+        visibilityWords: perception.visibilityWords,
+        illumination: perception.illumination,
+        range: spell.range,
+      });
+      if (!target.ok) return { status: 'invalid', reason: target.reason };
+      try {
+        resolveEffectSequence({
+          effects: spell.effects,
+          actors: input.state.actors,
+          items: input.state.items,
+          content: input.context.content,
+          sourceActorId: actor.actorId,
+          targetActorId: candidate.actorId,
+          effectsState: input.state.rng.effects,
+          survival: input.state.survival,
+          survivalActorId: input.state.hero.actorId,
+          worldTime: input.state.worldTime,
+          eventId: command.commandId,
+          forceMoveDirection:
+            candidate.actorId === actor.actorId
+              ? { x: 1, y: 0 }
+              : {
+                  x: Math.sign(candidate.x - actor.x),
+                  y: Math.sign(candidate.y - actor.y),
+                },
+          operations: {},
+        });
+      } catch {
+        return { status: 'invalid', reason: 'action.unavailable' };
+      }
+      return {
+        type: 'use-item',
+        actorId: actor.actorId,
+        itemId: source.itemId,
+        targetActorId: candidate.actorId,
+        cost: definition.actionCost,
+      };
     }
     let targetActor = actor;
     if (command.target !== null) {

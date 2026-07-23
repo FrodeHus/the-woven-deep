@@ -334,6 +334,110 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       itemId: source.itemId,
       targetActorId: target.actorId,
     });
+    // A scroll (spellId set, no learn effect) resolves the referenced spell's own effects at the
+    // target -- AoE-aware via resolveEffectSweep -- with no Weave and no aptitude gate, then
+    // consumes itself via its own effects (effect.item.consume). This bypasses the item's own
+    // effects list entirely for the "cast" half of the read.
+    const scrollSpellId =
+      spellLearnTarget(definition.effects) === undefined ? definition.spellId : undefined;
+    if (scrollSpellId !== undefined) {
+      const spell = entryById(content, scrollSpellId);
+      if (!spell || spell.kind !== 'spell')
+        throw new Error(`internal invariant: scroll spell ${scrollSpellId} does not exist`);
+      let next = state;
+      let spellEvents: readonly DomainEvent[];
+      if (spell.aoe !== undefined) {
+        if (action.aimTarget === undefined)
+          throw new Error('internal invariant: AoE scroll action missing aimTarget');
+        const perception = targetContext(next, actor, content);
+        const area = validateTarget({
+          targetingId: spell.targetingId,
+          sourceActor: actor,
+          targetActorId: null,
+          target: action.aimTarget,
+          floor: perception.floor,
+          actors: next.actors,
+          visibilityWords: perception.visibilityWords,
+          illumination: perception.illumination,
+          range: spell.range,
+          aoe: spell.aoe,
+        });
+        if (!area.ok)
+          throw new Error(`internal invariant: validated scroll read failed with ${area.reason}`);
+        const cellKeys = new Set(area.cells.map((cell) => `${cell.x},${cell.y}`));
+        const targetActorIds = next.actors
+          .filter(
+            (entry) =>
+              entry.floorId === actor.floorId &&
+              entry.health > 0 &&
+              entry.actorId !== actor.actorId &&
+              cellKeys.has(`${entry.x},${entry.y}`),
+          )
+          .map((entry) => entry.actorId);
+        const resolved = resolveEffectSweep({
+          effects: spell.effects,
+          actors: next.actors,
+          items: next.items,
+          content,
+          sourceActorId: actor.actorId,
+          casterActorId: actor.actorId,
+          includeCaster: false,
+          targetActorIds,
+          effectsState: next.rng.effects,
+          survival: next.survival,
+          survivalActorId: next.hero.actorId,
+          worldTime: next.worldTime,
+          eventId,
+          forceMoveDirection: { x: 1, y: 0 },
+          operations: {},
+        });
+        next = applyEffectResult(next, resolved);
+        spellEvents = resolved.events;
+      } else {
+        const resolved = resolveEffectSequence({
+          effects: spell.effects,
+          actors: next.actors,
+          items: next.items,
+          content,
+          sourceActorId: actor.actorId,
+          targetActorId: target.actorId,
+          effectsState: next.rng.effects,
+          worldTime: next.worldTime,
+          eventId,
+          survival: next.survival,
+          survivalActorId: next.hero.actorId,
+          forceMoveDirection:
+            target.actorId === actor.actorId
+              ? { x: 1, y: 0 }
+              : { x: Math.sign(target.x - actor.x), y: Math.sign(target.y - actor.y) },
+          operations: {},
+        });
+        next = applyEffectResult(next, resolved);
+        spellEvents = resolved.events;
+      }
+      // Consume the scroll via its own effects (effect.item.consume), independent of the spell's
+      // effects resolved above.
+      const consumed = resolveEffectSequence({
+        effects: definition.effects,
+        actors: next.actors,
+        items: next.items,
+        content,
+        sourceActorId: actor.actorId,
+        sourceItemId: source.itemId,
+        targetActorId: actor.actorId,
+        effectsState: next.rng.effects,
+        worldTime: next.worldTime,
+        eventId,
+        survival: next.survival,
+        survivalActorId: next.hero.actorId,
+        forceMoveDirection: { x: 1, y: 0 },
+        operations: {},
+      });
+      next = applyEffectResult(next, consumed);
+      events.push(...spellEvents);
+      events.push(...consumed.events);
+      return { state: next, chargeEnergy: true };
+    }
     const resolved = resolveEffectSequence({
       effects: definition.effects,
       actors: state.actors,
