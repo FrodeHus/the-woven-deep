@@ -95,6 +95,7 @@ const entries: readonly ContentEntry[] = [
     stacking: { mode: 'refresh', maximumStacks: 1 },
     modifiersPerStack: {},
     traits: ['condition-trait.incapacitated'],
+    tickEffects: [],
   },
   {
     kind: 'item',

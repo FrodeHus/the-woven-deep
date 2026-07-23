@@ -1,11 +1,18 @@
 import type {
   BalanceContentEntry,
   CompiledContentPack,
+  DamageType,
   ItemContentEntry,
 } from '@woven-deep/content';
-import { replaceActor } from './actor-model.js';
-import { actorHasConditionTrait, advanceConditions, conditionModifiers } from './conditions.js';
+import { replaceActor, type ActorState } from './actor-model.js';
+import {
+  actorHasConditionTrait,
+  advanceConditions,
+  conditionModifiers,
+  tickConditions,
+} from './conditions.js';
 import { deriveActorStats, type DerivedStatModifier } from './attributes.js';
+import { damageMitigation } from './combat-profile.js';
 import { equipmentModifiers } from './equipment.js';
 import type { ItemInstance } from './item-model.js';
 import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
@@ -156,6 +163,19 @@ export function consumeFuel(
   };
 }
 
+function actorDamageMitigation(
+  input: Readonly<{
+    actors: readonly ActorState[];
+    content: CompiledContentPack;
+    actorId: OpaqueId;
+    damageType: DamageType;
+  }>,
+): Readonly<{ armor: number; resistance: number; immune: boolean }> {
+  const actor = input.actors.find((candidate) => candidate.actorId === input.actorId);
+  if (!actor) throw new Error(`internal invariant: actor ${input.actorId} does not exist`);
+  return damageMitigation(actor, input.content, input.damageType);
+}
+
 export function advanceSurvival(
   input: Readonly<{
     state: ActiveRun;
@@ -251,6 +271,21 @@ export function advanceSurvival(
   });
   events.push(...fuel.events);
 
+  const tick = tickConditions({
+    actors,
+    content: input.content,
+    effectsState: input.state.rng.effects,
+    worldTime: input.state.worldTime,
+    eventId: input.eventId,
+    survival: input.state.survival,
+    survivalActorId: heroId,
+    mitigationFor: (actorId, damageType) =>
+      actorDamageMitigation({ actors, content: input.content, actorId, damageType }),
+  });
+  actors = [...tick.actors];
+  hero = actors.find((actor) => actor.actorId === heroId)!;
+  events.push(...tick.events);
+
   const conditions = advanceConditions({
     actors,
     worldTime: input.state.worldTime,
@@ -317,5 +352,14 @@ export function advanceSurvival(
     emittedHungerWarnings: [...emittedStages],
     emittedFuelWarnings: fuel.emittedWarnings,
   };
-  return { state: { ...input.state, actors, items: fuel.items, survival }, events };
+  return {
+    state: {
+      ...input.state,
+      actors,
+      items: fuel.items,
+      survival,
+      rng: { ...input.state.rng, effects: tick.effectsState },
+    },
+    events,
+  };
 }

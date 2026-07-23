@@ -110,6 +110,7 @@ export function createDemoContentPack(): CompiledContentPack {
         stacking: { mode: 'refresh', maximumStacks: 1 },
         modifiersPerStack: {},
         traits: ['condition-trait.avoids-opportunity-attacks'],
+        tickEffects: [],
       },
       {
         kind: 'condition',
@@ -122,6 +123,7 @@ export function createDemoContentPack(): CompiledContentPack {
         stacking: { mode: 'refresh', maximumStacks: 1 },
         modifiersPerStack: {},
         traits: ['condition-trait.incapacitated'],
+        tickEffects: [],
       },
       {
         kind: 'condition',
@@ -134,6 +136,7 @@ export function createDemoContentPack(): CompiledContentPack {
         stacking: { mode: 'refresh', maximumStacks: 1 },
         modifiersPerStack: {},
         traits: ['condition-trait.suppresses-reactions'],
+        tickEffects: [],
       },
       {
         kind: 'condition',
@@ -146,6 +149,7 @@ export function createDemoContentPack(): CompiledContentPack {
         stacking: { mode: 'refresh', maximumStacks: 1 },
         modifiersPerStack: {},
         traits: [],
+        tickEffects: [],
       },
       {
         kind: 'condition',
@@ -158,6 +162,7 @@ export function createDemoContentPack(): CompiledContentPack {
         stacking: { mode: 'refresh', maximumStacks: 1 },
         modifiersPerStack: {},
         traits: ['condition-trait.interrupts-rest'],
+        tickEffects: [],
       },
     ],
     generationReport: { foundationalCategories: [] },

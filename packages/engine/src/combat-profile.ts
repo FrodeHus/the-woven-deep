@@ -1,5 +1,6 @@
 import type {
   CompiledContentPack,
+  DamageType,
   MonsterContentEntry,
   NpcContentEntry,
   PopulationCombatModifiers,
@@ -42,6 +43,29 @@ function npcDefinition(
 ): NpcContentEntry | undefined {
   const entry = entryById(content, actor.contentId);
   return entry?.kind === 'npc' ? entry : undefined;
+}
+
+/**
+ * Damage-type-aware mitigation for a single actor, independent of the melee/ranged combat
+ * profile above (which only ever reports the `physical` resistance). Used by non-attack damage
+ * sources such as condition tick effects (burn) that can carry any `DamageType`.
+ */
+export function damageMitigation(
+  actor: ActorState,
+  content: CompiledContentPack,
+  damageType: DamageType,
+): Readonly<{ armor: number; resistance: number; immune: boolean }> {
+  const monster = monsterDefinition(content, actor);
+  if (monster) {
+    const resistance = monster.resistances[damageType];
+    return { armor: monster.armor, resistance, immune: resistance >= 100 };
+  }
+  const npc = npcDefinition(content, actor);
+  if (npc) {
+    const resistance = npc.resistances[damageType];
+    return { armor: npc.armor, resistance, immune: resistance >= 100 };
+  }
+  return { armor: 0, resistance: 0, immune: false };
 }
 
 type PopulationCombatModifierResolver = (

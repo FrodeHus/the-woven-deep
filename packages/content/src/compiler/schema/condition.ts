@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { CONDITION_TRAIT_IDS, DERIVED_STAT_NAMES } from '../../model.js';
-import { base, color, conditionStackingModes, safeInteger, safePositive } from './common.js';
+import { base, color, conditionStackingModes, effect, safeInteger, safePositive } from './common.js';
 
 const conditionDuration = z.discriminatedUnion('mode', [
   z
@@ -25,6 +25,7 @@ export const conditionEntry = z
     }),
     modifiersPerStack: z.partialRecord(z.enum(DERIVED_STAT_NAMES), safeInteger).default({}),
     traits: z.array(z.enum(CONDITION_TRAIT_IDS)).default([]),
+    tickEffects: z.array(effect).default([]),
   })
   .superRefine((entry, context) => {
     if (entry.stacking.mode !== 'intensify' && entry.stacking.maximumStacks !== 1) {
