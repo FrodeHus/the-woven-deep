@@ -23,6 +23,7 @@ export interface ClassContentEntry extends BaseContentEntry {
   readonly unlockHint: string | null;
   readonly classTags: readonly string[];
   readonly kits: readonly ClassKitDefinition[];
+  readonly casterAptitude: boolean;
   readonly modifiers?: Readonly<Partial<Record<DerivedStatName, number>>>;
   readonly startingSpellIds?: readonly ContentId[];
 }

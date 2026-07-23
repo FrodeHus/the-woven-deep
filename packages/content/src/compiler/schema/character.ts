@@ -41,6 +41,7 @@ export const classEntry = z
     unlockHint: z.string().trim().min(1).max(200).nullable(),
     classTags: z.array(slugSchema).min(1),
     kits: z.array(classKitDefinition).max(3),
+    casterAptitude: z.boolean().default(false),
     modifiers: derivedStatModifiers.optional(),
     startingSpellIds: z.array(stableIdSchema).optional(),
   })
