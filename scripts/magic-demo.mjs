@@ -123,6 +123,22 @@ function proveMilestone(result) {
     'the tome did not teach spell.frost-shard',
   );
 
+  // The burst/line/cone AoE shapes must damage more than one distinct actor, not just
+  // repeatedly hit the same one -- otherwise a regression that narrows AoE targeting
+  // back to a single actor would still pass the type-presence checks above.
+  for (const boundary of ['after-burst', 'after-line', 'after-cone']) {
+    const entry = record(result, boundary);
+    const damagedActorIds = new Set(
+      entry.authoritativeEvents
+        .filter((event) => event.type === 'actor.damaged')
+        .map((event) => event.actorId),
+    );
+    assert(
+      damagedActorIds.size > 1,
+      `${boundary} did not damage more than one distinct actor (AoE targeting collapsed to a single target)`,
+    );
+  }
+
   const recall = record(result, 'after-recall');
   assert(
     recall.authoritativeEvents.some((event) => event.type === 'hero.recalled'),

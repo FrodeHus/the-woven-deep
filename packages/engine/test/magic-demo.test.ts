@@ -41,6 +41,18 @@ describe('magic demo', () => {
       expect(record.authoritativeEvents.some((event) => event.type === 'attack.hit')).toBe(true);
       expect(record.authoritativeEvents.some((event) => event.type === 'actor.damaged')).toBe(true);
     }
+    // The burst/line/cone AoE shapes must damage more than one distinct actor, not just
+    // repeatedly hit the same one -- otherwise a regression that narrows AoE targeting
+    // back to a single actor would still pass the assertions above.
+    for (const name of ['after-burst', 'after-line', 'after-cone']) {
+      const record = boundary(name);
+      const damagedActorIds = new Set(
+        record.authoritativeEvents
+          .filter((event) => event.type === 'actor.damaged')
+          .map((event) => event.actorId),
+      );
+      expect(damagedActorIds.size).toBeGreaterThan(1);
+    }
     // The burst also applies a burn condition (fireball's second effect).
     expect(
       boundary('after-burst').authoritativeEvents.some(
