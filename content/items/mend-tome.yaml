@@ -1,0 +1,23 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.mend-tome
+    name: Tome of mend
+    glyph: '='
+    color: '#8fd6a0'
+    description: A gentle codex; reading it teaches the mend for good.
+    tags: [magic, tome]
+    minDepth: 1
+    maxDepth: 20
+    category: misc
+    stackLimit: 1
+    price: 35
+    rarity: uncommon
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    identification: { mode: known, poolId: null }
+    effects:
+      - { effectId: effect.spell.learn, parameters: { spellId: spell.mend }, requiresLivingTarget: false }
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

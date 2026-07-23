@@ -1,0 +1,12 @@
+schemaVersion: 7
+entries:
+  - kind: spell
+    id: spell.recall
+    name: Recall
+    tags: [arcane, utility]
+    targetingId: target.self
+    range: 0
+    actionCost: 100
+    weaveCost: 8
+    effects:
+      - { effectId: effect.recall, parameters: {}, requiresLivingTarget: false }

@@ -1,0 +1,23 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.arc-lance-scroll
+    name: Scroll of arc lance
+    glyph: '?'
+    color: '#c9a63e'
+    description: Brittle vellum inked with a jagged sigil. Reading it aloud looses a bolt of lightning down a straight line.
+    tags: [magic, offense, scroll, aoe]
+    minDepth: 3
+    maxDepth: 20
+    category: scroll
+    stackLimit: 3
+    price: 25
+    rarity: uncommon
+    actionCost: 100
+    equipment: null
+    combat: { accuracy: 0, defense: 0, armor: 0, damage: null, range: 6, ammunitionTag: null }
+    light: null
+    spellId: spell.arc-lance
+    identification: { mode: known, poolId: null }
+    effects:
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

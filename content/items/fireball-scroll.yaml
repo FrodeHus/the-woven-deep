@@ -1,0 +1,24 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.fireball-scroll
+    name: Scroll of fireball
+    glyph: '?'
+    color: '#e05a2b'
+    description: Brittle vellum inked with a burst of interlocking sigils. Reading it aloud unleashes the whole pattern at once.
+    lore: 'This one was never meant to be read carefully. It was meant to be read fast, and only once.'
+    tags: [magic, offense, scroll, aoe]
+    minDepth: 3
+    maxDepth: 20
+    category: scroll
+    stackLimit: 3
+    price: 30
+    rarity: rare
+    actionCost: 100
+    equipment: null
+    combat: { accuracy: 0, defense: 0, armor: 0, damage: null, range: 6, ammunitionTag: null }
+    light: null
+    spellId: spell.fireball
+    identification: { mode: known, poolId: null }
+    effects:
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

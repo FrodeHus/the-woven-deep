@@ -1,0 +1,12 @@
+schemaVersion: 7
+entries:
+  - kind: spell
+    id: spell.weave-shield
+    name: Weave shield
+    tags: [ward, defense]
+    targetingId: target.self
+    range: 0
+    actionCost: 100
+    weaveCost: 4
+    effects:
+      - { effectId: effect.condition.apply, parameters: { conditionId: condition.weave-shield, duration: 20 }, requiresLivingTarget: false }

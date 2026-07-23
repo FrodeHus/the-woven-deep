@@ -1,0 +1,11 @@
+schemaVersion: 7
+entries:
+  - kind: condition
+    id: condition.chilled
+    name: Chilled
+    tags: [frost, debuff]
+    description: Frost creeps through the limbs, fouling aim and footing alike.
+    color: '#7fbfe0'
+    duration: { mode: timed, default: 3, maximum: 6 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: { meleeAccuracy: -2, rangedAccuracy: -2 }

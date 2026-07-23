@@ -1,0 +1,12 @@
+schemaVersion: 7
+entries:
+  - kind: condition
+    id: condition.burning
+    name: Burning
+    tags: [fire, debuff]
+    description: Wracked by clinging flame, taking fire damage each turn.
+    color: '#e05a2b'
+    duration: { mode: timed, default: 3, maximum: 6 }
+    stacking: { mode: replace, maximumStacks: 1 }
+    tickEffects:
+      - { effectId: effect.damage, parameters: { damageType: fire, dice: { count: 1, sides: 2, bonus: 0 } }, requiresLivingTarget: true }

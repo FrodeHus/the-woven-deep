@@ -1,0 +1,23 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.chain-spark-tome
+    name: Tome of chain spark
+    glyph: '='
+    color: '#c9a63e'
+    description: A crackling codex; reading it teaches the chain spark for good.
+    tags: [magic, tome]
+    minDepth: 1
+    maxDepth: 20
+    category: misc
+    stackLimit: 1
+    price: 40
+    rarity: uncommon
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    identification: { mode: known, poolId: null }
+    effects:
+      - { effectId: effect.spell.learn, parameters: { spellId: spell.chain-spark }, requiresLivingTarget: false }
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

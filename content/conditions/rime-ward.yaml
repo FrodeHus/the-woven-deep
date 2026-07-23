@@ -1,0 +1,11 @@
+schemaVersion: 7
+entries:
+  - kind: condition
+    id: condition.rime-ward
+    name: Rime ward
+    tags: [frost, buff, ward]
+    description: A skin of hoarfrost clings to the body, turning aside the worst of the cold.
+    color: '#a6d9f2'
+    duration: { mode: timed, default: 20, maximum: 40 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    mitigation: { resistancePerStack: { cold: 40 } }

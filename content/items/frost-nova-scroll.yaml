@@ -1,0 +1,23 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.frost-nova-scroll
+    name: Scroll of frost nova
+    glyph: '?'
+    color: '#a6d9f2'
+    description: Brittle vellum inked with a radiating sigil. Reading it aloud detonates a ring of killing frost.
+    tags: [magic, offense, scroll, aoe]
+    minDepth: 3
+    maxDepth: 20
+    category: scroll
+    stackLimit: 3
+    price: 30
+    rarity: rare
+    actionCost: 100
+    equipment: null
+    combat: { accuracy: 0, defense: 0, armor: 0, damage: null, range: 5, ammunitionTag: null }
+    light: null
+    spellId: spell.frost-nova
+    identification: { mode: known, poolId: null }
+    effects:
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

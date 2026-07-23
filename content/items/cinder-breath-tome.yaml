@@ -1,0 +1,23 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.cinder-breath-tome
+    name: Tome of cinder breath
+    glyph: '='
+    color: '#e07b46'
+    description: A scorched codex; reading it teaches the cinder breath for good.
+    tags: [magic, tome]
+    minDepth: 3
+    maxDepth: 20
+    category: misc
+    stackLimit: 1
+    price: 55
+    rarity: rare
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    identification: { mode: known, poolId: null }
+    effects:
+      - { effectId: effect.spell.learn, parameters: { spellId: spell.cinder-breath }, requiresLivingTarget: false }
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

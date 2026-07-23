@@ -1,0 +1,12 @@
+schemaVersion: 7
+entries:
+  - kind: spell
+    id: spell.aegis
+    name: Aegis
+    tags: [ward, defense]
+    targetingId: target.self
+    range: 0
+    actionCost: 100
+    weaveCost: 7
+    effects:
+      - { effectId: effect.condition.apply, parameters: { conditionId: condition.aegis, duration: 15 }, requiresLivingTarget: false }

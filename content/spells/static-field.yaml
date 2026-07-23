@@ -1,0 +1,13 @@
+schemaVersion: 7
+entries:
+  - kind: spell
+    id: spell.static-field
+    name: Static field
+    tags: [storm, debuff, aoe]
+    targetingId: target.burst
+    range: 5
+    actionCost: 100
+    weaveCost: 5
+    aoe: { shape: burst, radius: 2 }
+    effects:
+      - { effectId: effect.condition.apply, parameters: { conditionId: condition.static-weakened, duration: 3 }, requiresLivingTarget: true }

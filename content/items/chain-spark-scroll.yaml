@@ -1,0 +1,23 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.chain-spark-scroll
+    name: Scroll of chain spark
+    glyph: '?'
+    color: '#c9a63e'
+    description: Brittle vellum inked with a single crackling sigil. Reading it aloud is the last thing it is good for.
+    tags: [magic, offense, scroll]
+    minDepth: 1
+    maxDepth: 20
+    category: scroll
+    stackLimit: 3
+    price: 15
+    rarity: uncommon
+    actionCost: 100
+    equipment: null
+    combat: { accuracy: 0, defense: 0, armor: 0, damage: null, range: 6, ammunitionTag: null }
+    light: null
+    spellId: spell.chain-spark
+    identification: { mode: known, poolId: null }
+    effects:
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

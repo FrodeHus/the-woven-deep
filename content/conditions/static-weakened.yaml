@@ -1,0 +1,11 @@
+schemaVersion: 7
+entries:
+  - kind: condition
+    id: condition.static-weakened
+    name: Static-weakened
+    tags: [storm, debuff]
+    description: Crackling residue jangles the nerves, sapping strength and aim.
+    color: '#c9a63e'
+    duration: { mode: timed, default: 3, maximum: 6 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: { meleeDamageBonus: -2, rangedAccuracy: -1 }

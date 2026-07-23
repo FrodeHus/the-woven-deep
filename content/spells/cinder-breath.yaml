@@ -1,0 +1,13 @@
+schemaVersion: 7
+entries:
+  - kind: spell
+    id: spell.cinder-breath
+    name: Cinder breath
+    tags: [fire, offense, aoe]
+    targetingId: target.cone
+    range: 4
+    actionCost: 100
+    weaveCost: 5
+    aoe: { shape: cone, radius: 3 }
+    effects:
+      - { effectId: effect.damage, parameters: { damageType: fire, dice: { count: 2, sides: 8, bonus: 0 } }, requiresLivingTarget: true }

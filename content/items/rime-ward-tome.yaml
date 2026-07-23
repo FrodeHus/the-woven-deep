@@ -1,0 +1,23 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.rime-ward-tome
+    name: Tome of rime ward
+    glyph: '='
+    color: '#a6d9f2'
+    description: A frost-limned codex; reading it teaches the rime ward for good.
+    tags: [magic, tome]
+    minDepth: 2
+    maxDepth: 20
+    category: misc
+    stackLimit: 1
+    price: 45
+    rarity: uncommon
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    identification: { mode: known, poolId: null }
+    effects:
+      - { effectId: effect.spell.learn, parameters: { spellId: spell.rime-ward }, requiresLivingTarget: false }
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }
