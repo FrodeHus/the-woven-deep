@@ -9,14 +9,17 @@ import {
   DEFAULT_GUEST_HERO,
   type ActiveRun,
   type GameCommand,
-  type GameplayProjection,
   type NewRunHero,
   type PublicDecision,
   type PublicEvent,
-  type RunConclusionProjection,
   type Uint32State,
 } from '@woven-deep/engine';
-import { dispatchCommand, dispatchIntent, type PlayerIntent } from '@woven-deep/session-core';
+import {
+  dispatchCommand,
+  dispatchIntent,
+  type PlayerIntent,
+  type ServerRunSnapshot,
+} from '@woven-deep/session-core';
 import type { ActiveRunRepository } from '../db/active-run-repository.js';
 
 /**
@@ -77,27 +80,9 @@ const CONSEQUENTIAL_EVENT_TYPES: ReadonlySet<string> = new Set<string>([
   'swarm.source-destroyed',
 ]);
 
-/**
- * The run-authoritative snapshot the server produces after applying a command. Only redacted,
- * projection-derived data — never raw `ActiveRun` (which carries hidden state the client must not
- * see). The client assembles the full session snapshot from this (folding `lastEvents` into a log,
- * accumulating sightings, computing the final-chamber choice, adding client-only onboarding).
- */
-export interface ServerRunSnapshot {
-  readonly projection: GameplayProjection;
-  readonly lastEvents: readonly PublicEvent[];
-  readonly revision: number;
-  readonly pendingDecision: PublicDecision | null;
-  readonly conclusion: RunConclusionProjection | null;
-  readonly houseOpen: boolean;
-  readonly heroClassTags: readonly string[];
-  /** Authoritative, perception-free: whether the Weakened Heart boss is present and alive on the
-   * raw run state (`isHeartBossActive`). The client must use this rather than deriving boss
-   * presence from the redacted, illumination-gated projection's visible actors -- under the
-   * light-out mechanic (0 illumination on the hero's own tile) the boss can be alive but invisible,
-   * and re-deriving from visible actors would wrongly re-offer the Final Chamber choice mid-fight. */
-  readonly bossActive: boolean;
-}
+/** The `ServerRunSnapshot` shape now lives in `@woven-deep/session-core` (shared with
+ * `apps/web`) -- re-exported here so existing local importers keep working unchanged. */
+export type { ServerRunSnapshot };
 
 export type ApplyOutcome =
   | { readonly kind: 'state'; readonly snapshot: ServerRunSnapshot }
