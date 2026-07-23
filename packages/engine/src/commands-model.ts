@@ -222,6 +222,7 @@ export type InvalidActionReason =
   | 'target.blocked'
   | 'target.invalid'
   | 'cast.insufficient-weave'
+  | 'cast.no-aptitude'
   | 'run.concluded'
   | 'final-chamber.unavailable'
   | 'final-chamber.fragments-required'

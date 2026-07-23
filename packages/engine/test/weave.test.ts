@@ -28,7 +28,9 @@ function runWithAdjacentRat(overrides: Partial<ActiveRun['actors'][number]> = {}
         ? { ...actor, ...overrides }
         : actor,
   );
-  return { run: { ...run, actors }, target };
+  // The Loomcaller classTags grant caster aptitude, matching class.loomcaller's classTags in
+  // content; without it the cast-aptitude gate would reject every cast below.
+  return { run: { ...run, actors, hero: { ...run.hero, classTags: ['loomcaller'] } }, target };
 }
 
 describe('the Weave magic resource', () => {

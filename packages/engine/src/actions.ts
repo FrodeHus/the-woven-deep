@@ -10,7 +10,8 @@ import { actorHasConditionTrait } from './conditions.js';
 import { dropItem, pickupItem, splitStack } from './inventory.js';
 import { floorPerception } from './run-perception.js';
 import { validateTarget } from './targeting.js';
-import { resolveEffectSequence } from './effects.js';
+import { resolveEffectSequence, resolveEffectSweep } from './effects.js';
+import { heroCasterAptitude } from './caster.js';
 import { parseEffectParameters } from './parameter-contracts.js';
 import { equipItem, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
 import { closeDoor, openDoor } from './features.js';
@@ -107,6 +108,7 @@ export interface CastAction {
   readonly targetActorId: OpaqueId;
   readonly weaveCost: number;
   readonly cost: number;
+  readonly aimTarget?: Point;
 }
 export interface EquipAction {
   readonly type: 'equip';
@@ -225,7 +227,7 @@ function itemEntry(
   return entry?.kind === 'item' ? entry : undefined;
 }
 
-function targetContext(
+export function targetContext(
   state: ActiveRun,
   actor: ReturnType<typeof heroActor>,
   content: CompiledContentPack,
@@ -629,6 +631,74 @@ export function validatePlayerAction(
     // consuming randomness or advancing the world, like the town-truce and concluded rejections.
     if (actor.weave < definition.weaveCost) {
       return { status: 'invalid', reason: 'cast.insufficient-weave' };
+    }
+    // The aptitude gate runs after the Weave gate but still before any target resolution or RNG:
+    // an invalid cast must mutate neither state nor RNG.
+    if (
+      !heroCasterAptitude(input.context.content, input.state.hero) &&
+      actor.actorId === input.state.hero.actorId
+    ) {
+      return { status: 'invalid', reason: 'cast.no-aptitude' };
+    }
+    if (definition.aoe !== undefined) {
+      if (command.target === null) return { status: 'invalid', reason: 'target.invalid' };
+      const perception = targetContext(input.state, actor, input.context.content);
+      const area = validateTarget({
+        targetingId: definition.targetingId,
+        sourceActor: actor,
+        targetActorId: null,
+        target: command.target,
+        floor: perception.floor,
+        actors: input.state.actors,
+        visibilityWords: perception.visibilityWords,
+        illumination: perception.illumination,
+        range: definition.range,
+        aoe: definition.aoe,
+      });
+      if (!area.ok) return { status: 'invalid', reason: area.reason };
+      const cellKeys = new Set(area.cells.map((cell) => `${cell.x},${cell.y}`));
+      const targetActorIds = input.state.actors
+        .filter(
+          (entry) =>
+            entry.floorId === actor.floorId &&
+            entry.health > 0 &&
+            entry.actorId !== actor.actorId &&
+            cellKeys.has(`${entry.x},${entry.y}`),
+        )
+        .map((entry) => entry.actorId);
+      try {
+        // Speculative resolve only: this dry-run must not mutate ActiveRun state or RNG. The
+        // commit-time sweep in action-dispatch.ts re-derives the same cells from aimTarget and
+        // performs the real mutation.
+        resolveEffectSweep({
+          effects: definition.effects,
+          actors: input.state.actors,
+          items: input.state.items,
+          content: input.context.content,
+          sourceActorId: actor.actorId,
+          casterActorId: actor.actorId,
+          includeCaster: false,
+          targetActorIds,
+          effectsState: input.state.rng.effects,
+          survival: input.state.survival,
+          survivalActorId: input.state.hero.actorId,
+          worldTime: input.state.worldTime,
+          eventId: command.commandId,
+          forceMoveDirection: { x: 1, y: 0 },
+          operations: {},
+        });
+      } catch {
+        return { status: 'invalid', reason: 'action.unavailable' };
+      }
+      return {
+        type: 'cast',
+        actorId: actor.actorId,
+        spellId: definition.id,
+        targetActorId: actor.actorId,
+        weaveCost: definition.weaveCost,
+        cost: definition.actionCost,
+        aimTarget: command.target,
+      };
     }
     const candidate =
       definition.targetingId === 'target.self'

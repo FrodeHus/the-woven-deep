@@ -1484,128 +1484,142 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                                 (entry.type === 'attack.hit' || entry.type === 'attack.missed') &&
                                 entry.actorId === run.hero.actorId,
                             )
-                          : recordValue.command.type === 'throw-item'
+                          : recordValue.command.type === 'cast'
                             ? recordValue.events.find(
                                 (entry) =>
-                                  entry.type === 'item.thrown' &&
-                                  entry.actorId === run.hero.actorId &&
-                                  entry.quantity === commandQuantity,
+                                  (entry.type === 'attack.hit' &&
+                                    entry.actorId === run.hero.actorId) ||
+                                  ((entry.type === 'actor.damaged' ||
+                                    entry.type === 'actor.healed' ||
+                                    entry.type === 'condition.applied') &&
+                                    entry.sourceActorId === run.hero.actorId) ||
+                                  // `hero.recalled` ships in a later task; the `as string` cast
+                                  // keeps this branch inert but forward-compatible until
+                                  // DomainEvent grows that member.
+                                  (entry.type as string) === 'hero.recalled',
                               )
-                            : recordValue.command.type === 'use-item'
+                            : recordValue.command.type === 'throw-item'
                               ? recordValue.events.find(
                                   (entry) =>
-                                    entry.type === 'item.used' &&
+                                    entry.type === 'item.thrown' &&
                                     entry.actorId === run.hero.actorId &&
-                                    entry.itemId === commandItemId,
+                                    entry.quantity === commandQuantity,
                                 )
-                              : recordValue.command.type === 'equip'
+                              : recordValue.command.type === 'use-item'
                                 ? recordValue.events.find(
                                     (entry) =>
-                                      entry.type === 'item.equipped' &&
+                                      entry.type === 'item.used' &&
                                       entry.actorId === run.hero.actorId &&
-                                      entry.itemId === commandItemId &&
-                                      entry.slot === commandSlot,
+                                      entry.itemId === commandItemId,
                                   )
-                                : recordValue.command.type === 'unequip'
+                                : recordValue.command.type === 'equip'
                                   ? recordValue.events.find(
                                       (entry) =>
-                                        entry.type === 'item.unequipped' &&
+                                        entry.type === 'item.equipped' &&
                                         entry.actorId === run.hero.actorId &&
+                                        entry.itemId === commandItemId &&
                                         entry.slot === commandSlot,
                                     )
-                                  : recordValue.command.type === 'toggle-light'
+                                  : recordValue.command.type === 'unequip'
                                     ? recordValue.events.find(
                                         (entry) =>
-                                          entry.type === 'item.light-toggled' &&
+                                          entry.type === 'item.unequipped' &&
                                           entry.actorId === run.hero.actorId &&
-                                          entry.itemId === commandItemId &&
-                                          entry.enabled === commandEnabled,
+                                          entry.slot === commandSlot,
                                       )
-                                    : recordValue.command.type === 'refuel'
+                                    : recordValue.command.type === 'toggle-light'
                                       ? recordValue.events.find(
                                           (entry) =>
-                                            entry.type === 'item.refueled' &&
+                                            entry.type === 'item.light-toggled' &&
                                             entry.actorId === run.hero.actorId &&
                                             entry.itemId === commandItemId &&
-                                            entry.fuelItemId === commandFuelItemId,
+                                            entry.enabled === commandEnabled,
                                         )
-                                      : recordValue.command.type === 'open-door'
+                                      : recordValue.command.type === 'refuel'
                                         ? recordValue.events.find(
                                             (entry) =>
-                                              entry.type === 'door.opened' &&
+                                              entry.type === 'item.refueled' &&
                                               entry.actorId === run.hero.actorId &&
-                                              entry.featureId === commandFeatureId,
+                                              entry.itemId === commandItemId &&
+                                              entry.fuelItemId === commandFuelItemId,
                                           )
-                                        : recordValue.command.type === 'close-door'
+                                        : recordValue.command.type === 'open-door'
                                           ? recordValue.events.find(
                                               (entry) =>
-                                                entry.type === 'door.closed' &&
+                                                entry.type === 'door.opened' &&
                                                 entry.actorId === run.hero.actorId &&
                                                 entry.featureId === commandFeatureId,
                                             )
-                                          : recordValue.command.type === 'search'
+                                          : recordValue.command.type === 'close-door'
                                             ? recordValue.events.find(
                                                 (entry) =>
-                                                  entry.type === 'feature.searched' &&
-                                                  entry.actorId === run.hero.actorId,
+                                                  entry.type === 'door.closed' &&
+                                                  entry.actorId === run.hero.actorId &&
+                                                  entry.featureId === commandFeatureId,
                                               )
-                                            : recordValue.command.type === 'disarm'
+                                            : recordValue.command.type === 'search'
                                               ? recordValue.events.find(
                                                   (entry) =>
-                                                    (entry.type === 'trap.disarmed' ||
-                                                      entry.type === 'trap.triggered' ||
-                                                      entry.type === 'trap.disarm-failed') &&
-                                                    entry.actorId === run.hero.actorId &&
-                                                    entry.featureId === commandFeatureId,
+                                                    entry.type === 'feature.searched' &&
+                                                    entry.actorId === run.hero.actorId,
                                                 )
-                                              : recordValue.command.type === 'pick-lock'
+                                              : recordValue.command.type === 'disarm'
                                                 ? recordValue.events.find(
                                                     (entry) =>
-                                                      (entry.type === 'lock.picked' ||
-                                                        entry.type === 'lock.pick-failed' ||
-                                                        entry.type === 'door.unlocked' ||
-                                                        entry.type === 'chest.jammed') &&
+                                                      (entry.type === 'trap.disarmed' ||
+                                                        entry.type === 'trap.triggered' ||
+                                                        entry.type === 'trap.disarm-failed') &&
                                                       entry.actorId === run.hero.actorId &&
                                                       entry.featureId === commandFeatureId,
                                                   )
-                                                : recordValue.command.type === 'rest'
+                                                : recordValue.command.type === 'pick-lock'
                                                   ? recordValue.events.find(
-                                                      (entry) => entry.type === 'rest.completed',
+                                                      (entry) =>
+                                                        (entry.type === 'lock.picked' ||
+                                                          entry.type === 'lock.pick-failed' ||
+                                                          entry.type === 'door.unlocked' ||
+                                                          entry.type === 'chest.jammed') &&
+                                                        entry.actorId === run.hero.actorId &&
+                                                        entry.featureId === commandFeatureId,
                                                     )
-                                                  : recordValue.command.type === 'trade-open'
+                                                  : recordValue.command.type === 'rest'
                                                     ? recordValue.events.find(
-                                                        (entry) => entry.type === 'trade.opened',
+                                                        (entry) => entry.type === 'rest.completed',
                                                       )
-                                                    : recordValue.command.type === 'trade-buy'
+                                                    : recordValue.command.type === 'trade-open'
                                                       ? recordValue.events.find(
-                                                          (entry) =>
-                                                            entry.type === 'trade.bought' &&
-                                                            entry.itemId === commandItemId &&
-                                                            entry.quantity === commandQuantity,
+                                                          (entry) => entry.type === 'trade.opened',
                                                         )
-                                                      : recordValue.command.type === 'trade-sell'
+                                                      : recordValue.command.type === 'trade-buy'
                                                         ? recordValue.events.find(
                                                             (entry) =>
-                                                              entry.type === 'trade.sold' &&
+                                                              entry.type === 'trade.bought' &&
                                                               entry.itemId === commandItemId &&
                                                               entry.quantity === commandQuantity,
                                                           )
-                                                        : recordValue.command.type ===
-                                                            'trade-service'
+                                                        : recordValue.command.type === 'trade-sell'
                                                           ? recordValue.events.find(
                                                               (entry) =>
-                                                                entry.type ===
-                                                                  'trade.service-purchased' &&
-                                                                entry.targetItemId ===
-                                                                  commandTargetItemId,
+                                                                entry.type === 'trade.sold' &&
+                                                                entry.itemId === commandItemId &&
+                                                                entry.quantity === commandQuantity,
                                                             )
                                                           : recordValue.command.type ===
-                                                              'trade-close'
+                                                              'trade-service'
                                                             ? recordValue.events.find(
                                                                 (entry) =>
-                                                                  entry.type === 'trade.closed',
+                                                                  entry.type ===
+                                                                    'trade.service-purchased' &&
+                                                                  entry.targetItemId ===
+                                                                    commandTargetItemId,
                                                               )
-                                                            : undefined;
+                                                            : recordValue.command.type ===
+                                                                'trade-close'
+                                                              ? recordValue.events.find(
+                                                                  (entry) =>
+                                                                    entry.type === 'trade.closed',
+                                                                )
+                                                              : undefined;
       if (!eventValue) fail(`${path}.events`, 'processed result has no matching event');
       if (recordValue.result.status === 'invalid') {
         if (

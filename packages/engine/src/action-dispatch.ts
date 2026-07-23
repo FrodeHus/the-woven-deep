@@ -1,8 +1,10 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameAction } from './actions.js';
+import { targetContext } from './actions.js';
 import { actorById, heroPerception, withActor, type ActorState } from './actor-model.js';
 import { applyPopulationCombatModifiers, resolveAttack } from './combat.js';
-import { applyEffectResult, resolveEffectSequence } from './effects.js';
+import { applyEffectResult, resolveEffectSequence, resolveEffectSweep } from './effects.js';
+import { validateTarget } from './targeting.js';
 import { consumeItemQuantity, dropItem, pickupItem, splitStack } from './inventory.js';
 import {
   equipItem,
@@ -368,12 +370,61 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
     const definition = entryById(content, action.spellId);
     if (!definition || definition.kind !== 'spell')
       throw new Error(`internal invariant: cast spell ${action.spellId} does not exist`);
-    const target = actorById(state, action.targetActorId);
-    if (!target)
-      throw new Error(`internal invariant: spell target ${action.targetActorId} disappeared`);
     // The Weave powers the casting before the spell's effects resolve: the cost is subtracted from
     // the caster first, then the effects apply against that post-spend state.
     let next = withActor(state, { ...actor, weave: actor.weave - action.weaveCost });
+    if (definition.aoe !== undefined) {
+      if (action.aimTarget === undefined)
+        throw new Error('internal invariant: AoE cast action missing aimTarget');
+      const perception = targetContext(next, actor, content);
+      const area = validateTarget({
+        targetingId: definition.targetingId,
+        sourceActor: actor,
+        targetActorId: null,
+        target: action.aimTarget,
+        floor: perception.floor,
+        actors: next.actors,
+        visibilityWords: perception.visibilityWords,
+        illumination: perception.illumination,
+        range: definition.range,
+        aoe: definition.aoe,
+      });
+      if (!area.ok)
+        throw new Error(`internal invariant: validated AoE cast failed with ${area.reason}`);
+      const cellKeys = new Set(area.cells.map((cell) => `${cell.x},${cell.y}`));
+      const targetActorIds = next.actors
+        .filter(
+          (entry) =>
+            entry.floorId === actor.floorId &&
+            entry.health > 0 &&
+            entry.actorId !== actor.actorId &&
+            cellKeys.has(`${entry.x},${entry.y}`),
+        )
+        .map((entry) => entry.actorId);
+      const resolved = resolveEffectSweep({
+        effects: definition.effects,
+        actors: next.actors,
+        items: next.items,
+        content,
+        sourceActorId: actor.actorId,
+        casterActorId: actor.actorId,
+        includeCaster: false,
+        targetActorIds,
+        effectsState: next.rng.effects,
+        survival: next.survival,
+        survivalActorId: next.hero.actorId,
+        worldTime: next.worldTime,
+        eventId,
+        forceMoveDirection: { x: 1, y: 0 },
+        operations: {},
+      });
+      next = applyEffectResult(next, resolved);
+      events.push(...resolved.events);
+      return { state: next, chargeEnergy: true };
+    }
+    const target = actorById(state, action.targetActorId);
+    if (!target)
+      throw new Error(`internal invariant: spell target ${action.targetActorId} disappeared`);
     const resolved = resolveEffectSequence({
       effects: definition.effects,
       actors: next.actors,
