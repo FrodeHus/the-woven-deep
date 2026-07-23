@@ -57,6 +57,7 @@ export const itemEntry = z.strictObject({
   rarity: z.enum(itemRarities),
   heirloomEligible: z.boolean().default(true),
   actionCost: safeNonNegative,
+  spellId: stableIdSchema.optional(),
   equipment: equipment.nullable(),
   combat: combat.nullable(),
   light: itemLight.nullable(),
