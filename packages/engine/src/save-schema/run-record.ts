@@ -1962,6 +1962,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         const doorReason = recordValue.result.reason.startsWith('door.');
         const finalChamberReason = recordValue.result.reason.startsWith('final-chamber.');
         const recallReason = recordValue.result.reason === 'recall.already-town';
+        const castReason = recordValue.result.reason.startsWith('cast.');
+        const learnReason = recordValue.result.reason.startsWith('learn.');
         if (tradeReason) {
           // Modal rejection: any command may fail with trade.active; other trade reasons
           // require the trade command boundary.
@@ -1991,6 +1993,10 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           fail(`${path}.result.reason`, 'final-chamber reason requires a final-chamber choice');
         if (recallReason && recordValue.command.type !== 'cast')
           fail(`${path}.result.reason`, 'recall reason requires a cast command');
+        if (castReason && recordValue.command.type !== 'cast')
+          fail(`${path}.result.reason`, 'cast reason requires a cast command');
+        if (learnReason && recordValue.command.type !== 'use-item')
+          fail(`${path}.result.reason`, 'learn reason requires a use-item command');
         if (
           !inventoryReason &&
           !targetReason &&
@@ -1999,6 +2005,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           !doorReason &&
           !finalChamberReason &&
           !recallReason &&
+          !castReason &&
+          !learnReason &&
           recordValue.result.reason !== 'action.unavailable' &&
           recordValue.result.reason !== 'run.concluded'
         ) {

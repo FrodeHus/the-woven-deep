@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import { resolve } from 'node:path';
-import type { CompiledContentPack, SpellContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, ItemContentEntry, SpellContentEntry } from '@woven-deep/content';
 import {
   createGameplayDemoRun,
   decodeActiveRun,
@@ -14,6 +14,7 @@ import {
   TOWN_FLOOR_ID,
   validatePlayerAction,
   type ActiveRun,
+  type ItemInstance,
 } from '../src/index.js';
 
 let pack: CompiledContentPack;
@@ -203,5 +204,200 @@ describe('recall', () => {
     expect(cast.state.returnAnchorFloorId).toBeDefined();
     const roundTripped = decodeActiveRun(encodeActiveRun(cast.state));
     expect(roundTripped.returnAnchorFloorId).toBe(cast.state.returnAnchorFloorId);
+  });
+});
+
+const EMBER_BOLT_SPELL_ID = 'spell.ember-bolt';
+const TOME_CONTENT_ID = 'item.test-tome-retained-invalid';
+
+/** Synthetic tome item entry, mirroring the pattern in tome-learn.test.ts: an item.spell.learn +
+ * effect.item.consume pair, since a real shipped tome does not exist yet. */
+function retainedInvalidTomeDefinition(): ItemContentEntry {
+  return {
+    kind: 'item',
+    id: TOME_CONTENT_ID,
+    name: 'Test Tome (retained-invalid)',
+    glyph: '?',
+    color: '#ffffff',
+    tags: [],
+    category: 'misc',
+    stackLimit: 1,
+    price: 1,
+    rarity: 'common',
+    heirloomEligible: false,
+    minDepth: 0,
+    maxDepth: 20,
+    actionCost: 100,
+    equipment: null,
+    combat: null,
+    light: null,
+    identification: { mode: 'known', poolId: null },
+    effects: [
+      {
+        effectId: 'effect.spell.learn',
+        parameters: { spellId: EMBER_BOLT_SPELL_ID },
+        requiresLivingTarget: false,
+      },
+      {
+        effectId: 'effect.item.consume',
+        parameters: { quantity: 1 },
+        requiresLivingTarget: false,
+      },
+    ],
+  };
+}
+
+function tomeInstanceFor(actorId: string): ItemInstance {
+  return {
+    // Sorts after every other item in the demo run's items array (including the vault-slot
+    // synthetic item), since itemId must be unique and strictly increasing across the run.
+    itemId: 'item.zzz-tome-retained-invalid',
+    contentId: TOME_CONTENT_ID,
+    quantity: 1,
+    condition: 100,
+    enchantment: null,
+    identified: true,
+    charges: null,
+    fuel: null,
+    enabled: null,
+    location: { type: 'backpack', actorId },
+  };
+}
+
+/** A run on the gameplay demo's dungeon floor, with the hero's weave and classTags overridden so
+ * a `cast` command can be driven into either invalid-cast reason on demand. */
+function runWithHeroWeaveAndAptitude(options: {
+  weave: number;
+  caster: boolean;
+  knownSpellIds?: readonly string[];
+}): { run: ActiveRun } {
+  const { run } = createGameplayDemoRun(pack);
+  const heroActor = run.actors.find((actor) => actor.playerControlled)!;
+  return {
+    run: {
+      ...run,
+      hero: {
+        ...run.hero,
+        classTags: options.caster ? ['loomcaller'] : [],
+        ...(options.knownSpellIds ? { knownSpellIds: options.knownSpellIds } : {}),
+      },
+      actors: run.actors.map((actor) =>
+        actor.actorId === heroActor.actorId
+          ? { ...actor, weave: Math.min(options.weave, actor.maxWeave) }
+          : actor,
+      ),
+    },
+  };
+}
+
+describe('retained invalid cast/use-item commands round-trip (save-corruption regression)', () => {
+  it('retains an invalid cast.insufficient-weave and round-trips it', () => {
+    const { run } = runWithHeroWeaveAndAptitude({
+      weave: 0,
+      caster: true,
+      knownSpellIds: [EMBER_BOLT_SPELL_ID],
+    });
+    const cast = resolveCommand(
+      run,
+      {
+        type: 'cast',
+        commandId: 'command.cast-insufficient-weave',
+        expectedRevision: run.revision,
+        spellId: EMBER_BOLT_SPELL_ID,
+        target: null,
+      },
+      { content: pack },
+    );
+
+    expect(cast.result).toMatchObject({ status: 'invalid', reason: 'cast.insufficient-weave' });
+    expect(cast.state.recentCommands).toHaveLength(1);
+    expect(() => decodeActiveRun(encodeActiveRun(cast.state))).not.toThrow();
+    const roundTripped = decodeActiveRun(encodeActiveRun(cast.state));
+    expect(roundTripped.recentCommands).toHaveLength(1);
+  });
+
+  it('retains an invalid cast.no-aptitude and round-trips it', () => {
+    const { run } = runWithHeroWeaveAndAptitude({ weave: 999, caster: false });
+    const cast = resolveCommand(
+      run,
+      {
+        type: 'cast',
+        commandId: 'command.cast-no-aptitude',
+        expectedRevision: run.revision,
+        spellId: EMBER_BOLT_SPELL_ID,
+        target: null,
+      },
+      { content: pack },
+    );
+
+    expect(cast.result).toMatchObject({ status: 'invalid', reason: 'cast.no-aptitude' });
+    expect(cast.state.recentCommands).toHaveLength(1);
+    expect(() => decodeActiveRun(encodeActiveRun(cast.state))).not.toThrow();
+    const roundTripped = decodeActiveRun(encodeActiveRun(cast.state));
+    expect(roundTripped.recentCommands).toHaveLength(1);
+  });
+
+  it('retains an invalid use-item learn.no-aptitude and round-trips it', () => {
+    const { run } = createGameplayDemoRun(pack);
+    const heroActor = run.actors.find((actor) => actor.playerControlled)!;
+    const tomePack: CompiledContentPack = {
+      ...pack,
+      entries: [...pack.entries, retainedInvalidTomeDefinition()],
+    };
+    const runWithTome: ActiveRun = {
+      ...run,
+      hero: { ...run.hero, classTags: [] },
+      items: [...run.items, tomeInstanceFor(heroActor.actorId)],
+    };
+
+    const result = resolveCommand(
+      runWithTome,
+      {
+        type: 'use-item',
+        commandId: 'command.learn-no-aptitude-retained',
+        expectedRevision: runWithTome.revision,
+        itemId: 'item.zzz-tome-retained-invalid',
+        target: null,
+      },
+      { content: tomePack },
+    );
+
+    expect(result.result).toMatchObject({ status: 'invalid', reason: 'learn.no-aptitude' });
+    expect(result.state.recentCommands).toHaveLength(1);
+    expect(() => decodeActiveRun(encodeActiveRun(result.state))).not.toThrow();
+    const roundTripped = decodeActiveRun(encodeActiveRun(result.state));
+    expect(roundTripped.recentCommands).toHaveLength(1);
+  });
+
+  it('retains an invalid use-item learn.already-known and round-trips it', () => {
+    const { run } = createGameplayDemoRun(pack);
+    const heroActor = run.actors.find((actor) => actor.playerControlled)!;
+    const tomePack: CompiledContentPack = {
+      ...pack,
+      entries: [...pack.entries, retainedInvalidTomeDefinition()],
+    };
+    const runWithTome: ActiveRun = {
+      ...run,
+      hero: { ...run.hero, classTags: ['loomcaller'], knownSpellIds: [EMBER_BOLT_SPELL_ID] },
+      items: [...run.items, tomeInstanceFor(heroActor.actorId)],
+    };
+
+    const result = resolveCommand(
+      runWithTome,
+      {
+        type: 'use-item',
+        commandId: 'command.learn-already-known-retained',
+        expectedRevision: runWithTome.revision,
+        itemId: 'item.zzz-tome-retained-invalid',
+        target: null,
+      },
+      { content: tomePack },
+    );
+
+    expect(result.result).toMatchObject({ status: 'invalid', reason: 'learn.already-known' });
+    expect(result.state.recentCommands).toHaveLength(1);
+    expect(() => decodeActiveRun(encodeActiveRun(result.state))).not.toThrow();
+    const roundTripped = decodeActiveRun(encodeActiveRun(result.state));
+    expect(roundTripped.recentCommands).toHaveLength(1);
   });
 });
