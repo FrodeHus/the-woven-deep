@@ -733,6 +733,26 @@ entries:
     );
   });
 
+  it('rejects a negative armorPerStack mitigation value', () => {
+    const source = `schemaVersion: 7
+entries:
+  - kind: condition
+    id: condition.shielded
+    name: Shielded
+    description: Wrapped in a defensive ward.
+    tags: [beneficial]
+    color: "#80b8ff"
+    duration: { mode: timed, default: 20, maximum: 40 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: {}
+    traits: []
+    mitigation: { armorPerStack: -1 }
+`;
+    expect(() => parseContentFile({ path: 'conditions/invalid-ward.yaml', source })).toThrow(
+      /mitigation\.armorPerStack/i,
+    );
+  });
+
   it.each([
     ['unknown modifier', 'modifiersPerStack: { luck: 1 }', /modifiersPerStack\.luck/i],
     ['unknown trait', 'traits: [condition-trait.unknown]', /traits\.0/i],

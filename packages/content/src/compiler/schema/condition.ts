@@ -7,13 +7,14 @@ import {
   damageTypes,
   effect,
   safeInteger,
+  safeNonNegative,
   safePositive,
 } from './common.js';
 
 const mitigationPercent = safeInteger.min(-100).max(100);
 
 const conditionMitigation = z.strictObject({
-  armorPerStack: safeInteger.optional(),
+  armorPerStack: safeNonNegative.optional(),
   resistancePerStack: z.partialRecord(z.enum(damageTypes), mitigationPercent).optional(),
 });
 

@@ -59,6 +59,17 @@ const immuneWardCondition: ConditionContentEntry = {
   mitigation: { resistancePerStack: { fire: 100 } },
 };
 
+// A 60%-per-stack fire ward. Stacked to 2 (`stacking.mode: 'intensify'`), the combined
+// resistance is 120 -- OVER the 100 that `resolveDamage` (combat.ts) rejects with a RangeError.
+// Proves the engine clamps the returned resistance to <=100 (and derives `immune` from the
+// unclamped total) so stacking wards never crash resolveDamage.
+const stackingWardCondition: ConditionContentEntry = {
+  ...wardCondition,
+  id: 'condition.test-ward-stacking',
+  stacking: { mode: 'intensify', maximumStacks: 3 },
+  mitigation: { resistancePerStack: { fire: 60 } },
+};
+
 // A condition with no `mitigation` block at all (the shape of every condition shipped today) —
 // proves the plumbing is a strict no-op when the block is absent.
 const noopCondition: ConditionContentEntry = {
@@ -109,6 +120,7 @@ beforeAll(async () => {
       shieldCondition,
       wardCondition,
       immuneWardCondition,
+      stackingWardCondition,
       noopCondition,
       bruteMonster,
     ],
@@ -254,5 +266,55 @@ describe('condition-based damage mitigation', () => {
   it('scales armorPerStack by stacks', () => {
     const twoStacks = heroWithConditions('condition.test-shield', 2);
     expect(damageMitigation(twoStacks, pack, 'physical').armor).toBe(6);
+  });
+
+  it('(e) stacking wards whose combined resistance exceeds 100 resolve to immune/0 damage without throwing', () => {
+    // Two stacks of a 60%-per-stack ward sum to 120% -- over resolveDamage's supported range.
+    // Before the clamp in combat-profile.ts, damageMitigation returned resistance: 120 unmodified
+    // and resolveDamage (combat.ts:18-20) threw `RangeError: ... outside their supported range`.
+    const overcapped = heroWithConditions('condition.test-ward-stacking', 2);
+    const mitigation = damageMitigation(overcapped, pack, 'fire');
+    expect(mitigation.resistance).toBeLessThanOrEqual(100);
+    expect(mitigation.resistance).toBeGreaterThanOrEqual(-100);
+    expect(mitigation.immune).toBe(true);
+    expect(() => tickDamage(overcapped)).not.toThrow();
+    expect(tickDamage(overcapped)).toBe(0);
+
+    // The melee/profile() path must clamp identically -- also must not throw. profile() only ever
+    // tracks 'physical' resistance (melee/ranged attacks are hardcoded physical, see combat()), and
+    // this ward only grants fire resistance, so profile() itself reports no resistance/immunity here;
+    // the assertion is that it stays in-range and doesn't throw, mirroring the fire-specific checks
+    // above via damageMitigation.
+    expect(() => meleeDamageAgainst(overcapped)).not.toThrow();
+    const meleeProfile = profile(overcapped, pack);
+    expect(meleeProfile.resistance).toBeLessThanOrEqual(100);
+    expect(meleeProfile.resistance).toBeGreaterThanOrEqual(-100);
+    expect(meleeProfile.armor).toBeGreaterThanOrEqual(0);
+  });
+
+  it('(f) a combined resistance well above 100 (three stacks, 180%) still clamps to immune/0, no throw', () => {
+    const wayOvercapped = heroWithConditions('condition.test-ward-stacking', 3);
+    const mitigation = damageMitigation(wayOvercapped, pack, 'fire');
+    expect(mitigation.resistance).toBeLessThanOrEqual(100);
+    expect(mitigation.immune).toBe(true);
+    expect(() => tickDamage(wayOvercapped)).not.toThrow();
+    expect(tickDamage(wayOvercapped)).toBe(0);
+  });
+
+  it('(g) a single-stack 50% ward still halves damage (regression, unchanged by the clamp)', () => {
+    const warded = heroWithConditions('condition.test-ward');
+    expect(tickDamage(warded)).toBe(5);
+    const mitigation = damageMitigation(warded, pack, 'fire');
+    expect(mitigation.resistance).toBe(50);
+    expect(mitigation.immune).toBe(false);
+  });
+
+  it('(h) the no-mitigation-block case remains unchanged (regression)', () => {
+    const bare = heroWithConditions(null);
+    expect(damageMitigation(bare, pack, 'physical')).toEqual({
+      armor: 0,
+      resistance: 0,
+      immune: false,
+    });
   });
 });

@@ -84,6 +84,27 @@ function conditionMitigationContribution(
 }
 
 /**
+ * Combines a base armor/resistance/immune reading with a condition mitigation contribution,
+ * clamping the result to the ranges `resolveDamage` (`combat.ts`) requires (`armor >= 0`,
+ * `-100 <= resistance <= 100`) so stacking wards can never produce a value that throws a
+ * `RangeError` there. `immune` is derived from the UNCLAMPED total resistance so that e.g. two
+ * stacking 60% fire wards (120% combined) correctly resolve to immune/0 damage rather than
+ * clamping to a merely-strong 100% resistance.
+ */
+function clampMitigation(
+  base: Readonly<{ armor: number; resistance: number; immune?: boolean }>,
+  condition: Readonly<{ armor: number; resistance: number }>,
+): Readonly<{ armor: number; resistance: number; immune: boolean }> {
+  const totalArmor = base.armor + condition.armor;
+  const totalResistance = base.resistance + condition.resistance;
+  return {
+    armor: Math.max(0, totalArmor),
+    resistance: Math.max(-100, Math.min(100, totalResistance)),
+    immune: Boolean(base.immune) || totalResistance >= 100,
+  };
+}
+
+/**
  * Damage-type-aware mitigation for a single actor, independent of the melee/ranged combat
  * profile above (which only ever reports the `physical` resistance). Used by non-attack damage
  * sources such as condition tick effects (burn) that can carry any `DamageType`.
@@ -101,9 +122,7 @@ export function damageMitigation(
       ? { armor: npc.armor, resistance: npc.resistances[damageType] }
       : { armor: 0, resistance: 0 };
   const conditionContribution = conditionMitigationContribution(actor, content, damageType);
-  const armor = base.armor + conditionContribution.armor;
-  const resistance = base.resistance + conditionContribution.resistance;
-  return { armor, resistance, immune: resistance >= 100 };
+  return clampMitigation(base, conditionContribution);
 }
 
 type PopulationCombatModifierResolver = (
@@ -156,31 +175,31 @@ export function profile(
   const conditionContribution = conditionMitigationContribution(actor, content, 'physical');
   const npc = monster === undefined ? npcDefinition(content, actor) : undefined;
   if (npc) {
-    const armor = npc.armor + conditionContribution.armor;
-    const resistance = npc.resistances.physical + conditionContribution.resistance;
+    const mitigation = clampMitigation(
+      { armor: npc.armor, resistance: npc.resistances.physical },
+      conditionContribution,
+    );
     return applyPopulationCombatModifiers(
       {
         accuracy: npc.accuracy,
         defense: npc.defense,
         damage: npc.damage,
-        armor,
-        resistance,
-        immune: resistance >= 100,
+        ...mitigation,
       },
       populationModifiers,
     );
   }
   if (monster) {
-    const armor = monster.armor + conditionContribution.armor;
-    const resistance = monster.resistances.physical + conditionContribution.resistance;
+    const mitigation = clampMitigation(
+      { armor: monster.armor, resistance: monster.resistances.physical },
+      conditionContribution,
+    );
     return applyPopulationCombatModifiers(
       {
         accuracy: monster.accuracy,
         defense: monster.defense,
         damage: monster.damage,
-        armor,
-        resistance,
-        immune: resistance >= 100,
+        ...mitigation,
       },
       populationModifiers,
     );
@@ -204,16 +223,16 @@ export function profile(
     (total, item) => total + (requireItem(content, item.contentId).combat?.armor ?? 0),
     0,
   );
-  const armor = equippedArmor + conditionContribution.armor;
-  const resistance = conditionContribution.resistance;
+  const mitigation = clampMitigation(
+    { armor: equippedArmor, resistance: 0 },
+    conditionContribution,
+  );
   return applyPopulationCombatModifiers(
     {
       accuracy: stats.meleeAccuracy,
       defense: stats.defense,
       damage,
-      armor,
-      resistance,
-      immune: resistance >= 100,
+      ...mitigation,
     },
     populationModifiers,
   );
