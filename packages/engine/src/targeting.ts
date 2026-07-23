@@ -83,25 +83,27 @@ function lineCells(input: TargetValidationInput, aim: Point, radius: number): re
   return cells;
 }
 
-/** Wedge of depth `radius` from the caster toward `aim`. Cell at forward depth d spans lateral +-d. */
+/**
+ * Wedge of depth `radius` from the caster toward `aim`, correct for all 8 aim
+ * directions (cardinal and diagonal). A cell at offset (dx, dy) from the
+ * caster is in the cone iff it's within the Chebyshev extent, forward of the
+ * caster along the aim direction, and within the 45-degree half-angle of that
+ * direction (forward component >= perpendicular component).
+ */
 function coneCells(input: TargetValidationInput, aim: Point, radius: number): readonly Point[] {
   const fx = Math.sign(aim.x - input.sourceActor.x);
   const fy = Math.sign(aim.y - input.sourceActor.y);
   const cells: Point[] = [];
-  const seen = new Set<string>();
-  for (let depth = 1; depth <= radius; depth += 1) {
-    for (let lateral = -depth; lateral <= depth; lateral += 1) {
-      const cell =
-        fx !== 0 && fy !== 0
-          ? { x: input.sourceActor.x + fx * depth, y: input.sourceActor.y + fy * depth + lateral }
-          : {
-              x: input.sourceActor.x + fx * depth + (fx === 0 ? lateral : 0),
-              y: input.sourceActor.y + fy * depth + (fy === 0 ? lateral : 0),
-            };
-      const key = `${cell.x},${cell.y}`;
-      if (seen.has(key)) continue;
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) > radius) continue;
+      const forward = dx * fx + dy * fy;
+      if (forward <= 0) continue;
+      const perpendicular = Math.abs(dx * -fy + dy * fx);
+      if (forward < perpendicular) continue;
+      const cell = { x: input.sourceActor.x + dx, y: input.sourceActor.y + dy };
       if (tileIndex(input.floor, cell.x, cell.y) === undefined) continue;
-      seen.add(key);
       cells.push(cell);
     }
   }

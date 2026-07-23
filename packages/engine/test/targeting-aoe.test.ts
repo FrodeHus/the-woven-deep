@@ -73,4 +73,21 @@ describe('AoE cell computation', () => {
     expect(cells.has('5,4')).toBe(true); // depth 3 widened
     expect(cells.has('1,2')).toBe(false); // never behind the caster
   });
+
+  it('cone widens correctly for a diagonal (NE) aim direction', () => {
+    const floor = openFloor(11, 11);
+    const result = validateTarget({
+      ...baseInput(floor),
+      targetingId: 'target.cone',
+      target: { x: 5, y: 0 }, // NE of caster (2,2): fx=+1, fy=-1
+      aoe: { shape: 'cone', radius: 3 },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const cells = new Set(result.cells.map((c) => `${c.x},${c.y}`));
+    expect(cells.has('3,1')).toBe(true); // depth 1 straight diagonal (dx=1,dy=-1)
+    expect(cells.has('3,2')).toBe(true); // depth 1 lateral widening (dx=1,dy=0)
+    expect(cells.has('4,0')).toBe(true); // depth 2 straight diagonal, deeper into the cone
+    expect(cells.has('1,3')).toBe(false); // behind the caster (SW), never in the cone
+  });
 });
