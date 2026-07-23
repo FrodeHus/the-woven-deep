@@ -4,6 +4,8 @@ import {
   descendToNextFloor,
   projectDomainEvents,
   projectGameplayState,
+  recallReturn,
+  recallToTown,
   resolveCommand,
   type ActiveRun,
   type CommandResolution,
@@ -83,7 +85,13 @@ export function dispatchIntent(
   }
 
   if (built.kind === 'descend') {
-    const transition = descendToNextFloor(run, { content: pack });
+    // A pending recall anchor reroutes the town's descend/stair intent to the return portal
+    // instead of generating/entering the next dungeon floor: the hero is walking back down into
+    // the floor they recalled away from, not descending fresh.
+    const transition =
+      run.returnAnchorFloorId !== undefined
+        ? recallReturn(run, { content: pack })
+        : descendToNextFloor(run, { content: pack });
     const events = projectDomainEvents({
       state: transition.state,
       content: pack,
@@ -113,9 +121,31 @@ export function dispatchIntent(
     return { kind: 'house', run };
   }
 
+  const resolution = resolveCommand(run, built.command, { content: pack });
+  // A recall cast sets `returnAnchorFloorId` inside the reducer but deliberately does not move the
+  // hero (floor transitions live outside `resolveCommand` and clear `recentCommands`, which would
+  // invalidate the very command just retained). Once the anchor first appears here, this performs
+  // the actual town move as a follow-on session-level transition -- guarded by `run.returnAnchorFloorId
+  // === undefined` so re-dispatching an already-anchored run (e.g. replay) never re-triggers it.
+  if (resolution.state.returnAnchorFloorId !== undefined && run.returnAnchorFloorId === undefined) {
+    const moved = recallToTown(resolution.state, { content: pack });
+    // `resolution.events` carries the cast's own public events (notably `hero.recalled`) --
+    // `recallToTown` itself emits none, but its town-move is still projected the same way the
+    // other floor-transition branches project theirs, for consistency.
+    const events = [
+      ...resolution.events,
+      ...projectDomainEvents({
+        state: moved.state,
+        content: pack,
+        heroId: moved.state.hero.actorId,
+        events: moved.events,
+      }),
+    ];
+    return { kind: 'transition', run: moved.state, events, onboardingIntentType: 'recall' };
+  }
   return {
     kind: 'command',
-    resolution: resolveCommand(run, built.command, { content: pack }),
+    resolution,
     onboardingIntentType: onboardingIntentType(intent),
   };
 }

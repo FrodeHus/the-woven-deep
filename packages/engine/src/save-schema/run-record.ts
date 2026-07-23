@@ -108,6 +108,7 @@ export const activeRunSchema = z.strictObject({
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
+  returnAnchorFloorId: identifier.optional(),
   floors: z.array(floor).min(1).readonly(),
   recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
@@ -371,6 +372,10 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   if (!activeFloor) fail('activeFloorId', 'active floor does not exist');
   if (run.activeFloorEnteredAt > run.worldTime)
     fail('activeFloorEnteredAt', 'active floor entry cannot be in the future');
+  if (run.returnAnchorFloorId !== undefined) {
+    const anchor = run.floors.find((floor) => floor.floorId === run.returnAnchorFloorId);
+    if (!anchor) fail('returnAnchorFloorId', 'recall anchor floor does not exist');
+  }
 
   validateOrderedIds(
     run.reputations.map((entry) => entry.factionId),
@@ -1493,10 +1498,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                                     entry.type === 'actor.healed' ||
                                     entry.type === 'condition.applied') &&
                                     entry.sourceActorId === run.hero.actorId) ||
-                                  // `hero.recalled` ships in a later task; the `as string` cast
-                                  // keeps this branch inert but forward-compatible until
-                                  // DomainEvent grows that member.
-                                  (entry.type as string) === 'hero.recalled',
+                                  (entry.type === 'hero.recalled' &&
+                                    entry.actorId === run.hero.actorId),
                               )
                             : recordValue.command.type === 'throw-item'
                               ? recordValue.events.find(
@@ -1810,6 +1813,16 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       ) {
         // `become-heart`/`broke-cycle` conclude immediately (`run.concluded`); `turn-away` activates
         // the weakened Heart boss (`population.created`) and concludes only once the fight resolves.
+      } else if (
+        recordValue.command.type === 'cast' &&
+        ((eventValue.type === 'attack.hit' && eventValue.actorId === run.hero.actorId) ||
+          ((eventValue.type === 'actor.damaged' ||
+            eventValue.type === 'actor.healed' ||
+            eventValue.type === 'condition.applied') &&
+            eventValue.sourceActorId === run.hero.actorId) ||
+          (eventValue.type === 'hero.recalled' && eventValue.actorId === run.hero.actorId))
+      ) {
+        // The spell's authored effects (damage/heal/condition) or a recall determine the outcome.
       } else fail(`${path}.events`, 'applied command and event are inconsistent');
     }
     if (
@@ -1948,6 +1961,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           recordValue.command.type === 'open-door' || recordValue.command.type === 'close-door';
         const doorReason = recordValue.result.reason.startsWith('door.');
         const finalChamberReason = recordValue.result.reason.startsWith('final-chamber.');
+        const recallReason = recordValue.result.reason === 'recall.already-town';
         if (tradeReason) {
           // Modal rejection: any command may fail with trade.active; other trade reasons
           // require the trade command boundary.
@@ -1975,6 +1989,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           fail(`${path}.result.reason`, 'door reason requires a door command');
         if (finalChamberReason && recordValue.command.type !== 'final-chamber-choice')
           fail(`${path}.result.reason`, 'final-chamber reason requires a final-chamber choice');
+        if (recallReason && recordValue.command.type !== 'cast')
+          fail(`${path}.result.reason`, 'recall reason requires a cast command');
         if (
           !inventoryReason &&
           !targetReason &&
@@ -1982,6 +1998,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           !townReason &&
           !doorReason &&
           !finalChamberReason &&
+          !recallReason &&
           recordValue.result.reason !== 'action.unavailable' &&
           recordValue.result.reason !== 'run.concluded'
         ) {
@@ -2045,6 +2062,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       recordValue.command.type === 'house-deposit' ||
       recordValue.command.type === 'house-withdraw' ||
       recordValue.command.type === 'final-chamber-choice' ||
+      recordValue.command.type === 'cast' ||
       tradeCommand
     )
       continue;

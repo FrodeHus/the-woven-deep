@@ -223,6 +223,7 @@ export type InvalidActionReason =
   | 'target.invalid'
   | 'cast.insufficient-weave'
   | 'cast.no-aptitude'
+  | 'recall.already-town'
   | 'learn.no-aptitude'
   | 'learn.already-known'
   | 'run.concluded'

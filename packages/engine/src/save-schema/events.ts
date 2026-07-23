@@ -212,6 +212,12 @@ export const spellLearnedEvent = z.strictObject({
   actorId: identifier,
   spellId: identifier,
 });
+export const heroRecalledEvent = z.strictObject({
+  type: z.literal('hero.recalled'),
+  eventId: identifier,
+  actorId: identifier,
+  anchorFloorId: identifier,
+});
 export const itemEquippedEvent = z.strictObject({
   type: z.literal('item.equipped'),
   eventId: identifier,
@@ -781,6 +787,7 @@ export const eventOptions = [
   itemThrownEvent,
   itemUsedEvent,
   spellLearnedEvent,
+  heroRecalledEvent,
   itemEquippedEvent,
   itemUnequippedEvent,
   itemLightToggledEvent,

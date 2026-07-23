@@ -289,6 +289,7 @@ export function projectDomainEvents(
           output.push(event);
         break;
       case 'spell.learned':
+      case 'hero.recalled':
         output.push(event);
         break;
       case 'item.equipped':

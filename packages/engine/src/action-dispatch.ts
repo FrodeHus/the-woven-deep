@@ -435,6 +435,15 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       });
       next = applyEffectResult(next, resolved);
       events.push(...resolved.events);
+      if (definition.effects.some((effect) => effect.effectId === 'effect.recall')) {
+        next = { ...next, returnAnchorFloorId: next.activeFloorId };
+        events.push({
+          type: 'hero.recalled',
+          eventId,
+          actorId: actor.actorId,
+          anchorFloorId: next.activeFloorId,
+        });
+      }
       return { state: next, chargeEnergy: true };
     }
     const target = actorById(state, action.targetActorId);
@@ -460,6 +469,19 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
     });
     next = applyEffectResult(next, resolved);
     events.push(...resolved.events);
+    // effect.recall is a run-level effect (resolveEffectSequence skips it -- no actor mutation, no
+    // RNG): the anchor mutation happens here, against the run directly. The floor itself does not
+    // change in this reducer -- the session layer performs the town move afterward (recallToTown),
+    // since floor transitions clear recentCommands and must stay outside resolveCommand.
+    if (definition.effects.some((effect) => effect.effectId === 'effect.recall')) {
+      next = { ...next, returnAnchorFloorId: next.activeFloorId };
+      events.push({
+        type: 'hero.recalled',
+        eventId,
+        actorId: actor.actorId,
+        anchorFloorId: next.activeFloorId,
+      });
+    }
     return { state: next, chargeEnergy: true };
   },
   fire: ({ state, action, actor, content, eventId, events }) => {

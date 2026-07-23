@@ -15,6 +15,7 @@ import { recordFloorEntered } from './run-metrics.js';
 import { validateActiveRun } from './save-schema.js';
 import { compareCodeUnits } from './stable-json.js';
 import { tileDefinition } from './terrain.js';
+import { TOWN_FLOOR_ID } from './town-floor.js';
 import {
   NEW_RUN_FLOOR_HEIGHT,
   NEW_RUN_FLOOR_THEME_SETTINGS,
@@ -301,4 +302,49 @@ export function ascendToPreviousFloor(
 
   const state = enterStoredFloor(run, { floorId: targetFloorId, arrival });
   return { state, events: [] };
+}
+
+/**
+ * The session-level half of a recall cast: moves the hero to town, arriving on the town's
+ * stair-down (the dungeon entrance -- the town has no stair-up). `returnAnchorFloorId` was already
+ * set on `run` by the cast reducer path (see `action-dispatch.ts`'s `cast` handler) and survives
+ * `enterStoredFloor`'s spread untouched, so the resulting town state still carries the anchor.
+ * Consumes no randomness and emits no events -- like `ascendToPreviousFloor`, moving between
+ * already-existing floors is pure bookkeeping.
+ */
+export function recallToTown(
+  run: ActiveRun,
+  context: Readonly<{ content: CompiledContentPack }>,
+): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+  void context;
+  const town = run.floors.find((floor) => floor.floorId === TOWN_FLOOR_ID);
+  if (!town) throw new Error('internal invariant: run has no town floor');
+  const arrival = town.stairDown;
+  if (arrival === null) throw new Error('internal invariant: town floor has no stair-down');
+  const state = enterStoredFloor(run, { floorId: town.floorId, arrival });
+  return { state, events: [] };
+}
+
+/**
+ * The town return-portal: moves the hero back to the floor anchored by a prior recall, arriving on
+ * that floor's stair-down (falling back to its stair-up for the rare case a floor has none, e.g.
+ * the Final Chamber). Clears `returnAnchorFloorId` by deleting the key entirely -- the save schema
+ * types it as an optional field, and `exactOptionalPropertyTypes` forbids assigning it `undefined`
+ * instead of omitting it.
+ */
+export function recallReturn(
+  run: ActiveRun,
+  context: Readonly<{ content: CompiledContentPack }>,
+): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+  void context;
+  const anchorId = run.returnAnchorFloorId;
+  if (anchorId === undefined) throw new Error('recallReturn requires an anchored floor');
+  const anchor = run.floors.find((floor) => floor.floorId === anchorId);
+  if (!anchor) throw new Error(`internal invariant: anchor floor ${anchorId} is missing`);
+  const arrival = anchor.stairDown ?? anchor.stairUp;
+  if (arrival === null)
+    throw new Error(`internal invariant: anchor floor ${anchorId} has no stair`);
+  const moved = enterStoredFloor(run, { floorId: anchorId, arrival });
+  const { returnAnchorFloorId: _cleared, ...rest } = moved;
+  return { state: rest, events: [] };
 }

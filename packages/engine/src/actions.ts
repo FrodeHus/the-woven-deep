@@ -15,6 +15,7 @@ import { heroCasterAptitude, spellLearnTarget } from './caster.js';
 import { parseEffectParameters } from './parameter-contracts.js';
 import { equipItem, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
 import { closeDoor, openDoor } from './features.js';
+import { isTownFloorActive } from './town-floor.js';
 import type {
   ActiveRun,
   DecisionRequiredResult,
@@ -650,6 +651,16 @@ export function validatePlayerAction(
       actor.actorId === input.state.hero.actorId
     ) {
       return { status: 'invalid', reason: 'cast.no-aptitude' };
+    }
+    // Defense-in-depth: `resolveCommand`'s town-truce gate already rejects every `cast` in town
+    // (with reason `town.truce`) before this function ever runs, so this branch is unreachable
+    // through the normal command path. It exists so a recall spell is still rejected correctly if
+    // this function is ever called directly, or if the truce gate's command-type list changes.
+    if (
+      definition.effects.some((effect) => effect.effectId === 'effect.recall') &&
+      isTownFloorActive(input.state)
+    ) {
+      return { status: 'invalid', reason: 'recall.already-town' };
     }
     if (definition.aoe !== undefined) {
       if (command.target === null) return { status: 'invalid', reason: 'target.invalid' };
