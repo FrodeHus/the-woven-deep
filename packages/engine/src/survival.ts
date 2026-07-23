@@ -5,18 +5,47 @@ import type {
   ItemContentEntry,
 } from '@woven-deep/content';
 import { replaceActor, type ActorState } from './actor-model.js';
-import {
-  actorHasConditionTrait,
-  advanceConditions,
-  conditionModifiers,
-  tickConditions,
-} from './conditions.js';
+import { actorHasConditionTrait, advanceConditions, conditionModifiers } from './conditions.js';
 import { deriveActorStats, type DerivedStatModifier } from './attributes.js';
-import { damageMitigation } from './combat-profile.js';
 import { equipmentModifiers } from './equipment.js';
 import type { ItemInstance } from './item-model.js';
-import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
+import type { ActiveRun, DomainEvent, OpaqueId, Uint32State } from './model.js';
 import type { HungerStage, SurvivalState } from './survival-model.js';
+
+// `tickConditions` (and the mitigation lookup it needs) lives in `condition-tick.ts`, which pulls
+// in the effect-resolution pipeline (`effects.ts`) and `combat-profile.ts`. This module must stay
+// out of that subgraph entirely -- not even a type-only import, since dependency-cruiser's
+// `no-circular` rule flags a cycle if ANY edge in it is a runtime import, regardless of whether
+// other edges in the same cycle are type-only. So the shape below is spelled out by hand instead
+// of imported, and the caller (`world-step.ts`) injects the concrete implementation.
+export type ConditionTicker = (
+  input: Readonly<{
+    actors: readonly ActorState[];
+    content: CompiledContentPack;
+    effectsState: Uint32State;
+    worldTime: number;
+    eventId: OpaqueId;
+    survival: SurvivalState;
+    survivalActorId: OpaqueId;
+    mitigationFor: (
+      actorId: OpaqueId,
+      damageType: DamageType,
+    ) => Readonly<{ armor: number; resistance: number; immune: boolean }>;
+  }>,
+) => Readonly<{
+  actors: readonly ActorState[];
+  effectsState: Uint32State;
+  events: readonly DomainEvent[];
+}>;
+
+export type ActorDamageMitigation = (
+  input: Readonly<{
+    actors: readonly ActorState[];
+    content: CompiledContentPack;
+    actorId: OpaqueId;
+    damageType: DamageType;
+  }>,
+) => Readonly<{ armor: number; resistance: number; immune: boolean }>;
 
 const STAGES: readonly HungerStage[] = ['sated', 'hungry', 'weak', 'starving'];
 
@@ -163,19 +192,6 @@ export function consumeFuel(
   };
 }
 
-function actorDamageMitigation(
-  input: Readonly<{
-    actors: readonly ActorState[];
-    content: CompiledContentPack;
-    actorId: OpaqueId;
-    damageType: DamageType;
-  }>,
-): Readonly<{ armor: number; resistance: number; immune: boolean }> {
-  const actor = input.actors.find((candidate) => candidate.actorId === input.actorId);
-  if (!actor) throw new Error(`internal invariant: actor ${input.actorId} does not exist`);
-  return damageMitigation(actor, input.content, input.damageType);
-}
-
 export function advanceSurvival(
   input: Readonly<{
     state: ActiveRun;
@@ -183,6 +199,8 @@ export function advanceSurvival(
     elapsed: number;
     eventId: OpaqueId;
     danger: boolean;
+    tickConditions: ConditionTicker;
+    mitigationFor: ActorDamageMitigation;
   }>,
 ): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
   if (!Number.isSafeInteger(input.elapsed) || input.elapsed < 0) {
@@ -271,7 +289,7 @@ export function advanceSurvival(
   });
   events.push(...fuel.events);
 
-  const tick = tickConditions({
+  const tick = input.tickConditions({
     actors,
     content: input.content,
     effectsState: input.state.rng.effects,
@@ -280,7 +298,7 @@ export function advanceSurvival(
     survival: input.state.survival,
     survivalActorId: heroId,
     mitigationFor: (actorId, damageType) =>
-      actorDamageMitigation({ actors, content: input.content, actorId, damageType }),
+      input.mitigationFor({ actors, content: input.content, actorId, damageType }),
   });
   actors = [...tick.actors];
   hero = actors.find((actor) => actor.actorId === heroId)!;

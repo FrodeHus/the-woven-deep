@@ -62,6 +62,7 @@ export * from './targeting.js';
 export * from './effects.js';
 export * from './content-index.js';
 export * from './conditions.js';
+export * from './condition-tick.js';
 export * from './reactions.js';
 export * from './behavior.js';
 export * from './world-step.js';

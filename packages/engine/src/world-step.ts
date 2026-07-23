@@ -5,9 +5,10 @@ import { entryById } from './content-index.js';
 import { chooseBehaviorAction, selectPatrolGoal } from './behavior.js';
 import { ensureFactionReputation } from './commerce.js';
 import { applyAction } from './action-dispatch.js';
-import { monsterDefinition } from './combat-profile.js';
+import { damageMitigation, monsterDefinition } from './combat-profile.js';
+import { tickConditions } from './condition-tick.js';
 import { itemLightSources } from './equipment.js';
-import { advanceSurvival } from './survival.js';
+import { advanceSurvival, type ActorDamageMitigation } from './survival.js';
 import { applyPassiveDiscovery, featureTiles } from './features.js';
 import {
   tileIndex,
@@ -60,6 +61,12 @@ function appendEvents(
   authoritative.push(...emitted);
   publicEvents.push(...projectDomainEvents({ events: emitted, state, heroId, content }));
 }
+
+const actorDamageMitigation: ActorDamageMitigation = (input) => {
+  const actor = input.actors.find((candidate) => candidate.actorId === input.actorId);
+  if (!actor) throw new Error(`internal invariant: actor ${input.actorId} does not exist`);
+  return damageMitigation(actor, input.content, input.damageType);
+};
 
 function refreshHeroKnowledge(state: ActiveRun, content: CompiledContentPack): ActiveRun {
   const hero = heroActor(state);
@@ -573,6 +580,8 @@ export function resolveWorldStep(
         elapsed: state.worldTime - previousWorldTime,
         eventId: input.eventId,
         danger,
+        tickConditions,
+        mitigationFor: actorDamageMitigation,
       });
       state = survival.state;
       appendEvents(events, publicEvents, survival.events, state, heroId, input.content);
