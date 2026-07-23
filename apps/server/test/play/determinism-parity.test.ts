@@ -125,7 +125,11 @@ function driveServerSide(
   return blobsAfterEachIntent;
 }
 
-function freshRepos(): { repo: ActiveRunRepository; hallRepo: ServerRunRecordRepository } {
+function freshRepos(): {
+  database: Database.Database;
+  repo: ActiveRunRepository;
+  hallRepo: ServerRunRecordRepository;
+} {
   const database = new Database(':memory:');
   runMigrations(database);
   new ProfileRepository(database).create({
@@ -134,6 +138,7 @@ function freshRepos(): { repo: ActiveRunRepository; hallRepo: ServerRunRecordRep
     nowIso: FIXED_CLOCK(),
   });
   return {
+    database,
     repo: new ActiveRunRepository(database),
     hallRepo: new ServerRunRecordRepository({ database, profileId: PROFILE }),
   };
@@ -148,11 +153,12 @@ describe('cross-process determinism parity (client core vs. server play path)', 
 
     // Server side: the same seed/hero/pack, driven through ServerPlaySession.applyIntent over an
     // in-memory SQLite repo -- the server's real play path.
-    const { repo, hallRepo } = freshRepos();
+    const { database, repo, hallRepo } = freshRepos();
     const session = new ServerPlaySession({
       pack,
       repo,
       hallRepo,
+      database,
       profileId: PROFILE,
       clock: FIXED_CLOCK,
     });

@@ -161,6 +161,7 @@ export function registerWsPlayRoute(
           pack,
           repo,
           profileId,
+          database,
           hallRepo: new ServerRunRecordRepository({ database, profileId }),
         });
 

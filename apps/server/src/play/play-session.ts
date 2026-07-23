@@ -1,3 +1,4 @@
+import type Database from 'better-sqlite3';
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
   createNewRun,
@@ -123,6 +124,7 @@ export class ServerPlaySession {
   private readonly pack: CompiledContentPack;
   private readonly repo: ActiveRunRepository;
   private readonly hallRepo: ServerRunRecordRepository;
+  private readonly database: Database.Database;
   private readonly profileId: string;
   private readonly clock: Clock;
   private readonly portraitGlyph: string;
@@ -143,6 +145,7 @@ export class ServerPlaySession {
       pack: CompiledContentPack;
       repo: ActiveRunRepository;
       hallRepo: ServerRunRecordRepository;
+      database: Database.Database;
       profileId: string;
       clock?: Clock;
       portraitGlyph?: string;
@@ -151,6 +154,7 @@ export class ServerPlaySession {
     this.pack = input.pack;
     this.repo = input.repo;
     this.hallRepo = input.hallRepo;
+    this.database = input.database;
     this.profileId = input.profileId;
     this.clock = input.clock ?? (() => new Date().toISOString());
     this.portraitGlyph = input.portraitGlyph ?? '@';
@@ -289,6 +293,25 @@ export class ServerPlaySession {
    * set, and the now-finished active run row cleared so the profile can start a new one. A no-op
    * when the run has not concluded, or has already been finalized -- the double-finalize guard
    * that keeps a resend/reconnect from appending a second, colliding Hall record.
+   *
+   * Crash-atomicity: every WRITE below (the Hall append, the lifetime/unlocks/achievements
+   * updates, and clearing the `active_runs` row) runs inside a single better-sqlite3 transaction
+   * on the shared `database` connection (the Hall repo and the active-run repo are both backed by
+   * it). A crash or thrown error anywhere inside rolls the whole sequence back atomically: either
+   * `active_runs` is cleared and the Hall has the new record (fully committed), or `active_runs`
+   * still holds its pre-finalize blob and the Hall has NO record (fully rolled back) -- there is
+   * no window where a stale `finalized: false` active-run row can coexist with an already-appended
+   * Hall record, which is what previously let a reconnect re-run `finalizeRun` and crash on a
+   * colliding, already-taken `recordId`. `finalizeRun` itself stays a pure computation outside the
+   * transaction; `this.run`/`finalizedRecord`/`finalizedAchievements` are only updated after the
+   * transaction commits, so an aborted transaction never leaves the in-memory session believing a
+   * run is finalized when the DB rolled it back.
+   *
+   * Defensive self-heal: if the Hall already contains a record with this run's (deterministic)
+   * `recordId` -- which should now be unreachable in normal operation given the transaction above,
+   * but could still occur from manually-corrupted state or a pre-fix on-disk row -- this treats the
+   * run as already finalized rather than re-appending (which would throw): it skips the Hall
+   * writes, just clears the stale active-run row, and projects the existing record.
    */
   private maybeFinalize(): void {
     if (this.run.conclusion === null || this.run.conclusion.finalized) return;
@@ -298,28 +321,45 @@ export class ServerPlaySession {
       content: this.pack,
       lifetime: this.hallRepo.lifetime(),
     });
-    this.run = finalized.run;
+
+    const existingRecord = this.hallRepo
+      .records()
+      .find((record) => record.recordId === finalized.record.recordId);
+
+    if (existingRecord !== undefined) {
+      this.database.transaction(() => {
+        this.repo.clear(this.profileId);
+      })();
+      this.run = finalized.run;
+      this.finalizedRecord = existingRecord;
+      this.finalizedAchievements = finalized.deltas.achievementGrants;
+      return;
+    }
 
     const stored: StoredHallRecord = {
       ...finalized.record,
       enrichment: { achievedAt: this.clock(), portraitGlyph: this.portraitGlyph },
     };
-    this.hallRepo.appendRecord(stored);
-    this.hallRepo.applyDeltas(finalized.deltas);
 
-    const unlocks = evaluateUnlocks({
-      records: this.hallRepo.records(),
-      lifetime: this.hallRepo.lifetime(),
-      content: this.pack,
-    });
-    this.hallRepo.setUnlocks(unlocks);
-    this.hallRepo.appendAchievements(finalized.deltas.achievementGrants);
+    this.database.transaction(() => {
+      this.hallRepo.appendRecord(stored);
+      this.hallRepo.applyDeltas(finalized.deltas);
 
+      const unlocks = evaluateUnlocks({
+        records: this.hallRepo.records(),
+        lifetime: this.hallRepo.lifetime(),
+        content: this.pack,
+      });
+      this.hallRepo.setUnlocks(unlocks);
+      this.hallRepo.appendAchievements(finalized.deltas.achievementGrants);
+
+      // The run is over -- clear the active run row so the profile's next open() starts fresh.
+      this.repo.clear(this.profileId);
+    })();
+
+    this.run = finalized.run;
     this.finalizedRecord = stored;
     this.finalizedAchievements = finalized.deltas.achievementGrants;
-
-    // The run is over -- clear the active run row so the profile's next open() starts fresh.
-    this.repo.clear(this.profileId);
   }
 
   /** Persists the latest run state (called on disconnect and any time an unwritten checkpoint is

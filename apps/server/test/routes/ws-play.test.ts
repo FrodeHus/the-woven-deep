@@ -119,6 +119,7 @@ describe('handleMessage (pure message routing)', () => {
       pack,
       repo,
       hallRepo,
+      database,
       profileId: 'profile-1',
       clock: FIXED_CLOCK,
     });

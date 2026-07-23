@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import Database from 'better-sqlite3';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
@@ -51,6 +51,7 @@ function newSession(
     pack,
     repo: input.repo ?? new ActiveRunRepository(database),
     hallRepo: input.hallRepo ?? new ServerRunRecordRepository({ database, profileId: PROFILE }),
+    database,
     profileId: PROFILE,
     clock: FIXED_CLOCK,
   });
@@ -267,6 +268,63 @@ describe('ServerPlaySession', () => {
       const secondSnapshot = newSession(database, { repo, hallRepo }).open({ seed: SEED });
       expect(secondSnapshot.conclusion).toBeNull();
       expect(hallRepo.records()).toHaveLength(1);
+    });
+
+    it('crash-atomicity: a throw mid-finalize rolls back the WHOLE write sequence -- no Hall record, active_runs left untouched -- so a later open() finalizes cleanly', () => {
+      storeConcludedRun(repo);
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      // Simulate a crash (or any thrown error) partway through the write sequence, after the Hall
+      // append would have happened but before the sequence completes.
+      const appendAchievementsSpy = vi
+        .spyOn(hallRepo, 'appendAchievements')
+        .mockImplementation(() => {
+          throw new Error('simulated crash mid-finalize');
+        });
+
+      expect(() => newSession(database, { repo, hallRepo }).open({ seed: SEED })).toThrow(
+        'simulated crash mid-finalize',
+      );
+
+      // The transaction rolled back entirely: no Hall record was committed, and the active_runs row
+      // still holds its pre-finalize (finalized: false) blob -- exactly as if the crash had never
+      // reached the write sequence at all.
+      expect(hallRepo.records()).toHaveLength(0);
+      const stillStored = repo.get(PROFILE);
+      expect(stillStored).toBeDefined();
+      expect(decodeActiveRun(stillStored!.runBlob).conclusion?.finalized).toBe(false);
+
+      appendAchievementsSpy.mockRestore();
+
+      // A later open() (e.g. the process restarting, or a reconnect) re-finalizes cleanly: exactly
+      // one Hall record, and the active_runs row is cleared -- the crash left no lingering damage.
+      const snapshot = newSession(database, { repo, hallRepo }).open({ seed: SEED });
+      expect(hallRepo.records()).toHaveLength(1);
+      expect(repo.get(PROFILE)).toBeUndefined();
+      expect(snapshot.conclusion?.finalized).toBe(true);
+    });
+
+    it('self-heals a manually-corrupted stale active_runs blob that coexists with an already-committed Hall record, instead of throwing on the colliding recordId', () => {
+      storeConcludedRun(repo);
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      newSession(database, { repo, hallRepo }).open({ seed: SEED });
+      expect(hallRepo.records()).toHaveLength(1);
+      expect(repo.get(PROFILE)).toBeUndefined();
+
+      // Manually reconstruct the impossible-after-fix state the old bug relied on: a stale
+      // pre-finalize (finalized: false) active_runs row re-appears alongside an already-committed
+      // Hall record (e.g. hand-edited/restored from a pre-fix backup). This must self-heal rather
+      // than re-invoke finalizeRun and throw on the now-duplicate deterministic recordId.
+      storeConcludedRun(repo);
+      expect(repo.get(PROFILE)).toBeDefined();
+
+      const snapshot = newSession(database, { repo, hallRepo }).open({ seed: SEED });
+
+      // Still exactly one Hall record (no duplicate append attempted), the stale row is cleared
+      // again, and the reopened session reports the existing record as finalized.
+      expect(hallRepo.records()).toHaveLength(1);
+      expect(repo.get(PROFILE)).toBeUndefined();
+      expect(snapshot.conclusion?.finalized).toBe(true);
+      expect(snapshot.conclusion?.score).toEqual(hallRepo.records()[0]!.score);
     });
   });
 });
