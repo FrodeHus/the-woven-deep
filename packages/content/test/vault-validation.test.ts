@@ -638,6 +638,19 @@ describe('validateVaultEntry (town vault contract)', () => {
         contentId: null,
       },
     },
+    S: {
+      terrain: 'floor',
+      entrance: false,
+      light: null,
+      slot: {
+        id: 'merchant-spellvendor',
+        kind: 'npc',
+        required: true,
+        tags: ['town'],
+        lootTableId: null,
+        contentId: null,
+      },
+    },
     L: {
       terrain: 'floor',
       entrance: false,
@@ -679,13 +692,14 @@ describe('validateVaultEntry (town vault contract)', () => {
         'merchant-arms',
         'merchant-curios',
         'merchant-provisioner',
+        'merchant-spellvendor',
       ],
     };
   }
 
-  const validLayout = ['+>PAC.', '.....D', '..L...'] as const;
+  const validLayout = ['+>PACS', '.....D', '..L...'] as const;
 
-  it('accepts a town vault carrying exactly the five required slots and a light', () => {
+  it('accepts a town vault carrying exactly the six required slots and a light', () => {
     const issues = validateVaultEntry(townVault(validLayout), 'vaults/town.yaml');
     expect(issues.filter((issue) => issue.message.includes('town vault'))).toEqual([]);
   });
