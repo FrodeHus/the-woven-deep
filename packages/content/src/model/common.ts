@@ -156,6 +156,8 @@ export const EFFECT_IDS = [
   'effect.light.toggle',
   'effect.item.consume',
   'effect.feature.mutate',
+  'effect.spell.learn',
+  'effect.recall',
 ] as const;
 export type EffectId = (typeof EFFECT_IDS)[number];
 

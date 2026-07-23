@@ -911,6 +911,10 @@ Each effect has `effectId`, strict `parameters`, and optional `requiresLivingTar
 | `effect.light.toggle` | boolean `enabled` |
 | `effect.item.consume` | positive `quantity` |
 | `effect.feature.mutate` | stable `state` ID such as `door.open` |
+| `effect.spell.learn` | stable `spellId` |
+| `effect.recall` | none |
+
+`effect.spell.learn` and `effect.recall` are run-level effects: they are recognized by the effect sequence resolver but mutate no actor and consume no RNG there, since they act on run-scoped state (known spells, recall destination) that the cast/use-item dispatch handlers own.
 
 Damage types are `physical`, `fire`, `cold`, `lightning`, `poison`, and `arcane`. Dice use the same bounded structure documented for monsters.
 
