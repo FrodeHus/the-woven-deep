@@ -1,4 +1,7 @@
 import {
+  burstCells,
+  coneCells,
+  lineCells,
   tileDefinition,
   type ObservableFloorProjection,
   type OpaqueId,
@@ -22,9 +25,9 @@ import { chebyshev, type ActorView, type HeroView } from './projection-view.js';
  */
 
 /** One valid cast target: the cell to pass as `CastCommand.target`, the actor occupying it (when
- * the spell is `target.actor`), and the cells the cast would actually affect. `affected` is always
- * `[cell]` today (no AoE spell/targeting exists yet) but is its own field so an area-effect spell
- * can later populate more than one cell here without changing this shape. */
+ * the spell is `target.actor`), and the cells the cast would actually affect. For an AoE spell
+ * (`target.burst`/`line`/`cone`) `affected` is the shared-geometry footprint at that aim cell (fed
+ * fogged-projection callbacks); for a single-target spell it is just `[cell]`. */
 export interface TargetCandidate {
   readonly cell: Point;
   readonly actorId?: OpaqueId;
@@ -112,13 +115,79 @@ function inRangeVisibleAndClear(
   return hasLineOfSight(floor, hero, point);
 }
 
+/** Whether `aim` is within Chebyshev `range` of the hero. The free-cursor targeting mode clamps to
+ * this; the shared geometry itself does not range-check the aim cell (burst is anchored AT the aim). */
+export function aimInRange(hero: Pick<Point, 'x' | 'y'>, aim: Point, range: number): boolean {
+  return chebyshev(aim, hero) <= range;
+}
+
+/** Opacity for the client's fogged projection, matching the engine callback contract: an
+ * out-of-bounds or never-observed (`tileId` undefined) cell reads as OPAQUE, so `lineCells` stops
+ * conservatively at the fog edge (advisory: it can only under-reach, never over-reach). */
+function projectionIsOpaque(floor: ObservableFloorProjection, point: Point): boolean {
+  const cell = cellAt(floor, point.x, point.y);
+  if (cell === undefined || cell.tileId === undefined) return true;
+  return tileDefinition(cell.tileId).opaque;
+}
+
+function projectionInBounds(floor: ObservableFloorProjection, point: Point): boolean {
+  return cellAt(floor, point.x, point.y) !== undefined;
+}
+
+/**
+ * The cells a cast of `spell` aimed at `aim` would affect right now, from what the projection
+ * exposes. Advisory only (the engine re-validates on dispatch). Single-target ids return `[aim]`
+ * when the aim is a legal single-target cell (in range, visible, clear LoS), else `[]`. AoE ids
+ * return the shared-geometry footprint when the aim is in range + visible, else `[]`.
+ */
+export function affectedFootprint(
+  input: Readonly<{
+    spell: Pick<CastableSpellView, 'range' | 'targetingId' | 'aoe'>;
+    floor: ObservableFloorProjection;
+    hero: Pick<HeroView, 'x' | 'y'>;
+    aim: Point;
+  }>,
+): readonly Point[] {
+  const { spell, floor, hero, aim } = input;
+  const origin: Point = { x: hero.x, y: hero.y };
+
+  if (spell.targetingId === 'target.self') {
+    return [{ x: origin.x, y: origin.y }];
+  }
+
+  if (
+    spell.aoe !== undefined &&
+    (spell.targetingId === 'target.burst' ||
+      spell.targetingId === 'target.line' ||
+      spell.targetingId === 'target.cone')
+  ) {
+    if (!aimInRange(origin, aim, spell.range)) return [];
+    if (!cellIsVisible(floor, aim)) return [];
+    if (spell.targetingId === 'target.burst') {
+      return burstCells(aim, spell.aoe.radius, { inBounds: (p) => projectionInBounds(floor, p) });
+    }
+    if (spell.targetingId === 'target.line') {
+      return lineCells(origin, aim, spell.aoe.radius, {
+        isOpaque: (p) => projectionIsOpaque(floor, p),
+      });
+    }
+    return coneCells(origin, aim, spell.aoe.radius, {
+      inBounds: (p) => projectionInBounds(floor, p),
+    });
+  }
+
+  // Single-target actor/cell: the aim itself is the footprint, when it's a legal target cell.
+  return inRangeVisibleAndClear({ floor, hero: origin, range: spell.range, point: aim })
+    ? [{ x: aim.x, y: aim.y }]
+    : [];
+}
+
 /**
  * Computes every currently-valid target cell for a spell's targeting rule, given only what the
  * guest projection exposes: `target.self` always yields the caster's own cell; `target.actor`
  * yields every hostile actor's cell that is in range, visible+lit, and has clear line of sight from
- * the hero. `target.cell`/`target.line` have no content spell using them yet (see the design doc's
- * "out of scope" section), so they yield no candidates -- there is nothing to enumerate a reticle
- * over without a concrete clicked point, and no such flow exists today.
+ * the hero. Burst/line/cone are aimed with the free cursor via `affectedFootprint`, not enumerated
+ * here: there is no finite candidate set to cycle for an area spell.
  */
 export function computeValidTargets(input: ComputeValidTargetsInput): ValidTargeting {
   const { spell, floor, hero, actors } = input;
@@ -140,5 +209,8 @@ export function computeValidTargets(input: ComputeValidTargetsInput): ValidTarge
     return { candidates };
   }
 
+  // Burst/line/cone are aimed with the free cursor via `affectedFootprint`, not enumerated here:
+  // there is no finite candidate set to cycle for an area spell. `useSpellTargeting` drives the
+  // reticle directly for those.
   return { candidates: [] };
 }
