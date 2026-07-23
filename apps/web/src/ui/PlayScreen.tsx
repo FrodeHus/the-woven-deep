@@ -66,6 +66,9 @@ export interface PlayScreenProps {
    * `/ws/play` connection from inside a run -- the title screen's own "Sign out" is unreachable
    * once play has started. */
   readonly onSignOut?: (() => void) | undefined;
+  /** Permanently deletes the current profile -- forwarded straight through to the settings overlay
+   * body, exactly like `onSignOut` (only ever provided for a signed-in `ProfileSession`). */
+  readonly onDeleteAccount?: (() => void) | undefined;
   /** Forwarded straight through to the settings overlay body's "Lifetime & achievements" section --
    * only ever provided for a signed-in `ProfileSession` run, exactly like `onSignOut`. Optional so
    * every pre-existing caller/test keeps compiling unchanged (the section just doesn't render
@@ -105,6 +108,7 @@ export function PlayScreen({
   onCloseOverlay = () => {},
   onClearGuestSession = () => {},
   onSignOut,
+  onDeleteAccount,
   account,
   records = [],
   currentHeart = null,
@@ -344,6 +348,7 @@ export function PlayScreen({
           records={records}
           onClearGuestSession={onClearGuestSession}
           onSignOut={onSignOut}
+          onDeleteAccount={onDeleteAccount}
           account={account}
         />
         <CommandPalette

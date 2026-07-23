@@ -7,6 +7,7 @@ import { runMigrations } from '../../src/database.js';
 import { LoginTokenRepository } from '../../src/db/login-token-repository.js';
 import { ProfileRepository } from '../../src/db/profile-repository.js';
 import { ServerRunRecordRepository } from '../../src/db/hall-repository.js';
+import { ActiveRunRepository } from '../../src/db/active-run-repository.js';
 import { createAuthBundle } from '../../src/auth/bundle.js';
 import { generateToken, hashToken } from '../../src/auth/tokens.js';
 import type { AuthConfig } from '../../src/config.js';
@@ -507,5 +508,184 @@ describe('GET /api/profile/export', () => {
     for (const forbidden of forbiddenSubstrings) {
       expect(raw.toLowerCase()).not.toContain(forbidden.toLowerCase());
     }
+  });
+});
+
+describe('DELETE /api/profile', () => {
+  let app: FastifyInstance;
+  let database: Database.Database;
+  let bundle: AuthBundle;
+
+  beforeEach(() => {
+    database = freshDatabase();
+    bundle = createAuthBundle({ db: database, config: makeConfig() });
+    app = buildApp({ pack, auth: bundle, database });
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  function rowCount(table: string, column: string, value: string): number {
+    const row = database
+      .prepare(`select count(*) as count from ${table} where ${column} = ?`)
+      .get(value) as { count: number };
+    return row.count;
+  }
+
+  it('returns 401 when unauthenticated', async () => {
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/profile',
+      headers: { origin: PUBLIC_URL, 'content-type': 'application/json' },
+      payload: { confirm: true },
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('returns 403 for a mismatched Origin, and deletes nothing', async () => {
+    const email = 'delete-bad-origin@example.com';
+    const sessionCookies = await verifyAndGetCookies(app, database, email);
+    const { csrfToken, cookies } = await getCsrfToken(app, sessionCookies);
+    const profile = new ProfileRepository(database).findByEmail(email);
+    expect(profile).toBeDefined();
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/profile',
+      headers: {
+        origin: 'https://evil.example.com',
+        cookie: cookieHeader(cookies),
+        'x-csrf-token': csrfToken,
+        'content-type': 'application/json',
+      },
+      payload: { confirm: true },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(new ProfileRepository(database).findById(profile!.id)).toBeDefined();
+  });
+
+  it('returns 403 with a missing CSRF token, and deletes nothing', async () => {
+    const email = 'delete-no-csrf@example.com';
+    const sessionCookies = await verifyAndGetCookies(app, database, email);
+    const profile = new ProfileRepository(database).findByEmail(email);
+    expect(profile).toBeDefined();
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/profile',
+      headers: {
+        origin: PUBLIC_URL,
+        cookie: cookieHeader(sessionCookies),
+        'content-type': 'application/json',
+      },
+      payload: { confirm: true },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(new ProfileRepository(database).findById(profile!.id)).toBeDefined();
+  });
+
+  it('returns 400 confirmation_required when confirm is absent, and deletes nothing', async () => {
+    const email = 'delete-unconfirmed@example.com';
+    const sessionCookies = await verifyAndGetCookies(app, database, email);
+    const { csrfToken, cookies } = await getCsrfToken(app, sessionCookies);
+    const profile = new ProfileRepository(database).findByEmail(email);
+    expect(profile).toBeDefined();
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/profile',
+      headers: {
+        origin: PUBLIC_URL,
+        cookie: cookieHeader(cookies),
+        'x-csrf-token': csrfToken,
+        'content-type': 'application/json',
+      },
+      payload: {},
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'confirmation_required' });
+    expect(new ProfileRepository(database).findById(profile!.id)).toBeDefined();
+  });
+
+  it(
+    'deletes every row for the profile (hall records/state, active run, sessions, login tokens, ' +
+      'the profile itself), clears the cookie, and a subsequent session check is 401',
+    async () => {
+      const email = 'delete-full@example.com';
+      const sessionCookies = await verifyAndGetCookies(app, database, email);
+      const profiles = new ProfileRepository(database);
+      const profile = profiles.findByEmail(email);
+      expect(profile).toBeDefined();
+      const profileId = profile!.id;
+
+      const hallRepo = new ServerRunRecordRepository({ database, profileId });
+      hallRepo.appendRecord(fixtureHallRecord('record.dddddddd00000000.dddddddddddddddd'));
+      hallRepo.appendRecord(fixtureHallRecord('record.eeeeeeee00000000.eeeeeeeeeeeeeeee'));
+      hallRepo.setUnlocks(['class.warden']);
+
+      const activeRuns = new ActiveRunRepository(database);
+      activeRuns.upsert({
+        profileId,
+        runBlob: '{}',
+        revision: 1,
+        contentHash: 'a'.repeat(64),
+        updatedAt: new Date().toISOString(),
+      });
+
+      expect(rowCount('hall_records', 'profile_id', profileId)).toBe(2);
+      expect(rowCount('hall_state', 'profile_id', profileId)).toBe(1);
+      expect(rowCount('active_runs', 'profile_id', profileId)).toBe(1);
+      expect(rowCount('sessions', 'profile_id', profileId)).toBeGreaterThan(0);
+      expect(rowCount('login_tokens', 'normalized_email', email)).toBeGreaterThan(0);
+
+      const { csrfToken, cookies } = await getCsrfToken(app, sessionCookies);
+      const response = await app.inject({
+        method: 'DELETE',
+        url: '/api/profile',
+        headers: {
+          origin: PUBLIC_URL,
+          cookie: cookieHeader(cookies),
+          'x-csrf-token': csrfToken,
+          'content-type': 'application/json',
+        },
+        payload: { confirm: true },
+      });
+      expect(response.statusCode).toBe(204);
+      expect(String(response.headers['set-cookie'])).toContain('wd_session=;');
+
+      expect(rowCount('hall_records', 'profile_id', profileId)).toBe(0);
+      expect(rowCount('hall_state', 'profile_id', profileId)).toBe(0);
+      expect(rowCount('active_runs', 'profile_id', profileId)).toBe(0);
+      expect(rowCount('sessions', 'profile_id', profileId)).toBe(0);
+      expect(rowCount('login_tokens', 'normalized_email', email)).toBe(0);
+      expect(profiles.findById(profileId)).toBeUndefined();
+
+      const sessionResponse = await app.inject({
+        method: 'GET',
+        url: '/api/auth/session',
+        headers: { cookie: cookieHeader(cookies) },
+      });
+      expect(sessionResponse.statusCode).toBe(401);
+    },
+  );
+
+  it('accepts confirm: "delete" as well as confirm: true', async () => {
+    const email = 'delete-string-confirm@example.com';
+    const sessionCookies = await verifyAndGetCookies(app, database, email);
+    const { csrfToken, cookies } = await getCsrfToken(app, sessionCookies);
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/profile',
+      headers: {
+        origin: PUBLIC_URL,
+        cookie: cookieHeader(cookies),
+        'x-csrf-token': csrfToken,
+        'content-type': 'application/json',
+      },
+      payload: { confirm: 'delete' },
+    });
+    expect(response.statusCode).toBe(204);
   });
 });

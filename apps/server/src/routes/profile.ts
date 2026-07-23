@@ -3,7 +3,14 @@ import type Database from 'better-sqlite3';
 import { emptyRunMetrics, type LifetimeState } from '@woven-deep/engine';
 import type { AuthBundle } from './auth.js';
 import { ServerRunRecordRepository } from '../db/hall-repository.js';
-import { requireOrigin, requireSession, requireCsrf } from '../auth/http-guards.js';
+import { ProfileRepository } from '../db/profile-repository.js';
+import {
+  requireOrigin,
+  requireSession,
+  requireCsrf,
+  readSessionToken,
+  SESSION_COOKIE_NAME,
+} from '../auth/http-guards.js';
 
 /** Matches `auth.ts`'s `EMPTY_LIFETIME`: the zeroed `LifetimeState` a profile with no
  * `hall_state` row (or no database at all, in isolated profile-route tests) gets from
@@ -99,6 +106,43 @@ export function registerProfileRoutes(
       }
 
       reply.send({ ok: true });
+    },
+  );
+
+  // A destructive, permanent state change -- gated identically to the settings write (auth +
+  // origin + CSRF) plus an explicit confirmation in the body, since there is no undo.
+  app.delete(
+    '/api/profile',
+    { preHandler: [originPreHandler, sessionPreHandler, csrfPreHandler] },
+    async (request, reply) => {
+      const profileId = request.profileId;
+      if (profileId === undefined) {
+        return;
+      }
+
+      const body = request.body as { confirm?: unknown } | undefined;
+      const confirmed = body?.confirm === true || body?.confirm === 'delete';
+      if (!confirmed) {
+        reply.code(400).send({ error: 'confirmation_required' });
+        return;
+      }
+
+      // Deleting the profile's `sessions` rows (inside the transaction below) already
+      // invalidates every session for it -- `SessionService.authenticate` re-reads both tables
+      // on every request. This explicit revoke of the CURRENT token is defense-in-depth for the
+      // rare case `database` is unset (isolated tests with no db wired into this route), where
+      // the cascade delete below doesn't run at all.
+      const token = readSessionToken(request);
+      if (token) {
+        auth.session.revoke(token);
+      }
+
+      if (database) {
+        new ProfileRepository(database).delete(profileId);
+      }
+
+      reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
+      reply.code(204).send();
     },
   );
 }

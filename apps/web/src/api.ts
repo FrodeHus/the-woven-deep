@@ -75,6 +75,25 @@ export async function logout(csrfToken: string, fetcher: typeof fetch = fetch): 
   });
 }
 
+/** Permanently deletes the signed-in profile and every row that belongs to it (Hall records,
+ * lifetime totals, unlocks, achievements, settings, the active run) -- `DELETE /api/profile`,
+ * gated server-side on the same auth+origin+CSRF trio as every other state-changing profile
+ * route, plus an explicit `confirm` flag since there is no undo. */
+export async function deleteAccount(
+  csrfToken: string,
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  await fetcher('/api/profile', {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: {
+      'content-type': 'application/json',
+      'x-csrf-token': csrfToken,
+    },
+    body: JSON.stringify({ confirm: true }),
+  });
+}
+
 export async function fetchProfileSettings(
   fetcher: typeof fetch = fetch,
 ): Promise<{ settingsJson: string | null; settingsVersion: number }> {

@@ -32,6 +32,9 @@ export interface OverlayHostProps {
    * `onClearGuestSession`. See `PlayScreenProps.onSignOut`'s doc comment for why this is the one
    * reachable "sign out" while a `ProfileSession` run is live. */
   readonly onSignOut?: (() => void) | undefined;
+  /** Permanently deletes the current profile -- forwarded to the settings overlay body alongside
+   * `onSignOut`. See `SettingsOverlayProps.onDeleteAccount`'s doc comment. */
+  readonly onDeleteAccount?: (() => void) | undefined;
   /** Explicit override for the codex body's sightings, taking precedence over the live session's
    * `snapshot.sightings` -- the title screen has no session (see `App.tsx`'s TITLE-screen
    * `OverlayHost` call site), so it passes the guest's persisted cross-run sighting cache
@@ -59,6 +62,7 @@ export function OverlayHost({
   records,
   onClearGuestSession,
   onSignOut,
+  onDeleteAccount,
   sightings,
   account,
 }: Readonly<OverlayHostProps>): JSX.Element | null {
@@ -74,6 +78,7 @@ export function OverlayHost({
     records,
     onClearGuestSession,
     onSignOut,
+    onDeleteAccount,
     account,
     snapshot: sessionCtx?.snapshot,
     sightings: sightings ?? sessionCtx?.snapshot.sightings,
@@ -113,6 +118,7 @@ interface RenderBodyContext {
   readonly records: readonly StoredHallRecord[] | undefined;
   readonly onClearGuestSession: (() => void) | undefined;
   readonly onSignOut: (() => void) | undefined;
+  readonly onDeleteAccount: (() => void) | undefined;
   readonly account: AccountState | undefined;
   readonly snapshot: SessionSnapshot | undefined;
   readonly sightings: Sightings | undefined;
@@ -147,6 +153,7 @@ function renderBody(overlay: OverlayId, ctx: RenderBodyContext): JSX.Element {
         <SettingsOverlay
           onClearGuestSession={ctx.onClearGuestSession}
           onSignOut={ctx.onSignOut}
+          onDeleteAccount={ctx.onDeleteAccount}
           account={ctx.account}
         />
       );
