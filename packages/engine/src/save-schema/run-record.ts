@@ -1499,6 +1499,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                                     entry.type === 'condition.applied') &&
                                     entry.sourceActorId === run.hero.actorId) ||
                                   (entry.type === 'hero.recalled' &&
+                                    entry.actorId === run.hero.actorId) ||
+                                  (entry.type === 'spell.cast' &&
                                     entry.actorId === run.hero.actorId),
                               )
                             : recordValue.command.type === 'throw-item'
@@ -1820,9 +1822,11 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
             eventValue.type === 'actor.healed' ||
             eventValue.type === 'condition.applied') &&
             eventValue.sourceActorId === run.hero.actorId) ||
-          (eventValue.type === 'hero.recalled' && eventValue.actorId === run.hero.actorId))
+          (eventValue.type === 'hero.recalled' && eventValue.actorId === run.hero.actorId) ||
+          (eventValue.type === 'spell.cast' && eventValue.actorId === run.hero.actorId))
       ) {
-        // The spell's authored effects (damage/heal/condition) or a recall determine the outcome.
+        // The spell's authored effects (damage/heal/condition), a recall, or the cast marker
+        // itself (guaranteed on every cast, including zero-target AoE) determine the outcome.
       } else fail(`${path}.events`, 'applied command and event are inconsistent');
     }
     if (

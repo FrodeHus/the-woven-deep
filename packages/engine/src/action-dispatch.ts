@@ -492,6 +492,12 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
     // The Weave powers the casting before the spell's effects resolve: the cost is subtracted from
     // the caster first, then the effects apply against that post-spend state.
     let next = withActor(state, { ...actor, weave: actor.weave - action.weaveCost });
+    events.push({
+      type: 'spell.cast',
+      eventId,
+      actorId: actor.actorId,
+      spellId: action.spellId,
+    });
     if (definition.aoe !== undefined) {
       if (action.aimTarget === undefined)
         throw new Error('internal invariant: AoE cast action missing aimTarget');

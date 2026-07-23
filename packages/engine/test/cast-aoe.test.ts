@@ -2,7 +2,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import { resolve } from 'node:path';
 import type { CompiledContentPack, SpellContentEntry } from '@woven-deep/content';
-import { createGameplayDemoRun, resolveCommand, type ActiveRun } from '../src/index.js';
+import {
+  createGameplayDemoRun,
+  decodeActiveRun,
+  encodeActiveRun,
+  resolveCommand,
+  type ActiveRun,
+} from '../src/index.js';
 
 let pack: CompiledContentPack;
 let burstPack: CompiledContentPack;
@@ -68,7 +74,102 @@ function runWithClusteredRats(): { run: ActiveRun; aim: { x: number; y: number }
   };
 }
 
+/** The unmodified gameplay demo run (cave rat left at its default, untouched position, far from
+ * the aim cell) with caster aptitude granted -- a legal AoE cast aimed at empty, walkable ground,
+ * since nothing else stands in the radius-1 burst centered there. (Unlike `runWithClusteredRats`'s
+ * `hero.x + 1` cell, which is a wall the rat is placed on for melee-adjacency only, `hero.x - 1`
+ * here is genuinely walkable terrain so the round-tripped save stays valid.) */
+function runWithEmptyAim(): { run: ActiveRun; aim: { x: number; y: number } } {
+  const { run } = createGameplayDemoRun(pack);
+  const hero = run.actors.find((actor) => actor.playerControlled)!;
+  const aim = { x: hero.x - 1, y: hero.y };
+  return {
+    run: { ...run, hero: { ...run.hero, classTags: ['loomcaller'] } },
+    aim,
+  };
+}
+
 describe('AoE cast', () => {
+  it('applies, emits spell.cast, and round-trips a zero-target burst aimed at empty ground', () => {
+    const { run, aim } = runWithEmptyAim();
+    const hero = run.actors.find((actor) => actor.playerControlled)!;
+
+    const result = resolveCommand(
+      run,
+      {
+        type: 'cast',
+        commandId: 'command.cast-burst-empty',
+        expectedRevision: run.revision,
+        spellId: BURST_SPELL_ID,
+        target: aim,
+      },
+      { content: burstPack },
+    );
+
+    expect(result.result.status).toBe('applied');
+    const heroAfter = result.state.actors.find((actor) => actor.playerControlled)!;
+    // Weave is spent even though the burst hit nothing -- this is the latent save-corruption gap:
+    // the cast applies with no attack.hit/actor.damaged/actor.healed/condition.applied/hero.recalled
+    // event, so the applied-command matcher needs `spell.cast` to find anything at all.
+    expect(heroAfter.weave).toBe(hero.weave - 3);
+    const commandEvents = result.state.recentCommands.at(-1)?.events ?? [];
+    expect(commandEvents).toContainEqual(
+      expect.objectContaining({
+        type: 'spell.cast',
+        actorId: hero.actorId,
+        spellId: BURST_SPELL_ID,
+      }),
+    );
+
+    expect(result.state.recentCommands).toHaveLength(1);
+    expect(() => decodeActiveRun(encodeActiveRun(result.state))).not.toThrow();
+    const roundTripped = decodeActiveRun(encodeActiveRun(result.state));
+    expect(roundTripped.recentCommands).toHaveLength(1);
+  });
+
+  it('applies, emits spell.cast, and round-trips a real single-target cast (spell.ember-bolt)', () => {
+    const { run } = createGameplayDemoRun(pack);
+    const hero = run.actors.find((actor) => actor.playerControlled)!;
+    // `hero.x - 1` (unlike `hero.x + 1`, a wall) is genuinely walkable terrain, so the target rat
+    // placed there keeps the round-tripped save valid.
+    const target = { x: hero.x - 1, y: hero.y };
+    const actors = run.actors.map((actor) =>
+      actor.contentId === 'monster.cave-rat' ? { ...actor, ...target } : actor,
+    );
+    const casterRun: ActiveRun = {
+      ...run,
+      actors,
+      hero: { ...run.hero, classTags: ['loomcaller'] },
+    };
+
+    const result = resolveCommand(
+      casterRun,
+      {
+        type: 'cast',
+        commandId: 'command.cast-single-target',
+        expectedRevision: casterRun.revision,
+        spellId: 'spell.ember-bolt',
+        target,
+      },
+      { content: pack },
+    );
+
+    expect(result.result.status).toBe('applied');
+    const commandEvents = result.state.recentCommands.at(-1)?.events ?? [];
+    expect(commandEvents).toContainEqual(
+      expect.objectContaining({
+        type: 'spell.cast',
+        actorId: hero.actorId,
+        spellId: 'spell.ember-bolt',
+      }),
+    );
+
+    expect(result.state.recentCommands).toHaveLength(1);
+    expect(() => decodeActiveRun(encodeActiveRun(result.state))).not.toThrow();
+    const roundTripped = decodeActiveRun(encodeActiveRun(result.state));
+    expect(roundTripped.recentCommands).toHaveLength(1);
+  });
+
   it('burst hits every actor in radius and excludes the caster, deterministically', () => {
     const { run, aim } = runWithClusteredRats();
     const hero = run.actors.find((actor) => actor.playerControlled)!;
