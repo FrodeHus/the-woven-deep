@@ -91,6 +91,31 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    id: 4,
+    name: 'hall',
+    up: (database) => {
+      database.exec(`
+        create table if not exists hall_records (
+          profile_id text not null references profiles(id) on delete cascade,
+          record_id text not null,
+          seq integer not null,
+          record_json text not null,
+          achieved_at text not null,
+          primary key(profile_id, record_id)
+        ) strict;
+
+        create table if not exists hall_state (
+          profile_id text primary key references profiles(id) on delete cascade,
+          lifetime_json text not null,
+          heart_json text,
+          unlocks_json text not null,
+          achievements_json text not null,
+          updated_at text not null
+        ) strict;
+      `);
+    },
+  },
 ];
 
 /**

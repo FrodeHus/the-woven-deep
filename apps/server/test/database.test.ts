@@ -235,6 +235,129 @@ describe('migration 3 (active-runs)', () => {
   });
 });
 
+describe('migration 4 (hall)', () => {
+  it('creates strict, cascading hall_records and hall_state tables on a fresh database', () => {
+    const database = new Database(':memory:');
+
+    try {
+      runMigrations(database);
+
+      expect(database.pragma('user_version', { simple: true })).toBe(MIGRATIONS.length);
+      expect(
+        database.prepare(`select strict from pragma_table_list where name = 'hall_records'`).get(),
+      ).toEqual({ strict: 1 });
+      expect(
+        database.prepare(`select strict from pragma_table_list where name = 'hall_state'`).get(),
+      ).toEqual({ strict: 1 });
+      expect(
+        (database.pragma('table_info(hall_records)') as Array<{ name: string }>).map(
+          ({ name }) => name,
+        ),
+      ).toEqual(['profile_id', 'record_id', 'seq', 'record_json', 'achieved_at']);
+      expect(
+        (database.pragma('table_info(hall_state)') as Array<{ name: string }>).map(
+          ({ name }) => name,
+        ),
+      ).toEqual([
+        'profile_id',
+        'lifetime_json',
+        'heart_json',
+        'unlocks_json',
+        'achievements_json',
+        'updated_at',
+      ]);
+    } finally {
+      database.close();
+    }
+  });
+
+  it('cascades deletes from profiles into hall_records and hall_state', () => {
+    const database = new Database(':memory:');
+
+    try {
+      runMigrations(database);
+      database.pragma('foreign_keys = ON');
+
+      database
+        .prepare(
+          `insert into profiles(id, normalized_email, progression_json, settings_version, created_at, updated_at)
+           values ('p1', 'a@example.com', '{}', 0, 't', 't')`,
+        )
+        .run();
+      database
+        .prepare(
+          `insert into hall_records(profile_id, record_id, seq, record_json, achieved_at)
+           values ('p1', 'record.1', 1, '{}', 't')`,
+        )
+        .run();
+      database
+        .prepare(
+          `insert into hall_state(profile_id, lifetime_json, heart_json, unlocks_json, achievements_json, updated_at)
+           values ('p1', '{}', null, '[]', '[]', 't')`,
+        )
+        .run();
+
+      database.prepare(`delete from profiles where id = 'p1'`).run();
+
+      expect(database.prepare('select count(*) as count from hall_records').get()).toEqual({
+        count: 0,
+      });
+      expect(database.prepare('select count(*) as count from hall_state').get()).toEqual({
+        count: 0,
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  it('rejects a hall_records row referencing a missing profile', () => {
+    const database = new Database(':memory:');
+
+    try {
+      runMigrations(database);
+      database.pragma('foreign_keys = ON');
+
+      expect(() =>
+        database
+          .prepare(
+            `insert into hall_records(profile_id, record_id, seq, record_json, achieved_at)
+             values ('no-such-profile', 'record.1', 1, '{}', 't')`,
+          )
+          .run(),
+      ).toThrow();
+    } finally {
+      database.close();
+    }
+  });
+
+  it('applies cleanly as a forward migration from a 6B database at user_version 3', () => {
+    const database = new Database(':memory:');
+
+    try {
+      const sixBMigrations = MIGRATIONS.filter((migration) => migration.id <= 3);
+      for (const migration of sixBMigrations) {
+        database.transaction(() => {
+          migration.up(database);
+          database.pragma(`user_version = ${migration.id}`);
+        })();
+      }
+      expect(database.pragma('user_version', { simple: true })).toBe(3);
+
+      runMigrations(database);
+
+      expect(database.pragma('user_version', { simple: true })).toBe(MIGRATIONS.length);
+      expect(
+        database.prepare(`select strict from pragma_table_list where name = 'hall_records'`).get(),
+      ).toEqual({ strict: 1 });
+      expect(
+        database.prepare(`select strict from pragma_table_list where name = 'hall_state'`).get(),
+      ).toEqual({ strict: 1 });
+    } finally {
+      database.close();
+    }
+  });
+});
+
 describe('assertMigrationsWellFormed', () => {
   it('accepts a contiguous, ascending-from-1 migration list', () => {
     const wellFormed: Migration[] = [
