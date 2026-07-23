@@ -440,6 +440,7 @@ export interface CastableSpellView {
   readonly weaveCost: number;
   readonly range: number;
   readonly targetingId: string;
+  readonly aoe?: Readonly<{ shape: 'burst' | 'line' | 'cone'; radius: number }>;
 }
 
 export interface GameplayProjection {
@@ -733,6 +734,9 @@ function projectHeroView(
       weaveCost: entry.weaveCost,
       range: entry.range,
       targetingId: entry.targetingId,
+      ...(entry.aoe === undefined
+        ? {}
+        : { aoe: { shape: entry.aoe.shape, radius: entry.aoe.radius } }),
     }));
   const backpack = state.items
     .filter((item) => item.location.type === 'backpack' && item.location.actorId === hero.actorId)
