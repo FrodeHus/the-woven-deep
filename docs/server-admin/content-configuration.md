@@ -888,6 +888,8 @@ Unregistered behavior IDs and extra parameters fail compilation.
 - `target.self`: the source actor.
 - `target.actor`: one visible actor in range.
 - `target.line`: a visible unobstructed line ending at a cell.
+- `target.burst`: a filled Chebyshev-radius area around a visible aim cell in range.
+- `target.cone`: a wedge of `aoe.radius` depth from the caster toward a visible aim cell.
 - `target.cell`: one visible cell in range.
 
 Visibility includes field of view and nonzero illumination.

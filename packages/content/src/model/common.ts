@@ -86,7 +86,14 @@ export const ITEM_CATEGORIES = [
 export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
 export const ITEM_RARITIES = ['common', 'uncommon', 'rare', 'legendary'] as const;
 export type ItemRarity = (typeof ITEM_RARITIES)[number];
-export const TARGETING_IDS = ['target.self', 'target.actor', 'target.line', 'target.cell'] as const;
+export const TARGETING_IDS = [
+  'target.self',
+  'target.actor',
+  'target.line',
+  'target.burst',
+  'target.cone',
+  'target.cell',
+] as const;
 export type TargetingId = (typeof TARGETING_IDS)[number];
 
 export interface DiceDefinition {
