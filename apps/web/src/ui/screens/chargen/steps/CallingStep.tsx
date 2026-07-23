@@ -3,13 +3,22 @@ import { FacetedOptionList } from '../FacetedOptionList.js';
 import { classEntries } from '../../../../session/pack-queries.js';
 import type { StepProps } from './step-content.js';
 
-export function CallingStep({ state, pack, dispatch }: StepProps): JSX.Element {
-  const entries = classEntries(pack).map((entry) => ({
-    ...entry,
-    glyph: entry.silhouetteGlyph,
-    locked: !entry.playable,
-    ...(entry.unlockHint ? { lockHint: entry.unlockHint } : {}),
-  }));
+export function CallingStep({
+  state,
+  pack,
+  dispatch,
+  unlockedClassIds = [],
+}: StepProps): JSX.Element {
+  const entries = classEntries(pack).map((entry) => {
+    const selectable = entry.playable || unlockedClassIds.includes(entry.id);
+    return {
+      ...entry,
+      glyph: entry.silhouetteGlyph,
+      locked: !selectable,
+      ...(!selectable && entry.unlockHint ? { lockHint: entry.unlockHint } : {}),
+      selectable,
+    };
+  });
 
   return (
     <section aria-label="Calling" className="flex flex-col gap-3 font-mono">
@@ -19,7 +28,7 @@ export function CallingStep({ state, pack, dispatch }: StepProps): JSX.Element {
         marker="single"
         selected={(entry) => state.classId === entry.id}
         onSelect={(entry) => {
-          if (entry.playable) dispatch({ type: 'choose-class', classId: entry.id });
+          if (entry.selectable) dispatch({ type: 'choose-class', classId: entry.id });
         }}
       />
     </section>

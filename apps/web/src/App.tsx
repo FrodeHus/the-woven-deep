@@ -608,6 +608,7 @@ export function App({
           seed={seed}
           settings={settings}
           onChangeSettings={handleSettingsChange}
+          unlockedClassIds={account.unlockedClassIds}
           onConfirm={(choices: HeroChoices, glyph: string) => {
             let hero: ReturnType<typeof heroFromChoices>;
             try {

@@ -5,6 +5,7 @@ import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   createNewRun,
   DEFAULT_GUEST_HERO,
+  finalizeRunRecordsDemo,
   FINAL_CHAMBER_DEPTH,
   isHeartBossActive,
   projectGameplayState,
@@ -342,7 +343,7 @@ describe('ProfileSession', () => {
     expect(session.getSnapshot().houseOpen).toBe(false);
   });
 
-  it('finalizeConcludedRun stub returns the server-projected conclusion without writing a repository', async () => {
+  it('finalizeConcludedRun throws when the run has not concluded', async () => {
     const { socket, connectPromise } = harness();
     const run = freshRun();
     socket().emit(HELLO);
@@ -352,5 +353,46 @@ describe('ProfileSession', () => {
     expect(() => session.finalizeConcludedRun({} as never, {} as never)).toThrow(
       /requires a concluded run/,
     );
+  });
+
+  it('finalizeConcludedRun surfaces the real, non-null score/heirloom/achievements the server already finalized', async () => {
+    const { socket, connectPromise } = harness();
+    const fresh = freshRun();
+    const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+    const dead: ActiveRun = {
+      ...fresh,
+      actors: fresh.actors.map((actor) =>
+        actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+      ),
+      conclusion: {
+        completionType: 'died',
+        cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
+        concludedAtRevision: fresh.revision,
+        finalized: false,
+      },
+    };
+    // Mirrors what the server does before ever sending a concluded run's `state` reply: finalize
+    // it into a `HallRecord` (so `score`/`heirloom` are real, not the `record: null` this suite's
+    // `snapshotOf` helper otherwise defaults to) and project the real conclusion from that record.
+    const finalized = finalizeRunRecordsDemo(dead, pack);
+    const conclusion = projectRunConclusion({
+      run: finalized.state,
+      record: finalized.record,
+      achievements: finalized.deltas.achievementGrants,
+    });
+
+    socket().emit(HELLO);
+    socket().emit({
+      type: 'state',
+      snapshot: { ...snapshotOf(finalized.state), conclusion },
+    });
+    const session = await connectPromise;
+
+    const projection = session.finalizeConcludedRun({} as never, {} as never);
+    expect(projection.finalized).toBe(true);
+    expect(projection.score).not.toBeNull();
+    expect(projection.heirloom).not.toBeNull();
+    expect(projection.score).toEqual(finalized.record.score);
+    expect(projection.heirloom).toEqual(finalized.record.heirloom);
   });
 });

@@ -305,15 +305,13 @@ export class ProfileSession implements RunSession {
   }
 
   /**
-   * Stubbed for 6B: the Hall of Records stays guest-scoped (a non-goal of this milestone, per the
-   * plan), so this never writes a server-side Hall record. It re-exposes the same cheap,
-   * `record: null`/`achievements: []` conclusion projection the server already computed (see
-   * `ServerPlaySession.snapshot`'s `conclusion` field) -- `finalized` is therefore always `false`
-   * here, identical to `GuestSession`'s in-progress `SessionSnapshot.conclusion`. `repository` and
-   * `enrichment` are unused (nothing is appended anywhere).
-   *
-   * TODO(6C): server-authoritative Hall -- finalize the profile's run server-side (a dedicated
-   * `/ws/play` message or HTTP route) and return the REAL score/heirloom/achievement projection.
+   * Returns this session's conclusion projection, which the server has already computed
+   * authoritatively (see `ServerPlaySession.snapshot`'s `conclusion` field): the server owns the
+   * profile's Hall of Records, so by the time this run has concluded, `this.serverSnapshot.conclusion`
+   * already carries the real score, heirloom, and achievement grants -- there is nothing left for
+   * the client to finalize or persist. `_repository` and `_enrichment` are unused here; they exist
+   * only for signature parity with `RunSession`/`GuestSession`, where they are load-bearing because
+   * `GuestSession` finalizes into and reads back from a client-local Hall.
    */
   finalizeConcludedRun(
     _repository: RunRecordRepository,
