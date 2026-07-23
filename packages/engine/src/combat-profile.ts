@@ -1,5 +1,6 @@
 import type {
   CompiledContentPack,
+  ConditionContentEntry,
   DamageType,
   MonsterContentEntry,
   NpcContentEntry,
@@ -46,6 +47,43 @@ function npcDefinition(
 }
 
 /**
+ * Reads a condition's content definition directly via `entryById` (not `conditions.ts`'s
+ * `conditionDefinition`) to avoid pulling `combat-profile.ts` into the
+ * `conditions.ts -> attributes.ts -> stats.ts -> combat-profile.ts` import cycle.
+ */
+function conditionEntry(
+  content: CompiledContentPack,
+  conditionId: ActorState['conditions'][number]['conditionId'],
+): ConditionContentEntry | undefined {
+  const entry = entryById(content, conditionId);
+  return entry?.kind === 'condition' ? entry : undefined;
+}
+
+/**
+ * Sums the armor/resistance contributed by an actor's active timed/permanent conditions whose
+ * content definition carries a `mitigation` block (e.g. a self-cast ward/shield). Conditions with
+ * no `mitigation` block (every condition shipped today) contribute nothing, so this is a no-op
+ * for all existing content.
+ */
+function conditionMitigationContribution(
+  actor: ActorState,
+  content: CompiledContentPack,
+  damageType: DamageType,
+): Readonly<{ armor: number; resistance: number }> {
+  let armor = 0;
+  let resistance = 0;
+  for (const condition of actor.conditions) {
+    const definition = conditionEntry(content, condition.conditionId);
+    const mitigation = definition?.mitigation;
+    if (!mitigation) continue;
+    if (mitigation.armorPerStack) armor += mitigation.armorPerStack * condition.stacks;
+    const resistancePerStack = mitigation.resistancePerStack?.[damageType];
+    if (resistancePerStack) resistance += resistancePerStack * condition.stacks;
+  }
+  return { armor, resistance };
+}
+
+/**
  * Damage-type-aware mitigation for a single actor, independent of the melee/ranged combat
  * profile above (which only ever reports the `physical` resistance). Used by non-attack damage
  * sources such as condition tick effects (burn) that can carry any `DamageType`.
@@ -56,16 +94,16 @@ export function damageMitigation(
   damageType: DamageType,
 ): Readonly<{ armor: number; resistance: number; immune: boolean }> {
   const monster = monsterDefinition(content, actor);
-  if (monster) {
-    const resistance = monster.resistances[damageType];
-    return { armor: monster.armor, resistance, immune: resistance >= 100 };
-  }
-  const npc = npcDefinition(content, actor);
-  if (npc) {
-    const resistance = npc.resistances[damageType];
-    return { armor: npc.armor, resistance, immune: resistance >= 100 };
-  }
-  return { armor: 0, resistance: 0, immune: false };
+  const npc = monster === undefined ? npcDefinition(content, actor) : undefined;
+  const base = monster
+    ? { armor: monster.armor, resistance: monster.resistances[damageType] }
+    : npc
+      ? { armor: npc.armor, resistance: npc.resistances[damageType] }
+      : { armor: 0, resistance: 0 };
+  const conditionContribution = conditionMitigationContribution(actor, content, damageType);
+  const armor = base.armor + conditionContribution.armor;
+  const resistance = base.resistance + conditionContribution.resistance;
+  return { armor, resistance, immune: resistance >= 100 };
 }
 
 type PopulationCombatModifierResolver = (
@@ -111,31 +149,42 @@ export function profile(
       }),
     ),
   );
+  // Direct attacks (melee/ranged) are hardcoded 'physical' (see `combat()` below), so only the
+  // physical condition contribution applies here; elemental wards only matter to the tick/effect
+  // path via `damageMitigation`. No existing condition carries a `mitigation` block, so this is a
+  // no-op for all current content.
+  const conditionContribution = conditionMitigationContribution(actor, content, 'physical');
   const npc = monster === undefined ? npcDefinition(content, actor) : undefined;
-  if (npc)
+  if (npc) {
+    const armor = npc.armor + conditionContribution.armor;
+    const resistance = npc.resistances.physical + conditionContribution.resistance;
     return applyPopulationCombatModifiers(
       {
         accuracy: npc.accuracy,
         defense: npc.defense,
         damage: npc.damage,
-        armor: npc.armor,
-        resistance: npc.resistances.physical,
-        immune: npc.resistances.physical === 100,
+        armor,
+        resistance,
+        immune: resistance >= 100,
       },
       populationModifiers,
     );
-  if (monster)
+  }
+  if (monster) {
+    const armor = monster.armor + conditionContribution.armor;
+    const resistance = monster.resistances.physical + conditionContribution.resistance;
     return applyPopulationCombatModifiers(
       {
         accuracy: monster.accuracy,
         defense: monster.defense,
         damage: monster.damage,
-        armor: monster.armor,
-        resistance: monster.resistances.physical,
-        immune: monster.resistances.physical === 100,
+        armor,
+        resistance,
+        immune: resistance >= 100,
       },
       populationModifiers,
     );
+  }
   const stats = deriveRunActorStats({
     state: { actors, items, survival: survival ?? { hungerStage: 'sated' }, hero },
     content,
@@ -151,18 +200,20 @@ export function profile(
     weapon?.damage && weapon.ammunitionTag === null
       ? { ...weapon.damage, bonus: weapon.damage.bonus + stats.meleeDamageBonus }
       : { count: 1, sides: 4, bonus: stats.meleeDamageBonus };
-  const armor = equipped.reduce(
+  const equippedArmor = equipped.reduce(
     (total, item) => total + (requireItem(content, item.contentId).combat?.armor ?? 0),
     0,
   );
+  const armor = equippedArmor + conditionContribution.armor;
+  const resistance = conditionContribution.resistance;
   return applyPopulationCombatModifiers(
     {
       accuracy: stats.meleeAccuracy,
       defense: stats.defense,
       damage,
       armor,
-      resistance: 0,
-      immune: false,
+      resistance,
+      immune: resistance >= 100,
     },
     populationModifiers,
   );
