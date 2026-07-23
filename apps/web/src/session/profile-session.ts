@@ -3,13 +3,17 @@ import {
   FINAL_CHAMBER_DEPTH,
   tabletFragmentIds,
   type FinalChamberChoiceCommand,
-  type GameplayProjection,
   type HallRecordEnrichment,
-  type PublicDecision,
   type PublicEvent,
   type RunConclusionProjection,
   type RunRecordRepository,
 } from '@woven-deep/engine';
+import type {
+  ClientMessage,
+  PlayerIntent,
+  ServerMessage,
+  ServerRunSnapshot,
+} from '@woven-deep/session-core';
 import {
   accumulateSightings,
   loadSightings,
@@ -19,7 +23,6 @@ import {
 } from './codex.js';
 import { foldEventsIntoLog, LOG_CAPACITY, type LogLine } from './event-log.js';
 import type { PendingFinalChamberChoice, SessionNotice, SessionSnapshot } from './guest-session.js';
-import type { PlayerIntent } from './intents.js';
 import {
   dismissHint,
   loadOnboarding,
@@ -32,68 +35,9 @@ import type { RunSession } from './run-session.js';
 import { classifyStorageFailure, type SessionStorageLike } from './storage.js';
 import { WsClient, type WebSocketFactory } from './ws-client.js';
 
-/**
- * The run-authoritative snapshot the server sends after every applied command --
- * STRUCTURALLY mirrors `apps/server/src/play/play-session.ts`'s `ServerRunSnapshot` exactly.
- * There is no shared protocol package yet (per the plan's File Structure, `ws-protocol.ts` lives
- * only in `apps/server`, and `apps/web` has no dependency on `@woven-deep/server`), so this type
- * is duplicated here rather than imported -- the wire is untyped JSON either way. Keep this in
- * sync with the server's `ServerRunSnapshot` by hand; a genuine drift is exactly what
- * `PROTOCOL_VERSION`/content-hash mismatches (surfaced as an `error` message) are for.
- */
-export interface ServerRunSnapshot {
-  readonly projection: GameplayProjection;
-  readonly lastEvents: readonly PublicEvent[];
-  readonly revision: number;
-  readonly pendingDecision: PublicDecision | null;
-  readonly conclusion: RunConclusionProjection | null;
-  readonly houseOpen: boolean;
-  readonly heroClassTags: readonly string[];
-  /** Authoritative, perception-free: whether the Weakened Heart boss is present and alive on the
-   * server's raw run state (`isHeartBossActive`). Must be used instead of re-deriving boss
-   * presence from the redacted projection's visible actors -- see `computePendingFinalChamberChoice`. */
-  readonly bossActive: boolean;
-}
-
-/** Client -> server messages, mirroring `apps/server/src/ws-protocol.ts`'s `ClientMessage`. */
-type ClientMessage =
-  | {
-      readonly type: 'command';
-      readonly commandId: string;
-      readonly expectedRevision: number;
-      readonly intent: PlayerIntent;
-    }
-  | {
-      readonly type: 'answer-decision';
-      readonly commandId: string;
-      readonly expectedRevision: number;
-      readonly confirmed: boolean;
-    }
-  | {
-      readonly type: 'final-chamber-choice';
-      readonly commandId: string;
-      readonly expectedRevision: number;
-      readonly choice: FinalChamberChoiceCommand['choice'];
-    };
-
-/** Server -> client messages, mirroring `apps/server/src/ws-protocol.ts`'s `ServerMessage`. */
-export type ServerMessage =
-  | {
-      readonly type: 'hello';
-      readonly protocolVersion: number;
-      readonly contentHash: string;
-      readonly gameVersion: string;
-      readonly saveSchemaVersion: number;
-    }
-  | { readonly type: 'state'; readonly snapshot: ServerRunSnapshot }
-  | { readonly type: 'rejected'; readonly reason: string; readonly snapshot: ServerRunSnapshot }
-  | {
-      readonly type: 'decision-required';
-      readonly decision: PublicDecision | null;
-      readonly snapshot: ServerRunSnapshot;
-    }
-  | { readonly type: 'error'; readonly code: string; readonly message: string }
-  | { readonly type: 'superseded' };
+/** Re-exported from `@woven-deep/session-core` (shared with `apps/server`) so existing local
+ * importers (tests) keep working unchanged. */
+export type { ServerMessage, ServerRunSnapshot };
 
 /** Width of the zero-padded counter component of a client-minted command id -- mirrors
  * `GuestSession`'s `COMMAND_SEQUENCE_WIDTH` (same rationale: a fixed, easy-to-scan shape). */
@@ -361,15 +305,13 @@ export class ProfileSession implements RunSession {
   }
 
   /**
-   * Stubbed for 6B: the Hall of Records stays guest-scoped (a non-goal of this milestone, per the
-   * plan), so this never writes a server-side Hall record. It re-exposes the same cheap,
-   * `record: null`/`achievements: []` conclusion projection the server already computed (see
-   * `ServerPlaySession.snapshot`'s `conclusion` field) -- `finalized` is therefore always `false`
-   * here, identical to `GuestSession`'s in-progress `SessionSnapshot.conclusion`. `repository` and
-   * `enrichment` are unused (nothing is appended anywhere).
-   *
-   * TODO(6C): server-authoritative Hall -- finalize the profile's run server-side (a dedicated
-   * `/ws/play` message or HTTP route) and return the REAL score/heirloom/achievement projection.
+   * Returns this session's conclusion projection, which the server has already computed
+   * authoritatively (see `ServerPlaySession.snapshot`'s `conclusion` field): the server owns the
+   * profile's Hall of Records, so by the time this run has concluded, `this.serverSnapshot.conclusion`
+   * already carries the real score, heirloom, and achievement grants -- there is nothing left for
+   * the client to finalize or persist. `_repository` and `_enrichment` are unused here; they exist
+   * only for signature parity with `RunSession`/`GuestSession`, where they are load-bearing because
+   * `GuestSession` finalizes into and reads back from a client-local Hall.
    */
   finalizeConcludedRun(
     _repository: RunRecordRepository,

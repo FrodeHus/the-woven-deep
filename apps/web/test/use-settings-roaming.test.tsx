@@ -1,15 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useSettingsRoaming } from '../src/ui/hooks/useSettingsRoaming.js';
-import type { AccountState } from '../src/session/account.js';
+import { GUEST_ACCOUNT, type AccountState } from '../src/session/account.js';
 import { DEFAULT_SETTINGS, SETTINGS_KEY, type Settings } from '../src/session/settings.js';
 import type { SessionStorageLike } from '../src/session/storage.js';
 
-const GUEST: AccountState = { status: 'guest', email: null, csrfToken: null };
+const GUEST: AccountState = GUEST_ACCOUNT;
 const SIGNED_IN: AccountState = {
+  ...GUEST_ACCOUNT,
   status: 'signed-in',
   email: 'player@example.com',
   csrfToken: 'tok',
+  unlockedClassIds: [],
 };
 
 afterEach(() => {

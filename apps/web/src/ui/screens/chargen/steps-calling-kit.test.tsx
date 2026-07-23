@@ -15,6 +15,7 @@ const SEED: Uint32State = [11, 22, 33, 44];
 
 const WAYFARER = 'class.wayfarer';
 const ARCHIVIST = 'class.archivist';
+const WARDEN = 'class.warden';
 
 beforeAll(async () => {
   pack = await compileContentDirectory({
@@ -46,6 +47,41 @@ describe('CallingStep', () => {
     await user.click(archivistOption);
     expect(dispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'choose-class', classId: ARCHIVIST }),
+    );
+  });
+
+  it('renders a content-locked class as selectable when its id is in unlockedClassIds, and dispatches choose-class on click', async () => {
+    const user = userEvent.setup();
+    const dispatch = vi.fn();
+    render(
+      <CallingStep
+        state={stubState()}
+        pack={pack}
+        dispatch={dispatch}
+        unlockedClassIds={[WARDEN]}
+      />,
+    );
+    const wardenOption = screen.getByRole('option', { name: /Warden/ });
+    expect(wardenOption).not.toHaveAttribute('aria-disabled', 'true');
+    expect(wardenOption.textContent).not.toMatch(/Survive to depth ten/);
+
+    await user.click(wardenOption);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'choose-class', classId: WARDEN });
+  });
+
+  it('keeps a content-locked class locked for guests (empty unlockedClassIds)', async () => {
+    const user = userEvent.setup();
+    const dispatch = vi.fn();
+    render(
+      <CallingStep state={stubState()} pack={pack} dispatch={dispatch} unlockedClassIds={[]} />,
+    );
+    const wardenOption = screen.getByRole('option', { name: /Warden/ });
+    expect(wardenOption).toHaveAttribute('aria-disabled', 'true');
+    expect(wardenOption.textContent).toMatch(/Survive to depth ten/);
+
+    await user.click(wardenOption);
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'choose-class', classId: WARDEN }),
     );
   });
 

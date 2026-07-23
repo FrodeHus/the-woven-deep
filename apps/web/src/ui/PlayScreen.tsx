@@ -22,6 +22,7 @@ import {
   ThreatPanel,
 } from './panels.js';
 import type { OverlayId } from './overlays/registry.js';
+import type { AccountState } from '../session/account.js';
 import { DecisionPrompt } from './overlays/DecisionPrompt.js';
 import { FinalChamberChoice } from './overlays/FinalChamberChoice.js';
 import { OverlayHost } from './overlays/OverlayHost.js';
@@ -65,6 +66,14 @@ export interface PlayScreenProps {
    * `/ws/play` connection from inside a run -- the title screen's own "Sign out" is unreachable
    * once play has started. */
   readonly onSignOut?: (() => void) | undefined;
+  /** Permanently deletes the current profile -- forwarded straight through to the settings overlay
+   * body, exactly like `onSignOut` (only ever provided for a signed-in `ProfileSession`). */
+  readonly onDeleteAccount?: (() => void) | undefined;
+  /** Forwarded straight through to the settings overlay body's "Lifetime & achievements" section --
+   * only ever provided for a signed-in `ProfileSession` run, exactly like `onSignOut`. Optional so
+   * every pre-existing caller/test keeps compiling unchanged (the section just doesn't render
+   * without it). */
+  readonly account?: AccountState | undefined;
   /** Forwarded straight through to the codex overlay body (`CodexOverlayBody`) when it's the one
    * open -- `codex` is `global`-scope, so it can open mid-play too. `App` (via `GameRoot`) owns the
    * Hall repository; `PlayScreen` just plumbs this past the overlay host. Defaults keep every
@@ -99,6 +108,8 @@ export function PlayScreen({
   onCloseOverlay = () => {},
   onClearGuestSession = () => {},
   onSignOut,
+  onDeleteAccount,
+  account,
   records = [],
   currentHeart = null,
   onboardingEnabled = true,
@@ -337,6 +348,8 @@ export function PlayScreen({
           records={records}
           onClearGuestSession={onClearGuestSession}
           onSignOut={onSignOut}
+          onDeleteAccount={onDeleteAccount}
+          account={account}
         />
         <CommandPalette
           open={paletteOpen}

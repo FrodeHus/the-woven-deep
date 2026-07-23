@@ -6,16 +6,18 @@ import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import { App } from '../src/App.js';
-import type { AccountState } from '../src/session/account.js';
+import { GUEST_ACCOUNT, type AccountState } from '../src/session/account.js';
 import { DEFAULT_SETTINGS, SETTINGS_KEY } from '../src/session/settings.js';
 import type { SessionStorageLike } from '../src/session/storage.js';
 
 let pack: CompiledContentPack;
 
 const SIGNED_IN_ACCOUNT: AccountState = {
+  ...GUEST_ACCOUNT,
   status: 'signed-in',
   email: 'player@example.com',
   csrfToken: 'tok',
+  unlockedClassIds: [],
 };
 
 beforeAll(async () => {

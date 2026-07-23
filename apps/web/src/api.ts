@@ -4,6 +4,7 @@ import {
   type CompiledContentPack,
   type ContentKind,
 } from '@woven-deep/content';
+import type { AchievementGrant, LifetimeState } from '@woven-deep/engine';
 
 export interface ContentSummary {
   readonly hash: string;
@@ -50,6 +51,14 @@ export interface SessionInfo {
   authenticated: boolean;
   email?: string;
   csrfToken?: string;
+  unlockedClassIds?: readonly string[];
+  /** The profile's server-persisted lifetime totals (`hall_state.lifetime_json`, replayed and
+   * serialized by `GET /api/auth/session` -- see `ServerRunRecordRepository.lifetime()`).
+   * Undefined only if the session route itself predates this field; `loadAccount` falls back to
+   * the same zeroed shape the server sends for a fresh profile. */
+  lifetime?: LifetimeState;
+  /** The profile's server-persisted granted achievements (`hall_state.achievements_json`). */
+  achievements?: readonly AchievementGrant[];
 }
 
 export async function fetchSession(fetcher: typeof fetch = fetch): Promise<SessionInfo> {
@@ -63,6 +72,25 @@ export async function logout(csrfToken: string, fetcher: typeof fetch = fetch): 
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'x-csrf-token': csrfToken },
+  });
+}
+
+/** Permanently deletes the signed-in profile and every row that belongs to it (Hall records,
+ * lifetime totals, unlocks, achievements, settings, the active run) -- `DELETE /api/profile`,
+ * gated server-side on the same auth+origin+CSRF trio as every other state-changing profile
+ * route, plus an explicit `confirm` flag since there is no undo. */
+export async function deleteAccount(
+  csrfToken: string,
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  await fetcher('/api/profile', {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: {
+      'content-type': 'application/json',
+      'x-csrf-token': csrfToken,
+    },
+    body: JSON.stringify({ confirm: true }),
   });
 }
 

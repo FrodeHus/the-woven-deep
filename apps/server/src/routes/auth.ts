@@ -1,10 +1,13 @@
 import type { FastifyInstance } from 'fastify';
+import type Database from 'better-sqlite3';
+import { emptyRunMetrics, type LifetimeState } from '@woven-deep/engine';
 import type { AuthConfig } from '../config.js';
 import type { LoginService } from '../auth/login-service.js';
 import type { VerifyService } from '../auth/verify-service.js';
 import type { SessionService } from '../auth/session-service.js';
 import type { SettingsService } from '../auth/settings-service.js';
 import type { MailTransport } from '../auth/mail-transport.js';
+import { ServerRunRecordRepository } from '../db/hall-repository.js';
 import {
   requireOrigin,
   requireCsrf,
@@ -13,6 +16,17 @@ import {
 } from '../auth/http-guards.js';
 
 const SESSION_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+
+/** The zeroed `LifetimeState` a profile with no `hall_state` row (or no database at all, in
+ * isolated auth-route tests) gets from `/api/auth/session` -- matches exactly what
+ * `ServerRunRecordRepository.lifetime()` itself returns for that same profile, so the two never
+ * drift. */
+const EMPTY_LIFETIME: LifetimeState = {
+  conqueredChampionRecordIds: [],
+  grantedAchievementIds: [],
+  discoveryProtection: [],
+  totals: emptyRunMetrics(),
+};
 
 export interface AuthBundle {
   config: AuthConfig;
@@ -23,7 +37,11 @@ export interface AuthBundle {
   transport: MailTransport;
 }
 
-export function registerAuthRoutes(app: FastifyInstance, auth: AuthBundle): void {
+export function registerAuthRoutes(
+  app: FastifyInstance,
+  auth: AuthBundle,
+  database?: Database.Database,
+): void {
   const { config, login, verify, session } = auth;
 
   const originPreHandler = requireOrigin(config.publicUrl);
@@ -75,7 +93,28 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthBundle): void
     }
 
     const csrfToken = reply.generateCsrf();
-    reply.send({ authenticated: true, email: authenticated.email, csrfToken });
+    // The profile's persisted, `evaluateUnlocks`-derived unlock set (source of truth is what the
+    // run-conclusion finalize step already wrote to `hall_state.unlocks_json`), the profile's
+    // lifetime totals (`hall_state.lifetime_json`, replayed through the engine's in-memory
+    // repository -- see `ServerRunRecordRepository.lifetime()`), and its granted achievements
+    // (`hall_state.achievements_json`) -- all read from the SAME per-profile repository, never
+    // re-derived here, and each empty/zeroed when there is no database wired in (isolated
+    // auth-route tests) or the profile has no `hall_state` row yet (a profile that has never
+    // finished a run).
+    const hallRepo = database
+      ? new ServerRunRecordRepository({ database, profileId: authenticated.profileId })
+      : null;
+    const unlockedClassIds = hallRepo ? hallRepo.unlocks() : [];
+    const lifetime = hallRepo ? hallRepo.lifetime() : EMPTY_LIFETIME;
+    const achievements = hallRepo ? hallRepo.achievements() : [];
+    reply.send({
+      authenticated: true,
+      email: authenticated.email,
+      csrfToken,
+      unlockedClassIds,
+      lifetime,
+      achievements,
+    });
   });
 
   const csrfPreHandler = requireCsrf(app);

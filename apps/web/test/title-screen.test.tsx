@@ -20,9 +20,11 @@ let pack: CompiledContentPack;
 const SEED: Uint32State = [11, 22, 33, 44];
 
 const SIGNED_IN_ACCOUNT: AccountState = {
+  ...GUEST_ACCOUNT,
   status: 'signed-in',
   email: 'player@example.com',
   csrfToken: 'tok',
+  unlockedClassIds: [],
 };
 
 beforeAll(async () => {

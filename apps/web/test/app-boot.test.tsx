@@ -19,7 +19,7 @@ import {
   type Uint32State,
 } from '@woven-deep/engine';
 import { App, PORTRAIT_KEY } from '../src/App.js';
-import type { AccountState } from '../src/session/account.js';
+import { GUEST_ACCOUNT, type AccountState } from '../src/session/account.js';
 import type { ServerMessage, ServerRunSnapshot } from '../src/session/profile-session.js';
 import {
   createSessionRunRecordRepository,
@@ -678,9 +678,11 @@ describe('App finalize-once (concluded run)', () => {
 
 describe('App identity/account', () => {
   const SIGNED_IN_ACCOUNT: AccountState = {
+    ...GUEST_ACCOUNT,
     status: 'signed-in',
     email: 'player@example.com',
     csrfToken: 'tok',
+    unlockedClassIds: [],
   };
 
   it('boots as guest by default: title shows "Sign in with email", not an email/Sign-out', async () => {
@@ -757,9 +759,11 @@ describe('App identity/account', () => {
 
 describe('App identity/account — ProfileSession routing', () => {
   const SIGNED_IN_ACCOUNT: AccountState = {
+    ...GUEST_ACCOUNT,
     status: 'signed-in',
     email: 'player@example.com',
     csrfToken: 'tok',
+    unlockedClassIds: [],
   };
 
   it('a signed-in boot opens a ProfileSession over /ws/play and renders play from the server state', async () => {

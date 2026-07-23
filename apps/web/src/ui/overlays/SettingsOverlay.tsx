@@ -1,4 +1,5 @@
 import { useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { RunMetrics } from '@woven-deep/engine';
 import {
   ACTION_IDS,
   ACTION_LABELS,
@@ -8,6 +9,7 @@ import {
   type ActionId,
   type KeyChord,
 } from '../../session/settings.js';
+import type { AccountState } from '../../session/account.js';
 import { useSettingsCtx } from '../providers.js';
 import { Button } from '../components/button.js';
 import { Input } from '../components/input.js';
@@ -28,7 +30,35 @@ export interface SettingsOverlayProps {
    * is the one reachable way to sign out (and tear down the live `/ws/play` connection) once play
    * has started -- the title screen's own "Sign out" menu entry is unreachable from inside a run. */
   readonly onSignOut?: (() => void) | undefined;
+  /** Permanently deletes the current profile and all its server-side data -- only ever provided
+   * for a signed-in `ProfileSession` run (`App` omits it entirely for a guest, exactly like
+   * `onSignOut`), so the "Delete account" section below only renders then. */
+  readonly onDeleteAccount?: (() => void) | undefined;
+  /** The current account, sourced from `GET /api/auth/session` (`App`'s `useAccount`) -- drives the
+   * "Lifetime & Achievements" section below, which only renders for a signed-in profile (a guest's
+   * lifetime/records stay in their existing session-only Hall UI, untouched by this section).
+   * Optional so every pre-existing caller/test keeps compiling unchanged. */
+  readonly account?: AccountState | undefined;
 }
+
+/** The small, fixed subset of `RunMetrics`' numeric fields this section shows -- excludes
+ * `killsByModel` (an object, not a displayable scalar) and every other field, picked for being
+ * meaningful at a glance rather than an exhaustive dump of every metric. */
+type LifetimeMetricKey = Exclude<keyof RunMetrics, 'killsByModel'>;
+
+const LIFETIME_METRIC_ROWS: readonly {
+  readonly key: LifetimeMetricKey;
+  readonly label: string;
+}[] = [
+  { key: 'kills', label: 'Kills' },
+  { key: 'bossKills', label: 'Boss kills' },
+  { key: 'championKills', label: 'Champion kills' },
+  { key: 'deepestDepth', label: 'Deepest depth' },
+  { key: 'floorsEntered', label: 'Floors entered' },
+  { key: 'itemsCollected', label: 'Items collected' },
+  { key: 'currencyEarned', label: 'Currency earned' },
+  { key: 'turnsElapsed', label: 'Turns elapsed' },
+];
 
 const FONT_SCALE_STEPS: readonly (1 | 1.15 | 1.3 | 1.5)[] = [1, 1.15, 1.3, 1.5];
 
@@ -49,6 +79,10 @@ const REDUCED_MOTION_LABELS: Readonly<Record<string, string>> = {
  * this screen. */
 const CLEAR_CONFIRM_WORD = 'clear';
 
+/** Mirrors `CLEAR_CONFIRM_WORD`'s contract for the "Delete account" danger-zone action below --
+ * the exact word "delete" typed into its own confirmation field, compared case-insensitively. */
+const DELETE_CONFIRM_WORD = 'delete';
+
 /** The Escape key itself is stripped by `handleCaptureKeyDown` before this ever needs to
  * distinguish it; these are the modifier keys that produce a nonsensical bare chord (e.g.
  * `{key:'Shift', shift:true}`) if committed on their own -- pressing one of these leaves capture
@@ -64,19 +98,23 @@ type CaptureRefusal =
  * (the three-way contract: "system" defers to the OS, "on" forces animations off, "off" forces
  * them back on regardless of the OS setting -- see `App.tsx`'s `withRootStyling` doc comment for
  * the CSS side of this), full per-action key rebinding (press-to-rebind, conflict refusal,
- * per-row/global reset), and clear-guest-session. `settings`/`onChange`/`keymap` arrive via
+ * per-row/global reset), sign-out and delete-account (both signed-in-only, each behind its own
+ * typed confirmation), and clear-guest-session. `settings`/`onChange`/`keymap` arrive via
  * `useSettingsCtx()` (owned by `App`); `onClearGuestSession` is the one prop, threaded in by
  * `OverlayHost`. The only local state here is transient UI-only (which row is armed for capture,
- * the pending conflict notice, and the clear-confirmation text).
+ * the pending conflict notice, and the clear/delete confirmation text).
  */
 export function SettingsOverlay({
   onClearGuestSession,
   onSignOut,
+  onDeleteAccount,
+  account,
 }: Readonly<SettingsOverlayProps>): JSX.Element {
   const { settings, onChange, keymap } = useSettingsCtx();
   const [capturing, setCapturing] = useState<ActionId | null>(null);
   const [conflict, setConflict] = useState<CaptureRefusal | null>(null);
   const [clearText, setClearText] = useState('');
+  const [deleteText, setDeleteText] = useState('');
 
   function armCapture(action: ActionId): void {
     setConflict(null);
@@ -141,6 +179,7 @@ export function SettingsOverlay({
   }
 
   const clearReady = clearText.trim().toLowerCase() === CLEAR_CONFIRM_WORD;
+  const deleteReady = deleteText.trim().toLowerCase() === DELETE_CONFIRM_WORD;
 
   return (
     <div className="flex flex-col gap-6">
@@ -303,6 +342,36 @@ export function SettingsOverlay({
         </Button>
       </section>
 
+      {account?.status === 'signed-in' && (
+        <section aria-labelledby="settings-lifetime-heading" className="flex flex-col gap-2">
+          <h3 id="settings-lifetime-heading" className="text-sm font-semibold text-fg-strong">
+            Lifetime & achievements
+          </h3>
+          <p className="text-sm text-muted">
+            Confirmed by the server across every run on this profile.
+          </p>
+          <dl aria-label="Lifetime totals" className="flex flex-col gap-1 text-sm">
+            {LIFETIME_METRIC_ROWS.map(({ key, label }) => (
+              <div key={key} className="flex justify-between gap-4">
+                <dt className="text-muted">{label}</dt>
+                <dd className="font-medium text-fg-strong">{account.lifetime.totals[key]}</dd>
+              </div>
+            ))}
+          </dl>
+          {account.achievements.length === 0 ? (
+            <p role="status" className="text-sm text-muted">
+              No achievements granted yet.
+            </p>
+          ) : (
+            <ul aria-label="Granted achievements" className="flex flex-col gap-1 text-sm">
+              {account.achievements.map((achievement) => (
+                <li key={achievement.achievementId}>{achievement.name}</li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       {onSignOut && (
         <section aria-labelledby="settings-sign-out-heading" className="flex flex-col gap-2">
           <h3 id="settings-sign-out-heading" className="text-sm font-semibold text-fg-strong">
@@ -313,6 +382,34 @@ export function SettingsOverlay({
           </p>
           <Button type="button" variant="destructive" onClick={onSignOut} className="self-start">
             Sign out
+          </Button>
+        </section>
+      )}
+
+      {onDeleteAccount && (
+        <section aria-labelledby="settings-delete-account-heading" className="flex flex-col gap-2">
+          <h3 id="settings-delete-account-heading" className="text-sm font-semibold text-danger">
+            Delete account
+          </h3>
+          <p className="text-sm text-muted">
+            Permanently deletes your account and all its data on the server -- your Hall of Records,
+            lifetime totals, unlocks, achievements, and settings. This cannot be undone.
+          </p>
+          <Label htmlFor="settings-delete-confirm">Type &quot;delete&quot; to confirm</Label>
+          <Input
+            id="settings-delete-confirm"
+            value={deleteText}
+            onChange={(event) => setDeleteText(event.target.value)}
+            className="max-w-48"
+          />
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={!deleteReady}
+            onClick={onDeleteAccount}
+            className="self-start"
+          >
+            Delete account
           </Button>
         </section>
       )}

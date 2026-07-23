@@ -10,6 +10,7 @@ import { runMigrations } from '../../src/database.js';
 import { LoginTokenRepository } from '../../src/db/login-token-repository.js';
 import { ProfileRepository } from '../../src/db/profile-repository.js';
 import { ActiveRunRepository } from '../../src/db/active-run-repository.js';
+import { ServerRunRecordRepository } from '../../src/db/hall-repository.js';
 import { createAuthBundle } from '../../src/auth/bundle.js';
 import { generateToken, hashToken } from '../../src/auth/tokens.js';
 import type { AuthConfig } from '../../src/config.js';
@@ -113,7 +114,15 @@ describe('handleMessage (pure message routing)', () => {
       nowIso: FIXED_CLOCK(),
     });
     const repo = new ActiveRunRepository(database);
-    session = new ServerPlaySession({ pack, repo, profileId: 'profile-1', clock: FIXED_CLOCK });
+    const hallRepo = new ServerRunRecordRepository({ database, profileId: 'profile-1' });
+    session = new ServerPlaySession({
+      pack,
+      repo,
+      hallRepo,
+      database,
+      profileId: 'profile-1',
+      clock: FIXED_CLOCK,
+    });
     session.open({ seed: SEED });
   });
 

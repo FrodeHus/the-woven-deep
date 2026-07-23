@@ -49,8 +49,8 @@ export function buildApp(input: {
       getToken: (req) => req.headers['x-csrf-token'] as string | undefined,
     });
     decorateProfileId(app);
-    registerAuthRoutes(app, auth);
-    registerProfileRoutes(app, auth);
+    registerAuthRoutes(app, auth, input.database);
+    registerProfileRoutes(app, auth, input.database);
     // Dev mode mirrors the absence of a real mail transport: without Mailgun configured,
     // magic links are only ever delivered through this endpoint, so it must be reachable.
     const isDevMode = auth.config.mailgun === null;
@@ -63,8 +63,9 @@ export function buildApp(input: {
     if (input.database) {
       const repo = new ActiveRunRepository(input.database);
       void app.register(fastifyWebsocket);
+      const database = input.database;
       void app.register((instance, _opts, done) => {
-        registerWsPlayRoute(instance, { auth, pack: input.pack, repo });
+        registerWsPlayRoute(instance, { auth, pack: input.pack, repo, database });
         done();
       });
     }

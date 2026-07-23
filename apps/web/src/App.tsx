@@ -7,7 +7,7 @@ import {
   type RunRecordRepository,
   type Uint32State,
 } from '@woven-deep/engine';
-import { logout, playWsUrl } from './api.js';
+import { deleteAccount, logout, playWsUrl } from './api.js';
 import { GUEST_ACCOUNT, type AccountState } from './session/account.js';
 import { loadSightings } from './session/codex.js';
 import type { LogLine } from './session/event-log.js';
@@ -130,6 +130,14 @@ interface GameRootProps {
    * a guest's `GuestSession` (there is no account to sign out of); only ever set for a signed-in
    * `ProfileSession` run. See `PlayScreenProps.onSignOut`'s doc comment. */
   readonly onSignOut?: (() => void) | undefined;
+  /** Permanently deletes the current profile -- forwarded straight through to `PlayScreen`, exactly
+   * like `onSignOut` (undefined for a guest's `GuestSession`, only ever set for a signed-in
+   * `ProfileSession` run). */
+  readonly onDeleteAccount?: (() => void) | undefined;
+  /** Forwarded straight through to `PlayScreen`'s settings overlay body -- the current account
+   * (always populated; `GUEST_ACCOUNT` for a guest run), driving the signed-in-only "Lifetime &
+   * achievements" section. */
+  readonly account: AccountState;
   /** Whether the contextual onboarding hint strip may show at all: `settings.onboarding === 'on'`
    * AND not a quickstart boot -- quickstart always forces it off regardless of the stored setting,
    * protecting every pinned e2e walk (see `isQuickstart`'s doc comment). */
@@ -161,6 +169,8 @@ function GameRoot({
   onCloseOverlay,
   onClearGuestSession,
   onSignOut,
+  onDeleteAccount,
+  account,
   onboardingEnabled,
 }: GameRootProps): JSX.Element {
   const snapshot = useRunSession(session);
@@ -234,6 +244,8 @@ function GameRoot({
         onCloseOverlay={onCloseOverlay}
         onClearGuestSession={onClearGuestSession}
         onSignOut={onSignOut}
+        onDeleteAccount={onDeleteAccount}
+        account={account}
         records={repository.records()}
         currentHeart={repository.currentHeart()}
         onboardingEnabled={onboardingEnabled}
@@ -420,6 +432,16 @@ export function App({
     void logout(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
   }
 
+  /** Permanently deletes the signed-in profile: calls `DELETE /api/profile` server-side, then
+   * flips `account` back to `GUEST_ACCOUNT` -- reusing the exact same sign-out teardown
+   * (`handleSignOut`'s effect above tears down the live `ProfileSession` and returns to the title
+   * screen on that same transition), since after a delete there is nothing left to stay
+   * connected to either. Only ever wired up for a signed-in `ProfileSession` run (see the
+   * `onDeleteAccount` prop below). */
+  function handleDeleteAccount(): void {
+    void deleteAccount(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
+  }
+
   /**
    * Signed-in profile connect: opens a `ProfileSession` over `/ws/play` once the account is known
    * signed-in and the content pack is ready. Guarded on `session`/`profileError` both being unset
@@ -574,6 +596,7 @@ export function App({
             records={repository.records()}
             onClearGuestSession={handleClearGuestSession}
             sightings={loadSightings(storage).sightings}
+            account={account}
           />
         </main>
       );
@@ -608,6 +631,7 @@ export function App({
           seed={seed}
           settings={settings}
           onChangeSettings={handleSettingsChange}
+          unlockedClassIds={account.unlockedClassIds}
           onConfirm={(choices: HeroChoices, glyph: string) => {
             let hero: ReturnType<typeof heroFromChoices>;
             try {
@@ -704,6 +728,8 @@ export function App({
         onCloseOverlay={closeOverlay}
         onClearGuestSession={handleClearGuestSession}
         onSignOut={account.status === 'signed-in' ? handleSignOut : undefined}
+        onDeleteAccount={account.status === 'signed-in' ? handleDeleteAccount : undefined}
+        account={account}
         onboardingEnabled={settings.onboarding === 'on' && !quickstart}
         onConcluded={(projection, logTail) => {
           setConclusion({ projection, logTail });

@@ -1,23 +1,34 @@
+import type Database from 'better-sqlite3';
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
   createNewRun,
   decodeActiveRun,
   encodeActiveRun,
+  finalizeRun,
   isHeartBossActive,
   projectGameplayState,
   projectRunConclusion,
   DEFAULT_GUEST_HERO,
   type ActiveRun,
+  type AchievementGrant,
   type GameCommand,
-  type GameplayProjection,
   type NewRunHero,
   type PublicDecision,
   type PublicEvent,
-  type RunConclusionProjection,
+  type StoredHallRecord,
   type Uint32State,
 } from '@woven-deep/engine';
-import { dispatchCommand, dispatchIntent, type PlayerIntent } from '@woven-deep/session-core';
+import {
+  canStartClass,
+  classEntryForHeroTags,
+  dispatchCommand,
+  dispatchIntent,
+  evaluateUnlocks,
+  type PlayerIntent,
+  type ServerRunSnapshot,
+} from '@woven-deep/session-core';
 import type { ActiveRunRepository } from '../db/active-run-repository.js';
+import type { ServerRunRecordRepository } from '../db/hall-repository.js';
 
 /**
  * How many consecutive pure-movement commands may apply before the server checkpoints the run to
@@ -77,27 +88,9 @@ const CONSEQUENTIAL_EVENT_TYPES: ReadonlySet<string> = new Set<string>([
   'swarm.source-destroyed',
 ]);
 
-/**
- * The run-authoritative snapshot the server produces after applying a command. Only redacted,
- * projection-derived data — never raw `ActiveRun` (which carries hidden state the client must not
- * see). The client assembles the full session snapshot from this (folding `lastEvents` into a log,
- * accumulating sightings, computing the final-chamber choice, adding client-only onboarding).
- */
-export interface ServerRunSnapshot {
-  readonly projection: GameplayProjection;
-  readonly lastEvents: readonly PublicEvent[];
-  readonly revision: number;
-  readonly pendingDecision: PublicDecision | null;
-  readonly conclusion: RunConclusionProjection | null;
-  readonly houseOpen: boolean;
-  readonly heroClassTags: readonly string[];
-  /** Authoritative, perception-free: whether the Weakened Heart boss is present and alive on the
-   * raw run state (`isHeartBossActive`). The client must use this rather than deriving boss
-   * presence from the redacted, illumination-gated projection's visible actors -- under the
-   * light-out mechanic (0 illumination on the hero's own tile) the boss can be alive but invisible,
-   * and re-deriving from visible actors would wrongly re-offer the Final Chamber choice mid-fight. */
-  readonly bossActive: boolean;
-}
+/** The `ServerRunSnapshot` shape now lives in `@woven-deep/session-core` (shared with
+ * `apps/web`) -- re-exported here so existing local importers keep working unchanged. */
+export type { ServerRunSnapshot };
 
 export type ApplyOutcome =
   | { readonly kind: 'state'; readonly snapshot: ServerRunSnapshot }
@@ -121,6 +114,17 @@ export class ContentHashMismatchError extends Error {
   }
 }
 
+/** Thrown by {@link ServerPlaySession.open} when a supplied `hero` was built from a
+ * `playable: false` class the profile has not earned (i.e. `classId` is absent from the
+ * profile's persisted `unlocks()`) — the run-start anti-cheat guard. The WS layer maps this to a
+ * rejection/error rather than silently starting the run. */
+export class LockedClassError extends Error {
+  constructor(readonly classId: string) {
+    super(`class ${classId} is locked and has not been unlocked for this profile`);
+    this.name = 'LockedClassError';
+  }
+}
+
 type Clock = () => string;
 
 /**
@@ -132,27 +136,41 @@ type Clock = () => string;
 export class ServerPlaySession {
   private readonly pack: CompiledContentPack;
   private readonly repo: ActiveRunRepository;
+  private readonly hallRepo: ServerRunRecordRepository;
+  private readonly database: Database.Database;
   private readonly profileId: string;
   private readonly clock: Clock;
+  private readonly portraitGlyph: string;
   private run!: ActiveRun;
   private houseOpen = false;
   private lastEvents: readonly PublicEvent[] = [];
   private pendingDecision: PublicDecision | null = null;
   private movesSinceCheckpoint = 0;
   private dirty = false;
+  // Set exactly once, by `maybeFinalize()`, the run this conclusion belongs to -- carried here
+  // (rather than re-derived) so `snapshot()` can project the real score/heirloom/achievements
+  // without re-touching the Hall repository on every snapshot.
+  private finalizedRecord: StoredHallRecord | null = null;
+  private finalizedAchievements: readonly AchievementGrant[] = [];
 
   constructor(
     input: Readonly<{
       pack: CompiledContentPack;
       repo: ActiveRunRepository;
+      hallRepo: ServerRunRecordRepository;
+      database: Database.Database;
       profileId: string;
       clock?: Clock;
+      portraitGlyph?: string;
     }>,
   ) {
     this.pack = input.pack;
     this.repo = input.repo;
+    this.hallRepo = input.hallRepo;
+    this.database = input.database;
     this.profileId = input.profileId;
     this.clock = input.clock ?? (() => new Date().toISOString());
+    this.portraitGlyph = input.portraitGlyph ?? '@';
   }
 
   /**
@@ -169,13 +187,32 @@ export class ServerPlaySession {
       }
       this.run = decodeActiveRun(stored.runBlob);
     } else {
-      this.run = createNewRun({
-        pack: this.pack,
-        seed: input.seed,
-        hero: input.hero ?? DEFAULT_GUEST_HERO,
-      });
+      const hero = input.hero ?? DEFAULT_GUEST_HERO;
+      // Anti-cheat run-start guard: until profile hero-customization (chargen go-live) lands, a
+      // supplied `hero` is always `DEFAULT_GUEST_HERO` (a `playable: true` class), so this branch
+      // never fires today -- it exists so that once a client can supply its own chosen class, a
+      // profile can never start a run as a `playable: false` class it has not earned, even if the
+      // client bypasses the chargen UI's own checks (`heroFromChoices`'s `requireClass`, which
+      // rejects locked classes unconditionally but has no notion of a profile's *earned* unlocks).
+      if (input.hero !== undefined) {
+        const classEntry = classEntryForHeroTags(this.pack, input.hero.classTags);
+        if (
+          classEntry !== undefined &&
+          !canStartClass({
+            classId: classEntry.id,
+            unlockedClassIds: this.hallRepo.unlocks(),
+            content: this.pack,
+          })
+        ) {
+          throw new LockedClassError(classEntry.id);
+        }
+      }
+      this.run = createNewRun({ pack: this.pack, seed: input.seed, hero });
       this.persist();
     }
+    // A reconnect may load a run that concluded but never finished finalizing (e.g. a crash
+    // between the conclusion-producing command and the finalize step below) -- catch it up here.
+    this.maybeFinalize();
     return this.snapshot();
   }
 
@@ -183,6 +220,14 @@ export class ServerPlaySession {
   applyIntent(
     input: Readonly<{ commandId: string; expectedRevision: number; intent: PlayerIntent }>,
   ): ApplyOutcome {
+    // Once finalized, the run is over: any further command (a stray resend, a reconnect that
+    // raced the finalize, etc.) is a no-op rather than being dispatched -- dispatching would risk
+    // replaying a *cached* pre-finalize resolution (see `dispatchIntent`'s idempotency cache) and
+    // re-entering `maybeFinalize()`, whose Hall-record append would then collide on the
+    // deterministic record ID.
+    if (this.isFinalized()) {
+      return { kind: 'state', snapshot: this.snapshot() };
+    }
     const outcome = dispatchIntent(this.run, input.intent, {
       pack: this.pack,
       commandId: input.commandId,
@@ -211,7 +256,17 @@ export class ServerPlaySession {
 
   /** Applies a raw engine command (the decision / final-chamber paths that bypass `buildIntent`). */
   applyCommand(command: GameCommand): ApplyOutcome {
+    if (this.isFinalized()) {
+      return { kind: 'state', snapshot: this.snapshot() };
+    }
     return this.applyResolution(dispatchCommand(this.run, command, { pack: this.pack }), false);
+  }
+
+  /** Whether this session's run has already been finalized into the Hall -- once true, the run is
+   * permanently over and no further command may mutate it (see the guards in `applyIntent` /
+   * `applyCommand` above). */
+  private isFinalized(): boolean {
+    return this.run.conclusion !== null && this.run.conclusion.finalized;
   }
 
   /**
@@ -251,7 +306,89 @@ export class ServerPlaySession {
     } else {
       this.checkpoint();
     }
+    // The run has just (possibly) concluded -- finalize it into the Hall before snapshotting, so
+    // the conclusion the caller sees is already the real, scored one.
+    this.maybeFinalize();
     return { kind: 'state', snapshot: this.snapshot() };
+  }
+
+  /**
+   * Finalizes this session's concluded run into the profile's Hall exactly once, mirroring the
+   * guest's `finalizeConcludedRun` (see `apps/web/src/session/guest-session.ts`): `finalizeRun`
+   * (pure, unchanged engine code) produces the Hall record + lifetime deltas from the server's
+   * authoritative run; only the enrichment (`achievedAt`/`portraitGlyph`) is host-supplied. The
+   * record is appended, the deltas applied, unlocks re-evaluated over the full updated Hall +
+   * lifetime and persisted, this run's achievement grants folded into the lifetime-accumulated
+   * set, and the now-finished active run row cleared so the profile can start a new one. A no-op
+   * when the run has not concluded, or has already been finalized -- the double-finalize guard
+   * that keeps a resend/reconnect from appending a second, colliding Hall record.
+   *
+   * Crash-atomicity: every WRITE below (the Hall append, the lifetime/unlocks/achievements
+   * updates, and clearing the `active_runs` row) runs inside a single better-sqlite3 transaction
+   * on the shared `database` connection (the Hall repo and the active-run repo are both backed by
+   * it). A crash or thrown error anywhere inside rolls the whole sequence back atomically: either
+   * `active_runs` is cleared and the Hall has the new record (fully committed), or `active_runs`
+   * still holds its pre-finalize blob and the Hall has NO record (fully rolled back) -- there is
+   * no window where a stale `finalized: false` active-run row can coexist with an already-appended
+   * Hall record, which is what previously let a reconnect re-run `finalizeRun` and crash on a
+   * colliding, already-taken `recordId`. `finalizeRun` itself stays a pure computation outside the
+   * transaction; `this.run`/`finalizedRecord`/`finalizedAchievements` are only updated after the
+   * transaction commits, so an aborted transaction never leaves the in-memory session believing a
+   * run is finalized when the DB rolled it back.
+   *
+   * Defensive self-heal: if the Hall already contains a record with this run's (deterministic)
+   * `recordId` -- which should now be unreachable in normal operation given the transaction above,
+   * but could still occur from manually-corrupted state or a pre-fix on-disk row -- this treats the
+   * run as already finalized rather than re-appending (which would throw): it skips the Hall
+   * writes, just clears the stale active-run row, and projects the existing record.
+   */
+  private maybeFinalize(): void {
+    if (this.run.conclusion === null || this.run.conclusion.finalized) return;
+
+    const finalized = finalizeRun({
+      run: this.run,
+      content: this.pack,
+      lifetime: this.hallRepo.lifetime(),
+    });
+
+    const existingRecord = this.hallRepo
+      .records()
+      .find((record) => record.recordId === finalized.record.recordId);
+
+    if (existingRecord !== undefined) {
+      this.database.transaction(() => {
+        this.repo.clear(this.profileId);
+      })();
+      this.run = finalized.run;
+      this.finalizedRecord = existingRecord;
+      this.finalizedAchievements = finalized.deltas.achievementGrants;
+      return;
+    }
+
+    const stored: StoredHallRecord = {
+      ...finalized.record,
+      enrichment: { achievedAt: this.clock(), portraitGlyph: this.portraitGlyph },
+    };
+
+    this.database.transaction(() => {
+      this.hallRepo.appendRecord(stored);
+      this.hallRepo.applyDeltas(finalized.deltas);
+
+      const unlocks = evaluateUnlocks({
+        records: this.hallRepo.records(),
+        lifetime: this.hallRepo.lifetime(),
+        content: this.pack,
+      });
+      this.hallRepo.setUnlocks(unlocks);
+      this.hallRepo.appendAchievements(finalized.deltas.achievementGrants);
+
+      // The run is over -- clear the active run row so the profile's next open() starts fresh.
+      this.repo.clear(this.profileId);
+    })();
+
+    this.run = finalized.run;
+    this.finalizedRecord = stored;
+    this.finalizedAchievements = finalized.deltas.achievementGrants;
   }
 
   /** Persists the latest run state (called on disconnect and any time an unwritten checkpoint is
@@ -290,7 +427,11 @@ export class ServerPlaySession {
       pendingDecision: this.pendingDecision,
       conclusion:
         this.run.conclusion !== null
-          ? projectRunConclusion({ run: this.run, record: null, achievements: [] })
+          ? projectRunConclusion({
+              run: this.run,
+              record: this.finalizedRecord,
+              achievements: this.finalizedAchievements,
+            })
           : null,
       houseOpen: this.houseOpen,
       heroClassTags: this.run.hero.classTags,

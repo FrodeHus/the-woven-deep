@@ -37,6 +37,10 @@ export interface ChargenScreenProps {
   /** The portrait glyph is client-only cosmetic state (never engine data — see `PORTRAIT_GLYPHS`),
    * so it rides beside `HeroChoices` here rather than inside it. */
   readonly onConfirm: (choices: HeroChoices, portraitGlyph: string) => void;
+  /** The profile's earned, content-locked class ids (`AccountState.unlockedClassIds`), threaded
+   * into `CallingStep` so an unlocked class is selectable there. Optional/defaults to `[]` so
+   * every pre-existing caller/test (guests, none of which unlock anything) keeps compiling. */
+  readonly unlockedClassIds?: readonly string[];
 }
 
 /**
@@ -54,6 +58,7 @@ export function ChargenScreen({
   settings = DEFAULT_SETTINGS,
   onChangeSettings = () => {},
   onConfirm,
+  unlockedClassIds = [],
 }: ChargenScreenProps): JSX.Element {
   const [state, setState] = useState<WizardState>(() =>
     initialWizardState(seed, settings.onboarding === 'on'),
@@ -98,7 +103,7 @@ export function ChargenScreen({
     if (next !== state) setState(next);
   };
 
-  const stepProps: StepProps = { state, pack, dispatch };
+  const stepProps: StepProps = { state, pack, dispatch, unlockedClassIds };
 
   return (
     <div className="flex h-screen flex-col gap-2 bg-deep p-2 text-fg font-mono">

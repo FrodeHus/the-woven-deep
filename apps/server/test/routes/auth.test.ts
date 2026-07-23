@@ -7,10 +7,12 @@ import { runMigrations } from '../../src/database.js';
 import { LoginTokenRepository } from '../../src/db/login-token-repository.js';
 import { ProfileRepository } from '../../src/db/profile-repository.js';
 import { SessionRepository } from '../../src/db/session-repository.js';
+import { ServerRunRecordRepository } from '../../src/db/hall-repository.js';
 import { createLoginService } from '../../src/auth/login-service.js';
 import { createVerifyService } from '../../src/auth/verify-service.js';
 import { createSessionService } from '../../src/auth/session-service.js';
 import { createSettingsService } from '../../src/auth/settings-service.js';
+import { emptyRunMetrics } from '@woven-deep/engine';
 import { generateToken, hashToken } from '../../src/auth/tokens.js';
 import type { Clock } from '../../src/auth/rate-limiter.js';
 import type { AuthConfig } from '../../src/config.js';
@@ -105,7 +107,7 @@ describe('auth routes', () => {
     const built = makeBundle();
     bundle = built.bundle;
     database = built.database;
-    app = buildApp({ pack, auth: bundle });
+    app = buildApp({ pack, auth: bundle, database });
   });
 
   afterEach(async () => {
@@ -203,7 +205,7 @@ describe('auth routes', () => {
     return setCookies.map((c) => c.split(';')[0]).join('; ');
   }
 
-  it('session with a valid cookie returns {authenticated:true, email} and a csrfToken', async () => {
+  it('session with a valid cookie returns {authenticated:true, email} and a csrfToken, and unlockedClassIds:[] for a profile with no hall_state row yet', async () => {
     const setCookies = await verifyAndGetCookies('session-ok@example.com');
     const response = await app.inject({
       method: 'GET',
@@ -216,6 +218,78 @@ describe('auth routes', () => {
     expect(body.email).toBe('session-ok@example.com');
     expect(typeof body.csrfToken).toBe('string');
     expect(body.csrfToken.length).toBeGreaterThan(0);
+    expect(body.unlockedClassIds).toEqual([]);
+    expect(body.achievements).toEqual([]);
+    expect(body.lifetime).toEqual({
+      conqueredChampionRecordIds: [],
+      grantedAchievementIds: [],
+      discoveryProtection: [],
+      totals: emptyRunMetrics(),
+    });
+  });
+
+  it('session with a valid cookie returns the profile persisted unlockedClassIds from hall_state', async () => {
+    const setCookies = await verifyAndGetCookies('unlocked@example.com');
+    const profiles = new ProfileRepository(database);
+    const profile = profiles.findByEmail('unlocked@example.com');
+    expect(profile).toBeDefined();
+
+    const hallRepo = new ServerRunRecordRepository({ database, profileId: profile!.id });
+    hallRepo.setUnlocks(['class.warden']);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/auth/session',
+      headers: { cookie: cookieHeader(setCookies) },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().unlockedClassIds).toEqual(['class.warden']);
+  });
+
+  it('session with a valid cookie returns the profile persisted lifetime totals and granted achievements from hall_state', async () => {
+    const setCookies = await verifyAndGetCookies('lifetime@example.com');
+    const profiles = new ProfileRepository(database);
+    const profile = profiles.findByEmail('lifetime@example.com');
+    expect(profile).toBeDefined();
+
+    const hallRepo = new ServerRunRecordRepository({ database, profileId: profile!.id });
+    hallRepo.applyDeltas({
+      recordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+      newlyConqueredChampionRecordIds: [],
+      achievementGrants: [
+        {
+          achievementId: 'achievement.first-blood',
+          criteriaId: 'first-champion-defeat',
+          name: 'First Blood',
+        },
+      ],
+      discoveryProtectionUpdates: [],
+      metrics: { ...emptyRunMetrics(), kills: 12, deepestDepth: 4 },
+    });
+    hallRepo.appendAchievements([
+      {
+        achievementId: 'achievement.first-blood',
+        criteriaId: 'first-champion-defeat',
+        name: 'First Blood',
+      },
+    ]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/auth/session',
+      headers: { cookie: cookieHeader(setCookies) },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.lifetime.totals.kills).toBe(12);
+    expect(body.lifetime.totals.deepestDepth).toBe(4);
+    expect(body.achievements).toEqual([
+      {
+        achievementId: 'achievement.first-blood',
+        criteriaId: 'first-champion-defeat',
+        name: 'First Blood',
+      },
+    ]);
   });
 
   it('logout without a CSRF token returns 403', async () => {
