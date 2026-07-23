@@ -49,7 +49,7 @@ export function buildApp(input: {
       getToken: (req) => req.headers['x-csrf-token'] as string | undefined,
     });
     decorateProfileId(app);
-    registerAuthRoutes(app, auth);
+    registerAuthRoutes(app, auth, input.database);
     registerProfileRoutes(app, auth);
     // Dev mode mirrors the absence of a real mail transport: without Mailgun configured,
     // magic links are only ever delivered through this endpoint, so it must be reachable.

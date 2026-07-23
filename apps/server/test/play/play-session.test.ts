@@ -17,7 +17,11 @@ import { runMigrations } from '../../src/database.js';
 import { ActiveRunRepository } from '../../src/db/active-run-repository.js';
 import { ServerRunRecordRepository } from '../../src/db/hall-repository.js';
 import { ProfileRepository } from '../../src/db/profile-repository.js';
-import { ContentHashMismatchError, ServerPlaySession } from '../../src/play/play-session.js';
+import {
+  ContentHashMismatchError,
+  LockedClassError,
+  ServerPlaySession,
+} from '../../src/play/play-session.js';
 
 const SEED = [7, 14, 21, 28] as unknown as Uint32State;
 const PROFILE = 'profile-1';
@@ -208,6 +212,37 @@ describe('ServerPlaySession', () => {
     expect(() => newSession(database, { repo }).open({ seed: SEED })).toThrow(
       ContentHashMismatchError,
     );
+  });
+
+  describe('run-start class re-validation (Task 5)', () => {
+    it('rejects a fresh run started with an unearned locked-class hero', () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      const session = newSession(database, { repo, hallRepo });
+      const wardenHero = { ...DEFAULT_GUEST_HERO, classTags: ['warden'] };
+
+      expect(() => session.open({ hero: wardenHero, seed: SEED })).toThrow(LockedClassError);
+      // Nothing was persisted -- the rejected run never reaches createNewRun/persist.
+      expect(repo.get(PROFILE)).toBeUndefined();
+    });
+
+    it('allows a fresh run started with a locked-class hero the profile has unlocked', () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      hallRepo.setUnlocks(['class.warden']);
+      const session = newSession(database, { repo, hallRepo });
+      const wardenHero = { ...DEFAULT_GUEST_HERO, classTags: ['warden'] };
+
+      const snapshot = session.open({ hero: wardenHero, seed: SEED });
+      expect(snapshot.heroClassTags).toEqual(['warden']);
+      expect(repo.get(PROFILE)).toBeDefined();
+    });
+
+    it('allows a fresh run started with the default (playable) guest hero regardless of unlocks', () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      const session = newSession(database, { repo, hallRepo });
+
+      const snapshot = session.open({ hero: DEFAULT_GUEST_HERO, seed: SEED });
+      expect(snapshot.conclusion).toBeNull();
+    });
   });
 
   describe('finalize-on-conclusion (Task 4)', () => {

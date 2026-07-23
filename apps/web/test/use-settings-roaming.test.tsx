@@ -5,11 +5,17 @@ import type { AccountState } from '../src/session/account.js';
 import { DEFAULT_SETTINGS, SETTINGS_KEY, type Settings } from '../src/session/settings.js';
 import type { SessionStorageLike } from '../src/session/storage.js';
 
-const GUEST: AccountState = { status: 'guest', email: null, csrfToken: null };
+const GUEST: AccountState = {
+  status: 'guest',
+  email: null,
+  csrfToken: null,
+  unlockedClassIds: [],
+};
 const SIGNED_IN: AccountState = {
   status: 'signed-in',
   email: 'player@example.com',
   csrfToken: 'tok',
+  unlockedClassIds: [],
 };
 
 afterEach(() => {

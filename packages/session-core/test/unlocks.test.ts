@@ -6,7 +6,7 @@ import {
   type StoredHallRecord,
 } from '@woven-deep/engine';
 import { describe, expect, it } from 'vitest';
-import { evaluateUnlocks } from '../src/unlocks.js';
+import { canStartClass, classEntryForHeroTags, evaluateUnlocks } from '../src/unlocks.js';
 
 function metrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
   return { ...emptyRunMetrics(), ...overrides };
@@ -179,5 +179,46 @@ describe('evaluateUnlocks', () => {
     expect(evaluateUnlocks({ records, lifetime: emptyLifetime(), content: withoutWarden })).toEqual(
       [],
     );
+  });
+});
+
+describe('canStartClass', () => {
+  it('allows a playable class regardless of unlockedClassIds', () => {
+    expect(
+      canStartClass({ classId: 'class.fighter', unlockedClassIds: [], content: contentPack() }),
+    ).toBe(true);
+  });
+
+  it('allows a locked class the profile has unlocked', () => {
+    expect(
+      canStartClass({
+        classId: 'class.warden',
+        unlockedClassIds: ['class.warden'],
+        content: contentPack(),
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects a locked class the profile has not unlocked', () => {
+    expect(
+      canStartClass({ classId: 'class.warden', unlockedClassIds: [], content: contentPack() }),
+    ).toBe(false);
+  });
+
+  it('rejects an unknown class id', () => {
+    expect(
+      canStartClass({ classId: 'class.nonexistent', unlockedClassIds: [], content: contentPack() }),
+    ).toBe(false);
+  });
+});
+
+describe('classEntryForHeroTags', () => {
+  it('finds the class entry whose classTags set matches exactly', () => {
+    const entry = classEntryForHeroTags(contentPack(), ['warden']);
+    expect(entry?.id).toBe('class.warden');
+  });
+
+  it('returns undefined when no class entry matches', () => {
+    expect(classEntryForHeroTags(contentPack(), ['nonexistent'])).toBeUndefined();
   });
 });

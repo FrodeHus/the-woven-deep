@@ -16,6 +16,7 @@ const SIGNED_IN_ACCOUNT: AccountState = {
   status: 'signed-in',
   email: 'player@example.com',
   csrfToken: 'tok',
+  unlockedClassIds: [],
 };
 
 beforeAll(async () => {

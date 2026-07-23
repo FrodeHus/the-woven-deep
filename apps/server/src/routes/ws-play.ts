@@ -11,6 +11,7 @@ import { ConnectionRegistry } from '../play/connection-registry.js';
 import type { PlaySocket } from '../play/play-socket.js';
 import {
   ContentHashMismatchError,
+  LockedClassError,
   ServerPlaySession,
   type ApplyOutcome,
 } from '../play/play-session.js';
@@ -206,6 +207,11 @@ export function registerWsPlayRoute(
         if (error instanceof ContentHashMismatchError) {
           send(socket, { type: 'error', code: 'content-mismatch', message: error.message });
           socket.close(1008, 'content-mismatch');
+          return;
+        }
+        if (error instanceof LockedClassError) {
+          send(socket, { type: 'error', code: 'locked-class', message: error.message });
+          socket.close(1008, 'locked-class');
           return;
         }
         throw error;

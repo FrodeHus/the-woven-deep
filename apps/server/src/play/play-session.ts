@@ -19,6 +19,8 @@ import {
   type Uint32State,
 } from '@woven-deep/engine';
 import {
+  canStartClass,
+  classEntryForHeroTags,
   dispatchCommand,
   dispatchIntent,
   evaluateUnlocks,
@@ -112,6 +114,17 @@ export class ContentHashMismatchError extends Error {
   }
 }
 
+/** Thrown by {@link ServerPlaySession.open} when a supplied `hero` was built from a
+ * `playable: false` class the profile has not earned (i.e. `classId` is absent from the
+ * profile's persisted `unlocks()`) — the run-start anti-cheat guard. The WS layer maps this to a
+ * rejection/error rather than silently starting the run. */
+export class LockedClassError extends Error {
+  constructor(readonly classId: string) {
+    super(`class ${classId} is locked and has not been unlocked for this profile`);
+    this.name = 'LockedClassError';
+  }
+}
+
 type Clock = () => string;
 
 /**
@@ -174,11 +187,27 @@ export class ServerPlaySession {
       }
       this.run = decodeActiveRun(stored.runBlob);
     } else {
-      this.run = createNewRun({
-        pack: this.pack,
-        seed: input.seed,
-        hero: input.hero ?? DEFAULT_GUEST_HERO,
-      });
+      const hero = input.hero ?? DEFAULT_GUEST_HERO;
+      // Anti-cheat run-start guard: until profile hero-customization (chargen go-live) lands, a
+      // supplied `hero` is always `DEFAULT_GUEST_HERO` (a `playable: true` class), so this branch
+      // never fires today -- it exists so that once a client can supply its own chosen class, a
+      // profile can never start a run as a `playable: false` class it has not earned, even if the
+      // client bypasses the chargen UI's own checks (`heroFromChoices`'s `requireClass`, which
+      // rejects locked classes unconditionally but has no notion of a profile's *earned* unlocks).
+      if (input.hero !== undefined) {
+        const classEntry = classEntryForHeroTags(this.pack, input.hero.classTags);
+        if (
+          classEntry !== undefined &&
+          !canStartClass({
+            classId: classEntry.id,
+            unlockedClassIds: this.hallRepo.unlocks(),
+            content: this.pack,
+          })
+        ) {
+          throw new LockedClassError(classEntry.id);
+        }
+      }
+      this.run = createNewRun({ pack: this.pack, seed: input.seed, hero });
       this.persist();
     }
     // A reconnect may load a run that concluded but never finished finalizing (e.g. a crash

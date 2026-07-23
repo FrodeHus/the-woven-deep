@@ -681,6 +681,7 @@ describe('App identity/account', () => {
     status: 'signed-in',
     email: 'player@example.com',
     csrfToken: 'tok',
+    unlockedClassIds: [],
   };
 
   it('boots as guest by default: title shows "Sign in with email", not an email/Sign-out', async () => {
@@ -760,6 +761,7 @@ describe('App identity/account — ProfileSession routing', () => {
     status: 'signed-in',
     email: 'player@example.com',
     csrfToken: 'tok',
+    unlockedClassIds: [],
   };
 
   it('a signed-in boot opens a ProfileSession over /ws/play and renders play from the server state', async () => {

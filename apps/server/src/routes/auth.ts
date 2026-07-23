@@ -1,10 +1,12 @@
 import type { FastifyInstance } from 'fastify';
+import type Database from 'better-sqlite3';
 import type { AuthConfig } from '../config.js';
 import type { LoginService } from '../auth/login-service.js';
 import type { VerifyService } from '../auth/verify-service.js';
 import type { SessionService } from '../auth/session-service.js';
 import type { SettingsService } from '../auth/settings-service.js';
 import type { MailTransport } from '../auth/mail-transport.js';
+import { ServerRunRecordRepository } from '../db/hall-repository.js';
 import {
   requireOrigin,
   requireCsrf,
@@ -23,7 +25,11 @@ export interface AuthBundle {
   transport: MailTransport;
 }
 
-export function registerAuthRoutes(app: FastifyInstance, auth: AuthBundle): void {
+export function registerAuthRoutes(
+  app: FastifyInstance,
+  auth: AuthBundle,
+  database?: Database.Database,
+): void {
   const { config, login, verify, session } = auth;
 
   const originPreHandler = requireOrigin(config.publicUrl);
@@ -75,7 +81,14 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthBundle): void
     }
 
     const csrfToken = reply.generateCsrf();
-    reply.send({ authenticated: true, email: authenticated.email, csrfToken });
+    // The profile's persisted, `evaluateUnlocks`-derived unlock set (source of truth is what the
+    // run-conclusion finalize step already wrote to `hall_state.unlocks_json`) -- never
+    // re-evaluated here, and empty when there is no database wired in (isolated auth-route tests)
+    // or the profile has no `hall_state` row yet (a profile that has never finished a run).
+    const unlockedClassIds = database
+      ? new ServerRunRecordRepository({ database, profileId: authenticated.profileId }).unlocks()
+      : [];
+    reply.send({ authenticated: true, email: authenticated.email, csrfToken, unlockedClassIds });
   });
 
   const csrfPreHandler = requireCsrf(app);

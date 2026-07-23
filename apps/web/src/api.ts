@@ -50,6 +50,7 @@ export interface SessionInfo {
   authenticated: boolean;
   email?: string;
   csrfToken?: string;
+  unlockedClassIds?: readonly string[];
 }
 
 export async function fetchSession(fetcher: typeof fetch = fetch): Promise<SessionInfo> {

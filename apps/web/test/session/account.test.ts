@@ -146,7 +146,7 @@ describe('loadAccount', () => {
     expect(account).toEqual(GUEST_ACCOUNT);
   });
 
-  it('returns a signed-in state on a 200', async () => {
+  it('returns a signed-in state on a 200, defaulting unlockedClassIds to [] when absent', async () => {
     const fetcher = vi
       .fn()
       .mockResolvedValueOnce(
@@ -158,6 +158,29 @@ describe('loadAccount', () => {
 
     const account = await loadAccount(fetcher as unknown as typeof fetch);
 
-    expect(account).toEqual({ status: 'signed-in', email: 'player@example.com', csrfToken: 'tok' });
+    expect(account).toEqual({
+      status: 'signed-in',
+      email: 'player@example.com',
+      csrfToken: 'tok',
+      unlockedClassIds: [],
+    });
+  });
+
+  it('maps unlockedClassIds from the session payload when present', async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          authenticated: true,
+          email: 'player@example.com',
+          csrfToken: 'tok',
+          unlockedClassIds: ['class.warden'],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const account = await loadAccount(fetcher as unknown as typeof fetch);
+
+    expect(account.unlockedClassIds).toEqual(['class.warden']);
   });
 });
