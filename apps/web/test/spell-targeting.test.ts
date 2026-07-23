@@ -218,7 +218,13 @@ describe('geometry parity: engine tiles vs full-visibility projection', () => {
     const { validateTarget, createDemoRun } = await import('@woven-deep/engine');
     const width = 11;
     const height = 5;
-    const walls: [number, number][] = [[6, 2]];
+    // Wall at (4,2): Chebyshev distance 2 from the origin (2,2), WITHIN the shared radius (3)
+    // below, so the line's opacity stop (not its range clamp) is what actually gets exercised.
+    // Hand-traced Bresenham from (2,2) toward aim (8,2) is the straight run (3,2),(4,2),(5,2),...;
+    // hitting the wall at (4,2) truncates the line to just [{x:3,y:2}] -- strictly shorter than the
+    // 3-cell range-clamped run ([{3,2},{4,2},{5,2}]) that a wall-less/opacity-blind line would
+    // produce, so this case fails if `isOpaque` is ever ignored.
+    const walls: [number, number][] = [[4, 2]];
     // Engine input: raw tiles (1 floor, 0 wall).
     const run = createDemoRun();
     const tiles = Array(width * height).fill(1);
@@ -250,6 +256,12 @@ describe('geometry parity: engine tiles vs full-visibility projection', () => {
       });
       if (!engine.ok) return;
       expect(footprintKeys(client)).toEqual(footprintKeys(engine.cells));
+      // The opacity-driven truncation itself: assert the exact cell set for `line`, not just
+      // engine/client agreement, so an implementation that ignores `isOpaque` (and would then
+      // agree with the engine only by also ignoring it) can't slip past a parity-only check.
+      if (shape === 'line') {
+        expect(footprintKeys(client)).toEqual(footprintKeys([{ x: 3, y: 2 }]));
+      }
     }
   });
 });
