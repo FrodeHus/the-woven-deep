@@ -32,17 +32,17 @@ describe('bundled content', () => {
       ),
     ).toEqual({
       monster: 35,
-      item: 24,
-      spell: 1,
+      item: 43,
+      spell: 14,
       trap: 1,
-      'loot-table': 16,
+      'loot-table': 17,
       balance: 1,
       vault: 3,
       'identification-pool': 2,
-      encounter: 33,
+      encounter: 34,
       'fallen-champion-template': 1,
-      npc: 4,
-      'npc-faction': 4,
+      npc: 5,
+      'npc-faction': 5,
       achievement: 2,
       class: 5,
       background: 3,
@@ -51,7 +51,7 @@ describe('bundled content', () => {
     expect(
       pack.entries.filter((entry) => entry.kind === 'class' && (entry as any).playable),
     ).toHaveLength(3);
-    expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(5);
+    expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(12);
     expect(pack.entries.map((entry) => entry.id)).toEqual(
       [...pack.entries.map((entry) => entry.id)].sort(),
     );
@@ -270,7 +270,7 @@ describe('bundled content', () => {
     expect(torch?.kind === 'item' ? torch.light?.fuelTags : null).toEqual([]);
   });
 
-  it('ships the town vault with three permanent merchants and the strongbox service', async () => {
+  it('ships the town vault with four permanent merchants and the strongbox service', async () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
@@ -286,12 +286,14 @@ describe('bundled content', () => {
         'merchant-arms',
         'merchant-curios',
         'merchant-provisioner',
+        'merchant-spellvendor',
       ],
     });
     for (const id of [
       'encounter.town-provisioner',
       'encounter.town-armorer',
       'encounter.town-curios-dealer',
+      'encounter.town-spellvendor',
     ]) {
       expect(entries.get(id)).toMatchObject({
         kind: 'encounter',

@@ -1,4 +1,4 @@
-import type { BaseContentEntry, DerivedStatName } from './common.js';
+import type { BaseContentEntry, DamageType, DerivedStatName, EffectDefinition } from './common.js';
 
 export const CONDITION_TRAIT_IDS = [
   'condition-trait.avoids-opportunity-attacks',
@@ -26,4 +26,9 @@ export interface ConditionContentEntry extends BaseContentEntry {
   }>;
   readonly modifiersPerStack: Readonly<Partial<Record<DerivedStatName, number>>>;
   readonly traits: readonly ConditionTraitId[];
+  readonly tickEffects: readonly EffectDefinition[];
+  readonly mitigation?: Readonly<{
+    armorPerStack?: number;
+    resistancePerStack?: Readonly<Partial<Record<DamageType, number>>>;
+  }>;
 }

@@ -74,6 +74,49 @@ function withHiddenNeighborEast(run: ActiveRun): ActiveRun {
   };
 }
 
+/** A run whose hero has descended once and carries the Loomcaller classTags, granting caster
+ * aptitude for the synthetic recall spell below. */
+function depth1CasterRun(seed: Uint32State): ActiveRun {
+  const fresh = createNewRun({
+    pack,
+    seed,
+    hero: { ...DEFAULT_GUEST_HERO, classTags: ['loomcaller'] },
+  });
+  const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+  const town = fresh.floors.find((floor) => floor.floorId === hero.floorId)!;
+  const atStairDown: ActiveRun = {
+    ...fresh,
+    actors: fresh.actors.map((actor) =>
+      actor.actorId === hero.actorId
+        ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y }
+        : actor,
+    ),
+  };
+  return descendToNextFloor(atStairDown, { content: pack }).state;
+}
+
+/** Synthetic self-cast recall spell (`spell.recall` ships in a later content task), mirroring the
+ * engine-level `recall.test.ts` fixture. */
+function packWithRecall(): CompiledContentPack {
+  return {
+    ...pack,
+    entries: [
+      ...pack.entries,
+      {
+        kind: 'spell',
+        id: 'spell.test-recall',
+        name: 'Test Recall',
+        tags: [],
+        targetingId: 'target.self',
+        range: 0,
+        actionCost: 100,
+        weaveCost: 0,
+        effects: [{ effectId: 'effect.recall', parameters: {}, requiresLivingTarget: false }],
+      },
+    ],
+  };
+}
+
 function heroAdjacentToHouseDoor(run: ActiveRun): ActiveRun {
   const hero = run.actors.find((actor) => actor.playerControlled)!;
   const town = run.floors.find((floor) => floor.floorId === hero.floorId)!;
@@ -261,6 +304,50 @@ describe('dispatchIntent', () => {
       },
     );
     expect(wait.kind === 'command' && wait.onboardingIntentType).toBeNull();
+  });
+});
+
+describe('recall session wiring', () => {
+  it('auto-moves to town once a cast sets returnAnchorFloorId', () => {
+    const run = depth1CasterRun(DESCEND_SEED);
+    const recallPack = packWithRecall();
+    const dungeonFloorId = run.activeFloorId;
+
+    const outcome = dispatchIntent(
+      run,
+      { type: 'cast', spellId: 'spell.test-recall', target: null },
+      { pack: recallPack, commandId: 'command.recall', expectedRevision: run.revision },
+    );
+
+    expect(outcome.kind).toBe('transition');
+    if (outcome.kind !== 'transition') throw new Error('expected transition outcome');
+    expect(outcome.run.activeFloorId).toBe('floor.depth-000');
+    expect(outcome.run.returnAnchorFloorId).toBe(dungeonFloorId);
+    expect(outcome.onboardingIntentType).toBe('recall');
+    expect(outcome.events.some((event) => event.type === 'hero.recalled')).toBe(true);
+  });
+
+  it('routes the town descend intent to the anchored floor when a recall is pending', () => {
+    const run = depth1CasterRun(DESCEND_SEED);
+    const recallPack = packWithRecall();
+    const dungeonFloorId = run.activeFloorId;
+    const recalled = dispatchIntent(
+      run,
+      { type: 'cast', spellId: 'spell.test-recall', target: null },
+      { pack: recallPack, commandId: 'command.recall', expectedRevision: run.revision },
+    );
+    if (recalled.kind !== 'transition') throw new Error('expected transition outcome');
+
+    const outcome = dispatchIntent(
+      recalled.run,
+      { type: 'descend' },
+      { pack: recallPack, commandId: 'command.return', expectedRevision: recalled.run.revision },
+    );
+
+    expect(outcome.kind).toBe('transition');
+    if (outcome.kind !== 'transition') throw new Error('expected transition outcome');
+    expect(outcome.run.activeFloorId).toBe(dungeonFloorId);
+    expect(outcome.run.returnAnchorFloorId).toBeUndefined();
   });
 });
 

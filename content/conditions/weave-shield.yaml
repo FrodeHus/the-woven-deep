@@ -1,0 +1,11 @@
+schemaVersion: 7
+entries:
+  - kind: condition
+    id: condition.weave-shield
+    name: Weave shield
+    tags: [ward, buff]
+    description: A lattice of woven force hardens against incoming blows.
+    color: '#8f9bd6'
+    duration: { mode: timed, default: 20, maximum: 40 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    mitigation: { armorPerStack: 4 }

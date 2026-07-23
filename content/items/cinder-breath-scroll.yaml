@@ -1,0 +1,23 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.cinder-breath-scroll
+    name: Scroll of cinder breath
+    glyph: '?'
+    color: '#e07b46'
+    description: Brittle vellum inked with a fanning sigil. Reading it aloud breathes scorching cinders in a wide cone.
+    tags: [magic, offense, scroll, aoe]
+    minDepth: 3
+    maxDepth: 20
+    category: scroll
+    stackLimit: 3
+    price: 25
+    rarity: uncommon
+    actionCost: 100
+    equipment: null
+    combat: { accuracy: 0, defense: 0, armor: 0, damage: null, range: 4, ammunitionTag: null }
+    light: null
+    spellId: spell.cinder-breath
+    identification: { mode: known, poolId: null }
+    effects:
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

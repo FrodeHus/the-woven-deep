@@ -288,6 +288,11 @@ export function projectDomainEvents(
         )
           output.push(event);
         break;
+      case 'spell.learned':
+      case 'hero.recalled':
+      case 'spell.cast':
+        output.push(event);
+        break;
       case 'item.equipped':
       case 'item.unequipped':
       case 'item.light-toggled':

@@ -46,6 +46,11 @@ function townMerchantSpecs(
       encounterId: 'encounter.town-curios-dealer',
       position: town.merchantSlots.curios,
     },
+    {
+      populationId: 'population.town-spellvendor',
+      encounterId: 'encounter.town-spellvendor',
+      position: town.merchantSlots.spellvendor,
+    },
   ];
 }
 

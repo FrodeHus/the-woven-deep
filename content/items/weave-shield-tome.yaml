@@ -1,0 +1,23 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.weave-shield-tome
+    name: Tome of weave shield
+    glyph: '='
+    color: '#8f9bd6'
+    description: A close-woven codex; reading it teaches the weave shield for good.
+    tags: [magic, tome]
+    minDepth: 1
+    maxDepth: 20
+    category: misc
+    stackLimit: 1
+    price: 35
+    rarity: uncommon
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    identification: { mode: known, poolId: null }
+    effects:
+      - { effectId: effect.spell.learn, parameters: { spellId: spell.weave-shield }, requiresLivingTarget: false }
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

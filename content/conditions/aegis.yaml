@@ -1,0 +1,18 @@
+schemaVersion: 7
+entries:
+  - kind: condition
+    id: condition.aegis
+    name: Aegis
+    tags: [ward, buff]
+    description: A shimmering barrier of woven force turns aside every school of harm at once.
+    color: '#d8c98a'
+    duration: { mode: timed, default: 15, maximum: 30 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    mitigation:
+      resistancePerStack:
+        physical: 15
+        fire: 15
+        cold: 15
+        lightning: 15
+        poison: 15
+        arcane: 15

@@ -1,0 +1,12 @@
+schemaVersion: 7
+entries:
+  - kind: spell
+    id: spell.mend
+    name: Mend
+    tags: [arcane, support]
+    targetingId: target.self
+    range: 0
+    actionCost: 100
+    weaveCost: 5
+    effects:
+      - { effectId: effect.heal, parameters: { dice: { count: 2, sides: 8, bonus: 4 } }, requiresLivingTarget: false }

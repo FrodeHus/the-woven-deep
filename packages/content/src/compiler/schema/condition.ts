@@ -1,6 +1,22 @@
 import { z } from 'zod';
 import { CONDITION_TRAIT_IDS, DERIVED_STAT_NAMES } from '../../model.js';
-import { base, color, conditionStackingModes, safeInteger, safePositive } from './common.js';
+import {
+  base,
+  color,
+  conditionStackingModes,
+  damageTypes,
+  effect,
+  safeInteger,
+  safeNonNegative,
+  safePositive,
+} from './common.js';
+
+const mitigationPercent = safeInteger.min(-100).max(100);
+
+const conditionMitigation = z.strictObject({
+  armorPerStack: safeNonNegative.optional(),
+  resistancePerStack: z.partialRecord(z.enum(damageTypes), mitigationPercent).optional(),
+});
 
 const conditionDuration = z.discriminatedUnion('mode', [
   z
@@ -25,6 +41,8 @@ export const conditionEntry = z
     }),
     modifiersPerStack: z.partialRecord(z.enum(DERIVED_STAT_NAMES), safeInteger).default({}),
     traits: z.array(z.enum(CONDITION_TRAIT_IDS)).default([]),
+    tickEffects: z.array(effect).default([]),
+    mitigation: conditionMitigation.optional(),
   })
   .superRefine((entry, context) => {
     if (entry.stacking.mode !== 'intensify' && entry.stacking.maximumStacks !== 1) {

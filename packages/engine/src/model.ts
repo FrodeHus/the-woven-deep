@@ -164,6 +164,11 @@ export interface ActiveRun {
   readonly identification: IdentificationState;
   readonly activeFloorId: OpaqueId;
   readonly activeFloorEnteredAt: number;
+  /**
+   * The floor the hero recalled away from, set by `effect.recall` and cleared by `recallReturn`.
+   * Additive/optional: absent on any run that has never cast recall.
+   */
+  readonly returnAnchorFloorId?: OpaqueId;
   readonly floors: readonly FloorSnapshot[];
   readonly recentCommands: readonly RecordedCommand[];
   readonly encounterDecisions: readonly EncounterRunDecision[];

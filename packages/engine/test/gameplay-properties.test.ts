@@ -13,6 +13,7 @@ import {
   type ItemInstance,
   itemLightSources,
   advanceSurvival,
+  tickConditions,
   hungerStage,
   refuelItem,
   projectGameplayState,
@@ -491,6 +492,8 @@ describe('survival resource properties', () => {
             elapsed,
             eventId: 'event.property',
             danger: true,
+            tickConditions,
+            mitigationFor: () => ({ armor: 0, resistance: 0, immune: false }),
           };
           const result = advanceSurvival(input);
           expect(result.state.survival.hungerReserve).toBeGreaterThanOrEqual(0);

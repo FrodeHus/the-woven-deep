@@ -103,6 +103,8 @@ const DIRECT_EFFECTS = new Set([
   'effect.hunger.restore',
 ]);
 
+const RUN_LEVEL_EFFECTS = new Set<EffectId>(['effect.spell.learn', 'effect.recall']);
+
 function checkedSafeInteger(label: string, value: number): number {
   if (!Number.isSafeInteger(value)) throw new RangeError(`${label} must be a safe integer`);
   return value;
@@ -193,7 +195,11 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
       throw new TypeError(
         `invalid effect ${effect.effectId} at effects.${index}: ${parsed.error.issues[0]!.message}`,
       );
-    if (!DIRECT_EFFECTS.has(effect.effectId) && !input.operations[effect.effectId]) {
+    if (
+      !DIRECT_EFFECTS.has(effect.effectId) &&
+      !RUN_LEVEL_EFFECTS.has(effect.effectId) &&
+      !input.operations[effect.effectId]
+    ) {
       throw new TypeError(`effect operation ${effect.effectId} is unavailable`);
     }
   }
@@ -350,6 +356,10 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
         itemId: input.sourceItemId,
         quantity,
       });
+    } else if (RUN_LEVEL_EFFECTS.has(effect.effectId)) {
+      // Run-level effects (learn, recall) mutate ActiveRun, which resolveEffectSequence does not
+      // own. The cast/use-item dispatch handlers apply them. No actor mutation, no RNG here.
+      continue;
     } else {
       const operation = input.operations[effect.effectId as EffectId]!;
       const result = operation({
@@ -370,4 +380,49 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
     }
   }
   return { actors, items, features, floors, survival, effectsState: state, events };
+}
+
+export interface EffectSweepInput extends Omit<EffectSequenceInput, 'targetActorId'> {
+  readonly targetActorIds: readonly OpaqueId[];
+  readonly casterActorId: OpaqueId;
+  readonly includeCaster: boolean;
+}
+
+/**
+ * Applies `effects` to every actor named in `targetActorIds` (minus the caster unless opted in),
+ * in a stable ascending `actorId` order, folding the effects RNG stream forward actor-by-actor:
+ * target N+1 rolls from the state target N returned. Re-simulating from any iteration order is
+ * bit-identical. A single-target sweep consumes RNG exactly like one resolveEffectSequence call.
+ */
+export function resolveEffectSweep(input: EffectSweepInput): EffectSequenceResult {
+  const unique = [...new Set(input.targetActorIds)]
+    .filter((id) => input.includeCaster || id !== input.casterActorId)
+    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+  let actors = input.actors;
+  let items = input.items ?? [];
+  let features = input.features ?? [];
+  let floors = input.floors ?? [];
+  let survival = input.survival;
+  let state = input.effectsState;
+  const events: DomainEvent[] = [];
+  for (const targetActorId of unique) {
+    const step = resolveEffectSequence({
+      ...input,
+      actors,
+      items,
+      features,
+      floors,
+      survival,
+      effectsState: state,
+      targetActorId,
+    });
+    actors = step.actors;
+    items = step.items;
+    features = step.features;
+    floors = step.floors;
+    survival = step.survival;
+    state = step.effectsState;
+    events.push(...step.events);
+  }
+  return { actors, items, survival, features, floors, effectsState: state, events };
 }

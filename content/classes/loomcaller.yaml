@@ -9,6 +9,7 @@ entries:
     silhouetteGlyph: "Λ"
     unlockHint: null
     classTags: [loomcaller]
+    casterAptitude: true
     modifiers: { meleeAccuracy: -3, meleeDamageBonus: -1, defense: -2, maxHealth: -6, maxWeave: 4, weaveRegen: 2, search: 2 }
     startingSpellIds: [spell.ember-bolt]
     kits:

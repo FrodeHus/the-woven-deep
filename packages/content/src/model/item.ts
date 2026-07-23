@@ -1,4 +1,5 @@
 import type {
+  ContentId,
   DiceDefinition,
   EffectDefinition,
   EquipmentSlot,
@@ -53,6 +54,7 @@ export interface ItemContentEntry extends PresentedContentEntry {
   readonly minDepth: number;
   readonly maxDepth: number;
   readonly actionCost: number;
+  readonly spellId?: ContentId;
   readonly equipment: EquipmentDefinition | null;
   readonly combat: CombatItemDefinition | null;
   readonly light: LightItemDefinition | null;

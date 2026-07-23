@@ -206,6 +206,24 @@ export const itemUsedEvent = z.strictObject({
   itemId: identifier,
   targetActorId: identifier,
 });
+export const spellLearnedEvent = z.strictObject({
+  type: z.literal('spell.learned'),
+  eventId: identifier,
+  actorId: identifier,
+  spellId: identifier,
+});
+export const heroRecalledEvent = z.strictObject({
+  type: z.literal('hero.recalled'),
+  eventId: identifier,
+  actorId: identifier,
+  anchorFloorId: identifier,
+});
+export const spellCastEvent = z.strictObject({
+  type: z.literal('spell.cast'),
+  eventId: identifier,
+  actorId: identifier,
+  spellId: identifier,
+});
 export const itemEquippedEvent = z.strictObject({
   type: z.literal('item.equipped'),
   eventId: identifier,
@@ -774,6 +792,9 @@ export const eventOptions = [
   itemConsumedEvent,
   itemThrownEvent,
   itemUsedEvent,
+  spellLearnedEvent,
+  heroRecalledEvent,
+  spellCastEvent,
   itemEquippedEvent,
   itemUnequippedEvent,
   itemLightToggledEvent,
@@ -949,6 +970,7 @@ import type {
   GroupOutcomeAppliedEvent,
   HeroDamagedPublicEvent,
   HeroMovedEvent,
+  HeroRecalledEvent,
   HeroWaitedEvent,
   HungerRestoredEvent,
   HungerStageChangedEvent,
@@ -987,6 +1009,8 @@ import type {
   RunConcludedEvent,
   RunFinalizedEvent,
   SoundHeardEvent,
+  SpellCastEvent,
+  SpellLearnedEvent,
   SwarmCapReachedEvent,
   SwarmMembersCreatedEvent,
   SwarmSourceDestroyedEvent,
@@ -1057,6 +1081,13 @@ type _ItemConsumedDrift = Expect<
 >;
 type _ItemThrownDrift = Expect<SchemaMatches<z.infer<typeof itemThrownEvent>, ItemThrownEvent>>;
 type _ItemUsedDrift = Expect<SchemaMatches<z.infer<typeof itemUsedEvent>, ItemUsedEvent>>;
+type _SpellLearnedDrift = Expect<
+  SchemaMatches<z.infer<typeof spellLearnedEvent>, SpellLearnedEvent>
+>;
+type _HeroRecalledDrift = Expect<
+  SchemaMatches<z.infer<typeof heroRecalledEvent>, HeroRecalledEvent>
+>;
+type _SpellCastDrift = Expect<SchemaMatches<z.infer<typeof spellCastEvent>, SpellCastEvent>>;
 type _ItemEquippedDrift = Expect<
   SchemaMatches<z.infer<typeof itemEquippedEvent>, ItemEquippedEvent>
 >;

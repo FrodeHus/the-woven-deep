@@ -20,6 +20,7 @@ export const TOWN_VAULT_REQUIRED_SLOT_IDS = [
   'merchant-provisioner',
   'merchant-arms',
   'merchant-curios',
+  'merchant-spellvendor',
 ] as const;
 
 const slot = z.strictObject({

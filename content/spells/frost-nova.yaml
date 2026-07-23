@@ -1,0 +1,14 @@
+schemaVersion: 7
+entries:
+  - kind: spell
+    id: spell.frost-nova
+    name: Frost nova
+    tags: [frost, offense, aoe]
+    targetingId: target.burst
+    range: 5
+    actionCost: 100
+    weaveCost: 6
+    aoe: { shape: burst, radius: 2 }
+    effects:
+      - { effectId: effect.damage, parameters: { damageType: cold, dice: { count: 2, sides: 6, bonus: 0 } }, requiresLivingTarget: true }
+      - { effectId: effect.condition.apply, parameters: { conditionId: condition.chilled, duration: 3 }, requiresLivingTarget: true }

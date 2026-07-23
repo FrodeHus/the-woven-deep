@@ -672,6 +672,87 @@ entries:
     );
   });
 
+  it('parses an optional condition mitigation block (armor and per-damage-type resistance)', () => {
+    const entries = parseContentFile({
+      path: 'conditions/ward.yaml',
+      source: `schemaVersion: 7
+entries:
+  - kind: condition
+    id: condition.shielded
+    name: Shielded
+    description: Wrapped in a defensive ward.
+    tags: [beneficial]
+    color: "#80b8ff"
+    duration: { mode: timed, default: 20, maximum: 40 }
+    stacking: { mode: intensify, maximumStacks: 3 }
+    modifiersPerStack: {}
+    traits: []
+    mitigation: { armorPerStack: 2, resistancePerStack: { fire: 50, cold: -10 } }
+`,
+    });
+
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'condition',
+          id: 'condition.shielded',
+          mitigation: { armorPerStack: 2, resistancePerStack: { fire: 50, cold: -10 } },
+        }),
+      ]),
+    );
+  });
+
+  it.each([
+    [
+      'out-of-range armor mitigation percent is fine but resistance is bounded',
+      'resistancePerStack: { fire: 150 }',
+      /mitigation\.resistancePerStack\.fire/i,
+    ],
+    [
+      'non-integer resistance mitigation',
+      'resistancePerStack: { fire: 12.5 }',
+      /mitigation\.resistancePerStack\.fire/i,
+    ],
+  ])('rejects condition mitigation with %s', (_label, replacement, message) => {
+    const source = `schemaVersion: 7
+entries:
+  - kind: condition
+    id: condition.shielded
+    name: Shielded
+    description: Wrapped in a defensive ward.
+    tags: [beneficial]
+    color: "#80b8ff"
+    duration: { mode: timed, default: 20, maximum: 40 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: {}
+    traits: []
+    mitigation: { armorPerStack: 2, ${replacement} }
+`;
+    expect(() => parseContentFile({ path: 'conditions/invalid-ward.yaml', source })).toThrow(
+      message,
+    );
+  });
+
+  it('rejects a negative armorPerStack mitigation value', () => {
+    const source = `schemaVersion: 7
+entries:
+  - kind: condition
+    id: condition.shielded
+    name: Shielded
+    description: Wrapped in a defensive ward.
+    tags: [beneficial]
+    color: "#80b8ff"
+    duration: { mode: timed, default: 20, maximum: 40 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: {}
+    traits: []
+    mitigation: { armorPerStack: -1 }
+`;
+    expect(() => parseContentFile({ path: 'conditions/invalid-ward.yaml', source })).toThrow(
+      /mitigation\.armorPerStack/i,
+    );
+  });
+
   it.each([
     ['unknown modifier', 'modifiersPerStack: { luck: 1 }', /modifiersPerStack\.luck/i],
     ['unknown trait', 'traits: [condition-trait.unknown]', /traits\.0/i],

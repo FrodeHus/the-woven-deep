@@ -1,6 +1,6 @@
 import type { ContentEntry, ItemContentEntry } from '../../model.js';
 import type { ContentCompileIssue } from '../error.js';
-import { effectIssues, issue, type LocatedContentEntry } from './shared.js';
+import { effectIssues, issue, referencedKindIssue, type LocatedContentEntry } from './shared.js';
 
 function equipmentIssues(file: string, item: ItemContentEntry): ContentCompileIssue[] {
   const equipment = item.equipment;
@@ -46,6 +46,7 @@ function itemCompatibilityIssues(
   file: string,
   item: ItemContentEntry,
   allItems: readonly ItemContentEntry[],
+  byId: ReadonlyMap<string, ContentEntry>,
 ): ContentCompileIssue[] {
   const path = `$.entries.${item.id}`;
   const issues: ContentCompileIssue[] = [];
@@ -102,6 +103,9 @@ function itemCompatibilityIssues(
       previous = threshold;
     });
   }
+  if (item.spellId !== undefined) {
+    issues.push(...referencedKindIssue(file, `${path}.spellId`, item.spellId, 'spell', byId));
+  }
   return issues;
 }
 
@@ -117,7 +121,7 @@ export function itemIssues(
     if (entry.kind !== 'item') continue;
     issues.push(
       ...equipmentIssues(file, entry),
-      ...itemCompatibilityIssues(file, entry, allItems),
+      ...itemCompatibilityIssues(file, entry, allItems, byId),
       ...effectIssues(file, entry.id, entry.effects, byId),
     );
   }

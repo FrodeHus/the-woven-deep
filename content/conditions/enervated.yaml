@@ -1,0 +1,11 @@
+schemaVersion: 7
+entries:
+  - kind: condition
+    id: condition.enervated
+    name: Enervated
+    tags: [arcane, debuff]
+    description: The Weave itself has been unwound from the target's muscles, leaving them slow and weak.
+    color: '#6d5a8a'
+    duration: { mode: timed, default: 4, maximum: 8 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: { meleeDamageBonus: -3, rangedAccuracy: -2 }

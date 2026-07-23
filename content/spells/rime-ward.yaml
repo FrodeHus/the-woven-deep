@@ -1,0 +1,12 @@
+schemaVersion: 7
+entries:
+  - kind: spell
+    id: spell.rime-ward
+    name: Rime ward
+    tags: [frost, defense, ward]
+    targetingId: target.self
+    range: 0
+    actionCost: 100
+    weaveCost: 5
+    effects:
+      - { effectId: effect.condition.apply, parameters: { conditionId: condition.rime-ward, duration: 20 }, requiresLivingTarget: false }

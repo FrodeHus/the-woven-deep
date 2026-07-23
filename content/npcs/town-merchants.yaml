@@ -43,6 +43,27 @@ entries:
     selfPreservationThresholdBps: 3500
 
   - kind: npc
+    id: npc.town-spellvendor
+    name: Town Spell Vendor
+    tags: [town, merchant, spellvendor]
+    glyph: S
+    color: '#7aa8c2'
+    factionId: npc-faction.town-spellvendor
+    attributes: { might: 6, agility: 9, vitality: 9, wits: 14, resolve: 12 }
+    health: 20
+    speed: 100
+    perception: 13
+    accuracy: 7
+    defense: 9
+    damage: { count: 1, sides: 3, bonus: 0 }
+    armor: 0
+    resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 }
+    disposition: neutral
+    behaviorId: npc-behavior.travelling-merchant
+    behaviorParameters: {}
+    selfPreservationThresholdBps: 3500
+
+  - kind: npc
     id: npc.town-curios-dealer
     name: Town Curios Dealer
     tags: [town, merchant, curios]

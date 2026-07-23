@@ -6,10 +6,13 @@ import {
   createDemoRun,
   hungerStage,
   resolveEffectSequence,
+  tickConditions,
   type ItemInstance,
   validateContentBoundRun,
   hungerModifiers,
 } from '../src/index.js';
+
+const noMitigation = () => ({ armor: 0, resistance: 0, immune: false });
 
 const thresholds = { hungry: 70, weak: 30, starving: 0 } as const;
 
@@ -93,7 +96,15 @@ function fixture(
       hungerStage: hungerStage({ reserve: overrides.hunger ?? 20, thresholds }),
     },
   };
-  return { state, content, elapsed, eventId: 'event.survival', danger: false };
+  return {
+    state,
+    content,
+    elapsed,
+    eventId: 'event.survival',
+    danger: false,
+    tickConditions,
+    mitigationFor: noMitigation,
+  };
 }
 
 describe('survival clocks', () => {
@@ -266,6 +277,8 @@ describe('survival clocks', () => {
       elapsed: 10,
       eventId: 'event.survival',
       danger: false,
+      tickConditions,
+      mitigationFor: noMitigation,
     });
     // hungry recovery percentage is 50; floor(10 * 50 / 100) = 5 per crossed interval, 2 intervals crossed.
     expect(result.state.actors[0]?.health).toBe(20);

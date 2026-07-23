@@ -1,0 +1,12 @@
+schemaVersion: 7
+entries:
+  - kind: spell
+    id: spell.enervate
+    name: Enervate
+    tags: [arcane, debuff]
+    targetingId: target.actor
+    range: 6
+    actionCost: 100
+    weaveCost: 4
+    effects:
+      - { effectId: effect.condition.apply, parameters: { conditionId: condition.enervated, duration: 4 }, requiresLivingTarget: true }
