@@ -223,6 +223,8 @@ export type InvalidActionReason =
   | 'target.invalid'
   | 'cast.insufficient-weave'
   | 'cast.no-aptitude'
+  | 'learn.no-aptitude'
+  | 'learn.already-known'
   | 'run.concluded'
   | 'final-chamber.unavailable'
   | 'final-chamber.fragments-required'

@@ -11,7 +11,7 @@ import { dropItem, pickupItem, splitStack } from './inventory.js';
 import { floorPerception } from './run-perception.js';
 import { validateTarget } from './targeting.js';
 import { resolveEffectSequence, resolveEffectSweep } from './effects.js';
-import { heroCasterAptitude } from './caster.js';
+import { heroCasterAptitude, spellLearnTarget } from './caster.js';
 import { parseEffectParameters } from './parameter-contracts.js';
 import { equipItem, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
 import { closeDoor, openDoor } from './features.js';
@@ -561,6 +561,17 @@ export function validatePlayerAction(
       );
     if (!Number.isSafeInteger(consumption) || consumption > source.quantity) {
       return { status: 'invalid', reason: 'item.quantity' };
+    }
+    // A tome (an item carrying effect.spell.learn) gates on caster aptitude and the already-known
+    // spell before any effect applies, so a rejected learn consumes neither the tome nor RNG.
+    const learnSpellId = spellLearnTarget(definition.effects);
+    if (learnSpellId !== undefined) {
+      if (!heroCasterAptitude(input.context.content, input.state.hero)) {
+        return { status: 'invalid', reason: 'learn.no-aptitude' };
+      }
+      if ((input.state.hero.knownSpellIds ?? []).includes(learnSpellId)) {
+        return { status: 'invalid', reason: 'learn.already-known' };
+      }
     }
     let targetActor = actor;
     if (command.target !== null) {

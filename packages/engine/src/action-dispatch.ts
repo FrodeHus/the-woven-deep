@@ -4,6 +4,7 @@ import { targetContext } from './actions.js';
 import { actorById, heroPerception, withActor, type ActorState } from './actor-model.js';
 import { applyPopulationCombatModifiers, resolveAttack } from './combat.js';
 import { applyEffectResult, resolveEffectSequence, resolveEffectSweep } from './effects.js';
+import { spellLearnTarget } from './caster.js';
 import { validateTarget } from './targeting.js';
 import { consumeItemQuantity, dropItem, pickupItem, splitStack } from './inventory.js';
 import {
@@ -362,6 +363,15 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       const identified = identifyAppearance({ run: next, contentId: definition.id, eventId });
       next = identified.state;
       events.push(...identified.events);
+    }
+    // effect.spell.learn is a run-level effect (resolveEffectSequence skips it -- no actor
+    // mutation, no RNG); the learn mutation happens here, against the hero directly, since
+    // knownSpellIds is gated in actions.ts to only ever apply to the hero.
+    const learnSpellId = spellLearnTarget(definition.effects);
+    if (learnSpellId !== undefined) {
+      const known = next.hero.knownSpellIds ?? [];
+      next = { ...next, hero: { ...next.hero, knownSpellIds: [...known, learnSpellId] } };
+      events.push({ type: 'spell.learned', eventId, actorId: actor.actorId, spellId: learnSpellId });
     }
     events.push(...consumedEvents);
     return { state: next, chargeEnergy: true };

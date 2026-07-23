@@ -68,6 +68,8 @@ export const blockReason = z.enum([
   'target.invalid',
   'cast.insufficient-weave',
   'cast.no-aptitude',
+  'learn.no-aptitude',
+  'learn.already-known',
   'trade.active',
   'trade.required',
   'merchant.unavailable',

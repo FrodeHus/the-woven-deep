@@ -1,4 +1,4 @@
-import type { CompiledContentPack } from '@woven-deep/content';
+import type { CompiledContentPack, EffectDefinition } from '@woven-deep/content';
 import type { HeroState } from './model.js';
 
 /** The class entry whose classTags are all carried by the hero, or undefined. */
@@ -15,4 +15,10 @@ function heroClass(content: CompiledContentPack, hero: HeroState) {
 export function heroCasterAptitude(content: CompiledContentPack, hero: HeroState): boolean {
   const cls = heroClass(content, hero);
   return cls?.kind === 'class' ? cls.casterAptitude : false;
+}
+
+/** The spellId of the first effect.spell.learn in an item's effects, or undefined. */
+export function spellLearnTarget(effects: readonly EffectDefinition[]): string | undefined {
+  const learn = effects.find((effect) => effect.effectId === 'effect.spell.learn');
+  return learn ? (learn.parameters.spellId as string) : undefined;
 }
