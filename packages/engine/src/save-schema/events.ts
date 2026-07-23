@@ -970,6 +970,7 @@ import type {
   GroupOutcomeAppliedEvent,
   HeroDamagedPublicEvent,
   HeroMovedEvent,
+  HeroRecalledEvent,
   HeroWaitedEvent,
   HungerRestoredEvent,
   HungerStageChangedEvent,
@@ -1008,6 +1009,8 @@ import type {
   RunConcludedEvent,
   RunFinalizedEvent,
   SoundHeardEvent,
+  SpellCastEvent,
+  SpellLearnedEvent,
   SwarmCapReachedEvent,
   SwarmMembersCreatedEvent,
   SwarmSourceDestroyedEvent,
@@ -1078,6 +1081,13 @@ type _ItemConsumedDrift = Expect<
 >;
 type _ItemThrownDrift = Expect<SchemaMatches<z.infer<typeof itemThrownEvent>, ItemThrownEvent>>;
 type _ItemUsedDrift = Expect<SchemaMatches<z.infer<typeof itemUsedEvent>, ItemUsedEvent>>;
+type _SpellLearnedDrift = Expect<
+  SchemaMatches<z.infer<typeof spellLearnedEvent>, SpellLearnedEvent>
+>;
+type _HeroRecalledDrift = Expect<
+  SchemaMatches<z.infer<typeof heroRecalledEvent>, HeroRecalledEvent>
+>;
+type _SpellCastDrift = Expect<SchemaMatches<z.infer<typeof spellCastEvent>, SpellCastEvent>>;
 type _ItemEquippedDrift = Expect<
   SchemaMatches<z.infer<typeof itemEquippedEvent>, ItemEquippedEvent>
 >;
