@@ -29,6 +29,7 @@ export * from './trade.js';
 export * from './house.js';
 export * from './merchant-fixture.js';
 export * from './run-records-fixture.js';
+export * from './magic-fixture.js';
 export * from './population-gates.js';
 export * from './population-placement.js';
 export * from './pathfinding.js';
