@@ -13,6 +13,7 @@ import {
 import { dispatchIntent, type PlayerIntent } from '@woven-deep/session-core';
 import { runMigrations } from '../../src/database.js';
 import { ActiveRunRepository } from '../../src/db/active-run-repository.js';
+import { ServerRunRecordRepository } from '../../src/db/hall-repository.js';
 import { ProfileRepository } from '../../src/db/profile-repository.js';
 import { ServerPlaySession } from '../../src/play/play-session.js';
 
@@ -124,7 +125,7 @@ function driveServerSide(
   return blobsAfterEachIntent;
 }
 
-function freshRepo(): ActiveRunRepository {
+function freshRepos(): { repo: ActiveRunRepository; hallRepo: ServerRunRecordRepository } {
   const database = new Database(':memory:');
   runMigrations(database);
   new ProfileRepository(database).create({
@@ -132,7 +133,10 @@ function freshRepo(): ActiveRunRepository {
     normalizedEmail: 'parity-profile@example.com',
     nowIso: FIXED_CLOCK(),
   });
-  return new ActiveRunRepository(database);
+  return {
+    repo: new ActiveRunRepository(database),
+    hallRepo: new ServerRunRecordRepository({ database, profileId: PROFILE }),
+  };
 }
 
 describe('cross-process determinism parity (client core vs. server play path)', () => {
@@ -144,8 +148,14 @@ describe('cross-process determinism parity (client core vs. server play path)', 
 
     // Server side: the same seed/hero/pack, driven through ServerPlaySession.applyIntent over an
     // in-memory SQLite repo -- the server's real play path.
-    const repo = freshRepo();
-    const session = new ServerPlaySession({ pack, repo, profileId: PROFILE, clock: FIXED_CLOCK });
+    const { repo, hallRepo } = freshRepos();
+    const session = new ServerPlaySession({
+      pack,
+      repo,
+      hallRepo,
+      profileId: PROFILE,
+      clock: FIXED_CLOCK,
+    });
     session.open({ seed: SEED, hero: DEFAULT_GUEST_HERO });
     const serverBlobsAfterEachIntent = driveServerSide(session, repo, INTENT_SEQUENCE);
 

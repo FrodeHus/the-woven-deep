@@ -3,24 +3,29 @@ import {
   createNewRun,
   decodeActiveRun,
   encodeActiveRun,
+  finalizeRun,
   isHeartBossActive,
   projectGameplayState,
   projectRunConclusion,
   DEFAULT_GUEST_HERO,
   type ActiveRun,
+  type AchievementGrant,
   type GameCommand,
   type NewRunHero,
   type PublicDecision,
   type PublicEvent,
+  type StoredHallRecord,
   type Uint32State,
 } from '@woven-deep/engine';
 import {
   dispatchCommand,
   dispatchIntent,
+  evaluateUnlocks,
   type PlayerIntent,
   type ServerRunSnapshot,
 } from '@woven-deep/session-core';
 import type { ActiveRunRepository } from '../db/active-run-repository.js';
+import type { ServerRunRecordRepository } from '../db/hall-repository.js';
 
 /**
  * How many consecutive pure-movement commands may apply before the server checkpoints the run to
@@ -117,27 +122,38 @@ type Clock = () => string;
 export class ServerPlaySession {
   private readonly pack: CompiledContentPack;
   private readonly repo: ActiveRunRepository;
+  private readonly hallRepo: ServerRunRecordRepository;
   private readonly profileId: string;
   private readonly clock: Clock;
+  private readonly portraitGlyph: string;
   private run!: ActiveRun;
   private houseOpen = false;
   private lastEvents: readonly PublicEvent[] = [];
   private pendingDecision: PublicDecision | null = null;
   private movesSinceCheckpoint = 0;
   private dirty = false;
+  // Set exactly once, by `maybeFinalize()`, the run this conclusion belongs to -- carried here
+  // (rather than re-derived) so `snapshot()` can project the real score/heirloom/achievements
+  // without re-touching the Hall repository on every snapshot.
+  private finalizedRecord: StoredHallRecord | null = null;
+  private finalizedAchievements: readonly AchievementGrant[] = [];
 
   constructor(
     input: Readonly<{
       pack: CompiledContentPack;
       repo: ActiveRunRepository;
+      hallRepo: ServerRunRecordRepository;
       profileId: string;
       clock?: Clock;
+      portraitGlyph?: string;
     }>,
   ) {
     this.pack = input.pack;
     this.repo = input.repo;
+    this.hallRepo = input.hallRepo;
     this.profileId = input.profileId;
     this.clock = input.clock ?? (() => new Date().toISOString());
+    this.portraitGlyph = input.portraitGlyph ?? '@';
   }
 
   /**
@@ -161,6 +177,9 @@ export class ServerPlaySession {
       });
       this.persist();
     }
+    // A reconnect may load a run that concluded but never finished finalizing (e.g. a crash
+    // between the conclusion-producing command and the finalize step below) -- catch it up here.
+    this.maybeFinalize();
     return this.snapshot();
   }
 
@@ -168,6 +187,14 @@ export class ServerPlaySession {
   applyIntent(
     input: Readonly<{ commandId: string; expectedRevision: number; intent: PlayerIntent }>,
   ): ApplyOutcome {
+    // Once finalized, the run is over: any further command (a stray resend, a reconnect that
+    // raced the finalize, etc.) is a no-op rather than being dispatched -- dispatching would risk
+    // replaying a *cached* pre-finalize resolution (see `dispatchIntent`'s idempotency cache) and
+    // re-entering `maybeFinalize()`, whose Hall-record append would then collide on the
+    // deterministic record ID.
+    if (this.isFinalized()) {
+      return { kind: 'state', snapshot: this.snapshot() };
+    }
     const outcome = dispatchIntent(this.run, input.intent, {
       pack: this.pack,
       commandId: input.commandId,
@@ -196,7 +223,17 @@ export class ServerPlaySession {
 
   /** Applies a raw engine command (the decision / final-chamber paths that bypass `buildIntent`). */
   applyCommand(command: GameCommand): ApplyOutcome {
+    if (this.isFinalized()) {
+      return { kind: 'state', snapshot: this.snapshot() };
+    }
     return this.applyResolution(dispatchCommand(this.run, command, { pack: this.pack }), false);
+  }
+
+  /** Whether this session's run has already been finalized into the Hall -- once true, the run is
+   * permanently over and no further command may mutate it (see the guards in `applyIntent` /
+   * `applyCommand` above). */
+  private isFinalized(): boolean {
+    return this.run.conclusion !== null && this.run.conclusion.finalized;
   }
 
   /**
@@ -236,7 +273,53 @@ export class ServerPlaySession {
     } else {
       this.checkpoint();
     }
+    // The run has just (possibly) concluded -- finalize it into the Hall before snapshotting, so
+    // the conclusion the caller sees is already the real, scored one.
+    this.maybeFinalize();
     return { kind: 'state', snapshot: this.snapshot() };
+  }
+
+  /**
+   * Finalizes this session's concluded run into the profile's Hall exactly once, mirroring the
+   * guest's `finalizeConcludedRun` (see `apps/web/src/session/guest-session.ts`): `finalizeRun`
+   * (pure, unchanged engine code) produces the Hall record + lifetime deltas from the server's
+   * authoritative run; only the enrichment (`achievedAt`/`portraitGlyph`) is host-supplied. The
+   * record is appended, the deltas applied, unlocks re-evaluated over the full updated Hall +
+   * lifetime and persisted, this run's achievement grants folded into the lifetime-accumulated
+   * set, and the now-finished active run row cleared so the profile can start a new one. A no-op
+   * when the run has not concluded, or has already been finalized -- the double-finalize guard
+   * that keeps a resend/reconnect from appending a second, colliding Hall record.
+   */
+  private maybeFinalize(): void {
+    if (this.run.conclusion === null || this.run.conclusion.finalized) return;
+
+    const finalized = finalizeRun({
+      run: this.run,
+      content: this.pack,
+      lifetime: this.hallRepo.lifetime(),
+    });
+    this.run = finalized.run;
+
+    const stored: StoredHallRecord = {
+      ...finalized.record,
+      enrichment: { achievedAt: this.clock(), portraitGlyph: this.portraitGlyph },
+    };
+    this.hallRepo.appendRecord(stored);
+    this.hallRepo.applyDeltas(finalized.deltas);
+
+    const unlocks = evaluateUnlocks({
+      records: this.hallRepo.records(),
+      lifetime: this.hallRepo.lifetime(),
+      content: this.pack,
+    });
+    this.hallRepo.setUnlocks(unlocks);
+    this.hallRepo.appendAchievements(finalized.deltas.achievementGrants);
+
+    this.finalizedRecord = stored;
+    this.finalizedAchievements = finalized.deltas.achievementGrants;
+
+    // The run is over -- clear the active run row so the profile's next open() starts fresh.
+    this.repo.clear(this.profileId);
   }
 
   /** Persists the latest run state (called on disconnect and any time an unwritten checkpoint is
@@ -275,7 +358,11 @@ export class ServerPlaySession {
       pendingDecision: this.pendingDecision,
       conclusion:
         this.run.conclusion !== null
-          ? projectRunConclusion({ run: this.run, record: null, achievements: [] })
+          ? projectRunConclusion({
+              run: this.run,
+              record: this.finalizedRecord,
+              achievements: this.finalizedAchievements,
+            })
           : null,
       houseOpen: this.houseOpen,
       heroClassTags: this.run.hero.classTags,

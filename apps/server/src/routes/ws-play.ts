@@ -1,10 +1,12 @@
 import { randomFillSync } from 'node:crypto';
+import type Database from 'better-sqlite3';
 import type { FastifyInstance } from 'fastify';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { ENGINE_GAME_VERSION, SAVE_SCHEMA_VERSION, type Uint32State } from '@woven-deep/engine';
 import type { AuthBundle } from './auth.js';
 import { requireOrigin, requireSession } from '../auth/http-guards.js';
 import type { ActiveRunRepository } from '../db/active-run-repository.js';
+import { ServerRunRecordRepository } from '../db/hall-repository.js';
 import { ConnectionRegistry } from '../play/connection-registry.js';
 import type { PlaySocket } from '../play/play-socket.js';
 import {
@@ -127,9 +129,14 @@ export function handleMessage(session: ServerPlaySession, raw: unknown): readonl
  */
 export function registerWsPlayRoute(
   app: FastifyInstance,
-  input: Readonly<{ auth: AuthBundle; pack: CompiledContentPack; repo: ActiveRunRepository }>,
+  input: Readonly<{
+    auth: AuthBundle;
+    pack: CompiledContentPack;
+    repo: ActiveRunRepository;
+    database: Database.Database;
+  }>,
 ): void {
-  const { auth, pack, repo } = input;
+  const { auth, pack, repo, database } = input;
   const registry = new ConnectionRegistry();
 
   app.get(
@@ -148,7 +155,14 @@ export function registerWsPlayRoute(
       }
 
       const existing = registry.get(profileId);
-      const session = existing?.session ?? new ServerPlaySession({ pack, repo, profileId });
+      const session =
+        existing?.session ??
+        new ServerPlaySession({
+          pack,
+          repo,
+          profileId,
+          hallRepo: new ServerRunRecordRepository({ database, profileId }),
+        });
 
       // Attach handlers synchronously before any work runs (session.open below is synchronous
       // too, so there's no async gap for a message to slip through unhandled, but this is the

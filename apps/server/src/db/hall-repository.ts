@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import {
   createInMemoryRunRecordRepository,
   standingsFromRecords,
+  type AchievementGrant,
   type FallenHeroStandingSnapshot,
   type HeartLineageRecord,
   type LifetimeDeltas,
@@ -200,5 +201,44 @@ export class ServerRunRecordRepository implements RunRecordRepository {
       appliedDeltas: [...envelope.appliedDeltas, deltas],
     };
     this.writeState({ lifetimeEnvelope: nextEnvelope });
+  }
+
+  /** The profile's currently unlocked (content-locked-by-default) class ids, as last evaluated by
+   * `evaluateUnlocks` — a full replacement each call, never merged, since the caller always
+   * recomputes the complete set from the profile's full Hall records + lifetime state. */
+  unlocks(): readonly string[] {
+    const state = this.readState();
+    return state ? (JSON.parse(state.unlocks_json) as string[]) : [];
+  }
+
+  setUnlocks(unlocks: readonly string[]): void {
+    this.writeState({ unlocksJson: JSON.stringify(unlocks) });
+  }
+
+  /** The profile's lifetime-accumulated achievement grants (richer than
+   * `lifetime().grantedAchievementIds` — carries the display name + criteria alongside the id). */
+  achievements(): readonly AchievementGrant[] {
+    const state = this.readState();
+    return state ? (JSON.parse(state.achievements_json) as AchievementGrant[]) : [];
+  }
+
+  /** Merges newly-granted achievements into the persisted lifetime set, deduplicated by
+   * `achievementId` and sorted for a stable, deterministic on-disk representation. A no-op when
+   * every grant is already present (e.g. a re-finalize guarded elsewhere never reaches here, but
+   * this stays safe to call defensively). */
+  appendAchievements(grants: readonly AchievementGrant[]): void {
+    if (grants.length === 0) return;
+    const existing = this.achievements();
+    const existingIds = new Set(existing.map((grant) => grant.achievementId));
+    const additions = grants.filter((grant) => !existingIds.has(grant.achievementId));
+    if (additions.length === 0) return;
+    const merged = [...existing, ...additions].sort((left, right) =>
+      left.achievementId < right.achievementId
+        ? -1
+        : left.achievementId > right.achievementId
+          ? 1
+          : 0,
+    );
+    this.writeState({ achievementsJson: JSON.stringify(merged) });
   }
 }

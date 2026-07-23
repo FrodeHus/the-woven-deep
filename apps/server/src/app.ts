@@ -63,8 +63,9 @@ export function buildApp(input: {
     if (input.database) {
       const repo = new ActiveRunRepository(input.database);
       void app.register(fastifyWebsocket);
+      const database = input.database;
       void app.register((instance, _opts, done) => {
-        registerWsPlayRoute(instance, { auth, pack: input.pack, repo });
+        registerWsPlayRoute(instance, { auth, pack: input.pack, repo, database });
         done();
       });
     }
