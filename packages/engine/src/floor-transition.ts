@@ -28,6 +28,33 @@ function nextFloorId(depth: number): string {
   return depthFloorId(depth);
 }
 
+const MILESTONE_BOSS_VAULT_TAG = 'milestone-boss';
+
+/**
+ * The single `milestone-boss`-tagged vault whose depth band contains `depth`, if any. Each milestone
+ * arena is depth-pinned (`minDepth == maxDepth`), so at most one matches a given depth; more than one
+ * is a content authoring error. Keeps the milestone depth set {5,10,15} entirely in content -- the
+ * engine only knows "force the milestone-boss vault pinned here, if one exists."
+ */
+export function milestoneBossVaultId(
+  vaults: readonly VaultContentEntry[],
+  depth: number,
+): string | undefined {
+  const matches = vaults.filter(
+    (vault) =>
+      vault.tags.includes(MILESTONE_BOSS_VAULT_TAG) &&
+      depth >= vault.minDepth &&
+      depth <= vault.maxDepth,
+  );
+  if (matches.length > 1) {
+    throw new Error(
+      `internal invariant: ${matches.length} milestone-boss vaults pinned to depth ${depth}: ` +
+        matches.map((vault) => vault.id).join(', '),
+    );
+  }
+  return matches[0]?.id;
+}
+
 /**
  * Fires every un-fired balance restock milestone the run's dungeon high-water mark has now
  * reached, restocking every permanent (town) merchant once per milestone and recording it in
@@ -171,6 +198,7 @@ export function descendToNextFloor(
   const vaults = context.content.entries.filter(
     (entry): entry is VaultContentEntry => entry.kind === 'vault',
   );
+  const requiredVaultId = milestoneBossVaultId(vaults, nextDepth);
   const generated = generateFloor({
     floorId,
     floorSeed: allocation.floorSeed,
@@ -183,6 +211,7 @@ export function descendToNextFloor(
       NEW_RUN_FLOOR_THEME_SETTINGS,
     ),
     vaults,
+    ...(requiredVaultId === undefined ? {} : { requiredVaultId }),
   });
   const stairUp = generated.floor.stairUp;
   if (stairUp === null) throw new Error('internal invariant: generated floor must have a stair-up');

@@ -1,0 +1,62 @@
+schemaVersion: 7
+entries:
+  - kind: item
+    id: item.ashfather-cinder
+    name: The Ashfather's Cinder
+    glyph: "*"
+    color: "#ff6a2a"
+    description: A coal that outlived the fire it came from. It sharpens the eye the way standing near a forge does — everything edged in heat-shimmer.
+    lore: "Taken from the pyre while it still remembered being a whole fire. It has not gone cold, and gives every sign it never intends to."
+    tags: [boss-reward, fire, offense]
+    minDepth: 5
+    maxDepth: 20
+    category: ring
+    stackLimit: 1
+    price: 150
+    rarity: legendary
+    actionCost: 100
+    equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
+    combat: { accuracy: 1, defense: 0, armor: 0, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []
+  - kind: item
+    id: item.tide-crown
+    name: The Drowned Crown
+    glyph: "*"
+    color: "#3a8fb0"
+    description: A circlet still cold from the water it was pulled from. Wearing it steadies the hand and turns aside a blow the way a current turns aside a stone.
+    lore: "It ruled a court that forgot how to leave. On a living brow it is only cold — but it is the cold of something that has waited a very long time and is good at it."
+    tags: [boss-reward, cold, defense]
+    minDepth: 10
+    maxDepth: 20
+    category: ring
+    stackLimit: 1
+    price: 200
+    rarity: legendary
+    actionCost: 100
+    equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
+    combat: { accuracy: 1, defense: 1, armor: 0, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []
+  - kind: item
+    id: item.herald-sigil
+    name: The Herald's Sigil
+    glyph: "*"
+    color: "#c9425f"
+    description: A token pressed from the Heart's own corruption, worn as a warning and kept as a ward. It thickens the skin against what the deep throws, at the cost of a faint, constant ache.
+    lore: "The Heart marks its heralds so the deep knows them. Pried off and worn, the mark still works — the deep simply mistakes you for something it has already claimed."
+    tags: [boss-reward, heart, arcane]
+    minDepth: 15
+    maxDepth: 20
+    category: ring
+    stackLimit: 1
+    price: 230
+    rarity: legendary
+    actionCost: 100
+    equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
+    combat: { accuracy: 1, defense: 0, armor: 1, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []

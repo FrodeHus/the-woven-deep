@@ -38,9 +38,13 @@ function context() {
   return { content: pack };
 }
 
+// Scoped to permanent (town) merchants -- `departureAt: null` -- so a transient merchant the
+// hero happens to encounter elsewhere while descending (e.g. a travelling merchant rolled onto an
+// intermediate floor) can never shift the by-index alignment this suite relies on.
 function townMerchants(run: ActiveRun): readonly MerchantPopulation[] {
   return run.populations.filter(
-    (population): population is MerchantPopulation => population.model === 'merchant',
+    (population): population is MerchantPopulation =>
+      population.model === 'merchant' && population.departureAt === null,
   );
 }
 

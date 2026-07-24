@@ -1,0 +1,28 @@
+schemaVersion: 7
+entries:
+  - kind: monster
+    id: monster.ashfather
+    name: The Ashfather
+    glyph: "A"
+    color: "#ff6a2a"
+    description: The first fire that took, and the last to go out. It has burned in this hollow long enough to forget it was ever meant to stop.
+    lore: "Every warden below it was kindled from this coal. It does not command them so much as remember them, one flame recalling all the smaller flames it once spat out."
+    tags: [boss, fire, guardian]
+    minDepth: 5
+    maxDepth: 5
+    attributes: { might: 13, agility: 7, vitality: 12, wits: 8, resolve: 13 }
+    health: 44
+    speed: 90
+    accuracy: 6
+    defense: 13
+    perception: 9
+    damage: { count: 2, sides: 6, bonus: 3 }
+    armor: 4
+    resistances: { physical: 10, fire: 80, cold: -30, lightning: 0, poison: 30, arcane: 10 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 13
+    rarity: legendary
+    lootTableId: loot-table.ashfather
+    dropChance: 1
