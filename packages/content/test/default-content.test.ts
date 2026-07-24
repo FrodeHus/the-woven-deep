@@ -39,7 +39,7 @@ describe('bundled content', () => {
       balance: 1,
       vault: 3,
       'identification-pool': 2,
-      encounter: 34,
+      encounter: 42,
       'fallen-champion-template': 1,
       npc: 5,
       'npc-faction': 5,

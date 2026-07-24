@@ -34,7 +34,7 @@ entries:
     color: "#6a4f92"
     description: The bindings have fused into its flesh, and it swings the trailing lengths of them like weapons it no longer remembers picking up.
     lore: "Whatever it was chained for is forgotten. The chains stayed, and it learned to hit things with them, and that was enough purpose to keep it upright."
-    tags: [the-bound, arcane, brute]
+    tags: [the-bound, arcane, brute, swarm-source]
     minDepth: 13
     maxDepth: 16
     attributes: { might: 14, agility: 7, vitality: 14, wits: 7, resolve: 12 }
