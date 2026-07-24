@@ -8,8 +8,11 @@ roadmap.md` §7), after **7A** (deep dungeon 13–19, merged via #88). Branch `f
 Gives the descent a rhythmic "every-5-floors" boss beat that mirrors the depth-20 Final Chamber:
 three **guaranteed** milestone bosses at depths 5, 10, and 15, each a band capstone that escalates
 toward the Heart, each dropping a unique reward. **Mostly content authoring against existing schemas,
-plus one small, additive engine change** — wiring the already-existing `requiredVaultId` primitive into
-the real per-depth floor generation so a boss-arena vault is forced to place on the milestone floors.
+plus two small, additive, off-milestone-no-op engine changes**: (a) wiring the already-existing
+`requiredVaultId` primitive into the real per-depth floor generation so a boss-arena vault is forced to
+place on the milestone floors, and (b) a guaranteed vault-gated boss pre-pass in floor population
+placement so the boss is *placed* (not merely *eligible*) once its arena is present. Both are byte-
+identical no-ops on every non-milestone floor.
 
 ## Scope of Milestone 7 (context) — what this sub-project is NOT
 
@@ -54,17 +57,22 @@ class foreshadowing. Ranged/caster monster AI is out of the whole milestone (see
 
 ## Design
 
-### 1. The guarantee — force a milestone-boss arena vault via `requiredVaultId` (⚙️ the one engine change)
+### 1. The guarantee — force the arena vault, then force-place the boss (⚙️ two contained engine changes)
 
-Each milestone floor gets a hand-authored **boss-arena vault** that is forced to place every run. The
-boss binds to it through the existing generic mechanism; the only new engine behavior is *forcing the
-arena*.
+Each milestone floor gets a hand-authored **boss-arena vault** forced to place every run, and the
+vault-gated boss is force-placed once its arena is present. Both engine touches are no-ops on every
+non-milestone floor. A crucial subtlety this design accounts for: **`requiredVaultId` alone does NOT
+guarantee the boss.** It forces only the arena *room* (and its `monster` slot). The boss itself is
+placed by `placeFloorPopulations`, which weighted-selects among *all* eligible encounters (regular
+encounters have `requiredVaultTags: []`, so they are always eligible and compete). So forcing the arena
+makes the boss *eligible and correctly anchored*, but a second change is needed to make it *always
+placed*.
 
-- **Data-driven discovery (no hardcoded depths or ids in the engine).** Tag each arena vault
-  `milestone-boss` and pin it to its depth (`minDepth == maxDepth == 5|10|15`). In
+- **Change (a) — force the arena via `requiredVaultId` (data-driven, no hardcoded depths/ids).** Tag
+  each arena vault `milestone-boss` and pin it to its depth (`minDepth == maxDepth == 5|10|15`). In
   `floor-transition.ts`, immediately before the normal `generateFloor(...)` call (the `else` path at
-  ~line 170-186, NOT the Final-Chamber branch), compute the required vault by filtering
-  `context.content` for vault entries tagged `milestone-boss` whose depth band contains `nextDepth`:
+  ~line 170-186, NOT the Final-Chamber branch), compute the required vault by filtering the already-
+  built `vaults` array for entries tagged `milestone-boss` whose depth band contains `nextDepth`:
   - **exactly one match** → pass its `id` as `requiredVaultId` to `generateFloor` (spread it in exactly
     as `requiredVaultId` is already spread at `generate-floor.ts:213-215`);
   - **no match** → pass nothing (behavior byte-identical to today — every non-milestone depth);
@@ -72,8 +80,17 @@ arena*.
     milestone arenas cannot both be forced on one floor).
 
   This keeps the set `{5,10,15}` entirely in **content** (three vaults tagged `milestone-boss`); the
-  engine only knows "if a milestone-boss vault is pinned to this depth, force it." Adding or moving a
-  milestone boss later is a pure content edit.
+  engine only knows "if a milestone-boss vault is pinned to this depth, force it." Because each arena is
+  depth-pinned (`minDepth == maxDepth`), it can only ever appear on its own milestone floor.
+- **Change (b) — guaranteed vault-gated boss pre-pass in `placeFloorPopulations`.** Before the existing
+  weighted density-attempt loop (`population-placement.ts` ~line 1084), force-place every eligible
+  `model: 'boss'` encounter whose **non-empty** `requiredAnchorTags` (= `requiredVaultTags` +
+  `definition.vaultTags`) are all present in the floor's vault tags — reusing `placePopulation` with
+  `forcedEncounterId` and committing exactly as the loop body does. The **non-empty** guard is critical:
+  it force-places the milestone bosses (which require a `<boss-tag>`) while excluding the existing
+  random `ashen-warden` (empty vault tags), so its weighted behavior is unchanged. On any non-milestone
+  floor no milestone-tagged vault is present, so the pre-pass places nothing and consumes no RNG →
+  byte-identical. This is the change that turns "eligible" into "guaranteed."
 - **The arena vault** (one YAML per boss, e.g. `content/vaults/ashfather-arena.yaml`, mirroring
   `final-chamber.yaml`'s layout/legend/slot shape): `tags: [milestone-boss, <boss-tag>]`,
   `minDepth: maxDepth: <5|10|15>`, `maxPerFloor: 1`, an enclosed arena room with an entrance, and a
@@ -82,9 +99,9 @@ arena*.
 - **The boss encounter** (authored in `content/encounters/`, model `boss`): `minDepth: maxDepth:
   <5|10|15>`, `runAppearanceChance: 1.0` (always run-eligible — the per-run decision roll passes every
   run), `maximumInstancesPerRun: 1`, `requiredVaultTags: [<boss-tag>]`, `placement.requiresVaultSlot:
-  true` with `allowedTerrainTags: [floor]`. Because the arena is forced to place and its tag makes this
-  the eligible boss for that pinned depth, the boss spawns in the arena **every run**. Pinning
-  `minDepth == maxDepth` guarantees it never competes on any other floor.
+  true` with `allowedTerrainTags: [floor]`. Arena forced (a) → tags + anchor slot present → the pre-pass
+  (b) force-places the boss in the arena's monster slot **every run**. Pinning `minDepth == maxDepth`
+  guarantees it never appears on any other floor.
 
 ### 2. The three bosses — band capstones escalating toward the Heart
 
@@ -157,10 +174,13 @@ D5 ≤ D10 ≤ D15).
   - Content compiles under STRICT zod (`z.strictObject`): the three bosses (monsters + boss encounters),
     three arena vaults (with a required `monster` slot), three reward items, three enhanced loot tables;
     all referenced ids resolve; `maxDepth >= minDepth`.
-  - **Engine — the guarantee:** a test that per-depth generation for depths 5, 10, 15 **always** places
-    that depth's milestone-boss arena vault and spawns its boss in the arena's monster slot, and that a
-    non-milestone depth (e.g. 6) forces no milestone vault (behavior unchanged). Assert the "more than
-    one milestone vault at a depth" invariant throws.
+  - **Engine — change (a):** a unit test of the `milestoneBossVaultId(vaults, depth)` discovery helper —
+    returns the pinned arena id for depths 5/10/15, `undefined` for a non-milestone depth (e.g. 6), and
+    throws on two milestone vaults pinned to one depth.
+  - **Engine — change (b) + end-to-end guarantee:** a test that a full floor generation + population at
+    depths 5, 10, 15 (real content, real `requiredVaultId` wiring) **always** places the arena vault and
+    spawns the milestone boss anchored in the arena's `monster` slot; and that a non-milestone depth
+    (e.g. 6) places no milestone vault and no forced boss (pre-pass is a no-op → RNG untouched).
   - **Engine — boss lifecycle (reuse `boss-behavior`):** a milestone boss transitions phases at its
     health thresholds and drops its `uniqueItemId` on death (one boss suffices — the mechanism is
     generic and already covered for `heart-boss`/`ashen-warden`).
@@ -175,7 +195,8 @@ D5 ≤ D10 ≤ D15).
 
 7B delivers three guaranteed milestone bosses (5/10/15) as band capstones escalating toward the Heart,
 each in a forced boss-arena vault, each dropping a unique reward — reusing the generic boss model, the
-vault-gated population path, and the existing `requiredVaultId` primitive. The **only** engine change is
-data-driven wiring of `requiredVaultId` into the real per-depth floor generation for depths that have a
-`milestone-boss`-tagged vault; everything else is content. No new gameplay systems, no server-authority
-changes, no new special-case engine branch.
+vault-gated population path, and the existing `requiredVaultId` primitive. The engine changes are two
+small, additive, off-milestone-no-op touches: (a) data-driven wiring of `requiredVaultId` into the real
+per-depth floor generation for depths that have a `milestone-boss`-tagged vault, and (b) a guaranteed
+vault-gated boss pre-pass in `placeFloorPopulations`. Everything else is content. No new gameplay
+systems, no server-authority changes, no new special-case engine branch.
