@@ -13,6 +13,7 @@ import { usePack, useSessionCtx } from '../providers.js';
 import { InventoryOverlay } from './InventoryOverlay.js';
 import { CharacterSheetOverlay } from './CharacterSheetOverlay.js';
 import { MapJournalOverlay } from './MapJournalOverlay.js';
+import { SpellbookOverlay } from './SpellbookOverlay.js';
 import { CodexOverlay } from './CodexOverlay.js';
 import { SettingsOverlay } from './SettingsOverlay.js';
 import { HelpOverlay } from './HelpOverlay.js';
@@ -54,6 +55,10 @@ export interface OverlayHostProps {
     itemId: string,
     spell: Pick<CastableSpellView, 'spellId' | 'name' | 'range' | 'targetingId' | 'aoe'>,
   ) => void;
+  /** Forwarded straight through to the spellbook overlay body -- enters the shared spell-targeting
+   * mode for the selected spell, the same path the always-on HUD `SpellsPanel` uses. Optional so
+   * every pre-existing caller/test (none of which open the spellbook) keeps compiling unchanged. */
+  readonly onCastSpell?: (spellId: string) => void;
 }
 
 /**
@@ -75,6 +80,7 @@ export function OverlayHost({
   sightings,
   account,
   onBeginScrollTargeting,
+  onCastSpell,
 }: Readonly<OverlayHostProps>): JSX.Element | null {
   const pack = usePack();
   const sessionCtx = useSessionCtx();
@@ -93,6 +99,7 @@ export function OverlayHost({
     snapshot: sessionCtx?.snapshot,
     sightings: sightings ?? sessionCtx?.snapshot.sightings,
     onBeginScrollTargeting,
+    onCastSpell,
     onClose,
   });
 
@@ -140,6 +147,7 @@ interface RenderBodyContext {
         spell: Pick<CastableSpellView, 'spellId' | 'name' | 'range' | 'targetingId' | 'aoe'>,
       ) => void)
     | undefined;
+  readonly onCastSpell: ((spellId: string) => void) | undefined;
   readonly onClose: () => void;
 }
 
@@ -159,6 +167,9 @@ function renderBody(overlay: OverlayId, ctx: RenderBodyContext): JSX.Element {
     case 'map-journal':
       if (!ctx.snapshot) return <p>The map and journal are unavailable right now.</p>;
       return <MapJournalOverlay />;
+    case 'spellbook':
+      if (!ctx.snapshot) return <p>Your spellbook is unavailable right now.</p>;
+      return <SpellbookOverlay onCast={ctx.onCastSpell} />;
     case 'codex':
       // Codex renders from the session-less title screen too, so it takes records/snapshot/
       // sightings/pack as explicit props here rather than reading them from session context.
