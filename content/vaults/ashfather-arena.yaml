@@ -1,0 +1,30 @@
+schemaVersion: 7
+entries:
+  - kind: vault
+    id: vault.ashfather-arena
+    name: The Ashfather's Pyre
+    tags: [milestone-boss, milestone-boss-5]
+    minDepth: 5
+    maxDepth: 5
+    rarity: common
+    weight: 1
+    maxPerFloor: 1
+    margin: 0
+    transforms:
+      rotations: [0]
+      reflectHorizontal: false
+    layout:
+      - "#########"
+      - "#.......#"
+      - "+.......#"
+      - "#.......#"
+      - "#...B...#"
+      - "#.......#"
+      - "#########"
+    legend:
+      "#": { terrain: wall }
+      ".": { terrain: floor }
+      "+": { terrain: floor, entrance: true }
+      "B":
+        terrain: floor
+        slot: { id: boss, kind: monster, required: true, tags: [milestone-boss-5] }
