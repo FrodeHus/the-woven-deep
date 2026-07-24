@@ -1,0 +1,109 @@
+schemaVersion: 7
+entries:
+  - kind: monster
+    id: monster.bound-wretch
+    name: Bound wretch
+    glyph: b
+    color: "#7a5fa0"
+    description: A husk of someone the Heart never let finish dying, dragging its bindings toward any warmth it can still feel.
+    lore: "It reaches for the living the way a sleeper gropes for a blanket pulled away in the night, and it has been groping for a very long time."
+    tags: [the-bound, arcane, skirmisher]
+    minDepth: 13
+    maxDepth: 15
+    attributes: { might: 12, agility: 9, vitality: 12, wits: 7, resolve: 11 }
+    health: 48
+    speed: 100
+    accuracy: 5
+    defense: 12
+    perception: 8
+    damage: { count: 2, sides: 8, bonus: 1 }
+    armor: 3
+    resistances: { physical: 30, fire: -25, cold: 0, lightning: 0, poison: 10, arcane: 40 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 10
+    rarity: common
+    lootTableId: loot-table.the-bound
+    dropChance: 0.35
+
+  - kind: monster
+    id: monster.bound-shackled
+    name: Shackled remnant
+    glyph: b
+    color: "#6a4f92"
+    description: The bindings have fused into its flesh, and it swings the trailing lengths of them like weapons it no longer remembers picking up.
+    lore: "Whatever it was chained for is forgotten. The chains stayed, and it learned to hit things with them, and that was enough purpose to keep it upright."
+    tags: [the-bound, arcane, brute]
+    minDepth: 13
+    maxDepth: 16
+    attributes: { might: 14, agility: 7, vitality: 14, wits: 7, resolve: 12 }
+    health: 52
+    speed: 95
+    accuracy: 5
+    defense: 11
+    perception: 7
+    damage: { count: 2, sides: 8, bonus: 2 }
+    armor: 4
+    resistances: { physical: 35, fire: -25, cold: 0, lightning: 0, poison: 15, arcane: 45 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 11
+    rarity: common
+    lootTableId: loot-table.the-bound
+    dropChance: 0.4
+
+  - kind: monster
+    id: monster.bound-warden
+    name: Bound warden
+    glyph: B
+    color: "#5a3f82"
+    description: Slabs of fused binding-iron plate its shoulders and skull, a warden of nothing, guarding a threshold no one crosses anymore.
+    lore: "It still keeps a post. The post is gone, the thing it guarded is gone, and the warden has forgotten both, but it will not step aside."
+    tags: [the-bound, arcane, armored]
+    minDepth: 14
+    maxDepth: 16
+    attributes: { might: 15, agility: 6, vitality: 15, wits: 8, resolve: 13 }
+    health: 53
+    speed: 90
+    accuracy: 6
+    defense: 12
+    perception: 7
+    damage: { count: 2, sides: 8, bonus: 2 }
+    armor: 5
+    resistances: { physical: 45, fire: -20, cold: 5, lightning: 0, poison: 15, arcane: 45 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 12
+    rarity: uncommon
+    lootTableId: loot-table.the-bound
+    dropChance: 0.4
+
+  - kind: monster
+    id: monster.bound-hexbound
+    name: Hexbound
+    glyph: H
+    color: "#8a5fc0"
+    description: The bindings have gone quiet and cold around this one, and the air near it bends the way heat-haze bends, only wrong.
+    lore: "The Heart wound its threads tightest here, and something in the tangle learned to pull back. It is not free. It has only learned which way the leash runs."
+    tags: [the-bound, arcane, caster, hexbound]
+    minDepth: 15
+    maxDepth: 16
+    attributes: { might: 9, agility: 8, vitality: 12, wits: 15, resolve: 15 }
+    health: 52
+    speed: 105
+    accuracy: 6
+    defense: 14
+    perception: 10
+    damage: { count: 3, sides: 6, bonus: 2 }
+    armor: 3
+    resistances: { physical: 45, fire: -30, cold: 10, lightning: 0, poison: 20, arcane: 55 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 13
+    rarity: rare
+    lootTableId: loot-table.the-bound
+    dropChance: 0.45
