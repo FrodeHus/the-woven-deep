@@ -368,6 +368,7 @@ export function PlayScreen({
         <OverlayHost
           overlay={overlay}
           onClose={onCloseOverlay}
+          onBeginScrollTargeting={(itemId, spell) => targeting.beginScroll(itemId, spell)}
           isPlayActive
           records={records}
           onClearGuestSession={onClearGuestSession}

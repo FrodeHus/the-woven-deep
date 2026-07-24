@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Point } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import { actorsOf, chebyshev, heroOf } from '../../session/projection-view.js';
+import type { CastableSpellView } from '../../session/projection-view.js';
 import type { RunSession } from '../../session/run-session.js';
 import {
   affectedFootprint,
@@ -9,6 +10,18 @@ import {
   computeValidTargets,
   type TargetCandidate,
 } from '../../session/spell-targeting.js';
+
+type ScrollSpellDescriptor = Pick<
+  CastableSpellView,
+  'spellId' | 'name' | 'range' | 'targetingId' | 'aoe'
+>;
+
+/** What confirming the current aim dispatches: a `cast` for a spell chosen from the panel/command
+ * palette, or a `use`+target for a targeted scroll read from the inventory. The aim flow (reticle,
+ * footprint, range clamp, cancel) is identical either way -- only the dispatch on confirm differs. */
+type TargetingPending =
+  | { readonly kind: 'spell'; readonly spellId: string }
+  | { readonly kind: 'scroll'; readonly itemId: string; readonly spell: ScrollSpellDescriptor };
 
 function cellKey(point: Point): string {
   return `${point.x},${point.y}`;
@@ -43,6 +56,11 @@ export interface UseSpellTargetingResult {
   readonly canConfirm: boolean;
   /** Enters targeting mode for `spellId` (called by the Spells panel / command palette). */
   readonly begin: (spellId: string) => void;
+  /** Enters targeting mode for a targeted scroll read from the inventory (`InventoryOverlay`'s
+   * `use` action for an item whose `spellId` resolves to an aimed spell -- see
+   * `scrollAimSpell`). Confirming dispatches `{type:'backpack', action:'use', itemId, target}`
+   * instead of a `cast`. */
+  readonly beginScroll: (itemId: string, spell: ScrollSpellDescriptor) => void;
   /** Exits targeting mode without dispatching anything (Escape / right-click). */
   readonly cancel: () => void;
   /** Casts at `point` if it is a legal aim for the active spell, then exits targeting; a no-op
@@ -85,14 +103,19 @@ export function useSpellTargeting(
   snapshot: SessionSnapshot,
 ): UseSpellTargetingResult {
   const { projection } = snapshot;
-  const [activeSpellId, setActiveSpellId] = useState<string | null>(null);
+  const [pending, setPending] = useState<TargetingPending | null>(null);
   const [reticleIndex, setReticleIndex] = useState(0);
   const [freeReticle, setFreeReticle] = useState<Point | null>(null);
 
   const hero = heroOf(projection);
-  const spell = activeSpellId
-    ? (hero.castableSpells ?? []).find((candidate) => candidate.spellId === activeSpellId)
-    : undefined;
+  const activeSpellId =
+    pending === null ? null : pending.kind === 'spell' ? pending.spellId : pending.spell.spellId;
+  const spell: ScrollSpellDescriptor | undefined =
+    pending === null
+      ? undefined
+      : pending.kind === 'scroll'
+        ? pending.spell
+        : (hero.castableSpells ?? []).find((candidate) => candidate.spellId === pending.spellId);
   const isAoe = isAoeTargetingId(spell?.targetingId);
 
   const candidates = useMemo<readonly TargetCandidate[]>(() => {
@@ -134,7 +157,7 @@ export function useSpellTargeting(
 
   const begin = useCallback(
     (spellId: string): void => {
-      setActiveSpellId(spellId);
+      setPending({ kind: 'spell', spellId });
       setReticleIndex(0);
       const next = (hero.castableSpells ?? []).find((candidate) => candidate.spellId === spellId);
       setFreeReticle(isAoeTargetingId(next?.targetingId) ? { x: hero.x, y: hero.y } : null);
@@ -142,41 +165,61 @@ export function useSpellTargeting(
     [hero],
   );
 
+  const beginScroll = useCallback(
+    (itemId: string, spellDescriptor: ScrollSpellDescriptor): void => {
+      setPending({ kind: 'scroll', itemId, spell: spellDescriptor });
+      setReticleIndex(0);
+      setFreeReticle(
+        isAoeTargetingId(spellDescriptor.targetingId) ? { x: hero.x, y: hero.y } : null,
+      );
+    },
+    [hero],
+  );
+
   const cancel = useCallback((): void => {
-    setActiveSpellId(null);
+    setPending(null);
     setFreeReticle(null);
   }, []);
 
-  const dispatchCast = useCallback(
+  const dispatchConfirm = useCallback(
     (point: Point): void => {
-      if (!activeSpellId) return;
-      session.dispatch({ type: 'cast', spellId: activeSpellId, target: point });
-      setActiveSpellId(null);
+      if (!pending) return;
+      if (pending.kind === 'spell') {
+        session.dispatch({ type: 'cast', spellId: pending.spellId, target: point });
+      } else {
+        session.dispatch({
+          type: 'backpack',
+          action: 'use',
+          itemId: pending.itemId,
+          target: point,
+        });
+      }
+      setPending(null);
       setFreeReticle(null);
     },
-    [activeSpellId, session],
+    [pending, session],
   );
 
   const confirmAt = useCallback(
     (point: Point): boolean => {
-      if (!activeSpellId) return false;
+      if (!pending) return false;
       if (isAoe) {
         if (!aimInRange(hero, point, spell?.range ?? 0)) return false;
-        dispatchCast(point);
+        dispatchConfirm(point);
         return true;
       }
       if (!validCells.has(cellKey(point))) return false;
-      dispatchCast(point);
+      dispatchConfirm(point);
       return true;
     },
-    [activeSpellId, isAoe, hero, spell, dispatchCast, validCells],
+    [pending, isAoe, hero, spell, dispatchConfirm, validCells],
   );
 
   const confirmReticle = useCallback((): boolean => {
-    if (!activeSpellId || reticle === null || !canConfirm) return false;
-    dispatchCast(reticle);
+    if (!pending || reticle === null || !canConfirm) return false;
+    dispatchConfirm(reticle);
     return true;
-  }, [activeSpellId, reticle, canConfirm, dispatchCast]);
+  }, [pending, reticle, canConfirm, dispatchConfirm]);
 
   const moveReticle = useCallback(
     (step: 1 | -1): void => {
@@ -263,6 +306,7 @@ export function useSpellTargeting(
     reticle,
     canConfirm,
     begin,
+    beginScroll,
     cancel,
     confirmAt,
     confirmReticle,

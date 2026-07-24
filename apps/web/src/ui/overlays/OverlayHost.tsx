@@ -4,6 +4,7 @@ import type { StoredHallRecord } from '@woven-deep/engine';
 import type { Sightings } from '../../session/codex.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { AccountState } from '../../session/account.js';
+import type { CastableSpellView } from '../../session/projection-view.js';
 import { canOpenOverlay, OVERLAY_REGISTRY, type OverlayId } from './registry.js';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/sheet.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
@@ -45,6 +46,14 @@ export interface OverlayHostProps {
    * "Lifetime & achievements" section. Optional so every pre-existing caller/test keeps compiling
    * unchanged (the section just doesn't render without it). */
   readonly account?: AccountState | undefined;
+  /** Forwarded straight through to the inventory overlay body -- enters the shared spell-targeting
+   * mode for a targeted scroll instead of dispatching `use` immediately (Task 6). Optional so every
+   * pre-existing caller/test (none of which open the inventory to a targeted scroll) keeps
+   * compiling unchanged. */
+  readonly onBeginScrollTargeting?: (
+    itemId: string,
+    spell: Pick<CastableSpellView, 'spellId' | 'name' | 'range' | 'targetingId' | 'aoe'>,
+  ) => void;
 }
 
 /**
@@ -65,6 +74,7 @@ export function OverlayHost({
   onDeleteAccount,
   sightings,
   account,
+  onBeginScrollTargeting,
 }: Readonly<OverlayHostProps>): JSX.Element | null {
   const pack = usePack();
   const sessionCtx = useSessionCtx();
@@ -82,6 +92,8 @@ export function OverlayHost({
     account,
     snapshot: sessionCtx?.snapshot,
     sightings: sightings ?? sessionCtx?.snapshot.sightings,
+    onBeginScrollTargeting,
+    onClose,
   });
 
   const onOpenChange = (open: boolean): void => {
@@ -122,13 +134,25 @@ interface RenderBodyContext {
   readonly account: AccountState | undefined;
   readonly snapshot: SessionSnapshot | undefined;
   readonly sightings: Sightings | undefined;
+  readonly onBeginScrollTargeting:
+    | ((
+        itemId: string,
+        spell: Pick<CastableSpellView, 'spellId' | 'name' | 'range' | 'targetingId' | 'aoe'>,
+      ) => void)
+    | undefined;
+  readonly onClose: () => void;
 }
 
 function renderBody(overlay: OverlayId, ctx: RenderBodyContext): JSX.Element {
   switch (overlay) {
     case 'inventory':
       if (!ctx.snapshot) return <p>Your backpack is unavailable right now.</p>;
-      return <InventoryOverlay />;
+      return (
+        <InventoryOverlay
+          onBeginScrollTargeting={ctx.onBeginScrollTargeting}
+          onCloseOverlay={ctx.onClose}
+        />
+      );
     case 'character-sheet':
       if (!ctx.snapshot) return <p>Your character sheet is unavailable right now.</p>;
       return <CharacterSheetOverlay />;
