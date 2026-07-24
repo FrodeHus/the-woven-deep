@@ -32,6 +32,15 @@ const EMBER_BOLT_SPELL = {
   targetingId: 'target.actor',
 } as const;
 
+const FIREBALL_SPELL = {
+  spellId: 'spell.fireball',
+  name: 'Fireball',
+  weaveCost: 6,
+  range: 6,
+  targetingId: 'target.burst',
+  aoe: { shape: 'burst', radius: 2 },
+} as const;
+
 beforeAll(async () => {
   pack = await compileContentDirectory({
     rootDir: resolve(import.meta.dirname, '../../../content'),
@@ -68,6 +77,7 @@ function projectionOf(input: {
   hero: Point & { health?: number; weave?: number };
   actors?: readonly FakeActor[];
   walls?: readonly Point[];
+  spells?: readonly Record<string, unknown>[];
 }): GameplayProjection {
   const wallSet = new Set((input.walls ?? []).map((point) => `${point.x},${point.y}`));
   const cells = [];
@@ -95,7 +105,7 @@ function projectionOf(input: {
       y: input.hero.y,
       health: input.hero.health ?? 20,
       weave: input.hero.weave ?? 10,
-      castableSpells: [EMBER_BOLT_SPELL],
+      castableSpells: input.spells ?? [EMBER_BOLT_SPELL],
     },
     actors: input.actors ?? [],
     groundItems: [],
@@ -330,5 +340,113 @@ describe('PlayScreen click-to-move is unaffected when targeting is inactive', ()
     renderPlay(session);
     clickCell({ x: 21, y: 10 });
     expect(session.dispatched).toEqual([{ type: 'move', direction: 'east' }]);
+  });
+});
+
+async function beginFireballTargeting(): Promise<void> {
+  const row = screen.getByRole('button', { name: /Fireball/ });
+  await userEvent.click(row);
+}
+
+describe('PlayScreen AoE free-cursor targeting', () => {
+  it('renders a live footprint under the reticle and confirms a cast at the reticle cell', async () => {
+    const session = new FakeSession(
+      projectionOf({ hero: { x: 20, y: 10, weave: 20 }, spells: [FIREBALL_SPELL] }),
+    );
+    renderPlay(session);
+
+    await beginFireballTargeting();
+
+    // A burst-2 footprint at the hero cell covers several cells -- more than one `-valid` cell.
+    expect(screen.getAllByTestId('targeting-valid').length).toBeGreaterThan(1);
+
+    // Move the reticle east twice, then confirm with Enter.
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    fireEvent.keyDown(window, { key: 'Enter' });
+
+    expect(casts(session)).toEqual([
+      { type: 'cast', spellId: 'spell.fireball', target: { x: 22, y: 10 } },
+    ]);
+  });
+
+  it('renders a single-cell footprint for a single-target spell', async () => {
+    const session = new FakeSession(
+      projectionOf({ hero: { x: 20, y: 10 }, actors: [hostile(23, 10)] }),
+    );
+    renderPlay(session);
+
+    await beginTargeting();
+
+    // The lone hostile is both the only valid target AND the default reticle, so its `data-testid`
+    // reads "targeting-reticle" (see `TargetingOverlay`) even though it still carries the
+    // `targeting-cell-valid` class -- query by class, not testid, to count the footprint.
+    const layout = screen.getByTestId('play-layout');
+    expect(layout.querySelectorAll('.targeting-cell-valid')).toHaveLength(1);
+  });
+
+  it('highlights an actor caught in the AoE footprint distinctly', async () => {
+    const session = new FakeSession(
+      projectionOf({
+        hero: { x: 20, y: 10, weave: 20 },
+        actors: [hostile(21, 10)],
+        spells: [FIREBALL_SPELL],
+      }),
+    );
+    renderPlay(session);
+
+    await beginFireballTargeting();
+
+    const layout = screen.getByTestId('play-layout');
+    const cell = layout.querySelector('[data-cell="21,10"].targeting-cell');
+    expect(cell).not.toBeNull();
+    expect(cell).toHaveClass('targeting-cell-affected-actor');
+  });
+
+  it('the reticle never leaves range: hammering past range still confirms at the clamped edge', async () => {
+    const session = new FakeSession(
+      projectionOf({ hero: { x: 20, y: 10, weave: 20 }, spells: [FIREBALL_SPELL] }),
+    );
+    renderPlay(session);
+
+    await beginFireballTargeting();
+    // Range is 6; hammer the reticle far past it.
+    for (let i = 0; i < 20; i += 1) fireEvent.keyDown(window, { key: 'ArrowRight' });
+    fireEvent.keyDown(window, { key: 'Enter' });
+
+    expect(casts(session)).toEqual([
+      { type: 'cast', spellId: 'spell.fireball', target: { x: 26, y: 10 } },
+    ]);
+  });
+
+  it('mouse hover sets the reticle and drives the footprint', async () => {
+    const session = new FakeSession(
+      projectionOf({ hero: { x: 20, y: 10, weave: 20 }, spells: [FIREBALL_SPELL] }),
+    );
+    renderPlay(session);
+
+    await beginFireballTargeting();
+    const grid = screen.getByRole('grid', { name: /dungeon/i });
+    const target = grid.querySelector('[data-cell="24,10"]');
+    expect(target).not.toBeNull();
+    fireEvent.mouseOver(target!);
+    fireEvent.keyDown(window, { key: 'Enter' });
+
+    expect(casts(session)).toEqual([
+      { type: 'cast', spellId: 'spell.fireball', target: { x: 24, y: 10 } },
+    ]);
+  });
+
+  it('Escape cancels AoE targeting without casting', async () => {
+    const session = new FakeSession(
+      projectionOf({ hero: { x: 20, y: 10, weave: 20 }, spells: [FIREBALL_SPELL] }),
+    );
+    renderPlay(session);
+
+    await beginFireballTargeting();
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(casts(session)).toEqual([]);
+    expect(screen.queryByTestId('targeting-valid')).not.toBeInTheDocument();
   });
 });

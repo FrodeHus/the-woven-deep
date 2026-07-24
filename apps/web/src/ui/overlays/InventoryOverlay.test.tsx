@@ -15,7 +15,11 @@ import {
 import type { GuestSession, SessionSnapshot } from '../../session/guest-session.js';
 import { DEFAULT_SETTINGS } from '../../session/settings.js';
 import { UiProviders } from '../providers.js';
-import { InventoryOverlay, type ProjectedItemLike } from './InventoryOverlay.js';
+import {
+  InventoryOverlay,
+  type InventoryOverlayProps,
+  type ProjectedItemLike,
+} from './InventoryOverlay.js';
 
 let pack: CompiledContentPack;
 let baseProjection: GameplayProjection;
@@ -79,7 +83,7 @@ function stubSession(snapshot: SessionSnapshot): {
   return { session, dispatch };
 }
 
-function renderInventory(session: GuestSession) {
+function renderInventory(session: GuestSession, overlayProps?: Readonly<InventoryOverlayProps>) {
   return render(
     <UiProviders
       pack={pack}
@@ -87,7 +91,10 @@ function renderInventory(session: GuestSession) {
       onChangeSettings={() => {}}
       session={session}
     >
-      <InventoryOverlay />
+      <InventoryOverlay
+        onBeginScrollTargeting={overlayProps?.onBeginScrollTargeting}
+        onCloseOverlay={overlayProps?.onCloseOverlay}
+      />
     </UiProviders>,
   );
 }
@@ -378,6 +385,106 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(screen.queryByText('Damage')).not.toBeInTheDocument();
     expect(screen.queryByText('Worth')).not.toBeInTheDocument();
     expect(screen.queryByText(/notched from honest use/i)).not.toBeInTheDocument();
+  });
+
+  it('using a targeted scroll enters targeting instead of dispatching use immediately', async () => {
+    const user = userEvent.setup();
+    const beginScroll = vi.fn();
+    const closeOverlay = vi.fn();
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.ember-scroll.1',
+        contentId: 'item.ember-scroll',
+        name: 'Scroll of ember bolt',
+        category: 'scroll',
+      }),
+    ]);
+    const { session, dispatch } = stubSession(snapshot);
+    renderInventory(session, { onBeginScrollTargeting: beginScroll, onCloseOverlay: closeOverlay });
+
+    await user.keyboard('u');
+
+    expect(closeOverlay).toHaveBeenCalled();
+    expect(beginScroll).toHaveBeenCalledWith(
+      'item.ember-scroll.1',
+      expect.objectContaining({ spellId: 'spell.ember-bolt', targetingId: 'target.actor' }),
+    );
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('using an AoE scroll previews the burst spell descriptor', async () => {
+    const user = userEvent.setup();
+    const beginScroll = vi.fn();
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.fireball-scroll.1',
+        contentId: 'item.fireball-scroll',
+        name: 'Scroll of fireball',
+        category: 'scroll',
+      }),
+    ]);
+    const { session, dispatch } = stubSession(snapshot);
+    renderInventory(session, { onBeginScrollTargeting: beginScroll });
+
+    await user.keyboard('u');
+
+    expect(beginScroll).toHaveBeenCalledWith(
+      'item.fireball-scroll.1',
+      expect.objectContaining({
+        spellId: 'spell.fireball',
+        targetingId: 'target.burst',
+        aoe: expect.objectContaining({ shape: 'burst' }),
+      }),
+    );
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('using a plain consumable dispatches use immediately (fire-and-forget)', async () => {
+    const user = userEvent.setup();
+    const beginScroll = vi.fn();
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.ration.1',
+        contentId: 'item.travel-ration',
+        name: 'Travel ration',
+        category: 'food',
+      }),
+    ]);
+    const { session, dispatch } = stubSession(snapshot);
+    renderInventory(session, { onBeginScrollTargeting: beginScroll });
+
+    await user.keyboard('u');
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'backpack',
+      action: 'use',
+      itemId: 'item.ration.1',
+    });
+    expect(beginScroll).not.toHaveBeenCalled();
+  });
+
+  it('using a tome (learn effect, no spellId cast) dispatches use immediately', async () => {
+    const user = userEvent.setup();
+    const beginScroll = vi.fn();
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.fireball-tome.1',
+        contentId: 'item.fireball-tome',
+        name: 'Tome of fireball',
+        category: 'misc',
+      }),
+    ]);
+    const { session, dispatch } = stubSession(snapshot);
+    renderInventory(session, { onBeginScrollTargeting: beginScroll });
+
+    await user.keyboard('u');
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'backpack',
+      action: 'use',
+      itemId: 'item.fireball-tome.1',
+    });
+    expect(beginScroll).not.toHaveBeenCalled();
   });
 
   it('renders nothing when there is no session in context', () => {

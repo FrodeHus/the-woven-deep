@@ -60,6 +60,7 @@ export * from './movement.js';
 export * from './actions.js';
 export * from './combat.js';
 export * from './targeting.js';
+export * from './aoe-geometry.js';
 export * from './effects.js';
 export * from './content-index.js';
 export * from './conditions.js';

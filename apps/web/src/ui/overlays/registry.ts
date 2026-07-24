@@ -2,11 +2,11 @@ import type { ActionId } from '../../session/settings.js';
 
 /**
  * Every overlay the guest UI can present. `inventory` shares this same registry with the other
- * overlay ids -- `i` routes exactly like the other five overlay-open keys (see `KeyRouter.ts`'s
+ * overlay ids -- `i` routes exactly like the other six overlay-open keys (see `KeyRouter.ts`'s
  * `OverlayActionId`).
  */
 export type OverlayId =
-  'inventory' | 'character-sheet' | 'map-journal' | 'codex' | 'settings' | 'help';
+  'inventory' | 'character-sheet' | 'map-journal' | 'spellbook' | 'codex' | 'settings' | 'help';
 
 export interface OverlayDefinition {
   readonly id: OverlayId;
@@ -39,6 +39,7 @@ export const OVERLAY_REGISTRY: Readonly<Record<OverlayId, OverlayDefinition>> = 
     scope: 'play',
     action: 'map-journal',
   },
+  spellbook: { id: 'spellbook', title: 'Spellbook', scope: 'play', action: 'spellbook' },
   codex: { id: 'codex', title: 'Codex', scope: 'global', action: 'codex' },
   settings: { id: 'settings', title: 'Settings', scope: 'global', action: 'settings' },
   help: { id: 'help', title: 'Help', scope: 'global', action: 'help' },
@@ -47,7 +48,8 @@ export const OVERLAY_REGISTRY: Readonly<Record<OverlayId, OverlayDefinition>> = 
 /**
  * Whether `definition` may open right now: `global`-scope overlays (codex/settings/help) are
  * always allowed (from the title screen or from play); `play`-scope overlays (inventory,
- * character sheet, map/journal) require an actual live run, i.e. the play screen with a session.
+ * character sheet, map/journal, spellbook) require an actual live run, i.e. the play screen with a
+ * session.
  *
  * Not part of the brief's literal produced interface, but exported (rather than kept private)
  * because it is the one piece of scope-gating logic `App` needs and it is otherwise untestable in

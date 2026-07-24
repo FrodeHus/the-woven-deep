@@ -95,6 +95,15 @@ export function CommandPalette({
     (spell) => (heroData?.weave ?? 0) >= spell.weaveCost,
   );
 
+  // A pending recall anchor reroutes the town stair's `descend` intent server-side (see
+  // `dispatch.ts`) -- this relabels the palette entry to match, without ever dispatching a
+  // different intent.
+  const returnAnchorDepth = sessionCtx?.snapshot.projection.returnAnchorDepth;
+  const descendLabel =
+    returnAnchorDepth === undefined
+      ? ACTION_LABELS.descend
+      : `Return to depth ${returnAnchorDepth}`;
+
   const intentActions: readonly (keyof typeof INTENT_ENTRIES)[] = [
     'wait',
     'rest',
@@ -136,7 +145,7 @@ export function CommandPalette({
             </CommandGroup>
             <CommandGroup heading="Actions">
               {intentActions.map((action) => {
-                const label = ACTION_LABELS[action];
+                const label = action === 'descend' ? descendLabel : ACTION_LABELS[action];
                 const shortcut = hint(action);
                 return (
                   <CommandItem

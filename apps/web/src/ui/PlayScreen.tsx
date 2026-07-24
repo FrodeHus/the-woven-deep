@@ -1,9 +1,16 @@
-import { useRef, type CSSProperties, type JSX, type MouseEvent as ReactMouseEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  type CSSProperties,
+  type JSX,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { HeartLineageRecord, StoredHallRecord } from '@woven-deep/engine';
 import type { RunSession } from '../session/run-session.js';
 import { useRunSession } from '../session/store.js';
-import { heroOf, tradeIsAvailable } from '../session/projection-view.js';
+import { actorsOf, heroOf, tradeIsAvailable } from '../session/projection-view.js';
 import { computeCamera, type CameraOrigin } from './camera.js';
 import { CommandPalette } from './CommandPalette.js';
 import { EffectsLayer } from './EffectsLayer.js';
@@ -189,6 +196,22 @@ export function PlayScreen({
       ? { x: cursor.x, y: cursor.y }
       : targeting.reticle;
 
+  // Cells where an actor caught in the current footprint stands -- `TargetingOverlay` renders these
+  // distinctly from the rest of the valid set, so the player sees who gets hit before confirming.
+  const affectedActorCells = useMemo(() => {
+    const keys = new Set<string>();
+    for (const actor of actorsOf(projection)) {
+      if (targeting.affectedActorIds.has(actor.actorId)) keys.add(`${actor.x},${actor.y}`);
+    }
+    return keys;
+  }, [projection, targeting.affectedActorIds]);
+
+  // While an AoE spell is being targeted, the mouse cursor drives the free reticle directly -- the
+  // keyboard-only path (`moveReticleBy`) still works for players who never move the mouse.
+  useEffect(() => {
+    if (targeting.activeSpellId && cursor) targeting.setReticle({ x: cursor.x, y: cursor.y });
+  }, [targeting.activeSpellId, targeting.setReticle, cursor]);
+
   /**
    * The map pane's single click handler: while targeting is active, a click is routed to
    * `targeting.confirmAt` INSTEAD of auto-travel (a click on an invalid cell is simply ignored --
@@ -267,6 +290,7 @@ export function PlayScreen({
                 cellPx={cellSize}
                 validCells={targeting.validCells}
                 highlighted={targetingHighlight}
+                affectedActorCells={affectedActorCells}
               />
             ) : (
               cursor &&
@@ -344,6 +368,11 @@ export function PlayScreen({
         <OverlayHost
           overlay={overlay}
           onClose={onCloseOverlay}
+          onBeginScrollTargeting={(itemId, spell) => targeting.beginScroll(itemId, spell)}
+          onCastSpell={(spellId) => {
+            onCloseOverlay();
+            targeting.begin(spellId);
+          }}
           isPlayActive
           records={records}
           onClearGuestSession={onClearGuestSession}
