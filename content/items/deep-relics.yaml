@@ -12,11 +12,11 @@ entries:
     maxDepth: 20
     category: ring
     stackLimit: 1
-    price: 220
+    price: 150
     rarity: rare
     actionCost: 100
     equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
-    combat: { accuracy: 1, defense: 2, armor: 1, damage: null, range: 0, ammunitionTag: null }
+    combat: { accuracy: 0, defense: 1, armor: 1, damage: null, range: 0, ammunitionTag: null }
     light: null
     identification: { mode: known, poolId: null }
     effects: []
@@ -33,11 +33,11 @@ entries:
     maxDepth: 20
     category: ring
     stackLimit: 1
-    price: 320
+    price: 200
     rarity: legendary
     actionCost: 100
     equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
-    combat: { accuracy: 2, defense: 2, armor: 1, damage: null, range: 0, ammunitionTag: null }
+    combat: { accuracy: 1, defense: 1, armor: 0, damage: null, range: 0, ammunitionTag: null }
     light: null
     identification: { mode: known, poolId: null }
     effects: []
