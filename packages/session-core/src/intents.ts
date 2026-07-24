@@ -32,6 +32,10 @@ export type PlayerIntent =
       readonly type: 'backpack';
       readonly action: 'equip' | 'unequip' | 'use' | 'drop' | 'toggle-light';
       readonly itemId: OpaqueId;
+      // Only meaningful for `action: 'use'` on an item whose spell is targeted (actor/burst/line/
+      // cone) -- the aim cell chosen in targeting mode. Absent for non-targeted uses; the command
+      // builder passes `null` to the engine's `use-item` command then.
+      readonly target?: { readonly x: number; readonly y: number };
     }
   // Refuels an equipped light source (`targetItemId`) from a backpack fuel stack
   // (`fuelItemId`) -- see command-builder.ts, which builds the engine's `refuel` command from
