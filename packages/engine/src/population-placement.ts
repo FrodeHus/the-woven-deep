@@ -1064,12 +1064,92 @@ export interface FloorPopulationsResult {
 }
 
 /**
+ * Applies one population placement to the running state: threads the encounters/merchant-stock RNG,
+ * commits created actors/items/features/populations on `placed`, and emits the matching domain
+ * events. Returns the advanced run and whether the caller should stop (a `rejected` placement).
+ * Shared by the guaranteed-boss pre-pass and the weighted density loop so both commit identically.
+ * `floorId` is `input.floor.floorId`, threaded in rather than derived from `placement` (which
+ * carries no floor reference on a `skipped` result) so `skipped` diagnostics keep their exact
+ * pre-extraction payload.
+ */
+function applyPopulationPlacement(
+  run: ActiveRun,
+  placement: PopulationPlacementResult,
+  events: DomainEvent[],
+  eventId: string,
+  floorId: OpaqueId,
+): Readonly<{ run: ActiveRun; stop: boolean }> {
+  let next: ActiveRun = {
+    ...run,
+    rng: {
+      ...run.rng,
+      encounters: placement.nextEncounterState,
+      ...(placement.status === 'placed' && placement.nextMerchantStockState !== null
+        ? { 'merchant-stock': placement.nextMerchantStockState }
+        : {}),
+    },
+    encounterDecisions: placement.encounterDecisions,
+  };
+  if (placement.status === 'placed') {
+    next = {
+      ...next,
+      actors: sortByActorId([...next.actors, ...placement.createdActors]),
+      items:
+        placement.createdItems.length === 0
+          ? next.items
+          : sortByItemId([...next.items, ...placement.createdItems]),
+      features:
+        placement.createdFeatures.length === 0
+          ? next.features
+          : sortByFeatureId([...next.features, ...placement.createdFeatures]),
+      populations: sortByPopulationId([...next.populations, placement.population]),
+    };
+    events.push({
+      type: 'population.created',
+      eventId,
+      populationId: placement.population.populationId,
+      encounterId: placement.population.encounterId,
+      floorId: placement.population.floorId,
+      model: placement.population.model,
+      actorIds: placement.population.livingMemberIds,
+    });
+    if (placement.population.model === 'group' && placement.population.leaderActorId !== null) {
+      const leaderActorId = placement.population.leaderActorId;
+      const roleId = placement.population.roleMembership.find(
+        (role) => role.actorId === leaderActorId,
+      )?.roleId;
+      if (roleId === undefined)
+        throw new Error(`internal invariant: group leader ${leaderActorId} has no role`);
+      events.push({
+        type: 'group.leader-created',
+        eventId,
+        populationId: placement.population.populationId,
+        actorId: leaderActorId,
+        roleId,
+      });
+    }
+  } else if (placement.status === 'skipped') {
+    for (const diagnostic of placement.diagnostics)
+      events.push({ ...diagnostic, eventId, floorId });
+  }
+  return { run: next, stop: placement.status === 'rejected' };
+}
+
+/**
  * Fills a generated floor with encounters up to its density budget: repeatedly calls
  * `placePopulation`, threading the RNG streams and encounter decisions from each attempt into the
  * next so every attempt sees the cells and populations the previous ones committed (distinct
  * populationIds, no double-booked cells). A `rejected` result (a required encounter with no legal
  * placement) stops the loop immediately -- the floor is full, and the caller decides whether that
  * means regenerating (as `generateFloor` does for its own guaranteed placements) or failing.
+ *
+ * Before the weighted attempts, a guaranteed-boss pre-pass force-places any eligible `model:
+ * 'boss'` encounter whose non-empty required vault tags (`requiredVaultTags` +
+ * `definition.vaultTags`) are all present on the floor -- so a milestone boss whose arena vault
+ * was forced onto the floor (see `milestoneBossVaultId`/`requiredVaultId`) always spawns instead of
+ * merely competing for a weighted attempt slot. Bosses with no required vault tags (e.g. the
+ * random `ashen-warden`) are excluded by the non-empty guard and keep their weighted behavior. On
+ * a floor with no such vault this pre-pass runs zero iterations and consumes no randomness.
  */
 export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulationsResult {
   const maps = contentMaps(input.content);
@@ -1081,6 +1161,36 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
   let run = input.run;
   const placements: PopulationPlacementResult[] = [];
   const events: DomainEvent[] = [];
+
+  const availableTags = availableVaultTags(input.floor, input.content);
+  const bossDecisions = new Map(
+    run.encounterDecisions.map((decision) => [decision.encounterId, decision]),
+  );
+  const guaranteedBosses = maps.encounters.filter((encounter) => {
+    if (encounter.model !== 'boss') return false;
+    const requiredTags = requiredAnchorTags(encounter);
+    if (requiredTags.length === 0) return false;
+    const decision = bossDecisions.get(encounter.id);
+    return (
+      decision?.eligible === true &&
+      decision.instancesCreated < encounter.maximumInstancesPerRun &&
+      input.floor.depth >= encounter.minDepth &&
+      input.floor.depth <= encounter.maxDepth &&
+      requiredTags.every((tag) => availableTags.has(tag))
+    );
+  });
+  for (const boss of guaranteedBosses) {
+    const placement = placePopulation({
+      run,
+      floor: input.floor,
+      content: input.content,
+      ...(input.environmentTags === undefined ? {} : { environmentTags: input.environmentTags }),
+      forcedEncounterId: boss.id,
+    });
+    placements.push(placement);
+    run = applyPopulationPlacement(run, placement, events, eventId, input.floor.floorId).run;
+  }
+
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const placement = placePopulation({
       run,
@@ -1092,60 +1202,9 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
         : { forcedEncounterId: input.forcedEncounterId }),
     });
     placements.push(placement);
-    run = {
-      ...run,
-      rng: {
-        ...run.rng,
-        encounters: placement.nextEncounterState,
-        ...(placement.status === 'placed' && placement.nextMerchantStockState !== null
-          ? { 'merchant-stock': placement.nextMerchantStockState }
-          : {}),
-      },
-      encounterDecisions: placement.encounterDecisions,
-    };
-    if (placement.status === 'placed') {
-      run = {
-        ...run,
-        actors: sortByActorId([...run.actors, ...placement.createdActors]),
-        items:
-          placement.createdItems.length === 0
-            ? run.items
-            : sortByItemId([...run.items, ...placement.createdItems]),
-        features:
-          placement.createdFeatures.length === 0
-            ? run.features
-            : sortByFeatureId([...run.features, ...placement.createdFeatures]),
-        populations: sortByPopulationId([...run.populations, placement.population]),
-      };
-      events.push({
-        type: 'population.created',
-        eventId,
-        populationId: placement.population.populationId,
-        encounterId: placement.population.encounterId,
-        floorId: placement.population.floorId,
-        model: placement.population.model,
-        actorIds: placement.population.livingMemberIds,
-      });
-      if (placement.population.model === 'group' && placement.population.leaderActorId !== null) {
-        const leaderActorId = placement.population.leaderActorId;
-        const roleId = placement.population.roleMembership.find(
-          (role) => role.actorId === leaderActorId,
-        )?.roleId;
-        if (roleId === undefined)
-          throw new Error(`internal invariant: group leader ${leaderActorId} has no role`);
-        events.push({
-          type: 'group.leader-created',
-          eventId,
-          populationId: placement.population.populationId,
-          actorId: leaderActorId,
-          roleId,
-        });
-      }
-    } else if (placement.status === 'skipped') {
-      for (const diagnostic of placement.diagnostics)
-        events.push({ ...diagnostic, eventId, floorId: input.floor.floorId });
-    }
-    if (placement.status === 'rejected') break;
+    const applied = applyPopulationPlacement(run, placement, events, eventId, input.floor.floorId);
+    run = applied.run;
+    if (applied.stop) break;
   }
   const fragmentSpawn = placeFragmentSpawn({ ...input, run }, run.rng.encounters);
   run = {
