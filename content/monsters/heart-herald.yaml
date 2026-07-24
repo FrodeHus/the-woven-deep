@@ -1,0 +1,28 @@
+schemaVersion: 7
+entries:
+  - kind: monster
+    id: monster.heart-herald
+    name: The Heart-Herald
+    glyph: "H"
+    color: "#c9425f"
+    description: A shape the Heart wears to speak before it must be met. It carries the deep's corruption ahead of itself, a promise walked up to meet you early.
+    lore: "It is not the Heart. It is what the Heart sends when it wants you to understand what waits, while there is still floor enough left to turn back across. There never is."
+    tags: [boss, heart, arcane]
+    minDepth: 15
+    maxDepth: 15
+    attributes: { might: 15, agility: 10, vitality: 16, wits: 13, resolve: 15 }
+    health: 78
+    speed: 100
+    accuracy: 8
+    defense: 15
+    perception: 11
+    damage: { count: 2, sides: 8, bonus: 3 }
+    armor: 6
+    resistances: { physical: 20, fire: 10, cold: 10, lightning: 10, poison: 30, arcane: 60 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 18
+    rarity: legendary
+    lootTableId: loot-table.heart-herald
+    dropChance: 1

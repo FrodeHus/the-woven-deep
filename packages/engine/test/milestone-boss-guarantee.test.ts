@@ -79,6 +79,22 @@ describe('milestone boss guarantee', () => {
     expect(bosses).toHaveLength(1);
   });
 
+  it('guarantees the Heart-Herald in its arena at depth 15', () => {
+    const requiredVaultId = milestoneBossVaultId(vaults, 15);
+    expect(requiredVaultId).toBe('vault.heart-herald-arena');
+    const generated = generateAt(15, requiredVaultId);
+    expect(generated.floor.vaults.map((vault) => vault.vaultId)).toContain(
+      'vault.heart-herald-arena',
+    );
+    const base = createDemoRun();
+    const run = { ...base, encounterDecisions: [bossDecision('encounter.heart-herald')] };
+    const result = placeFloorPopulations({ run, floor: generated.floor, content });
+    const bosses = result.state.actors.filter(
+      (actor) => actor.contentId === 'monster.heart-herald',
+    );
+    expect(bosses).toHaveLength(1);
+  });
+
   it('forces no milestone vault and no boss at a non-milestone depth (6)', () => {
     expect(milestoneBossVaultId(vaults, 6)).toBeUndefined();
     const generated = generateAt(6, undefined);
