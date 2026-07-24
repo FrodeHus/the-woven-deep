@@ -14,6 +14,9 @@ export interface TargetingOverlayProps {
    * keyboard reticle) -- highlighted distinctly from the rest of the valid set. `null` when nothing
    * is currently targeted. */
   readonly highlighted: Point | null;
+  /** `"x,y"` keys of cells where an affected actor stands -- highlighted distinctly so the player
+   * sees who gets hit by the current footprint. */
+  readonly affectedActorCells: ReadonlySet<string>;
 }
 
 /**
@@ -32,6 +35,7 @@ export function TargetingOverlay({
   cellPx,
   validCells,
   highlighted,
+  affectedActorCells,
 }: TargetingOverlayProps): JSX.Element {
   const cells: JSX.Element[] = [];
 
@@ -81,6 +85,7 @@ export function TargetingOverlay({
             'targeting-cell',
             valid ? 'targeting-cell-valid' : '',
             isHighlighted ? 'targeting-cell-reticle' : '',
+            affectedActorCells.has(key) ? 'targeting-cell-affected-actor' : '',
           ]
             .filter(Boolean)
             .join(' ')}

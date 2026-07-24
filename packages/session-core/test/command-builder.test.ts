@@ -417,7 +417,58 @@ describe('buildIntent', () => {
         expectedRevision: 9,
       },
     });
+  });
 
+  it('threads a target into use-item when the backpack intent carries one', () => {
+    const backpack = baseProjection.hero as unknown as {
+      backpack: readonly Readonly<Record<string, unknown>>[];
+    };
+    const ration = backpack.backpack.find((item) => item.contentId === 'item.travel-ration')!;
+
+    const targeted = buildIntent({
+      intent: {
+        type: 'backpack',
+        action: 'use',
+        itemId: ration.itemId as string,
+        target: { x: 4, y: 2 },
+      },
+      projection: baseProjection,
+      commandId: 'command.guest-000012',
+      expectedRevision: 9,
+    });
+    expect(targeted).toEqual({
+      kind: 'command',
+      command: {
+        type: 'use-item',
+        itemId: ration.itemId,
+        target: { x: 4, y: 2 },
+        commandId: 'command.guest-000012',
+        expectedRevision: 9,
+      },
+    });
+
+    const untargeted = buildIntent({
+      intent: { type: 'backpack', action: 'use', itemId: ration.itemId as string },
+      projection: baseProjection,
+      commandId: 'command.guest-000013',
+      expectedRevision: 10,
+    });
+    expect(untargeted).toEqual({
+      kind: 'command',
+      command: {
+        type: 'use-item',
+        itemId: ration.itemId,
+        target: null,
+        commandId: 'command.guest-000013',
+        expectedRevision: 10,
+      },
+    });
+  });
+
+  it('builds equip with the definition slot', () => {
+    const backpack = baseProjection.hero as unknown as {
+      backpack: readonly Readonly<Record<string, unknown>>[];
+    };
     const bow = {
       itemId: 'item.on-floor-bow',
       contentId: 'item.hunting-bow',

@@ -440,6 +440,7 @@ export interface CastableSpellView {
   readonly weaveCost: number;
   readonly range: number;
   readonly targetingId: string;
+  readonly aoe?: Readonly<{ shape: 'burst' | 'line' | 'cone'; radius: number }>;
 }
 
 export interface GameplayProjection {
@@ -476,6 +477,10 @@ export interface GameplayProjection {
    */
   readonly slots: readonly ObservablePlacementSlot[];
   readonly house: ObservableHouse;
+  /** The depth of the floor a pending recall will return the hero to from the town stair -- present
+   * only when `run.returnAnchorFloorId` is set. The client relabels the descend affordance to
+   * "Return to depth N" when this is present. */
+  readonly returnAnchorDepth?: number;
 }
 
 /**
@@ -733,6 +738,9 @@ function projectHeroView(
       weaveCost: entry.weaveCost,
       range: entry.range,
       targetingId: entry.targetingId,
+      ...(entry.aoe === undefined
+        ? {}
+        : { aoe: { shape: entry.aoe.shape, radius: entry.aoe.radius } }),
     }));
   const backpack = state.items
     .filter((item) => item.location.type === 'backpack' && item.location.actorId === hero.actorId)
@@ -988,8 +996,13 @@ export function projectGameplayState(
           y: slot.y,
         }))
       : [];
+  const anchorFloor =
+    input.state.returnAnchorFloorId === undefined
+      ? undefined
+      : input.state.floors.find((floor) => floor.floorId === input.state.returnAnchorFloorId);
   return {
     ...(trade === undefined ? {} : { trade }),
+    ...(anchorFloor === undefined ? {} : { returnAnchorDepth: anchorFloor.depth }),
     floor: projectFloor({
       floor: observed.floor,
       hero: heroPerception(input.state.hero, hero),

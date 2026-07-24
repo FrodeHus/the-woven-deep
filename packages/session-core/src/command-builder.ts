@@ -7,6 +7,7 @@ import {
   type GameCommand,
   type GameplayProjection,
   type OpaqueId,
+  type Point,
 } from '@woven-deep/engine';
 import type { PlayerIntent } from './intents.js';
 import {
@@ -220,10 +221,11 @@ function buildBackpackIntent(
     expectedRevision: number;
     action: 'equip' | 'unequip' | 'use' | 'drop' | 'toggle-light';
     itemId: OpaqueId;
+    target?: Point | undefined;
     pack?: CompiledContentPack | undefined;
   }>,
 ): BuiltIntent {
-  const { projection, commandId, expectedRevision, action, itemId, pack } = input;
+  const { projection, commandId, expectedRevision, action, itemId, target, pack } = input;
   const item = ownedItem(projection, itemId);
   if (!item) return { kind: 'rejected', message: 'That item is no longer in your backpack.' };
 
@@ -238,7 +240,7 @@ function buildBackpackIntent(
   if (action === 'use') {
     return {
       kind: 'command',
-      command: { type: 'use-item', itemId, target: null, commandId, expectedRevision },
+      command: { type: 'use-item', itemId, target: target ?? null, commandId, expectedRevision },
     };
   }
   if (action === 'drop') {
@@ -467,6 +469,7 @@ export function buildIntent(
     expectedRevision,
     action: intent.action,
     itemId: intent.itemId,
+    ...(intent.target === undefined ? {} : { target: intent.target }),
     pack,
   });
 }

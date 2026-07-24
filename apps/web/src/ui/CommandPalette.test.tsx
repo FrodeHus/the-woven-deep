@@ -166,6 +166,21 @@ describe('CommandPalette', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it('labels the descend entry "Descend" with no pending recall anchor', () => {
+    harness();
+    expect(screen.getByText('Descend')).toBeInTheDocument();
+  });
+
+  it('relabels the descend entry "Return to depth N" when a recall anchor is set', () => {
+    const anchor = baseRun.floors[0]!;
+    const anchored: ActiveRun = { ...baseRun, returnAnchorFloorId: anchor.floorId };
+    const projection = projectGameplayState({ state: anchored, content: pack });
+    harness({ projection });
+
+    expect(screen.getByText(`Return to depth ${anchor.depth}`)).toBeInTheDocument();
+    expect(screen.queryByText('Descend')).not.toBeInTheDocument();
+  });
+
   it('omits the Cast entry when the hero cannot afford its Weave cost', () => {
     const heroActorId = baseRun.hero.actorId;
     const caster: ActiveRun = {

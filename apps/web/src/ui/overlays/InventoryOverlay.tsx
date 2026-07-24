@@ -6,6 +6,8 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { heroOf } from '../../session/projection-view.js';
+import type { CastableSpellView } from '../../session/projection-view.js';
+import { scrollAimSpell } from '../../session/scroll-targeting.js';
 import { usePack, useSessionCtx } from '../providers.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
 import { cn } from '../lib/cn.js';
@@ -21,6 +23,26 @@ import {
   type CategoryFilter,
   type MenuEntry,
 } from './inventory-model.js';
+
+type ScrollSpellDescriptor = Pick<
+  CastableSpellView,
+  'spellId' | 'name' | 'range' | 'targetingId' | 'aoe'
+>;
+
+export interface InventoryOverlayProps {
+  /** Enters the shared spell-targeting mode for a targeted scroll (`useSpellTargeting.beginScroll`)
+   * instead of dispatching `use` immediately -- called with the item's own id and the aim-requiring
+   * spell descriptor `scrollAimSpell` resolved from its `spellId`. Optional so every pre-existing
+   * caller/test (none of which stock a targeted scroll) keeps compiling unchanged; without it,
+   * using ANY item stays fire-and-forget exactly as before. */
+  readonly onBeginScrollTargeting?:
+    ((itemId: string, spell: ScrollSpellDescriptor) => void) | undefined;
+  /** Closes the overlay -- called right before `onBeginScrollTargeting` so the targeting reticle
+   * takes over the map pane instead of sitting behind the inventory Sheet. Optional for the same
+   * pre-existing-caller reason as `onBeginScrollTargeting`; both are provided together in practice
+   * (`OverlayHost`'s `inventory` case forwards `onClose` as `onCloseOverlay`). */
+  readonly onCloseOverlay?: (() => void) | undefined;
+}
 
 export {
   CATEGORY_FILTER_ORDER,
@@ -52,7 +74,10 @@ function toListItem(entry: MenuEntry): ListDetailItem {
  * fire only while focus is inside the drawer. `ListDetail` owns arrow/Home/End selection and
  * listbox semantics; this component only owns the action keys layered on top of that selection.
  */
-export function InventoryOverlay(): JSX.Element | null {
+export function InventoryOverlay({
+  onBeginScrollTargeting,
+  onCloseOverlay,
+}: Readonly<InventoryOverlayProps> = {}): JSX.Element | null {
   const sessionCtx = useSessionCtx();
   const pack = usePack();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -78,9 +103,28 @@ export function InventoryOverlay(): JSX.Element | null {
   const refuelTarget =
     hero && selected ? equippedLightMatchingFuel(pack, hero, selected.item) : undefined;
 
-  function dispatchAction(action: 'equip' | 'unequip' | 'use' | 'drop' | 'toggle-light'): void {
+  function dispatchAction(action: 'equip' | 'unequip' | 'drop' | 'toggle-light'): void {
     if (!selected || !sessionCtx) return;
     sessionCtx.session.dispatch({ type: 'backpack', action, itemId: selected.item.itemId });
+  }
+
+  /**
+   * Using an item whose content entry names a spellId targeting an actor or an area routes through
+   * the SAME free-cursor targeting mode as casting from the Spells panel (see
+   * `useSpellTargeting.beginScroll`, generalized in Task 6) -- the overlay closes and the aim
+   * reticle takes over the map pane, and confirming dispatches `use`+`target` rather than firing
+   * immediately. Every other item (self-target scrolls, potions, food, tomes) stays fire-and-forget,
+   * exactly as before.
+   */
+  function applyUse(entry: MenuEntry): void {
+    if (!sessionCtx) return;
+    const aimed = scrollAimSpell(pack, entry.item.contentId);
+    if (aimed && onBeginScrollTargeting) {
+      onCloseOverlay?.();
+      onBeginScrollTargeting(entry.item.itemId, aimed);
+      return;
+    }
+    sessionCtx.session.dispatch({ type: 'backpack', action: 'use', itemId: entry.item.itemId });
   }
 
   function dispatchRefuel(): void {
@@ -107,7 +151,7 @@ export function InventoryOverlay(): JSX.Element | null {
   // selection); the returned handler is a no-op until an item is selected.
   const handleItemActionKey = useItemActionKeys<MenuEntry>(selected, {
     e: (entry) => dispatchAction(entry.equipped ? 'unequip' : 'equip'),
-    u: () => dispatchAction('use'),
+    u: (entry) => applyUse(entry),
     d: () => dispatchAction('drop'),
     l: () => dispatchAction('toggle-light'),
     r: () => dispatchRefuel(),
@@ -174,7 +218,7 @@ export function InventoryOverlay(): JSX.Element | null {
             refuelTarget={refuelTarget}
             pack={pack}
             onEquip={() => dispatchAction(selected?.equipped ? 'unequip' : 'equip')}
-            onUse={() => dispatchAction('use')}
+            onUse={() => selected && applyUse(selected)}
             onDrop={() => dispatchAction('drop')}
             onToggleLight={() => dispatchAction('toggle-light')}
             onRefuel={dispatchRefuel}

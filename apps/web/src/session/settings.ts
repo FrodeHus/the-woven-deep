@@ -4,9 +4,9 @@ import { classifyStorageFailure } from './storage.js';
 /**
  * Every player command the rebindable keymap can route to. Movement synonyms (arrows, numpad)
  * stay hardwired in `KeyRouter.ts` and are never represented here -- only the *primary* movement
- * keys (vi keys, by default) are rebindable, alongside the non-movement commands and the six
+ * keys (vi keys, by default) are rebindable, alongside the non-movement commands and the seven
  * overlay-open actions (`inventory` included -- it routes onto the overlay registry exactly like
- * the other five, see `KeyRouter.ts`).
+ * the other six, see `KeyRouter.ts`).
  */
 export type ActionId =
   | `move.${'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw'}`
@@ -21,6 +21,7 @@ export type ActionId =
   | 'pick-lock'
   | 'character-sheet'
   | 'map-journal'
+  | 'spellbook'
   | 'codex'
   | 'settings'
   | 'help'
@@ -77,6 +78,7 @@ export const ACTION_IDS: readonly ActionId[] = [
   'pick-lock',
   'character-sheet',
   'map-journal',
+  'spellbook',
   'codex',
   'settings',
   'help',
@@ -110,6 +112,7 @@ export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
   'pick-lock': 'Pick lock',
   'character-sheet': 'Character sheet',
   'map-journal': 'Map & journal',
+  spellbook: 'Spellbook',
   codex: 'Codex',
   settings: 'Settings',
   help: 'Help',
@@ -120,7 +123,7 @@ export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
  * The shipped keymap. Movement defaults are the vi keys (arrows/numpad are separate, hardwired
  * synonyms baked into `KeyRouter.ts` -- they are never represented here and can never be
  * rebound away from movement). Every other default matches `KeyRouter.ts`'s `KEYMAP` exactly,
- * plus the five overlay-open keys (`c`/`m`/`x`/`o`/`Shift+?`).
+ * plus the six overlay-open keys (`c`/`m`/`v`/`x`/`o`/`Shift+?`).
  */
 export const DEFAULT_BINDINGS: Readonly<Record<ActionId, KeyChord>> = {
   'move.n': chord('k'),
@@ -142,6 +145,7 @@ export const DEFAULT_BINDINGS: Readonly<Record<ActionId, KeyChord>> = {
   'pick-lock': chord('p'),
   'character-sheet': chord('c'),
   'map-journal': chord('m'),
+  spellbook: chord('v'),
   codex: chord('x'),
   settings: chord('o'),
   help: chord('?', true),
