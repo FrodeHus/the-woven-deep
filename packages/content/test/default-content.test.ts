@@ -31,11 +31,11 @@ describe('bundled content', () => {
         kinds.map((kind) => [kind, pack.entries.filter((entry) => entry.kind === kind).length]),
       ),
     ).toEqual({
-      monster: 39,
+      monster: 43,
       item: 43,
       spell: 14,
       trap: 1,
-      'loot-table': 18,
+      'loot-table': 19,
       balance: 1,
       vault: 3,
       'identification-pool': 2,
