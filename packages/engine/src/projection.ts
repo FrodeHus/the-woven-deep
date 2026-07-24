@@ -477,6 +477,10 @@ export interface GameplayProjection {
    */
   readonly slots: readonly ObservablePlacementSlot[];
   readonly house: ObservableHouse;
+  /** The depth of the floor a pending recall will return the hero to from the town stair -- present
+   * only when `run.returnAnchorFloorId` is set. The client relabels the descend affordance to
+   * "Return to depth N" when this is present. */
+  readonly returnAnchorDepth?: number;
 }
 
 /**
@@ -992,8 +996,13 @@ export function projectGameplayState(
           y: slot.y,
         }))
       : [];
+  const anchorFloor =
+    input.state.returnAnchorFloorId === undefined
+      ? undefined
+      : input.state.floors.find((floor) => floor.floorId === input.state.returnAnchorFloorId);
   return {
     ...(trade === undefined ? {} : { trade }),
+    ...(anchorFloor === undefined ? {} : { returnAnchorDepth: anchorFloor.depth }),
     floor: projectFloor({
       floor: observed.floor,
       hero: heroPerception(input.state.hero, hero),

@@ -22,10 +22,12 @@ export function TownPanel({ snapshot, keymap }: TownPanelProps): JSX.Element {
   const { projection } = snapshot;
   const tradeChord = chordKey(keymap.byAction.trade);
   const houseChord = chordKey(keymap.byAction.house);
+  const descendChord = chordKey(keymap.byAction.descend);
   const hero = heroOf(projection);
   const merchants = merchantActors(projection);
   const houseDoor = projection.slots.find((slot) => slot.tags.includes('house-door'));
   const houseAdjacent = houseDoor !== undefined && chebyshev(hero, houseDoor) === 1;
+  const returnDepth = projection.returnAnchorDepth;
 
   return (
     <section aria-label="Town" className="town-panel">
@@ -54,6 +56,11 @@ export function TownPanel({ snapshot, keymap }: TownPanelProps): JSX.Element {
             );
           })}
         </ul>
+      )}
+      {returnDepth !== undefined && (
+        <p className="town-return-hint">
+          {`Return to depth ${returnDepth} — press ${descendChord} at the stair.`}
+        </p>
       )}
       <p className={houseAdjacent ? 'town-house-hint town-house-hint--nearby' : 'town-house-hint'}>
         {houseAdjacent ? `The house is nearby — press ${houseChord} to open it.` : 'The house'}
