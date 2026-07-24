@@ -1,0 +1,29 @@
+schemaVersion: 7
+entries:
+  - kind: encounter
+    id: encounter.tide-sovereign
+    name: The Tide-Sovereign
+    tags: [boss, drowned]
+    model: boss
+    minDepth: 10
+    maxDepth: 10
+    environmentTags: []
+    requiredVaultTags: [milestone-boss-10]
+    weight: 1
+    rarity: legendary
+    runAppearanceChance: 1.0
+    discoveryProtectionIncrement: 0
+    discoveryProtectionCap: 1
+    maximumInstancesPerRun: 1
+    placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      monsterId: monster.tide-sovereign
+      phases:
+        - { phaseId: surging, healthThresholdPercent: 60, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, modifiers: { accuracy: 1, defense: 0, damage: 1 }, effects: [] }
+        - { phaseId: maelstrom, healthThresholdPercent: 30, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, modifiers: { accuracy: 2, defense: -1, damage: 3 }, effects: [] }
+      recoveryPerWorldTime: 0
+      recoveryCapPercent: 0
+      uniqueItemId: item.tide-crown
+      enhancedLootTableId: loot-table.tide-sovereign
+      vaultTags: [milestone-boss-10]

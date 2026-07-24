@@ -63,6 +63,22 @@ describe('milestone boss guarantee', () => {
     expect(bosses).toHaveLength(1);
   });
 
+  it('guarantees the Tide-Sovereign in its arena at depth 10', () => {
+    const requiredVaultId = milestoneBossVaultId(vaults, 10);
+    expect(requiredVaultId).toBe('vault.tide-sovereign-arena');
+    const generated = generateAt(10, requiredVaultId);
+    expect(generated.floor.vaults.map((vault) => vault.vaultId)).toContain(
+      'vault.tide-sovereign-arena',
+    );
+    const base = createDemoRun();
+    const run = { ...base, encounterDecisions: [bossDecision('encounter.tide-sovereign')] };
+    const result = placeFloorPopulations({ run, floor: generated.floor, content });
+    const bosses = result.state.actors.filter(
+      (actor) => actor.contentId === 'monster.tide-sovereign',
+    );
+    expect(bosses).toHaveLength(1);
+  });
+
   it('forces no milestone vault and no boss at a non-milestone depth (6)', () => {
     expect(milestoneBossVaultId(vaults, 6)).toBeUndefined();
     const generated = generateAt(6, undefined);

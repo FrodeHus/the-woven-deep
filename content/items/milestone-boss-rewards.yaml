@@ -20,3 +20,23 @@ entries:
     light: null
     identification: { mode: known, poolId: null }
     effects: []
+  - kind: item
+    id: item.tide-crown
+    name: The Drowned Crown
+    glyph: "*"
+    color: "#3a8fb0"
+    description: A circlet still cold from the water it was pulled from. Wearing it steadies the hand and turns aside a blow the way a current turns aside a stone.
+    lore: "It ruled a court that forgot how to leave. On a living brow it is only cold — but it is the cold of something that has waited a very long time and is good at it."
+    tags: [boss-reward, cold, defense]
+    minDepth: 10
+    maxDepth: 20
+    category: ring
+    stackLimit: 1
+    price: 200
+    rarity: legendary
+    actionCost: 100
+    equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
+    combat: { accuracy: 1, defense: 1, armor: 0, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []
