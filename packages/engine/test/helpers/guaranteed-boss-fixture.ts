@@ -147,7 +147,7 @@ function arenaVault(): VaultContentEntry {
   };
 }
 
-function fixtureFloor(withArena: boolean): FloorSnapshot {
+function fixtureFloor(withArena: boolean, blockArenaSlot = false): FloorSnapshot {
   const tiles = Array.from({ length: WIDTH * HEIGHT }, (_, index) => {
     const x = index % WIDTH;
     const y = Math.floor(index / WIDTH);
@@ -164,7 +164,11 @@ function fixtureFloor(withArena: boolean): FloorSnapshot {
     height: HEIGHT,
     depth: 3,
     tiles,
-    entities: [],
+    // A pre-existing entity pinned to the arena's `monster` slot cell (5,3) reserves it via
+    // `reservedCellIndexes`, so `selectCells` finds zero legal vault anchors for the boss --
+    // the only way to make an otherwise-eligible-with-arena-present guaranteed boss fail to
+    // place, for exercising the pre-pass's invariant assertion.
+    entities: blockArenaSlot ? [{ entityId: 'entity.arena-slot-blocker', x: 5, y: 3 }] : [],
     themeId: 'theme.cavern',
     ambient: { color: [0, 0, 0], strength: 0 },
     knowledge: createUnknownKnowledge(tiles.length),
@@ -205,6 +209,8 @@ function fixtureFloor(withArena: boolean): FloorSnapshot {
 export interface GuaranteedBossFixtureOptions {
   readonly arenaTagPresent: boolean;
   readonly emptyTagBoss?: boolean;
+  /** Reserves the arena's `monster` slot cell so the guaranteed boss has no legal anchor. */
+  readonly blockArenaSlot?: boolean;
 }
 
 export interface GuaranteedBossFixture {
@@ -296,5 +302,9 @@ export function buildGuaranteedBossFixture(
     encounterDecisions,
   };
 
-  return { content, run, floor: fixtureFloor(options.arenaTagPresent) };
+  return {
+    content,
+    run,
+    floor: fixtureFloor(options.arenaTagPresent, options.blockArenaSlot ?? false),
+  };
 }

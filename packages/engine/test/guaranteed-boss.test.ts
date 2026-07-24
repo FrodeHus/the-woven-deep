@@ -42,4 +42,19 @@ describe('guaranteed vault-gated boss pre-pass', () => {
     );
     expect(emptyTagActors).toHaveLength(0);
   });
+
+  it('throws the internal-invariant error instead of silently dropping a guaranteed boss that cannot anchor', () => {
+    // The boss is eligible and its arena tags ARE present (a `guaranteedBosses` member), but its
+    // only legal vault anchor cell is reserved by a pre-existing entity, so `placePopulation`
+    // can find no legal placement and returns `status: 'skipped'` (the boss's `failureMode` is
+    // `optional`). Before the fix this silently left the run without its guaranteed boss; now
+    // the pre-pass must fail loudly instead.
+    const { content, run, floor } = buildGuaranteedBossFixture({
+      arenaTagPresent: true,
+      blockArenaSlot: true,
+    });
+    expect(() => placeFloorPopulations({ run, floor, content })).toThrow(
+      /internal invariant.*encounter\.arena-boss.*depth 3/s,
+    );
+  });
 });

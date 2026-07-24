@@ -200,6 +200,29 @@ function availableVaultTags(
   return tags;
 }
 
+/**
+ * The eligibility predicate shared by `candidates()` (the weighted density loop) and the
+ * guaranteed-boss pre-pass filter in `placeFloorPopulations`: decision eligible, run-instance cap
+ * not yet reached, floor depth within band, and every required-vault tag present. `candidates()`
+ * layers an environment-tags check on top; the pre-pass layers `model === 'boss'` plus a
+ * non-empty-required-tags guard on top. Kept as one function so the two call sites cannot drift.
+ */
+function meetsBaseEligibility(
+  encounter: EncounterContentEntry,
+  decision: EncounterRunDecision | undefined,
+  depth: number,
+  requiredTags: readonly string[],
+  vaultTags: ReadonlySet<string>,
+): boolean {
+  return (
+    decision?.eligible === true &&
+    decision.instancesCreated < encounter.maximumInstancesPerRun &&
+    depth >= encounter.minDepth &&
+    depth <= encounter.maxDepth &&
+    requiredTags.every((tag) => vaultTags.has(tag))
+  );
+}
+
 function candidates(
   input: PlacePopulationInput,
   encounters: readonly EncounterContentEntry[],
@@ -211,17 +234,10 @@ function candidates(
   const environmentTags = new Set(input.environmentTags ?? []);
   return encounters.filter((encounter) => {
     const decision = decisions.get(encounter.id);
-    const requiredTags =
-      encounter.model === 'boss'
-        ? [...encounter.requiredVaultTags, ...encounter.definition.vaultTags]
-        : encounter.requiredVaultTags;
+    const requiredTags = requiredAnchorTags(encounter);
     return (
-      decision?.eligible === true &&
-      decision.instancesCreated < encounter.maximumInstancesPerRun &&
-      input.floor.depth >= encounter.minDepth &&
-      input.floor.depth <= encounter.maxDepth &&
-      encounter.environmentTags.every((tag) => environmentTags.has(tag)) &&
-      requiredTags.every((tag) => vaultTags.has(tag))
+      meetsBaseEligibility(encounter, decision, input.floor.depth, requiredTags, vaultTags) &&
+      encounter.environmentTags.every((tag) => environmentTags.has(tag))
     );
   });
 }
@@ -1171,12 +1187,12 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
     const requiredTags = requiredAnchorTags(encounter);
     if (requiredTags.length === 0) return false;
     const decision = bossDecisions.get(encounter.id);
-    return (
-      decision?.eligible === true &&
-      decision.instancesCreated < encounter.maximumInstancesPerRun &&
-      input.floor.depth >= encounter.minDepth &&
-      input.floor.depth <= encounter.maxDepth &&
-      requiredTags.every((tag) => availableTags.has(tag))
+    return meetsBaseEligibility(
+      encounter,
+      decision,
+      input.floor.depth,
+      requiredTags,
+      availableTags,
     );
   });
   for (const boss of guaranteedBosses) {
@@ -1189,6 +1205,13 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
     });
     placements.push(placement);
     run = applyPopulationPlacement(run, placement, events, eventId, input.floor.floorId).run;
+    if (placement.status !== 'placed') {
+      throw new Error(
+        `internal invariant: guaranteed milestone boss ${boss.id} was eligible with its arena ` +
+          `tags present on floor depth ${input.floor.depth} but failed to place ` +
+          `(status: ${placement.status})`,
+      );
+    }
   }
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
