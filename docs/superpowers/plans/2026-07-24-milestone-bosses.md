@@ -439,7 +439,7 @@ entries:
     layout:
       - "#########"
       - "#.......#"
-      - "#..+....#"
+      - "+.......#"
       - "#.......#"
       - "#...B...#"
       - "#.......#"
@@ -552,7 +552,7 @@ entries:
     rarity: legendary
     runAppearanceChance: 1.0
     discoveryProtectionIncrement: 0
-    discoveryProtectionCap: 0
+    discoveryProtectionCap: 1
     maximumInstancesPerRun: 1
     placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: optional }
     intentPresentation: { visible: true }
@@ -728,7 +728,7 @@ entries:
     layout:
       - "#########"
       - "#.......#"
-      - "#..+....#"
+      - "+.......#"
       - "#.......#"
       - "#...B...#"
       - "#.......#"
@@ -839,7 +839,7 @@ entries:
     rarity: legendary
     runAppearanceChance: 1.0
     discoveryProtectionIncrement: 0
-    discoveryProtectionCap: 0
+    discoveryProtectionCap: 1
     maximumInstancesPerRun: 1
     placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: optional }
     intentPresentation: { visible: true }
@@ -930,7 +930,7 @@ entries:
     layout:
       - "#########"
       - "#.......#"
-      - "#..+....#"
+      - "+.......#"
       - "#.......#"
       - "#...B...#"
       - "#.......#"
@@ -1041,7 +1041,7 @@ entries:
     rarity: legendary
     runAppearanceChance: 1.0
     discoveryProtectionIncrement: 0
-    discoveryProtectionCap: 0
+    discoveryProtectionCap: 1
     maximumInstancesPerRun: 1
     placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: optional }
     intentPresentation: { visible: true }
