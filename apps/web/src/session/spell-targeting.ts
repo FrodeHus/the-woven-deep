@@ -1,4 +1,5 @@
 import {
+  bresenhamLine,
   burstCells,
   coneCells,
   lineCells,
@@ -61,33 +62,6 @@ function cellIsVisible(floor: ObservableFloorProjection, point: Point): boolean 
   return cellAt(floor, point.x, point.y)?.knowledge === 'visible';
 }
 
-/** Bresenham line from `from` to `to`, EXCLUSIVE of `from` and inclusive of `to` -- a byte-for-byte
- * port of the private `line()` in `packages/engine/src/targeting.ts`, kept in lockstep with it by
- * `spell-targeting.test.ts`'s parity cases (mirroring `targeting.test.ts`). */
-function line(from: Point, to: Point): readonly Point[] {
-  const points: Point[] = [];
-  let x = from.x;
-  let y = from.y;
-  const dx = Math.abs(to.x - from.x);
-  const sx = from.x < to.x ? 1 : -1;
-  const dy = -Math.abs(to.y - from.y);
-  const sy = from.y < to.y ? 1 : -1;
-  let error = dx + dy;
-  while (x !== to.x || y !== to.y) {
-    const twice = 2 * error;
-    if (twice >= dy) {
-      error += dy;
-      x += sx;
-    }
-    if (twice <= dx) {
-      error += dx;
-      y += sy;
-    }
-    points.push({ x, y });
-  }
-  return points;
-}
-
 /**
  * Whether the straight line from `from` to `to` is unobstructed, mirroring the engine's own
  * Bresenham LoS check (`validatePoint` in `targeting.ts`): every cell strictly between the two
@@ -98,7 +72,7 @@ function line(from: Point, to: Point): readonly Point[] {
  * `visible` almost always has its whole line of sight already explored too.
  */
 function hasLineOfSight(floor: ObservableFloorProjection, from: Point, to: Point): boolean {
-  const path = line(from, to);
+  const path = bresenhamLine(from, to);
   return !path.slice(0, -1).some((point) => {
     const cell = cellAt(floor, point.x, point.y);
     if (cell === undefined || cell.tileId === undefined) return true;
