@@ -75,6 +75,8 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
         default:
           return { text: `That cannot be done (${event.reason}).`, tone: 'system' };
       }
+    case 'spell.learned':
+      return { text: 'You learn a new spell.', tone: 'info' };
     case 'run.concluded':
       return { text: 'Your run has concluded.', tone: 'system' };
     default:

@@ -8,6 +8,9 @@ export interface LedgerRow {
   readonly quantity?: number;
   /** Pre-formatted price label (e.g. `"45g"`); omitted for columns with no price (house). */
   readonly price?: string;
+  /** A small spell affordance (e.g. `"learns Fireball"`, `"casts Ember bolt (burst r2)"`) shown
+   * under a tome/scroll row's name, so the player can tell what it does before buying it. */
+  readonly badge?: string;
 }
 
 export interface LedgerListProps {
@@ -86,7 +89,12 @@ export function LedgerList(props: Readonly<LedgerListProps>): JSX.Element {
                     {row.glyph}
                   </span>
                 )}
-                <span className="flex-1 truncate">{row.name}</span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate">{row.name}</span>
+                  {row.badge && (
+                    <span className="truncate text-[0.625rem] text-cool">{row.badge}</span>
+                  )}
+                </span>
                 {row.quantity !== undefined && (
                   <span className="text-[0.6875rem] text-subtle">{`×${row.quantity}`}</span>
                 )}

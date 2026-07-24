@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { useState, type JSX } from 'react';
+import { useState, type JSX, type ReactElement, type ReactNode } from 'react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
@@ -24,6 +24,7 @@ import {
 } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../src/session/guest-session.js';
 import { TradeScreen } from '../src/ui/screens/TradeScreen.js';
+import { withUiProviders } from './with-ui-providers.js';
 
 let pack: CompiledContentPack;
 let baseProjection: GameplayProjection;
@@ -37,6 +38,14 @@ beforeAll(async () => {
   const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
   baseProjection = projectGameplayState({ state: run, content: pack });
 });
+
+/** `TradeScreen` reads the content pack (`usePack`) to derive the spell badge on tome/scroll
+ * stock rows, so every render in this file needs `UiProviders` in the tree -- the same
+ * `withUiProviders` helper `trade-close-escape.test.tsx` uses for `PlayScreen`. Passed as RTL's
+ * `wrapper` option (rather than wrapping each JSX call site) so `rerender` picks it up too. */
+function Wrapper({ children }: Readonly<{ children: ReactNode }>): JSX.Element {
+  return withUiProviders(pack, children as ReactElement);
+}
 
 function snapshotOf(projection: GameplayProjection): SessionSnapshot {
   return {
@@ -79,6 +88,7 @@ describe('TradeScreen', () => {
   it('renders nothing when the projection has no active trade', () => {
     const { container } = render(
       <TradeScreen snapshot={snapshotOf(baseProjection)} onDispatch={vi.fn()} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -87,6 +97,7 @@ describe('TradeScreen', () => {
     const projection = withTrade(baseProjection, { currency: 42 });
     render(
       <TradeScreen snapshot={snapshotOf(projection)} onDispatch={vi.fn()} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
     );
     expect(screen.getByRole('dialog', { name: 'Trade' })).toBeInTheDocument();
     expect(screen.getByText('Provisioner')).toBeInTheDocument();
@@ -104,6 +115,7 @@ describe('TradeScreen', () => {
     });
     render(
       <TradeScreen snapshot={snapshotOf(projection)} onDispatch={onDispatch} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
     );
 
     await user.keyboard('{Enter}');
@@ -127,6 +139,7 @@ describe('TradeScreen', () => {
     });
     render(
       <TradeScreen snapshot={snapshotOf(projection)} onDispatch={onDispatch} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
     );
 
     await user.keyboard('{Tab}');
@@ -156,6 +169,7 @@ describe('TradeScreen', () => {
     });
     render(
       <TradeScreen snapshot={snapshotOf(projection)} onDispatch={onDispatch} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
     );
 
     await user.keyboard('{Tab}{Tab}');
@@ -182,6 +196,7 @@ describe('TradeScreen', () => {
     });
     render(
       <TradeScreen snapshot={snapshotOf(projection)} onDispatch={vi.fn()} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
     );
 
     await user.keyboard('{Tab}{Tab}');
@@ -206,6 +221,7 @@ describe('TradeScreen', () => {
     });
     render(
       <TradeScreen snapshot={snapshotOf(projection)} onDispatch={onDispatch} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
     );
 
     await user.keyboard('{Tab}{Tab}');
@@ -241,6 +257,7 @@ describe('TradeScreen', () => {
     });
     render(
       <TradeScreen snapshot={snapshotOf(projection)} onDispatch={onDispatch} onClose={onClose} />,
+      { wrapper: Wrapper },
     );
 
     await user.keyboard('{Tab}{Tab}');
@@ -267,6 +284,7 @@ describe('TradeScreen', () => {
     });
     render(
       <TradeScreen snapshot={snapshotOf(projection)} onDispatch={onDispatch} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
     );
 
     await user.keyboard('{ArrowDown}');
@@ -279,12 +297,105 @@ describe('TradeScreen', () => {
     });
   });
 
+  it('badges a scroll in the buy list with the spell it casts', () => {
+    const projection = withTrade(baseProjection, {
+      stock: [
+        {
+          item: {
+            itemId: 'item.ember-scroll.1',
+            name: 'Scroll of ember bolt',
+            contentId: 'item.ember-scroll',
+          },
+          quantity: 1,
+          unitPrice: 15,
+        },
+      ],
+    });
+    render(
+      <TradeScreen snapshot={snapshotOf(projection)} onDispatch={vi.fn()} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
+    );
+
+    const row = screen.getByRole('option', { name: /Scroll of ember bolt/ });
+    expect(row).toHaveTextContent('casts Ember bolt');
+  });
+
+  it('badges an AoE scroll in the buy list with the spell name and its area shape', () => {
+    const projection = withTrade(baseProjection, {
+      stock: [
+        {
+          item: {
+            itemId: 'item.fireball-scroll.1',
+            name: 'Scroll of fireball',
+            contentId: 'item.fireball-scroll',
+          },
+          quantity: 1,
+          unitPrice: 30,
+        },
+      ],
+    });
+    render(
+      <TradeScreen snapshot={snapshotOf(projection)} onDispatch={vi.fn()} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
+    );
+
+    const row = screen.getByRole('option', { name: /Scroll of fireball/ });
+    expect(row).toHaveTextContent('casts Fireball (burst r2)');
+  });
+
+  it('badges a tome in the buy list with the spell it teaches', () => {
+    const projection = withTrade(baseProjection, {
+      stock: [
+        {
+          item: {
+            itemId: 'item.fireball-tome.1',
+            name: 'Tome of fireball',
+            contentId: 'item.fireball-tome',
+          },
+          quantity: 1,
+          unitPrice: 60,
+        },
+      ],
+    });
+    render(
+      <TradeScreen snapshot={snapshotOf(projection)} onDispatch={vi.fn()} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
+    );
+
+    const row = screen.getByRole('option', { name: /Tome of fireball/ });
+    expect(row).toHaveTextContent('learns Fireball');
+  });
+
+  it('shows no spell badge for a non-spell item in the buy list', () => {
+    const projection = withTrade(baseProjection, {
+      stock: [
+        {
+          item: {
+            itemId: 'item.ration.1',
+            name: 'Travel ration',
+            contentId: 'item.travel-ration',
+          },
+          quantity: 1,
+          unitPrice: 3,
+        },
+      ],
+    });
+    render(
+      <TradeScreen snapshot={snapshotOf(projection)} onDispatch={vi.fn()} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
+    );
+
+    const row = screen.getByRole('option', { name: /Travel ration/ });
+    expect(row).not.toHaveTextContent(/casts|learns/);
+  });
+
   it('closes on Escape', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     const projection = withTrade(baseProjection);
     render(
       <TradeScreen snapshot={snapshotOf(projection)} onDispatch={vi.fn()} onClose={onClose} />,
+      { wrapper: Wrapper },
     );
 
     await user.keyboard('{Escape}');
@@ -296,6 +407,7 @@ describe('TradeScreen', () => {
     const projection = withTrade(baseProjection);
     const { rerender, container } = render(
       <TradeScreen snapshot={snapshotOf(projection)} onDispatch={vi.fn()} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
     );
     expect(screen.getByRole('dialog', { name: 'Trade' })).toBeInTheDocument();
 
@@ -464,7 +576,7 @@ describe('TradeScreen roving focus after a sale shrinks the list', () => {
     const survivorName = nameOf(secondOffer!.itemId);
     const soldFirstName = nameOf(firstOffer!.itemId);
 
-    render(<TradeHarness initialRun={run} />);
+    render(<TradeHarness initialRun={run} />, { wrapper: Wrapper });
     const sellList = () => screen.getByRole('listbox', { name: 'Sell' });
 
     await user.keyboard('{Tab}'); // buy -> sell list
@@ -521,7 +633,7 @@ describe('TradeScreen focus after a dispatch empties the active list', () => {
       );
     }
 
-    render(<EmptyingHarness />);
+    render(<EmptyingHarness />, { wrapper: Wrapper });
 
     await user.keyboard('{Tab}'); // buy -> sell
     await user.keyboard('{Enter}'); // sells the only offer, emptying the sell list
@@ -664,6 +776,7 @@ describe('TradeScreen identify target picker', () => {
           latestRun = next;
         }}
       />,
+      { wrapper: Wrapper },
     );
 
     await user.keyboard('{Tab}{Tab}'); // buy -> sell -> services
@@ -693,7 +806,7 @@ describe('TradeScreen identify target picker', () => {
   it('closes the picker on Escape and returns to the services list without closing the trade dialog', async () => {
     const user = userEvent.setup();
     const run = runWithUnidentifiedPair();
-    render(<IdentifyHarness initialRun={run} />);
+    render(<IdentifyHarness initialRun={run} />, { wrapper: Wrapper });
 
     await user.keyboard('{Tab}{Tab}');
     await user.keyboard('{Enter}');

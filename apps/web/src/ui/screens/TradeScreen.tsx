@@ -7,13 +7,16 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import type { OpaqueId } from '@woven-deep/engine';
-import type { MerchantServiceId } from '@woven-deep/content';
+import type { CompiledContentPack, MerchantServiceId } from '@woven-deep/content';
+import { itemById, spellEntries } from '@woven-deep/session-core';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
 import { heroOf, ownedItemOf, tradeOf, type TradeView } from '../../session/projection-view.js';
+import { aoeBadge } from '../../session/spell-detail.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
 import { LedgerCenter, LedgerList, type LedgerRow } from '../components/LedgerList.js';
 import { cn } from '../lib/cn.js';
+import { usePack } from '../providers.js';
 
 /** The minimal owned-item shape the trade rows read -- an owned item's projection, or a bare
  * `{ itemId, name }` fallback when the offer's item is no longer in the hero's own projection. */
@@ -45,6 +48,31 @@ function ownedItemRef(snapshot: SessionSnapshot, itemId: OpaqueId): ProjectedIte
   return ownedItemOf(heroOf(snapshot.projection), itemId) ?? { itemId, name: itemId };
 }
 
+/** The small "learns X" / "casts X (...)" affordance for a tome/scroll row in the merchant's stock,
+ * so the player can tell what a spell item does without opening it first. A scroll's content entry
+ * carries a directly-castable `spellId` (see `scroll-targeting.ts`'s `scrollAimSpell`, which this
+ * duplicates only the id-resolution half of -- that helper narrows to aim-requiring targeting only,
+ * which is too narrow a signal for a shop badge); a tome instead LEARNS a spell via an
+ * `effect.spell.learn` effect carrying the spellId in its parameters (see
+ * `content/items/fireball-tome.yaml`). Returns `undefined` for a non-spell item (nothing to badge). */
+function spellBadge(
+  pack: CompiledContentPack,
+  contentId: OpaqueId | undefined,
+): string | undefined {
+  if (contentId === undefined) return undefined;
+  const entry = itemById(pack, contentId);
+  if (!entry) return undefined;
+  const learnEffect = entry.effects.find((effect) => effect.effectId === 'effect.spell.learn');
+  const learnSpellId = learnEffect?.parameters.spellId;
+  const spellId = entry.spellId ?? (typeof learnSpellId === 'string' ? learnSpellId : undefined);
+  if (typeof spellId !== 'string') return undefined;
+  const spell = spellEntries(pack).find((candidate) => candidate.id === spellId);
+  if (!spell) return undefined;
+  if (typeof learnSpellId === 'string') return `learns ${spell.name}`;
+  const shape = aoeBadge(spell.aoe);
+  return shape ? `casts ${spell.name} (${shape})` : `casts ${spell.name}`;
+}
+
 type FocusedList = 'buy' | 'sell' | 'services';
 
 const LIST_ORDER: readonly FocusedList[] = ['buy', 'sell', 'services'];
@@ -69,6 +97,7 @@ interface TradeRow {
   readonly name: string;
   readonly quantity?: number;
   readonly price: string;
+  readonly badge?: string;
   readonly run: () => void;
 }
 
@@ -124,6 +153,7 @@ export function TradeScreen({
   onClose,
 }: TradeScreenProps): JSX.Element | null {
   const session = trade(snapshot);
+  const pack = usePack();
   const [focusedList, setFocusedList] = useState<FocusedList>('buy');
   const [selectedIndex, setSelectedIndex] = useState(0);
   // Set only for services whose `targetItemIds` is non-empty (e.g. identify): opening the picker
@@ -146,13 +176,17 @@ export function TradeScreen({
   const rows = useMemo((): Readonly<Record<FocusedList, readonly TradeRow[]>> => {
     if (!session) return { buy: [], sell: [], services: [] };
     return {
-      buy: session.stock.map((entry) => ({
-        id: entry.item.itemId,
-        name: entry.item.name,
-        quantity: entry.quantity,
-        price: `${entry.unitPrice}g`,
-        run: () => onDispatch({ type: 'trade-buy', itemId: entry.item.itemId, quantity: 1 }),
-      })),
+      buy: session.stock.map((entry) => {
+        const badge = spellBadge(pack, entry.item.contentId);
+        return {
+          id: entry.item.itemId,
+          name: entry.item.name,
+          quantity: entry.quantity,
+          price: `${entry.unitPrice}g`,
+          ...(badge ? { badge } : {}),
+          run: () => onDispatch({ type: 'trade-buy', itemId: entry.item.itemId, quantity: 1 }),
+        };
+      }),
       sell: session.saleOffers.map((entry) => ({
         id: entry.itemId,
         name: backpackItemName(snapshot, entry.itemId),
@@ -177,7 +211,7 @@ export function TradeScreen({
         },
       })),
     };
-  }, [session, snapshot, onDispatch]);
+  }, [session, snapshot, onDispatch, pack]);
 
   const activeRows = rows[focusedList];
 
@@ -263,6 +297,7 @@ export function TradeScreen({
       name: row.name,
       ...(row.quantity !== undefined ? { quantity: row.quantity } : {}),
       price: row.price,
+      ...(row.badge ? { badge: row.badge } : {}),
     }));
     return (
       <LedgerList
