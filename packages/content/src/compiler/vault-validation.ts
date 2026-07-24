@@ -123,6 +123,15 @@ export function validateVaultEntry(
             ...referencedKindIssue(file, `${slotPath}.contentId`, slot.contentId, 'item', byId),
           );
         }
+      } else if (slot.kind === 'trap') {
+        if (slot.lootTableId !== null) {
+          add(slotPath, `${slot.kind} slot ${slot.id} may not set item loot fields`);
+        }
+        if (slot.contentId !== null) {
+          issues.push(
+            ...referencedKindIssue(file, `${slotPath}.contentId`, slot.contentId, 'trap', byId),
+          );
+        }
       } else if (slot.lootTableId !== null || slot.contentId !== null) {
         add(slotPath, `${slot.kind} slot ${slot.id} may not set item loot fields`);
       }

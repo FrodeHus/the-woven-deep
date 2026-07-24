@@ -1,0 +1,49 @@
+schemaVersion: 7
+entries:
+  - kind: vault
+    id: vault.deep-antechamber
+    name: Deep antechamber
+    tags: [deep, heart, threshold]
+    minDepth: 13
+    maxDepth: 19
+    rarity: rare
+    weight: 4
+    maxPerFloor: 1
+    margin: 1
+    transforms:
+      rotations: [0, 180]
+      reflectHorizontal: true
+    layout:
+      - "#######"
+      - "+..O..#"
+      - "#.m.n.#"
+      - "#..t..#"
+      - "#O.i.O#"
+      - "#..*..#"
+      - "#######"
+    legend:
+      "#": { terrain: wall }
+      ".": { terrain: floor }
+      "+": { terrain: closed-door, entrance: true }
+      "O": { terrain: pillar }
+      "*":
+        terrain: floor
+        light:
+          idSuffix: heart-glimmer
+          glyph: "*"
+          presentationToken: fixture.lamp
+          color: [201, 66, 95]
+          radius: 5
+          strength: 140
+      "m":
+        terrain: floor
+        slot: { id: ambush-left, kind: monster, required: false, tags: [ambush, deep] }
+      "n":
+        terrain: floor
+        slot: { id: ambush-right, kind: monster, required: false, tags: [ambush, deep] }
+      "t":
+        terrain: floor
+        slot: { id: warded-threshold, kind: trap, required: false, tags: [deep, hazard], contentId: trap.warded-glyph }
+      "i":
+        terrain: floor
+        slot: { id: deep-cache, kind: item, required: true, tags: [cache, deep], lootTableId: loot-table.echo-wrought }

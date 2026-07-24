@@ -1,0 +1,16 @@
+schemaVersion: 7
+entries:
+  - kind: trap
+    id: trap.warded-glyph
+    name: Warded glyph
+    glyph: "^"
+    color: "#8a5fc0"
+    tags: [arcane, deep, offense]
+    targetingId: target.actor
+    discoveryDifficulty: 12
+    disarmDifficulty: 14
+    disarmOutcomes: { failure: trigger, criticalFailure: trigger, toolDamage: 15 }
+    resetMode: once
+    effects:
+      - { effectId: effect.damage, parameters: { damageType: arcane, dice: { count: 2, sides: 6, bonus: 2 } }, requiresLivingTarget: true }
+      - { effectId: effect.condition.apply, parameters: { conditionId: condition.burning }, requiresLivingTarget: true }

@@ -1315,6 +1315,20 @@ describe('compileContentDirectory', () => {
   });
 
   it('rejects a non-item vault slot that sets item loot fields', async () => {
+    const vaultWithBadMonsterSlot = compactVault.replace(
+      'slot: {id: monster-main, kind: monster, required: true, tags: [guard]}',
+      'slot: {id: monster-main, kind: monster, required: true, tags: [guard], contentId: item.lantern}',
+    );
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, compactItem, vaultWithBadMonsterSlot),
+    });
+
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /may not set item loot fields/,
+    );
+  });
+
+  it('rejects a trap vault slot naming an unknown or wrong-kind trap', async () => {
     const vaultWithBadTrapSlot = compactVault.replace(
       'slot: {id: monster-main, kind: monster, required: true, tags: [guard]}',
       'slot: {id: trap-loot, kind: trap, required: true, tags: [guard], contentId: item.lantern}',
@@ -1324,7 +1338,7 @@ describe('compileContentDirectory', () => {
     });
 
     await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
-      /may not set item loot fields/,
+      /trap reference item\.lantern resolves to item/,
     );
   });
 
