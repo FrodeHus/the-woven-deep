@@ -1,0 +1,109 @@
+schemaVersion: 7
+entries:
+  - kind: monster
+    id: monster.echo-breaker
+    name: Echo-wrought breaker
+    glyph: e
+    color: "#9a4f6f"
+    description: A brute the Heart hammered back into shape after it broke, its body a rough echo of the thing it used to be, only heavier.
+    lore: "The Deep does not waste a strong back. When this one fell, the Heart's pull gathered the pieces and pressed them together again, close enough to work."
+    tags: [echo-wrought, brute]
+    minDepth: 16
+    maxDepth: 18
+    attributes: { might: 16, agility: 5, vitality: 15, wits: 5, resolve: 12 }
+    health: 54
+    speed: 90
+    accuracy: 6
+    defense: 11
+    perception: 6
+    damage: { count: 2, sides: 8, bonus: 3 }
+    armor: 5
+    resistances: { physical: 35, fire: 10, cold: -10, lightning: 0, poison: 20, arcane: 25 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 14
+    rarity: common
+    lootTableId: loot-table.echo-wrought
+    dropChance: 0.4
+
+  - kind: monster
+    id: monster.echo-colossus
+    name: Echo-wrought colossus
+    glyph: E
+    color: "#8a3f5f"
+    description: Layer on layer of reclaimed dead, pressed by the Heart's weight into one slab-shouldered giant that walks with the patience of stone.
+    lore: "Count the seams and you count the fallen. The Heart keeps no ledger, but the colossus wears one, written in the joins where body was fitted to body."
+    tags: [echo-wrought, brute, armored]
+    minDepth: 16
+    maxDepth: 19
+    attributes: { might: 17, agility: 5, vitality: 16, wits: 6, resolve: 13 }
+    health: 55
+    speed: 85
+    accuracy: 6
+    defense: 12
+    perception: 6
+    damage: { count: 3, sides: 8, bonus: 2 }
+    armor: 6
+    resistances: { physical: 40, fire: 10, cold: -10, lightning: 0, poison: 25, arcane: 30 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 15
+    rarity: uncommon
+    lootTableId: loot-table.echo-wrought
+    dropChance: 0.45
+
+  - kind: monster
+    id: monster.echo-harrower
+    name: Echo-wrought harrower
+    glyph: e
+    color: "#a44f7f"
+    description: Lean where its kin are massive, quick where they are slow, its reworked limbs ending in reaching hooks that the Heart's residue keeps sharp.
+    lore: "Not every echo comes back heavier. Some come back hungrier, remade lean and fast for the one task the Heart still cares about down here: bringing more back."
+    tags: [echo-wrought, arcane, harrower]
+    minDepth: 17
+    maxDepth: 19
+    attributes: { might: 15, agility: 8, vitality: 15, wits: 9, resolve: 13 }
+    health: 55
+    speed: 95
+    accuracy: 7
+    defense: 13
+    perception: 9
+    damage: { count: 3, sides: 8, bonus: 2 }
+    armor: 6
+    resistances: { physical: 35, fire: 5, cold: -10, lightning: 0, poison: 20, arcane: 40 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 16
+    rarity: rare
+    lootTableId: loot-table.echo-wrought
+    dropChance: 0.45
+
+  - kind: monster
+    id: monster.echo-sovereign
+    name: The Echo Sovereign
+    glyph: E
+    color: "#c9425f"
+    description: The Heart's masterwork of reclaimed dead, crowned in fused binding-iron, a preview of the shape waiting in the Final Chamber below.
+    lore: "It is what the Heart makes when it is not being careless: a body worthy of the pull that raised it. Stand before it and you are looking up the last stretch of stair at the thing that owns them all."
+    tags: [echo-wrought, brute, elite, legendary]
+    minDepth: 18
+    maxDepth: 19
+    attributes: { might: 18, agility: 6, vitality: 17, wits: 10, resolve: 15 }
+    health: 57
+    speed: 95
+    accuracy: 7
+    defense: 13
+    perception: 8
+    damage: { count: 3, sides: 8, bonus: 3 }
+    armor: 7
+    resistances: { physical: 45, fire: 15, cold: -5, lightning: 0, poison: 30, arcane: 40 }
+    disposition: hostile
+    behaviorId: behavior.approach-and-attack
+    behaviorParameters: {}
+    threat: 18
+    rarity: legendary
+    lootTableId: loot-table.echo-wrought
+    dropChance: 0.5

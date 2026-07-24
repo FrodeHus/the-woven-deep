@@ -15,3 +15,4 @@ entries:
       - { contentId: item.wooden-arrows, lootTableId: null, weight: 4, minimumQuantity: 4, maximumQuantity: 12 }
       - { contentId: item.hunting-bow, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1, minDepth: 5 }
       - { contentId: item.leather-armor, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1, minDepth: 10 }
+      - { contentId: item.bound-signet, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, minDepth: 13 }

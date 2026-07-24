@@ -68,3 +68,28 @@ entries:
       - { contentId: item.ember-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.hunting-bow, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.wooden-arrows, lootTableId: null, weight: 2, minimumQuantity: 4, maximumQuantity: 12 }
+
+  - kind: loot-table
+    id: loot-table.the-bound
+    name: Bound remnants
+    tags: [arcane, deep, undead]
+    rolls: 2
+    choices:
+      - { contentId: item.ashen-potion, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.echo-remnant, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.etched-ring, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.ember-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.bound-signet, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, minDepth: 13 }
+
+  - kind: loot-table
+    id: loot-table.echo-wrought
+    name: Echo-wrought salvage
+    tags: [arcane, brute, deep]
+    rolls: 2
+    choices:
+      - { contentId: item.leather-armor, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.ashen-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.echo-remnant, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.ember-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.iron-sword, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.echo-heartstone, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, minDepth: 15 }

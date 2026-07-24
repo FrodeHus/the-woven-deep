@@ -575,3 +575,200 @@ entries:
       responseParameters: { duration: 8, modifiers: { accuracy: 1, defense: -1, damage: 2 } }
       supernaturalBond: false
       collapseRewards: none
+
+  # --- The Bound (depth 13-16) ---
+  - kind: encounter
+    id: encounter.bound-wretch-prowl
+    name: Bound wretch prowl
+    tags: [arcane, the-bound, skirmisher]
+    model: individual
+    minDepth: 13
+    maxDepth: 15
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 5
+    rarity: common
+    runAppearanceChance: 0.6
+    discoveryProtectionIncrement: 0.06
+    discoveryProtectionCap: 0.8
+    maximumInstancesPerRun: 10
+    placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.bound-wretch, minimumQuantity: 1, maximumQuantity: 3 }
+
+  - kind: encounter
+    id: encounter.bound-procession
+    name: Bound procession
+    tags: [arcane, the-bound]
+    model: group
+    minDepth: 13
+    maxDepth: 16
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 4
+    rarity: uncommon
+    runAppearanceChance: 0.5
+    discoveryProtectionIncrement: 0.05
+    discoveryProtectionCap: 0.7
+    maximumInstancesPerRun: 8
+    placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 5, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      roles:
+        - { roleId: wretch, monsterId: monster.bound-wretch, minimumQuantity: 1, maximumQuantity: 3, formationPreference: front, behaviorParameters: {} }
+        - { roleId: shackled, monsterId: monster.bound-shackled, minimumQuantity: 1, maximumQuantity: 2, formationPreference: front, behaviorParameters: {} }
+        - { roleId: warden, monsterId: monster.bound-warden, minimumQuantity: 1, maximumQuantity: 1, formationPreference: center, behaviorParameters: {} }
+      formation: line
+      communicationRadius: 6
+      leaderChance: 0.45
+      leaderRoleId: warden
+      leaderAccentColor: "#5a3f82"
+      leaderAlternateGlyph: W
+      coordinationModifiers: { accuracy: 1, defense: 1, damage: 0 }
+      leaderDeathResponse: weaken
+      responseParameters: { modifiers: { accuracy: -1, defense: -2, damage: -1 } }
+      supernaturalBond: true
+      collapseRewards: none
+
+  - kind: encounter
+    id: encounter.bound-swarm
+    name: Bound swarm
+    tags: [arcane, the-bound, swarm]
+    model: swarm
+    minDepth: 14
+    maxDepth: 16
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 3
+    rarity: rare
+    runAppearanceChance: 0.3
+    discoveryProtectionIncrement: 0.04
+    discoveryProtectionCap: 0.55
+    maximumInstancesPerRun: 5
+    placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 4, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      sourceMonsterId: monster.bound-shackled
+      spawnRoles:
+        - { roleId: wretch, monsterId: monster.bound-wretch, weight: 3 }
+      spawnInterval: 300
+      minimumSpawnQuantity: 1
+      maximumSpawnQuantity: 2
+      placementRadius: 3
+      allowedTerrainTags: [floor]
+      maximumLivingChildren: 8
+      maximumLivingMembers: 9
+      maximumFloorActors: 20
+      sourceDestructionResponse: decay
+      responseParameters: { interval: 300, damage: 2 }
+
+  - kind: encounter
+    id: encounter.bound-hex-rite
+    name: Bound hex rite
+    tags: [arcane, caster, the-bound]
+    model: individual
+    minDepth: 15
+    maxDepth: 16
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 3
+    rarity: rare
+    runAppearanceChance: 0.3
+    discoveryProtectionIncrement: 0.04
+    discoveryProtectionCap: 0.55
+    maximumInstancesPerRun: 5
+    placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.bound-hexbound, minimumQuantity: 1, maximumQuantity: 1 }
+
+  # --- Echo-wrought (depth 16-19) ---
+  - kind: encounter
+    id: encounter.echo-breaker-stand
+    name: Echo-wrought breaker stand
+    tags: [arcane, echo-wrought, brute]
+    model: individual
+    minDepth: 16
+    maxDepth: 18
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 5
+    rarity: common
+    runAppearanceChance: 0.55
+    discoveryProtectionIncrement: 0.05
+    discoveryProtectionCap: 0.75
+    maximumInstancesPerRun: 9
+    placement: { minimumStairDistance: 7, minimumObjectiveDistance: 7, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.echo-breaker, minimumQuantity: 1, maximumQuantity: 2 }
+
+  - kind: encounter
+    id: encounter.echo-vanguard
+    name: Echo-wrought vanguard
+    tags: [arcane, echo-wrought, brute]
+    model: group
+    minDepth: 16
+    maxDepth: 19
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 4
+    rarity: uncommon
+    runAppearanceChance: 0.45
+    discoveryProtectionIncrement: 0.05
+    discoveryProtectionCap: 0.65
+    maximumInstancesPerRun: 7
+    placement: { minimumStairDistance: 7, minimumObjectiveDistance: 7, maximumMemberDistance: 5, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition:
+      roles:
+        - { roleId: breaker, monsterId: monster.echo-breaker, minimumQuantity: 1, maximumQuantity: 2, formationPreference: front, behaviorParameters: {} }
+        - { roleId: colossus, monsterId: monster.echo-colossus, minimumQuantity: 1, maximumQuantity: 1, formationPreference: front, behaviorParameters: {} }
+        - { roleId: harrower, monsterId: monster.echo-harrower, minimumQuantity: 1, maximumQuantity: 1, formationPreference: flank, behaviorParameters: {} }
+      formation: wedge
+      communicationRadius: 6
+      leaderChance: 0.5
+      leaderRoleId: colossus
+      leaderAccentColor: "#8a3f5f"
+      leaderAlternateGlyph: C
+      coordinationModifiers: { accuracy: 1, defense: 1, damage: 1 }
+      leaderDeathResponse: frenzy
+      responseParameters: { duration: 8, modifiers: { accuracy: 1, defense: -1, damage: 2 } }
+      supernaturalBond: true
+      collapseRewards: none
+
+  - kind: encounter
+    id: encounter.echo-harrower-hunt
+    name: Echo-wrought harrower hunt
+    tags: [arcane, echo-wrought, harrower]
+    model: individual
+    minDepth: 17
+    maxDepth: 19
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 3
+    rarity: rare
+    runAppearanceChance: 0.35
+    discoveryProtectionIncrement: 0.04
+    discoveryProtectionCap: 0.6
+    maximumInstancesPerRun: 6
+    placement: { minimumStairDistance: 7, minimumObjectiveDistance: 7, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.echo-harrower, minimumQuantity: 1, maximumQuantity: 2 }
+
+  - kind: encounter
+    id: encounter.echo-sovereign-march
+    name: The Echo Sovereign's march
+    tags: [arcane, echo-wrought, elite]
+    model: individual
+    minDepth: 18
+    maxDepth: 19
+    environmentTags: []
+    requiredVaultTags: []
+    weight: 2
+    rarity: legendary
+    runAppearanceChance: 0.25
+    discoveryProtectionIncrement: 0.03
+    discoveryProtectionCap: 0.45
+    maximumInstancesPerRun: 3
+    placement: { minimumStairDistance: 7, minimumObjectiveDistance: 7, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
+    intentPresentation: { visible: true }
+    definition: { monsterId: monster.echo-sovereign, minimumQuantity: 1, maximumQuantity: 1 }
