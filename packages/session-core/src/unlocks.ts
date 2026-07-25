@@ -1,4 +1,4 @@
-import type { ClassContentEntry, CompiledContentPack } from '@woven-deep/content';
+import type { ClassContentEntry, CompiledContentPack, UnlockCondition } from '@woven-deep/content';
 import type { LifetimeState, StoredHallRecord } from '@woven-deep/engine';
 import { classById, classEntries } from './pack-queries.js';
 
@@ -9,29 +9,32 @@ export interface EvaluateUnlocksInput {
 }
 
 /**
- * The single source of unlock rules, keyed by class id. Each predicate decides whether the
- * profile's Hall records + lifetime state have earned that class, independent of whether the
- * class is currently locked in content.
+ * Decides whether a class's data-driven `unlock` condition is satisfied by the profile's Hall
+ * records + lifetime state.
  */
-const UNLOCK_RULES: Readonly<Record<string, (input: EvaluateUnlocksInput) => boolean>> = {
-  'class.warden': ({ records }) => records.some((record) => record.deepestDepth >= 10),
-  'class.archivist': ({ lifetime }) => lifetime.conqueredChampionRecordIds.length >= 3,
-};
+function unlockConditionMet(condition: UnlockCondition, input: EvaluateUnlocksInput): boolean {
+  switch (condition.type) {
+    case 'reach-depth':
+      return input.records.some((record) => record.deepestDepth >= condition.depth);
+    case 'defeat-champions':
+      return input.lifetime.conqueredChampionRecordIds.length >= condition.count;
+  }
+}
 
 /**
  * Evaluates which content-locked class ids a profile has unlocked, from its Hall records +
  * lifetime state. Pure: no I/O, no clock, no randomness. A class id is only ever included if it
- * both satisfies its unlock rule AND exists in `content` as a currently `playable: false` class —
- * a class that is already playable is never returned.
+ * is currently `playable: false` in `content` AND its own `unlock` condition is met — a class
+ * that is already playable, or has no `unlock` condition, is never returned.
  */
 export function evaluateUnlocks(input: EvaluateUnlocksInput): readonly string[] {
-  const unlocked = Object.entries(UNLOCK_RULES)
-    .filter(([classId, predicate]) => {
-      const entry = classById(input.content, classId);
-      return entry !== undefined && !entry.playable && predicate(input);
-    })
-    .map(([classId]) => classId);
-  return unlocked.sort();
+  return classEntries(input.content)
+    .filter(
+      (entry) =>
+        !entry.playable && entry.unlock !== null && unlockConditionMet(entry.unlock, input),
+    )
+    .map((entry) => entry.id)
+    .sort();
 }
 
 /**
