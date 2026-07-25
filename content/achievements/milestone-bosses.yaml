@@ -1,0 +1,20 @@
+schemaVersion: 7
+entries:
+  - kind: achievement
+    id: achievement.felled-the-ashfather
+    name: Felled the Ashfather
+    tags: [boss, prestige]
+    description: Defeat the Ashfather at the fifth descent.
+    criteria: { type: defeat-boss, monsterId: monster.ashfather }
+  - kind: achievement
+    id: achievement.drowned-the-sovereign
+    name: Drowned the Sovereign
+    tags: [boss, prestige]
+    description: Defeat the Tide-Sovereign at the tenth descent.
+    criteria: { type: defeat-boss, monsterId: monster.tide-sovereign }
+  - kind: achievement
+    id: achievement.silenced-the-herald
+    name: Silenced the Herald
+    tags: [boss, prestige]
+    description: Defeat the Heart-Herald at the fifteenth descent.
+    criteria: { type: defeat-boss, monsterId: monster.heart-herald }

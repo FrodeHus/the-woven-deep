@@ -43,7 +43,7 @@ describe('bundled content', () => {
       'fallen-champion-template': 1,
       npc: 5,
       'npc-faction': 5,
-      achievement: 2,
+      achievement: 10,
       class: 5,
       background: 3,
       trait: 8,
