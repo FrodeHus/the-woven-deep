@@ -259,7 +259,6 @@ describe('auth routes', () => {
       achievementGrants: [
         {
           achievementId: 'achievement.first-blood',
-          criteriaId: 'first-champion-defeat',
           name: 'First Blood',
         },
       ],
@@ -269,7 +268,6 @@ describe('auth routes', () => {
     hallRepo.appendAchievements([
       {
         achievementId: 'achievement.first-blood',
-        criteriaId: 'first-champion-defeat',
         name: 'First Blood',
       },
     ]);
@@ -286,7 +284,6 @@ describe('auth routes', () => {
     expect(body.achievements).toEqual([
       {
         achievementId: 'achievement.first-blood',
-        criteriaId: 'first-champion-defeat',
         name: 'First Blood',
       },
     ]);

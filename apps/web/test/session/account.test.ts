@@ -209,7 +209,6 @@ describe('loadAccount', () => {
     const achievements = [
       {
         achievementId: 'achievement.first-blood',
-        criteriaId: 'first-champion-defeat',
         name: 'First Blood',
       },
     ];

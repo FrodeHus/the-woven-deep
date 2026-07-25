@@ -201,6 +201,19 @@ describe('active-run save codec', () => {
     return stripDefeatedBossMonsterIds({ ...current, schemaVersion: 9 });
   }
 
+  // v10 saves are structurally identical to the current shape (achievement.granted events can
+  // never legitimately be retained in recentCommands, see the "cannot be retained" invariant
+  // below), so the only difference is the schemaVersion literal.
+  function v10Fixture(): Record<string, unknown> {
+    const current = structuredClone(createDemoRun()) as any;
+    return { ...current, schemaVersion: 10 };
+  }
+
+  function stripV11Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
+    const current = structuredClone(run) as any;
+    return { ...current, schemaVersion: 10 };
+  }
+
   function concludedRun(): ReturnType<typeof createDemoRun> {
     const base = createDemoRun();
     const heroActor = { ...base.actors[0]!, health: 0 };
@@ -429,11 +442,11 @@ describe('active-run save codec', () => {
     return population;
   }
 
-  it('migrates strict schema v4 state through v5, v6, v7, v8, v9, and v10 and preserves every former field', () => {
+  it('migrates strict schema v4 state through v5, v6, v7, v8, v9, v10, and v11 and preserves every former field', () => {
     const legacy = v4Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(10);
+    expect(decoded.schemaVersion).toBe(11);
     expect(decoded.hero.currency).toBe(0);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
@@ -453,11 +466,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v5 state through v6, v7, v8, v9, and v10 and preserves every former field', () => {
+  it('migrates strict schema v5 state through v6, v7, v8, v9, v10, and v11 and preserves every former field', () => {
     const legacy = v5Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(10);
+    expect(decoded.schemaVersion).toBe(11);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
     expect(decoded.metrics).toEqual(emptyRunMetrics());
@@ -472,11 +485,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v6 state through v7, v8, v9, and v10 and preserves every former field', () => {
+  it('migrates strict schema v6 state through v7, v8, v9, v10, and v11 and preserves every former field', () => {
     const legacy = v6Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(10);
+    expect(decoded.schemaVersion).toBe(11);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
     expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
@@ -487,11 +500,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v7 state to v10 and preserves every former field', () => {
+  it('migrates strict schema v7 state to v11 and preserves every former field', () => {
     const legacy = v7Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(10);
+    expect(decoded.schemaVersion).toBe(11);
     expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
     expect(decoded.restockedMilestones).toEqual([]);
     // A pre-Weave hero migrates to full Weave: maxWeave is base 4 + Wits, and weave starts full.
@@ -504,11 +517,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v8 state to v10 and preserves every former field', () => {
+  it('migrates strict schema v8 state to v11 and preserves every former field', () => {
     const legacy = v8Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(10);
+    expect(decoded.schemaVersion).toBe(11);
     // A pre-Weave hero migrates to full Weave: maxWeave is base 4 + Wits, and weave starts full.
     const migratedHero = decoded.actors.find((actor) => actor.actorId === decoded.hero.actorId)!;
     expect(migratedHero.maxWeave).toBe(4 + migratedHero.attributes.wits);
@@ -525,13 +538,24 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v9 state to v10 and preserves every former field', () => {
+  it('migrates strict schema v9 state to v11 and preserves every former field', () => {
     const legacy = v9Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(10);
+    expect(decoded.schemaVersion).toBe(11);
     expect(decoded.metrics.defeatedBossMonsterIds).toEqual([]);
     expect(stripV10Fields(decoded)).toEqual(legacy);
+    expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
+      encodeActiveRun(decoded),
+    );
+  });
+
+  it('migrates strict schema v10 state to v11 and preserves every former field', () => {
+    const legacy = v10Fixture();
+    const decoded = decodeActiveRun(JSON.stringify(legacy));
+
+    expect(decoded.schemaVersion).toBe(11);
+    expect(stripV11Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
       encodeActiveRun(decoded),
     );
@@ -710,7 +734,6 @@ describe('active-run save codec', () => {
     const grantedEvent = {
       type: 'achievement.granted' as const,
       achievementId: 'achievement.first-champion-defeat',
-      criteriaId: 'first-champion-defeat' as const,
       name: 'First Champion Defeat',
     };
     const { record, revision, turn } = heroWaitRecord(state, 'command.granted', [grantedEvent]);
@@ -2285,7 +2308,7 @@ describe('active-run save codec', () => {
     );
   });
 
-  it.each([0, 1, 2, 3, 11])(
+  it.each([0, 1, 2, 3, 12])(
     'rejects unsupported schema version %i without partial state',
     (schemaVersion) => {
       try {

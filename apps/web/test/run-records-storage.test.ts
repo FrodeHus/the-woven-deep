@@ -294,8 +294,8 @@ describe('createSessionRunRecordRepository', () => {
       recordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
       newlyConqueredChampionRecordIds: ['record.champ-b', 'record.champ-a'],
       achievementGrants: [
-        { achievementId: 'achievement.b', criteriaId: 'first-echo-defeat', name: 'B' },
-        { achievementId: 'achievement.a', criteriaId: 'first-champion-defeat', name: 'A' },
+        { achievementId: 'achievement.b', name: 'B' },
+        { achievementId: 'achievement.a', name: 'A' },
       ],
       discoveryProtectionUpdates: [
         { encounterId: 'encounter.rats', previousBonus: 0, nextBonus: 0.2, outcome: 'unreached' },

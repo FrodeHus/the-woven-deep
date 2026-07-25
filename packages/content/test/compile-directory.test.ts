@@ -34,8 +34,8 @@ const compactStock =
 const compactMerchant =
   '{kind: encounter, id: encounter.merchant, name: Merchant, tags: [], model: merchant, minDepth: 1, maxDepth: 10, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: uncommon, runAppearanceChance: 0.25, maximumInstancesPerRun: 2, placement: {minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {npcId: npc.lampwright, stockLootTableId: loot-table.stock, minimumStockRolls: 1, maximumStockRolls: 2, merchantSaleBps: 12000, merchantPurchaseBps: 6000, acceptedCategories: [light], services: [{serviceId: merchant-service.identify, basePrice: 10, minimumUses: 1, maximumUses: 2, tierIds: [neutral]}], permanent: false, minimumLifetime: 3000, maximumLifetime: 5000, departureWarningThresholds: [1000, 500, 100], aggressionResponse: flee, commerceReputationDelta: 25, aggressionReputationDelta: -300, deathReputationDelta: -200, stockDropFraction: 0.5}}';
 
-function achievement(id: string, criteriaId: string): string {
-  return `{kind: achievement, id: ${id}, name: Achievement, tags: [], description: Do the thing first., criteriaId: ${criteriaId}}`;
+function achievement(id: string, criteria: string): string {
+  return `{kind: achievement, id: ${id}, name: Achievement, tags: [], description: Do the thing first., criteria: ${criteria}}`;
 }
 
 function playableClass(kitCount: 1 | 2, equippedSlot = 'off-hand'): string {
@@ -457,30 +457,29 @@ describe('compileContentDirectory', () => {
       );
     }
   });
-  it('compiles achievements and allows at most one achievement per criterion', async () => {
+  it('compiles achievements with parameterized criteria and rejects an unresolved boss reference', async () => {
     const validRoot = await fixture({
       'content.yaml': contentFile(
         compactMonster,
         compactItem,
         compactVault,
-        achievement('achievement.a', 'first-champion-defeat'),
-        achievement('achievement.b', 'first-echo-defeat'),
+        achievement('achievement.a', '{type: defeat-fallen-hero, role: champion}'),
+        achievement('achievement.b', '{type: reach-depth, depth: 10}'),
       ),
     });
     const pack = await compileContentDirectory({ rootDir: validRoot });
     expect(pack.entries.filter((entry) => entry.kind === 'achievement')).toHaveLength(2);
 
-    const duplicateRoot = await fixture({
+    const invalidRoot = await fixture({
       'content.yaml': contentFile(
         compactMonster,
         compactItem,
         compactVault,
-        achievement('achievement.a', 'first-champion-defeat'),
-        achievement('achievement.b', 'first-champion-defeat'),
+        achievement('achievement.a', '{type: defeat-boss, monsterId: monster.rat}'),
       ),
     });
-    await expect(compileContentDirectory({ rootDir: duplicateRoot })).rejects.toThrow(
-      /at most one achievement per criterion/,
+    await expect(compileContentDirectory({ rootDir: invalidRoot })).rejects.toThrow(
+      /not a boss-tagged monster/,
     );
   });
 

@@ -59,7 +59,6 @@ function projection(overrides: Partial<RunConclusionProjection> = {}): RunConclu
     achievements: [
       {
         achievementId: 'achievement.first-blood',
-        criteriaId: 'first-champion-defeat',
         name: 'First Blood',
       },
     ],

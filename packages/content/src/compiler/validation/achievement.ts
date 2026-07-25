@@ -5,21 +5,22 @@ export function achievementIssues(
   locatedEntries: readonly LocatedContentEntry[],
 ): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
-  const firstByCriteria = new Map<string, string>();
+  const bossMonsterIds = new Set(
+    locatedEntries
+      .filter(({ entry }) => entry.kind === 'monster' && entry.tags.includes('boss'))
+      .map(({ entry }) => entry.id),
+  );
   for (const { entry, file } of locatedEntries) {
     if (entry.kind !== 'achievement') continue;
-    const first = firstByCriteria.get(entry.criteriaId);
-    if (first === undefined) {
-      firstByCriteria.set(entry.criteriaId, entry.id);
-      continue;
+    if (entry.criteria.type === 'defeat-boss' && !bossMonsterIds.has(entry.criteria.monsterId)) {
+      issues.push(
+        issue(
+          file,
+          `$.entries.${entry.id}.criteria.monsterId`,
+          `defeat-boss achievement references ${entry.criteria.monsterId}, which is not a boss-tagged monster`,
+        ),
+      );
     }
-    issues.push(
-      issue(
-        file,
-        `$.entries.${entry.id}.criteriaId`,
-        `at most one achievement per criterion; ${entry.criteriaId} is already claimed by ${first}`,
-      ),
-    );
   }
   return issues;
 }

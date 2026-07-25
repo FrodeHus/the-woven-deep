@@ -417,7 +417,6 @@ describe('GET /api/profile/export', () => {
       achievementGrants: [
         {
           achievementId: 'achievement.first-blood',
-          criteriaId: 'first-champion-defeat',
           name: 'First Blood',
         },
       ],
@@ -427,7 +426,6 @@ describe('GET /api/profile/export', () => {
     hallRepo.appendAchievements([
       {
         achievementId: 'achievement.first-blood',
-        criteriaId: 'first-champion-defeat',
         name: 'First Blood',
       },
     ]);
@@ -463,7 +461,6 @@ describe('GET /api/profile/export', () => {
     expect(body.achievements).toEqual([
       {
         achievementId: 'achievement.first-blood',
-        criteriaId: 'first-champion-defeat',
         name: 'First Blood',
       },
     ]);

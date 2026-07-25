@@ -770,9 +770,16 @@ An `achievement` names a permanent account milestone. Beyond the common `id`, `n
 | Field | Type | Required | Rules and meaning |
 |---|---|---|---|
 | `description` | string | Yes | Trimmed non-empty text, at most 200 characters. |
-| `criteriaId` | registered ID | Yes | One entry from the closed criteria registry below. Each criterion may be claimed by at most one achievement per pack. |
+| `criteria` | discriminated union | Yes | A structured, parameterized condition (see below). New criteria types require a code change; unknown `type` values fail compilation. |
 
-The closed achievement criteria registry contains exactly `first-champion-defeat` (first defeat of the Deep's Champion) and `first-echo-defeat` (first defeat of a fallen hero's Echo). New criteria require a code change; unknown criteria IDs fail compilation.
+The `criteria.type` field is one of the four registered criteria types:
+
+| `type` | Additional fields | Meaning |
+|---|---|---|
+| `defeat-boss` | `monsterId` (must resolve to a `monster` entry tagged `boss`) | Grants when the run defeats the named boss. |
+| `defeat-fallen-hero` | `role` (`champion` or `echo`) | Grants on the first defeat of a fallen champion or an Echo. |
+| `reach-depth` | `depth` (integer, 1-20) | Grants when the run reaches at least that depth. |
+| `complete-ending` | `ending` (`became-heart`, `refused`, or `broke-cycle`) | Grants when the run concludes with the matching ending. |
 
 ```yaml
 schemaVersion: 7
@@ -782,13 +789,13 @@ entries:
     name: Defeated the Deep's Champion
     tags: [fallen-hero, prestige]
     description: Defeat the Deep's Champion for the first time.
-    criteriaId: first-champion-defeat
+    criteria: { type: defeat-fallen-hero, role: champion }
   - kind: achievement
     id: achievement.silenced-an-echo
     name: Silenced an Echo
     tags: [fallen-hero]
     description: Defeat an Echo of a fallen hero for the first time.
-    criteriaId: first-echo-defeat
+    criteria: { type: defeat-fallen-hero, role: echo }
 ```
 
 ## Class, background, and trait entries

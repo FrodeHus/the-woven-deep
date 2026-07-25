@@ -1,4 +1,4 @@
-import type { AchievementCriteriaId, CompletionType } from '@woven-deep/content';
+import type { CompletionType } from '@woven-deep/content';
 import type { BaseAttributes } from './actor-model.js';
 import type { FactionReputation } from './merchant-model.js';
 import { assertOpaqueId, type OpaqueId, type Uint32State } from './model.js';
@@ -54,7 +54,6 @@ export interface HeartLineageRecord {
 
 export interface AchievementGrant {
   readonly achievementId: OpaqueId;
-  readonly criteriaId: AchievementCriteriaId;
   readonly name: string;
 }
 

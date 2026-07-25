@@ -29,7 +29,7 @@ import {
   contentSourceEntrySchema,
 } from '../src/compiler/schema.js';
 import {
-  ACHIEVEMENT_CRITERIA_IDS,
+  ACHIEVEMENT_CRITERIA_TYPES,
   ACTION_COST_IDS,
   BEHAVIOR_PARAMETER_SCHEMAS,
   EFFECT_PARAMETER_SCHEMAS,
@@ -95,7 +95,7 @@ describe('server-admin content documentation', () => {
       ...MERCHANT_SERVICE_IDS,
       ...MERCHANT_AGGRESSION_RESPONSES,
       ...CONDITION_TRAIT_IDS,
-      ...ACHIEVEMENT_CRITERIA_IDS,
+      ...ACHIEVEMENT_CRITERIA_TYPES,
     ];
     for (const identifier of required) {
       expect(reference, `missing admin documentation for ${identifier}`).toContain(
@@ -161,9 +161,9 @@ describe('server-admin content documentation', () => {
     );
     for (const identifier of [
       'achievement',
-      'criteriaId',
+      'criteria',
       'description',
-      ...ACHIEVEMENT_CRITERIA_IDS,
+      ...ACHIEVEMENT_CRITERIA_TYPES,
       'score',
       'threat',
       'depthCoefficient',

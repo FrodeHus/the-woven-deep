@@ -183,12 +183,12 @@ describe('bundled content', () => {
     expect(entries.get('achievement.defeated-the-deeps-champion')).toMatchObject({
       kind: 'achievement',
       name: "Defeated the Deep's Champion",
-      criteriaId: 'first-champion-defeat',
+      criteria: { type: 'defeat-fallen-hero', role: 'champion' },
     });
     expect(entries.get('achievement.silenced-an-echo')).toMatchObject({
       kind: 'achievement',
       name: 'Silenced an Echo',
-      criteriaId: 'first-echo-defeat',
+      criteria: { type: 'defeat-fallen-hero', role: 'echo' },
     });
     expect(entries.get('balance.core-gameplay')).toMatchObject({
       score: {

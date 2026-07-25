@@ -144,7 +144,7 @@ export interface HouseState {
 }
 
 export interface ActiveRun {
-  readonly schemaVersion: 10;
+  readonly schemaVersion: 11;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly runId: OpaqueId;
