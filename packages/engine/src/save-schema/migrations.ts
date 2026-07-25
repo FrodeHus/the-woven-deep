@@ -30,7 +30,7 @@ import {
   tradeSoldEvent,
 } from './events.js';
 import { floor } from './floor.js';
-import { legacyActor } from './actor.js';
+import { actor, legacyActor } from './actor.js';
 import { feature, item, itemFields, itemLocationV7, legacyItemLocation } from './item.js';
 import {
   encounterDecision,
@@ -45,7 +45,7 @@ import {
   relationship,
   survival,
 } from './population.js';
-import { rngEntries, runConclusionSchema, runMetrics } from './run-record.js';
+import { rngEntries, runConclusionSchema, runKillsByModel } from './run-record.js';
 import { ENGINE_GAME_VERSION, RECENT_COMMAND_LIMIT, type RNG_STREAM_NAMES } from '../versions.js';
 
 export const legacyPopulationCreatedEvent = z.strictObject({
@@ -144,6 +144,52 @@ export const legacyV5Recorded = z.strictObject({
   events: z.array(legacyV5AuthoritativeEvent).readonly(),
   publicEvents: z.array(legacyV5PublicEvent).readonly(),
 });
+// The pre-boss-tracking metrics shape: identical to the current `runMetrics` schema except it
+// carries no `defeatedBossMonsterIds`. `metrics` has kept this exact shape since it was introduced
+// at schema v6, so every legacy schema from v6 through v9 references this frozen shape too.
+export const legacyRunMetricsV9 = z.strictObject({
+  kills: safeNonNegative,
+  killsByModel: runKillsByModel,
+  bossKills: safeNonNegative,
+  championKills: safeNonNegative,
+  echoKills: safeNonNegative,
+  threatDefeated: safeNonNegative,
+  damageDealt: safeNonNegative,
+  damageTaken: safeNonNegative,
+  itemsCollected: safeNonNegative,
+  itemsIdentified: safeNonNegative,
+  currencyEarned: safeNonNegative,
+  currencySpent: safeNonNegative,
+  tradesCompleted: safeNonNegative,
+  floorsEntered: safeNonNegative,
+  deepestDepth: safeNonNegative,
+  discoveriesRevealed: safeNonNegative,
+  turnsElapsed: safeNonNegative,
+  restsCompleted: safeNonNegative,
+});
+
+/** The pre-boss-tracking zero-value `metrics` literal, matching `legacyRunMetricsV9`. */
+export const emptyLegacyRunMetricsV9: z.infer<typeof legacyRunMetricsV9> = {
+  kills: 0,
+  killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },
+  bossKills: 0,
+  championKills: 0,
+  echoKills: 0,
+  threatDefeated: 0,
+  damageDealt: 0,
+  damageTaken: 0,
+  itemsCollected: 0,
+  itemsIdentified: 0,
+  currencyEarned: 0,
+  currencySpent: 0,
+  tradesCompleted: 0,
+  floorsEntered: 0,
+  deepestDepth: 0,
+  discoveriesRevealed: 0,
+  turnsElapsed: 0,
+  restsCompleted: 0,
+};
+
 export const legacyActiveRunV7Schema = z.strictObject({
   schemaVersion: z.literal(7),
   gameVersion: z.literal(ENGINE_GAME_VERSION),
@@ -182,8 +228,57 @@ export const legacyActiveRunV7Schema = z.strictObject({
   fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
-  metrics: runMetrics,
+  metrics: legacyRunMetricsV9,
   conclusion: runConclusionSchema.nullable(),
+});
+
+// The pre-boss-tracking save shape: identical to the current run schema except `metrics` carries
+// no `defeatedBossMonsterIds`. Spelled out as a frozen literal (not derived from the live
+// `activeRunSchema`) so a future schema bump can't silently change what a real v9 save is
+// validated against.
+export const legacyActiveRunV9Schema = z.strictObject({
+  schemaVersion: z.literal(9),
+  gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  runId: identifier,
+  runSeed: uint32Tuple,
+  rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
+  revision: safeNonNegative,
+  turn: safeNonNegative,
+  worldTime: safeNonNegative,
+  hero,
+  reputations: z
+    .array(z.strictObject({ factionId: identifier, value: z.number().int().safe() }))
+    .readonly(),
+  activeTrade: z
+    .strictObject({
+      merchantPopulationId: identifier,
+      merchantActorId: identifier,
+      openedByCommandId: identifier,
+      openedAtRevision: safeNonNegative,
+      completedCommerce: z.boolean(),
+    })
+    .nullable(),
+  actors: z.array(actor).min(1).readonly(),
+  items: z.array(item).readonly(),
+  features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(),
+  survival,
+  identification,
+  activeFloorId: identifier,
+  activeFloorEnteredAt: safeNonNegative,
+  returnAnchorFloorId: identifier.optional(),
+  floors: z.array(floor).min(1).readonly(),
+  recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(),
+  populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+  metrics: legacyRunMetricsV9,
+  conclusion: runConclusionSchema.nullable(),
+  house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
+  restockedMilestones: z.array(positiveQuantity).readonly(),
 });
 
 // The pre-Weave save shape: identical to the current run schema except actors carry no
@@ -228,7 +323,7 @@ export const legacyActiveRunV8Schema = z.strictObject({
   fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
-  metrics: runMetrics,
+  metrics: legacyRunMetricsV9,
   conclusion: runConclusionSchema.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
   restockedMilestones: z.array(positiveQuantity).readonly(),
@@ -272,7 +367,7 @@ export const legacyActiveRunV6Schema = z.strictObject({
   fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
-  metrics: runMetrics,
+  metrics: legacyRunMetricsV9,
   conclusion: runConclusionSchema.nullable(),
 });
 

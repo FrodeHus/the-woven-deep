@@ -44,6 +44,7 @@ export const runMetrics = z.strictObject({
   kills: safeNonNegative,
   killsByModel: runKillsByModel,
   bossKills: safeNonNegative,
+  defeatedBossMonsterIds: z.array(identifier).readonly(),
   championKills: safeNonNegative,
   echoKills: safeNonNegative,
   threatDefeated: safeNonNegative,

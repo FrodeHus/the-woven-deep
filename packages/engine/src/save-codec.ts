@@ -6,10 +6,11 @@ import {
   legacyActiveRunV6Schema,
   legacyActiveRunV7Schema,
   legacyActiveRunV8Schema,
+  legacyActiveRunV9Schema,
+  emptyLegacyRunMetricsV9,
   validateActiveRun,
 } from './save-schema.js';
 import { deriveRngStreams } from './random.js';
-import { emptyRunMetrics } from './run-metrics.js';
 import { stableJson } from './stable-json.js';
 import { SAVE_SCHEMA_VERSION } from './versions.js';
 
@@ -41,7 +42,7 @@ function migrateV5ToV6(input: unknown): unknown {
     ...v5,
     schemaVersion: 6,
     rng: { ...v5.rng, 'run-records': derived['run-records'] },
-    metrics: emptyRunMetrics(),
+    metrics: emptyLegacyRunMetricsV9,
     conclusion: null,
   };
 }
@@ -82,18 +83,31 @@ function migrateV8ToV9(input: unknown): unknown {
   };
 }
 
-function migrateLegacy(input: unknown, schemaVersion: 4 | 5 | 6 | 7 | 8): ActiveRun {
+function migrateV9ToV10(input: unknown): unknown {
+  const v9 = legacyActiveRunV9Schema.parse(input);
+  return {
+    ...v9,
+    schemaVersion: 10,
+    metrics: { ...v9.metrics, defeatedBossMonsterIds: [] },
+  };
+}
+
+function migrateLegacy(input: unknown, schemaVersion: 4 | 5 | 6 | 7 | 8 | 9): ActiveRun {
   try {
     const migrated =
       schemaVersion === 4
-        ? migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input)))))
+        ? migrateV9ToV10(
+            migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input))))),
+          )
         : schemaVersion === 5
-          ? migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input))))
+          ? migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input)))))
           : schemaVersion === 6
-            ? migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(input)))
+            ? migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(input))))
             : schemaVersion === 7
-              ? migrateV8ToV9(migrateV7ToV8(input))
-              : migrateV8ToV9(input);
+              ? migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(input)))
+              : schemaVersion === 8
+                ? migrateV9ToV10(migrateV8ToV9(input))
+                : migrateV9ToV10(input);
     return validateActiveRun(migrated);
   } catch (cause) {
     if (cause instanceof SaveLoadError) throw cause;
@@ -126,7 +140,8 @@ export function decodeActiveRun(json: string): ActiveRun {
     schemaVersion === 5 ||
     schemaVersion === 6 ||
     schemaVersion === 7 ||
-    schemaVersion === 8
+    schemaVersion === 8 ||
+    schemaVersion === 9
   ) {
     return migrateLegacy(input, schemaVersion);
   }

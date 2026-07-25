@@ -133,7 +133,9 @@ describe('active-run save codec', () => {
       restockedMilestones: _restockedMilestones,
       ...withoutV8Fields
     } = current;
-    return stripActorWeave({ ...withoutV8Fields, schemaVersion: 6, hero });
+    return stripDefeatedBossMonsterIds(
+      stripActorWeave({ ...withoutV8Fields, schemaVersion: 6, hero }),
+    );
   }
 
   function stripV7Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
@@ -144,7 +146,9 @@ describe('active-run save codec', () => {
       restockedMilestones: _restockedMilestones,
       ...withoutV8Fields
     } = current;
-    return stripActorWeave({ ...withoutV8Fields, schemaVersion: 6, hero });
+    return stripDefeatedBossMonsterIds(
+      stripActorWeave({ ...withoutV8Fields, schemaVersion: 6, hero }),
+    );
   }
 
   function v7Fixture(): Record<string, unknown> {
@@ -154,7 +158,7 @@ describe('active-run save codec', () => {
       restockedMilestones: _restockedMilestones,
       ...withoutV8Fields
     } = current;
-    return stripActorWeave({ ...withoutV8Fields, schemaVersion: 7 });
+    return stripDefeatedBossMonsterIds(stripActorWeave({ ...withoutV8Fields, schemaVersion: 7 }));
   }
 
   function stripV8Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
@@ -164,17 +168,37 @@ describe('active-run save codec', () => {
       restockedMilestones: _restockedMilestones,
       ...withoutV8Fields
     } = current;
-    return stripActorWeave({ ...withoutV8Fields, schemaVersion: 7 });
+    return stripDefeatedBossMonsterIds(stripActorWeave({ ...withoutV8Fields, schemaVersion: 7 }));
   }
 
   function v8Fixture(): Record<string, unknown> {
     const current = structuredClone(createDemoRun()) as any;
-    return stripActorWeave({ ...current, schemaVersion: 8 });
+    return stripDefeatedBossMonsterIds(stripActorWeave({ ...current, schemaVersion: 8 }));
   }
 
   function stripV9Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
     const current = structuredClone(run) as any;
-    return stripActorWeave({ ...current, schemaVersion: 8 });
+    return stripDefeatedBossMonsterIds(stripActorWeave({ ...current, schemaVersion: 8 }));
+  }
+
+  // Pre-boss-tracking saves carry no `metrics.defeatedBossMonsterIds`; drop it so a legacy fixture
+  // and the reciprocal strip both round-trip against the frozen legacy metrics shape.
+  const stripDefeatedBossMonsterIds = (run: Record<string, unknown>): Record<string, unknown> => {
+    const { defeatedBossMonsterIds: _defeatedBossMonsterIds, ...metrics } = run.metrics as Record<
+      string,
+      unknown
+    >;
+    return { ...run, metrics };
+  };
+
+  function v9Fixture(): Record<string, unknown> {
+    const current = structuredClone(createDemoRun()) as any;
+    return stripDefeatedBossMonsterIds({ ...current, schemaVersion: 9 });
+  }
+
+  function stripV10Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
+    const current = structuredClone(run) as any;
+    return stripDefeatedBossMonsterIds({ ...current, schemaVersion: 9 });
   }
 
   function concludedRun(): ReturnType<typeof createDemoRun> {
@@ -405,11 +429,11 @@ describe('active-run save codec', () => {
     return population;
   }
 
-  it('migrates strict schema v4 state through v5, v6, v7, v8, and v9 and preserves every former field', () => {
+  it('migrates strict schema v4 state through v5, v6, v7, v8, v9, and v10 and preserves every former field', () => {
     const legacy = v4Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(9);
+    expect(decoded.schemaVersion).toBe(10);
     expect(decoded.hero.currency).toBe(0);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
@@ -429,11 +453,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v5 state through v6, v7, v8, and v9 and preserves every former field', () => {
+  it('migrates strict schema v5 state through v6, v7, v8, v9, and v10 and preserves every former field', () => {
     const legacy = v5Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(9);
+    expect(decoded.schemaVersion).toBe(10);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
     expect(decoded.metrics).toEqual(emptyRunMetrics());
@@ -448,11 +472,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v6 state through v7, v8, and v9 and preserves every former field', () => {
+  it('migrates strict schema v6 state through v7, v8, v9, and v10 and preserves every former field', () => {
     const legacy = v6Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(9);
+    expect(decoded.schemaVersion).toBe(10);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
     expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
@@ -463,11 +487,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v7 state to v9 and preserves every former field', () => {
+  it('migrates strict schema v7 state to v10 and preserves every former field', () => {
     const legacy = v7Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(9);
+    expect(decoded.schemaVersion).toBe(10);
     expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
     expect(decoded.restockedMilestones).toEqual([]);
     // A pre-Weave hero migrates to full Weave: maxWeave is base 4 + Wits, and weave starts full.
@@ -480,11 +504,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v8 state to v9 and preserves every former field', () => {
+  it('migrates strict schema v8 state to v10 and preserves every former field', () => {
     const legacy = v8Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(9);
+    expect(decoded.schemaVersion).toBe(10);
     // A pre-Weave hero migrates to full Weave: maxWeave is base 4 + Wits, and weave starts full.
     const migratedHero = decoded.actors.find((actor) => actor.actorId === decoded.hero.actorId)!;
     expect(migratedHero.maxWeave).toBe(4 + migratedHero.attributes.wits);
@@ -499,6 +523,29 @@ describe('active-run save codec', () => {
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
       encodeActiveRun(decoded),
     );
+  });
+
+  it('migrates strict schema v9 state to v10 and preserves every former field', () => {
+    const legacy = v9Fixture();
+    const decoded = decodeActiveRun(JSON.stringify(legacy));
+
+    expect(decoded.schemaVersion).toBe(10);
+    expect(decoded.metrics.defeatedBossMonsterIds).toEqual([]);
+    expect(stripV10Fields(decoded)).toEqual(legacy);
+    expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
+      encodeActiveRun(decoded),
+    );
+  });
+
+  it('round-trips current state carrying defeatedBossMonsterIds to identical stable bytes', () => {
+    const withBossKills = createDemoRun();
+    const decorated = {
+      ...withBossKills,
+      metrics: { ...withBossKills.metrics, defeatedBossMonsterIds: ['monster.ashfather'] },
+    };
+    const encoded = encodeActiveRun(decorated);
+    expect(decodeActiveRun(encoded).metrics.defeatedBossMonsterIds).toEqual(['monster.ashfather']);
+    expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
   });
 
   it.each([
@@ -2238,7 +2285,7 @@ describe('active-run save codec', () => {
     );
   });
 
-  it.each([0, 1, 2, 3, 10])(
+  it.each([0, 1, 2, 3, 11])(
     'rejects unsupported schema version %i without partial state',
     (schemaVersion) => {
       try {

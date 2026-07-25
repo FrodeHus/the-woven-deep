@@ -65,6 +65,10 @@ function mergeMetrics(totals: RunMetrics, delta: RunMetrics): RunMetrics {
       boss: checkedAdd(totals.killsByModel.boss, delta.killsByModel.boss, 'killsByModel.boss'),
     },
     bossKills: checkedAdd(totals.bossKills, delta.bossKills, 'bossKills'),
+    defeatedBossMonsterIds: mergedSortedUnion(
+      totals.defeatedBossMonsterIds,
+      delta.defeatedBossMonsterIds,
+    ),
     championKills: checkedAdd(totals.championKills, delta.championKills, 'championKills'),
     echoKills: checkedAdd(totals.echoKills, delta.echoKills, 'echoKills'),
     threatDefeated: checkedAdd(totals.threatDefeated, delta.threatDefeated, 'threatDefeated'),

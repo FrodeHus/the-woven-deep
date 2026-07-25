@@ -285,7 +285,7 @@ export function validateRunRecordsInvariants(run: ActiveRun, pack: CompiledConte
   validateContentBoundRun(run, pack);
   const metrics = run.metrics;
   for (const [name, value] of Object.entries(metrics)) {
-    if (name === 'killsByModel') continue;
+    if (name === 'killsByModel' || name === 'defeatedBossMonsterIds') continue;
     if (!Number.isSafeInteger(value as number) || (value as number) < 0) {
       throw new Error(`run-records invariant: metric ${name} must be a non-negative safe integer`);
     }
