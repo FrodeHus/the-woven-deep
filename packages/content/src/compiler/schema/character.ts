@@ -39,6 +39,12 @@ export const classEntry = z
     playable: z.boolean(),
     silhouetteGlyph: glyph,
     unlockHint: z.string().trim().min(1).max(200).nullable(),
+    unlock: z
+      .discriminatedUnion('type', [
+        z.strictObject({ type: z.literal('reach-depth'), depth: z.number().int().min(1).max(20) }),
+        z.strictObject({ type: z.literal('defeat-champions'), count: z.number().int().min(1) }),
+      ])
+      .nullable(),
     classTags: z.array(slugSchema).min(1),
     kits: z.array(classKitDefinition).max(3),
     casterAptitude: z.boolean().default(false),
@@ -54,12 +60,28 @@ export const classEntry = z
           message: 'a playable class must not declare an unlockHint',
         });
       }
-    } else if (entry.unlockHint === null) {
-      context.addIssue({
-        code: 'custom',
-        path: ['unlockHint'],
-        message: 'a locked class requires a non-empty unlockHint',
-      });
+      if (entry.unlock !== null) {
+        context.addIssue({
+          code: 'custom',
+          path: ['unlock'],
+          message: 'a playable class must not declare an unlock condition',
+        });
+      }
+    } else {
+      if (entry.unlockHint === null) {
+        context.addIssue({
+          code: 'custom',
+          path: ['unlockHint'],
+          message: 'a locked class requires a non-empty unlockHint',
+        });
+      }
+      if (entry.unlock === null) {
+        context.addIssue({
+          code: 'custom',
+          path: ['unlock'],
+          message: 'a locked class requires an unlock condition',
+        });
+      }
     }
   });
 

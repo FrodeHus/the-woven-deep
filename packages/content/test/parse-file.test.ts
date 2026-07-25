@@ -340,6 +340,7 @@ entries:
     playable: true
     silhouetteGlyph: W
     unlockHint: null
+    unlock: null
     classTags: [wayfarer]
     kits:
       - kitId: blade

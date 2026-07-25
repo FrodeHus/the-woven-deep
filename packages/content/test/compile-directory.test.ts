@@ -42,7 +42,7 @@ function playableClass(kitCount: 1 | 2, equippedSlot = 'off-hand'): string {
   const kit1 = `{kitId: first, name: First, equipped: [{contentId: item.lantern, slot: ${equippedSlot}, enabled: true}], backpack: []}`;
   const kit2 = '{kitId: second, name: Second, equipped: [], backpack: []}';
   const kits = kitCount === 1 ? kit1 : `${kit1}, ${kit2}`;
-  return `{kind: class, id: class.wayfarer, name: Wayfarer, tags: [], description: A traveller., playable: true, silhouetteGlyph: W, unlockHint: null, classTags: [wayfarer], kits: [${kits}]}`;
+  return `{kind: class, id: class.wayfarer, name: Wayfarer, tags: [], description: A traveller., playable: true, silhouetteGlyph: W, unlockHint: null, unlock: null, classTags: [wayfarer], kits: [${kits}]}`;
 }
 
 function backgroundEntry(extraItemContentId: string | null): string {
@@ -498,6 +498,38 @@ describe('compileContentDirectory', () => {
     await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(/at least 2 kits/);
   });
 
+  it('rejects a locked class missing a structured unlock condition', async () => {
+    const lockedClassWithoutUnlock =
+      '{kind: class, id: class.warden, name: Warden, tags: [], description: A defender., playable: false, silhouetteGlyph: W, unlockHint: Descend to depth ten., unlock: null, classTags: [warden], kits: []}';
+    const root = await fixture({
+      'content.yaml': contentFile(
+        compactMonster,
+        compactItem,
+        compactVault,
+        lockedClassWithoutUnlock,
+      ),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /a locked class requires an unlock condition/,
+    );
+  });
+
+  it('rejects a playable class declaring a structured unlock condition', async () => {
+    const playableClassWithUnlock =
+      '{kind: class, id: class.wayfarer, name: Wayfarer, tags: [], description: A traveller., playable: true, silhouetteGlyph: W, unlockHint: null, unlock: {type: reach-depth, depth: 5}, classTags: [wayfarer], kits: []}';
+    const root = await fixture({
+      'content.yaml': contentFile(
+        compactMonster,
+        compactItem,
+        compactVault,
+        playableClassWithUnlock,
+      ),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /a playable class must not declare an unlock condition/,
+    );
+  });
+
   it('rejects a class kit that sets enabled on a non-light equipped item', async () => {
     const sword = compactItem
       .replace('item.lantern', 'item.sword')
@@ -515,7 +547,7 @@ describe('compileContentDirectory', () => {
       '{kitId: first, name: First, equipped: ' +
       '[{contentId: item.sword, slot: main-hand, enabled: true}], backpack: []}';
     const kit2 = '{kitId: second, name: Second, equipped: [], backpack: []}';
-    const enabledOnNonLightClass = `{kind: class, id: class.wayfarer, name: Wayfarer, tags: [], description: A traveller., playable: true, silhouetteGlyph: W, unlockHint: null, classTags: [wayfarer], kits: [${kit1}, ${kit2}]}`;
+    const enabledOnNonLightClass = `{kind: class, id: class.wayfarer, name: Wayfarer, tags: [], description: A traveller., playable: true, silhouetteGlyph: W, unlockHint: null, unlock: null, classTags: [wayfarer], kits: [${kit1}, ${kit2}]}`;
     const root = await fixture({
       'content.yaml': contentFile(
         compactMonster,
@@ -534,7 +566,7 @@ describe('compileContentDirectory', () => {
     const kit1 = `{kitId: first, name: First, equipped: [{contentId: item.lantern, slot: off-hand, enabled: true}], backpack: []}`;
     const kit2 = '{kitId: second, name: Second, equipped: [], backpack: []}';
     const casterClass =
-      `{kind: class, id: class.wayfarer, name: Wayfarer, tags: [], description: A traveller., playable: true, silhouetteGlyph: W, unlockHint: null, classTags: [wayfarer], kits: [${kit1}, ${kit2}], ` +
+      `{kind: class, id: class.wayfarer, name: Wayfarer, tags: [], description: A traveller., playable: true, silhouetteGlyph: W, unlockHint: null, unlock: null, classTags: [wayfarer], kits: [${kit1}, ${kit2}], ` +
       'modifiers: {maxWeave: 4, defense: -1}, startingSpellIds: [spell.ember-bolt]}';
     const root = await fixture({
       'content.yaml': contentFile(
@@ -616,7 +648,7 @@ describe('compileContentDirectory', () => {
       '{kitId: first, name: First, equipped: ' +
       '[{contentId: item.bow, slot: main-hand, enabled: true}, {contentId: item.lantern, slot: off-hand, enabled: true}], backpack: []}';
     const secondKit = '{kitId: second, name: Second, equipped: [], backpack: []}';
-    const conflictingClass = `{kind: class, id: class.wayfarer, name: Wayfarer, tags: [], description: A traveller., playable: true, silhouetteGlyph: W, unlockHint: null, classTags: [wayfarer], kits: [${conflictingKit}, ${secondKit}]}`;
+    const conflictingClass = `{kind: class, id: class.wayfarer, name: Wayfarer, tags: [], description: A traveller., playable: true, silhouetteGlyph: W, unlockHint: null, unlock: null, classTags: [wayfarer], kits: [${conflictingKit}, ${secondKit}]}`;
     const root = await fixture({
       'content.yaml': contentFile(
         compactMonster,

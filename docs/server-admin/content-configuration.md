@@ -809,6 +809,7 @@ entries:
 | `playable` | boolean | Yes | Whether the class is available at chargen. |
 | `silhouetteGlyph` | one Unicode glyph | Yes | Character-select silhouette marker. |
 | `unlockHint` | string or null | Yes | Required non-empty text (at most 200 characters) when `playable` is `false`, describing how to unlock the class; must be `null` when `playable` is `true`. |
+| `unlock` | unlock condition or null | Yes | Structured unlock condition (`{ type: reach-depth, depth }` or `{ type: defeat-champions, count }`) when `playable` is `false`; must be `null` when `playable` is `true`. |
 | `classTags` | non-empty slug array | Yes | Descriptive class taxonomy. |
 | `kits` | array of kit definitions, at most 3 | Yes | Starting-loadout choices. A playable class requires at least 2 kits; a locked class may declare 0 through 3. |
 
@@ -833,6 +834,7 @@ entries:
     playable: true
     silhouetteGlyph: "W"
     unlockHint: null
+    unlock: null
     classTags: [wayfarer]
     kits:
       - kitId: blade
@@ -854,7 +856,8 @@ entries:
     description: A keeper of forbidden lore.
     playable: false
     silhouetteGlyph: "A"
-    unlockHint: Read three lore fragments recovered from fallen champions to unlock the Archivist.
+    unlockHint: Defeat three of the Deep's champions to unlock the Archivist.
+    unlock: { type: defeat-champions, count: 3 }
     classTags: [archivist]
     kits: []
 ```

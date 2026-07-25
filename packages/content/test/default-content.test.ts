@@ -100,6 +100,26 @@ describe('bundled content', () => {
     expect(loomcaller.kits.some((kit) => kit.kitId === 'weaveward')).toBe(true);
   });
 
+  it('ships structured unlock conditions matching the corrected hint text', async () => {
+    const pack = await compileContentDirectory({
+      rootDir: resolve(import.meta.dirname, '../../../content'),
+    });
+    const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
+    expect(entries.get('class.warden')).toMatchObject({
+      playable: false,
+      unlock: { type: 'reach-depth', depth: 10 },
+      unlockHint: 'Descend to depth ten to unlock the Warden.',
+    });
+    expect(entries.get('class.archivist')).toMatchObject({
+      playable: false,
+      unlock: { type: 'defeat-champions', count: 3 },
+      unlockHint: "Defeat three of the Deep's champions to unlock the Archivist.",
+    });
+    for (const id of ['class.lamplighter', 'class.loomcaller', 'class.wayfarer']) {
+      expect(entries.get(id)).toMatchObject({ playable: true, unlock: null, unlockHint: null });
+    }
+  });
+
   it('ships the exact Lampwright merchant contract', async () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),

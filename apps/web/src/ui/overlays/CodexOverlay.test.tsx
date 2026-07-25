@@ -152,7 +152,7 @@ describe('CodexOverlay', () => {
       .find((option) => option.textContent?.includes('A'));
     expect(archivistOption).toBeDefined();
     await user.click(archivistOption!);
-    expect(screen.getByText(/Read three lore fragments/)).toBeInTheDocument();
+    expect(screen.getByText(/Defeat three of the Deep's champions/)).toBeInTheDocument();
   });
 
   it('shows the session-only footer line', () => {

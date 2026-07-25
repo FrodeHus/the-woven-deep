@@ -8,6 +8,7 @@ entries:
     playable: true
     silhouetteGlyph: "L"
     unlockHint: null
+    unlock: null
     classTags: [lamplighter]
     kits:
       - kitId: lantern

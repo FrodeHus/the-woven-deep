@@ -7,7 +7,8 @@ entries:
     description: A keeper of forbidden lore, still bound to the surface until proven worthy.
     playable: false
     silhouetteGlyph: "A"
-    unlockHint: Read three lore fragments recovered from fallen champions to unlock the Archivist.
+    unlockHint: Defeat three of the Deep's champions to unlock the Archivist.
+    unlock: { type: defeat-champions, count: 3 }
     classTags: [archivist]
     kits: []
   - kind: class
@@ -17,6 +18,7 @@ entries:
     description: A stalwart defender who has not yet earned the right to descend.
     playable: false
     silhouetteGlyph: "W"
-    unlockHint: Survive to depth ten without a single death to unlock the Warden.
+    unlockHint: Descend to depth ten to unlock the Warden.
+    unlock: { type: reach-depth, depth: 10 }
     classTags: [warden]
     kits: []
