@@ -8,7 +8,7 @@ import type {
   TileId,
 } from '@woven-deep/engine';
 import type { CompiledContentPack, ItemCategory } from '@woven-deep/content';
-import { itemById } from './pack-queries.js';
+import { itemById, npcById } from './pack-queries.js';
 
 /**
  * The single typed boundary over the engine's gameplay projection. The engine projects
@@ -256,6 +256,35 @@ export function tradeIsAvailable(projection: GameplayProjection): boolean {
   return merchantActors(projection).some(
     (merchant) => chebyshev(hero, merchant) === 1 && merchant.tradeAvailable !== false,
   );
+}
+
+/** The perceived, non-hostile NPC actor the hero is Chebyshev-adjacent to whose content entry
+ * carries a `dialogueId` -- i.e. the one actor a `talk` action could open a conversation with.
+ * When more than one qualifies, the nearest by actor-id ordering wins, mirroring
+ * `adjacentMerchant`. A hostile actor never qualifies (mid-fight is never a talk target), even if
+ * its content entry happens to carry a `dialogueId`. */
+export function adjacentDialogueNpc(
+  projection: GameplayProjection,
+  pack: CompiledContentPack,
+): ActorView | undefined {
+  const origin = heroOf(projection);
+  return actorsOf(projection)
+    .filter(
+      (actor) =>
+        actor.disposition !== 'hostile' &&
+        chebyshev(actor, origin) === 1 &&
+        actor.contentId !== null &&
+        npcById(pack, actor.contentId)?.dialogueId !== undefined,
+    )
+    .sort((left, right) => (left.actorId < right.actorId ? -1 : 1))[0];
+}
+
+/** Whether a `talk` conversation could be opened right now: `adjacentDialogueNpc` finds a target. */
+export function dialogueTargetAvailable(
+  projection: GameplayProjection,
+  pack: CompiledContentPack,
+): boolean {
+  return adjacentDialogueNpc(projection, pack) !== undefined;
 }
 
 /** The locked door/chest the hero is Chebyshev-adjacent to (but not standing on), if any --

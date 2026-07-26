@@ -6,7 +6,14 @@ import type { ActionId } from '../../session/settings.js';
  * `OverlayActionId`).
  */
 export type OverlayId =
-  'inventory' | 'character-sheet' | 'map-journal' | 'spellbook' | 'codex' | 'settings' | 'help';
+  | 'inventory'
+  | 'character-sheet'
+  | 'map-journal'
+  | 'spellbook'
+  | 'codex'
+  | 'settings'
+  | 'help'
+  | 'dialogue';
 
 export interface OverlayDefinition {
   readonly id: OverlayId;
@@ -43,6 +50,11 @@ export const OVERLAY_REGISTRY: Readonly<Record<OverlayId, OverlayDefinition>> = 
   codex: { id: 'codex', title: 'Codex', scope: 'global', action: 'codex' },
   settings: { id: 'settings', title: 'Settings', scope: 'global', action: 'settings' },
   help: { id: 'help', title: 'Help', scope: 'global', action: 'help' },
+  // Unlike `trade` (an engine-state-driven screen, mounted directly by `PlayScreen` whenever
+  // `projection.trade` is set -- see `TradeScreen`), `dialogue` is a self-contained overlay-open
+  // action exactly like `codex`/`inventory`: opening it is client-side UI state, gated to an
+  // adjacent dialogue-bearing NPC (`dialogueTargetAvailable`), not an engine command.
+  dialogue: { id: 'dialogue', title: 'Talk', scope: 'play', action: 'talk' },
 };
 
 /**

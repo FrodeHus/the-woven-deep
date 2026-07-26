@@ -65,6 +65,7 @@ function harness(
   overrides: Readonly<{
     isTownContext?: boolean;
     tradeAvailable?: boolean;
+    talkAvailable?: boolean;
     onOpenChange?: (open: boolean) => void;
     onOpenOverlay?: (overlay: string) => void;
     onCast?: (spellId: string) => void;
@@ -88,6 +89,7 @@ function harness(
         onOpenOverlay={onOpenOverlay as never}
         isTownContext={overrides.isTownContext ?? false}
         tradeAvailable={overrides.tradeAvailable ?? false}
+        talkAvailable={overrides.talkAvailable ?? false}
         onCast={onCast}
       />
     </UiProviders>,

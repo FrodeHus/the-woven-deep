@@ -8,7 +8,14 @@ import type { ActionId, ResolvedKeymap } from '../session/settings.js';
  * string set as `OverlayId` (registry.ts), `inventory` included: `i` routes through this same
  * registry path as every other overlay. */
 export type OverlayActionId =
-  'inventory' | 'character-sheet' | 'map-journal' | 'spellbook' | 'codex' | 'settings' | 'help';
+  | 'inventory'
+  | 'character-sheet'
+  | 'map-journal'
+  | 'spellbook'
+  | 'codex'
+  | 'settings'
+  | 'help'
+  | 'dialogue';
 
 /** Everything `routeKey` can hand back to the caller besides a `PlayerIntent`: opening a registry
  * overlay, or closing whatever overlay is currently open. */
@@ -98,6 +105,11 @@ function outcomeForAction(action: ActionId): RouterOutcome {
       return { type: 'trade-open' };
     case 'pick-lock':
       return { type: 'pick-lock' };
+    // Unlike the six actions below, whose `ActionId` and `OverlayId` share the same string, `talk`
+    // opens the `dialogue` overlay -- a self-contained overlay-open action exactly like `codex`/
+    // `inventory` (never an engine intent; see `registry.ts`'s `dialogue` entry).
+    case 'talk':
+      return { type: 'open-overlay', overlay: 'dialogue' };
     case 'inventory':
     case 'character-sheet':
     case 'map-journal':

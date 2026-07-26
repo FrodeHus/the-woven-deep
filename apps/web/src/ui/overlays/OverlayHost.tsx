@@ -3,6 +3,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import type { StoredHallRecord } from '@woven-deep/engine';
 import type { Sightings } from '../../session/codex.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
+import type { RunSession } from '../../session/run-session.js';
 import type { AccountState } from '../../session/account.js';
 import type { CastableSpellView } from '../../session/projection-view.js';
 import { canOpenOverlay, OVERLAY_REGISTRY, type OverlayId } from './registry.js';
@@ -17,6 +18,7 @@ import { SpellbookOverlay } from './SpellbookOverlay.js';
 import { CodexOverlay } from './CodexOverlay.js';
 import { SettingsOverlay } from './SettingsOverlay.js';
 import { HelpOverlay } from './HelpOverlay.js';
+import { DialogueScreen } from '../screens/DialogueScreen.js';
 
 const SHEET_OVERLAYS: ReadonlySet<OverlayId> = new Set([
   'inventory',
@@ -97,6 +99,7 @@ export function OverlayHost({
     onDeleteAccount,
     account,
     snapshot: sessionCtx?.snapshot,
+    session: sessionCtx?.session,
     sightings: sightings ?? sessionCtx?.snapshot.sightings,
     onBeginScrollTargeting,
     onCastSpell,
@@ -140,6 +143,11 @@ interface RenderBodyContext {
   readonly onDeleteAccount: (() => void) | undefined;
   readonly account: AccountState | undefined;
   readonly snapshot: SessionSnapshot | undefined;
+  /** The live `RunSession`, threaded through for the `dialogue` body -- `DialogueScreen` dispatches
+   * intents and reveals lore straight through the session, exactly like `TradeScreen`/`HouseScreen`
+   * do from `PlayScreen` (the difference here is that `DialogueScreen` is mounted from inside
+   * `OverlayHost`, which otherwise only ever reads `snapshot`/`sightings` off the session). */
+  readonly session: RunSession | undefined;
   readonly sightings: Sightings | undefined;
   readonly onBeginScrollTargeting:
     | ((
@@ -194,5 +202,16 @@ function renderBody(overlay: OverlayId, ctx: RenderBodyContext): JSX.Element {
       );
     case 'help':
       return <HelpOverlay />;
+    case 'dialogue':
+      if (!ctx.snapshot || !ctx.session) return <p>There is no one to talk to right now.</p>;
+      return (
+        <DialogueScreen
+          pack={ctx.pack}
+          projection={ctx.snapshot.projection}
+          onDispatch={(intent) => ctx.session?.dispatch(intent)}
+          onRevealLore={(contentId) => ctx.session?.revealLore(contentId)}
+          onClose={ctx.onClose}
+        />
+      );
   }
 }

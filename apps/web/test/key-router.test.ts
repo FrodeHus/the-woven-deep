@@ -128,7 +128,7 @@ describe('routeKey', () => {
     });
   });
 
-  it('maps Shift+T to trade-open -- bare "t" is unbound so it never collides with vi movement', () => {
+  it('maps Shift+T to trade-open and bare "t" to the talk overlay -- distinct chords, never colliding with vi movement', () => {
     expect(
       routeKey({
         event: keyEvent('T', { shiftKey: true }),
@@ -143,9 +143,10 @@ describe('routeKey', () => {
         keymap: defaultKeymap,
       }),
     ).toBeNull();
-    expect(
-      routeKey({ event: keyEvent('t'), overlayOpen: false, keymap: defaultKeymap }),
-    ).toBeNull();
+    expect(routeKey({ event: keyEvent('t'), overlayOpen: false, keymap: defaultKeymap })).toEqual({
+      type: 'open-overlay',
+      overlay: 'dialogue',
+    });
   });
 
   it('maps p to pick-lock -- a deliberate keypress, never emitted by movement', () => {

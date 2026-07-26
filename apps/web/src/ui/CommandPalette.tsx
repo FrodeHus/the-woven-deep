@@ -47,6 +47,10 @@ export interface CommandPaletteProps {
   readonly onOpenOverlay: (overlay: OverlayActionId) => void;
   readonly isTownContext: boolean;
   readonly tradeAvailable: boolean;
+  /** Whether an adjacent dialogue-bearing NPC makes the `dialogue` overlay reachable right now --
+   * mirrors `tradeAvailable`'s gating exactly, since `talk` is likewise only ever offered while a
+   * valid target is actually adjacent (see `dialogueTargetAvailable`, `projection-view.ts`). */
+  readonly talkAvailable: boolean;
   readonly onCast: (spellId: string) => void;
 }
 
@@ -62,6 +66,7 @@ export function CommandPalette({
   onOpenOverlay,
   isTownContext,
   tradeAvailable,
+  talkAvailable,
   onCast,
 }: Readonly<CommandPaletteProps>): JSX.Element {
   const sessionCtx = useSessionCtx();
@@ -114,6 +119,15 @@ export function CommandPalette({
     ...(tradeAvailable ? (['trade'] as const) : []),
   ];
 
+  // `dialogue` is gated by `talkAvailable` exactly like `trade` is gated by `tradeAvailable` above
+  // -- unlike the six fixed `OVERLAY_ENTRIES`, which are always reachable during play, offering an
+  // unreachable "Talk" entry when no NPC is adjacent would be a discovery surface lying about what
+  // is actually possible right now.
+  const screenEntries: readonly OverlayId[] = [
+    ...OVERLAY_ENTRIES,
+    ...(talkAvailable ? (['dialogue'] as const) : []),
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="overflow-hidden p-0 shadow-lg" data-testid="command-palette">
@@ -131,7 +145,7 @@ export function CommandPalette({
           <CommandList>
             <CommandEmpty>No matching command.</CommandEmpty>
             <CommandGroup heading="Screens">
-              {OVERLAY_ENTRIES.map((overlay) => {
+              {screenEntries.map((overlay) => {
                 const action = OVERLAY_REGISTRY[overlay].action;
                 const label = ACTION_LABELS[action];
                 const shortcut = hint(action);

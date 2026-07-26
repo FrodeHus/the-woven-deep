@@ -303,9 +303,29 @@ export function accumulateSightings(prev: Sightings, projection: GameplayProject
 
 /** The in-voice, first-reveal flavor line for one newly-sighted-or-identified, lore-bearing
  * content entry (`GuestSession`'s client log, not an engine event) -- a single fixed template so
- * every reveal reads as one consistent, subtle narrator's voice, never per-entry-authored copy. */
-function revealLine(name: string): string {
+ * every reveal reads as one consistent, subtle narrator's voice, never per-entry-authored copy.
+ * Exported for `revealLore`'s dialogue-consequence path (`GuestSession`/`ProfileSession`), which
+ * needs the exact same template for a lore reveal that never went through `accumulateSightings`. */
+export function revealLine(name: string): string {
   return `The threads whisper of ${name}.`;
+}
+
+/** Direct-insert helper for a dialogue `reveal-lore` consequence -- unlike `accumulateSightings`,
+ * this never scans the live projection for what the hero currently perceives: a dialogue reveal is
+ * a narrative event the NPC just told the hero about, not something freshly sighted/identified, so
+ * it bypasses `accumulateSightings` entirely and inserts `contentId` directly. A no-op (returns
+ * `prev` unchanged) when `contentId` names neither a monster nor an item -- there is nothing to
+ * insert -- so a caller can call this unconditionally without checking beforehand. */
+export function insertSighting(
+  prev: Sightings,
+  pack: CompiledContentPack,
+  contentId: string,
+): Sightings {
+  const monster = monsterById(pack, contentId);
+  if (monster) return { ...prev, monsterIds: sortedUnique([...prev.monsterIds, contentId]) };
+  const item = itemById(pack, contentId);
+  if (item) return { ...prev, itemIds: sortedUnique([...prev.itemIds, contentId]) };
+  return prev;
 }
 
 /**
