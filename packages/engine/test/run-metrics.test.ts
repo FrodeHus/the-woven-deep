@@ -509,7 +509,7 @@ describe('foldRunMetrics', () => {
       true,
     );
     for (const key of Object.keys(seed) as (keyof RunMetrics)[]) {
-      if (key === 'killsByModel') continue;
+      if (key === 'killsByModel' || key === 'defeatedBossMonsterIds') continue;
       expect(folded[key] as number).toBeGreaterThanOrEqual(seed[key] as number);
     }
   });

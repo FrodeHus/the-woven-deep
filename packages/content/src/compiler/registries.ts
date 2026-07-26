@@ -51,7 +51,7 @@ export const MERCHANT_SERVICE_IDS = [
 ] as const;
 export const MERCHANT_AGGRESSION_RESPONSES = ['flee', 'self-defense'] as const;
 
-export { ACHIEVEMENT_CRITERIA_IDS } from '../model.js';
+export { ACHIEVEMENT_CRITERIA_TYPES } from '../model.js';
 
 export const LEADER_RESPONSE_PARAMETER_SCHEMAS = {
   weaken: z.strictObject({ modifiers: populationModifiers }),

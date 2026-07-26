@@ -134,7 +134,6 @@ describe('run record shapes', () => {
       achievementGrants: [
         {
           achievementId: 'achievement.first-champion',
-          criteriaId: 'first-champion-defeat',
           name: 'First champion',
         },
       ],

@@ -42,7 +42,7 @@ describe('CallingStep', () => {
     render(<CallingStep state={stubState()} pack={pack} dispatch={dispatch} />);
     const archivistOption = screen.getByRole('option', { name: /Archivist/ });
     expect(archivistOption).toHaveAttribute('aria-disabled', 'true');
-    expect(archivistOption.textContent).toMatch(/Read three lore fragments/);
+    expect(archivistOption.textContent).toMatch(/Defeat three of the Deep's champions/);
 
     await user.click(archivistOption);
     expect(dispatch).not.toHaveBeenCalledWith(
@@ -63,7 +63,7 @@ describe('CallingStep', () => {
     );
     const wardenOption = screen.getByRole('option', { name: /Warden/ });
     expect(wardenOption).not.toHaveAttribute('aria-disabled', 'true');
-    expect(wardenOption.textContent).not.toMatch(/Survive to depth ten/);
+    expect(wardenOption.textContent).not.toMatch(/Descend to depth ten/);
 
     await user.click(wardenOption);
     expect(dispatch).toHaveBeenCalledWith({ type: 'choose-class', classId: WARDEN });
@@ -77,7 +77,7 @@ describe('CallingStep', () => {
     );
     const wardenOption = screen.getByRole('option', { name: /Warden/ });
     expect(wardenOption).toHaveAttribute('aria-disabled', 'true');
-    expect(wardenOption.textContent).toMatch(/Survive to depth ten/);
+    expect(wardenOption.textContent).toMatch(/Descend to depth ten/);
 
     await user.click(wardenOption);
     expect(dispatch).not.toHaveBeenCalledWith(

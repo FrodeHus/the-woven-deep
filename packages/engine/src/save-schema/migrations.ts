@@ -7,22 +7,22 @@ import {
   uint32State,
   uint32Tuple,
 } from './primitives.js';
-import { commandV7 } from './commands.js';
+import { command, commandV7 } from './commands.js';
 import {
-  authoritativeEvent,
   eventOptions,
   hiddenPublicEventTypes,
   merchantDepartedEvent,
   merchantDepartureWarningEvent,
   merchantDiedEvent,
   merchantProvokedEvent,
+  merchantRestockedEvent,
   merchantStockDroppedEvent,
   populationCreatedEvent,
   processedResult,
-  publicEvent,
   publicOnlyEventTypes,
-  recorded,
   reputationChangedEvent,
+  runConcludedEvent,
+  runFinalizedEvent,
   tradeBoughtEvent,
   tradeClosedEvent,
   tradeOpenedEvent,
@@ -30,7 +30,7 @@ import {
   tradeSoldEvent,
 } from './events.js';
 import { floor } from './floor.js';
-import { legacyActor } from './actor.js';
+import { actor, legacyActor } from './actor.js';
 import { feature, item, itemFields, itemLocationV7, legacyItemLocation } from './item.js';
 import {
   encounterDecision,
@@ -45,7 +45,7 @@ import {
   relationship,
   survival,
 } from './population.js';
-import { rngEntries, runConclusionSchema, runMetrics } from './run-record.js';
+import { rngEntries, runConclusionSchema, runKillsByModel, runMetrics } from './run-record.js';
 import { ENGINE_GAME_VERSION, RECENT_COMMAND_LIMIT, type RNG_STREAM_NAMES } from '../versions.js';
 
 export const legacyPopulationCreatedEvent = z.strictObject({
@@ -69,11 +69,56 @@ export const legacyPublicEvent = legacyEvent.refine(
   (value) => !hiddenPublicEventTypes.has(value.type),
   'authoritative or roll-bearing event must be projected before public storage',
 );
+// The pre-parameterized-criteria achievement.granted shape: identical to the current event except
+// it carries a `criteriaId` drawn from the old closed criteria registry. Spelled out as a frozen
+// literal (not derived from the live content package, whose criteria registry is gone) so a future
+// schema bump can't silently change what a real v6-v10 save's achievement events are validated
+// against.
+export const legacyAchievementGrantedEventV10 = z.strictObject({
+  type: z.literal('achievement.granted'),
+  eventId: identifier,
+  achievementId: identifier,
+  criteriaId: z.enum(['first-champion-defeat', 'first-echo-defeat']),
+  name: heroName,
+});
+export const legacyEventV10 = z.discriminatedUnion('type', [
+  ...eventOptions,
+  populationCreatedEvent,
+  reputationChangedEvent,
+  tradeOpenedEvent,
+  tradeBoughtEvent,
+  tradeSoldEvent,
+  tradeServicePurchasedEvent,
+  tradeClosedEvent,
+  merchantDepartureWarningEvent,
+  merchantDepartedEvent,
+  merchantProvokedEvent,
+  merchantStockDroppedEvent,
+  merchantDiedEvent,
+  merchantRestockedEvent,
+  runConcludedEvent,
+  runFinalizedEvent,
+  legacyAchievementGrantedEventV10,
+]);
+export const legacyAuthoritativeEventV10 = legacyEventV10.refine(
+  (value) => !publicOnlyEventTypes.has(value.type),
+  'public projection event cannot be stored as authoritative',
+);
+export const legacyPublicEventV10 = legacyEventV10.refine(
+  (value) => !hiddenPublicEventTypes.has(value.type),
+  'authoritative or roll-bearing event must be projected before public storage',
+);
 export const recordedV7 = z.strictObject({
   command: commandV7,
   result: processedResult,
-  events: z.array(authoritativeEvent).readonly(),
-  publicEvents: z.array(publicEvent).readonly(),
+  events: z.array(legacyAuthoritativeEventV10).readonly(),
+  publicEvents: z.array(legacyPublicEventV10).readonly(),
+});
+export const legacyRecordedV10 = z.strictObject({
+  command,
+  result: processedResult,
+  events: z.array(legacyAuthoritativeEventV10).readonly(),
+  publicEvents: z.array(legacyPublicEventV10).readonly(),
 });
 export const legacyRecorded = z.strictObject({
   command: commandV7,
@@ -144,6 +189,52 @@ export const legacyV5Recorded = z.strictObject({
   events: z.array(legacyV5AuthoritativeEvent).readonly(),
   publicEvents: z.array(legacyV5PublicEvent).readonly(),
 });
+// The pre-boss-tracking metrics shape: identical to the current `runMetrics` schema except it
+// carries no `defeatedBossMonsterIds`. `metrics` has kept this exact shape since it was introduced
+// at schema v6, so every legacy schema from v6 through v9 references this frozen shape too.
+export const legacyRunMetricsV9 = z.strictObject({
+  kills: safeNonNegative,
+  killsByModel: runKillsByModel,
+  bossKills: safeNonNegative,
+  championKills: safeNonNegative,
+  echoKills: safeNonNegative,
+  threatDefeated: safeNonNegative,
+  damageDealt: safeNonNegative,
+  damageTaken: safeNonNegative,
+  itemsCollected: safeNonNegative,
+  itemsIdentified: safeNonNegative,
+  currencyEarned: safeNonNegative,
+  currencySpent: safeNonNegative,
+  tradesCompleted: safeNonNegative,
+  floorsEntered: safeNonNegative,
+  deepestDepth: safeNonNegative,
+  discoveriesRevealed: safeNonNegative,
+  turnsElapsed: safeNonNegative,
+  restsCompleted: safeNonNegative,
+});
+
+/** The pre-boss-tracking zero-value `metrics` literal, matching `legacyRunMetricsV9`. */
+export const emptyLegacyRunMetricsV9: z.infer<typeof legacyRunMetricsV9> = {
+  kills: 0,
+  killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },
+  bossKills: 0,
+  championKills: 0,
+  echoKills: 0,
+  threatDefeated: 0,
+  damageDealt: 0,
+  damageTaken: 0,
+  itemsCollected: 0,
+  itemsIdentified: 0,
+  currencyEarned: 0,
+  currencySpent: 0,
+  tradesCompleted: 0,
+  floorsEntered: 0,
+  deepestDepth: 0,
+  discoveriesRevealed: 0,
+  turnsElapsed: 0,
+  restsCompleted: 0,
+};
+
 export const legacyActiveRunV7Schema = z.strictObject({
   schemaVersion: z.literal(7),
   gameVersion: z.literal(ENGINE_GAME_VERSION),
@@ -182,8 +273,106 @@ export const legacyActiveRunV7Schema = z.strictObject({
   fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
+  metrics: legacyRunMetricsV9,
+  conclusion: runConclusionSchema.nullable(),
+});
+
+// The pre-boss-tracking save shape: identical to the current run schema except `metrics` carries
+// no `defeatedBossMonsterIds`. Spelled out as a frozen literal (not derived from the live
+// `activeRunSchema`) so a future schema bump can't silently change what a real v9 save is
+// validated against.
+export const legacyActiveRunV9Schema = z.strictObject({
+  schemaVersion: z.literal(9),
+  gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  runId: identifier,
+  runSeed: uint32Tuple,
+  rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
+  revision: safeNonNegative,
+  turn: safeNonNegative,
+  worldTime: safeNonNegative,
+  hero,
+  reputations: z
+    .array(z.strictObject({ factionId: identifier, value: z.number().int().safe() }))
+    .readonly(),
+  activeTrade: z
+    .strictObject({
+      merchantPopulationId: identifier,
+      merchantActorId: identifier,
+      openedByCommandId: identifier,
+      openedAtRevision: safeNonNegative,
+      completedCommerce: z.boolean(),
+    })
+    .nullable(),
+  actors: z.array(actor).min(1).readonly(),
+  items: z.array(item).readonly(),
+  features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(),
+  survival,
+  identification,
+  activeFloorId: identifier,
+  activeFloorEnteredAt: safeNonNegative,
+  returnAnchorFloorId: identifier.optional(),
+  floors: z.array(floor).min(1).readonly(),
+  recentCommands: z.array(legacyRecordedV10).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(),
+  populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+  metrics: legacyRunMetricsV9,
+  conclusion: runConclusionSchema.nullable(),
+  house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
+  restockedMilestones: z.array(positiveQuantity).readonly(),
+});
+
+// The pre-parameterized-criteria save shape: identical to the current run schema except achievement
+// events carry `criteriaId`. Spelled out as a frozen literal (not derived from the live
+// `activeRunSchema`) so a future schema bump can't silently change what a real v10 save is
+// validated against.
+export const legacyActiveRunV10Schema = z.strictObject({
+  schemaVersion: z.literal(10),
+  gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  runId: identifier,
+  runSeed: uint32Tuple,
+  rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
+  revision: safeNonNegative,
+  turn: safeNonNegative,
+  worldTime: safeNonNegative,
+  hero,
+  reputations: z
+    .array(z.strictObject({ factionId: identifier, value: z.number().int().safe() }))
+    .readonly(),
+  activeTrade: z
+    .strictObject({
+      merchantPopulationId: identifier,
+      merchantActorId: identifier,
+      openedByCommandId: identifier,
+      openedAtRevision: safeNonNegative,
+      completedCommerce: z.boolean(),
+    })
+    .nullable(),
+  actors: z.array(actor).min(1).readonly(),
+  items: z.array(item).readonly(),
+  features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(),
+  survival,
+  identification,
+  activeFloorId: identifier,
+  activeFloorEnteredAt: safeNonNegative,
+  returnAnchorFloorId: identifier.optional(),
+  floors: z.array(floor).min(1).readonly(),
+  recentCommands: z.array(legacyRecordedV10).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(),
+  populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: runMetrics,
   conclusion: runConclusionSchema.nullable(),
+  house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
+  restockedMilestones: z.array(positiveQuantity).readonly(),
 });
 
 // The pre-Weave save shape: identical to the current run schema except actors carry no
@@ -222,13 +411,13 @@ export const legacyActiveRunV8Schema = z.strictObject({
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
   floors: z.array(floor).min(1).readonly(),
-  recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
+  recentCommands: z.array(legacyRecordedV10).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
   fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
-  metrics: runMetrics,
+  metrics: legacyRunMetricsV9,
   conclusion: runConclusionSchema.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
   restockedMilestones: z.array(positiveQuantity).readonly(),
@@ -272,7 +461,7 @@ export const legacyActiveRunV6Schema = z.strictObject({
   fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
-  metrics: runMetrics,
+  metrics: legacyRunMetricsV9,
   conclusion: runConclusionSchema.nullable(),
 });
 

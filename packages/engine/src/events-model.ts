@@ -2,7 +2,6 @@ import type { OpaqueId, Direction, Point } from './model.js';
 import type { InvalidActionReason } from './commands-model.js';
 import type { EquipmentSlot } from './actor-model.js';
 import type {
-  AchievementCriteriaId,
   CompletionType,
   DamageType,
   LeaderDeathResponse,
@@ -770,7 +769,6 @@ export interface AchievementGrantedEvent {
   readonly type: 'achievement.granted';
   readonly eventId: OpaqueId;
   readonly achievementId: OpaqueId;
-  readonly criteriaId: AchievementCriteriaId;
   readonly name: string;
 }
 export type RunRecordDomainEvent = RunConcludedEvent | RunFinalizedEvent | AchievementGrantedEvent;

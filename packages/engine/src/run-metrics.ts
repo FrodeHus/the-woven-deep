@@ -1,5 +1,6 @@
 import type { CompiledContentPack } from '@woven-deep/content';
-import type { ActiveRun, DomainEvent } from './model.js';
+import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
+import { compareCodeUnits } from './stable-json.js';
 
 export interface RunKillsByModel {
   readonly individual: number;
@@ -12,6 +13,7 @@ export interface RunMetrics {
   readonly kills: number;
   readonly killsByModel: RunKillsByModel;
   readonly bossKills: number;
+  readonly defeatedBossMonsterIds: readonly OpaqueId[];
   readonly championKills: number;
   readonly echoKills: number;
   readonly threatDefeated: number;
@@ -34,6 +36,7 @@ export function emptyRunMetrics(): RunMetrics {
     kills: 0,
     killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },
     bossKills: 0,
+    defeatedBossMonsterIds: [],
     championKills: 0,
     echoKills: 0,
     threatDefeated: 0,
@@ -87,6 +90,7 @@ export function foldRunMetrics(
   let kills = metrics.kills;
   let killsByModel = metrics.killsByModel;
   let bossKills = metrics.bossKills;
+  const defeatedBossMonsters = new Set<string>(metrics.defeatedBossMonsterIds);
   let championKills = metrics.championKills;
   let echoKills = metrics.echoKills;
   let threatDefeated = metrics.threatDefeated;
@@ -127,9 +131,16 @@ export function foldRunMetrics(
         if (monster) threatDefeated = checkedAdd(threatDefeated, monster.threat, 'threatDefeated');
         break;
       }
-      case 'boss.defeated':
+      case 'boss.defeated': {
         bossKills = checkedAdd(bossKills, 1, 'bossKills');
+        const encounter = content.entries.find(
+          (entry): entry is Extract<typeof entry, { kind: 'encounter' }> =>
+            entry.kind === 'encounter' && entry.id === event.encounterId,
+        );
+        if (encounter && encounter.model === 'boss')
+          defeatedBossMonsters.add(encounter.definition.monsterId);
         break;
+      }
       case 'champion.defeated':
         championKills = checkedAdd(championKills, 1, 'championKills');
         break;
@@ -186,6 +197,7 @@ export function foldRunMetrics(
     kills,
     killsByModel,
     bossKills,
+    defeatedBossMonsterIds: [...defeatedBossMonsters].sort(compareCodeUnits),
     championKills,
     echoKills,
     threatDefeated,

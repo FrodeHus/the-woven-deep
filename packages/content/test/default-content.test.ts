@@ -43,7 +43,7 @@ describe('bundled content', () => {
       'fallen-champion-template': 1,
       npc: 5,
       'npc-faction': 5,
-      achievement: 2,
+      achievement: 10,
       class: 5,
       background: 3,
       trait: 8,
@@ -98,6 +98,26 @@ describe('bundled content', () => {
     expect(loomcaller.startingSpellIds).toEqual(['spell.ember-bolt']);
     expect(loomcaller.kits.length).toBeGreaterThanOrEqual(2);
     expect(loomcaller.kits.some((kit) => kit.kitId === 'weaveward')).toBe(true);
+  });
+
+  it('ships structured unlock conditions matching the corrected hint text', async () => {
+    const pack = await compileContentDirectory({
+      rootDir: resolve(import.meta.dirname, '../../../content'),
+    });
+    const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
+    expect(entries.get('class.warden')).toMatchObject({
+      playable: false,
+      unlock: { type: 'reach-depth', depth: 10 },
+      unlockHint: 'Descend to depth ten to unlock the Warden.',
+    });
+    expect(entries.get('class.archivist')).toMatchObject({
+      playable: false,
+      unlock: { type: 'defeat-champions', count: 3 },
+      unlockHint: "Defeat three of the Deep's champions to unlock the Archivist.",
+    });
+    for (const id of ['class.lamplighter', 'class.loomcaller', 'class.wayfarer']) {
+      expect(entries.get(id)).toMatchObject({ playable: true, unlock: null, unlockHint: null });
+    }
   });
 
   it('ships the exact Lampwright merchant contract', async () => {
@@ -183,12 +203,12 @@ describe('bundled content', () => {
     expect(entries.get('achievement.defeated-the-deeps-champion')).toMatchObject({
       kind: 'achievement',
       name: "Defeated the Deep's Champion",
-      criteriaId: 'first-champion-defeat',
+      criteria: { type: 'defeat-fallen-hero', role: 'champion' },
     });
     expect(entries.get('achievement.silenced-an-echo')).toMatchObject({
       kind: 'achievement',
       name: 'Silenced an Echo',
-      criteriaId: 'first-echo-defeat',
+      criteria: { type: 'defeat-fallen-hero', role: 'echo' },
     });
     expect(entries.get('balance.core-gameplay')).toMatchObject({
       score: {

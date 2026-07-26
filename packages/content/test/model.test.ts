@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ACHIEVEMENT_CRITERIA_IDS,
+  ACHIEVEMENT_CRITERIA_TYPES,
   CONTENT_SCHEMA_VERSION,
   CONTENT_KIND_IDS,
   type ContentKind,
@@ -36,8 +36,13 @@ describe('content model', () => {
     expect(CONTENT_KIND_IDS).toEqual(expect.arrayContaining(['class', 'background', 'trait']));
   });
 
-  it('publishes the closed achievement criteria registry', () => {
-    expect(ACHIEVEMENT_CRITERIA_IDS).toEqual(['first-champion-defeat', 'first-echo-defeat']);
+  it('publishes the closed achievement criteria type registry', () => {
+    expect(ACHIEVEMENT_CRITERIA_TYPES).toEqual([
+      'defeat-boss',
+      'defeat-fallen-hero',
+      'reach-depth',
+      'complete-ending',
+    ]);
   });
 
   it('rejects a stored schema-v6 pack before exposing entries', async () => {

@@ -57,7 +57,6 @@ describe('SettingsOverlay -- Lifetime & achievements', () => {
       achievements: [
         {
           achievementId: 'achievement.first-blood',
-          criteriaId: 'first-champion-defeat',
           name: 'First Blood',
         },
       ],

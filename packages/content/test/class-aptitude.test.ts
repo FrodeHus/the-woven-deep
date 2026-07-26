@@ -14,6 +14,7 @@ function classFile(extra: Record<string, unknown>) {
         playable: true,
         silhouetteGlyph: 'T',
         unlockHint: null,
+        unlock: null,
         classTags: ['test'],
         kits: [
           { kitId: 'a', name: 'A', equipped: [], backpack: [] },

@@ -885,7 +885,6 @@ describe('public event projection', () => {
         type: 'achievement.granted',
         eventId: 'event.finalize',
         achievementId: 'achievement.test',
-        criteriaId: 'first-champion-defeat',
         name: 'Test achievement',
       },
     ];

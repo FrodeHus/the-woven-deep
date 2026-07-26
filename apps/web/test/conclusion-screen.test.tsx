@@ -17,6 +17,7 @@ function projection(overrides: Partial<RunConclusionProjection> = {}): RunConclu
       kills: 2,
       killsByModel: { individual: 2, group: 0, swarm: 0, boss: 0 },
       bossKills: 0,
+      defeatedBossMonsterIds: [],
       championKills: 0,
       echoKills: 0,
       threatDefeated: 6,
@@ -58,7 +59,6 @@ function projection(overrides: Partial<RunConclusionProjection> = {}): RunConclu
     achievements: [
       {
         achievementId: 'achievement.first-blood',
-        criteriaId: 'first-champion-defeat',
         name: 'First Blood',
       },
     ],

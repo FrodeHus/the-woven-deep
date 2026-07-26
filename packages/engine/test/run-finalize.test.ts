@@ -81,7 +81,7 @@ const championAchievement: AchievementContentEntry = {
   name: 'Defeated the Champion',
   tags: [],
   description: 'First champion defeat.',
-  criteriaId: 'first-champion-defeat',
+  criteria: { type: 'defeat-fallen-hero', role: 'champion' },
 };
 const echoAchievement: AchievementContentEntry = {
   kind: 'achievement',
@@ -89,7 +89,7 @@ const echoAchievement: AchievementContentEntry = {
   name: 'Silenced an Echo',
   tags: [],
   description: 'First echo defeat.',
-  criteriaId: 'first-echo-defeat',
+  criteria: { type: 'defeat-fallen-hero', role: 'echo' },
 };
 
 function encounterDef(id: string): EncounterContentEntry {
@@ -412,12 +412,10 @@ describe('finalizeRun', () => {
       expect(finalized.deltas.achievementGrants).toEqual([
         {
           achievementId: 'achievement.a-echo',
-          criteriaId: 'first-echo-defeat',
           name: 'Silenced an Echo',
         },
         {
           achievementId: 'achievement.z-champion',
-          criteriaId: 'first-champion-defeat',
           name: 'Defeated the Champion',
         },
       ]);
@@ -451,14 +449,12 @@ describe('finalizeRun', () => {
         type: 'achievement.granted',
         eventId,
         achievementId: 'achievement.a-echo',
-        criteriaId: 'first-echo-defeat',
         name: 'Silenced an Echo',
       },
       {
         type: 'achievement.granted',
         eventId,
         achievementId: 'achievement.z-champion',
-        criteriaId: 'first-champion-defeat',
         name: 'Defeated the Champion',
       },
     ]);

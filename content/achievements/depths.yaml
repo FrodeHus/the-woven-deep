@@ -1,0 +1,14 @@
+schemaVersion: 7
+entries:
+  - kind: achievement
+    id: achievement.into-the-deep
+    name: Into the Deep
+    tags: [depth]
+    description: Descend to depth fifteen.
+    criteria: { type: reach-depth, depth: 15 }
+  - kind: achievement
+    id: achievement.the-final-descent
+    name: The Final Descent
+    tags: [depth, prestige]
+    description: Descend to depth twenty, the Final Chamber.
+    criteria: { type: reach-depth, depth: 20 }

@@ -1,6 +1,6 @@
 import type {
   AchievementContentEntry,
-  AchievementCriteriaId,
+  AchievementCriteria,
   CompiledContentPack,
   EncounterContentEntry,
   FallenChampionTemplateContentEntry,
@@ -63,34 +63,48 @@ function isFirstDefeat(
   );
 }
 
-function achievementGrants(
-  input: Readonly<{
+function criterionMet(
+  criteria: AchievementCriteria,
+  ctx: Readonly<{
     decisions: readonly FallenHeroRunDecision[];
     lifetime: LifetimeState;
-    content: CompiledContentPack;
+    deepestDepth: number;
+    completionType: HallRecord['completionType'];
+    defeatedBossMonsterIds: readonly OpaqueId[];
   }>,
+): boolean {
+  switch (criteria.type) {
+    case 'defeat-boss':
+      return ctx.defeatedBossMonsterIds.includes(criteria.monsterId);
+    case 'defeat-fallen-hero':
+      return ctx.decisions.some((decision) => isFirstDefeat(decision, criteria.role, ctx.lifetime));
+    case 'reach-depth':
+      return ctx.deepestDepth >= criteria.depth;
+    case 'complete-ending':
+      return ctx.completionType === criteria.ending;
+  }
+}
+
+function achievementGrants(
+  input: Readonly<{ run: ActiveRun; lifetime: LifetimeState; content: CompiledContentPack }>,
 ): readonly AchievementGrant[] {
-  const { decisions, lifetime, content } = input;
-  const earnedCriteria: readonly AchievementCriteriaId[] = [
-    ...(decisions.some((decision) => isFirstDefeat(decision, 'champion', lifetime))
-      ? ['first-champion-defeat' as const]
-      : []),
-    ...(decisions.some((decision) => isFirstDefeat(decision, 'echo', lifetime))
-      ? ['first-echo-defeat' as const]
-      : []),
-  ];
+  const { run, lifetime, content } = input;
+  const completionType = run.conclusion!.completionType;
+  const ctx = {
+    decisions: run.fallenHeroDecisions,
+    lifetime,
+    deepestDepth: run.metrics.deepestDepth,
+    completionType,
+    defeatedBossMonsterIds: run.metrics.defeatedBossMonsterIds,
+  };
   return content.entries
     .filter(
       (entry): entry is AchievementContentEntry =>
         entry.kind === 'achievement' &&
-        earnedCriteria.includes(entry.criteriaId) &&
-        !lifetime.grantedAchievementIds.includes(entry.id),
+        !lifetime.grantedAchievementIds.includes(entry.id) &&
+        criterionMet(entry.criteria, ctx),
     )
-    .map((entry): AchievementGrant => ({
-      achievementId: entry.id,
-      criteriaId: entry.criteriaId,
-      name: entry.name,
-    }))
+    .map((entry): AchievementGrant => ({ achievementId: entry.id, name: entry.name }))
     .sort((left, right) => compareCodeUnits(left.achievementId, right.achievementId));
 }
 
@@ -153,7 +167,7 @@ export function finalizeRun(
     contentHash: run.contentHash,
   };
 
-  const grants = achievementGrants({ decisions: run.fallenHeroDecisions, lifetime, content });
+  const grants = achievementGrants({ run, lifetime, content });
   const encounters = content.entries.filter(
     (entry): entry is EncounterContentEntry => entry.kind === 'encounter',
   );
@@ -182,7 +196,6 @@ export function finalizeRun(
     type: 'achievement.granted',
     eventId,
     achievementId: grant.achievementId,
-    criteriaId: grant.criteriaId,
     name: grant.name,
   }));
 

@@ -84,7 +84,7 @@ entries:
     ).toThrow(/schema version|schemaVersion/i);
   });
 
-  it('publishes and parses strict schema-v5 achievement content', () => {
+  it('publishes and parses strict schema-v7 achievement content', () => {
     const validAchievementYaml = `schemaVersion: 7
 entries:
   - kind: achievement
@@ -92,7 +92,7 @@ entries:
     name: Defeated the Deep's Champion
     tags: [fallen-hero, prestige]
     description: Defeat the Deep's Champion for the first time.
-    criteriaId: first-champion-defeat
+    criteria: { type: defeat-fallen-hero, role: champion }
 `;
     expect(
       parseContentFile({
@@ -101,22 +101,29 @@ entries:
       })[0],
     ).toMatchObject({
       kind: 'achievement',
-      criteriaId: 'first-champion-defeat',
+      criteria: { type: 'defeat-fallen-hero', role: 'champion' },
       name: "Defeated the Deep's Champion",
     });
     for (const [label, source] of [
       [
         'unknown field',
         validAchievementYaml.replace(
-          '    criteriaId: first-champion-defeat',
-          '    criteriaId: first-champion-defeat\n    reward: 100',
+          '    criteria: { type: defeat-fallen-hero, role: champion }',
+          '    criteria: { type: defeat-fallen-hero, role: champion }\n    reward: 100',
         ),
       ],
       [
-        'unknown criteria',
+        'unknown criteria type',
         validAchievementYaml.replace(
-          'criteriaId: first-champion-defeat',
-          'criteriaId: first-boss-defeat',
+          'criteria: { type: defeat-fallen-hero, role: champion }',
+          'criteria: { type: first-boss-defeat }',
+        ),
+      ],
+      [
+        'unknown criteria role',
+        validAchievementYaml.replace(
+          'criteria: { type: defeat-fallen-hero, role: champion }',
+          'criteria: { type: defeat-fallen-hero, role: sidekick }',
         ),
       ],
       [
@@ -128,7 +135,10 @@ entries:
       ],
       [
         'missing criteria',
-        validAchievementYaml.replace('    criteriaId: first-champion-defeat\n', ''),
+        validAchievementYaml.replace(
+          '    criteria: { type: defeat-fallen-hero, role: champion }\n',
+          '',
+        ),
       ],
     ] as const) {
       expect(
@@ -330,6 +340,7 @@ entries:
     playable: true
     silhouetteGlyph: W
     unlockHint: null
+    unlock: null
     classTags: [wayfarer]
     kits:
       - kitId: blade

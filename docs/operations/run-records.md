@@ -27,7 +27,7 @@ in both the authoritative and public event streams:
   `worldTime`). Emitted once, inside the killing transition.
 - `run.finalized` — carries the `recordId`, `completionType`, and `scoreTotal`. A finalized run
   contains exactly one `run.finalized` event.
-- `achievement.granted` — one per newly granted achievement (`achievementId`, `criteriaId`, `name`).
+- `achievement.granted` — one per newly granted achievement (`achievementId`, `name`).
 
 ## Finalization flow
 

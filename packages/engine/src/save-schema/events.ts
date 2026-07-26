@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { ACHIEVEMENT_CRITERIA_IDS } from '@woven-deep/content';
 import {
   blockReason,
   completionType,
@@ -765,7 +764,6 @@ export const achievementGrantedEvent = z.strictObject({
   type: z.literal('achievement.granted'),
   eventId: identifier,
   achievementId: identifier,
-  criteriaId: z.enum(ACHIEVEMENT_CRITERIA_IDS),
   name: heroName,
 });
 export const eventOptions = [

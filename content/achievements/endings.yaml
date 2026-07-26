@@ -1,0 +1,20 @@
+schemaVersion: 7
+entries:
+  - kind: achievement
+    id: achievement.broke-the-cycle
+    name: Broke the Cycle
+    tags: [ending, prestige]
+    description: Reach the broke-cycle ending in the Final Chamber.
+    criteria: { type: complete-ending, ending: broke-cycle }
+  - kind: achievement
+    id: achievement.became-the-heart
+    name: Became the Heart
+    tags: [ending, prestige]
+    description: Reach the became-heart ending in the Final Chamber.
+    criteria: { type: complete-ending, ending: became-heart }
+  - kind: achievement
+    id: achievement.walked-away
+    name: Walked Away
+    tags: [ending]
+    description: Reach the refused ending in the Final Chamber.
+    criteria: { type: complete-ending, ending: refused }
