@@ -381,4 +381,61 @@ describe('createSessionRunRecordRepository', () => {
     expect(() => createSessionRunRecordRepository(storage)).toThrow(SessionHallCorruptError);
     expect(() => createSessionRunRecordRepository(storage)).not.toThrow();
   });
+
+  it('migrates a legacy (pre-versioning, pre-7C) stored Hall without throwing', () => {
+    // Simulates a blob written before `version` and `defeatedBossMonsterIds` existed: no
+    // `version` field, `lifetime.totals` lacks `defeatedBossMonsterIds` entirely (the exact
+    // shape that used to hit `mergedSortedUnion(totals.defeatedBossMonsterIds, undefined)` and
+    // throw a TypeError on the next merge) plus a missing numeric field (`restsCompleted`), and
+    // a stored record whose `metrics` is likewise incomplete.
+    const legacyTotals = { ...metrics({ kills: 4, bossKills: 1 }) } as Record<string, unknown>;
+    delete legacyTotals['defeatedBossMonsterIds'];
+    delete legacyTotals['restsCompleted'];
+
+    const legacyRecordMetrics = { ...metrics({ kills: 2 }) } as Record<string, unknown>;
+    delete legacyRecordMetrics['defeatedBossMonsterIds'];
+    const legacyRecord = { ...storedRecord(), metrics: legacyRecordMetrics };
+
+    const legacyBlob = {
+      // no `version` field
+      records: [legacyRecord],
+      heart: null,
+      lifetime: {
+        conqueredChampionRecordIds: [],
+        grantedAchievementIds: [],
+        discoveryProtection: [],
+        totals: legacyTotals,
+      },
+      appliedDeltaRecordIds: [],
+    };
+
+    const storage = fakeStorage();
+    storage.set(RECORDS_KEY, JSON.stringify(legacyBlob));
+
+    let repository: ReturnType<typeof createSessionRunRecordRepository>;
+    expect(() => {
+      repository = createSessionRunRecordRepository(storage);
+    }).not.toThrow();
+
+    const lifetime = repository!.lifetime();
+    expect(lifetime.totals.kills).toBe(4);
+    expect(lifetime.totals.bossKills).toBe(1);
+    expect(lifetime.totals.defeatedBossMonsterIds).toEqual([]);
+    expect(lifetime.totals.restsCompleted).toBe(0);
+    expect(repository!.records()[0]?.metrics.defeatedBossMonsterIds).toEqual([]);
+
+    // Applying a fresh delta on top of the migrated totals must also succeed and merge additively
+    // — this is exactly the `mergedSortedUnion(undefined, ...)` regression the issue names.
+    expect(() =>
+      repository!.applyDeltas({
+        recordId: 'record.new',
+        newlyConqueredChampionRecordIds: [],
+        achievementGrants: [],
+        discoveryProtectionUpdates: [],
+        metrics: metrics({ kills: 3, defeatedBossMonsterIds: ['monster.boss.new'] }),
+      }),
+    ).not.toThrow();
+    expect(repository!.lifetime().totals.kills).toBe(7);
+    expect(repository!.lifetime().totals.defeatedBossMonsterIds).toEqual(['monster.boss.new']);
+  });
 });

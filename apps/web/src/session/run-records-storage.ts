@@ -1,4 +1,5 @@
 import {
+  normalizeStoredMetrics,
   standingsFromRecords,
   type DiscoveryProtectionBonus,
   type DiscoveryProtectionUpdate,
@@ -25,7 +26,19 @@ export class SessionHallCorruptError extends Error {
   }
 }
 
+/**
+ * Stamps the shape of the persisted blob under `RECORDS_KEY` (and, transitively, the
+ * `RunMetrics` shape `lifetime.totals` and each stored record's `metrics` were written with).
+ * A legacy blob with no `version` is treated as version 0 (the oldest); either way, every
+ * metrics-bearing field is normalized via the engine's `normalizeStoredMetrics` on load, so a
+ * `RunMetrics` field added after this blob was written never breaks the guest's merge math —
+ * future field additions only extend that (idempotent) normalizer, never a bespoke migration
+ * step here.
+ */
+const HALL_STORE_VERSION = 1;
+
 interface PersistedHallState {
+  readonly version: number;
   readonly records: readonly StoredHallRecord[];
   readonly heart: HeartLineageRecord | null;
   readonly lifetime: LifetimeState;
@@ -58,6 +71,7 @@ function emptyLifetimeMetrics(): RunMetrics {
 
 function emptyPersistedState(): PersistedHallState {
   return {
+    version: HALL_STORE_VERSION,
     records: [],
     heart: null,
     lifetime: {
@@ -67,6 +81,25 @@ function emptyPersistedState(): PersistedHallState {
       totals: emptyLifetimeMetrics(),
     },
     appliedDeltaRecordIds: [],
+  };
+}
+
+/** Migrates a just-parsed, structurally-valid `PersistedHallState` to the current `RunMetrics`
+ * shape: normalizes `lifetime.totals` (the running merge base future deltas fold into) and every
+ * stored record's `metrics`. A no-op for already-complete data (current writes), since
+ * `normalizeStoredMetrics` is idempotent. */
+function migratePersistedState(state: PersistedHallState): PersistedHallState {
+  return {
+    ...state,
+    version: HALL_STORE_VERSION,
+    records: state.records.map((record) => ({
+      ...record,
+      metrics: normalizeStoredMetrics(record.metrics),
+    })),
+    lifetime: {
+      ...state.lifetime,
+      totals: normalizeStoredMetrics(state.lifetime.totals),
+    },
   };
 }
 
@@ -214,7 +247,7 @@ export function createSessionRunRecordRepository(storage: SessionStorageLike): R
         'the stored Hall of Records blob is corrupt and has been reset',
       );
     }
-    state = parsed as PersistedHallState;
+    state = migratePersistedState(parsed as PersistedHallState);
   }
 
   const hall: StoredHallRecord[] = [...state.records];
@@ -224,6 +257,7 @@ export function createSessionRunRecordRepository(storage: SessionStorageLike): R
 
   function persist(): void {
     const toPersist: PersistedHallState = {
+      version: HALL_STORE_VERSION,
       records: hall,
       heart,
       lifetime,

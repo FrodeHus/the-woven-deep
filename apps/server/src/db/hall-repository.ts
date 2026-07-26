@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import {
   createInMemoryRunRecordRepository,
+  normalizeStoredMetrics,
   standingsFromRecords,
   type AchievementGrant,
   type FallenHeroStandingSnapshot,
@@ -35,16 +36,53 @@ interface HallStateRow {
  * and to decide whether an incoming delta's `recordId` has already been applied. This
  * mirrors the in-memory reference's `appliedDeltaRecordIds` set without re-implementing
  * `mergeMetrics`/`mergedSortedUnion` server-side.
+ *
+ * `version` stamps the shape of this envelope (and, transitively, of the `RunMetrics` shape
+ * each stored delta's `metrics` was written with). It lives inside the JSON blob, not as a
+ * SQLite column: `lifetime_json` is opaque to the schema, so no DB migration is needed to add
+ * or bump it. A legacy blob with no `version` is treated as version 0 (the oldest); either way,
+ * every delta is normalized via `normalizeStoredMetrics` before replay, so future `RunMetrics`
+ * field additions only require extending that (idempotent) normalizer, never a bespoke
+ * migration step here.
  */
+const HALL_STORE_VERSION = 1;
+
 interface LifetimeEnvelope {
+  readonly version: number;
   readonly appliedDeltas: readonly LifetimeDeltas[];
 }
 
-const EMPTY_LIFETIME_ENVELOPE: LifetimeEnvelope = { appliedDeltas: [] };
+const EMPTY_LIFETIME_ENVELOPE: LifetimeEnvelope = {
+  version: HALL_STORE_VERSION,
+  appliedDeltas: [],
+};
+
+/** Parses a persisted `lifetime_json` blob into a `LifetimeEnvelope`, treating a missing
+ * `version` (pre-versioning legacy data) as version 0 rather than failing to parse. */
+function parseLifetimeEnvelope(json: string): LifetimeEnvelope {
+  const parsed = JSON.parse(json) as Partial<LifetimeEnvelope>;
+  return {
+    version: typeof parsed.version === 'number' ? parsed.version : 0,
+    appliedDeltas: Array.isArray(parsed.appliedDeltas) ? parsed.appliedDeltas : [],
+  };
+}
+
+/** Normalizes every stored delta's `metrics` to the current `RunMetrics` shape before replay,
+ * so a delta persisted before a `RunMetrics` field existed (e.g. `defeatedBossMonsterIds`)
+ * doesn't throw inside the engine's `mergeMetrics`/`mergedSortedUnion`. */
+function normalizeEnvelopeForReplay(envelope: LifetimeEnvelope): LifetimeEnvelope {
+  return {
+    version: HALL_STORE_VERSION,
+    appliedDeltas: envelope.appliedDeltas.map((delta) => ({
+      ...delta,
+      metrics: normalizeStoredMetrics(delta.metrics),
+    })),
+  };
+}
 
 function deriveLifetime(envelope: LifetimeEnvelope): LifetimeState {
   const repo = createInMemoryRunRecordRepository();
-  for (const delta of envelope.appliedDeltas) {
+  for (const delta of normalizeEnvelopeForReplay(envelope).appliedDeltas) {
     repo.applyDeltas(delta);
   }
   return repo.lifetime();
@@ -107,7 +145,10 @@ export class ServerRunRecordRepository implements RunRecordRepository {
 
   private readAllRecords(): readonly StoredHallRecord[] {
     const rows = this.selectRecordsStatement.all(this.profileId) as HallRecordRow[];
-    return rows.map((row) => JSON.parse(row.record_json) as StoredHallRecord);
+    return rows.map((row) => {
+      const stored = JSON.parse(row.record_json) as StoredHallRecord;
+      return { ...stored, metrics: normalizeStoredMetrics(stored.metrics) };
+    });
   }
 
   private readState(): HallStateRow | undefined {
@@ -182,7 +223,7 @@ export class ServerRunRecordRepository implements RunRecordRepository {
   lifetime(): LifetimeState {
     const state = this.readState();
     const envelope: LifetimeEnvelope = state
-      ? (JSON.parse(state.lifetime_json) as LifetimeEnvelope)
+      ? parseLifetimeEnvelope(state.lifetime_json)
       : EMPTY_LIFETIME_ENVELOPE;
     return deriveLifetime(envelope);
   }
@@ -190,7 +231,7 @@ export class ServerRunRecordRepository implements RunRecordRepository {
   applyDeltas(deltas: LifetimeDeltas): void {
     const state = this.readState();
     const envelope: LifetimeEnvelope = state
-      ? (JSON.parse(state.lifetime_json) as LifetimeEnvelope)
+      ? parseLifetimeEnvelope(state.lifetime_json)
       : EMPTY_LIFETIME_ENVELOPE;
 
     if (envelope.appliedDeltas.some((applied) => applied.recordId === deltas.recordId)) {
@@ -198,6 +239,7 @@ export class ServerRunRecordRepository implements RunRecordRepository {
     }
 
     const nextEnvelope: LifetimeEnvelope = {
+      version: HALL_STORE_VERSION,
       appliedDeltas: [...envelope.appliedDeltas, deltas],
     };
     this.writeState({ lifetimeEnvelope: nextEnvelope });
