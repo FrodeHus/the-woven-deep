@@ -4,7 +4,7 @@ import type {
   SwarmEncounterContentEntry,
 } from '@woven-deep/content';
 import { emptyEquipment, type ActorState } from './actor-model.js';
-import { actionCostFor, balanceEntry } from './actions.js';
+import { actionCostFor, balanceEntry } from './balance.js';
 import { chargeActionEnergy } from './scheduler.js';
 import { applyCondition } from './conditions.js';
 import { applyEffectResult, resolveEffectSequence } from './effects.js';

@@ -1,6 +1,6 @@
 import type { ClassContentEntry, CompiledContentPack } from '@woven-deep/content';
 import type { StoredHallRecord } from '@woven-deep/engine';
-import type { SessionSnapshot } from './guest-session.js';
+import type { SessionSnapshot } from './session-snapshot.js';
 import type { Sightings } from './codex-storage.js';
 import {
   classEntries,

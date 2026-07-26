@@ -1,5 +1,5 @@
 import type { CompiledContentPack } from '@woven-deep/content';
-import { balanceEntry } from './actions.js';
+import { balanceEntry } from './balance.js';
 import type { ActorState } from './actor-model.js';
 import { deriveActorStats, type DerivedActorStats } from './attributes.js';
 import { conditionModifiers } from './conditions.js';

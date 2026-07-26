@@ -8,20 +8,9 @@ import type {
   OpaqueId,
   RunConcludedEvent,
 } from './model.js';
+import type { RunConclusion } from './run-conclusion-model.js';
 
-export interface RunConclusionCause {
-  readonly killerContentId: OpaqueId | null; // null for non-death completions
-  readonly depth: number;
-  readonly turn: number;
-  readonly worldTime: number;
-}
-
-export interface RunConclusion {
-  readonly completionType: CompletionType;
-  readonly cause: Readonly<RunConclusionCause>;
-  readonly concludedAtRevision: number;
-  readonly finalized: boolean;
-}
+export type { RunConclusion, RunConclusionCause } from './run-conclusion-model.js';
 
 function isHeroDeathEvent(event: DomainEvent, heroId: OpaqueId): event is ActorDiedEvent {
   return event.type === 'actor.died' && event.actorId === heroId;
