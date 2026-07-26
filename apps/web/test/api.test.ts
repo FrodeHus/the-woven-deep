@@ -33,6 +33,7 @@ describe('content summary counts', () => {
       balance: 1,
       vault: 1,
       condition: 1,
+      dialogue: 0,
       'identification-pool': 1,
       encounter: 0,
       'fallen-champion-template': 0,

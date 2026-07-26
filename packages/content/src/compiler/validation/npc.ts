@@ -19,6 +19,16 @@ export function npcIssues(
         byId,
       ),
     );
+    if (entry.dialogueId !== undefined)
+      issues.push(
+        ...referencedKindIssue(
+          file,
+          `$.entries.${entry.id}.dialogueId`,
+          entry.dialogueId,
+          'dialogue',
+          byId,
+        ),
+      );
     issues.push(
       ...validateParameters(
         file,

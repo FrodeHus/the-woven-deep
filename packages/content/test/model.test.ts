@@ -26,9 +26,10 @@ describe('content model', () => {
   it('exposes every schema-v7 content kind', () => {
     const kinds: ContentKind[] = [...CONTENT_KIND_IDS];
 
-    expect(kinds).toHaveLength(17);
+    expect(kinds).toHaveLength(18);
     expect(kinds).toEqual(expect.arrayContaining(['npc', 'npc-faction']));
     expect(kinds).toContain('condition');
+    expect(kinds).toContain('dialogue');
     expect(kinds).toContain('identification-pool');
     expect(kinds).toContain('encounter');
     expect(kinds).toContain('fallen-champion-template');

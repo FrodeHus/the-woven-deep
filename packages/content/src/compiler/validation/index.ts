@@ -4,6 +4,7 @@ import { backgroundEntriesIssues } from './background.js';
 import { balanceEntriesIssues } from './balance.js';
 import { championTemplateEntriesIssues } from './champion-template.js';
 import { classEntriesIssues } from './class.js';
+import { dialogueIssues } from './dialogue.js';
 import { encounterEntriesIssues } from './encounter.js';
 import { npcFactionIssues } from './faction.js';
 import { identificationEntriesIssues } from './identification.js';
@@ -27,6 +28,7 @@ export function validateContentEntries(
   const vaultTags = buildVaultTags(locatedEntries);
   issues.push(...monsterIssues(locatedEntries, byId));
   issues.push(...npcIssues(locatedEntries, byId));
+  issues.push(...dialogueIssues(locatedEntries, byId));
   issues.push(...npcFactionIssues(locatedEntries));
   issues.push(...itemIssues(locatedEntries, byId));
   issues.push(...classEntriesIssues(locatedEntries, byId));

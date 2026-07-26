@@ -36,6 +36,7 @@ export const npcEntry = z.strictObject({
   ...presented,
   kind: z.literal('npc'),
   factionId: stableIdSchema,
+  dialogueId: stableIdSchema.optional(),
   attributes: positiveAttributes,
   health: safePositive,
   speed: safePositive,

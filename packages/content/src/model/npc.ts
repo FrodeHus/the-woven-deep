@@ -9,6 +9,7 @@ import type {
 export interface NpcContentEntry extends PresentedContentEntry {
   readonly kind: 'npc';
   readonly factionId: ContentId;
+  readonly dialogueId?: ContentId;
   readonly attributes: BaseAttributeDefinition;
   readonly health: number;
   readonly speed: number;
