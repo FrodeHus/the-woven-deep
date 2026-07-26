@@ -39,6 +39,30 @@ export function validateParameters(
   );
 }
 
+function spellLearnReferenceIssues(
+  file: string,
+  path: string,
+  effect: EffectDefinition,
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  if (effect.effectId !== 'effect.spell.learn') return [];
+  const spellId = effect.parameters.spellId;
+  if (typeof spellId !== 'string') return [];
+  return referencedKindIssue(file, `${path}.parameters.spellId`, spellId, 'spell', byId);
+}
+
+function effectReferenceIssues(
+  file: string,
+  path: string,
+  effect: EffectDefinition,
+  byId: ReadonlyMap<string, ContentEntry>,
+): ContentCompileIssue[] {
+  return [
+    ...conditionReferenceIssues(file, path, effect, byId),
+    ...spellLearnReferenceIssues(file, path, effect, byId),
+  ];
+}
+
 function conditionReferenceIssues(
   file: string,
   path: string,
@@ -107,7 +131,7 @@ export function effectIssues(
     );
     return parameterIssues.length > 0
       ? parameterIssues
-      : conditionReferenceIssues(file, path, effect, byId);
+      : effectReferenceIssues(file, path, effect, byId);
   });
 }
 
@@ -129,7 +153,7 @@ export function effectsAtPath(
     );
     return parameterIssues.length > 0
       ? parameterIssues
-      : conditionReferenceIssues(file, effectPath, effect, byId);
+      : effectReferenceIssues(file, effectPath, effect, byId);
   });
 }
 
