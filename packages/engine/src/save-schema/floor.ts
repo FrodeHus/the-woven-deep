@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VAULT_PLACEMENT_KINDS } from '@woven-deep/content';
 import { identifier, point, safeNonNegative, uint8, uint32, uint32Tuple } from './primitives.js';
 
 export const entity = z.strictObject({
@@ -47,7 +48,7 @@ export const vault = z.strictObject({
 export const slot = z.strictObject({
   slotId: identifier,
   vaultPlacementId: identifier,
-  kind: z.enum(['monster', 'item', 'trap', 'npc', 'fixture', 'objective', 'door', 'chest']),
+  kind: z.enum(VAULT_PLACEMENT_KINDS),
   required: z.boolean(),
   tags: z.array(z.string()).readonly(),
   x: safeNonNegative,

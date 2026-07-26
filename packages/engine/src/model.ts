@@ -1,3 +1,4 @@
+import type { VaultPlacementKind } from '@woven-deep/content';
 import type { RngStreamName } from './versions.js';
 import type { FloorKnowledge } from './knowledge.js';
 import type { AmbientLight, LightSource } from './light-model.js';
@@ -72,7 +73,7 @@ export interface VaultPlacement {
 export interface FloorPlacementSlot {
   readonly slotId: OpaqueId;
   readonly vaultPlacementId: OpaqueId;
-  readonly kind: 'monster' | 'item' | 'trap' | 'npc' | 'fixture' | 'objective' | 'door' | 'chest';
+  readonly kind: VaultPlacementKind;
   readonly required: boolean;
   readonly tags: readonly string[];
   readonly x: number;

@@ -65,7 +65,7 @@ export const discovery = z.strictObject({
   attemptedContextKeys: z.array(z.string().min(1).max(256)).readonly(),
 });
 export const lockData = z.strictObject({
-  difficulty: safeNonNegative,
+  difficulty: z.number().int().safe().min(1).max(30),
   keyContentId: nullableIdentifier,
 });
 export const featureBase = {
