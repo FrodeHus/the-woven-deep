@@ -1130,6 +1130,39 @@ entries:
     ).toThrow(/entries\.vault\.bad-difficulty\.legend\.D\.slot\.difficulty/);
   });
 
+  it('rejects a below-range lock difficulty with a field path', () => {
+    expect(() =>
+      parseContentFile({
+        path: 'vaults/bad-difficulty-low.yaml',
+        source: `schemaVersion: 7
+entries:
+  - kind: vault
+    id: vault.bad-difficulty-low
+    name: Bad difficulty low
+    tags: [test]
+    minDepth: 1
+    maxDepth: 5
+    rarity: common
+    weight: 10
+    maxPerFloor: 1
+    margin: 1
+    transforms: { rotations: [0], reflectHorizontal: false }
+    layout: ["+D"]
+    legend:
+      "+": { terrain: floor, entrance: true }
+      "D":
+        terrain: closed-door
+        slot:
+          id: vault-door
+          kind: door
+          required: true
+          tags: []
+          difficulty: 0
+`,
+      }),
+    ).toThrow(/entries\.vault\.bad-difficulty-low\.legend\.D\.slot\.difficulty/);
+  });
+
   it('rejects unknown properties with a field path', () => {
     expect(() =>
       parseContentFile({

@@ -167,8 +167,16 @@ describe('pickLock', () => {
   it('consumes one lockpick on an ordinary chest failure and leaves it retryable', () => {
     const base = createDemoRun();
     const hero = heroAt(base, 2, 1);
-    const chest = lockedChest({}, 999);
-    const run: ActiveRun = { ...base, actors: [hero], features: [chest], items: [lockpickItem()] };
+    const chest = lockedChest({}, 30);
+    const run: ActiveRun = {
+      ...base,
+      actors: [hero],
+      features: [chest],
+      items: [lockpickItem()],
+      // A roll of 2 (not the natural-1 jam branch) plus the demo hero's disarm bonus still falls
+      // short of the schema's maximum lock difficulty (30), guaranteeing an ordinary failure.
+      rng: { ...base.rng, effects: effectsStateForRoll(2) },
+    };
     const result = pickLock({
       run,
       content: content(),
