@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
@@ -466,8 +466,14 @@ describe('SettingsOverlay composed with PlayScreen/App', () => {
     await user.click(screen.getByRole('option', { name: /hall of records/i }));
 
     await screen.findByRole('heading', { name: 'Hall of Records' });
-    expect(screen.getByRole('status')).toHaveTextContent(/no runs have been recorded yet/i);
-    expect(screen.queryByText('Ada')).not.toBeInTheDocument();
+    // The Hall's own body (the empty-state `status` line vs. the wiped seed record) renders off
+    // the SAME `repository` the heading above does, but await it explicitly rather than asserting
+    // synchronously right after the heading -- under parallel-worker CPU contention a stray extra
+    // render pass between the two should not be able to flake this.
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/no runs have been recorded yet/i);
+      expect(screen.queryByText('Ada')).not.toBeInTheDocument();
+    });
   });
 });
 

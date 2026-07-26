@@ -184,7 +184,14 @@ describe('settings roaming (Task 12)', () => {
     await user.click(screen.getByRole('combobox', { name: /theme/i }));
     await user.click(await screen.findByRole('option', { name: /high contrast/i }));
 
-    await new Promise((r) => setTimeout(r, 600));
+    // Fake timers (rather than a real 600ms wall-clock wait) so this assertion is deterministic
+    // under parallel-worker CPU contention: a real setTimeout races the actual passage of wall
+    // time against however delayed the event loop is under load, whereas advancing a fake clock
+    // is exact regardless of how busy the machine is. `shouldAdvanceTime: true` still lets any of
+    // the Select's own near-zero internal timeouts resolve normally.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await vi.advanceTimersByTimeAsync(600);
+
     expect(puts).toHaveLength(0);
     const cached = JSON.parse(localStorage.peek(SETTINGS_KEY)!) as { theme: string };
     expect(cached.theme).toBe('high-contrast');

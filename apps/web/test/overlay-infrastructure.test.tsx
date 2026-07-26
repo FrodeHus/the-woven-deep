@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { Component, type JSX, type ReactNode } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
@@ -84,7 +84,13 @@ describe('registry overlay infrastructure', () => {
       expect(dialog).not.toHaveTextContent('Coming in a later task');
 
       fireEvent.keyDown(window, { key: 'Escape' });
-      expect(screen.queryByRole('dialog', { name: title })).not.toBeInTheDocument();
+      // The dialog primitive's own exit animation/cleanup (data-ending-style, Base UI's Presence)
+      // can settle a tick after the keydown flushes, especially under parallel-worker CPU
+      // contention -- await the negative assertion instead of asserting it synchronously right
+      // after the keydown so this doesn't race that settle.
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog', { name: title })).not.toBeInTheDocument();
+      });
     }
   });
 

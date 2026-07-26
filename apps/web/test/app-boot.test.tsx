@@ -50,6 +50,13 @@ beforeAll(async () => {
 
 afterEach(() => {
   window.history.replaceState({}, '', '/');
+  // Most tests in this file omit the `localStorage` prop, which routes `App` to the real
+  // `browserLocalStorage()` -- i.e. this jsdom window's actual `localStorage`. That's the SAME
+  // object across every test in this file (a fresh jsdom window is only created per test *file*),
+  // so anything a boot writes there (settings, the onboarding ledger, ...) would otherwise leak
+  // into every later test's boot in this file and change its rendering non-deterministically.
+  window.localStorage.clear();
+  window.sessionStorage.clear();
 });
 
 function packFetcher(): typeof fetch {

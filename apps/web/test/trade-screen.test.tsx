@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { useState, type JSX, type ReactElement, type ReactNode } from 'react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
@@ -646,7 +646,12 @@ describe('TradeScreen focus after a dispatch empties the active list', () => {
     // effect re-seats focus on the Services listbox once it becomes the active side.
     await user.keyboard('{Tab}');
 
-    expect(screen.getByRole('listbox', { name: 'Services' })).toHaveFocus();
+    // The re-seat happens in a passive `useEffect` after the Tab-driven state update -- under
+    // parallel-worker CPU contention that effect can settle a tick after `user.keyboard` resolves,
+    // so await the focus assertion instead of asserting it synchronously.
+    await waitFor(() => {
+      expect(screen.getByRole('listbox', { name: 'Services' })).toHaveFocus();
+    });
   });
 });
 
