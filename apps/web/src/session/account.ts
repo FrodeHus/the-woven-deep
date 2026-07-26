@@ -1,15 +1,10 @@
-import { emptyRunMetrics, type AchievementGrant, type LifetimeState } from '@woven-deep/engine';
+import { emptyLifetimeState, type AchievementGrant, type LifetimeState } from '@woven-deep/engine';
 import { fetchSession } from '../api.js';
 
 /** The zeroed `LifetimeState` a guest (or a signed-in profile with no `hall_state` row yet) sees --
  * matches exactly what the server sends for that same profile (`EMPTY_LIFETIME` in
  * `apps/server/src/routes/auth.ts`), so the two never drift. */
-const EMPTY_LIFETIME: LifetimeState = {
-  conqueredChampionRecordIds: [],
-  grantedAchievementIds: [],
-  discoveryProtection: [],
-  totals: emptyRunMetrics(),
-};
+const EMPTY_LIFETIME: LifetimeState = emptyLifetimeState();
 
 export interface AccountState {
   status: 'guest' | 'signed-in';

@@ -5,7 +5,7 @@ import { assertOpaqueId, type OpaqueId, type Uint32State } from './model.js';
 import type { DiscoveryProtectionBonus, DiscoveryProtectionUpdate } from './population-gates.js';
 import type { RecordedHeirloomSnapshot } from './population-model.js';
 import type { RunConclusion } from './run-conclusion.js';
-import type { RunMetrics } from './run-metrics.js';
+import { emptyRunMetrics, type RunMetrics } from './run-metrics.js';
 import type { ScoreBreakdown } from './score-run.js';
 
 export interface FallenHeroBuildSnapshot {
@@ -62,6 +62,18 @@ export interface LifetimeState {
   readonly grantedAchievementIds: readonly OpaqueId[]; // sorted unique
   readonly discoveryProtection: readonly DiscoveryProtectionBonus[]; // sorted by encounterId
   readonly totals: RunMetrics;
+}
+
+/** The zeroed `LifetimeState` a profile with no Hall history yet sees -- shared by every host
+ * (server, web) so the "no records yet" shape is defined once instead of near-duplicated per
+ * consumer. */
+export function emptyLifetimeState(): LifetimeState {
+  return {
+    conqueredChampionRecordIds: [],
+    grantedAchievementIds: [],
+    discoveryProtection: [],
+    totals: emptyRunMetrics(),
+  };
 }
 
 export interface LifetimeDeltas {

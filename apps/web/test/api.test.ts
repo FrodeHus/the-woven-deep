@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadContentPack, loadContentSummary } from '../src/api.js';
+import { deleteAccount, loadContentPack, loadContentSummary } from '../src/api.js';
 import { CONTENT_KIND_IDS, type ContentKind } from '@woven-deep/content';
 import { contentPack } from './content-pack-fixture.js';
 
@@ -86,6 +86,24 @@ describe('loadContentPack', () => {
 
     await expect(loadContentPack(request as typeof fetch)).rejects.toThrow(
       /unsupported content schema version 1/i,
+    );
+  });
+});
+
+describe('deleteAccount', () => {
+  it('resolves when the server confirms the delete', async () => {
+    const request = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(
+      deleteAccount('csrf-token', request as unknown as typeof fetch),
+    ).resolves.toBeUndefined();
+  });
+
+  it('throws when the server delete fails, instead of resolving as if it succeeded', async () => {
+    const request = vi.fn().mockResolvedValueOnce(new Response(null, { status: 500 }));
+
+    await expect(deleteAccount('csrf-token', request as unknown as typeof fetch)).rejects.toThrow(
+      /failed to delete the account/i,
     );
   });
 });
