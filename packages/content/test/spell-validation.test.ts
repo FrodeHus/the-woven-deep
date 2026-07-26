@@ -95,4 +95,15 @@ describe('spell aoe shape', () => {
       /aoe shape cone does not match targetingId target\.burst/i,
     );
   });
+
+  it('reports an issue when an aoe-shaped targetingId has no aoe descriptor', async () => {
+    const noAoeBurst =
+      '{kind: spell, id: spell.test-burst, name: Test burst, tags: [fire], targetingId: target.burst, range: 6, actionCost: 100, weaveCost: 3, effects: [{effectId: effect.damage, parameters: {damageType: fire, dice: {count: 1, sides: 6, bonus: 0}}, requiresLivingTarget: true}]}';
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, compactVault, compactBalance, noAoeBurst),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /targeting target\.burst requires an aoe descriptor/i,
+    );
+  });
 });
