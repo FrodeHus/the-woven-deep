@@ -21,6 +21,11 @@ import {
   resolveTradeCommand,
   validateTradeCommand,
 } from './trade.js';
+import {
+  applyDialogueConsequence,
+  isDialogueCommand,
+  validateDialogueCommand,
+} from './dialogue.js';
 import { isHouseCommand, resolveHouseCommand, validateHouseCommand } from './house.js';
 import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import { projectDomainEvents } from './event-projection.js';
@@ -272,6 +277,55 @@ export function resolveCommand(
       preEvents,
       prePublicEvents,
     );
+  }
+
+  if (isDialogueCommand(command)) {
+    const validation = validateDialogueCommand({
+      state: current,
+      command,
+      content: context.content,
+    });
+    if (!validation.ok) {
+      return recordInvalid(
+        current,
+        context.content,
+        command,
+        validation.reason,
+        preEvents,
+        prePublicEvents,
+      );
+    }
+    assertCountersCanAdvance(current, false);
+    // Dialogue commands advance the revision only, exactly like trade and house commands: no
+    // turn, world time, energy, or survival change.
+    const result = {
+      status: 'applied',
+      commandId: command.commandId,
+      revision: current.revision + 1,
+      turn: current.turn,
+    } as const;
+    const resolved = applyDialogueConsequence({
+      state: current,
+      command,
+      content: context.content,
+    });
+    const events = [...preEvents, ...resolved.events];
+    const publicEvents = [
+      ...prePublicEvents,
+      ...(resolved.events.length === 0
+        ? []
+        : projectDomainEvents({
+            state: resolved.state,
+            content: context.content,
+            heroId: resolved.state.hero.actorId,
+            events: resolved.events,
+          })),
+    ];
+    return {
+      state: record(resolved.state, context.content, command, result, events, publicEvents),
+      result,
+      events: publicEvents,
+    };
   }
 
   if (isHouseCommand(command)) {

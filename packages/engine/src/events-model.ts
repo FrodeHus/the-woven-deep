@@ -625,7 +625,7 @@ export interface ReputationChangedEvent {
   readonly previous: number;
   readonly delta: number;
   readonly value: number;
-  readonly reason: 'commerce' | 'aggression' | 'death';
+  readonly reason: 'commerce' | 'aggression' | 'death' | 'dialogue';
 }
 export interface TradeOpenedEvent {
   readonly type: 'trade.opened';

@@ -71,7 +71,7 @@ export function merchantFaction(
   return entry;
 }
 
-function merchantPerceived(
+export function merchantPerceived(
   state: ActiveRun,
   content: CompiledContentPack,
   hero: ActorState,

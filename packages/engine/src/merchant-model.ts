@@ -40,4 +40,5 @@ export interface MerchantPopulation extends PopulationBase {
   readonly deathPenaltyApplied: boolean;
   readonly stockLossResolved: boolean;
   readonly commerceBonusApplied: boolean;
+  readonly dialogueConsequencesApplied?: readonly OpaqueId[];
 }
