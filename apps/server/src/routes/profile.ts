@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
-import { emptyRunMetrics, type LifetimeState } from '@woven-deep/engine';
+import { emptyLifetimeState, type LifetimeState } from '@woven-deep/engine';
 import type { AuthBundle } from './auth.js';
 import { ServerRunRecordRepository } from '../db/hall-repository.js';
 import { ProfileRepository } from '../db/profile-repository.js';
@@ -16,12 +16,7 @@ import {
  * `hall_state` row (or no database at all, in isolated profile-route tests) gets from
  * `/api/profile/export` -- kept in lockstep with what `ServerRunRecordRepository.lifetime()`
  * itself returns for that same profile. */
-const EMPTY_LIFETIME: LifetimeState = {
-  conqueredChampionRecordIds: [],
-  grantedAchievementIds: [],
-  discoveryProtection: [],
-  totals: emptyRunMetrics(),
-};
+const EMPTY_LIFETIME: LifetimeState = emptyLifetimeState();
 
 export function registerProfileRoutes(
   app: FastifyInstance,

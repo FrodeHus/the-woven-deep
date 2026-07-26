@@ -437,9 +437,16 @@ export function App({
    * (`handleSignOut`'s effect above tears down the live `ProfileSession` and returns to the title
    * screen on that same transition), since after a delete there is nothing left to stay
    * connected to either. Only ever wired up for a signed-in `ProfileSession` run (see the
-   * `onDeleteAccount` prop below). */
+   * `onDeleteAccount` prop below). If the server delete fails (network/5xx), `deleteAccount`
+   * rejects and the tear-down never runs -- the account stays signed in and the failure is
+   * surfaced through `profileError`, the same signed-in-action-failed banner the boot-time
+   * `ProfileSession.connect` rejection above uses. */
   function handleDeleteAccount(): void {
-    void deleteAccount(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
+    void deleteAccount(account.csrfToken ?? '', fetcher)
+      .then(() => setAccount(GUEST_ACCOUNT))
+      .catch((thrown) => {
+        setProfileError(thrown instanceof Error ? thrown.message : 'Failed to delete the account.');
+      });
   }
 
   /**

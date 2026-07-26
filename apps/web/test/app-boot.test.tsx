@@ -825,4 +825,51 @@ describe('App identity/account — ProfileSession routing', () => {
       expect.objectContaining({ method: 'POST' }),
     );
   });
+
+  it('a failed account delete (from the in-play settings overlay) does not tear down to guest', async () => {
+    const user = userEvent.setup();
+    const { createSocket, sockets } = profileSocketFactory();
+    const fetcher = vi.fn((url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url === '/api/profile' && init?.method === 'DELETE') {
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify(pack), { status: 200 }));
+    }) as unknown as typeof fetch;
+
+    render(
+      <App
+        fetcher={fetcher}
+        storage={fakeStorage()}
+        accountOverride={SIGNED_IN_ACCOUNT}
+        createSocket={createSocket}
+      />,
+    );
+
+    await waitFor(() => expect(sockets.length).toBe(1));
+    const socket = sockets[0]!;
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    socket.emit(HELLO);
+    socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
+    await screen.findByRole('grid', { name: /dungeon/i });
+
+    fireEvent.keyDown(window, { key: 'o' });
+    await screen.findByRole('dialog', { name: 'Settings' });
+    await user.type(screen.getByLabelText('Type "delete" to confirm'), 'delete');
+    await user.click(screen.getByRole('button', { name: 'Delete account' }));
+
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/profile',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+
+    // The delete rejected -- the live session/socket must survive rather than tearing down to
+    // guest the way a successful delete (or a sign-out) would. The settings dialog stays open
+    // (unlike the sign-out flow, which closes it as part of the teardown), so the dungeon grid
+    // underneath is legitimately `aria-hidden` right now -- check for it via the DOM directly
+    // instead of `getByRole`, which excludes hidden elements.
+    await waitFor(() => expect(socket.readyState).not.toBe(3));
+    expect(await screen.findByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+    expect(document.querySelector('[role="grid"]')).not.toBeNull();
+    expect(screen.queryByRole('option', { name: /enter the deep/i })).not.toBeInTheDocument();
+  });
 });

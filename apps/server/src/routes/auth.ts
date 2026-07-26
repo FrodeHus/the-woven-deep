@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
-import { emptyRunMetrics, type LifetimeState } from '@woven-deep/engine';
+import { emptyLifetimeState, type LifetimeState } from '@woven-deep/engine';
 import type { AuthConfig } from '../config.js';
 import type { LoginService } from '../auth/login-service.js';
 import type { VerifyService } from '../auth/verify-service.js';
@@ -21,12 +21,7 @@ const SESSION_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
  * isolated auth-route tests) gets from `/api/auth/session` -- matches exactly what
  * `ServerRunRecordRepository.lifetime()` itself returns for that same profile, so the two never
  * drift. */
-const EMPTY_LIFETIME: LifetimeState = {
-  conqueredChampionRecordIds: [],
-  grantedAchievementIds: [],
-  discoveryProtection: [],
-  totals: emptyRunMetrics(),
-};
+const EMPTY_LIFETIME: LifetimeState = emptyLifetimeState();
 
 export interface AuthBundle {
   config: AuthConfig;

@@ -83,7 +83,7 @@ export async function deleteAccount(
   csrfToken: string,
   fetcher: typeof fetch = fetch,
 ): Promise<void> {
-  await fetcher('/api/profile', {
+  const response = await fetcher('/api/profile', {
     method: 'DELETE',
     credentials: 'same-origin',
     headers: {
@@ -92,6 +92,7 @@ export async function deleteAccount(
     },
     body: JSON.stringify({ confirm: true }),
   });
+  if (!response.ok) throw new Error('Failed to delete the account.');
 }
 
 export async function fetchProfileSettings(
