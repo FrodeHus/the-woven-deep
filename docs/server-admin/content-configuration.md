@@ -136,6 +136,7 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `restockMilestones` | array of positive safe integers | Yes | Strictly increasing world-time milestones at which town merchant stock restocks. The bundled value is `[5, 10, 15, 20]`. |
 | `house` | object | Yes | Player house sizing, described below. The bundled value is `{ baseCapacity: 6, strongboxIncrement: 4 }`. |
 | `encounterDensity` | object | Yes | Dungeon encounter density, described below. The bundled value is `{ cellsPerEncounter: 2000 }`. |
+| `fragmentSpawnRollDenominator` | positive integer | Yes | Odds denominator (1-in-N) for the rare Ancient Tablet fragment spawn rolled once per floor generation. The bundled value is `40`. |
 
 `house` carries a positive safe integer `baseCapacity` (the player house's starting storage capacity) and a positive safe integer `strongboxIncrement` (additional capacity granted per purchased strongbox upgrade). `encounterDensity` carries a positive safe integer `cellsPerEncounter`, the average number of floor cells the generator budgets per placed encounter.
 
@@ -217,6 +218,7 @@ entries:
     restockMilestones: [5, 10, 15, 20]
     house: { baseCapacity: 6, strongboxIncrement: 4 }
     encounterDensity: { cellsPerEncounter: 2000 }
+    fragmentSpawnRollDenominator: 40
 ```
 
 The closed action-cost IDs are `action.attack`, `action.cast`, `action.close-door`, `action.disarm`, `action.drop`, `action.equip`, `action.fire`, `action.move`, `action.open-door`, `action.pickup`, `action.refuel`, `action.search`, `action.spawn`, `action.split-stack`, `action.throw-item`, `action.toggle-light`, `action.unequip`, `action.use-item`, and `action.wait`. A pack may override any subset; `normalActionCost` supplies the normal fallback.

@@ -69,6 +69,7 @@ export const balanceEntry = z
     encounterDensity: z.strictObject({
       cellsPerEncounter: safePositive,
     }),
+    fragmentSpawnRollDenominator: z.number().int().min(1),
   })
   .superRefine((entry, context) => {
     let previousMilestone = 0;
