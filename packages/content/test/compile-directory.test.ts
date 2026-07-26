@@ -479,7 +479,7 @@ describe('compileContentDirectory', () => {
       ),
     });
     await expect(compileContentDirectory({ rootDir: invalidRoot })).rejects.toThrow(
-      /not a boss-tagged monster/,
+      /not spawned by any boss encounter/,
     );
   });
 
