@@ -6,7 +6,7 @@ import type {
 } from '@woven-deep/content';
 import { heroActor, type ActorState } from './actor-model.js';
 import { entryById, requireEncounter, requireItem as itemDefinition } from './content-index.js';
-import { balanceEntry } from './actions.js';
+import { balanceEntry } from './balance.js';
 import { actorHasConditionTrait } from './conditions.js';
 import {
   changeReputation,

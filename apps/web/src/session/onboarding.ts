@@ -2,7 +2,7 @@ import type { GameplayProjection } from '@woven-deep/engine';
 import { actorsOf, heroOf } from './projection-view.js';
 import type { ResolvedKeymap } from './settings.js';
 import { chordKey } from './settings.js';
-import type { SessionSnapshot } from './guest-session.js';
+import type { SessionSnapshot } from './session-snapshot.js';
 import type { SessionStorageLike } from './storage.js';
 
 /** Where the guest's onboarding-hint mastery lives -- `localStorage`, device-persistent per the

@@ -4,7 +4,8 @@ import type {
   NpcContentEntry,
   NpcFactionContentEntry,
 } from '@woven-deep/content';
-import { actionCostFor, balanceEntry, type GameAction } from './actions.js';
+import type { GameAction } from './action-types.js';
+import { actionCostFor, balanceEntry } from './balance.js';
 import { actorById, withActor, type ActorState } from './actor-model.js';
 import { entryById, requireEncounter } from './content-index.js';
 import { changeReputation } from './commerce.js';

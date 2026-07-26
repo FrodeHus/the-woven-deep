@@ -9,7 +9,7 @@ import type {
 } from '@woven-deep/content';
 import type { HungerStage } from './survival-model.js';
 import type { PopulationInstance, PopulationIntent } from './population-model.js';
-import type { RunConclusionCause } from './run-conclusion.js';
+import type { RunConclusionCause } from './run-conclusion-model.js';
 
 export interface HeroMovedEvent {
   readonly type: 'hero.moved';

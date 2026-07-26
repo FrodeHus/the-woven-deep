@@ -13,14 +13,14 @@ import type {
   PopulationInstance,
 } from './population-model.js';
 import type { ActiveTrade, FactionReputation } from './merchant-model.js';
-import type { RunConclusion } from './run-conclusion.js';
+import type { RunConclusion } from './run-conclusion-model.js';
 import type { RunMetrics } from './run-metrics.js';
 import type { DerivedStatModifier } from './attributes.js';
 import type { GameCommand } from './commands-model.js';
 import type { DomainEvent, InvalidActionEvent, PublicEvent } from './events-model.js';
 
-export * from './commands-model.js';
-export * from './events-model.js';
+export type * from './commands-model.js';
+export type * from './events-model.js';
 
 export type OpaqueId = string;
 export type Uint32State = readonly [number, number, number, number];
