@@ -96,6 +96,9 @@ export const blockReason = z.enum([
   'final-chamber.unavailable',
   'final-chamber.fragments-required',
   'final-chamber.boss-active',
+  'dialogue.unavailable',
+  'dialogue.out-of-range',
+  'dialogue.invalid-topic',
 ]);
 export const completionType = z.enum(['died', 'became-heart', 'refused', 'broke-cycle']);
 export const runConclusionCause = z.strictObject({

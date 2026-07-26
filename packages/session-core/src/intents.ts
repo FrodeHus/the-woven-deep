@@ -48,6 +48,17 @@ export type PlayerIntent =
   // client-side "trade open" boolean to track (contrast `house`, which only toggles local UI
   // state).
   | { readonly type: 'trade-open' }
+  // Applies a dialogue topic's `reputation` consequence, chosen from the client-only
+  // `DialogueScreen` overlay (never routed through `command-builder.ts`'s adjacency resolution the
+  // way `trade-open` is -- `DialogueScreen` already resolved and is holding the exact NPC actor/
+  // topic the player chose). Maps straight onto the engine's `DialogueConsequenceCommand`; the
+  // server re-derives and re-validates the consequence from content (anti-cheat), so this carries
+  // no reputation amount/faction of its own.
+  | {
+      readonly type: 'dialogue-consequence';
+      readonly npcActorId: OpaqueId;
+      readonly topicId: string;
+    }
   // Closes the active trade session for whichever merchant `projection.trade` currently names.
   | { readonly type: 'trade-close' }
   | { readonly type: 'trade-buy'; readonly itemId: OpaqueId; readonly quantity: number }

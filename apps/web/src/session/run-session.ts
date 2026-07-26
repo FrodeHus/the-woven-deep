@@ -33,4 +33,11 @@ export interface RunSession {
   recordOnboardingIntent(intentType: string): void;
   /** Retires an onboarding hint for good -- the hint strip's dedicated dismiss key. */
   dismissOnboardingHint(hintId: string): void;
+  /** Reveals lore for `contentId` (a dialogue topic's `reveal-lore` consequence) straight into the
+   * codex sighting cache -- a narrative event, never derived from what the projection currently
+   * shows, so it bypasses `dispatch`/`PlayerIntent` entirely (mirrors `recordOnboardingIntent`'s
+   * posture: client-only state that never goes through the engine). Idempotent: revealing the same
+   * `contentId` twice is a no-op the second time, with no duplicate log line. Both `GuestSession`
+   * and `ProfileSession` implement this identically over their own held `Sightings`/log. */
+  revealLore(contentId: string): void;
 }

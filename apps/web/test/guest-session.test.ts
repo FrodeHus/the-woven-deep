@@ -924,4 +924,47 @@ describe('GuestSession', () => {
       ).toHaveLength(1);
     });
   });
+
+  describe('revealLore (Task 3, dialogue reveal-lore consequence)', () => {
+    it('inserts the content id into sightings and appends exactly one reveal line', () => {
+      const storage = fakeStorage();
+      const session = new GuestSession({ pack, storage, seed: SEED });
+
+      session.revealLore('monster.cave-rat');
+
+      expect(session.getSnapshot().sightings.monsterIds).toContain('monster.cave-rat');
+      expect(
+        session
+          .getSnapshot()
+          .log.filter((line) => line.text === 'The threads whisper of Cave rat.'),
+      ).toHaveLength(1);
+    });
+
+    it('is idempotent: revealing the same content id twice appends no duplicate line', () => {
+      const storage = fakeStorage();
+      const session = new GuestSession({ pack, storage, seed: SEED });
+
+      session.revealLore('monster.cave-rat');
+      session.revealLore('monster.cave-rat');
+
+      expect(
+        session
+          .getSnapshot()
+          .log.filter((line) => line.text === 'The threads whisper of Cave rat.'),
+      ).toHaveLength(1);
+    });
+
+    it('persists the reveal to storage so it survives a reload', () => {
+      const storage = fakeStorage();
+      const session = new GuestSession({ pack, storage, seed: SEED });
+
+      // `item.hunting-bow` (not `item.iron-sword`, which `DEFAULT_GUEST_HERO` starts already
+      // equipped, and so is already in the sighting cache from boot -- see the lore first-reveal
+      // suite above) is an item the starting kit never carries.
+      session.revealLore('item.hunting-bow');
+
+      const persisted = JSON.parse(storage.peek(SIGHTINGS_KEY) ?? '{}') as { itemIds?: string[] };
+      expect(persisted.itemIds).toContain('item.hunting-bow');
+    });
+  });
 });

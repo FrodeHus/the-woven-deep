@@ -1,0 +1,27 @@
+schemaVersion: 7
+entries:
+  - kind: dialogue
+    id: dialogue.travelling-lampwright
+    name: The Travelling Lampwright
+    tags: [dialogue, lampwright]
+    greeting: "Mind the wick, traveller. Light's the only coin the dark respects down here."
+    topics:
+      - id: lamps
+        prompt: "Tell me about your lamps."
+        response: "Every one trimmed by hand. Oil runs out; courage runs out faster. I sell what keeps both burning a while longer."
+      - id: heart
+        prompt: "What lies at the bottom?"
+        response: "Something that was a person once, they say, worn thin by all that binds it. I keep my lamps lit and my questions few."
+      - id: fallen
+        prompt: "You speak of the fallen."
+        response: "Champions who went down and did not come up whole. Their echoes still pace the deep. Here — let me tell you of one, so you'll know it when it finds you."
+        consequence: { kind: reveal-lore, contentId: monster.echo-breaker }
+      - id: keep-lit
+        prompt: "I'll keep your lamps lit."
+        response: "Then you're a friend of the wick. The Lampwrights remember such things."
+        once: true
+        consequence: { kind: reputation, factionId: npc-faction.lampwrights, amount: 5 }
+      - id: trade
+        prompt: "What are you selling?"
+        response: "Have a look, then. Mind the prices — oil's dear this far down."
+        consequence: { kind: open-trade }

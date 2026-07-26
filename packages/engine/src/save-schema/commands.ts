@@ -147,6 +147,12 @@ export const finalChamberChoiceCommand = z.strictObject({
   type: z.literal('final-chamber-choice'),
   choice: z.enum(['become-heart', 'turn-away', 'break-cycle']),
 });
+export const dialogueConsequenceCommand = z.strictObject({
+  ...commandBase,
+  type: z.literal('dialogue-consequence'),
+  npcActorId: identifier,
+  topicId: z.string().min(1).max(64),
+});
 export const commandV7 = z.discriminatedUnion('type', [
   ...commandBaseOptions,
   tradeServiceCommandV7,
@@ -157,6 +163,7 @@ export const command = z.discriminatedUnion('type', [
   houseDepositCommand,
   houseWithdrawCommand,
   finalChamberChoiceCommand,
+  dialogueConsequenceCommand,
 ]);
 
 import type { GameCommand } from '../model.js';

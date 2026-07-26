@@ -292,6 +292,20 @@ An `npc-faction` declares safe-integer `minimumReputation`, `maximumReputation`,
 
 The bundled `npc-faction.lampwrights` spans `-1000..1000`, starts at `0`, and uses `refused` (`-1000..-251`, `15000`/`5000`, no trade/services), `wary` (`-250..-1`, `13000`/`7000`, trade/no services), `neutral` (`0..249`, `11000`/`9000`, trade/identify), and `trusted` (`250..1000`, `9000`/`10000`, trade/identify). The neutral `npc.travelling-lampwright` uses threshold `3500`.
 
+## Dialogue entries
+
+A `dialogue` entry has the common `kind`, `id`, `name`, and `tags` fields, a `greeting` (1-600 characters), and a non-empty `topics` list. Each topic has a local `id` (1-64 characters, unique within the dialogue), a `prompt` (1-120 characters), a `response` (1-600 characters), an optional `reveals` list of other topic IDs it unlocks, an optional `once` flag, and an optional `consequence`.
+
+A topic's `consequence` is one of three strict shapes:
+
+- `{ kind: reputation, factionId, amount }` — adjusts standing with the referenced `npc-faction` by the signed integer `amount`.
+- `{ kind: reveal-lore, contentId }` — reveals the lore of the referenced entry, which must be a `monster` or `item` with authored `lore`.
+- `{ kind: open-trade }` — opens the speaking NPC's trade screen.
+
+Every `reveals` target must name another topic in the same dialogue. Every `reputation.factionId` must resolve to an `npc-faction`, and every `reveal-lore.contentId` must resolve to a lore-bearing `monster` or `item`.
+
+An `npc` may set an optional `dialogueId` naming a `dialogue` entry to attach to that NPC.
+
 ## Encounter entries
 
 An `encounter` has a strict `model` of `individual`, `group`, `swarm`, `boss`, or `merchant`. All models share:

@@ -394,6 +394,18 @@ export function buildIntent(
       },
     };
   }
+  if (intent.type === 'dialogue-consequence') {
+    return {
+      kind: 'command',
+      command: {
+        type: 'dialogue-consequence',
+        npcActorId: intent.npcActorId,
+        topicId: intent.topicId,
+        commandId,
+        expectedRevision,
+      },
+    };
+  }
   if (
     intent.type === 'trade-close' ||
     intent.type === 'trade-buy' ||

@@ -5,8 +5,10 @@ import type {
   CompiledContentPack,
   ContentEntry,
   ContentKind,
+  DialogueContentEntry,
   ItemContentEntry,
   MonsterContentEntry,
+  NpcContentEntry,
   SpellContentEntry,
   TraitContentEntry,
 } from '@woven-deep/content';
@@ -94,4 +96,15 @@ export function monsterById(
 
 export function spellEntries(pack: CompiledContentPack): readonly SpellContentEntry[] {
   return entriesByKind(pack, 'spell');
+}
+
+export function npcById(pack: CompiledContentPack, id: string): NpcContentEntry | undefined {
+  return entryById(pack, 'npc', id);
+}
+
+export function dialogueById(
+  pack: CompiledContentPack,
+  id: string,
+): DialogueContentEntry | undefined {
+  return entryById(pack, 'dialogue', id);
 }

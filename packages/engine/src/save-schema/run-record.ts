@@ -1625,7 +1625,15 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                                                                   (entry) =>
                                                                     entry.type === 'trade.closed',
                                                                 )
-                                                              : undefined;
+                                                              : recordValue.command.type ===
+                                                                  'dialogue-consequence'
+                                                                ? recordValue.events.find(
+                                                                    (entry) =>
+                                                                      entry.type ===
+                                                                        'reputation.changed' &&
+                                                                      entry.reason === 'dialogue',
+                                                                  )
+                                                                : undefined;
       if (!eventValue) fail(`${path}.events`, 'processed result has no matching event');
       if (recordValue.result.status === 'invalid') {
         if (
@@ -1811,6 +1819,13 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           fail(`${path}.events`, 'trade-close command and event are inconsistent');
         }
       } else if (
+        recordValue.command.type === 'dialogue-consequence' &&
+        eventValue.type === 'reputation.changed'
+      ) {
+        if (eventValue.reason !== 'dialogue') {
+          fail(`${path}.events`, 'dialogue-consequence command and event are inconsistent');
+        }
+      } else if (
         recordValue.command.type === 'final-chamber-choice' &&
         (eventValue.type === 'run.concluded' || eventValue.type === 'population.created')
       ) {
@@ -1969,6 +1984,11 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         const recallReason = recordValue.result.reason === 'recall.already-town';
         const castReason = recordValue.result.reason.startsWith('cast.');
         const learnReason = recordValue.result.reason.startsWith('learn.');
+        const dialogueCommand = recordValue.command.type === 'dialogue-consequence';
+        const dialogueReason = recordValue.result.reason.startsWith('dialogue.');
+        if (dialogueReason && !dialogueCommand) {
+          fail(`${path}.result.reason`, 'dialogue reason requires a dialogue command');
+        }
         if (tradeReason) {
           // Modal rejection: any command may fail with trade.active; other trade reasons
           // require the trade command boundary.
@@ -2012,6 +2032,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           !recallReason &&
           !castReason &&
           !learnReason &&
+          !dialogueReason &&
           recordValue.result.reason !== 'action.unavailable' &&
           recordValue.result.reason !== 'run.concluded'
         ) {
@@ -2076,6 +2097,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       recordValue.command.type === 'house-withdraw' ||
       recordValue.command.type === 'final-chamber-choice' ||
       recordValue.command.type === 'cast' ||
+      recordValue.command.type === 'dialogue-consequence' ||
       tradeCommand
     )
       continue;

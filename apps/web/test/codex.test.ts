@@ -7,6 +7,7 @@ import { emptyRunMetrics } from '@woven-deep/engine';
 import {
   accumulateSightings,
   deriveCodexState,
+  insertSighting,
   loadSightings,
   newLoreReveals,
   saveSightings,
@@ -415,6 +416,32 @@ describe('newLoreReveals', () => {
     const next: Sightings = { monsterIds: ['monster.does-not-exist'], itemIds: [], landmarks: [] };
 
     expect(newLoreReveals(prev, next, pack)).toEqual([]);
+  });
+});
+
+describe('insertSighting', () => {
+  it('inserts a monster id directly, bypassing accumulateSightings entirely', () => {
+    const prev: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
+    const next = insertSighting(prev, pack, 'monster.cave-rat');
+    expect(next).toEqual({ monsterIds: ['monster.cave-rat'], itemIds: [], landmarks: [] });
+  });
+
+  it('inserts an item id directly', () => {
+    const prev: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
+    const next = insertSighting(prev, pack, 'item.iron-sword');
+    expect(next).toEqual({ monsterIds: [], itemIds: ['item.iron-sword'], landmarks: [] });
+  });
+
+  it('is idempotent: inserting an already-present id is a no-op', () => {
+    const prev: Sightings = { monsterIds: ['monster.cave-rat'], itemIds: [], landmarks: [] };
+    const next = insertSighting(prev, pack, 'monster.cave-rat');
+    expect(next).toEqual(prev);
+  });
+
+  it('leaves the sightings unchanged for a content id that is neither a monster nor an item', () => {
+    const prev: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
+    const next = insertSighting(prev, pack, 'npc-faction.does-not-exist');
+    expect(next).toBe(prev);
   });
 });
 

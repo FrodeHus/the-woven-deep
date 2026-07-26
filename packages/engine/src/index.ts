@@ -26,6 +26,7 @@ export * from './merchant-lifecycle.js';
 export * from './merchant-behavior.js';
 export * from './commerce.js';
 export * from './trade.js';
+export * from './dialogue.js';
 export * from './house.js';
 export * from './merchant-fixture.js';
 export * from './run-records-fixture.js';

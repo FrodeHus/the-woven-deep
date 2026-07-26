@@ -639,7 +639,7 @@ export const reputationChangedEvent = z.strictObject({
   previous: z.number().int().safe(),
   delta: z.number().int().safe(),
   value: z.number().int().safe(),
-  reason: z.enum(['commerce', 'aggression', 'death']),
+  reason: z.enum(['commerce', 'aggression', 'death', 'dialogue']),
 });
 export const tradeOpenedEvent = z.strictObject({
   type: z.literal('trade.opened'),

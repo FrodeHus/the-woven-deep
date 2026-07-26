@@ -3,6 +3,7 @@ import type { BackgroundContentEntry } from './background.js';
 import type { BalanceContentEntry } from './balance.js';
 import type { ClassContentEntry } from './class.js';
 import type { ConditionContentEntry } from './condition.js';
+import type { DialogueContentEntry } from './dialogue.js';
 import type { EncounterContentEntry } from './encounter.js';
 import type { FallenChampionTemplateContentEntry } from './champion.js';
 import type { IdentificationPoolContentEntry } from './identification-pool.js';
@@ -28,6 +29,7 @@ export const CONTENT_KIND_IDS = [
   'balance',
   'vault',
   'condition',
+  'dialogue',
   'identification-pool',
   'encounter',
   'fallen-champion-template',
@@ -170,6 +172,7 @@ export type ContentEntry =
   | BalanceContentEntry
   | VaultContentEntry
   | ConditionContentEntry
+  | DialogueContentEntry
   | IdentificationPoolContentEntry
   | EncounterContentEntry
   | FallenChampionTemplateContentEntry

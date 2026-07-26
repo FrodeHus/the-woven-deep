@@ -10,7 +10,12 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import type { HeartLineageRecord, StoredHallRecord } from '@woven-deep/engine';
 import type { RunSession } from '../session/run-session.js';
 import { useRunSession } from '../session/store.js';
-import { actorsOf, heroOf, tradeIsAvailable } from '../session/projection-view.js';
+import {
+  actorsOf,
+  dialogueTargetAvailable,
+  heroOf,
+  tradeIsAvailable,
+} from '../session/projection-view.js';
 import { computeCamera, type CameraOrigin } from './camera.js';
 import { CommandPalette } from './CommandPalette.js';
 import { EffectsLayer } from './EffectsLayer.js';
@@ -386,6 +391,7 @@ export function PlayScreen({
           onOpenOverlay={onOpenOverlay}
           isTownContext={projection.floor.town}
           tradeAvailable={tradeIsAvailable(projection)}
+          talkAvailable={dialogueTargetAvailable(projection, pack)}
           onCast={targeting.begin}
         />
       </div>

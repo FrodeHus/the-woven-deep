@@ -31,11 +31,14 @@ import {
 import { dispatchCommand, dispatchIntent } from '@woven-deep/session-core';
 import {
   accumulateSightings,
+  insertSighting,
   loadSightings,
   newLoreReveals,
+  revealLine,
   saveSightings,
   type Sightings,
 } from './codex.js';
+import { itemById, monsterById } from './pack-queries.js';
 import { foldEventsIntoLog, LOG_CAPACITY, type LogLine } from './event-log.js';
 import type { PlayerIntent } from './intents.js';
 import {
@@ -544,6 +547,29 @@ export class GuestSession implements RunSession {
     } catch {
       // Best-effort, same posture as `noteOnboardingIntent` above.
     }
+    this.publish();
+  }
+
+  /** A dialogue topic's `reveal-lore` consequence -- see `RunSession.revealLore`'s doc comment for
+   * the full contract. Mirrors `syncSightings`'s reveal path (direct-insert, persist, one log
+   * line) but reads/writes `this.sightings` directly rather than re-loading from storage: unlike a
+   * perceived sighting, a narrative reveal is never raced by another tab, so there is nothing to
+   * merge in from a fresh storage read. Idempotent via the plain `includes` check below -- a
+   * second reveal of the same id is already present in `this.sightings`, so `insertSighting`
+   * would be a no-op anyway, but skipping it outright also skips the duplicate log line. */
+  revealLore(contentId: string): void {
+    if (this.sightings.monsterIds.includes(contentId) || this.sightings.itemIds.includes(contentId))
+      return;
+    this.sightings = insertSighting(this.sightings, this.pack, contentId);
+    try {
+      saveSightings(this.storage, this.sightings);
+    } catch (error) {
+      if (this.notice === null || this.notice.kind !== 'storage') {
+        this.notice = { kind: 'storage', failure: classifyStorageFailure(error) };
+      }
+    }
+    const name = monsterById(this.pack, contentId)?.name ?? itemById(this.pack, contentId)?.name;
+    if (name) this.appendReveal(revealLine(name));
     this.publish();
   }
 

@@ -7,6 +7,7 @@ entries:
     glyph: L
     color: '#ffd166'
     factionId: npc-faction.lampwrights
+    dialogueId: dialogue.travelling-lampwright
     attributes: { might: 8, agility: 9, vitality: 10, wits: 12, resolve: 11 }
     health: 20
     speed: 100

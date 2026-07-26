@@ -137,6 +137,12 @@ export interface TradeCloseCommand extends CommandEnvelope {
 export type TradeCommand =
   TradeOpenCommand | TradeBuyCommand | TradeSellCommand | TradeServiceCommand | TradeCloseCommand;
 
+export interface DialogueConsequenceCommand extends CommandEnvelope {
+  readonly type: 'dialogue-consequence';
+  readonly npcActorId: OpaqueId;
+  readonly topicId: string;
+}
+
 export interface HouseDepositCommand extends CommandEnvelope {
   readonly type: 'house-deposit';
   readonly itemId: OpaqueId;
@@ -172,6 +178,7 @@ export type GameCommand =
   | PickLockCommand
   | RestCommand
   | TradeCommand
+  | DialogueConsequenceCommand
   | HouseCommand
   | FinalChamberChoiceCommand;
 
@@ -197,6 +204,8 @@ export type TradeInvalidReason =
   | 'trade.capacity'
   | 'trade.service-unavailable'
   | 'trade.target-invalid';
+export type DialogueInvalidReason =
+  'dialogue.unavailable' | 'dialogue.out-of-range' | 'dialogue.invalid-topic';
 export type TownInvalidReason = 'town.truce' | 'town.rest' | 'house.full';
 export type DoorInvalidReason =
   | 'door.missing'
@@ -208,6 +217,7 @@ export type DoorInvalidReason =
 export type InvalidActionReason =
   | MovementInvalidReason
   | TradeInvalidReason
+  | DialogueInvalidReason
   | TownInvalidReason
   | DoorInvalidReason
   | 'action.unavailable'

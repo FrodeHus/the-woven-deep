@@ -24,6 +24,7 @@ export const merchantPopulationFields = {
   deathPenaltyApplied: z.boolean(),
   stockLossResolved: z.boolean(),
   commerceBonusApplied: z.boolean(),
+  dialogueConsequencesApplied: z.array(identifier).readonly().optional(),
 } as const;
 export const merchantPopulationV7 = z.strictObject({
   ...merchantPopulationFields,

@@ -16,8 +16,10 @@ import type {
 } from '@woven-deep/session-core';
 import {
   accumulateSightings,
+  insertSighting,
   loadSightings,
   newLoreReveals,
+  revealLine,
   saveSightings,
   type Sightings,
 } from './codex.js';
@@ -30,6 +32,7 @@ import {
   saveOnboarding,
   type OnboardingState,
 } from './onboarding.js';
+import { itemById, monsterById } from './pack-queries.js';
 import { heroOf } from './projection-view.js';
 import type { RunSession } from './run-session.js';
 import { classifyStorageFailure, type SessionStorageLike } from './storage.js';
@@ -336,6 +339,25 @@ export class ProfileSession implements RunSession {
     } catch {
       // Best-effort, same posture as `noteOnboardingIntent` below.
     }
+    this.snapshot = this.buildSnapshot();
+    this.notify();
+  }
+
+  /** Mirrors `GuestSession.revealLore` exactly -- see `RunSession.revealLore`'s doc comment for
+   * the full contract. */
+  revealLore(contentId: string): void {
+    if (this.sightings.monsterIds.includes(contentId) || this.sightings.itemIds.includes(contentId))
+      return;
+    this.sightings = insertSighting(this.sightings, this.pack, contentId);
+    try {
+      saveSightings(this.storage, this.sightings);
+    } catch (error) {
+      if (this.notice === null || this.notice.kind !== 'storage') {
+        this.notice = { kind: 'storage', failure: classifyStorageFailure(error) };
+      }
+    }
+    const name = monsterById(this.pack, contentId)?.name ?? itemById(this.pack, contentId)?.name;
+    if (name) this.appendReveal(revealLine(name));
     this.snapshot = this.buildSnapshot();
     this.notify();
   }

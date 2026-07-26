@@ -131,7 +131,7 @@ export function changeReputation(
     run: ActiveRun;
     faction: NpcFactionContentEntry;
     delta: number;
-    reason: 'commerce' | 'aggression' | 'death';
+    reason: 'commerce' | 'aggression' | 'death' | 'dialogue';
     eventId: OpaqueId;
   }>,
 ): Readonly<{ state: ActiveRun; event: ReputationChangedEvent }> {
