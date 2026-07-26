@@ -96,6 +96,11 @@ describe('generateFinalChamberFloor', () => {
     }
   });
 
+  it('carries no light fixtures: illumination comes entirely from ambient light', () => {
+    const floor = generateFinalChamberFloor(pack);
+    expect(floor.lights).toEqual([]);
+  });
+
   it('contains the authored Heart marker cell', () => {
     const floor = generateFinalChamberFloor(pack);
     const heart = heartMarkerPoint(floor);

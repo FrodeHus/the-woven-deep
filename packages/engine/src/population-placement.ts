@@ -557,9 +557,6 @@ function fillItemSlots(
   return { items, state: currentState };
 }
 
-/** 1-in-N odds per floor generation: a rare roll, so a full fragment set in one run stays rare. */
-const FRAGMENT_SPAWN_ROLL_DENOMINATOR = 40;
-
 function fragmentItemEntry(content: CompiledContentPack, fragmentId: string): ItemContentEntry {
   const entry = content.entries.find(
     (candidate): candidate is ItemContentEntry =>
@@ -621,7 +618,11 @@ function placeFragmentSpawn(
 ): Readonly<{ items: readonly ItemInstance[]; state: Uint32State }> {
   const eligible = eligibleFragmentSpawnIds(input);
   if (eligible.length === 0) return { items: [], state };
-  const roll = rollDie(state, FRAGMENT_SPAWN_ROLL_DENOMINATOR);
+  // 1-in-N odds per floor generation, N from content/balance: a rare roll, so a full fragment set
+  // in one run stays rare.
+  const fragmentSpawnRollDenominator = contentMaps(input.content).balance
+    .fragmentSpawnRollDenominator;
+  const roll = rollDie(state, fragmentSpawnRollDenominator);
   if (roll.value !== 1) return { items: [], state: roll.state };
   const cells = openFloorCells(input);
   if (cells.length === 0) return { items: [], state: roll.state };
@@ -629,6 +630,9 @@ function placeFragmentSpawn(
   const cellPick = rollDie(fragmentPick.state, cells.length);
   const fragmentId = eligible[fragmentPick.value - 1]!;
   const cell = cells[cellPick.value - 1]!;
+  // Invariant: at most one fragment spawns per floor generation (the roll above either misses or
+  // places exactly one), so `floorId` alone keeps this id unique. Extending to multiple spawns per
+  // floor would require a per-spawn suffix to avoid id collisions.
   const item = createFloorItem({
     content: input.content,
     contentId: fragmentId,

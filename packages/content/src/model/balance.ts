@@ -50,4 +50,5 @@ export interface BalanceContentEntry extends BaseContentEntry {
   readonly restockMilestones: readonly number[];
   readonly house: Readonly<{ baseCapacity: number; strongboxIncrement: number }>;
   readonly encounterDensity: Readonly<{ cellsPerEncounter: number }>;
+  readonly fragmentSpawnRollDenominator: number;
 }

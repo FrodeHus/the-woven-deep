@@ -98,6 +98,7 @@ export function createDemoContentPack(): CompiledContentPack {
         restockMilestones: [5, 10, 15, 20],
         house: { baseCapacity: 6, strongboxIncrement: 4 },
         encounterDensity: { cellsPerEncounter: 2000 },
+        fragmentSpawnRollDenominator: 40,
       },
       {
         kind: 'condition',
