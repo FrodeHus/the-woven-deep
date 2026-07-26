@@ -55,6 +55,62 @@ export function emptyRunMetrics(): RunMetrics {
   };
 }
 
+function normalizedNumber(raw: unknown, fallback: number): number {
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : fallback;
+}
+
+function normalizedOpaqueIdArray(raw: unknown, fallback: readonly OpaqueId[]): readonly OpaqueId[] {
+  return Array.isArray(raw) ? (raw as readonly OpaqueId[]) : fallback;
+}
+
+/**
+ * Migrates a stored (possibly legacy/partial) metrics blob into a complete, current-shape
+ * `RunMetrics`. Every field missing or of the wrong type falls back to `emptyRunMetrics()`'s
+ * default (including the nested `killsByModel` fields and array fields like
+ * `defeatedBossMonsterIds`), while any present, well-typed value is preserved as-is. Pure and
+ * idempotent: running it again over its own output is a no-op, and it never throws on
+ * unrecognized/partial input — the Hall store (server + guest) replays persisted deltas/records
+ * through this before merging, so a pre-existing field addition to `RunMetrics` never breaks
+ * replay of older persisted data.
+ */
+export function normalizeStoredMetrics(raw: unknown): RunMetrics {
+  const empty = emptyRunMetrics();
+  const candidate = (raw !== null && typeof raw === 'object' ? raw : {}) as Partial<
+    RunMetrics & { killsByModel: Partial<RunKillsByModel> }
+  >;
+  const killsByModel = (candidate.killsByModel ?? {}) as Partial<RunKillsByModel>;
+
+  return {
+    kills: normalizedNumber(candidate.kills, empty.kills),
+    killsByModel: {
+      individual: normalizedNumber(killsByModel.individual, empty.killsByModel.individual),
+      group: normalizedNumber(killsByModel.group, empty.killsByModel.group),
+      swarm: normalizedNumber(killsByModel.swarm, empty.killsByModel.swarm),
+      boss: normalizedNumber(killsByModel.boss, empty.killsByModel.boss),
+    },
+    bossKills: normalizedNumber(candidate.bossKills, empty.bossKills),
+    defeatedBossMonsterIds: normalizedOpaqueIdArray(
+      candidate.defeatedBossMonsterIds,
+      empty.defeatedBossMonsterIds,
+    ),
+    championKills: normalizedNumber(candidate.championKills, empty.championKills),
+    echoKills: normalizedNumber(candidate.echoKills, empty.echoKills),
+    threatDefeated: normalizedNumber(candidate.threatDefeated, empty.threatDefeated),
+    damageDealt: normalizedNumber(candidate.damageDealt, empty.damageDealt),
+    damageTaken: normalizedNumber(candidate.damageTaken, empty.damageTaken),
+    itemsCollected: normalizedNumber(candidate.itemsCollected, empty.itemsCollected),
+    itemsIdentified: normalizedNumber(candidate.itemsIdentified, empty.itemsIdentified),
+    currencyEarned: normalizedNumber(candidate.currencyEarned, empty.currencyEarned),
+    currencySpent: normalizedNumber(candidate.currencySpent, empty.currencySpent),
+    tradesCompleted: normalizedNumber(candidate.tradesCompleted, empty.tradesCompleted),
+    floorsEntered: normalizedNumber(candidate.floorsEntered, empty.floorsEntered),
+    deepestDepth: normalizedNumber(candidate.deepestDepth, empty.deepestDepth),
+    discoveriesRevealed: normalizedNumber(candidate.discoveriesRevealed, empty.discoveriesRevealed),
+    turnsElapsed: normalizedNumber(candidate.turnsElapsed, empty.turnsElapsed),
+    restsCompleted: normalizedNumber(candidate.restsCompleted, empty.restsCompleted),
+  };
+}
+
 function checkedAdd(left: number, right: number, label: string): number {
   const sum = left + right;
   if (!Number.isSafeInteger(sum)) {

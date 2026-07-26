@@ -5,6 +5,7 @@ import {
   createDemoRun,
   emptyRunMetrics,
   foldRunMetrics,
+  normalizeStoredMetrics,
   recordFloorEntered,
   type ActiveRun,
   type ActorState,
@@ -537,5 +538,62 @@ describe('recordFloorEntered', () => {
     expect(() => recordFloorEntered(fixtureState(), Number.MAX_SAFE_INTEGER + 2)).toThrow(
       RangeError,
     );
+  });
+});
+
+describe('normalizeStoredMetrics', () => {
+  it('fills a missing defeatedBossMonsterIds array with []', () => {
+    const legacy = { ...emptyRunMetrics(), kills: 3 } as Record<string, unknown>;
+    delete legacy['defeatedBossMonsterIds'];
+
+    const normalized = normalizeStoredMetrics(legacy);
+
+    expect(normalized.defeatedBossMonsterIds).toEqual([]);
+    expect(normalized.kills).toBe(3);
+  });
+
+  it('fills a missing numeric field with 0', () => {
+    const legacy = { ...emptyRunMetrics(), kills: 5 } as Record<string, unknown>;
+    delete legacy['restsCompleted'];
+
+    const normalized = normalizeStoredMetrics(legacy);
+
+    expect(normalized.restsCompleted).toBe(0);
+    expect(normalized.kills).toBe(5);
+  });
+
+  it('fills a missing killsByModel field with 0 while preserving present ones', () => {
+    const legacy = {
+      ...emptyRunMetrics(),
+      killsByModel: { individual: 7, group: 2 },
+    } as unknown as Record<string, unknown>;
+
+    const normalized = normalizeStoredMetrics(legacy);
+
+    expect(normalized.killsByModel).toEqual({ individual: 7, group: 2, swarm: 0, boss: 0 });
+  });
+
+  it('preserves every present value on a complete metrics object', () => {
+    const complete: RunMetrics = {
+      ...emptyRunMetrics(),
+      kills: 10,
+      bossKills: 2,
+      defeatedBossMonsterIds: ['monster.boss.a', 'monster.boss.b'],
+      deepestDepth: 6,
+    };
+
+    expect(normalizeStoredMetrics(complete)).toEqual(complete);
+  });
+
+  it('is idempotent on already-complete metrics', () => {
+    const complete = normalizeStoredMetrics({ ...emptyRunMetrics(), kills: 42 });
+    expect(normalizeStoredMetrics(complete)).toEqual(complete);
+  });
+
+  it('is safe on null/undefined/garbage input, returning empty metrics', () => {
+    expect(normalizeStoredMetrics(null)).toEqual(emptyRunMetrics());
+    expect(normalizeStoredMetrics(undefined)).toEqual(emptyRunMetrics());
+    expect(normalizeStoredMetrics('garbage')).toEqual(emptyRunMetrics());
+    expect(normalizeStoredMetrics(42)).toEqual(emptyRunMetrics());
   });
 });

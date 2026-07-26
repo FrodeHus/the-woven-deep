@@ -246,4 +246,47 @@ describe('ServerRunRecordRepository', () => {
     reopened.applyDeltas(deltas);
     expect(reopened.lifetime().totals.kills).toBe(deltas.metrics.kills);
   });
+
+  it('lifetime() migrates a legacy (pre-versioning, pre-7C) stored delta without throwing', () => {
+    // Simulates a `lifetime_json` blob written before `version` and `defeatedBossMonsterIds`
+    // existed: no `version` field, and `metrics` lacks `defeatedBossMonsterIds` entirely (the
+    // exact shape that used to hit `mergedSortedUnion(totals.defeatedBossMonsterIds, undefined)`
+    // and throw a TypeError on replay) plus a missing numeric field (`restsCompleted`).
+    const legacyMetrics = { ...emptyRunMetrics(), kills: 4, bossKills: 1 } as Record<
+      string,
+      unknown
+    >;
+    delete legacyMetrics['defeatedBossMonsterIds'];
+    delete legacyMetrics['restsCompleted'];
+
+    const legacyDelta = {
+      recordId: 'record.legacy.1',
+      newlyConqueredChampionRecordIds: [],
+      achievementGrants: [],
+      discoveryProtectionUpdates: [],
+      metrics: legacyMetrics,
+    };
+    const legacyEnvelope = { appliedDeltas: [legacyDelta] }; // no `version` field
+
+    database
+      .prepare(
+        `insert into hall_state(profile_id, lifetime_json, heart_json, unlocks_json, achievements_json, updated_at)
+         values (?, ?, null, '[]', '[]', ?)`,
+      )
+      .run('p1', JSON.stringify(legacyEnvelope), '2026-07-23T00:00:00.000Z');
+
+    const reopened = new ServerRunRecordRepository({ database, profileId: 'p1' });
+
+    expect(() => reopened.lifetime()).not.toThrow();
+    const lifetime = reopened.lifetime();
+    expect(lifetime.totals.kills).toBe(4);
+    expect(lifetime.totals.bossKills).toBe(1);
+    expect(lifetime.totals.defeatedBossMonsterIds).toEqual([]);
+    expect(lifetime.totals.restsCompleted).toBe(0);
+
+    // Applying a fresh, complete delta on top must also succeed and merge additively.
+    const { deltas } = buildStoredRecord();
+    expect(() => reopened.applyDeltas(deltas)).not.toThrow();
+    expect(reopened.lifetime().totals.kills).toBe(4 + deltas.metrics.kills);
+  });
 });
