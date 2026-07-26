@@ -395,4 +395,38 @@ describe('ProfileSession', () => {
     expect(projection.score).toEqual(finalized.record.score);
     expect(projection.heirloom).toEqual(finalized.record.heirloom);
   });
+
+  describe('revealLore (Task 3, dialogue reveal-lore consequence)', () => {
+    it('inserts the content id into sightings and appends exactly one reveal line, and is idempotent on a repeat reveal', async () => {
+      const { socket, connectPromise } = harness();
+      const run = freshRun();
+      socket().emit(HELLO);
+      socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+      const session = await connectPromise;
+
+      let notified = 0;
+      session.subscribe(() => {
+        notified += 1;
+      });
+
+      session.revealLore('monster.cave-rat');
+
+      expect(session.getSnapshot().sightings.monsterIds).toContain('monster.cave-rat');
+      expect(
+        session
+          .getSnapshot()
+          .log.filter((line) => line.text === 'The threads whisper of Cave rat.'),
+      ).toHaveLength(1);
+      expect(notified).toBe(1);
+
+      session.revealLore('monster.cave-rat');
+
+      expect(
+        session
+          .getSnapshot()
+          .log.filter((line) => line.text === 'The threads whisper of Cave rat.'),
+      ).toHaveLength(1);
+      expect(notified).toBe(1);
+    });
+  });
 });
