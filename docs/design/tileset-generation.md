@@ -10,14 +10,18 @@ no such objects, and a sprite without a game entity behind it never renders.
 ## Image-generation prompt
 
 ```
-Isometric dungeon tileset sprite sheet, single 1024x1024 PNG, fully transparent background.
+Isometric dungeon-and-town tileset sprite sheet, single 1024x1024 PNG, fully transparent
+background. ONE SHEET, mixing materials by row group — dungeon rows and town rows share the same
+grid and discipline but carry different masonry.
 
-BIOME: pick ONE per sheet — generate one sheet per biome, identical layout:
-  A. WORKED DUNGEON — pale blue-grey cut limestone blocks, moss-green floor slabs, navy shadow,
-     warm amber lamplight
-  B. TOWN — warm grey cobbles, timber-and-plaster walls, oiled wood, brass lamp fittings
+MATERIALS:
+  DUNGEON rows — pale blue-grey worked/cut limestone blocks, moss-green floor slab accents, navy
+    shadow, warm amber lamplight.
+  TOWN rows — warm grey cobbles, timber-and-plaster over stone footings, oiled wood, brass lamp
+    fittings.
 
-Every biome keeps the same discipline: cool desaturated stone, one warm accent, flat value steps.
+Both materials keep the same discipline across the whole sheet: cool desaturated stone, one warm
+accent, flat value steps.
 
 STRICT GRID — this is machine-sliced, precision matters more than beauty:
 - Exactly 8 columns x 8 rows of 128x128-pixel cells. One tile per cell, nothing crossing cell
@@ -39,40 +43,43 @@ STRICT GRID — this is machine-sliced, precision matters more than beauty:
 STYLE — CLEAN CEL-SHADED GAME ART, not painterly illustration:
 - FLAT VALUE STEPS, not gradients. Top face lightest, the two side faces two distinct darker
   values. Three nameable values per block. No airbrush, no glossy specular.
-- CHUNKY MASONRY: roughly 3x3 large stones per wall face, clean mortar lines. Never gravel noise.
+- CHUNKY MASONRY: roughly 3x3 large stones per wall face (dungeon), or timber framing over stone
+  footing (town); clean mortar/joint lines either way. Never gravel noise.
 - LOW TEXTURE NOISE: detail from shape and value; a few deliberate cracks, no grime spatter.
-- LIMITED COOL PALETTE (~8-10 colours per sheet); warm light against cool stone is the entire
-  colour story.
+- LIMITED COOL PALETTE (~8-10 colours across the whole sheet); warm light against cool stone is
+  the entire colour story, in both materials.
 - CRISP EDGES, no outlines; silhouette-first — every object readable as a black shape at 32 px.
-- No text, no watermark, no border. Apply the biome's material to EVERY row.
+- No text, no watermark, no border. Apply the row's material consistently across its own row.
 - AVOID: painterly dark-fantasy rendering, muddy realism, photoreal textures, gradient-heavy
   shading, flourish detail that vanishes at game scale.
 
 ROW LAYOUT (row 0 = top; fill every cell):
-- Row 0: 8 clean FLOOR slabs — same material, subtle variation only. Must tile seamlessly.
-- Row 1: 8 DIRTY floor variants — mud-tracked, stained, soot-scorched, damp sheen, moss patches,
-  dust drifts, straw-flecked, rubble-flecked.
-- Row 2: 8 WALL cubes — full-height sharp-edged blocks: 4 plain, 2 weathered/cracked,
-  2 with luminous violet Weave-conduit threads across the faces.
-- Row 3: 8 ROUNDED wall pieces, same height, eroded silhouettes: 4 outer-corner boulders rounded
-  toward NE / SE / SW / NW, 2 end-cap stubs, 2 lone rock masses.
-- Row 4: STAIRS & PASSAGES: stairs-down (steps cut INTO the floor plane, a well, never a raised
-  platform; stone painted unlit — the violet glow is animated separately), stairs-up (steps
-  rising against a wall block), closed wooden door in stone frame, iron-barred gate (locked
-  passage), stone pillar, broken pillar stump, wall-mounted lamp (lit), free-standing lamp post
-  (lit).
-- Row 5: TOWN terrain: 2 cobbled plaza floors, 2 town building walls (timber-and-plaster over
-  stone footing), house door (heavier, dwelling-grade, distinct from the dungeon door),
-  dungeon-entrance stair surround (worked stone arch around a descending well), lamp post
-  (unlit), hanging shop sign on bracket.
-- Row 6: TOWN market stalls, one per merchant: provisioner (sacks, bread, produce), arms dealer
-  (racked blades, shield), curios dealer (odd trinkets, bottles, threads), spell vendor (scrolls,
-  candles, faint violet glow). Then: empty stall counter with awning, stacked wares crate,
-  notice board, town well.
-- Row 7: reserved — extra floor and wall variants in the biome's material, for future variety.
+- Row 0: 8 clean DUNGEON floor slabs — pale blue-grey limestone, moss-green accents, subtle
+  variation only. Must tile seamlessly.
+- Row 1: 8 DIRTY dungeon floor variants — mud-tracked, stained, soot-scorched, damp sheen, moss
+  patches, dust drifts, straw-flecked, rubble-flecked.
+- Row 2: 8 dungeon WALL cubes — full-height sharp-edged limestone blocks: cols 0-3 plain, cols
+  4-5 weathered/cracked, cols 6-7 with luminous violet Weave-conduit threads across the faces.
+- Row 3: 8 ROUNDED dungeon wall pieces, same height, eroded silhouettes, cols 0-7: outer-corner
+  boulders rounded toward NE, SE, SW, NW, then 2 end-cap stubs, then 2 lone rock masses.
+- Row 4: dungeon STAIRS & PASSAGES: col 0 stairs-down (steps cut INTO the floor plane, a well,
+  never a raised platform; stone painted unlit — the violet glow is animated separately), col 1
+  stairs-up (steps rising against a wall block), col 2 closed wooden door in stone frame, col 3
+  iron-barred gate (locked passage), col 4 stone pillar, col 5 broken pillar stump, col 6
+  wall-mounted lamp (lit), col 7 free-standing lamp post (lit).
+- Row 5: TOWN terrain: cols 0-1 cobbled plaza floors (warm grey cobbles), cols 2-3 town building
+  walls (timber-and-plaster over stone footing), col 4 house door (heavier, dwelling-grade,
+  distinct from the dungeon door), col 5 dungeon-entrance stair surround (worked stone arch
+  around a descending well), col 6 lamp post (unlit, brass fittings), col 7 hanging shop sign on
+  bracket.
+- Row 6: TOWN market stalls & dressing: col 0 provisioner stall (sacks, bread, produce), col 1
+  arms stall (racked blades, shield), col 2 curios stall (odd trinkets, bottles, threads), col 3
+  spell-vendor stall (scrolls, candles, faint violet glow), col 4 empty stall counter with
+  awning, col 5 stacked wares crate, col 6 notice board, col 7 town well.
+- Row 7: reserved — extra floor/wall variants in either material, for future variety.
 
-COMPANION ANIMATION SHEET — tiles-{biome}-anim.png (separate 1024x1024 PNG, same 8x8 grid, same
-palette, same footprint and apex anchor).
+COMPANION ANIMATION SHEET — tiles-anim.png (single separate 1024x1024 PNG, same 8x8 grid, same
+palette, same footprint and apex anchor — not per-biome).
 
 ANIMATION RULES:
 - MOVING PART ONLY: a frame contains ONLY the thing that moves, on transparency — flame, glow,
@@ -101,7 +108,17 @@ ROW LAYOUT — ANIMATION SHEET:
 The renderer slices by explicit rects in `apps/web/public/playfield/atlas-dungeon.json`
 (`parseAtlas` in `apps/web/src/ui/playfield/atlas.ts` is the schema authority). For a sheet
 generated on the strict grid above, a cell at column `c`, row `r` slices as
-`[c*128, r*128, 128, 128]`. Keys and what consumes them:
+`[c*128, r*128, 128, 128]`.
+
+The unified sheet's drop-in contract already ships as
+`apps/web/public/playfield/atlas-unified.json`, with `blockDepthPx: 48` (this grid's block
+depth). It is not yet loaded by the game — the live atlas stays `atlas-dungeon.json` and the game
+keeps rendering from `tiles-dungeon-v5.png` until someone switches it over. Switching over means:
+generate the PNG as `tiles-unified.png`, drop both the PNG and `tiles-anim.png` into
+`apps/web/public/playfield/`, extend `parseAtlas`'s schema with the town keys below, and point
+`ATLAS_URL` at `atlas-unified.json`.
+
+Keys and what consumes them:
 
 | Key | Game visual |
 |---|---|
@@ -112,7 +129,12 @@ generated on the strict grid above, a cell at column `c`, row `r` slices as
 | `gate` | locked features (`featuresOf` projection entries) |
 | `pillar`, `pillarBroken` | `terrain.pillar` |
 | `torch`, `torchWall` | `fixture.lamp` light fixtures |
-| town row keys (future) | town vault placement slots (merchant stalls, house door, entrance) |
+| `townFloors[]`, `townWalls[]` | town vault terrain (plaza floor / building wall placement slots) |
+| `houseDoor` | town vault house-door placement slot |
+| `entranceSurround` | town vault dungeon-entrance placement slot |
+| `lampPostUnlit`, `shopSign` | town vault dressing placement slots |
+| `stalls.provisioner`, `stalls.arms`, `stalls.curios`, `stalls.spellvendor` | town vault merchant-stall placement slots |
+| `stallCounter`, `waresCrate`, `noticeBoard`, `townWell` | town vault dressing placement slots |
 
 Do not add atlas keys for assets the game cannot render — a key with no engine counterpart is
 dead data and gets rejected in review.
