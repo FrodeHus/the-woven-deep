@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { ObservableCell } from '@woven-deep/engine';
-import { cellDarkness, lightsForFloor, type LightSpec } from './light-layer.js';
+import {
+  cellDarkness,
+  lightPoolDiameterPx,
+  lightsForFloor,
+  visibleBrightness,
+  VISIBLE_FLOOR_BRIGHTNESS,
+  type LightSpec,
+} from './light-layer.js';
+import { TILE_HALF_W } from './iso-math.js';
 
 function cell(
   input: Partial<ObservableCell> & { index: number; x: number; y: number },
@@ -37,6 +45,42 @@ describe('cellDarkness', () => {
     for (let i = 1; i < samples.length; i += 1) {
       expect(cellDarkness(samples[i]!)).toBeLessThan(cellDarkness(samples[i - 1]!));
     }
+  });
+});
+
+describe('visibleBrightness', () => {
+  it('floors an unlit visible cell above black and reaches full brightness when fully lit', () => {
+    expect(visibleBrightness(0)).toBe(VISIBLE_FLOOR_BRIGHTNESS);
+    expect(visibleBrightness(255)).toBe(1);
+  });
+
+  it('never drops a visible cell to (or below) the remembered gray brightness (~0.29)', () => {
+    // The bug being guarded: a torch-rim visible cell (single-digit intensity) must not read darker
+    // than remembered terrain further out.
+    for (const intensity of [0, 1, 5, 20, 80, 200, 255]) {
+      expect(visibleBrightness(intensity)).toBeGreaterThan(0.29);
+    }
+  });
+
+  it('is monotonic increasing in intensity', () => {
+    const samples = [0, 40, 80, 120, 160, 200, 255];
+    for (let i = 1; i < samples.length; i += 1) {
+      expect(visibleBrightness(samples[i]!)).toBeGreaterThan(visibleBrightness(samples[i - 1]!));
+    }
+  });
+
+  it('clamps out-of-range intensity to the floor..1 band', () => {
+    expect(visibleBrightness(-10)).toBe(VISIBLE_FLOOR_BRIGHTNESS);
+    expect(visibleBrightness(400)).toBe(1);
+  });
+});
+
+describe('lightPoolDiameterPx', () => {
+  it('converts a tile radius to a pixel diameter of radius * 2 * TILE_HALF_W', () => {
+    expect(lightPoolDiameterPx(5)).toBe(5 * TILE_HALF_W * 2);
+    expect(lightPoolDiameterPx(5)).toBe(320); // TILE_HALF_W === 32
+    expect(lightPoolDiameterPx(7)).toBe(448);
+    expect(lightPoolDiameterPx(0)).toBe(0);
   });
 });
 

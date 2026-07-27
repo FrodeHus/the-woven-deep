@@ -1,4 +1,5 @@
 import type { ObservableCell } from '@woven-deep/engine';
+import { TILE_HALF_W } from './iso-math.js';
 
 /**
  * Pure inputs for the renderer's light layer. Everything the `IsoRenderer` needs to paint a light
@@ -29,6 +30,37 @@ const FIXTURE_LIGHT_INTENSITY = 1;
 export function cellDarkness(intensity: number): number {
   const clamped = Math.max(0, Math.min(255, intensity));
   return 1 - clamped / 255;
+}
+
+/**
+ * The brightness floor a VISIBLE cell never drops below in the multiply light-map, mirroring the
+ * old DOM renderer's proven `0.6..1.0` opacity band (its `--remembered` gray sat near 0.29, so a
+ * visible cell is always clearly brighter than any remembered one). Without this floor a visible
+ * cell at a torch's rim -- where the engine's `intensity` bottoms out to single digits -- multiplied
+ * to near-black and read DARKER than remembered terrain further out.
+ */
+export const VISIBLE_FLOOR_BRIGHTNESS = 0.6;
+
+/**
+ * The multiply-layer BRIGHTNESS (not darkness) for a visible cell of the given engine `intensity`
+ * (0-255): floored at {@link VISIBLE_FLOOR_BRIGHTNESS} and ramping to `1` (scene rendered verbatim)
+ * as intensity climbs. Expressed through {@link cellDarkness} so the two stay a single source of
+ * truth: `brightness = 1 - (1 - floor) * darkness`. The renderer paints this as a white fill whose
+ * alpha is the returned value, so a fully lit cell (`intensity 255`) paints alpha `1` and an
+ * unlit-but-visible cell paints alpha `VISIBLE_FLOOR_BRIGHTNESS`.
+ */
+export function visibleBrightness(intensity: number): number {
+  return 1 - (1 - VISIBLE_FLOOR_BRIGHTNESS) * cellDarkness(intensity);
+}
+
+/**
+ * A light pool's on-screen diameter in iso-local pixels for a reach of `radiusTiles` grid cells:
+ * `radiusTiles` tiles across at `TILE_HALF_W * 2` px per tile. Camera zoom is applied by the light
+ * container's own `scale`, so this is zoom-agnostic. The pool is a `radiusTiles`-across circle, so a
+ * radius-5 torch spans `5 * 64 = 320` px, not 5 px -- the unit conversion the renderer must not skip.
+ */
+export function lightPoolDiameterPx(radiusTiles: number): number {
+  return radiusTiles * TILE_HALF_W * 2;
 }
 
 /**

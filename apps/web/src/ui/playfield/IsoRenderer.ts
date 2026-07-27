@@ -18,7 +18,7 @@ import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { AtlasRect, PlayfieldAtlas } from './atlas.js';
 import { bakeFloor, bakeKey, planFloorBake } from './floor-bake.js';
 import { TILE_HALF_H, TILE_HALF_W, worldToScreen, cellAtScreen, type IsoView } from './iso-math.js';
-import { cellDarkness, lightsForFloor, type LightSpec } from './light-layer.js';
+import { lightPoolDiameterPx, lightsForFloor, visibleBrightness, type LightSpec } from './light-layer.js';
 import { selectNewEffects, spawnForEffect, stepParticles, type Particle } from './particles.js';
 import {
   motionPosition,
@@ -49,9 +49,10 @@ const ZOOM = 1;
 const BACKGROUND_COLOR = 0x05060a;
 /** The global darkness the multiply light-map starts from (areas outside any discovered cell). */
 const DARKNESS_COLOR = 0x05060a;
-/** Fixed dim, cool wash painted over `remembered` cells (the demo's `fovG` pattern). */
-const REMEMBERED_COLOR = 0x1b2138;
-const REMEMBERED_ALPHA = 0.75;
+/** The cool, dim brightness `remembered` cells multiply down to -- matches the old renderer's
+ * `--remembered` gray (`#4b526b`, luminance ~0.29), so a remembered cell is clearly darker than any
+ * visible one (floored at `VISIBLE_FLOOR_BRIGHTNESS`) yet still legible. */
+const REMEMBERED_COLOR = 0x4b526b;
 /** Warm lamp color for fixture light pools. */
 const FIXTURE_LIGHT_COLOR = 0xffb166;
 /** Fallback hero light color when no light source resolves a color. */
@@ -345,7 +346,11 @@ export class IsoRenderer {
     );
 
     this.darknessQuad.tint = DARKNESS_COLOR;
-    this.lightBuild.addChild(this.darknessQuad, this.lightsContainer, this.fovGraphics);
+    // Order matters: the per-cell FOV pass paints each visible cell's BRIGHTNESS floor first, then
+    // the additive light pools layer ON TOP so a torch warms and brightens that floor with falloff.
+    // (The prior order drew lights first and then stamped the FOV pass over them, collapsing every
+    // pool to the hero's single highest-intensity cell.)
+    this.lightBuild.addChild(this.darknessQuad, this.fovGraphics, this.lightsContainer);
 
     this.lightMapSprite.blendMode = 'multiply';
 
@@ -412,8 +417,11 @@ export class IsoRenderer {
     }
     const [r, g, b] = light.color;
     this.heroLightColor = (r << 16) | (g << 8) | b;
+    // Fuel dims the glow (its additive alpha), it does NOT shrink its reach: the old DOM renderer
+    // kept the pool at the item's full `radius` and modulated `--glow-intensity` by fuel. Folding
+    // fuel into the radius (the previous bug) shrank a half-spent torch's pool to a sliver.
     this.heroLightAlpha = 0.35 + 0.65 * light.fuelFraction;
-    this.heroLightRadius = light.radius * light.fuelFraction;
+    this.heroLightRadius = light.radius;
   }
 
   private rebakeIfNeeded(cells: readonly ObservableCell[], floorId: string, town: boolean): void {
@@ -571,7 +579,7 @@ export class IsoRenderer {
       sprite.anchor.set(0.5, 0.5);
       sprite.blendMode = 'add';
       sprite.tint = isHero ? this.heroLightColor : FIXTURE_LIGHT_COLOR;
-      const diameter = spec.radius * TILE_HALF_W * 2 * BAKE_SCALE;
+      const diameter = lightPoolDiameterPx(spec.radius) * BAKE_SCALE;
       sprite.width = diameter;
       sprite.height = diameter;
       const [lx, ly] = this.isoLocal(spec.x, spec.y);
@@ -600,10 +608,12 @@ export class IsoRenderer {
       if (cell.knowledge === 'unknown') {
         graphics.poly(diamond).fill({ color: 0x000000, alpha: 1 });
       } else if (cell.knowledge === 'remembered') {
-        graphics.poly(diamond).fill({ color: REMEMBERED_COLOR, alpha: REMEMBERED_ALPHA });
+        graphics.poly(diamond).fill({ color: REMEMBERED_COLOR, alpha: 1 });
       } else {
-        const alpha = cellDarkness(cell.intensity);
-        if (alpha > 0) graphics.poly(diamond).fill({ color: 0x000000, alpha });
+        // Paint the cell's BRIGHTNESS (white at alpha = visibleBrightness) rather than a darkness:
+        // this is the light-map value the scene multiplies against, floored so a visible cell is
+        // never darker than a remembered one, and the additive light pools brighten it further.
+        graphics.poly(diamond).fill({ color: 0xffffff, alpha: visibleBrightness(cell.intensity) });
       }
     }
   }
