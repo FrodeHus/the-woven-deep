@@ -28,7 +28,11 @@ export type ActionId =
   | 'help'
   // Dismisses the play screen's contextual onboarding hint strip -- rebindable and listed
   // in help/settings exactly like every other action, even though it isn't a game command.
-  | 'dismiss-hint';
+  | 'dismiss-hint'
+  // Drinks the potion in the action bar's first belt slot. Bound to `1` by default -- a
+  // rebindable keymap action, not a hardwired numpad synonym (see `KeyRouter.ts`'s
+  // `HARDWIRED_DIRECTION_KEYS` doc comment).
+  | 'use-belt-1';
 
 /** A single rebindable keystroke: `event.key` plus whether Shift must be held. Serializes to
  * "Shift+T" / "i" (see `chordKey`) for both storage-comparison and on-screen display. */
@@ -85,6 +89,7 @@ export const ACTION_IDS: readonly ActionId[] = [
   'settings',
   'help',
   'dismiss-hint',
+  'use-belt-1',
 ];
 
 function chord(key: string, shift = false): KeyChord {
@@ -120,6 +125,7 @@ export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
   settings: 'Settings',
   help: 'Help',
   'dismiss-hint': 'Dismiss hint',
+  'use-belt-1': 'Use belt potion 1',
 };
 
 /**
@@ -156,6 +162,7 @@ export const DEFAULT_BINDINGS: Readonly<Record<ActionId, KeyChord>> = {
   help: chord('?', true),
   // Free (never hardwired, never used by any other default) -- see `chordReserved`.
   'dismiss-hint': chord("'"),
+  'use-belt-1': chord('1'),
 };
 
 /** Serializes a `KeyChord` to its display/comparison string: "Shift+T" or "i". */
@@ -205,13 +212,13 @@ export function bindingConflict(
  * ever consulting the keymap -- binding one of these to an `ActionId` here would produce a chord
  * that saves and displays fine but silently never fires. Duplicated from `KeyRouter.ts`'s
  * `HARDWIRED_DIRECTION_KEYS` (rather than imported) because `settings.ts` is the lower-level,
- * framework-free module `KeyRouter.ts` itself depends on; keep the two key lists in sync. */
+ * framework-free module `KeyRouter.ts` itself depends on; keep the two key lists in sync. `1` is
+ * deliberately absent -- it's `use-belt-1`'s ordinary rebindable default, not a hardwired synonym. */
 const HARDWIRED_KEYS: ReadonlySet<string> = new Set([
   'ArrowUp',
   'ArrowDown',
   'ArrowLeft',
   'ArrowRight',
-  '1',
   '2',
   '3',
   '4',

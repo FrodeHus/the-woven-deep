@@ -24,13 +24,19 @@ export type RouterOutcome =
   | { readonly type: 'open-overlay'; readonly overlay: OverlayActionId }
   | { readonly type: 'close-overlay' }
   | { readonly type: 'dismiss-hint' }
+  // Drinks the potion in the belt's slot `slot` (0-based) -- `routeKey` has no snapshot access, so
+  // it can't resolve a slot to an itemId itself; `usePlayKeyDispatcher` does that resolution and
+  // dispatches the actual `{type:'backpack', action:'use', itemId}` intent.
+  | { readonly type: 'use-belt-slot'; readonly slot: number }
   | null;
 
 /**
  * Hardwired movement synonyms: arrows and numpad (NumLock on, so `event.key` reports the digit).
  * These are never rebindable -- they always mean movement regardless of the resolved keymap. The
  * *primary* movement keys (vi keys, by default) are rebindable via `ActionId`s `move.n`..`move.nw`
- * in `settings.ts`'s `DEFAULT_BINDINGS` / the resolved keymap passed into `routeKey`.
+ * in `settings.ts`'s `DEFAULT_BINDINGS` / the resolved keymap passed into `routeKey`. `1` is
+ * deliberately absent -- it's the potion belt's first slot (`use-belt-1`), a rebindable keymap
+ * action rather than a hardwired synonym; southwest movement is reachable via numpad/vi `b`.
  */
 const HARDWIRED_DIRECTION_KEYS: Readonly<Record<string, Direction>> = {
   ArrowUp: 'north',
@@ -43,7 +49,6 @@ const HARDWIRED_DIRECTION_KEYS: Readonly<Record<string, Direction>> = {
   '6': 'east',
   '7': 'northwest',
   '9': 'northeast',
-  '1': 'southwest',
   '3': 'southeast',
 };
 
@@ -120,6 +125,8 @@ function outcomeForAction(action: ActionId): RouterOutcome {
       return { type: 'open-overlay', overlay: nonMoveAction };
     case 'dismiss-hint':
       return { type: 'dismiss-hint' };
+    case 'use-belt-1':
+      return { type: 'use-belt-slot', slot: 0 };
     default: {
       const exhaustive: never = nonMoveAction;
       return exhaustive;
@@ -177,6 +184,9 @@ export interface KeyDispatchHandlers {
   readonly closeOverlay: () => void;
   /** Retires whatever onboarding hint is currently showing -- a no-op if none is. */
   readonly dismissHint: () => void;
+  /** Drinks the potion currently in belt slot `slot` (0-based), resolved from the live snapshot --
+   * a no-op if that slot is empty. */
+  readonly useBeltSlot: (slot: number) => void;
 }
 
 export type KeyDispatcher = (
@@ -223,6 +233,10 @@ export function createKeyDispatcher(
     }
     if (outcome.type === 'dismiss-hint') {
       handlers.dismissHint();
+      return;
+    }
+    if (outcome.type === 'use-belt-slot') {
+      handlers.useBeltSlot(outcome.slot);
       return;
     }
     handlers.dispatch(outcome);

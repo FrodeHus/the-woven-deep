@@ -41,7 +41,6 @@ describe('routeKey', () => {
       ['6', 'east'],
       ['7', 'northwest'],
       ['9', 'northeast'],
-      ['1', 'southwest'],
       ['3', 'southeast'],
       ['k', 'north'],
       ['j', 'south'],
@@ -231,6 +230,20 @@ describe('routeKey', () => {
     });
   });
 
+  describe('belt keybind', () => {
+    it('maps 1 to using the first belt potion slot', () => {
+      expect(routeKey({ event: keyEvent('1'), overlayOpen: false, keymap: defaultKeymap })).toEqual(
+        { type: 'use-belt-slot', slot: 0 },
+      );
+    });
+
+    it('blocks the belt keybind while an overlay is open', () => {
+      expect(
+        routeKey({ event: keyEvent('1'), overlayOpen: true, keymap: defaultKeymap }),
+      ).toBeNull();
+    });
+  });
+
   it('ignores any Ctrl/Meta chord, even one that shares a key with a default binding', () => {
     // "k" is the default "Move north" binding -- Meta+K/Control+K must not also move the hero
     // (this is the browser/OS palette-open chord; see the ⌘K command palette listener).
@@ -277,7 +290,7 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const now = () => time;
     const dispatch = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint: vi.fn() },
+      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint: vi.fn(), useBeltSlot: vi.fn() },
       () => false,
       () => defaultKeymap,
       now,
@@ -306,7 +319,7 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const now = () => time;
     const dispatch = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint: vi.fn() },
+      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint: vi.fn(), useBeltSlot: vi.fn() },
       () => false,
       () => defaultKeymap,
       now,
@@ -325,7 +338,7 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const closeOverlay = vi.fn();
     let overlayOpen = false;
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay, closeOverlay, dismissHint: vi.fn() },
+      { dispatch, openOverlay, closeOverlay, dismissHint: vi.fn(), useBeltSlot: vi.fn() },
       () => overlayOpen,
       () => defaultKeymap,
     );
@@ -344,7 +357,7 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const dispatch = vi.fn();
     const openOverlay = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay, closeOverlay: vi.fn(), dismissHint: vi.fn() },
+      { dispatch, openOverlay, closeOverlay: vi.fn(), dismissHint: vi.fn(), useBeltSlot: vi.fn() },
       () => false,
       () => defaultKeymap,
     );
@@ -359,13 +372,28 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const dispatch = vi.fn();
     const dismissHint = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint },
+      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint, useBeltSlot: vi.fn() },
       () => false,
       () => defaultKeymap,
     );
 
     handler(keyEvent("'"));
     expect(dismissHint).toHaveBeenCalledOnce();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('routes the belt keybind to the useBeltSlot handler instead of dispatch', () => {
+    const dispatch = vi.fn();
+    const useBeltSlot = vi.fn();
+    const handler = createKeyDispatcher(
+      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint: vi.fn(), useBeltSlot },
+      () => false,
+      () => defaultKeymap,
+    );
+
+    handler(keyEvent('1'));
+    expect(useBeltSlot).toHaveBeenCalledOnce();
+    expect(useBeltSlot).toHaveBeenCalledWith(0);
     expect(dispatch).not.toHaveBeenCalled();
   });
 });

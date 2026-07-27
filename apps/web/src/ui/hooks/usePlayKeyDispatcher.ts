@@ -1,8 +1,10 @@
 import { useEffect, type RefObject } from 'react';
 import type { GameplayProjection } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../../session/guest-session.js';
+import { heroOf } from '../../session/projection-view.js';
 import type { RunSession } from '../../session/run-session.js';
 import type { ResolvedKeymap } from '../../session/settings.js';
+import { isPotion } from '../overlays/inventory-model.js';
 import { createKeyDispatcher, type OverlayActionId } from '../KeyRouter.js';
 import type { OverlayId } from '../overlays/registry.js';
 
@@ -66,6 +68,15 @@ export function usePlayKeyDispatcher({
         dismissHint: () => {
           const id = activeHintRef.current;
           if (id) session.dismissOnboardingHint(id);
+        },
+        // Reads the live snapshot fresh at keypress time (rather than closing over the one this
+        // effect was created with) so a potion picked up or drunk after this listener was attached
+        // is still resolved correctly -- the same posture `dispatch`/`session.dispatch` already
+        // has, since `session` itself is always the current one.
+        useBeltSlot: (slot) => {
+          const hero = heroOf(session.getSnapshot().projection);
+          const potion = hero.backpack.filter(isPotion)[slot];
+          if (potion) session.dispatch({ type: 'backpack', action: 'use', itemId: potion.itemId });
         },
         closeOverlay: () => {
           // `inventory` is a registry overlay like every other one, so this first branch already

@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
@@ -186,10 +186,13 @@ async function renderPlay(session: FakeSession): Promise<FakePlayfieldRenderer> 
 }
 
 /** Enters spell targeting through the ⌘K command palette's "Cast: <spell>" entry -- the reachable
- * cast path for a caster hero during play. */
+ * cast path for a caster hero during play. Scoped to the palette dialog: the action bar's own
+ * quick-cast button (`ActionBar`) can render the identical "Cast: <spell>" text for the hero's
+ * first castable spell at the same time, so an unscoped text query would be ambiguous. */
 async function castViaPalette(spellName: string): Promise<void> {
   fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
-  await userEvent.click(await screen.findByText(`Cast: ${spellName}`));
+  const dialog = await screen.findByRole('dialog', { name: /command palette/i });
+  await userEvent.click(await within(dialog).findByText(`Cast: ${spellName}`));
 }
 
 function clickCell(fake: FakePlayfieldRenderer, cell: Point): void {

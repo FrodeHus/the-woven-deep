@@ -53,7 +53,6 @@ describe('DEFAULT_BINDINGS', () => {
       'ArrowDown',
       'ArrowLeft',
       'ArrowRight',
-      '1',
       '2',
       '3',
       '4',
@@ -122,7 +121,6 @@ describe('chordReserved', () => {
       'ArrowDown',
       'ArrowLeft',
       'ArrowRight',
-      '1',
       '2',
       '3',
       '4',
@@ -142,6 +140,27 @@ describe('chordReserved', () => {
 
   it('returns false for an ordinary rebindable key', () => {
     expect(chordReserved({ key: 'z', shift: false })).toBe(false);
+  });
+
+  it('returns false for "1" -- the belt keybind default, not a hardwired numpad synonym', () => {
+    expect(chordReserved({ key: '1', shift: false })).toBe(false);
+  });
+});
+
+describe('use-belt-1', () => {
+  it('defaults to "1" and resolves even when a stored keymap has no override for it', () => {
+    expect(DEFAULT_BINDINGS['use-belt-1']).toEqual({ key: '1', shift: false });
+    const { byAction, byChord } = resolveKeymap({});
+    expect(byAction['use-belt-1']).toEqual({ key: '1', shift: false });
+    expect(byChord.get('1')).toBe('use-belt-1');
+  });
+
+  it('tolerates a persisted bindings blob predating this action (forward tolerance)', () => {
+    // A pre-existing stored blob never had a 'use-belt-1' entry -- `resolveKeymap` still resolves
+    // it from `DEFAULT_BINDINGS` rather than leaving it undefined.
+    const priorBindings: Settings['bindings'] = { wait: { key: 'z', shift: false } };
+    const { byAction } = resolveKeymap(priorBindings);
+    expect(byAction['use-belt-1']).toEqual(DEFAULT_BINDINGS['use-belt-1']);
   });
 });
 
