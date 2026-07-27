@@ -21,6 +21,10 @@ export interface PlayfieldAtlas {
   torchWall: AtlasRect;
   pillar: AtlasRect;
   pillarBroken: AtlasRect;
+  townFloors: AtlasRect[];
+  townWalls: AtlasRect[];
+  houseDoor: AtlasRect;
+  entranceSurround: AtlasRect;
 }
 
 export const ATLAS_URL = '/playfield/atlas-unified.json';
@@ -93,6 +97,10 @@ export function parseAtlas(json: unknown): PlayfieldAtlas {
   const torchWall = toRect(record.torchWall, 'torchWall');
   const pillar = toRect(record.pillar, 'pillar');
   const pillarBroken = toRect(record.pillarBroken, 'pillarBroken');
+  const townFloors = toRectList(record.townFloors, 'townFloors');
+  const townWalls = toRectList(record.townWalls, 'townWalls');
+  const houseDoor = toRect(record.houseDoor, 'houseDoor');
+  const entranceSurround = toRect(record.entranceSurround, 'entranceSurround');
 
   return {
     imageUrl: `${IMAGE_BASE_URL}${image}`,
@@ -110,5 +118,9 @@ export function parseAtlas(json: unknown): PlayfieldAtlas {
     torchWall,
     pillar,
     pillarBroken,
+    townFloors,
+    townWalls,
+    houseDoor,
+    entranceSurround,
   };
 }

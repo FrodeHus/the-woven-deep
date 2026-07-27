@@ -35,7 +35,12 @@ export interface FloorBakePlan {
 }
 
 function isWallFamily(family: TileFamily): boolean {
-  return family === 'wall' || family === 'wall-rounded' || family === 'wall-weave';
+  return (
+    family === 'wall' ||
+    family === 'wall-rounded' ||
+    family === 'wall-weave' ||
+    family === 'town-wall'
+  );
 }
 
 // `void` is excluded from the family type: the only caller filters void cells out before resolving
@@ -68,6 +73,14 @@ function rectForSkin(
       // Both stair tiles skin to the 'stairs' family; the direction picks the rect. Up rises
       // against a wall block, down cuts a well into the floor plane.
       return isStairUp(tileId) ? atlas.stairsUp : atlas.stairs;
+    case 'town-floor':
+      return atlas.townFloors[variant];
+    case 'town-wall':
+      return atlas.townWalls[variant];
+    case 'town-door':
+      return atlas.houseDoor;
+    case 'town-entrance':
+      return atlas.entranceSurround;
   }
 }
 
@@ -104,8 +117,9 @@ export function planFloorBake(
   floorId: string,
   atlas: PlayfieldAtlas,
   scale: number,
+  town: boolean,
 ): FloorBakePlan {
-  const skins = skinFloor(cells, width, height, floorId);
+  const skins = skinFloor(cells, width, height, floorId, town);
 
   const dw = TILE_HALF_W * 2 * scale; // 64 * scale, per spec
   const floorHalfDh = TILE_HALF_H * scale;

@@ -10,6 +10,10 @@ export type TileFamily =
   | 'pillar'
   | 'pillar-broken'
   | 'stairs'
+  | 'town-floor'
+  | 'town-wall'
+  | 'town-door'
+  | 'town-entrance'
   | 'void';
 
 export interface TileSkin {
@@ -23,6 +27,12 @@ const FLOORS_LEN = 8;
 const DIRTY_LEN = 8;
 const WALLS_LEN = 6;
 const WEAVE_LEN = 2;
+const TOWN_FLOORS_LEN = 2;
+const TOWN_WALLS_LEN = 2;
+
+/** Dungeon floor dirt scatter rate: 1-in-`DIRTY_RATE` cells seed dirt before neighbour
+ * propagation. Higher is calmer. */
+const DIRTY_RATE = 8;
 // `rounded` has 8 entries (NE/SE/SW/NW=0-3, endcaps=4-5, lone=6-7); every branch below picks a
 // literal in that range so no length constant is needed for modulo.
 
@@ -82,6 +92,7 @@ export function skinFloor(
   width: number,
   height: number,
   floorId: string,
+  town: boolean,
 ): readonly TileSkin[] {
   const size = width * height;
   const baseFamily: TileFamily[] = Array.from({ length: size }, (): TileFamily => 'void');
@@ -107,6 +118,25 @@ export function skinFloor(
       const family = baseFamily[gridIndex]!;
       const seed = cellSeed(floorId, x, y);
 
+      if (town) {
+        // The town is masonry of a different material: cobbles never wear dirty, and its timber
+        // walls have no rounded-boulder or Weave-conduit shapes, so town cells skip the dungeon
+        // topology entirely and alternate coherently between the two town variants by seed.
+        if (family === 'wall') {
+          resolved[gridIndex] = { family: 'town-wall', variant: seed % TOWN_WALLS_LEN };
+        } else if (family === 'floor') {
+          resolved[gridIndex] = { family: 'town-floor', variant: seed % TOWN_FLOORS_LEN };
+        } else if (family === 'door') {
+          resolved[gridIndex] = { family: 'town-door', variant: 0 };
+        } else if (family === 'stairs') {
+          // The dungeon entrance: the worked-stone arch surround is the entrance visual.
+          resolved[gridIndex] = { family: 'town-entrance', variant: 0 };
+        } else {
+          resolved[gridIndex] = { family, variant: 0 };
+        }
+        continue;
+      }
+
       if (family === 'wall') {
         resolved[gridIndex] = resolveWallSkin(seed, x, y, familyAt);
         continue;
@@ -117,12 +147,11 @@ export function skinFloor(
         const west = resolved[x > 0 ? gridIndex - 1 : -1];
         const northDirty = north?.family === 'floor-dirty';
         const westDirty = west?.family === 'floor-dirty';
-        const seedDirty = seed % 4 === 0;
-        // The propagation coin is deliberately decoupled from the rule-1 parity: with this
-        // module's cellSeed mix, `seed % 2` is provably always odd whenever a cell's north AND
-        // west neighbors both satisfy `seed % 4 === 0` (verified exhaustively over the formula's
-        // full period), which would make this clause permanently dead. Reading a higher bit
-        // (`>>> 8`) breaks that coupling so propagation can actually fire on real floors.
+        const seedDirty = seed % DIRTY_RATE === 0;
+        // The propagation coin reads a high bit (`>>> 8`), decoupled from the low bits the
+        // rule-1 seed test consumes: a coin on the low bits stays correlated with which cells
+        // qualify to propagate at all, which can make this clause effectively dead. Reading a
+        // higher bit breaks that coupling so propagation can actually fire on real floors.
         const neighborPropagatedDirty = northDirty && westDirty && (seed >>> 8) % 2 === 0;
         const isDirty = seedDirty || neighborPropagatedDirty;
         resolved[gridIndex] = isDirty

@@ -73,8 +73,8 @@ describe('skinFloor determinism', () => {
     const cells = grid(width, height, (x, y) =>
       x === 0 || y === 0 || x === width - 1 || y === height - 1 ? 'terrain.wall' : 'terrain.floor',
     );
-    const first = skinFloor(cells, width, height, 'floor-alpha');
-    const second = skinFloor(cells, width, height, 'floor-alpha');
+    const first = skinFloor(cells, width, height, 'floor-alpha', false);
+    const second = skinFloor(cells, width, height, 'floor-alpha', false);
     expect(second).toStrictEqual(first);
   });
 
@@ -84,8 +84,8 @@ describe('skinFloor determinism', () => {
     const cells = grid(width, height, (x, y) =>
       x === 0 || y === 0 || x === width - 1 || y === height - 1 ? 'terrain.wall' : 'terrain.floor',
     );
-    const a = skinFloor(cells, width, height, 'floor-alpha');
-    const b = skinFloor(cells, width, height, 'floor-beta');
+    const a = skinFloor(cells, width, height, 'floor-alpha', false);
+    const b = skinFloor(cells, width, height, 'floor-beta', false);
     expect(a).not.toStrictEqual(b);
   });
 });
@@ -97,7 +97,7 @@ describe('skinFloor wall topology', () => {
     const cells = grid(width, height, (x, y) =>
       x === 1 && y === 1 ? 'terrain.wall' : 'terrain.floor',
     );
-    const skins = skinFloor(cells, width, height, 'floor-lone');
+    const skins = skinFloor(cells, width, height, 'floor-lone', false);
     const index = 1 * width + 1;
     expect(skins[index]!.family).toBe('wall-rounded');
     expect([6, 7]).toContain(skins[index]!.variant);
@@ -112,7 +112,7 @@ describe('skinFloor wall topology', () => {
       if (x === 1 && y === 0) return 'terrain.floor';
       return 'terrain.wall';
     });
-    const skins = skinFloor(cells, width, height, 'floor-straight-2');
+    const skins = skinFloor(cells, width, height, 'floor-straight-2', false);
     const index = 1 * width + 1;
     expect(skins[index]!.family).toBe('wall');
   });
@@ -123,27 +123,26 @@ describe('skinFloor unknown tokens', () => {
     const width = 2;
     const height = 1;
     const cells = [cell(0, 0, 'terrain.floor'), cell(1, 0, 'terrain.lava')];
-    expect(() => skinFloor(cells, width, height, 'floor-bad')).toThrow();
+    expect(() => skinFloor(cells, width, height, 'floor-bad', false)).toThrow();
   });
 });
 
 describe('skinFloor floor dirty clustering', () => {
   // The propagation coin (`(cellSeed >>> 8) % 2 === 0`) is deliberately read from a high bit,
-  // decoupled from the rule-1 parity (`cellSeed % 4 === 0`): with this module's cellSeed mix, a
-  // coin on the low bits (`cellSeed % 2`) is provably always odd whenever a cell's north AND west
-  // neighbors are both rule-1 dirty (verified exhaustively over the formula's full period), which
-  // would make propagation permanently dead. Reading `>>> 8` breaks that coupling, so this floor
-  // ("dirt-a") was picked because it actually exercises propagation end-to-end.
+  // decoupled from the rule-1 seed test (`cellSeed % 8 === 0`) that consumes the low bits: a coin
+  // on the low bits stays correlated with which cells qualify to propagate, which can make
+  // propagation effectively dead. Reading `>>> 8` breaks that coupling, so this floor ("dirt-a")
+  // was picked because it actually exercises propagation end-to-end at the tuned rate.
   it('collapses seed-dirty cells, propagates dirt to qualifying neighbors, and never leaves a dirty cell unexplained by either rule', () => {
     const width = 10;
     const height = 10;
     const cells = grid(width, height, () => 'terrain.floor');
     const floorId = 'dirt-a';
-    const skins = skinFloor(cells, width, height, floorId);
+    const skins = skinFloor(cells, width, height, floorId, false);
 
     const isDirty = (x: number, y: number): boolean =>
       skins[y * width + x]!.family === 'floor-dirty';
-    const isSeedDirty = (x: number, y: number): boolean => cellSeed(floorId, x, y) % 4 === 0;
+    const isSeedDirty = (x: number, y: number): boolean => cellSeed(floorId, x, y) % 8 === 0;
 
     let sawSeedDirty = false;
     let sawNeighborPropagated = false;
@@ -163,5 +162,54 @@ describe('skinFloor floor dirty clustering', () => {
     }
     expect(sawSeedDirty).toBe(true);
     expect(sawNeighborPropagated).toBe(true);
+  });
+});
+
+describe('skinFloor town', () => {
+  it('skins town floors from the town-floor family only -- never dirty -- alternating both cobbles', () => {
+    const width = 8;
+    const height = 8;
+    const cells = grid(width, height, () => 'terrain.floor');
+    const skins = skinFloor(cells, width, height, 'town-plaza', true);
+    const variants = new Set<number>();
+    for (const skin of skins) {
+      expect(skin.family).toBe('town-floor');
+      expect(skin.variant).toBeLessThan(2);
+      variants.add(skin.variant);
+    }
+    // Both cobble variants appear across the plaza (coherent alternation, not a single tile).
+    expect(variants).toEqual(new Set([0, 1]));
+  });
+
+  it('skins every town wall as a plain town-wall -- no rounded boulder for a lone wall', () => {
+    const width = 3;
+    const height = 3;
+    // A lone wall in floor resolves to a rounded boulder in the dungeon; in town it stays a wall.
+    const cells = grid(width, height, (x, y) =>
+      x === 1 && y === 1 ? 'terrain.wall' : 'terrain.floor',
+    );
+    const skins = skinFloor(cells, width, height, 'town-walls', true);
+    const center = skins[1 * width + 1]!;
+    expect(center.family).toBe('town-wall');
+    expect(center.variant).toBeLessThan(2);
+  });
+
+  it('skins town doors and the dungeon entrance to their town families', () => {
+    const cells = [cell(0, 0, 'terrain.door'), cell(1, 0, 'terrain.stair', { tileId: 5 })];
+    const skins = skinFloor(cells, 2, 1, 'town-fixtures', true);
+    expect(skins[0]!.family).toBe('town-door');
+    expect(skins[1]!.family).toBe('town-entrance');
+  });
+
+  it('is unchanged from dungeon skinning shape when town is false (no town families leak)', () => {
+    const width = 4;
+    const height = 4;
+    const cells = grid(width, height, (x, y) =>
+      x === 0 || y === 0 || x === width - 1 || y === height - 1 ? 'terrain.wall' : 'terrain.floor',
+    );
+    const skins = skinFloor(cells, width, height, 'dungeon', false);
+    for (const skin of skins) {
+      expect(skin.family.startsWith('town-')).toBe(false);
+    }
   });
 });

@@ -33,6 +33,10 @@ function makeAtlas(): PlayfieldAtlas {
     torchWall: rect(820),
     pillar: rect(900),
     pillarBroken: rect(950),
+    townFloors: [rect(1000), rect(1001)],
+    townWalls: [rect(1010), rect(1011)],
+    houseDoor: rect(1020),
+    entranceSurround: rect(1030),
   };
 }
 
@@ -78,7 +82,7 @@ describe('planFloorBake unknown cells', () => {
       () => undefined,
       () => ({ knowledge: 'unknown', intensity: 0 }),
     );
-    const plan = planFloorBake(cells, 3, 3, 'floor-unknown', atlas, 1);
+    const plan = planFloorBake(cells, 3, 3, 'floor-unknown', atlas, 1, false);
     expect(plan.draws).toHaveLength(0);
   });
 });
@@ -92,8 +96,8 @@ describe('planFloorBake knowledge tiers', () => {
     const visibleCells = grid(3, 3, tokenAt);
     const rememberedCells = grid(3, 3, tokenAt, () => ({ knowledge: 'remembered', intensity: 24 }));
 
-    const visiblePlan = planFloorBake(visibleCells, 3, 3, 'floor-knowledge', atlas, 1);
-    const rememberedPlan = planFloorBake(rememberedCells, 3, 3, 'floor-knowledge', atlas, 1);
+    const visiblePlan = planFloorBake(visibleCells, 3, 3, 'floor-knowledge', atlas, 1, false);
+    const rememberedPlan = planFloorBake(rememberedCells, 3, 3, 'floor-knowledge', atlas, 1, false);
 
     expect(rememberedPlan).toStrictEqual(visiblePlan);
   });
@@ -109,7 +113,7 @@ describe('planFloorBake ordering', () => {
       return 'terrain.floor';
     };
     const cells = grid(2, 2, tokenAt);
-    const plan = planFloorBake(cells, 2, 2, 'floor-order', atlas, 1);
+    const plan = planFloorBake(cells, 2, 2, 'floor-order', atlas, 1, false);
 
     expect(plan.draws).toHaveLength(4);
     expect(plan.draws[0]!.rect).toEqual(atlas.door); // (0,0) sum 0
@@ -123,7 +127,7 @@ describe('planFloorBake buried walls', () => {
   it('skips a wall cell with no non-wall neighbor in the 8-neighborhood', () => {
     const atlas = makeAtlas();
     const cells = grid(3, 3, () => 'terrain.wall');
-    const plan = planFloorBake(cells, 3, 3, 'floor-buried', atlas, 1);
+    const plan = planFloorBake(cells, 3, 3, 'floor-buried', atlas, 1, false);
 
     // Only the 8 perimeter wall cells are drawn; the fully-surrounded center is buried.
     expect(plan.draws).toHaveLength(8);
@@ -133,16 +137,26 @@ describe('planFloorBake buried walls', () => {
 describe('planFloorBake single-rect families', () => {
   it('bakes a stair-down cell (tileId 5) using atlas.stairs', () => {
     const atlas = makeAtlas();
-    const cells = grid(1, 1, () => 'terrain.stair', () => ({ tileId: 5 }));
-    const plan = planFloorBake(cells, 1, 1, 'floor-stairs-down', atlas, 1);
+    const cells = grid(
+      1,
+      1,
+      () => 'terrain.stair',
+      () => ({ tileId: 5 }),
+    );
+    const plan = planFloorBake(cells, 1, 1, 'floor-stairs-down', atlas, 1, false);
     expect(plan.draws).toHaveLength(1);
     expect(plan.draws[0]!.rect).toEqual(atlas.stairs);
   });
 
   it('bakes a stair-up cell (tileId 4) using atlas.stairsUp', () => {
     const atlas = makeAtlas();
-    const cells = grid(1, 1, () => 'terrain.stair', () => ({ tileId: 4 }));
-    const plan = planFloorBake(cells, 1, 1, 'floor-stairs-up', atlas, 1);
+    const cells = grid(
+      1,
+      1,
+      () => 'terrain.stair',
+      () => ({ tileId: 4 }),
+    );
+    const plan = planFloorBake(cells, 1, 1, 'floor-stairs-up', atlas, 1, false);
     expect(plan.draws).toHaveLength(1);
     expect(plan.draws[0]!.rect).toEqual(atlas.stairsUp);
   });
@@ -150,7 +164,7 @@ describe('planFloorBake single-rect families', () => {
   it('falls back to atlas.stairs for a stair cell with no tileId', () => {
     const atlas = makeAtlas();
     const cells = grid(1, 1, () => 'terrain.stair');
-    const plan = planFloorBake(cells, 1, 1, 'floor-stairs', atlas, 1);
+    const plan = planFloorBake(cells, 1, 1, 'floor-stairs', atlas, 1, false);
     expect(plan.draws).toHaveLength(1);
     expect(plan.draws[0]!.rect).toEqual(atlas.stairs);
   });
@@ -158,9 +172,60 @@ describe('planFloorBake single-rect families', () => {
   it('bakes a door cell using atlas.door', () => {
     const atlas = makeAtlas();
     const cells = grid(1, 1, () => 'terrain.door');
-    const plan = planFloorBake(cells, 1, 1, 'floor-door', atlas, 1);
+    const plan = planFloorBake(cells, 1, 1, 'floor-door', atlas, 1, false);
     expect(plan.draws).toHaveLength(1);
     expect(plan.draws[0]!.rect).toEqual(atlas.door);
+  });
+});
+
+describe('planFloorBake town families', () => {
+  it('bakes town floor cells from atlas.townFloors, never the dungeon floors or dirty', () => {
+    const atlas = makeAtlas();
+    const cells = grid(3, 3, () => 'terrain.floor');
+    const plan = planFloorBake(cells, 3, 3, 'town-floor', atlas, 1, true);
+    expect(plan.draws).toHaveLength(9);
+    for (const draw of plan.draws) {
+      expect(atlas.townFloors).toContainEqual(draw.rect);
+      expect(atlas.floors).not.toContainEqual(draw.rect);
+      expect(atlas.dirty).not.toContainEqual(draw.rect);
+    }
+  });
+
+  it('bakes town wall cells from atlas.townWalls, never rounded/weave dungeon shapes', () => {
+    const atlas = makeAtlas();
+    // A lone wall surrounded by floor would resolve to a rounded boulder in the dungeon; in town it
+    // must stay a plain town wall.
+    const cells = grid(3, 3, (x, y) => (x === 1 && y === 1 ? 'terrain.wall' : 'terrain.floor'));
+    const plan = planFloorBake(cells, 3, 3, 'town-wall', atlas, 1, true);
+    const wallDraw = plan.draws.find((draw) => atlas.townWalls.some((r) => r.x === draw.rect.x));
+    expect(wallDraw).toBeDefined();
+    expect(atlas.rounded).not.toContainEqual(wallDraw!.rect);
+  });
+
+  it('bakes a town door cell from atlas.houseDoor', () => {
+    const atlas = makeAtlas();
+    const cells = grid(1, 1, () => 'terrain.door');
+    const plan = planFloorBake(cells, 1, 1, 'town-door', atlas, 1, true);
+    expect(plan.draws[0]!.rect).toEqual(atlas.houseDoor);
+  });
+
+  it('bakes a town stair (entrance) cell from atlas.entranceSurround regardless of direction', () => {
+    const atlas = makeAtlas();
+    const cells = grid(
+      1,
+      1,
+      () => 'terrain.stair',
+      () => ({ tileId: 5 }),
+    );
+    const plan = planFloorBake(cells, 1, 1, 'town-entrance', atlas, 1, true);
+    expect(plan.draws[0]!.rect).toEqual(atlas.entranceSurround);
+  });
+
+  it('leaves dungeon skinning unchanged when town is false', () => {
+    const atlas = makeAtlas();
+    const cells = grid(1, 1, () => 'terrain.door');
+    const dungeon = planFloorBake(cells, 1, 1, 'floor-door', atlas, 1, false);
+    expect(dungeon.draws[0]!.rect).toEqual(atlas.door);
   });
 });
 
@@ -170,7 +235,7 @@ describe('planFloorBake tile anchoring', () => {
     // A pillar is a flat (non-wall) tile with a predictable full-cell rect, so its draw geometry is
     // fully determined -- unlike a floor variant, whose rect is hash-chosen.
     const cells = grid(1, 1, () => 'terrain.pillar');
-    const plan = planFloorBake(cells, 1, 1, 'floor-anchor', atlas, 1);
+    const plan = planFloorBake(cells, 1, 1, 'floor-anchor', atlas, 1, false);
     expect(plan.draws).toHaveLength(1);
     const draw = plan.draws[0]!;
 
@@ -187,7 +252,7 @@ describe('planFloorBake tile anchoring', () => {
   it('widens a wall tile horizontally by WALL_OVERSCAN while keeping its base-anchored height', () => {
     const atlas = makeAtlas();
     const cells = grid(1, 1, () => 'terrain.wall');
-    const plan = planFloorBake(cells, 1, 1, 'floor-wall-anchor', atlas, 1);
+    const plan = planFloorBake(cells, 1, 1, 'floor-wall-anchor', atlas, 1, false);
     expect(plan.draws).toHaveLength(1);
     const draw = plan.draws[0]!;
 
@@ -206,7 +271,7 @@ describe('planFloorBake canvas sizing', () => {
   it('rounds the bake canvas size up to whole pixels so a fractional scale never clips the last row/column', () => {
     const atlas = makeAtlas();
     const cells = grid(3, 3, () => 'terrain.floor');
-    const plan = planFloorBake(cells, 3, 3, 'floor-ceil', atlas, 0.37);
+    const plan = planFloorBake(cells, 3, 3, 'floor-ceil', atlas, 0.37, false);
     expect(Number.isInteger(plan.pxWidth)).toBe(true);
     expect(Number.isInteger(plan.pxHeight)).toBe(true);
   });

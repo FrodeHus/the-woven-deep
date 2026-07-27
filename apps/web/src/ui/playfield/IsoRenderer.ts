@@ -254,7 +254,7 @@ export class IsoRenderer {
     }
 
     this.resolveHeroLight(snapshot);
-    this.rebakeIfNeeded(floor.cells, floor.floorId);
+    this.rebakeIfNeeded(floor.cells, floor.floorId, floor.town);
     this.rebuildFeatures(snapshot);
     this.rebuildGroundItems();
     this.rebuildActors();
@@ -416,7 +416,7 @@ export class IsoRenderer {
     this.heroLightRadius = light.radius * light.fuelFraction;
   }
 
-  private rebakeIfNeeded(cells: readonly ObservableCell[], floorId: string): void {
+  private rebakeIfNeeded(cells: readonly ObservableCell[], floorId: string, town: boolean): void {
     const key = bakeKey(cells, floorId);
     if (key === this.currentBakeKey) return;
     this.currentBakeKey = key;
@@ -431,6 +431,7 @@ export class IsoRenderer {
       floorId,
       this.atlas,
       BAKE_SCALE,
+      town,
     );
     const canvas = document.createElement('canvas');
     // `bakeFloor` fails loud on a null 2d context, so a missing context surfaces as a thrown error
