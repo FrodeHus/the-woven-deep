@@ -122,7 +122,7 @@ describe('belt keybind', () => {
     const session = new FakeSession(projectionOf([potion('potion.a'), potion('potion.b')]));
     await renderPlay(session);
 
-    act(() => fireEvent.keyDown(window, { key: '1' }));
+    act(() => fireEvent.keyDown(window, { key: '1', code: 'Digit1' }));
 
     expect(session.dispatched).toEqual([
       { type: 'backpack', action: 'use', itemId: 'potion.a' },
@@ -133,7 +133,7 @@ describe('belt keybind', () => {
     const session = new FakeSession(projectionOf([]));
     await renderPlay(session);
 
-    act(() => fireEvent.keyDown(window, { key: '1' }));
+    act(() => fireEvent.keyDown(window, { key: '1', code: 'Digit1' }));
 
     expect(session.dispatched).toEqual([]);
   });
@@ -143,10 +143,19 @@ describe('belt keybind', () => {
     const session = new FakeSession(projectionOf([nonPotion, potion('potion.a')]));
     await renderPlay(session);
 
-    act(() => fireEvent.keyDown(window, { key: '1' }));
+    act(() => fireEvent.keyDown(window, { key: '1', code: 'Digit1' }));
 
     expect(session.dispatched).toEqual([
       { type: 'backpack', action: 'use', itemId: 'potion.a' },
     ]);
+  });
+
+  it('numpad Numpad1 still moves southwest instead of drinking a potion', async () => {
+    const session = new FakeSession(projectionOf([potion('potion.a')]));
+    await renderPlay(session);
+
+    act(() => fireEvent.keyDown(window, { key: '1', code: 'Numpad1' }));
+
+    expect(session.dispatched).toEqual([{ type: 'move', direction: 'southwest' }]);
   });
 });

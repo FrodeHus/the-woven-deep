@@ -6,6 +6,7 @@ import { resolveKeymap } from '../src/session/settings.js';
 function keyEvent(
   key: string,
   options: Readonly<{
+    code?: string;
     shiftKey?: boolean;
     target?: EventTarget | null;
     repeat?: boolean;
@@ -15,6 +16,9 @@ function keyEvent(
 ) {
   return {
     key,
+    // Real keydowns always carry a `code`; tests that don't care which physical key produced the
+    // event (everything but the Numpad1/Digit1 disambiguation below) leave it blank.
+    code: options.code ?? '',
     shiftKey: options.shiftKey ?? false,
     target: options.target ?? null,
     repeat: options.repeat ?? false,
@@ -231,15 +235,39 @@ describe('routeKey', () => {
   });
 
   describe('belt keybind', () => {
-    it('maps 1 to using the first belt potion slot', () => {
-      expect(routeKey({ event: keyEvent('1'), overlayOpen: false, keymap: defaultKeymap })).toEqual(
-        { type: 'use-belt-slot', slot: 0 },
-      );
+    it('maps the top-row Digit1 to using the first belt potion slot', () => {
+      expect(
+        routeKey({
+          event: keyEvent('1', { code: 'Digit1' }),
+          overlayOpen: false,
+          keymap: defaultKeymap,
+        }),
+      ).toEqual({ type: 'use-belt-slot', slot: 0 });
+    });
+
+    it('still maps numpad Numpad1 to southwest movement, not the belt', () => {
+      expect(
+        routeKey({
+          event: keyEvent('1', { code: 'Numpad1' }),
+          overlayOpen: false,
+          keymap: defaultKeymap,
+        }),
+      ).toEqual({ type: 'move', direction: 'southwest' });
     });
 
     it('blocks the belt keybind while an overlay is open', () => {
       expect(
-        routeKey({ event: keyEvent('1'), overlayOpen: true, keymap: defaultKeymap }),
+        routeKey({ event: keyEvent('1', { code: 'Digit1' }), overlayOpen: true, keymap: defaultKeymap }),
+      ).toBeNull();
+    });
+
+    it('still blocks the hardwired numpad southwest key while an overlay is open', () => {
+      expect(
+        routeKey({
+          event: keyEvent('1', { code: 'Numpad1' }),
+          overlayOpen: true,
+          keymap: defaultKeymap,
+        }),
       ).toBeNull();
     });
   });
@@ -391,9 +419,23 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
       () => defaultKeymap,
     );
 
-    handler(keyEvent('1'));
+    handler(keyEvent('1', { code: 'Digit1' }));
     expect(useBeltSlot).toHaveBeenCalledOnce();
     expect(useBeltSlot).toHaveBeenCalledWith(0);
     expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('still routes numpad Numpad1 to a southwest move dispatch, never useBeltSlot', () => {
+    const dispatch = vi.fn();
+    const useBeltSlot = vi.fn();
+    const handler = createKeyDispatcher(
+      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint: vi.fn(), useBeltSlot },
+      () => false,
+      () => defaultKeymap,
+    );
+
+    handler(keyEvent('1', { code: 'Numpad1' }));
+    expect(dispatch).toHaveBeenCalledWith({ type: 'move', direction: 'southwest' });
+    expect(useBeltSlot).not.toHaveBeenCalled();
   });
 });
