@@ -115,7 +115,12 @@ export function skinFloor(
         const northDirty = north?.family === 'floor-dirty';
         const westDirty = west?.family === 'floor-dirty';
         const seedDirty = seed % 4 === 0;
-        const neighborPropagatedDirty = northDirty && westDirty && seed % 2 === 0;
+        // The propagation coin is deliberately decoupled from the rule-1 parity: with this
+        // module's cellSeed mix, `seed % 2` is provably always odd whenever a cell's north AND
+        // west neighbors both satisfy `seed % 4 === 0` (verified exhaustively over the formula's
+        // full period), which would make this clause permanently dead. Reading a higher bit
+        // (`>>> 8`) breaks that coupling so propagation can actually fire on real floors.
+        const neighborPropagatedDirty = northDirty && westDirty && (seed >>> 8) % 2 === 0;
         const isDirty = seedDirty || neighborPropagatedDirty;
         resolved[gridIndex] = isDirty
           ? { family: 'floor-dirty', variant: seed % DIRTY_LEN }

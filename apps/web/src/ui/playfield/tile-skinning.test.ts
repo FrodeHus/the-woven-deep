@@ -122,48 +122,39 @@ describe('skinFloor unknown tokens', () => {
 });
 
 describe('skinFloor floor dirty clustering', () => {
-  it('collapses seed-dirty cells and never leaves a dirty cell unexplained by either rule', () => {
+  // The propagation coin (`(cellSeed >>> 8) % 2 === 0`) is deliberately read from a high bit,
+  // decoupled from the rule-1 parity (`cellSeed % 4 === 0`): with this module's cellSeed mix, a
+  // coin on the low bits (`cellSeed % 2`) is provably always odd whenever a cell's north AND west
+  // neighbors are both rule-1 dirty (verified exhaustively over the formula's full period), which
+  // would make propagation permanently dead. Reading `>>> 8` breaks that coupling, so this floor
+  // ("dirt-a") was picked because it actually exercises propagation end-to-end.
+  it('collapses seed-dirty cells, propagates dirt to qualifying neighbors, and never leaves a dirty cell unexplained by either rule', () => {
     const width = 10;
     const height = 10;
     const cells = grid(width, height, () => 'terrain.floor');
-    const floorId = 'floor-dirty-cluster';
+    const floorId = 'dirt-a';
     const skins = skinFloor(cells, width, height, floorId);
 
     const isDirty = (x: number, y: number): boolean => skins[y * width + x]!.family === 'floor-dirty';
     const isSeedDirty = (x: number, y: number): boolean => cellSeed(floorId, x, y) % 4 === 0;
 
     let sawSeedDirty = false;
+    let sawNeighborPropagated = false;
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
         if (!isDirty(x, y)) continue;
         const seedDirty = isSeedDirty(x, y);
         const north = y > 0 && isDirty(x, y - 1);
         const west = x > 0 && isDirty(x - 1, y);
-        const neighborPropagated = north && west && cellSeed(floorId, x, y) % 2 === 0;
+        const neighborPropagated = north && west && (cellSeed(floorId, x, y) >>> 8) % 2 === 0;
         // Every dirty cell must trace back to one of the two spec'd rules -- no third,
         // unseeded mechanism is allowed to mark a cell dirty.
         expect(seedDirty || neighborPropagated).toBe(true);
         if (seedDirty) sawSeedDirty = true;
+        if (!seedDirty && neighborPropagated) sawNeighborPropagated = true;
       }
     }
     expect(sawSeedDirty).toBe(true);
-  });
-
-  // The neighbor-propagation clause (`cellSeed % 4 !== 0` cell with both its already-collapsed
-  // north AND west neighbors dirty, gated by `cellSeed % 2 === 0`) is exercised directly here
-  // rather than through a generated floor: with the exact FNV-1a + 73856093/19349663 mix this
-  // module's `cellSeed` uses, it is a provable mathematical fact (verified exhaustively over the
-  // formula's full period) that whenever a cell's north AND west are both `cellSeed % 4 === 0`,
-  // that cell's own `cellSeed % 2` is always 1 -- so the propagation branch can never fire from a
-  // real grid under this hash. This test pins the branch's logic in isolation so it still has
-  // coverage; see the task report for the full derivation.
-  it('would mark a cell dirty by propagation if both already-collapsed neighbors were dirty and its own seed were even', () => {
-    const north = { family: 'floor-dirty' as const, variant: 0 };
-    const west = { family: 'floor-dirty' as const, variant: 0 };
-    const seed = 2; // % 4 !== 0, % 2 === 0
-    const northDirty = north.family === 'floor-dirty';
-    const westDirty = west.family === 'floor-dirty';
-    const neighborPropagated = northDirty && westDirty && seed % 2 === 0;
-    expect(seed % 4 === 0 || neighborPropagated).toBe(true);
+    expect(sawNeighborPropagated).toBe(true);
   });
 });
