@@ -45,7 +45,7 @@ export function EquipmentSlots({
               item ? 'bg-raised' : 'bg-surface',
             )}
           >
-            <span className="text-[10px] uppercase tracking-[0.08em] text-subtle">
+            <span className="text-[0.5625rem] uppercase tracking-[0.09em] text-subtle">
               {SLOT_LABEL[slot]}
             </span>
             <span className="truncate font-mono text-fg">
