@@ -43,7 +43,7 @@ export function MinimapPanel({ snapshot }: PanelProps): JSX.Element {
     <section
       aria-label="Map"
       data-testid="minimap"
-      className="flex max-h-40 flex-col gap-1 overflow-auto rounded-md border border-line bg-surface p-2"
+      className="pointer-events-auto absolute right-3 top-16 z-10 flex max-h-40 max-w-[45vw] flex-col gap-1 overflow-auto rounded-md border border-line bg-deep/70 p-2 backdrop-blur-sm"
     >
       <div aria-hidden="true" className="text-[0.625rem] uppercase tracking-[0.16em] text-subtle">
         ·&nbsp;─ The Floor ─&nbsp;·

@@ -9,19 +9,10 @@ import {
   tradeIsAvailable,
 } from '../session/projection-view.js';
 import { CommandPalette } from './CommandPalette.js';
-import { HintStrip } from './HintStrip.js';
 import type { OverlayActionId } from './KeyRouter.js';
 import { activeHint, HINTS } from '../session/onboarding.js';
 import type { LayoutTier } from './layout.js';
-import {
-  HeroPanel,
-  HeroStatusAnnouncer,
-  LogPanel,
-  MinimapPanel,
-  SpellsPanel,
-  StatusBar,
-  ThreatPanel,
-} from './panels.js';
+import { HeroStatusAnnouncer, LogPanel, MinimapPanel, TopBar } from './panels.js';
 import type { OverlayId } from './overlays/registry.js';
 import type { AccountState } from '../session/account.js';
 import { DecisionPrompt } from './overlays/DecisionPrompt.js';
@@ -96,12 +87,14 @@ export interface PlayScreenProps {
 }
 
 /**
- * Composes Layout A: a fixed status bar, the isometric Pixi playfield as the main focal region, a
- * persistent right rail (hero/vitals, minimap, threat/town panel), and a full-width message log --
- * none of which reflow as the window resizes; overlays open over this shell via `OverlayHost`'s
- * Sheet. The playfield renders on a canvas (`PlayfieldCanvas`), which reports pointer input back as
- * cell callbacks; the stateful concerns (the global key dispatcher, cell-hover popover, spell
- * targeting, the ⌘K palette) are each their own hook so this component stays layout + composition.
+ * Composes the full-bleed HUD: the isometric Pixi playfield fills the viewport (`PlayfieldCanvas`,
+ * absolute inset-0) and every piece of chrome floats above it -- the top bar, the top-right minimap,
+ * the bottom-left message log, the town panel (town only), and every popover/overlay. Nothing
+ * reflows into drawers; overlays open over this shell via `OverlayHost`'s Sheet. The playfield
+ * reports pointer input back as cell callbacks; the stateful concerns (the global key dispatcher,
+ * cell-hover popover, spell targeting, the ⌘K palette) are each their own hook so this component
+ * stays layout + composition. Hero vitals, spells, conditions, and threats live in their overlays
+ * and the command palette rather than always-on rail panels.
  */
 export function PlayScreen({
   session,
@@ -233,66 +226,50 @@ export function PlayScreen({
       reducedMotion={effectiveReducedMotion(settings.reducedMotion)}
     >
       <div
-        className="flex min-h-screen flex-col gap-2 bg-deep p-2 text-fg"
+        className="relative h-screen w-screen overflow-hidden bg-deep text-fg"
         data-testid="play-layout"
+        ref={mapPaneRef}
       >
-        <StatusBar snapshot={snapshot} />
-        <HeroStatusAnnouncer snapshot={snapshot} />
-
-        <div className="grid min-h-0 flex-1 grid-cols-[1fr_15rem] grid-rows-[1fr_auto] gap-2">
-          <div
-            className="map-pane relative col-start-1 row-start-1 overflow-hidden"
-            ref={mapPaneRef}
-          >
-            <PlayfieldCanvas
-              snapshot={snapshot}
-              pack={pack}
-              targeting={targetingVisual}
-              onCellClick={handleCellClick}
-              onCellHover={handleCellHover}
-              {...(createRenderer ? { createRenderer } : {})}
-            />
-            {hover?.kind === 'actor' && hoverAnchor && (
-              <ThreatPopover
-                actor={hover.actor}
-                leftPx={hoverAnchor.leftPx}
-                topPx={hoverAnchor.topPx}
-                paneWidthPx={hoverAnchor.paneWidthPx}
-                paneHeightPx={hoverAnchor.paneHeightPx}
-                pack={pack}
-              />
-            )}
-            {hover?.kind === 'asset' && hoverAnchor && (
-              <AssetPopover
-                asset={hover.asset}
-                leftPx={hoverAnchor.leftPx}
-                topPx={hoverAnchor.topPx}
-                paneWidthPx={hoverAnchor.paneWidthPx}
-                paneHeightPx={hoverAnchor.paneHeightPx}
-                pack={pack}
-              />
-            )}
-          </div>
-
-          <aside
-            aria-label="Hero status and threats"
-            className="col-start-2 row-start-1 flex flex-col gap-2 overflow-y-auto"
-          >
-            <HeroPanel snapshot={snapshot} />
-            <SpellsPanel snapshot={snapshot} onCast={targeting.begin} />
-            <MinimapPanel snapshot={snapshot} />
-            {projection.floor.town ? (
-              <TownPanel snapshot={snapshot} keymap={keymap} />
-            ) : (
-              <ThreatPanel snapshot={snapshot} keymap={keymap} pack={pack} />
-            )}
-          </aside>
-
-          <div className="col-span-2 row-start-2 flex flex-col gap-1">
-            <HintStrip hint={hint} keymap={keymap} />
-            <LogPanel snapshot={snapshot} />
-          </div>
+        <div className="absolute inset-0">
+          <PlayfieldCanvas
+            snapshot={snapshot}
+            pack={pack}
+            targeting={targetingVisual}
+            onCellClick={handleCellClick}
+            onCellHover={handleCellHover}
+            {...(createRenderer ? { createRenderer } : {})}
+          />
         </div>
+        {hover?.kind === 'actor' && hoverAnchor && (
+          <ThreatPopover
+            actor={hover.actor}
+            leftPx={hoverAnchor.leftPx}
+            topPx={hoverAnchor.topPx}
+            paneWidthPx={hoverAnchor.paneWidthPx}
+            paneHeightPx={hoverAnchor.paneHeightPx}
+            pack={pack}
+          />
+        )}
+        {hover?.kind === 'asset' && hoverAnchor && (
+          <AssetPopover
+            asset={hover.asset}
+            leftPx={hoverAnchor.leftPx}
+            topPx={hoverAnchor.topPx}
+            paneWidthPx={hoverAnchor.paneWidthPx}
+            paneHeightPx={hoverAnchor.paneHeightPx}
+            pack={pack}
+          />
+        )}
+
+        <TopBar snapshot={snapshot} />
+        <HeroStatusAnnouncer snapshot={snapshot} />
+        <MinimapPanel snapshot={snapshot} />
+        <LogPanel snapshot={snapshot} />
+        {projection.floor.town && (
+          <div className="pointer-events-auto absolute bottom-3 right-3 z-10 w-56 max-w-[45vw] rounded-md border border-line bg-deep/70 p-2 text-sm text-fg backdrop-blur-sm">
+            <TownPanel snapshot={snapshot} keymap={keymap} />
+          </div>
+        )}
 
         {snapshot.houseOpen && (
           <HouseScreen

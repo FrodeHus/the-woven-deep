@@ -30,9 +30,9 @@ describe('PlayfieldCanvas', () => {
 
     // Nothing is mounted before the atlas promise resolves.
     expect(fake.instances).toHaveLength(0);
-    expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
 
-    const host = await screen.findByRole('grid');
+    const host = await screen.findByRole('img');
     expect(host).toBeInTheDocument();
     expect(fake.instances).toHaveLength(1);
     await waitFor(() => expect(fake.latest().snapshots).toContain(snapshot));
@@ -51,7 +51,7 @@ describe('PlayfieldCanvas', () => {
         createRenderer={fake.createRenderer}
       />,
     );
-    await screen.findByRole('grid');
+    await screen.findByRole('img');
 
     act(() => fake.latest().click({ x: 3, y: 4 }, 'primary'));
     expect(onCellClick).toHaveBeenCalledWith({ x: 3, y: 4 }, 'primary');
@@ -74,7 +74,7 @@ describe('PlayfieldCanvas', () => {
         createRenderer={fake.createRenderer}
       />,
     );
-    await screen.findByRole('grid');
+    await screen.findByRole('img');
     await waitFor(() => expect(fake.latest().targetings.length).toBeGreaterThan(0));
 
     rerender(

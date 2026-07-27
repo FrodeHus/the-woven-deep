@@ -19,9 +19,14 @@ const REINFORCEMENT_CLASS: Partial<Record<LogLine['tone'], string>> = {
   system: 'log-line--system',
 };
 
+/** The floating log shows only the most recent handful of lines -- older history lives in the
+ * message journal. */
+const VISIBLE_LINES = 5;
+
 export function LogPanel({ snapshot }: PanelProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const { log } = snapshot;
+  const recent = log.slice(-VISIBLE_LINES);
 
   useEffect(() => {
     const node = containerRef.current;
@@ -29,15 +34,15 @@ export function LogPanel({ snapshot }: PanelProps): JSX.Element {
   }, [log]);
 
   return (
-    <div className="flex h-full flex-col rounded-md border border-line bg-surface p-2">
+    <div className="pointer-events-auto absolute bottom-3 left-3 z-10 w-80 max-w-[calc(100vw-1.5rem)] rounded-md border border-line bg-deep/70 p-2 backdrop-blur-sm">
       <div
         ref={containerRef}
         role="log"
         aria-live="polite"
         aria-label="Adventure log"
-        className="max-h-40 overflow-y-auto font-mono text-xs leading-relaxed"
+        className="max-h-32 overflow-y-auto font-mono text-xs leading-relaxed"
       >
-        {log.map((line) => (
+        {recent.map((line) => (
           <p key={line.id} className={cn(TONE_CLASS[line.tone], REINFORCEMENT_CLASS[line.tone])}>
             {line.text}
           </p>

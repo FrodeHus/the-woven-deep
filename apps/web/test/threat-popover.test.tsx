@@ -155,7 +155,7 @@ describe('PlayScreen threat hover integration (compact tier)', () => {
         />,
       ),
     );
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
 
     act(() => fake.latest().hover({ x: 0, y: 0 }, 10, 10));
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
@@ -203,7 +203,7 @@ describe('PlayScreen threat hover integration (compact tier)', () => {
         />,
       ),
     );
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
 
     act(() => fake.latest().hover({ x: hero.x + 1, y: hero.y }, 40, 20));
     await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('Cave rat'));

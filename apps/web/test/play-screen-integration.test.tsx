@@ -90,7 +90,7 @@ describe('PlayScreen renderer wiring', () => {
         <PlayScreen session={fakeSession(first)} pack={pack} createRenderer={fake.createRenderer} />,
       ),
     );
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
     await waitFor(() => expect(fake.latest().snapshots.length).toBeGreaterThan(0));
     expect(fake.latest().snapshots.at(-1)!.projection.floor.floorId).toBe('floor.depth-001');
 
@@ -305,7 +305,7 @@ describe('PlayScreen threat hover scroll-dismiss', () => {
         <PlayScreen session={fakeHoverSession} pack={pack} createRenderer={fake.createRenderer} />,
       ),
     );
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
 
     act(() => fake.latest().hover({ x: hero.x + 1, y: hero.y }, 30, 30));
     await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('Cave rat'));
@@ -340,20 +340,21 @@ describe('PlayScreen Layout A composition', () => {
     return new GuestSession({ pack, storage: keyedStorage });
   }
 
-  it('always renders the hero panel, minimap, map grid, and an always-visible threat panel -- Layout A never collapses into drawers', async () => {
+  it('renders the full-bleed HUD -- top bar, floating minimap, and the playfield -- with no drawers on a dungeon floor', async () => {
     render(withUiProviders(pack, <PlayScreen session={session()} pack={pack} />));
-    expect(await screen.findByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Hero' })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: /dungeon/i })).toBeInTheDocument();
+    expect(screen.getByText('THE WOVEN DEEP')).toBeInTheDocument();
     expect(screen.getByTestId('minimap')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: /threats/i })).toBeInTheDocument();
+    // The dungeon floor is not town, so no town panel floats over the HUD.
+    expect(screen.queryByRole('region', { name: /town/i })).not.toBeInTheDocument();
     expect(document.querySelector('details.threat-drawer')).toBeNull();
     expect(document.querySelector('details.hero-drawer')).toBeNull();
   });
 
-  it('renders the town panel instead of the threat panel while in town, still without collapsing', () => {
+  it('floats the town panel over the HUD while in town', () => {
     const guestSession = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
     render(withUiProviders(pack, <PlayScreen session={guestSession} pack={pack} />));
     expect(screen.getByRole('region', { name: /town/i })).toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: /threats/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('minimap')).toBeInTheDocument();
   });
 });

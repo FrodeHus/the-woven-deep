@@ -13,6 +13,7 @@ import {
   type Point,
 } from '@woven-deep/engine';
 import type { GuestSession, SessionSnapshot } from '../src/session/guest-session.js';
+import type { RunSession } from '../src/session/run-session.js';
 import type { PlayerIntent } from '../src/session/intents.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
 import { fakePlayfieldRenderer, type FakePlayfieldRenderer } from './fake-playfield-renderer.js';
@@ -175,11 +176,20 @@ async function renderPlay(session: FakeSession): Promise<FakePlayfieldRenderer> 
         pack={pack}
         createRenderer={fake.createRenderer}
       />,
+      undefined,
+      session as unknown as RunSession,
     ),
   );
   // The renderer mounts once the atlas resolves; its callbacks are how a click reaches PlayScreen.
-  await screen.findByRole('grid', { name: /dungeon/i });
+  await screen.findByRole('img', { name: /dungeon/i });
   return fake;
+}
+
+/** Enters spell targeting the way a player now does it -- the always-on HUD Spells panel is gone,
+ * so casting is reached through the ⌘K command palette's "Cast: <spell>" entry. */
+async function castViaPalette(spellName: string): Promise<void> {
+  fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+  await userEvent.click(await screen.findByText(`Cast: ${spellName}`));
 }
 
 function clickCell(fake: FakePlayfieldRenderer, cell: Point): void {
@@ -199,8 +209,7 @@ function moves(session: FakeSession): readonly PlayerIntent[] {
 }
 
 async function beginTargeting(): Promise<void> {
-  const row = screen.getByRole('button', { name: /Ember bolt/ });
-  await userEvent.click(row);
+  await castViaPalette('Ember bolt');
 }
 
 describe('PlayScreen spell-targeting mode', () => {
@@ -232,9 +241,9 @@ describe('PlayScreen spell-targeting mode', () => {
 
     expect(casts(session)).toEqual([]);
     expect(moves(session)).toEqual([]);
-    // Still targeting -- the Ember bolt row is still the thing that was clicked to enter, and no
-    // auto-travel move fired underneath the ignored click.
-    expect(screen.getByRole('button', { name: /Ember bolt/ })).toBeInTheDocument();
+    // Still targeting -- the click on the out-of-range cell was ignored, no auto-travel move fired
+    // underneath it, and the renderer is still being handed a targeting visual to draw.
+    await waitFor(() => expect(fake.latest().lastTargeting()).not.toBeNull());
   });
 
   it('clicking a cell with no hostile on it does not cast', async () => {
@@ -349,8 +358,7 @@ describe('PlayScreen click-to-move is unaffected when targeting is inactive', ()
 });
 
 async function beginFireballTargeting(): Promise<void> {
-  const row = screen.getByRole('button', { name: /Fireball/ });
-  await userEvent.click(row);
+  await castViaPalette('Fireball');
 }
 
 describe('PlayScreen AoE free-cursor targeting', () => {

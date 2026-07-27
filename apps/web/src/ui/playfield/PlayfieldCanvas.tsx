@@ -131,5 +131,12 @@ export function PlayfieldCanvas({
   }, [ready, targeting]);
 
   if (atlas === null) return null;
-  return <div ref={hostRef} className="h-full w-full" role="grid" aria-label="Dungeon floor" />;
+  return (
+    <div
+      ref={hostRef}
+      className="h-full w-full"
+      role="img"
+      aria-label="Isometric view of the dungeon floor"
+    />
+  );
 }

@@ -276,7 +276,7 @@ describe('App boot flow', () => {
     const storage = fakeStorage();
 
     render(<App fetcher={packFetcher()} storage={storage} />);
-    expect(await screen.findByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: /dungeon/i })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '.' });
     await waitFor(() => expect(storage.peek()).not.toBeNull());
@@ -289,7 +289,7 @@ describe('App boot flow', () => {
     const storage = fakeStorage();
 
     render(<App fetcher={packFetcher()} storage={storage} />);
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
 
     fireEvent.keyDown(window, { key: '.' });
     await waitFor(() => expect(storage.peek()).not.toBeNull());
@@ -320,7 +320,7 @@ describe('App boot flow', () => {
     const localStorage = removableStorage();
 
     render(<App fetcher={packFetcher()} storage={storage} localStorage={localStorage} />);
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
 
     fireEvent.keyDown(window, { key: 'o' });
     await screen.findByRole('dialog', { name: 'Settings' });
@@ -331,7 +331,7 @@ describe('App boot flow', () => {
     // re-constructed by the surviving `?quickstart=1` query would instead bounce straight back
     // into play.
     expect(await screen.findByRole('option', { name: /enter the deep/i })).toBeInTheDocument();
-    expect(screen.queryByRole('grid', { name: /dungeon/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /dungeon/i })).not.toBeInTheDocument();
 
     // The wiped keys must stay wiped -- a resurrected session's constructor persists sightings
     // (and would persist a save/command-counter on any further dispatch) even with no player
@@ -346,7 +346,7 @@ describe('App boot flow', () => {
     const storage = fakeStorage('{"not": "a save"}');
     render(<App fetcher={packFetcher()} storage={storage} />);
 
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
     const banner = screen.getByRole('status', { name: /session/i });
     expect(banner).toHaveTextContent(/previous save/i);
     const dismiss = screen.getByRole('button', { name: /dismiss/i });
@@ -364,7 +364,7 @@ describe('App boot flow', () => {
     };
 
     render(<App fetcher={packFetcher()} storage={storage} />);
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
 
     fireEvent.keyDown(window, { key: '.' });
 
@@ -372,7 +372,7 @@ describe('App boot flow', () => {
     expect(warning).toHaveTextContent(/saving is unavailable/i);
     expect(within(warning).queryByRole('button', { name: /dismiss/i })).not.toBeInTheDocument();
 
-    expect(screen.getByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /dungeon/i })).toBeInTheDocument();
     expect(screen.getByRole('alert', { name: /storage/i })).toBeInTheDocument();
   });
 
@@ -387,7 +387,7 @@ describe('App boot flow', () => {
     };
 
     render(<App fetcher={packFetcher()} storage={storage} />);
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
 
     fireEvent.keyDown(window, { key: '.' });
 
@@ -400,7 +400,7 @@ describe('App boot flow', () => {
     const storage = fakeStorage();
 
     render(<App fetcher={packFetcher()} storage={storage} />);
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
 
     fireEvent.keyDown(window, { key: '.' });
 
@@ -427,7 +427,7 @@ describe('App boot flow', () => {
     await driveWizardToSummary(user);
     await weaveAndDescend(user);
 
-    expect(await screen.findByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: /dungeon/i })).toBeInTheDocument();
     // A fresh session doesn't persist until its first dispatch — force one (harmless: `.` waits).
     fireEvent.keyDown(window, { key: '.' });
     await waitFor(() => expect(storage.peek()).not.toBeNull());
@@ -461,7 +461,7 @@ describe('App boot flow', () => {
     await driveWizardToSummary(user);
     await weaveAndDescend(user);
 
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
     expect(storage.peek(PORTRAIT_KEY)).toBe(PORTRAIT_GLYPHS[1]);
   });
 
@@ -473,7 +473,7 @@ describe('App boot flow', () => {
     const continueOption = await screen.findByRole('option', { name: /continue/i });
     await user.click(continueOption);
 
-    expect(await screen.findByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: /dungeon/i })).toBeInTheDocument();
     expect(screen.getByRole('status', { name: /session/i })).toHaveTextContent(/restored/i);
   });
 
@@ -491,7 +491,7 @@ describe('App boot flow', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/poisoned choices: boom/);
-    expect(screen.queryByRole('grid', { name: /dungeon/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /dungeon/i })).not.toBeInTheDocument();
   });
 
   it('does not offer Continue when the stored save is corrupt', async () => {
@@ -502,41 +502,6 @@ describe('App boot flow', () => {
     expect(screen.queryByRole('option', { name: /continue/i })).not.toBeInTheDocument();
   });
 
-  describe('quickstart forces onboarding off (Task 8 review Finding 1)', () => {
-    it('?quickstart=1 never shows the onboarding hint strip, even with settings onboarding stored "on"', async () => {
-      window.history.pushState({}, '', '/play?quickstart=1');
-      const storage = fakeStorage();
-      const localStorage = fakeLocalStorage({
-        key: SETTINGS_KEY,
-        value: JSON.stringify({
-          fontScale: 1,
-          reducedMotion: 'system',
-          theme: 'tapestry',
-          onboarding: 'on',
-          bindings: {},
-        }),
-      });
-
-      render(<App fetcher={packFetcher()} storage={storage} localStorage={localStorage} />);
-      await screen.findByRole('grid', { name: /dungeon/i });
-
-      expect(screen.queryByRole('note')).not.toBeInTheDocument();
-    });
-
-    it('contrast: a non-quickstart boot into a fresh town run shows the movement hint', async () => {
-      const user = userEvent.setup();
-      const storage = fakeStorage();
-      render(<App fetcher={packFetcher()} storage={storage} />);
-
-      await user.click(await screen.findByRole('option', { name: /enter the deep/i }));
-      await screen.findByLabelText(/Step 1 of 7/);
-      await driveWizardToSummary(user);
-      await weaveAndDescend(user);
-
-      await screen.findByRole('grid', { name: /dungeon/i });
-      expect(screen.getByRole('note')).toHaveTextContent(/move/i);
-    });
-  });
 
   describe('corrupted storage surfaces the standard dismissible notice (Task 8 review Finding 3)', () => {
     it('a corrupted settings blob resets to defaults AND shows a dismissible "Session notice" banner', async () => {
@@ -588,7 +553,7 @@ describe('App finalize-once (concluded run)', () => {
 
     // (a) the app switches to the conclusion screen.
     expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
-    expect(screen.queryByRole('grid', { name: /dungeon/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /dungeon/i })).not.toBeInTheDocument();
 
     // (b) exactly one record, even though StrictMode ran every effect twice.
     expect(createSessionRunRecordRepository(storage).records()).toHaveLength(1);
@@ -625,10 +590,12 @@ describe('App finalize-once (concluded run)', () => {
     await weaveAndDescend(user);
 
     // The PLAY screen mounts with the new hero, at turn 0 -- NOT the conclusion screen again.
-    expect(await screen.findByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: /dungeon/i })).toBeInTheDocument();
     expect(screen.queryByText(/you have fallen/i)).not.toBeInTheDocument();
-    const heroPanel = screen.getByRole('region', { name: 'Hero' });
-    expect(heroPanel).toHaveTextContent('Rin');
+    // The hero name now lives in the Hero Record overlay (opened with `c`), not an always-on rail.
+    await user.keyboard('c');
+    const record = await screen.findByRole('dialog', { name: /hero record/i });
+    expect(record).toHaveTextContent('Rin');
   });
 
   it('surfaces a persistent storage warning and still shows the conclusion screen (not a white screen) when the Hall write throws quota-style during finalize', async () => {
@@ -791,7 +758,7 @@ describe('App identity/account — ProfileSession routing', () => {
     socket.emit(HELLO);
     socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
 
-    expect(await screen.findByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: /dungeon/i })).toBeInTheDocument();
   });
 
   it('signing out (from the in-play settings overlay) tears down the WS and returns to the guest/title flow', async () => {
@@ -818,7 +785,7 @@ describe('App identity/account — ProfileSession routing', () => {
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     socket.emit(HELLO);
     socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
 
     fireEvent.keyDown(window, { key: 'o' });
     await screen.findByRole('dialog', { name: 'Settings' });
@@ -826,7 +793,7 @@ describe('App identity/account — ProfileSession routing', () => {
 
     expect(socket.readyState).toBe(3);
     expect(await screen.findByRole('option', { name: /enter the deep/i })).toBeInTheDocument();
-    expect(screen.queryByRole('grid', { name: /dungeon/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /dungeon/i })).not.toBeInTheDocument();
     expect(fetcher).toHaveBeenCalledWith(
       '/api/auth/logout',
       expect.objectContaining({ method: 'POST' }),
@@ -857,7 +824,7 @@ describe('App identity/account — ProfileSession routing', () => {
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     socket.emit(HELLO);
     socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
 
     fireEvent.keyDown(window, { key: 'o' });
     await screen.findByRole('dialog', { name: 'Settings' });
@@ -876,7 +843,7 @@ describe('App identity/account — ProfileSession routing', () => {
     // instead of `getByRole`, which excludes hidden elements.
     await waitFor(() => expect(socket.readyState).not.toBe(3));
     expect(await screen.findByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
-    expect(document.querySelector('[role="grid"]')).not.toBeNull();
+    expect(document.querySelector('[role="img"]')).not.toBeNull();
     expect(screen.queryByRole('option', { name: /enter the deep/i })).not.toBeInTheDocument();
   });
 });

@@ -162,7 +162,7 @@ async function renderPlay(session: FakeSession): Promise<FakePlayfieldRenderer> 
       />,
     ),
   );
-  await screen.findByRole('grid', { name: /dungeon/i });
+  await screen.findByRole('img', { name: /dungeon/i });
   return fake;
 }
 
