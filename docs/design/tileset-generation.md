@@ -10,9 +10,10 @@ no such objects, and a sprite without a game entity behind it never renders.
 ## Image-generation prompt
 
 ```
-Isometric dungeon-and-town tileset sprite sheet, single 1024x1024 PNG, fully transparent
-background. ONE SHEET, mixing materials by row group — dungeon rows and town rows share the same
-grid and discipline but carry different masonry.
+Isometric dungeon-and-town tileset sprite sheet, single 1024x1024 PNG, solid magenta background
+(#ff00ff) everywhere art is absent — fill every gap and cell margin with flat #ff00ff, no
+gradient, no transparency. ONE SHEET, mixing materials by row group — dungeon rows and town rows
+share the same grid and discipline but carry different masonry.
 
 MATERIALS:
   DUNGEON rows — pale blue-grey worked/cut limestone blocks, moss-green floor slab accents, navy
@@ -35,8 +36,8 @@ STRICT GRID — this is machine-sliced, precision matters more than beauty:
   extend upward.
 - Lighting: single hard-ish key light from upper-left, identical across all tiles. NO cast
   shadows on the ground outside the block.
-- ABSOLUTELY NO ground plate, contact shadow, soft halo, or vignette under any tile: alpha ends
-  EXACTLY at the block's own silhouette.
+- ABSOLUTELY NO ground plate, contact shadow, soft halo, or vignette under any tile: the magenta
+  ends EXACTLY at the block's own silhouette (this silhouette becomes the alpha edge after keying).
 - QC: imagine each tile composited on pure magenta — nothing may darken the magenta except the
   block itself.
 
@@ -78,11 +79,17 @@ ROW LAYOUT (row 0 = top; fill every cell):
   awning, col 5 stacked wares crate, col 6 notice board, col 7 town well.
 - Row 7: reserved — extra floor/wall variants in either material, for future variety.
 
-COMPANION ANIMATION SHEET — tiles-anim.png (single separate 1024x1024 PNG, same 8x8 grid, same
-palette, same footprint and apex anchor — not per-biome).
+COMPANION ANIMATION SHEET — tiles-anim.png (OPTIONAL; nothing in the renderer consumes it yet, and
+the light layer already drives procedural shimmer, so the game ships fine without it). Single
+separate 1024x1024 PNG, same 8x8 grid, same palette, same footprint and apex anchor — not
+per-biome. RECOMMENDED ALTERNATIVE — instead of an 8-frame loop per row (which is hard to keep
+frame-consistent), author a single-frame EMISSIVE OVERLAY row: one static bright frame each of the
+lamp flame, the Weave threads, and the stairs-down glow, on the same solid-magenta background. The
+engine animates these procedurally (alpha/scale breathing on the light layer), which sidesteps the
+frame-matching problem entirely.
 
-ANIMATION RULES:
-- MOVING PART ONLY: a frame contains ONLY the thing that moves, on transparency — flame, glow,
+ANIMATION RULES (only if authoring the full multi-frame sheet rather than the recommended overlay):
+- MOVING PART ONLY: a frame contains ONLY the thing that moves, on solid magenta — flame, glow,
   threads. Never redraw surrounding stone; redrawn stone never matches itself between frames.
 - Each ROW is one 8-frame loop, frames left to right, col 0 = frame 0; frame 7 leads back into
   frame 0 with no jump. Constant phase step (1/8 cycle) per frame.
@@ -95,13 +102,31 @@ ROW LAYOUT — ANIMATION SHEET:
 - Row 0: LAMP FLAME only — flame and immediate light, no post or bracket, positioned where it
   sits above the row-4 lamps.
 - Row 1: WEAVE THREADS only — the luminous violet threads as they sit on the row-2 accent wall
-  cube, stone transparent; glow pulses and travels along the threads, brightest at frame 3-4.
+  cube, stone replaced by magenta; glow pulses and travels along the threads, brightest at frame 3-4.
 - Row 2: STAIRS-DOWN WEAVE GLOW — violet light only (#a06cff), no steps or stone; a soft pool
   rising out of the stair well, breathing dim-to-bright over 8 frames, never bright enough to
   read as fire.
-- Rows 3-7: reserved — leave fully transparent (the renderer falls back to procedural shimmer,
+- Rows 3-7: reserved — leave as solid magenta (the renderer falls back to procedural shimmer,
   so partial sheets are safe to ship).
 ```
+
+## Import pipeline
+
+Generators cannot emit alpha, so the sheet arrives with a solid magenta background. Transparency is
+produced by the keying tool, not the generator:
+
+1. **Generate** the 1024×1024 PNG from the prompt above (solid #ff00ff wherever art is absent).
+2. **Key** it into place:
+
+   ```bash
+   python3 tools/key-tilesheet.py in.png apps/web/public/playfield/tiles.png
+   ```
+
+   The tool samples the corner background colour, keys within `--tolerance` (default 60) under a
+   `g < r && g < b` magenta guard so warm stone and violet Weave art survive, and de-fringes the
+   edges. It prints a warning if the corners are not fully transparent (raise `--tolerance`).
+3. **Verify in-game**: rebuild the web app, restart the server, and load the town — cobbles and
+   dungeon floors should tessellate seamlessly with no magenta halo around any tile.
 
 ## Atlas contract
 
