@@ -98,6 +98,7 @@ export class IsoRenderer {
   private app: Application | null = null;
   private atlasImage: HTMLImageElement | null = null;
   private atlasBaseTexture: Texture | null = null;
+  private gateTexture: Texture | null = null;
   private gradientTexture: Texture | null = null;
   private lightMap: RenderTexture | null = null;
   private resizeObserver: ResizeObserver | null = null;
@@ -168,6 +169,9 @@ export class IsoRenderer {
 
     this.atlasImage = await this.loadAtlasImage(this.atlas.imageUrl);
     this.atlasBaseTexture = Texture.from(this.atlasImage);
+    // Built once and shared across every locked-feature sprite: a fresh per-snapshot wrapper would
+    // leak, since a Sprite's default `destroy()` never destroys its texture.
+    this.gateTexture = this.atlasTexture(this.atlas.gate);
     this.gradientTexture = this.buildRadialGradientTexture();
 
     this.assembleSceneGraph();
@@ -220,6 +224,10 @@ export class IsoRenderer {
     const app = this.app;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+
+    // Capture the floor texture before the display tree is torn down.
+    const floorTexture = this.floorSprite.texture;
+
     if (app) {
       app.ticker.remove(this.onTick);
       const canvas = app.canvas;
@@ -227,9 +235,29 @@ export class IsoRenderer {
       canvas.removeEventListener('pointermove', this.onPointerMove);
       canvas.removeEventListener('pointerleave', this.onPointerLeave);
       canvas.removeEventListener('contextmenu', this.onContextMenu);
-      app.destroy(true, { children: true, texture: true, textureSource: true });
+      // Destroy the display tree but NOT texture sources: `darknessQuad`/`vignetteSprite` render on
+      // the process-global `Texture.WHITE`, and destroying its source (the `textureSource` flag)
+      // would break every later IsoRenderer instance. The renderer-owned textures below are the
+      // ones this instance actually allocated, so they are freed explicitly instead.
+      app.destroy(true, { children: true });
     }
+
+    // The light-build container is offscreen (never added to the stage), so the app teardown above
+    // never reaches it; destroy its subtree here. Its children share `Texture.WHITE`/`gradientTexture`,
+    // which are handled explicitly, so no texture flags here.
+    this.lightBuild.destroy({ children: true });
+
+    if (floorTexture && floorTexture !== Texture.EMPTY) floorTexture.destroy(true);
+    this.gradientTexture?.destroy(true);
+    // `gateTexture` is a frame wrapper over the atlas base source, so drop only the wrapper here and
+    // destroy the shared source once, via the base texture.
+    this.gateTexture?.destroy(false);
+    this.atlasBaseTexture?.destroy(true);
     this.lightMap?.destroy(true);
+
+    this.gateTexture = null;
+    this.gradientTexture = null;
+    this.atlasBaseTexture = null;
     this.lightMap = null;
     this.app = null;
   }
@@ -350,7 +378,11 @@ export class IsoRenderer {
       throw new Error('IsoRenderer: 2d context unavailable for the floor bake canvas');
     }
     bakeFloor(canvas, image, plan);
+    // `bakeKey` changes repeatedly during exploration (every newly discovered cell), so the outgoing
+    // canvas-backed texture must be freed or GPU memory grows unbounded. Guard the initial empty one.
+    const previous = this.floorSprite.texture;
     this.floorSprite.texture = Texture.from(canvas);
+    if (previous && previous !== Texture.EMPTY) previous.destroy(true);
     this.floorSprite.position.set(-plan.originX, -plan.originY);
   }
 
@@ -365,9 +397,11 @@ export class IsoRenderer {
 
   private rebuildFeatures(snapshot: SessionSnapshot): void {
     this.featuresContainer.removeChildren().forEach((child) => child.destroy());
+    const gateTexture = this.gateTexture;
+    if (gateTexture === null) return;
     for (const feature of featuresOf(snapshot.projection)) {
       if (feature.state !== 'locked') continue;
-      const sprite = new Sprite(this.atlasTexture(this.atlas.gate));
+      const sprite = new Sprite(gateTexture);
       const dw = TILE_HALF_W * 2 * BAKE_SCALE;
       const dh = dw * (this.atlas.gate.h / this.atlas.gate.w);
       const sx = (feature.x - feature.y) * TILE_HALF_W * BAKE_SCALE;
