@@ -190,7 +190,6 @@ describe('bakeKey', () => {
 
   it('changes when a cell becomes newly discovered', () => {
     const width = 2;
-    const height = 1;
     const undiscovered = [
       cell(0, 0, width, 'terrain.floor'),
       cell(1, 0, width, undefined, { knowledge: 'unknown', intensity: 0 }),
@@ -205,7 +204,6 @@ describe('bakeKey', () => {
 
   it('changes when a known cell token flips (e.g. a door opening)', () => {
     const width = 1;
-    const height = 1;
     const closed = [cell(0, 0, width, 'terrain.door')];
     const opened = [cell(0, 0, width, 'terrain.floor')];
 

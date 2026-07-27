@@ -109,7 +109,10 @@ export function planFloorBake(
   // Family lookup across the WHOLE grid, not just the cells actually drawn -- buried-wall
   // detection needs real neighbor geometry regardless of fog. `cells` always covers every grid
   // index (an engine invariant of `ObservableFloorProjection`), so this is a straight remap.
-  const familyByIndex: (TileFamily | undefined)[] = new Array(width * height);
+  const familyByIndex: (TileFamily | undefined)[] = Array.from(
+    { length: width * height },
+    (): TileFamily | undefined => undefined,
+  );
   for (let i = 0; i < cells.length; i += 1) {
     familyByIndex[cells[i]!.index] = skins[i]!.family;
   }

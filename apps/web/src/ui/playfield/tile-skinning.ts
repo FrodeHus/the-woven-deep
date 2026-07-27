@@ -84,14 +84,17 @@ export function skinFloor(
   floorId: string,
 ): readonly TileSkin[] {
   const size = width * height;
-  const baseFamily: TileFamily[] = new Array(size).fill('void');
+  const baseFamily: TileFamily[] = Array.from({ length: size }, (): TileFamily => 'void');
 
   for (const cell of cells) {
     const gridIndex = cell.y * width + cell.x;
     baseFamily[gridIndex] = familyForToken(cell.token);
   }
 
-  const resolved: (TileSkin | undefined)[] = new Array(size);
+  const resolved: (TileSkin | undefined)[] = Array.from(
+    { length: size },
+    (): TileSkin | undefined => undefined,
+  );
 
   const familyAt = (x: number, y: number): TileFamily => {
     if (x < 0 || x >= width || y < 0 || y >= height) return 'void';
