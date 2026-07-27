@@ -90,7 +90,7 @@ def _flood_cells(rgba: np.ndarray, tolerance: float) -> None:
             _flood_cell(rgba[cy : cy + CELL, cx : cx + CELL], tolerance)
 
 
-def _defringe(rgba: np.ndarray, tolerance: float) -> None:
+def _defringe(rgba: np.ndarray) -> None:
     """Damp the coloured halo on art pixels that border a now-transparent pixel, in place.
 
     A surviving edge pixel next to the keyed background carries a magenta cast. The isometric floor
@@ -139,7 +139,7 @@ def key_tilesheet(src: Image.Image, tolerance: float, defringe_only: bool = Fals
     if not defringe_only:
         _magenta_key(rgba, tolerance)
         _flood_cells(rgba, tolerance)
-    _defringe(rgba, tolerance)
+    _defringe(rgba)
     return Image.fromarray(np.clip(rgba, 0, 255).astype(np.uint8), "RGBA")
 
 
@@ -151,7 +151,7 @@ def main(argv: list[str]) -> int:
         "--tolerance",
         type=float,
         default=60.0,
-        help="colour-distance threshold for the key and per-cell flood (default 60)",
+        help="colour-distance threshold for the magenta keying pass only (default 60)",
     )
     parser.add_argument(
         "--defringe-only",

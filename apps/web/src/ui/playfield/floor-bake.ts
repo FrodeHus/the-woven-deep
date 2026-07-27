@@ -185,6 +185,9 @@ export function planFloorBake(
     // one floor plane; the wall art's own body then rises above and drops below that plane.
     const spriteScale = dw / rect.w;
     const diamondCentreY = (rect.h - atlas.blockDepthPx - rect.w / 4) * spriteScale;
+    // Object-tile anchoring (door/pillar/stairs) assumes band-form art with the diamond at a fixed
+    // in-cell depth; full-cell object art would render ~24px low, so regenerated object tiles must
+    // follow the band form.
 
     if (wall) {
       // Base-anchored: the sprite's bottom edge sits `blockDepthPx` (source px, scaled) below the

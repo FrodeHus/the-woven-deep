@@ -30,6 +30,7 @@ STRICT GRID — this is machine-sliced, precision matters more than beauty:
 - Every tile is built on the SAME isometric footprint: a 2:1 diamond top exactly 128 px wide and
   64 px tall, apex at y=16 in-cell, left/right corners at y=48, bottom corner at y=80. Blocks
   extend straight down 48 px below the diamond (base at y=128). Flat items sit ON this diamond.
+- The 2:1 band footprint remains the canonical form; the renderer additionally tolerates full-cell 1:1 floor diamonds by squashing flat-floor families onto the 2:1 footprint at bake time, but wall and object tiles must follow the band form.
 - Camera: classic 2:1 isometric, no perspective, no rotation variance between tiles.
 - ONE FLOOR PLANE: every walkable top face occupies that exact diamond. Flat tiles must show NO
   side wall or kerb rising above it. Only wall cubes, rounded rocks, and standing objects may
