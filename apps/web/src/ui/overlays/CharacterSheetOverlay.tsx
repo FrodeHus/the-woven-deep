@@ -215,9 +215,10 @@ export function CharacterSheetOverlay(): JSX.Element | null {
       <Section id="character-sheet-vitals-heading" title="Vitals">
         <DefinitionGrid>
           <Row label="Health" value={`${hero.health} / ${hero.maxHealth}`} />
+          <Row label="Weave" value={`${hero.weave} / ${hero.maxWeave}`} />
           <Row label="Hunger" value={hero.hungerStage} />
-          <Row label="Light" value={lightStateText(hero.equipment)} />
           <Row label="Sight radius" value={hero.sightRadius} />
+          <Row label="Light" value={lightStateText(hero.equipment)} />
         </DefinitionGrid>
       </Section>
 
