@@ -18,7 +18,13 @@ import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { AtlasRect, PlayfieldAtlas } from './atlas.js';
 import { bakeFloor, bakeKey, planFloorBake } from './floor-bake.js';
 import { TILE_HALF_H, TILE_HALF_W, worldToScreen, cellAtScreen, type IsoView } from './iso-math.js';
-import { lightPoolDiameterPx, lightsForFloor, visibleBrightness, type LightSpec } from './light-layer.js';
+import {
+  isFogMaskedTier,
+  lightPoolDiameterPx,
+  lightsForFloor,
+  visibleBrightness,
+  type LightSpec,
+} from './light-layer.js';
 import { selectNewEffects, spawnForEffect, stepParticles, type Particle } from './particles.js';
 import {
   motionPosition,
@@ -138,6 +144,7 @@ export class IsoRenderer {
   private readonly darknessQuad = new Sprite(Texture.WHITE);
   private readonly lightsContainer = new Container();
   private readonly fovGraphics = new Graphics();
+  private readonly fovOverpaint = new Graphics();
   private readonly lightMapSprite = new Sprite();
   private readonly overlayContainer = new Container();
   private readonly targetingGraphics = new Graphics();
@@ -346,11 +353,16 @@ export class IsoRenderer {
     );
 
     this.darknessQuad.tint = DARKNESS_COLOR;
-    // Order matters: the per-cell FOV pass paints each visible cell's BRIGHTNESS floor first, then
-    // the additive light pools layer ON TOP so a torch warms and brightens that floor with falloff.
-    // (The prior order drew lights first and then stamped the FOV pass over them, collapsing every
-    // pool to the hero's single highest-intensity cell.)
-    this.lightBuild.addChild(this.darknessQuad, this.fovGraphics, this.lightsContainer);
+    // Light-map build order: (1) global darkness base, (2) `fovGraphics` paints each VISIBLE cell's
+    // floored brightness, (3) additive light pools brighten that floor with falloff, (4)
+    // `fovOverpaint` re-stamps every non-visible cell opaque LAST so a plain radial pool can never
+    // leak light onto unseen geometry (the fog invariant in `isFogMaskedTier`).
+    this.lightBuild.addChild(
+      this.darknessQuad,
+      this.fovGraphics,
+      this.lightsContainer,
+      this.fovOverpaint,
+    );
 
     this.lightMapSprite.blendMode = 'multiply';
 
@@ -417,9 +429,7 @@ export class IsoRenderer {
     }
     const [r, g, b] = light.color;
     this.heroLightColor = (r << 16) | (g << 8) | b;
-    // Fuel dims the glow (its additive alpha), it does NOT shrink its reach: the old DOM renderer
-    // kept the pool at the item's full `radius` and modulated `--glow-intensity` by fuel. Folding
-    // fuel into the radius (the previous bug) shrank a half-spent torch's pool to a sliver.
+    // Fuel dims the glow's additive alpha; the pool keeps the item's full `radius` reach.
     this.heroLightAlpha = 0.35 + 0.65 * light.fuelFraction;
     this.heroLightRadius = light.radius;
   }
@@ -591,8 +601,10 @@ export class IsoRenderer {
   }
 
   private rebuildFov(cells: readonly ObservableCell[]): void {
-    const graphics = this.fovGraphics;
-    graphics.clear();
+    const visible = this.fovGraphics;
+    const masked = this.fovOverpaint;
+    visible.clear();
+    masked.clear();
     for (const cell of cells) {
       const [cx, cy] = this.isoLocal(cell.x, cell.y);
       const diamond = [
@@ -605,15 +617,17 @@ export class IsoRenderer {
         cx - TILE_HALF_W,
         cy,
       ];
-      if (cell.knowledge === 'unknown') {
-        graphics.poly(diamond).fill({ color: 0x000000, alpha: 1 });
-      } else if (cell.knowledge === 'remembered') {
-        graphics.poly(diamond).fill({ color: REMEMBERED_COLOR, alpha: 1 });
+      if (isFogMaskedTier(cell.knowledge)) {
+        // Drawn into the overpaint layer, which composites AFTER the additive pools: `unknown`
+        // renders pure black and `remembered` its fixed dim level, so a light pool spilling across
+        // a corner can never brighten an unseen cell.
+        const color = cell.knowledge === 'remembered' ? REMEMBERED_COLOR : 0x000000;
+        masked.poly(diamond).fill({ color, alpha: 1 });
       } else {
-        // Paint the cell's BRIGHTNESS (white at alpha = visibleBrightness) rather than a darkness:
-        // this is the light-map value the scene multiplies against, floored so a visible cell is
-        // never darker than a remembered one, and the additive light pools brighten it further.
-        graphics.poly(diamond).fill({ color: 0xffffff, alpha: visibleBrightness(cell.intensity) });
+        // A visible cell's BRIGHTNESS (white at alpha = visibleBrightness): the value the scene
+        // multiplies against, floored so a visible cell is never darker than a remembered one, then
+        // brightened further by the additive light pools layered on top.
+        visible.poly(diamond).fill({ color: 0xffffff, alpha: visibleBrightness(cell.intensity) });
       }
     }
   }

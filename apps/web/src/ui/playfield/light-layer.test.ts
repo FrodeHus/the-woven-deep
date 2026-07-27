@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ObservableCell } from '@woven-deep/engine';
 import {
   cellDarkness,
+  isFogMaskedTier,
   lightPoolDiameterPx,
   lightsForFloor,
   visibleBrightness,
@@ -72,6 +73,17 @@ describe('visibleBrightness', () => {
   it('clamps out-of-range intensity to the floor..1 band', () => {
     expect(visibleBrightness(-10)).toBe(VISIBLE_FLOOR_BRIGHTNESS);
     expect(visibleBrightness(400)).toBe(1);
+  });
+});
+
+describe('isFogMaskedTier', () => {
+  it('overpaints non-visible tiers opaque so light pools never leak past the fog boundary', () => {
+    expect(isFogMaskedTier('unknown')).toBe(true);
+    expect(isFogMaskedTier('remembered')).toBe(true);
+  });
+
+  it('never overpaints a visible cell (it keeps floor brightness + additive pools)', () => {
+    expect(isFogMaskedTier('visible')).toBe(false);
   });
 });
 

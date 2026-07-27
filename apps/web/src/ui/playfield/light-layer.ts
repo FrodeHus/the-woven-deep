@@ -64,6 +64,19 @@ export function lightPoolDiameterPx(radiusTiles: number): number {
 }
 
 /**
+ * Whether a cell must be re-stamped OPAQUE in the light map as the final pass, AFTER the additive
+ * light pools composite -- true for every non-visible tier (`unknown`, `remembered`). The fog-of-war
+ * invariant this enforces: additive light sprites are plain Euclidean radial pools with no
+ * line-of-sight shape, so a pool can spill onto an unseen cell around a corner. Overpainting every
+ * non-visible cell opaque last guarantees `unknown` renders pure black and `remembered` renders its
+ * fixed dim level regardless of light geometry, so a light never hints at hidden terrain. A
+ * `visible` cell is never overpainted, so it keeps its floored brightness plus the additive pools.
+ */
+export function isFogMaskedTier(knowledge: ObservableCell['knowledge']): boolean {
+  return knowledge !== 'visible';
+}
+
+/**
  * A deterministic per-coordinate flicker phase for a fixture. The pure `lightsForFloor` signature
  * carries no `floorId` (unlike `tile-skinning.ts`'s `cellSeed`), so this folds only `(x, y)`: two
  * different floors' fixtures at the same cell would share a flicker phase, which is invisible since
