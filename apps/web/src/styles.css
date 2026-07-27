@@ -1,7 +1,7 @@
 :root {
   /* Named palette: colors used by more than one rule live here as custom properties. Colors that
-     appear only once (e.g. the hit-flash/death-burst gradients' own accent reds) stay as literals;
-     only recurring ones earn a name. */
+     appear only once (e.g. the `.tapestry` inset shadow) stay as literals; only recurring ones
+     earn a name. */
   --ink: #aab3d1;
   --ground: #121521;
   --gold: #e8c879;
@@ -125,24 +125,14 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
-  /* Belt-and-suspenders: `ScreenFade` (ScreenFade.tsx) already resolves the three-way motion
-     contract in JS and never MOUNTS this element under reduced motion, so this rule should never
-     actually need to fire in practice -- kept here anyway so every new animation this milestone
-     adds declares behavior in all four motion blocks (see the Global Constraints), and so a
-     consumer that somehow renders the element anyway (e.g. a future caller that forgets the JS
-     gate) still degrades safely to no animation, no paint. */
-  .screen-fade { display: none; }
-  /* Unlike .screen-fade above, `fixture-flicker`/`mat-stair-*` shimmer/`.condition-aura` are pure
-     CSS animations with no JS-side reduced-motion gate at all -- this global media block is the
-     ONLY thing that honors an OS-level "reduce motion" preference for them (the `.motion-reduced`/
-     `.motion-full` blocks further below only fire from the EXPLICIT in-game setting). `!important`
-     is required on all three: each has a higher- or equal-specificity unconditional rule declared
-     LATER in this file (`.cell-visible.fixture-flicker`, `.cell-visible.mat-stair-up`/
-     `-down`, `.condition-aura`) that would otherwise win by source order despite this block's
-     earlier position. */
-  .fixture-flicker { animation: none !important; }
-  .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: none !important; }
-  .condition-aura { animation: none !important; opacity: 0.4; }
+  /* The only decorative animations left on screen are the `ScreenFade` cloak and the overlay
+     entrance motions (`.wd-*`). `ScreenFade` already resolves the three-way motion contract in JS
+     and never MOUNTS its element under reduced motion, so its rule here is belt-and-suspenders; the
+     `.wd-*` entrances have no JS gate, so this media block is the ONLY thing that honors an
+     OS-level "reduce motion" preference for them. `!important` on the `.wd-*` override beats each
+     entrance's own unconditional animation declared later in this file. */
+  .screen-fade { animation: none !important; display: none; }
+  .wd-slide-in, .wd-fade-in, .wd-rise-in, .wd-flicker { animation: none !important; }
 }
 
 /* Screen transitions: a short fade-through-dark wrapping title->play, chargen->play, a
@@ -181,266 +171,6 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 .wd-rise-in { animation: wd-rise-in 0.2s ease-out; }
 .wd-flicker { animation: wd-flicker 2.4s ease-in-out infinite; }
 
-/* Playfield: the grid renders gameplay truth, the effects layer is a purely decorative overlay
-   sharing its coordinate space via --cell-w/--cell-h set on the wrapper. `--zoom` is the single
-   source of truth for the bounded playfield zoom (see `zoomForFloor` in layout.ts): it is set as
-   an inline custom property by PlayScreen and scales `font-size` here, on `.playfield` itself.
-   `--cell-w`/`--cell-h` are then plain `1ch`/`1lh` (NOT `* var(--zoom)` — that would double-scale,
-   since `1ch`/`1lh` are already relative to THIS element's own font-size): growing the font grows
-   both the glyphs actually painted in each `.cell` (which inherits font-size from here) AND the
-   `ch`/`lh` units cell-w/cell-h are measured in, in lockstep, with exactly one number (`--zoom`)
-   driving all of it. `.playfield-grid` below reads the same `--cell-w`/`--cell-h`, and the
-   measurement probe's own box (`.cell-probe` below) is pinned to them too, so there is exactly one
-   number driving the rendered grid, the glyph size, the effects overlay, and everything the JS
-   measurement pipeline reads back — never a value computed in parallel. */
-.playfield {
-  position: relative;
-  overflow: hidden;
-  font-size: calc(1rem * var(--zoom, 1));
-  --cell-w: 1ch;
-  --cell-h: 1lh;
-  line-height: 1;
-}
-/* Town floors read slightly warmer than the dungeon proper -- PlayScreen adds this class to the
-   same `.playfield` element whenever `projection.floor.town` is true. A gentle warm-gold tint
-   (4%) rather than a hue shift on the materials themselves, so the dungeon's own material palette
-   isn't duplicated per-floor-kind.
-   IMPORTANT: this can NOT be painted as a `background` on `.playfield` itself (as an earlier
-   version of this rule did) -- `.playfield-grid`, its child, paints its OWN opaque
-   `background: var(--void-bg)` over essentially the same box, so a `.playfield` background never
-   actually composites into anything visible; it is fully occluded. (A `background-blend-mode` on
-   `.playfield` doesn't rescue this either -- blend modes mix multiple background LAYERS on the
-   SAME element, and `.playfield` only ever had the one layer here; the two elements' separate
-   backgrounds simply stack in paint order, they never blend.) It also cannot become a second layer
-   painted onto `.playfield-grid`'s own background (e.g. two `background` layers on `.playfield-grid`
-   itself) or an inserted overlay element, because a `<canvas>` sits inside `.playfield`, between it
-   and `.playfield-grid`, and any layer occupying that space would compete with the canvas for the
-   same box. The one place left that (a) actually composites and (b) claims no layer/element the
-   canvas needs is `.playfield-grid`'s OWN background declaration: pre-mix the 4% gold into
-   `--void-bg` itself, once, as a single flat color. */
-.playfield-town .playfield-grid {
-  background: color-mix(in srgb, var(--gold) 4%, var(--void-bg));
-}
-.playfield-grid {
-  display: grid;
-  grid-auto-rows: var(--cell-h);
-  line-height: 1;
-  background: var(--void-bg);
-}
-.playfield-grid:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
-.cell { display: block; text-align: center; }
-/* Measurement-only probe: lives inside .playfield so it shares its line-height: 1 context (an
-   in-flow probe outside that context measures ~15-20% too tall), and is hidden so it never
-   appears as a stray glyph. `visibility: hidden` (not `display: none`) keeps it laid out and
-   measurable via getBoundingClientRect. Its box is pinned to --cell-w/--cell-h (rather than
-   relying on the "0" glyph's own intrinsic size) so a probe measurement always reports exactly the
-   zoomed cell size the grid and effects overlay are actually rendered at. */
-.cell-probe { position: absolute; visibility: hidden; width: var(--cell-w); height: var(--cell-h); }
-/* A second, UN-zoomed probe purely for `zoomForFloor`'s input: it fixes font-size back to the base
-   `1rem` (undoing `.playfield`'s `--zoom` scale) so its `1ch`/`1lh` box reports the 1x cell size
-   directly. This exists because font metrics don't necessarily scale perfectly linearly with
-   font-size (subpixel/hinting rounding differs per size, especially at the non-power-of-two
-   `ZOOM_STEPS` like 1.25/1.75) — recovering the base size by DIVIDING `.cell-probe`'s zoomed
-   measurement by the applied zoom would silently accumulate that rounding error into the zoom
-   decision. Measuring the base size directly, from a second probe, avoids that arithmetic
-   entirely. */
-.cell-probe-base { position: absolute; visibility: hidden; width: 1ch; height: 1lh; font-size: 1rem; }
-.cell-empty { color: transparent; }
-.cell-unknown { color: transparent; background: var(--void-bg); }
-/* A remembered cell must never render brighter than the darkest a visible cell can get — otherwise
-   the player's remembered floor plan would out-shine what their torch is actually illuminating
-   right now. Kept slightly below `.cell-visible`'s floor term (0.62) below.
-   `saturate(0.4)` desaturates whatever hue is already set on `color` IN PLACE -- it does not pull
-   different hues toward a shared `--remembered` family or toward each other; a desaturated gold
-   and a desaturated blue-grey remain visibly distinct hues, just muted versions of themselves. The
-   actual "never brighter than visible" guarantee here comes entirely from the unconditional
-   `opacity: 0.55`, not from the filter. */
-.cell-remembered { color: var(--remembered); filter: saturate(0.4); opacity: 0.55; }
-/* The floor term (0.62) is deliberately high: a visible-but-dim cell (low --light, e.g. at the
-   edge of a torch's radius) must still read as brighter than any remembered cell, never darker —
-   the earlier `0.35 +` floor let a dim-but-visible ring around the carried light render darker
-   than the remembered floor beyond it, an inverted "dark circle" around the player's own torch. */
-.cell-visible { color: var(--fg, var(--mat, var(--ink))); opacity: calc(0.62 + 0.38 * var(--light, 1)); }
-
-/* Material coloring: `materialClass` (`GridRenderer.tsx`) adds one of these classes,
-   derived from the cell's terrain token (stairs split further by tileId), beside the knowledge
-   class. `--mat` is consumed two ways: here, as a fallback color for a visible cell that has no
-   `tint` yet (rare, but keeps a material-flavored cell from ever falling back all the way to plain
-   `--ink`); and by `GridRenderer`, which reads the SAME hex value (mirrored in `cell-color.ts` as
-   `MATERIAL_BASE_RGB` -- do not let the two drift) as the BASE color a lit cell's tint blends from,
-   via `visibleForeground`'s optional `base` parameter, so a wall reads mineral blue-grey even in
-   dim torchlight rather than the old one-size floor gray. A pillar is structural stone like a wall
-   and both stair directions share one accent -- so `mat-pillar` and `mat-stair-up`/`mat-stair-down`
-   intentionally reuse `--mat-wall`/`--mat-stair` rather than each getting a dedicated variable. */
-.cell-visible.mat-wall, .cell-visible.mat-pillar { --mat: var(--mat-wall); }
-.cell-visible.mat-floor { --mat: var(--mat-floor); }
-.cell-visible.mat-door { --mat: var(--mat-door); }
-.cell-visible.mat-stair-up, .cell-visible.mat-stair-down { --mat: var(--mat-stair); }
-.cell-visible.mat-void { --mat: var(--mat-void); }
-
-/* Remembered cells keep their material hue, still run through the SAME `saturate(0.4)` filter
-   `.cell-remembered` already applies -- but that filter only desaturates each material's own hue
-   in place, it does NOT converge different materials toward a shared `--remembered` color
-   family or toward each other; a remembered wall and a remembered door stay visibly distinct,
-   muted versions of their own colors, not close cousins of one gray-blue memory. What DOES hold
-   regardless of material is the dimmer-than-any-visible guarantee: the class-level
-   `opacity: 0.55` above is unconditional and unchanged by material. */
-.cell-remembered.mat-wall, .cell-remembered.mat-pillar { color: var(--mat-wall); }
-.cell-remembered.mat-floor { color: var(--mat-floor); }
-.cell-remembered.mat-door { color: var(--mat-door); }
-.cell-remembered.mat-stair-up, .cell-remembered.mat-stair-down { color: var(--mat-stair); }
-.cell-remembered.mat-void { color: var(--mat-void); }
-
-/* Fixture flicker variation: every wall/floor light fixture (`cell.fixture`) flickers
-   with its OWN delay/duration, derived deterministically from its `lightId` hash
-   (`fixtureFlickerStyle`, GridRenderer.tsx) -- never `Math.random`, so the SAME fixture always
-   flickers the SAME way across renders/remounts, while two different fixtures desynchronize into
-   independent-looking flames rather than one fixture-wide strobe. `--flicker-delay`/
-   `--flicker-duration` are set inline per-cell; the keyframe itself is shared. Applies to VISIBLE
-   fixture cells only -- a remembered fixture is dim memory, not an active light source. */
-.cell-visible.fixture-flicker {
-  animation: fixture-flicker var(--flicker-duration, 2.2s) ease-in-out var(--flicker-delay, 0s) infinite;
-}
-@keyframes fixture-flicker {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.18); }
-}
-
-/* Stair/entrance shimmer: a subtle periodic brightness sheen on VISIBLE stair cells --
-   an ambient "this is the way out/down" cue, layered onto the existing `mat-stair-up`/
-   `mat-stair-down` material classes rather than a new glyph or color. Kept as a plain
-   `filter: brightness()` pulse (same technique as `fixture-flicker` above) so it composes cleanly
-   with whichever `--fg`/`--mat` color the cell already resolved to. */
-.cell-visible.mat-stair-up, .cell-visible.mat-stair-down {
-  animation: stair-shimmer 3.4s ease-in-out infinite;
-}
-@keyframes stair-shimmer {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.4); }
-}
-
-.effects-layer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.glow, .effect {
-  position: absolute;
-  left: calc(var(--cell-w) * var(--x, 0));
-  top: calc(var(--cell-h) * var(--y, 0));
-  width: var(--cell-w);
-  height: var(--cell-h);
-  pointer-events: none;
-}
-
-.glow {
-  --glow-color: var(--gold);
-  --glow-radius: 5;
-  --glow-intensity: 1;
-  /* Both axes derive from --cell-h (not --cell-w): the box must be square so the radial gradient
-     below is a true circle with `closest-side` reaching full transparency exactly at every edge —
-     mixing --cell-w (narrow) and --cell-h (tall) here produced an ellipse whose gradient got
-     clipped by border-radius: 50% along the short axis before it faded out, i.e. a hard rim. Rows
-     are the bigger screen unit for a monospace grid, so sizing off --cell-h also means the glow
-     reads as visually round (spanning more columns than rows), matching how a round shape looks
-     on a grid of tall-narrow cells. */
-  --glow-diameter: calc(var(--cell-h) * var(--glow-radius) * 2);
-  /* Position the glow's anchor point at the CENTER of the hero cell (+0.5 cell), not its top-left
-     corner (the shared `.glow, .effect` left/top rule below is corner-anchored, which is correct
-     for `.effect` — a 1-cell box that should align exactly with its cell — but wrong for `.glow`,
-     a many-cell box that must be centered on its cell). */
-  left: calc(var(--cell-w) * (var(--x, 0) + 0.5));
-  top: calc(var(--cell-h) * (var(--y, 0) + 0.5));
-  /* Centering lives in the standalone `translate` property (not the `transform` shorthand) so the
-     `glow-drift`/`glow-gutter` keyframes below can animate the standalone `scale`/`opacity`
-     properties without needing to repeat `translate(-50%, -50%)` in every keyframe — composable
-     transforms compose instead of overwriting each other. */
-  translate: -50% -50%;
-  width: var(--glow-diameter);
-  height: var(--glow-diameter);
-  border-radius: 50%;
-  background: radial-gradient(circle closest-side, color-mix(in srgb, var(--glow-color) calc(var(--glow-intensity) * 30%), transparent) 0%, transparent 100%);
-  mix-blend-mode: screen;
-  animation: glow-drift 2.6s ease-in-out infinite alternate;
-}
-.glow[data-source*="torch"] { animation: glow-gutter 2.2s ease-in-out infinite; }
-
-/* Hero condition aura: a faint tinted pulse on the hero's OWN cell while any condition
-   from `projection.hero.conditions` is active, colored from that condition's projected `color`
-   (`pickPrimaryCondition`, effects-map.ts, picks the highest-stacks condition when several are
-   active -- see that function's own doc comment for the tie-break rule). Positioned like `.effect`
-   (single-cell, corner-anchored) rather than like the many-cell `.glow`, since it marks exactly
-   one cell. This is a colored SUPPLEMENT to the glyph-plus-name condition badge in `StatusBar`
-   (panels.tsx) -- never the only signal a condition is active, so meaning is never color-only. */
-.condition-aura {
-  position: absolute;
-  left: calc(var(--cell-w) * var(--x, 0));
-  top: calc(var(--cell-h) * var(--y, 0));
-  width: var(--cell-w);
-  height: var(--cell-h);
-  pointer-events: none;
-  background: radial-gradient(circle, var(--aura-color, var(--gold)) 0%, transparent 75%);
-  mix-blend-mode: screen;
-  animation: condition-aura-pulse 1.8s ease-in-out infinite;
-}
-@keyframes condition-aura-pulse {
-  0%, 100% { opacity: 0.25; }
-  50% { opacity: 0.55; }
-}
-
-.effect { transform-origin: center; }
-.effect-hit-flash {
-  background: radial-gradient(circle, #ff8a7a 0%, transparent 70%);
-  animation: hit-flash 120ms ease-out;
-}
-.effect-attack-streak {
-  --dx: calc(var(--to-x, 0) - var(--x, 0));
-  --dy: calc(var(--to-y, 0) - var(--y, 0));
-  background: linear-gradient(90deg, var(--gold-bright), transparent);
-  animation: attack-streak 160ms ease-out;
-}
-.effect-death-burst {
-  background: radial-gradient(circle, var(--alert) 0%, transparent 70%);
-  animation: death-burst 240ms ease-out;
-}
-
-@keyframes glow-drift {
-  from { scale: 0.94; opacity: 0.85; }
-  to { scale: 1.04; opacity: 1; }
-}
-@keyframes glow-gutter {
-  0%, 100% { opacity: 0.88; scale: 0.98; }
-  45% { opacity: 1; scale: 1.02; }
-  70% { opacity: 0.92; scale: 0.99; }
-}
-@keyframes hit-flash {
-  from { opacity: 1; filter: brightness(1.6); }
-  to { opacity: 0; filter: brightness(1); }
-}
-@keyframes attack-streak {
-  from { transform: translate(0, 0); opacity: 1; }
-  to {
-    transform: translate(calc(var(--cell-w) * var(--dx)), calc(var(--cell-h) * var(--dy)));
-    opacity: 0;
-  }
-}
-@keyframes death-burst {
-  from { transform: scale(0.4); opacity: 1; }
-  to { transform: scale(2.2); opacity: 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* !important is required here: .glow[data-source*="torch"] (specificity 0,2,0) otherwise
-     beats this bare .glow override (0,1,0) and the torch flicker keeps animating. */
-  .glow { animation: none !important; opacity: calc(var(--glow-intensity) * 0.7); }
-  .effect { animation: none !important; display: none; }
-  .screen-fade { animation: none !important; display: none; }
-  .fixture-flicker { animation: none !important; }
-  .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: none !important; }
-  .condition-aura { animation: none !important; opacity: 0.4; }
-  .wd-slide-in, .wd-fade-in, .wd-rise-in, .wd-flicker { animation: none !important; }
-}
-
 /* Same overrides as the `@media (prefers-reduced-motion: reduce)` block above, applied instead by
    an explicit `.motion-reduced` root class (set by `App` when the guest's "Reduce motion" setting
    is "on", regardless of the OS-level media query) -- see `styles-contract.test.ts` for the
@@ -448,16 +178,10 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
    query cannot be triggered by a class, and this class cannot replace the media query either
    (players whose OS already requests reduced motion still get it even with the setting on
    "system"), so both paths to the same declarations have to exist independently. Same `!important`
-   discipline as above, for the identical specificity reason (`.motion-reduced .glow` (0,2,0) vs.
-   `.glow[data-source*="torch"]` (0,2,0) -- equal specificity, so source order alone is not
-   reliable; `!important` removes the ambiguity exactly like the media block does). */
+   discipline as above, for the identical specificity reason (a `.wd-*` entrance's own unconditional
+   animation would otherwise win by source order). */
 .motion-reduced {
-  .glow { animation: none !important; opacity: calc(var(--glow-intensity) * 0.7); }
-  .effect { animation: none !important; display: none; }
   .screen-fade { animation: none !important; display: none; }
-  .fixture-flicker { animation: none !important; }
-  .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: none !important; }
-  .condition-aura { animation: none !important; opacity: 0.4; }
   .wd-slide-in, .wd-fade-in, .wd-rise-in, .wd-flicker { animation: none !important; }
 }
 
@@ -474,23 +198,12 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
  * rather than trusting a copied literal here to stay in sync).
  */
 .motion-full {
-  .glow { animation: glow-drift 2.6s ease-in-out infinite alternate !important; }
-  .glow[data-source*="torch"] { animation: glow-gutter 2.2s ease-in-out infinite !important; }
-  .effect { display: block !important; }
-  .effect-hit-flash { animation: hit-flash 120ms ease-out !important; }
-  .effect-attack-streak { animation: attack-streak 160ms ease-out !important; }
-  .effect-death-burst { animation: death-burst 240ms ease-out !important; }
   .screen-fade { display: block !important; animation: screen-fade 440ms linear !important; }
-  .fixture-flicker { animation: fixture-flicker var(--flicker-duration, 2.2s) ease-in-out var(--flicker-delay, 0s) infinite !important; }
-  .cell-visible.mat-stair-up, .cell-visible.mat-stair-down { animation: stair-shimmer 3.4s ease-in-out infinite !important; }
-  .condition-aura { animation: condition-aura-pulse 1.8s ease-in-out infinite !important; }
   .wd-slide-in { animation: wd-slide-in 0.22s ease-out !important; }
   .wd-fade-in { animation: wd-fade-in 0.15s ease-out !important; }
   .wd-rise-in { animation: wd-rise-in 0.2s ease-out !important; }
   .wd-flicker { animation: wd-flicker 2.4s ease-in-out infinite !important; }
 }
-
-.map-pane { position: relative; overflow: hidden; }
 
 /* Contextual onboarding hint strip -- above the log within its own slot, never a live
    region (see `HintStrip.tsx`'s doc comment for why `role="note"`, not `alert`/`status`). */

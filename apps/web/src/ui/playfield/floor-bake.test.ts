@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { ObservableCell } from '@woven-deep/engine';
 import type { AtlasRect, PlayfieldAtlas } from './atlas.js';
-import { bakeKey, FLOOR_OVERSCAN, planFloorBake, WALL_OVERSCAN } from './floor-bake.js';
+import {
+  bakeFloor,
+  bakeKey,
+  FLOOR_OVERSCAN,
+  planFloorBake,
+  WALL_OVERSCAN,
+  type FloorBakePlan,
+} from './floor-bake.js';
 
 function rect(x: number, w = 64, h = 32): AtlasRect {
   return { x, y: 0, w, h };
@@ -173,6 +180,29 @@ describe('planFloorBake tile anchoring', () => {
   });
 });
 
+describe('planFloorBake canvas sizing', () => {
+  it('rounds the bake canvas size up to whole pixels so a fractional scale never clips the last row/column', () => {
+    const atlas = makeAtlas();
+    const cells = grid(3, 3, () => 'terrain.floor');
+    const plan = planFloorBake(cells, 3, 3, 'floor-ceil', atlas, 0.37);
+    expect(Number.isInteger(plan.pxWidth)).toBe(true);
+    expect(Number.isInteger(plan.pxHeight)).toBe(true);
+  });
+});
+
+describe('bakeFloor', () => {
+  it('throws when the 2d context is unavailable, rather than uploading a silently blank floor', () => {
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => null,
+    } as unknown as HTMLCanvasElement;
+    const image = {} as CanvasImageSource;
+    const plan: FloorBakePlan = { draws: [], pxWidth: 4, pxHeight: 4, originX: 0, originY: 0 };
+    expect(() => bakeFloor(canvas, image, plan)).toThrow(/2d context/);
+  });
+});
+
 describe('bakeKey', () => {
   it('is stable across a knowledge-only change (visible <-> remembered)', () => {
     const width = 3;
@@ -194,10 +224,7 @@ describe('bakeKey', () => {
       cell(0, 0, width, 'terrain.floor'),
       cell(1, 0, width, undefined, { knowledge: 'unknown', intensity: 0 }),
     ];
-    const discovered = [
-      cell(0, 0, width, 'terrain.floor'),
-      cell(1, 0, width, 'terrain.floor'),
-    ];
+    const discovered = [cell(0, 0, width, 'terrain.floor'), cell(1, 0, width, 'terrain.floor')];
 
     expect(bakeKey(discovered, 'floor-key')).not.toBe(bakeKey(undiscovered, 'floor-key'));
   });

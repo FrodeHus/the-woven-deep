@@ -87,7 +87,11 @@ describe('PlayScreen renderer wiring', () => {
     const { rerender } = render(
       withUiProviders(
         pack,
-        <PlayScreen session={fakeSession(first)} pack={pack} createRenderer={fake.createRenderer} />,
+        <PlayScreen
+          session={fakeSession(first)}
+          pack={pack}
+          createRenderer={fake.createRenderer}
+        />,
       ),
     );
     await screen.findByRole('img', { name: /dungeon/i });
@@ -124,7 +128,7 @@ describe('PlayScreen keyboard routing', () => {
 
   function decisionSession(): GuestSession {
     // The fresh guest run boots into town, whose fixed layout is always fully (and permanently)
-    // lit -- douse-the-torch no longer hides a neighbor there. So this descends to the depth-1
+    // lit -- so dousing the torch never hides a neighbor there. This descends to the depth-1
     // floor first (same trick as guest-session.test.ts's `depth1Run`): douse the torch and place
     // a neutral actor next door, in the dark, so the hero's own projection never sees it — a
     // plain `move` therefore resolves against the *actual* (neutral) occupant server-side, which
@@ -174,10 +178,10 @@ describe('PlayScreen keyboard routing', () => {
   it('opens the backpack on "i", moves the game keys through a focus trap, and closes on Escape', async () => {
     const user = userEvent.setup();
     const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
-    // `inventory` is a registry overlay now (Task 5 absorbed the old standalone `BackpackMenu`),
-    // so -- exactly like every other registry overlay -- `PlayScreen` no longer owns whether it's
-    // open; that lives in the parent (`App`, normally). This tiny stateful wrapper stands in for
-    // `App` so the test can drive `i`/Escape the same way a real guest would.
+    // `inventory` is a registry overlay, so -- exactly like every other registry overlay --
+    // `PlayScreen` does not own whether it's open; that state lives in the parent (`App`, normally).
+    // This tiny stateful wrapper stands in for `App` so the test can drive `i`/Escape the same way a
+    // real guest would.
     function Harness(): JSX.Element {
       const [overlay, setOverlay] = useState<OverlayId | null>(null);
       return withUiProviders(

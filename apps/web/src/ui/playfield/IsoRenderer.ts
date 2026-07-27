@@ -20,7 +20,12 @@ import { bakeFloor, bakeKey, planFloorBake } from './floor-bake.js';
 import { TILE_HALF_H, TILE_HALF_W, worldToScreen, cellAtScreen, type IsoView } from './iso-math.js';
 import { cellDarkness, lightsForFloor, type LightSpec } from './light-layer.js';
 import { selectNewEffects, spawnForEffect, stepParticles, type Particle } from './particles.js';
-import { motionPosition, nextSceneState, type ActorSprite, type SceneState } from './scene-state.js';
+import {
+  motionPosition,
+  nextSceneState,
+  type ActorSprite,
+  type SceneState,
+} from './scene-state.js';
 
 export interface RendererCallbacks {
   onCellClick(cell: { x: number; y: number }, button: 'primary' | 'secondary'): void;
@@ -428,11 +433,8 @@ export class IsoRenderer {
       BAKE_SCALE,
     );
     const canvas = document.createElement('canvas');
-    // Fail loud, per Task 6 finding: `bakeFloor` silently returns when the 2d context is null, so
-    // guard here rather than letting the floor silently disappear.
-    if (canvas.getContext('2d') === null) {
-      throw new Error('IsoRenderer: 2d context unavailable for the floor bake canvas');
-    }
+    // `bakeFloor` fails loud on a null 2d context, so a missing context surfaces as a thrown error
+    // rather than a floor that silently disappears.
     bakeFloor(canvas, image, plan);
     // `bakeKey` changes repeatedly during exploration (every newly discovered cell), so the outgoing
     // canvas-backed texture must be freed or GPU memory grows unbounded. Guard the initial empty one.

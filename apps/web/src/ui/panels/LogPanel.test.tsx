@@ -37,9 +37,10 @@ describe('LogPanel', () => {
     expect(screen.getByText('Your light is running low.')).toHaveClass('text-warn');
   });
 
-  it('never unmounts the log region even when empty', () => {
-    render(<LogPanel snapshot={snapshotOf([])} />);
-    expect(screen.getByRole('log')).toBeInTheDocument();
+  it('renders nothing when there are no log lines, so no empty box floats over the playfield', () => {
+    const { container } = render(<LogPanel snapshot={snapshotOf([])} />);
+    expect(screen.queryByRole('log')).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('applies the colorblind reinforcement class alongside the token color class for each colored tone', () => {

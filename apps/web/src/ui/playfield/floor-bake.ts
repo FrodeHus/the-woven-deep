@@ -1,7 +1,7 @@
 import type { ObservableCell } from '@woven-deep/engine';
 import type { AtlasRect, PlayfieldAtlas } from './atlas.js';
 import { TILE_HALF_H, TILE_HALF_W } from './iso-math.js';
-import { skinFloor, type TileFamily, type TileSkin } from './tile-skinning.js';
+import { skinFloor, type TileFamily } from './tile-skinning.js';
 
 /**
  * The hand-cropped atlas diamonds carry a few pixels of transparent margin around the painted art,
@@ -39,20 +39,25 @@ function isWallFamily(family: TileFamily): boolean {
   return family === 'wall' || family === 'wall-rounded' || family === 'wall-weave';
 }
 
-function rectForSkin(skin: TileSkin, atlas: PlayfieldAtlas): AtlasRect | undefined {
-  switch (skin.family) {
-    case 'void':
-      return undefined;
+// `void` is excluded from the family type: the only caller filters void cells out before resolving
+// a rect, so the switch stays exhaustive over the drawable families with no void arm. The result is
+// still optional because an out-of-range variant (atlas/length drift) reads back `undefined`.
+function rectForSkin(
+  family: Exclude<TileFamily, 'void'>,
+  variant: number,
+  atlas: PlayfieldAtlas,
+): AtlasRect | undefined {
+  switch (family) {
     case 'floor':
-      return atlas.floors[skin.variant];
+      return atlas.floors[variant];
     case 'floor-dirty':
-      return atlas.dirty[skin.variant];
+      return atlas.dirty[variant];
     case 'wall':
-      return atlas.walls[skin.variant];
+      return atlas.walls[variant];
     case 'wall-rounded':
-      return atlas.rounded[skin.variant];
+      return atlas.rounded[variant];
     case 'wall-weave':
-      return atlas.weaveWalls[skin.variant];
+      return atlas.weaveWalls[variant];
     case 'door':
       return atlas.door;
     case 'pillar':
@@ -141,7 +146,7 @@ export function planFloorBake(
     const wall = isWallFamily(skin.family);
     if (wall && isBuriedWall(cell.x, cell.y)) continue;
 
-    const rect = rectForSkin(skin, atlas);
+    const rect = rectForSkin(skin.family, skin.variant, atlas);
     if (rect === undefined) continue;
 
     const sx = isoX(cell.x, cell.y);
@@ -200,7 +205,9 @@ export function planFloorBake(
     return { rect: p.rect, dx, dy, dw: p.dw, dh: p.dh };
   });
 
-  return { draws, pxWidth, pxHeight, originX, originY };
+  // Round up to whole pixels: a fractional `scale` leaves the rightmost/bottommost draw ending on a
+  // sub-pixel boundary, and a truncating canvas size would clip that last row or column.
+  return { draws, pxWidth: Math.ceil(pxWidth), pxHeight: Math.ceil(pxHeight), originX, originY };
 }
 
 /**
@@ -236,7 +243,11 @@ export function bakeFloor(
   canvas.width = plan.pxWidth;
   canvas.height = plan.pxHeight;
   const ctx = canvas.getContext('2d');
-  if (ctx === null) return;
+  // Fail loud: a null 2d context means the floor cannot be baked at all, so surface it as an error
+  // rather than a silently blank canvas the renderer would upload as an empty texture.
+  if (ctx === null) {
+    throw new Error('bakeFloor: 2d context unavailable for the floor bake canvas');
+  }
 
   for (const draw of plan.draws) {
     ctx.drawImage(

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type MouseEvent as ReactMouseEvent } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { Point } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
@@ -10,19 +10,10 @@ import {
   type ActiveTravel,
 } from '../../session/travel.js';
 
-function parseDataCell(value: string): Point | undefined {
-  const [xText, yText] = value.split(',');
-  const x = Number(xText);
-  const y = Number(yText);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return undefined;
-  return { x, y };
-}
-
 export interface AutoTravelHandlers {
-  readonly onClick: (event: ReactMouseEvent<HTMLDivElement>) => void;
-  /** Starts a click-to-travel walk toward `cell`, driven by the same one-step-per-projection
-   * pacing as `onClick`. The canvas playfield calls this directly with the cell resolved from a
-   * pointer event, since it has no `data-cell` DOM to look up. */
+  /** Starts a click-to-travel walk toward `cell`, driven by one-step-per-projection pacing. The
+   * canvas playfield calls this directly with the cell resolved from a pointer event, since it has
+   * no `data-cell` DOM to look up. */
   readonly travelTo: (cell: Point) => void;
 }
 
@@ -35,14 +26,13 @@ export interface UseAutoTravelParams {
 }
 
 /**
- * Click-to-travel for the Play view. A click on a floor cell resolves to a `TravelPlan`
- * (`session/travel.ts`) and the hook then walks it by dispatching ordinary one-step `move` intents
- * -- the very same `PlayerIntent`s the keyboard dispatcher sends -- pacing exactly one step per
- * authoritative projection so it can never desync from or outrun the engine. The walk is a pure
- * convenience: it is cancelled by any keypress or a new click, and it stops itself the moment the
- * projection shows the hero did not advance as expected, took damage, or a new hostile appeared
- * (see `advanceTravel`). Cells are matched by their `data-cell="x,y"` attribute, exactly like
- * `useCellHover`, so no separate pixel->cell camera math is needed.
+ * Click-to-travel for the Play view. `travelTo` receives a floor cell (resolved from a pointer event
+ * by the canvas playfield), turns it into a `TravelPlan` (`session/travel.ts`), and walks it by
+ * dispatching ordinary one-step `move` intents -- the very same `PlayerIntent`s the keyboard
+ * dispatcher sends -- pacing exactly one step per authoritative projection so it can never desync
+ * from or outrun the engine. The walk is a pure convenience: it is cancelled by any keypress or a
+ * new click, and it stops itself the moment the projection shows the hero did not advance as
+ * expected, took damage, or a new hostile appeared (see `advanceTravel`).
  */
 export function useAutoTravel({
   session,
@@ -91,17 +81,5 @@ export function useAutoTravel({
     });
   };
 
-  const onClick = (event: ReactMouseEvent<HTMLDivElement>): void => {
-    if (disabled) {
-      travelRef.current = null;
-      return;
-    }
-    const cellElement = (event.target as HTMLElement).closest('[data-cell]');
-    if (!cellElement) return;
-    const cell = parseDataCell(cellElement.getAttribute('data-cell') ?? '');
-    if (!cell) return;
-    travelTo(cell);
-  };
-
-  return { onClick, travelTo };
+  return { travelTo };
 }

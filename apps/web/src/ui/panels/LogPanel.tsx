@@ -23,7 +23,7 @@ const REINFORCEMENT_CLASS: Partial<Record<LogLine['tone'], string>> = {
  * message journal. */
 const VISIBLE_LINES = 5;
 
-export function LogPanel({ snapshot }: PanelProps): JSX.Element {
+export function LogPanel({ snapshot }: PanelProps): JSX.Element | null {
   const containerRef = useRef<HTMLDivElement>(null);
   const { log } = snapshot;
   const recent = log.slice(-VISIBLE_LINES);
@@ -32,6 +32,9 @@ export function LogPanel({ snapshot }: PanelProps): JSX.Element {
     const node = containerRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [log]);
+
+  // With no lines yet, render nothing rather than an empty floating box over the playfield.
+  if (recent.length === 0) return null;
 
   return (
     <div className="pointer-events-auto absolute bottom-3 left-3 z-10 w-80 max-w-[calc(100vw-1.5rem)] rounded-md border border-line bg-deep/70 p-2 backdrop-blur-sm">
