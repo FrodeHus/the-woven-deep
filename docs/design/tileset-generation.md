@@ -68,11 +68,17 @@ ROW LAYOUT (row 0 = top; fill every cell):
   stairs-up (steps rising against a wall block), col 2 closed wooden door in stone frame, col 3
   iron-barred gate (locked passage), col 4 stone pillar, col 5 broken pillar stump, col 6
   wall-mounted lamp (lit), col 7 free-standing lamp post (lit).
-- Row 5: TOWN terrain: cols 0-1 cobbled plaza floors (warm grey cobbles), cols 2-3 town building
-  walls (timber-and-plaster over stone footing), col 4 house door (heavier, dwelling-grade,
-  distinct from the dungeon door), col 5 dungeon-entrance stair surround (worked stone arch
-  around a descending well), col 6 lamp post (unlit, brass fittings), col 7 hanging shop sign on
-  bracket.
+- Row 5: TOWN terrain: cols 0-1 cobbled plaza floors (warm grey cobbles). READ THIS TWICE — the
+  cobble floors are FLAT FLOOR TILES exactly like row 0: the cobbled surface fills the whole
+  diamond corner to corner at floor height, with NO timber trim, NO beam, NO kerb, NO fence, NO
+  edging of any kind along any edge of the diamond, and no side faces rising above the floor
+  plane. A cobble tile with a wooden border reads in-game as a raised planter box, and a plaza
+  tiled with them turns into a woven lattice of beams. Only the stone texture may vary between
+  the two variants. Then: cols 2-3 town building walls (timber-and-plaster over stone footing —
+  these are the WALL cubes, the only place timber framing belongs), col 4 house door (heavier,
+  dwelling-grade, distinct from the dungeon door), col 5 dungeon-entrance stair surround (worked
+  stone arch around a descending well), col 6 lamp post (unlit, brass fittings), col 7 hanging
+  shop sign on bracket.
 - Row 6: TOWN market stalls & dressing: col 0 provisioner stall (sacks, bread, produce), col 1
   arms stall (racked blades, shield), col 2 curios stall (odd trinkets, bottles, threads), col 3
   spell-vendor stall (scrolls, candles, faint violet glow), col 4 empty stall counter with
