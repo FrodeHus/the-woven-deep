@@ -86,15 +86,19 @@ Pixi:
 - `TopBar`, `HeroStatusAnnouncer`, `MinimapPanel`, and `LogPanel` are fixed HUD panels. `LogPanel`
   renders nothing when there are no log lines, so no empty box floats over the field.
 - `TownPanel` shows only on town floors.
+- `HintFloat` (`panels/HintFloat.tsx`) floats the contextual onboarding hint centered just above the
+  action bar, fed by the same `activeHint(...)`/onboarding state `PlayScreen` already computes. It is
+  a `role="note"` (never a live region, never focus-stealing), shows the rebindable dismiss chord,
+  and renders nothing when there is no active hint — including whenever onboarding is off.
 - `ActionBar` is the bottom command bar and begins targeting for casts.
 
 The stylesheet `styles.css` keeps only the presentation CSS that outlives the canvas swap: the
-`ScreenFade` cloak and the overlay entrance motions (`.wd-*`), each declared across all four motion
-blocks (the reduced-motion media query, `.motion-reduced`, `.motion-full`), plus the named color
-and material palettes, the high-contrast theme, colorblind log reinforcement, and shared chrome.
-The material palette variables are the design source of truth mirrored in `cell-color.ts`
-(`visibleForeground` / `MATERIAL_BASE_RGB`), which the map/journal grid and the
-`styles-contract.test.ts` luminance-floor invariant still exercise.
+`ScreenFade` cloak and the `.wd-rise-in` modal entrance, each suppressed with `!important` across the
+reduced-motion media query, `.motion-reduced`, and `.motion-full` (and restored to its original
+timing under `.motion-full`), plus the named color and material palettes, the high-contrast theme,
+colorblind log reinforcement, and shared chrome. The material palette variables are the design
+source of truth mirrored in `cell-color.ts` (`visibleForeground` / `MATERIAL_BASE_RGB`), which the
+map/journal grid and the `styles-contract.test.ts` luminance-floor invariant still exercise.
 
 ## What is presentation-only
 
