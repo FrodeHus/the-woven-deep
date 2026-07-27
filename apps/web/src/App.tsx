@@ -38,8 +38,10 @@ import { useContentPack } from './ui/hooks/useContentPack.js';
 import { useHallRepository } from './ui/hooks/useHallRepository.js';
 import { useScreenRouter } from './ui/hooks/useScreenRouter.js';
 import { useSettingsRoaming } from './ui/hooks/useSettingsRoaming.js';
+import { DeathOverlay } from './ui/overlays/DeathOverlay.js';
 import { canOpenOverlay, OVERLAY_REGISTRY, type OverlayId } from './ui/overlays/registry.js';
 import { OverlayHost } from './ui/overlays/OverlayHost.js';
+import { concludedByDeath } from './ui/playfield/scene-state.js';
 import { ChargenScreen } from './ui/screens/ChargenScreen.js';
 import { ConclusionScreen } from './ui/screens/ConclusionScreen.js';
 import { HallScreen } from './ui/screens/HallScreen.js';
@@ -177,6 +179,15 @@ function GameRoot({
   const [dismissed, setDismissed] = useState(false);
   const { notice, conclusion } = snapshot;
   const finalizedRef = useRef(false);
+  /** Set the instant a DEATH conclusion finalizes, holding the exact `onConcluded` arguments until
+   * the player acknowledges the `DeathOverlay` -- the run is already finalized (the Hall write
+   * above has already happened) the moment this is set; only the navigation is deferred. A
+   * non-death conclusion never touches this state -- `onConcluded` still fires immediately for
+   * those, unchanged. */
+  const [pendingDeathConclusion, setPendingDeathConclusion] = useState<{
+    projection: RunConclusionProjection;
+    logTail: readonly LogLine[];
+  } | null>(null);
 
   useEffect(() => {
     setDismissed(false);
@@ -185,12 +196,15 @@ function GameRoot({
   useEffect(() => {
     if (conclusion === null || finalizedRef.current) return;
     finalizedRef.current = true;
+    const isDeath = concludedByDeath(snapshot);
     try {
       const projection = session.finalizeConcludedRun(repository, {
         achievedAt: `Run #${repository.records().length + 1}`,
         portraitGlyph: portraitGlyph ?? '@',
       });
-      onConcluded(projection, session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL));
+      const logTail = session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL);
+      if (isDeath) setPendingDeathConclusion({ projection, logTail });
+      else onConcluded(projection, logTail);
     } catch (thrown) {
       // The Hall write itself failed (quota/unavailable) -- this is not a bug in the run, so
       // don't let it crash out of the effect into a white screen. Surface the same persistent
@@ -204,9 +218,13 @@ function GameRoot({
           : 'The Hall of Records is unavailable, so this run could not be saved.',
       );
       const fallback = session.getSnapshot().conclusion;
-      if (fallback) onConcluded(fallback, session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL));
+      if (fallback) {
+        const logTail = session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL);
+        if (isDeath) setPendingDeathConclusion({ projection: fallback, logTail });
+        else onConcluded(fallback, logTail);
+      }
     }
-  }, [conclusion, onConcluded, onFinalizeError, portraitGlyph, repository, session]);
+  }, [conclusion, onConcluded, onFinalizeError, portraitGlyph, repository, session, snapshot]);
 
   const dismissibleNotice = notice && !isStorageNotice(notice) ? notice : null;
   const storageNotice = notice && isStorageNotice(notice) ? notice : null;
@@ -264,6 +282,13 @@ function GameRoot({
         currentHeart={repository.currentHeart()}
         onboardingEnabled={onboardingEnabled}
       />
+      {pendingDeathConclusion && (
+        <DeathOverlay
+          onAcknowledge={() =>
+            onConcluded(pendingDeathConclusion.projection, pendingDeathConclusion.logTail)
+          }
+        />
+      )}
     </div>
   );
 }

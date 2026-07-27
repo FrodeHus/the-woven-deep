@@ -551,6 +551,9 @@ describe('App finalize-once (concluded run)', () => {
     const continueOption = await screen.findByRole('option', { name: /continue/i });
     await user.click(continueOption);
 
+    // The death overlay gates navigation to the conclusion screen -- acknowledge it first.
+    await user.click(await screen.findByRole('alertdialog', { name: /the deep takes you/i }));
+
     // (a) the app switches to the conclusion screen.
     expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
     expect(screen.queryByRole('img', { name: /dungeon/i })).not.toBeInTheDocument();
@@ -569,6 +572,7 @@ describe('App finalize-once (concluded run)', () => {
     );
     const continueAgain = await screen.findByRole('option', { name: /continue/i });
     await user.click(continueAgain);
+    await user.click(await screen.findByRole('alertdialog', { name: /the deep takes you/i }));
 
     expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
     expect(createSessionRunRecordRepository(storage).records()).toHaveLength(1);
@@ -582,6 +586,7 @@ describe('App finalize-once (concluded run)', () => {
 
     const continueOption = await screen.findByRole('option', { name: /continue/i });
     await user.click(continueOption);
+    await user.click(await screen.findByRole('alertdialog', { name: /the deep takes you/i }));
     expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole('option', { name: 'New Hero' }));
@@ -614,6 +619,7 @@ describe('App finalize-once (concluded run)', () => {
     render(<App fetcher={strictModeSafePackFetcher()} storage={storage} />);
     const continueOption = await screen.findByRole('option', { name: /continue/i });
     await user.click(continueOption);
+    await user.click(await screen.findByRole('alertdialog', { name: /the deep takes you/i }));
 
     // No exception escapes, no white screen: the conclusion screen renders regardless.
     expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
@@ -643,6 +649,7 @@ describe('App finalize-once (concluded run)', () => {
     render(<App fetcher={strictModeSafePackFetcher()} storage={storage} />);
     const continueOption = await screen.findByRole('option', { name: /continue/i });
     await user.click(continueOption);
+    await user.click(await screen.findByRole('alertdialog', { name: /the deep takes you/i }));
 
     expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
     expect(screen.queryByRole('table', { name: 'Score' })).not.toBeInTheDocument();
