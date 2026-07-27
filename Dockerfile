@@ -8,8 +8,10 @@ COPY content ./content
 COPY docs ./docs
 COPY scripts ./scripts
 RUN npm ci
-# CI=true activates the web suite's retry for its timing-sensitive jsdom integration tests.
-RUN CI=true npm test && npm run typecheck && npm run build && npm run engine:demo && npm run dungeon:demo && npm run gameplay:demo && npm run population:demo && npm run merchant:demo && npm run run-records:demo
+# Tests, typecheck, and the demo determinism gates run in CI (ci.yml), not here — the image build
+# only compiles and validates the baked content pack. Use `npm run content:startup-gate` for an
+# explicit on-demand Docker release gate.
+RUN npm run build && npm run content:validate
 RUN npm prune --omit=dev
 
 FROM node:22-bookworm-slim AS runtime
@@ -35,6 +37,8 @@ COPY --from=build /app/packages/content/package.json ./packages/content/package.
 COPY --from=build /app/packages/content/dist ./packages/content/dist
 COPY --from=build /app/packages/engine/package.json ./packages/engine/package.json
 COPY --from=build /app/packages/engine/dist ./packages/engine/dist
+COPY --from=build /app/packages/session-core/package.json ./packages/session-core/package.json
+COPY --from=build /app/packages/session-core/dist ./packages/session-core/dist
 COPY --from=build /app/content ./content
 RUN mkdir -p /data && chown -R node:node /app /data
 USER node
