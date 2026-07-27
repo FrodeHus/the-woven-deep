@@ -1,23 +1,22 @@
-import type { ObservableCell } from '@woven-deep/engine';
+import { isStairUp, type ObservableCell, type TileId } from '@woven-deep/engine';
 import type { AtlasRect, PlayfieldAtlas } from './atlas.js';
 import { TILE_HALF_H, TILE_HALF_W } from './iso-math.js';
 import { skinFloor, type TileFamily } from './tile-skinning.js';
 
 /**
- * The hand-cropped atlas diamonds carry a few pixels of transparent margin around the painted art,
- * so mapping a crop's width straight to the 64px cell pitch leaves each painted diamond a touch
- * narrower than its cell -- opening uniform dark seams between neighbours. Drawing every flat tile
- * scaled up by this factor (about the cell's top-face centre, so the overlap is symmetric) makes
- * adjacent diamonds meet and slightly overlap, so the floor reads as continuous stone.
+ * The unified sheet's flat-floor art fills its 128px cell edge to edge, so a straight 0.5 map onto
+ * the 64px cell pitch already tessellates. A hair of overscan (about the cell's top-face centre,
+ * so the overlap is symmetric) hides the sub-pixel seams a fractional camera zoom can still open
+ * between adjacent diamonds, keeping the floor reading as continuous stone.
  */
-export const FLOOR_OVERSCAN = 1.14;
+export const FLOOR_OVERSCAN = 1.04;
 
 /**
- * The same margin correction for wall crops, applied horizontally only: adjacent wall faces along an
- * explored edge otherwise show stubby gaps ("teeth") where the painted art falls short of the cell
+ * The same seam correction for wall tiles, applied horizontally only: adjacent wall faces along an
+ * explored edge otherwise show hairline gaps where sub-pixel rounding falls short of the cell
  * pitch. Widening about the cell centre closes them without changing the base-anchored height.
  */
-export const WALL_OVERSCAN = 1.08;
+export const WALL_OVERSCAN = 1.04;
 
 export interface BakeDraw {
   rect: AtlasRect;
@@ -46,6 +45,7 @@ function rectForSkin(
   family: Exclude<TileFamily, 'void'>,
   variant: number,
   atlas: PlayfieldAtlas,
+  tileId: TileId | undefined,
 ): AtlasRect | undefined {
   switch (family) {
     case 'floor':
@@ -65,7 +65,9 @@ function rectForSkin(
     case 'pillar-broken':
       return atlas.pillarBroken;
     case 'stairs':
-      return atlas.stairs;
+      // Both stair tiles skin to the 'stairs' family; the direction picks the rect. Up rises
+      // against a wall block, down cuts a well into the floor plane.
+      return isStairUp(tileId) ? atlas.stairsUp : atlas.stairs;
   }
 }
 
@@ -146,26 +148,33 @@ export function planFloorBake(
     const wall = isWallFamily(skin.family);
     if (wall && isBuriedWall(cell.x, cell.y)) continue;
 
-    const rect = rectForSkin(skin.family, skin.variant, atlas);
+    const rect = rectForSkin(skin.family, skin.variant, atlas, cell.tileId);
     if (rect === undefined) continue;
 
     const sx = isoX(cell.x, cell.y);
     const sy = isoY(cell.x, cell.y);
     const dh = dw * (rect.h / rect.w);
 
+    // Every unified-sheet cell is a full 128px square whose top-face diamond sits at a fixed
+    // in-cell depth: its bottom corner `blockDepthPx` px above the cell base, its centre a further
+    // quarter-width up (the diamond is 2:1). `spriteScale` maps that source geometry into the
+    // scaled draw. Anchoring the diamond centre on the cell keeps floors and wall top faces on the
+    // one floor plane; the wall art's own body then rises above and drops below that plane.
+    const spriteScale = dw / rect.w;
+    const diamondCentreY = (rect.h - atlas.blockDepthPx - rect.w / 4) * spriteScale;
+
     if (wall) {
-      // Base-anchored: the sprite's bottom edge sits `blockDepthPx` (scaled) below the cell's own
-      // floor-diamond bottom corner, so tall wall art rises from the tile it stands on instead of
-      // being centered on it. Widened by `WALL_OVERSCAN` about the cell centre (bottom + height
-      // unchanged) so adjacent wall faces meet instead of leaving stubby gaps.
-      const bottomY = sy + floorHalfDh + atlas.blockDepthPx * scale;
+      // Base-anchored: the sprite's bottom edge sits `blockDepthPx` (source px, scaled) below the
+      // cell's own floor-diamond bottom corner, so tall wall art rises from the tile it stands on
+      // instead of being centred on it. Widened by `WALL_OVERSCAN` about the cell centre (bottom +
+      // height unchanged) so adjacent wall faces meet instead of leaving hairline gaps.
+      const bottomY = sy + floorHalfDh + atlas.blockDepthPx * spriteScale;
       const wdw = dw * WALL_OVERSCAN;
       placed.push({ x: cell.x, y: cell.y, rect, dx: sx - wdw / 2, dy: bottomY - dh, dw: wdw, dh });
     } else {
-      // Top-anchored: the diamond's apex sits at the cell's top corner (`sy - floorHalfDh`), so the
-      // top face lands exactly on the cell diamond and tessellates with its neighbours -- then
-      // scaled up by `FLOOR_OVERSCAN` about that top-face centre (`sx`, `sy`) so the painted diamond
-      // fills, and slightly overlaps, the full cell pitch.
+      // Top-anchored: the diamond centre lands on the cell centre (`sx`, `sy`) so the top face
+      // tessellates with its neighbours -- then scaled up by `FLOOR_OVERSCAN` about that centre so
+      // adjacent painted diamonds meet and slightly overlap across the full cell pitch.
       const fdw = dw * FLOOR_OVERSCAN;
       const fdh = dh * FLOOR_OVERSCAN;
       placed.push({
@@ -173,7 +182,7 @@ export function planFloorBake(
         y: cell.y,
         rect,
         dx: sx - fdw / 2,
-        dy: sy - floorHalfDh * FLOOR_OVERSCAN,
+        dy: sy - diamondCentreY * FLOOR_OVERSCAN,
         dw: fdw,
         dh: fdh,
       });

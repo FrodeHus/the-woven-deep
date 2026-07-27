@@ -10,26 +10,29 @@ import {
   type FloorBakePlan,
 } from './floor-bake.js';
 
-function rect(x: number, w = 64, h = 32): AtlasRect {
+// Every unified-sheet cell is a full 128x128 square; the atlas rects are grid cells, not tight
+// crops. `x` distinguishes fixtures for equality assertions.
+function rect(x: number, w = 128, h = 128): AtlasRect {
   return { x, y: 0, w, h };
 }
 
 function makeAtlas(): PlayfieldAtlas {
   return {
     imageUrl: 'atlas.png',
-    blockDepthPx: 34,
-    floors: [0, 1, 2, 3, 4, 5, 6].map((i) => rect(100 + i)),
-    dirty: [0, 1, 2, 3, 4, 5, 6].map((i) => rect(200 + i)),
-    walls: [0, 1, 2, 3, 4, 5].map((i) => rect(300 + i, 64, 96)),
-    rounded: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => rect(400 + i, 64, 96)),
-    weaveWalls: [rect(500, 64, 96)],
+    blockDepthPx: 48,
+    floors: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => rect(100 + i)),
+    dirty: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => rect(200 + i)),
+    walls: [0, 1, 2, 3, 4, 5].map((i) => rect(300 + i)),
+    rounded: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => rect(400 + i)),
+    weaveWalls: [rect(500), rect(501)],
     stairs: rect(600),
+    stairsUp: rect(610),
     door: rect(700),
     gate: rect(800),
-    torch: rect(810, 16, 16),
-    torchWall: rect(820, 16, 32),
-    pillar: rect(900, 64, 64),
-    pillarBroken: rect(950, 64, 64),
+    torch: rect(810),
+    torchWall: rect(820),
+    pillar: rect(900),
+    pillarBroken: rect(950),
   };
 }
 
@@ -128,7 +131,23 @@ describe('planFloorBake buried walls', () => {
 });
 
 describe('planFloorBake single-rect families', () => {
-  it('bakes a stairs cell using atlas.stairs', () => {
+  it('bakes a stair-down cell (tileId 5) using atlas.stairs', () => {
+    const atlas = makeAtlas();
+    const cells = grid(1, 1, () => 'terrain.stair', () => ({ tileId: 5 }));
+    const plan = planFloorBake(cells, 1, 1, 'floor-stairs-down', atlas, 1);
+    expect(plan.draws).toHaveLength(1);
+    expect(plan.draws[0]!.rect).toEqual(atlas.stairs);
+  });
+
+  it('bakes a stair-up cell (tileId 4) using atlas.stairsUp', () => {
+    const atlas = makeAtlas();
+    const cells = grid(1, 1, () => 'terrain.stair', () => ({ tileId: 4 }));
+    const plan = planFloorBake(cells, 1, 1, 'floor-stairs-up', atlas, 1);
+    expect(plan.draws).toHaveLength(1);
+    expect(plan.draws[0]!.rect).toEqual(atlas.stairsUp);
+  });
+
+  it('falls back to atlas.stairs for a stair cell with no tileId', () => {
     const atlas = makeAtlas();
     const cells = grid(1, 1, () => 'terrain.stair');
     const plan = planFloorBake(cells, 1, 1, 'floor-stairs', atlas, 1);
@@ -146,23 +165,23 @@ describe('planFloorBake single-rect families', () => {
 });
 
 describe('planFloorBake tile anchoring', () => {
-  it('top-anchors a flat tile at the cell diamond apex and overscans it about the cell centre', () => {
+  it('centres a flat tile diamond on the cell and overscans it about that centre', () => {
     const atlas = makeAtlas();
-    // A pillar is a flat (non-wall) tile with a predictable 64x64 rect, so its draw geometry is
+    // A pillar is a flat (non-wall) tile with a predictable full-cell rect, so its draw geometry is
     // fully determined -- unlike a floor variant, whose rect is hash-chosen.
     const cells = grid(1, 1, () => 'terrain.pillar');
     const plan = planFloorBake(cells, 1, 1, 'floor-anchor', atlas, 1);
     expect(plan.draws).toHaveLength(1);
     const draw = plan.draws[0]!;
 
-    // Overscanned in both axes (aspect preserved: the 64x64 pillar rect stays square).
+    // Overscanned in both axes (aspect preserved: the 128x128 cell rect stays square at 64px).
     expect(draw.dw).toBeCloseTo(64 * FLOOR_OVERSCAN, 5);
     expect(draw.dh).toBeCloseTo(64 * FLOOR_OVERSCAN, 5);
     // Horizontally centred on the cell (sx = 0 here): left edge is half the overscanned width in.
     expect(draw.dx).toBeCloseTo(plan.originX - (64 * FLOOR_OVERSCAN) / 2, 5);
-    // Top-anchored: the diamond apex sits `TILE_HALF_H * overscan` above the cell centre -- NOT
-    // half the sprite height (which is what centring a 1:1 rect would give, ~32 * overscan).
-    expect(draw.dy).toBeCloseTo(plan.originY - 16 * FLOOR_OVERSCAN, 5);
+    // Diamond-centre-anchored: (rect.h - blockDepthPx - rect.w/4) * spriteScale = (128-48-32)*0.5
+    // = 24 above the cell centre, then scaled about that centre by the overscan.
+    expect(draw.dy).toBeCloseTo(plan.originY - 24 * FLOOR_OVERSCAN, 5);
   });
 
   it('widens a wall tile horizontally by WALL_OVERSCAN while keeping its base-anchored height', () => {
@@ -172,11 +191,14 @@ describe('planFloorBake tile anchoring', () => {
     expect(plan.draws).toHaveLength(1);
     const draw = plan.draws[0]!;
 
-    // Width overscanned; height left at the base 64->96 mapping (walls rise, they don't fatten).
+    // Width overscanned; height left at the full-cell 128->64 mapping (walls rise, they don't fatten).
     expect(draw.dw).toBeCloseTo(64 * WALL_OVERSCAN, 5);
-    expect(draw.dh).toBeCloseTo(96, 5);
+    expect(draw.dh).toBeCloseTo(64, 5);
     // Still centred on the cell horizontally (sx = 0).
     expect(draw.dx).toBeCloseTo(plan.originX - (64 * WALL_OVERSCAN) / 2, 5);
+    // Base-anchored: bottom sits floorHalfDh (16) + blockDepthPx*spriteScale (48*0.5=24) below the
+    // cell centre, so the diamond centre lands on the cell exactly as the flat tile's does.
+    expect(draw.dy + draw.dh).toBeCloseTo(plan.originY + 16 + 24, 5);
   });
 });
 

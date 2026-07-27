@@ -105,18 +105,16 @@ ROW LAYOUT — ANIMATION SHEET:
 
 ## Atlas contract
 
-The renderer slices by explicit rects in `apps/web/public/playfield/atlas-dungeon.json`
+The renderer slices by explicit rects in `apps/web/public/playfield/atlas-unified.json`
 (`parseAtlas` in `apps/web/src/ui/playfield/atlas.ts` is the schema authority). For a sheet
 generated on the strict grid above, a cell at column `c`, row `r` slices as
 `[c*128, r*128, 128, 128]`.
 
-The unified sheet's drop-in contract already ships as
-`apps/web/public/playfield/atlas-unified.json`, with `blockDepthPx: 48` (this grid's block
-depth). It is not yet loaded by the game — the live atlas stays `atlas-dungeon.json` and the game
-keeps rendering from `tiles-dungeon-v5.png` until someone switches it over. Switching over means:
-generate the PNG as `tiles-unified.png`, drop both the PNG and `tiles-anim.png` into
-`apps/web/public/playfield/`, extend `parseAtlas`'s schema with the town keys below, and point
-`ATLAS_URL` at `atlas-unified.json`.
+`atlas-unified.json` is the live atlas: the game loads it (`ATLAS_URL`) and renders from
+`tiles.png` on this 8×8 grid, with `blockDepthPx: 48` (this grid's block depth). The stair
+direction picks the rect at bake time — `stairsUp` for tileId 4, `stairs` (the down-well) for
+tileId 5. The companion `tiles-anim.png` animation sheet is optional; the renderer falls back to
+procedural shimmer when it is absent.
 
 Keys and what consumes them:
 

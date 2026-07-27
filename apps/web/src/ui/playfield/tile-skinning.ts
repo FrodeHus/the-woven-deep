@@ -17,12 +17,12 @@ export interface TileSkin {
   variant: number;
 }
 
-/** Atlas family array lengths (`atlas-dungeon.json` via `atlas.ts`), duplicated here as literal
+/** Atlas family array lengths (`atlas-unified.json` via `atlas.ts`), duplicated here as literal
  * constants rather than imported so this pure WFC pass stays decoupled from atlas loading. */
-const FLOORS_LEN = 7;
-const DIRTY_LEN = 7;
+const FLOORS_LEN = 8;
+const DIRTY_LEN = 8;
 const WALLS_LEN = 6;
-const WEAVE_LEN = 1;
+const WEAVE_LEN = 2;
 // `rounded` has 8 entries (NE/SE/SW/NW=0-3, endcaps=4-5, lone=6-7); every branch below picks a
 // literal in that range so no length constant is needed for modulo.
 

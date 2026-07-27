@@ -24,12 +24,12 @@ vi.mock('../src/ui/playfield/IsoRenderer.js', () => ({
 // so serve the real atlas JSON off disk for that URL. Any other URL is unhandled on purpose -- a
 // test that reaches the network is a mistake, not a silent no-op.
 const atlasJson = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), '../public/playfield/atlas-dungeon.json'),
+  join(dirname(fileURLToPath(import.meta.url)), '../public/playfield/atlas-unified.json'),
   'utf8',
 );
 (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (input: RequestInfo | URL) => {
   const url = typeof input === 'string' ? input : input.toString();
-  if (url.includes('/playfield/atlas-dungeon.json')) {
+  if (url.includes('/playfield/atlas-unified.json')) {
     return {
       ok: true,
       status: 200,

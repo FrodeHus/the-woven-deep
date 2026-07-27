@@ -1,6 +1,6 @@
 {
-  "note": "Drop-in contract for the unified dungeon-and-town sheet described in docs/design/tileset-generation.md. Not yet loaded by the game.",
-  "image": "tiles-unified.png",
+  "note": "Unified dungeon-and-town sheet described in docs/design/tileset-generation.md.",
+  "image": "tiles.png",
   "blockDepthPx": 48,
   "floors": [
     [0, 0, 128, 128],

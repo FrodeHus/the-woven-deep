@@ -14,6 +14,7 @@ export interface PlayfieldAtlas {
   rounded: AtlasRect[];
   weaveWalls: AtlasRect[];
   stairs: AtlasRect;
+  stairsUp: AtlasRect;
   door: AtlasRect;
   gate: AtlasRect;
   torch: AtlasRect;
@@ -22,7 +23,7 @@ export interface PlayfieldAtlas {
   pillarBroken: AtlasRect;
 }
 
-export const ATLAS_URL = '/playfield/atlas-dungeon.json';
+export const ATLAS_URL = '/playfield/atlas-unified.json';
 
 const IMAGE_BASE_URL = '/playfield/';
 
@@ -85,6 +86,7 @@ export function parseAtlas(json: unknown): PlayfieldAtlas {
   const rounded = toRectList(record.rounded, 'rounded');
   const weaveWalls = toRectList(record.weaveWalls, 'weaveWalls');
   const stairs = toRect(record.stairs, 'stairs');
+  const stairsUp = toRect(record.stairsUp, 'stairsUp');
   const door = toRect(record.door, 'door');
   const gate = toRect(record.gate, 'gate');
   const torch = toRect(record.torch, 'torch');
@@ -101,6 +103,7 @@ export function parseAtlas(json: unknown): PlayfieldAtlas {
     rounded,
     weaveWalls,
     stairs,
+    stairsUp,
     door,
     gate,
     torch,

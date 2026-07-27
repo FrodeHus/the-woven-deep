@@ -464,7 +464,8 @@ export class IsoRenderer {
       const dh = dw * (this.atlas.gate.h / this.atlas.gate.w);
       const sx = (feature.x - feature.y) * TILE_HALF_W * BAKE_SCALE;
       const sy = (feature.x + feature.y) * TILE_HALF_H * BAKE_SCALE;
-      const bottomY = sy + TILE_HALF_H * BAKE_SCALE + this.atlas.blockDepthPx * BAKE_SCALE;
+      const bottomY =
+        sy + TILE_HALF_H * BAKE_SCALE + this.atlas.blockDepthPx * (dw / this.atlas.gate.w);
       sprite.width = dw;
       sprite.height = dh;
       sprite.position.set(sx - dw / 2, bottomY - dh);
