@@ -23,12 +23,12 @@ export interface HoverAsset {
 
 export interface AssetPopoverProps {
   readonly asset: HoverAsset;
-  /** Screen-space column/row, camera-relative (world coordinate minus camera origin). */
-  readonly col: number;
-  readonly row: number;
-  readonly paneCols: number;
-  readonly paneRows: number;
-  readonly cellPx: Readonly<{ width: number; height: number }>;
+  /** Pane-relative pixel position of the hovered cell, clamped here so the popover never renders
+   * past the pane bounds -- the item/tile counterpart to `ThreatPopover`'s anchor. */
+  readonly leftPx: number;
+  readonly topPx: number;
+  readonly paneWidthPx: number;
+  readonly paneHeightPx: number;
   /** Looked up by `asset.contentId` to surface an identified ground item's authored `description`
    * and known facts -- the pack is the single source for that text, never threaded through the
    * engine projection. */
@@ -46,18 +46,15 @@ export interface AssetPopoverProps {
  */
 export function AssetPopover({
   asset,
-  col,
-  row,
-  paneCols,
-  paneRows,
-  cellPx,
+  leftPx,
+  topPx,
+  paneWidthPx,
+  paneHeightPx,
   pack,
 }: AssetPopoverProps): JSX.Element {
-  const clampedCol = Math.max(0, Math.min(col, Math.max(paneCols - 1, 0)));
-  const clampedRow = Math.max(0, Math.min(row, Math.max(paneRows - 1, 0)));
   const style: CSSProperties = {
-    left: `${clampedCol * cellPx.width}px`,
-    top: `${clampedRow * cellPx.height}px`,
+    left: `${Math.max(0, Math.min(leftPx, paneWidthPx))}px`,
+    top: `${Math.max(0, Math.min(topPx, paneHeightPx))}px`,
   };
   const content = asset.contentId === undefined ? undefined : itemById(pack, asset.contentId);
 

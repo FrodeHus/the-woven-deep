@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
@@ -8,6 +8,7 @@ import { GuestSession } from '../src/session/guest-session.js';
 import type { SessionStorageLike } from '../src/session/storage.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
 import { ThreatPopover } from '../src/ui/ThreatPopover.js';
+import { fakePlayfieldRenderer } from './fake-playfield-renderer.js';
 import { withUiProviders } from './with-ui-providers.js';
 
 let pack: CompiledContentPack;
@@ -41,11 +42,10 @@ describe('ThreatPopover', () => {
           healthPresentation: { band: 'wounded' },
           intentPresentation: 'intent.approach',
         }}
-        col={2}
-        row={3}
-        paneCols={20}
-        paneRows={10}
-        cellPx={{ width: 8, height: 16 }}
+        leftPx={16}
+        topPx={48}
+        paneWidthPx={200}
+        paneHeightPx={200}
         pack={pack}
       />,
     );
@@ -67,11 +67,10 @@ describe('ThreatPopover', () => {
           healthPresentation: { band: 'wounded' },
           contentId: 'monster.cave-rat',
         }}
-        col={2}
-        row={3}
-        paneCols={20}
-        paneRows={10}
-        cellPx={{ width: 8, height: 16 }}
+        leftPx={16}
+        topPx={48}
+        paneWidthPx={200}
+        paneHeightPx={200}
         pack={pack}
       />,
     );
@@ -87,18 +86,17 @@ describe('ThreatPopover', () => {
           disposition: 'hostile',
           healthPresentation: { band: 'wounded' },
         }}
-        col={2}
-        row={3}
-        paneCols={20}
-        paneRows={10}
-        cellPx={{ width: 8, height: 16 }}
+        leftPx={16}
+        topPx={48}
+        paneWidthPx={200}
+        paneHeightPx={200}
         pack={pack}
       />,
     );
     expect(document.querySelector('.threat-popover-description')).not.toBeInTheDocument();
   });
 
-  it('positions itself in pixels derived from the measured cell size, not a CSS custom property', () => {
+  it('positions itself in pixels from its pane-relative anchor, not a CSS custom property', () => {
     render(
       <ThreatPopover
         actor={{
@@ -106,11 +104,10 @@ describe('ThreatPopover', () => {
           disposition: 'hostile',
           healthPresentation: { band: 'healthy' },
         }}
-        col={2}
-        row={3}
-        paneCols={20}
-        paneRows={10}
-        cellPx={{ width: 10, height: 18 }}
+        leftPx={20}
+        topPx={54}
+        paneWidthPx={200}
+        paneHeightPx={180}
         pack={pack}
       />,
     );
@@ -129,32 +126,42 @@ describe('ThreatPopover', () => {
           disposition: 'hostile',
           healthPresentation: { band: 'healthy' },
         }}
-        col={999}
-        row={-5}
-        paneCols={20}
-        paneRows={10}
-        cellPx={{ width: 8, height: 16 }}
+        leftPx={8000}
+        topPx={-40}
+        paneWidthPx={152}
+        paneHeightPx={300}
         pack={pack}
       />,
     );
     const style = screen.getByRole('tooltip').getAttribute('style')!;
-    // clamped col 19 (paneCols - 1) * width 8, clamped row 0 * height 16.
+    // left clamps to the pane width (152), top clamps up to 0.
     expect(style).toContain('left: 152px');
     expect(style).toContain('top: 0px');
   });
 });
 
 describe('PlayScreen threat hover integration (compact tier)', () => {
-  it('hovering an empty grid cell shows nothing', () => {
+  it('hovering an empty cell shows nothing', async () => {
     const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
-    render(withUiProviders(pack, <PlayScreen session={session} pack={pack} tier="compact" />));
-    const grid = screen.getByRole('grid', { name: /dungeon/i });
-    const emptyCell = grid.querySelector('[data-cell]')!;
-    fireEvent.mouseOver(emptyCell);
+    const fake = fakePlayfieldRenderer();
+    render(
+      withUiProviders(
+        pack,
+        <PlayScreen
+          session={session}
+          pack={pack}
+          tier="compact"
+          createRenderer={fake.createRenderer}
+        />,
+      ),
+    );
+    await screen.findByRole('grid', { name: /dungeon/i });
+
+    act(() => fake.latest().hover({ x: 0, y: 0 }, 10, 10));
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 
-  it('hovering a cell holding a visible actor shows the popover with its name, and unhover removes it', () => {
+  it('hovering a cell holding a visible actor shows the popover with its name, and unhover removes it', async () => {
     const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
     const snapshot = session.getSnapshot();
     const hero = snapshot.projection.hero as unknown as { x: number; y: number };
@@ -184,14 +191,24 @@ describe('PlayScreen threat hover integration (compact tier)', () => {
       getSnapshot: () => spliced,
     } as unknown as GuestSession;
 
-    render(withUiProviders(pack, <PlayScreen session={fakeSession} pack={pack} tier="compact" />));
-    const grid = screen.getByRole('grid', { name: /dungeon/i });
-    const actorCell = grid.querySelector(`[data-cell="${hero.x + 1},${hero.y}"]`)!;
+    const fake = fakePlayfieldRenderer();
+    render(
+      withUiProviders(
+        pack,
+        <PlayScreen
+          session={fakeSession}
+          pack={pack}
+          tier="compact"
+          createRenderer={fake.createRenderer}
+        />,
+      ),
+    );
+    await screen.findByRole('grid', { name: /dungeon/i });
 
-    fireEvent.mouseOver(actorCell);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Cave rat');
+    act(() => fake.latest().hover({ x: hero.x + 1, y: hero.y }, 40, 20));
+    await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('Cave rat'));
 
-    fireEvent.mouseLeave(grid.closest('.map-pane')!);
+    act(() => fake.latest().hover(null));
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 });

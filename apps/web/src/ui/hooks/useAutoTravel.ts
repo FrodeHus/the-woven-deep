@@ -20,6 +20,10 @@ function parseDataCell(value: string): Point | undefined {
 
 export interface AutoTravelHandlers {
   readonly onClick: (event: ReactMouseEvent<HTMLDivElement>) => void;
+  /** Starts a click-to-travel walk toward `cell`, driven by the same one-step-per-projection
+   * pacing as `onClick`. The canvas playfield calls this directly with the cell resolved from a
+   * pointer event, since it has no `data-cell` DOM to look up. */
+  readonly travelTo: (cell: Point) => void;
 }
 
 export interface UseAutoTravelParams {
@@ -68,15 +72,11 @@ export function useAutoTravel({
     travelRef.current = advanceTravel({ projection, travel: travelRef.current, dispatch });
   }, [projection, dispatch]);
 
-  const onClick = (event: ReactMouseEvent<HTMLDivElement>): void => {
+  const travelTo = (cell: Point): void => {
     if (disabled) {
       travelRef.current = null;
       return;
     }
-    const cellElement = (event.target as HTMLElement).closest('[data-cell]');
-    if (!cellElement) return;
-    const cell = parseDataCell(cellElement.getAttribute('data-cell') ?? '');
-    if (!cell) return;
     const plan = resolveClick(projection, cell);
     if (plan === null) {
       travelRef.current = null;
@@ -91,5 +91,17 @@ export function useAutoTravel({
     });
   };
 
-  return { onClick };
+  const onClick = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    if (disabled) {
+      travelRef.current = null;
+      return;
+    }
+    const cellElement = (event.target as HTMLElement).closest('[data-cell]');
+    if (!cellElement) return;
+    const cell = parseDataCell(cellElement.getAttribute('data-cell') ?? '');
+    if (!cell) return;
+    travelTo(cell);
+  };
+
+  return { onClick, travelTo };
 }

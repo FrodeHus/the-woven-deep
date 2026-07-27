@@ -1,29 +1,18 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  type CSSProperties,
-  type JSX,
-  type MouseEvent as ReactMouseEvent,
-} from 'react';
+import { useMemo, useRef, useState, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
-import type { HeartLineageRecord, StoredHallRecord } from '@woven-deep/engine';
+import type { HeartLineageRecord, Point, StoredHallRecord } from '@woven-deep/engine';
 import type { RunSession } from '../session/run-session.js';
 import { useRunSession } from '../session/store.js';
 import {
   actorsOf,
   dialogueTargetAvailable,
-  heroOf,
   tradeIsAvailable,
 } from '../session/projection-view.js';
-import { computeCamera, type CameraOrigin } from './camera.js';
 import { CommandPalette } from './CommandPalette.js';
-import { EffectsLayer } from './EffectsLayer.js';
-import { GridRenderer } from './GridRenderer.js';
 import { HintStrip } from './HintStrip.js';
 import type { OverlayActionId } from './KeyRouter.js';
 import { activeHint, HINTS } from '../session/onboarding.js';
-import { viewportForPane, type LayoutTier } from './layout.js';
+import type { LayoutTier } from './layout.js';
 import {
   HeroPanel,
   HeroStatusAnnouncer,
@@ -43,14 +32,13 @@ import { HouseScreen } from './screens/HouseScreen.js';
 import { TradeScreen } from './screens/TradeScreen.js';
 import { effectiveReducedMotion, ScreenFade } from './ScreenFade.js';
 import { AssetPopover } from './AssetPopover.js';
-import { CellCursor } from './CellCursor.js';
-import { TargetingOverlay } from './TargetingOverlay.js';
 import { ThreatPopover } from './ThreatPopover.js';
 import { TownPanel } from './TownPanel.js';
+import { PlayfieldCanvas, type CreateRenderer } from './playfield/PlayfieldCanvas.js';
+import type { TargetingVisual } from './playfield/IsoRenderer.js';
 import { useAutoTravel } from './hooks/useAutoTravel.js';
 import { useCellHover } from './hooks/useCellHover.js';
 import { useCommandPaletteHotkey } from './hooks/useCommandPaletteHotkey.js';
-import { usePaneMeasurement } from './hooks/usePaneMeasurement.js';
 import { usePlayKeyDispatcher } from './hooks/usePlayKeyDispatcher.js';
 import { useSpellTargeting } from './hooks/useSpellTargeting.js';
 
@@ -102,15 +90,18 @@ export interface PlayScreenProps {
    * `snapshot.onboarding`'s mastery counts either, so in practice they'd only ever see the
    * `movement` hint, and only while in town. */
   readonly onboardingEnabled?: boolean;
+  /** Injection seam for the playfield renderer, threaded to `PlayfieldCanvas`. Defaults to the real
+   * `IsoRenderer`; tests pass a recording fake (jsdom has no WebGL). */
+  readonly createRenderer?: CreateRenderer;
 }
 
 /**
- * Composes Layout A: a fixed status bar, the ASCII grid + effects layer as the main focal region,
- * a persistent right rail (hero/vitals, minimap, threat/town panel), and a full-width message log
- * -- none of which reflow as the window resizes; overlays open over this shell via `OverlayHost`'s
- * Sheet. The measured pane/cell pixel sizes and per-floor zoom live in `usePaneMeasurement`; the
- * five stateful concerns (measurement, the global key dispatcher, cell-hover popover, the ⌘K
- * palette) are each their own hook so this component stays layout + composition.
+ * Composes Layout A: a fixed status bar, the isometric Pixi playfield as the main focal region, a
+ * persistent right rail (hero/vitals, minimap, threat/town panel), and a full-width message log --
+ * none of which reflow as the window resizes; overlays open over this shell via `OverlayHost`'s
+ * Sheet. The playfield renders on a canvas (`PlayfieldCanvas`), which reports pointer input back as
+ * cell callbacks; the stateful concerns (the global key dispatcher, cell-hover popover, spell
+ * targeting, the ⌘K palette) are each their own hook so this component stays layout + composition.
  */
 export function PlayScreen({
   session,
@@ -125,6 +116,7 @@ export function PlayScreen({
   records = [],
   currentHeart = null,
   onboardingEnabled = true,
+  createRenderer,
 }: PlayScreenProps): JSX.Element {
   const { settings, keymap } = useSettingsCtx();
   const snapshot = useRunSession(session);
@@ -138,9 +130,6 @@ export function PlayScreen({
   const hint = activeHint(snapshot.onboarding, HINTS, projection, snapshot, onboardingEnabled);
   const activeHintRef = useRef<string | null>(null);
   activeHintRef.current = hint?.id ?? null;
-
-  const { mapPaneRef, cellProbeRef, cellProbeBaseRef, paneSize, cellSize, zoom } =
-    usePaneMeasurement(projection.floor);
 
   const targeting = useSpellTargeting(session, snapshot);
 
@@ -158,21 +147,6 @@ export function PlayScreen({
     targetingActive: targeting.activeSpellId !== null,
   });
 
-  const viewport = viewportForPane({ panePx: paneSize, cellPx: cellSize, floor: projection.floor });
-
-  const cameraRef = useRef<Readonly<{ floorId: string; origin: CameraOrigin }> | null>(null);
-  const heroPosition = heroOf(projection);
-  const previousOrigin =
-    cameraRef.current?.floorId === projection.floor.floorId ? cameraRef.current.origin : null;
-  const camera = computeCamera({
-    hero: heroPosition,
-    sightRadius: heroPosition.sightRadius,
-    floor: projection.floor,
-    viewport,
-    previous: previousOrigin,
-  });
-  cameraRef.current = { floorId: projection.floor.floorId, origin: camera };
-
   const isModalActive =
     overlay !== null ||
     snapshot.houseOpen ||
@@ -182,27 +156,19 @@ export function PlayScreen({
     targeting.activeSpellId !== null;
   const [paletteOpen, setPaletteOpen] = useCommandPaletteHotkey(isModalActive);
 
-  const { hover, cursor, handlers } = useCellHover(snapshot);
+  const { hover, hoverAtCell } = useCellHover(snapshot);
   const autoTravel = useAutoTravel({ session, snapshot, disabled: isModalActive });
-  const cursorCol = cursor ? cursor.x - camera.x : 0;
-  const cursorRow = cursor ? cursor.y - camera.y : 0;
-  const cursorInView =
-    cursor !== null &&
-    cursorCol >= 0 &&
-    cursorCol < viewport.width &&
-    cursorRow >= 0 &&
-    cursorRow < viewport.height;
 
-  // The mouse cursor doubles as the targeting reticle whenever it sits over a currently-valid
-  // target -- otherwise the keyboard reticle (`targeting.reticle`) is what's highlighted. Neither
-  // overrides the other; whichever the player is actively using wins.
-  const targetingHighlight =
-    cursor && targeting.validCells.has(`${cursor.x},${cursor.y}`)
-      ? { x: cursor.x, y: cursor.y }
-      : targeting.reticle;
+  const mapPaneRef = useRef<HTMLDivElement>(null);
+  const [hoverAnchor, setHoverAnchor] = useState<{
+    readonly leftPx: number;
+    readonly topPx: number;
+    readonly paneWidthPx: number;
+    readonly paneHeightPx: number;
+  } | null>(null);
 
-  // Cells where an actor caught in the current footprint stands -- `TargetingOverlay` renders these
-  // distinctly from the rest of the valid set, so the player sees who gets hit before confirming.
+  // Cells where an actor caught in the current footprint stands -- surfaced to the renderer so it
+  // highlights who gets hit before the player confirms the cast.
   const affectedActorCells = useMemo(() => {
     const keys = new Set<string>();
     for (const actor of actorsOf(projection)) {
@@ -211,38 +177,54 @@ export function PlayScreen({
     return keys;
   }, [projection, targeting.affectedActorIds]);
 
-  // While an AoE spell is being targeted, the mouse cursor drives the free reticle directly -- the
-  // keyboard-only path (`moveReticleBy`) still works for players who never move the mouse.
-  useEffect(() => {
-    if (targeting.activeSpellId && cursor) targeting.setReticle({ x: cursor.x, y: cursor.y });
-  }, [targeting.activeSpellId, targeting.setReticle, cursor]);
+  // The targeting visuals the canvas draws: the footprint at the reticle (`validCells`), the cells
+  // where an affected actor stands, and the reticle itself. `null` whenever targeting is inactive.
+  const targetingVisual: TargetingVisual | null =
+    targeting.activeSpellId !== null
+      ? {
+          validCells: targeting.validCells,
+          affectedCells: affectedActorCells,
+          reticle: targeting.reticle,
+        }
+      : null;
 
   /**
-   * The map pane's single click handler: while targeting is active, a click is routed to
-   * `targeting.confirmAt` INSTEAD of auto-travel (a click on an invalid cell is simply ignored --
-   * targeting stays active -- rather than cancelling the whole mode or auto-travelling underneath
-   * it); otherwise it's exactly today's auto-travel click, unchanged.
+   * The playfield's cell click. While targeting is active, a primary click confirms the cast at the
+   * cell (a click on an invalid cell is ignored -- targeting stays active) and a secondary
+   * (right-click) cancels; otherwise a primary click starts click-to-travel, unchanged.
    */
-  const handleMapClick = (event: ReactMouseEvent<HTMLDivElement>): void => {
-    if (targeting.activeSpellId) {
-      const cellElement = (event.target as HTMLElement).closest('[data-cell]');
-      if (!cellElement) return;
-      const [xText, yText] = (cellElement.getAttribute('data-cell') ?? '').split(',');
-      const x = Number(xText);
-      const y = Number(yText);
-      if (Number.isFinite(x) && Number.isFinite(y)) targeting.confirmAt({ x, y });
+  const handleCellClick = (cell: Point, button: 'primary' | 'secondary'): void => {
+    if (targeting.activeSpellId !== null) {
+      if (button === 'primary') targeting.confirmAt(cell);
+      else targeting.cancel();
       return;
     }
-    autoTravel.onClick(event);
+    if (button === 'primary') autoTravel.travelTo(cell);
   };
 
-  /** Right-click cancels targeting without casting -- the second of the two documented cancel
-   * gestures (Escape is the other, handled by `useSpellTargeting`'s own keydown listener). A no-op
-   * (default browser context menu) when targeting isn't active. */
-  const handleMapContextMenu = (event: ReactMouseEvent<HTMLDivElement>): void => {
-    if (!targeting.activeSpellId) return;
-    event.preventDefault();
-    targeting.cancel();
+  /**
+   * The playfield's cell hover. Positions the description popover from the pointer's client position
+   * (relative to the map pane's own box) and, while an AoE spell is being targeted, drives the free
+   * reticle so the footprint follows the mouse -- the keyboard reticle still works for players who
+   * never move the mouse.
+   */
+  const handleCellHover = (
+    payload: { cell: Point; clientX: number; clientY: number } | null,
+  ): void => {
+    if (payload === null) {
+      hoverAtCell(null);
+      setHoverAnchor(null);
+      return;
+    }
+    hoverAtCell(payload.cell);
+    const rect = mapPaneRef.current?.getBoundingClientRect();
+    setHoverAnchor({
+      leftPx: payload.clientX - (rect?.left ?? 0),
+      topPx: payload.clientY - (rect?.top ?? 0),
+      paneWidthPx: rect?.width ?? 0,
+      paneHeightPx: rect?.height ?? 0,
+    });
+    if (targeting.activeSpellId !== null) targeting.setReticle(payload.cell);
   };
 
   return (
@@ -261,72 +243,32 @@ export function PlayScreen({
           <div
             className="map-pane relative col-start-1 row-start-1 overflow-hidden"
             ref={mapPaneRef}
-            onMouseOver={handlers.onMouseOver}
-            onMouseLeave={handlers.onMouseLeave}
-            onClick={handleMapClick}
-            onContextMenu={handleMapContextMenu}
           >
-            <div
-              className={['playfield', projection.floor.town ? 'playfield-town' : '']
-                .filter(Boolean)
-                .join(' ')}
-              style={{ '--zoom': zoom } as CSSProperties}
-            >
-              <span ref={cellProbeRef} className="cell cell-probe" aria-hidden="true">
-                0
-              </span>
-              <span ref={cellProbeBaseRef} className="cell cell-probe-base" aria-hidden="true">
-                0
-              </span>
-              <GridRenderer projection={projection} camera={camera} viewport={viewport} />
-              <EffectsLayer
-                projection={projection}
-                pack={pack}
-                lastEvents={snapshot.lastEvents}
-                camera={camera}
-                viewport={viewport}
-              />
-            </div>
-            {targeting.activeSpellId ? (
-              <TargetingOverlay
-                floor={projection.floor}
-                camera={camera}
-                viewport={viewport}
-                cellPx={cellSize}
-                validCells={targeting.validCells}
-                highlighted={targetingHighlight}
-                affectedActorCells={affectedActorCells}
-              />
-            ) : (
-              cursor &&
-              cursorInView && (
-                <CellCursor
-                  col={cursorCol}
-                  row={cursorRow}
-                  reachable={cursor.reachable}
-                  cellPx={cellSize}
-                />
-              )
-            )}
-            {hover?.kind === 'actor' && (
+            <PlayfieldCanvas
+              snapshot={snapshot}
+              pack={pack}
+              targeting={targetingVisual}
+              onCellClick={handleCellClick}
+              onCellHover={handleCellHover}
+              {...(createRenderer ? { createRenderer } : {})}
+            />
+            {hover?.kind === 'actor' && hoverAnchor && (
               <ThreatPopover
                 actor={hover.actor}
-                col={hover.actor.x - camera.x}
-                row={hover.actor.y - camera.y}
-                paneCols={viewport.width}
-                paneRows={viewport.height}
-                cellPx={cellSize}
+                leftPx={hoverAnchor.leftPx}
+                topPx={hoverAnchor.topPx}
+                paneWidthPx={hoverAnchor.paneWidthPx}
+                paneHeightPx={hoverAnchor.paneHeightPx}
                 pack={pack}
               />
             )}
-            {hover?.kind === 'asset' && (
+            {hover?.kind === 'asset' && hoverAnchor && (
               <AssetPopover
                 asset={hover.asset}
-                col={hover.asset.x - camera.x}
-                row={hover.asset.y - camera.y}
-                paneCols={viewport.width}
-                paneRows={viewport.height}
-                cellPx={cellSize}
+                leftPx={hoverAnchor.leftPx}
+                topPx={hoverAnchor.topPx}
+                paneWidthPx={hoverAnchor.paneWidthPx}
+                paneHeightPx={hoverAnchor.paneHeightPx}
                 pack={pack}
               />
             )}

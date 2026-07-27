@@ -14,6 +14,7 @@ import {
 import type { GuestSession, SessionSnapshot } from '../src/session/guest-session.js';
 import type { PlayerIntent } from '../src/session/intents.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
+import { fakePlayfieldRenderer, type FakePlayfieldRenderer } from './fake-playfield-renderer.js';
 import { withUiProviders } from './with-ui-providers.js';
 
 let pack: CompiledContentPack;
@@ -149,17 +150,24 @@ class FakeSession {
   answerDecision(): void {}
 }
 
-function renderPlay(session: FakeSession): void {
+async function renderPlay(session: FakeSession): Promise<FakePlayfieldRenderer> {
+  const fake = fakePlayfieldRenderer();
   render(
-    withUiProviders(pack, <PlayScreen session={session as unknown as GuestSession} pack={pack} />),
+    withUiProviders(
+      pack,
+      <PlayScreen
+        session={session as unknown as GuestSession}
+        pack={pack}
+        createRenderer={fake.createRenderer}
+      />,
+    ),
   );
+  await screen.findByRole('grid', { name: /dungeon/i });
+  return fake;
 }
 
-function clickCell(cell: Point): void {
-  const grid = screen.getByRole('grid', { name: /dungeon/i });
-  const el = grid.querySelector(`[data-cell="${cell.x},${cell.y}"]`);
-  expect(el, `cell ${cell.x},${cell.y} must be within the viewport`).not.toBeNull();
-  fireEvent.click(el!);
+function clickCell(fake: FakePlayfieldRenderer, cell: Point): void {
+  act(() => fake.latest().click(cell, 'primary'));
 }
 
 function moves(session: FakeSession): readonly PlayerIntent[] {
@@ -167,18 +175,18 @@ function moves(session: FakeSession): readonly PlayerIntent[] {
 }
 
 describe('PlayScreen click-to-move (auto-travel)', () => {
-  it('clicking an adjacent cell dispatches exactly one move', () => {
+  it('clicking an adjacent cell dispatches exactly one move', async () => {
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
-    renderPlay(session);
-    clickCell({ x: 21, y: 10 });
+    const fake = await renderPlay(session);
+    clickCell(fake, { x: 21, y: 10 });
     expect(session.dispatched).toEqual([{ type: 'move', direction: 'east' }]);
   });
 
-  it('clicking a distant reachable cell starts auto-travel (first step dispatched) and is cancellable by a keypress', () => {
+  it('clicking a distant reachable cell starts auto-travel (first step dispatched) and is cancellable by a keypress', async () => {
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
-    clickCell({ x: 23, y: 10 });
+    clickCell(fake, { x: 23, y: 10 });
     // Only the FIRST step is dispatched up front; the rest await each authoritative projection.
     expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
 
@@ -190,7 +198,7 @@ describe('PlayScreen click-to-move (auto-travel)', () => {
     expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
   });
 
-  it('auto-travels step by step and picks up a floor item on arrival', () => {
+  it('auto-travels step by step and picks up a floor item on arrival', async () => {
     const item: FakeItem = {
       itemId: 'item.sword',
       x: 22,
@@ -202,9 +210,9 @@ describe('PlayScreen click-to-move (auto-travel)', () => {
       identified: true,
     };
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 }, groundItems: [item] }));
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
-    clickCell({ x: 22, y: 10 });
+    clickCell(fake, { x: 22, y: 10 });
     expect(moves(session)).toHaveLength(1);
     expect(session.dispatched).not.toContainEqual({ type: 'pickup' });
 
@@ -218,7 +226,7 @@ describe('PlayScreen click-to-move (auto-travel)', () => {
     expect(moves(session)).toHaveLength(2);
   });
 
-  it('clicking a hostile dispatches a move toward it (which the command builder resolves to an attack)', () => {
+  it('clicking a hostile dispatches a move toward it (which the command builder resolves to an attack)', async () => {
     const hostile: FakeActor = {
       actorId: 'monster.rat',
       x: 21,
@@ -230,43 +238,16 @@ describe('PlayScreen click-to-move (auto-travel)', () => {
       glyph: 'r',
     };
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 }, actors: [hostile] }));
-    renderPlay(session);
-    clickCell({ x: 21, y: 10 });
+    const fake = await renderPlay(session);
+    clickCell(fake, { x: 21, y: 10 });
     // Adjacent hostile: a single east move, which `buildIntent` turns into an attack (see
     // travel.test.ts's grounding case).
     expect(session.dispatched).toEqual([{ type: 'move', direction: 'east' }]);
   });
 });
 
-describe('PlayScreen movement affordance cursor', () => {
-  function cursor(): HTMLElement | null {
-    return screen.queryByTestId('cell-cursor');
-  }
-
-  it('highlights a reachable floor cell as an inviting move target', () => {
-    const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
-    renderPlay(session);
-    const grid = screen.getByRole('grid', { name: /dungeon/i });
-    fireEvent.mouseOver(grid.querySelector('[data-cell="23,10"]')!);
-    expect(cursor()).toHaveAttribute('data-reachable', 'true');
-    expect(cursor()).toHaveClass('cell-cursor-reachable');
-  });
-
-  it('does not invite a move over a non-actionable cell (a wall)', () => {
-    const session = new FakeSession(
-      projectionOf({ hero: { x: 20, y: 10 }, walls: [{ x: 22, y: 10 }] }),
-    );
-    renderPlay(session);
-    const grid = screen.getByRole('grid', { name: /dungeon/i });
-    fireEvent.mouseOver(grid.querySelector('[data-cell="22,10"]')!);
-    // The cursor still tracks the cell, but reads as blocked rather than a move invitation.
-    expect(cursor()).toHaveAttribute('data-reachable', 'false');
-    expect(cursor()).toHaveClass('cell-cursor-blocked');
-  });
-});
-
 describe('PlayScreen hover description popover', () => {
-  it('hovering a floor item shows a description popover naming it', () => {
+  it('hovering a floor item shows a description popover naming it', async () => {
     const item: FakeItem = {
       itemId: 'item.sword',
       x: 22,
@@ -278,10 +259,9 @@ describe('PlayScreen hover description popover', () => {
       identified: true,
     };
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 }, groundItems: [item] }));
-    renderPlay(session);
-    const grid = screen.getByRole('grid', { name: /dungeon/i });
-    fireEvent.mouseOver(grid.querySelector('[data-cell="22,10"]')!);
-    const tooltip = screen.getByRole('tooltip');
+    const fake = await renderPlay(session);
+    act(() => fake.latest().hover({ x: 22, y: 10 }, 30, 30));
+    const tooltip = await screen.findByRole('tooltip');
     expect(tooltip).toHaveTextContent('Iron sword');
     expect(tooltip).toHaveTextContent(/weapon/i);
   });

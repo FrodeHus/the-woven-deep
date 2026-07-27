@@ -25,11 +25,10 @@ describe('AssetPopover', () => {
           y: 3,
           contentId: 'item.iron-sword',
         }}
-        col={2}
-        row={3}
-        paneCols={20}
-        paneRows={10}
-        cellPx={{ width: 8, height: 16 }}
+        leftPx={16}
+        topPx={48}
+        paneWidthPx={200}
+        paneHeightPx={200}
         pack={pack}
       />,
     );
@@ -51,11 +50,10 @@ describe('AssetPopover', () => {
           x: 2,
           y: 3,
         }}
-        col={2}
-        row={3}
-        paneCols={20}
-        paneRows={10}
-        cellPx={{ width: 8, height: 16 }}
+        leftPx={16}
+        topPx={48}
+        paneWidthPx={200}
+        paneHeightPx={200}
         pack={pack}
       />,
     );
@@ -76,11 +74,10 @@ describe('AssetPopover', () => {
           x: 2,
           y: 3,
         }}
-        col={2}
-        row={3}
-        paneCols={20}
-        paneRows={10}
-        cellPx={{ width: 8, height: 16 }}
+        leftPx={16}
+        topPx={48}
+        paneWidthPx={200}
+        paneHeightPx={200}
         pack={pack}
       />,
     );

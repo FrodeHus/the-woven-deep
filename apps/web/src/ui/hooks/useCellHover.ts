@@ -1,14 +1,7 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-} from 'react';
-import { isStairDown, isStairUp, type GameplayProjection } from '@woven-deep/engine';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { isStairDown, isStairUp, type GameplayProjection, type Point } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import { actorsOf, groundItemsOf } from '../../session/projection-view.js';
-import { resolveClick } from '../../session/travel.js';
 import { humanize } from '../labels.js';
 import type { ThreatPopoverActor } from '../ThreatPopover.js';
 import type { HoverAsset } from '../AssetPopover.js';
@@ -76,55 +69,34 @@ function assetAtCell(projection: GameplayProjection, x: number, y: number): Hove
   return itemAssetAtCell(projection, x, y) ?? tileAssetAtCell(projection, x, y);
 }
 
-function parseDataCell(value: string): Readonly<{ x: number; y: number }> | undefined {
-  const [xText, yText] = value.split(',');
-  const x = Number(xText);
-  const y = Number(yText);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return undefined;
-  return { x, y };
-}
-
 export type CellHover =
   | Readonly<{ kind: 'actor'; actor: PositionedActor }>
   | Readonly<{ kind: 'asset'; asset: HoverAsset }>
   | null;
 
-/** The movement-affordance cursor: the cell the pointer is over, and whether a click there would
- * actually do something (`reachable` -- a move/travel/attack/pickup, i.e. `resolveClick` returns a
- * plan). A non-reachable cell (wall, unknown, the hero's own empty cell, a non-hostile actor) is
- * still tracked so the cursor follows the pointer, but rendered as a non-inviting cue. */
-export type CellCursor = Readonly<{ x: number; y: number; reachable: boolean }> | null;
-
-export interface CellHoverHandlers {
-  readonly onMouseOver: (event: ReactMouseEvent<HTMLDivElement>) => void;
-  readonly onMouseLeave: () => void;
-}
-
 export interface UseCellHoverResult {
   readonly hover: CellHover;
-  readonly cursor: CellCursor;
-  readonly handlers: CellHoverHandlers;
+  /** Resolves the description popover for the cell the pointer is over -- an actor
+   * (`ThreatPopover`), a floor item / notable tile (`AssetPopover`), or nothing. `null` clears it
+   * (the pointer left the map). Only recomputes when the pointer crosses into a new cell. */
+  readonly hoverAtCell: (cell: Point | null) => void;
 }
 
 /**
- * Tracks the cell under the pointer for two overlays `PlayScreen` renders: a description popover for
- * whatever asset it holds -- an actor (`ThreatPopover`) or a floor item / notable tile
- * (`AssetPopover`) -- and a movement-affordance `cursor` highlighting the cell and signalling
- * whether a click would move/travel there (reachability reused from auto-travel's `resolveClick`).
- * Both are cleared whenever the session snapshot publishes (a resolved turn can move or remove the
- * hovered asset, or change reachability) and on any scroll (the overlays are absolutely positioned
- * against the pane, so scrolling would strand them). Cells are matched by their `data-cell="x,y"`
- * attribute; reachability is only recomputed when the pointer crosses into a new cell.
+ * Tracks the map cell under the pointer to drive the description popover `PlayScreen` renders for
+ * whatever it holds -- an actor (`ThreatPopover`) or a floor item / notable tile (`AssetPopover`).
+ * The playfield canvas reports the hovered cell (resolved from the pointer's screen position); this
+ * hook turns that into the popover's content. It clears whenever the session snapshot publishes (a
+ * resolved turn can move or remove the hovered asset) and on any scroll (the popover is absolutely
+ * positioned against the pane, so scrolling would strand it).
  */
 export function useCellHover(snapshot: SessionSnapshot): UseCellHoverResult {
   const { projection } = snapshot;
   const [hover, setHover] = useState<CellHover>(null);
-  const [cursor, setCursor] = useState<CellCursor>(null);
   const lastCellRef = useRef<string | null>(null);
 
   const clear = useCallback((): void => {
     setHover(null);
-    setCursor(null);
     lastCellRef.current = null;
   }, []);
 
@@ -137,27 +109,26 @@ export function useCellHover(snapshot: SessionSnapshot): UseCellHoverResult {
     return () => window.removeEventListener('scroll', clear, true);
   }, [clear]);
 
-  const onMouseOver = (event: ReactMouseEvent<HTMLDivElement>): void => {
-    const cellElement = (event.target as HTMLElement).closest('[data-cell]');
-    if (!cellElement) return;
-    const cell = parseDataCell(cellElement.getAttribute('data-cell') ?? '');
-    if (!cell) return;
-    // `mouseover` only refires when the pointer crosses into a new element, but guard anyway so a
-    // stray re-fire never recomputes `resolveClick` (which runs a pathfind) for the same cell.
-    const key = `${cell.x},${cell.y}`;
-    if (lastCellRef.current === key) return;
-    lastCellRef.current = key;
+  const hoverAtCell = useCallback(
+    (cell: Point | null): void => {
+      if (cell === null) {
+        clear();
+        return;
+      }
+      const key = `${cell.x},${cell.y}`;
+      if (lastCellRef.current === key) return;
+      lastCellRef.current = key;
 
-    setCursor({ x: cell.x, y: cell.y, reachable: resolveClick(projection, cell) !== null });
+      const actor = actorAtCell(projection, cell.x, cell.y);
+      if (actor) {
+        setHover({ kind: 'actor', actor });
+        return;
+      }
+      const asset = assetAtCell(projection, cell.x, cell.y);
+      setHover(asset ? { kind: 'asset', asset } : null);
+    },
+    [projection, clear],
+  );
 
-    const actor = actorAtCell(projection, cell.x, cell.y);
-    if (actor) {
-      setHover({ kind: 'actor', actor });
-      return;
-    }
-    const asset = assetAtCell(projection, cell.x, cell.y);
-    setHover(asset ? { kind: 'asset', asset } : null);
-  };
-
-  return { hover, cursor, handlers: { onMouseOver, onMouseLeave: clear } };
+  return { hover, hoverAtCell };
 }

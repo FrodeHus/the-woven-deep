@@ -1,6 +1,43 @@
 import '@testing-library/jest-dom/vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { cleanup } from '@testing-library/react';
-import { afterEach } from 'vitest';
+import { afterEach, vi } from 'vitest';
+
+// jsdom has no WebGL, so the real PixiJS `IsoRenderer` can never mount in a test. Replace it with an
+// inert stand-in for every test file: PlayScreen renders that do not inject their own `createRenderer`
+// (App-level boot tests, keyboard/palette tests) get this harmless renderer instead of a real Pixi
+// context. Tests that need to observe or drive the renderer inject `fakePlayfieldRenderer` explicitly.
+vi.mock('../src/ui/playfield/IsoRenderer.js', () => ({
+  IsoRenderer: class {
+    init(): Promise<void> {
+      return Promise.resolve();
+    }
+    setSnapshot(): void {}
+    setTargeting(): void {}
+    destroy(): void {}
+  },
+}));
+
+// The playfield canvas fetches its sprite atlas once via `fetch(ATLAS_URL)`; jsdom has no `fetch`,
+// so serve the real atlas JSON off disk for that URL. Any other URL is unhandled on purpose -- a
+// test that reaches the network is a mistake, not a silent no-op.
+const atlasJson = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '../public/playfield/atlas-dungeon.json'),
+  'utf8',
+);
+(globalThis as unknown as { fetch: typeof fetch }).fetch = (async (input: RequestInfo | URL) => {
+  const url = typeof input === 'string' ? input : input.toString();
+  if (url.includes('/playfield/atlas-dungeon.json')) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => JSON.parse(atlasJson) as unknown,
+    } as Response;
+  }
+  throw new Error(`unexpected fetch in test: ${url}`);
+}) as typeof fetch;
 
 // jsdom has no ResizeObserver. PlayScreen only needs the constructor shape (observe/unobserve/
 // disconnect) to exist so mounting it doesn't throw; most PlayScreen tests assert the wiring
