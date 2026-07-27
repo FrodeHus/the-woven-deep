@@ -3,6 +3,22 @@ import type { AtlasRect, PlayfieldAtlas } from './atlas.js';
 import { TILE_HALF_H, TILE_HALF_W } from './iso-math.js';
 import { skinFloor, type TileFamily, type TileSkin } from './tile-skinning.js';
 
+/**
+ * The hand-cropped atlas diamonds carry a few pixels of transparent margin around the painted art,
+ * so mapping a crop's width straight to the 64px cell pitch leaves each painted diamond a touch
+ * narrower than its cell -- opening uniform dark seams between neighbours. Drawing every flat tile
+ * scaled up by this factor (about the cell's top-face centre, so the overlap is symmetric) makes
+ * adjacent diamonds meet and slightly overlap, so the floor reads as continuous stone.
+ */
+export const FLOOR_OVERSCAN = 1.14;
+
+/**
+ * The same margin correction for wall crops, applied horizontally only: adjacent wall faces along an
+ * explored edge otherwise show stubby gaps ("teeth") where the painted art falls short of the cell
+ * pitch. Widening about the cell centre closes them without changing the base-anchored height.
+ */
+export const WALL_OVERSCAN = 1.08;
+
 export interface BakeDraw {
   rect: AtlasRect;
   dx: number;
@@ -85,7 +101,6 @@ export function planFloorBake(
   const skins = skinFloor(cells, width, height, floorId);
 
   const dw = TILE_HALF_W * 2 * scale; // 64 * scale, per spec
-  const halfDw = dw / 2;
   const floorHalfDh = TILE_HALF_H * scale;
 
   const isoX = (x: number, y: number): number => (x - y) * TILE_HALF_W * scale;
@@ -133,11 +148,27 @@ export function planFloorBake(
     if (wall) {
       // Base-anchored: the sprite's bottom edge sits `blockDepthPx` (scaled) below the cell's own
       // floor-diamond bottom corner, so tall wall art rises from the tile it stands on instead of
-      // being centered on it.
+      // being centered on it. Widened by `WALL_OVERSCAN` about the cell centre (bottom + height
+      // unchanged) so adjacent wall faces meet instead of leaving stubby gaps.
       const bottomY = sy + floorHalfDh + atlas.blockDepthPx * scale;
-      placed.push({ x: cell.x, y: cell.y, rect, dx: sx - halfDw, dy: bottomY - dh, dw, dh });
+      const wdw = dw * WALL_OVERSCAN;
+      placed.push({ x: cell.x, y: cell.y, rect, dx: sx - wdw / 2, dy: bottomY - dh, dw: wdw, dh });
     } else {
-      placed.push({ x: cell.x, y: cell.y, rect, dx: sx - halfDw, dy: sy - dh / 2, dw, dh });
+      // Top-anchored: the diamond's apex sits at the cell's top corner (`sy - floorHalfDh`), so the
+      // top face lands exactly on the cell diamond and tessellates with its neighbours -- then
+      // scaled up by `FLOOR_OVERSCAN` about that top-face centre (`sx`, `sy`) so the painted diamond
+      // fills, and slightly overlaps, the full cell pitch.
+      const fdw = dw * FLOOR_OVERSCAN;
+      const fdh = dh * FLOOR_OVERSCAN;
+      placed.push({
+        x: cell.x,
+        y: cell.y,
+        rect,
+        dx: sx - fdw / 2,
+        dy: sy - floorHalfDh * FLOOR_OVERSCAN,
+        dw: fdw,
+        dh: fdh,
+      });
     }
   }
 

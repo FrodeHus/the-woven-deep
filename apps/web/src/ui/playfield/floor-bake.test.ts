@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ObservableCell } from '@woven-deep/engine';
 import type { AtlasRect, PlayfieldAtlas } from './atlas.js';
-import { bakeKey, planFloorBake } from './floor-bake.js';
+import { bakeKey, FLOOR_OVERSCAN, planFloorBake, WALL_OVERSCAN } from './floor-bake.js';
 
 function rect(x: number, w = 64, h = 32): AtlasRect {
   return { x, y: 0, w, h };
@@ -135,6 +135,41 @@ describe('planFloorBake single-rect families', () => {
     const plan = planFloorBake(cells, 1, 1, 'floor-door', atlas, 1);
     expect(plan.draws).toHaveLength(1);
     expect(plan.draws[0]!.rect).toEqual(atlas.door);
+  });
+});
+
+describe('planFloorBake tile anchoring', () => {
+  it('top-anchors a flat tile at the cell diamond apex and overscans it about the cell centre', () => {
+    const atlas = makeAtlas();
+    // A pillar is a flat (non-wall) tile with a predictable 64x64 rect, so its draw geometry is
+    // fully determined -- unlike a floor variant, whose rect is hash-chosen.
+    const cells = grid(1, 1, () => 'terrain.pillar');
+    const plan = planFloorBake(cells, 1, 1, 'floor-anchor', atlas, 1);
+    expect(plan.draws).toHaveLength(1);
+    const draw = plan.draws[0]!;
+
+    // Overscanned in both axes (aspect preserved: the 64x64 pillar rect stays square).
+    expect(draw.dw).toBeCloseTo(64 * FLOOR_OVERSCAN, 5);
+    expect(draw.dh).toBeCloseTo(64 * FLOOR_OVERSCAN, 5);
+    // Horizontally centred on the cell (sx = 0 here): left edge is half the overscanned width in.
+    expect(draw.dx).toBeCloseTo(plan.originX - (64 * FLOOR_OVERSCAN) / 2, 5);
+    // Top-anchored: the diamond apex sits `TILE_HALF_H * overscan` above the cell centre -- NOT
+    // half the sprite height (which is what centring a 1:1 rect would give, ~32 * overscan).
+    expect(draw.dy).toBeCloseTo(plan.originY - 16 * FLOOR_OVERSCAN, 5);
+  });
+
+  it('widens a wall tile horizontally by WALL_OVERSCAN while keeping its base-anchored height', () => {
+    const atlas = makeAtlas();
+    const cells = grid(1, 1, () => 'terrain.wall');
+    const plan = planFloorBake(cells, 1, 1, 'floor-wall-anchor', atlas, 1);
+    expect(plan.draws).toHaveLength(1);
+    const draw = plan.draws[0]!;
+
+    // Width overscanned; height left at the base 64->96 mapping (walls rise, they don't fatten).
+    expect(draw.dw).toBeCloseTo(64 * WALL_OVERSCAN, 5);
+    expect(draw.dh).toBeCloseTo(96, 5);
+    // Still centred on the cell horizontally (sx = 0).
+    expect(draw.dx).toBeCloseTo(plan.originX - (64 * WALL_OVERSCAN) / 2, 5);
   });
 });
 
