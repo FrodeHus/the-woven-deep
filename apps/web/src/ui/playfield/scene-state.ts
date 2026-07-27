@@ -45,7 +45,7 @@ export interface SceneState {
 export const STEP_MS = 180;
 
 const DEFAULT_GLYPH = '?';
-/** The prior `GridRenderer` convention: the hero always renders as '@', regardless of any
+/** `IsoRenderer`'s hero glyph convention: the hero always renders as '@', regardless of any
  * content-driven glyph -- `HeroView` carries no glyph field at all, so this is not a fallback,
  * it is the hero's one and only glyph. */
 const HERO_GLYPH = '@';

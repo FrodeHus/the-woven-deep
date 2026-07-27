@@ -110,7 +110,7 @@ function liftToFloor(rgb: RgbTuple): RgbTuple {
 }
 
 /**
- * A visible cell's rendered foreground color (the `--fg` custom property `GridRenderer` and
+ * A visible cell's rendered foreground color (the `--fg` custom property `MinimapPanel` and
  * `MapJournalOverlay` set on `.cell-visible`/`.map-cell-visible`). Blends `base` (defaulting to
  * `FLOOR_RGB`, the generic pre-material floor) toward the engine's own `tint` as `intensity` climbs
  * from 0 to 255 (clamped), then, since that blend alone only holds the luminance floor for tints
@@ -123,9 +123,12 @@ function liftToFloor(rgb: RgbTuple): RgbTuple {
  * `base`, this holds for ANY material base too (see `MATERIAL_BASE_RGB` below and its property
  * tests in `cell-color.test.ts`), not just the generic floor.
  *
- * `base` is `GridRenderer`'s hook for material coloring (Task 1): passing a cell's material base
- * color (e.g. `MATERIAL_BASE_RGB.wall`) makes a lit wall read mineral blue-grey at low intensity
- * instead of the old one-size-fits-all `FLOOR_RGB` gray, while still guaranteeing the same floor.
+ * `base` is the hook for material coloring: passing a cell's material base color (e.g.
+ * `MATERIAL_BASE_RGB.wall`) makes a lit wall read mineral blue-grey at low intensity instead of
+ * the one-size-fits-all `FLOOR_RGB` gray, while still guaranteeing the same floor. `MinimapPanel`
+ * and `MapJournalOverlay` are today's callers and both pass only `tint`/`intensity`, so no caller
+ * currently exercises a non-default `base` -- the hook stays exercised only by `cell-color.test.ts`
+ * until a caller opts into material coloring.
  *
  * Pure presentation only: the engine's `tint`/`intensity` fields are read, never written or
  * reinterpreted -- this is strictly how they get painted.
@@ -167,8 +170,8 @@ export function visibleForeground(
 }
 
 /**
- * The five material identities `materialClass` (`GridRenderer.tsx`) can derive from a cell's
- * terrain token: a pillar reuses `wall`'s base (structural mineral stone) and both stair
+ * The five material identities a cell's terrain token can be classified into: a pillar reuses
+ * `wall`'s base (structural mineral stone) and both stair
  * directions reuse `stair`'s, matching `styles.css`'s `--mat-*` custom properties one-to-one --
  * `wall`/`floor`/`door`/`stair`/`void` are the only distinct bases, mirroring the CSS file having
  * only `--mat-wall`/`--mat-floor`/`--mat-door`/`--mat-stair`/`--mat-void` (no separate

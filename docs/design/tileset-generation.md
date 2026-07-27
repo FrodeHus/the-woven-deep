@@ -148,23 +148,35 @@ direction picks the rect at bake time — `stairsUp` for tileId 4, `stairs` (the
 tileId 5. The companion `tiles-anim.png` animation sheet is optional; the renderer falls back to
 procedural shimmer when it is absent.
 
-Keys and what consumes them:
+Keys and what consumes them, by status:
 
-| Key | Game visual |
-|---|---|
-| `floors[]`, `dirty[]` | `terrain.floor` cells (seeded WFC variant selection) |
-| `walls[]`, `rounded[]`, `weaveWalls[]` | `terrain.wall` cells (topology decides shape) |
-| `stairs` | `terrain.stair` (tileId 4 up / 5 down) |
-| `door` | `terrain.door` |
-| `gate` | locked features (`featuresOf` projection entries) |
-| `pillar`, `pillarBroken` | `terrain.pillar` |
-| `torch`, `torchWall` | `fixture.lamp` light fixtures |
-| `townFloors[]`, `townWalls[]` | town vault terrain (plaza floor / building wall placement slots) |
-| `houseDoor` | town vault house-door placement slot |
-| `entranceSurround` | town vault dungeon-entrance placement slot |
-| `lampPostUnlit`, `shopSign` | town vault dressing placement slots |
-| `stalls.provisioner`, `stalls.arms`, `stalls.curios`, `stalls.spellvendor` | town vault merchant-stall placement slots |
-| `stallCounter`, `waresCrate`, `noticeBoard`, `townWell` | town vault dressing placement slots |
+- **rendered** — blitted to the canvas today from live engine state.
+- **parsed, not drawn** — `parseAtlas` validates and exposes the rect, but no draw call reads it
+  yet; the feature it belongs to renders through a different path in the meantime.
+- **reserved** — validated by the schema but nothing in the engine or renderer can trigger it;
+  the slot exists for art that hasn't been wired up yet.
 
-Do not add atlas keys for assets the game cannot render — a key with no engine counterpart is
-dead data and gets rejected in review.
+| Key | Game visual | Status |
+|---|---|---|
+| `floors[]`, `dirty[]` | `terrain.floor` cells (seeded WFC variant selection) | rendered |
+| `walls[]`, `rounded[]`, `weaveWalls[]` | `terrain.wall` cells (topology decides shape) | rendered |
+| `stairs` | `terrain.stair` down-well (tileId 5) | rendered |
+| `stairsUp` | `terrain.stair` up (tileId 4) | rendered |
+| `door` | `terrain.door` | rendered |
+| `gate` | locked features (`featuresOf` projection entries) | rendered |
+| `pillar` | `terrain.pillar` | rendered |
+| `townFloors[]`, `townWalls[]` | town vault terrain (plaza floor / building wall placement slots) | rendered |
+| `houseDoor` | town vault house-door placement slot | rendered |
+| `entranceSurround` | town vault dungeon-entrance placement slot | rendered |
+| `torch`, `torchWall` | `fixture.lamp` light fixtures — currently presented only as procedural light pools (`light-layer.ts`); the sprite itself isn't blitted yet | parsed, not drawn |
+| `pillarBroken` | no engine token maps to it — `tile-skinning.ts`'s `familyForToken` never produces `pillar-broken` from any terrain kind, so the branch in `floor-bake.ts` that reads it is unreachable | reserved |
+| `lampPostUnlit`, `shopSign` | town dressing — not yet placed by the town vault | reserved |
+| `stalls.provisioner`, `stalls.arms`, `stalls.curios`, `stalls.spellvendor` | town merchant-stall dressing — not yet placed by the town vault | reserved |
+| `stallCounter`, `waresCrate`, `noticeBoard`, `townWell` | town dressing — not yet placed by the town vault | reserved |
+
+The `reserved` tier is not an exception to "no dead data" — it is the tier that keeps the rule
+coherent. Those keys are deliberately held for dressing the town vault's row layout already
+describes, and the schema validates them so wiring one up later is a renderer change, not an
+atlas-format change. A key earns `reserved` status by having a concrete planned consumer in this
+doc; a key with no engine counterpart and no such rationale is dead data and gets rejected in
+review.

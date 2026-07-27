@@ -31,7 +31,7 @@ function byCell<T extends { x: number; y: number }>(items: readonly T[]): Readon
 const MAP_CELL_STYLE = { width: 'var(--map-cell)', height: 'var(--map-cell)' } as const;
 
 /**
- * The map tab's grid: the FULL floor (not the camera-limited viewport `GridRenderer` draws during
+ * The map tab's grid: the FULL floor (not the camera-limited viewport `IsoRenderer` draws during
  * play) at a fixed, compact cell size -- `--map-cell` is its own custom property (deliberately
  * distinct from the playfield's zoom-scaled `--cell-w`/`--cell-h`), so this pane's cell size never
  * changes with the guest's play-zoom or font-scale setting. The pane itself scrolls rather than
@@ -41,12 +41,12 @@ const MAP_CELL_STYLE = { width: 'var(--map-cell)', height: 'var(--map-cell)' } a
  * `unknown` cell renders no glyph at all (blank), a `remembered` cell renders its glyph dim (same
  * `cell.glyph` a `visible` reading of that same tile would show -- terrain doesn't change once
  * explored), and a `visible` cell renders lit, with the hero's own marker and any actor glyph
- * layered on top exactly as `GridRenderer` does. `projection.actors` is visible-only by
+ * layered on top exactly as `IsoRenderer` does. `projection.actors` is visible-only by
  * construction (`projectGameplayState`'s actor filter drops anything not currently perceived), so
  * layering actor glyphs unconditionally here can never leak an actor onto a non-visible cell.
  *
  * This pane deliberately omits `groundItems` overlays -- it paints actors/hero/stairs only, per
- * the brief -- so a future reader diffing this against `GridRenderer` (which does layer ground
+ * the brief -- so a future reader diffing this against `IsoRenderer` (which does layer ground
  * items) should read that as intentional scope, not an oversight.
  */
 function MapPane({
