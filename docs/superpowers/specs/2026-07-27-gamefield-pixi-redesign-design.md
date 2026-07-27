@@ -152,9 +152,16 @@ hash moves, the delta is inspected and re-pinned as an intentional, explained ch
   `apps/web` (public or bundled assets). Only sheets the token mapping uses are imported —
   start with the latest dungeon sheet (the engine has no biomes); superseded `tiles-*-v*.png`
   versions stay out of the repo.
-- Atlas rectangles used: floors, dirty floors, walls, rounded walls, weave-conduit walls
-  (cosmetic), stairs, door/gate/arch (door only where the engine has door tokens), torch.
-  Water/lava frames and decor props are not imported (no engine counterpart).
+- The committed atlas contains ONLY assets the game renders (user directive): floors, dirty
+  floors, walls, rounded walls, weave-conduit walls (cosmetic), stairs (one sprite serving both
+  stair-up and stair-down until dedicated art exists), door (`terrain.door`), gate (locked
+  features), pillar/broken pillar, torch/wall torch (`fixture.lamp`). Excluded as demo-only:
+  water/lava frames, pits, arch, banner, lever, and all decor props.
+- A curated tileset-generation guide ships in `docs/design/tileset-generation.md` (user
+  directive): the design project's generation prompt reworked to the game's real asset
+  vocabulary — demo-only rows removed, missing assets added, notably a town set (cobbles, town
+  walls, house door, dungeon-entrance surround, lamp posts, and one stall per merchant type —
+  the town vault's placement slots are real projection data) plus stair-up art.
 
 ## Explicitly out of scope (demo-only, not ported)
 
