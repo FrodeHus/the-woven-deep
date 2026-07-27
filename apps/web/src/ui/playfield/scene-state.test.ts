@@ -288,4 +288,12 @@ describe('scene state shape', () => {
     const hero = state.actors.find((actor) => actor.id === 'actor.hero')!;
     expect(hero.isHero).toBe(true);
   });
+
+  it("gives the hero sprite the literal glyph '@', never an NPC/content glyph", () => {
+    const snap = snapshot({ heroX: 5, heroY: 5 });
+    const state = nextSceneState(null, snap, 0);
+    const hero = state.actors.find((actor) => actor.id === 'actor.hero')!;
+    expect(hero.glyph).toBe('@');
+    expect(hero.isHero).toBe(true);
+  });
 });

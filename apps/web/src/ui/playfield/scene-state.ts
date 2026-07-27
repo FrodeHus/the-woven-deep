@@ -45,6 +45,10 @@ export interface SceneState {
 export const STEP_MS = 180;
 
 const DEFAULT_GLYPH = '?';
+/** The prior `GridRenderer` convention: the hero always renders as '@', regardless of any
+ * content-driven glyph -- `HeroView` carries no glyph field at all, so this is not a fallback,
+ * it is the hero's one and only glyph. */
+const HERO_GLYPH = '@';
 
 /**
  * `CompletionType` (`packages/content/src/model/common.ts`) is `'died' | 'became-heart' |
@@ -147,7 +151,7 @@ export function nextSceneState(
   const heroSprite = buildSprite(
     {
       id: hero.actorId,
-      glyph: DEFAULT_GLYPH,
+      glyph: HERO_GLYPH,
       color: undefined,
       isHero: true,
       x: hero.x,
