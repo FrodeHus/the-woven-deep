@@ -29,5 +29,6 @@
       "entry": ["src/main.ts"],
       "project": "src/**/*.ts"
     }
-  }
+  },
+  "ignore": [".claude/**"]
 }
