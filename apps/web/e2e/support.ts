@@ -70,7 +70,11 @@ export interface Point {
  * hero's own cell, since the camera eases toward the hero and settles there once the hero stops
  * moving (every hover below happens well after the hero's last move in its spec).
  */
-function isoScreenPoint(camera: Point, cell: Point, viewport: { width: number; height: number }): Point {
+function isoScreenPoint(
+  camera: Point,
+  cell: Point,
+  viewport: { width: number; height: number },
+): Point {
   const dx = cell.x - camera.x;
   const dy = cell.y - camera.y;
   return {

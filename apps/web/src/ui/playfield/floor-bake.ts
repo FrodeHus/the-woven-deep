@@ -203,7 +203,15 @@ export function planFloorBake(
       // `FLOOR_OVERSCAN` grows it symmetrically about that centre to close sub-pixel seams.
       const fdw = dw * FLOOR_OVERSCAN;
       const fdh = floorHalfDh * 2 * FLOOR_OVERSCAN;
-      placed.push({ x: cell.x, y: cell.y, rect, dx: sx - fdw / 2, dy: sy - fdh / 2, dw: fdw, dh: fdh });
+      placed.push({
+        x: cell.x,
+        y: cell.y,
+        rect,
+        dx: sx - fdw / 2,
+        dy: sy - fdh / 2,
+        dw: fdw,
+        dh: fdh,
+      });
     } else {
       // Object standing on the floor (door, pillar, stairs): the diamond centre lands on the cell
       // centre (`sx`, `sy`) so its footprint tessellates with the floor, then scaled up by
