@@ -1,0 +1,205 @@
+import type { SessionSnapshot } from '../../session/guest-session.js';
+import { actorsOf, groundItemsOf, heroOf } from '../../session/projection-view.js';
+import { effectsForEvents, type ActorPositions, type TransientEffect } from '../effects-map.js';
+
+/** Ticks a single actor/hero sprite from `fromX/fromY` to `toX/toY`, started at `startedAt`. */
+export interface SpriteMotion {
+  readonly fromX: number;
+  readonly fromY: number;
+  readonly toX: number;
+  readonly toY: number;
+  readonly startedAt: number;
+  readonly durationMs: number;
+}
+
+export interface ActorSprite {
+  readonly id: string;
+  readonly glyph: string;
+  readonly color: string | undefined;
+  readonly isHero: boolean;
+  readonly motion: SpriteMotion | null;
+  readonly x: number;
+  readonly y: number;
+  readonly health: number;
+  readonly maxHealth: number;
+}
+
+export interface SceneState {
+  readonly floorId: string;
+  readonly actors: readonly ActorSprite[];
+  readonly groundItems: readonly {
+    readonly id: string;
+    readonly glyph: string;
+    readonly color: string | undefined;
+    readonly x: number;
+    readonly y: number;
+  }[];
+  readonly effects: readonly TransientEffect[];
+  /** Timestamp of the last hero-damage event, drives vignette/shake. `null` when this snapshot's
+   * `lastEvents` carried no `hero.damaged` event. */
+  readonly hurtAt: number | null;
+  readonly concludedByDeath: boolean;
+}
+
+/** Every command's world-position tween runs for the same fixed duration. */
+export const STEP_MS = 180;
+
+const DEFAULT_GLYPH = '?';
+
+/**
+ * `CompletionType` (`packages/content/src/model/common.ts`) is `'died' | 'became-heart' |
+ * 'refused' | 'broke-cycle'` -- there is no literal named `'death'`; `'died'` is the one variant
+ * that means the hero's run ended by dying, so that is the exact literal this predicate checks.
+ * Exported (not just inlined into `nextSceneState`) because a later task's death overlay imports
+ * this exact predicate by name.
+ */
+export function concludedByDeath(snapshot: SessionSnapshot): boolean {
+  const conclusion = snapshot.projection.conclusion;
+  return conclusion !== null && conclusion.completionType === 'died';
+}
+
+/** Smoothstep-eased interpolation, clamped to `[0, 1]` at the edges. */
+function smoothstep(t: number): number {
+  const clamped = Math.min(1, Math.max(0, t));
+  return clamped * clamped * (3 - 2 * clamped);
+}
+
+/** The sprite's current rendered world position: interpolated along its `motion` tween at `now`,
+ * or its resting `(x, y)` when it has no motion in flight. */
+export function motionPosition(sprite: ActorSprite, now: number): readonly [number, number] {
+  const { motion } = sprite;
+  if (motion === null) return [sprite.x, sprite.y];
+  const elapsed = now - motion.startedAt;
+  const t = motion.durationMs <= 0 ? 1 : elapsed / motion.durationMs;
+  const eased = smoothstep(t);
+  const x = motion.fromX + (motion.toX - motion.fromX) * eased;
+  const y = motion.fromY + (motion.toY - motion.fromY) * eased;
+  return [x, y];
+}
+
+function findPrevSprite(prev: SceneState | null, id: string): ActorSprite | undefined {
+  return prev?.actors.find((sprite) => sprite.id === id);
+}
+
+function buildSprite(
+  input: Readonly<{
+    id: string;
+    glyph: string | undefined;
+    color: string | undefined;
+    isHero: boolean;
+    x: number;
+    y: number;
+    health: number;
+    maxHealth: number;
+  }>,
+  prev: SceneState | null,
+  floorChanged: boolean,
+  now: number,
+): ActorSprite {
+  const prevSprite = floorChanged ? undefined : findPrevSprite(prev, input.id);
+  const glyph = input.glyph ?? prevSprite?.glyph ?? DEFAULT_GLYPH;
+
+  if (prevSprite === undefined || (prevSprite.x === input.x && prevSprite.y === input.y)) {
+    return {
+      id: input.id,
+      glyph,
+      color: input.color,
+      isHero: input.isHero,
+      motion: null,
+      x: input.x,
+      y: input.y,
+      health: input.health,
+      maxHealth: input.maxHealth,
+    };
+  }
+
+  const [fromX, fromY] = motionPosition(prevSprite, now);
+  return {
+    id: input.id,
+    glyph,
+    color: input.color,
+    isHero: input.isHero,
+    motion: { fromX, fromY, toX: input.x, toY: input.y, startedAt: now, durationMs: STEP_MS },
+    x: input.x,
+    y: input.y,
+    health: input.health,
+    maxHealth: input.maxHealth,
+  };
+}
+
+/**
+ * Diffs `snapshot` against the previously rendered `prev` scene state and schedules any
+ * position tweens: an actor id present in both scenes at a new cell gets a `motion` running from
+ * its currently-interpolated rendered position (so a command mid-tween snaps forward smoothly,
+ * never restarting from its old resting cell) to the new cell, over `STEP_MS`. A brand-new actor
+ * id, `prev === null`, or a floor change all appear in place with no motion.
+ */
+export function nextSceneState(
+  prev: SceneState | null,
+  snapshot: SessionSnapshot,
+  now: number,
+): SceneState {
+  const { projection } = snapshot;
+  const floorId = projection.floor.floorId;
+  const floorChanged = prev !== null && prev.floorId !== floorId;
+
+  const hero = heroOf(projection);
+  const heroSprite = buildSprite(
+    {
+      id: hero.actorId,
+      glyph: DEFAULT_GLYPH,
+      color: undefined,
+      isHero: true,
+      x: hero.x,
+      y: hero.y,
+      health: hero.health,
+      maxHealth: hero.maxHealth,
+    },
+    prev,
+    floorChanged,
+    now,
+  );
+
+  const actorSprites = actorsOf(projection).map((actor) =>
+    buildSprite(
+      {
+        id: actor.actorId,
+        glyph: actor.glyph,
+        color: actor.color,
+        isHero: false,
+        x: actor.x,
+        y: actor.y,
+        health: actor.health,
+        maxHealth: actor.maxHealth,
+      },
+      prev,
+      floorChanged,
+      now,
+    ),
+  );
+
+  const groundItems = groundItemsOf(projection).map((item) => ({
+    id: item.itemId,
+    glyph: item.glyph ?? DEFAULT_GLYPH,
+    color: item.color,
+    x: item.x,
+    y: item.y,
+  }));
+
+  const positions: ActorPositions = new Map([
+    [hero.actorId, { x: hero.x, y: hero.y }],
+    ...actorsOf(projection).map((actor) => [actor.actorId, { x: actor.x, y: actor.y }] as const),
+  ]);
+  const effects = effectsForEvents(snapshot.lastEvents, hero.actorId, positions);
+
+  const hurt = snapshot.lastEvents.some((event) => event.type === 'hero.damaged');
+
+  return {
+    floorId,
+    actors: [heroSprite, ...actorSprites],
+    groundItems,
+    effects,
+    hurtAt: hurt ? now : null,
+    concludedByDeath: concludedByDeath(snapshot),
+  };
+}
