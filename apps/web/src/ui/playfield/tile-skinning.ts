@@ -50,10 +50,10 @@ export function familyForToken(token: string | undefined): TileFamily {
   }
 }
 
-/** Deterministic 32-bit hash: FNV-1a over `floorId`, then xor-mixed with the cell coordinates
- * via large odd primes. Same mix the earlier fixture-flicker/dungeon-demo hashing used, extended
- * with the floorId so two floors never collapse identically. Never `Math.random` -- determinism
- * (byte-identical replay) is the point of this whole module. */
+/** Deterministic 32-bit hash: FNV-1a over `floorId`, then xor-mixed with the cell coordinates via
+ * large odd primes. Folding the floorId in means two floors never collapse to an identical skin
+ * layout. Never `Math.random` -- determinism (byte-identical replay) is the point of this whole
+ * module. */
 export function cellSeed(floorId: string, x: number, y: number): number {
   let hash = 0x811c9dc5;
   for (let index = 0; index < floorId.length; index += 1) {

@@ -4,12 +4,14 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contrastRatio, relativeLuminance, visibleForeground } from '../src/ui/cell-color.js';
 
-// jsdom (our test environment) never evaluates @media queries, so we cannot assert the
-// reduced-motion behaviour by rendering and reading computed styles. Instead this is a static,
-// lint-style contract on the stylesheet text: the reduced-motion override for `.glow` must carry
-// `!important`, because `.glow[data-source*="torch"]` has higher specificity (0,2,0) than a bare
-// `.glow` override (0,1,0) and would otherwise keep the torch flicker animating even when the
-// user has asked to reduce motion.
+// jsdom (our test environment) never evaluates @media queries, so reduced-motion behaviour cannot
+// be asserted by rendering and reading computed styles. Instead this is a static, lint-style
+// contract on the stylesheet TEXT. It covers the motion CSS that survives the pixi-canvas redesign
+// -- the `ScreenFade` cloak and the `.wd-rise-in` modal entrance -- pinning that each is suppressed
+// with `!important` across the reduced-motion media query, `.motion-reduced`, and `.motion-full`,
+// and restored to its original timing under `.motion-full`; plus the named/material palette, the
+// high-contrast theme, colorblind log reinforcement, and the ornamental framing vocabulary. Parsing
+// the file directly (rather than the DOM) is what lets these invariants be checked at all in jsdom.
 const testDir = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(join(testDir, '../src/styles.css'), 'utf8');
 const landingCss = readFileSync(join(testDir, '../src/landing/landing.css'), 'utf8');
@@ -87,30 +89,29 @@ describe('reduced-motion stylesheet contract', () => {
     expect(fadeDuration(fullFadeMatch![1]!)).toBe(fadeDuration(originalAnimationMatch![0]!));
   });
 
-  it('declares the overlay entrance (.wd-*) motions in all four motion blocks, suppressed under reduced motion and restored under .motion-full', () => {
-    // The overlay entrances are pure CSS with no JS gate, so the reduced-motion media block is the
-    // only thing honoring an OS-level preference for them; the explicit setting classes mirror it.
+  it('declares the .wd-rise-in overlay entrance in all four motion blocks, suppressed under reduced motion and restored under .motion-full', () => {
+    // `.wd-rise-in` (the DecisionPrompt modal entrance) is pure CSS with no JS gate, so the
+    // reduced-motion media block is the only thing honoring an OS-level preference for it; the
+    // explicit setting classes mirror it. It is the sole remaining `.wd-*` entrance.
     const reducedBlocks = extractReducedMotionBlocks(css);
     const mediaWdBlock = reducedBlocks.find((block) =>
-      /\.wd-slide-in[^{]*\{[^}]*animation\s*:\s*none\s*!important/.test(block),
+      /\.wd-rise-in\s*\{[^}]*animation\s*:\s*none\s*!important/.test(block),
     );
     expect(
       mediaWdBlock,
-      'expected a .wd-* animation:none override in the reduced-motion media block',
+      'expected a .wd-rise-in animation:none override in the reduced-motion media block',
     ).toBeTruthy();
 
     const motionReducedBlocks = extractBlocksAfterMarker(css, '.motion-reduced {');
     expect(motionReducedBlocks[0]).toMatch(
-      /\.wd-slide-in[^{]*\{[^}]*animation\s*:\s*none\s*!important/,
+      /\.wd-rise-in\s*\{[^}]*animation\s*:\s*none\s*!important/,
     );
 
-    // Every entrance is re-enabled with !important under .motion-full so it beats the suppression.
+    // Re-enabled with !important under .motion-full so it beats the suppression.
     const motionFullBlocks = extractBlocksAfterMarker(css, '.motion-full {');
-    for (const entrance of ['wd-slide-in', 'wd-fade-in', 'wd-rise-in', 'wd-flicker']) {
-      const match = new RegExp(`\\.${entrance}\\s*\\{([^}]*)\\}`).exec(motionFullBlocks[0]!);
-      expect(match, `.${entrance} not found inside .motion-full`).toBeTruthy();
-      expect(match![1]).toMatch(/animation\s*:[^}]*!important/);
-    }
+    const fullMatch = /\.wd-rise-in\s*\{([^}]*)\}/.exec(motionFullBlocks[0]!);
+    expect(fullMatch, '.wd-rise-in not found inside .motion-full').toBeTruthy();
+    expect(fullMatch![1]).toMatch(/animation\s*:[^}]*!important/);
   });
 });
 

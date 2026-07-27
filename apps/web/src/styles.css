@@ -125,14 +125,14 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
-  /* The only decorative animations left on screen are the `ScreenFade` cloak and the overlay
-     entrance motions (`.wd-*`). `ScreenFade` already resolves the three-way motion contract in JS
-     and never MOUNTS its element under reduced motion, so its rule here is belt-and-suspenders; the
-     `.wd-*` entrances have no JS gate, so this media block is the ONLY thing that honors an
-     OS-level "reduce motion" preference for them. `!important` on the `.wd-*` override beats each
-     entrance's own unconditional animation declared later in this file. */
+  /* The only decorative animations left on screen are the `ScreenFade` cloak and the `.wd-rise-in`
+     modal entrance. `ScreenFade` already resolves the three-way motion contract in JS and never
+     MOUNTS its element under reduced motion, so its rule here is belt-and-suspenders; `.wd-rise-in`
+     has no JS gate, so this media block is the ONLY thing that honors an OS-level "reduce motion"
+     preference for it. `!important` beats the entrance's own unconditional animation declared later
+     in this file. */
   .screen-fade { animation: none !important; display: none; }
-  .wd-slide-in, .wd-fade-in, .wd-rise-in, .wd-flicker { animation: none !important; }
+  .wd-rise-in { animation: none !important; }
 }
 
 /* Screen transitions: a short fade-through-dark wrapping title->play, chargen->play, a
@@ -157,19 +157,13 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
   100% { opacity: 0; }
 }
 
-/* Overlay entrance motion (Woven Deep): side panels slide in from the right (`.wd-slide-in`),
-   scrims fade (`.wd-fade-in`), and centered modals rise (`.wd-rise-in`). Purely decorative
-   entrance animations, so they follow the same three-way motion contract as everything else in
-   this file: suppressed by the reduced-motion media query and `.motion-reduced`, re-enabled by
-   `.motion-full`. Applied to overlay chrome only, never to a live gameplay surface. */
-@keyframes wd-slide-in { from { transform: translateX(48px); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes wd-fade-in { from { opacity: 0; } to { opacity: 1; } }
+/* Overlay entrance motion (Woven Deep): centered modals rise in (`.wd-rise-in`, used by
+   `DecisionPrompt`). A purely decorative entrance, so it follows the same three-way motion contract
+   as everything else in this file: suppressed by the reduced-motion media query and
+   `.motion-reduced`, re-enabled by `.motion-full`. Applied to overlay chrome only, never to a live
+   gameplay surface. */
 @keyframes wd-rise-in { from { transform: translateY(16px) scale(0.985); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes wd-flicker { 0%, 100% { opacity: 0.9; } 50% { opacity: 1; } }
-.wd-slide-in { animation: wd-slide-in 0.22s ease-out; }
-.wd-fade-in { animation: wd-fade-in 0.15s ease-out; }
 .wd-rise-in { animation: wd-rise-in 0.2s ease-out; }
-.wd-flicker { animation: wd-flicker 2.4s ease-in-out infinite; }
 
 /* Same overrides as the `@media (prefers-reduced-motion: reduce)` block above, applied instead by
    an explicit `.motion-reduced` root class (set by `App` when the guest's "Reduce motion" setting
@@ -182,7 +176,7 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
    animation would otherwise win by source order). */
 .motion-reduced {
   .screen-fade { animation: none !important; display: none; }
-  .wd-slide-in, .wd-fade-in, .wd-rise-in, .wd-flicker { animation: none !important; }
+  .wd-rise-in { animation: none !important; }
 }
 
 /* The three-way motion contract (`Settings.reducedMotion`, see `App.tsx`'s `withRootStyling`):
@@ -199,25 +193,8 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
  */
 .motion-full {
   .screen-fade { display: block !important; animation: screen-fade 440ms linear !important; }
-  .wd-slide-in { animation: wd-slide-in 0.22s ease-out !important; }
-  .wd-fade-in { animation: wd-fade-in 0.15s ease-out !important; }
   .wd-rise-in { animation: wd-rise-in 0.2s ease-out !important; }
-  .wd-flicker { animation: wd-flicker 2.4s ease-in-out infinite !important; }
 }
-
-/* Contextual onboarding hint strip -- above the log within its own slot, never a live
-   region (see `HintStrip.tsx`'s doc comment for why `role="note"`, not `alert`/`status`). */
-.hint-strip {
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  padding: .4em .6em;
-  margin-bottom: .4em;
-  display: flex;
-  justify-content: space-between;
-  gap: 1em;
-  font-size: .9em;
-}
-.hint-strip-dismiss { color: var(--muted); white-space: nowrap; }
 
 /* Colorblind reinforcement: a silent `::before` glyph for each colored log tone, painted
    via the CSS alt-text syntax (`content: "..." / ""` -- the string after `/` is what a screen
@@ -230,17 +207,6 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 .journal-log-line--warning::before { content: "\26A0  " / ""; }
 .journal-log-line--combat::before { content: "\2694  " / ""; }
 .journal-log-line--system::before { content: "\2699  " / ""; }
-
-/* Condition badge: the colorblind-safe reinforcement `styles-contract.test.ts` verifies -- a generic
-   status-effect glyph plus the condition's NAME as text, so meaning never rests on
-   `--condition-color` alone; the tinted border is a supplement for a sighted-color reader, not the
-   only signal. Rendered by `StatusBar` (panels/StatusBar.tsx). */
-.condition-badge {
-  border: 1px solid var(--condition-color, var(--line));
-  border-radius: 3px;
-  padding: 0 .4em;
-  font-size: .85em;
-}
 
 /* Visually-hidden but screen-reader-available (the standard clip-rect pattern). Used by
    `HeroStatusAnnouncer` (panels.tsx) for its off-screen `role="status"` live region -- present in

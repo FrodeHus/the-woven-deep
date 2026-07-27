@@ -2,14 +2,13 @@ export type RgbTuple = readonly [number, number, number];
 
 /**
  * The floor a visible cell's color blends up from at zero intensity. Chosen so its relative
- * luminance clears the remembered floor's (`.cell-remembered` in `styles.css`, roughly
- * `[0x4b, 0x52, 0x6b]`) by a healthy margin (roughly 1.9x) -- this is the color-
- * channel half of the "dark ring" bug fix: 5C already floored `.cell-visible`'s OPACITY above the
- * remembered floor (`styles.css`'s `calc(0.62 + 0.38 * var(--light))`), but left the COLOR
- * (`--fg`, the engine's per-cell `tint`) free to go near-black at the light-radius rim, where
- * `intensity` bottoms out to single digits. A wall right inside a torch's radius could render
- * darker (near-black glyph on a near-black-tinted ground) than the remembered gray one cell
- * further out. Flooring the color the same way the opacity is floored closes that gap.
+ * luminance clears the remembered floor's (the `--remembered` palette color, roughly
+ * `[0x4b, 0x52, 0x6b]`) by a healthy margin (roughly 1.9x) -- the color-channel half of the "dark
+ * ring" guarantee. A visible cell's color (`--fg`, the engine's per-cell `tint`) is otherwise free
+ * to go near-black at the light-radius rim, where `intensity` bottoms out to single digits, so a
+ * wall just inside a torch's radius could render darker (near-black glyph on near-black ground) than
+ * the remembered gray one cell further out. Flooring the color the same way its opacity is floored
+ * closes that gap.
  */
 const FLOOR_RGB: RgbTuple = [100, 106, 130];
 
