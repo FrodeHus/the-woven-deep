@@ -11,6 +11,7 @@ import {
   Texture,
   type Ticker,
 } from 'pixi.js';
+import { MAX_TRANSIENT_EFFECTS, type TransientEffect } from '../effects-map.js';
 import { equippedLightSource } from '../light-sources.js';
 import { featuresOf, heroOf } from '../../session/projection-view.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
@@ -18,6 +19,7 @@ import type { AtlasRect, PlayfieldAtlas } from './atlas.js';
 import { bakeFloor, bakeKey, planFloorBake } from './floor-bake.js';
 import { TILE_HALF_H, TILE_HALF_W, worldToScreen, cellAtScreen, type IsoView } from './iso-math.js';
 import { cellDarkness, lightsForFloor, type LightSpec } from './light-layer.js';
+import { spawnForEffect, stepParticles, type Particle } from './particles.js';
 import { motionPosition, nextSceneState, type ActorSprite, type SceneState } from './scene-state.js';
 
 export interface RendererCallbacks {
@@ -61,6 +63,16 @@ const HURT_VIGNETTE_COLOR = 0xcc2222;
 const HURT_VIGNETTE_MAX_ALPHA = 0.5;
 const HURT_SHAKE_MAX_PX = 7;
 
+/** Floating combat-text lifetime/rise. `TransientEffect` (Task 7's `effects-map.ts`) carries no
+ * damage amount -- only `key`/`kind`/`x`/`y`/`toX?`/`toY?` -- so this is a generic hit/death glyph,
+ * not the actual damage number; a real number would need a wider domain-event shape upstream. */
+const DAMAGE_FLOAT_TTL_MS = 650;
+const DAMAGE_FLOAT_RISE_PX = 28;
+const HIT_FLASH_GLYPH = '✦';
+const DEATH_BURST_GLYPH = '☠';
+const HIT_FLASH_TEXT_COLOR = 0xff6a5a;
+const DEATH_BURST_TEXT_COLOR = 0xb188ff;
+
 const CAMERA_EASE_PER_SECOND = 6;
 const FLICKER_SPEED = 0.006;
 const RADIAL_GRADIENT_SIZE = 128;
@@ -68,6 +80,14 @@ const RADIAL_GRADIENT_SIZE = 128;
 interface ActorDisplay {
   readonly container: Container;
   readonly sprite: ActorSprite;
+}
+
+/** A rising, fading glyph spawned for a hit or death effect. Owns its `Text` for the duration of
+ * its float; `updateDamageFloats` destroys it the moment its ttl elapses. */
+interface DamageFloat {
+  readonly text: Text;
+  readonly bornAt: number;
+  readonly baseY: number;
 }
 
 interface LightDisplay {
@@ -116,12 +136,17 @@ export class IsoRenderer {
   private readonly overlayContainer = new Container();
   private readonly targetingGraphics = new Graphics();
   private readonly effectsContainer = new Container();
+  private readonly particleGraphicsNormal = new Graphics();
+  private readonly particleGraphicsAdditive = new Graphics();
   private readonly vignetteSprite = new Sprite(Texture.WHITE);
 
   private scene: SceneState | null = null;
   private lights: readonly LightDisplay[] = [];
   private actorDisplays: readonly ActorDisplay[] = [];
   private targeting: TargetingVisual | null = null;
+  private particles: readonly Particle[] = [];
+  private damageFloats: readonly DamageFloat[] = [];
+  private readonly seenEffectKeys = new Set<string>();
 
   private floorWidth = 0;
   private floorHeight = 0;
@@ -194,6 +219,7 @@ export class IsoRenderer {
     const previous = this.scene;
     this.scene = nextSceneState(previous, snapshot, now);
     this.hurtAt = this.scene.hurtAt;
+    this.spawnNewEffects(this.scene.effects, now);
 
     const floor = snapshot.projection.floor;
     this.floorWidth = floor.width;
@@ -224,6 +250,15 @@ export class IsoRenderer {
     const app = this.app;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+
+    // Each damage float owns a `Text`; the app-destroy sweep below would reach them too (they hang
+    // off `effectsContainer` in the stage), but destroying them explicitly first keeps this method
+    // the single place that accounts for every `Text` this renderer ever created (Task 7's review
+    // was strict about that).
+    for (const damageFloat of this.damageFloats) damageFloat.text.destroy();
+    this.damageFloats = [];
+    this.particles = [];
+    this.seenEffectKeys.clear();
 
     // Capture the floor texture before the display tree is torn down.
     const floorTexture = this.floorSprite.texture;
@@ -290,6 +325,9 @@ export class IsoRenderer {
     this.lightBuild.addChild(this.darknessQuad, this.lightsContainer, this.fovGraphics);
 
     this.lightMapSprite.blendMode = 'multiply';
+
+    this.particleGraphicsAdditive.blendMode = 'add';
+    this.effectsContainer.addChild(this.particleGraphicsNormal, this.particleGraphicsAdditive);
 
     this.overlayContainer.addChild(this.targetingGraphics, this.effectsContainer);
 
@@ -628,6 +666,7 @@ export class IsoRenderer {
     this.updateDarknessCover(app, baseX, baseY);
     this.renderLightMap(app);
     this.updateVignette(app);
+    this.updateEffects(now);
   }
 
   private easeCamera(scene: SceneState, dt: number, now: number): void {
@@ -716,6 +755,87 @@ export class IsoRenderer {
       return;
     }
     this.vignetteSprite.alpha = HURT_VIGNETTE_MAX_ALPHA * (1 - elapsed / HURT_DURATION_MS);
+  }
+
+  // --- transient combat effects ---------------------------------------------
+
+  /** Spawns a particle burst (and, for hit/death, a floating glyph) for every effect this renderer
+   * has not already spawned for, keyed by `TransientEffect.key`. The seen-key set is capped at
+   * `MAX_TRANSIENT_EFFECTS`, evicting the oldest entry (`Set` preserves insertion order), mirroring
+   * `effectsForEvents`'s own per-snapshot cap so this renderer never accumulates unbounded state
+   * across a long run. */
+  private spawnNewEffects(effects: readonly TransientEffect[], now: number): void {
+    for (const effect of effects) {
+      if (this.seenEffectKeys.has(effect.key)) continue;
+      this.seenEffectKeys.add(effect.key);
+      while (this.seenEffectKeys.size > MAX_TRANSIENT_EFFECTS) {
+        const oldest = this.seenEffectKeys.values().next().value;
+        if (oldest === undefined) break;
+        this.seenEffectKeys.delete(oldest);
+      }
+
+      this.particles = [...this.particles, ...spawnForEffect(effect, now)];
+      if (effect.kind === 'hit-flash' || effect.kind === 'death-burst') {
+        this.spawnDamageFloat(effect, now);
+      }
+    }
+  }
+
+  private spawnDamageFloat(effect: TransientEffect, now: number): void {
+    const isDeath = effect.kind === 'death-burst';
+    const text = new Text({
+      text: isDeath ? DEATH_BURST_GLYPH : HIT_FLASH_GLYPH,
+      style: {
+        fill: isDeath ? DEATH_BURST_TEXT_COLOR : HIT_FLASH_TEXT_COLOR,
+        fontFamily: 'monospace',
+        fontSize: 16,
+        fontWeight: 'bold',
+      },
+    });
+    text.anchor.set(0.5, 1);
+    const [lx, ly] = this.isoLocal(effect.x, effect.y);
+    const baseY = ly - TILE_HALF_H;
+    text.position.set(lx, baseY);
+    this.effectsContainer.addChild(text);
+    this.damageFloats = [...this.damageFloats, { text, bornAt: now, baseY }];
+  }
+
+  private updateEffects(now: number): void {
+    this.particles = stepParticles(this.particles, now);
+    this.drawParticles(now);
+    this.updateDamageFloats(now);
+  }
+
+  private drawParticles(now: number): void {
+    const normal = this.particleGraphicsNormal;
+    const additive = this.particleGraphicsAdditive;
+    normal.clear();
+    additive.clear();
+    for (const particle of this.particles) {
+      const age = now - particle.bornAt;
+      const alpha = Math.max(0, Math.min(1, 1 - age / particle.ttlMs));
+      if (alpha <= 0) continue;
+      const graphics = particle.additive ? additive : normal;
+      graphics
+        .circle(particle.x, particle.y - particle.z, particle.size)
+        .fill({ color: particle.color, alpha });
+    }
+  }
+
+  private updateDamageFloats(now: number): void {
+    const remaining: DamageFloat[] = [];
+    for (const damageFloat of this.damageFloats) {
+      const age = now - damageFloat.bornAt;
+      if (age >= DAMAGE_FLOAT_TTL_MS) {
+        damageFloat.text.destroy();
+        continue;
+      }
+      const progress = age / DAMAGE_FLOAT_TTL_MS;
+      damageFloat.text.position.y = damageFloat.baseY - DAMAGE_FLOAT_RISE_PX * progress;
+      damageFloat.text.alpha = 1 - progress;
+      remaining.push(damageFloat);
+    }
+    this.damageFloats = remaining;
   }
 
   // --- input ---------------------------------------------------------------
