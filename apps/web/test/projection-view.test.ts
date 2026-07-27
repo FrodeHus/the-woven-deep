@@ -62,6 +62,7 @@ describe('heroOf', () => {
     expect(typeof hero.health).toBe('number');
     expect(typeof hero.maxHealth).toBe('number');
     expect(typeof hero.sightRadius).toBe('number');
+    expect(typeof hero.currency).toBe('number');
     expect(typeof hero.backpackCapacity).toBe('number');
     expect(typeof hero.hungerStage).toBe('string');
     expect(typeof hero.attributes.might).toBe('number');
