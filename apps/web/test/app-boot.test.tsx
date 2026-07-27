@@ -592,7 +592,7 @@ describe('App finalize-once (concluded run)', () => {
     // The PLAY screen mounts with the new hero, at turn 0 -- NOT the conclusion screen again.
     expect(await screen.findByRole('img', { name: /dungeon/i })).toBeInTheDocument();
     expect(screen.queryByText(/you have fallen/i)).not.toBeInTheDocument();
-    // The hero name now lives in the Hero Record overlay (opened with `c`), not an always-on rail.
+    // The hero name is shown in the Hero Record overlay, opened with `c`.
     await user.keyboard('c');
     const record = await screen.findByRole('dialog', { name: /hero record/i });
     expect(record).toHaveTextContent('Rin');

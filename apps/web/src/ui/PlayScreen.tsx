@@ -266,7 +266,7 @@ export function PlayScreen({
         <MinimapPanel snapshot={snapshot} />
         <LogPanel snapshot={snapshot} />
         {projection.floor.town && (
-          <div className="pointer-events-auto absolute bottom-3 right-3 z-10 w-56 max-w-[45vw] rounded-md border border-line bg-deep/70 p-2 text-sm text-fg backdrop-blur-sm">
+          <div className="pointer-events-auto absolute bottom-3 right-3 z-10 max-h-56 w-56 max-w-[45vw] overflow-y-auto rounded-md border border-line bg-deep/70 p-2 text-sm text-fg backdrop-blur-sm">
             <TownPanel snapshot={snapshot} keymap={keymap} />
           </div>
         )}

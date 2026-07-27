@@ -211,29 +211,43 @@ function GameRoot({
   const dismissibleNotice = notice && !isStorageNotice(notice) ? notice : null;
   const storageNotice = notice && isStorageNotice(notice) ? notice : null;
 
+  const showDismissibleNotice = dismissibleNotice !== null && !dismissed;
+
   return (
-    <div className="app-root">
-      {storageNotice && (
-        <div
-          role="alert"
-          aria-label="Storage warning"
-          className="storage-warning-banner"
-          data-kind="storage"
-        >
-          <p>{storageWarningMessage(storageNotice)}</p>
-        </div>
-      )}
-      {dismissibleNotice && !dismissed && (
-        <div
-          role="status"
-          aria-label="Session notice"
-          className="session-banner"
-          data-kind={dismissibleNotice.kind}
-        >
-          <p>{noticeMessage(dismissibleNotice)}</p>
-          <button type="button" onClick={() => setDismissed(true)}>
-            Dismiss
-          </button>
+    <div className="app-root relative">
+      {/* Notices float over the top of the full-bleed HUD rather than stacking in flow above it, so
+       * the play layout keeps the full 100vh and the TopBar stays anchored to the viewport top. The
+       * wrapper ignores pointer events; each banner re-enables them so its Dismiss button stays
+       * clickable. */}
+      {(storageNotice || showDismissibleNotice) && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col">
+          {storageNotice && (
+            <div
+              role="alert"
+              aria-label="Storage warning"
+              className="storage-warning-banner pointer-events-auto bg-deep/85 font-mono text-sm backdrop-blur-sm"
+              data-kind="storage"
+            >
+              <p>{storageWarningMessage(storageNotice)}</p>
+            </div>
+          )}
+          {showDismissibleNotice && (
+            <div
+              role="status"
+              aria-label="Session notice"
+              className="session-banner pointer-events-auto flex items-center justify-between gap-4 border-b border-line bg-deep/85 px-4 py-2 font-mono text-sm text-fg backdrop-blur-sm"
+              data-kind={dismissibleNotice.kind}
+            >
+              <p>{noticeMessage(dismissibleNotice)}</p>
+              <button
+                type="button"
+                onClick={() => setDismissed(true)}
+                className="shrink-0 text-muted underline-offset-2 hover:text-fg hover:underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
         </div>
       )}
       <PlayScreen

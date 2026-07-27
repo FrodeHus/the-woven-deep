@@ -185,8 +185,8 @@ async function renderPlay(session: FakeSession): Promise<FakePlayfieldRenderer> 
   return fake;
 }
 
-/** Enters spell targeting the way a player now does it -- the always-on HUD Spells panel is gone,
- * so casting is reached through the ⌘K command palette's "Cast: <spell>" entry. */
+/** Enters spell targeting through the ⌘K command palette's "Cast: <spell>" entry -- the reachable
+ * cast path for a caster hero during play. */
 async function castViaPalette(spellName: string): Promise<void> {
   fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
   await userEvent.click(await screen.findByText(`Cast: ${spellName}`));
