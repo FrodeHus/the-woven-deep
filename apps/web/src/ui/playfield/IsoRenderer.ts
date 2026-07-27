@@ -19,7 +19,7 @@ import type { AtlasRect, PlayfieldAtlas } from './atlas.js';
 import { bakeFloor, bakeKey, planFloorBake } from './floor-bake.js';
 import { TILE_HALF_H, TILE_HALF_W, worldToScreen, cellAtScreen, type IsoView } from './iso-math.js';
 import { cellDarkness, lightsForFloor, type LightSpec } from './light-layer.js';
-import { spawnForEffect, stepParticles, type Particle } from './particles.js';
+import { selectNewEffects, spawnForEffect, stepParticles, type Particle } from './particles.js';
 import { motionPosition, nextSceneState, type ActorSprite, type SceneState } from './scene-state.js';
 
 export interface RendererCallbacks {
@@ -146,7 +146,18 @@ export class IsoRenderer {
   private targeting: TargetingVisual | null = null;
   private particles: readonly Particle[] = [];
   private damageFloats: readonly DamageFloat[] = [];
-  private readonly seenEffectKeys = new Set<string>();
+  /** Salted per `snapshotGeneration` -- see `selectNewEffects` in `particles.ts` for why a raw
+   * `effect.key` alone is not a safe cross-snapshot dedup key. */
+  private seenEffectKeys: ReadonlySet<string> = new Set();
+  /** The last snapshot OBJECT `setSnapshot` was given (reference identity, not a revision number:
+   * `SessionSnapshot`/`GameplayProjection` never expose one -- confirmed against
+   * `session-snapshot.ts` and `projection.ts`, consistent with the projection boundary never
+   * leaking engine-internal revision counters). Bumping `snapshotGeneration` only when this
+   * reference actually changes means a resize- or targeting-only re-feed of the SAME snapshot
+   * object keeps the current generation, so its effects still dedup exactly once; a genuinely new
+   * turn's snapshot always bumps it, even if `effectsForEvents` reuses a literal effect key. */
+  private lastSnapshot: SessionSnapshot | null = null;
+  private snapshotGeneration = 0;
 
   private floorWidth = 0;
   private floorHeight = 0;
@@ -219,6 +230,11 @@ export class IsoRenderer {
     const previous = this.scene;
     this.scene = nextSceneState(previous, snapshot, now);
     this.hurtAt = this.scene.hurtAt;
+
+    if (snapshot !== this.lastSnapshot) {
+      this.lastSnapshot = snapshot;
+      this.snapshotGeneration += 1;
+    }
     this.spawnNewEffects(this.scene.effects, now);
 
     const floor = snapshot.projection.floor;
@@ -258,7 +274,9 @@ export class IsoRenderer {
     for (const damageFloat of this.damageFloats) damageFloat.text.destroy();
     this.damageFloats = [];
     this.particles = [];
-    this.seenEffectKeys.clear();
+    this.seenEffectKeys = new Set();
+    this.lastSnapshot = null;
+    this.snapshotGeneration = 0;
 
     // Capture the floor texture before the display tree is torn down.
     const floorTexture = this.floorSprite.texture;
@@ -760,20 +778,19 @@ export class IsoRenderer {
   // --- transient combat effects ---------------------------------------------
 
   /** Spawns a particle burst (and, for hit/death, a floating glyph) for every effect this renderer
-   * has not already spawned for, keyed by `TransientEffect.key`. The seen-key set is capped at
-   * `MAX_TRANSIENT_EFFECTS`, evicting the oldest entry (`Set` preserves insertion order), mirroring
-   * `effectsForEvents`'s own per-snapshot cap so this renderer never accumulates unbounded state
-   * across a long run. */
+   * has not already spawned for THIS generation, per `selectNewEffects` (see its doc comment in
+   * `particles.ts` for why the dedup key is salted by `snapshotGeneration` rather than the raw
+   * `effect.key`). */
   private spawnNewEffects(effects: readonly TransientEffect[], now: number): void {
-    for (const effect of effects) {
-      if (this.seenEffectKeys.has(effect.key)) continue;
-      this.seenEffectKeys.add(effect.key);
-      while (this.seenEffectKeys.size > MAX_TRANSIENT_EFFECTS) {
-        const oldest = this.seenEffectKeys.values().next().value;
-        if (oldest === undefined) break;
-        this.seenEffectKeys.delete(oldest);
-      }
+    const decision = selectNewEffects(
+      effects,
+      this.snapshotGeneration,
+      this.seenEffectKeys,
+      MAX_TRANSIENT_EFFECTS,
+    );
+    this.seenEffectKeys = decision.seenKeys;
 
+    for (const effect of decision.newEffects) {
       this.particles = [...this.particles, ...spawnForEffect(effect, now)];
       if (effect.kind === 'hit-flash' || effect.kind === 'death-burst') {
         this.spawnDamageFloat(effect, now);

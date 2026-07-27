@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TransientEffect } from '../effects-map.js';
-import { spawnForEffect, stepParticles, type Particle } from './particles.js';
+import { selectNewEffects, spawnForEffect, stepParticles, type Particle } from './particles.js';
 
 function effect(kind: TransientEffect['kind'], extra: Partial<TransientEffect> = {}): TransientEffect {
   return { key: `${kind}-1`, kind, x: 3, y: 4, ...extra };
@@ -100,5 +100,48 @@ describe('stepParticles', () => {
     const stepOnce = stepParticles([particle], 1016);
     const stepTwice = stepParticles(stepOnce, 1032);
     expect(stepTwice[0]!.vz).toBeLessThan(stepOnce[0]!.vz);
+  });
+});
+
+describe('selectNewEffects', () => {
+  // Mirrors `effectsForEvents`'s `hero.damaged` branch: the SAME literal key recurring in two
+  // different turns, since it is `${event.type}-${index}` (array position), not a stable event id.
+  const recurringHeroHit: TransientEffect = { key: 'hero.damaged-0', kind: 'hit-flash', x: 1, y: 1 };
+
+  it('spawns the same effect key again when the generation advances (a new turn)', () => {
+    const first = selectNewEffects([recurringHeroHit], 1, new Set(), 12);
+    expect(first.newEffects).toEqual([recurringHeroHit]);
+
+    const second = selectNewEffects([recurringHeroHit], 2, first.seenKeys, 12);
+    expect(second.newEffects).toEqual([recurringHeroHit]);
+  });
+
+  it('does not re-spawn the same effect key within the same generation (a re-feed)', () => {
+    const first = selectNewEffects([recurringHeroHit], 1, new Set(), 12);
+    expect(first.newEffects).toEqual([recurringHeroHit]);
+
+    const refeed = selectNewEffects([recurringHeroHit], 1, first.seenKeys, 12);
+    expect(refeed.newEffects).toEqual([]);
+  });
+
+  it('prunes seen keys from generations older than the previous one', () => {
+    const gen1 = selectNewEffects([recurringHeroHit], 1, new Set(), 12);
+    const gen2 = selectNewEffects([], 2, gen1.seenKeys, 12);
+    // gen1's key survives one generation bump (still "last turn" relative to gen2)...
+    expect([...gen2.seenKeys]).toContain('1:hero.damaged-0');
+    const gen3 = selectNewEffects([], 3, gen2.seenKeys, 12);
+    // ...but is pruned once a second generation has passed.
+    expect([...gen3.seenKeys]).not.toContain('1:hero.damaged-0');
+  });
+
+  it('still caps spawn volume within a single generation at maxSeenKeys', () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({
+      key: `k-${i}`,
+      kind: 'hit-flash' as const,
+      x: 0,
+      y: 0,
+    }));
+    const result = selectNewEffects(many, 1, new Set(), 12);
+    expect(result.seenKeys.size).toBeLessThanOrEqual(12);
   });
 });

@@ -172,3 +172,64 @@ export function stepParticles(particles: readonly Particle[], now: number): read
   }
   return next;
 }
+
+export interface EffectSpawnDecision {
+  readonly newEffects: readonly TransientEffect[];
+  readonly seenKeys: ReadonlySet<string>;
+}
+
+/**
+ * Decides which of `effects` are new since the last call, salting every dedup key with a
+ * caller-owned `generation` counter: `${generation}:${effect.key}`.
+ *
+ * This exists because `effectsForEvents`'s `hero.damaged` branch keys its effect by
+ * `${event.type}-${index}` (an array position within one snapshot's `lastEvents`), not a stable
+ * event id -- by design, since the hero-damaged event carries no attacker identity to derive one
+ * from. Across two DIFFERENT snapshots (i.e. two different turns), that literal key can recur
+ * (e.g. `hero.damaged-0` every time a hit happens to land first in that turn's event list), so a
+ * dedup set keyed on the raw effect key alone would treat the second hit as already-seen and
+ * silently drop it forever. Salting by generation fixes that without touching `effects-map.ts` or
+ * the engine: two literally-identical effect keys from two different generations produce two
+ * different salted keys, so both spawn; the SAME snapshot object re-fed to the renderer (a resize
+ * or a targeting-only re-render, which calls `setSnapshot` again without a new snapshot) keeps the
+ * same generation, so its effects are still deduped exactly once, matching the pre-fix behavior
+ * for genuine re-feeds.
+ *
+ * Bounded correctly, not just by LRU size: any previously-seen key from a generation older than
+ * `generation - 1` is pruned unconditionally on every call (a fight can only ever be "this turn" or
+ * "last turn" from the caller's perspective, since the caller bumps `generation` once per new
+ * snapshot), and `maxSeenKeys` remains as a secondary cap purely to bound spawn volume within a
+ * single generation, matching `MAX_TRANSIENT_EFFECTS`.
+ *
+ * Pure: returns a new `seenKeys` set derived from the input one; never mutates its input.
+ */
+export function selectNewEffects(
+  effects: readonly TransientEffect[],
+  generation: number,
+  seenKeys: ReadonlySet<string>,
+  maxSeenKeys: number,
+): EffectSpawnDecision {
+  const next = new Set<string>();
+  for (const key of seenKeys) {
+    const separator = key.indexOf(':');
+    const keyGeneration = separator === -1 ? Number.NaN : Number(key.slice(0, separator));
+    if (Number.isFinite(keyGeneration) && keyGeneration >= generation - 1) {
+      next.add(key);
+    }
+  }
+
+  const newEffects: TransientEffect[] = [];
+  for (const effect of effects) {
+    const salted = `${generation}:${effect.key}`;
+    if (next.has(salted)) continue;
+    next.add(salted);
+    newEffects.push(effect);
+    while (next.size > maxSeenKeys) {
+      const oldest = next.values().next().value;
+      if (oldest === undefined) break;
+      next.delete(oldest);
+    }
+  }
+
+  return { newEffects, seenKeys: next };
+}
