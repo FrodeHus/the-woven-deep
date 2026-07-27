@@ -133,8 +133,9 @@ Full-bleed canvas; chrome floats over it:
 
 - **Pack & Gear (`InventoryOverlay`)** and **Hero Record (`CharacterSheetOverlay`)**: restyled
   as the design's right slide-in panels; all current functionality preserved (equip/unequip/
-  use/drop/toggle-light/refuel, filters, sort, keyboard nav, list-detail). Demo-only fields are
-  **not** added: no "Condition: 100" durability, no "IDENTIFIED" badge.
+  use/drop/toggle-light/refuel, filters, sort, keyboard nav, list-detail). The demo's invented
+  placeholder fields are not reproduced (hardcoded "Condition: 100", unconditional "IDENTIFIED"
+  badge); the game's real per-item condition and identification state remain displayed as before.
 - All other overlays/screens (Spellbook, Map & Journal, Codex, Settings, Help, Dialogue, Trade,
   House, Command Palette) keep working unchanged; retheming them is out of scope.
 

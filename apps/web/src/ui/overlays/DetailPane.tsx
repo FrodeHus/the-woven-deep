@@ -88,19 +88,23 @@ export function DetailPane({
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
         <h3 className="font-serif text-lg text-fg-strong">{item.name}</h3>
-        <div>
+        <div className="flex flex-wrap gap-1.5">
           <span className="border border-muted px-1.5 py-px text-[10px] uppercase tracking-[0.1em] text-muted">
             {item.category}
+          </span>
+          <span className="border border-muted px-1.5 py-px text-[10px] uppercase tracking-[0.1em] text-muted">
+            {unidentified ? 'Unidentified' : 'Identified'}
           </span>
         </div>
       </div>
 
       {/* Dotted-leader fact rows. Instance facts come off the projected item; static facts
        * (Damage/Worth/Light radius/Armor) come off the identified content entry (`content`), which
-       * is absent for an unidentified item -- so its hidden stats never leak. No "Condition"
-       * durability row and no separate identified/unidentified badge -- excluded by the design spec
-       * (`docs/superpowers/specs/2026-07-27-gamefield-pixi-redesign-design.md`'s Panels section);
-       * whether an item is identified still gates which of the rows below are shown. */}
+       * is absent for an unidentified item -- so its hidden stats never leak. `Condition` is real
+       * per-instance durability data (`item.condition`, an `ItemView` field), not the demo's
+       * hardcoded placeholder -- it stays, alongside the identified/unidentified tag above, per
+       * "all current functionality preserved" (design spec's Panels section); whether an item is
+       * identified still gates which of the OTHER rows below are shown. */}
       <div className="flex flex-col gap-1">
         {equipped && <FactRow label="Equipped" value={slot} />}
         {content != null &&
@@ -119,6 +123,7 @@ export function DetailPane({
           Object.entries(item.enchantment.modifiers).map(([stat, amount]) => (
             <FactRow key={stat} label={stat} value={`${amount >= 0 ? '+' : ''}${amount}`} />
           ))}
+        <FactRow label="Condition" value={item.condition} />
         {item.charges != null && <FactRow label="Charges" value={item.charges} />}
         {item.fuel != null && <FactRow label="Fuel" value={item.fuel} />}
         {item.enabled !== null && <FactRow label="State" value={item.enabled ? 'Lit' : 'Unlit'} />}
