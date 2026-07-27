@@ -502,7 +502,6 @@ describe('App boot flow', () => {
     expect(screen.queryByRole('option', { name: /continue/i })).not.toBeInTheDocument();
   });
 
-
   describe('corrupted storage surfaces the standard dismissible notice (Task 8 review Finding 3)', () => {
     it('a corrupted settings blob resets to defaults AND shows a dismissible "Session notice" banner', async () => {
       const user = userEvent.setup();

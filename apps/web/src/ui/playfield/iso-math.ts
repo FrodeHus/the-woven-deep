@@ -24,10 +24,8 @@ export function worldToScreen(
   const dy = ty - view.camY;
   const elevation = z ?? 0;
 
-  const sx =
-    (dx - dy) * TILE_HALF_W * view.zoom + view.viewW / 2;
-  const sy =
-    (dx + dy) * TILE_HALF_H * view.zoom + view.viewH / 2 - elevation * view.zoom;
+  const sx = (dx - dy) * TILE_HALF_W * view.zoom + view.viewW / 2;
+  const sy = (dx + dy) * TILE_HALF_H * view.zoom + view.viewH / 2 - elevation * view.zoom;
 
   return [sx, sy];
 }
@@ -36,16 +34,10 @@ export function worldToScreen(
  * Maps screen pixels to isometric world coordinates.
  * Exact inverse of worldToScreen (solves the 2×2 linear system).
  */
-export function screenToWorld(
-  view: IsoView,
-  sx: number,
-  sy: number,
-): readonly [number, number] {
+export function screenToWorld(view: IsoView, sx: number, sy: number): readonly [number, number] {
   // Denormalize screen coordinates relative to viewport center
-  const dx_norm =
-    (sx - view.viewW / 2) / (TILE_HALF_W * view.zoom);
-  const dy_norm =
-    (sy - view.viewH / 2) / (TILE_HALF_H * view.zoom);
+  const dx_norm = (sx - view.viewW / 2) / (TILE_HALF_W * view.zoom);
+  const dy_norm = (sy - view.viewH / 2) / (TILE_HALF_H * view.zoom);
 
   // Solve for tx-camX and ty-camY
   const u = (dx_norm + dy_norm) / 2;

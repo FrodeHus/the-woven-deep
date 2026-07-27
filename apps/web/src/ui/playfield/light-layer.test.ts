@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { ObservableCell } from '@woven-deep/engine';
 import { cellDarkness, lightsForFloor, type LightSpec } from './light-layer.js';
 
-function cell(input: Partial<ObservableCell> & { index: number; x: number; y: number }): ObservableCell {
+function cell(
+  input: Partial<ObservableCell> & { index: number; x: number; y: number },
+): ObservableCell {
   return {
     knowledge: 'visible',
     intensity: 0,
@@ -42,11 +44,7 @@ describe('lightsForFloor', () => {
   const hero = { x: 5, y: 6, lightRadius: 7 };
 
   it('emits one fixture light per fixture cell plus one hero light', () => {
-    const cells = [
-      fixtureCell(0, 1, 1),
-      cell({ index: 1, x: 2, y: 2 }),
-      fixtureCell(2, 3, 3),
-    ];
+    const cells = [fixtureCell(0, 1, 1), cell({ index: 1, x: 2, y: 2 }), fixtureCell(2, 3, 3)];
     const lights = lightsForFloor(cells, hero);
     expect(lights).toHaveLength(3); // two fixtures + hero
   });

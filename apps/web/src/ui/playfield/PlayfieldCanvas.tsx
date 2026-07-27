@@ -6,7 +6,10 @@ import { IsoRenderer, type RendererCallbacks, type TargetingVisual } from './Iso
 
 /** The slice of `IsoRenderer` `PlayfieldCanvas` drives -- the injection seam for tests, which
  * supply a recording fake (jsdom has no WebGL, so the real renderer can never mount there). */
-export type MountedRenderer = Pick<IsoRenderer, 'init' | 'setSnapshot' | 'setTargeting' | 'destroy'>;
+export type MountedRenderer = Pick<
+  IsoRenderer,
+  'init' | 'setSnapshot' | 'setTargeting' | 'destroy'
+>;
 
 export type CreateRenderer = (
   host: HTMLElement,

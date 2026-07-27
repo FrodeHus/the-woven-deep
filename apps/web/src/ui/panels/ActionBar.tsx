@@ -12,7 +12,11 @@ function BeltSlot({
   item,
   index,
   onUse,
-}: Readonly<{ item: OwnedItemView | undefined; index: number; onUse: (itemId: string) => void }>): JSX.Element {
+}: Readonly<{
+  item: OwnedItemView | undefined;
+  index: number;
+  onUse: (itemId: string) => void;
+}>): JSX.Element {
   if (!item) {
     return (
       <div

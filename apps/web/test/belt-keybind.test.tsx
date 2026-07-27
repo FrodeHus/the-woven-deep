@@ -124,9 +124,7 @@ describe('belt keybind', () => {
 
     act(() => fireEvent.keyDown(window, { key: '1', code: 'Digit1' }));
 
-    expect(session.dispatched).toEqual([
-      { type: 'backpack', action: 'use', itemId: 'potion.a' },
-    ]);
+    expect(session.dispatched).toEqual([{ type: 'backpack', action: 'use', itemId: 'potion.a' }]);
   });
 
   it('pressing "1" with no potions in the backpack dispatches nothing', async () => {
@@ -145,9 +143,7 @@ describe('belt keybind', () => {
 
     act(() => fireEvent.keyDown(window, { key: '1', code: 'Digit1' }));
 
-    expect(session.dispatched).toEqual([
-      { type: 'backpack', action: 'use', itemId: 'potion.a' },
-    ]);
+    expect(session.dispatched).toEqual([{ type: 'backpack', action: 'use', itemId: 'potion.a' }]);
   });
 
   it('numpad Numpad1 still moves southwest instead of drinking a potion', async () => {

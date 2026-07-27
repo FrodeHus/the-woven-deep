@@ -34,7 +34,9 @@ afterEach(() => {
 });
 
 function packFetcher(): typeof fetch {
-  return vi.fn(() => Promise.resolve(new Response(JSON.stringify(pack)))) as unknown as typeof fetch;
+  return vi.fn(() =>
+    Promise.resolve(new Response(JSON.stringify(pack))),
+  ) as unknown as typeof fetch;
 }
 
 function fakeStorage(

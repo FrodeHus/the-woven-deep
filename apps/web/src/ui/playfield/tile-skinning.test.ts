@@ -19,7 +19,11 @@ function cell(
   } as ObservableCell;
 }
 
-function grid(width: number, height: number, tokenAt: (x: number, y: number) => string): ObservableCell[] {
+function grid(
+  width: number,
+  height: number,
+  tokenAt: (x: number, y: number) => string,
+): ObservableCell[] {
   const cells: ObservableCell[] = [];
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -90,7 +94,9 @@ describe('skinFloor wall topology', () => {
   it('skins a lone wall cell surrounded by floor as wall-rounded variant 6 or 7', () => {
     const width = 3;
     const height = 3;
-    const cells = grid(width, height, (x, y) => (x === 1 && y === 1 ? 'terrain.wall' : 'terrain.floor'));
+    const cells = grid(width, height, (x, y) =>
+      x === 1 && y === 1 ? 'terrain.wall' : 'terrain.floor',
+    );
     const skins = skinFloor(cells, width, height, 'floor-lone');
     const index = 1 * width + 1;
     expect(skins[index]!.family).toBe('wall-rounded');
@@ -135,7 +141,8 @@ describe('skinFloor floor dirty clustering', () => {
     const floorId = 'dirt-a';
     const skins = skinFloor(cells, width, height, floorId);
 
-    const isDirty = (x: number, y: number): boolean => skins[y * width + x]!.family === 'floor-dirty';
+    const isDirty = (x: number, y: number): boolean =>
+      skins[y * width + x]!.family === 'floor-dirty';
     const isSeedDirty = (x: number, y: number): boolean => cellSeed(floorId, x, y) % 4 === 0;
 
     let sawSeedDirty = false;

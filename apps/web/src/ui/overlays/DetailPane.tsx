@@ -133,7 +133,12 @@ export function DetailPane({
       {description && <p className="text-sm italic text-muted">{description}</p>}
 
       <div className="flex flex-wrap gap-2">
-        <ActionButton label={equipped ? 'Unequip' : 'Equip'} chord="e" tone="accent" onClick={onEquip} />
+        <ActionButton
+          label={equipped ? 'Unequip' : 'Equip'}
+          chord="e"
+          tone="accent"
+          onClick={onEquip}
+        />
         <ActionButton label="Use" chord="u" tone="good" onClick={onUse} />
         <ActionButton label="Drop" chord="d" tone="danger" onClick={onDrop} />
         {item.category === 'light' && (

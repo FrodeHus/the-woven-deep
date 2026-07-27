@@ -374,9 +374,7 @@ describe('PlayScreen AoE free-cursor targeting', () => {
     await beginFireballTargeting();
 
     // A burst-2 footprint at the hero cell covers several cells -- more than one valid cell.
-    await waitFor(() =>
-      expect(fake.latest().lastTargeting()!.validCells.size).toBeGreaterThan(1),
-    );
+    await waitFor(() => expect(fake.latest().lastTargeting()!.validCells.size).toBeGreaterThan(1));
 
     // Move the reticle east twice, then confirm with Enter.
     fireEvent.keyDown(window, { key: 'ArrowRight' });

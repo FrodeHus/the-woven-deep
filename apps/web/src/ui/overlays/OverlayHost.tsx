@@ -121,7 +121,13 @@ export function OverlayHost({
           // `sm:max-w-xl` sheet width unchanged -- so this override is scoped to `inventory` only.
           className={overlay === 'inventory' ? 'sm:max-w-[430px]' : undefined}
         >
-          <SheetHeader className={overlay === 'inventory' ? 'flex-row items-center justify-between space-y-0' : undefined}>
+          <SheetHeader
+            className={
+              overlay === 'inventory'
+                ? 'flex-row items-center justify-between space-y-0'
+                : undefined
+            }
+          >
             <SheetTitle>{definition.title}</SheetTitle>
             {overlay === 'inventory' && (
               <span aria-hidden="true" className="font-mono text-[0.6875rem] text-subtle">

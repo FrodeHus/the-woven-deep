@@ -3,11 +3,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import type { HeartLineageRecord, Point, StoredHallRecord } from '@woven-deep/engine';
 import type { RunSession } from '../session/run-session.js';
 import { useRunSession } from '../session/store.js';
-import {
-  actorsOf,
-  dialogueTargetAvailable,
-  tradeIsAvailable,
-} from '../session/projection-view.js';
+import { actorsOf, dialogueTargetAvailable, tradeIsAvailable } from '../session/projection-view.js';
 import { CommandPalette } from './CommandPalette.js';
 import type { OverlayActionId } from './KeyRouter.js';
 import { activeHint, HINTS } from '../session/onboarding.js';

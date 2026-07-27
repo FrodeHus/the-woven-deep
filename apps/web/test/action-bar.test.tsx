@@ -136,7 +136,12 @@ describe('ActionBar', () => {
   it('also hides the cast button when castableSpells is absent', () => {
     const session = fakeSession();
     render(
-      <ActionBar snapshot={snapshotOf({})} session={session} keymap={KEYMAP} onBeginCast={vi.fn()} />,
+      <ActionBar
+        snapshot={snapshotOf({})}
+        session={session}
+        keymap={KEYMAP}
+        onBeginCast={vi.fn()}
+      />,
     );
     expect(screen.queryByTestId('cast-button')).not.toBeInTheDocument();
   });
@@ -168,7 +173,12 @@ describe('ActionBar', () => {
     const session = fakeSession();
     const rebound = resolveKeymap({ 'use-belt-1': { key: 'q', shift: false } });
     render(
-      <ActionBar snapshot={snapshotOf({})} session={session} keymap={rebound} onBeginCast={vi.fn()} />,
+      <ActionBar
+        snapshot={snapshotOf({})}
+        session={session}
+        keymap={rebound}
+        onBeginCast={vi.fn()}
+      />,
     );
     expect(screen.getByText(/q drink/i)).toBeInTheDocument();
     expect(screen.queryByText(/\b1 drink\b/i)).not.toBeInTheDocument();

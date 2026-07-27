@@ -34,14 +34,8 @@ describe('isometric math', () => {
       const [sx1, sy1] = worldToScreen(view, 11, 8);
       const view2x = { ...view, zoom: 4 };
       const [sx2, sy2] = worldToScreen(view2x, 11, 8);
-      expect(sx2 - view2x.viewW / 2).toBeCloseTo(
-        2 * (sx1 - view.viewW / 2),
-        5,
-      );
-      expect(sy2 - view2x.viewH / 2).toBeCloseTo(
-        2 * (sy1 - view.viewH / 2),
-        5,
-      );
+      expect(sx2 - view2x.viewW / 2).toBeCloseTo(2 * (sx1 - view.viewW / 2), 5);
+      expect(sy2 - view2x.viewH / 2).toBeCloseTo(2 * (sy1 - view.viewH / 2), 5);
     });
 
     it('accounts for z elevation', () => {

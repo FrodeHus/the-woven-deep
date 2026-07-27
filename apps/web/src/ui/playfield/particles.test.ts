@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { TransientEffect } from '../effects-map.js';
 import { selectNewEffects, spawnForEffect, stepParticles, type Particle } from './particles.js';
 
-function effect(kind: TransientEffect['kind'], extra: Partial<TransientEffect> = {}): TransientEffect {
+function effect(
+  kind: TransientEffect['kind'],
+  extra: Partial<TransientEffect> = {},
+): TransientEffect {
   return { key: `${kind}-1`, kind, x: 3, y: 4, ...extra };
 }
 
@@ -106,7 +109,12 @@ describe('stepParticles', () => {
 describe('selectNewEffects', () => {
   // Mirrors `effectsForEvents`'s `hero.damaged` branch: the SAME literal key recurring in two
   // different turns, since it is `${event.type}-${index}` (array position), not a stable event id.
-  const recurringHeroHit: TransientEffect = { key: 'hero.damaged-0', kind: 'hit-flash', x: 1, y: 1 };
+  const recurringHeroHit: TransientEffect = {
+    key: 'hero.damaged-0',
+    kind: 'hit-flash',
+    x: 1,
+    y: 1,
+  };
 
   it('spawns the same effect key again when the generation advances (a new turn)', () => {
     const first = selectNewEffects([recurringHeroHit], 1, new Set(), 12);

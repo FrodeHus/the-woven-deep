@@ -257,7 +257,11 @@ describe('routeKey', () => {
 
     it('blocks the belt keybind while an overlay is open', () => {
       expect(
-        routeKey({ event: keyEvent('1', { code: 'Digit1' }), overlayOpen: true, keymap: defaultKeymap }),
+        routeKey({
+          event: keyEvent('1', { code: 'Digit1' }),
+          overlayOpen: true,
+          keymap: defaultKeymap,
+        }),
       ).toBeNull();
     });
 
@@ -318,7 +322,13 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const now = () => time;
     const dispatch = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint: vi.fn(), useBeltSlot: vi.fn() },
+      {
+        dispatch,
+        openOverlay: vi.fn(),
+        closeOverlay: vi.fn(),
+        dismissHint: vi.fn(),
+        useBeltSlot: vi.fn(),
+      },
       () => false,
       () => defaultKeymap,
       now,
@@ -347,7 +357,13 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const now = () => time;
     const dispatch = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint: vi.fn(), useBeltSlot: vi.fn() },
+      {
+        dispatch,
+        openOverlay: vi.fn(),
+        closeOverlay: vi.fn(),
+        dismissHint: vi.fn(),
+        useBeltSlot: vi.fn(),
+      },
       () => false,
       () => defaultKeymap,
       now,

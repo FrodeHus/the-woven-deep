@@ -185,7 +185,8 @@ export function routeKey(
   // The one hardwired key whose meaning depends on which physical key produced it: numpad `1`
   // (NumLock on) still means southwest movement; the top-row `Digit1` falls through to the keymap
   // below, where it's bound to `use-belt-1` by default.
-  if (event.key === '1' && event.code === NUMPAD1_CODE) return { type: 'move', direction: 'southwest' };
+  if (event.key === '1' && event.code === NUMPAD1_CODE)
+    return { type: 'move', direction: 'southwest' };
 
   const action = lookupAction(keymap, event.key, event.shiftKey);
   return action === null ? null : outcomeForAction(action);

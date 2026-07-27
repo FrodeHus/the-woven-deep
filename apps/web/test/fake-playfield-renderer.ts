@@ -1,8 +1,5 @@
 import type { SessionSnapshot } from '../src/session/guest-session.js';
-import type {
-  CreateRenderer,
-  MountedRenderer,
-} from '../src/ui/playfield/PlayfieldCanvas.js';
+import type { CreateRenderer, MountedRenderer } from '../src/ui/playfield/PlayfieldCanvas.js';
 import type { RendererCallbacks, TargetingVisual } from '../src/ui/playfield/IsoRenderer.js';
 
 /** One mounted fake renderer, recording everything `PlayfieldCanvas` drove into it and exposing the
