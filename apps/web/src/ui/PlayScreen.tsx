@@ -8,7 +8,14 @@ import { CommandPalette } from './CommandPalette.js';
 import type { OverlayActionId } from './KeyRouter.js';
 import { activeHint, HINTS } from '../session/onboarding.js';
 import type { LayoutTier } from './layout.js';
-import { ActionBar, HeroStatusAnnouncer, LogPanel, MinimapPanel, TopBar } from './panels.js';
+import {
+  ActionBar,
+  HeroStatusAnnouncer,
+  HintFloat,
+  LogPanel,
+  MinimapPanel,
+  TopBar,
+} from './panels.js';
 import type { OverlayId } from './overlays/registry.js';
 import type { AccountState } from '../session/account.js';
 import { DecisionPrompt } from './overlays/DecisionPrompt.js';
@@ -266,7 +273,8 @@ export function PlayScreen({
             <TownPanel snapshot={snapshot} keymap={keymap} />
           </div>
         )}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2">
+          <HintFloat hint={hint} keymap={keymap} />
           <div className="pointer-events-auto">
             <ActionBar
               snapshot={snapshot}

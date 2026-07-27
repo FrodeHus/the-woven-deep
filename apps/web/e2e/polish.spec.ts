@@ -113,24 +113,24 @@ test('the guest polish: onboarding, theme, the descend fade, and a clean reset',
   await awaitKeyboardReady(page);
 
   // --- The onboarding sequence leads with movement (priority 0), triggered in town. ---
-  const strip = page.locator('.hint-strip');
-  await expect(strip).toContainText(/The dark waits on your step/i);
+  const hint = page.getByRole('note');
+  await expect(hint).toContainText(/The dark waits on your step/i);
 
   // Ten successful town steps master movement; the hint retires and inspection (priority 1) takes
   // over. The walk returns to the spawn cell, keeping the later descend origin exact.
   await pressAll(page, TEN_TOWN_STEPS);
   await expect(page.getByLabel('Hero at 5, 9')).toBeVisible();
-  await expect(strip).not.toContainText(/The dark waits on your step/i);
-  await expect(strip).toContainText(/read your own measure/i);
+  await expect(hint).not.toContainText(/The dark waits on your step/i);
+  await expect(hint).toContainText(/read your own measure/i);
 
   // Dismiss the inspection hint by hand (the rebindable `dismiss-hint` key, default `'`). It stays
   // gone, and the inventory hint (priority 2) steps up in its place.
   await page.keyboard.press("'");
-  await expect(strip).not.toContainText(/read your own measure/i);
-  await expect(strip).toContainText(/see what you carry/i);
+  await expect(hint).not.toContainText(/read your own measure/i);
+  await expect(hint).toContainText(/see what you carry/i);
 
   // --- Settings: everything below is asserted against the play screen, which stays mounted behind
-  // the overlay (the overlay host lives inside `PlayScreen`), so the canvas/strip/theme changes are
+  // the overlay (the overlay host lives inside `PlayScreen`), so the canvas/hint/theme changes are
   // observable live without closing the overlay between each. The overlay's own content (font
   // scale/theme/onboarding/motion/every rebindable key row/clear-session) is taller than the
   // pinned 1440x900 viewport and the dialog itself never scrolls (`DialogContent` has no
@@ -141,12 +141,12 @@ test('the guest polish: onboarding, theme, the descend fade, and a clean reset',
   const settings = page.getByTestId('overlay-settings');
   await expect(settings).toBeVisible();
 
-  // Turn onboarding off -> the strip vanishes entirely (HintStrip renders nothing).
+  // Turn onboarding off -> the hint float vanishes entirely (HintFloat renders nothing).
   const onboardingToggle = settings.getByRole('switch', { name: /show contextual guidance/i });
   await expect(onboardingToggle).toBeChecked();
   await onboardingToggle.click();
   await expect(onboardingToggle).not.toBeChecked();
-  await expect(strip).toHaveCount(0);
+  await expect(hint).toHaveCount(0);
 
   // Theme: high contrast lands the root class and recomputes the palette (a computed-style spot
   // check on `--ink`, which the `.theme-high-contrast` block redeclares to pure white).
