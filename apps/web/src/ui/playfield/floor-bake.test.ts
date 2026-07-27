@@ -229,6 +229,25 @@ describe('planFloorBake town families', () => {
   });
 });
 
+describe('planFloorBake flat floor geometry', () => {
+  it('squashes a full-cell floor diamond onto the 2:1 iso footprint centred on the cell', () => {
+    const atlas = makeAtlas();
+    const cells = grid(1, 1, () => 'terrain.floor');
+    const plan = planFloorBake(cells, 1, 1, 'floor-flat', atlas, 1, false);
+    expect(plan.draws).toHaveLength(1);
+    const draw = plan.draws[0]!;
+    expect(atlas.floors).toContainEqual(draw.rect);
+
+    // Width keeps the full 64px pitch (overscanned); height is halved to the 2:1 footprint (32px)
+    // rather than the square 64px, so the full-cell diamond tessellates instead of overlapping.
+    expect(draw.dw).toBeCloseTo(64 * FLOOR_OVERSCAN, 5);
+    expect(draw.dh).toBeCloseTo(32 * FLOOR_OVERSCAN, 5);
+    // Centred on the cell (sx = 0, sy = 0 here) in both axes.
+    expect(draw.dx).toBeCloseTo(plan.originX - (64 * FLOOR_OVERSCAN) / 2, 5);
+    expect(draw.dy).toBeCloseTo(plan.originY - (32 * FLOOR_OVERSCAN) / 2, 5);
+  });
+});
+
 describe('planFloorBake tile anchoring', () => {
   it('centres a flat tile diamond on the cell and overscans it about that centre', () => {
     const atlas = makeAtlas();

@@ -93,35 +93,52 @@ def _flood_cells(rgba: np.ndarray, tolerance: float) -> None:
 def _defringe(rgba: np.ndarray, tolerance: float) -> None:
     """Damp the coloured halo on art pixels that border a now-transparent pixel, in place.
 
-    A surviving edge pixel next to keyed transparency carries a magenta cast; lift its green toward
-    the red/blue mean to neutralise the tint and drop its alpha in proportion to how tinted it
-    remains, so the art edge fades cleanly rather than ending on a pink rim.
+    A surviving edge pixel next to the keyed background carries a magenta cast. The isometric floor
+    diamonds span their whole cell, so their edges sit against a thin anti-aliased rim (partial
+    alpha) rather than hard zero-alpha transparency; treating any pixel below `RIM_ALPHA` as the
+    boundary and reaching two rings inward catches the fully-opaque magenta the earlier passes leave
+    on those diagonal edges. For every reached art pixel with a magenta cast the green channel is
+    lifted to the red/blue mean, collapsing the violet seam to neutral stone, and the tinted rim
+    pixels themselves fade toward transparency since they are background bleed, not art. Interior art
+    (the luminous violet Weave-conduit threads across wall faces) never borders the boundary, so it
+    is untouched.
     """
+    RIM_ALPHA = 200
     r, g, b = rgba[..., 0], rgba[..., 1], rgba[..., 2]
-    keyed = rgba[..., 3] == 0
-    neigh = np.zeros_like(keyed)
-    neigh[1:, :] |= keyed[:-1, :]
-    neigh[:-1, :] |= keyed[1:, :]
-    neigh[:, 1:] |= keyed[:, :-1]
-    neigh[:, :-1] |= keyed[:, 1:]
-    fringe = neigh & (~keyed)
+    alpha = rgba[..., 3]
+
+    boundary = alpha < RIM_ALPHA
+    reached = boundary.copy()
+    for _ in range(2):
+        grown = reached.copy()
+        grown[1:, :] |= reached[:-1, :]
+        grown[:-1, :] |= reached[1:, :]
+        grown[:, 1:] |= reached[:, :-1]
+        grown[:, :-1] |= reached[:, 1:]
+        reached = grown
+    near_boundary = reached & (alpha > 0)
 
     magenta_amount = np.clip((r + b) / 2.0 - g, 0, None)
-    edge = fringe & (magenta_amount > 8)
+    edge = near_boundary & (magenta_amount > 6)
     target_g = (r + b) / 2.0
-    # Lift green most of the way to the red/blue mean (0.85) so a heavy magenta rim collapses to
-    # near-neutral rather than staying visibly pink, and fade the most-tinted edge pixels toward
-    # transparency (floor 0.2) since they are bleed, not art.
-    rgba[..., 1] = np.where(edge, g + (target_g - g) * 0.85, g)
-    edge_alpha = np.clip(1.0 - (magenta_amount - 8) / (tolerance * 0.67), 0.2, 1.0)
-    rgba[..., 3] = np.where(edge, rgba[..., 3] * edge_alpha, rgba[..., 3])
+    rgba[..., 1] = np.where(edge, target_g, g)
+    # Fade the strongly-tinted rim pixels (still translucent) toward transparency; keep opaque art
+    # pixels opaque once their green is neutralised.
+    rim_bleed = edge & boundary & (magenta_amount > 30)
+    rgba[..., 3] = np.where(rim_bleed, 0, alpha)
 
 
-def key_tilesheet(src: Image.Image, tolerance: float) -> Image.Image:
-    """Return an RGBA copy of `src` with its magenta and per-cell backdrops keyed to transparency."""
+def key_tilesheet(src: Image.Image, tolerance: float, defringe_only: bool = False) -> Image.Image:
+    """Return an RGBA copy of `src` with its magenta and per-cell backdrops keyed to transparency.
+
+    With `defringe_only` the magenta-key and per-cell flood passes are skipped -- they need the solid
+    magenta background of an unkeyed source -- and only the de-fringe runs, neutralising the violet
+    seams left on an already-keyed sheet.
+    """
     rgba = np.asarray(src.convert("RGBA")).astype(np.float32)
-    _magenta_key(rgba, tolerance)
-    _flood_cells(rgba, tolerance)
+    if not defringe_only:
+        _magenta_key(rgba, tolerance)
+        _flood_cells(rgba, tolerance)
     _defringe(rgba, tolerance)
     return Image.fromarray(np.clip(rgba, 0, 255).astype(np.uint8), "RGBA")
 
@@ -136,10 +153,16 @@ def main(argv: list[str]) -> int:
         default=60.0,
         help="colour-distance threshold for the key and per-cell flood (default 60)",
     )
+    parser.add_argument(
+        "--defringe-only",
+        action="store_true",
+        help="skip the magenta key and flood (they need an unkeyed source) and only de-fringe an "
+        "already-keyed RGBA sheet",
+    )
     args = parser.parse_args(argv)
 
     with Image.open(args.input) as src:
-        result = key_tilesheet(src, args.tolerance)
+        result = key_tilesheet(src, args.tolerance, defringe_only=args.defringe_only)
     result.save(args.output)
 
     keyed = np.asarray(result)[..., 3]

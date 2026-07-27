@@ -4,19 +4,21 @@ import { TILE_HALF_H, TILE_HALF_W } from './iso-math.js';
 import { skinFloor, type TileFamily } from './tile-skinning.js';
 
 /**
- * The unified sheet's flat-floor art fills its 128px cell edge to edge, so a straight 0.5 map onto
- * the 64px cell pitch already tessellates. A hair of overscan (about the cell's top-face centre,
- * so the overlap is symmetric) hides the sub-pixel seams a fractional camera zoom can still open
- * between adjacent diamonds, keeping the floor reading as continuous stone.
+ * The regenerated sheet draws each flat-floor cell as a full-cell diamond that spans the whole
+ * 128px square (apex to apex, edge to edge), so its footprint is 1:1 rather than the 2:1 the iso
+ * grid expects. `planFloorBake` maps that full cell onto the 2:1 pitch (64px wide by 32px tall at
+ * scale 1) and centres the diamond on the cell, which tessellates exactly. A hair of overscan about
+ * that centre hides the sub-pixel seams a fractional camera zoom can still open between adjacent
+ * diamonds, keeping the floor reading as continuous stone.
  */
-export const FLOOR_OVERSCAN = 1.04;
+export const FLOOR_OVERSCAN = 1.02;
 
 /**
  * The same seam correction for wall tiles, applied horizontally only: adjacent wall faces along an
  * explored edge otherwise show hairline gaps where sub-pixel rounding falls short of the cell
  * pitch. Widening about the cell centre closes them without changing the base-anchored height.
  */
-export const WALL_OVERSCAN = 1.04;
+export const WALL_OVERSCAN = 1.02;
 
 export interface BakeDraw {
   rect: AtlasRect;
@@ -41,6 +43,13 @@ function isWallFamily(family: TileFamily): boolean {
     family === 'wall-weave' ||
     family === 'town-wall'
   );
+}
+
+// Flat walkable surfaces: their sheet art is a full-cell diamond with no vertical body, so they are
+// squashed onto the 2:1 iso footprint and centred on the cell. Objects that stand ON the floor
+// (doors, pillars, stairs) keep their full in-cell height and are anchored separately.
+function isFlatFloorFamily(family: TileFamily): boolean {
+  return family === 'floor' || family === 'floor-dirty' || family === 'town-floor';
 }
 
 // `void` is excluded from the family type: the only caller filters void cells out before resolving
@@ -185,10 +194,17 @@ export function planFloorBake(
       const bottomY = sy + floorHalfDh + atlas.blockDepthPx * spriteScale;
       const wdw = dw * WALL_OVERSCAN;
       placed.push({ x: cell.x, y: cell.y, rect, dx: sx - wdw / 2, dy: bottomY - dh, dw: wdw, dh });
+    } else if (isFlatFloorFamily(skin.family)) {
+      // Flat floor: the full-cell diamond is squashed onto the 2:1 iso footprint (half the drawn
+      // height) and centred on the cell, so adjacent diamonds meet edge to edge across the pitch.
+      // `FLOOR_OVERSCAN` grows it symmetrically about that centre to close sub-pixel seams.
+      const fdw = dw * FLOOR_OVERSCAN;
+      const fdh = floorHalfDh * 2 * FLOOR_OVERSCAN;
+      placed.push({ x: cell.x, y: cell.y, rect, dx: sx - fdw / 2, dy: sy - fdh / 2, dw: fdw, dh: fdh });
     } else {
-      // Top-anchored: the diamond centre lands on the cell centre (`sx`, `sy`) so the top face
-      // tessellates with its neighbours -- then scaled up by `FLOOR_OVERSCAN` about that centre so
-      // adjacent painted diamonds meet and slightly overlap across the full cell pitch.
+      // Object standing on the floor (door, pillar, stairs): the diamond centre lands on the cell
+      // centre (`sx`, `sy`) so its footprint tessellates with the floor, then scaled up by
+      // `FLOOR_OVERSCAN` about that centre while keeping the object's full in-cell height.
       const fdw = dw * FLOOR_OVERSCAN;
       const fdh = dh * FLOOR_OVERSCAN;
       placed.push({
