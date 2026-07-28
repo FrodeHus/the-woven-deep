@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseAtlas } from './atlas.js';
+import { parseActorAtlas, parseAtlas, parseItemAtlas } from './atlas.js';
 import raw from '../../../public/playfield/atlas-unified.json' with { type: 'json' };
+import actorsRaw from '../../../public/playfield/atlas-actors.json' with { type: 'json' };
+import itemsRaw from '../../../public/playfield/atlas-items.json' with { type: 'json' };
 
 describe('parseAtlas', () => {
   it('parses the committed unified atlas into typed rects', () => {
@@ -44,5 +46,52 @@ describe('parseAtlas', () => {
   it('throws when a town key is missing', () => {
     const { entranceSurround: _omitted, ...withoutEntrance } = raw as Record<string, unknown>;
     expect(() => parseAtlas(withoutEntrance)).toThrow(/entranceSurround/);
+  });
+});
+
+describe('parseActorAtlas', () => {
+  it('parses the committed actor atlas: 52 contentId-keyed rects', () => {
+    const atlas = parseActorAtlas(actorsRaw);
+    expect(atlas.imageUrl).toBe('/playfield/actors.png');
+    // 6 hero/townsfolk + 46 monsters = 52 keys.
+    expect(Object.keys(atlas.sprites)).toHaveLength(52);
+    const monsterKeys = Object.keys(atlas.sprites).filter((id) => id.startsWith('monster.'));
+    expect(monsterKeys).toHaveLength(46);
+    // Spot-check the hero, a townsfolk, a row-1 vermin, and a split-out LARGE boss.
+    expect(atlas.sprites['hero.adventurer']).toEqual({ x: 35, y: 39, w: 112, h: 158 });
+    expect(atlas.sprites['npc.town-spellvendor']).toEqual({ x: 654, y: 41, w: 90, h: 155 });
+    expect(atlas.sprites['monster.cave-rat']).toEqual({ x: 37, y: 234, w: 120, h: 109 });
+    expect(atlas.sprites['monster.tide-revenant']).toEqual({ x: 647, y: 838, w: 117, h: 159 });
+    expect(atlas.sprites['monster.weakened-heart']).toEqual({ x: 806, y: 1095, w: 162, h: 156 });
+  });
+
+  it('throws on a missing actors record or a malformed rect', () => {
+    expect(() => parseActorAtlas({ image: 'actors.png' })).toThrow(/actors/);
+    expect(() => parseActorAtlas({ image: 'actors.png', actors: { x: [1, 2, 3] } })).toThrow();
+  });
+});
+
+describe('parseItemAtlas', () => {
+  it('parses the committed item atlas: 31 keys incl. the generic/currency slots', () => {
+    const atlas = parseItemAtlas(itemsRaw);
+    expect(atlas.imageUrl).toBe('/playfield/items.png');
+    // 25 dedicated item ids + 6 generic/currency fallback slots.
+    expect(Object.keys(atlas.sprites)).toHaveLength(31);
+    expect(atlas.sprites['item.iron-sword']).toEqual({ x: 30, y: 26, w: 153, h: 141 });
+    expect(atlas.sprites['item.echo-heartstone']).toEqual({ x: 985, y: 1039, w: 96, h: 98 });
+    for (const slot of [
+      'GENERIC-POTION',
+      'GENERIC-SCROLL',
+      'GENERIC-TOME',
+      'GENERIC-TOME-ORNATE',
+      'GOLD-COINS',
+      'GOLD-POUCH',
+    ]) {
+      expect(atlas.sprites[slot]).toBeDefined();
+    }
+  });
+
+  it('throws on a missing items record', () => {
+    expect(() => parseItemAtlas({ image: 'items.png' })).toThrow(/items/);
   });
 });

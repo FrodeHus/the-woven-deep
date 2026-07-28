@@ -46,6 +46,33 @@ def _magenta_key(rgba: np.ndarray, tolerance: float) -> None:
     rgba[..., 3] = np.where(is_bg, 0, rgba[..., 3])
 
 
+def _magenta_signature_key(rgba: np.ndarray) -> None:
+    """Clear every magenta-signature pixel outright, in place -- the plate remover for hand-laid
+    actor/item sheets.
+
+    The distance key (`_magenta_key`) removes only pixels within `tolerance` of the corner colour;
+    a generator that paints a MAGENTA GROUND PLATE under a figure draws it as a gradient that darkens
+    toward the centre (e.g. #ee13 ed at the rim fading to ~#a0029c under the feet), whose dark core
+    sits far outside any tolerance that does not also eat warm/violet/heart-red art. Distance cannot
+    separate them. The hue signature can: magenta is the ONLY family where green is both the clear
+    minimum channel AND deeply suppressed while red and blue are elevated and near-equal. No figure
+    art in these sheets satisfies it (violet skin keeps g well above 55; heart-red keeps r >> b), so
+    clearing the whole signature -- border-connected gutter, enclosed pockets between limbs, and the
+    feet plates alike -- removes the backdrop without touching a figure. Grid-free by construction:
+    it is a per-pixel colour test, so it needs no cell alignment.
+    """
+    r, g, b = rgba[..., 0], rgba[..., 1], rgba[..., 2]
+    is_bg = (
+        (g < 55)
+        & (r > 100)
+        & (b > 100)
+        & (np.abs(r - b) < 60)
+        & (r - g > 60)
+        & (b - g > 60)
+    )
+    rgba[..., 3] = np.where(is_bg, 0, rgba[..., 3])
+
+
 def _flood_cell(cell: np.ndarray, tolerance: float) -> None:
     """Clear the backdrop connected to a single cell's corners, in place.
 
@@ -133,6 +160,7 @@ def key_tilesheet(
     tolerance: float,
     defringe_only: bool = False,
     no_flood: bool = False,
+    signature: bool = False,
 ) -> Image.Image:
     """Return an RGBA copy of `src` with its magenta and per-cell backdrops keyed to transparency.
 
@@ -147,9 +175,14 @@ def key_tilesheet(
     """
     rgba = np.asarray(src.convert("RGBA")).astype(np.float32)
     if not defringe_only:
-        _magenta_key(rgba, tolerance)
-        if not no_flood:
-            _flood_cells(rgba, tolerance)
+        if signature:
+            # Hue-signature removal supersedes the distance key and the per-cell flood: it clears the
+            # gutter, the enclosed pockets, and the feet plates in one art-safe pass.
+            _magenta_signature_key(rgba)
+        else:
+            _magenta_key(rgba, tolerance)
+            if not no_flood:
+                _flood_cells(rgba, tolerance)
     _defringe(rgba)
     return Image.fromarray(np.clip(rgba, 0, 255).astype(np.uint8), "RGBA")
 
@@ -176,11 +209,22 @@ def main(argv: list[str]) -> int:
         help="run the magenta key and de-fringe but skip the per-cell corner flood, whose 128px "
         "cell grid does not fit a hand-laid sheet on an uneven pitch",
     )
+    parser.add_argument(
+        "--signature",
+        action="store_true",
+        help="remove magenta by hue signature (green the deeply-suppressed minimum, red/blue "
+        "elevated and near-equal) instead of corner distance; clears gradient ground plates and "
+        "enclosed pockets on hand-laid, grid-free actor/item sheets without eating warm/violet art",
+    )
     args = parser.parse_args(argv)
 
     with Image.open(args.input) as src:
         result = key_tilesheet(
-            src, args.tolerance, defringe_only=args.defringe_only, no_flood=args.no_flood
+            src,
+            args.tolerance,
+            defringe_only=args.defringe_only,
+            no_flood=args.no_flood,
+            signature=args.signature,
         )
     result.save(args.output)
 
