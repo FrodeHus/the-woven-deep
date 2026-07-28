@@ -39,6 +39,13 @@ interface PlacementBase {
   readonly encounterId: OpaqueId | null;
   readonly reason?: PopulationPlacementFailureReason;
   readonly nextEncounterState: Uint32State;
+  /**
+   * Advanced `loot-placement` state when this placement drew vault item-slot loot, `null` when it
+   * drew none (every non-`placed` result, and a `placed` result whose floor had no unfilled item
+   * slot). Callers write it back as `placement.nextLootPlacementState ?? run.rng['loot-placement']`
+   * so a null never rewinds the stream.
+   */
+  readonly nextLootPlacementState: Uint32State | null;
   readonly encounterDecisions: readonly EncounterRunDecision[];
   readonly diagnostics: readonly Readonly<{
     type: 'population.placement-skipped';
@@ -511,16 +518,19 @@ function unfilledItemSlots(
 
 /**
  * Fills every not-yet-filled `kind:'item'` vault slot on the floor with the item or loot-table
- * roll its originating `VaultPlacementSlot` names, threading the same `encounters` RNG stream the
- * rest of this file's floor-generation-time placement uses (never `run.rng.loot`, reserved for
- * runtime combat drops). Checking already-filled positions against `run.items` makes repeated
- * calls across `placeFloorPopulations`' multiple attempts on one floor idempotent.
+ * roll its originating `VaultPlacementSlot` names, drawing from the dedicated `loot-placement` RNG
+ * stream rather than the `encounters` stream the rest of this file's placement decisions use, so
+ * an encounter-placement change can never re-roll a floor's loot (never `run.rng.loot` either,
+ * which is reserved for runtime combat drops). Returns `state: null` when no slot needed a roll,
+ * so callers leave `loot-placement` untouched instead of rewinding it. Checking already-filled
+ * positions against `run.items` makes repeated calls across `placeFloorPopulations`' multiple
+ * attempts on one floor idempotent.
  */
 function fillItemSlots(
   input: PlacePopulationInput,
   state: Uint32State,
-): Readonly<{ items: readonly ItemInstance[]; state: Uint32State }> {
-  let currentState = state;
+): Readonly<{ items: readonly ItemInstance[]; state: Uint32State | null }> {
+  let currentState: Uint32State | null = null;
   const items: ItemInstance[] = [];
   for (const slot of unfilledItemSlots(input)) {
     const vaultSlot = originatingVaultSlot(input, slot);
@@ -529,7 +539,7 @@ function fillItemSlots(
       const loot = createFloorLootFromTable({
         content: input.content,
         tableId: vaultSlot.lootTableId,
-        state: currentState,
+        state: currentState ?? state,
         itemIdPrefix: itemId,
         floorId: input.floor.floorId,
         x: slot.x,
@@ -606,9 +616,10 @@ function openFloorCells(input: PlacePopulationInput): readonly Point[] {
 }
 
 /**
- * Rare, depth-banded Ancient Tablet fragment spawn: rolled once per floor generation from the same
- * `encounters` stream every other floor-generation-time placement in this file threads (never
- * `run.rng.loot`, reserved for runtime combat drops). A miss, an empty eligible set (nothing left
+ * Rare, depth-banded Ancient Tablet fragment spawn: rolled once per floor generation from the
+ * dedicated `loot-placement` stream this file's other loot draws use, keeping it isolated from the
+ * `encounters` stream that drives encounter selection and cell choice (never `run.rng.loot`, which
+ * is reserved for runtime combat drops). A miss, an empty eligible set (nothing left
  * in band, or the hero already carries every eligible fragment this run), or no open cell all
  * consume no more than the roll(s) already made and place nothing.
  */
@@ -841,6 +852,7 @@ function placementFailure(
     encounterId: encounter.id,
     reason,
     nextEncounterState: state,
+    nextLootPlacementState: null,
     encounterDecisions,
     diagnostics: [
       { type: 'population.placement-skipped' as const, encounterId: encounter.id, reason },
@@ -875,6 +887,7 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
       encounterId: null,
       reason: 'no-eligible-encounter',
       nextEncounterState: input.run.rng.encounters,
+      nextLootPlacementState: null,
       encounterDecisions: reachedDecisions,
       diagnostics: [],
     };
@@ -905,11 +918,12 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
       floorId: input.floor.floorId,
       position: positions.cells[0]!,
     });
-    const itemSlots = fillItemSlots(input, positions.state);
+    const itemSlots = fillItemSlots(input, input.run.rng['loot-placement']);
     return {
       status: 'placed',
       encounterId: selected.encounter.id,
-      nextEncounterState: itemSlots.state,
+      nextEncounterState: positions.state,
+      nextLootPlacementState: itemSlots.state,
       encounterDecisions: reachedDecisions.map((decision) =>
         decision.encounterId === selected.encounter.id
           ? { ...decision, instancesCreated: decision.instancesCreated + 1 }
@@ -1031,11 +1045,12 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
       ? { ...decision, instancesCreated: decision.instancesCreated + 1 }
       : decision,
   );
-  const itemSlots = fillItemSlots(input, positions.state);
+  const itemSlots = fillItemSlots(input, input.run.rng['loot-placement']);
   return {
     status: 'placed',
     encounterId: selected.encounter.id,
-    nextEncounterState: itemSlots.state,
+    nextEncounterState: positions.state,
+    nextLootPlacementState: itemSlots.state,
     encounterDecisions,
     diagnostics: [],
     createdActors,
@@ -1097,7 +1112,9 @@ export interface FloorPopulationsResult {
 }
 
 /**
- * Applies one population placement to the running state: threads the encounters/merchant-stock RNG,
+ * Applies one population placement to the running state: threads the encounters, loot-placement and
+ * merchant-stock RNG streams (a null `nextLootPlacementState` means no loot draw, so the stream is
+ * carried forward unchanged),
  * commits created actors/items/features/populations on `placed`, and emits the matching domain
  * events. Returns the advanced run and whether the caller should stop (a `rejected` placement).
  * Shared by the guaranteed-boss pre-pass and the weighted density loop so both commit identically.
@@ -1117,6 +1134,7 @@ function applyPopulationPlacement(
     rng: {
       ...run.rng,
       encounters: placement.nextEncounterState,
+      'loot-placement': placement.nextLootPlacementState ?? run.rng['loot-placement'],
       ...(placement.status === 'placed' && placement.nextMerchantStockState !== null
         ? { 'merchant-stock': placement.nextMerchantStockState }
         : {}),
@@ -1246,14 +1264,14 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
     run = applied.run;
     if (applied.stop) break;
   }
-  const fragmentSpawn = placeFragmentSpawn({ ...input, run }, run.rng.encounters);
+  const fragmentSpawn = placeFragmentSpawn({ ...input, run }, run.rng['loot-placement']);
   run = {
     ...run,
     items:
       fragmentSpawn.items.length === 0
         ? run.items
         : sortByItemId([...run.items, ...fragmentSpawn.items]),
-    rng: { ...run.rng, encounters: fragmentSpawn.state },
+    rng: { ...run.rng, 'loot-placement': fragmentSpawn.state },
   };
   return { state: run, placements, events };
 }

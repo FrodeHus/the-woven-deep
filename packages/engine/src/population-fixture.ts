@@ -224,7 +224,11 @@ function publishPlacement(
       floor.floorId === placement.floor.floorId ? placement.floor : floor,
     ),
     encounterDecisions: placement.encounterDecisions,
-    rng: { ...run.rng, encounters: placement.nextEncounterState },
+    rng: {
+      ...run.rng,
+      encounters: placement.nextEncounterState,
+      'loot-placement': placement.nextLootPlacementState ?? run.rng['loot-placement'],
+    },
   };
 }
 

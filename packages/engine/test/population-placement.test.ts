@@ -16,6 +16,7 @@ import {
   createUnknownKnowledge,
   decodeActiveRun,
   encodeActiveRun,
+  nextUint32,
   placeFloorPopulations,
   placePopulation,
   rollDie,
@@ -1456,6 +1457,55 @@ describe('vault item slot consumption', () => {
     expect(second.status).toBe('placed');
     if (second.status !== 'placed') return;
     expect(second.createdItems).toHaveLength(0);
+  });
+
+  const variedItemEntries: readonly ItemContentEntry[] = ['a', 'b', 'c', 'd'].map((suffix) => ({
+    ...stockItemEntry,
+    id: `item.test-varied-${suffix}`,
+    name: `Test Varied ${suffix}`,
+  }));
+  const variedLootTable: LootTableContentEntry = {
+    kind: 'loot-table',
+    id: 'loot-table.test-varied-cache',
+    name: 'Test Varied Cache',
+    tags: [],
+    rolls: 1,
+    choices: variedItemEntries.map((entry) => ({
+      contentId: entry.id,
+      lootTableId: null,
+      weight: 1,
+      minimumQuantity: 1,
+      maximumQuantity: 3,
+    })),
+  };
+
+  it('keeps vault item and fragment rolls identical when the encounters stream is perturbed', () => {
+    const encounter = individual('encounter.item-cache-isolation');
+    const vault = itemCacheVault('vault.item-cache-isolation-test', {
+      lootTableId: variedLootTable.id,
+      contentId: null,
+    });
+    const generated = itemCacheFloor(vault.id);
+    const content = pack([encounter], [vault, variedLootTable, ...variedItemEntries]);
+    const run = runFor([encounter]);
+    const input = { run, floor: generated, content, forcedEncounterId: encounter.id };
+
+    const base = placeFloorPopulations(input);
+    const perturbed = placeFloorPopulations({
+      ...input,
+      run: { ...run, rng: { ...run.rng, encounters: nextUint32(run.rng.encounters).state } },
+    });
+
+    const lootOf = (state: ActiveRun) =>
+      state.items
+        .filter(
+          (item) =>
+            item.itemId.startsWith('item.vault.') || item.itemId.startsWith('item.fragment-spawn.'),
+        )
+        .map(({ itemId, contentId, quantity }) => ({ itemId, contentId, quantity }));
+
+    expect(lootOf(base.state).length).toBeGreaterThan(0);
+    expect(lootOf(perturbed.state)).toEqual(lootOf(base.state));
   });
 });
 
