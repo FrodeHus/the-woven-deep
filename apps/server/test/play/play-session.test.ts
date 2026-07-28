@@ -18,6 +18,7 @@ import { ActiveRunRepository } from '../../src/db/active-run-repository.js';
 import { ServerRunRecordRepository } from '../../src/db/hall-repository.js';
 import { ProfileRepository } from '../../src/db/profile-repository.js';
 import {
+  CONSEQUENTIAL_EVENT_TYPES,
   ContentHashMismatchError,
   LockedClassError,
   ServerPlaySession,
@@ -155,6 +156,15 @@ describe('ServerPlaySession', () => {
     // A `wait` is not a plain move → immediate persist; the stored revision matches the new run.
     expect(repo.get(PROFILE)!.revision).toBe(outcome.snapshot.revision);
     expect(outcome.snapshot.revision).toBe(1);
+  });
+
+  it('treats every hero health-loss event as consequential, whatever the attacker visibility', () => {
+    // `hero.damaged` is the projection of a hero-targeted `actor.damaged` — it is what the hero
+    // sees whether or not the attacker is visible. A move that costs the hero health must persist
+    // immediately; leaving it checkpoint-eligible would risk MOVEMENT_CHECKPOINT_INTERVAL moves of
+    // unsaved HP loss.
+    for (const type of ['actor.damaged', 'hero.damaged', 'actor.died'])
+      expect(CONSEQUENTIAL_EVENT_TYPES.has(type), type).toBe(true);
   });
 
   it('rejects a stale-revision command without mutating the run', () => {

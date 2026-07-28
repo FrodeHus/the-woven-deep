@@ -6,6 +6,7 @@ import {
   projectDomainEvents,
   stableJson,
   type ActiveRun,
+  type DamageType,
   type DomainEvent,
   type MerchantPopulation,
   type PopulationDomainEvent,
@@ -70,7 +71,7 @@ function monsterDefinition(): MonsterContentEntry {
   };
 }
 
-function fixture() {
+function fixture(damageType: DamageType = 'physical') {
   const base = createDemoRun();
   const attacker = {
     ...base.actors[0]!,
@@ -99,7 +100,7 @@ function fixture() {
       rolledDice: 1,
       rolledDamage: 3,
       effectiveDamage: 3,
-      damageType: 'physical',
+      damageType,
     },
     {
       type: 'actor.damaged',
@@ -523,7 +524,9 @@ describe('public event projection', () => {
   });
 
   it('projects hero damage from a visible attacker as hero.damaged', () => {
-    const input = fixture();
+    // A non-physical damage type on purpose: `physical` is also the projector's initial value, so
+    // asserting it here would pass even if the visible branch never captured the attack's type.
+    const input = fixture('fire');
     const visible = {
       ...input,
       state: {
@@ -537,7 +540,7 @@ describe('public event projection', () => {
       },
     };
     const output = projectDomainEvents({ ...visible, heroId: visible.state.hero.actorId });
-    expect(output).toContainEqual({ type: 'hero.damaged', amount: 3, damageType: 'physical' });
+    expect(output).toContainEqual({ type: 'hero.damaged', amount: 3, damageType: 'fire' });
     expect(output.some((event) => event.type === 'actor.damaged')).toBe(false);
   });
 
