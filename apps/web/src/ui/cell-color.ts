@@ -2,14 +2,13 @@ export type RgbTuple = readonly [number, number, number];
 
 /**
  * The floor a visible cell's color blends up from at zero intensity. Chosen so its relative
- * luminance clears the remembered floor's (`.cell-remembered` in `styles.css`, roughly
- * `[0x4b, 0x52, 0x6b]`) by a healthy margin (roughly 1.9x) -- this is the color-
- * channel half of the "dark ring" bug fix: 5C already floored `.cell-visible`'s OPACITY above the
- * remembered floor (`styles.css`'s `calc(0.62 + 0.38 * var(--light))`), but left the COLOR
- * (`--fg`, the engine's per-cell `tint`) free to go near-black at the light-radius rim, where
- * `intensity` bottoms out to single digits. A wall right inside a torch's radius could render
- * darker (near-black glyph on a near-black-tinted ground) than the remembered gray one cell
- * further out. Flooring the color the same way the opacity is floored closes that gap.
+ * luminance clears the remembered floor's (the `--remembered` palette color, roughly
+ * `[0x4b, 0x52, 0x6b]`) by a healthy margin (roughly 1.9x) -- the color-channel half of the "dark
+ * ring" guarantee. A visible cell's color (`--fg`, the engine's per-cell `tint`) is otherwise free
+ * to go near-black at the light-radius rim, where `intensity` bottoms out to single digits, so a
+ * wall just inside a torch's radius could render darker (near-black glyph on near-black ground) than
+ * the remembered gray one cell further out. Flooring the color the same way its opacity is floored
+ * closes that gap.
  */
 const FLOOR_RGB: RgbTuple = [100, 106, 130];
 
@@ -111,7 +110,7 @@ function liftToFloor(rgb: RgbTuple): RgbTuple {
 }
 
 /**
- * A visible cell's rendered foreground color (the `--fg` custom property `GridRenderer` and
+ * A visible cell's rendered foreground color (the `--fg` custom property `MinimapPanel` and
  * `MapJournalOverlay` set on `.cell-visible`/`.map-cell-visible`). Blends `base` (defaulting to
  * `FLOOR_RGB`, the generic pre-material floor) toward the engine's own `tint` as `intensity` climbs
  * from 0 to 255 (clamped), then, since that blend alone only holds the luminance floor for tints
@@ -124,9 +123,12 @@ function liftToFloor(rgb: RgbTuple): RgbTuple {
  * `base`, this holds for ANY material base too (see `MATERIAL_BASE_RGB` below and its property
  * tests in `cell-color.test.ts`), not just the generic floor.
  *
- * `base` is `GridRenderer`'s hook for material coloring (Task 1): passing a cell's material base
- * color (e.g. `MATERIAL_BASE_RGB.wall`) makes a lit wall read mineral blue-grey at low intensity
- * instead of the old one-size-fits-all `FLOOR_RGB` gray, while still guaranteeing the same floor.
+ * `base` is the hook for material coloring: passing a cell's material base color (e.g.
+ * `MATERIAL_BASE_RGB.wall`) makes a lit wall read mineral blue-grey at low intensity instead of
+ * the one-size-fits-all `FLOOR_RGB` gray, while still guaranteeing the same floor. `MinimapPanel`
+ * and `MapJournalOverlay` are today's callers and both pass only `tint`/`intensity`, so no caller
+ * currently exercises a non-default `base` -- the hook stays exercised only by `cell-color.test.ts`
+ * until a caller opts into material coloring.
  *
  * Pure presentation only: the engine's `tint`/`intensity` fields are read, never written or
  * reinterpreted -- this is strictly how they get painted.
@@ -168,8 +170,8 @@ export function visibleForeground(
 }
 
 /**
- * The five material identities `materialClass` (`GridRenderer.tsx`) can derive from a cell's
- * terrain token: a pillar reuses `wall`'s base (structural mineral stone) and both stair
+ * The five material identities a cell's terrain token can be classified into: a pillar reuses
+ * `wall`'s base (structural mineral stone) and both stair
  * directions reuse `stair`'s, matching `styles.css`'s `--mat-*` custom properties one-to-one --
  * `wall`/`floor`/`door`/`stair`/`void` are the only distinct bases, mirroring the CSS file having
  * only `--mat-wall`/`--mat-floor`/`--mat-door`/`--mat-stair`/`--mat-void` (no separate

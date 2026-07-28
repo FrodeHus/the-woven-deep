@@ -90,6 +90,7 @@ export interface HeroView {
   readonly maxHealth: number;
   readonly weave: number;
   readonly maxWeave: number;
+  readonly currency: number;
   readonly sightRadius: number;
   readonly hungerStage: string;
   readonly conditions: readonly ConditionView[];

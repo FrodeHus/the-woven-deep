@@ -189,8 +189,9 @@ describe('closing trade with Escape', () => {
     await user.keyboard('{Escape}');
 
     expect(screen.queryByRole('dialog', { name: 'Trade' })).not.toBeInTheDocument();
-    const log = screen.getByRole('log', { name: 'Adventure log' });
-    expect(log).not.toHaveTextContent('There is no open trade session.');
+    // The floating log hides entirely when it has no lines, so assert the spurious message never
+    // appears anywhere rather than requiring the log region to be present.
+    expect(screen.queryByText('There is no open trade session.')).not.toBeInTheDocument();
   });
 
   // Task 9 gap: the identify picker's own Escape branch (`TradeScreen.tsx`) calls
@@ -226,8 +227,9 @@ describe('closing trade with Escape', () => {
     expect(screen.queryByRole('listbox', { name: 'Identify target' })).not.toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Trade' })).toBeInTheDocument();
     expect(dispatchSpy).not.toHaveBeenCalledWith({ type: 'trade-close' });
-    const log = screen.getByRole('log', { name: 'Adventure log' });
-    expect(log).not.toHaveTextContent('There is no open trade session.');
+    // The floating log hides entirely when it has no lines, so assert the spurious message never
+    // appears anywhere rather than requiring the log region to be present.
+    expect(screen.queryByText('There is no open trade session.')).not.toBeInTheDocument();
 
     await user.keyboard('{Escape}');
 
@@ -235,6 +237,6 @@ describe('closing trade with Escape', () => {
     expect(dispatchSpy.mock.calls.filter(([intent]) => intent.type === 'trade-close')).toHaveLength(
       1,
     );
-    expect(log).not.toHaveTextContent('There is no open trade session.');
+    expect(screen.queryByText('There is no open trade session.')).not.toBeInTheDocument();
   });
 });

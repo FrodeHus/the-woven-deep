@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { dungeonCanvas, topBarLocation } from './support.js';
 
 /**
  * The 5B exit demonstration: the full chargen -> play -> death -> conclusion -> Hall lifecycle,
@@ -158,24 +159,34 @@ test('a guest builds a Lamplighter through the seven-step console and enters pla
   await expect(page.getByLabel(/Step 7 of 7/)).toBeVisible();
   await page.getByRole('button', { name: 'WEAVE ▸', exact: true }).click();
 
-  // The Lamplighter's loadout is live in the hero panel: brass lantern equipped, 22 HP derived
-  // from the allocated Vitality.
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
-  const heroPanel = page.getByRole('region', { name: 'Hero' });
-  await expect(heroPanel).toContainText(/off-hand: Brass lantern/i);
-  await expect(heroPanel).toContainText('22/22 HP');
+  // The Lamplighter's loadout: 22 HP derived from the allocated Vitality lives in the ActionBar's
+  // life-thread gauge (`Gauge.tsx`'s `aria-label`, e.g. "Life-thread: 22 of 22"); the brass lantern
+  // equipped in the off-hand lives in the Hero Record overlay (`c`) -- both replace the retired
+  // always-on hero panel, which the full-bleed HUD has no equivalent of.
+  await expect(dungeonCanvas(page)).toBeVisible();
+  await expect(page.getByTestId('gauge-hp')).toHaveAttribute(
+    'aria-label',
+    /^Life-thread: 22 of 22$/,
+  );
+  await page.keyboard.press('c');
+  const heroRecord = page.getByTestId('overlay-character-sheet');
+  await expect(heroRecord).toBeVisible();
+  await expect(heroRecord).toContainText('off-hand');
+  await expect(heroRecord).toContainText('Brass lantern');
+  await page.keyboard.press('Escape');
+  await expect(heroRecord).toBeHidden();
 });
 
 test('a death finalizes into the Hall and the conclusion closes the loop', async ({ page }) => {
   await page.goto(QUICKSTART_QUERY);
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
+  await expect(dungeonCanvas(page)).toBeVisible();
   await awaitKeyboardReady(page);
 
   // Descend from town, march into the monster room and kill one of the group, then wait beside the
   // survivors until they kill the wounded hero.
   await pressAll(page, DESCEND_PREFIX);
   await page.keyboard.press('>');
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
+  await expect(topBarLocation(page)).toContainText(/depth 1/i);
   await pressAll(page, CLUSTER_KILL);
   await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(/dies/i);
 
@@ -238,9 +249,13 @@ test('a death finalizes into the Hall and the conclusion closes the loop', async
   await expect(page.getByLabel(/Step 7 of 7/)).toBeVisible();
   await page.getByRole('button', { name: 'WEAVE ▸', exact: true }).click();
 
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
+  await expect(dungeonCanvas(page)).toBeVisible();
   await expect(page.getByRole('heading', { name: /you have fallen/i })).not.toBeVisible();
-  const heroPanel = page.getByRole('region', { name: 'Hero' });
-  await expect(heroPanel).toContainText('Nova');
+  await page.keyboard.press('c');
+  const heroRecord = page.getByTestId('overlay-character-sheet');
+  await expect(heroRecord).toBeVisible();
+  await expect(heroRecord).toContainText('Nova');
+  await page.keyboard.press('Escape');
+  await expect(heroRecord).toBeHidden();
   await expect(page.getByTestId('turn-count')).toHaveText('Turn 0');
 });

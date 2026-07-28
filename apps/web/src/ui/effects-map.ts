@@ -52,7 +52,8 @@ export function pickPrimaryCondition(
  * coordinates, this mapping needs a last-known actor/hero position lookup that the caller
  * maintains across renders (actors that just died are already gone from the current
  * `GameplayProjection`, so their death position must come from a snapshot taken before they were
- * removed). `EffectsLayer` owns that lookup and passes it in here; this is a disclosed deviation
+ * removed). `scene-state.ts` owns that lookup and passes it in here (from there `IsoRenderer`
+ * consumes the resulting effects); this is a disclosed deviation
  * from the brief's literal two-argument signature, made because the two-argument form cannot
  * satisfy "hit-flash at the target cell" / "death-burst" for any event that lacks an embedded
  * point.

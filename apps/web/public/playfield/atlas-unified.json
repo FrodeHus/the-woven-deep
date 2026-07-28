@@ -1,0 +1,72 @@
+{
+  "note": "Unified dungeon-and-town sheet. Rects are MEASURED (auto-sliced by tools/slice-tilesheet.py), not grid-derived: the regenerated tiles.png is hand-laid on an uneven ~156px pitch with 7- and 8-item rows and per-block margins, so the strict [c*128,r*128,128,128] grid contract does not apply. rounded[7] duplicates rounded[6]: the sheet ships 7 boulder pieces but the topology encoding in tile-skinning.ts uses 8 slots (NE/SE/SW/NW/2 endcaps/2 lone), so the last lone slot reuses the final boulder. blockDepthPx=80 is the median over the plain wall cubes of (tightHeight - topFaceCentreY - tightWidth/4), where topFaceCentreY is the cube crop's widest scanline and tightWidth/4 is the iso floor-diamond half-depth term floor-bake.ts cancels against. RESERVED keys (see docs/design/tileset-generation.md): entranceSurround is demoted — the town dungeon-entrance renders the stairs down-well like dungeon floors, so nothing draws it. archOpen (open-door archway) is OPTIONAL and absent here; parseAtlas leaves it undefined and an open door falls back to a glyph until the art ships.",
+  "image": "tiles.png",
+  "blockDepthPx": 80,
+  "floors": [
+    [14, 39, 151, 94],
+    [179, 39, 152, 94],
+    [344, 39, 152, 94],
+    [509, 39, 152, 94],
+    [675, 39, 151, 94],
+    [840, 39, 152, 94],
+    [1006, 39, 152, 94]
+  ],
+  "dirty": [
+    [14, 191, 151, 95],
+    [179, 191, 152, 95],
+    [344, 191, 152, 95],
+    [509, 191, 152, 95],
+    [675, 191, 151, 95],
+    [840, 191, 152, 95],
+    [1006, 191, 152, 95]
+  ],
+  "walls": [
+    [29, 319, 120, 144],
+    [195, 319, 120, 144],
+    [360, 319, 120, 144],
+    [525, 319, 120, 144],
+    [690, 319, 121, 144],
+    [856, 319, 120, 144]
+  ],
+  "weaveWalls": [[1022, 319, 120, 144]],
+  "rounded": [
+    [30, 482, 116, 133],
+    [192, 482, 120, 134],
+    [349, 483, 130, 133],
+    [538, 482, 96, 133],
+    [711, 486, 71, 125],
+    [860, 482, 103, 132],
+    [1021, 485, 125, 129],
+    [1021, 485, 125, 129]
+  ],
+  "stairs": [10, 669, 160, 95],
+  "stairsUp": [189, 637, 127, 145],
+  "door": [364, 638, 109, 139],
+  "gate": [525, 641, 113, 133],
+  "pillar": [700, 635, 69, 143],
+  "pillarBroken": [836, 648, 84, 133],
+  "torchWall": [974, 663, 89, 92],
+  "torch": [1142, 621, 47, 161],
+  "townFloors": [
+    [13, 811, 152, 111],
+    [179, 811, 153, 111]
+  ],
+  "townWalls": [
+    [356, 802, 115, 139],
+    [502, 802, 115, 139]
+  ],
+  "houseDoor": [665, 809, 96, 130],
+  "entranceSurround": [808, 801, 140, 151],
+  "lampPostUnlit": [990, 789, 47, 159],
+  "shopSign": [1094, 822, 109, 120],
+  "stalls": {
+    "provisioner": [17, 961, 129, 154],
+    "arms": [181, 959, 127, 158],
+    "curios": [339, 958, 126, 159],
+    "spellvendor": [496, 959, 131, 158]
+  },
+  "stallCounter": [657, 962, 124, 155],
+  "waresCrate": [816, 978, 107, 129],
+  "noticeBoard": [963, 973, 98, 140],
+  "townWell": [1099, 962, 114, 157]
+}

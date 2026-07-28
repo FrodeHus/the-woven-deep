@@ -254,7 +254,7 @@ describe('SettingsOverlay composed with PlayScreen/App', () => {
   ): Promise<void> {
     window.history.pushState({}, '', '/play?quickstart=1');
     render(<App fetcher={packFetcher()} storage={storage} localStorage={localStorage} />);
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
   }
 
   async function openSettings(): Promise<void> {
@@ -347,7 +347,7 @@ describe('SettingsOverlay composed with PlayScreen/App', () => {
     const { container } = render(
       <App fetcher={packFetcher()} storage={bootStorage()} localStorage={localStorage} />,
     );
-    await within(container).findByRole('grid', { name: /dungeon/i });
+    await within(container).findByRole('img', { name: /dungeon/i });
     const root = container.firstElementChild as HTMLElement;
     expect(root.className).toMatch(/\bmotion-reduced\b/);
     expect(root.style.fontSize).toBe('calc(1.3rem)');

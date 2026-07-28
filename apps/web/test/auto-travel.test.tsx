@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
@@ -14,6 +14,8 @@ import {
 import type { GuestSession, SessionSnapshot } from '../src/session/guest-session.js';
 import type { PlayerIntent } from '../src/session/intents.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
+import { STEP_MS } from '../src/ui/playfield/scene-state.js';
+import { fakePlayfieldRenderer, type FakePlayfieldRenderer } from './fake-playfield-renderer.js';
 import { withUiProviders } from './with-ui-providers.js';
 
 let pack: CompiledContentPack;
@@ -91,7 +93,7 @@ function projectionOf(input: {
   } as unknown as GameplayProjection;
 }
 
-function snapshotOf(projection: GameplayProjection): SessionSnapshot {
+function snapshotOf(projection: GameplayProjection, houseOpen = false): SessionSnapshot {
   return {
     projection,
     log: [],
@@ -99,7 +101,7 @@ function snapshotOf(projection: GameplayProjection): SessionSnapshot {
     pendingDecision: null,
     pendingFinalChamberChoice: null,
     notice: null,
-    houseOpen: false,
+    houseOpen,
     conclusion: null,
     sightings: { monsterIds: [], itemIds: [], landmarks: [] },
     heroClassTags: [],
@@ -135,9 +137,9 @@ class FakeSession {
     this.dispatched.push(intent);
   }
 
-  publish(projection: GameplayProjection): void {
+  publish(projection: GameplayProjection, houseOpen = false): void {
     act(() => {
-      this.snapshot = snapshotOf(projection);
+      this.snapshot = snapshotOf(projection, houseOpen);
       for (const listener of this.listeners) listener();
     });
   }
@@ -149,17 +151,24 @@ class FakeSession {
   answerDecision(): void {}
 }
 
-function renderPlay(session: FakeSession): void {
+async function renderPlay(session: FakeSession): Promise<FakePlayfieldRenderer> {
+  const fake = fakePlayfieldRenderer();
   render(
-    withUiProviders(pack, <PlayScreen session={session as unknown as GuestSession} pack={pack} />),
+    withUiProviders(
+      pack,
+      <PlayScreen
+        session={session as unknown as GuestSession}
+        pack={pack}
+        createRenderer={fake.createRenderer}
+      />,
+    ),
   );
+  await screen.findByRole('img', { name: /dungeon/i });
+  return fake;
 }
 
-function clickCell(cell: Point): void {
-  const grid = screen.getByRole('grid', { name: /dungeon/i });
-  const el = grid.querySelector(`[data-cell="${cell.x},${cell.y}"]`);
-  expect(el, `cell ${cell.x},${cell.y} must be within the viewport`).not.toBeNull();
-  fireEvent.click(el!);
+function clickCell(fake: FakePlayfieldRenderer, cell: Point): void {
+  act(() => fake.latest().click(cell, 'primary'));
 }
 
 function moves(session: FakeSession): readonly PlayerIntent[] {
@@ -167,18 +176,22 @@ function moves(session: FakeSession): readonly PlayerIntent[] {
 }
 
 describe('PlayScreen click-to-move (auto-travel)', () => {
-  it('clicking an adjacent cell dispatches exactly one move', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('clicking an adjacent cell dispatches exactly one move', async () => {
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
-    renderPlay(session);
-    clickCell({ x: 21, y: 10 });
+    const fake = await renderPlay(session);
+    clickCell(fake, { x: 21, y: 10 });
     expect(session.dispatched).toEqual([{ type: 'move', direction: 'east' }]);
   });
 
-  it('clicking a distant reachable cell starts auto-travel (first step dispatched) and is cancellable by a keypress', () => {
+  it('clicking a distant reachable cell starts auto-travel (first step dispatched) and is cancellable by a keypress', async () => {
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
-    clickCell({ x: 23, y: 10 });
+    clickCell(fake, { x: 23, y: 10 });
     // Only the FIRST step is dispatched up front; the rest await each authoritative projection.
     expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
 
@@ -190,7 +203,77 @@ describe('PlayScreen click-to-move (auto-travel)', () => {
     expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
   });
 
-  it('auto-travels step by step and picks up a floor item on arrival', () => {
+  it('a keypress during the paced wait for the next step cancels the walk before the timer fires', async () => {
+    const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
+    const fake = await renderPlay(session);
+
+    vi.useFakeTimers();
+
+    clickCell(fake, { x: 23, y: 10 });
+    expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
+
+    // The projection confirming step one arrives while the second step is still paced behind the
+    // STEP_MS timer.
+    session.publish(projectionOf({ hero: { x: 21, y: 10 } }));
+    expect(moves(session)).toHaveLength(1);
+
+    // Cancel while that timer is still pending -- it must never fire.
+    fireEvent.keyDown(window, { key: 'Backspace' });
+    // The pending-step timer must actually be torn down, not merely masked by the `travelRef`
+    // null-guard in the timeout callback -- otherwise this assertion would pass even if
+    // `clearTimeout` were never called.
+    expect(vi.getTimerCount()).toBe(0);
+    act(() => {
+      vi.advanceTimersByTime(STEP_MS);
+    });
+    expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
+  });
+
+  it('disabling input mid-wait (e.g. a modal opening via a mouse-only path) cancels the pending step and clears the walk', async () => {
+    const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
+    const fake = await renderPlay(session);
+
+    vi.useFakeTimers();
+
+    clickCell(fake, { x: 23, y: 10 });
+    expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
+
+    // The projection confirming step one arrives while the second step is still paced behind the
+    // STEP_MS timer -- same window the review found: a modal can open here via a mouse-only path
+    // (e.g. clicking a CommandPalette item), with no keydown to cancel the walk.
+    session.publish(projectionOf({ hero: { x: 21, y: 10 } }));
+    expect(moves(session)).toHaveLength(1);
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
+    // Flip `disabled` on -- modelled here as `snapshot.houseOpen` becoming true, one of the
+    // conditions `PlayScreen` folds into `isModalActive` (mirroring a modal opened by a
+    // mouse-only path with no keydown) -- while the timer is still pending.
+    session.publish(projectionOf({ hero: { x: 21, y: 10 } }), true);
+
+    // The pending step timer must be torn down immediately (not merely left to no-op when it
+    // fires): `useAutoTravel`'s own `clearPendingStep` must have run. `HouseScreen`'s dialog
+    // mounting schedules unrelated timers of its own, so a raw `vi.getTimerCount()` delta would be
+    // contaminated by those -- spying on `clearTimeout` isolates the assertion to cancellation
+    // actually having happened.
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+    clearTimeoutSpy.mockRestore();
+
+    act(() => {
+      vi.advanceTimersByTime(STEP_MS);
+    });
+    // No further move was dispatched while disabled.
+    expect(moves(session)).toHaveLength(1);
+
+    // Re-enable and click again: the walk must start fresh rather than resuming the cleared plan.
+    session.publish(projectionOf({ hero: { x: 21, y: 10 } }));
+    clickCell(fake, { x: 22, y: 10 });
+    expect(moves(session)).toEqual([
+      { type: 'move', direction: 'east' },
+      { type: 'move', direction: 'east' },
+    ]);
+  });
+
+  it('auto-travels step by step and picks up a floor item on arrival', async () => {
     const item: FakeItem = {
       itemId: 'item.sword',
       x: 22,
@@ -202,23 +285,40 @@ describe('PlayScreen click-to-move (auto-travel)', () => {
       identified: true,
     };
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 }, groundItems: [item] }));
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
-    clickCell({ x: 22, y: 10 });
+    vi.useFakeTimers();
+
+    clickCell(fake, { x: 22, y: 10 });
+    // The first step fires immediately, with no timer wait -- no added click latency.
     expect(moves(session)).toHaveLength(1);
     expect(session.dispatched).not.toContainEqual({ type: 'pickup' });
 
     session.publish(projectionOf({ hero: { x: 21, y: 10 }, groundItems: [item] }));
+    // The projection confirming the first step lands well inside STEP_MS of the first dispatch,
+    // so the second step is paced behind a timer and must NOT fire yet -- this is exactly the
+    // "snap forward" scenario the pacing fix guards against.
+    expect(moves(session)).toHaveLength(1);
+
+    act(() => {
+      vi.advanceTimersByTime(STEP_MS);
+    });
     expect(moves(session)).toHaveLength(2);
     expect(session.dispatched).not.toContainEqual({ type: 'pickup' });
 
     session.publish(projectionOf({ hero: { x: 22, y: 10 }, groundItems: [item] }));
+    // Arrival is paced the same way: nothing fires until STEP_MS has elapsed since the last step.
+    expect(session.dispatched.at(-1)).not.toEqual({ type: 'pickup' });
+
+    act(() => {
+      vi.advanceTimersByTime(STEP_MS);
+    });
     // Arrived on the item cell: the pickup fires, and no further move is dispatched.
     expect(session.dispatched.at(-1)).toEqual({ type: 'pickup' });
     expect(moves(session)).toHaveLength(2);
   });
 
-  it('clicking a hostile dispatches a move toward it (which the command builder resolves to an attack)', () => {
+  it('clicking a hostile dispatches a move toward it (which the command builder resolves to an attack)', async () => {
     const hostile: FakeActor = {
       actorId: 'monster.rat',
       x: 21,
@@ -230,43 +330,16 @@ describe('PlayScreen click-to-move (auto-travel)', () => {
       glyph: 'r',
     };
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 }, actors: [hostile] }));
-    renderPlay(session);
-    clickCell({ x: 21, y: 10 });
+    const fake = await renderPlay(session);
+    clickCell(fake, { x: 21, y: 10 });
     // Adjacent hostile: a single east move, which `buildIntent` turns into an attack (see
     // travel.test.ts's grounding case).
     expect(session.dispatched).toEqual([{ type: 'move', direction: 'east' }]);
   });
 });
 
-describe('PlayScreen movement affordance cursor', () => {
-  function cursor(): HTMLElement | null {
-    return screen.queryByTestId('cell-cursor');
-  }
-
-  it('highlights a reachable floor cell as an inviting move target', () => {
-    const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
-    renderPlay(session);
-    const grid = screen.getByRole('grid', { name: /dungeon/i });
-    fireEvent.mouseOver(grid.querySelector('[data-cell="23,10"]')!);
-    expect(cursor()).toHaveAttribute('data-reachable', 'true');
-    expect(cursor()).toHaveClass('cell-cursor-reachable');
-  });
-
-  it('does not invite a move over a non-actionable cell (a wall)', () => {
-    const session = new FakeSession(
-      projectionOf({ hero: { x: 20, y: 10 }, walls: [{ x: 22, y: 10 }] }),
-    );
-    renderPlay(session);
-    const grid = screen.getByRole('grid', { name: /dungeon/i });
-    fireEvent.mouseOver(grid.querySelector('[data-cell="22,10"]')!);
-    // The cursor still tracks the cell, but reads as blocked rather than a move invitation.
-    expect(cursor()).toHaveAttribute('data-reachable', 'false');
-    expect(cursor()).toHaveClass('cell-cursor-blocked');
-  });
-});
-
 describe('PlayScreen hover description popover', () => {
-  it('hovering a floor item shows a description popover naming it', () => {
+  it('hovering a floor item shows a description popover naming it', async () => {
     const item: FakeItem = {
       itemId: 'item.sword',
       x: 22,
@@ -278,10 +351,9 @@ describe('PlayScreen hover description popover', () => {
       identified: true,
     };
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 }, groundItems: [item] }));
-    renderPlay(session);
-    const grid = screen.getByRole('grid', { name: /dungeon/i });
-    fireEvent.mouseOver(grid.querySelector('[data-cell="22,10"]')!);
-    const tooltip = screen.getByRole('tooltip');
+    const fake = await renderPlay(session);
+    act(() => fake.latest().hover({ x: 22, y: 10 }, 30, 30));
+    const tooltip = await screen.findByRole('tooltip');
     expect(tooltip).toHaveTextContent('Iron sword');
     expect(tooltip).toHaveTextContent(/weapon/i);
   });

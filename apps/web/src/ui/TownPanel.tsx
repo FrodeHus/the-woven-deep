@@ -40,17 +40,21 @@ export function TownPanel({ snapshot, keymap }: TownPanelProps): JSX.Element {
             return (
               <li
                 key={merchant.actorId}
-                className={adjacent ? 'town-merchant town-merchant--nearby' : 'town-merchant'}
+                className={`flex items-baseline gap-2 town-merchant${
+                  adjacent ? ' town-merchant--nearby' : ''
+                }`}
               >
-                <span>{merchant.name ?? merchant.factionName}</span>
+                <span className="text-fg">{merchant.name ?? merchant.factionName}</span>
                 {merchant.reputationTier !== undefined && (
-                  <span className="town-merchant-reputation">{merchant.reputationTier}</span>
+                  <span className="town-merchant-reputation text-muted">
+                    {`· ${merchant.reputationTier}`}
+                  </span>
                 )}
                 {merchant.tradeAvailable === false && (
-                  <span className="town-merchant-unavailable">unavailable</span>
+                  <span className="town-merchant-unavailable text-muted">unavailable</span>
                 )}
                 {canTrade && (
-                  <span className="town-merchant-trade-hint">{`press ${tradeChord} to trade`}</span>
+                  <span className="town-merchant-trade-hint text-muted">{`press ${tradeChord} to trade`}</span>
                 )}
               </li>
             );

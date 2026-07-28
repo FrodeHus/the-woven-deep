@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { MATERIAL_BASE_RGB, relativeLuminance, visibleForeground } from '../src/ui/cell-color.js';
 
 /**
- * `.cell-remembered`'s static color in `styles.css` -- reproduced as a literal here (not imported,
- * since this is a pure-TS test with no stylesheet parsing) so this suite pins the exact regression
- * the bug report was about: a `.cell-visible` glyph must never render darker than this gray, even
- * at the light-radius rim where `intensity` bottoms out to single digits and `tint` goes near-black.
+ * The remembered floor's static gray -- reproduced as a literal here (not imported, since this is a
+ * pure-TS test with no stylesheet parsing) so this suite pins the exact regression the bug report
+ * was about: a visible cell's glyph must never render darker than this gray, even at the
+ * light-radius rim where `intensity` bottoms out to single digits and `tint` goes near-black.
  */
 const REMEMBERED_GRAY: readonly [number, number, number] = [0x4b, 0x52, 0x6b];
 const REMEMBERED_LUMINANCE = relativeLuminance(REMEMBERED_GRAY);

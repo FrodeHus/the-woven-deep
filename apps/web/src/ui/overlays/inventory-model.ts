@@ -108,6 +108,13 @@ export function matchesFilter(item: ProjectedItemLike, filter: CategoryFilter): 
   return filter === 'all' || bucketFor(item.category) === filter;
 }
 
+/** Whether `item` is a drinkable potion -- the one `consumables`-bucket category the potion belt
+ * (`ActionBar`) singles out, rather than the broader food/potion/scroll grouping `bucketFor` uses
+ * for the inventory overlay's category filter. */
+export function isPotion(item: ProjectedItemLike): boolean {
+  return item.category === 'potion';
+}
+
 /** Stable, locale-free (plain codepoint) name comparison -- `localeCompare` is deliberately never
  * used here, so sort order can never depend on the guest's browser locale. */
 export function byNameStable(left: MenuEntry, right: MenuEntry): number {

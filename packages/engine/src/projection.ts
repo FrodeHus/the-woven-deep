@@ -790,6 +790,7 @@ function projectHeroView(
     weave: hero.weave,
     maxWeave: hero.maxWeave,
     sightRadius: state.hero.sightRadius,
+    currency: state.hero.currency,
     hungerStage: state.survival.hungerStage,
     conditions,
     equipment,

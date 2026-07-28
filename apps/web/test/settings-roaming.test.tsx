@@ -136,7 +136,7 @@ describe('settings roaming (Task 12)', () => {
         accountOverride={SIGNED_IN_ACCOUNT}
       />,
     );
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
     // Let the boot-time roam-seed PUT land before exercising the change-driven debounce below.
     await waitFor(() => expect(puts).toHaveLength(1));
 
@@ -175,7 +175,7 @@ describe('settings roaming (Task 12)', () => {
     const fetcher = routedFetcher({ settings: null, settingsVersion: 0 }, puts);
 
     render(<App fetcher={fetcher} storage={fakeStorage()} localStorage={localStorage} />);
-    await screen.findByRole('grid', { name: /dungeon/i });
+    await screen.findByRole('img', { name: /dungeon/i });
 
     const { fireEvent } = await import('@testing-library/react');
     fireEvent.keyDown(window, { key: 'o' });

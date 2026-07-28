@@ -745,6 +745,12 @@ describe('gameplay projection', () => {
     expect(projected.hero.sightRadius).toBe(base.hero.sightRadius);
   });
 
+  it('exposes the hero purse as currency', () => {
+    const base = createDemoRun();
+    const projected = projectGameplayState({ state: base, content: createDemoContentPack() });
+    expect(projected.hero.currency).toBe(base.hero.currency);
+  });
+
   it('folds hero statModifiers into the character-sheet derived block', () => {
     const base = createDemoRun();
     const boosted = { ...base, hero: { ...base.hero, statModifiers: { search: 1 } } };

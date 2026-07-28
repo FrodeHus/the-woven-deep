@@ -66,7 +66,7 @@ function pressKey(chord: Readonly<{ key: string; shift: boolean }>): void {
 async function bootIntoPlay(storage: SessionStorageLike = fakeStorage()): Promise<void> {
   window.history.pushState({}, '', '/play?quickstart=1');
   render(<App fetcher={packFetcher()} storage={storage} localStorage={fakeStorage()} />);
-  await screen.findByRole('grid', { name: /dungeon/i });
+  await screen.findByRole('img', { name: /dungeon/i });
 }
 
 describe('registry overlay infrastructure', () => {

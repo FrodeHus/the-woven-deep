@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { dungeonCanvas, expectHeroAt, topBarLocation } from './support.js';
 
 /**
  * The 5D-2 exit demonstration: the whole GUEST-EXPERIENCE POLISH layer, proven end to end in a
@@ -85,8 +86,8 @@ async function buildHeroAndEnterTown(page: Page): Promise<void> {
   await expect(page.getByLabel(/Step 7 of 7/)).toBeVisible();
   await page.getByRole('button', { name: 'WEAVE ▸', exact: true }).click();
 
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
+  await expect(dungeonCanvas(page)).toBeVisible();
+  await expect(topBarLocation(page)).toContainText(/town/i);
 }
 
 test('the guest polish: onboarding, theme, the descend fade, and a clean reset', async ({
@@ -109,28 +110,28 @@ test('the guest polish: onboarding, theme, the descend fade, and a clean reset',
 
   await page.goto(SEED_QUERY);
   await buildHeroAndEnterTown(page);
-  await expect(page.getByLabel('Hero at 5, 9')).toBeVisible();
   await awaitKeyboardReady(page);
+  await expectHeroAt(page, 5, 9);
 
   // --- The onboarding sequence leads with movement (priority 0), triggered in town. ---
-  const strip = page.locator('.hint-strip');
-  await expect(strip).toContainText(/The dark waits on your step/i);
+  const hint = page.getByRole('note');
+  await expect(hint).toContainText(/The dark waits on your step/i);
 
   // Ten successful town steps master movement; the hint retires and inspection (priority 1) takes
   // over. The walk returns to the spawn cell, keeping the later descend origin exact.
   await pressAll(page, TEN_TOWN_STEPS);
-  await expect(page.getByLabel('Hero at 5, 9')).toBeVisible();
-  await expect(strip).not.toContainText(/The dark waits on your step/i);
-  await expect(strip).toContainText(/read your own measure/i);
+  await expectHeroAt(page, 5, 9);
+  await expect(hint).not.toContainText(/The dark waits on your step/i);
+  await expect(hint).toContainText(/read your own measure/i);
 
   // Dismiss the inspection hint by hand (the rebindable `dismiss-hint` key, default `'`). It stays
   // gone, and the inventory hint (priority 2) steps up in its place.
   await page.keyboard.press("'");
-  await expect(strip).not.toContainText(/read your own measure/i);
-  await expect(strip).toContainText(/see what you carry/i);
+  await expect(hint).not.toContainText(/read your own measure/i);
+  await expect(hint).toContainText(/see what you carry/i);
 
   // --- Settings: everything below is asserted against the play screen, which stays mounted behind
-  // the overlay (the overlay host lives inside `PlayScreen`), so the canvas/strip/theme changes are
+  // the overlay (the overlay host lives inside `PlayScreen`), so the canvas/hint/theme changes are
   // observable live without closing the overlay between each. The overlay's own content (font
   // scale/theme/onboarding/motion/every rebindable key row/clear-session) is taller than the
   // pinned 1440x900 viewport and the dialog itself never scrolls (`DialogContent` has no
@@ -141,12 +142,12 @@ test('the guest polish: onboarding, theme, the descend fade, and a clean reset',
   const settings = page.getByTestId('overlay-settings');
   await expect(settings).toBeVisible();
 
-  // Turn onboarding off -> the strip vanishes entirely (HintStrip renders nothing).
+  // Turn onboarding off -> the hint float vanishes entirely (HintFloat renders nothing).
   const onboardingToggle = settings.getByRole('switch', { name: /show contextual guidance/i });
   await expect(onboardingToggle).toBeChecked();
   await onboardingToggle.click();
   await expect(onboardingToggle).not.toBeChecked();
-  await expect(strip).toHaveCount(0);
+  await expect(hint).toHaveCount(0);
 
   // Theme: high contrast lands the root class and recomputes the palette (a computed-style spot
   // check on `--ink`, which the `.theme-high-contrast` block redeclares to pure white).
@@ -167,15 +168,15 @@ test('the guest polish: onboarding, theme, the descend fade, and a clean reset',
   // --- Descend: step onto the town stair-down (6,10) and go down. The floor change plays the
   // fade-through-dark, which mounts, then tears itself away. The appearance is caught by arming the
   // wait BEFORE the keystroke (the fade is short and self-clearing); its duration is never timed. ---
-  await expect(page.getByLabel('Hero at 5, 9')).toBeVisible();
+  await expectHeroAt(page, 5, 9);
   await page.keyboard.press('3'); // south-east: (5,9) -> (6,10), onto the stair
-  await expect(page.getByLabel('Hero at 6, 10')).toBeVisible();
+  await expectHeroAt(page, 6, 10);
 
   const fadeAppeared = page.waitForSelector('.screen-fade', { state: 'attached', timeout: 3000 });
   await page.keyboard.press('>');
   await fadeAppeared; // the fade element mounted -> the transition is playing
   await expect(page.locator('.screen-fade')).toHaveCount(0); // and it clears itself away
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
+  await expect(topBarLocation(page)).toContainText(/depth 1/i);
 
   // --- Clear the guest session from settings; the app lands on a fresh title screen and every
   // guest storage key is wiped -- including the onboarding mastery ledger this run wrote to. ---
@@ -187,7 +188,7 @@ test('the guest polish: onboarding, theme, the descend fade, and a clean reset',
 
   await expect(page.getByRole('listbox', { name: 'Title menu' })).toBeVisible();
   await expect(page.getByRole('option', { name: 'Enter the Deep' })).toBeVisible();
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeHidden();
+  await expect(dungeonCanvas(page)).toBeHidden();
 
   // Prove the wipe itself: every key named by `clear-guest-session.ts` (its
   // GUEST_SESSION_STORAGE_KEYS in sessionStorage, GUEST_LOCAL_STORAGE_KEYS in localStorage,

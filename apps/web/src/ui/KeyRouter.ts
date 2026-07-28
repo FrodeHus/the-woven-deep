@@ -24,6 +24,10 @@ export type RouterOutcome =
   | { readonly type: 'open-overlay'; readonly overlay: OverlayActionId }
   | { readonly type: 'close-overlay' }
   | { readonly type: 'dismiss-hint' }
+  // Drinks the potion in the belt's slot `slot` (0-based) -- `routeKey` has no snapshot access, so
+  // it can't resolve a slot to an itemId itself; `usePlayKeyDispatcher` does that resolution and
+  // dispatches the actual `{type:'backpack', action:'use', itemId}` intent.
+  | { readonly type: 'use-belt-slot'; readonly slot: number }
   | null;
 
 /**
@@ -31,6 +35,12 @@ export type RouterOutcome =
  * These are never rebindable -- they always mean movement regardless of the resolved keymap. The
  * *primary* movement keys (vi keys, by default) are rebindable via `ActionId`s `move.n`..`move.nw`
  * in `settings.ts`'s `DEFAULT_BINDINGS` / the resolved keymap passed into `routeKey`.
+ *
+ * `1` is deliberately absent here: both the numpad's `1` (southwest) and the top-row digit `1`
+ * report `event.key === '1'`, but only the numpad one is still a hardwired movement synonym -- the
+ * top-row `1` is the potion belt's first slot (`use-belt-1`), an ordinary rebindable keymap action.
+ * `routeKey` disambiguates the two with `event.code` (`'Numpad1'` vs `'Digit1'`) before ever
+ * consulting this table; see the `NUMPAD1_CODE` check there.
  */
 const HARDWIRED_DIRECTION_KEYS: Readonly<Record<string, Direction>> = {
   ArrowUp: 'north',
@@ -43,9 +53,13 @@ const HARDWIRED_DIRECTION_KEYS: Readonly<Record<string, Direction>> = {
   '6': 'east',
   '7': 'northwest',
   '9': 'northeast',
-  '1': 'southwest',
   '3': 'southeast',
 };
+
+/** The `KeyboardEvent.code` a numpad `1` keypress reports (with NumLock on) -- distinguishes it
+ * from the top-row `Digit1`, which shares the same `event.key` ("1") but means something different
+ * (the potion belt's first slot) now that `1` is no longer wholesale-hardwired to southwest. */
+const NUMPAD1_CODE = 'Numpad1';
 
 function directionForMoveAction(action: MoveActionId): Direction {
   switch (action) {
@@ -120,6 +134,8 @@ function outcomeForAction(action: ActionId): RouterOutcome {
       return { type: 'open-overlay', overlay: nonMoveAction };
     case 'dismiss-hint':
       return { type: 'dismiss-hint' };
+    case 'use-belt-1':
+      return { type: 'use-belt-slot', slot: 0 };
     default: {
       const exhaustive: never = nonMoveAction;
       return exhaustive;
@@ -152,7 +168,7 @@ function lookupAction(keymap: ResolvedKeymap, key: string, shiftKey: boolean): A
  */
 export function routeKey(
   input: Readonly<{
-    event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'target' | 'ctrlKey' | 'metaKey'>;
+    event: Pick<KeyboardEvent, 'key' | 'code' | 'shiftKey' | 'target' | 'ctrlKey' | 'metaKey'>;
     overlayOpen: boolean;
     keymap: ResolvedKeymap;
   }>,
@@ -166,6 +182,11 @@ export function routeKey(
 
   const hardwiredDirection = HARDWIRED_DIRECTION_KEYS[event.key];
   if (hardwiredDirection) return { type: 'move', direction: hardwiredDirection };
+  // The one hardwired key whose meaning depends on which physical key produced it: numpad `1`
+  // (NumLock on) still means southwest movement; the top-row `Digit1` falls through to the keymap
+  // below, where it's bound to `use-belt-1` by default.
+  if (event.key === '1' && event.code === NUMPAD1_CODE)
+    return { type: 'move', direction: 'southwest' };
 
   const action = lookupAction(keymap, event.key, event.shiftKey);
   return action === null ? null : outcomeForAction(action);
@@ -177,10 +198,16 @@ export interface KeyDispatchHandlers {
   readonly closeOverlay: () => void;
   /** Retires whatever onboarding hint is currently showing -- a no-op if none is. */
   readonly dismissHint: () => void;
+  /** Drinks the potion currently in belt slot `slot` (0-based), resolved from the live snapshot --
+   * a no-op if that slot is empty. */
+  readonly useBeltSlot: (slot: number) => void;
 }
 
 export type KeyDispatcher = (
-  event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'target' | 'repeat' | 'ctrlKey' | 'metaKey'>,
+  event: Pick<
+    KeyboardEvent,
+    'key' | 'code' | 'shiftKey' | 'target' | 'repeat' | 'ctrlKey' | 'metaKey'
+  >,
 ) => void;
 
 /** OS key auto-repeat fires at roughly 30/sec; this is the minimum gap enforced between two
@@ -223,6 +250,10 @@ export function createKeyDispatcher(
     }
     if (outcome.type === 'dismiss-hint') {
       handlers.dismissHint();
+      return;
+    }
+    if (outcome.type === 'use-belt-slot') {
+      handlers.useBeltSlot(outcome.slot);
       return;
     }
     handlers.dispatch(outcome);

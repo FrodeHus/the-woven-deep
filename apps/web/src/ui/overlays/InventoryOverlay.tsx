@@ -202,7 +202,7 @@ export function InventoryOverlay({
               aria-pressed={active}
               onClick={() => selectFilter(option)}
               className={cn(
-                'cursor-pointer border px-2.5 py-1 font-mono text-[0.6875rem] uppercase tracking-[0.08em]',
+                'cursor-pointer rounded-full border px-2.5 py-1 font-mono text-[0.6875rem] uppercase tracking-[0.08em]',
                 active
                   ? 'border-accent bg-accent text-deep'
                   : 'border-line bg-surface text-muted hover:border-accent hover:text-fg',

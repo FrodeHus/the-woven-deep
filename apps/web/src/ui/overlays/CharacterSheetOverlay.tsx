@@ -9,6 +9,7 @@ import {
   playerVisibleDerivedStats,
 } from '../derived-stats-display.js';
 import { heroOf, type HeroView } from '../../session/projection-view.js';
+import { lightStateText } from '../panels/types.js';
 
 /** Only the current-run stats the brief lists -- deliberately a narrower literal union than
  * `keyof RunMetrics` (which also has `killsByModel`, a nested object, plus a few fields the brief
@@ -214,8 +215,10 @@ export function CharacterSheetOverlay(): JSX.Element | null {
       <Section id="character-sheet-vitals-heading" title="Vitals">
         <DefinitionGrid>
           <Row label="Health" value={`${hero.health} / ${hero.maxHealth}`} />
+          <Row label="Weave" value={`${hero.weave} / ${hero.maxWeave}`} />
           <Row label="Hunger" value={hero.hungerStage} />
           <Row label="Sight radius" value={hero.sightRadius} />
+          <Row label="Light" value={lightStateText(hero.equipment)} />
         </DefinitionGrid>
       </Section>
 

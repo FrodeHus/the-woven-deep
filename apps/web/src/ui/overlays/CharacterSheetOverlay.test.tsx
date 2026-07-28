@@ -263,6 +263,7 @@ describe('CharacterSheetOverlay', () => {
     const vitalsSection = sectionFor('Vitals');
     expect(vitalsSection.getByText(hero.hungerStage)).toBeInTheDocument();
     expect(vitalsSection.getByText(String(hero.sightRadius))).toBeInTheDocument();
+    expect(vitalsSection.getByText('Light')).toBeInTheDocument();
   });
 
   it('shows run statistics from projection.metrics with human labels', () => {

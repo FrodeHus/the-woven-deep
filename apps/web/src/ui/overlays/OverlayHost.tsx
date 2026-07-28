@@ -113,9 +113,27 @@ export function OverlayHost({
   if (SHEET_OVERLAYS.has(overlay)) {
     return (
       <Sheet open onOpenChange={onOpenChange}>
-        <SheetContent side="right" data-testid={`overlay-${overlay}`}>
-          <SheetHeader>
+        <SheetContent
+          side="right"
+          data-testid={`overlay-${overlay}`}
+          // The design's Pack & Gear panel is a narrower fixed-width slide-in (~430px) than the
+          // other two Sheet-framed overlays (Hero Record, Map & Journal), which keep the shared
+          // `sm:max-w-xl` sheet width unchanged -- so this override is scoped to `inventory` only.
+          className={overlay === 'inventory' ? 'sm:max-w-[430px]' : undefined}
+        >
+          <SheetHeader
+            className={
+              overlay === 'inventory'
+                ? 'flex-row items-center justify-between space-y-0'
+                : undefined
+            }
+          >
             <SheetTitle>{definition.title}</SheetTitle>
+            {overlay === 'inventory' && (
+              <span aria-hidden="true" className="font-mono text-[0.6875rem] text-subtle">
+                ✕ esc
+              </span>
+            )}
           </SheetHeader>
           <OverlayErrorBoundary>{body}</OverlayErrorBoundary>
         </SheetContent>

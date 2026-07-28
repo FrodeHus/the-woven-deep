@@ -7,3 +7,4 @@
 content/**
 packages/engine/fixtures/**
 packages/engine/test/fixtures/**
+.gitnexus/

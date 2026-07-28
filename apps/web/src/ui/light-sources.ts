@@ -2,7 +2,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import type { GameplayProjection, OpaqueId } from '@woven-deep/engine';
 import { heroOf } from '../session/projection-view.js';
 
-/** Client-side light-source resolver used by `EffectsLayer` for the hero's carried-light glow. */
+/** Client-side light-source resolver used by `IsoRenderer` for the hero's carried-light glow. */
 export interface EquippedLight {
   readonly contentId: OpaqueId;
   readonly color: readonly [number, number, number];

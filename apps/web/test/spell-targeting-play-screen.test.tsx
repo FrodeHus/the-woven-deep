@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
@@ -13,8 +13,10 @@ import {
   type Point,
 } from '@woven-deep/engine';
 import type { GuestSession, SessionSnapshot } from '../src/session/guest-session.js';
+import type { RunSession } from '../src/session/run-session.js';
 import type { PlayerIntent } from '../src/session/intents.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
+import { fakePlayfieldRenderer, type FakePlayfieldRenderer } from './fake-playfield-renderer.js';
 import { withUiProviders } from './with-ui-providers.js';
 
 let pack: CompiledContentPack;
@@ -164,24 +166,41 @@ class FakeSession {
   answerDecision(): void {}
 }
 
-function renderPlay(session: FakeSession): void {
+async function renderPlay(session: FakeSession): Promise<FakePlayfieldRenderer> {
+  const fake = fakePlayfieldRenderer();
   render(
-    withUiProviders(pack, <PlayScreen session={session as unknown as GuestSession} pack={pack} />),
+    withUiProviders(
+      pack,
+      <PlayScreen
+        session={session as unknown as GuestSession}
+        pack={pack}
+        createRenderer={fake.createRenderer}
+      />,
+      undefined,
+      session as unknown as RunSession,
+    ),
   );
+  // The renderer mounts once the atlas resolves; its callbacks are how a click reaches PlayScreen.
+  await screen.findByRole('img', { name: /dungeon/i });
+  return fake;
 }
 
-function clickCell(cell: Point): void {
-  const grid = screen.getByRole('grid', { name: /dungeon/i });
-  const el = grid.querySelector(`[data-cell="${cell.x},${cell.y}"]`);
-  expect(el, `cell ${cell.x},${cell.y} must be within the viewport`).not.toBeNull();
-  fireEvent.click(el!);
+/** Enters spell targeting through the ⌘K command palette's "Cast: <spell>" entry -- the reachable
+ * cast path for a caster hero during play. Scoped to the palette dialog: the action bar's own
+ * quick-cast button (`ActionBar`) can render the identical "Cast: <spell>" text for the hero's
+ * first castable spell at the same time, so an unscoped text query would be ambiguous. */
+async function castViaPalette(spellName: string): Promise<void> {
+  fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+  const dialog = await screen.findByRole('dialog', { name: /command palette/i });
+  await userEvent.click(await within(dialog).findByText(`Cast: ${spellName}`));
 }
 
-function rightClickCell(cell: Point): void {
-  const grid = screen.getByRole('grid', { name: /dungeon/i });
-  const el = grid.querySelector(`[data-cell="${cell.x},${cell.y}"]`);
-  expect(el, `cell ${cell.x},${cell.y} must be within the viewport`).not.toBeNull();
-  fireEvent.contextMenu(el!);
+function clickCell(fake: FakePlayfieldRenderer, cell: Point): void {
+  act(() => fake.latest().click(cell, 'primary'));
+}
+
+function rightClickCell(fake: FakePlayfieldRenderer, cell: Point): void {
+  act(() => fake.latest().click(cell, 'secondary'));
 }
 
 function casts(session: FakeSession): readonly PlayerIntent[] {
@@ -193,8 +212,7 @@ function moves(session: FakeSession): readonly PlayerIntent[] {
 }
 
 async function beginTargeting(): Promise<void> {
-  const row = screen.getByRole('button', { name: /Ember bolt/ });
-  await userEvent.click(row);
+  await castViaPalette('Ember bolt');
 }
 
 describe('PlayScreen spell-targeting mode', () => {
@@ -202,16 +220,16 @@ describe('PlayScreen spell-targeting mode', () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 20, y: 10 }, actors: [hostile(23, 10)] }),
     );
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
     await beginTargeting();
-    clickCell({ x: 23, y: 10 });
+    clickCell(fake, { x: 23, y: 10 });
 
     expect(casts(session)).toEqual([
       { type: 'cast', spellId: 'spell.ember-bolt', target: { x: 23, y: 10 } },
     ]);
-    // Targeting exited: the overlay is gone and clicking again now performs ordinary auto-travel.
-    expect(screen.queryByTestId('targeting-valid')).not.toBeInTheDocument();
+    // Targeting exited: the renderer is told there is no more targeting visual to draw.
+    await waitFor(() => expect(fake.latest().lastTargeting()).toBeNull());
   });
 
   it('clicking an out-of-range cell does not cast, and targeting stays active', async () => {
@@ -219,26 +237,26 @@ describe('PlayScreen spell-targeting mode', () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 5, y: 10 }, actors: [hostile(17, 10)] }),
     );
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
     await beginTargeting();
-    clickCell({ x: 17, y: 10 });
+    clickCell(fake, { x: 17, y: 10 });
 
     expect(casts(session)).toEqual([]);
     expect(moves(session)).toEqual([]);
-    // Still targeting -- the Ember bolt row is still the thing that was clicked to enter, and no
-    // auto-travel move fired underneath the ignored click.
-    expect(screen.getByRole('button', { name: /Ember bolt/ })).toBeInTheDocument();
+    // Still targeting -- the click on the out-of-range cell was ignored, no auto-travel move fired
+    // underneath it, and the renderer is still being handed a targeting visual to draw.
+    await waitFor(() => expect(fake.latest().lastTargeting()).not.toBeNull());
   });
 
   it('clicking a cell with no hostile on it does not cast', async () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 20, y: 10 }, actors: [hostile(23, 10)] }),
     );
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
     await beginTargeting();
-    clickCell({ x: 21, y: 10 });
+    clickCell(fake, { x: 21, y: 10 });
 
     expect(casts(session)).toEqual([]);
     expect(moves(session)).toEqual([]);
@@ -252,10 +270,10 @@ describe('PlayScreen spell-targeting mode', () => {
         walls: [{ x: 22, y: 10 }],
       }),
     );
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
     await beginTargeting();
-    clickCell({ x: 23, y: 10 });
+    clickCell(fake, { x: 23, y: 10 });
 
     expect(casts(session)).toEqual([]);
   });
@@ -264,11 +282,11 @@ describe('PlayScreen spell-targeting mode', () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 20, y: 10 }, actors: [hostile(23, 10)] }),
     );
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
     await beginTargeting();
     fireEvent.keyDown(window, { key: 'Escape' });
-    clickCell({ x: 23, y: 10 });
+    clickCell(fake, { x: 23, y: 10 });
 
     // Escape exited targeting, so the subsequent click is ordinary auto-travel (a move), not a cast.
     expect(casts(session)).toEqual([]);
@@ -278,20 +296,20 @@ describe('PlayScreen spell-targeting mode', () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 20, y: 10 }, actors: [hostile(23, 10)] }),
     );
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
     await beginTargeting();
-    rightClickCell({ x: 23, y: 10 });
+    rightClickCell(fake, { x: 23, y: 10 });
 
     expect(casts(session)).toEqual([]);
-    expect(screen.queryByTestId('targeting-valid')).not.toBeInTheDocument();
+    await waitFor(() => expect(fake.latest().lastTargeting()).toBeNull());
   });
 
   it('Enter casts at the keyboard reticle (defaulting to the only valid target)', async () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 20, y: 10 }, actors: [hostile(23, 10)] }),
     );
-    renderPlay(session);
+    await renderPlay(session);
 
     await beginTargeting();
     fireEvent.keyDown(window, { key: 'Enter' });
@@ -305,25 +323,24 @@ describe('PlayScreen spell-targeting mode', () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 20, y: 10 }, actors: [hostile(23, 10)] }),
     );
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
     await beginTargeting();
-    // `TargetingOverlay` is a sibling of the `role="grid"` element (its own absolutely-positioned
-    // overlay layer within the map pane), so it's queried from the whole layout, not the grid.
-    const layout = screen.getByTestId('play-layout');
-    // The lone hostile is both the only valid target AND the default reticle, so it renders with
-    // BOTH classes (`data-testid` reads "targeting-reticle" once a cell is also highlighted --
-    // see `TargetingOverlay`).
-    const cell = layout.querySelector('[data-cell="23,10"].targeting-cell');
-    expect(cell).not.toBeNull();
-    expect(cell).toHaveClass('targeting-cell-valid');
+    // The lone hostile is both the only valid target AND the default reticle, so the renderer is
+    // handed it as a valid cell and as the reticle.
+    await waitFor(() => {
+      const visual = fake.latest().lastTargeting();
+      expect(visual).not.toBeNull();
+      expect(visual!.validCells.has('23,10')).toBe(true);
+      expect(visual!.reticle).toEqual({ x: 23, y: 10 });
+    });
   });
 
   it('movement keys do not move the hero while targeting is active', async () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 20, y: 10 }, actors: [hostile(23, 10)] }),
     );
-    renderPlay(session);
+    await renderPlay(session);
 
     await beginTargeting();
     fireEvent.keyDown(window, { key: 'ArrowUp' });
@@ -333,19 +350,18 @@ describe('PlayScreen spell-targeting mode', () => {
 });
 
 describe('PlayScreen click-to-move is unaffected when targeting is inactive', () => {
-  it('clicking an adjacent cell still dispatches exactly one move (no regression)', () => {
+  it('clicking an adjacent cell still dispatches exactly one move (no regression)', async () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 20, y: 10 }, actors: [hostile(23, 10)] }),
     );
-    renderPlay(session);
-    clickCell({ x: 21, y: 10 });
+    const fake = await renderPlay(session);
+    clickCell(fake, { x: 21, y: 10 });
     expect(session.dispatched).toEqual([{ type: 'move', direction: 'east' }]);
   });
 });
 
 async function beginFireballTargeting(): Promise<void> {
-  const row = screen.getByRole('button', { name: /Fireball/ });
-  await userEvent.click(row);
+  await castViaPalette('Fireball');
 }
 
 describe('PlayScreen AoE free-cursor targeting', () => {
@@ -353,12 +369,12 @@ describe('PlayScreen AoE free-cursor targeting', () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 20, y: 10, weave: 20 }, spells: [FIREBALL_SPELL] }),
     );
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
     await beginFireballTargeting();
 
-    // A burst-2 footprint at the hero cell covers several cells -- more than one `-valid` cell.
-    expect(screen.getAllByTestId('targeting-valid').length).toBeGreaterThan(1);
+    // A burst-2 footprint at the hero cell covers several cells -- more than one valid cell.
+    await waitFor(() => expect(fake.latest().lastTargeting()!.validCells.size).toBeGreaterThan(1));
 
     // Move the reticle east twice, then confirm with Enter.
     fireEvent.keyDown(window, { key: 'ArrowRight' });
@@ -374,15 +390,13 @@ describe('PlayScreen AoE free-cursor targeting', () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 20, y: 10 }, actors: [hostile(23, 10)] }),
     );
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
     await beginTargeting();
 
-    // The lone hostile is both the only valid target AND the default reticle, so its `data-testid`
-    // reads "targeting-reticle" (see `TargetingOverlay`) even though it still carries the
-    // `targeting-cell-valid` class -- query by class, not testid, to count the footprint.
-    const layout = screen.getByTestId('play-layout');
-    expect(layout.querySelectorAll('.targeting-cell-valid')).toHaveLength(1);
+    // The lone hostile is both the only valid target AND the default reticle, so the footprint the
+    // renderer is handed is exactly the one cell.
+    await waitFor(() => expect(fake.latest().lastTargeting()!.validCells.size).toBe(1));
   });
 
   it('highlights an actor caught in the AoE footprint distinctly', async () => {
@@ -393,21 +407,20 @@ describe('PlayScreen AoE free-cursor targeting', () => {
         spells: [FIREBALL_SPELL],
       }),
     );
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
     await beginFireballTargeting();
 
-    const layout = screen.getByTestId('play-layout');
-    const cell = layout.querySelector('[data-cell="21,10"].targeting-cell');
-    expect(cell).not.toBeNull();
-    expect(cell).toHaveClass('targeting-cell-affected-actor');
+    await waitFor(() =>
+      expect(fake.latest().lastTargeting()!.affectedCells.has('21,10')).toBe(true),
+    );
   });
 
   it('the reticle never leaves range: hammering past range still confirms at the clamped edge', async () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 20, y: 10, weave: 20 }, spells: [FIREBALL_SPELL] }),
     );
-    renderPlay(session);
+    await renderPlay(session);
 
     await beginFireballTargeting();
     // Range is 6; hammer the reticle far past it.
@@ -423,13 +436,10 @@ describe('PlayScreen AoE free-cursor targeting', () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 20, y: 10, weave: 20 }, spells: [FIREBALL_SPELL] }),
     );
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
     await beginFireballTargeting();
-    const grid = screen.getByRole('grid', { name: /dungeon/i });
-    const target = grid.querySelector('[data-cell="24,10"]');
-    expect(target).not.toBeNull();
-    fireEvent.mouseOver(target!);
+    act(() => fake.latest().hover({ x: 24, y: 10 }, 0, 0));
     fireEvent.keyDown(window, { key: 'Enter' });
 
     expect(casts(session)).toEqual([
@@ -441,12 +451,12 @@ describe('PlayScreen AoE free-cursor targeting', () => {
     const session = new FakeSession(
       projectionOf({ hero: { x: 20, y: 10, weave: 20 }, spells: [FIREBALL_SPELL] }),
     );
-    renderPlay(session);
+    const fake = await renderPlay(session);
 
     await beginFireballTargeting();
     fireEvent.keyDown(window, { key: 'Escape' });
 
     expect(casts(session)).toEqual([]);
-    expect(screen.queryByTestId('targeting-valid')).not.toBeInTheDocument();
+    await waitFor(() => expect(fake.latest().lastTargeting()).toBeNull());
   });
 });

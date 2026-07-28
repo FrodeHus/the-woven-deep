@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { dungeonCanvas, hoverWorldCell, topBarLocation } from './support.js';
 
 /**
  * The 5A exit demonstration: a guest plays the real game — real server, real content pack,
@@ -157,15 +158,15 @@ async function closeBackpack(page: Page): Promise<void> {
 
 test('a guest plays, persists, and descends by keyboard alone', async ({ page }) => {
   await page.goto(SEED_QUERY);
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
+  await expect(dungeonCanvas(page)).toBeVisible();
+  await expect(topBarLocation(page)).toContainText(/town/i);
   const log = page.getByRole('log', { name: /adventure log/i });
   await awaitKeyboardReady(page);
 
   // Descend from town into the dungeon.
   await pressAll(page, DESCEND_PREFIX);
   await page.keyboard.press('>');
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
+  await expect(topBarLocation(page)).toContainText(/depth 1/i);
 
   // Bump-attack a monster until it dies.
   await pressAll(page, KILL);
@@ -192,7 +193,7 @@ test('a guest plays, persists, and descends by keyboard alone', async ({ page })
 
 test('a mid-run reload restores the run and a cleared session starts fresh', async ({ page }) => {
   await page.goto(SEED_QUERY);
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
+  await expect(dungeonCanvas(page)).toBeVisible();
 
   // Wait at least one turn (pressing again if the very first keydown raced the listener
   // attaching); every applied command persists the run to sessionStorage.
@@ -214,8 +215,7 @@ test('a mid-run reload restores the run and a cleared session starts fresh', asy
 
 test('every interactive surface is reachable by keyboard', async ({ page }) => {
   await page.goto(SEED_QUERY);
-  const grid = page.getByRole('grid', { name: /dungeon/i });
-  await expect(grid).toBeVisible();
+  await expect(dungeonCanvas(page)).toBeVisible();
 
   // The session banner's Dismiss button is first in tab order; dismiss it by keyboard.
   await page.keyboard.press('Tab');
@@ -223,9 +223,13 @@ test('every interactive surface is reachable by keyboard', async ({ page }) => {
   await page.keyboard.press('Enter');
   await expect(page.getByRole('status').filter({ hasText: /new run/i })).toBeHidden();
 
-  // Tab reaches the dungeon grid.
-  await page.keyboard.press('Tab');
-  await expect(grid).toBeFocused();
+  // Unlike the retired DOM grid (a real focus target the old right-rail design tabbed into), the
+  // Pixi canvas is never focusable -- keyboard input is a global `window` keydown listener
+  // (`usePlayKeyDispatcher`), independent of DOM focus entirely. So there is no "Tab reaches the
+  // grid, grid is focused" step to translate; the surviving intent -- the game keeps responding to
+  // keyboard input after the banner's dismissal -- is proven by the same no-op `g` probe every
+  // other spec in this suite uses to confirm the keyboard is live.
+  await awaitKeyboardReady(page);
 
   // `i` opens the backpack as a focus-trapped dialog: its mount effect moves focus onto the
   // backpack's own listbox (see `InventoryOverlay`)...
@@ -246,44 +250,49 @@ test('every interactive surface is reachable by keyboard', async ({ page }) => {
   await page.keyboard.press('Shift+Tab');
   await expect(lastFocusable).toBeFocused();
 
-  // Escape closes the dialog and restores focus to the grid.
+  // Escape closes the dialog; the game is still live afterward (again, there is no focus target to
+  // reassert -- the canvas is never a focusable element).
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
-  await expect(grid).toBeFocused();
+  await awaitKeyboardReady(page);
 });
 
-// Layout A's right rail (hero/vitals, minimap, threat/town) is a fixed CSS grid that never
-// reflows by viewport size (see `PlayScreen`'s own doc comment) -- the pre-redesign responsive
-// tier/drawer-collapse this test used to cover (`.triptych`'s `data-tier` and `.threat-drawer`) no
-// longer exists, so those assertions are removed rather than translated; the surviving intent is
-// "the threat panel lists a nearby hostile, reachable regardless of viewport size, and hovering
-// its cell raises the popover".
-test('the right rail lists a nearby threat and offers the hover popover', async ({ page }) => {
+// The full-bleed HUD has no always-on right rail at all: hero vitals/spells/conditions/threats now
+// live only in their overlays (Hero Record, Spellbook) and this hover popover -- there is no
+// persistent "Threats" region to list a nearby hostile in anymore (see `PlayScreen`'s own doc
+// comment), so the pre-redesign "the right rail lists a nearby threat" half of this test has no
+// honest translation and is dropped rather than faked. The surviving, still-representable intent is
+// "hovering a nearby hostile's cell raises the popover naming it", which this test now proves purely
+// through the canvas.
+test('hovering a nearby threat on the canvas raises the popover', async ({ page }) => {
   await page.goto(SEED_QUERY);
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
+  await expect(dungeonCanvas(page)).toBeVisible();
   await awaitKeyboardReady(page);
 
   // Descend, then march into the monster room and kill one of the packed group: a surviving cave
   // rat is left at world cell (9,2) beside the hero at (10,2) — pinned by the derivation run.
   await pressAll(page, DESCEND_PREFIX);
   await page.keyboard.press('>');
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
+  await expect(topBarLocation(page)).toContainText(/depth 1/i);
   await pressAll(page, CLUSTER_KILL);
   await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(/dies/i);
 
-  const threatPanel = page.getByRole('region', { name: 'Threats' });
-  await expect(threatPanel).toBeVisible();
-  await expect(threatPanel).toContainText(/cave rat/i);
+  const hero = { x: 10, y: 2 };
+  const rat = { x: 9, y: 2 };
 
-  // Resizing the viewport never collapses the right rail or hides the grid -- Layout A's
-  // composition is fixed.
-  await page.setViewportSize({ width: 900, height: 900 });
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
-  await expect(threatPanel).toContainText(/cave rat/i);
-
-  // Hovering the rat's cell raises the threat popover card.
-  await page.locator('[data-cell="9,2"]').hover();
+  // Hovering the rat's cell (computed from the pinned hero cell via the same iso projection the
+  // renderer itself uses -- see `support.ts`'s `hoverWorldCell`) raises the threat popover card.
+  await hoverWorldCell(page, hero, rat);
   const popover = page.getByRole('tooltip');
+  await expect(popover).toBeVisible();
+  await expect(popover).toContainText(/cave rat/i);
+
+  // Resizing the viewport never hides the canvas, and the popover still raises at the recomputed
+  // pixel position for the (now-different) canvas size.
+  await page.setViewportSize({ width: 900, height: 900 });
+  await expect(dungeonCanvas(page)).toBeVisible();
+  await page.mouse.move(0, 0); // clear the stale hover from the old viewport size first
+  await hoverWorldCell(page, hero, rat);
   await expect(popover).toBeVisible();
   await expect(popover).toContainText(/cave rat/i);
 });

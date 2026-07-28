@@ -5,16 +5,35 @@ import { itemById } from '../../session/pack-queries.js';
 import { itemKnownFacts } from '../../session/item-facts.js';
 import type { MenuEntry, ProjectedItemLike } from './inventory-model.js';
 
+/** The tone each action button borders in, mirroring the HUD's own tone vocabulary (`Gauge`'s
+ * hp/weave tones, the belt's accent) rather than inventing new colors: equip/refuel read as the
+ * neutral accent, use as an affirmative "good" action, drop as destructive "danger", and toggling
+ * a light as a "warn" (fire) accent. */
+type ActionTone = 'accent' | 'good' | 'danger' | 'warn';
+
+const ACTION_TONE_CLASS: Readonly<Record<ActionTone, string>> = {
+  accent: 'border-accent text-accent-strong hover:bg-accent hover:text-deep',
+  good: 'border-good text-good hover:bg-good hover:text-deep',
+  danger: 'border-danger text-danger-fg hover:bg-danger hover:text-deep',
+  warn: 'border-warn text-warn hover:bg-warn hover:text-deep',
+};
+
 function ActionButton({
   label,
   chord,
+  tone = 'accent',
   onClick,
-}: Readonly<{ label: string; chord: string; onClick: () => void }>): JSX.Element {
+}: Readonly<{
+  label: string;
+  chord: string;
+  tone?: ActionTone;
+  onClick: () => void;
+}>): JSX.Element {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="cursor-pointer border border-accent bg-raised px-3 py-1.5 font-mono text-xs text-accent-strong hover:bg-accent hover:text-deep"
+      className={`cursor-pointer border bg-raised px-3 py-1.5 font-mono text-xs ${ACTION_TONE_CLASS[tone]}`}
     >
       {label} <span className="opacity-60">[{chord}]</span>
     </button>
@@ -69,16 +88,23 @@ export function DetailPane({
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
         <h3 className="font-serif text-lg text-fg-strong">{item.name}</h3>
-        <div>
+        <div className="flex flex-wrap gap-1.5">
           <span className="border border-muted px-1.5 py-px text-[10px] uppercase tracking-[0.1em] text-muted">
-            {`${item.category} · ${unidentified ? 'Unidentified' : 'Identified'}`}
+            {item.category}
+          </span>
+          <span className="border border-muted px-1.5 py-px text-[10px] uppercase tracking-[0.1em] text-muted">
+            {unidentified ? 'Unidentified' : 'Identified'}
           </span>
         </div>
       </div>
 
       {/* Dotted-leader fact rows. Instance facts come off the projected item; static facts
        * (Damage/Worth/Light radius/Armor) come off the identified content entry (`content`), which
-       * is absent for an unidentified item -- so its hidden stats never leak. */}
+       * is absent for an unidentified item -- so its hidden stats never leak. `Condition` is real
+       * per-instance durability data (`item.condition`, an `ItemView` field), not the demo's
+       * hardcoded placeholder -- it stays, alongside the identified/unidentified tag above, per
+       * "all current functionality preserved" (design spec's Panels section); whether an item is
+       * identified still gates which of the OTHER rows below are shown. */}
       <div className="flex flex-col gap-1">
         {equipped && <FactRow label="Equipped" value={slot} />}
         {content != null &&
@@ -107,14 +133,24 @@ export function DetailPane({
       {description && <p className="text-sm italic text-muted">{description}</p>}
 
       <div className="flex flex-wrap gap-2">
-        <ActionButton label={equipped ? 'Unequip' : 'Equip'} chord="e" onClick={onEquip} />
-        <ActionButton label="Use" chord="u" onClick={onUse} />
-        <ActionButton label="Drop" chord="d" onClick={onDrop} />
+        <ActionButton
+          label={equipped ? 'Unequip' : 'Equip'}
+          chord="e"
+          tone="accent"
+          onClick={onEquip}
+        />
+        <ActionButton label="Use" chord="u" tone="good" onClick={onUse} />
+        <ActionButton label="Drop" chord="d" tone="danger" onClick={onDrop} />
         {item.category === 'light' && (
-          <ActionButton label="Toggle light" chord="l" onClick={onToggleLight} />
+          <ActionButton label="Toggle light" chord="l" tone="warn" onClick={onToggleLight} />
         )}
         {refuelTarget && (
-          <ActionButton label={`Refuel ${refuelTarget.name}`} chord="r" onClick={onRefuel} />
+          <ActionButton
+            label={`Refuel ${refuelTarget.name}`}
+            chord="r"
+            tone="warn"
+            onClick={onRefuel}
+          />
         )}
       </div>
     </div>

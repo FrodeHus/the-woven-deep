@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { useState, type JSX } from 'react';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
@@ -21,6 +21,7 @@ import { GuestSession } from '../src/session/guest-session.js';
 import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
 import type { OverlayId } from '../src/ui/overlays/registry.js';
+import { fakePlayfieldRenderer } from './fake-playfield-renderer.js';
 import { withUiProviders } from './with-ui-providers.js';
 
 let pack: CompiledContentPack;
@@ -46,25 +47,14 @@ function fakeStorage(): SessionStorageLike {
   };
 }
 
-describe('PlayScreen camera wiring', () => {
-  // jsdom's zero-size measurements clamp the viewport to MIN_VIEWPORT (30x12, see layout.ts), so
-  // this floor is generously larger than that on both axes — see camera.ts's `scrolledAxis` for
-  // how the projected hero's `sightRadius` (now read straight off the projection) sizes the
-  // deadzone margin.
-  function unknownCell(
-    index: number,
-    x: number,
-    y: number,
-  ): GameplayProjection['floor']['cells'][number] {
-    return { index, x, y, knowledge: 'unknown', intensity: 0 };
-  }
-
+describe('PlayScreen renderer wiring', () => {
   function floorProjection(floorId: string, hero: { x: number; y: number }): GameplayProjection {
     const width = 100;
     const height = 60;
     const cells = [];
     for (let y = 0; y < height; y += 1)
-      for (let x = 0; x < width; x += 1) cells.push(unknownCell(y * width + x, x, y));
+      for (let x = 0; x < width; x += 1)
+        cells.push({ index: y * width + x, x, y, knowledge: 'unknown' as const, intensity: 0 });
     return {
       ...baseProjection,
       floor: { floorId, width, height, cells },
@@ -91,38 +81,37 @@ describe('PlayScreen camera wiring', () => {
     return { subscribe: () => () => {}, getSnapshot: () => snapshot } as unknown as GuestSession;
   }
 
-  function topLeftDataCell(): string {
-    const grid = screen.getByRole('grid', { name: /dungeon/i });
-    return grid.querySelector('[data-cell]')!.getAttribute('data-cell')!;
-  }
-
-  it('keeps the same camera origin across a small in-floor hero move (deadzone holds)', () => {
+  it('feeds the mounted renderer the current snapshot, and re-feeds it when the projection changes', async () => {
+    const fake = fakePlayfieldRenderer();
     const first = floorProjection('floor.depth-001', { x: 50, y: 30 });
     const { rerender } = render(
-      withUiProviders(pack, <PlayScreen session={fakeSession(first)} pack={pack} />),
+      withUiProviders(
+        pack,
+        <PlayScreen
+          session={fakeSession(first)}
+          pack={pack}
+          createRenderer={fake.createRenderer}
+        />,
+      ),
     );
-    const originAfterFirst = topLeftDataCell();
-
-    const movedSlightly = floorProjection('floor.depth-001', { x: 51, y: 30 });
-    rerender(
-      withUiProviders(pack, <PlayScreen session={fakeSession(movedSlightly)} pack={pack} />),
-    );
-    expect(topLeftDataCell()).toBe(originAfterFirst);
-  });
-
-  it('recenters on the new hero position when the floorId changes (a descend)', () => {
-    const first = floorProjection('floor.depth-001', { x: 50, y: 30 });
-    const { rerender } = render(
-      withUiProviders(pack, <PlayScreen session={fakeSession(first)} pack={pack} />),
-    );
-    const originOnFirstFloor = topLeftDataCell();
+    await screen.findByRole('img', { name: /dungeon/i });
+    await waitFor(() => expect(fake.latest().snapshots.length).toBeGreaterThan(0));
+    expect(fake.latest().snapshots.at(-1)!.projection.floor.floorId).toBe('floor.depth-001');
 
     const nextFloor = floorProjection('floor.depth-002', { x: 5, y: 5 });
-    rerender(withUiProviders(pack, <PlayScreen session={fakeSession(nextFloor)} pack={pack} />));
-    expect(topLeftDataCell()).not.toBe(originOnFirstFloor);
-    // Centered afresh on the new hero position (5,5) inside a 100x60 floor with a >=30x12
-    // viewport clamps to the top-left floor corner, same as computeCamera's own corner-clamp test.
-    expect(topLeftDataCell()).toBe('0,0');
+    rerender(
+      withUiProviders(
+        pack,
+        <PlayScreen
+          session={fakeSession(nextFloor)}
+          pack={pack}
+          createRenderer={fake.createRenderer}
+        />,
+      ),
+    );
+    await waitFor(() =>
+      expect(fake.latest().snapshots.at(-1)!.projection.floor.floorId).toBe('floor.depth-002'),
+    );
   });
 });
 
@@ -139,7 +128,7 @@ describe('PlayScreen keyboard routing', () => {
 
   function decisionSession(): GuestSession {
     // The fresh guest run boots into town, whose fixed layout is always fully (and permanently)
-    // lit -- douse-the-torch no longer hides a neighbor there. So this descends to the depth-1
+    // lit -- so dousing the torch never hides a neighbor there. This descends to the depth-1
     // floor first (same trick as guest-session.test.ts's `depth1Run`): douse the torch and place
     // a neutral actor next door, in the dark, so the hero's own projection never sees it — a
     // plain `move` therefore resolves against the *actual* (neutral) occupant server-side, which
@@ -189,10 +178,10 @@ describe('PlayScreen keyboard routing', () => {
   it('opens the backpack on "i", moves the game keys through a focus trap, and closes on Escape', async () => {
     const user = userEvent.setup();
     const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
-    // `inventory` is a registry overlay now (Task 5 absorbed the old standalone `BackpackMenu`),
-    // so -- exactly like every other registry overlay -- `PlayScreen` no longer owns whether it's
-    // open; that lives in the parent (`App`, normally). This tiny stateful wrapper stands in for
-    // `App` so the test can drive `i`/Escape the same way a real guest would.
+    // `inventory` is a registry overlay, so -- exactly like every other registry overlay --
+    // `PlayScreen` does not own whether it's open; that state lives in the parent (`App`, normally).
+    // This tiny stateful wrapper stands in for `App` so the test can drive `i`/Escape the same way a
+    // real guest would.
     function Harness(): JSX.Element {
       const [overlay, setOverlay] = useState<OverlayId | null>(null);
       return withUiProviders(
@@ -287,7 +276,7 @@ describe('PlayScreen threat hover scroll-dismiss', () => {
   // reads live actors straight off the session), extended with the one behavior that file doesn't
   // cover yet: a real `scroll` event (the listener `PlayScreen` attaches at L321-325) dismissing an
   // already-open popover.
-  it('hovering an actor cell opens the popover, and a scroll event dismisses it', () => {
+  it('hovering an actor cell opens the popover, and a scroll event dismisses it', async () => {
     const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
     const snapshot = session.getSnapshot();
     const hero = snapshot.projection.hero as unknown as { x: number; y: number };
@@ -313,12 +302,17 @@ describe('PlayScreen threat hover scroll-dismiss', () => {
       getSnapshot: () => spliced,
     } as unknown as GuestSession;
 
-    render(withUiProviders(pack, <PlayScreen session={fakeHoverSession} pack={pack} />));
-    const grid = screen.getByRole('grid', { name: /dungeon/i });
-    const actorCell = grid.querySelector(`[data-cell="${hero.x + 1},${hero.y}"]`)!;
+    const fake = fakePlayfieldRenderer();
+    render(
+      withUiProviders(
+        pack,
+        <PlayScreen session={fakeHoverSession} pack={pack} createRenderer={fake.createRenderer} />,
+      ),
+    );
+    await screen.findByRole('img', { name: /dungeon/i });
 
-    fireEvent.mouseOver(actorCell);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Cave rat');
+    act(() => fake.latest().hover({ x: hero.x + 1, y: hero.y }, 30, 30));
+    await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('Cave rat'));
 
     fireEvent.scroll(window);
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
@@ -350,20 +344,21 @@ describe('PlayScreen Layout A composition', () => {
     return new GuestSession({ pack, storage: keyedStorage });
   }
 
-  it('always renders the hero panel, minimap, map grid, and an always-visible threat panel -- Layout A never collapses into drawers', () => {
+  it('renders the full-bleed HUD -- top bar, floating minimap, and the playfield -- with no drawers on a dungeon floor', async () => {
     render(withUiProviders(pack, <PlayScreen session={session()} pack={pack} />));
-    expect(screen.getByRole('grid', { name: /dungeon/i })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Hero' })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: /dungeon/i })).toBeInTheDocument();
+    expect(screen.getByText('THE WOVEN DEEP')).toBeInTheDocument();
     expect(screen.getByTestId('minimap')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: /threats/i })).toBeInTheDocument();
+    // The dungeon floor is not town, so no town panel floats over the HUD.
+    expect(screen.queryByRole('region', { name: /town/i })).not.toBeInTheDocument();
     expect(document.querySelector('details.threat-drawer')).toBeNull();
     expect(document.querySelector('details.hero-drawer')).toBeNull();
   });
 
-  it('renders the town panel instead of the threat panel while in town, still without collapsing', () => {
+  it('floats the town panel over the HUD while in town', () => {
     const guestSession = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
     render(withUiProviders(pack, <PlayScreen session={guestSession} pack={pack} />));
     expect(screen.getByRole('region', { name: /town/i })).toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: /threats/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('minimap')).toBeInTheDocument();
   });
 });

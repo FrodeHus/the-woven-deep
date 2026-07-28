@@ -13,19 +13,13 @@ export interface ThreatPopoverActor {
 
 export interface ThreatPopoverProps {
   readonly actor: ThreatPopoverActor;
-  /** Screen-space column/row, camera-relative (world coordinate minus camera origin). */
-  readonly col: number;
-  readonly row: number;
-  /** The map pane's size in cells, used to clamp the popover so it never renders off-pane. */
-  readonly paneCols: number;
-  readonly paneRows: number;
-  /**
-   * The measured cell size in pixels (see `PlayScreen`'s `cellProbeRef`), used to convert the
-   * clamped col/row into an inline pixel position. `.threat-popover` is a sibling of `.playfield`
-   * in the DOM (not a descendant), so it cannot inherit `--cell-w`/`--cell-h` custom properties
-   * from the grid; positioning it in pixels here sidesteps that entirely.
-   */
-  readonly cellPx: Readonly<{ width: number; height: number }>;
+  /** Pane-relative pixel position of the hovered cell (the pointer's client position minus the map
+   * pane's own origin), clamped here so the popover never renders past the pane bounds. */
+  readonly leftPx: number;
+  readonly topPx: number;
+  /** The map pane's pixel size, used as the clamp bound. */
+  readonly paneWidthPx: number;
+  readonly paneHeightPx: number;
   /** Looked up by `actor.contentId` to surface the monster's authored `description`, if any --
    * the pack is the single source for that text, never threaded through the engine projection. */
   readonly pack: CompiledContentPack;
@@ -39,18 +33,15 @@ export interface ThreatPopoverProps {
  */
 export function ThreatPopover({
   actor,
-  col,
-  row,
-  paneCols,
-  paneRows,
-  cellPx,
+  leftPx,
+  topPx,
+  paneWidthPx,
+  paneHeightPx,
   pack,
 }: ThreatPopoverProps): JSX.Element {
-  const clampedCol = Math.max(0, Math.min(col, Math.max(paneCols - 1, 0)));
-  const clampedRow = Math.max(0, Math.min(row, Math.max(paneRows - 1, 0)));
   const style: CSSProperties = {
-    left: `${clampedCol * cellPx.width}px`,
-    top: `${clampedRow * cellPx.height}px`,
+    left: `${Math.max(0, Math.min(leftPx, paneWidthPx))}px`,
+    top: `${Math.max(0, Math.min(topPx, paneHeightPx))}px`,
   };
   const description = actor.contentId ? monsterById(pack, actor.contentId)?.description : undefined;
 

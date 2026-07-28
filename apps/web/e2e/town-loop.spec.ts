@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { dungeonCanvas, expectHeroAt, topBarLocation } from './support.js';
 
 /**
  * The 5C exit demonstration: the full town loop, proven end to end in a real chromium against the
@@ -299,9 +300,12 @@ async function openDialog(page: Page, key: string, name: RegExp): Promise<void> 
   await expect(dialog).toBeVisible();
 }
 
-/** The currency readout is a plain `${amount}g` paragraph (no dedicated class). */
+/** The currency readout used to be the only `Ng`-shaped text in the dialog; the trade screen now
+ * also renders a `Ng` price tag on every stock/sale row (`min-w-11 text-right text-accent-strong`
+ * spans), so a bare text match is ambiguous. The "Your purse" readout is still the only text in the
+ * dialog wrapped in the `text-lg` paragraph (`TradeScreen.tsx`), so scope to that. */
 function currencyText(dialog: ReturnType<Page['getByRole']>) {
-  return dialog.getByText(/^\d+g$/);
+  return dialog.locator('p.text-lg span:not([aria-hidden])');
 }
 
 /** The house capacity readout is a plain `House (used/capacity)` paragraph (no dedicated class). */
@@ -313,12 +317,12 @@ test('the town loop: buy, store, descend, kill, return, sell, upgrade, retrieve,
   page,
 }) => {
   await page.goto(SEED_QUERY);
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
+  await expect(dungeonCanvas(page)).toBeVisible();
   const trade = page.getByRole('dialog', { name: /trade/i });
   const house = page.getByRole('dialog', { name: /house/i });
 
   // --- Boot to town: the status label reads "Town" and the provisioner is on the town panel. ---
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
+  await expect(topBarLocation(page)).toContainText(/town/i);
   await expect(page.getByRole('region', { name: 'Town' })).toContainText(/provisioner/i);
   await awaitKeyboardReady(page);
 
@@ -342,7 +346,7 @@ test('the town loop: buy, store, descend, kill, return, sell, upgrade, retrieve,
   // --- Descend to Depth 1. ---
   await pressAll(page, TO_STAIR);
   await page.keyboard.press('>');
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
+  await expect(topBarLocation(page)).toContainText(/depth 1/i);
 
   // --- Kill a monster. ---
   await pressAll(page, KILL);
@@ -351,20 +355,20 @@ test('the town loop: buy, store, descend, kill, return, sell, upgrade, retrieve,
   // --- Return to town, then back down to the SAME stored floor. ---
   await pressAll(page, TO_STAIR_UP);
   await page.keyboard.press('<');
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
+  await expect(topBarLocation(page)).toContainText(/town/i);
   await page.keyboard.press('>');
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
+  await expect(topBarLocation(page)).toContainText(/depth 1/i);
 
   // Dead stays dead: walk the hero back onto the killed monster's cell (27,10). It is only
   // reachable and standable because the corpse never respawned -- a regenerated floor would have a
   // live monster there. The hero glyph occupying the cell is the proof.
   await pressAll(page, TO_CORPSE);
-  await expect(page.getByLabel('Hero at 27, 10')).toBeVisible();
+  await expectHeroAt(page, 27, 10);
 
   // Back up to town for the trade half of the loop.
   await pressAll(page, TO_STAIR_UP_2);
   await page.keyboard.press('<');
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
+  await expect(topBarLocation(page)).toContainText(/town/i);
 
   // --- Unequip the surplus starting gear (sword + armor) into the backpack so it can be sold. ---
   await openDialog(page, 'i', /backpack/i);
@@ -413,5 +417,5 @@ test('the town loop: buy, store, descend, kill, return, sell, upgrade, retrieve,
   // --- Descend once more to close the loop. ---
   await pressAll(page, TO_STAIR_2);
   await page.keyboard.press('>');
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
+  await expect(topBarLocation(page)).toContainText(/depth 1/i);
 });

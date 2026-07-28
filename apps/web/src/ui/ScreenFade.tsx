@@ -47,9 +47,9 @@ export interface ScreenFadeProps {
  * instant, matching the design's "applies the new state immediately" rather than degrading to a
  * zero-duration animation.
  *
- * Cleanup is the same dual pattern as `EffectsLayer`'s transient effects: `onAnimationEnd` for the
- * normal case, plus a timeout backup, because a reduced-motion `animation: none` (the CSS-side
- * belt-and-suspenders declared in all four motion blocks) never fires `animationend`.
+ * Cleanup is a dual pattern: `onAnimationEnd` for the normal case, plus a timeout backup, because
+ * a reduced-motion `animation: none` (the CSS-side belt-and-suspenders declared in all four motion
+ * blocks) never fires `animationend`.
  */
 export function ScreenFade({
   transitionKey,

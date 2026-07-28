@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { dungeonCanvas, expectHeroAt, heroCellLabel, topBarLocation } from './support.js';
 
 /**
  * The 5D-1 exit demonstration: the whole guest INTERFACE, proven end to end in a real chromium
@@ -176,17 +177,17 @@ async function cycleOverlay(page: Page, key: string, testId: string): Promise<vo
   await expect(page.getByTestId(testId)).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId(testId)).toBeHidden();
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
+  await expect(dungeonCanvas(page)).toBeVisible();
 }
 
 test('the guest interface: overlays, rebinding, font scale, codex discovery, identify, and reset', async ({
   page,
 }) => {
   await page.goto(SEED_QUERY);
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
-  await expect(page.getByLabel('Hero at 5, 9')).toBeVisible();
+  await expect(dungeonCanvas(page)).toBeVisible();
+  await expect(topBarLocation(page)).toContainText(/town/i);
   await awaitKeyboardReady(page);
+  await expectHeroAt(page, 5, 9);
 
   // --- Open and close every registry overlay by its key; each returns to a live play grid. ---
   await cycleOverlay(page, 'c', 'overlay-character-sheet');
@@ -197,7 +198,7 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await cycleOverlay(page, 'i', 'overlay-inventory');
   // Hero is still responsive after the whole overlay tour (state untouched at the spawn cell).
   await awaitKeyboardReady(page);
-  await expect(page.getByLabel('Hero at 5, 9')).toBeVisible();
+  await expectHeroAt(page, 5, 9);
 
   // --- Rebind Move west to `q`, then walk west with it; the aria hero label proves the move. ---
   // The settings overlay's content (font scale/theme/onboarding/motion/every rebindable key row/
@@ -221,7 +222,7 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await expect(settings).toBeHidden();
 
   await page.keyboard.press('q'); // `q` now routes to Move west
-  await expect(page.getByLabel('Hero at 4, 9')).toBeVisible();
+  await expectHeroAt(page, 4, 9);
 
   // Rebind back: reset the Move west row to its default `h`.
   await page.keyboard.press('o');
@@ -239,7 +240,7 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await pressAll(page, ['6', '6', '6', '6', '6']); // walk east five cells: (4,9) -> (9,9)
-  await expect(page.getByLabel('Hero at 9, 9')).toBeVisible();
+  await expectHeroAt(page, 9, 9);
 
   // --- Codex in town: the hero's class and starting gear are discovered (perceived in town),
   // but every monster is still a silhouette -- nothing has been perceived below yet. ---
@@ -260,16 +261,16 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   // --- Descend to Depth 1, land the first kill, and ascend back to town. ---
   await pressAll(page, ['4', '4', '4', '2']); // (9,9) -> (6,9) -> (6,10), onto the stair
   await page.keyboard.press('>');
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Depth 1');
-  await expect(page.getByLabel('Hero at 38, 23')).toBeVisible();
+  await expect(topBarLocation(page)).toContainText(/depth 1/i);
+  await expectHeroAt(page, 38, 23);
 
   await pressAll(page, KILL);
   await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(/dies/i);
 
   await pressAll(page, TO_STAIR_UP);
   await page.keyboard.press('<');
-  await expect(page.getByRole('group', { name: 'Status' })).toContainText('Town');
-  await expect(page.getByLabel('Hero at 6, 10')).toBeVisible();
+  await expect(topBarLocation(page)).toContainText(/town/i);
+  await expectHeroAt(page, 6, 10);
 
   // --- Codex again: the perceived-and-killed Training beetle is now a named, discovered entry. ---
   await page.keyboard.press('x');
@@ -284,8 +285,11 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await page.keyboard.press('Shift+T');
   const trade = page.getByRole('dialog', { name: 'Trade' });
   await expect(trade).toBeVisible();
-  // The currency readout is a plain `${amount}g` paragraph (no dedicated class).
-  const currency = trade.getByText(/^\d+g$/);
+  // The currency readout used to be the only `Ng`-shaped text in the dialog; the trade screen now
+  // also renders a `Ng` price tag on every stock row (`min-w-11 text-right text-accent-strong`
+  // spans), so a bare text match is ambiguous. The "Your purse" readout is still the only text in
+  // the dialog wrapped in the `text-lg` paragraph (`TradeScreen.tsx`), so scope to that.
+  const currency = trade.locator('p.text-lg span:not([aria-hidden])');
   await expect(currency).toHaveText('40g');
 
   await page.keyboard.press('Enter'); // buy the first stock row (the unidentified potion)
@@ -310,23 +314,28 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   // `KeyRouter.ts`'s `routeKey` ignores any keydown with `ctrlKey`/`metaKey` held, so the bare `k`
   // chord it shares with the default "Move north" binding does not also reach the game dispatcher
   // -- asserted directly below by checking the hero's cell is unchanged across the whole sequence.
-  const heroLabelBeforePalette = await page
-    .getByLabel(/^Hero at \d+, \d+$/)
-    .getAttribute('aria-label');
+  // The retired DOM grid kept the hero's labelled cell live underneath the floating palette, so the
+  // old assertion read it WHILE the palette was open. The Pixi canvas has no such per-cell DOM at
+  // all, so this reads the hero's cell before opening the palette, then again through the very
+  // overlay the palette's "map" entry opens (`overlay-map-journal`, whose map pane is the one
+  // surviving place that label still exists) -- an equally direct proof that the whole round trip
+  // (including whatever `Meta+k`/`Control+k` themselves did) never moved the hero.
+  const heroLabelBeforePalette = await heroCellLabel(page);
   await page.keyboard.press('Meta+k');
   const palette = page.getByTestId('command-palette');
   if (!(await palette.isVisible().catch(() => false))) {
     await page.keyboard.press('Control+k');
   }
   await expect(palette).toBeVisible();
-  await expect(page.getByLabel(heroLabelBeforePalette!)).toBeVisible(); // opening the palette did not move the hero
   await palette.getByRole('combobox').fill('map');
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('overlay-map-journal')).toBeVisible();
+  const mapJournal = page.getByTestId('overlay-map-journal');
+  await expect(mapJournal).toBeVisible();
+  await expect(mapJournal.getByLabel(heroLabelBeforePalette)).toBeVisible(); // opening the palette did not move the hero
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('overlay-map-journal')).toBeHidden();
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeVisible();
-  await expect(page.getByLabel(heroLabelBeforePalette!)).toBeVisible(); // still unchanged after the full round-trip
+  await expect(mapJournal).toBeHidden();
+  await expect(dungeonCanvas(page)).toBeVisible();
+  expect(await heroCellLabel(page)).toBe(heroLabelBeforePalette); // still unchanged after the full round-trip
 
   // --- Clear the guest session from settings; the app lands on a fresh title screen. ---
   // The `?quickstart=1` query is still in the URL here -- the boot effect that constructs
@@ -341,7 +350,7 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   // The title menu is a roving listbox of `option`s (see `TitleScreen`), not buttons.
   await expect(page.getByRole('listbox', { name: 'Title menu' })).toBeVisible();
   await expect(page.getByRole('option', { name: 'Enter the Deep' })).toBeVisible();
-  await expect(page.getByRole('grid', { name: /dungeon/i })).toBeHidden();
+  await expect(dungeonCanvas(page)).toBeHidden();
 
   // The fresh title alone doesn't prove the clear itself worked -- routing decouples the title
   // transition from the storage wipe, so a broken clear could still land here. Prove storage is
