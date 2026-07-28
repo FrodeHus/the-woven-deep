@@ -1,5 +1,6 @@
 import type { ObservableCell } from '@woven-deep/engine';
 import { TILE_HALF_W } from './iso-math.js';
+import { cellSeed } from './tile-skinning.js';
 
 /**
  * Pure inputs for the renderer's light layer. Everything the `IsoRenderer` needs to paint a light
@@ -72,15 +73,111 @@ export function tintLuminance(tint: number): number {
 }
 
 /**
- * The brightness the void-fill rock texture is darkened to at build time (a multiply factor applied
- * to the atlas crop it is cut from). Unexcavated stone must sit at the BOTTOM of the playfield's
- * contrast ladder -- strictly darker than {@link REMEMBERED_TINT} (remembered terrain), which is in
- * turn darker than {@link VISIBLE_FLOOR_BRIGHTNESS} (the floor a visible cell never drops below) --
- * so the eye reads unexplored space as solid rock rather than as somewhere already walked. The
- * ordering is pinned by test, comparing against {@link tintLuminance}`(REMEMBERED_TINT)` rather than
- * a duplicated literal.
+ * The mean brightness the void-fill noise texture is normalized to at build time. Unexcavated stone
+ * must sit at the BOTTOM of the playfield's contrast ladder -- strictly darker than {@link
+ * REMEMBERED_TINT} (remembered terrain), which is in turn darker than {@link
+ * VISIBLE_FLOOR_BRIGHTNESS} (the floor a visible cell never drops below) -- so the eye reads
+ * unexplored space as solid rock rather than as somewhere already walked. The ordering is pinned by
+ * test, comparing against {@link tintLuminance}`(REMEMBERED_TINT)` rather than a duplicated literal.
  */
-export const VOID_ROCK_BRIGHTNESS = 0.08;
+export const VOID_ROCK_BRIGHTNESS = 0.03;
+
+/** Per-pixel brightness spread (standard deviation) the void-fill noise field is normalized to
+ * around {@link VOID_ROCK_BRIGHTNESS} -- barely-there variation, never a hard edge. */
+export const VOID_ROCK_BRIGHTNESS_VARIATION = 0.01;
+
+/** Edge length (px) of the square void-fill noise field/texture. */
+export const VOID_NOISE_SIZE = 256;
+
+/** How many soft blotches are stamped into the noise field. Enough to avoid any single blotch
+ * reading as a recognizable shape once normalized into the tight dark band. */
+const VOID_NOISE_BLOTCH_COUNT = 90;
+
+/** A fixed key folded into {@link cellSeed} so the void-noise hash never collides with a real
+ * floor's per-cell seed space; any floorId that is never a real floor id would do. */
+const VOID_NOISE_SEED_KEY = 'void-noise-field';
+
+/** A deterministic pseudo-random unit value (`0..1`) for blotch parameter `slot` of blotch `index`,
+ * derived from {@link cellSeed}'s FNV/xor mix -- same inputs always yield the same value, no
+ * `Math.random`. */
+function voidNoiseUnit(index: number, slot: number): number {
+  return cellSeed(VOID_NOISE_SEED_KEY, index, slot) / 0xffffffff;
+}
+
+/**
+ * Adds one soft (Gaussian) blotch, centered at `(cx, cy)` with the given `radius` and signed
+ * `amplitude`, into `field` (a `size`×`size` row-major buffer). Only the pixels within `3 * radius`
+ * of the center are touched -- everywhere else the Gaussian falloff is negligible.
+ */
+function stampBlotch(
+  field: Float32Array,
+  size: number,
+  cx: number,
+  cy: number,
+  radius: number,
+  amplitude: number,
+): void {
+  const reach = radius * 3;
+  const minX = Math.floor(cx - reach);
+  const maxX = Math.ceil(cx + reach);
+  const minY = Math.floor(cy - reach);
+  const maxY = Math.ceil(cy + reach);
+  const twoRadiusSq = 2 * radius * radius;
+  for (let y = Math.max(0, minY); y <= Math.min(size - 1, maxY); y += 1) {
+    for (let x = Math.max(0, minX); x <= Math.min(size - 1, maxX); x += 1) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const falloff = Math.exp(-(dx * dx + dy * dy) / twoRadiusSq);
+      const at = y * size + x;
+      field[at] = (field[at] as number) + amplitude * falloff;
+    }
+  }
+}
+
+/**
+ * Builds a deterministic, seamlessly-tileable amorphous noise field for the void-fill rock texture:
+ * `size`×`size` values (row-major, `field[y * size + x]`), each an RGB-equal luminance normalized
+ * into a tight dark band around {@link VOID_ROCK_BRIGHTNESS} (spread {@link
+ * VOID_ROCK_BRIGHTNESS_VARIATION}) and clamped to `[0, 1]`.
+ *
+ * Every blotch is soft (Gaussian falloff, no hard edges) and stamped at its own position PLUS its
+ * eight `±size` wrapped copies, so a blotch near one edge also contributes near the opposite edge --
+ * the field tiles with no visible seam without needing toroidal distance math. Blotch center,
+ * radius, sign, and strength are all drawn from {@link cellSeed} (via {@link voidNoiseUnit}), so the
+ * same `size` always produces byte-identical output -- no `Math.random`, stable across reloads.
+ */
+export function buildVoidNoiseField(size: number = VOID_NOISE_SIZE): Float32Array {
+  const field = new Float32Array(size * size);
+  for (let index = 0; index < VOID_NOISE_BLOTCH_COUNT; index += 1) {
+    const cx = voidNoiseUnit(index, 1) * size;
+    const cy = voidNoiseUnit(index, 2) * size;
+    const radius = size * (0.05 + voidNoiseUnit(index, 3) * 0.09);
+    const sign = voidNoiseUnit(index, 4) < 0.5 ? -1 : 1;
+    const amplitude = sign * (0.4 + voidNoiseUnit(index, 5) * 0.6);
+    for (let wrapX = -1; wrapX <= 1; wrapX += 1) {
+      for (let wrapY = -1; wrapY <= 1; wrapY += 1) {
+        stampBlotch(field, size, cx + wrapX * size, cy + wrapY * size, radius, amplitude);
+      }
+    }
+  }
+
+  let mean = 0;
+  for (let index = 0; index < field.length; index += 1) mean += field[index] as number;
+  mean /= field.length;
+  let variance = 0;
+  for (let index = 0; index < field.length; index += 1) {
+    const delta = (field[index] as number) - mean;
+    variance += delta * delta;
+  }
+  const stdDev = Math.sqrt(variance / field.length) || 1;
+
+  for (let index = 0; index < field.length; index += 1) {
+    const z = ((field[index] as number) - mean) / stdDev;
+    const value = VOID_ROCK_BRIGHTNESS + VOID_ROCK_BRIGHTNESS_VARIATION * z;
+    field[index] = Math.max(0, Math.min(1, value));
+  }
+  return field;
+}
 
 /**
  * The uniform gray-scale tint (`0xRRGGBB`, all three channels equal) for a sprite standing on a
