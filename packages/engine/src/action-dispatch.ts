@@ -726,6 +726,8 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
     return { state: next, chargeEnergy: true };
   },
   pickup: ({ state, action, actor, content, eventId, events }) => {
+    const source = state.items.find((item) => item.itemId === action.itemId);
+    const definition = source ? requireItem(content, source.contentId) : undefined;
     const transition = pickupItem({
       run: state,
       content,
@@ -736,13 +738,23 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
     });
     if (!transition.ok)
       throw new Error(`internal invariant: validated pickup failed with ${transition.reason}`);
-    events.push({
-      type: 'item.picked-up',
-      eventId,
-      actorId: actor.actorId,
-      itemId: action.itemId,
-      quantity: action.quantity,
-    });
+    if (definition?.category === 'currency') {
+      events.push({
+        type: 'currency.collected',
+        eventId,
+        actorId: actor.actorId,
+        amount: action.quantity,
+        currency: transition.run.hero.currency,
+      });
+    } else {
+      events.push({
+        type: 'item.picked-up',
+        eventId,
+        actorId: actor.actorId,
+        itemId: action.itemId,
+        quantity: action.quantity,
+      });
+    }
     return { state: transition.run, chargeEnergy: true };
   },
   drop: ({ state, action, actor, eventId, events }) => {

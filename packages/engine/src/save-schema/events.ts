@@ -168,6 +168,13 @@ export const itemPickedUpEvent = z.strictObject({
   itemId: identifier,
   quantity: positiveQuantity,
 });
+export const currencyCollectedEvent = z.strictObject({
+  type: z.literal('currency.collected'),
+  eventId: identifier,
+  actorId: identifier,
+  amount: safeNonNegative,
+  currency: safeNonNegative,
+});
 export const itemDroppedEvent = z.strictObject({
   type: z.literal('item.dropped'),
   eventId: identifier,
@@ -785,6 +792,7 @@ export const eventOptions = [
   actorTurnCompletedEvent,
   actorMovedEvent,
   itemPickedUpEvent,
+  currencyCollectedEvent,
   itemDroppedEvent,
   itemStackSplitEvent,
   itemConsumedEvent,
@@ -956,6 +964,7 @@ import type {
   CombatObservedPublicEvent,
   ConditionAppliedEvent,
   ConditionRemovedEvent,
+  CurrencyCollectedEvent,
   EchoDefeatedEvent,
   EchoEncounteredEvent,
   EchoLootCreatedEvent,
@@ -1071,6 +1080,9 @@ type _ItemPickedUpDrift = Expect<
   SchemaMatches<z.infer<typeof itemPickedUpEvent>, ItemPickedUpEvent>
 >;
 type _ItemDroppedDrift = Expect<SchemaMatches<z.infer<typeof itemDroppedEvent>, ItemDroppedEvent>>;
+type _CurrencyCollectedDrift = Expect<
+  SchemaMatches<z.infer<typeof currencyCollectedEvent>, CurrencyCollectedEvent>
+>;
 type _ItemStackSplitDrift = Expect<
   SchemaMatches<z.infer<typeof itemStackSplitEvent>, ItemStackSplitEvent>
 >;

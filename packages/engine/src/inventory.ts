@@ -18,6 +18,7 @@ import type { RecordedHeirloomSnapshot } from './population-model.js';
 import { compareCodeUnits, stableJson } from './stable-json.js';
 import { boundedDisplayText } from './display-text.js';
 import { rollDie } from './random.js';
+import { checkedAdd } from './run-metrics.js';
 
 export type InventoryFailureReason =
   | 'inventory.full'
@@ -665,6 +666,18 @@ export function pickupItem(
     return failure('item.unavailable');
   if (input.quantity > source.quantity) return failure('item.quantity');
   const definition = itemDefinition(input.content, source.contentId);
+  if (definition.category === 'currency') {
+    const gathered = input.quantity;
+    const currency = checkedAdd(input.run.hero.currency, gathered, 'hero.currency');
+    const remaining = source.quantity - gathered;
+    const items =
+      remaining === 0
+        ? input.run.items.filter((item) => item.itemId !== input.itemId)
+        : input.run.items.map((item) =>
+            item.itemId === input.itemId ? { ...item, quantity: remaining } : item,
+          );
+    return success({ ...input.run, hero: { ...input.run.hero, currency } }, items);
+  }
   const backpack = input.run.items
     .filter(
       (item) =>

@@ -297,6 +297,93 @@ describe('immutable inventory transitions', () => {
     expect(() => encodeActiveRun(dropped.state)).not.toThrow();
   });
 
+  it('credits hero currency on gold pickup without using a backpack slot', () => {
+    const pack = content(
+      itemDefinition('item.coin'),
+      itemDefinition('item.gold-coins', 999, { category: 'currency', tags: ['currency'] }),
+    );
+    const backpackFiller = Array.from({ length: 12 }, (_, index) =>
+      item({ itemId: `item.coin.${index}`, quantity: 1 }),
+    );
+    const run = {
+      ...createDemoRun(),
+      items: [
+        ...backpackFiller,
+        item({
+          itemId: 'item.gold-coins.floor',
+          contentId: 'item.gold-coins',
+          quantity: 12,
+          location: { type: 'floor', floorId: 'floor.demo', x: 1, y: 1 },
+        }),
+      ],
+    };
+    const before = run.hero.currency;
+    const backpackSlotsBefore = run.items.filter(
+      (entry) => entry.location.type === 'backpack',
+    ).length;
+    const { state, events } = resolveCommand(
+      run,
+      {
+        type: 'pickup',
+        commandId: 'command.pickup',
+        expectedRevision: 0,
+        itemId: 'item.gold-coins.floor',
+        quantity: 12,
+      },
+      { content: pack },
+    );
+    expect(state.hero.currency).toBe(before + 12);
+    expect(state.items.find((entry) => entry.itemId === 'item.gold-coins.floor')).toBeUndefined();
+    expect(state.items.filter((entry) => entry.location.type === 'backpack').length).toBe(
+      backpackSlotsBefore,
+    );
+    const currencyEvent = events.find((event) => event.type === 'currency.collected');
+    expect(currencyEvent).toMatchObject({ amount: 12, currency: before + 12 });
+    expect(events.some((event) => event.type === 'item.picked-up')).toBe(false);
+    expect(() => encodeActiveRun(state)).not.toThrow();
+  });
+
+  it('credits a partial gold pickup and leaves the remainder on the floor', () => {
+    const pack = content(
+      itemDefinition('item.gold-coins', 999, { category: 'currency', tags: ['currency'] }),
+    );
+    const run = {
+      ...createDemoRun(),
+      items: [
+        item({
+          itemId: 'item.gold-coins.floor',
+          contentId: 'item.gold-coins',
+          quantity: 20,
+          location: { type: 'floor', floorId: 'floor.demo', x: 1, y: 1 },
+        }),
+      ],
+    };
+    const before = run.hero.currency;
+    const { state, events } = resolveCommand(
+      run,
+      {
+        type: 'pickup',
+        commandId: 'command.pickup',
+        expectedRevision: 0,
+        itemId: 'item.gold-coins.floor',
+        quantity: 8,
+      },
+      { content: pack },
+    );
+    expect(state.hero.currency).toBe(before + 8);
+    expect(state.items).toMatchObject([
+      {
+        itemId: 'item.gold-coins.floor',
+        quantity: 12,
+        location: { type: 'floor', x: 1, y: 1 },
+      },
+    ]);
+    const currencyEvent = events.find((event) => event.type === 'currency.collected');
+    expect(currencyEvent).toMatchObject({ amount: 8, currency: before + 8 });
+    expect(events.some((event) => event.type === 'item.picked-up')).toBe(false);
+    expect(() => encodeActiveRun(state)).not.toThrow();
+  });
+
   it('applies a split command with its caller-supplied stable item ID', () => {
     const pack = content(itemDefinition());
     const run = { ...createDemoRun(), items: [item({ quantity: 4 })] };

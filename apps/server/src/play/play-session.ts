@@ -54,6 +54,7 @@ const CONSEQUENTIAL_EVENT_TYPES: ReadonlySet<string> = new Set<string>([
   'actor.healed',
   'loot.dropped',
   'item.picked-up',
+  'currency.collected',
   'item.dropped',
   'item.stack-split',
   'item.consumed',

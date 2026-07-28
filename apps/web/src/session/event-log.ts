@@ -31,6 +31,8 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
       };
     case 'item.picked-up':
       return { text: 'You pick up an item.', tone: 'info' };
+    case 'currency.collected':
+      return { text: `You gather ${event.amount} gold.`, tone: 'info' };
     case 'item.equipped':
       return { text: 'You equip an item.', tone: 'info' };
     case 'item.consumed':

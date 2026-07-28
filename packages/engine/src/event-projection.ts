@@ -272,6 +272,9 @@ export function projectDomainEvents(
         )
           output.push(event);
         break;
+      case 'currency.collected':
+        if (actorVisible(event.actorId)) output.push(event);
+        break;
       case 'item.stack-split':
         if (
           actorVisible(event.actorId) &&
