@@ -93,7 +93,7 @@ function projectionOf(input: {
   } as unknown as GameplayProjection;
 }
 
-function snapshotOf(projection: GameplayProjection): SessionSnapshot {
+function snapshotOf(projection: GameplayProjection, houseOpen = false): SessionSnapshot {
   return {
     projection,
     log: [],
@@ -101,7 +101,7 @@ function snapshotOf(projection: GameplayProjection): SessionSnapshot {
     pendingDecision: null,
     pendingFinalChamberChoice: null,
     notice: null,
-    houseOpen: false,
+    houseOpen,
     conclusion: null,
     sightings: { monsterIds: [], itemIds: [], landmarks: [] },
     heroClassTags: [],
@@ -137,9 +137,9 @@ class FakeSession {
     this.dispatched.push(intent);
   }
 
-  publish(projection: GameplayProjection): void {
+  publish(projection: GameplayProjection, houseOpen = false): void {
     act(() => {
-      this.snapshot = snapshotOf(projection);
+      this.snapshot = snapshotOf(projection, houseOpen);
       for (const listener of this.listeners) listener();
     });
   }
@@ -219,10 +219,58 @@ describe('PlayScreen click-to-move (auto-travel)', () => {
 
     // Cancel while that timer is still pending -- it must never fire.
     fireEvent.keyDown(window, { key: 'Backspace' });
+    // The pending-step timer must actually be torn down, not merely masked by the `travelRef`
+    // null-guard in the timeout callback -- otherwise this assertion would pass even if
+    // `clearTimeout` were never called.
+    expect(vi.getTimerCount()).toBe(0);
     act(() => {
       vi.advanceTimersByTime(STEP_MS);
     });
     expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
+  });
+
+  it('disabling input mid-wait (e.g. a modal opening via a mouse-only path) cancels the pending step and clears the walk', async () => {
+    const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
+    const fake = await renderPlay(session);
+
+    vi.useFakeTimers();
+
+    clickCell(fake, { x: 23, y: 10 });
+    expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
+
+    // The projection confirming step one arrives while the second step is still paced behind the
+    // STEP_MS timer -- same window the review found: a modal can open here via a mouse-only path
+    // (e.g. clicking a CommandPalette item), with no keydown to cancel the walk.
+    session.publish(projectionOf({ hero: { x: 21, y: 10 } }));
+    expect(moves(session)).toHaveLength(1);
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
+    // Flip `disabled` on -- modelled here as `snapshot.houseOpen` becoming true, one of the
+    // conditions `PlayScreen` folds into `isModalActive` (mirroring a modal opened by a
+    // mouse-only path with no keydown) -- while the timer is still pending.
+    session.publish(projectionOf({ hero: { x: 21, y: 10 } }), true);
+
+    // The pending step timer must be torn down immediately (not merely left to no-op when it
+    // fires): `useAutoTravel`'s own `clearPendingStep` must have run. `HouseScreen`'s dialog
+    // mounting schedules unrelated timers of its own, so a raw `vi.getTimerCount()` delta would be
+    // contaminated by those -- spying on `clearTimeout` isolates the assertion to cancellation
+    // actually having happened.
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+    clearTimeoutSpy.mockRestore();
+
+    act(() => {
+      vi.advanceTimersByTime(STEP_MS);
+    });
+    // No further move was dispatched while disabled.
+    expect(moves(session)).toHaveLength(1);
+
+    // Re-enable and click again: the walk must start fresh rather than resuming the cleared plan.
+    session.publish(projectionOf({ hero: { x: 21, y: 10 } }));
+    clickCell(fake, { x: 22, y: 10 });
+    expect(moves(session)).toEqual([
+      { type: 'move', direction: 'east' },
+      { type: 'move', direction: 'east' },
+    ]);
   });
 
   it('auto-travels step by step and picks up a floor item on arrival', async () => {

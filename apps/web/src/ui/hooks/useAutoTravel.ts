@@ -54,6 +54,7 @@ export function useAutoTravel({
   const travelRef = useRef<ActiveTravel | null>(null);
   const lastDispatchAtRef = useRef(0);
   const pendingStepRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const disabledRef = useRef(disabled);
   const dispatch = useCallback((intent: PlayerIntent) => session.dispatch(intent), [session]);
 
   const clearPendingStep = useCallback(() => {
@@ -62,6 +63,19 @@ export function useAutoTravel({
       pendingStepRef.current = null;
     }
   }, []);
+
+  // A modal can grab input via a mouse-only path (e.g. clicking a `CommandPalette` item) with no
+  // intervening keydown, so `disabled` going true has to cancel the pending step timer and clear
+  // the travel plan itself -- matching the pre-pacing semantics where a synchronous dispatch never
+  // had a window for a modal to open mid-step. `disabledRef` also lets the timeout callback below
+  // re-check the latest value even though its own effect closed over an earlier one.
+  useEffect(() => {
+    disabledRef.current = disabled;
+    if (disabled) {
+      travelRef.current = null;
+      clearPendingStep();
+    }
+  }, [disabled, clearPendingStep]);
 
   // Any real keypress cancels an in-progress walk. The key still reaches `usePlayKeyDispatcher`'s
   // own listener and does its normal thing (e.g. a manual move) -- cancelling here only drops the
@@ -88,7 +102,7 @@ export function useAutoTravel({
     const delay = Math.max(0, STEP_MS - (Date.now() - lastDispatchAtRef.current));
     pendingStepRef.current = setTimeout(() => {
       pendingStepRef.current = null;
-      if (travelRef.current === null) return;
+      if (travelRef.current === null || disabledRef.current) return;
       travelRef.current = advanceTravel({ projection, travel: travelRef.current, dispatch });
       lastDispatchAtRef.current = Date.now();
     }, delay);
