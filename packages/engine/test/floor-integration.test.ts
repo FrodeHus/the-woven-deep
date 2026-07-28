@@ -205,9 +205,10 @@ describe('addGeneratedFloor', () => {
       forcedEncounterId: source.id,
     });
 
+    // Floor-loot scatter is the one item source this path legitimately adds; nothing else may.
     expect(
-      integrated.state.items.filter((item) => item.location.type === 'merchant-stock'),
-    ).toEqual([]);
+      integrated.state.items.filter((item) => !item.itemId.startsWith('item.floor-loot.')),
+    ).toEqual(run.items);
     expect(integrated.state.rng['merchant-stock']).toEqual(run.rng['merchant-stock']);
     expect(integrated.state.rng.encounters).toEqual(run.rng.encounters);
     expect(integrated.state.populations).toEqual([]);

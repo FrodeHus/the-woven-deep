@@ -22,6 +22,7 @@ import {
   rollDie,
   stableJson,
   type ActiveRun,
+  type DungeonFeature,
   type FloorSnapshot,
 } from '../src/index.js';
 
@@ -1760,5 +1761,42 @@ describe('vault door/chest feature slot spawn', () => {
 
     const encoded = encodeActiveRun(runWithFeatures);
     expect(decodeActiveRun(encoded)).toEqual(runWithFeatures);
+  });
+
+  it('keeps run.features ordered when floor loot lands beside a pre-existing vault feature', () => {
+    const encounter = individual('encounter.floor-loot-feature-order');
+    const generated = openFloor(40, 20, 'floor.floor-loot-feature-order');
+    // `feature.vault.*` sorts after `feature.floor-loot.*`, so appending the new batch unsorted
+    // would break the strictly-increasing featureId the save schema demands.
+    const existing: DungeonFeature = {
+      featureId: 'feature.vault.pre-existing-chest',
+      floorId: generated.floorId,
+      x: 2,
+      y: 2,
+      contentId: null,
+      coverTileId: 1,
+      type: 'chest',
+      lootTableId: 'loot-table.chest-shallow',
+      lootContentId: null,
+      state: 'closed',
+      lock: null,
+    };
+    const base = runFor([encounter]);
+    const run: ActiveRun = {
+      ...base,
+      floors: [...base.floors, generated].sort((left, right) =>
+        left.floorId < right.floorId ? -1 : left.floorId > right.floorId ? 1 : 0,
+      ),
+      features: [existing],
+    };
+
+    const result = placeFloorPopulations({ run, floor: generated, content: pack([encounter]) });
+
+    const featureIds = result.state.features.map((feature) => feature.featureId);
+    expect(featureIds.filter((id) => id.startsWith('feature.floor-loot.')).length).toBeGreaterThan(
+      0,
+    );
+    expect(featureIds).toEqual([...featureIds].sort());
+    expect(decodeActiveRun(encodeActiveRun(result.state))).toEqual(result.state);
   });
 });

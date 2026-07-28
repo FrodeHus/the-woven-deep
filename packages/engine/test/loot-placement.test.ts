@@ -282,6 +282,55 @@ describe('placeFloorLoot', () => {
     }
   });
 
+  it('never places on a cell held by a floor entity or an existing feature', () => {
+    const generated = floor();
+    const protectedIdx = protectedRouteIndexes(generated);
+    // Cells the unobstructed pass actually uses, so blocking them proves the exclusion bites.
+    const baseline = SEEDS.flatMap((seed) => [
+      ...groundCells(
+        placeFloorLoot({ run: run(), floor: generated, content: content() }, seed).items,
+      ),
+      ...placeFloorLoot({ run: run(), floor: generated, content: content() }, seed).features.filter(
+        (feature): feature is ChestFeature => feature.type === 'chest',
+      ),
+    ]);
+    const entityCell = baseline[0]!;
+    const featureCell = baseline.find(
+      (cell) => cell.x !== entityCell.x || cell.y !== entityCell.y,
+    )!;
+    const doorCell = DOOR_CELLS.find((door) => !protectedIdx.has(door.y * WIDTH + door.x))!;
+
+    const blocked: FloorSnapshot = {
+      ...generated,
+      entities: [
+        { entityId: 'actor.blocker', x: entityCell.x, y: entityCell.y },
+        { entityId: 'actor.door-blocker', x: doorCell.x, y: doorCell.y },
+      ],
+    };
+    const blockingFeature: ChestFeature = {
+      featureId: 'feature.pre-existing.chest',
+      floorId: generated.floorId,
+      x: featureCell.x,
+      y: featureCell.y,
+      contentId: null,
+      coverTileId: 1,
+      type: 'chest',
+      lootTableId: 'loot-table.chest-shallow',
+      lootContentId: null,
+      state: 'closed',
+      lock: null,
+    };
+    const blockedRun: ActiveRun = { ...run(), features: [blockingFeature] };
+
+    for (const seed of SEEDS) {
+      const result = placeFloorLoot({ run: blockedRun, floor: blocked, content: content() }, seed);
+      const placed = [...groundCells(result.items), ...result.features];
+      for (const occupied of [entityCell, featureCell, doorCell]) {
+        expect(placed.some((cell) => cell.x === occupied.x && cell.y === occupied.y)).toBe(false);
+      }
+    }
+  });
+
   it('places nothing on depth-0 floors', () => {
     expect(placeFloorLoot(townFixture(), SEED)).toEqual({ items: [], features: [], state: SEED });
   });

@@ -1258,7 +1258,9 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
     items:
       floorLoot.items.length === 0 ? run.items : sortByItemId([...run.items, ...floorLoot.items]),
     features:
-      floorLoot.features.length === 0 ? run.features : [...run.features, ...floorLoot.features],
+      floorLoot.features.length === 0
+        ? run.features
+        : sortByFeatureId([...run.features, ...floorLoot.features]),
     rng: { ...run.rng, 'loot-placement': floorLoot.state },
   };
   return { state: run, placements, events };

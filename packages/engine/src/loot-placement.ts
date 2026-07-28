@@ -16,6 +16,15 @@ import { tileDefinition } from './terrain.js';
 
 const DOOR_TILE_ID = 2;
 const PERCENT_SIDES = 100;
+const ORDINAL_DIGITS = 6;
+
+/**
+ * Zero-padded feature ordinal: ids within one floor's batch must sort in the order they were
+ * placed, and an unpadded `10` sorts before `2`.
+ */
+function ordinal(value: number): string {
+  return String(value).padStart(ORDINAL_DIGITS, '0');
+}
 
 export type DepthBand = 'shallow' | 'mid' | 'deep';
 
@@ -215,7 +224,7 @@ export function placeFloorLoot(
     cursor = lockRoll.state;
     const locked = lockRoll.value <= knobs.lockedChestPercent;
     const feature: ChestFeature = {
-      featureId: `feature.floor-loot.${floor.floorId}.chest-${chest}`,
+      featureId: `feature.floor-loot.${floor.floorId}.chest-${ordinal(chest)}`,
       floorId: floor.floorId,
       x: draw.cell.x,
       y: draw.cell.y,
@@ -238,7 +247,7 @@ export function placeFloorLoot(
     cursor = lockRoll.state;
     if (lockRoll.value > knobs.lockedDoorPercent) continue;
     const door: DoorFeature = {
-      featureId: `feature.floor-loot.${floor.floorId}.door-${lockedDoors}`,
+      featureId: `feature.floor-loot.${floor.floorId}.door-${ordinal(lockedDoors)}`,
       floorId: floor.floorId,
       x: index % floor.width,
       y: Math.floor(index / floor.width),
