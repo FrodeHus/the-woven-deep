@@ -168,6 +168,8 @@ floorLoot:
   chestLockDifficulty: { shallow: 10, mid: 13, deep: 16 }
 ```
 
+The floor-loot placement pass resolves its rolls against six bundled loot tables, one per depth band and placement kind: `loot-table.floor-scatter-shallow`, `loot-table.floor-scatter-mid`, `loot-table.floor-scatter-deep`, `loot-table.chest-shallow`, `loot-table.chest-mid`, and `loot-table.chest-deep` (`content/loot-tables/floor-scatter-*.yaml` and `content/loot-tables/chest-*.yaml`). The engine looks these up by exact ID during floor generation, choosing the band from `depthBands` and the kind (scattered item vs. chest) from the placement roll; removing or renaming any of the six is a validation-time error, not a runtime fallback.
+
 ### Point-buy attribute table
 
 `pointBuy` supplies the chargen cost curve for raising a base attribute from `attributeMinimum` to `attributeMaximum`.

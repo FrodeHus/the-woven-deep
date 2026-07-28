@@ -1,0 +1,16 @@
+schemaVersion: 8
+entries:
+  - kind: loot-table
+    id: loot-table.chest-deep
+    name: Deep chest
+    tags: [chest, deep]
+    rolls: 1
+    choices:
+      - { contentId: item.gold-coins, lootTableId: null, weight: 5, minimumQuantity: 40, maximumQuantity: 90 }
+      - { contentId: item.fireball-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.frost-nova-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.rime-ward-tome, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.static-field-tome, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.etched-ring, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.weave-focus, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.iron-key, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }

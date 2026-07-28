@@ -36,7 +36,7 @@ describe('bundled content', () => {
       item: 49,
       spell: 14,
       trap: 2,
-      'loot-table': 22,
+      'loot-table': 28,
       balance: 1,
       vault: 7,
       dialogue: 1,

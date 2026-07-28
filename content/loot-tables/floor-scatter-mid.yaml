@@ -1,0 +1,17 @@
+schemaVersion: 8
+entries:
+  - kind: loot-table
+    id: loot-table.floor-scatter-mid
+    name: Mid floor scatter
+    tags: [floor-loot, mid]
+    rolls: 1
+    choices:
+      - { contentId: item.gold-coins, lootTableId: null, weight: 5, minimumQuantity: 10, maximumQuantity: 30 }
+      - { contentId: item.travel-ration, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.ashen-potion, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.crimson-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.lamp-oil, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.frost-shard-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.chain-spark-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.lockpick, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.iron-key, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }

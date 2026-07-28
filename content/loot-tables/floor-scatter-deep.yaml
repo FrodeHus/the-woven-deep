@@ -1,0 +1,16 @@
+schemaVersion: 8
+entries:
+  - kind: loot-table
+    id: loot-table.floor-scatter-deep
+    name: Deep floor scatter
+    tags: [floor-loot, deep]
+    rolls: 1
+    choices:
+      - { contentId: item.gold-coins, lootTableId: null, weight: 5, minimumQuantity: 20, maximumQuantity: 60 }
+      - { contentId: item.ashen-potion, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.crimson-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.fireball-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.frost-nova-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.arc-lance-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.iron-key, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.etched-ring, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
