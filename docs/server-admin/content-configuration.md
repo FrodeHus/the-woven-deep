@@ -150,7 +150,7 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `scatterCount` | object | Yes | `{ minimum, maximum }` non-negative safe integers bounding how many loose scattered items are placed per floor. `minimum` must not exceed `maximum`. |
 | `chestCount` | object | Yes | `{ minimum, maximum }` non-negative safe integers bounding how many chests are placed per floor. `minimum` must not exceed `maximum`. |
 | `lockedChestPercent` | integer 0-100 | Yes | Percent chance a placed chest is locked. |
-| `lockedDoorPercent` | integer 0-100 | Yes | Percent chance a placed door is locked. |
+| `lockedDoorPercent` | integer 0-100 | Yes | Percent chance rolled once per existing door tile on the floor; the expected locked-door count scales with the floor's door-tile count, not with a single placement roll. |
 | `minimumAnchorDistance` | positive safe integer | Yes | Minimum Chebyshev distance a loot placement must keep from the spawn point and stairs. |
 | `minimumSpreadDistance` | positive safe integer | Yes | Minimum Chebyshev distance kept between two loot placements. |
 | `depthBands` | object | Yes | `{ shallowMaxDepth, midMaxDepth }` positive safe integers splitting the dungeon into shallow, mid, and deep bands; `shallowMaxDepth` must be less than `midMaxDepth`. |
@@ -168,7 +168,7 @@ floorLoot:
   chestLockDifficulty: { shallow: 10, mid: 13, deep: 16 }
 ```
 
-The floor-loot placement pass resolves its rolls against six bundled loot tables, one per depth band and placement kind: `loot-table.floor-scatter-shallow`, `loot-table.floor-scatter-mid`, `loot-table.floor-scatter-deep`, `loot-table.chest-shallow`, `loot-table.chest-mid`, and `loot-table.chest-deep` (`content/loot-tables/floor-scatter-*.yaml` and `content/loot-tables/chest-*.yaml`). The engine looks these up by exact ID during floor generation, choosing the band from `depthBands` and the kind (scattered item vs. chest) from the placement roll; removing or renaming any of the six is a validation-time error, not a runtime fallback.
+The floor-loot placement pass resolves its rolls against six bundled loot tables, one per depth band and placement kind: `loot-table.floor-scatter-shallow`, `loot-table.floor-scatter-mid`, `loot-table.floor-scatter-deep`, `loot-table.chest-shallow`, `loot-table.chest-mid`, and `loot-table.chest-deep` (`content/loot-tables/floor-scatter-*.yaml` and `content/loot-tables/chest-*.yaml`). The engine resolves these ids at floor-generation time, choosing the band from `depthBands` and the kind (scattered item vs. chest) from the placement roll; nothing validates the six ids at compile time, so a missing table throws a mid-run error on descent, not a build-time failure. Do not remove or rename any of the six (a compile-time guard is a planned follow-up).
 
 ### Point-buy attribute table
 
@@ -205,8 +205,8 @@ entries:
     energyMaximum: 10000
     attributeMinimum: 0
     attributeMaximum: 30
-    hungerMaximum: 10000
-    hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 }
+    hungerMaximum: 5000
+    hungerThresholds: { hungry: 1500, weak: 500, starving: 0 }
     starvationInterval: 500
     starvationDamage: 1
     recoveryInterval: 500
