@@ -269,7 +269,7 @@ describe('planFloorBake tile anchoring', () => {
     expect(draw.dy).toBeCloseTo(plan.originY - 24 * FLOOR_OVERSCAN, 5);
   });
 
-  it('widens a wall tile horizontally by WALL_OVERSCAN while keeping its base-anchored height', () => {
+  it('widens a wall tile horizontally by WALL_OVERSCAN while keeping its foot-anchored height', () => {
     const atlas = makeAtlas();
     const cells = grid(1, 1, () => 'terrain.wall');
     const plan = planFloorBake(cells, 1, 1, 'floor-wall-anchor', atlas, 1, false);
@@ -281,9 +281,37 @@ describe('planFloorBake tile anchoring', () => {
     expect(draw.dh).toBeCloseTo(64, 5);
     // Still centred on the cell horizontally (sx = 0).
     expect(draw.dx).toBeCloseTo(plan.originX - (64 * WALL_OVERSCAN) / 2, 5);
-    // Base-anchored: bottom sits floorHalfDh (16) + blockDepthPx*spriteScale (48*0.5=24) below the
-    // cell centre, so the diamond centre lands on the cell exactly as the flat tile's does.
-    expect(draw.dy + draw.dh).toBeCloseTo(plan.originY + 16 + 24, 5);
+    // Foot-anchored: the crop's bottom edge rests on the cell floor-diamond bottom corner
+    // (floorHalfDh = 16 below the cell centre), independent of blockDepthPx.
+    expect(draw.dy + draw.dh).toBeCloseTo(plan.originY + 16, 5);
+  });
+
+  it('stands a measured wall cube above its own floor plane (real 120x144 crop, depth 80)', () => {
+    // The live sheet's plain-wall crops are 120x144 with blockDepthPx=80 (see atlas-unified.json).
+    // A wall must render as a raised cube: foot on the cell floor, top edge well above the floor
+    // diamond's top corner. Anchoring by the crop foot is what makes the whole body overpaint the
+    // cell's own floor instead of sinking below the plane (the flat-wall regression).
+    const atlas: PlayfieldAtlas = {
+      ...makeAtlas(),
+      blockDepthPx: 80,
+      walls: [0, 1, 2, 3, 4, 5].map((i) => ({ x: i, y: 0, w: 120, h: 144 })),
+    };
+    const cells = grid(1, 1, () => 'terrain.wall');
+    const plan = planFloorBake(cells, 1, 1, 'floor-real-wall', atlas, 1, false);
+    expect(plan.draws).toHaveLength(1);
+    const draw = plan.draws[0]!;
+
+    // Cell centre is the origin (x=0,y=0 -> sx=sy=0); the plan shifts everything by originX/originY.
+    const cellCentreY = plan.originY;
+    const floorHalfDh = 16; // TILE_HALF_H * scale(1)
+    // Height derives from the 120x144 aspect scaled onto the 64px pitch: dh = 64 * 144/120 = 76.8.
+    expect(draw.dh).toBeCloseTo(64 * (144 / 120), 5);
+    // Base at the cell's floor-diamond bottom corner.
+    expect(draw.dy + draw.dh).toBeCloseTo(cellCentreY + floorHalfDh, 5);
+    // Top edge stands MEANINGFULLY above the cell's floor-diamond top corner (cellCentre - 16):
+    // the top rises dh - floorHalfDh = 60.8 above the foot, i.e. ~44.8 above the diamond top corner.
+    const diamondTopY = cellCentreY - floorHalfDh;
+    expect(draw.dy).toBeLessThan(diamondTopY - 20);
   });
 });
 

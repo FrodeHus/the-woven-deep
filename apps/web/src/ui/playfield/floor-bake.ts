@@ -189,11 +189,16 @@ export function planFloorBake(
     // follow the band form.
 
     if (wall) {
-      // Base-anchored: the sprite's bottom edge sits `blockDepthPx` (source px, scaled) below the
-      // cell's own floor-diamond bottom corner, so tall wall art rises from the tile it stands on
-      // instead of being centred on it. Widened by `WALL_OVERSCAN` about the cell centre (bottom +
-      // height unchanged) so adjacent wall faces meet instead of leaving hairline gaps.
-      const bottomY = sy + floorHalfDh + atlas.blockDepthPx * spriteScale;
+      // Foot-anchored: a measured wall crop is tight, so its bottom edge is the cube's front foot.
+      // Rest that foot on the cell's floor-diamond bottom corner (`sy + floorHalfDh`), which lands
+      // the whole cube -- top face and side faces -- ABOVE the cell's floor plane and overpainting
+      // it. The cube height is already encoded in `dh` (the scaled crop height), so its top edge
+      // rises `dh - floorHalfDh` above the cell centre; no separate depth offset is added. Adding
+      // `blockDepthPx` here (the earlier bug) instead sank the body a full cube-depth below the
+      // plane, where the next row's floor overpainted it and the wall read as flat floor.
+      // Widened by `WALL_OVERSCAN` about the cell centre (foot and height unchanged) so adjacent
+      // wall faces meet instead of leaving hairline gaps.
+      const bottomY = sy + floorHalfDh;
       const wdw = dw * WALL_OVERSCAN;
       placed.push({ x: cell.x, y: cell.y, rect, dx: sx - wdw / 2, dy: bottomY - dh, dw: wdw, dh });
     } else if (isFlatFloorFamily(skin.family)) {
