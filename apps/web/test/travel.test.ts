@@ -338,6 +338,25 @@ describe('click-to-travel through a closed unlocked door', () => {
   });
 });
 
+describe('click-to-travel into a locked door', () => {
+  it('rejects the move: the bump into a locked door does not auto-open and returns a rejected outcome', () => {
+    const projection = makeProjection({
+      hero: { x: 5, y: 5 },
+      doors: [{ x: 6, y: 5, state: 'locked' }],
+    });
+    // A locked door is NOT traversable: a move intent into it is rejected outright.
+    // This contrasts with closed doors, which bump-open via `open-door` conversion.
+    const built = buildIntent({
+      intent: { type: 'move', direction: 'east' },
+      projection,
+      commandId: 'command.test',
+      expectedRevision: 0,
+    });
+    expect(built.kind).toBe('rejected');
+    expect((built as { message: string }).message).toMatch(/locked/i);
+  });
+});
+
 describe('click-hostile grounding: the terminal move resolves to an attack command', () => {
   it("a move into a hostile's cell builds an `attack` command targeting it", () => {
     const hostile: Actor = {
