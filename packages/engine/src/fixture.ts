@@ -39,7 +39,7 @@ export function createDemoContentPack(): CompiledContentPack {
         energyMaximum: 10_000,
         attributeMinimum: 0,
         attributeMaximum: 30,
-        hungerMaximum: 10_000,
+        hungerMaximum: 5_000,
         hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 },
         starvationInterval: 500,
         starvationDamage: 1,
@@ -313,7 +313,7 @@ export function createDemoRun(): ActiveRun {
     features: [],
     relationships: [],
     survival: {
-      hungerReserve: 10_000,
+      hungerReserve: 5_000,
       hungerStage: 'sated',
       nextStarvationAt: null,
       emittedHungerWarnings: [],

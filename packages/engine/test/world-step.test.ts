@@ -491,7 +491,7 @@ describe('atomic world steps', () => {
       action: { type: 'wait', actorId: 'hero.demo', cost: 100 },
     });
     expect(result.state.worldTime).toBe(1);
-    expect(result.state.survival.hungerReserve).toBe(9_999);
+    expect(result.state.survival.hungerReserve).toBe(4_999);
     expect(result.state.items[0]).toMatchObject({ fuel: 1, enabled: true });
     expect(result.events.some((event) => event.type === 'fuel.warning')).toBe(true);
   });
