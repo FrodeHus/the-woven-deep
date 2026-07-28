@@ -45,8 +45,8 @@ import {
   relationship,
   survival,
 } from './population.js';
-import { rngEntries, runConclusionSchema, runKillsByModel, runMetrics } from './run-record.js';
-import { ENGINE_GAME_VERSION, RECENT_COMMAND_LIMIT, type RNG_STREAM_NAMES } from '../versions.js';
+import { runConclusionSchema, runKillsByModel, runMetrics } from './run-record.js';
+import { ENGINE_GAME_VERSION, RECENT_COMMAND_LIMIT } from '../versions.js';
 
 export const legacyPopulationCreatedEvent = z.strictObject({
   type: z.literal('population.created'),
@@ -120,6 +120,48 @@ export const legacyRecordedV10 = z.strictObject({
   events: z.array(legacyAuthoritativeEventV10).readonly(),
   publicEvents: z.array(legacyPublicEventV10).readonly(),
 });
+// The post-parameterized-criteria achievement.granted shape a v11 save carries: the v10 event with
+// `criteriaId` dropped, exactly what `migrateV10ToV11` produces. Spelled out as a frozen literal so
+// a future event change can't silently alter what a real v11 save is validated against.
+export const legacyAchievementGrantedEventV11 = z.strictObject({
+  type: z.literal('achievement.granted'),
+  eventId: identifier,
+  achievementId: identifier,
+  name: heroName,
+});
+export const legacyEventV11 = z.discriminatedUnion('type', [
+  ...eventOptions,
+  populationCreatedEvent,
+  reputationChangedEvent,
+  tradeOpenedEvent,
+  tradeBoughtEvent,
+  tradeSoldEvent,
+  tradeServicePurchasedEvent,
+  tradeClosedEvent,
+  merchantDepartureWarningEvent,
+  merchantDepartedEvent,
+  merchantProvokedEvent,
+  merchantStockDroppedEvent,
+  merchantDiedEvent,
+  merchantRestockedEvent,
+  runConcludedEvent,
+  runFinalizedEvent,
+  legacyAchievementGrantedEventV11,
+]);
+export const legacyAuthoritativeEventV11 = legacyEventV11.refine(
+  (value) => !publicOnlyEventTypes.has(value.type),
+  'public projection event cannot be stored as authoritative',
+);
+export const legacyPublicEventV11 = legacyEventV11.refine(
+  (value) => !hiddenPublicEventTypes.has(value.type),
+  'authoritative or roll-bearing event must be projected before public storage',
+);
+export const legacyRecordedV11 = z.strictObject({
+  command,
+  result: processedResult,
+  events: z.array(legacyAuthoritativeEventV11).readonly(),
+  publicEvents: z.array(legacyPublicEventV11).readonly(),
+});
 export const legacyRecorded = z.strictObject({
   command: commandV7,
   result: processedResult,
@@ -154,12 +196,30 @@ export const LEGACY_V5_RNG_STREAM_NAMES = [
   'effects',
   'narrative',
 ] as const;
+// The ten streams every v6-v11 save carries, spelled out as a frozen literal rather than derived
+// from the live `RNG_STREAM_NAMES`: a new stream must never retroactively become required of a
+// genuine old save.
+export const LEGACY_V11_RNG_STREAM_NAMES = [
+  'generation',
+  'encounters',
+  'population-gates',
+  'merchant-stock',
+  'merchant-runtime',
+  'combat',
+  'loot',
+  'effects',
+  'narrative',
+  'run-records',
+] as const;
 export const legacyRngEntries = Object.fromEntries(
   LEGACY_RNG_STREAM_NAMES.map((name) => [name, uint32State]),
 );
 export const legacyV5RngEntries = Object.fromEntries(
   LEGACY_V5_RNG_STREAM_NAMES.map((name) => [name, uint32State]),
 );
+export const legacyV11RngEntries = Object.fromEntries(
+  LEGACY_V11_RNG_STREAM_NAMES.map((name) => [name, uint32State]),
+) as Record<(typeof LEGACY_V11_RNG_STREAM_NAMES)[number], typeof uint32State>;
 export const legacyV5Event = z.discriminatedUnion('type', [
   ...eventOptions,
   populationCreatedEvent,
@@ -241,7 +301,7 @@ export const legacyActiveRunV7Schema = z.strictObject({
   contentHash: z.string().regex(/^[a-f0-9]{64}$/),
   runId: identifier,
   runSeed: uint32Tuple,
-  rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
+  rng: z.strictObject(legacyV11RngEntries),
   revision: safeNonNegative,
   turn: safeNonNegative,
   worldTime: safeNonNegative,
@@ -287,7 +347,7 @@ export const legacyActiveRunV9Schema = z.strictObject({
   contentHash: z.string().regex(/^[a-f0-9]{64}$/),
   runId: identifier,
   runSeed: uint32Tuple,
-  rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
+  rng: z.strictObject(legacyV11RngEntries),
   revision: safeNonNegative,
   turn: safeNonNegative,
   worldTime: safeNonNegative,
@@ -336,7 +396,7 @@ export const legacyActiveRunV10Schema = z.strictObject({
   contentHash: z.string().regex(/^[a-f0-9]{64}$/),
   runId: identifier,
   runSeed: uint32Tuple,
-  rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
+  rng: z.strictObject(legacyV11RngEntries),
   revision: safeNonNegative,
   turn: safeNonNegative,
   worldTime: safeNonNegative,
@@ -375,6 +435,55 @@ export const legacyActiveRunV10Schema = z.strictObject({
   restockedMilestones: z.array(positiveQuantity).readonly(),
 });
 
+// The pre-loot-placement save shape: identical to the current run schema except `rng` carries only
+// the ten streams that existed before floor loot placement. Spelled out as a frozen literal (not
+// derived from the live `activeRunSchema`) so a future schema bump can't silently change what a
+// real v11 save is validated against.
+export const legacyActiveRunV11Schema = z.strictObject({
+  schemaVersion: z.literal(11),
+  gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  runId: identifier,
+  runSeed: uint32Tuple,
+  rng: z.strictObject(legacyV11RngEntries),
+  revision: safeNonNegative,
+  turn: safeNonNegative,
+  worldTime: safeNonNegative,
+  hero,
+  reputations: z
+    .array(z.strictObject({ factionId: identifier, value: z.number().int().safe() }))
+    .readonly(),
+  activeTrade: z
+    .strictObject({
+      merchantPopulationId: identifier,
+      merchantActorId: identifier,
+      openedByCommandId: identifier,
+      openedAtRevision: safeNonNegative,
+      completedCommerce: z.boolean(),
+    })
+    .nullable(),
+  actors: z.array(actor).min(1).readonly(),
+  items: z.array(item).readonly(),
+  features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(),
+  survival,
+  identification,
+  activeFloorId: identifier,
+  activeFloorEnteredAt: safeNonNegative,
+  returnAnchorFloorId: identifier.optional(),
+  floors: z.array(floor).min(1).readonly(),
+  recentCommands: z.array(legacyRecordedV11).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(),
+  populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+  metrics: runMetrics,
+  conclusion: runConclusionSchema.nullable(),
+  house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
+  restockedMilestones: z.array(positiveQuantity).readonly(),
+});
+
 // The pre-Weave save shape: identical to the current run schema except actors carry no
 // `weave`/`maxWeave`. Spelled out as a frozen literal (not derived from the live
 // `activeRunSchema`) so a future schema bump can't silently change what a real v8 save is
@@ -385,7 +494,7 @@ export const legacyActiveRunV8Schema = z.strictObject({
   contentHash: z.string().regex(/^[a-f0-9]{64}$/),
   runId: identifier,
   runSeed: uint32Tuple,
-  rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
+  rng: z.strictObject(legacyV11RngEntries),
   revision: safeNonNegative,
   turn: safeNonNegative,
   worldTime: safeNonNegative,
@@ -429,7 +538,7 @@ export const legacyActiveRunV6Schema = z.strictObject({
   contentHash: z.string().regex(/^[a-f0-9]{64}$/),
   runId: identifier,
   runSeed: uint32Tuple,
-  rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
+  rng: z.strictObject(legacyV11RngEntries),
   revision: safeNonNegative,
   turn: safeNonNegative,
   worldTime: safeNonNegative,

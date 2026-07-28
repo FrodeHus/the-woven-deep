@@ -14,6 +14,7 @@ import {
   heroPerception,
   refreshKnowledge,
   resolveCommand as resolveCommandWithContext,
+  RNG_STREAM_NAMES,
   SaveLoadError,
   validateActiveRun,
   validateContentBoundRun,
@@ -45,6 +46,13 @@ describe('active-run save codec', () => {
     ),
   });
 
+  // Pre-floor-loot saves carry no `rng['loot-placement']` stream; drop it so a legacy fixture and
+  // the reciprocal strip both round-trip against the frozen ten-stream legacy rng shape.
+  const stripLootPlacementStream = (run: Record<string, unknown>): Record<string, unknown> => {
+    const { 'loot-placement': _lootPlacement, ...rng } = run.rng as Record<string, unknown>;
+    return { ...run, rng };
+  };
+
   function v4Fixture(): Record<string, unknown> {
     const current = structuredClone(createDemoRun()) as any;
     const {
@@ -68,7 +76,9 @@ describe('active-run save codec', () => {
       'run-records': _runRecords,
       ...rng
     } = withoutRunFields.rng;
-    return stripActorWeave({ ...withoutRunFields, schemaVersion: 4, hero, rng });
+    return stripLootPlacementStream(
+      stripActorWeave({ ...withoutRunFields, schemaVersion: 4, hero, rng }),
+    );
   }
 
   function stripToV4Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
@@ -94,7 +104,9 @@ describe('active-run save codec', () => {
       'run-records': _runRecords,
       ...rng
     } = withoutRunFields.rng;
-    return stripActorWeave({ ...withoutRunFields, schemaVersion: 4, hero, rng });
+    return stripLootPlacementStream(
+      stripActorWeave({ ...withoutRunFields, schemaVersion: 4, hero, rng }),
+    );
   }
 
   function v5Fixture(): Record<string, unknown> {
@@ -108,7 +120,9 @@ describe('active-run save codec', () => {
     } = current;
     const { 'run-records': _runRecords, ...rng } = withoutV6Fields.rng;
     const { classTags: _classTags, statModifiers: _statModifiers, ...hero } = withoutV6Fields.hero;
-    return stripActorWeave({ ...withoutV6Fields, schemaVersion: 5, hero, rng });
+    return stripLootPlacementStream(
+      stripActorWeave({ ...withoutV6Fields, schemaVersion: 5, hero, rng }),
+    );
   }
 
   function stripV6Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
@@ -122,7 +136,9 @@ describe('active-run save codec', () => {
     } = current;
     const { 'run-records': _runRecords, ...rng } = withoutV6Fields.rng;
     const { classTags: _classTags, statModifiers: _statModifiers, ...hero } = withoutV6Fields.hero;
-    return stripActorWeave({ ...withoutV6Fields, schemaVersion: 5, hero, rng });
+    return stripLootPlacementStream(
+      stripActorWeave({ ...withoutV6Fields, schemaVersion: 5, hero, rng }),
+    );
   }
 
   function v6Fixture(): Record<string, unknown> {
@@ -133,8 +149,8 @@ describe('active-run save codec', () => {
       restockedMilestones: _restockedMilestones,
       ...withoutV8Fields
     } = current;
-    return stripDefeatedBossMonsterIds(
-      stripActorWeave({ ...withoutV8Fields, schemaVersion: 6, hero }),
+    return stripLootPlacementStream(
+      stripDefeatedBossMonsterIds(stripActorWeave({ ...withoutV8Fields, schemaVersion: 6, hero })),
     );
   }
 
@@ -146,8 +162,8 @@ describe('active-run save codec', () => {
       restockedMilestones: _restockedMilestones,
       ...withoutV8Fields
     } = current;
-    return stripDefeatedBossMonsterIds(
-      stripActorWeave({ ...withoutV8Fields, schemaVersion: 6, hero }),
+    return stripLootPlacementStream(
+      stripDefeatedBossMonsterIds(stripActorWeave({ ...withoutV8Fields, schemaVersion: 6, hero })),
     );
   }
 
@@ -158,7 +174,9 @@ describe('active-run save codec', () => {
       restockedMilestones: _restockedMilestones,
       ...withoutV8Fields
     } = current;
-    return stripDefeatedBossMonsterIds(stripActorWeave({ ...withoutV8Fields, schemaVersion: 7 }));
+    return stripLootPlacementStream(
+      stripDefeatedBossMonsterIds(stripActorWeave({ ...withoutV8Fields, schemaVersion: 7 })),
+    );
   }
 
   function stripV8Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
@@ -168,17 +186,23 @@ describe('active-run save codec', () => {
       restockedMilestones: _restockedMilestones,
       ...withoutV8Fields
     } = current;
-    return stripDefeatedBossMonsterIds(stripActorWeave({ ...withoutV8Fields, schemaVersion: 7 }));
+    return stripLootPlacementStream(
+      stripDefeatedBossMonsterIds(stripActorWeave({ ...withoutV8Fields, schemaVersion: 7 })),
+    );
   }
 
   function v8Fixture(): Record<string, unknown> {
     const current = structuredClone(createDemoRun()) as any;
-    return stripDefeatedBossMonsterIds(stripActorWeave({ ...current, schemaVersion: 8 }));
+    return stripLootPlacementStream(
+      stripDefeatedBossMonsterIds(stripActorWeave({ ...current, schemaVersion: 8 })),
+    );
   }
 
   function stripV9Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
     const current = structuredClone(run) as any;
-    return stripDefeatedBossMonsterIds(stripActorWeave({ ...current, schemaVersion: 8 }));
+    return stripLootPlacementStream(
+      stripDefeatedBossMonsterIds(stripActorWeave({ ...current, schemaVersion: 8 })),
+    );
   }
 
   // Pre-boss-tracking saves carry no `metrics.defeatedBossMonsterIds`; drop it so a legacy fixture
@@ -193,12 +217,12 @@ describe('active-run save codec', () => {
 
   function v9Fixture(): Record<string, unknown> {
     const current = structuredClone(createDemoRun()) as any;
-    return stripDefeatedBossMonsterIds({ ...current, schemaVersion: 9 });
+    return stripLootPlacementStream(stripDefeatedBossMonsterIds({ ...current, schemaVersion: 9 }));
   }
 
   function stripV10Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
     const current = structuredClone(run) as any;
-    return stripDefeatedBossMonsterIds({ ...current, schemaVersion: 9 });
+    return stripLootPlacementStream(stripDefeatedBossMonsterIds({ ...current, schemaVersion: 9 }));
   }
 
   // v10 saves are structurally identical to the current shape (achievement.granted events can
@@ -206,12 +230,24 @@ describe('active-run save codec', () => {
   // below), so the only difference is the schemaVersion literal.
   function v10Fixture(): Record<string, unknown> {
     const current = structuredClone(createDemoRun()) as any;
-    return { ...current, schemaVersion: 10 };
+    return stripLootPlacementStream({ ...current, schemaVersion: 10 });
   }
 
   function stripV11Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
     const current = structuredClone(run) as any;
-    return { ...current, schemaVersion: 10 };
+    return stripLootPlacementStream({ ...current, schemaVersion: 10 });
+  }
+
+  // v11 saves are structurally identical to the current shape apart from the loot-placement RNG
+  // stream, which floor loot placement introduced at v12.
+  function v11Fixture(): Record<string, unknown> {
+    const current = structuredClone(createDemoRun()) as any;
+    return stripLootPlacementStream({ ...current, schemaVersion: 11 });
+  }
+
+  function stripV12Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
+    const current = structuredClone(run) as any;
+    return stripLootPlacementStream({ ...current, schemaVersion: 11 });
   }
 
   function concludedRun(): ReturnType<typeof createDemoRun> {
@@ -442,11 +478,11 @@ describe('active-run save codec', () => {
     return population;
   }
 
-  it('migrates strict schema v4 state through v5, v6, v7, v8, v9, v10, and v11 and preserves every former field', () => {
+  it('migrates strict schema v4 state through v5, v6, v7, v8, v9, v10, v11, and v12 and preserves every former field', () => {
     const legacy = v4Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(11);
+    expect(decoded.schemaVersion).toBe(12);
     expect(decoded.hero.currency).toBe(0);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
@@ -466,11 +502,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v5 state through v6, v7, v8, v9, v10, and v11 and preserves every former field', () => {
+  it('migrates strict schema v5 state through v6, v7, v8, v9, v10, v11, and v12 and preserves every former field', () => {
     const legacy = v5Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(11);
+    expect(decoded.schemaVersion).toBe(12);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
     expect(decoded.metrics).toEqual(emptyRunMetrics());
@@ -485,11 +521,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v6 state through v7, v8, v9, v10, and v11 and preserves every former field', () => {
+  it('migrates strict schema v6 state through v7, v8, v9, v10, v11, and v12 and preserves every former field', () => {
     const legacy = v6Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(11);
+    expect(decoded.schemaVersion).toBe(12);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
     expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
@@ -500,11 +536,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v7 state to v11 and preserves every former field', () => {
+  it('migrates strict schema v7 state to v12 and preserves every former field', () => {
     const legacy = v7Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(11);
+    expect(decoded.schemaVersion).toBe(12);
     expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
     expect(decoded.restockedMilestones).toEqual([]);
     // A pre-Weave hero migrates to full Weave: maxWeave is base 4 + Wits, and weave starts full.
@@ -517,11 +553,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v8 state to v11 and preserves every former field', () => {
+  it('migrates strict schema v8 state to v12 and preserves every former field', () => {
     const legacy = v8Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(11);
+    expect(decoded.schemaVersion).toBe(12);
     // A pre-Weave hero migrates to full Weave: maxWeave is base 4 + Wits, and weave starts full.
     const migratedHero = decoded.actors.find((actor) => actor.actorId === decoded.hero.actorId)!;
     expect(migratedHero.maxWeave).toBe(4 + migratedHero.attributes.wits);
@@ -538,11 +574,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v9 state to v11 and preserves every former field', () => {
+  it('migrates strict schema v9 state to v12 and preserves every former field', () => {
     const legacy = v9Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(11);
+    expect(decoded.schemaVersion).toBe(12);
     expect(decoded.metrics.defeatedBossMonsterIds).toEqual([]);
     expect(stripV10Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
@@ -550,15 +586,49 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v10 state to v11 and preserves every former field', () => {
+  it('migrates strict schema v10 state to v12 and preserves every former field', () => {
     const legacy = v10Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(11);
+    expect(decoded.schemaVersion).toBe(12);
     expect(stripV11Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
       encodeActiveRun(decoded),
     );
+  });
+
+  it('migrates strict schema v11 state to v12 and preserves every former field', () => {
+    const legacy = v11Fixture();
+    const decoded = decodeActiveRun(JSON.stringify(legacy));
+
+    expect(decoded.schemaVersion).toBe(12);
+    expect(decoded.rng['loot-placement']).toEqual(
+      deriveRngStreams(legacy.runSeed as any)['loot-placement'],
+    );
+    expect(stripV12Fields(decoded)).toEqual(legacy);
+    expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
+      encodeActiveRun(decoded),
+    );
+  });
+
+  it('derives a loot-placement stream distinct from every other stream', () => {
+    const streams = deriveRngStreams([1, 2, 3, 4]);
+    expect(streams['loot-placement']).toBeDefined();
+    for (const name of RNG_STREAM_NAMES.filter((candidate) => candidate !== 'loot-placement'))
+      expect(streams['loot-placement']).not.toEqual(streams[name]);
+  });
+
+  it('migrates v11 saves by deriving the loot-placement stream', () => {
+    const current = createDemoRun();
+    const encoded = JSON.parse(encodeActiveRun(current)) as any;
+    const { 'loot-placement': _dropped, ...v11Rng } = encoded.rng;
+    const v11 = { ...encoded, schemaVersion: 11, rng: v11Rng };
+    const decoded = decodeActiveRun(JSON.stringify(v11));
+
+    expect(decoded.rng['loot-placement']).toEqual(
+      deriveRngStreams(decoded.runSeed)['loot-placement'],
+    );
+    expect(encodeActiveRun(decoded)).toEqual(encodeActiveRun(current));
   });
 
   it('round-trips current state carrying defeatedBossMonsterIds to identical stable bytes', () => {
@@ -2308,7 +2378,7 @@ describe('active-run save codec', () => {
     );
   });
 
-  it.each([0, 1, 2, 3, 12])(
+  it.each([0, 1, 2, 3, 13])(
     'rejects unsupported schema version %i without partial state',
     (schemaVersion) => {
       try {

@@ -8,6 +8,7 @@ import {
   legacyActiveRunV8Schema,
   legacyActiveRunV9Schema,
   legacyActiveRunV10Schema,
+  legacyActiveRunV11Schema,
   emptyLegacyRunMetricsV9,
   validateActiveRun,
 } from './save-schema.js';
@@ -112,28 +113,48 @@ function migrateV10ToV11(input: unknown): unknown {
   };
 }
 
-function migrateLegacy(input: unknown, schemaVersion: 4 | 5 | 6 | 7 | 8 | 9 | 10): ActiveRun {
+function migrateV11ToV12(input: unknown): unknown {
+  const v11 = legacyActiveRunV11Schema.parse(input);
+  const derived = deriveRngStreams(v11.runSeed);
+  return {
+    ...v11,
+    schemaVersion: 12,
+    rng: { ...v11.rng, 'loot-placement': derived['loot-placement'] },
+  };
+}
+
+function migrateLegacy(input: unknown, schemaVersion: 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11): ActiveRun {
   try {
     const migrated =
       schemaVersion === 4
-        ? migrateV10ToV11(
-            migrateV9ToV10(
-              migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input))))),
+        ? migrateV11ToV12(
+            migrateV10ToV11(
+              migrateV9ToV10(
+                migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input))))),
+              ),
             ),
           )
         : schemaVersion === 5
-          ? migrateV10ToV11(
-              migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input))))),
+          ? migrateV11ToV12(
+              migrateV10ToV11(
+                migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input))))),
+              ),
             )
           : schemaVersion === 6
-            ? migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(input)))))
+            ? migrateV11ToV12(
+                migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(input))))),
+              )
             : schemaVersion === 7
-              ? migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(input))))
+              ? migrateV11ToV12(
+                  migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(input)))),
+                )
               : schemaVersion === 8
-                ? migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(input)))
+                ? migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(input))))
                 : schemaVersion === 9
-                  ? migrateV10ToV11(migrateV9ToV10(input))
-                  : migrateV10ToV11(input);
+                  ? migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(input)))
+                  : schemaVersion === 10
+                    ? migrateV11ToV12(migrateV10ToV11(input))
+                    : migrateV11ToV12(input);
     return validateActiveRun(migrated);
   } catch (cause) {
     if (cause instanceof SaveLoadError) throw cause;
@@ -168,7 +189,8 @@ export function decodeActiveRun(json: string): ActiveRun {
     schemaVersion === 7 ||
     schemaVersion === 8 ||
     schemaVersion === 9 ||
-    schemaVersion === 10
+    schemaVersion === 10 ||
+    schemaVersion === 11
   ) {
     return migrateLegacy(input, schemaVersion);
   }
