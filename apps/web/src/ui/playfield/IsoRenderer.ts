@@ -20,9 +20,13 @@ import { bakeFloor, bakeKey, occludedWallIndices, planFloorBake } from './floor-
 import { TILE_HALF_H, TILE_HALF_W, worldToScreen, cellAtScreen, type IsoView } from './iso-math.js';
 import { groundItemHoverOffset, resolveActorRect, resolveItemSprite } from './sprite-mapping.js';
 import {
+  composeTints,
+  featureLightTint,
   isFogMaskedTier,
   lightPoolDiameterPx,
   lightsForFloor,
+  REMEMBERED_TINT,
+  spriteLightTint,
   visibleBrightness,
   type LightSpec,
 } from './light-layer.js';
@@ -57,10 +61,6 @@ const ZOOM = 1;
 const BACKGROUND_COLOR = 0x05060a;
 /** The global darkness the multiply light-map starts from (areas outside any discovered cell). */
 const DARKNESS_COLOR = 0x05060a;
-/** The cool, dim brightness `remembered` cells multiply down to -- matches the old renderer's
- * `--remembered` gray (`#4b526b`, luminance ~0.29), so a remembered cell is clearly darker than any
- * visible one (floored at `VISIBLE_FLOOR_BRIGHTNESS`) yet still legible. */
-const REMEMBERED_COLOR = 0x4b526b;
 /** Warm lamp color for fixture light pools. */
 const FIXTURE_LIGHT_COLOR = 0xffb166;
 /** Fallback hero light color when no light source resolves a color. */
@@ -186,6 +186,10 @@ export class IsoRenderer {
 
   private readonly worldContainer = new Container();
   private readonly floorSprite = new Sprite();
+  /** Holds the feature/ground-item/actor sprite containers. Sits ABOVE the multiply light-map in the
+   * stage so a tall sprite is never sliced by a neighbor cell's fov geometry; each sprite instead
+   * carries its own cell's light as a flat per-sprite tint. Shares the world's camera transform. */
+  private readonly spritesContainer = new Container();
   private readonly featuresContainer = new Container();
   private readonly itemsContainer = new Container();
   private readonly actorsContainer = new Container();
@@ -203,6 +207,10 @@ export class IsoRenderer {
   private readonly vignetteSprite = new Sprite(Texture.WHITE);
 
   private scene: SceneState | null = null;
+  /** Per-snapshot cell lookup keyed `"x,y"`, so a sprite can read its OWN cell's knowledge/intensity
+   * and tint itself uniformly (it no longer receives the per-cell multiply light-map). Rebuilt each
+   * `setSnapshot` before the feature/item/actor rebuilds that consume it. */
+  private cellByKey = new Map<string, ObservableCell>();
   private lights: readonly LightDisplay[] = [];
   private actorDisplays: readonly ActorDisplay[] = [];
   private itemDisplays: readonly ItemDisplay[] = [];
@@ -319,6 +327,8 @@ export class IsoRenderer {
     this.floorWidth = floor.width;
     this.floorHeight = floor.height;
 
+    this.cellByKey = new Map(floor.cells.map((cell) => [`${cell.x},${cell.y}`, cell] as const));
+
     const hero = heroOf(snapshot.projection);
     if (!this.cameraInitialized) {
       this.camX = hero.x;
@@ -424,8 +434,11 @@ export class IsoRenderer {
 
     this.actorsContainer.sortableChildren = true;
 
-    this.worldContainer.addChild(
-      this.floorSprite,
+    // The floor alone stays UNDER the multiply light-map (a flat plane the per-cell fov geometry can
+    // shade correctly). The feature/item/actor sprites move into `spritesContainer`, layered above
+    // the light-map, so a tall sprite crossing a cell boundary is never sliced by a darker neighbor.
+    this.worldContainer.addChild(this.floorSprite);
+    this.spritesContainer.addChild(
       this.featuresContainer,
       this.itemsContainer,
       this.actorsContainer,
@@ -453,9 +466,15 @@ export class IsoRenderer {
     this.vignetteSprite.tint = HURT_VIGNETTE_COLOR;
     this.vignetteSprite.alpha = 0;
 
+    // Stage order (back to front): floor, the multiply light-map over it, then the per-sprite-lit
+    // feature/item/actor sprites, then the overlay (targeting + transient effects), then the hurt
+    // vignette on top. `overlayContainer`'s `effectsContainer` deliberately stays above the light-map
+    // and UNTINTED: combat particles and floating glyphs are emissive, so they must not be dimmed by
+    // cell light the way the world sprites now are.
     app.stage.addChild(
       this.worldContainer,
       this.lightMapSprite,
+      this.spritesContainer,
       this.overlayContainer,
       this.vignetteSprite,
     );
@@ -633,6 +652,7 @@ export class IsoRenderer {
     sprite.width = dw;
     sprite.height = dh;
     sprite.position.set(lx - dw / 2, bottomY - dh);
+    sprite.tint = this.featureTintAt(feature.x, feature.y);
     return sprite;
   }
 
@@ -654,6 +674,7 @@ export class IsoRenderer {
     });
     text.anchor.set(0.5, 1);
     text.position.set(0, TILE_HALF_H * 0.4);
+    text.tint = this.featureTintAt(feature.x, feature.y);
     container.addChild(text);
 
     const [lx, ly] = this.isoLocal(feature.x, feature.y);
@@ -681,7 +702,7 @@ export class IsoRenderer {
       shadow.fill({ color: SHADOW_COLOR, alpha: SHADOW_ALPHA });
       container.addChild(shadow);
 
-      const body = this.buildItemBody(item);
+      const body = this.buildItemBody(item, this.spriteTintAt(item.x, item.y));
       container.addChild(body);
       this.itemsContainer.addChild(container);
       displays.push({ container, body, bodyBaseY: 0, x: item.x, y: item.y });
@@ -689,9 +710,11 @@ export class IsoRenderer {
     this.itemDisplays = displays;
   }
 
-  /** A ground item's bob-able body: the atlas sprite (tinted only for a generic fallback sheet) when
-   * one resolves, else the colored glyph. Centered on the cell. */
-  private buildItemBody(item: GroundItemSprite): Container {
+  /** A ground item's bob-able body, tinted by its own cell's light (`lightTint`). Uses the atlas
+   * sprite when one resolves -- composing the cell light with the generic-category tint when the
+   * sprite carries one, else applying the cell light alone -- otherwise the colored glyph, also
+   * dimmed by the cell light. Centered on the cell. */
+  private buildItemBody(item: GroundItemSprite, lightTint: number): Container {
     const resolution = resolveItemSprite(item, this.itemAtlas);
     if (resolution !== null) {
       const key = item.contentId ?? `generic:${item.category}`;
@@ -705,7 +728,8 @@ export class IsoRenderer {
         const image = new Sprite(texture);
         image.anchor.set(0.5, 0.5);
         image.scale.set(ITEM_SPRITE_SCALE);
-        if (resolution.tint !== undefined) image.tint = resolution.tint;
+        image.tint =
+          resolution.tint === undefined ? lightTint : composeTints(resolution.tint, lightTint);
         image.position.set(0, 0);
         return image;
       }
@@ -722,6 +746,7 @@ export class IsoRenderer {
     });
     text.anchor.set(0.5, 0.5);
     text.position.set(0, 0);
+    text.tint = lightTint;
     return text;
   }
 
@@ -752,7 +777,7 @@ export class IsoRenderer {
     shadow.fill({ color: SHADOW_COLOR, alpha: SHADOW_ALPHA });
     container.addChild(shadow);
 
-    const { node, topY } = this.buildActorBody(sprite);
+    const { node, topY } = this.buildActorBody(sprite, this.spriteTintAt(sprite.x, sprite.y));
     container.addChild(node);
 
     if (sprite.health < sprite.maxHealth && sprite.maxHealth > 0) {
@@ -776,7 +801,7 @@ export class IsoRenderer {
    * sprite (foot-anchored to the cell floor, uniformly scaled so taller boss crops read bigger,
    * horizontally mirrored while facing right); falls back to the colored glyph when the contentId has
    * no art. */
-  private buildActorBody(sprite: ActorSprite): { node: Container; topY: number } {
+  private buildActorBody(sprite: ActorSprite, lightTint: number): { node: Container; topY: number } {
     const rect = resolveActorRect(sprite.contentId, this.actorAtlas);
     const texture =
       rect === null || sprite.contentId === null
@@ -788,6 +813,7 @@ export class IsoRenderer {
       const flip = sprite.facing === 'right' ? -1 : 1;
       image.scale.set(ACTOR_SPRITE_SCALE * flip, ACTOR_SPRITE_SCALE);
       image.position.set(0, ACTOR_FEET_Y);
+      image.tint = lightTint;
       return { node: image, topY: ACTOR_FEET_Y - rect.h * ACTOR_SPRITE_SCALE };
     }
 
@@ -802,6 +828,7 @@ export class IsoRenderer {
     });
     glyph.anchor.set(0.5, 1);
     glyph.position.set(0, ACTOR_FEET_Y);
+    glyph.tint = lightTint;
     return { node: glyph, topY: ACTOR_FEET_Y - glyph.height };
   }
 
@@ -857,7 +884,7 @@ export class IsoRenderer {
         // Drawn into the overpaint layer, which composites AFTER the additive pools: `unknown`
         // renders pure black and `remembered` its fixed dim level, so a light pool spilling across
         // a corner can never brighten an unseen cell.
-        const color = cell.knowledge === 'remembered' ? REMEMBERED_COLOR : 0x000000;
+        const color = cell.knowledge === 'remembered' ? REMEMBERED_TINT : 0x000000;
         masked.poly(diamond).fill({ color, alpha: 1 });
       } else {
         // A visible cell's BRIGHTNESS (white at alpha = visibleBrightness): the value the scene
@@ -938,6 +965,8 @@ export class IsoRenderer {
 
     this.worldContainer.position.set(baseX, baseY);
     this.worldContainer.scale.set(ZOOM);
+    this.spritesContainer.position.set(baseX, baseY);
+    this.spritesContainer.scale.set(ZOOM);
     this.overlayContainer.position.set(baseX, baseY);
     this.overlayContainer.scale.set(ZOOM);
     this.lightBuild.position.set(baseX, baseY);
@@ -1161,5 +1190,20 @@ export class IsoRenderer {
    * world/overlay/light containers carry the camera translation and zoom, so children use this. */
   private isoLocal(x: number, y: number): readonly [number, number] {
     return [(x - y) * TILE_HALF_W * BAKE_SCALE, (x + y) * TILE_HALF_H * BAKE_SCALE];
+  }
+
+  /** The per-sprite light tint for an actor or ground item at cell `(x, y)`: these are FOV-gated to
+   * visible cells, so the tint is `spriteLightTint(cell.intensity)`. A cell missing from the lookup
+   * (never expected for a rendered actor/item) falls back to full brightness rather than black. */
+  private spriteTintAt(x: number, y: number): number {
+    const cell = this.cellByKey.get(`${x},${y}`);
+    return cell === undefined ? 0xffffff : spriteLightTint(cell.intensity);
+  }
+
+  /** The per-sprite light tint for a FEATURE at cell `(x, y)`: features may sit on remembered cells,
+   * so this routes through `featureLightTint` (remembered dim gray vs. visible cell light). */
+  private featureTintAt(x: number, y: number): number {
+    const cell = this.cellByKey.get(`${x},${y}`);
+    return cell === undefined ? 0xffffff : featureLightTint(cell.knowledge, cell.intensity);
   }
 }
