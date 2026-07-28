@@ -1,0 +1,22 @@
+schemaVersion: 8
+entries:
+  - kind: item
+    id: item.gold-coins
+    name: Gold coins
+    glyph: "$"
+    color: "#e8c879"
+    description: A scattering of stamped coins, still bright under the dust.
+    lore: "Minted above; spent below."
+    tags: [currency]
+    minDepth: 1
+    maxDepth: 999
+    category: currency
+    stackLimit: 999
+    price: 1
+    rarity: common
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    identification: { mode: known, poolId: null }
+    effects: []

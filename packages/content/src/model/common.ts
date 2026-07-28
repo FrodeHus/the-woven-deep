@@ -17,7 +17,7 @@ import type { TraitContentEntry } from './trait.js';
 import type { TrapContentEntry } from './trap.js';
 import type { VaultContentEntry } from './vault.js';
 
-export const CONTENT_SCHEMA_VERSION = 7 as const;
+export const CONTENT_SCHEMA_VERSION = 8 as const;
 
 export type ContentId = string;
 export const CONTENT_KIND_IDS = [
@@ -84,6 +84,7 @@ export const ITEM_CATEGORIES = [
   'scroll',
   'ring',
   'misc',
+  'currency',
 ] as const;
 export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
 export const ITEM_RARITIES = ['common', 'uncommon', 'rare', 'legendary'] as const;
