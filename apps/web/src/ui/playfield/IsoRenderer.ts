@@ -15,9 +15,10 @@ import { MAX_TRANSIENT_EFFECTS, type TransientEffect } from '../effects-map.js';
 import { equippedLightSource } from '../light-sources.js';
 import { featuresOf, heroOf, type FeatureView } from '../../session/projection-view.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
-import type { AtlasRect, PlayfieldAtlas } from './atlas.js';
+import type { AtlasRect, PlayfieldAtlas, SpriteAtlas } from './atlas.js';
 import { bakeFloor, bakeKey, occludedWallIndices, planFloorBake } from './floor-bake.js';
 import { TILE_HALF_H, TILE_HALF_W, worldToScreen, cellAtScreen, type IsoView } from './iso-math.js';
+import { groundItemHoverOffset, resolveActorRect, resolveItemSprite } from './sprite-mapping.js';
 import {
   isFogMaskedTier,
   lightPoolDiameterPx,
@@ -30,6 +31,7 @@ import {
   motionPosition,
   nextSceneState,
   type ActorSprite,
+  type GroundItemSprite,
   type SceneState,
 } from './scene-state.js';
 
@@ -112,6 +114,25 @@ interface ActorDisplay {
   readonly sprite: ActorSprite;
 }
 
+/** A mounted ground-item display: the outer container (positioned at the cell), the bob-able body
+ * node (sprite or glyph) whose y oscillates each frame, its resting y, and the world cell so the
+ * hover phase stays keyed to the item's position. The shadow stays fixed on the container. */
+interface ItemDisplay {
+  readonly container: Container;
+  readonly body: Container;
+  readonly bodyBaseY: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+/** Sheet→screen scale for actor sprites: applied uniformly so taller boss crops render larger for
+ * free. A ~130px standard crop lands near two tiles tall; LARGE crops (up to ~160px) rise above it. */
+const ACTOR_SPRITE_SCALE = 0.52;
+/** Sheet→screen scale for ground-item sprites -- smaller than actors, centered on the cell. */
+const ITEM_SPRITE_SCALE = 0.3;
+/** Actor feet rest here below the diamond centre (matches the glyph baseline it replaces). */
+const ACTOR_FEET_Y = TILE_HALF_H * 0.4;
+
 /** A rising, fading glyph spawned for a hit or death effect. Owns its `Text` for the duration of
  * its float; `updateDamageFloats` destroys it the moment its ttl elapses. */
 interface DamageFloat {
@@ -142,12 +163,20 @@ interface LightDisplay {
 export class IsoRenderer {
   private readonly host: HTMLElement;
   private readonly atlas: PlayfieldAtlas;
+  private readonly actorAtlas: SpriteAtlas;
+  private readonly itemAtlas: SpriteAtlas;
   private readonly callbacks: RendererCallbacks;
   private readonly pack: CompiledContentPack;
 
   private app: Application | null = null;
   private atlasImage: HTMLImageElement | null = null;
   private atlasBaseTexture: Texture | null = null;
+  private actorBaseTexture: Texture | null = null;
+  private itemBaseTexture: Texture | null = null;
+  /** Lazily-built frame wrappers over the actor/item base sources, cached per contentId so each
+   * sprite is allocated once and freed once (see `destroy`). */
+  private readonly actorTextures = new Map<string, Texture>();
+  private readonly itemTextures = new Map<string, Texture>();
   private gateTexture: Texture | null = null;
   private doorTexture: Texture | null = null;
   private archOpenTexture: Texture | null = null;
@@ -176,6 +205,7 @@ export class IsoRenderer {
   private scene: SceneState | null = null;
   private lights: readonly LightDisplay[] = [];
   private actorDisplays: readonly ActorDisplay[] = [];
+  private itemDisplays: readonly ItemDisplay[] = [];
   private targeting: TargetingVisual | null = null;
   private particles: readonly Particle[] = [];
   private damageFloats: readonly DamageFloat[] = [];
@@ -216,9 +246,13 @@ export class IsoRenderer {
     atlas: PlayfieldAtlas,
     callbacks: RendererCallbacks,
     pack: CompiledContentPack,
+    actorAtlas: SpriteAtlas,
+    itemAtlas: SpriteAtlas,
   ) {
     this.host = host;
     this.atlas = atlas;
+    this.actorAtlas = actorAtlas;
+    this.itemAtlas = itemAtlas;
     this.callbacks = callbacks;
     this.pack = pack;
   }
@@ -236,8 +270,15 @@ export class IsoRenderer {
     this.app = app;
     this.host.appendChild(app.canvas);
 
-    this.atlasImage = await this.loadAtlasImage(this.atlas.imageUrl);
+    const [atlasImage, actorImage, itemImage] = await Promise.all([
+      this.loadAtlasImage(this.atlas.imageUrl),
+      this.loadAtlasImage(this.actorAtlas.imageUrl),
+      this.loadAtlasImage(this.itemAtlas.imageUrl),
+    ]);
+    this.atlasImage = atlasImage;
     this.atlasBaseTexture = Texture.from(this.atlasImage);
+    this.actorBaseTexture = Texture.from(actorImage);
+    this.itemBaseTexture = Texture.from(itemImage);
     // Built once and shared across every locked-feature sprite: a fresh per-snapshot wrapper would
     // leak, since a Sprite's default `destroy()` never destroys its texture.
     this.gateTexture = this.atlasTexture(this.atlas.gate);
@@ -344,7 +385,15 @@ export class IsoRenderer {
     this.gateTexture?.destroy(false);
     this.doorTexture?.destroy(false);
     this.archOpenTexture?.destroy(false);
+    // Cached actor/item crops are frame wrappers over their base sources, so drop only the wrappers
+    // here and destroy each shared source once via its base texture below.
+    for (const texture of this.actorTextures.values()) texture.destroy(false);
+    for (const texture of this.itemTextures.values()) texture.destroy(false);
+    this.actorTextures.clear();
+    this.itemTextures.clear();
     this.atlasBaseTexture?.destroy(true);
+    this.actorBaseTexture?.destroy(true);
+    this.itemBaseTexture?.destroy(true);
     this.lightMap?.destroy(true);
 
     this.gateTexture = null;
@@ -352,6 +401,8 @@ export class IsoRenderer {
     this.archOpenTexture = null;
     this.gradientTexture = null;
     this.atlasBaseTexture = null;
+    this.actorBaseTexture = null;
+    this.itemBaseTexture = null;
     this.lightMap = null;
     this.app = null;
   }
@@ -518,6 +569,25 @@ export class IsoRenderer {
     });
   }
 
+  /** A frame wrapper over a sprite-sheet base source, cached by `key` so each crop is allocated once
+   * and destroyed once. Returns `null` before the base texture has loaded. */
+  private spriteTexture(
+    base: Texture | null,
+    cache: Map<string, Texture>,
+    key: string,
+    rect: AtlasRect,
+  ): Texture | null {
+    if (base === null) return null;
+    const cached = cache.get(key);
+    if (cached !== undefined) return cached;
+    const texture = new Texture({
+      source: base.source,
+      frame: new Rectangle(rect.x, rect.y, rect.w, rect.h),
+    });
+    cache.set(key, texture);
+    return texture;
+  }
+
   private rebuildFeatures(snapshot: SessionSnapshot): void {
     this.featuresContainer.removeChildren().forEach((child) => child.destroy());
     for (const feature of featuresOf(snapshot.projection)) {
@@ -594,22 +664,65 @@ export class IsoRenderer {
   private rebuildGroundItems(): void {
     this.itemsContainer.removeChildren().forEach((child) => child.destroy());
     const scene = this.scene;
-    if (!scene) return;
-    for (const item of scene.groundItems) {
-      const text = new Text({
-        text: item.glyph,
-        style: {
-          fill: item.color ?? 0xffffff,
-          fontFamily: 'monospace',
-          fontSize: 22,
-          fontWeight: 'bold',
-        },
-      });
-      text.anchor.set(0.5, 0.5);
-      const [lx, ly] = this.isoLocal(item.x, item.y);
-      text.position.set(lx, ly);
-      this.itemsContainer.addChild(text);
+    if (!scene) {
+      this.itemDisplays = [];
+      return;
     }
+    const displays: ItemDisplay[] = [];
+    for (const item of scene.groundItems) {
+      const container = new Container();
+      const [lx, ly] = this.isoLocal(item.x, item.y);
+      container.position.set(lx, ly);
+
+      // The shadow stays pinned to the ground; only the body bobs, so the widening gap between them
+      // sells the hover.
+      const shadow = new Graphics();
+      shadow.ellipse(0, TILE_HALF_H * 0.35, TILE_HALF_W * 0.32, TILE_HALF_H * 0.3);
+      shadow.fill({ color: SHADOW_COLOR, alpha: SHADOW_ALPHA });
+      container.addChild(shadow);
+
+      const body = this.buildItemBody(item);
+      container.addChild(body);
+      this.itemsContainer.addChild(container);
+      displays.push({ container, body, bodyBaseY: 0, x: item.x, y: item.y });
+    }
+    this.itemDisplays = displays;
+  }
+
+  /** A ground item's bob-able body: the atlas sprite (tinted only for a generic fallback sheet) when
+   * one resolves, else the colored glyph. Centered on the cell. */
+  private buildItemBody(item: GroundItemSprite): Container {
+    const resolution = resolveItemSprite(item, this.itemAtlas);
+    if (resolution !== null) {
+      const key = item.contentId ?? `generic:${item.category}`;
+      const texture = this.spriteTexture(
+        this.itemBaseTexture,
+        this.itemTextures,
+        key,
+        resolution.rect,
+      );
+      if (texture !== null) {
+        const image = new Sprite(texture);
+        image.anchor.set(0.5, 0.5);
+        image.scale.set(ITEM_SPRITE_SCALE);
+        if (resolution.tint !== undefined) image.tint = resolution.tint;
+        image.position.set(0, 0);
+        return image;
+      }
+    }
+
+    const text = new Text({
+      text: item.glyph,
+      style: {
+        fill: item.color ?? 0xffffff,
+        fontFamily: 'monospace',
+        fontSize: 22,
+        fontWeight: 'bold',
+      },
+    });
+    text.anchor.set(0.5, 0.5);
+    text.position.set(0, 0);
+    return text;
   }
 
   private rebuildActors(): void {
@@ -628,8 +741,9 @@ export class IsoRenderer {
     this.actorDisplays = displays;
   }
 
-  /** Drop-shadow ellipse + colored glyph + a mini HP bar when hurt -- the port of the demo's
-   * `pHpBar` actor presentation. Monsters have no atlas art, so actors are glyph sprites. */
+  /** Drop-shadow ellipse + the actor body (atlas sprite when the contentId has art, else the colored
+   * glyph) + a mini HP bar when hurt -- the port of the demo's `pHpBar` actor presentation. The
+   * shadow and HP bar are identical for sprite and glyph; only the body differs. */
   private buildActorDisplay(sprite: ActorSprite): Container {
     const container = new Container();
 
@@ -637,6 +751,45 @@ export class IsoRenderer {
     shadow.ellipse(0, TILE_HALF_H * 0.35, TILE_HALF_W * 0.5, TILE_HALF_H * 0.4);
     shadow.fill({ color: SHADOW_COLOR, alpha: SHADOW_ALPHA });
     container.addChild(shadow);
+
+    const { node, topY } = this.buildActorBody(sprite);
+    container.addChild(node);
+
+    if (sprite.health < sprite.maxHealth && sprite.maxHealth > 0) {
+      const fraction = Math.max(0, Math.min(1, sprite.health / sprite.maxHealth));
+      const barW = TILE_HALF_W;
+      const barH = 4;
+      const barX = -barW / 2;
+      const barY = topY - 6;
+      const bar = new Graphics();
+      bar.rect(barX, barY, barW, barH).fill({ color: HP_BAR_BG, alpha: 0.85 });
+      bar
+        .rect(barX, barY, barW * fraction, barH)
+        .fill({ color: fraction > 0.4 ? HP_HIGH : HP_LOW });
+      container.addChild(bar);
+    }
+
+    return container;
+  }
+
+  /** The actor's body node and the y of its top edge (for HP-bar placement). Prefers the atlas
+   * sprite (foot-anchored to the cell floor, uniformly scaled so taller boss crops read bigger,
+   * horizontally mirrored while facing right); falls back to the colored glyph when the contentId has
+   * no art. */
+  private buildActorBody(sprite: ActorSprite): { node: Container; topY: number } {
+    const rect = resolveActorRect(sprite.contentId, this.actorAtlas);
+    const texture =
+      rect === null || sprite.contentId === null
+        ? null
+        : this.spriteTexture(this.actorBaseTexture, this.actorTextures, sprite.contentId, rect);
+    if (rect !== null && texture !== null) {
+      const image = new Sprite(texture);
+      image.anchor.set(0.5, 1);
+      const flip = sprite.facing === 'right' ? -1 : 1;
+      image.scale.set(ACTOR_SPRITE_SCALE * flip, ACTOR_SPRITE_SCALE);
+      image.position.set(0, ACTOR_FEET_Y);
+      return { node: image, topY: ACTOR_FEET_Y - rect.h * ACTOR_SPRITE_SCALE };
+    }
 
     const glyph = new Text({
       text: sprite.glyph,
@@ -648,24 +801,8 @@ export class IsoRenderer {
       },
     });
     glyph.anchor.set(0.5, 1);
-    glyph.position.set(0, TILE_HALF_H * 0.4);
-    container.addChild(glyph);
-
-    if (sprite.health < sprite.maxHealth && sprite.maxHealth > 0) {
-      const fraction = Math.max(0, Math.min(1, sprite.health / sprite.maxHealth));
-      const barW = TILE_HALF_W;
-      const barH = 4;
-      const barX = -barW / 2;
-      const barY = -glyph.height - 6;
-      const bar = new Graphics();
-      bar.rect(barX, barY, barW, barH).fill({ color: HP_BAR_BG, alpha: 0.85 });
-      bar
-        .rect(barX, barY, barW * fraction, barH)
-        .fill({ color: fraction > 0.4 ? HP_HIGH : HP_LOW });
-      container.addChild(bar);
-    }
-
-    return container;
+    glyph.position.set(0, ACTOR_FEET_Y);
+    return { node: glyph, topY: ACTOR_FEET_Y - glyph.height };
   }
 
   private rebuildLights(cells: readonly ObservableCell[], hero: { x: number; y: number }): void {
@@ -807,6 +944,7 @@ export class IsoRenderer {
     this.lightBuild.scale.set(ZOOM);
 
     this.updateActors(now);
+    this.updateItems(scene, now);
     this.updateLights(now);
     this.updateDarknessCover(app, baseX, baseY);
     this.renderLightMap(app);
@@ -839,6 +977,16 @@ export class IsoRenderer {
       const [lx, ly] = this.isoLocal(ax, ay);
       display.container.position.set(lx, ly);
       display.container.zIndex = ax + ay;
+    }
+  }
+
+  /** Bob each ground item's body with a slow, position-seeded sine so items catch the eye without
+   * bouncing. The shadow (a sibling of `body` in the container) is left untouched, so the hover reads
+   * as the item floating off its own shadow. */
+  private updateItems(scene: SceneState, now: number): void {
+    for (const display of this.itemDisplays) {
+      const offset = groundItemHoverOffset(scene.floorId, display.x, display.y, now);
+      display.body.position.y = display.bodyBaseY - offset;
     }
   }
 

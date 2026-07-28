@@ -20,20 +20,23 @@ vi.mock('../src/ui/playfield/IsoRenderer.js', () => ({
   },
 }));
 
-// The playfield canvas fetches its sprite atlas once via `fetch(ATLAS_URL)`; jsdom has no `fetch`,
-// so serve the real atlas JSON off disk for that URL. Any other URL is unhandled on purpose -- a
-// test that reaches the network is a mistake, not a silent no-op.
-const atlasJson = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), '../public/playfield/atlas-unified.json'),
-  'utf8',
-);
+// The playfield canvas fetches its three sprite atlases once (tiles, actors, items); jsdom has no
+// `fetch`, so serve the real atlas JSON off disk for those URLs. Any other URL is unhandled on
+// purpose -- a test that reaches the network is a mistake, not a silent no-op.
+const playfieldDir = join(dirname(fileURLToPath(import.meta.url)), '../public/playfield');
+const atlasByFile: Readonly<Record<string, string>> = {
+  'atlas-unified.json': readFileSync(join(playfieldDir, 'atlas-unified.json'), 'utf8'),
+  'atlas-actors.json': readFileSync(join(playfieldDir, 'atlas-actors.json'), 'utf8'),
+  'atlas-items.json': readFileSync(join(playfieldDir, 'atlas-items.json'), 'utf8'),
+};
 (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (input: RequestInfo | URL) => {
   const url = typeof input === 'string' ? input : input.toString();
-  if (url.includes('/playfield/atlas-unified.json')) {
+  const match = Object.keys(atlasByFile).find((file) => url.includes(`/playfield/${file}`));
+  if (match !== undefined) {
     return {
       ok: true,
       status: 200,
-      json: async () => JSON.parse(atlasJson) as unknown,
+      json: async () => JSON.parse(atlasByFile[match] as string) as unknown,
     } as Response;
   }
   throw new Error(`unexpected fetch in test: ${url}`);

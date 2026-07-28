@@ -1,6 +1,8 @@
+import type { ItemCategory } from '@woven-deep/content';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import { actorsOf, groundItemsOf, heroOf } from '../../session/projection-view.js';
 import { effectsForEvents, type ActorPositions, type TransientEffect } from '../effects-map.js';
+import { HERO_SPRITE_ID, resolveFacing, type Facing } from './sprite-mapping.js';
 
 /** Ticks a single actor/hero sprite from `fromX/fromY` to `toX/toY`, started at `startedAt`. */
 export interface SpriteMotion {
@@ -14,26 +16,39 @@ export interface SpriteMotion {
 
 export interface ActorSprite {
   readonly id: string;
+  /** The content id used to look up the actor's atlas sprite. `HERO_SPRITE_ID` for the hero; the
+   * `ActorView` contentId (or `null` for an anonymized/unperceived actor) otherwise. A `null`/unmapped
+   * id renders the glyph fallback. */
+  readonly contentId: string | null;
   readonly glyph: string;
   readonly color: string | undefined;
   readonly isHero: boolean;
   readonly motion: SpriteMotion | null;
+  /** Persisted screen facing: updated by each eastward/westward step, preserved while idle so a
+   * resting actor never snaps back to the drawn orientation. */
+  readonly facing: Facing;
   readonly x: number;
   readonly y: number;
   readonly health: number;
   readonly maxHealth: number;
 }
 
+/** A perceived ground item, carrying the fields the renderer needs to pick a sprite (or fall back to
+ * the glyph) and to hover-bob it in place. */
+export interface GroundItemSprite {
+  readonly id: string;
+  readonly contentId: string | undefined;
+  readonly category: ItemCategory;
+  readonly glyph: string;
+  readonly color: string | undefined;
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface SceneState {
   readonly floorId: string;
   readonly actors: readonly ActorSprite[];
-  readonly groundItems: readonly {
-    readonly id: string;
-    readonly glyph: string;
-    readonly color: string | undefined;
-    readonly x: number;
-    readonly y: number;
-  }[];
+  readonly groundItems: readonly GroundItemSprite[];
   readonly effects: readonly TransientEffect[];
   /** Timestamp of the last hero-damage event, drives vignette/shake. `null` when this snapshot's
    * `lastEvents` carried no `hero.damaged` event. */
@@ -88,6 +103,7 @@ function findPrevSprite(prev: SceneState | null, id: string): ActorSprite | unde
 function buildSprite(
   input: Readonly<{
     id: string;
+    contentId: string | null;
     glyph: string | undefined;
     color: string | undefined;
     isHero: boolean;
@@ -102,14 +118,17 @@ function buildSprite(
 ): ActorSprite {
   const prevSprite = floorChanged ? undefined : findPrevSprite(prev, input.id);
   const glyph = input.glyph ?? prevSprite?.glyph ?? DEFAULT_GLYPH;
+  const previousFacing: Facing = prevSprite?.facing ?? 'left';
 
   if (prevSprite === undefined || (prevSprite.x === input.x && prevSprite.y === input.y)) {
     return {
       id: input.id,
+      contentId: input.contentId,
       glyph,
       color: input.color,
       isHero: input.isHero,
       motion: null,
+      facing: previousFacing,
       x: input.x,
       y: input.y,
       health: input.health,
@@ -118,12 +137,15 @@ function buildSprite(
   }
 
   const [fromX, fromY] = motionPosition(prevSprite, now);
+  const motion = { fromX, fromY, toX: input.x, toY: input.y, startedAt: now, durationMs: STEP_MS };
   return {
     id: input.id,
+    contentId: input.contentId,
     glyph,
     color: input.color,
     isHero: input.isHero,
-    motion: { fromX, fromY, toX: input.x, toY: input.y, startedAt: now, durationMs: STEP_MS },
+    motion,
+    facing: resolveFacing(previousFacing, motion),
     x: input.x,
     y: input.y,
     health: input.health,
@@ -151,6 +173,7 @@ export function nextSceneState(
   const heroSprite = buildSprite(
     {
       id: hero.actorId,
+      contentId: HERO_SPRITE_ID,
       glyph: HERO_GLYPH,
       color: undefined,
       isHero: true,
@@ -168,6 +191,7 @@ export function nextSceneState(
     buildSprite(
       {
         id: actor.actorId,
+        contentId: actor.contentId,
         glyph: actor.glyph,
         color: actor.color,
         isHero: false,
@@ -182,8 +206,10 @@ export function nextSceneState(
     ),
   );
 
-  const groundItems = groundItemsOf(projection).map((item) => ({
+  const groundItems: readonly GroundItemSprite[] = groundItemsOf(projection).map((item) => ({
     id: item.itemId,
+    contentId: item.contentId,
+    category: item.category,
     glyph: item.glyph ?? DEFAULT_GLYPH,
     color: item.color,
     x: item.x,
