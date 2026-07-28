@@ -28,6 +28,9 @@ export interface PlayfieldAtlas {
   townWalls: AtlasRect[];
   houseDoor: AtlasRect;
   entranceSurround: AtlasRect;
+  /** Crate art a dungeon chest renders as. OPTIONAL: a sheet without it falls back to the chest
+   * glyph. Parsed only when present. */
+  waresCrate?: AtlasRect;
 }
 
 export const ATLAS_URL = '/playfield/atlas-unified.json';
@@ -116,6 +119,9 @@ export function parseAtlas(json: unknown): PlayfieldAtlas {
   const townWalls = toRectList(record.townWalls, 'townWalls');
   const houseDoor = toRect(record.houseDoor, 'houseDoor');
   const entranceSurround = toRect(record.entranceSurround, 'entranceSurround');
+  // Optional: a sheet without crate art leaves the chest on its glyph.
+  const waresCrate =
+    record.waresCrate === undefined ? undefined : toRect(record.waresCrate, 'waresCrate');
 
   return {
     imageUrl: `${IMAGE_BASE_URL}${image}`,
@@ -138,6 +144,7 @@ export function parseAtlas(json: unknown): PlayfieldAtlas {
     townWalls,
     houseDoor,
     entranceSurround,
+    ...(waresCrate === undefined ? {} : { waresCrate }),
   };
 }
 

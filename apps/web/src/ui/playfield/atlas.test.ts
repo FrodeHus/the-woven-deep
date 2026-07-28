@@ -34,6 +34,12 @@ describe('parseAtlas', () => {
     expect(parseAtlas(withArch).archOpen).toEqual({ x: 1, y: 2, w: 3, h: 4 });
   });
 
+  it('parses waresCrate (the chest crop) and leaves it undefined when absent', () => {
+    expect(parseAtlas(raw).waresCrate).toEqual({ x: 816, y: 978, w: 107, h: 129 });
+    const { waresCrate: _omitted, ...withoutCrate } = raw as Record<string, unknown>;
+    expect(parseAtlas(withoutCrate).waresCrate).toBeUndefined();
+  });
+
   it('throws on malformed input', () => {
     expect(() => parseAtlas({ image: 'x.png' })).toThrow();
   });
