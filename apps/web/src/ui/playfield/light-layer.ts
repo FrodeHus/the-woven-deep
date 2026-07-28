@@ -53,6 +53,53 @@ export function visibleBrightness(intensity: number): number {
   return 1 - (1 - VISIBLE_FLOOR_BRIGHTNESS) * cellDarkness(intensity);
 }
 
+/** The cool, dim gray a `remembered` cell (and any feature standing on one) multiplies down to --
+ * the old renderer's `--remembered` gray (`#4b526b`, luminance ~0.29). This is the single source of
+ * truth shared by the light-map's fov overpaint (which paints remembered floor) and the per-sprite
+ * tint of a feature that sits on a remembered cell, so the two never drift apart. */
+export const REMEMBERED_TINT = 0x4b526b;
+
+/**
+ * The uniform gray-scale tint (`0xRRGGBB`, all three channels equal) for a sprite standing on a
+ * VISIBLE cell of the given engine `intensity` (0-255). Sprites render ABOVE the multiply light-map,
+ * so they carry their own cell's light as a flat tint instead of being sliced by the per-cell fov
+ * geometry. Expressed through {@link visibleBrightness} so the floor and the sprites share one light
+ * curve: `intensity 255` yields `0xffffff` (rendered verbatim) and `intensity 0` yields the floored
+ * gray `0x999999` -- never black, because an actor on a visible cell is never fully dark. Monotonic
+ * in intensity.
+ */
+export function spriteLightTint(intensity: number): number {
+  const channel = Math.round(visibleBrightness(intensity) * 255);
+  return (channel << 16) | (channel << 8) | channel;
+}
+
+/**
+ * The tint a FEATURE sprite (gate/door) carries for its cell. Actors and ground items are FOV-gated
+ * to visible cells, but a feature can sit on a `remembered` cell, so it tints to {@link
+ * REMEMBERED_TINT} (the same dim gray the fov overpaint paints remembered floor with); a visible
+ * feature tints by its cell light via {@link spriteLightTint}.
+ */
+export function featureLightTint(
+  knowledge: ObservableCell['knowledge'],
+  intensity: number,
+): number {
+  return knowledge === 'remembered' ? REMEMBERED_TINT : spriteLightTint(intensity);
+}
+
+/**
+ * Channel-wise multiply of two `0xRRGGBB` tints, normalized so `compose(c, 0xffffff) === c`. Used to
+ * fold a sprite's own tint (a generic item-category color) together with its cell's light tint into
+ * one `sprite.tint` value, since Pixi applies a single tint per node.
+ */
+export function composeTints(base: number, light: number): number {
+  const channel = (shift: number): number => {
+    const b = (base >> shift) & 0xff;
+    const l = (light >> shift) & 0xff;
+    return Math.round((b * l) / 255);
+  };
+  return (channel(16) << 16) | (channel(8) << 8) | channel(0);
+}
+
 /**
  * A light pool's on-screen diameter in iso-local pixels for a reach of `radiusTiles` grid cells:
  * `radiusTiles` tiles across at `TILE_HALF_W * 2` px per tile. Camera zoom is applied by the light
