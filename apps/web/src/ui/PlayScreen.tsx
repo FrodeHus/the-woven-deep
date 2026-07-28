@@ -7,6 +7,7 @@ import { actorsOf, dialogueTargetAvailable, tradeIsAvailable } from '../session/
 import { CommandPalette } from './CommandPalette.js';
 import type { OverlayActionId } from './KeyRouter.js';
 import { activeHint, HINTS } from '../session/onboarding.js';
+import { cellNavigability } from '../session/travel.js';
 import type { LayoutTier } from './layout.js';
 import {
   ActionBar,
@@ -29,7 +30,7 @@ import { AssetPopover } from './AssetPopover.js';
 import { ThreatPopover } from './ThreatPopover.js';
 import { TownPanel } from './TownPanel.js';
 import { PlayfieldCanvas, type CreateRenderer } from './playfield/PlayfieldCanvas.js';
-import type { TargetingVisual } from './playfield/IsoRenderer.js';
+import type { HoverCursor, TargetingVisual } from './playfield/IsoRenderer.js';
 import { useAutoTravel } from './hooks/useAutoTravel.js';
 import { useCellHover } from './hooks/useCellHover.js';
 import { useCommandPaletteHotkey } from './hooks/useCommandPaletteHotkey.js';
@@ -153,6 +154,10 @@ export function PlayScreen({
   const [paletteOpen, setPaletteOpen] = useCommandPaletteHotkey(isModalActive);
 
   const { hover, hoverAtCell } = useCellHover(snapshot);
+  // The navigation cursor drawn on the hovered cell. Kept as raw state and suppressed at render time
+  // while targeting is active, so the targeting visuals own the overlay uncontested and the cursor
+  // reappears on the cell still under the pointer the moment the cast resolves or is cancelled.
+  const [hoverCursor, setHoverCursor] = useState<HoverCursor | null>(null);
   const autoTravel = useAutoTravel({ session, snapshot, disabled: isModalActive });
 
   const mapPaneRef = useRef<HTMLDivElement>(null);
@@ -175,6 +180,9 @@ export function PlayScreen({
 
   // The targeting visuals the canvas draws: the footprint at the reticle (`validCells`), the cells
   // where an affected actor stands, and the reticle itself. `null` whenever targeting is inactive.
+  const hoverCursorVisual: HoverCursor | null =
+    targeting.activeSpellId !== null ? null : hoverCursor;
+
   const targetingVisual: TargetingVisual | null =
     targeting.activeSpellId !== null
       ? {
@@ -200,7 +208,7 @@ export function PlayScreen({
 
   /**
    * The playfield's cell hover. Positions the description popover from the pointer's client position
-   * (relative to the map pane's own box) and, while an AoE spell is being targeted, drives the free
+   * (relative to the map pane's own box), resolves the navigation cursor for the cell, and, while an AoE spell is being targeted, drives the free
    * reticle so the footprint follows the mouse -- the keyboard reticle still works for players who
    * never move the mouse.
    */
@@ -210,9 +218,19 @@ export function PlayScreen({
     if (payload === null) {
       hoverAtCell(null);
       setHoverAnchor(null);
+      setHoverCursor(null);
       return;
     }
     hoverAtCell(payload.cell);
+    // Navigability is auto-travel's own predicate, not a lookalike: the outline the player sees and
+    // the path a click actually walks come from the same `cellNavigability`. An undiscovered cell
+    // draws no cursor at all.
+    const navigability = cellNavigability(projection, payload.cell);
+    setHoverCursor(
+      navigability === 'unknown'
+        ? null
+        : { cell: payload.cell, navigable: navigability === 'navigable' },
+    );
     const rect = mapPaneRef.current?.getBoundingClientRect();
     setHoverAnchor({
       leftPx: payload.clientX - (rect?.left ?? 0),
@@ -238,6 +256,7 @@ export function PlayScreen({
             snapshot={snapshot}
             pack={pack}
             targeting={targetingVisual}
+            hoverCursor={hoverCursorVisual}
             onCellClick={handleCellClick}
             onCellHover={handleCellHover}
             {...(createRenderer ? { createRenderer } : {})}

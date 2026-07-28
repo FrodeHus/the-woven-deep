@@ -60,6 +60,29 @@ export function visibleBrightness(intensity: number): number {
 export const REMEMBERED_TINT = 0x4b526b;
 
 /**
+ * The relative luminance (0..1) of a `0xRRGGBB` tint, on the same scale the multiply light-map's
+ * brightness values use. Rec. 601 weights, so a comparison between a colored tint and a plain
+ * brightness factor reflects what the eye actually reads as "darker".
+ */
+export function tintLuminance(tint: number): number {
+  const r = (tint >> 16) & 0xff;
+  const g = (tint >> 8) & 0xff;
+  const b = tint & 0xff;
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+/**
+ * The brightness the void-fill rock texture is darkened to at build time (a multiply factor applied
+ * to the atlas crop it is cut from). Unexcavated stone must sit at the BOTTOM of the playfield's
+ * contrast ladder -- strictly darker than {@link REMEMBERED_TINT} (remembered terrain), which is in
+ * turn darker than {@link VISIBLE_FLOOR_BRIGHTNESS} (the floor a visible cell never drops below) --
+ * so the eye reads unexplored space as solid rock rather than as somewhere already walked. The
+ * ordering is pinned by test, comparing against {@link tintLuminance}`(REMEMBERED_TINT)` rather than
+ * a duplicated literal.
+ */
+export const VOID_ROCK_BRIGHTNESS = 0.08;
+
+/**
  * The uniform gray-scale tint (`0xRRGGBB`, all three channels equal) for a sprite standing on a
  * VISIBLE cell of the given engine `intensity` (0-255). Sprites render ABOVE the multiply light-map,
  * so they carry their own cell's light as a flat tint instead of being sliced by the per-cell fov

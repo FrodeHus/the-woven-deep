@@ -16,6 +16,7 @@ vi.mock('../src/ui/playfield/IsoRenderer.js', () => ({
     }
     setSnapshot(): void {}
     setTargeting(): void {}
+    setHoverCursor(): void {}
     destroy(): void {}
   },
 }));

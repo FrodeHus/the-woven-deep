@@ -319,6 +319,67 @@ describe('PlayScreen threat hover scroll-dismiss', () => {
   });
 });
 
+describe('PlayScreen hover cursor', () => {
+  interface HoverCell {
+    readonly x: number;
+    readonly y: number;
+    readonly knowledge: string;
+    readonly token?: string;
+  }
+
+  const PASSABLE = new Set(['terrain.floor', 'terrain.stair', 'terrain.door']);
+
+  it('pushes a navigable/blocked cursor per hovered cell and clears it on pointer leave', async () => {
+    const session = new GuestSession({ pack, storage: fakeStorage(), seed: SEED });
+    const cells = session.getSnapshot().projection.floor.cells as readonly HoverCell[];
+    const navigable = cells.find(
+      (cell) =>
+        cell.knowledge !== 'unknown' && cell.token !== undefined && PASSABLE.has(cell.token),
+    );
+    const blocked = cells.find(
+      (cell) =>
+        cell.knowledge !== 'unknown' && cell.token !== undefined && !PASSABLE.has(cell.token),
+    );
+    const unknown = cells.find((cell) => cell.knowledge === 'unknown');
+    expect(navigable).toBeDefined();
+    expect(blocked).toBeDefined();
+
+    const fake = fakePlayfieldRenderer();
+    render(
+      withUiProviders(
+        pack,
+        <PlayScreen session={session} pack={pack} createRenderer={fake.createRenderer} />,
+      ),
+    );
+    await screen.findByRole('img', { name: /dungeon/i });
+
+    act(() => fake.latest().hover({ x: navigable!.x, y: navigable!.y }, 10, 10));
+    await waitFor(() =>
+      expect(fake.latest().lastHoverCursor()).toEqual({
+        cell: { x: navigable!.x, y: navigable!.y },
+        navigable: true,
+      }),
+    );
+
+    act(() => fake.latest().hover({ x: blocked!.x, y: blocked!.y }, 10, 10));
+    await waitFor(() =>
+      expect(fake.latest().lastHoverCursor()).toEqual({
+        cell: { x: blocked!.x, y: blocked!.y },
+        navigable: false,
+      }),
+    );
+
+    // An undiscovered cell draws nothing at all -- the cursor must never hint at unseen terrain.
+    if (unknown !== undefined) {
+      act(() => fake.latest().hover({ x: unknown.x, y: unknown.y }, 10, 10));
+      await waitFor(() => expect(fake.latest().lastHoverCursor()).toBeNull());
+    }
+
+    act(() => fake.latest().hover(null));
+    await waitFor(() => expect(fake.latest().lastHoverCursor()).toBeNull());
+  });
+});
+
 describe('PlayScreen Layout A composition', () => {
   function session(): GuestSession {
     const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });

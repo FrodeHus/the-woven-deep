@@ -4,6 +4,7 @@ import type { PlayerIntent } from '../src/session/intents.js';
 import {
   advanceTravel,
   beginTravel,
+  cellNavigability,
   computeTravelPath,
   directionBetween,
   resolveClick,
@@ -46,22 +47,35 @@ function makeProjection(input: {
   groundItems?: readonly Item[];
   walls?: readonly Point[];
   doors?: readonly DoorInput[];
+  unknownCells?: readonly Point[];
+  pillars?: readonly Point[];
 }): GameplayProjection {
   const wallSet = new Set((input.walls ?? []).map((point) => `${point.x},${point.y}`));
   const doorSet = new Set((input.doors ?? []).map((door) => `${door.x},${door.y}`));
+  const unknownSet = new Set((input.unknownCells ?? []).map((point) => `${point.x},${point.y}`));
+  const pillarSet = new Set((input.pillars ?? []).map((point) => `${point.x},${point.y}`));
   const cells = [];
   for (let y = 0; y < HEIGHT; y += 1) {
     for (let x = 0; x < WIDTH; x += 1) {
       const wall = wallSet.has(`${x},${y}`);
       const door = doorSet.has(`${x},${y}`);
+      const pillar = pillarSet.has(`${x},${y}`);
+      const unknown = unknownSet.has(`${x},${y}`);
+      const token = wall
+        ? 'terrain.wall'
+        : pillar
+          ? 'terrain.pillar'
+          : door
+            ? 'terrain.door'
+            : 'terrain.floor';
       cells.push({
         index: y * WIDTH + x,
         x,
         y,
-        knowledge: 'visible' as const,
+        knowledge: unknown ? ('unknown' as const) : ('visible' as const),
         tileId: wall ? 0 : 1,
         glyph: wall ? '#' : door ? '+' : '.',
-        token: wall ? 'terrain.wall' : door ? 'terrain.door' : 'terrain.floor',
+        token,
         intensity: 255,
       });
     }
@@ -101,7 +115,67 @@ describe('directionBetween', () => {
   });
 });
 
+describe('cellNavigability', () => {
+  it('reads plain floor as navigable', () => {
+    const projection = makeProjection({ hero: { x: 5, y: 5 } });
+    expect(cellNavigability(projection, { x: 7, y: 5 })).toBe('navigable');
+  });
+
+  it('reads a wall and a pillar as blocked', () => {
+    const projection = makeProjection({
+      hero: { x: 5, y: 5 },
+      walls: [{ x: 7, y: 5 }],
+      pillars: [{ x: 7, y: 6 }],
+    });
+    expect(cellNavigability(projection, { x: 7, y: 5 })).toBe('blocked');
+    expect(cellNavigability(projection, { x: 7, y: 6 })).toBe('blocked');
+  });
+
+  it('reads a CLOSED door as navigable -- travel bump-opens it', () => {
+    const projection = makeProjection({
+      hero: { x: 5, y: 5 },
+      doors: [{ x: 7, y: 5, state: 'closed' }],
+    });
+    expect(cellNavigability(projection, { x: 7, y: 5 })).toBe('navigable');
+  });
+
+  it('reads a LOCKED door as blocked even though its terrain token is passable', () => {
+    const projection = makeProjection({
+      hero: { x: 5, y: 5 },
+      doors: [{ x: 7, y: 5, state: 'locked' }],
+    });
+    expect(cellNavigability(projection, { x: 7, y: 5 })).toBe('blocked');
+  });
+
+  it('reads an undiscovered cell, and anything off the grid, as unknown', () => {
+    const projection = makeProjection({
+      hero: { x: 5, y: 5 },
+      unknownCells: [{ x: 7, y: 5 }],
+    });
+    expect(cellNavigability(projection, { x: 7, y: 5 })).toBe('unknown');
+    expect(cellNavigability(projection, { x: -1, y: 5 })).toBe('unknown');
+    expect(cellNavigability(projection, { x: WIDTH, y: 5 })).toBe('unknown');
+  });
+});
+
 describe('computeTravelPath', () => {
+  it('refuses to route through a locked door, matching cellNavigability', () => {
+    const projection = makeProjection({
+      hero: { x: 1, y: 1 },
+      walls: [
+        { x: 3, y: 0 },
+        { x: 3, y: 2 },
+        { x: 3, y: 3 },
+        { x: 3, y: 4 },
+        { x: 3, y: 5 },
+        { x: 3, y: 6 },
+        { x: 3, y: 7 },
+      ],
+      doors: [{ x: 3, y: 1, state: 'locked' }],
+    });
+    expect(computeTravelPath({ projection, destination: { x: 6, y: 4 } })).toBeNull();
+  });
+
   it('routes across open floor and refuses cells blocked by a bystander actor', () => {
     const bystander: Actor = { actorId: 'a', x: 6, y: 5, disposition: 'neutral', health: 5 };
     const projection = makeProjection({ hero: { x: 5, y: 5 }, actors: [bystander] });

@@ -9,8 +9,10 @@ import {
   lightsForFloor,
   REMEMBERED_TINT,
   spriteLightTint,
+  tintLuminance,
   visibleBrightness,
   VISIBLE_FLOOR_BRIGHTNESS,
+  VOID_ROCK_BRIGHTNESS,
   type LightSpec,
 } from './light-layer.js';
 import { TILE_HALF_W } from './iso-math.js';
@@ -193,5 +195,27 @@ describe('lightsForFloor', () => {
   it('gives distinct fixture cells distinct flicker seeds', () => {
     const lights = lightsForFloor([fixtureCell(0, 1, 1), fixtureCell(1, 9, 2)], hero);
     expect(lights[0]!.flickerSeed).not.toBe(lights[1]!.flickerSeed);
+  });
+});
+
+describe('void-fill rock contrast', () => {
+  // The playfield's contrast ladder, pinned so a later tweak to any one tier cannot silently invert
+  // it: unexcavated rock reads darkest, remembered terrain sits above it, and a visible cell never
+  // drops below its own floor. Compared against the REAL constants, never a duplicated literal.
+  it('is strictly darker than remembered terrain, which is darker than the visible floor', () => {
+    const remembered = tintLuminance(REMEMBERED_TINT);
+    expect(VOID_ROCK_BRIGHTNESS).toBeLessThan(remembered);
+    expect(remembered).toBeLessThan(VISIBLE_FLOOR_BRIGHTNESS);
+  });
+
+  it('keeps the rock in the 5-10% luminance band -- present, but never legible as terrain', () => {
+    expect(VOID_ROCK_BRIGHTNESS).toBeGreaterThanOrEqual(0.05);
+    expect(VOID_ROCK_BRIGHTNESS).toBeLessThanOrEqual(0.1);
+  });
+
+  it('reads a mid gray as brighter than a near-black tint', () => {
+    expect(tintLuminance(0x808080)).toBeGreaterThan(tintLuminance(0x0a0a0a));
+    expect(tintLuminance(0xffffff)).toBeCloseTo(1, 5);
+    expect(tintLuminance(0x000000)).toBe(0);
   });
 });
