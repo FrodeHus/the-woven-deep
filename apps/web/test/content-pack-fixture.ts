@@ -24,7 +24,7 @@ const entries: readonly ContentEntry[] = [
     attributeMinimum: 0,
     attributeMaximum: 30,
     hungerMaximum: 5000,
-    hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 },
+    hungerThresholds: { hungry: 1500, weak: 500, starving: 0 },
     starvationInterval: 500,
     starvationDamage: 1,
     recoveryInterval: 500,
