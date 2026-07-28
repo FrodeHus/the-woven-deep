@@ -137,8 +137,36 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `house` | object | Yes | Player house sizing, described below. The bundled value is `{ baseCapacity: 6, strongboxIncrement: 4 }`. |
 | `encounterDensity` | object | Yes | Dungeon encounter density, described below. The bundled value is `{ cellsPerEncounter: 2000 }`. |
 | `fragmentSpawnRollDenominator` | positive integer | Yes | Odds denominator (1-in-N) for the rare Ancient Tablet fragment spawn rolled once per floor generation. The bundled value is `40`. |
+| `floorLoot` | object | Yes | Floor-loot placement knobs described below. |
 
 `house` carries a positive safe integer `baseCapacity` (the player house's starting storage capacity) and a positive safe integer `strongboxIncrement` (additional capacity granted per purchased strongbox upgrade). `encounterDensity` carries a positive safe integer `cellsPerEncounter`, the average number of floor cells the generator budgets per placed encounter.
+
+### Floor loot
+
+`floorLoot` bounds how the floor-loot placement pass scatters items and chests across a generated floor.
+
+| Field | Type | Required | Rules and meaning |
+|---|---|---|---|
+| `scatterCount` | object | Yes | `{ minimum, maximum }` non-negative safe integers bounding how many loose scattered items are placed per floor. `minimum` must not exceed `maximum`. |
+| `chestCount` | object | Yes | `{ minimum, maximum }` non-negative safe integers bounding how many chests are placed per floor. `minimum` must not exceed `maximum`. |
+| `lockedChestPercent` | integer 0-100 | Yes | Percent chance a placed chest is locked. |
+| `lockedDoorPercent` | integer 0-100 | Yes | Percent chance a placed door is locked. |
+| `minimumAnchorDistance` | positive safe integer | Yes | Minimum Chebyshev distance a loot placement must keep from the spawn point and stairs. |
+| `minimumSpreadDistance` | positive safe integer | Yes | Minimum Chebyshev distance kept between two loot placements. |
+| `depthBands` | object | Yes | `{ shallowMaxDepth, midMaxDepth }` positive safe integers splitting the dungeon into shallow, mid, and deep bands; `shallowMaxDepth` must be less than `midMaxDepth`. |
+| `chestLockDifficulty` | object | Yes | `{ shallow, mid, deep }` positive safe integers giving the lock difficulty for a locked chest placed in each depth band. |
+
+```yaml
+floorLoot:
+  scatterCount: { minimum: 2, maximum: 4 }
+  chestCount: { minimum: 0, maximum: 2 }
+  lockedChestPercent: 50
+  lockedDoorPercent: 15
+  minimumAnchorDistance: 8
+  minimumSpreadDistance: 6
+  depthBands: { shallowMaxDepth: 6, midMaxDepth: 13 }
+  chestLockDifficulty: { shallow: 10, mid: 13, deep: 16 }
+```
 
 ### Point-buy attribute table
 
@@ -219,6 +247,15 @@ entries:
     house: { baseCapacity: 6, strongboxIncrement: 4 }
     encounterDensity: { cellsPerEncounter: 2000 }
     fragmentSpawnRollDenominator: 40
+    floorLoot:
+      scatterCount: { minimum: 2, maximum: 4 }
+      chestCount: { minimum: 0, maximum: 2 }
+      lockedChestPercent: 50
+      lockedDoorPercent: 15
+      minimumAnchorDistance: 8
+      minimumSpreadDistance: 6
+      depthBands: { shallowMaxDepth: 6, midMaxDepth: 13 }
+      chestLockDifficulty: { shallow: 10, mid: 13, deep: 16 }
 ```
 
 The closed action-cost IDs are `action.attack`, `action.cast`, `action.close-door`, `action.disarm`, `action.drop`, `action.equip`, `action.fire`, `action.move`, `action.open-door`, `action.pickup`, `action.refuel`, `action.search`, `action.spawn`, `action.split-stack`, `action.throw-item`, `action.toggle-light`, `action.unequip`, `action.use-item`, and `action.wait`. A pack may override any subset; `normalActionCost` supplies the normal fallback.

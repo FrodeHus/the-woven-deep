@@ -99,6 +99,16 @@ export function createDemoContentPack(): CompiledContentPack {
         house: { baseCapacity: 6, strongboxIncrement: 4 },
         encounterDensity: { cellsPerEncounter: 2000 },
         fragmentSpawnRollDenominator: 40,
+        floorLoot: {
+          scatterCount: { minimum: 2, maximum: 4 },
+          chestCount: { minimum: 0, maximum: 2 },
+          lockedChestPercent: 50,
+          lockedDoorPercent: 15,
+          minimumAnchorDistance: 8,
+          minimumSpreadDistance: 6,
+          depthBands: { shallowMaxDepth: 6, midMaxDepth: 13 },
+          chestLockDifficulty: { shallow: 10, mid: 13, deep: 16 },
+        },
       },
       {
         kind: 'condition',

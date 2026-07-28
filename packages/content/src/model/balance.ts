@@ -51,4 +51,14 @@ export interface BalanceContentEntry extends BaseContentEntry {
   readonly house: Readonly<{ baseCapacity: number; strongboxIncrement: number }>;
   readonly encounterDensity: Readonly<{ cellsPerEncounter: number }>;
   readonly fragmentSpawnRollDenominator: number;
+  readonly floorLoot: Readonly<{
+    scatterCount: Readonly<{ minimum: number; maximum: number }>;
+    chestCount: Readonly<{ minimum: number; maximum: number }>;
+    lockedChestPercent: number;
+    lockedDoorPercent: number;
+    minimumAnchorDistance: number;
+    minimumSpreadDistance: number;
+    depthBands: Readonly<{ shallowMaxDepth: number; midMaxDepth: number }>;
+    chestLockDifficulty: Readonly<{ shallow: number; mid: number; deep: number }>;
+  }>;
 }
