@@ -205,7 +205,9 @@ describe('addGeneratedFloor', () => {
       forcedEncounterId: source.id,
     });
 
-    expect(integrated.state.items).toEqual(run.items);
+    expect(
+      integrated.state.items.filter((item) => item.location.type === 'merchant-stock'),
+    ).toEqual([]);
     expect(integrated.state.rng['merchant-stock']).toEqual(run.rng['merchant-stock']);
     expect(integrated.state.rng.encounters).toEqual(run.rng.encounters);
     expect(integrated.state.populations).toEqual([]);

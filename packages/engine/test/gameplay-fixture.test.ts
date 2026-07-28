@@ -120,9 +120,11 @@ describe('seeded gameplay fixture', () => {
     ).toBeGreaterThanOrEqual(6);
 
     // 13 base demo items, the lockpick and iron key the hero carries to exercise the lock
-    // mechanic, plus one item created from `vault.lampwright-cache`'s filled item slot
-    // (`item-cache`, `loot-table.travelling-lampwright-stock`).
-    expect(run.items).toHaveLength(16);
+    // mechanic, one item created from `vault.lampwright-cache`'s filled item slot
+    // (`item-cache`, `loot-table.travelling-lampwright-stock`), and the floor-loot scatter piles
+    // `placeFloorLoot` drops on the generated floor.
+    expect(run.items).toHaveLength(20);
+    expect(run.items.filter((item) => item.itemId.startsWith('item.floor-loot.'))).toHaveLength(4);
     expect(run.items.find((item) => item.itemId === ids.lantern)).toMatchObject({
       contentId: 'item.brass-lantern',
       fuel: 1800,

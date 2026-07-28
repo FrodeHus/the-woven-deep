@@ -1188,8 +1188,7 @@ describe('placeFloorPopulations (encounter density)', () => {
     const encounter = individual('encounter.density-clamp', { maximumInstancesPerRun: 1 });
     const run: ActiveRun = {
       ...runFor([encounter]),
-      // Already at its instance cap: every attempt is a cheap, tiles-untouched "no-eligible-encounter"
-      // skip, so the huge nominal floor area below never needs a real tile array.
+      // Already at its instance cap: every attempt is a cheap "no-eligible-encounter" skip.
       encounterDecisions: [
         {
           encounterId: encounter.id,
@@ -1203,7 +1202,8 @@ describe('placeFloorPopulations (encounter density)', () => {
         },
       ],
     };
-    const massiveFloor = floor({ width: 4000, height: 4000, tiles: [0] });
+    // 20000 cells / 2000 cellsPerEncounter is 10 nominal attempts, clamped down to 8.
+    const massiveFloor = openFloor(200, 100);
 
     const result = placeFloorPopulations({ run, floor: massiveFloor, content: pack([encounter]) });
 

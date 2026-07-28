@@ -7,6 +7,19 @@ import { ENGINE_GAME_VERSION, SAVE_SCHEMA_VERSION } from './versions.js';
 import { emptyEquipment, heroPerception, type ActorState } from './actor-model.js';
 import { CONTENT_SCHEMA_VERSION, type CompiledContentPack } from '@woven-deep/content';
 
+/**
+ * Table ids `placeFloorLoot` draws from on every generated floor; the demo pack carries stand-ins
+ * so fixture-built runs can integrate a floor without the full content directory.
+ */
+const FLOOR_LOOT_TABLE_IDS = [
+  'loot-table.floor-scatter-shallow',
+  'loot-table.floor-scatter-mid',
+  'loot-table.floor-scatter-deep',
+  'loot-table.chest-shallow',
+  'loot-table.chest-mid',
+  'loot-table.chest-deep',
+] as const;
+
 export function createDemoContentPack(): CompiledContentPack {
   return {
     schemaVersion: CONTENT_SCHEMA_VERSION,
@@ -175,6 +188,43 @@ export function createDemoContentPack(): CompiledContentPack {
         traits: ['condition-trait.interrupts-rest'],
         tickEffects: [],
       },
+      {
+        kind: 'item',
+        id: 'item.demo-scatter',
+        name: 'Demo scatter',
+        tags: ['demo'],
+        glyph: '*',
+        color: '#c0a060',
+        category: 'misc',
+        stackLimit: 10,
+        price: 1,
+        rarity: 'common',
+        heirloomEligible: false,
+        minDepth: 1,
+        maxDepth: 20,
+        actionCost: 100,
+        equipment: null,
+        combat: null,
+        light: null,
+        identification: { mode: 'known', poolId: null },
+        effects: [],
+      },
+      ...FLOOR_LOOT_TABLE_IDS.map((id) => ({
+        kind: 'loot-table' as const,
+        id,
+        name: id,
+        tags: ['floor-loot'],
+        rolls: 1,
+        choices: [
+          {
+            contentId: 'item.demo-scatter',
+            lootTableId: null,
+            weight: 1,
+            minimumQuantity: 1,
+            maximumQuantity: 1,
+          },
+        ],
+      })),
     ],
     generationReport: { foundationalCategories: [] },
   };

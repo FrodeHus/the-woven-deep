@@ -8,10 +8,11 @@ import type {
   VaultPlacementSlot,
 } from '@woven-deep/content';
 import { emptyEquipment, type ActorState } from './actor-model.js';
-import { analyzeConnectivity, preservesRequiredRoutes } from './connectivity.js';
+import { preservesRequiredRoutes, protectedRouteIndexes, requiredPoints } from './connectivity.js';
 import type { DungeonFeature } from './feature-model.js';
 import { heroHoldsFragment, tabletFragmentIds } from './final-chamber-fragments.js';
 import { createFloorItem, createFloorLootFromTable } from './inventory.js';
+import { placeFloorLoot } from './loot-placement.js';
 import type { ItemInstance } from './item-model.js';
 import { materializeMerchant } from './merchant-stock.js';
 import {
@@ -407,32 +408,6 @@ function legalCells(
     }
   }
   return cells;
-}
-
-function requiredPoints(floor: FloorSnapshot): readonly Point[] {
-  return [
-    floor.stairUp,
-    floor.stairDown,
-    ...floor.placementSlots.filter((slot) => slot.kind === 'objective'),
-  ].filter((point): point is Point => point !== null);
-}
-
-function protectedRouteIndexes(floor: FloorSnapshot): ReadonlySet<number> {
-  const points = requiredPoints(floor);
-  const protectedIndexes = new Set<number>();
-  const start = points[0];
-  if (!start) return protectedIndexes;
-  for (const target of points.slice(1)) {
-    const route = analyzeConnectivity({
-      width: floor.width,
-      height: floor.height,
-      tiles: floor.tiles,
-      start,
-      target,
-    }).route;
-    for (const point of route) protectedIndexes.add(point.y * floor.width + point.x);
-  }
-  return protectedIndexes;
 }
 
 function requiredAnchorTags(encounter: EncounterContentEntry): readonly string[] {
@@ -1273,6 +1248,18 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
         ? run.items
         : sortByItemId([...run.items, ...fragmentSpawn.items]),
     rng: { ...run.rng, 'loot-placement': fragmentSpawn.state },
+  };
+  const floorLoot = placeFloorLoot(
+    { run, floor: input.floor, content: input.content },
+    run.rng['loot-placement'],
+  );
+  run = {
+    ...run,
+    items:
+      floorLoot.items.length === 0 ? run.items : sortByItemId([...run.items, ...floorLoot.items]),
+    features:
+      floorLoot.features.length === 0 ? run.features : [...run.features, ...floorLoot.features],
+    rng: { ...run.rng, 'loot-placement': floorLoot.state },
   };
   return { state: run, placements, events };
 }

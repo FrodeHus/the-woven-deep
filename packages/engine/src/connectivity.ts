@@ -1,4 +1,4 @@
-import type { TileId } from './model.js';
+import type { FloorSnapshot, Point, TileId } from './model.js';
 import { tileDefinition } from './terrain.js';
 
 export interface ConnectivityInput {
@@ -167,4 +167,30 @@ export function preservesRequiredRoutes(input: RequiredRouteInput): boolean {
     }
   }
   return required.every((index) => visited[index] === 1);
+}
+
+export function requiredPoints(floor: FloorSnapshot): readonly Point[] {
+  return [
+    floor.stairUp,
+    floor.stairDown,
+    ...floor.placementSlots.filter((slot) => slot.kind === 'objective'),
+  ].filter((point): point is Point => point !== null);
+}
+
+export function protectedRouteIndexes(floor: FloorSnapshot): ReadonlySet<number> {
+  const points = requiredPoints(floor);
+  const protectedIndexes = new Set<number>();
+  const start = points[0];
+  if (!start) return protectedIndexes;
+  for (const target of points.slice(1)) {
+    const route = analyzeConnectivity({
+      width: floor.width,
+      height: floor.height,
+      tiles: floor.tiles,
+      start,
+      target,
+    }).route;
+    for (const point of route) protectedIndexes.add(point.y * floor.width + point.x);
+  }
+  return protectedIndexes;
 }
