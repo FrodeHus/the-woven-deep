@@ -82,7 +82,7 @@ const entries: readonly ContentEntry[] = [
     },
     restockMilestones: [5, 10, 15, 20],
     house: { baseCapacity: 6, strongboxIncrement: 4 },
-    encounterDensity: { cellsPerEncounter: 2000 },
+    encounterDensity: { openCellsPerEncounter: 800 },
     fragmentSpawnRollDenominator: 40,
     floorLoot: {
       scatterCount: { minimum: 2, maximum: 4 },

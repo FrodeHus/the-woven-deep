@@ -135,11 +135,11 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `pointBuy` | object | Yes | Chargen point-buy attribute table described below. |
 | `restockMilestones` | array of positive safe integers | Yes | Strictly increasing world-time milestones at which town merchant stock restocks. The bundled value is `[5, 10, 15, 20]`. |
 | `house` | object | Yes | Player house sizing, described below. The bundled value is `{ baseCapacity: 6, strongboxIncrement: 4 }`. |
-| `encounterDensity` | object | Yes | Dungeon encounter density, described below. The bundled value is `{ cellsPerEncounter: 2000 }`. |
+| `encounterDensity` | object | Yes | Dungeon encounter density, described below. The bundled value is `{ openCellsPerEncounter: 800 }`. |
 | `fragmentSpawnRollDenominator` | positive integer | Yes | Odds denominator (1-in-N) for the rare Ancient Tablet fragment spawn rolled once per floor generation. The bundled value is `40`. |
 | `floorLoot` | object | Yes | Floor-loot placement knobs described below. |
 
-`house` carries a positive safe integer `baseCapacity` (the player house's starting storage capacity) and a positive safe integer `strongboxIncrement` (additional capacity granted per purchased strongbox upgrade). `encounterDensity` carries a positive safe integer `cellsPerEncounter`, the average number of floor cells the generator budgets per placed encounter.
+`house` carries a positive safe integer `baseCapacity` (the player house's starting storage capacity) and a positive safe integer `strongboxIncrement` (additional capacity granted per purchased strongbox upgrade). `encounterDensity` carries a positive safe integer `openCellsPerEncounter`, the average number of walkable (open) floor cells the generator budgets per placed encounter.
 
 ### Floor loot
 
@@ -247,7 +247,7 @@ entries:
         - { value: 30, cost: 60 }
     restockMilestones: [5, 10, 15, 20]
     house: { baseCapacity: 6, strongboxIncrement: 4 }
-    encounterDensity: { cellsPerEncounter: 2000 }
+    encounterDensity: { openCellsPerEncounter: 800 }
     fragmentSpawnRollDenominator: 40
     floorLoot:
       scatterCount: { minimum: 2, maximum: 4 }

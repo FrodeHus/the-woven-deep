@@ -67,7 +67,7 @@ export const balanceEntry = z
       strongboxIncrement: safePositive,
     }),
     encounterDensity: z.strictObject({
-      cellsPerEncounter: safePositive,
+      openCellsPerEncounter: safePositive,
     }),
     fragmentSpawnRollDenominator: z.number().int().min(1),
     floorLoot: z.strictObject({

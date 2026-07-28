@@ -1042,23 +1042,27 @@ const MINIMUM_FLOOR_POPULATION_ATTEMPTS = 1;
 const MAXIMUM_FLOOR_POPULATION_ATTEMPTS = 8;
 
 /**
- * How many `placePopulation` attempts a floor gets, from its cell count and the balance-defined
- * encounter density: `floor((width * height) / cellsPerEncounter)`, clamped to [1, 8]. Checked
+ * How many `placePopulation` attempts a floor gets, from its walkable (open) cell count and the
+ * balance-defined encounter density: `floor(openCellCount / openCellsPerEncounter)`, clamped to
+ * [1, 8]. Counting only walkable tiles (`tileDefinition(tile).walkable`) rather than raw
+ * `width * height` keeps the budget proportional to the space encounters can actually occupy, so
+ * two floors of equal footprint but different amounts of open floor get different budgets. Checked
  * integer division (floor of a non-negative integer quotient) -- never a float approximation.
  */
 function floorPopulationAttempts(
-  floor: Pick<FloorSnapshot, 'width' | 'height'>,
-  cellsPerEncounter: number,
+  floor: Pick<FloorSnapshot, 'tiles'>,
+  openCellsPerEncounter: number,
 ): number {
-  if (!Number.isSafeInteger(cellsPerEncounter) || cellsPerEncounter <= 0) {
+  if (!Number.isSafeInteger(openCellsPerEncounter) || openCellsPerEncounter <= 0) {
     throw new RangeError(
-      'balance encounterDensity.cellsPerEncounter must be a positive safe integer',
+      'balance encounterDensity.openCellsPerEncounter must be a positive safe integer',
     );
   }
-  const cellCount = floor.width * floor.height;
-  if (!Number.isSafeInteger(cellCount))
-    throw new RangeError('floor cell count overflow computing population attempts');
-  const raw = Math.floor(cellCount / cellsPerEncounter);
+  let openCellCount = 0;
+  for (const tile of floor.tiles) if (tileDefinition(tile).walkable) openCellCount += 1;
+  if (!Number.isSafeInteger(openCellCount))
+    throw new RangeError('floor open cell count overflow computing population attempts');
+  const raw = Math.floor(openCellCount / openCellsPerEncounter);
   return Math.min(
     MAXIMUM_FLOOR_POPULATION_ATTEMPTS,
     Math.max(MINIMUM_FLOOR_POPULATION_ATTEMPTS, raw),
@@ -1182,7 +1186,7 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
   const maps = contentMaps(input.content);
   const attempts = floorPopulationAttempts(
     input.floor,
-    maps.balance.encounterDensity.cellsPerEncounter,
+    maps.balance.encounterDensity.openCellsPerEncounter,
   );
   const eventId = `event.${input.floor.floorId}.population`;
   let run = input.run;

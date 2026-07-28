@@ -49,7 +49,7 @@ export interface BalanceContentEntry extends BaseContentEntry {
   readonly pointBuy: PointBuyDefinition;
   readonly restockMilestones: readonly number[];
   readonly house: Readonly<{ baseCapacity: number; strongboxIncrement: number }>;
-  readonly encounterDensity: Readonly<{ cellsPerEncounter: number }>;
+  readonly encounterDensity: Readonly<{ openCellsPerEncounter: number }>;
   readonly fragmentSpawnRollDenominator: number;
   readonly floorLoot: Readonly<{
     scatterCount: Readonly<{ minimum: number; maximum: number }>;
