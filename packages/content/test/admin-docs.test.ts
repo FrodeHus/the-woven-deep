@@ -235,6 +235,30 @@ describe('server-admin content documentation', () => {
     }
   });
 
+  it('documents the floorLoot balance knobs', async () => {
+    const reference = await readFile(
+      resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
+      'utf8',
+    );
+    for (const identifier of [
+      'floorLoot',
+      'scatterCount',
+      'chestCount',
+      'lockedChestPercent',
+      'lockedDoorPercent',
+      'minimumAnchorDistance',
+      'minimumSpreadDistance',
+      'depthBands',
+      'shallowMaxDepth',
+      'midMaxDepth',
+      'chestLockDifficulty',
+    ]) {
+      expect(reference, `missing floorLoot documentation for ${identifier}`).toContain(
+        `\`${identifier}\``,
+      );
+    }
+  });
+
   it('documents the optional per-choice loot-table depth band', async () => {
     const reference = await readFile(
       resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
