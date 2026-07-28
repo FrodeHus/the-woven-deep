@@ -35,14 +35,17 @@ debt fixes (stream coupling, `minDepth` enforcement).
 - **Chest-tier tables** (new, per depth band): richer than scatter — gear, tomes, keys, gold.
 - **Keys and picks sourced:** `item.iron-key` becomes a rare choice in mid/deep scatter and
   chest tables; `item.lockpick` joins shallow scatter and the town provisioner's stock table.
-- **Currency loot choices:** a new loot-choice kind `currency: { min, max }` (integers, checked
-  arithmetic). Content schema bump v7→v8 with migration notes in
+- **Currency loot choices** *(amended 2026-07-28, planning)*: gold is modeled as an ordinary
+  item `item.gold-coins` with a new item category `currency`; amounts use the existing
+  per-choice `minimumQuantity`/`maximumQuantity` roll (integers, checked arithmetic), so the
+  loot-choice schema is unchanged and gold pile ranges live in the loot tables, not balance.
+  Content schema bump v7→v8 (new category value) with migration notes in
   `docs/server-admin/content-configuration.md`.
 - **Balance knobs** (all in `content/balance/`, no engine constants): scatter count range
-  (2–4), chest count range (0–2), locked-chest ratio (~0.5), chest lock difficulty by depth
-  band, locked-door probability per eligible chokepoint, minimum placement distances (from
-  spawn, stairs, and each other), encounter-density divisor (open cells per encounter group),
-  gold pile ranges by depth band.
+  (2–4), chest count range (0–2), locked-chest ratio (integer percent, ~50), chest lock
+  difficulty by depth band (shared by locked doors), locked-door probability per eligible door
+  tile (integer percent), minimum placement distances (from spawn, stairs, and each other),
+  depth-band thresholds, encounter-density divisor (open cells per encounter group).
 
 ## Engine
 
@@ -59,19 +62,22 @@ Runs during floor generation after population placement, pure `(floor, run, cont
    constraints plus wall-adjacency preference (chests read as placed, not dropped); locked at
    the balance ratio with difficulty from the depth band; loot pointer to the chest-tier table,
    materialized on open by the existing `materialiseChestLoot`.
-3. **Locked doors:** for each corridor chokepoint (a `terrain.door` tile or 1-wide passage
-   identified via the existing connectivity analysis) NOT on a protected route, roll the balance
-   probability; on success create a locked `DoorFeature` (existing model — key auto-unlock and
-   `d20 + disarm` picking already resolve it). A locked door must never make the stairs or a
-   required objective unreachable — the protected-route exclusion guarantees it structurally.
+3. **Locked doors** *(amended 2026-07-28, planning)*: for each existing `terrain.door` tile
+   NOT on a protected route, roll the balance probability; on success create a locked
+   `DoorFeature` (existing model — key auto-unlock and `d20 + disarm` picking already resolve
+   it). Carving new locks into 1-wide open passages is deferred: a `DoorFeature`'s
+   `coverTileId`/render contract expects a door tile. A locked door must never make the stairs
+   or a required objective unreachable — the protected-route exclusion guarantees it
+   structurally.
 4. **Gold piles:** part of the scatter roll via `currency` choices; placed as ground items of a
    new `currency` item category carrying an integer amount.
 
 ### Currency pickup
 
 Ground currency items are picked up via the existing `pickup` intent; resolution adds the amount
-to `hero.currency` (checked integers), consumes no backpack slot, emits the standard pickup
-events (log: "You gather N gold."). Run-record `currencyEarned` aggregates include it.
+to `hero.currency` (checked integers), consumes no backpack slot, and emits a dedicated
+`currency.collected` event (log: "You gather N gold.") instead of `item.picked-up`, so the
+`itemsCollected` metric never counts coins. Run-record `currencyEarned` aggregates include it.
 
 ### RNG stream
 
