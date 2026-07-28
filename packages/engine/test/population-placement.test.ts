@@ -270,7 +270,7 @@ function merchantFixture(overrides: Partial<MerchantEncounterContentEntry> = {})
 }
 
 describe('population placement selection and composition', () => {
-  it('composes a merchant as one neutral NPC with finite stock while preserving encounter stream behavior', () => {
+  it('composes a merchant as one neutral NPC with finite stock, drawing its stock from the merchant stream and its position from the encounter stream', () => {
     const { npc, stockItem, stock, encounter } = merchantFixture();
     const run = runFor([encounter]);
 
@@ -291,7 +291,9 @@ describe('population placement selection and composition', () => {
       populationId: result.population.populationId,
     });
     expect(result.createdItems.length).toBeGreaterThan(0);
-    expect(result.nextEncounterState).toEqual(run.rng.encounters);
+    // The merchant composition rolls nothing, but its cell is now drawn from the encounter stream
+    // (the seeded placement scan origin), so the stream advances past the run's starting state.
+    expect(result.nextEncounterState).not.toEqual(run.rng.encounters);
     expect(result.nextMerchantStockState).not.toEqual(run.rng['merchant-stock']);
   });
   it('gates merchants by depth, instance cap, and stair distance without touching the merchant stream', () => {
