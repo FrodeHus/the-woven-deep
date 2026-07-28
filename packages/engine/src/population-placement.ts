@@ -544,6 +544,7 @@ function fillItemSlots(
         floorId: input.floor.floorId,
         x: slot.x,
         y: slot.y,
+        depth: input.floor.depth,
       });
       items.push(...loot.items);
       currentState = loot.state;

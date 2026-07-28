@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
+import type {
+  CompiledContentPack,
+  ItemContentEntry,
+  LootTableContentEntry,
+} from '@woven-deep/content';
 import {
   canStack,
   createDemoContentPack,
   createDemoRun,
   consumeItemQuantity,
+  createFloorLootFromTable,
   dropItem,
   encodeActiveRun,
   inventorySlotCount,
@@ -14,6 +19,7 @@ import {
   splitStack,
   validateContentBoundRun,
   type ItemInstance,
+  type Uint32State,
 } from '../src/index.js';
 
 function item(overrides: Partial<ItemInstance> = {}): ItemInstance {
@@ -508,5 +514,77 @@ describe('immutable inventory transitions', () => {
     expect(result.result).toMatchObject({ status: 'applied' });
     expect(result.state.items).toEqual([]);
     expect(result.state.actors.find((actor) => actor.actorId === target.actorId)!.health).toBe(19);
+  });
+});
+
+describe('createFloorLootFromTable depth banding', () => {
+  const bandedTable: LootTableContentEntry = {
+    kind: 'loot-table',
+    id: 'loot-table.banded',
+    name: 'Banded loot',
+    tags: [],
+    rolls: 1,
+    choices: [
+      {
+        contentId: 'item.trinket-a',
+        lootTableId: null,
+        weight: 1,
+        minimumQuantity: 1,
+        maximumQuantity: 1,
+      },
+      {
+        contentId: 'item.deep-relic-b',
+        lootTableId: null,
+        weight: 1000,
+        minimumQuantity: 1,
+        maximumQuantity: 1,
+        minDepth: 15,
+      },
+    ],
+  };
+
+  function bandedPack(): CompiledContentPack {
+    const base = content(itemDefinition('item.trinket-a'), itemDefinition('item.deep-relic-b'));
+    return { ...base, entries: [...base.entries, bandedTable] };
+  }
+
+  it('never rolls a choice below its authored minDepth', () => {
+    const testPack = bandedPack();
+    let state: Uint32State = [9, 9, 9, 9];
+    for (let i = 0; i < 50; i += 1) {
+      const rolled = createFloorLootFromTable({
+        content: testPack,
+        tableId: 'loot-table.banded',
+        state,
+        itemIdPrefix: 'item.test',
+        floorId: 'floor.test',
+        x: 1,
+        y: 1,
+        depth: 1,
+      });
+      state = rolled.state;
+      expect(rolled.items.every((item) => item.contentId !== 'item.deep-relic-b')).toBe(true);
+    }
+  });
+
+  it('rolls the banded choice once its authored minDepth is reached', () => {
+    const testPack = bandedPack();
+    let state: Uint32State = [9, 9, 9, 9];
+    let sawDeepRelic = false;
+    for (let i = 0; i < 50; i += 1) {
+      const rolled = createFloorLootFromTable({
+        content: testPack,
+        tableId: 'loot-table.banded',
+        state,
+        itemIdPrefix: 'item.test',
+        floorId: 'floor.test',
+        x: 1,
+        y: 1,
+        depth: 15,
+      });
+      state = rolled.state;
+      if (rolled.items.some((item) => item.contentId === 'item.deep-relic-b')) sawDeepRelic = true;
+    }
+    expect(sawDeepRelic).toBe(true);
   });
 });

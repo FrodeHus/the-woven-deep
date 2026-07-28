@@ -312,9 +312,14 @@ export function createFloorLootFromTable(
     floorId: OpaqueId;
     x: number;
     y: number;
+    depth: number;
   }>,
 ): Readonly<{ items: readonly ItemInstance[]; state: Uint32State }> {
-  const tables = projectLootGraph({ content: input.content, rootTableId: input.tableId });
+  const tables = projectLootGraph({
+    content: input.content,
+    rootTableId: input.tableId,
+    depth: input.depth,
+  });
   if (
     !Number.isSafeInteger(input.x) ||
     input.x < 0 ||
@@ -385,6 +390,7 @@ export function createPopulationLoot(
     floorId: OpaqueId;
     x: number;
     y: number;
+    depth: number;
     uniqueContentId?: OpaqueId | null;
     uniqueItemId?: OpaqueId | null;
     lootState?: Uint32State;
@@ -423,6 +429,7 @@ export function createPopulationLoot(
     floorId: input.floorId,
     x: input.x,
     y: input.y,
+    depth: input.depth,
   });
   const createdItems: readonly ItemInstance[] = unique ? [unique, ...loot.items] : [...loot.items];
   if (!input.dryRun) {

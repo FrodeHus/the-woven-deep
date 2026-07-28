@@ -613,6 +613,7 @@ export function advanceFallenHeroEncounters(
         tableId: definition.echoLootTableId,
         recordedHeirloomContentId: standing.heirloom.contentId,
       });
+      const floor = state.floors.find((candidate) => candidate.floorId === population.floorId)!;
       const loot = createPopulationLoot({
         content: input.content,
         state,
@@ -621,6 +622,7 @@ export function advanceFallenHeroEncounters(
         floorId: population.floorId,
         x: actor.x,
         y: actor.y,
+        depth: floor.depth,
       });
       if (loot.createdItems.some((item) => item.contentId === standing.heirloom.contentId)) {
         throw new Error('Echo ordinary loot must not create its recorded heirloom');
