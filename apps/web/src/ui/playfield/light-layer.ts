@@ -79,7 +79,10 @@ export function spriteLightTint(intensity: number): number {
  * REMEMBERED_TINT} (the same dim gray the fov overpaint paints remembered floor with); a visible
  * feature tints by its cell light via {@link spriteLightTint}.
  */
-export function featureLightTint(knowledge: ObservableCell['knowledge'], intensity: number): number {
+export function featureLightTint(
+  knowledge: ObservableCell['knowledge'],
+  intensity: number,
+): number {
   return knowledge === 'remembered' ? REMEMBERED_TINT : spriteLightTint(intensity);
 }
 

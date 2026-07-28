@@ -801,7 +801,10 @@ export class IsoRenderer {
    * sprite (foot-anchored to the cell floor, uniformly scaled so taller boss crops read bigger,
    * horizontally mirrored while facing right); falls back to the colored glyph when the contentId has
    * no art. */
-  private buildActorBody(sprite: ActorSprite, lightTint: number): { node: Container; topY: number } {
+  private buildActorBody(
+    sprite: ActorSprite,
+    lightTint: number,
+  ): { node: Container; topY: number } {
     const rect = resolveActorRect(sprite.contentId, this.actorAtlas);
     const texture =
       rect === null || sprite.contentId === null
