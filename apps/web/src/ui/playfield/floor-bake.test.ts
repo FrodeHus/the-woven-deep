@@ -10,8 +10,9 @@ import {
   type FloorBakePlan,
 } from './floor-bake.js';
 
-// Every unified-sheet cell is a full 128x128 square; the atlas rects are grid cells, not tight
-// crops. `x` distinguishes fixtures for equality assertions.
+// A synthetic atlas with uniform square rects keeps the geometry assertions arithmetic-clean; the
+// live sheet's rects are tight measured crops (see atlas.test.ts). `x` distinguishes fixtures for
+// equality assertions.
 function rect(x: number, w = 128, h = 128): AtlasRect {
   return { x, y: 0, w, h };
 }
@@ -20,11 +21,11 @@ function makeAtlas(): PlayfieldAtlas {
   return {
     imageUrl: 'atlas.png',
     blockDepthPx: 48,
-    floors: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => rect(100 + i)),
-    dirty: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => rect(200 + i)),
+    floors: [0, 1, 2, 3, 4, 5, 6].map((i) => rect(100 + i)),
+    dirty: [0, 1, 2, 3, 4, 5, 6].map((i) => rect(200 + i)),
     walls: [0, 1, 2, 3, 4, 5].map((i) => rect(300 + i)),
     rounded: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => rect(400 + i)),
-    weaveWalls: [rect(500), rect(501)],
+    weaveWalls: [rect(500)],
     stairs: rect(600),
     stairsUp: rect(610),
     door: rect(700),

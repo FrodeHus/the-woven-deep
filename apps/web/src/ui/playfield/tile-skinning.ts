@@ -22,19 +22,22 @@ export interface TileSkin {
 }
 
 /** Atlas family array lengths (`atlas-unified.json` via `atlas.ts`), duplicated here as literal
- * constants rather than imported so this pure WFC pass stays decoupled from atlas loading. */
-const FLOORS_LEN = 8;
-const DIRTY_LEN = 8;
+ * constants rather than imported so this pure WFC pass stays decoupled from atlas loading. The
+ * measured (auto-sliced) sheet ships 7 floor and 7 dirt variants, 6 wall cubes, and a single
+ * Weave-conduit wall. */
+const FLOORS_LEN = 7;
+const DIRTY_LEN = 7;
 const WALLS_LEN = 6;
-const WEAVE_LEN = 2;
+const WEAVE_LEN = 1;
 const TOWN_FLOORS_LEN = 2;
 const TOWN_WALLS_LEN = 2;
 
 /** Dungeon floor dirt scatter rate: 1-in-`DIRTY_RATE` cells seed dirt before neighbour
  * propagation. Higher is calmer. */
 const DIRTY_RATE = 8;
-// `rounded` has 8 entries (NE/SE/SW/NW=0-3, endcaps=4-5, lone=6-7); every branch below picks a
-// literal in that range so no length constant is needed for modulo.
+// `rounded` addresses 8 topology slots (NE/SE/SW/NW=0-3, endcaps=4-5, lone=6-7); every branch below
+// picks a literal in that range so no length constant is needed for modulo. The sheet supplies 7
+// boulder pieces, so `atlas-unified.json` duplicates the last into slot 7 to fill the 8th lone slot.
 
 /** Closed set of engine terrain tokens (`TILE_DEFINITIONS`, `packages/engine/src/terrain.ts`).
  * Both stair tiles (up/down) share `terrain.stair` and, for now, the same sprite family. Any

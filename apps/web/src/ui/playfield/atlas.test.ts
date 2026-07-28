@@ -6,22 +6,24 @@ describe('parseAtlas', () => {
   it('parses the committed unified atlas into typed rects', () => {
     const atlas = parseAtlas(raw);
     expect(atlas.imageUrl).toBe('/playfield/tiles.png');
-    expect(atlas.blockDepthPx).toBe(48);
-    expect(atlas.floors).toHaveLength(8);
-    expect(atlas.dirty).toHaveLength(8);
+    expect(atlas.blockDepthPx).toBe(80);
+    expect(atlas.floors).toHaveLength(7);
+    expect(atlas.dirty).toHaveLength(7);
     expect(atlas.walls).toHaveLength(6);
-    expect(atlas.weaveWalls).toHaveLength(2);
+    expect(atlas.weaveWalls).toHaveLength(1);
+    // 7 boulder pieces plus a duplicate filling the 8th lone-wall topology slot.
     expect(atlas.rounded).toHaveLength(8);
-    // Grid-derived cells: column c, row r slices as [c*128, r*128, 128, 128].
-    expect(atlas.floors[0]).toEqual({ x: 0, y: 0, w: 128, h: 128 });
-    expect(atlas.stairs).toEqual({ x: 0, y: 512, w: 128, h: 128 }); // down (row 4, col 0)
-    expect(atlas.stairsUp).toEqual({ x: 128, y: 512, w: 128, h: 128 }); // up (row 4, col 1)
-    expect(atlas.door).toEqual({ x: 256, y: 512, w: 128, h: 128 });
+    expect(atlas.rounded[7]).toEqual(atlas.rounded[6]);
+    // Measured (auto-sliced) rects, not grid cells: tight bounding boxes on an uneven pitch.
+    expect(atlas.floors[0]).toEqual({ x: 14, y: 39, w: 151, h: 94 });
+    expect(atlas.stairs).toEqual({ x: 10, y: 669, w: 160, h: 95 }); // down-well (row 4, col 0)
+    expect(atlas.stairsUp).toEqual({ x: 189, y: 637, w: 127, h: 145 }); // up (row 4, col 1)
+    expect(atlas.door).toEqual({ x: 364, y: 638, w: 109, h: 139 });
     // Town keys (row 5): cobbles, timber walls, house door, dungeon-entrance surround.
     expect(atlas.townFloors).toHaveLength(2);
     expect(atlas.townWalls).toHaveLength(2);
-    expect(atlas.houseDoor).toEqual({ x: 512, y: 640, w: 128, h: 128 });
-    expect(atlas.entranceSurround).toEqual({ x: 640, y: 640, w: 128, h: 128 });
+    expect(atlas.houseDoor).toEqual({ x: 665, y: 809, w: 96, h: 130 });
+    expect(atlas.entranceSurround).toEqual({ x: 808, y: 801, w: 140, h: 151 });
   });
 
   it('throws on malformed input', () => {

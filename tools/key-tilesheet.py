@@ -128,17 +128,28 @@ def _defringe(rgba: np.ndarray) -> None:
     rgba[..., 3] = np.where(rim_bleed, 0, alpha)
 
 
-def key_tilesheet(src: Image.Image, tolerance: float, defringe_only: bool = False) -> Image.Image:
+def key_tilesheet(
+    src: Image.Image,
+    tolerance: float,
+    defringe_only: bool = False,
+    no_flood: bool = False,
+) -> Image.Image:
     """Return an RGBA copy of `src` with its magenta and per-cell backdrops keyed to transparency.
 
     With `defringe_only` the magenta-key and per-cell flood passes are skipped -- they need the solid
     magenta background of an unkeyed source -- and only the de-fringe runs, neutralising the violet
     seams left on an already-keyed sheet.
+
+    With `no_flood` the global magenta key and the de-fringe still run, but the per-cell corner flood
+    is skipped. That flood assumes a strict 128px cell grid (`CELL`); a hand-laid sheet whose blocks
+    sit on an uneven, non-128 pitch does not align to it, and such a sheet has no flat grey backdrop
+    for the flood to remove anyway, so the magenta key alone produces the needed transparency.
     """
     rgba = np.asarray(src.convert("RGBA")).astype(np.float32)
     if not defringe_only:
         _magenta_key(rgba, tolerance)
-        _flood_cells(rgba, tolerance)
+        if not no_flood:
+            _flood_cells(rgba, tolerance)
     _defringe(rgba)
     return Image.fromarray(np.clip(rgba, 0, 255).astype(np.uint8), "RGBA")
 
@@ -159,10 +170,18 @@ def main(argv: list[str]) -> int:
         help="skip the magenta key and flood (they need an unkeyed source) and only de-fringe an "
         "already-keyed RGBA sheet",
     )
+    parser.add_argument(
+        "--no-flood",
+        action="store_true",
+        help="run the magenta key and de-fringe but skip the per-cell corner flood, whose 128px "
+        "cell grid does not fit a hand-laid sheet on an uneven pitch",
+    )
     args = parser.parse_args(argv)
 
     with Image.open(args.input) as src:
-        result = key_tilesheet(src, args.tolerance, defringe_only=args.defringe_only)
+        result = key_tilesheet(
+            src, args.tolerance, defringe_only=args.defringe_only, no_flood=args.no_flood
+        )
     result.save(args.output)
 
     keyed = np.asarray(result)[..., 3]

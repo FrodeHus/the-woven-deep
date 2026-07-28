@@ -4,12 +4,11 @@ import { TILE_HALF_H, TILE_HALF_W } from './iso-math.js';
 import { skinFloor, type TileFamily } from './tile-skinning.js';
 
 /**
- * The regenerated sheet draws each flat-floor cell as a full-cell diamond that spans the whole
- * 128px square (apex to apex, edge to edge), so its footprint is 1:1 rather than the 2:1 the iso
- * grid expects. `planFloorBake` maps that full cell onto the 2:1 pitch (64px wide by 32px tall at
- * scale 1) and centres the diamond on the cell, which tessellates exactly. A hair of overscan about
- * that centre hides the sub-pixel seams a fractional camera zoom can still open between adjacent
- * diamonds, keeping the floor reading as continuous stone.
+ * The regenerated sheet draws each flat-floor cell as a diamond whose measured crop is close to
+ * square rather than the 2:1 the iso grid expects. `planFloorBake` maps that crop onto the 2:1
+ * pitch (64px wide by 32px tall at scale 1) and centres the diamond on the cell, which tessellates
+ * exactly. A hair of overscan about that centre hides the sub-pixel seams a fractional camera zoom
+ * can still open between adjacent diamonds, keeping the floor reading as continuous stone.
  */
 export const FLOOR_OVERSCAN = 1.02;
 
@@ -178,9 +177,9 @@ export function planFloorBake(
     const sy = isoY(cell.x, cell.y);
     const dh = dw * (rect.h / rect.w);
 
-    // Every unified-sheet cell is a full 128px square whose top-face diamond sits at a fixed
-    // in-cell depth: its bottom corner `blockDepthPx` px above the cell base, its centre a further
-    // quarter-width up (the diamond is 2:1). `spriteScale` maps that source geometry into the
+    // Each measured tile crop carries a top-face diamond at a fixed depth: its bottom corner
+    // `blockDepthPx` source-px above the crop base, its centre a further quarter-width up (the
+    // diamond projects 2:1). `spriteScale` maps that source geometry into the
     // scaled draw. Anchoring the diamond centre on the cell keeps floors and wall top faces on the
     // one floor plane; the wall art's own body then rises above and drops below that plane.
     const spriteScale = dw / rect.w;

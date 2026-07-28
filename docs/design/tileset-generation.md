@@ -146,7 +146,9 @@ produced by the keying tool, not the generator:
 The renderer slices by explicit rects in `apps/web/public/playfield/atlas-unified.json`
 (`parseAtlas` in `apps/web/src/ui/playfield/atlas.ts` is the schema authority). For a sheet
 generated on the strict grid above, a cell at column `c`, row `r` slices as
-`[c*128, r*128, 128, 128]`.
+`[c*128, r*128, 128, 128]`. A sheet that misses the strict grid — hand-laid on an uneven pitch, or
+with per-row counts that vary — can still be imported via `tools/slice-tilesheet.py`, which measures
+each tile's tight rect from the alpha-keyed art automatically instead of assuming the grid.
 
 `atlas-unified.json` is the live atlas: the game loads it (`ATLAS_URL`) and renders from
 `tiles.png` on this 8×8 grid, with `blockDepthPx: 48` (this grid's block depth). The stair
