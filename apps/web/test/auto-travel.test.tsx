@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
@@ -14,6 +14,7 @@ import {
 import type { GuestSession, SessionSnapshot } from '../src/session/guest-session.js';
 import type { PlayerIntent } from '../src/session/intents.js';
 import { PlayScreen } from '../src/ui/PlayScreen.js';
+import { STEP_MS } from '../src/ui/playfield/scene-state.js';
 import { fakePlayfieldRenderer, type FakePlayfieldRenderer } from './fake-playfield-renderer.js';
 import { withUiProviders } from './with-ui-providers.js';
 
@@ -175,6 +176,10 @@ function moves(session: FakeSession): readonly PlayerIntent[] {
 }
 
 describe('PlayScreen click-to-move (auto-travel)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('clicking an adjacent cell dispatches exactly one move', async () => {
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
     const fake = await renderPlay(session);
@@ -198,6 +203,28 @@ describe('PlayScreen click-to-move (auto-travel)', () => {
     expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
   });
 
+  it('a keypress during the paced wait for the next step cancels the walk before the timer fires', async () => {
+    const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
+    const fake = await renderPlay(session);
+
+    vi.useFakeTimers();
+
+    clickCell(fake, { x: 23, y: 10 });
+    expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
+
+    // The projection confirming step one arrives while the second step is still paced behind the
+    // STEP_MS timer.
+    session.publish(projectionOf({ hero: { x: 21, y: 10 } }));
+    expect(moves(session)).toHaveLength(1);
+
+    // Cancel while that timer is still pending -- it must never fire.
+    fireEvent.keyDown(window, { key: 'Backspace' });
+    act(() => {
+      vi.advanceTimersByTime(STEP_MS);
+    });
+    expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
+  });
+
   it('auto-travels step by step and picks up a floor item on arrival', async () => {
     const item: FakeItem = {
       itemId: 'item.sword',
@@ -212,15 +239,32 @@ describe('PlayScreen click-to-move (auto-travel)', () => {
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 }, groundItems: [item] }));
     const fake = await renderPlay(session);
 
+    vi.useFakeTimers();
+
     clickCell(fake, { x: 22, y: 10 });
+    // The first step fires immediately, with no timer wait -- no added click latency.
     expect(moves(session)).toHaveLength(1);
     expect(session.dispatched).not.toContainEqual({ type: 'pickup' });
 
     session.publish(projectionOf({ hero: { x: 21, y: 10 }, groundItems: [item] }));
+    // The projection confirming the first step lands well inside STEP_MS of the first dispatch,
+    // so the second step is paced behind a timer and must NOT fire yet -- this is exactly the
+    // "snap forward" scenario the pacing fix guards against.
+    expect(moves(session)).toHaveLength(1);
+
+    act(() => {
+      vi.advanceTimersByTime(STEP_MS);
+    });
     expect(moves(session)).toHaveLength(2);
     expect(session.dispatched).not.toContainEqual({ type: 'pickup' });
 
     session.publish(projectionOf({ hero: { x: 22, y: 10 }, groundItems: [item] }));
+    // Arrival is paced the same way: nothing fires until STEP_MS has elapsed since the last step.
+    expect(session.dispatched.at(-1)).not.toEqual({ type: 'pickup' });
+
+    act(() => {
+      vi.advanceTimersByTime(STEP_MS);
+    });
     // Arrived on the item cell: the pickup fires, and no further move is dispatched.
     expect(session.dispatched.at(-1)).toEqual({ type: 'pickup' });
     expect(moves(session)).toHaveLength(2);

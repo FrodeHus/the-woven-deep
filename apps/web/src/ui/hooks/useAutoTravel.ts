@@ -9,6 +9,7 @@ import {
   resolveClick,
   type ActiveTravel,
 } from '../../session/travel.js';
+import { STEP_MS } from '../playfield/scene-state.js';
 
 export interface AutoTravelHandlers {
   /** Starts a click-to-travel walk toward `cell`, driven by one-step-per-projection pacing. The
@@ -33,6 +34,16 @@ export interface UseAutoTravelParams {
  * from or outrun the engine. The walk is a pure convenience: it is cancelled by any keypress or a
  * new click, and it stops itself the moment the projection shows the hero did not advance as
  * expected, took damage, or a new hostile appeared (see `advanceTravel`).
+ *
+ * Pacing: successive projections can publish far faster than the playfield's per-step tween
+ * (`STEP_MS`, `ui/playfield/scene-state.ts`) resolves, because a dispatched move round-trips
+ * through the engine and back to a new snapshot well inside one animation frame. Left unpaced,
+ * each new step would retarget the sprite's in-flight tween before it finished, collapsing a
+ * multi-tile walk into what reads as a teleport. So only the FIRST step of a walk (the one
+ * `travelTo` fires synchronously off the click, for zero added click latency) dispatches
+ * immediately; every step after that waits behind a timer so it never fires sooner than
+ * `STEP_MS` after the previous dispatch, however fast the projections themselves arrive. Manual
+ * keyboard movement does not go through this hook at all, so it is never paced.
  */
 export function useAutoTravel({
   session,
@@ -41,7 +52,16 @@ export function useAutoTravel({
 }: UseAutoTravelParams): AutoTravelHandlers {
   const { projection } = snapshot;
   const travelRef = useRef<ActiveTravel | null>(null);
+  const lastDispatchAtRef = useRef(0);
+  const pendingStepRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dispatch = useCallback((intent: PlayerIntent) => session.dispatch(intent), [session]);
+
+  const clearPendingStep = useCallback(() => {
+    if (pendingStepRef.current !== null) {
+      clearTimeout(pendingStepRef.current);
+      pendingStepRef.current = null;
+    }
+  }, []);
 
   // Any real keypress cancels an in-progress walk. The key still reaches `usePlayKeyDispatcher`'s
   // own listener and does its normal thing (e.g. a manual move) -- cancelling here only drops the
@@ -49,20 +69,33 @@ export function useAutoTravel({
   useEffect(() => {
     const cancel = (): void => {
       travelRef.current = null;
+      clearPendingStep();
     };
     window.addEventListener('keydown', cancel);
     return () => window.removeEventListener('keydown', cancel);
-  }, []);
+  }, [clearPendingStep]);
 
-  // Drive one step whenever a new authoritative projection arrives. `advanceTravel` first confirms
-  // the previous step landed before dispatching the next, so this advances at most one move per
-  // engine turn and stays strictly in lockstep with the projection.
+  // Drop any pending step timer when the component unmounts.
+  useEffect(() => clearPendingStep, [clearPendingStep]);
+
+  // Drive one step whenever a new authoritative projection arrives, but never sooner than
+  // `STEP_MS` after the previous dispatch. `advanceTravel` first confirms the previous step
+  // landed before dispatching the next, so this advances at most one move per engine turn -- paced
+  // to at most one move per tween -- and stays strictly in lockstep with the projection.
   useEffect(() => {
     if (travelRef.current === null) return;
-    travelRef.current = advanceTravel({ projection, travel: travelRef.current, dispatch });
-  }, [projection, dispatch]);
+    clearPendingStep();
+    const delay = Math.max(0, STEP_MS - (Date.now() - lastDispatchAtRef.current));
+    pendingStepRef.current = setTimeout(() => {
+      pendingStepRef.current = null;
+      if (travelRef.current === null) return;
+      travelRef.current = advanceTravel({ projection, travel: travelRef.current, dispatch });
+      lastDispatchAtRef.current = Date.now();
+    }, delay);
+  }, [projection, dispatch, clearPendingStep]);
 
   const travelTo = (cell: Point): void => {
+    clearPendingStep();
     if (disabled) {
       travelRef.current = null;
       return;
@@ -72,13 +105,15 @@ export function useAutoTravel({
       travelRef.current = null;
       return;
     }
-    // Kick off the first step immediately against the current projection; every subsequent step is
-    // driven by the effect above as each resulting projection publishes.
+    // Kick off the first step immediately against the current projection -- no added click
+    // latency; every subsequent step is driven by the effect above, paced to `STEP_MS`, as each
+    // resulting projection publishes.
     travelRef.current = advanceTravel({
       projection,
       travel: beginTravel(projection, plan),
       dispatch,
     });
+    lastDispatchAtRef.current = Date.now();
   };
 
   return { travelTo };
