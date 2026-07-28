@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { ObservableCell } from '@woven-deep/engine';
 import {
   cellDarkness,
+  composeTints,
+  featureLightTint,
   isFogMaskedTier,
   lightPoolDiameterPx,
   lightsForFloor,
+  REMEMBERED_TINT,
+  spriteLightTint,
   visibleBrightness,
   VISIBLE_FLOOR_BRIGHTNESS,
   type LightSpec,
@@ -73,6 +77,64 @@ describe('visibleBrightness', () => {
   it('clamps out-of-range intensity to the floor..1 band', () => {
     expect(visibleBrightness(-10)).toBe(VISIBLE_FLOOR_BRIGHTNESS);
     expect(visibleBrightness(400)).toBe(1);
+  });
+});
+
+describe('spriteLightTint', () => {
+  it('renders a fully lit visible cell verbatim (white) and a dark visible cell at the floored gray', () => {
+    // Sprites live ABOVE the multiply light-map, so their tint carries the cell light directly.
+    expect(spriteLightTint(255)).toBe(0xffffff);
+    // floor 0.6 * 255 = 153 = 0x99 per channel -- floored, never black (an actor on a visible cell
+    // is never fully dark).
+    expect(spriteLightTint(0)).toBe(0x999999);
+  });
+
+  it('produces an equal-channel gray for every intensity', () => {
+    for (const intensity of [0, 1, 40, 128, 200, 255]) {
+      const tint = spriteLightTint(intensity);
+      const r = (tint >> 16) & 0xff;
+      const g = (tint >> 8) & 0xff;
+      const b = tint & 0xff;
+      expect(g).toBe(r);
+      expect(b).toBe(r);
+    }
+  });
+
+  it('is monotonic non-decreasing in intensity', () => {
+    const samples = [0, 40, 80, 120, 160, 200, 255];
+    for (let i = 1; i < samples.length; i += 1) {
+      expect(spriteLightTint(samples[i]!)).toBeGreaterThanOrEqual(spriteLightTint(samples[i - 1]!));
+    }
+    // and strictly brighter across the full span
+    expect(spriteLightTint(255)).toBeGreaterThan(spriteLightTint(0));
+  });
+});
+
+describe('featureLightTint', () => {
+  it('tints a remembered feature to the remembered dim gray regardless of intensity', () => {
+    expect(featureLightTint('remembered', 255)).toBe(REMEMBERED_TINT);
+    expect(featureLightTint('remembered', 0)).toBe(REMEMBERED_TINT);
+  });
+
+  it('tints a visible feature by its cell light, matching spriteLightTint', () => {
+    expect(featureLightTint('visible', 255)).toBe(spriteLightTint(255));
+    expect(featureLightTint('visible', 0)).toBe(spriteLightTint(0));
+  });
+});
+
+describe('composeTints', () => {
+  it('is the identity when the light tint is full white', () => {
+    expect(composeTints(0x8a6fd1, 0xffffff)).toBe(0x8a6fd1);
+  });
+
+  it('multiplies channel-wise (half-bright light halves each channel)', () => {
+    // 0x80/0xff ~= 0.5019; 0xff * that rounds to 0x80, 0x40 * that rounds to 0x20.
+    expect(composeTints(0xff4020, 0x808080)).toBe(0x802010);
+  });
+
+  it('goes black only when a channel of either tint is zero', () => {
+    expect(composeTints(0xffffff, 0x000000)).toBe(0x000000);
+    expect(composeTints(0x00ff00, 0xffffff)).toBe(0x00ff00);
   });
 });
 
