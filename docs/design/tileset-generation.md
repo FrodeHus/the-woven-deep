@@ -27,6 +27,12 @@ accent, flat value steps.
 STRICT GRID — this is machine-sliced, precision matters more than beauty:
 - Exactly 8 columns x 8 rows of 128x128-pixel cells. One tile per cell, nothing crossing cell
   borders, no overlap, no drop shadows or glows outside the block silhouette.
+- THE WHOLE BLOCK FITS INSIDE ITS CELL, with a margin of at least 2 px of background on all four
+  sides. Nothing may touch a cell border: not the diamond apex, not the left/right corners, not a
+  wall cube's top face. A block drawn larger than its cell gets guillotined by the machine slicer
+  — a wall cube with its apex or side corners cut off renders in-game as a sawtooth zigzag along
+  every wall run. If a cube looks too big to fit with the margin, draw it smaller; the renderer
+  scales tiles up, never the other way.
 - Every tile is built on the SAME isometric footprint: a 2:1 diamond top exactly 128 px wide and
   64 px tall, apex at y=16 in-cell, left/right corners at y=48, bottom corner at y=80. Blocks
   extend straight down 48 px below the diamond (base at y=128). Flat items sit ON this diamond.
