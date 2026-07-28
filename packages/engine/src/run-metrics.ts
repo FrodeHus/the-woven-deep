@@ -111,7 +111,7 @@ export function normalizeStoredMetrics(raw: unknown): RunMetrics {
   };
 }
 
-function checkedAdd(left: number, right: number, label: string): number {
+export function checkedAdd(left: number, right: number, label: string): number {
   const sum = left + right;
   if (!Number.isSafeInteger(sum)) {
     throw new RangeError(`${label} exceeds safe integer arithmetic`);
@@ -225,6 +225,11 @@ export function foldRunMetrics(
         break;
       case 'trade.sold':
         currencyEarned = checkedAdd(currencyEarned, event.total, 'currencyEarned');
+        break;
+      case 'currency.collected':
+        if (event.actorId === heroId) {
+          currencyEarned = checkedAdd(currencyEarned, event.amount, 'currencyEarned');
+        }
         break;
       case 'trade.service-purchased':
         currencySpent = checkedAdd(currencySpent, event.price, 'currencySpent');

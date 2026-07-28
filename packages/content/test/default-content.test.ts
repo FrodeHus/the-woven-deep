@@ -33,10 +33,10 @@ describe('bundled content', () => {
       ),
     ).toEqual({
       monster: 46,
-      item: 48,
+      item: 49,
       spell: 14,
       trap: 2,
-      'loot-table': 22,
+      'loot-table': 28,
       balance: 1,
       vault: 7,
       dialogue: 1,
@@ -196,11 +196,11 @@ describe('bundled content', () => {
     });
   });
 
-  it('ships schema-v7 run-record content: achievements, score coefficients, and monster threat', async () => {
+  it('ships schema-v8 run-record content: achievements, score coefficients, and monster threat', async () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
-    expect(pack.schemaVersion).toBe(7);
+    expect(pack.schemaVersion).toBe(8);
     const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
     expect(entries.get('achievement.defeated-the-deeps-champion')).toMatchObject({
       kind: 'achievement',
@@ -231,7 +231,7 @@ describe('bundled content', () => {
       },
       restockMilestones: [5, 10, 15, 20],
       house: { baseCapacity: 6, strongboxIncrement: 4 },
-      encounterDensity: { cellsPerEncounter: 2000 },
+      encounterDensity: { openCellsPerEncounter: 800 },
     });
     expect(entries.get('monster.cave-rat')).toMatchObject({ threat: 1 });
     expect(entries.get('monster.training-beetle')).toMatchObject({ threat: 2 });

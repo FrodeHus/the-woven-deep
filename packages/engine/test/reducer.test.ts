@@ -469,8 +469,7 @@ describe('run conclusion', () => {
     expect(heroActor(killing.state).health).toBe(0);
     expect(killing.events.map((event) => event.type)).toEqual([
       'hero.waited',
-      'actor.damaged',
-      'actor.died',
+      'hero.damaged',
       'run.concluded',
     ]);
     expect(killing.state.conclusion).toMatchObject({
@@ -561,8 +560,7 @@ describe('run conclusion', () => {
     expect(killing.events.map((event) => event.type)).toEqual([
       'reaction.triggered',
       'combat.observed',
-      'actor.damaged',
-      'actor.died',
+      'hero.damaged',
       'run.concluded',
     ]);
     expect(killing.state.conclusion).toMatchObject({

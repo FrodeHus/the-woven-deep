@@ -169,6 +169,13 @@ export interface ItemPickedUpEvent {
   readonly itemId: OpaqueId;
   readonly quantity: number;
 }
+export interface CurrencyCollectedEvent {
+  readonly type: 'currency.collected';
+  readonly eventId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly amount: number;
+  readonly currency: number;
+}
 export interface ItemDroppedEvent {
   readonly type: 'item.dropped';
   readonly eventId: OpaqueId;
@@ -792,6 +799,7 @@ export type DomainEvent =
   | ActorTurnCompletedEvent
   | ActorMovedEvent
   | ItemPickedUpEvent
+  | CurrencyCollectedEvent
   | ItemDroppedEvent
   | ItemStackSplitEvent
   | ItemConsumedEvent

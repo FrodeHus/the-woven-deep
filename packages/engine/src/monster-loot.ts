@@ -34,6 +34,9 @@ export function dropMonsterLoot(
     return { state: withRngStream(input.state, 'loot', chance.state), events: [] };
   }
 
+  const floor = input.state.floors.find(
+    (candidate) => candidate.floorId === input.deadActor.floorId,
+  )!;
   const loot = createFloorLootFromTable({
     content: input.content,
     tableId: monster.lootTableId,
@@ -42,6 +45,7 @@ export function dropMonsterLoot(
     floorId: input.deadActor.floorId,
     x: input.deadActor.x,
     y: input.deadActor.y,
+    depth: floor.depth,
   });
 
   if (loot.items.length === 0) {

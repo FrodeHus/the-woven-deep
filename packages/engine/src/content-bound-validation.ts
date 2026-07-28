@@ -305,6 +305,7 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           floorId: population.floorId,
           x: actor.x,
           y: actor.y,
+          depth: floor.depth,
           uniqueContentId: encounter.definition.uniqueItemId,
           uniqueItemId: `${rewardPrefix}unique`,
           lootState: population.rewardReceipt.lootStateBefore,

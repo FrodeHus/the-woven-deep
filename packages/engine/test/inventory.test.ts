@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
+import type {
+  CompiledContentPack,
+  ItemContentEntry,
+  LootTableContentEntry,
+} from '@woven-deep/content';
 import {
   canStack,
   createDemoContentPack,
   createDemoRun,
   consumeItemQuantity,
+  createFloorLootFromTable,
   dropItem,
   encodeActiveRun,
   inventorySlotCount,
@@ -14,6 +19,7 @@ import {
   splitStack,
   validateContentBoundRun,
   type ItemInstance,
+  type Uint32State,
 } from '../src/index.js';
 
 function item(overrides: Partial<ItemInstance> = {}): ItemInstance {
@@ -291,6 +297,93 @@ describe('immutable inventory transitions', () => {
     expect(() => encodeActiveRun(dropped.state)).not.toThrow();
   });
 
+  it('credits hero currency on gold pickup without using a backpack slot', () => {
+    const pack = content(
+      itemDefinition('item.coin'),
+      itemDefinition('item.gold-coins', 999, { category: 'currency', tags: ['currency'] }),
+    );
+    const backpackFiller = Array.from({ length: 12 }, (_, index) =>
+      item({ itemId: `item.coin.${index}`, quantity: 1 }),
+    );
+    const run = {
+      ...createDemoRun(),
+      items: [
+        ...backpackFiller,
+        item({
+          itemId: 'item.gold-coins.floor',
+          contentId: 'item.gold-coins',
+          quantity: 12,
+          location: { type: 'floor', floorId: 'floor.demo', x: 1, y: 1 },
+        }),
+      ],
+    };
+    const before = run.hero.currency;
+    const backpackSlotsBefore = run.items.filter(
+      (entry) => entry.location.type === 'backpack',
+    ).length;
+    const { state, events } = resolveCommand(
+      run,
+      {
+        type: 'pickup',
+        commandId: 'command.pickup',
+        expectedRevision: 0,
+        itemId: 'item.gold-coins.floor',
+        quantity: 12,
+      },
+      { content: pack },
+    );
+    expect(state.hero.currency).toBe(before + 12);
+    expect(state.items.find((entry) => entry.itemId === 'item.gold-coins.floor')).toBeUndefined();
+    expect(state.items.filter((entry) => entry.location.type === 'backpack').length).toBe(
+      backpackSlotsBefore,
+    );
+    const currencyEvent = events.find((event) => event.type === 'currency.collected');
+    expect(currencyEvent).toMatchObject({ amount: 12, currency: before + 12 });
+    expect(events.some((event) => event.type === 'item.picked-up')).toBe(false);
+    expect(() => encodeActiveRun(state)).not.toThrow();
+  });
+
+  it('credits a partial gold pickup and leaves the remainder on the floor', () => {
+    const pack = content(
+      itemDefinition('item.gold-coins', 999, { category: 'currency', tags: ['currency'] }),
+    );
+    const run = {
+      ...createDemoRun(),
+      items: [
+        item({
+          itemId: 'item.gold-coins.floor',
+          contentId: 'item.gold-coins',
+          quantity: 20,
+          location: { type: 'floor', floorId: 'floor.demo', x: 1, y: 1 },
+        }),
+      ],
+    };
+    const before = run.hero.currency;
+    const { state, events } = resolveCommand(
+      run,
+      {
+        type: 'pickup',
+        commandId: 'command.pickup',
+        expectedRevision: 0,
+        itemId: 'item.gold-coins.floor',
+        quantity: 8,
+      },
+      { content: pack },
+    );
+    expect(state.hero.currency).toBe(before + 8);
+    expect(state.items).toMatchObject([
+      {
+        itemId: 'item.gold-coins.floor',
+        quantity: 12,
+        location: { type: 'floor', x: 1, y: 1 },
+      },
+    ]);
+    const currencyEvent = events.find((event) => event.type === 'currency.collected');
+    expect(currencyEvent).toMatchObject({ amount: 8, currency: before + 8 });
+    expect(events.some((event) => event.type === 'item.picked-up')).toBe(false);
+    expect(() => encodeActiveRun(state)).not.toThrow();
+  });
+
   it('applies a split command with its caller-supplied stable item ID', () => {
     const pack = content(itemDefinition());
     const run = { ...createDemoRun(), items: [item({ quantity: 4 })] };
@@ -508,5 +601,77 @@ describe('immutable inventory transitions', () => {
     expect(result.result).toMatchObject({ status: 'applied' });
     expect(result.state.items).toEqual([]);
     expect(result.state.actors.find((actor) => actor.actorId === target.actorId)!.health).toBe(19);
+  });
+});
+
+describe('createFloorLootFromTable depth banding', () => {
+  const bandedTable: LootTableContentEntry = {
+    kind: 'loot-table',
+    id: 'loot-table.banded',
+    name: 'Banded loot',
+    tags: [],
+    rolls: 1,
+    choices: [
+      {
+        contentId: 'item.trinket-a',
+        lootTableId: null,
+        weight: 1,
+        minimumQuantity: 1,
+        maximumQuantity: 1,
+      },
+      {
+        contentId: 'item.deep-relic-b',
+        lootTableId: null,
+        weight: 1000,
+        minimumQuantity: 1,
+        maximumQuantity: 1,
+        minDepth: 15,
+      },
+    ],
+  };
+
+  function bandedPack(): CompiledContentPack {
+    const base = content(itemDefinition('item.trinket-a'), itemDefinition('item.deep-relic-b'));
+    return { ...base, entries: [...base.entries, bandedTable] };
+  }
+
+  it('never rolls a choice below its authored minDepth', () => {
+    const testPack = bandedPack();
+    let state: Uint32State = [9, 9, 9, 9];
+    for (let i = 0; i < 50; i += 1) {
+      const rolled = createFloorLootFromTable({
+        content: testPack,
+        tableId: 'loot-table.banded',
+        state,
+        itemIdPrefix: 'item.test',
+        floorId: 'floor.test',
+        x: 1,
+        y: 1,
+        depth: 1,
+      });
+      state = rolled.state;
+      expect(rolled.items.every((item) => item.contentId !== 'item.deep-relic-b')).toBe(true);
+    }
+  });
+
+  it('rolls the banded choice once its authored minDepth is reached', () => {
+    const testPack = bandedPack();
+    let state: Uint32State = [9, 9, 9, 9];
+    let sawDeepRelic = false;
+    for (let i = 0; i < 50; i += 1) {
+      const rolled = createFloorLootFromTable({
+        content: testPack,
+        tableId: 'loot-table.banded',
+        state,
+        itemIdPrefix: 'item.test',
+        floorId: 'floor.test',
+        x: 1,
+        y: 1,
+        depth: 15,
+      });
+      state = rolled.state;
+      if (rolled.items.some((item) => item.contentId === 'item.deep-relic-b')) sawDeepRelic = true;
+    }
+    expect(sawDeepRelic).toBe(true);
   });
 });

@@ -1465,9 +1465,11 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                   : recordValue.command.type === 'pickup'
                     ? recordValue.events.find(
                         (entry) =>
-                          entry.type === 'item.picked-up' &&
-                          entry.actorId === run.hero.actorId &&
-                          entry.itemId === commandItemId,
+                          (entry.type === 'item.picked-up' &&
+                            entry.actorId === run.hero.actorId &&
+                            entry.itemId === commandItemId) ||
+                          (entry.type === 'currency.collected' &&
+                            entry.actorId === run.hero.actorId),
                       )
                     : recordValue.command.type === 'drop'
                       ? recordValue.events.find(
@@ -1696,6 +1698,12 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         if (eventValue.quantity !== recordValue.command.quantity)
           fail(`${path}.events`, 'item quantity and event are inconsistent');
       } else if (
+        recordValue.command.type === 'pickup' &&
+        eventValue.type === 'currency.collected'
+      ) {
+        if (eventValue.amount !== recordValue.command.quantity)
+          fail(`${path}.events`, 'currency amount and event are inconsistent');
+      } else if (
         recordValue.command.type === 'fire' &&
         (eventValue.type === 'attack.hit' || eventValue.type === 'attack.missed') &&
         eventValue.actorId === run.hero.actorId
@@ -1910,6 +1918,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
               recordValue.events.find(
                 (entry) =>
                   (entry.type === 'item.picked-up' ||
+                    entry.type === 'currency.collected' ||
                     entry.type === 'item.dropped' ||
                     entry.type === 'item.stack-split' ||
                     entry.type === 'item.thrown' ||

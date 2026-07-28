@@ -290,7 +290,7 @@ export function createNewRun(
     features: [],
     relationships: [],
     survival: {
-      hungerReserve: 10_000,
+      hungerReserve: balance.hungerMaximum,
       hungerStage: 'sated',
       nextStarvationAt: null,
       emittedHungerWarnings: [],

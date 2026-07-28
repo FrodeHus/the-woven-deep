@@ -156,6 +156,9 @@ interface ItemDisplay {
 const ACTOR_SPRITE_SCALE = 0.52;
 /** Sheet→screen scale for ground-item sprites -- smaller than actors, centered on the cell. */
 const ITEM_SPRITE_SCALE = 0.3;
+/** A chest crate is a floor prop, not a wall-height leaf like a door, so its crop is drawn narrower
+ * than the full tile width the door sprites use. */
+const CHEST_SPRITE_WIDTH_SCALE = 0.7;
 /** Actor feet rest here below the diamond centre (matches the glyph baseline it replaces). */
 const ACTOR_FEET_Y = TILE_HALF_H * 0.4;
 
@@ -206,6 +209,7 @@ export class IsoRenderer {
   private gateTexture: Texture | null = null;
   private doorTexture: Texture | null = null;
   private archOpenTexture: Texture | null = null;
+  private crateTexture: Texture | null = null;
   private gradientTexture: Texture | null = null;
   private voidRockTexture: Texture | null = null;
   private voidRockSprite: TilingSprite | null = null;
@@ -324,6 +328,9 @@ export class IsoRenderer {
     // Absent in today's sheet -- an open door falls back to a glyph until the art ships.
     this.archOpenTexture =
       this.atlas.archOpen === undefined ? null : this.atlasTexture(this.atlas.archOpen);
+    // Absent only in a sheet without crate art -- a chest then falls back to its glyph.
+    this.crateTexture =
+      this.atlas.waresCrate === undefined ? null : this.atlasTexture(this.atlas.waresCrate);
     this.gradientTexture = this.buildRadialGradientTexture();
     this.voidRockTexture = this.buildVoidRockTexture();
 
@@ -431,11 +438,13 @@ export class IsoRenderer {
     this.gradientTexture?.destroy(true);
     // Canvas-backed like the gradient: this instance built it, so this instance frees its source.
     this.voidRockTexture?.destroy(true);
-    // `gateTexture`/`doorTexture`/`archOpenTexture` are frame wrappers over the atlas base source, so
-    // drop only the wrappers here and destroy the shared source once, via the base texture.
+    // `gateTexture`/`doorTexture`/`archOpenTexture`/`crateTexture` are frame wrappers over the atlas
+    // base source, so drop only the wrappers here and destroy the shared source once, via the base
+    // texture.
     this.gateTexture?.destroy(false);
     this.doorTexture?.destroy(false);
     this.archOpenTexture?.destroy(false);
+    this.crateTexture?.destroy(false);
     // Cached actor/item crops are frame wrappers over their base sources, so drop only the wrappers
     // here and destroy each shared source once via its base texture below.
     for (const texture of this.actorTextures.values()) texture.destroy(false);
@@ -450,6 +459,7 @@ export class IsoRenderer {
     this.gateTexture = null;
     this.doorTexture = null;
     this.archOpenTexture = null;
+    this.crateTexture = null;
     this.gradientTexture = null;
     this.voidRockTexture = null;
     this.voidRockSprite = null;
@@ -707,16 +717,23 @@ export class IsoRenderer {
     }
   }
 
-  /** The atlas sprite for a feature that has one: a door's closed leaf, a door's engaged lock (the
-   * gate), or -- once the art ships -- an open-door archway. Every other feature (chests in any
-   * state, revealed secrets, traps, open doors until arch art exists) returns `null` and renders a
-   * glyph instead. The gate is deliberately restricted to doors so a LOCKED CHEST no longer inherits
-   * the door gate. */
+  /** The atlas sprite for a feature that has one: a chest's crate, a door's closed leaf, a door's
+   * engaged lock (the gate), or -- once the art ships -- an open-door archway. Every other feature
+   * (revealed secrets, traps, open doors until arch art exists) returns `null` and renders a glyph
+   * instead, as does any of these whose art is absent from the sheet. The gate is deliberately
+   * restricted to doors so a LOCKED CHEST no longer inherits the door gate. */
   private featureSprite(feature: FeatureView): Sprite | null {
-    if (feature.type !== 'door') return null;
     let texture: Texture | null;
     let rect: AtlasRect;
-    if (feature.state === 'closed') {
+    let widthScale = 1;
+    if (feature.type === 'chest') {
+      if (this.atlas.waresCrate === undefined) return null;
+      texture = this.crateTexture;
+      rect = this.atlas.waresCrate;
+      widthScale = CHEST_SPRITE_WIDTH_SCALE;
+    } else if (feature.type !== 'door') {
+      return null;
+    } else if (feature.state === 'closed') {
       texture = this.doorTexture;
       rect = this.atlas.door;
     } else if (feature.state === 'locked') {
@@ -731,7 +748,7 @@ export class IsoRenderer {
     if (texture === null) return null;
 
     const sprite = new Sprite(texture);
-    const dw = TILE_HALF_W * 2 * BAKE_SCALE;
+    const dw = TILE_HALF_W * 2 * BAKE_SCALE * widthScale;
     const dh = dw * (rect.h / rect.w);
     const [lx, ly] = this.isoLocal(feature.x, feature.y);
     // Foot-anchored like the baked wall cubes: the crop's bottom edge rests on the cell's

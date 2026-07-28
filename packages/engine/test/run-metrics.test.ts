@@ -355,6 +355,33 @@ describe('foldRunMetrics', () => {
     expect(folded.itemsCollected).toBe(0);
   });
 
+  it('counts gathered gold in currencyEarned but not itemsCollected', () => {
+    const folded = fold([
+      {
+        type: 'currency.collected',
+        eventId: 'event.gold',
+        actorId: HERO,
+        amount: 12,
+        currency: 52,
+      },
+    ]);
+    expect(folded.currencyEarned).toBe(12);
+    expect(folded.itemsCollected).toBe(0);
+  });
+
+  it('does not credit currency.collected for a non-hero actor', () => {
+    const folded = fold([
+      {
+        type: 'currency.collected',
+        eventId: 'event.gold',
+        actorId: 'actor.group-member',
+        amount: 12,
+        currency: 12,
+      },
+    ]);
+    expect(folded.currencyEarned).toBe(0);
+  });
+
   it('credits trade.bought quantities to itemsCollected and totals to currencySpent', () => {
     const folded = fold([
       {

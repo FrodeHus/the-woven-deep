@@ -46,14 +46,16 @@ export const MOVEMENT_CHECKPOINT_INTERVAL = 10;
  * `move` (deliberate non-move actions always persist immediately). Erring toward over-saving is
  * safe; the only cost of a false "consequential" is a redundant WAL write.
  */
-const CONSEQUENTIAL_EVENT_TYPES: ReadonlySet<string> = new Set<string>([
+export const CONSEQUENTIAL_EVENT_TYPES: ReadonlySet<string> = new Set<string>([
   'attack.missed',
   'attack.hit',
   'actor.damaged',
+  'hero.damaged',
   'actor.died',
   'actor.healed',
   'loot.dropped',
   'item.picked-up',
+  'currency.collected',
   'item.dropped',
   'item.stack-split',
   'item.consumed',

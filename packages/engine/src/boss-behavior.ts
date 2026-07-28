@@ -413,6 +413,9 @@ function createRewards(
   if (input.boss.health > 0 || input.population.rewardCreated) {
     return { state: input.state, population: input.population, events: [] };
   }
+  const floor = input.state.floors.find(
+    (candidate) => candidate.floorId === input.population.floorId,
+  )!;
   const { state, createdItems, unique, receipt } = createPopulationLoot({
     content: input.content,
     state: input.state,
@@ -421,6 +424,7 @@ function createRewards(
     floorId: input.population.floorId,
     x: input.boss.x,
     y: input.boss.y,
+    depth: floor.depth,
     uniqueContentId: input.definition.uniqueItemId,
     uniqueItemId: `item.reward.${input.population.populationId}.unique`,
     existsError: (item) =>

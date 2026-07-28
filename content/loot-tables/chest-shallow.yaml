@@ -1,0 +1,14 @@
+schemaVersion: 8
+entries:
+  - kind: loot-table
+    id: loot-table.chest-shallow
+    name: Shallow chest
+    tags: [chest, shallow]
+    rolls: 1
+    choices:
+      - { contentId: item.gold-coins, lootTableId: null, weight: 5, minimumQuantity: 10, maximumQuantity: 25 }
+      - { contentId: item.iron-sword, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.leather-armor, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.wooden-shield, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.crimson-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.lockpick, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 3 }

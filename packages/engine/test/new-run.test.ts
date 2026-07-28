@@ -36,7 +36,7 @@ describe('createNewRun', () => {
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(11);
+    expect(first.schemaVersion).toBe(12);
     expect(first.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
     expect(first.restockedMilestones).toEqual([]);
     // The town is the run's only floor at creation -- depth 1 is generated later, on the hero's
@@ -289,7 +289,7 @@ describe('dead wielders and illumination', () => {
     }).not.toThrow();
     result = result!;
     expect(result.result.status).toBe('applied');
-    expect(result.events.map((event) => event.type)).toContain('actor.died');
+    expect(result.events.map((event) => event.type)).toContain('run.concluded');
     const heroAfter = result.state.actors.find((actor) => actor.actorId === hero.actorId);
     expect(heroAfter?.health).toBe(0);
     expect(result.state.conclusion).not.toBeNull();

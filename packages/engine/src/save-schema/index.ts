@@ -7,5 +7,7 @@ export {
   legacyActiveRunV8Schema,
   legacyActiveRunV9Schema,
   legacyActiveRunV10Schema,
+  legacyActiveRunV11Schema,
+  legacyV11RngEntries,
   emptyLegacyRunMetricsV9,
 } from './migrations.js';

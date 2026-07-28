@@ -67,9 +67,23 @@ export const balanceEntry = z
       strongboxIncrement: safePositive,
     }),
     encounterDensity: z.strictObject({
-      cellsPerEncounter: safePositive,
+      openCellsPerEncounter: safePositive,
     }),
     fragmentSpawnRollDenominator: z.number().int().min(1),
+    floorLoot: z.strictObject({
+      scatterCount: z.strictObject({ minimum: safeNonNegative, maximum: safePositive }),
+      chestCount: z.strictObject({ minimum: safeNonNegative, maximum: safePositive }),
+      lockedChestPercent: z.number().int().min(0).max(100),
+      lockedDoorPercent: z.number().int().min(0).max(100),
+      minimumAnchorDistance: safePositive,
+      minimumSpreadDistance: safePositive,
+      depthBands: z.strictObject({ shallowMaxDepth: safePositive, midMaxDepth: safePositive }),
+      chestLockDifficulty: z.strictObject({
+        shallow: safePositive,
+        mid: safePositive,
+        deep: safePositive,
+      }),
+    }),
   })
   .superRefine((entry, context) => {
     let previousMilestone = 0;
@@ -99,6 +113,27 @@ export const balanceEntry = z
     const coversRange =
       expectedValues.length === actualValues.length &&
       expectedValues.every((value, index) => value === actualValues[index]);
+    if (entry.floorLoot.scatterCount.minimum > entry.floorLoot.scatterCount.maximum) {
+      context.addIssue({
+        code: 'custom',
+        path: ['floorLoot', 'scatterCount'],
+        message: 'minimum must not exceed maximum',
+      });
+    }
+    if (entry.floorLoot.chestCount.minimum > entry.floorLoot.chestCount.maximum) {
+      context.addIssue({
+        code: 'custom',
+        path: ['floorLoot', 'chestCount'],
+        message: 'minimum must not exceed maximum',
+      });
+    }
+    if (entry.floorLoot.depthBands.shallowMaxDepth >= entry.floorLoot.depthBands.midMaxDepth) {
+      context.addIssue({
+        code: 'custom',
+        path: ['floorLoot', 'depthBands'],
+        message: 'shallowMaxDepth must be less than midMaxDepth',
+      });
+    }
     if (!coversRange) {
       context.addIssue({
         code: 'custom',

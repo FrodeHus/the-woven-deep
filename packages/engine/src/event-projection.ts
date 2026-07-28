@@ -183,6 +183,8 @@ export function projectDomainEvents(
       case 'attack.missed': {
         const attackerVisible = actorVisible(event.actorId);
         const targetVisible = actorVisible(event.targetActorId);
+        if (event.type === 'attack.hit' && event.targetActorId === hero.actorId)
+          pendingDamageType = event.damageType;
         if (attackerVisible && targetVisible) {
           const attackerName = actorName(event.actorId);
           const targetName = actorName(event.targetActorId);
@@ -196,14 +198,13 @@ export function projectDomainEvents(
             ...(targetName ? { targetName } : {}),
           });
         } else if (event.targetActorId === hero.actorId) {
-          if (event.type === 'attack.hit') pendingDamageType = event.damageType;
           const heard = sound(event, input.state, hero);
           if (heard) output.push(heard);
         }
         break;
       }
       case 'actor.damaged':
-        if (event.actorId === hero.actorId && !actorVisible(event.sourceActorId)) {
+        if (event.actorId === hero.actorId) {
           output.push({
             type: 'hero.damaged',
             amount: event.amount,
@@ -222,6 +223,7 @@ export function projectDomainEvents(
           });
         break;
       case 'actor.died':
+        if (event.actorId === hero.actorId) break;
         if (actorVisible(event.actorId) && actorVisible(event.killerActorId)) output.push(event);
         else if (actorVisible(event.actorId)) {
           const displayName = actorName(event.actorId);
@@ -271,6 +273,9 @@ export function projectDomainEvents(
           (event.type !== 'item.thrown' || pointVisible(event.to))
         )
           output.push(event);
+        break;
+      case 'currency.collected':
+        if (actorVisible(event.actorId)) output.push(event);
         break;
       case 'item.stack-split':
         if (

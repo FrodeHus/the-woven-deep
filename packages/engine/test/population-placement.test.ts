@@ -16,11 +16,14 @@ import {
   createUnknownKnowledge,
   decodeActiveRun,
   encodeActiveRun,
+  nextUint32,
   placeFloorPopulations,
   placePopulation,
   rollDie,
   stableJson,
+  tileDefinition,
   type ActiveRun,
+  type DungeonFeature,
   type FloorSnapshot,
 } from '../src/index.js';
 
@@ -1094,8 +1097,9 @@ describe('atomic population placement', () => {
 });
 
 // `placeFloorPopulations` fills a floor up to its density budget: attempts =
-// clamp(floor((width * height) / cellsPerEncounter), 1, 8). `createDemoContentPack`'s balance
-// (via `pack`) carries the bundled `cellsPerEncounter: 2000`.
+// clamp(floor(openCellCount / openCellsPerEncounter), 1, 8), where `openCellCount` counts only
+// walkable tiles (`tileDefinition(tile).walkable`), not the raw `width * height` footprint.
+// `createDemoContentPack`'s balance (via `pack`) carries the bundled `openCellsPerEncounter: 800`.
 function openFloor(
   width: number,
   height: number,
@@ -1148,70 +1152,109 @@ function corridorWithOneBranchFloor(
   });
 }
 
+// The number of walkable tiles on a floor -- the same count `floorPopulationAttempts` budgets
+// against.
+function openCellCount(target: FloorSnapshot): number {
+  return target.tiles.filter((tile) => tileDefinition(tile).walkable).length;
+}
+
+// clamp(floor(open / 800), 1, 8) -- mirrors `floorPopulationAttempts`'s formula so the test
+// derives its expectation from the fixture rather than a hand-computed constant.
+function expectedAttempts(open: number): number {
+  return Math.min(8, Math.max(1, Math.floor(open / 800)));
+}
+
+// Counts exact attempts regardless of a floor's placement legality: the encounter is already at
+// its instance cap, so every attempt is a cheap "no-eligible-encounter" skip and the loop always
+// runs its full budget.
+function attemptsFor(target: FloorSnapshot, encounterId: string): number {
+  const encounter = individual(encounterId, { maximumInstancesPerRun: 1 });
+  const run: ActiveRun = {
+    ...runFor([encounter]),
+    encounterDecisions: [
+      {
+        encounterId: encounter.id,
+        baseProbability: 1,
+        protectionBonus: 0,
+        effectiveProbability: 1,
+        eligible: true,
+        reachedEligibleDepth: false,
+        encountered: false,
+        instancesCreated: 1,
+      },
+    ],
+  };
+  const result = placeFloorPopulations({ run, floor: target, content: pack([encounter]) });
+  expect(
+    result.placements.every(
+      (entry) => entry.status === 'skipped' && entry.reason === 'no-eligible-encounter',
+    ),
+  ).toBe(true);
+  return result.placements.length;
+}
+
 describe('placeFloorPopulations (encounter density)', () => {
-  it('gives an 80x25 floor exactly 1 attempt (2000 cells / 2000 cellsPerEncounter)', () => {
-    const encounter = individual('encounter.density-80x25', { maximumInstancesPerRun: 8 });
-    const run = runFor([encounter]);
+  it('scales an 80x25 floor to its open-cell budget', () => {
+    const target = openFloor(80, 25);
+    const open = openCellCount(target);
 
-    const result = placeFloorPopulations({
-      run,
-      floor: openFloor(80, 25),
-      content: pack([encounter]),
-    });
+    const attempts = attemptsFor(target, 'encounter.density-80x25');
 
-    expect(result.placements).toHaveLength(1);
-    expect(result.placements[0]).toMatchObject({ status: 'placed' });
+    expect(attempts).toBe(expectedAttempts(open));
   });
 
-  it('gives a 160x50 floor exactly 4 attempts (8000 cells / 2000 cellsPerEncounter)', () => {
+  it('places one population per attempt on a 160x50 floor, all threaded onto the same run', () => {
     const encounter = individual('encounter.density-160x50', { maximumInstancesPerRun: 8 });
     const run = runFor([encounter]);
+    const target = openFloor(160, 50);
+    const expected = expectedAttempts(openCellCount(target));
 
     const result = placeFloorPopulations({
       run,
-      floor: openFloor(160, 50),
+      floor: target,
       content: pack([encounter]),
     });
 
-    expect(result.placements).toHaveLength(4);
+    expect(result.placements).toHaveLength(expected);
     expect(result.placements.every((entry) => entry.status === 'placed')).toBe(true);
     // Distinct populationIds, all threaded onto the same run.
     const populationIds = new Set(
       result.state.populations.map((population) => population.populationId),
     );
-    expect(populationIds.size).toBe(4);
-    expect(result.state.actors.filter((actor) => actor.populationId !== null)).toHaveLength(4);
+    expect(populationIds.size).toBe(expected);
+    expect(result.state.actors.filter((actor) => actor.populationId !== null)).toHaveLength(
+      expected,
+    );
   });
 
   it('clamps attempts at 8 for an arbitrarily large floor', () => {
-    const encounter = individual('encounter.density-clamp', { maximumInstancesPerRun: 1 });
-    const run: ActiveRun = {
-      ...runFor([encounter]),
-      // Already at its instance cap: every attempt is a cheap, tiles-untouched "no-eligible-encounter"
-      // skip, so the huge nominal floor area below never needs a real tile array.
-      encounterDecisions: [
-        {
-          encounterId: encounter.id,
-          baseProbability: 1,
-          protectionBonus: 0,
-          effectiveProbability: 1,
-          eligible: true,
-          reachedEligibleDepth: false,
-          encountered: false,
-          instancesCreated: 1,
-        },
-      ],
-    };
-    const massiveFloor = floor({ width: 4000, height: 4000, tiles: [0] });
+    const massiveFloor = openFloor(200, 100);
+    const open = openCellCount(massiveFloor);
+    // A large enough floor pushes the nominal budget (floor(open / 800)) past the clamp.
+    expect(Math.floor(open / 800)).toBeGreaterThan(8);
 
-    const result = placeFloorPopulations({ run, floor: massiveFloor, content: pack([encounter]) });
+    const attempts = attemptsFor(massiveFloor, 'encounter.density-clamp');
 
-    expect(result.placements).toHaveLength(8);
-    expect(
-      result.placements.every(
-        (entry) => entry.status === 'skipped' && entry.reason === 'no-eligible-encounter',
-      ),
-    ).toBe(true);
+    expect(attempts).toBe(8);
+  });
+
+  it('gives floors of equal width*height but different open-cell counts different attempts', () => {
+    const width = 100;
+    const height = 40;
+    const mostlyOpen = openFloor(width, height, 'floor.density-equal-area-open');
+    const mostlyWalled = corridorWithOneBranchFloor(width, height, { x: 1, y: height - 2 });
+
+    expect(mostlyOpen.width * mostlyOpen.height).toBe(mostlyWalled.width * mostlyWalled.height);
+    const openCells = openCellCount(mostlyOpen);
+    const walledCells = openCellCount(mostlyWalled);
+    expect(openCells).not.toBe(walledCells);
+
+    const openAttempts = attemptsFor(mostlyOpen, 'encounter.density-equal-area-open');
+    const walledAttempts = attemptsFor(mostlyWalled, 'encounter.density-equal-area-walled');
+
+    expect(openAttempts).toBe(expectedAttempts(openCells));
+    expect(walledAttempts).toBe(expectedAttempts(walledCells));
+    expect(openAttempts).not.toBe(walledAttempts);
   });
 
   it('stops the loop as soon as a required encounter is rejected, short of the attempt budget', () => {
@@ -1220,9 +1263,12 @@ describe('placeFloorPopulations (encounter density)', () => {
       placement: { ...placement, failureMode: 'required' },
     });
     const run = runFor([encounter]);
-    // 160x50 gives a budget of 4 attempts, but only one legal (non-route) cell exists on the
-    // whole floor -- the corridor connecting the stairs is protected and excluded from candidates.
-    const floorWithOneCell = corridorWithOneBranchFloor(160, 50, { x: 80, y: 2 });
+    // A long, thin corridor floor: its open-cell budget is well above 1 (a corridor this long has
+    // enough walkable cells to clear the 800-per-encounter threshold twice over), but only one
+    // legal (non-route) cell exists on the whole floor -- the corridor connecting the stairs is
+    // protected and excluded from candidates.
+    const floorWithOneCell = corridorWithOneBranchFloor(1600, 10, { x: 800, y: 3 });
+    expect(expectedAttempts(openCellCount(floorWithOneCell))).toBeGreaterThan(1);
 
     const result = placeFloorPopulations({
       run,
@@ -1456,6 +1502,55 @@ describe('vault item slot consumption', () => {
     expect(second.status).toBe('placed');
     if (second.status !== 'placed') return;
     expect(second.createdItems).toHaveLength(0);
+  });
+
+  const variedItemEntries: readonly ItemContentEntry[] = ['a', 'b', 'c', 'd'].map((suffix) => ({
+    ...stockItemEntry,
+    id: `item.test-varied-${suffix}`,
+    name: `Test Varied ${suffix}`,
+  }));
+  const variedLootTable: LootTableContentEntry = {
+    kind: 'loot-table',
+    id: 'loot-table.test-varied-cache',
+    name: 'Test Varied Cache',
+    tags: [],
+    rolls: 1,
+    choices: variedItemEntries.map((entry) => ({
+      contentId: entry.id,
+      lootTableId: null,
+      weight: 1,
+      minimumQuantity: 1,
+      maximumQuantity: 3,
+    })),
+  };
+
+  it('keeps vault item and fragment rolls identical when the encounters stream is perturbed', () => {
+    const encounter = individual('encounter.item-cache-isolation');
+    const vault = itemCacheVault('vault.item-cache-isolation-test', {
+      lootTableId: variedLootTable.id,
+      contentId: null,
+    });
+    const generated = itemCacheFloor(vault.id);
+    const content = pack([encounter], [vault, variedLootTable, ...variedItemEntries]);
+    const run = runFor([encounter]);
+    const input = { run, floor: generated, content, forcedEncounterId: encounter.id };
+
+    const base = placeFloorPopulations(input);
+    const perturbed = placeFloorPopulations({
+      ...input,
+      run: { ...run, rng: { ...run.rng, encounters: nextUint32(run.rng.encounters).state } },
+    });
+
+    const lootOf = (state: ActiveRun) =>
+      state.items
+        .filter(
+          (item) =>
+            item.itemId.startsWith('item.vault.') || item.itemId.startsWith('item.fragment-spawn.'),
+        )
+        .map(({ itemId, contentId, quantity }) => ({ itemId, contentId, quantity }));
+
+    expect(lootOf(base.state).length).toBeGreaterThan(0);
+    expect(lootOf(perturbed.state)).toEqual(lootOf(base.state));
   });
 });
 
@@ -1710,5 +1805,42 @@ describe('vault door/chest feature slot spawn', () => {
 
     const encoded = encodeActiveRun(runWithFeatures);
     expect(decodeActiveRun(encoded)).toEqual(runWithFeatures);
+  });
+
+  it('keeps run.features ordered when floor loot lands beside a pre-existing vault feature', () => {
+    const encounter = individual('encounter.floor-loot-feature-order');
+    const generated = openFloor(40, 20, 'floor.floor-loot-feature-order');
+    // `feature.vault.*` sorts after `feature.floor-loot.*`, so appending the new batch unsorted
+    // would break the strictly-increasing featureId the save schema demands.
+    const existing: DungeonFeature = {
+      featureId: 'feature.vault.pre-existing-chest',
+      floorId: generated.floorId,
+      x: 2,
+      y: 2,
+      contentId: null,
+      coverTileId: 1,
+      type: 'chest',
+      lootTableId: 'loot-table.chest-shallow',
+      lootContentId: null,
+      state: 'closed',
+      lock: null,
+    };
+    const base = runFor([encounter]);
+    const run: ActiveRun = {
+      ...base,
+      floors: [...base.floors, generated].sort((left, right) =>
+        left.floorId < right.floorId ? -1 : left.floorId > right.floorId ? 1 : 0,
+      ),
+      features: [existing],
+    };
+
+    const result = placeFloorPopulations({ run, floor: generated, content: pack([encounter]) });
+
+    const featureIds = result.state.features.map((feature) => feature.featureId);
+    expect(featureIds.filter((id) => id.startsWith('feature.floor-loot.')).length).toBeGreaterThan(
+      0,
+    );
+    expect(featureIds).toEqual([...featureIds].sort());
+    expect(decodeActiveRun(encodeActiveRun(result.state))).toEqual(result.state);
   });
 });

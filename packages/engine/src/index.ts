@@ -33,6 +33,7 @@ export * from './run-records-fixture.js';
 export * from './magic-fixture.js';
 export * from './population-gates.js';
 export * from './population-placement.js';
+export * from './loot-placement.js';
 export * from './pathfinding.js';
 export * from './population-perception.js';
 export * from './population-intent.js';

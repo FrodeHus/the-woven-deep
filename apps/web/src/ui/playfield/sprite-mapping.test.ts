@@ -22,6 +22,7 @@ const itemAtlas: SpriteAtlas = {
     'GENERIC-SCROLL': { x: 30, y: 30, w: 40, h: 40 },
     'GENERIC-TOME': { x: 50, y: 50, w: 60, h: 60 },
     'GENERIC-POTION': { x: 70, y: 70, w: 80, h: 80 },
+    'GOLD-COINS': { x: 90, y: 90, w: 100, h: 100 },
   },
 };
 
@@ -91,6 +92,21 @@ describe('resolveItemSprite', () => {
     const resolved = resolveItemSprite({ category: 'potion', color: '#c3484f' }, itemAtlas);
     expect(resolved?.rect).toEqual({ x: 70, y: 70, w: 80, h: 80 });
     expect(resolved?.tint).toBe(0xc3484f);
+  });
+
+  it('maps item.gold-coins onto the GOLD-COINS slot, untinted', () => {
+    const resolved = resolveItemSprite(
+      { contentId: 'item.gold-coins', category: 'currency', color: '#e8c879' },
+      itemAtlas,
+    );
+    expect(resolved).toEqual({ rect: { x: 90, y: 90, w: 100, h: 100 } });
+  });
+
+  it('falls back to the glyph for gold when the sheet has no GOLD-COINS slot', () => {
+    const bare: SpriteAtlas = { imageUrl: '/playfield/items.png', sprites: {} };
+    expect(
+      resolveItemSprite({ contentId: 'item.gold-coins', category: 'currency' }, bare),
+    ).toBeNull();
   });
 
   it('returns null (glyph fallback) for an unmapped non-scroll/tome/potion category', () => {

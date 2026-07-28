@@ -245,6 +245,7 @@ export function createMerchantDemoRun(pack: CompiledContentPack): ActiveRun {
       rng: {
         ...run.rng,
         encounters: placement.nextEncounterState,
+        'loot-placement': placement.nextLootPlacementState ?? run.rng['loot-placement'],
         ...(placement.nextMerchantStockState === null
           ? {}
           : { 'merchant-stock': placement.nextMerchantStockState }),

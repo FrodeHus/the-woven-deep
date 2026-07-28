@@ -7,6 +7,19 @@ import { ENGINE_GAME_VERSION, SAVE_SCHEMA_VERSION } from './versions.js';
 import { emptyEquipment, heroPerception, type ActorState } from './actor-model.js';
 import { CONTENT_SCHEMA_VERSION, type CompiledContentPack } from '@woven-deep/content';
 
+/**
+ * Table ids `placeFloorLoot` draws from on every generated floor; the demo pack carries stand-ins
+ * so fixture-built runs can integrate a floor without the full content directory.
+ */
+const FLOOR_LOOT_TABLE_IDS = [
+  'loot-table.floor-scatter-shallow',
+  'loot-table.floor-scatter-mid',
+  'loot-table.floor-scatter-deep',
+  'loot-table.chest-shallow',
+  'loot-table.chest-mid',
+  'loot-table.chest-deep',
+] as const;
+
 export function createDemoContentPack(): CompiledContentPack {
   return {
     schemaVersion: CONTENT_SCHEMA_VERSION,
@@ -26,8 +39,8 @@ export function createDemoContentPack(): CompiledContentPack {
         energyMaximum: 10_000,
         attributeMinimum: 0,
         attributeMaximum: 30,
-        hungerMaximum: 10_000,
-        hungerThresholds: { hungry: 3000, weak: 1000, starving: 0 },
+        hungerMaximum: 5_000,
+        hungerThresholds: { hungry: 1500, weak: 500, starving: 0 },
         starvationInterval: 500,
         starvationDamage: 1,
         recoveryInterval: 500,
@@ -97,8 +110,18 @@ export function createDemoContentPack(): CompiledContentPack {
         },
         restockMilestones: [5, 10, 15, 20],
         house: { baseCapacity: 6, strongboxIncrement: 4 },
-        encounterDensity: { cellsPerEncounter: 2000 },
+        encounterDensity: { openCellsPerEncounter: 800 },
         fragmentSpawnRollDenominator: 40,
+        floorLoot: {
+          scatterCount: { minimum: 2, maximum: 4 },
+          chestCount: { minimum: 0, maximum: 2 },
+          lockedChestPercent: 50,
+          lockedDoorPercent: 15,
+          minimumAnchorDistance: 8,
+          minimumSpreadDistance: 6,
+          depthBands: { shallowMaxDepth: 6, midMaxDepth: 13 },
+          chestLockDifficulty: { shallow: 10, mid: 13, deep: 16 },
+        },
       },
       {
         kind: 'condition',
@@ -165,6 +188,43 @@ export function createDemoContentPack(): CompiledContentPack {
         traits: ['condition-trait.interrupts-rest'],
         tickEffects: [],
       },
+      {
+        kind: 'item',
+        id: 'item.demo-scatter',
+        name: 'Demo scatter',
+        tags: ['demo'],
+        glyph: '*',
+        color: '#c0a060',
+        category: 'misc',
+        stackLimit: 10,
+        price: 1,
+        rarity: 'common',
+        heirloomEligible: false,
+        minDepth: 1,
+        maxDepth: 20,
+        actionCost: 100,
+        equipment: null,
+        combat: null,
+        light: null,
+        identification: { mode: 'known', poolId: null },
+        effects: [],
+      },
+      ...FLOOR_LOOT_TABLE_IDS.map((id) => ({
+        kind: 'loot-table' as const,
+        id,
+        name: id,
+        tags: ['floor-loot'],
+        rolls: 1,
+        choices: [
+          {
+            contentId: 'item.demo-scatter',
+            lootTableId: null,
+            weight: 1,
+            minimumQuantity: 1,
+            maximumQuantity: 1,
+          },
+        ],
+      })),
     ],
     generationReport: { foundationalCategories: [] },
   };
@@ -253,7 +313,7 @@ export function createDemoRun(): ActiveRun {
     features: [],
     relationships: [],
     survival: {
-      hungerReserve: 10_000,
+      hungerReserve: 5_000,
       hungerStage: 'sated',
       nextStarvationAt: null,
       emittedHungerWarnings: [],

@@ -15,7 +15,8 @@ export type ProjectedItemCategory =
   | 'potion'
   | 'scroll'
   | 'ring'
-  | 'misc';
+  | 'misc'
+  | 'currency';
 
 /** The five buckets the overlay's category filter cycles through, plus `all`. Grouped from the
  * real vocabulary above by rough kind, not invented categories: weapon/ammunition (things you
@@ -56,6 +57,7 @@ export const CATEGORY_GLYPH: Readonly<Record<ProjectedItemCategory, string>> = {
   scroll: '?',
   ring: '=',
   misc: '*',
+  currency: '$',
 };
 
 export function bucketFor(category: ProjectedItemCategory): Exclude<CategoryFilter, 'all'> {
@@ -75,6 +77,7 @@ export function bucketFor(category: ProjectedItemCategory): Exclude<CategoryFilt
       return 'light';
     case 'ring':
     case 'misc':
+    case 'currency':
       return 'other';
   }
 }

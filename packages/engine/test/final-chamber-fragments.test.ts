@@ -161,9 +161,14 @@ describe('deep-floor fragment spawn', () => {
     };
   }
 
-  function runAt(encounters: Uint32State, overrides: Partial<ActiveRun> = {}): ActiveRun {
+  function runAt(lootPlacement: Uint32State, overrides: Partial<ActiveRun> = {}): ActiveRun {
     const base = createDemoRun();
-    return { ...base, rng: { ...base.rng, encounters }, encounterDecisions: [], ...overrides };
+    return {
+      ...base,
+      rng: { ...base.rng, 'loot-placement': lootPlacement },
+      encounterDecisions: [],
+      ...overrides,
+    };
   }
 
   function placedFragmentContentIds(run: ActiveRun, floor: FloorSnapshot): readonly string[] {
@@ -175,9 +180,9 @@ describe('deep-floor fragment spawn', () => {
 
   /**
    * The spawn roll is rare (~1-in-40 per floor generation): search a deterministic sequence of
-   * seeds (advancing via the same `nextUint32` the engine's own RNG streams use) for one that
-   * lands a fragment on an empty deep floor, so the determinism/no-duplicate tests below exercise
-   * a real hit rather than asserting only on misses.
+   * `loot-placement` seeds (the stream the spawn draws from, advancing via the same `nextUint32`
+   * the engine's own RNG streams use) for one that lands a fragment on an empty deep floor, so the
+   * determinism/no-duplicate tests below exercise a real hit rather than asserting only on misses.
    */
   function findSeedThatSpawnsAFragment(): Uint32State {
     let seed: Uint32State = [5, 6, 7, 8];

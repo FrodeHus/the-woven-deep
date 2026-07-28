@@ -543,6 +543,7 @@ function materialiseChestLoot(
   let lootState = run.rng.loot;
   let created: readonly ItemInstance[] = [];
   if (chest.lootTableId !== null) {
+    const floor = run.floors.find((candidate) => candidate.floorId === chest.floorId)!;
     const loot = createFloorLootFromTable({
       content,
       tableId: chest.lootTableId,
@@ -551,6 +552,7 @@ function materialiseChestLoot(
       floorId: chest.floorId,
       x: chest.x,
       y: chest.y,
+      depth: floor.depth,
     });
     lootState = loot.state;
     created = loot.items;

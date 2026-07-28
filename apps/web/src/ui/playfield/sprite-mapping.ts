@@ -16,6 +16,12 @@ const GENERIC_SCROLL = 'GENERIC-SCROLL';
 const GENERIC_TOME = 'GENERIC-TOME';
 const GENERIC_POTION = 'GENERIC-POTION';
 
+/** Content ids whose art lives under a differently-named atlas slot. The coin pile is shared art the
+ * sheet names by what it depicts, not by the content id that drops it. */
+const ATLAS_KEY_BY_CONTENT_ID: Readonly<Record<string, string>> = {
+  'item.gold-coins': 'GOLD-COINS',
+};
+
 /** The minimal motion shape the facing rule reads -- decoupled from `scene-state`'s `SpriteMotion`
  * so the two modules do not import each other. */
 export interface FacingMotion {
@@ -68,7 +74,8 @@ export interface ItemSpriteInput {
 /**
  * The floor sprite for a ground item, or `null` to fall back to the glyph. Resolution tiers:
  *
- * 1. Dedicated art -- an identified item whose contentId is a key in the sheet -- drawn untinted.
+ * 1. Dedicated art -- an identified item whose contentId maps to a sheet key, either through
+ *    {@link ATLAS_KEY_BY_CONTENT_ID} or directly -- drawn untinted.
  * 2. Category generics for anything without dedicated art: a `scroll` reuses `GENERIC-SCROLL`, a
  *    tome (a `misc` item whose id ends `-tome`) reuses `GENERIC-TOME`, and a `potion` reuses
  *    `GENERIC-POTION` -- each tinted by the item's color so it still reads as itself.
@@ -79,6 +86,11 @@ export function resolveItemSprite(
   atlas: SpriteAtlas,
 ): ItemSpriteResolution | null {
   if (item.contentId !== undefined) {
+    const aliased = ATLAS_KEY_BY_CONTENT_ID[item.contentId];
+    if (aliased !== undefined) {
+      const rect = atlas.sprites[aliased];
+      if (rect !== undefined) return { rect };
+    }
     const dedicated = atlas.sprites[item.contentId];
     if (dedicated !== undefined) return { rect: dedicated };
   }
