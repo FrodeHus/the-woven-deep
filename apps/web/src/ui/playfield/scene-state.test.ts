@@ -228,13 +228,49 @@ describe('nextSceneState', () => {
   });
 });
 
+describe('nextSceneState facing', () => {
+  const at = (x: number): Record<string, unknown> => ({
+    actorId: 'actor.rat',
+    contentId: 'monster.cave-rat',
+    x,
+    y: 0,
+    health: 6,
+    maxHealth: 10,
+  });
+
+  it('faces right after an eastward step and preserves it while idle', () => {
+    const start = nextSceneState(null, snapshot({ heroX: 5, heroY: 5, actors: [at(0)] }), 0);
+    // Step east (screen +x): x - y increases.
+    const moved = nextSceneState(start, snapshot({ heroX: 5, heroY: 5, actors: [at(1)] }), 1000);
+    const east = moved.actors.find((a) => a.id === 'actor.rat')!;
+    expect(east.facing).toBe('right');
+
+    // Now hold position: facing must NOT snap back to the drawn (left) orientation.
+    const idle = nextSceneState(moved, snapshot({ heroX: 5, heroY: 5, actors: [at(1)] }), 2000);
+    expect(idle.actors.find((a) => a.id === 'actor.rat')!.facing).toBe('right');
+  });
+
+  it('faces left after a westward step', () => {
+    const start = nextSceneState(null, snapshot({ heroX: 5, heroY: 5, actors: [at(5)] }), 0);
+    const moved = nextSceneState(start, snapshot({ heroX: 5, heroY: 5, actors: [at(4)] }), 1000);
+    expect(moved.actors.find((a) => a.id === 'actor.rat')!.facing).toBe('left');
+  });
+
+  it('defaults a brand-new actor to the drawn (left) facing', () => {
+    const state = nextSceneState(null, snapshot({ heroX: 5, heroY: 5, actors: [at(3)] }), 0);
+    expect(state.actors.find((a) => a.id === 'actor.rat')!.facing).toBe('left');
+  });
+});
+
 describe('motionPosition', () => {
   const sprite: ActorSprite = {
     id: 'actor.rat',
+    contentId: 'monster.cave-rat',
     glyph: 'r',
     color: undefined,
     isHero: false,
     motion: { fromX: 0, fromY: 0, toX: 10, toY: 0, startedAt: 1000, durationMs: STEP_MS },
+    facing: 'left',
     x: 10,
     y: 0,
     health: 6,

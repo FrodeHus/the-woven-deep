@@ -1,8 +1,25 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { SessionSnapshot } from '../../session/guest-session.js';
-import { ATLAS_URL, parseAtlas, type PlayfieldAtlas } from './atlas.js';
+import {
+  ACTOR_ATLAS_URL,
+  ATLAS_URL,
+  ITEM_ATLAS_URL,
+  parseActorAtlas,
+  parseAtlas,
+  parseItemAtlas,
+  type PlayfieldAtlas,
+  type SpriteAtlas,
+} from './atlas.js';
 import { IsoRenderer, type RendererCallbacks, type TargetingVisual } from './IsoRenderer.js';
+
+/** The three sprite sheets a playfield needs, fetched and parsed together: the terrain/feature tile
+ * atlas plus the contentId-keyed actor and item atlases. */
+export interface PlayfieldAtlasBundle {
+  readonly tiles: PlayfieldAtlas;
+  readonly actors: SpriteAtlas;
+  readonly items: SpriteAtlas;
+}
 
 /** The slice of `IsoRenderer` `PlayfieldCanvas` drives -- the injection seam for tests, which
  * supply a recording fake (jsdom has no WebGL, so the real renderer can never mount there). */
@@ -16,26 +33,37 @@ export type CreateRenderer = (
   atlas: PlayfieldAtlas,
   callbacks: RendererCallbacks,
   pack: CompiledContentPack,
+  actorAtlas: SpriteAtlas,
+  itemAtlas: SpriteAtlas,
 ) => MountedRenderer;
 
-const createIsoRenderer: CreateRenderer = (host, atlas, callbacks, pack) =>
-  new IsoRenderer(host, atlas, callbacks, pack);
+const createIsoRenderer: CreateRenderer = (host, atlas, callbacks, pack, actorAtlas, itemAtlas) =>
+  new IsoRenderer(host, atlas, callbacks, pack, actorAtlas, itemAtlas);
 
-// The atlas JSON is fetched exactly once for the whole app lifetime, not per mount: it is a static
-// asset that never changes, and every playfield instance parses the same shape. A rejected fetch or
+// The atlases are fetched exactly once for the whole app lifetime, not per mount: they are static
+// assets that never change, and every playfield instance parses the same shapes. A rejected fetch or
 // a malformed atlas rejects this promise (and every awaiter) rather than silently rendering nothing.
-let atlasPromise: Promise<PlayfieldAtlas> | null = null;
+let atlasPromise: Promise<PlayfieldAtlasBundle> | null = null;
 
-function loadAtlas(): Promise<PlayfieldAtlas> {
+async function fetchJson(url: string): Promise<unknown> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`playfield atlas fetch failed: ${response.status} ${url}`);
+  }
+  return response.json();
+}
+
+function loadAtlas(): Promise<PlayfieldAtlasBundle> {
   if (atlasPromise === null) {
-    atlasPromise = fetch(ATLAS_URL)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`playfield atlas fetch failed: ${response.status} ${ATLAS_URL}`);
-        }
-        return response.json();
-      })
-      .then((json) => parseAtlas(json));
+    atlasPromise = Promise.all([
+      fetchJson(ATLAS_URL),
+      fetchJson(ACTOR_ATLAS_URL),
+      fetchJson(ITEM_ATLAS_URL),
+    ]).then(([tiles, actors, items]) => ({
+      tiles: parseAtlas(tiles),
+      actors: parseActorAtlas(actors),
+      items: parseItemAtlas(items),
+    }));
   }
   return atlasPromise;
 }
@@ -71,7 +99,7 @@ export function PlayfieldCanvas({
 }: PlayfieldCanvasProps): JSX.Element | null {
   const hostRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<MountedRenderer | null>(null);
-  const [atlas, setAtlas] = useState<PlayfieldAtlas | null>(null);
+  const [atlas, setAtlas] = useState<PlayfieldAtlasBundle | null>(null);
   const [ready, setReady] = useState(false);
 
   const clickRef = useRef(onCellClick);
@@ -102,7 +130,7 @@ export function PlayfieldCanvas({
       onCellClick: (cell, button) => clickRef.current(cell, button),
       onCellHover: (hover) => hoverRef.current(hover),
     };
-    const renderer = createRenderer(host, atlas, callbacks, pack);
+    const renderer = createRenderer(host, atlas.tiles, callbacks, pack, atlas.actors, atlas.items);
 
     void Promise.resolve(renderer.init()).then(() => {
       if (cancelled) {

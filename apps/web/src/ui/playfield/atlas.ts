@@ -31,8 +31,18 @@ export interface PlayfieldAtlas {
 }
 
 export const ATLAS_URL = '/playfield/atlas-unified.json';
+export const ACTOR_ATLAS_URL = '/playfield/atlas-actors.json';
+export const ITEM_ATLAS_URL = '/playfield/atlas-items.json';
 
 const IMAGE_BASE_URL = '/playfield/';
+
+/** A contentId-keyed sprite sheet: the hero/NPC/monster actors (`atlas-actors.json`) or the floor/
+ * pack items (`atlas-items.json`). Each key is a content id (or a `GENERIC-*`/`GOLD-*` fallback slot
+ * the renderer maps categories onto); the value is the measured crop on `imageUrl`. */
+export interface SpriteAtlas {
+  imageUrl: string;
+  sprites: Readonly<Record<string, AtlasRect>>;
+}
 
 function fail(field: string): never {
   throw new Error(`playfield atlas malformed: ${field}`);
@@ -129,4 +139,36 @@ export function parseAtlas(json: unknown): PlayfieldAtlas {
     houseDoor,
     entranceSurround,
   };
+}
+
+/** Parse a contentId-keyed sprite atlas (`recordKey` is `'actors'` or `'items'`). Fail-loud like
+ * `parseAtlas`: a non-object root, a missing/empty `image`, a missing record, or any malformed rect
+ * throws rather than silently yielding an empty sheet. */
+function parseSpriteAtlas(json: unknown, recordKey: string): SpriteAtlas {
+  if (typeof json !== 'object' || json === null) {
+    fail('root');
+  }
+  const record = json as Record<string, unknown>;
+  const image = toNonEmptyString(record.image, 'image');
+  const raw = record[recordKey];
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    fail(recordKey);
+  }
+  const entries = Object.entries(raw as Record<string, unknown>);
+  if (entries.length === 0) {
+    fail(recordKey);
+  }
+  const sprites: Record<string, AtlasRect> = {};
+  for (const [contentId, value] of entries) {
+    sprites[contentId] = toRect(value, `${recordKey}.${contentId}`);
+  }
+  return { imageUrl: `${IMAGE_BASE_URL}${image}`, sprites };
+}
+
+export function parseActorAtlas(json: unknown): SpriteAtlas {
+  return parseSpriteAtlas(json, 'actors');
+}
+
+export function parseItemAtlas(json: unknown): SpriteAtlas {
+  return parseSpriteAtlas(json, 'items');
 }
