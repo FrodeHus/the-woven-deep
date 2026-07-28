@@ -32,35 +32,53 @@ interface Item {
   readonly identified: boolean;
 }
 
-/** A minimal open floor of visible passable cells with optional walls at the given coordinates. */
+interface DoorInput {
+  readonly x: number;
+  readonly y: number;
+  readonly state: 'closed' | 'locked' | 'open';
+}
+
+/** A minimal open floor of visible passable cells with optional walls and doors at the given
+ * coordinates. A door cell carries the `terrain.door` token plus a matching `FeatureView`. */
 function makeProjection(input: {
   hero: Point & { health?: number };
   actors?: readonly Actor[];
   groundItems?: readonly Item[];
   walls?: readonly Point[];
+  doors?: readonly DoorInput[];
 }): GameplayProjection {
   const wallSet = new Set((input.walls ?? []).map((point) => `${point.x},${point.y}`));
+  const doorSet = new Set((input.doors ?? []).map((door) => `${door.x},${door.y}`));
   const cells = [];
   for (let y = 0; y < HEIGHT; y += 1) {
     for (let x = 0; x < WIDTH; x += 1) {
       const wall = wallSet.has(`${x},${y}`);
+      const door = doorSet.has(`${x},${y}`);
       cells.push({
         index: y * WIDTH + x,
         x,
         y,
         knowledge: 'visible' as const,
         tileId: wall ? 0 : 1,
-        glyph: wall ? '#' : '.',
-        token: wall ? 'terrain.wall' : 'terrain.floor',
+        glyph: wall ? '#' : door ? '+' : '.',
+        token: wall ? 'terrain.wall' : door ? 'terrain.door' : 'terrain.floor',
         intensity: 255,
       });
     }
   }
+  const features = (input.doors ?? []).map((door, index) => ({
+    featureId: `feature.door.${index}`,
+    type: 'door',
+    state: door.state,
+    x: door.x,
+    y: door.y,
+  }));
   return {
     floor: { floorId: 'floor.test', depth: 1, town: false, width: WIDTH, height: HEIGHT, cells },
     hero: { actorId: 'hero', x: input.hero.x, y: input.hero.y, health: input.hero.health ?? 10 },
     actors: input.actors ?? [],
     groundItems: input.groundItems ?? [],
+    features,
   } as unknown as GameplayProjection;
 }
 
@@ -285,6 +303,38 @@ describe('advanceTravel', () => {
     const arrived = makeProjection({ hero: { x: 6, y: 5 } });
     expect(advanceTravel({ projection: arrived, travel: afterFirst, dispatch })).toBeNull();
     expect(dispatch).toHaveBeenLastCalledWith({ type: 'pickup' });
+  });
+});
+
+describe('click-to-travel through a closed unlocked door', () => {
+  it('routes a path across a closed door cell (doors are traversable intent)', () => {
+    // Door at (6,5); the hero clicks the floor beyond it at (7,5).
+    const projection = makeProjection({
+      hero: { x: 5, y: 5 },
+      doors: [{ x: 6, y: 5, state: 'closed' }],
+    });
+    const path = computeTravelPath({ projection, destination: { x: 7, y: 5 } });
+    expect(path).not.toBeNull();
+    expect(path!.some((step) => step.x === 6 && step.y === 5)).toBe(true);
+  });
+
+  it('bump-opens the door: the move into the closed door builds an open-door command', () => {
+    const projection = makeProjection({
+      hero: { x: 5, y: 5 },
+      doors: [{ x: 6, y: 5, state: 'closed' }],
+    });
+    // Auto-travel dispatches a plain `move` toward the door, exactly as a keyboard step would; the
+    // command builder converts it into `open-door` (the bump-open), not a blocked rejection.
+    const built = buildIntent({
+      intent: { type: 'move', direction: 'east' },
+      projection,
+      commandId: 'command.test',
+      expectedRevision: 0,
+    });
+    expect(built).toMatchObject({
+      kind: 'command',
+      command: { type: 'open-door', featureId: 'feature.door.0' },
+    });
   });
 });
 

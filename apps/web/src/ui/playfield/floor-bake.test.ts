@@ -5,7 +5,9 @@ import {
   bakeFloor,
   bakeKey,
   FLOOR_OVERSCAN,
+  occludedWallIndices,
   planFloorBake,
+  STUB_SOURCE_FRACTION,
   WALL_OVERSCAN,
   type FloorBakePlan,
 } from './floor-bake.js';
@@ -210,7 +212,7 @@ describe('planFloorBake town families', () => {
     expect(plan.draws[0]!.rect).toEqual(atlas.houseDoor);
   });
 
-  it('bakes a town stair (entrance) cell from atlas.entranceSurround regardless of direction', () => {
+  it('bakes a town stair (entrance) cell from the stair well, not entranceSurround (user decision)', () => {
     const atlas = makeAtlas();
     const cells = grid(
       1,
@@ -219,7 +221,8 @@ describe('planFloorBake town families', () => {
       () => ({ tileId: 5 }),
     );
     const plan = planFloorBake(cells, 1, 1, 'town-entrance', atlas, 1, true);
-    expect(plan.draws[0]!.rect).toEqual(atlas.entranceSurround);
+    expect(plan.draws[0]!.rect).toEqual(atlas.stairs);
+    expect(plan.draws[0]!.rect).not.toEqual(atlas.entranceSurround);
   });
 
   it('leaves dungeon skinning unchanged when town is false', () => {
@@ -312,6 +315,114 @@ describe('planFloorBake tile anchoring', () => {
     // the top rises dh - floorHalfDh = 60.8 above the foot, i.e. ~44.8 above the diamond top corner.
     const diamondTopY = cellCentreY - floorHalfDh;
     expect(draw.dy).toBeLessThan(diamondTopY - 20);
+  });
+});
+
+describe('occludedWallIndices (dynamic hero-proximity occlusion)', () => {
+  // 4x4 open floor with a single lone wall at (2,2). Its raised body covers (1,1)/(1,2)/(2,1).
+  const wallAt = (x: number, y: number): string =>
+    x === 2 && y === 2 ? 'terrain.wall' : 'terrain.floor';
+
+  it('flags a wall whose body covers the hero vicinity', () => {
+    const atlas = makeAtlas();
+    const cells = grid(4, 4, wallAt);
+    const set = occludedWallIndices(cells, 4, 4, 'occ', atlas, 1, false, { x: 1, y: 1 });
+    expect([...set]).toEqual([2 * 4 + 2]); // only the (2,2) wall
+  });
+
+  it('flags nothing when the hero is nowhere behind the wall', () => {
+    const atlas = makeAtlas();
+    const cells = grid(4, 4, wallAt);
+    const set = occludedWallIndices(cells, 4, 4, 'occ', atlas, 1, false, { x: 0, y: 3 });
+    expect(set.size).toBe(0);
+  });
+
+  it('is empty when there is no hero', () => {
+    const atlas = makeAtlas();
+    const cells = grid(4, 4, wallAt);
+    expect(occludedWallIndices(cells, 4, 4, 'occ', atlas, 1, false, undefined).size).toBe(0);
+  });
+});
+
+describe('planFloorBake occlusion stub', () => {
+  const wallAt = (x: number, y: number): string =>
+    x === 2 && y === 2 ? 'terrain.wall' : 'terrain.floor';
+
+  it('renders an occluded wall as a cropped bottom stub, full-height otherwise', () => {
+    const atlas = makeAtlas();
+    const cells = grid(4, 4, wallAt);
+    const wallIndex = 2 * 4 + 2;
+    const full = planFloorBake(cells, 4, 4, 'occ', atlas, 1, false);
+    const stub = planFloorBake(cells, 4, 4, 'occ', atlas, 1, false, new Set([wallIndex]));
+    // The lone wall skins to a rounded boulder, so its draw is the only one on a rounded rect.
+    const fullWall = full.draws.find((d) => atlas.rounded.some((r) => r.x === d.rect.x))!;
+    const stubWall = stub.draws.find((d) => atlas.rounded.some((r) => r.x === d.rect.x))!;
+    // Stub crops the SOURCE rect to its bottom fraction and scales the dest height the same way.
+    expect(stubWall.rect.h).toBeCloseTo(fullWall.rect.h * STUB_SOURCE_FRACTION, 5);
+    expect(stubWall.dh).toBeCloseTo(fullWall.dh * STUB_SOURCE_FRACTION, 5);
+    // Same foot anchor: the bottom edge (dy + dh) is unchanged.
+    expect(stubWall.dy + stubWall.dh).toBeCloseTo(fullWall.dy + fullWall.dh, 5);
+    // The source crop starts partway down the original rect (a bottom slice).
+    expect(stubWall.rect.y).toBeGreaterThan(fullWall.rect.y);
+  });
+});
+
+describe('bakeKey occlusion folding', () => {
+  it('changes when the occlusion stub set changes, order-independently', () => {
+    const cells = grid(4, 4, () => 'terrain.floor');
+    expect(bakeKey(cells, 'k', new Set([5]))).not.toBe(bakeKey(cells, 'k', new Set()));
+    expect(bakeKey(cells, 'k', new Set([5]))).not.toBe(bakeKey(cells, 'k', new Set([6])));
+    expect(bakeKey(cells, 'k', new Set([5, 6]))).toBe(bakeKey(cells, 'k', new Set([6, 5])));
+  });
+});
+
+describe('planFloorBake lamp fixtures', () => {
+  const lamp = {
+    lightId: 'l1',
+    glyph: '*',
+    token: 'fixture.lamp',
+  } as unknown as NonNullable<ObservableCell['fixture']>;
+
+  it('adds a freestanding torch post on a lamp cell with no adjacent wall', () => {
+    const atlas = makeAtlas();
+    const cells = grid(
+      3,
+      3,
+      () => 'terrain.floor',
+      (x, y) => (x === 1 && y === 1 ? { fixture: lamp } : {}),
+    );
+    const plan = planFloorBake(cells, 3, 3, 'lamp-free', atlas, 1, false);
+    // 9 floors + 1 torch post.
+    expect(plan.draws.filter((d) => d.rect === atlas.torch)).toHaveLength(1);
+    expect(plan.draws.filter((d) => d.rect === atlas.torchWall)).toHaveLength(0);
+  });
+
+  it('mounts a wall torch when a lamp cell has an orthogonally adjacent wall', () => {
+    const atlas = makeAtlas();
+    // Lamp at (1,1) with a wall to the north at (1,0).
+    const cells = grid(
+      3,
+      3,
+      (x, y) => (x === 1 && y === 0 ? 'terrain.wall' : 'terrain.floor'),
+      (x, y) => (x === 1 && y === 1 ? { fixture: lamp } : {}),
+    );
+    const plan = planFloorBake(cells, 3, 3, 'lamp-wall', atlas, 1, false);
+    expect(plan.draws.filter((d) => d.rect === atlas.torchWall)).toHaveLength(1);
+    expect(plan.draws.filter((d) => d.rect === atlas.torch)).toHaveLength(0);
+  });
+
+  it('emits no torch for an undiscovered lamp cell', () => {
+    const atlas = makeAtlas();
+    const cells = grid(
+      3,
+      3,
+      () => 'terrain.floor',
+      (x, y) => (x === 1 && y === 1 ? { fixture: lamp, knowledge: 'unknown', intensity: 0 } : {}),
+    );
+    const plan = planFloorBake(cells, 3, 3, 'lamp-unknown', atlas, 1, false);
+    expect(
+      plan.draws.filter((d) => d.rect === atlas.torch || d.rect === atlas.torchWall),
+    ).toHaveLength(0);
   });
 });
 

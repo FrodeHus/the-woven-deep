@@ -1,5 +1,5 @@
 {
-  "note": "Unified dungeon-and-town sheet. Rects are MEASURED (auto-sliced by tools/slice-tilesheet.py), not grid-derived: the regenerated tiles.png is hand-laid on an uneven ~156px pitch with 7- and 8-item rows and per-block margins, so the strict [c*128,r*128,128,128] grid contract does not apply. rounded[7] duplicates rounded[6]: the sheet ships 7 boulder pieces but the topology encoding in tile-skinning.ts uses 8 slots (NE/SE/SW/NW/2 endcaps/2 lone), so the last lone slot reuses the final boulder. blockDepthPx=80 is the median over the plain wall cubes of (tightHeight - topFaceCentreY - tightWidth/4), where topFaceCentreY is the cube crop's widest scanline and tightWidth/4 is the iso floor-diamond half-depth term floor-bake.ts cancels against.",
+  "note": "Unified dungeon-and-town sheet. Rects are MEASURED (auto-sliced by tools/slice-tilesheet.py), not grid-derived: the regenerated tiles.png is hand-laid on an uneven ~156px pitch with 7- and 8-item rows and per-block margins, so the strict [c*128,r*128,128,128] grid contract does not apply. rounded[7] duplicates rounded[6]: the sheet ships 7 boulder pieces but the topology encoding in tile-skinning.ts uses 8 slots (NE/SE/SW/NW/2 endcaps/2 lone), so the last lone slot reuses the final boulder. blockDepthPx=80 is the median over the plain wall cubes of (tightHeight - topFaceCentreY - tightWidth/4), where topFaceCentreY is the cube crop's widest scanline and tightWidth/4 is the iso floor-diamond half-depth term floor-bake.ts cancels against. RESERVED keys (see docs/design/tileset-generation.md): entranceSurround is demoted — the town dungeon-entrance renders the stairs down-well like dungeon floors, so nothing draws it. archOpen (open-door archway) is OPTIONAL and absent here; parseAtlas leaves it undefined and an open door falls back to a glyph until the art ships.",
   "image": "tiles.png",
   "blockDepthPx": 80,
   "floors": [
@@ -28,9 +28,7 @@
     [690, 319, 121, 144],
     [856, 319, 120, 144]
   ],
-  "weaveWalls": [
-    [1022, 319, 120, 144]
-  ],
+  "weaveWalls": [[1022, 319, 120, 144]],
   "rounded": [
     [30, 482, 116, 133],
     [192, 482, 120, 134],

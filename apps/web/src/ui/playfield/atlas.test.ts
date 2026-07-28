@@ -26,6 +26,12 @@ describe('parseAtlas', () => {
     expect(atlas.entranceSurround).toEqual({ x: 808, y: 801, w: 140, h: 151 });
   });
 
+  it('leaves archOpen undefined when absent (current sheet) but parses it when present', () => {
+    expect(parseAtlas(raw).archOpen).toBeUndefined();
+    const withArch = { ...(raw as Record<string, unknown>), archOpen: [1, 2, 3, 4] };
+    expect(parseAtlas(withArch).archOpen).toEqual({ x: 1, y: 2, w: 3, h: 4 });
+  });
+
   it('throws on malformed input', () => {
     expect(() => parseAtlas({ image: 'x.png' })).toThrow();
   });

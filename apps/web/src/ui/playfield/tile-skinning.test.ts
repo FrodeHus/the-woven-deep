@@ -194,11 +194,12 @@ describe('skinFloor town', () => {
     expect(center.variant).toBeLessThan(2);
   });
 
-  it('skins town doors and the dungeon entrance to their town families', () => {
+  it('skins town doors to the town-door family and the dungeon entrance to the stair well', () => {
     const cells = [cell(0, 0, 'terrain.door'), cell(1, 0, 'terrain.stair', { tileId: 5 })];
     const skins = skinFloor(cells, 2, 1, 'town-fixtures', true);
     expect(skins[0]!.family).toBe('town-door');
-    expect(skins[1]!.family).toBe('town-entrance');
+    // User decision: the town entrance renders the descending stair well, not the arch surround.
+    expect(skins[1]!.family).toBe('stairs');
   });
 
   it('is unchanged from dungeon skinning shape when town is false (no town families leak)', () => {

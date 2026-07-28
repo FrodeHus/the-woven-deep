@@ -13,7 +13,6 @@ export type TileFamily =
   | 'town-floor'
   | 'town-wall'
   | 'town-door'
-  | 'town-entrance'
   | 'void';
 
 export interface TileSkin {
@@ -132,8 +131,9 @@ export function skinFloor(
         } else if (family === 'door') {
           resolved[gridIndex] = { family: 'town-door', variant: 0 };
         } else if (family === 'stairs') {
-          // The dungeon entrance: the worked-stone arch surround is the entrance visual.
-          resolved[gridIndex] = { family: 'town-entrance', variant: 0 };
+          // The dungeon entrance renders the same descending stair-well as dungeon floors (user
+          // decision); `entranceSurround` is demoted to the reserved atlas tier.
+          resolved[gridIndex] = { family: 'stairs', variant: 0 };
         } else {
           resolved[gridIndex] = { family, variant: 0 };
         }

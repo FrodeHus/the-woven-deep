@@ -170,13 +170,14 @@ Keys and what consumes them, by status:
 | `walls[]`, `rounded[]`, `weaveWalls[]` | `terrain.wall` cells (topology decides shape) | rendered |
 | `stairs` | `terrain.stair` down-well (tileId 5) | rendered |
 | `stairsUp` | `terrain.stair` up (tileId 4) | rendered |
-| `door` | `terrain.door` | rendered |
-| `gate` | locked features (`featuresOf` projection entries) | rendered |
+| `door` | `terrain.door` terrain cell + a closed door FEATURE (`IsoRenderer.featureSprite`) | rendered |
+| `gate` | **locked DOOR features only** (`featuresOf` projection entries) — restricted to `type: 'door'`; locked chests fall back to a glyph | rendered |
 | `pillar` | `terrain.pillar` | rendered |
 | `townFloors[]`, `townWalls[]` | town vault terrain (plaza floor / building wall placement slots) | rendered |
 | `houseDoor` | town vault house-door placement slot | rendered |
-| `entranceSurround` | town vault dungeon-entrance placement slot | rendered |
-| `torch`, `torchWall` | `fixture.lamp` light fixtures — currently presented only as procedural light pools (`light-layer.ts`); the sprite itself isn't blitted yet | parsed, not drawn |
+| `torch`, `torchWall` | `fixture.lamp` light fixtures — baked as a standing sprite in ADDITION to the light pool; `torchWall` mounts against an orthogonally adjacent wall, `torch` stands free (`floor-bake.ts`) | rendered |
+| `archOpen` (OPTIONAL) | open-door feature archway — absent in the current sheet, so `parseAtlas` leaves it `undefined` and an open door falls back to a glyph until the art ships | reserved |
+| `entranceSurround` | town vault dungeon-entrance — DEMOTED (user decision): the town entrance now renders the `stairs` down-well like dungeon floors, so nothing draws this | reserved |
 | `pillarBroken` | no engine token maps to it — `tile-skinning.ts`'s `familyForToken` never produces `pillar-broken` from any terrain kind, so the branch in `floor-bake.ts` that reads it is unreachable | reserved |
 | `lampPostUnlit`, `shopSign` | town dressing — not yet placed by the town vault | reserved |
 | `stalls.provisioner`, `stalls.arms`, `stalls.curios`, `stalls.spellvendor` | town merchant-stall dressing — not yet placed by the town vault | reserved |

@@ -13,10 +13,10 @@ import {
 } from 'pixi.js';
 import { MAX_TRANSIENT_EFFECTS, type TransientEffect } from '../effects-map.js';
 import { equippedLightSource } from '../light-sources.js';
-import { featuresOf, heroOf } from '../../session/projection-view.js';
+import { featuresOf, heroOf, type FeatureView } from '../../session/projection-view.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { AtlasRect, PlayfieldAtlas } from './atlas.js';
-import { bakeFloor, bakeKey, planFloorBake } from './floor-bake.js';
+import { bakeFloor, bakeKey, occludedWallIndices, planFloorBake } from './floor-bake.js';
 import { TILE_HALF_H, TILE_HALF_W, worldToScreen, cellAtScreen, type IsoView } from './iso-math.js';
 import {
   isFogMaskedTier,
@@ -89,6 +89,24 @@ const CAMERA_EASE_PER_SECOND = 6;
 const FLICKER_SPEED = 0.006;
 const RADIAL_GRADIENT_SIZE = 128;
 
+/** Per-feature-type glyph + color for the sprite-less fallback (chests, revealed secrets, traps,
+ * open doors until arch art exists). `FeatureView` carries no glyph, so these are the renderer's
+ * defaults; an unrecognized future type falls back to a neutral '?'. */
+function featureGlyphStyle(type: string): { glyph: string; color: number } {
+  switch (type) {
+    case 'door':
+      return { glyph: '/', color: 0xc9a06a };
+    case 'chest':
+      return { glyph: '▣', color: 0xd4af37 };
+    case 'secret':
+      return { glyph: '?', color: 0xb188ff };
+    case 'trap':
+      return { glyph: '^', color: 0xd65a5a };
+    default:
+      return { glyph: '?', color: 0xffffff };
+  }
+}
+
 interface ActorDisplay {
   readonly container: Container;
   readonly sprite: ActorSprite;
@@ -131,6 +149,8 @@ export class IsoRenderer {
   private atlasImage: HTMLImageElement | null = null;
   private atlasBaseTexture: Texture | null = null;
   private gateTexture: Texture | null = null;
+  private doorTexture: Texture | null = null;
+  private archOpenTexture: Texture | null = null;
   private gradientTexture: Texture | null = null;
   private lightMap: RenderTexture | null = null;
   private resizeObserver: ResizeObserver | null = null;
@@ -221,6 +241,10 @@ export class IsoRenderer {
     // Built once and shared across every locked-feature sprite: a fresh per-snapshot wrapper would
     // leak, since a Sprite's default `destroy()` never destroys its texture.
     this.gateTexture = this.atlasTexture(this.atlas.gate);
+    this.doorTexture = this.atlasTexture(this.atlas.door);
+    // Absent in today's sheet -- an open door falls back to a glyph until the art ships.
+    this.archOpenTexture =
+      this.atlas.archOpen === undefined ? null : this.atlasTexture(this.atlas.archOpen);
     this.gradientTexture = this.buildRadialGradientTexture();
 
     this.assembleSceneGraph();
@@ -262,7 +286,7 @@ export class IsoRenderer {
     }
 
     this.resolveHeroLight(snapshot);
-    this.rebakeIfNeeded(floor.cells, floor.floorId, floor.town);
+    this.rebakeIfNeeded(floor.cells, floor.floorId, floor.town, hero);
     this.rebuildFeatures(snapshot);
     this.rebuildGroundItems();
     this.rebuildActors();
@@ -315,13 +339,17 @@ export class IsoRenderer {
 
     if (floorTexture && floorTexture !== Texture.EMPTY) floorTexture.destroy(true);
     this.gradientTexture?.destroy(true);
-    // `gateTexture` is a frame wrapper over the atlas base source, so drop only the wrapper here and
-    // destroy the shared source once, via the base texture.
+    // `gateTexture`/`doorTexture`/`archOpenTexture` are frame wrappers over the atlas base source, so
+    // drop only the wrappers here and destroy the shared source once, via the base texture.
     this.gateTexture?.destroy(false);
+    this.doorTexture?.destroy(false);
+    this.archOpenTexture?.destroy(false);
     this.atlasBaseTexture?.destroy(true);
     this.lightMap?.destroy(true);
 
     this.gateTexture = null;
+    this.doorTexture = null;
+    this.archOpenTexture = null;
     this.gradientTexture = null;
     this.atlasBaseTexture = null;
     this.lightMap = null;
@@ -434,8 +462,25 @@ export class IsoRenderer {
     this.heroLightRadius = light.radius;
   }
 
-  private rebakeIfNeeded(cells: readonly ObservableCell[], floorId: string, town: boolean): void {
-    const key = bakeKey(cells, floorId);
+  private rebakeIfNeeded(
+    cells: readonly ObservableCell[],
+    floorId: string,
+    town: boolean,
+    hero: { x: number; y: number },
+  ): void {
+    // Hero-proximity occlusion stubs (see `occludedWallIndices`): folded into the key so the bake
+    // rebuilds when the stub set changes as the hero moves, not just on terrain discovery.
+    const occluded = occludedWallIndices(
+      cells,
+      this.floorWidth,
+      this.floorHeight,
+      floorId,
+      this.atlas,
+      BAKE_SCALE,
+      town,
+      hero,
+    );
+    const key = bakeKey(cells, floorId, occluded);
     if (key === this.currentBakeKey) return;
     this.currentBakeKey = key;
 
@@ -450,6 +495,7 @@ export class IsoRenderer {
       this.atlas,
       BAKE_SCALE,
       town,
+      occluded,
     );
     const canvas = document.createElement('canvas');
     // `bakeFloor` fails loud on a null 2d context, so a missing context surfaces as a thrown error
@@ -474,24 +520,75 @@ export class IsoRenderer {
 
   private rebuildFeatures(snapshot: SessionSnapshot): void {
     this.featuresContainer.removeChildren().forEach((child) => child.destroy());
-    const gateTexture = this.gateTexture;
-    if (gateTexture === null) return;
     for (const feature of featuresOf(snapshot.projection)) {
-      if (feature.state !== 'locked') continue;
-      const sprite = new Sprite(gateTexture);
-      const dw = TILE_HALF_W * 2 * BAKE_SCALE;
-      const dh = dw * (this.atlas.gate.h / this.atlas.gate.w);
-      const sx = (feature.x - feature.y) * TILE_HALF_W * BAKE_SCALE;
-      const sy = (feature.x + feature.y) * TILE_HALF_H * BAKE_SCALE;
-      // Foot-anchored like the baked wall cubes: the gate crop's bottom edge rests on the cell's
-      // floor-diamond bottom corner so the standing gate rises above its floor instead of sinking a
-      // cube-depth below the plane.
-      const bottomY = sy + TILE_HALF_H * BAKE_SCALE;
-      sprite.width = dw;
-      sprite.height = dh;
-      sprite.position.set(sx - dw / 2, bottomY - dh);
-      this.featuresContainer.addChild(sprite);
+      // An undiscovered secret projects as `terrain-cover` with no `state`; it blends into terrain
+      // and gets neither sprite nor glyph.
+      if (feature.state === undefined) continue;
+      const mapped = this.featureSprite(feature);
+      if (mapped) this.featuresContainer.addChild(mapped);
+      else this.featuresContainer.addChild(this.featureGlyphDisplay(feature));
     }
+  }
+
+  /** The atlas sprite for a feature that has one: a door's closed leaf, a door's engaged lock (the
+   * gate), or -- once the art ships -- an open-door archway. Every other feature (chests in any
+   * state, revealed secrets, traps, open doors until arch art exists) returns `null` and renders a
+   * glyph instead. The gate is deliberately restricted to doors so a LOCKED CHEST no longer inherits
+   * the door gate. */
+  private featureSprite(feature: FeatureView): Sprite | null {
+    if (feature.type !== 'door') return null;
+    let texture: Texture | null;
+    let rect: AtlasRect;
+    if (feature.state === 'closed') {
+      texture = this.doorTexture;
+      rect = this.atlas.door;
+    } else if (feature.state === 'locked') {
+      texture = this.gateTexture;
+      rect = this.atlas.gate;
+    } else if (feature.state === 'open' && this.atlas.archOpen !== undefined) {
+      texture = this.archOpenTexture;
+      rect = this.atlas.archOpen;
+    } else {
+      return null;
+    }
+    if (texture === null) return null;
+
+    const sprite = new Sprite(texture);
+    const dw = TILE_HALF_W * 2 * BAKE_SCALE;
+    const dh = dw * (rect.h / rect.w);
+    const [lx, ly] = this.isoLocal(feature.x, feature.y);
+    // Foot-anchored like the baked wall cubes: the crop's bottom edge rests on the cell's
+    // floor-diamond bottom corner so the standing feature rises above its floor.
+    const bottomY = ly + TILE_HALF_H * BAKE_SCALE;
+    sprite.width = dw;
+    sprite.height = dh;
+    sprite.position.set(lx - dw / 2, bottomY - dh);
+    return sprite;
+  }
+
+  /** A shadow-ellipse + colored glyph for a feature with no mapped sprite, in the same visual style
+   * as ground items and actors. `FeatureView` carries no glyph/color, so both fall back to a
+   * sensible per-type default. */
+  private featureGlyphDisplay(feature: FeatureView): Container {
+    const { glyph, color } = featureGlyphStyle(feature.type);
+    const container = new Container();
+
+    const shadow = new Graphics();
+    shadow.ellipse(0, TILE_HALF_H * 0.35, TILE_HALF_W * 0.5, TILE_HALF_H * 0.4);
+    shadow.fill({ color: SHADOW_COLOR, alpha: SHADOW_ALPHA });
+    container.addChild(shadow);
+
+    const text = new Text({
+      text: glyph,
+      style: { fill: color, fontFamily: 'monospace', fontSize: 24, fontWeight: 'bold' },
+    });
+    text.anchor.set(0.5, 1);
+    text.position.set(0, TILE_HALF_H * 0.4);
+    container.addChild(text);
+
+    const [lx, ly] = this.isoLocal(feature.x, feature.y);
+    container.position.set(lx, ly);
+    return container;
   }
 
   private rebuildGroundItems(): void {

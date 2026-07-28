@@ -17,6 +17,9 @@ export interface PlayfieldAtlas {
   stairsUp: AtlasRect;
   door: AtlasRect;
   gate: AtlasRect;
+  /** Open-door archway. OPTIONAL: absent in the current measured sheet, so an open door falls back
+   * to a glyph until the art ships. Parsed only when present. */
+  archOpen?: AtlasRect;
   torch: AtlasRect;
   torchWall: AtlasRect;
   pillar: AtlasRect;
@@ -93,6 +96,8 @@ export function parseAtlas(json: unknown): PlayfieldAtlas {
   const stairsUp = toRect(record.stairsUp, 'stairsUp');
   const door = toRect(record.door, 'door');
   const gate = toRect(record.gate, 'gate');
+  // Optional: present in future sheets that ship open-door art; absent today.
+  const archOpen = record.archOpen === undefined ? undefined : toRect(record.archOpen, 'archOpen');
   const torch = toRect(record.torch, 'torch');
   const torchWall = toRect(record.torchWall, 'torchWall');
   const pillar = toRect(record.pillar, 'pillar');
@@ -114,6 +119,7 @@ export function parseAtlas(json: unknown): PlayfieldAtlas {
     stairsUp,
     door,
     gate,
+    ...(archOpen === undefined ? {} : { archOpen }),
     torch,
     torchWall,
     pillar,
