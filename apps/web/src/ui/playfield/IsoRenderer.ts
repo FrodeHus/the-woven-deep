@@ -9,6 +9,7 @@ import {
   Sprite,
   Text,
   Texture,
+  TilingSprite,
   type Ticker,
 } from 'pixi.js';
 import { MAX_TRANSIENT_EFFECTS, type TransientEffect } from '../effects-map.js';
@@ -28,6 +29,7 @@ import {
   REMEMBERED_TINT,
   spriteLightTint,
   visibleBrightness,
+  VOID_ROCK_BRIGHTNESS,
   type LightSpec,
 } from './light-layer.js';
 import { selectNewEffects, spawnForEffect, stepParticles, type Particle } from './particles.js';
@@ -50,6 +52,14 @@ export interface TargetingVisual {
   validCells: ReadonlySet<string>;
   affectedCells: ReadonlySet<string>;
   reticle: { x: number; y: number } | null;
+}
+
+/** The cell the pointer is over, plus whether auto-travel would actually route there
+ * (`session/travel.ts`'s `cellNavigability`). A cell the hero has never discovered is expressed as
+ * `null` rather than a third flavour here: the renderer draws nothing for it. */
+export interface HoverCursor {
+  readonly cell: { x: number; y: number };
+  readonly navigable: boolean;
 }
 
 /** The iso-local scale the floor bake is planned at. The camera zoom is applied by the world
@@ -86,6 +96,24 @@ const HIT_FLASH_GLYPH = '✦';
 const DEATH_BURST_GLYPH = '☠';
 const HIT_FLASH_TEXT_COLOR = 0xff6a5a;
 const DEATH_BURST_TEXT_COLOR = 0xb188ff;
+
+/** Hover cursor: a soft moonlit outline over a cell auto-travel would walk to. */
+const HOVER_NAVIGABLE_COLOR = 0xcfe4ff;
+/** Hover cursor: a dim red indicator over a discovered cell the hero cannot enter. */
+const HOVER_BLOCKED_COLOR = 0x9c3535;
+
+/** The void-fill rock tile spans exactly two iso cells on each axis, so the pattern's pitch is a
+ * whole multiple of the grid and a camera pan can never slide it against the floor. */
+const VOID_ROCK_TILE_W = TILE_HALF_W * 2 * 2;
+const VOID_ROCK_TILE_H = TILE_HALF_H * 2 * 2;
+/** How many darkened variants of the source crop are stamped into the rock tile. More than one
+ * breaks up the banding a single repeated crop produces at this brightness. */
+const VOID_ROCK_VARIANTS = 4;
+/** Per-variant brightness jitter around {@link VOID_ROCK_BRIGHTNESS}, as a fraction of it. */
+const VOID_ROCK_VARIANT_JITTER = 0.35;
+/** Extra world margin the tiling sprite covers beyond the viewport, so a resize or a camera ease
+ * never exposes an unfilled edge before the next frame lands. */
+const VOID_ROCK_MARGIN_PX = VOID_ROCK_TILE_W * 2;
 
 const CAMERA_EASE_PER_SECOND = 6;
 const FLICKER_SPEED = 0.006;
@@ -181,6 +209,8 @@ export class IsoRenderer {
   private doorTexture: Texture | null = null;
   private archOpenTexture: Texture | null = null;
   private gradientTexture: Texture | null = null;
+  private voidRockTexture: Texture | null = null;
+  private voidRockSprite: TilingSprite | null = null;
   private lightMap: RenderTexture | null = null;
   private resizeObserver: ResizeObserver | null = null;
 
@@ -201,6 +231,7 @@ export class IsoRenderer {
   private readonly lightMapSprite = new Sprite();
   private readonly overlayContainer = new Container();
   private readonly targetingGraphics = new Graphics();
+  private readonly hoverGraphics = new Graphics();
   private readonly effectsContainer = new Container();
   private readonly particleGraphicsNormal = new Graphics();
   private readonly particleGraphicsAdditive = new Graphics();
@@ -215,6 +246,7 @@ export class IsoRenderer {
   private actorDisplays: readonly ActorDisplay[] = [];
   private itemDisplays: readonly ItemDisplay[] = [];
   private targeting: TargetingVisual | null = null;
+  private hoverCursor: HoverCursor | null = null;
   private particles: readonly Particle[] = [];
   private damageFloats: readonly DamageFloat[] = [];
   /** Salted per `snapshotGeneration` -- see `selectNewEffects` in `particles.ts` for why a raw
@@ -295,6 +327,7 @@ export class IsoRenderer {
     this.archOpenTexture =
       this.atlas.archOpen === undefined ? null : this.atlasTexture(this.atlas.archOpen);
     this.gradientTexture = this.buildRadialGradientTexture();
+    this.voidRockTexture = this.buildVoidRockTexture(atlasImage);
 
     this.assembleSceneGraph();
     this.recreateLightMap();
@@ -350,6 +383,14 @@ export class IsoRenderer {
     this.redrawTargeting();
   }
 
+  /** The navigable-hover cursor, or `null` to clear it (pointer off the grid, an undiscovered cell,
+   * or spell targeting taking over the overlay). Mirrors {@link setTargeting}: pure state in, an
+   * immediate redraw of one `Graphics`, no per-frame cost. */
+  setHoverCursor(cursor: HoverCursor | null): void {
+    this.hoverCursor = cursor;
+    this.redrawHoverCursor();
+  }
+
   destroy(): void {
     const app = this.app;
     this.resizeObserver?.disconnect();
@@ -390,6 +431,8 @@ export class IsoRenderer {
 
     if (floorTexture && floorTexture !== Texture.EMPTY) floorTexture.destroy(true);
     this.gradientTexture?.destroy(true);
+    // Canvas-backed like the gradient: this instance built it, so this instance frees its source.
+    this.voidRockTexture?.destroy(true);
     // `gateTexture`/`doorTexture`/`archOpenTexture` are frame wrappers over the atlas base source, so
     // drop only the wrappers here and destroy the shared source once, via the base texture.
     this.gateTexture?.destroy(false);
@@ -410,6 +453,8 @@ export class IsoRenderer {
     this.doorTexture = null;
     this.archOpenTexture = null;
     this.gradientTexture = null;
+    this.voidRockTexture = null;
+    this.voidRockSprite = null;
     this.atlasBaseTexture = null;
     this.actorBaseTexture = null;
     this.itemBaseTexture = null;
@@ -461,23 +506,39 @@ export class IsoRenderer {
     this.particleGraphicsAdditive.blendMode = 'add';
     this.effectsContainer.addChild(this.particleGraphicsNormal, this.particleGraphicsAdditive);
 
-    this.overlayContainer.addChild(this.targetingGraphics, this.effectsContainer);
+    // The hover cursor sits in the OVERLAY, above the baked floor/wall sprite and above the multiply
+    // light-map, so a cell hidden behind a full-height wall cube still shows its outline glowing
+    // through -- the whole point of a navigation cursor is that it reads where the floor does not.
+    this.overlayContainer.addChild(
+      this.hoverGraphics,
+      this.targetingGraphics,
+      this.effectsContainer,
+    );
+
+    // Unexcavated stone: a world-anchored tiling rock pattern so unexplored space reads as solid
+    // rock rather than as empty black. It composites with SCREEN, immediately ABOVE the multiply
+    // light-map rather than below it -- the light-map blackens every non-visible pixel, so a rock
+    // layer underneath would be crushed to nothing. Screen only ever lightens: over the black void
+    // the result IS the rock (its designed `VOID_ROCK_BRIGHTNESS`), while over remembered and
+    // visible floor -- already far brighter -- it barely registers, so the contrast ladder the
+    // light-layer test pins (rock < remembered < visible) survives the composite.
+    if (this.voidRockTexture !== null) {
+      const rock = new TilingSprite({ texture: this.voidRockTexture });
+      rock.blendMode = 'screen';
+      this.voidRockSprite = rock;
+    }
 
     this.vignetteSprite.tint = HURT_VIGNETTE_COLOR;
     this.vignetteSprite.alpha = 0;
 
-    // Stage order (back to front): floor, the multiply light-map over it, then the per-sprite-lit
-    // feature/item/actor sprites, then the overlay (targeting + transient effects), then the hurt
-    // vignette on top. `overlayContainer`'s `effectsContainer` deliberately stays above the light-map
-    // and UNTINTED: combat particles and floating glyphs are emissive, so they must not be dimmed by
-    // cell light the way the world sprites now are.
-    app.stage.addChild(
-      this.worldContainer,
-      this.lightMapSprite,
-      this.spritesContainer,
-      this.overlayContainer,
-      this.vignetteSprite,
-    );
+    // Stage order (back to front): floor, the multiply light-map over it, the void-fill rock, then
+    // the per-sprite-lit feature/item/actor sprites, then the overlay (hover cursor + targeting +
+    // transient effects), then the hurt vignette on top. `overlayContainer`'s `effectsContainer`
+    // deliberately stays above the light-map and UNTINTED: combat particles and floating glyphs are
+    // emissive, so they must not be dimmed by cell light the way the world sprites now are.
+    app.stage.addChild(this.worldContainer, this.lightMapSprite);
+    if (this.voidRockSprite !== null) app.stage.addChild(this.voidRockSprite);
+    app.stage.addChild(this.spritesContainer, this.overlayContainer, this.vignetteSprite);
   }
 
   /** A white-core-to-transparent radial gradient, reused (tinted) for every light pool. */
@@ -494,6 +555,55 @@ export class IsoRenderer {
     gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, RADIAL_GRADIENT_SIZE, RADIAL_GRADIENT_SIZE);
+    return Texture.from(canvas);
+  }
+
+  /**
+   * The tiling rock texture the void fill repeats: an existing wall crop from the terrain sheet,
+   * stamped {@link VOID_ROCK_VARIANTS} times into one grid-pitch tile and crushed to
+   * {@link VOID_ROCK_BRIGHTNESS} of its original luminance. Reusing real wall art (rather than
+   * generating noise) keeps unexplored space reading as the same stone the dungeon is cut from; the
+   * per-variant crop offset and brightness jitter exist purely to break up the banding a single
+   * repeated crop shows at this brightness. Deterministic -- no `Math.random`.
+   */
+  private buildVoidRockTexture(atlasImage: HTMLImageElement): Texture {
+    const canvas = document.createElement('canvas');
+    canvas.width = VOID_ROCK_TILE_W;
+    canvas.height = VOID_ROCK_TILE_H;
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) throw new Error('IsoRenderer: 2d context unavailable for the void rock tile');
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, VOID_ROCK_TILE_W, VOID_ROCK_TILE_H);
+
+    const source = this.atlas.walls[0] ?? this.atlas.floors[0];
+    if (source === undefined) return Texture.from(canvas);
+
+    const quadW = VOID_ROCK_TILE_W / 2;
+    const quadH = VOID_ROCK_TILE_H / 2;
+    // Sample a square window from the crop's interior so no variant picks up the crop's transparent
+    // silhouette edge, which would tile as a visible seam.
+    const sampleSize = Math.min(source.w, source.h) / 2;
+    for (let index = 0; index < VOID_ROCK_VARIANTS; index += 1) {
+      const column = index % 2;
+      const row = Math.floor(index / 2);
+      // A fixed cosine walk over the crop interior: distinct per variant, stable across sessions.
+      const shift = (index / VOID_ROCK_VARIANTS) * (Math.min(source.w, source.h) - sampleSize);
+      const jitter = 1 + VOID_ROCK_VARIANT_JITTER * Math.cos((index * Math.PI) / 2);
+      ctx.globalAlpha = Math.max(0, Math.min(1, VOID_ROCK_BRIGHTNESS * jitter));
+      ctx.drawImage(
+        atlasImage,
+        source.x + shift,
+        source.y + shift,
+        sampleSize,
+        sampleSize,
+        column * quadW,
+        row * quadH,
+        quadW,
+        quadH,
+      );
+    }
+    ctx.globalAlpha = 1;
     return Texture.from(canvas);
   }
 
@@ -917,6 +1027,29 @@ export class IsoRenderer {
     }
   }
 
+  /** Redraws the hover cursor: a soft light outline on a navigable cell, a dim red one on a
+   * discovered-but-blocked cell. Nothing is drawn for `null` (which covers undiscovered cells). */
+  private redrawHoverCursor(): void {
+    const graphics = this.hoverGraphics;
+    graphics.clear();
+    const cursor = this.hoverCursor;
+    if (!cursor) return;
+    const color = cursor.navigable ? HOVER_NAVIGABLE_COLOR : HOVER_BLOCKED_COLOR;
+    const [cx, cy] = this.isoLocal(cursor.cell.x, cursor.cell.y);
+    const diamond = [
+      cx,
+      cy - TILE_HALF_H,
+      cx + TILE_HALF_W,
+      cy,
+      cx,
+      cy + TILE_HALF_H,
+      cx - TILE_HALF_W,
+      cy,
+    ];
+    graphics.poly(diamond).fill({ color, alpha: cursor.navigable ? 0.1 : 0.14 });
+    graphics.poly(diamond).stroke({ color, alpha: cursor.navigable ? 0.85 : 0.7, width: 2 });
+  }
+
   private drawTargetDiamond(
     graphics: Graphics,
     x: number,
@@ -975,6 +1108,7 @@ export class IsoRenderer {
     this.lightBuild.position.set(baseX, baseY);
     this.lightBuild.scale.set(ZOOM);
 
+    this.updateVoidRock(app, baseX, baseY);
     this.updateActors(now);
     this.updateItems(scene, now);
     this.updateLights(now);
@@ -1031,6 +1165,29 @@ export class IsoRenderer {
       const flicker = 0.8 + 0.2 * Math.sin(now * FLICKER_SPEED + light.spec.flickerSeed);
       light.sprite.alpha = light.spec.intensity * flicker;
     }
+  }
+
+  /**
+   * Keeps the void-fill rock covering the viewport (plus a margin, so a resize or a fast camera ease
+   * never exposes an unfilled edge) and GRID-LOCKED TO THE WORLD: the tile offset is driven straight
+   * from the same camera origin the floor uses, so the rock scrolls with the terrain instead of
+   * sliding under it as the hero walks. The tile pitch is a whole multiple of the iso cell, so the
+   * modulo wrap lands the pattern back on the grid exactly.
+   */
+  private updateVoidRock(app: Application, baseX: number, baseY: number): void {
+    const rock = this.voidRockSprite;
+    if (rock === null) return;
+    rock.position.set(-VOID_ROCK_MARGIN_PX, -VOID_ROCK_MARGIN_PX);
+    rock.width = app.screen.width + VOID_ROCK_MARGIN_PX * 2;
+    rock.height = app.screen.height + VOID_ROCK_MARGIN_PX * 2;
+    // `position` already shifted the sprite by the margin, so fold it back in here: the pattern must
+    // stay anchored to the world origin, not to the sprite's top-left corner.
+    const offsetX = baseX + VOID_ROCK_MARGIN_PX;
+    const offsetY = baseY + VOID_ROCK_MARGIN_PX;
+    rock.tilePosition.set(
+      ((offsetX % VOID_ROCK_TILE_W) + VOID_ROCK_TILE_W) % VOID_ROCK_TILE_W,
+      ((offsetY % VOID_ROCK_TILE_H) + VOID_ROCK_TILE_H) % VOID_ROCK_TILE_H,
+    );
   }
 
   private updateDarknessCover(app: Application, baseX: number, baseY: number): void {

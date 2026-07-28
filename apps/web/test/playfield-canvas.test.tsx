@@ -22,6 +22,7 @@ describe('PlayfieldCanvas', () => {
         snapshot={snapshot}
         pack={pack}
         targeting={null}
+        hoverCursor={null}
         onCellClick={() => {}}
         onCellHover={() => {}}
         createRenderer={fake.createRenderer}
@@ -46,6 +47,7 @@ describe('PlayfieldCanvas', () => {
         snapshot={snapshot}
         pack={pack}
         targeting={null}
+        hoverCursor={null}
         onCellClick={onCellClick}
         onCellHover={() => {}}
         createRenderer={fake.createRenderer}
@@ -69,6 +71,7 @@ describe('PlayfieldCanvas', () => {
         snapshot={snapshot}
         pack={pack}
         targeting={null}
+        hoverCursor={null}
         onCellClick={() => {}}
         onCellHover={() => {}}
         createRenderer={fake.createRenderer}
@@ -82,6 +85,7 @@ describe('PlayfieldCanvas', () => {
         snapshot={snapshot}
         pack={pack}
         targeting={targeting}
+        hoverCursor={null}
         onCellClick={() => {}}
         onCellHover={() => {}}
         createRenderer={fake.createRenderer}

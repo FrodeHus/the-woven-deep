@@ -1,6 +1,6 @@
 import { findPath, type Direction, type GameplayProjection, type Point } from '@woven-deep/engine';
 import type { PlayerIntent } from './intents.js';
-import { actorsOf, groundItemsOf, heroOf } from './projection-view.js';
+import { actorsOf, featuresOf, groundItemsOf, heroOf } from './projection-view.js';
 
 /**
  * Client-side auto-travel: turning a clicked floor cell into the SAME stream of one-step `move`
@@ -52,6 +52,44 @@ function cellToken(
 }
 
 /**
+ * How a cell reads to travel: `unknown` (never discovered -- travel refuses it and the hover cursor
+ * shows nothing), `navigable` (travel may route across or end on it), or `blocked` (discovered, but
+ * terrain or an engaged lock stops the hero).
+ */
+export type CellNavigability = 'unknown' | 'navigable' | 'blocked';
+
+/** A door or chest whose lock is engaged at `(x, y)`. Mirrors `command-builder.ts`'s
+ * `lockedFeatureAt`: a bump into one is refused outright, never auto-opened, so travel must treat
+ * the cell as blocked even though its terrain token is passable. */
+function lockedFeatureAt(projection: GameplayProjection, x: number, y: number): boolean {
+  return featuresOf(projection).some(
+    (feature) =>
+      (feature.type === 'door' || feature.type === 'chest') &&
+      feature.state === 'locked' &&
+      feature.x === x &&
+      feature.y === y,
+  );
+}
+
+/**
+ * The single source of truth for "can the hero travel here", shared by `computeTravelPath` (which
+ * additionally rejects cells occupied by a bystander) and the playfield's hover cursor, so the
+ * outline the player sees and the path the click walks can never disagree.
+ *
+ * Floors and stairs are navigable; a CLOSED (unlocked) door is navigable because the ordinary `move`
+ * intent bump-opens it (`command-builder.ts`); a LOCKED door/chest, a wall, a pillar and void are
+ * blocked; a never-discovered cell is `unknown`. Actor occupancy is deliberately NOT folded in --
+ * it is a per-path concern (a hostile's own cell stays a legal destination), not a property of the
+ * cell's navigability.
+ */
+export function cellNavigability(projection: GameplayProjection, cell: Point): CellNavigability {
+  const observed = cellToken(projection.floor, cell.x, cell.y);
+  if (!observed || observed.knowledge === 'unknown') return 'unknown';
+  if (observed.token === undefined || !PASSABLE_TOKENS.has(observed.token)) return 'blocked';
+  return lockedFeatureAt(projection, cell.x, cell.y) ? 'blocked' : 'navigable';
+}
+
+/**
  * A path from the hero to `destination` across currently-known passable terrain (topology 8), or
  * `null` when none exists. Cells occupied by a perceived actor are impassable so auto-travel never
  * blunders into a bystander -- except `allowActorAt` (the clicked hostile's own cell), which stays
@@ -69,9 +107,7 @@ export function computeTravelPath(
   const hero = heroOf(projection);
   const occupied = new Set(actorsOf(projection).map((actor) => `${actor.x},${actor.y}`));
   const isPassable = (x: number, y: number): boolean => {
-    const cell = cellToken(floor, x, y);
-    if (!cell || cell.knowledge === 'unknown') return false;
-    if (cell.token === undefined || !PASSABLE_TOKENS.has(cell.token)) return false;
+    if (cellNavigability(projection, { x, y }) !== 'navigable') return false;
     if (allowActorAt && allowActorAt.x === x && allowActorAt.y === y) return true;
     return !occupied.has(`${x},${y}`);
   };

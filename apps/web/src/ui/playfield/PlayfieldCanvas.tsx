@@ -11,7 +11,12 @@ import {
   type PlayfieldAtlas,
   type SpriteAtlas,
 } from './atlas.js';
-import { IsoRenderer, type RendererCallbacks, type TargetingVisual } from './IsoRenderer.js';
+import {
+  IsoRenderer,
+  type HoverCursor,
+  type RendererCallbacks,
+  type TargetingVisual,
+} from './IsoRenderer.js';
 
 /** The three sprite sheets a playfield needs, fetched and parsed together: the terrain/feature tile
  * atlas plus the contentId-keyed actor and item atlases. */
@@ -25,7 +30,7 @@ export interface PlayfieldAtlasBundle {
  * supply a recording fake (jsdom has no WebGL, so the real renderer can never mount there). */
 export type MountedRenderer = Pick<
   IsoRenderer,
-  'init' | 'setSnapshot' | 'setTargeting' | 'destroy'
+  'init' | 'setSnapshot' | 'setTargeting' | 'setHoverCursor' | 'destroy'
 >;
 
 export type CreateRenderer = (
@@ -72,6 +77,8 @@ export interface PlayfieldCanvasProps {
   readonly snapshot: SessionSnapshot;
   readonly pack: CompiledContentPack;
   readonly targeting: TargetingVisual | null;
+  /** The hovered-cell navigation cursor, or `null` to draw none. */
+  readonly hoverCursor: HoverCursor | null;
   readonly onCellClick: (cell: { x: number; y: number }, button: 'primary' | 'secondary') => void;
   readonly onCellHover: (
     hover: { cell: { x: number; y: number }; clientX: number; clientY: number } | null,
@@ -83,7 +90,7 @@ export interface PlayfieldCanvasProps {
 /**
  * Mounts the PixiJS isometric renderer into a host `<div>` and keeps it fed: one effect owns the
  * renderer's create/init/destroy lifecycle, a second pushes each new `snapshot`, a third pushes each
- * `targeting` change. `init()` is async and `destroy()` is not idempotent, so the mount effect
+ * `targeting` change, a fourth pushes each `hoverCursor` change. `init()` is async and `destroy()` is not idempotent, so the mount effect
  * guards a cleanup that fires before init settles (React 19 StrictMode double-invokes effects in
  * dev): the renderer is destroyed exactly once, and `setSnapshot`/`setTargeting` never touch a
  * destroyed instance. Pointer input flows back out through the `onCellClick`/`onCellHover` callbacks
@@ -93,6 +100,7 @@ export function PlayfieldCanvas({
   snapshot,
   pack,
   targeting,
+  hoverCursor,
   onCellClick,
   onCellHover,
   createRenderer = createIsoRenderer,
@@ -160,6 +168,10 @@ export function PlayfieldCanvas({
   useEffect(() => {
     if (ready && rendererRef.current !== null) rendererRef.current.setTargeting(targeting);
   }, [ready, targeting]);
+
+  useEffect(() => {
+    if (ready && rendererRef.current !== null) rendererRef.current.setHoverCursor(hoverCursor);
+  }, [ready, hoverCursor]);
 
   if (atlas === null) return null;
   return (
