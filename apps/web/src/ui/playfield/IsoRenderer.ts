@@ -21,6 +21,7 @@ import { bakeFloor, bakeKey, occludedWallIndices, planFloorBake } from './floor-
 import { TILE_HALF_H, TILE_HALF_W, worldToScreen, cellAtScreen, type IsoView } from './iso-math.js';
 import { groundItemHoverOffset, resolveActorRect, resolveItemSprite } from './sprite-mapping.js';
 import {
+  buildVoidNoiseField,
   composeTints,
   featureLightTint,
   isFogMaskedTier,
@@ -29,7 +30,7 @@ import {
   REMEMBERED_TINT,
   spriteLightTint,
   visibleBrightness,
-  VOID_ROCK_BRIGHTNESS,
+  VOID_NOISE_SIZE,
   type LightSpec,
 } from './light-layer.js';
 import { selectNewEffects, spawnForEffect, stepParticles, type Particle } from './particles.js';
@@ -102,15 +103,12 @@ const HOVER_NAVIGABLE_COLOR = 0xcfe4ff;
 /** Hover cursor: a dim red indicator over a discovered cell the hero cannot enter. */
 const HOVER_BLOCKED_COLOR = 0x9c3535;
 
-/** The void-fill rock tile spans exactly two iso cells on each axis, so the pattern's pitch is a
- * whole multiple of the grid and a camera pan can never slide it against the floor. */
-const VOID_ROCK_TILE_W = TILE_HALF_W * 2 * 2;
-const VOID_ROCK_TILE_H = TILE_HALF_H * 2 * 2;
-/** How many darkened variants of the source crop are stamped into the rock tile. More than one
- * breaks up the banding a single repeated crop produces at this brightness. */
-const VOID_ROCK_VARIANTS = 4;
-/** Per-variant brightness jitter around {@link VOID_ROCK_BRIGHTNESS}, as a fraction of it. */
-const VOID_ROCK_VARIANT_JITTER = 0.35;
+/** The void-fill noise tile is square ({@link VOID_NOISE_SIZE}px), which happens to be a whole
+ * multiple of the iso grid on both axes (`256 / (TILE_HALF_W * 2) === 4`, `256 / (TILE_HALF_H * 2)
+ * === 8`) -- not load-bearing for a formless texture (there is no silhouette left to slide against),
+ * but it keeps the tiling sprite's world-anchoring math simple and exact. */
+const VOID_ROCK_TILE_W = VOID_NOISE_SIZE;
+const VOID_ROCK_TILE_H = VOID_NOISE_SIZE;
 /** Extra world margin the tiling sprite covers beyond the viewport, so a resize or a camera ease
  * never exposes an unfilled edge before the next frame lands. */
 const VOID_ROCK_MARGIN_PX = VOID_ROCK_TILE_W * 2;
@@ -327,7 +325,7 @@ export class IsoRenderer {
     this.archOpenTexture =
       this.atlas.archOpen === undefined ? null : this.atlasTexture(this.atlas.archOpen);
     this.gradientTexture = this.buildRadialGradientTexture();
-    this.voidRockTexture = this.buildVoidRockTexture(atlasImage);
+    this.voidRockTexture = this.buildVoidRockTexture();
 
     this.assembleSceneGraph();
     this.recreateLightMap();
@@ -559,51 +557,31 @@ export class IsoRenderer {
   }
 
   /**
-   * The tiling rock texture the void fill repeats: an existing wall crop from the terrain sheet,
-   * stamped {@link VOID_ROCK_VARIANTS} times into one grid-pitch tile and crushed to
-   * {@link VOID_ROCK_BRIGHTNESS} of its original luminance. Reusing real wall art (rather than
-   * generating noise) keeps unexplored space reading as the same stone the dungeon is cut from; the
-   * per-variant crop offset and brightness jitter exist purely to break up the banding a single
-   * repeated crop shows at this brightness. Deterministic -- no `Math.random`.
+   * The tiling texture the void fill repeats: an amorphous, seamless noise field ({@link
+   * buildVoidNoiseField}) rasterized to an offscreen canvas as a flat gray (RGB-equal) image.
+   * Unexplored space must read as formless dark stone, not as a recognizable crop of real wall art --
+   * a repeated silhouette (even darkened) tiles as a visible checkerboard up close. The field is
+   * already normalized into the target dark band and wrap-stamped for seamless tiling, so this method
+   * only rasterizes it; no atlas sampling, no `Math.random`.
    */
-  private buildVoidRockTexture(atlasImage: HTMLImageElement): Texture {
+  private buildVoidRockTexture(): Texture {
     const canvas = document.createElement('canvas');
     canvas.width = VOID_ROCK_TILE_W;
     canvas.height = VOID_ROCK_TILE_H;
     const ctx = canvas.getContext('2d');
     if (ctx === null) throw new Error('IsoRenderer: 2d context unavailable for the void rock tile');
 
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, VOID_ROCK_TILE_W, VOID_ROCK_TILE_H);
-
-    const source = this.atlas.walls[0] ?? this.atlas.floors[0];
-    if (source === undefined) return Texture.from(canvas);
-
-    const quadW = VOID_ROCK_TILE_W / 2;
-    const quadH = VOID_ROCK_TILE_H / 2;
-    // Sample a square window from the crop's interior so no variant picks up the crop's transparent
-    // silhouette edge, which would tile as a visible seam.
-    const sampleSize = Math.min(source.w, source.h) / 2;
-    for (let index = 0; index < VOID_ROCK_VARIANTS; index += 1) {
-      const column = index % 2;
-      const row = Math.floor(index / 2);
-      // A fixed cosine walk over the crop interior: distinct per variant, stable across sessions.
-      const shift = (index / VOID_ROCK_VARIANTS) * (Math.min(source.w, source.h) - sampleSize);
-      const jitter = 1 + VOID_ROCK_VARIANT_JITTER * Math.cos((index * Math.PI) / 2);
-      ctx.globalAlpha = Math.max(0, Math.min(1, VOID_ROCK_BRIGHTNESS * jitter));
-      ctx.drawImage(
-        atlasImage,
-        source.x + shift,
-        source.y + shift,
-        sampleSize,
-        sampleSize,
-        column * quadW,
-        row * quadH,
-        quadW,
-        quadH,
-      );
+    const field = buildVoidNoiseField(VOID_NOISE_SIZE);
+    const image = ctx.createImageData(VOID_ROCK_TILE_W, VOID_ROCK_TILE_H);
+    for (let index = 0; index < field.length; index += 1) {
+      const channel = Math.round((field[index] as number) * 255);
+      const pixel = index * 4;
+      image.data[pixel] = channel;
+      image.data[pixel + 1] = channel;
+      image.data[pixel + 2] = channel;
+      image.data[pixel + 3] = 255;
     }
-    ctx.globalAlpha = 1;
+    ctx.putImageData(image, 0, 0);
     return Texture.from(canvas);
   }
 

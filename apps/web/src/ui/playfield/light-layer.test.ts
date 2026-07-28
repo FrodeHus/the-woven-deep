@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ObservableCell } from '@woven-deep/engine';
 import {
+  buildVoidNoiseField,
   cellDarkness,
   composeTints,
   featureLightTint,
@@ -12,7 +13,9 @@ import {
   tintLuminance,
   visibleBrightness,
   VISIBLE_FLOOR_BRIGHTNESS,
+  VOID_NOISE_SIZE,
   VOID_ROCK_BRIGHTNESS,
+  VOID_ROCK_BRIGHTNESS_VARIATION,
   type LightSpec,
 } from './light-layer.js';
 import { TILE_HALF_W } from './iso-math.js';
@@ -208,14 +211,79 @@ describe('void-fill rock contrast', () => {
     expect(remembered).toBeLessThan(VISIBLE_FLOOR_BRIGHTNESS);
   });
 
-  it('keeps the rock in the 5-10% luminance band -- present, but never legible as terrain', () => {
-    expect(VOID_ROCK_BRIGHTNESS).toBeGreaterThanOrEqual(0.05);
-    expect(VOID_ROCK_BRIGHTNESS).toBeLessThanOrEqual(0.1);
+  it('keeps the rock in a barely-there luminance band -- present, but never legible as terrain', () => {
+    expect(VOID_ROCK_BRIGHTNESS).toBeGreaterThanOrEqual(0.02);
+    expect(VOID_ROCK_BRIGHTNESS).toBeLessThanOrEqual(0.04);
   });
 
   it('reads a mid gray as brighter than a near-black tint', () => {
     expect(tintLuminance(0x808080)).toBeGreaterThan(tintLuminance(0x0a0a0a));
     expect(tintLuminance(0xffffff)).toBeCloseTo(1, 5);
     expect(tintLuminance(0x000000)).toBe(0);
+  });
+});
+
+describe('buildVoidNoiseField', () => {
+  const SIZE = 32;
+
+  it('is deterministic: the same size always yields byte-identical output', () => {
+    const first = buildVoidNoiseField(SIZE);
+    const second = buildVoidNoiseField(SIZE);
+    expect(Array.from(second)).toEqual(Array.from(first));
+  });
+
+  it('produces size*size values, each clamped to [0, 1]', () => {
+    const field = buildVoidNoiseField(SIZE);
+    expect(field.length).toBe(SIZE * SIZE);
+    for (const value of field) {
+      expect(value).toBeGreaterThanOrEqual(0);
+      expect(value).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('normalizes into the tight dark band around VOID_ROCK_BRIGHTNESS', () => {
+    const field = buildVoidNoiseField(VOID_NOISE_SIZE);
+    let mean = 0;
+    for (const value of field) mean += value;
+    mean /= field.length;
+    expect(mean).toBeGreaterThanOrEqual(VOID_ROCK_BRIGHTNESS - VOID_ROCK_BRIGHTNESS_VARIATION);
+    expect(mean).toBeLessThanOrEqual(VOID_ROCK_BRIGHTNESS + VOID_ROCK_BRIGHTNESS_VARIATION);
+
+    let variance = 0;
+    for (const value of field) variance += (value - mean) * (value - mean);
+    const stdDev = Math.sqrt(variance / field.length);
+    // A handful of standard deviations wide: barely-there texture, no wild outliers.
+    expect(stdDev).toBeLessThanOrEqual(VOID_ROCK_BRIGHTNESS_VARIATION * 1.5);
+  });
+
+  it('has no hard edges: adjacent pixels never jump by more than a sliver', () => {
+    const field = buildVoidNoiseField(SIZE);
+    const maxStep = VOID_ROCK_BRIGHTNESS_VARIATION * 2;
+    for (let y = 0; y < SIZE; y += 1) {
+      for (let x = 0; x < SIZE; x += 1) {
+        const value = field[y * SIZE + x] as number;
+        const right = field[y * SIZE + ((x + 1) % SIZE)] as number;
+        const down = field[((y + 1) % SIZE) * SIZE + x] as number;
+        expect(Math.abs(right - value)).toBeLessThanOrEqual(maxStep);
+        expect(Math.abs(down - value)).toBeLessThanOrEqual(maxStep);
+      }
+    }
+  });
+
+  it('tiles seamlessly: the field wraps its own edges with no visible seam', () => {
+    // Wrapping column/row 0 and SIZE-1 (adjacent under toroidal tiling) must be as smooth as any
+    // interior neighbor pair -- the same bound `has no hard edges` checks internally.
+    const field = buildVoidNoiseField(SIZE);
+    const maxStep = VOID_ROCK_BRIGHTNESS_VARIATION * 2;
+    for (let y = 0; y < SIZE; y += 1) {
+      const left = field[y * SIZE] as number;
+      const right = field[y * SIZE + SIZE - 1] as number;
+      expect(Math.abs(left - right)).toBeLessThanOrEqual(maxStep);
+    }
+    for (let x = 0; x < SIZE; x += 1) {
+      const top = field[x] as number;
+      const bottom = field[(SIZE - 1) * SIZE + x] as number;
+      expect(Math.abs(top - bottom)).toBeLessThanOrEqual(maxStep);
+    }
   });
 });
