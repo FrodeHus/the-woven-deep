@@ -728,7 +728,8 @@ function selectCells(
   input: PlacePopulationInput,
   encounter: EncounterContentEntry,
   quantity: number,
-): Readonly<{ cells: readonly Point[]; routeFailure: boolean }> {
+  state: Uint32State,
+): Readonly<{ cells: readonly Point[]; routeFailure: boolean; state: Uint32State }> {
   const rawCells = legalCells(input, encounter);
   const protectedIndexes = protectedRouteIndexes(input.floor);
   const all = rawCells.filter(
@@ -763,7 +764,7 @@ function selectCells(
     requiredOrdinaryCells > all.length ||
     (vaultAnchors !== null && anchors.length === 0)
   ) {
-    return { cells: [], routeFailure };
+    return { cells: [], routeFailure, state };
   }
 
   const stride = input.floor.width + 1;
@@ -789,9 +790,21 @@ function selectCells(
     bottom: number,
   ): boolean => point.x >= left && point.x <= right && point.y >= top && point.y <= bottom;
   const maximumDistance = encounter.placement.maximumMemberDistance;
-  for (let top = 0; top < input.floor.height; top += 1) {
+  // Seed the rectangle scan's origin from the encounter stream instead of always starting at the
+  // floor's top-left corner. Without this, the first viable window -- always the minimal-y one --
+  // wins for every seed, clamping every depth population into a single top-edge pocket (#109). The
+  // scan below wraps cyclically over rows and columns from (top0, left0), so an origin of (0, 0)
+  // reproduces the original top-left-first order exactly; the draw is what spreads placements.
+  const topRoll = rollDie(state, input.floor.height);
+  const top0 = topRoll.value - 1;
+  const leftRoll = rollDie(topRoll.state, input.floor.width);
+  const left0 = leftRoll.value - 1;
+  const nextState = leftRoll.state;
+  for (let dy = 0; dy < input.floor.height; dy += 1) {
+    const top = (top0 + dy) % input.floor.height;
     const bottom = Math.min(input.floor.height - 1, top + maximumDistance);
-    for (let left = 0; left < input.floor.width; left += 1) {
+    for (let dx = 0; dx < input.floor.width; dx += 1) {
+      const left = (left0 + dx) % input.floor.width;
       const right = Math.min(input.floor.width - 1, left + maximumDistance);
       if (rectangleCount(left, top, right, bottom) < requiredOrdinaryCells) continue;
       const anchor =
@@ -811,11 +824,11 @@ function selectCells(
         requiredPoints: requiredPoints(input.floor),
         blockedPoints: selected,
       });
-      if (routeOk) return { cells: selected, routeFailure };
+      if (routeOk) return { cells: selected, routeFailure, state: nextState };
       routeFailure = true;
     }
   }
-  return { cells: [], routeFailure };
+  return { cells: [], routeFailure, state: nextState };
 }
 
 function placementFailure(
@@ -867,12 +880,12 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
     };
   }
   const planned = composition(selected.encounter, selected.state);
-  const positions = selectCells(input, selected.encounter, planned.members.length);
+  const positions = selectCells(input, selected.encounter, planned.members.length, planned.state);
   if (positions.cells.length !== planned.members.length) {
     return placementFailure(
       selected.encounter,
       positions.routeFailure ? 'required-route-blocked' : 'no-valid-placement',
-      planned.state,
+      positions.state,
       reachedDecisions,
     );
   }
@@ -892,7 +905,7 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
       floorId: input.floor.floorId,
       position: positions.cells[0]!,
     });
-    const itemSlots = fillItemSlots(input, planned.state);
+    const itemSlots = fillItemSlots(input, positions.state);
     return {
       status: 'placed',
       encounterId: selected.encounter.id,
@@ -986,7 +999,7 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
       return placementFailure(
         selected.encounter,
         'no-valid-placement',
-        planned.state,
+        positions.state,
         reachedDecisions,
       );
     population = {
@@ -1018,7 +1031,7 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
       ? { ...decision, instancesCreated: decision.instancesCreated + 1 }
       : decision,
   );
-  const itemSlots = fillItemSlots(input, planned.state);
+  const itemSlots = fillItemSlots(input, positions.state);
   return {
     status: 'placed',
     encounterId: selected.encounter.id,

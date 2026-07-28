@@ -18,6 +18,7 @@ import type {
   GameCommand,
   PublicEvent,
   TileId,
+  Uint32State,
 } from './model.js';
 import type {
   FallenHeroStandingSnapshot,
@@ -228,7 +229,17 @@ function publishPlacement(
 }
 
 /** Builds the milestone exit fixture. Eligibility overrides are explicit test/demo input; authored YAML is untouched. */
-export function createPopulationDemoRun(pack: CompiledContentPack, scenarioSeed = 0): ActiveRun {
+// Population placement now seeds its rectangle-scan origin from the encounter stream (#109), so the
+// forced group/swarm/boss land at seed-dependent cells. This fixed placement seed keeps the
+// demonstrated swarm source within the hero's opening view (a few tiles from the start at (1, 6))
+// with open room around it for the child-spawn cap, and the group and boss on their curated floors.
+const POPULATION_DEMO_PLACEMENT_SEED: Uint32State = [31, 218, 406, 3012];
+
+export function createPopulationDemoRun(
+  pack: CompiledContentPack,
+  scenarioSeed = 0,
+  placementSeed: Uint32State = POPULATION_DEMO_PLACEMENT_SEED,
+): ActiveRun {
   const group = encounter(pack, 'encounter.beetle-patrol');
   const swarm = encounter(pack, 'encounter.rat-brood');
   const boss = encounter(pack, 'encounter.ashen-warden');
@@ -266,7 +277,7 @@ export function createPopulationDemoRun(pack: CompiledContentPack, scenarioSeed 
       ...(decision.role === 'echo' ? { gateRoll: 0 } : {}),
     })),
     identification: identified.identification,
-    rng: { ...identified.rng, 'population-gates': selected.state },
+    rng: { ...identified.rng, 'population-gates': selected.state, encounters: placementSeed },
     encounterDecisions: pack.entries
       .filter((entry): entry is EncounterContentEntry => entry.kind === 'encounter')
       .sort((a, b) => a.id.localeCompare(b.id))
