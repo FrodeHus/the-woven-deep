@@ -289,7 +289,7 @@ describe('dead wielders and illumination', () => {
     }).not.toThrow();
     result = result!;
     expect(result.result.status).toBe('applied');
-    expect(result.events.map((event) => event.type)).toContain('actor.died');
+    expect(result.events.map((event) => event.type)).toContain('run.concluded');
     const heroAfter = result.state.actors.find((actor) => actor.actorId === hero.actorId);
     expect(heroAfter?.health).toBe(0);
     expect(result.state.conclusion).not.toBeNull();

@@ -522,6 +522,47 @@ describe('public event projection', () => {
     expect(stableJson(output)).not.toMatch(/naturalRoll|rolledDice|rolledDamage|defense/);
   });
 
+  it('projects hero damage from a visible attacker as hero.damaged', () => {
+    const input = fixture();
+    const visible = {
+      ...input,
+      state: {
+        ...input.state,
+        floors: [
+          {
+            ...input.state.floors[0]!,
+            ambient: { color: [255, 255, 255] as const, strength: 255 },
+          },
+        ],
+      },
+    };
+    const output = projectDomainEvents({ ...visible, heroId: visible.state.hero.actorId });
+    expect(output).toContainEqual({ type: 'hero.damaged', amount: 3, damageType: 'physical' });
+    expect(output.some((event) => event.type === 'actor.damaged')).toBe(false);
+  });
+
+  it('never publishes a raw creature-death event for the hero', () => {
+    const input = fixture();
+    const state = {
+      ...input.state,
+      floors: [
+        { ...input.state.floors[0]!, ambient: { color: [255, 255, 255] as const, strength: 255 } },
+      ],
+    };
+    const events: DomainEvent[] = [
+      {
+        type: 'actor.died',
+        eventId: 'event.hero-death',
+        actorId: state.hero.actorId,
+        contentId: state.hero.contentId,
+        killerActorId: 'monster.hidden',
+      },
+    ];
+    expect(
+      projectDomainEvents({ state, content: input.content, events, heroId: state.hero.actorId }),
+    ).toEqual([]);
+  });
+
   it('uses both prior and next observation without revealing the hidden endpoint', () => {
     const input = fixture();
     const state = {
@@ -636,7 +677,7 @@ describe('public event projection', () => {
     ).toEqual([]);
   });
 
-  it('keeps a hero death observable without publishing the hidden killer', () => {
+  it('leaves the hero death to the conclusion flow when the killer is hidden', () => {
     const input = fixture();
     const hero = input.state.actors[0]!;
     const event: DomainEvent = {
@@ -648,14 +689,7 @@ describe('public event projection', () => {
     };
     expect(
       projectDomainEvents({ ...input, events: [event], heroId: input.state.hero.actorId }),
-    ).toEqual([
-      {
-        type: 'actor.death-observed',
-        eventId: event.eventId,
-        actorId: hero.actorId,
-        contentId: hero.contentId,
-      },
-    ]);
+    ).toEqual([]);
   });
 
   it("suppresses an off-screen monster's loot.dropped while projecting a visible one", () => {

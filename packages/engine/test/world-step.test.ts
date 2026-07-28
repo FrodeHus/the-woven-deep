@@ -212,7 +212,7 @@ describe('atomic world steps', () => {
       'actor.turn.started',
       'actor.intent-changed',
       'combat.observed',
-      'actor.damaged',
+      'hero.damaged',
       'actor.turn.completed',
     ]);
     expect(JSON.stringify(result.publicEvents)).not.toMatch(
