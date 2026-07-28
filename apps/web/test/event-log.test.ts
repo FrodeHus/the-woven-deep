@@ -100,11 +100,29 @@ describe('foldEventsIntoLog', () => {
     expect(folded.log).toHaveLength(events.length);
     const [restLine] = folded.log.filter((line) => /stop resting/i.test(line.text));
     expect(restLine?.text).toMatch(/full-health/);
-    const [invalidLine] = folded.log.filter((line) => /cannot be done/i.test(line.text));
+    const [invalidLine] = folded.log.filter((line) => /wall blocks/i.test(line.text));
     expect(invalidLine?.tone).toBe('system');
-    expect(invalidLine?.text).toMatch(/blocked\.wall/);
     const [concludedLine] = folded.log.filter((line) => /run has concluded/i.test(line.text));
     expect(concludedLine?.tone).toBe('system');
+  });
+
+  it.each([
+    ['blocked.door', 'The door is closed.'],
+    ['blocked.door-locked', 'The door is locked — it needs a key or a lockpick.'],
+    ['blocked.chest', 'A chest blocks the way.'],
+    ['blocked.wall', 'A wall blocks the way.'],
+    ['blocked.bounds', 'A wall blocks the way.'],
+    ['blocked.pillar', 'A pillar blocks the way.'],
+    ['blocked.void', 'A wall blocks the way.'],
+    ['blocked.corner', 'You cannot squeeze between those corners.'],
+    ['blocked.actor', 'Something is in the way.'],
+  ] as const)('explains the movement block %s', (reason, text) => {
+    const folded = foldEventsIntoLog(
+      [],
+      [{ type: 'action.invalid', eventId: 'e', commandId: 'command.1', reason }] as PublicEvent[],
+      1,
+    );
+    expect(folded.log[0]).toMatchObject({ text, tone: 'system' });
   });
 
   it('renders specific copy for each door-related invalid action reason', () => {

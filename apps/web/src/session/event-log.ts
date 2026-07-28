@@ -74,6 +74,22 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
           return { text: 'The door is already closed.', tone: 'system' };
         case 'door.missing':
           return { text: 'There is no door there.', tone: 'system' };
+        case 'blocked.door':
+          return { text: 'The door is closed.', tone: 'system' };
+        case 'blocked.door-locked':
+          return { text: 'The door is locked — it needs a key or a lockpick.', tone: 'system' };
+        case 'blocked.chest':
+          return { text: 'A chest blocks the way.', tone: 'system' };
+        case 'blocked.wall':
+        case 'blocked.bounds':
+        case 'blocked.void':
+          return { text: 'A wall blocks the way.', tone: 'system' };
+        case 'blocked.pillar':
+          return { text: 'A pillar blocks the way.', tone: 'system' };
+        case 'blocked.corner':
+          return { text: 'You cannot squeeze between those corners.', tone: 'system' };
+        case 'blocked.actor':
+          return { text: 'Something is in the way.', tone: 'system' };
         default:
           return { text: `That cannot be done (${event.reason}).`, tone: 'system' };
       }

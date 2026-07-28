@@ -113,4 +113,28 @@ describe('movement classification', () => {
       }),
     ).toEqual({ status: 'move', to: { x: 2, y: 1 }, cost: 100 });
   });
+
+  it.each([
+    ['closed', 'blocked.door'],
+    ['locked', 'blocked.door-locked'],
+  ] as const)('reports a %s door as %s', (state, reason) => {
+    const input = fixture('east', { tiles: [1, 1, 1, 1, 1, 2, 1, 1, 1] });
+    expect(
+      movementAction({
+        ...input,
+        features: [
+          {
+            featureId: 'door.test',
+            type: 'door',
+            floorId: input.floor.floorId,
+            x: 2,
+            y: 1,
+            contentId: null,
+            coverTileId: 2,
+            state,
+          },
+        ],
+      }),
+    ).toEqual({ status: 'invalid', reason });
+  });
 });

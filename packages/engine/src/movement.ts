@@ -58,7 +58,8 @@ function blockReasonAt(
       candidate.y === point.y,
   );
   if (feature && !featureBlocksMovement(feature)) return undefined;
-  if (feature?.type === 'door') return 'blocked.door';
+  if (feature?.type === 'door')
+    return feature.state === 'locked' ? 'blocked.door-locked' : 'blocked.door';
   if (feature?.type === 'chest') return 'blocked.chest';
   return movementBlockReason(input.floor.tiles[index]!);
 }
