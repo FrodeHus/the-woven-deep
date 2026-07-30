@@ -232,6 +232,27 @@ describe('createNewRun', () => {
     expect(() => validateActiveRun(run)).not.toThrow();
     expect(() => encodeActiveRun(run)).not.toThrow();
   });
+
+  describe('engine-required floor loot tables', () => {
+    const MISSING = 'loot-table.chest-mid';
+
+    function packMissingChestMid(): CompiledContentPack {
+      return { ...pack, entries: pack.entries.filter((entry) => entry.id !== MISSING) };
+    }
+
+    it('rejects run creation against a pack missing one, naming the id', () => {
+      expect(() =>
+        createNewRun({ pack: packMissingChestMid(), seed: SEED, hero: DEFAULT_GUEST_HERO }),
+      ).toThrow(MISSING);
+    });
+
+    it('rejects a save load against a pack missing one, naming the id', () => {
+      const blob = encodeActiveRun(createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO }));
+      expect(() => decodeActiveRun(blob, packMissingChestMid())).toThrow(MISSING);
+      // The save itself is fine, so decoding it without a pack still succeeds.
+      expect(() => decodeActiveRun(blob)).not.toThrow();
+    });
+  });
 });
 
 // Regression: a guest hero always starts with a lit, equipped torch. If the hero dies from

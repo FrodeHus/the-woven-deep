@@ -171,7 +171,7 @@ export class GuestSession implements RunSession {
       return { run: this.freshRun(seed), notice: { kind: 'fresh' }, commandSequence: 0 };
     }
     try {
-      const restored = decodeActiveRun(raw);
+      const restored = decodeActiveRun(raw, this.pack);
       if (restored.contentHash !== this.pack.hash) {
         return {
           run: this.freshRun(seed),

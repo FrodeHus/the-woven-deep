@@ -205,9 +205,14 @@ describe('addGeneratedFloor', () => {
       forcedEncounterId: source.id,
     });
 
-    // Floor-loot scatter is the one item source this path legitimately adds; nothing else may.
+    // Floor-loot scatter and vault item slots are the item sources this path legitimately adds --
+    // both are per-floor `loot-placement` draws that run whether or not an encounter placed (#131);
+    // nothing else may.
     expect(
-      integrated.state.items.filter((item) => !item.itemId.startsWith('item.floor-loot.')),
+      integrated.state.items.filter(
+        (item) =>
+          !item.itemId.startsWith('item.floor-loot.') && !item.itemId.startsWith('item.vault.'),
+      ),
     ).toEqual(run.items);
     expect(integrated.state.rng['merchant-stock']).toEqual(run.rng['merchant-stock']);
     expect(integrated.state.rng.encounters).toEqual(run.rng.encounters);

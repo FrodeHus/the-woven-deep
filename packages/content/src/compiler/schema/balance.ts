@@ -71,8 +71,10 @@ export const balanceEntry = z
     }),
     fragmentSpawnRollDenominator: z.number().int().min(1),
     floorLoot: z.strictObject({
-      scatterCount: z.strictObject({ minimum: safeNonNegative, maximum: safePositive }),
-      chestCount: z.strictObject({ minimum: safeNonNegative, maximum: safePositive }),
+      // `maximum: 0` disables scatter piles or chests outright; the superRefine below still
+      // enforces minimum <= maximum.
+      scatterCount: z.strictObject({ minimum: safeNonNegative, maximum: safeNonNegative }),
+      chestCount: z.strictObject({ minimum: safeNonNegative, maximum: safeNonNegative }),
       lockedChestPercent: z.number().int().min(0).max(100),
       lockedDoorPercent: z.number().int().min(0).max(100),
       minimumAnchorDistance: safePositive,

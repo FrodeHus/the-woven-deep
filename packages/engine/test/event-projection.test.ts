@@ -544,6 +544,28 @@ describe('public event projection', () => {
     expect(output.some((event) => event.type === 'actor.damaged')).toBe(false);
   });
 
+  it('does not leak an absorbed attack damage type into a later non-attack hero.damaged', () => {
+    const input = fixture('fire');
+    const heroId = input.state.hero.actorId;
+    // The fire hit lands but is fully absorbed, so no `actor.damaged` follows it; the starvation
+    // tick later in the same batch is physical and must be reported as such.
+    const attack = input.events[0]!;
+    const events: DomainEvent[] = [
+      { ...attack, rolledDamage: 3, effectiveDamage: 0 } as DomainEvent,
+      {
+        type: 'actor.damaged',
+        eventId: 'command.wait',
+        actorId: heroId,
+        sourceActorId: heroId,
+        amount: 1,
+        health: 16,
+      },
+    ];
+
+    const output = projectDomainEvents({ ...input, events, heroId });
+    expect(output).toContainEqual({ type: 'hero.damaged', amount: 1, damageType: 'physical' });
+  });
+
   it('never publishes a raw creature-death event for the hero', () => {
     const input = fixture();
     const state = {

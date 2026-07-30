@@ -1,3 +1,5 @@
+import type { CompiledContentPack } from '@woven-deep/content';
+import { validateRequiredFloorLootTables } from './loot-placement.js';
 import type { ActiveRun } from './model.js';
 import { SaveLoadError } from './save-error.js';
 import {
@@ -171,7 +173,19 @@ function migrateLegacy(input: unknown, schemaVersion: 4 | 5 | 6 | 7 | 8 | 9 | 10
   }
 }
 
-export function decodeActiveRun(json: string): ActiveRun {
+/**
+ * Decodes a save, migrating any supported legacy schema version forward.
+ *
+ * `content` is optional only because callers that merely probe a blob's decodability (and the
+ * fixtures' round-trip assertions) have no pack in hand. Every caller that is actually about to
+ * play the decoded run passes it, which is what makes the engine-required floor loot tables a
+ * load-time guarantee rather than a first-descent surprise. The check runs before the JSON is even
+ * parsed and deliberately outside the `SaveLoadError` mapping below: a pack missing a required
+ * table is a content fault, not a corrupt save, so it must not be reported as `invalid_save` (nor
+ * be swallowed by a host that discards unreadable saves).
+ */
+export function decodeActiveRun(json: string, content?: CompiledContentPack): ActiveRun {
+  if (content !== undefined) validateRequiredFloorLootTables(content);
   let input: unknown;
   try {
     input = JSON.parse(json);

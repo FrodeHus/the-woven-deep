@@ -2,7 +2,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { balanceEntry } from './balance.js';
 import { protectedRouteIndexes } from './connectivity.js';
 import type { ChestFeature, DoorFeature, DungeonFeature } from './feature-model.js';
-import { createFloorLootFromTable } from './inventory.js';
+import { createFloorLootFromTable, projectLootGraph } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
 import {
   tileIndex,
@@ -19,8 +19,8 @@ const PERCENT_SIDES = 100;
 const ORDINAL_DIGITS = 6;
 
 /**
- * Zero-padded feature ordinal: ids within one floor's batch must sort in the order they were
- * placed, and an unpadded `10` sorts before `2`.
+ * Zero-padded feature and scatter-pile ordinal: ids within one floor's batch must sort in the order
+ * they were placed, and an unpadded `10` sorts before `2`.
  */
 function ordinal(value: number): string {
   return String(value).padStart(ORDINAL_DIGITS, '0');
@@ -47,6 +47,54 @@ export function depthBandFor(
   if (depth <= bands.shallowMaxDepth) return 'shallow';
   if (depth <= bands.midMaxDepth) return 'mid';
   return 'deep';
+}
+
+const REQUIRED_LOOT_TABLE_KINDS = ['floor-scatter', 'chest'] as const;
+const DEPTH_BANDS: readonly DepthBand[] = ['shallow', 'mid', 'deep'];
+
+/**
+ * Preflights the six loot tables this module resolves by exact id --
+ * `loot-table.floor-scatter-<band>` and `loot-table.chest-<band>`. The ids are constructed, not
+ * authored, so a pack that removes or renames one would otherwise only fail on the first descent
+ * into that band, mid-run. Each id must resolve to a `loot-table` entry whose graph projects
+ * cleanly at a depth representative of its own band, and must keep at least one eligible choice
+ * there (an all-pruned projection would roll against a zero weight total when the floor actually
+ * rolls). Representative depths come from the authored `floorLoot.depthBands`, so retuning the
+ * bands retunes the preflight with them.
+ *
+ * A pack-only invariant: nothing about a run can change it, so this runs once at run creation and
+ * once per save load, never per command.
+ */
+export function validateRequiredFloorLootTables(content: CompiledContentPack): void {
+  const bands = balanceEntry(content).floorLoot.depthBands;
+  const representativeDepth: Readonly<Record<DepthBand, number>> = {
+    shallow: 1,
+    mid: bands.shallowMaxDepth + 1,
+    deep: bands.midMaxDepth + 1,
+  };
+  for (const kind of REQUIRED_LOOT_TABLE_KINDS) {
+    for (const band of DEPTH_BANDS) {
+      const tableId = `loot-table.${kind}-${band}`;
+      const label = `content preflight: engine-required floor loot table ${tableId}`;
+      const entry = content.entries.find((candidate) => candidate.id === tableId);
+      if (entry === undefined || entry.kind !== 'loot-table') {
+        throw new Error(
+          `${label} does not exist; floor generation resolves it by exact id on every ` +
+            `${band}-band floor`,
+        );
+      }
+      const depth = representativeDepth[band];
+      const projected = projectLootGraph({
+        content,
+        rootTableId: tableId,
+        depth,
+        preflightLabel: label,
+      });
+      if (projected.get(tableId)!.choices.length === 0) {
+        throw new Error(`${label} has no choice eligible at ${band}-band depth ${depth}`);
+      }
+    }
+  }
 }
 
 function chebyshev(left: Point, right: Point): number {
@@ -82,6 +130,15 @@ function occupiedIndexes(run: ActiveRun, floor: FloorSnapshot): ReadonlySet<numb
   for (const feature of run.features) {
     if (feature.floorId !== floor.floorId) continue;
     const index = tileIndex(floor, feature.x, feature.y);
+    if (index !== undefined) occupied.add(index);
+  }
+  // `floor.entities` is the snapshot's own occupancy list and can lag the run's actors within a
+  // single `placeFloorPopulations` call (encounters commit to `run.actors`, not to the snapshot),
+  // so living actors on this floor are excluded here too -- otherwise a chest or locked door can
+  // land under a monster spawned moments earlier in the same pass.
+  for (const actor of run.actors) {
+    if (actor.floorId !== floor.floorId || actor.health <= 0) continue;
+    const index = tileIndex(floor, actor.x, actor.y);
     if (index !== undefined) occupied.add(index);
   }
   return occupied;
@@ -195,7 +252,7 @@ export function placeFloorLoot(
       content,
       tableId: `loot-table.floor-scatter-${band}`,
       state: cursor,
-      itemIdPrefix: `item.floor-loot.${floor.floorId}.${pile}`,
+      itemIdPrefix: `item.floor-loot.${floor.floorId}.${ordinal(pile)}`,
       floorId: floor.floorId,
       x: draw.cell.x,
       y: draw.cell.y,

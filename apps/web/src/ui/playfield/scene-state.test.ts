@@ -226,6 +226,27 @@ describe('nextSceneState', () => {
     const state = nextSceneState(null, snap, 0);
     expect(state.concludedByDeath).toBe(false);
   });
+
+  it('bursts at the hero cell on the snapshot the death conclusion first appears', () => {
+    const snap = snapshot({ heroX: 5, heroY: 6, completionType: 'died' });
+    const state = nextSceneState(null, snap, 0);
+    expect(state.effects).toContainEqual(
+      expect.objectContaining({ kind: 'death-burst', x: 5, y: 6 }),
+    );
+  });
+
+  it('does not repeat the hero death burst on later concluded snapshots', () => {
+    const snap = snapshot({ heroX: 5, heroY: 6, completionType: 'died' });
+    const first = nextSceneState(null, snap, 0);
+    const second = nextSceneState(first, snap, STEP_MS);
+    expect(second.effects.some((effect) => effect.kind === 'death-burst')).toBe(false);
+  });
+
+  it('does not burst for a non-death conclusion', () => {
+    const snap = snapshot({ heroX: 5, heroY: 6, completionType: 'broke-cycle' });
+    const state = nextSceneState(null, snap, 0);
+    expect(state.effects.some((effect) => effect.kind === 'death-burst')).toBe(false);
+  });
 });
 
 describe('nextSceneState facing', () => {

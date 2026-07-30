@@ -10,6 +10,7 @@ import { deriveActorStats, type DerivedStatModifier } from './attributes.js';
 import type { ClassicThemeSettings } from './generation-model.js';
 import { allocateIdentificationMap } from './identification.js';
 import type { ItemInstance } from './item-model.js';
+import { validateRequiredFloorLootTables } from './loot-placement.js';
 import { materializeMerchant } from './merchant-stock.js';
 import type { ActiveRun, OpaqueId, Point, Uint32State } from './model.js';
 import { createEncounterRunDecisions } from './population-gates.js';
@@ -172,6 +173,9 @@ export function createNewRun(
 ): ActiveRun {
   const { pack, seed, hero } = input;
   if (!isNonZeroState(seed)) throw new RangeError('run seed must not be all zero');
+  // Pack-only preflight, run once here rather than per command: a pack missing one of the
+  // engine-required floor loot tables must fail at run creation, not on the first descent.
+  validateRequiredFloorLootTables(pack);
   const balance = balanceEntry(pack);
   const heroStats = deriveActorStats({
     attributes: hero.attributes,

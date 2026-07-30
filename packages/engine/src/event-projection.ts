@@ -169,8 +169,16 @@ export function projectDomainEvents(
     }
   };
   const output: PublicEvent[] = [];
-  let pendingDamageType: DamageType = 'physical';
+  /**
+   * The damage type of the `attack.hit` whose `actor.damaged` has not been seen yet. Armed only by
+   * a hit on the hero that actually landed damage, and cleared by the very next event whatever it
+   * is, so an absorbed hit -- or any gap between the hit and the damage -- can never colour a
+   * later `hero.damaged` from starvation or a condition tick.
+   */
+  let pendingDamageType: DamageType | null = null;
   for (const event of input.events) {
+    const carriedDamageType = pendingDamageType;
+    pendingDamageType = null;
     switch (event.type) {
       case 'hero.moved':
       case 'hero.waited':
@@ -183,7 +191,11 @@ export function projectDomainEvents(
       case 'attack.missed': {
         const attackerVisible = actorVisible(event.actorId);
         const targetVisible = actorVisible(event.targetActorId);
-        if (event.type === 'attack.hit' && event.targetActorId === hero.actorId)
+        if (
+          event.type === 'attack.hit' &&
+          event.targetActorId === hero.actorId &&
+          event.effectiveDamage > 0
+        )
           pendingDamageType = event.damageType;
         if (attackerVisible && targetVisible) {
           const attackerName = actorName(event.actorId);
@@ -208,9 +220,8 @@ export function projectDomainEvents(
           output.push({
             type: 'hero.damaged',
             amount: event.amount,
-            damageType: pendingDamageType,
+            damageType: carriedDamageType ?? 'physical',
           });
-          pendingDamageType = 'physical';
         } else if (actorVisible(event.actorId) && actorVisible(event.sourceActorId))
           output.push(event);
         else if (actorVisible(event.actorId))

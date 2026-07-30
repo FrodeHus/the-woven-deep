@@ -187,7 +187,7 @@ export class ServerPlaySession {
       if (stored.contentHash !== this.pack.hash) {
         throw new ContentHashMismatchError(this.pack.hash, stored.contentHash);
       }
-      this.run = decodeActiveRun(stored.runBlob);
+      this.run = decodeActiveRun(stored.runBlob, this.pack);
     } else {
       const hero = input.hero ?? DEFAULT_GUEST_HERO;
       // Anti-cheat run-start guard: until profile hero-customization (chargen go-live) lands, a
