@@ -16,7 +16,7 @@ import {
 } from './population-runtime.js';
 import { entryById, requireEncounter, requireItem } from './content-index.js';
 import { compareCodeUnits } from './stable-json.js';
-import type { DungeonFeature } from './feature-model.js';
+import type { DoorFeature, DungeonFeature } from './feature-model.js';
 import { parseEffectParameters } from './parameter-contracts.js';
 
 const ZERO_MODIFIERS: PopulationCombatModifiers = { accuracy: 0, defense: 0, damage: 0 };
@@ -49,10 +49,31 @@ function synchronizeDeath(population: BossPopulation, actor: ActorState): BossPo
   return sharedSynchronizeDeath(population, actor.health <= 0 ? [actor.actorId] : []);
 }
 
+/**
+ * A door's `lock` is present if and only if its state is `locked` (the save schema cross-checks
+ * both ways), so an arena mutation cannot simply carry the old payload across a state change: an
+ * open/closed result drops the lock the way `unlockedDoor` does, and a `locked` result needs lock
+ * data that only the door itself can supply. Nothing mints one here -- a difficulty invented at
+ * mutation time would be an unauthored balance number -- so relocking a door that never carried a
+ * lock is refused outright, before the mutation can publish an unsavable run.
+ */
+function mutatedDoor(feature: DoorFeature, state: 'open' | 'closed' | 'locked'): DoorFeature {
+  if (state === 'locked') {
+    if (feature.lock === undefined) {
+      throw new Error(
+        `internal invariant: boss arena door ${feature.featureId} cannot be locked without lock data`,
+      );
+    }
+    return { ...feature, state, lock: feature.lock };
+  }
+  const { lock: _lock, ...rest } = feature;
+  return { ...rest, state };
+}
+
 function mutatedFeature(feature: DungeonFeature, state: string): DungeonFeature | null {
-  if (feature.type === 'door' && state === 'door.open') return { ...feature, state: 'open' };
-  if (feature.type === 'door' && state === 'door.closed') return { ...feature, state: 'closed' };
-  if (feature.type === 'door' && state === 'door.locked') return { ...feature, state: 'locked' };
+  if (feature.type === 'door' && state === 'door.open') return mutatedDoor(feature, 'open');
+  if (feature.type === 'door' && state === 'door.closed') return mutatedDoor(feature, 'closed');
+  if (feature.type === 'door' && state === 'door.locked') return mutatedDoor(feature, 'locked');
   if (feature.type === 'trap' && state === 'trap.armed') return { ...feature, state: 'armed' };
   if (feature.type === 'trap' && state === 'trap.disabled')
     return { ...feature, state: 'disabled' };
