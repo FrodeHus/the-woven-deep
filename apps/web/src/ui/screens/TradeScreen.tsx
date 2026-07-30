@@ -155,7 +155,7 @@ export function TradeScreen({
   const session = trade(snapshot);
   const pack = usePack();
   const [focusedList, setFocusedList] = useState<FocusedList>('buy');
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [storedIndex, setSelectedIndex] = useState(0);
   // Set only for services whose `targetItemIds` is non-empty (e.g. identify): opening the picker
   // replaces the immediate dispatch with an inline target list. A service with no eligible
   // targets (or the targetless strongbox) never touches this state.
@@ -164,19 +164,26 @@ export function TradeScreen({
   const containerRef = useRef<HTMLDivElement>(null);
 
   // `onOpenChange` reads the picker state through a ref so the `Dialog`'s Escape close always sees
-  // the current value regardless of when Base UI captured the handler.
+  // the current value regardless of when Base UI captured the handler. Mirrored after commit rather
+  // than while rendering -- Escape arrives as a DOM event, always later than that.
   const pickerServiceIdRef = useRef<MerchantServiceId | null>(pickerServiceId);
-  pickerServiceIdRef.current = pickerServiceId;
+  useEffect(() => {
+    pickerServiceIdRef.current = pickerServiceId;
+  }, [pickerServiceId]);
 
   const pickerService =
     pickerServiceId === null
       ? null
       : (session?.services.find((entry) => entry.serviceId === pickerServiceId) ?? null);
 
+  // The trade view is re-derived inside the memo instead of depending on `session` above: `snapshot`
+  // is the actual input (`trade` is a pure projection read of it), and keying on it is what lets the
+  // memoization survive -- a locally derived object as a dependency does not.
   const rows = useMemo((): Readonly<Record<FocusedList, readonly TradeRow[]>> => {
-    if (!session) return { buy: [], sell: [], services: [] };
+    const view = trade(snapshot);
+    if (!view) return { buy: [], sell: [], services: [] };
     return {
-      buy: session.stock.map((entry) => {
+      buy: view.stock.map((entry) => {
         const badge = spellBadge(pack, entry.item.contentId);
         return {
           id: entry.item.itemId,
@@ -187,14 +194,14 @@ export function TradeScreen({
           run: () => onDispatch({ type: 'trade-buy', itemId: entry.item.itemId, quantity: 1 }),
         };
       }),
-      sell: session.saleOffers.map((entry) => ({
+      sell: view.saleOffers.map((entry) => ({
         id: entry.itemId,
         name: backpackItemName(snapshot, entry.itemId),
         quantity: entry.quantity,
         price: `${entry.unitPrice}g`,
         run: () => onDispatch({ type: 'trade-sell', itemId: entry.itemId, quantity: 1 }),
       })),
-      services: session.services.map((entry) => ({
+      services: view.services.map((entry) => ({
         id: entry.serviceId,
         name: `${SERVICE_LABEL[entry.serviceId]} (${entry.remainingUses} left)`,
         price: `${entry.unitPrice}g`,
@@ -211,9 +218,19 @@ export function TradeScreen({
         },
       })),
     };
-  }, [session, snapshot, onDispatch, pack]);
+  }, [snapshot, onDispatch, pack]);
 
   const activeRows = rows[focusedList];
+
+  // A dispatch (e.g. selling the last offer) can shorten the active side under the stored selection,
+  // so the effective selection is clamped while rendering rather than written back from the focus
+  // effect below: it is a pure function of the stored index and the current row count, and deriving
+  // it keeps the highlight on a real row from the very render that shortened the list. The arrow keys
+  // clamp on write as well, so the stored index never outlives a row count it was valid for -- a
+  // shrink followed by a regrow must not put the selection back on the row it used to be on.
+  const clampIndex = (index: number): number =>
+    activeRows.length > 0 ? Math.max(0, Math.min(index, activeRows.length - 1)) : index;
+  const selectedIndex = clampIndex(storedIndex);
 
   // Keeps DOM focus on whichever listbox owns keyboard selection: the container while the picker is
   // open (so its `onKeyDown` drives the picker), otherwise the active side's listbox. Runs on first
@@ -225,9 +242,6 @@ export function TradeScreen({
     const root = containerRef.current;
     if (!root) return;
     focusActiveList(root, pickerServiceId !== null ? null : LIST_LABEL[focusedList]);
-    if (activeRows.length > 0) {
-      setSelectedIndex((index) => Math.max(0, Math.min(index, activeRows.length - 1)));
-    }
   }, [focusedList, pickerServiceId, activeRows.length]);
 
   function switchList(next: FocusedList): void {
@@ -271,7 +285,9 @@ export function TradeScreen({
       event.preventDefault();
       event.stopPropagation();
       const delta = event.key === 'ArrowDown' ? 1 : -1;
-      setSelectedIndex((index) => (index + delta + activeRows.length) % activeRows.length);
+      setSelectedIndex(
+        (index) => (clampIndex(index) + delta + activeRows.length) % activeRows.length,
+      );
       return;
     }
     if (event.key === 'Enter') {

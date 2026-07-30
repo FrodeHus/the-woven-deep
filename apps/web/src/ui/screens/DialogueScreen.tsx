@@ -1,4 +1,4 @@
-import { useMemo, useState, type JSX } from 'react';
+import { useState, type JSX } from 'react';
 import type { CompiledContentPack, DialogueTopic } from '@woven-deep/content';
 import type { GameplayProjection } from '@woven-deep/engine';
 import { dialogueById, npcById } from '@woven-deep/session-core';
@@ -60,11 +60,11 @@ export function DialogueScreen({
   const npc = npcActor?.contentId ? npcById(pack, npcActor.contentId) : undefined;
   const dialogue = npc?.dialogueId ? dialogueById(pack, npc.dialogueId) : undefined;
 
-  const initialRevealed = useMemo(
-    () => (dialogue ? greetingTopicIds(dialogue.topics) : new Set<string>()),
-    [dialogue],
+  // Seeded lazily rather than memoized: the greeting topics are only ever read as this mount's
+  // initial `revealed` set, so computing them on later renders would be wasted work either way.
+  const [revealed, setRevealed] = useState<ReadonlySet<string>>(() =>
+    dialogue ? greetingTopicIds(dialogue.topics) : new Set<string>(),
   );
-  const [revealed, setRevealed] = useState<ReadonlySet<string>>(initialRevealed);
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
   const [lastResponse, setLastResponse] = useState<string | null>(null);
 

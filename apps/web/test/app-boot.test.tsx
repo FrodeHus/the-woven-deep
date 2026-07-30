@@ -806,6 +806,53 @@ describe('App identity/account — ProfileSession routing', () => {
     );
   });
 
+  it('signing out from the title while the connect is still in flight tears down the session that lands in between', async () => {
+    const user = userEvent.setup();
+    const { createSocket, sockets } = profileSocketFactory();
+    // The server's logout reply is held open, so the teardown runs strictly after the connect below
+    // resolves -- the ordering the sign-out click's own closure cannot see.
+    let releaseLogout: (() => void) | undefined;
+    const fetcher = vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('/api/auth/logout')) {
+        return new Promise<Response>((resolveLogout) => {
+          releaseLogout = () =>
+            resolveLogout(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+        });
+      }
+      return Promise.resolve(new Response(JSON.stringify(pack), { status: 200 }));
+    }) as unknown as typeof fetch;
+
+    render(
+      <App
+        fetcher={fetcher}
+        storage={fakeStorage()}
+        accountOverride={SIGNED_IN_ACCOUNT}
+        createSocket={createSocket}
+      />,
+    );
+
+    // The handshake is deliberately unanswered, so `App` still has no session at all and the title
+    // screen (with its "Sign out" entry) is what the player is looking at.
+    await waitFor(() => expect(sockets.length).toBe(1));
+    const socket = sockets[0]!;
+    await user.click(await screen.findByRole('option', { name: /sign out/i }));
+    await waitFor(() => expect(releaseLogout).toBeDefined());
+
+    // Now the connect completes: play mounts on a `ProfileSession` the sign-out click never saw.
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    socket.emit(HELLO);
+    socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
+    await screen.findByRole('img', { name: /dungeon/i });
+
+    releaseLogout!();
+
+    // The teardown must find that session anyway -- otherwise the WS survives a sign-out and the
+    // player is stranded on a play screen no account backs any more.
+    await waitFor(() => expect(socket.readyState).toBe(3));
+    expect(await screen.findByRole('option', { name: /enter the deep/i })).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /dungeon/i })).not.toBeInTheDocument();
+  });
+
   it('a failed account delete (from the in-play settings overlay) does not tear down to guest', async () => {
     const user = userEvent.setup();
     const { createSocket, sockets } = profileSocketFactory();

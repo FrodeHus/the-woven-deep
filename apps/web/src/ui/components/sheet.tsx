@@ -70,13 +70,14 @@ function SheetContent({
 }: SheetContentProps) {
   // Unlike `Dialog.Popup`, `DrawerPrimitive.Popup`'s own default return-focus tracking does not
   // reliably restore focus to the element that was focused before the sheet opened (observed: it
-  // lands on `<body>` on close instead). Captured synchronously during this component's first
-  // render -- before any mount effect (the sheet's own initial-focus effect included) can move
-  // focus -- so it always holds whatever was focused immediately before the sheet opened.
-  const previouslyFocusedRef = React.useRef<HTMLElement | null>(null);
-  if (previouslyFocusedRef.current === null && typeof document !== 'undefined') {
-    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
-  }
+  // lands on `<body>` on close instead). The state initializer captures it synchronously during this
+  // component's first render -- before any mount effect (the sheet's own initial-focus effect
+  // included) can move focus -- so the handle it hands to `finalFocus` always holds whatever was
+  // focused immediately before the sheet opened.
+  const [previouslyFocusedRef] = React.useState<React.RefObject<HTMLElement | null>>(() => ({
+    current:
+      typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null,
+  }));
   return (
     <SheetPortal>
       <SheetOverlay />

@@ -11,7 +11,7 @@ import { deleteAccount, logout, playWsUrl } from './api.js';
 import { GUEST_ACCOUNT, type AccountState } from './session/account.js';
 import { loadSightings } from './session/codex.js';
 import type { LogLine } from './session/event-log.js';
-import { GuestSession } from './session/guest-session.js';
+import { GuestSession, type SessionNotice } from './session/guest-session.js';
 import { ProfileSession } from './session/profile-session.js';
 import type { RunSession } from './session/run-session.js';
 import { clearGuestSession } from './session/clear-guest-session.js';
@@ -176,8 +176,11 @@ function GameRoot({
   onboardingEnabled,
 }: GameRootProps): JSX.Element {
   const snapshot = useRunSession(session);
-  const [dismissed, setDismissed] = useState(false);
   const { notice, conclusion } = snapshot;
+  /** The notice the player dismissed, held by identity so a NEW notice is shown again without an
+   * effect having to reset a boolean: the banner is dismissed only while this IS the live notice. */
+  const [dismissedNotice, setDismissedNotice] = useState<SessionNotice | null>(null);
+  const dismissed = notice !== null && dismissedNotice === notice;
   const finalizedRef = useRef(false);
   /** Set the instant a DEATH conclusion finalizes, holding the exact `onConcluded` arguments until
    * the player acknowledges the `DeathOverlay` -- the run is already finalized (the Hall write
@@ -189,10 +192,13 @@ function GameRoot({
     logTail: readonly LogLine[];
   } | null>(null);
 
-  useEffect(() => {
-    setDismissed(false);
-  }, [notice]);
-
+  // `set-state-in-effect` is disabled for this effect alone: finalizing is an imperative, exactly-
+  // once side effect (it writes the Hall record through the repository), and the death branch has to
+  // publish that call's own return value -- the projection and log tail the `DeathOverlay` shows --
+  // back into React. `finalizedRef` makes it a genuine one-shot, so there is no cascade to avoid,
+  // and there is no render-time derivation available for a value that only exists once the
+  // side-effecting call has run.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (conclusion === null || finalizedRef.current) return;
     finalizedRef.current = true;
@@ -225,6 +231,7 @@ function GameRoot({
       }
     }
   }, [conclusion, onConcluded, onFinalizeError, portraitGlyph, repository, session, snapshot]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const dismissibleNotice = notice && !isStorageNotice(notice) ? notice : null;
   const storageNotice = notice && isStorageNotice(notice) ? notice : null;
@@ -259,7 +266,7 @@ function GameRoot({
               <p>{noticeMessage(dismissibleNotice)}</p>
               <button
                 type="button"
-                onClick={() => setDismissed(true)}
+                onClick={() => setDismissedNotice(dismissibleNotice)}
                 className="shrink-0 text-muted underline-offset-2 hover:text-fg hover:underline"
               >
                 Dismiss
@@ -396,6 +403,13 @@ export function App({
   const router = useScreenRouter(quickstart);
   const { screen } = router;
   const [session, setSession] = useState<RunSession>();
+  // The live session, mirrored for `dropToGuest` below: the sign-out/delete teardown runs from a
+  // promise callback, long after the click that started it, so it must not decide against the
+  // session its closure happened to capture. Written after commit, never while rendering.
+  const sessionRef = useRef<RunSession | undefined>(undefined);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
   const [chargenSeed, setChargenSeed] = useState<Uint32State>();
   const [portraitGlyph, setPortraitGlyph] = useState<string>();
   const [conclusion, setConclusion] = useState<{
@@ -450,6 +464,11 @@ export function App({
   // `session` back to undefined and the screen to 'title', silently constructing a hidden
   // `GuestSession` that re-persists storage (its constructor syncs sightings on its own) and breaks
   // the wipe contract on quickstart boots.
+  // `set-state-in-effect` is disabled for this effect alone: constructing a `GuestSession` is a
+  // side effect (it reads and re-persists browser storage), so it cannot move into render, and the
+  // trigger is the content pack finishing its fetch rather than any user action -- there is no event
+  // handler to host it. The guards above make it a one-shot, so no cascade follows.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!pack || session) return;
     if (screen.screen !== 'play') return;
@@ -461,28 +480,46 @@ export function App({
         : new GuestSession({ pack, storage, localStorage: localStorageInstance }),
     );
   }, [pack, storage, session, screen, localStorageInstance]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
-  /** Signs the current profile out: logs out server-side, then flips `account` back to
-   * `GUEST_ACCOUNT` -- the effect below reacts to that transition by tearing down any live
-   * `ProfileSession` and returning to the title screen. Reused by both the title screen's
-   * "Sign out" menu entry and the in-play settings overlay's "Sign out" action (the only two
-   * places `App` ever offers signing out). */
+  /** Drops the profile back to guest: flips `account` to `GUEST_ACCOUNT` and, if a live
+   * `ProfileSession` is what the player was playing, tears it down and returns to the title screen
+   * (clearing `session` closes the underlying WS through the effect further below). The teardown
+   * lives here, in the two actions that can cause it, rather than in an effect watching
+   * `account.status` -- signing out and deleting the account are the only ways the status ever
+   * leaves `'signed-in'`, and doing it in the action keeps the whole transition one atomic update.
+   * A guest never has a `ProfileSession`, so the guest boot/play path is untouched.
+   *
+   * The `ProfileSession` check reads `sessionRef`, not the `session` this closure captured: both
+   * callers run this from a promise callback, and a `ProfileSession.connect` that resolves between
+   * the click and the server's reply would otherwise be missed -- the WS would survive the sign-out
+   * with the player left on a play screen no longer backed by an account. */
+  function dropToGuest(): void {
+    setAccount(GUEST_ACCOUNT);
+    if (!(sessionRef.current instanceof ProfileSession)) return;
+    setSession(undefined);
+    setProfileError(undefined);
+    closeOverlay();
+    router.toTitle();
+  }
+
+  /** Signs the current profile out: logs out server-side, then drops back to guest (see
+   * `dropToGuest`). Reused by both the title screen's "Sign out" menu entry and the in-play
+   * settings overlay's "Sign out" action (the only two places `App` ever offers signing out). */
   function handleSignOut(): void {
-    void logout(account.csrfToken ?? '', fetcher).then(() => setAccount(GUEST_ACCOUNT));
+    void logout(account.csrfToken ?? '', fetcher).then(() => dropToGuest());
   }
 
   /** Permanently deletes the signed-in profile: calls `DELETE /api/profile` server-side, then
-   * flips `account` back to `GUEST_ACCOUNT` -- reusing the exact same sign-out teardown
-   * (`handleSignOut`'s effect above tears down the live `ProfileSession` and returns to the title
-   * screen on that same transition), since after a delete there is nothing left to stay
-   * connected to either. Only ever wired up for a signed-in `ProfileSession` run (see the
-   * `onDeleteAccount` prop below). If the server delete fails (network/5xx), `deleteAccount`
+   * reuses the exact same sign-out teardown (`dropToGuest`), since after a delete there is nothing
+   * left to stay connected to either. Only ever wired up for a signed-in `ProfileSession` run (see
+   * the `onDeleteAccount` prop below). If the server delete fails (network/5xx), `deleteAccount`
    * rejects and the tear-down never runs -- the account stays signed in and the failure is
    * surfaced through `profileError`, the same signed-in-action-failed banner the boot-time
    * `ProfileSession.connect` rejection above uses. */
   function handleDeleteAccount(): void {
     void deleteAccount(account.csrfToken ?? '', fetcher)
-      .then(() => setAccount(GUEST_ACCOUNT))
+      .then(() => dropToGuest())
       .catch((thrown) => {
         setProfileError(thrown instanceof Error ? thrown.message : 'Failed to delete the account.');
       });
@@ -534,24 +571,6 @@ export function App({
     // regardless.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pack, account.status, session, profileError, createSocket]);
-
-  /** Tears down a signed-in profile's live `ProfileSession` on sign-out: reacts to `account.status`
-   * leaving `'signed-in'` (the only way `handleSignOut` above changes it) by clearing `session`
-   * (the effect below closes the underlying WS as its cleanup) and returning to the title screen --
-   * a no-op for a guest (whose `session`, if any, is a `GuestSession`, never a `ProfileSession`), so
-   * this never touches the guest boot/play path. */
-  useEffect(() => {
-    if (account.status === 'signed-in') return;
-    if (!(session instanceof ProfileSession)) return;
-    setSession(undefined);
-    setProfileError(undefined);
-    closeOverlay();
-    router.toTitle();
-    // Only re-run on an account-status transition; `session`/`router` (read above) are read fresh
-    // at that moment (mirrors `useSettingsRoaming`'s roam-on-sign-in effect, which does the same
-    // for its own one-shot).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account.status]);
 
   /** Closes the underlying `/ws/play` connection whenever `session` stops being the live
    * `ProfileSession` -- covers both the sign-out teardown above and the component unmounting
