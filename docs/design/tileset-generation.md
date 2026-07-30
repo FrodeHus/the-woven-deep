@@ -123,6 +123,24 @@ ROW LAYOUT — ANIMATION SHEET:
   so partial sheets are safe to ship).
 ```
 
+## Start from the template
+
+Free-form generation drifts off the 128px pitch often enough that a supplied structural template
+raises the hit rate. Generate one and feed it back to the generator in image-edit (img2img) mode
+instead of starting from a blank prompt:
+
+```bash
+python3 tools/make-template.py --sheet tiles
+```
+
+Attach `template-tiles.png` as the edit-mode source image alongside the prompt above, with an
+instruction such as "paint one sprite per cell, keep every sprite inside its cell's inner guide
+box, do not paint over or remove the magenta guide lines, leave unused cells untouched." The guide
+lines are drawn in a near-magenta that `key-tilesheet.py` strips along with the background, so they
+never survive into the keyed sheet — they only exist to anchor the model's grid. This raises the
+hit rate but does not replace verification: the measured slicer (`slice-tilesheet.py`) remains the
+safety net for whatever the generator actually produces.
+
 ## Import pipeline
 
 Generators cannot emit alpha, so the sheet arrives with a solid magenta background. Transparency is
