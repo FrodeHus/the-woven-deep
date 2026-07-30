@@ -15,11 +15,13 @@ export function useListNavigation(length: number): {
   readonly handleArrowKeys: (event: ReactKeyboardEvent) => boolean;
 } {
   const itemRefs = useRef<(HTMLElement | null)[]>([]);
-  const [selectedIndex, setSelectedIndexState] = useState(0);
+  const [storedIndex, setStoredIndexState] = useState(0);
 
-  useEffect(() => {
-    if (selectedIndex >= length && length > 0) setSelectedIndexState(length - 1);
-  }, [length, selectedIndex]);
+  // The list can shrink under a stored index (e.g. selling the last offer), so the effective
+  // selection is clamped while rendering rather than written back through an effect: the clamp is a
+  // pure function of the stored index and the current length, and deriving it keeps the selection
+  // valid on the very render that shortened the list.
+  const selectedIndex = length > 0 ? Math.min(storedIndex, length - 1) : storedIndex;
 
   // Refocus the current option whenever the selection moves OR the list itself changes. The
   // `length` dependency matters when an action removes the focused option (e.g. selling the
@@ -30,7 +32,7 @@ export function useListNavigation(length: number): {
     itemRefs.current[selectedIndex]?.focus();
   }, [selectedIndex, length]);
 
-  const setSelectedIndex = (index: number): void => setSelectedIndexState(index);
+  const setSelectedIndex = (index: number): void => setStoredIndexState(index);
 
   const registerItem =
     (index: number) =>
@@ -42,12 +44,12 @@ export function useListNavigation(length: number): {
     if (length === 0) return false;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setSelectedIndexState((index) => (index + 1) % length);
+      setStoredIndexState((selectedIndex + 1) % length);
       return true;
     }
     if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setSelectedIndexState((index) => (index - 1 + length) % length);
+      setStoredIndexState((selectedIndex - 1 + length) % length);
       return true;
     }
     return false;

@@ -80,7 +80,7 @@ export function HouseScreen({ snapshot, onDispatch, onClose }: HouseScreenProps)
   };
 
   const keyHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {});
-  keyHandlerRef.current = (event: KeyboardEvent) => {
+  const keyHandler = (event: KeyboardEvent): void => {
     if (event.key === 'Tab') {
       event.preventDefault();
       event.stopPropagation();
@@ -107,6 +107,12 @@ export function HouseScreen({ snapshot, onDispatch, onClose }: HouseScreenProps)
     // once. That dismiss listener stops the native event there, so `PlayScreen`'s window-level key
     // dispatcher never sees it and can't dispatch a second close.
   };
+
+  // The window listener below is attached once, so it reaches the current render's handler through a
+  // ref -- mirrored here after commit (never while rendering), which is soon enough for a keystroke.
+  useEffect(() => {
+    keyHandlerRef.current = keyHandler;
+  });
 
   // Capture phase: runs before the event reaches any focused descendant (or `document`'s own
   // Escape-dismiss listener), so it works regardless of where DOM focus currently is.

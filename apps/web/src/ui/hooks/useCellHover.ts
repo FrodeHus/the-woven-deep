@@ -92,17 +92,22 @@ export interface UseCellHoverResult {
  */
 export function useCellHover(snapshot: SessionSnapshot): UseCellHoverResult {
   const { projection } = snapshot;
-  const [hover, setHover] = useState<CellHover>(null);
-  const lastCellRef = useRef<string | null>(null);
+  // The hover is stamped with the snapshot it was resolved from, so a published turn clears it by
+  // comparison while rendering instead of through an effect that writes state: a hover belonging to
+  // a superseded snapshot simply reads as no hover.
+  const [resolved, setResolved] = useState<{
+    readonly snapshot: SessionSnapshot;
+    readonly hover: CellHover;
+  } | null>(null);
+  const hover = resolved !== null && resolved.snapshot === snapshot ? resolved.hover : null;
+  // The last cell the pointer was reported over, likewise stamped: a new snapshot must let the same
+  // cell resolve again (its contents may have changed) rather than being deduplicated away.
+  const lastCellRef = useRef<{ snapshot: SessionSnapshot; key: string } | null>(null);
 
   const clear = useCallback((): void => {
-    setHover(null);
+    setResolved(null);
     lastCellRef.current = null;
   }, []);
-
-  useEffect(() => {
-    clear();
-  }, [snapshot, clear]);
 
   useEffect(() => {
     window.addEventListener('scroll', clear, true);
@@ -116,18 +121,19 @@ export function useCellHover(snapshot: SessionSnapshot): UseCellHoverResult {
         return;
       }
       const key = `${cell.x},${cell.y}`;
-      if (lastCellRef.current === key) return;
-      lastCellRef.current = key;
+      const last = lastCellRef.current;
+      if (last !== null && last.key === key && last.snapshot === snapshot) return;
+      lastCellRef.current = { snapshot, key };
 
       const actor = actorAtCell(projection, cell.x, cell.y);
       if (actor) {
-        setHover({ kind: 'actor', actor });
+        setResolved({ snapshot, hover: { kind: 'actor', actor } });
         return;
       }
       const asset = assetAtCell(projection, cell.x, cell.y);
-      setHover(asset ? { kind: 'asset', asset } : null);
+      setResolved({ snapshot, hover: asset ? { kind: 'asset', asset } : null });
     },
-    [projection, clear],
+    [projection, snapshot, clear],
   );
 
   return { hover, hoverAtCell };

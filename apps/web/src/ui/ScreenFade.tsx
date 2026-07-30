@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type JSX, type ReactNode } from 'react';
+import { useEffect, useState, type JSX, type ReactNode } from 'react';
 
 /** Total fade-through-dark duration: ~220ms fading to `--ground`, ~220ms fading back out --
  * matches the `screen-fade` keyframes in `styles.css` (kept in sync by
@@ -56,23 +56,33 @@ export function ScreenFade({
   reducedMotion,
   children,
 }: ScreenFadeProps): JSX.Element {
-  const previousKeyRef = useRef(transitionKey);
-  const [fading, setFading] = useState(false);
+  // The last key the fade has finished playing for. A `transitionKey` that differs from it IS the
+  // fade -- derived while rendering, so the overlay mounts on the very render the key changes rather
+  // than a render later, and nothing has to write state from inside an effect to start it.
+  const [settledKey, setSettledKey] = useState(transitionKey);
+  const fading = !reducedMotion && settledKey !== transitionKey;
 
+  // Settling the key ends the fade. Under reduced motion nothing was ever rendered, so the key is
+  // settled on the next tick instead (a fade that is never shown must not become a pending fade if
+  // the reduced-motion setting is turned off later).
   useEffect(() => {
-    if (previousKeyRef.current === transitionKey) return undefined;
-    previousKeyRef.current = transitionKey;
-    if (reducedMotion) return undefined;
-    setFading(true);
-    const timeout = setTimeout(() => setFading(false), SCREEN_FADE_MS);
+    if (settledKey === transitionKey) return undefined;
+    const timeout = setTimeout(
+      () => setSettledKey(transitionKey),
+      reducedMotion ? 0 : SCREEN_FADE_MS,
+    );
     return () => clearTimeout(timeout);
-  }, [transitionKey, reducedMotion]);
+  }, [settledKey, transitionKey, reducedMotion]);
 
   return (
     <>
       {children}
       {fading && (
-        <div aria-hidden="true" className="screen-fade" onAnimationEnd={() => setFading(false)} />
+        <div
+          aria-hidden="true"
+          className="screen-fade"
+          onAnimationEnd={() => setSettledKey(transitionKey)}
+        />
       )}
     </>
   );

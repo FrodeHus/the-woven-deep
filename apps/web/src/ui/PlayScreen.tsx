@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type JSX } from 'react';
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { HeartLineageRecord, Point, StoredHallRecord } from '@woven-deep/engine';
 import type { RunSession } from '../session/run-session.js';
@@ -123,10 +123,13 @@ export function PlayScreen({
   // `activeHintRef` mirrors it into a ref purely so the key-dispatcher effect below (whose own
   // dependency array must stay stable across every snapshot publish, not just hint changes) can
   // read the CURRENT hint id without re-attaching the window listener on every keystroke's worth
-  // of state change.
+  // of state change. The mirroring happens after commit, never while rendering; the dispatcher only
+  // reads it from inside a key event, which is always later than that.
   const hint = activeHint(snapshot.onboarding, HINTS, projection, snapshot, onboardingEnabled);
   const activeHintRef = useRef<string | null>(null);
-  activeHintRef.current = hint?.id ?? null;
+  useEffect(() => {
+    activeHintRef.current = hint?.id ?? null;
+  }, [hint]);
 
   const targeting = useSpellTargeting(session, snapshot);
 
