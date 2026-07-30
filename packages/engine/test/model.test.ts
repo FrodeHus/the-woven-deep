@@ -74,6 +74,102 @@ describe('engine model boundary', () => {
     ).toThrow(/actors\.1\.actorId.*strictly increasing/i);
   });
 
+  describe('door tile coverage', () => {
+    const DOOR_X = 3;
+    const DOOR_Y = 2;
+
+    /** The demo floor with its interior pillar retiled as a closed door. */
+    function runWithDoorTile(): ReturnType<typeof createDemoRun> {
+      const run = createDemoRun();
+      const floor = run.floors[0]!;
+      const tiles = [...floor.tiles];
+      tiles[DOOR_Y * floor.width + DOOR_X] = 2;
+      return { ...run, floors: [{ ...floor, tiles }] };
+    }
+
+    const door = {
+      featureId: 'feature.demo.door',
+      floorId: 'floor.demo',
+      x: DOOR_X,
+      y: DOOR_Y,
+      contentId: null,
+      coverTileId: 2 as const,
+      type: 'door' as const,
+      state: 'closed' as const,
+    };
+
+    /** A vault placement covering the door cell, plus a slot of the given kind on it. */
+    function withSlot(
+      run: ReturnType<typeof createDemoRun>,
+      kind: 'fixture' | 'chest' = 'fixture',
+    ): ReturnType<typeof createDemoRun> {
+      const floor = run.floors[0]!;
+      return {
+        ...run,
+        floors: [
+          {
+            ...floor,
+            vaults: [
+              {
+                placementId: 'placement.demo',
+                vaultId: 'vault.demo',
+                x: 2,
+                y: 1,
+                width: 3,
+                height: 3,
+                rotation: 0 as const,
+                reflected: false,
+                entrances: [],
+              },
+            ],
+            placementSlots: [
+              {
+                slotId: 'slot.demo.house-door',
+                vaultPlacementId: 'placement.demo',
+                kind,
+                required: true,
+                tags: ['house-door'],
+                x: DOOR_X,
+                y: DOOR_Y,
+              },
+            ],
+          },
+        ],
+      };
+    }
+
+    it('rejects a generated door tile with no door feature, naming the floor and cell', () => {
+      expect(() => validateActiveRun(runWithDoorTile())).toThrow(
+        /floors\.0\.tiles\.17.*door tile 3,2 on floor floor\.demo.*exactly one door feature/i,
+      );
+    });
+
+    it('accepts a door tile once a door feature covers it', () => {
+      const run = runWithDoorTile();
+      expect(() => validateActiveRun({ ...run, features: [door] })).not.toThrow();
+    });
+
+    it('accepts a featureless door tile a vault fixture slot covers', () => {
+      expect(() => validateActiveRun(withSlot(runWithDoorTile()))).not.toThrow();
+    });
+
+    it('rejects a featureless door tile whose covering slot is not a fixture', () => {
+      expect(() => validateActiveRun(withSlot(runWithDoorTile(), 'chest'))).toThrow(
+        /floors\.0\.tiles\.17.*door tile 3,2 on floor floor\.demo.*exactly one door feature/i,
+      );
+    });
+
+    it('rejects two door features stacked on one door tile', () => {
+      const run = runWithDoorTile();
+      expect(() =>
+        validateActiveRun({
+          ...run,
+          features: [door, { ...door, featureId: 'feature.demo.door-extra' }],
+        }),
+      ).toThrow(/floors\.0\.tiles\.17.*exactly one door feature/i);
+    });
+  });
+
   it('rejects duplicate item identifiers', () => {
     const run = createDemoRun();
     const item = {
