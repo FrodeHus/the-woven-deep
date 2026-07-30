@@ -60,7 +60,7 @@ entries:
     }
   });
 
-  it('rejects schema v4 after the schema-v8 upgrade', () => {
+  it('rejects superseded schema v4 as an unsupported envelope version', () => {
     expect(() =>
       parseContentFile({ path: 'legacy.yaml', source: 'schemaVersion: 4\nentries: []\n' }),
     ).toThrow(/expected 9/i);
@@ -73,17 +73,17 @@ entries:
       }),
     ).toThrow(/legacy\.yaml.*schemaVersion.*expected 9/i);
   });
-  it('rejects schema v5 after the schema-v8 upgrade', () => {
+  it('rejects superseded schema v5 as an unsupported envelope version', () => {
     expect(() =>
       parseContentFile({ path: 'legacy.yaml', source: 'schemaVersion: 5\nentries: []\n' }),
     ).toThrow(/schema version|schemaVersion/i);
   });
-  it('rejects schema v6 after the schema-v8 upgrade', () => {
+  it('rejects superseded schema v6 as an unsupported envelope version', () => {
     expect(() =>
       parseContentFile({ path: 'legacy.yaml', source: 'schemaVersion: 6\nentries: []\n' }),
     ).toThrow(/schema version|schemaVersion/i);
   });
-  it('rejects schema v7 after the schema-v8 upgrade', () => {
+  it('rejects superseded schema v7 as an unsupported envelope version', () => {
     expect(() =>
       parseContentFile({ path: 'legacy.yaml', source: 'schemaVersion: 7\nentries: []\n' }),
     ).toThrow(/schema version|schemaVersion/i);

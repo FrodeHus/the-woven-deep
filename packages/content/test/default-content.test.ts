@@ -196,7 +196,7 @@ describe('bundled content', () => {
     });
   });
 
-  it('ships schema-v8 run-record content: achievements, score coefficients, and monster threat', async () => {
+  it('ships run-record content: achievements, score coefficients, and monster threat', async () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
