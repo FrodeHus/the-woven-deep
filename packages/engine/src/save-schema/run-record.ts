@@ -1454,6 +1454,12 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                     (entry) =>
                       entry.type === 'reaction.triggered' &&
                       entry.targetActorId === run.hero.actorId,
+                  ) ??
+                  // Bump-to-open: a move into a closed door resolves as opening it (see
+                  // `bumpedClosedDoor` in actions.ts), so the move is satisfied by `door.opened`
+                  // and the hero stays put.
+                  recordValue.events.find(
+                    (entry) => entry.type === 'door.opened' && entry.actorId === run.hero.actorId,
                   ))
                 : recordValue.command.type === 'attack'
                   ? recordValue.events.find(
@@ -1673,6 +1679,13 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           eventValue.to.y,
           `${path}.events.0.to`,
         );
+      } else if (
+        recordValue.command.type === 'move' &&
+        eventValue.type === 'door.opened' &&
+        eventValue.actorId === run.hero.actorId
+      ) {
+        // Bump-to-open: the hero opens the door instead of entering the cell, so there is no
+        // destination to check -- the resulting door geometry lives on the feature.
       } else if (
         recordValue.command.type === 'move' &&
         eventValue.type === 'reaction.triggered' &&
@@ -1909,6 +1922,9 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
               recordValue.events.find(
                 (entry) =>
                   entry.type === 'reaction.triggered' && entry.targetActorId === run.hero.actorId,
+              ) ??
+              recordValue.events.find(
+                (entry) => entry.type === 'door.opened' && entry.actorId === run.hero.actorId,
               )!)
             : (recordValue.events.find(
                 (entry) =>
@@ -2115,7 +2131,9 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     if (
       eventValue.type === 'attack.hit' ||
       eventValue.type === 'attack.missed' ||
-      eventValue.type === 'reaction.triggered'
+      eventValue.type === 'reaction.triggered' ||
+      // Bump-to-open leaves the hero where it stood, so the retained position chain is unchanged.
+      eventValue.type === 'door.opened'
     )
       continue;
     if (eventValue.type !== 'hero.moved')
