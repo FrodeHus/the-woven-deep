@@ -121,6 +121,25 @@ reused by the renderer for the whole category with per-spell tinting — do NOT 
 - **Row 7 — currency & misc:** Gold coins (small loose pile — ground-loot rendering for
   currency); Gold pouch (tied pouch — larger amounts); 6 reserved.
 
+## Start from the template
+
+Hand-laid grids drift more than tile sheets do, since these sheets are only "roughly" 8x8. A
+structural template still helps steer generation before the measured slicer has to clean up after
+it. Generate one per sheet and feed it back in image-edit (img2img) mode:
+
+```bash
+python3 tools/make-template.py --sheet actors
+python3 tools/make-template.py --sheet items
+```
+
+Attach the matching `template-actors.png` / `template-items.png` as the edit-mode source image
+with an instruction such as "paint one sprite per cell, keep every sprite inside its cell's inner
+guide box, do not paint over or remove the magenta guide lines, leave unused cells untouched." The
+guide lines are near-magenta and get stripped by `key-tilesheet.py` along with the background, so
+none of it survives into the keyed sheet. This raises the hit rate but does not replace
+verification: the measured slicer (`slice-tilesheet.py`) is grid-tolerant by design and remains the
+safety net regardless of how closely the generator followed the template.
+
 ## Import & mapping
 
 1. `python3 tools/key-tilesheet.py actors-raw.png apps/web/public/playfield/actors.png` (same for
