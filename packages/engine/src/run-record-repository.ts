@@ -1,3 +1,10 @@
+import {
+  applyArtifactDeltas as foldArtifactDeltas,
+  emptyArtifactLedger,
+  reconcileArtifactLedger,
+  type ArtifactDeltas,
+  type ArtifactLedger,
+} from './artifact-ledger.js';
 import type { OpaqueId } from './model.js';
 import type { DiscoveryProtectionBonus } from './population-gates.js';
 import type { FallenHeroStandingSnapshot } from './population-model.js';
@@ -149,6 +156,15 @@ export interface RunRecordRepository {
   recordHeart(record: HeartLineageRecord): void;
   lifetime(): LifetimeState;
   applyDeltas(deltas: LifetimeDeltas): void;
+  /** The profile's artifact ledger, already reconciled against the current standings. */
+  artifactLedger(): ArtifactLedger;
+  /**
+   * Folds one run's artifact stints onto the ledger — idempotent by `deltas.recordId` — and then
+   * reconciles, so an artifact whose holder just fell out of the Hall is released in the same
+   * call. Deltas must be applied BEFORE reconciling (see `reconcileArtifactLedger`), which is
+   * why this is a single repository operation rather than two.
+   */
+  applyArtifactDeltas(deltas: ArtifactDeltas): void;
 }
 
 /**
@@ -163,13 +179,25 @@ export interface RunRecordRepository {
 export function createInMemoryRunRecordRepository(): RunRecordRepository {
   const hall: StoredHallRecord[] = [];
   const appliedDeltaRecordIds = new Set<OpaqueId>();
+  const appliedArtifactRecordIds = new Set<OpaqueId>();
   let heart: HeartLineageRecord | null = null;
+  let artifactLedger: ArtifactLedger = emptyArtifactLedger();
   let lifetime: LifetimeState = {
     conqueredChampionRecordIds: [],
     grantedAchievementIds: [],
     discoveryProtection: [],
     totals: emptyRunMetrics(),
   };
+
+  /** Standings membership is what decides whether a lost artifact is released, so reconcile runs
+   * on every event that can change it: a Hall append, and each applied batch of artifact deltas. */
+  function reconcile(): void {
+    artifactLedger = reconcileArtifactLedger({
+      ledger: artifactLedger,
+      standings: standingsFromRecords(hall, MAX_STANDINGS),
+      lifetime,
+    });
+  }
 
   return {
     standings(limit) {
@@ -185,6 +213,7 @@ export function createInMemoryRunRecordRepository(): RunRecordRepository {
         );
       }
       hall.push(deepFreezeCopy(stored));
+      reconcile();
     },
     currentHeart() {
       return heart;
@@ -213,6 +242,15 @@ export function createInMemoryRunRecordRepository(): RunRecordRepository {
         ),
         totals: mergeMetrics(lifetime.totals, deltas.metrics),
       };
+    },
+    artifactLedger() {
+      return artifactLedger;
+    },
+    applyArtifactDeltas(deltas) {
+      if (appliedArtifactRecordIds.has(deltas.recordId)) return;
+      appliedArtifactRecordIds.add(deltas.recordId);
+      artifactLedger = foldArtifactDeltas(artifactLedger, deltas);
+      reconcile();
     },
   };
 }

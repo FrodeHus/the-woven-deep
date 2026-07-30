@@ -1,9 +1,14 @@
 import type Database from 'better-sqlite3';
 import {
+  applyArtifactDeltas as foldArtifactDeltas,
   createInMemoryRunRecordRepository,
+  emptyArtifactLedger,
   normalizeStoredMetrics,
+  reconcileArtifactLedger,
   standingsFromRecords,
   type AchievementGrant,
+  type ArtifactDeltas,
+  type ArtifactLedger,
   type FallenHeroStandingSnapshot,
   type HeartLineageRecord,
   type LifetimeDeltas,
@@ -11,6 +16,10 @@ import {
   type RunRecordRepository,
   type StoredHallRecord,
 } from '@woven-deep/engine';
+
+/** The Hall standings cap the engine's `standingsFromRecords` enforces; the server reconciles the
+ * artifact ledger against the same window so an eviction here matches the engine reference. */
+const MAX_STANDINGS = 10;
 
 interface HallRecordRow {
   profile_id: string;
@@ -44,17 +53,29 @@ interface HallStateRow {
  * every delta is normalized via `normalizeStoredMetrics` before replay, so future `RunMetrics`
  * field additions only require extending that (idempotent) normalizer, never a bespoke
  * migration step here.
+ *
+ * The artifact ledger rides in the same envelope but is stored *derived*, not as a replayable
+ * delta history. Replay cannot reproduce it: `reconcileArtifactLedger` depends on who was in the
+ * standings at the moment a batch was applied, and replaying every batch against the final
+ * standings fabricates `reclaimed-by-the-deep` stints for holders who were still standing when
+ * the artifact changed hands. So the ledger is folded + reconciled at write time — exactly as the
+ * in-memory reference and the guest client do — and `appliedArtifactRecordIds` carries the
+ * idempotence set. Still a `lifetime_json` payload change only: no DB migration.
  */
-const HALL_STORE_VERSION = 1;
+const HALL_STORE_VERSION = 2;
 
 interface LifetimeEnvelope {
   readonly version: number;
   readonly appliedDeltas: readonly LifetimeDeltas[];
+  readonly artifactLedger: ArtifactLedger;
+  readonly appliedArtifactRecordIds: readonly string[];
 }
 
 const EMPTY_LIFETIME_ENVELOPE: LifetimeEnvelope = {
   version: HALL_STORE_VERSION,
   appliedDeltas: [],
+  artifactLedger: emptyArtifactLedger(),
+  appliedArtifactRecordIds: [],
 };
 
 /** Parses a persisted `lifetime_json` blob into a `LifetimeEnvelope`, treating a missing
@@ -64,6 +85,12 @@ function parseLifetimeEnvelope(json: string): LifetimeEnvelope {
   return {
     version: typeof parsed.version === 'number' ? parsed.version : 0,
     appliedDeltas: Array.isArray(parsed.appliedDeltas) ? parsed.appliedDeltas : [],
+    artifactLedger: Array.isArray(parsed.artifactLedger)
+      ? parsed.artifactLedger
+      : emptyArtifactLedger(),
+    appliedArtifactRecordIds: Array.isArray(parsed.appliedArtifactRecordIds)
+      ? parsed.appliedArtifactRecordIds
+      : [],
   };
 }
 
@@ -72,6 +99,7 @@ function parseLifetimeEnvelope(json: string): LifetimeEnvelope {
  * doesn't throw inside the engine's `mergeMetrics`/`mergedSortedUnion`. */
 function normalizeEnvelopeForReplay(envelope: LifetimeEnvelope): LifetimeEnvelope {
   return {
+    ...envelope,
     version: HALL_STORE_VERSION,
     appliedDeltas: envelope.appliedDeltas.map((delta) => ({
       ...delta,
@@ -155,6 +183,23 @@ export class ServerRunRecordRepository implements RunRecordRepository {
     return this.selectStateStatement.get(this.profileId) as HallStateRow | undefined;
   }
 
+  private readEnvelope(): LifetimeEnvelope {
+    const state = this.readState();
+    return state ? parseLifetimeEnvelope(state.lifetime_json) : EMPTY_LIFETIME_ENVELOPE;
+  }
+
+  /** Reconciles the persisted ledger against the standings and lifetime as they stand right now,
+   * and writes it back. Runs on every event that can change standings membership — a Hall append,
+   * and each applied batch of artifact deltas — mirroring the in-memory reference. */
+  private reconcileArtifacts(envelope: LifetimeEnvelope): void {
+    const reconciled = reconcileArtifactLedger({
+      ledger: envelope.artifactLedger,
+      standings: this.standings(MAX_STANDINGS),
+      lifetime: deriveLifetime(envelope),
+    });
+    this.writeState({ lifetimeEnvelope: { ...envelope, artifactLedger: reconciled } });
+  }
+
   private writeState(
     partial: Partial<{
       lifetimeEnvelope: LifetimeEnvelope;
@@ -208,6 +253,7 @@ export class ServerRunRecordRepository implements RunRecordRepository {
       JSON.stringify(stored),
       stored.enrichment.achievedAt,
     );
+    this.reconcileArtifacts(this.readEnvelope());
   }
 
   currentHeart(): HeartLineageRecord | null {
@@ -221,28 +267,41 @@ export class ServerRunRecordRepository implements RunRecordRepository {
   }
 
   lifetime(): LifetimeState {
-    const state = this.readState();
-    const envelope: LifetimeEnvelope = state
-      ? parseLifetimeEnvelope(state.lifetime_json)
-      : EMPTY_LIFETIME_ENVELOPE;
-    return deriveLifetime(envelope);
+    return deriveLifetime(this.readEnvelope());
   }
 
   applyDeltas(deltas: LifetimeDeltas): void {
-    const state = this.readState();
-    const envelope: LifetimeEnvelope = state
-      ? parseLifetimeEnvelope(state.lifetime_json)
-      : EMPTY_LIFETIME_ENVELOPE;
+    const envelope = this.readEnvelope();
 
     if (envelope.appliedDeltas.some((applied) => applied.recordId === deltas.recordId)) {
       return;
     }
 
-    const nextEnvelope: LifetimeEnvelope = {
+    this.writeState({
+      lifetimeEnvelope: {
+        ...envelope,
+        version: HALL_STORE_VERSION,
+        appliedDeltas: [...envelope.appliedDeltas, deltas],
+      },
+    });
+  }
+
+  artifactLedger(): ArtifactLedger {
+    return this.readEnvelope().artifactLedger;
+  }
+
+  applyArtifactDeltas(deltas: ArtifactDeltas): void {
+    const envelope = this.readEnvelope();
+    if (envelope.appliedArtifactRecordIds.includes(deltas.recordId)) {
+      return;
+    }
+
+    this.reconcileArtifacts({
+      ...envelope,
       version: HALL_STORE_VERSION,
-      appliedDeltas: [...envelope.appliedDeltas, deltas],
-    };
-    this.writeState({ lifetimeEnvelope: nextEnvelope });
+      artifactLedger: foldArtifactDeltas(envelope.artifactLedger, deltas),
+      appliedArtifactRecordIds: [...envelope.appliedArtifactRecordIds, deltas.recordId],
+    });
   }
 
   /** The profile's currently unlocked (content-locked-by-default) class ids, as last evaluated by

@@ -64,6 +64,22 @@ function assertSafeDepth(depth: number, label: string): void {
   }
 }
 
+/** Enforces the ledger's singleton invariant at the only gate every writer passes through:
+ * `lost` means exactly one holder, `undiscovered` means none. Repositories construct these
+ * deltas, so checking here makes the invariant structural rather than a caller convention. */
+function assertHolderMatchesStatus(
+  status: 'undiscovered' | 'lost',
+  holderRecordId: OpaqueId | null,
+  artifactId: OpaqueId,
+): void {
+  if (status === 'lost' && holderRecordId === null) {
+    throw new RangeError(`artifact ${artifactId} cannot be lost without a holder record`);
+  }
+  if (status === 'undiscovered' && holderRecordId !== null) {
+    throw new RangeError(`undiscovered artifact ${artifactId} cannot name a holder record`);
+  }
+}
+
 /**
  * Pure fold of a batch of artifact deltas onto the ledger: unknown artifact ids create new
  * entries, known ids are updated in place with the stint appended to provenance. Idempotence
@@ -78,6 +94,7 @@ export function applyArtifactDeltas(
 
   for (const change of deltas.stints) {
     assertSafeDepth(change.stint.depth, `artifact stint depth for ${change.artifactId}`);
+    assertHolderMatchesStatus(change.newStatus, change.holderRecordId, change.artifactId);
     const existing = byId.get(change.artifactId);
     const provenance = existing ? [...existing.provenance, change.stint] : [change.stint];
     byId.set(change.artifactId, {

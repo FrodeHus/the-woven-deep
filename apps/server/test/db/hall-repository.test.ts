@@ -11,6 +11,7 @@ import {
   emptyRunMetrics,
   finalizeRun,
   type ActiveRun,
+  type ArtifactDeltas,
   type HeartLineageRecord,
   type LifetimeDeltas,
   type LifetimeState,
@@ -288,5 +289,115 @@ describe('ServerRunRecordRepository', () => {
     const { deltas } = buildStoredRecord();
     expect(() => reopened.applyDeltas(deltas)).not.toThrow();
     expect(reopened.lifetime().totals.kills).toBe(4 + deltas.metrics.kills);
+  });
+});
+
+/** A hand-rolled record with a directly controllable score, so the artifact-ledger tests can
+ * force a precise standings eviction without steering `finalizeRun`'s scoring. */
+function plainRecord(overrides: Partial<StoredHallRecord> = {}): StoredHallRecord {
+  const { stored } = buildStoredRecord();
+  return {
+    ...stored,
+    recordId: 'record.holder',
+    heroName: 'Ada',
+    completionType: 'died',
+    cause: { killerContentId: 'monster.cave-rat', depth: 3, turn: 12, worldTime: 12 },
+    score: { lines: [], total: 40 },
+    ...overrides,
+  };
+}
+
+function lostToDeltas(recordId: string, heroName: string): ArtifactDeltas {
+  return {
+    recordId,
+    stints: [
+      {
+        artifactId: 'artifact.sundered-crown',
+        stint: { heroName, recordId, outcome: 'died-with', depth: 5 },
+        newStatus: 'lost',
+        holderRecordId: recordId,
+      },
+    ],
+  };
+}
+
+describe('ServerRunRecordRepository artifact ledger', () => {
+  let database: Database.Database;
+  let repository: ServerRunRecordRepository;
+
+  beforeEach(() => {
+    database = freshDatabase();
+    const profiles = new ProfileRepository(database);
+    profiles.create({
+      id: 'p1',
+      normalizedEmail: 'a@example.com',
+      nowIso: '2026-07-23T00:00:00.000Z',
+    });
+    repository = new ServerRunRecordRepository({ database, profileId: 'p1' });
+  });
+
+  it('artifactLedger() is empty before anything is applied', () => {
+    expect(repository.artifactLedger()).toEqual([]);
+  });
+
+  it('applyArtifactDeltas persists through lifetime_json and is idempotent by recordId', () => {
+    const holder = plainRecord();
+    repository.appendRecord(holder);
+    repository.applyArtifactDeltas(lostToDeltas(holder.recordId, holder.heroName));
+    repository.applyArtifactDeltas(lostToDeltas(holder.recordId, holder.heroName));
+
+    const reopened = new ServerRunRecordRepository({ database, profileId: 'p1' });
+    const ledger = reopened.artifactLedger();
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0].status).toBe('lost');
+    expect(ledger[0].holderRecordId).toBe(holder.recordId);
+    expect(ledger[0].provenance).toHaveLength(1);
+  });
+
+  it('reconciles on appendRecord: an evicted holder releases the artifact back to the deep', () => {
+    const holder = plainRecord();
+    repository.appendRecord(holder);
+    repository.applyArtifactDeltas(lostToDeltas(holder.recordId, holder.heroName));
+    expect(repository.artifactLedger()[0].status).toBe('lost');
+
+    for (let index = 0; index < 10; index += 1) {
+      repository.appendRecord(
+        plainRecord({
+          recordId: `record.rival${index}`,
+          heroName: `Rival ${index}`,
+          score: { lines: [], total: 500 + index },
+        }),
+      );
+    }
+
+    expect(repository.artifactLedger()).toEqual([
+      {
+        artifactId: 'artifact.sundered-crown',
+        status: 'undiscovered',
+        holderRecordId: null,
+        provenance: [
+          { heroName: holder.heroName, recordId: holder.recordId, outcome: 'died-with', depth: 5 },
+          {
+            heroName: holder.heroName,
+            recordId: holder.recordId,
+            outcome: 'reclaimed-by-the-deep',
+            depth: 0,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('reads a version-1 envelope with no artifact keys as an empty ledger', () => {
+    const legacyEnvelope = { version: 1, appliedDeltas: [] };
+    database
+      .prepare(
+        `insert into hall_state(profile_id, lifetime_json, heart_json, unlocks_json, achievements_json, updated_at)
+         values (?, ?, null, '[]', '[]', ?)`,
+      )
+      .run('p1', JSON.stringify(legacyEnvelope), '2026-07-23T00:00:00.000Z');
+
+    const reopened = new ServerRunRecordRepository({ database, profileId: 'p1' });
+    expect(reopened.artifactLedger()).toEqual([]);
   });
 });
