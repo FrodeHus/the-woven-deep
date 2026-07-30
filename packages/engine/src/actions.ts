@@ -1,7 +1,7 @@
 import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
 import { heroActor } from './actor-model.js';
 import { entryById } from './content-index.js';
-import { movementAction } from './movement.js';
+import { directionDelta, movementAction } from './movement.js';
 import { actorHasConditionTrait } from './conditions.js';
 import { dropItem, pickupItem, splitStack } from './inventory.js';
 import { validateTarget } from './targeting.js';
@@ -11,7 +11,14 @@ import { parseEffectParameters } from './parameter-contracts.js';
 import { equipItem, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
 import { closeDoor, openDoor } from './features.js';
 import { isTownFloorActive } from './town-floor.js';
-import type { ActiveRun, GameCommand, OpaqueId } from './model.js';
+import type { ActorState } from './actor-model.js';
+import type {
+  ActiveRun,
+  Direction,
+  GameCommand,
+  MovementInvalidReason,
+  OpaqueId,
+} from './model.js';
 import { isDispatchableActionType } from './action-dispatch.js';
 import type { GameAction, PlayerActionValidation, ResolutionContext } from './action-types.js';
 import { actionCostFor, balanceEntry } from './balance.js';
@@ -56,6 +63,38 @@ function itemEntry(
 }
 
 export { targetContext };
+
+/**
+ * Bump-to-open: a hero move whose target cell holds a closed door resolves as opening that door
+ * rather than as a rejected move. The engine decides this so the behavior no longer depends on the
+ * client having the door in its projection (an unlit or undiscovered cell sends a raw `move`).
+ * Locked doors keep their `blocked.door-locked` rejection, and only the hero reaches this path --
+ * non-hero movement is re-validated by `movementAction` inside the dispatcher, which still blocks.
+ */
+function bumpedClosedDoor(
+  state: ActiveRun,
+  actor: ActorState,
+  direction: Direction,
+  reason: MovementInvalidReason,
+): OpaqueId | undefined {
+  if (reason !== 'blocked.door') return undefined;
+  const delta = directionDelta(direction);
+  const target = { x: actor.x + delta.x, y: actor.y + delta.y };
+  const door = state.features.find(
+    (candidate) =>
+      candidate.type === 'door' &&
+      candidate.state === 'closed' &&
+      candidate.floorId === actor.floorId &&
+      candidate.x === target.x &&
+      candidate.y === target.y,
+  );
+  if (!door) return undefined;
+  // Mirror the explicit command's guard so a door the transition would refuse keeps the
+  // movement rejection instead of producing an action the dispatcher cannot apply.
+  return openDoor({ run: state, actorId: actor.actorId, featureId: door.featureId }).ok
+    ? door.featureId
+    : undefined;
+}
 
 export function validatePlayerAction(
   input: Readonly<{
@@ -118,7 +157,16 @@ export function validatePlayerAction(
       direction: input.command.direction,
       cost: actionCostFor(rules, 'action.move'),
     });
-    if (movement.status === 'invalid') return movement;
+    if (movement.status === 'invalid') {
+      const bumped = bumpedClosedDoor(input.state, actor, input.command.direction, movement.reason);
+      if (!bumped) return movement;
+      return {
+        type: 'open-door',
+        actorId: actor.actorId,
+        featureId: bumped,
+        cost: actionCostFor(rules, 'action.open-door'),
+      };
+    }
     if (movement.status === 'decision_required') {
       return {
         status: 'decision_required',

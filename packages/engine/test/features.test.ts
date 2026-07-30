@@ -17,8 +17,10 @@ import {
   triggerTrap,
   createDemoContentPack,
   resolveCommand,
+  resolveWorldStep,
+  validatePlayerAction,
 } from '../src/index.js';
-import type { TrapContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, TrapContentEntry } from '@woven-deep/content';
 
 function door(state: DoorFeature['state'] = 'closed'): DoorFeature {
   return {
@@ -30,6 +32,18 @@ function door(state: DoorFeature['state'] = 'closed'): DoorFeature {
     contentId: null,
     coverTileId: 0,
     state,
+  };
+}
+
+function withOpenDoorCost(cost: number): CompiledContentPack {
+  const pack = createDemoContentPack();
+  return {
+    ...pack,
+    entries: pack.entries.map((entry) =>
+      entry.kind === 'balance'
+        ? { ...entry, actionCosts: { ...entry.actionCosts, 'action.open-door': cost } }
+        : entry,
+    ),
   };
 }
 
@@ -105,6 +119,101 @@ describe('mutable dungeon features', () => {
     expect(result.state.features[0]).toMatchObject({ state: 'open' });
     expect(result.events[0]).toMatchObject({ type: 'door.opened', featureId: 'door.1' });
     expect(() => encodeActiveRun(result.state)).not.toThrow();
+  });
+
+  it('opens a closed door the hero bumps into instead of rejecting the move', () => {
+    const base = createDemoRun();
+    const hero = { ...base.actors[0]!, x: 2, y: 2 };
+    const state = { ...base, actors: [hero], features: [door()] };
+    const validation = validatePlayerAction({
+      state,
+      command: {
+        type: 'move',
+        commandId: 'command.bump-door',
+        expectedRevision: 0,
+        direction: 'east',
+      },
+      context: { content: withOpenDoorCost(250) },
+    });
+    expect(validation).toEqual({
+      type: 'open-door',
+      actorId: 'hero.demo',
+      featureId: 'door.1',
+      cost: 250,
+    });
+    const result = resolveCommand(
+      state,
+      {
+        type: 'move',
+        commandId: 'command.bump-door',
+        expectedRevision: 0,
+        direction: 'east',
+      },
+      { content: createDemoContentPack() },
+    );
+    expect(result.result).toMatchObject({ status: 'applied' });
+    expect(result.state.features[0]).toMatchObject({ state: 'open' });
+    expect(result.state.actors[0]).toMatchObject({ x: 2, y: 2 });
+    expect(result.events).toContainEqual(
+      expect.objectContaining({ type: 'door.opened', featureId: 'door.1' }),
+    );
+    expect(result.events).not.toContainEqual(
+      expect.objectContaining({ type: 'hero.moved' as const }),
+    );
+    expect(result.state.recentCommands[0]?.command).toMatchObject({ type: 'move' });
+    expect(() => decodeActiveRun(encodeActiveRun(result.state))).not.toThrow();
+  });
+
+  it('keeps a locked door blocking the hero who bumps into it', () => {
+    const base = createDemoRun();
+    const hero = { ...base.actors[0]!, x: 2, y: 2 };
+    const result = resolveCommand(
+      {
+        ...base,
+        actors: [hero],
+        features: [{ ...door('locked'), lock: { difficulty: 12, keyContentId: null } }],
+      },
+      {
+        type: 'move',
+        commandId: 'command.bump-locked',
+        expectedRevision: 0,
+        direction: 'east',
+      },
+      { content: createDemoContentPack() },
+    );
+    expect(result.result).toMatchObject({ status: 'invalid', reason: 'blocked.door-locked' });
+    expect(result.state.features[0]).toMatchObject({ state: 'locked' });
+    expect(() => decodeActiveRun(encodeActiveRun(result.state))).not.toThrow();
+  });
+
+  it('does not let a non-hero actor bump a closed door open', () => {
+    const base = createDemoRun();
+    const hero = { ...base.actors[0]!, x: 1, y: 1 };
+    const monster = {
+      ...base.actors[0]!,
+      actorId: 'monster.bumper',
+      contentId: 'monster.bumper',
+      playerControlled: false,
+      disposition: 'hostile' as const,
+      behaviorId: null,
+      x: 2,
+      y: 2,
+    };
+    const result = resolveWorldStep({
+      state: { ...base, actors: [hero, monster], features: [door()] },
+      content: createDemoContentPack(),
+      action: { type: 'move', actorId: 'monster.bumper', to: { x: 3, y: 2 }, cost: 100 },
+      eventId: 'event.monster-bump',
+      maxInternalActions: 1,
+    });
+    expect(result.state.features[0]).toMatchObject({ state: 'closed' });
+    expect(result.state.actors.find((actor) => actor.actorId === 'monster.bumper')).toMatchObject({
+      x: 2,
+      y: 2,
+    });
+    expect(result.events).not.toContainEqual(
+      expect.objectContaining({ type: 'door.opened' as const }),
+    );
   });
 
   it('searches through the timed command path and saves revealed geometry', () => {
