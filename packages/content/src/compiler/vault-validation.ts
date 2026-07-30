@@ -144,6 +144,25 @@ export function validateVaultEntry(
         add(slotPath, `${slot.kind} slot ${slot.id} may not set difficulty`);
       }
 
+      // Terrain and slot kind have to agree on door tiles. A `door` slot off door terrain would
+      // mint a door feature covering a floor/wall tile; any feature-bearing slot other than `door`
+      // on door terrain occupies the cell the generation door pass skips, leaving a door tile with
+      // no door feature -- an unopenable tile, and a soft lock when it sits on a route. Actor- and
+      // item-bearing kinds are refused for the same reason plus their own: a door tile is not
+      // walkable, so nothing may be authored to stand there. `fixture` is the one legitimate
+      // companion (the town's house door marks its door tile with one and is never opened).
+      if (slot.kind === 'door') {
+        if (legend.terrain !== 'closed-door') {
+          add(slotPath, `door slot ${slot.id} requires closed-door terrain, not ${legend.terrain}`);
+        }
+      } else if (legend.terrain === 'closed-door' && slot.kind !== 'fixture') {
+        add(
+          slotPath,
+          `closed-door terrain cannot carry ${slot.kind} slot ${slot.id}; ` +
+            'only a door or fixture slot may sit on a door tile',
+        );
+      }
+
       if (slot.kind === 'door') {
         if (slot.keyContentId !== undefined && slot.keyContentId !== null) {
           issues.push(

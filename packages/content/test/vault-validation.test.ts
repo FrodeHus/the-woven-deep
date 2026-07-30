@@ -566,6 +566,78 @@ describe('validateVaultEntry (locked door and chest slots)', () => {
       message: 'door slot vault-door may not set item loot fields',
     });
   });
+
+  it('rejects a door slot authored off closed-door terrain', () => {
+    const issues = validateVaultEntry(
+      lockedVault({
+        D: { terrain: 'floor', entrance: false, light: null, slot: doorSlot },
+      }),
+      'vaults/locked-room.yaml',
+    );
+
+    expect(issues).toContainEqual({
+      file: 'vaults/locked-room.yaml',
+      path: '$.entries.vault.test-room.legend.D.slot',
+      message: 'door slot vault-door requires closed-door terrain, not floor',
+    });
+  });
+
+  it('rejects a chest slot authored on closed-door terrain', () => {
+    const issues = validateVaultEntry(
+      lockedVault({
+        C: { terrain: 'closed-door', entrance: false, light: null, slot: chestSlot },
+      }),
+      'vaults/locked-room.yaml',
+    );
+
+    expect(issues).toContainEqual({
+      file: 'vaults/locked-room.yaml',
+      path: '$.entries.vault.test-room.legend.C.slot',
+      message:
+        'closed-door terrain cannot carry chest slot vault-chest; only a door or fixture slot may sit on a door tile',
+    });
+  });
+
+  it('rejects a monster slot authored on closed-door terrain', () => {
+    const issues = validateVaultEntry(
+      vault(['+m'], {
+        '+': baseLegend['+']!,
+        m: { ...baseLegend['m']!, terrain: 'closed-door' },
+      }),
+      'vaults/test-room.yaml',
+    );
+
+    expect(issues).toContainEqual({
+      file: 'vaults/test-room.yaml',
+      path: '$.entries.vault.test-room.legend.m.slot',
+      message:
+        'closed-door terrain cannot carry monster slot monster-main; only a door or fixture slot may sit on a door tile',
+    });
+  });
+
+  it('accepts a fixture slot on closed-door terrain', () => {
+    const issues = validateVaultEntry(
+      vault(['+F'], {
+        '+': baseLegend['+']!,
+        F: {
+          terrain: 'closed-door',
+          entrance: false,
+          light: null,
+          slot: {
+            id: 'monster-main',
+            kind: 'fixture',
+            required: true,
+            tags: [],
+            lootTableId: null,
+            contentId: null,
+          },
+        },
+      }),
+      'vaults/test-room.yaml',
+    );
+
+    expect(issues).toEqual([]);
+  });
 });
 
 describe('validateVaultEntry (town vault contract)', () => {
