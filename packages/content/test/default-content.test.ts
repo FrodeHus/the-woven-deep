@@ -196,11 +196,11 @@ describe('bundled content', () => {
     });
   });
 
-  it('ships schema-v8 run-record content: achievements, score coefficients, and monster threat', async () => {
+  it('ships run-record content: achievements, score coefficients, and monster threat', async () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
-    expect(pack.schemaVersion).toBe(8);
+    expect(pack.schemaVersion).toBe(9);
     const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
     expect(entries.get('achievement.defeated-the-deeps-champion')).toMatchObject({
       kind: 'achievement',

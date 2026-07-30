@@ -5,6 +5,7 @@ import { z } from 'zod';
 import {
   CONDITION_TRAIT_IDS,
   CONTENT_KIND_IDS,
+  CONTENT_SCHEMA_VERSION,
   MAX_ENCOUNTER_MEMBERS,
   MAX_LOOT_CHOICE_QUANTITY,
   MAX_LOOT_CREATED_UNITS,
@@ -232,6 +233,40 @@ describe('server-admin content documentation', () => {
       expect(reference, `missing town documentation for ${identifier}`).toContain(
         `\`${identifier}\``,
       );
+    }
+  });
+
+  it('documents the generation balance knobs', async () => {
+    const reference = await readFile(
+      resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
+      'utf8',
+    );
+    for (const identifier of ['generation', 'doorTilePercent']) {
+      expect(reference, `missing generation documentation for ${identifier}`).toContain(
+        `\`${identifier}\``,
+      );
+    }
+  });
+
+  it('documents the current content schema version and its migration note', async () => {
+    const reference = await readFile(
+      resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
+      'utf8',
+    );
+    expect(reference, 'missing required schemaVersion envelope value').toContain(
+      `Must be exactly \`${CONTENT_SCHEMA_VERSION}\`.`,
+    );
+    expect(reference, 'missing migration note for the current content schema version').toContain(
+      `Content schema version \`${CONTENT_SCHEMA_VERSION}\` adds`,
+    );
+    for (const contract of [
+      'the required balance `generation` block with `doorTilePercent`',
+      "Migration from 8: bump every file's `schemaVersion` to 9 and add " +
+        '`generation: { doorTilePercent: 35 }` to the balance entry',
+      // The v8 note used to claim "no other field changes"; v8 also made `floorLoot` required.
+      'and the required balance `floorLoot` block',
+    ]) {
+      expect(reference, `missing migration contract: ${contract}`).toContain(contract);
     }
   });
 

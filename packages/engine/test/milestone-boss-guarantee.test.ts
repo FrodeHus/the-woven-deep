@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack, VaultContentEntry } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
+  balanceEntry,
   createClassicTheme,
   createDemoRun,
   generateFloor,
@@ -46,6 +47,7 @@ function generateAt(depth: number, requiredVaultId: string | undefined) {
     height,
     theme: createClassicTheme(width, height, { ambient }),
     vaults,
+    doorTilePercent: balanceEntry(content).generation.doorTilePercent,
     ...(requiredVaultId === undefined ? {} : { requiredVaultId }),
   });
 }

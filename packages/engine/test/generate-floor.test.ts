@@ -9,9 +9,11 @@ import type {
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   analyzeConnectivity,
+  balanceEntry,
   createDemoRun,
   createClassicTheme,
   generateFloor,
+  GenerationError,
   generateTopology,
   stableJson,
   type GenerateFloorRequest,
@@ -39,6 +41,7 @@ function request(): GenerateFloorRequest {
     height,
     theme: createClassicTheme(width, height, { ambient }),
     vaults,
+    doorTilePercent: balanceEntry(content).generation.doorTilePercent,
     requiredVaultId: 'vault.lampwright-cache',
   };
 }
@@ -141,6 +144,43 @@ describe('full floor generation', () => {
     expect(generated.report.fallback).toBe(true);
   });
 
+  it('carves junction doors on the deterministic fallback floor too', () => {
+    const base = request();
+    const generated = generateFloor({
+      ...base,
+      vaults: [],
+      requiredVaultId: undefined,
+      doorTilePercent: 100,
+      attemptLimit: 1,
+      topologyFactory: () => ({ ok: false, code: 'topology.empty' }),
+    });
+    expect(generated.report.fallback).toBe(true);
+    expect(generated.floor.tiles.filter((tile) => tile === 2).length).toBeGreaterThan(0);
+    expect(
+      analyzeConnectivity({
+        width: generated.floor.width,
+        height: generated.floor.height,
+        tiles: generated.floor.tiles,
+        start: generated.floor.stairUp!,
+        target: generated.floor.stairDown!,
+      }).connected,
+    ).toBe(true);
+  });
+
+  it('rejects a door tile percent outside zero through one hundred', () => {
+    for (const doorTilePercent of [-1, 101, 1.5]) {
+      let thrown: unknown;
+      try {
+        generateFloor({ ...request(), doorTilePercent });
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(GenerationError);
+      expect((thrown as GenerationError).code).toBe('generation.invalid-request');
+      expect((thrown as GenerationError).message).toContain('door tile percent');
+    }
+  });
+
   it('shares bounded retries with required population rejection before using the fallback', () => {
     const source = content.entries.find(
       (entry): entry is EncounterContentEntry =>
@@ -185,6 +225,7 @@ describe('full floor generation', () => {
       height,
       theme: createClassicTheme(width, height, { ambient, minimumStairDistance: 10 }),
       vaults: [],
+      doorTilePercent: 0,
       attemptLimit: 2,
       topologyFactory: (_request, attempt) => ({
         ok: true,

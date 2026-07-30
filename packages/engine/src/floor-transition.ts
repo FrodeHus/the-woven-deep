@@ -211,6 +211,7 @@ export function descendToNextFloor(
       NEW_RUN_FLOOR_THEME_SETTINGS,
     ),
     vaults,
+    doorTilePercent: balanceEntry(context.content).generation.doorTilePercent,
     ...(requiredVaultId === undefined ? {} : { requiredVaultId }),
   });
   const stairUp = generated.floor.stairUp;

@@ -3,6 +3,7 @@ export * from './rot-adapter.js';
 export * from './generation-model.js';
 export * from './generation-random.js';
 export * from './generation-mask.js';
+export * from './junction-doors.js';
 export * from './connectivity.js';
 export * from './rot-topology.js';
 export * from './fallback-floor.js';
