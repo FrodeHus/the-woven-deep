@@ -122,37 +122,34 @@ function insideVault(floor: FloorSnapshot, cell: Point): boolean {
 }
 
 /** Cells on this floor a feature already holds, so the door pass never doubles up on one. */
-function featureIndexes(run: ActiveRun, floor: FloorSnapshot): readonly number[] {
-  const indexes: number[] = [];
+function featureIndexes(run: ActiveRun, floor: FloorSnapshot): ReadonlySet<number> {
+  const indexes = new Set<number>();
   for (const feature of run.features) {
     if (feature.floorId !== floor.floorId) continue;
     const index = tileIndex(floor, feature.x, feature.y);
-    if (index !== undefined) indexes.push(index);
+    if (index !== undefined) indexes.add(index);
   }
   return indexes;
 }
 
-function occupiedIndexes(run: ActiveRun, floor: FloorSnapshot): ReadonlySet<number> {
-  const occupied = new Set<number>();
+/**
+ * Cells a body stands on: the snapshot's own occupancy list plus the run's living actors on this
+ * floor. `floor.entities` can lag the actors within a single `placeFloorPopulations` call
+ * (encounters commit to `run.actors`, not to the snapshot), so both are collected -- otherwise a
+ * chest or locked door can land under a monster spawned moments earlier in the same pass.
+ */
+function bodyIndexes(run: ActiveRun, floor: FloorSnapshot): ReadonlySet<number> {
+  const bodies = new Set<number>();
   for (const entity of floor.entities) {
     const index = tileIndex(floor, entity.x, entity.y);
-    if (index !== undefined) occupied.add(index);
+    if (index !== undefined) bodies.add(index);
   }
-  for (const feature of run.features) {
-    if (feature.floorId !== floor.floorId) continue;
-    const index = tileIndex(floor, feature.x, feature.y);
-    if (index !== undefined) occupied.add(index);
-  }
-  // `floor.entities` is the snapshot's own occupancy list and can lag the run's actors within a
-  // single `placeFloorPopulations` call (encounters commit to `run.actors`, not to the snapshot),
-  // so living actors on this floor are excluded here too -- otherwise a chest or locked door can
-  // land under a monster spawned moments earlier in the same pass.
   for (const actor of run.actors) {
     if (actor.floorId !== floor.floorId || actor.health <= 0) continue;
     const index = tileIndex(floor, actor.x, actor.y);
-    if (index !== undefined) occupied.add(index);
+    if (index !== undefined) bodies.add(index);
   }
-  return occupied;
+  return bodies;
 }
 
 /**
@@ -244,7 +241,9 @@ export function placeFloorLoot(
   const knobs = balanceEntry(content).floorLoot;
   const band = depthBandFor(floor.depth, knobs.depthBands);
   const protectedIndexes = protectedRouteIndexes(floor);
-  const occupied = occupiedIndexes(run, floor);
+  const featureCells = featureIndexes(run, floor);
+  const bodies = bodyIndexes(run, floor);
+  const occupied = new Set<number>([...featureCells, ...bodies]);
 
   let cursor = state;
   let remaining = candidateCells(input, knobs.minimumAnchorDistance, protectedIndexes, occupied);
@@ -310,13 +309,23 @@ export function placeFloorLoot(
 
   // Every door tile needs a door feature. The tile alone is an unopenable wall: bump-to-open and
   // the explicit open-door command both work off a closed door *feature*, so a tile without one
-  // can never be passed -- and on a protected route that is a soft-locked run. Tiles a vault (or
-  // an earlier call on this same floor) already covered keep the feature they have.
-  const featureCells = new Set(featureIndexes(run, floor));
+  // can never be passed -- and on a protected route that is a soft-locked run. Two skips keep the
+  // pass from doubling up: `featureCells` holds the features already committed to `run` (a vault's
+  // authored door, or an earlier call on this same floor -- this is what makes repeated calls
+  // idempotent), and `placedIndexes` holds the cells this very call just drew for scatter loot and
+  // chests, which are not in `run` yet.
   let doors = 0;
   for (let index = 0; index < floor.tiles.length; index += 1) {
     if (floor.tiles[index] !== DOOR_TILE_ID) continue;
     if (featureCells.has(index) || placedIndexes.has(index)) continue;
+    // Door terrain is not walkable, so nothing may be standing on it: generation places actors and
+    // entities on walkable cells only. Pinned here because the pass would otherwise seal a body
+    // behind a closed door feature and produce a run the save schema refuses.
+    if (bodies.has(index)) {
+      throw new Error(
+        `internal invariant: door tile ${index % floor.width},${Math.floor(index / floor.width)} on floor ${floor.floorId} is occupied`,
+      );
+    }
     // Protected-route doors consume no roll and are never locked: keeping the stair route walkable
     // is the invariant, and a closed door already satisfies it.
     let locked = false;

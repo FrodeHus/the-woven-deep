@@ -327,6 +327,38 @@ describe('placeFloorLoot', () => {
     }
   });
 
+  it('refuses to hang a door on an occupied door tile', () => {
+    const generated = floor();
+    const door = DOOR_CELLS[0]!;
+    const base = run();
+    const hero = base.actors[0]!;
+    const occupiedByEntity = {
+      run: base,
+      floor: {
+        ...generated,
+        entities: [{ entityId: 'entity.squatter', x: door.x, y: door.y }],
+      },
+      content: content(),
+    };
+    expect(() => placeFloorLoot(occupiedByEntity, SEED)).toThrow(
+      /door tile 6,4 on floor floor\.loot-placement is occupied/,
+    );
+
+    const occupiedByActor = {
+      run: {
+        ...base,
+        actors: base.actors.map((actor) =>
+          actor.actorId === hero.actorId
+            ? { ...actor, floorId: generated.floorId, x: door.x, y: door.y }
+            : actor,
+        ),
+      },
+      floor: generated,
+      content: content(),
+    };
+    expect(() => placeFloorLoot(occupiedByActor, SEED)).toThrow(/is occupied/);
+  });
+
   it('leaves protected-route door tiles closed and never locked', () => {
     const { floor: generated, index: protectedDoor } = floorWithProtectedDoor();
     for (const seed of SEEDS) {
