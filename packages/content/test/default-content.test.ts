@@ -200,7 +200,7 @@ describe('bundled content', () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
-    expect(pack.schemaVersion).toBe(8);
+    expect(pack.schemaVersion).toBe(9);
     const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
     expect(entries.get('achievement.defeated-the-deeps-champion')).toMatchObject({
       kind: 'achievement',
