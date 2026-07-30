@@ -1403,16 +1403,14 @@ describe('vault item slot consumption', () => {
     });
     const generated = itemCacheFloor(vault.id);
 
-    const result = placePopulation({
+    const result = placeFloorPopulations({
       run: runFor([encounter]),
       floor: generated,
       content: pack([encounter], [vault, itemLootTable, stockItemEntry]),
       forcedEncounterId: encounter.id,
     });
 
-    expect(result.status).toBe('placed');
-    if (result.status !== 'placed') return;
-    const placed = result.createdItems.filter(
+    const placed = result.state.items.filter(
       (item) => item.location.type === 'floor' && item.location.x === 3 && item.location.y === 2,
     );
     expect(placed.length).toBeGreaterThan(0);
@@ -1429,16 +1427,14 @@ describe('vault item slot consumption', () => {
     });
     const generated = itemCacheFloor(vault.id);
 
-    const result = placePopulation({
+    const result = placeFloorPopulations({
       run: runFor([encounter]),
       floor: generated,
       content: pack([encounter], [vault, directItemEntry]),
       forcedEncounterId: encounter.id,
     });
 
-    expect(result.status).toBe('placed');
-    if (result.status !== 'placed') return;
-    expect(result.createdItems).toEqual([
+    expect(result.state.items.filter((item) => item.itemId.startsWith('item.vault.'))).toEqual([
       expect.objectContaining({
         contentId: directItemEntry.id,
         location: { type: 'floor', floorId: generated.floorId, x: 3, y: 2 },
@@ -1456,13 +1452,13 @@ describe('vault item slot consumption', () => {
     const run = runFor([encounter]);
     const content = pack([encounter], [vault, itemLootTable, stockItemEntry]);
 
-    const first = placePopulation({
+    const first = placeFloorPopulations({
       run,
       floor: generated,
       content,
       forcedEncounterId: encounter.id,
     });
-    const second = placePopulation({
+    const second = placeFloorPopulations({
       run,
       floor: generated,
       content,
@@ -1482,26 +1478,28 @@ describe('vault item slot consumption', () => {
     const run = runFor([encounter]);
     const content = pack([encounter], [vault, itemLootTable, stockItemEntry]);
 
-    const first = placePopulation({
+    const first = placeFloorPopulations({
       run,
       floor: generated,
       content,
       forcedEncounterId: encounter.id,
     });
-    expect(first.status).toBe('placed');
-    if (first.status !== 'placed') return;
-    const runWithItem = { ...run, items: [...run.items, ...first.createdItems] };
+    const slotItems = first.state.items.filter((item) => item.itemId.startsWith('item.vault.'));
+    expect(slotItems.length).toBeGreaterThan(0);
+    const runWithItem = { ...run, items: [...run.items, ...slotItems] };
 
-    const second = placePopulation({
+    // A second pass over the same floor refills nothing and leaves the `loot-placement` stream
+    // exactly where it was for the slot draws it skipped.
+    const second = placeFloorPopulations({
       run: runWithItem,
       floor: generated,
       content,
       forcedEncounterId: encounter.id,
     });
 
-    expect(second.status).toBe('placed');
-    if (second.status !== 'placed') return;
-    expect(second.createdItems).toHaveLength(0);
+    expect(second.state.items.filter((item) => item.itemId.startsWith('item.vault.'))).toEqual(
+      slotItems,
+    );
   });
 
   const variedItemEntries: readonly ItemContentEntry[] = ['a', 'b', 'c', 'd'].map((suffix) => ({
@@ -1551,6 +1549,55 @@ describe('vault item slot consumption', () => {
 
     expect(lootOf(base.state).length).toBeGreaterThan(0);
     expect(lootOf(perturbed.state)).toEqual(lootOf(base.state));
+  });
+
+  it('draws floor loot identically when every encounter placement fails', () => {
+    const placeable = individual('encounter.item-cache-placeable');
+    // No floor cell carries this terrain tag, so `legalCells` is empty and every attempt in the
+    // density loop fails with `no-valid-placement` -- the perturbation the #131 regression needs.
+    const unplaceable = individual('encounter.item-cache-unplaceable', {
+      placement: { ...placement, allowedTerrainTags: ['terrain-no-floor-carries'] },
+    });
+    const vault = itemCacheVault('vault.item-cache-failure-test', {
+      lootTableId: variedLootTable.id,
+      contentId: null,
+    });
+    const generated = itemCacheFloor(vault.id);
+    const content = pack([placeable, unplaceable], [vault, variedLootTable, ...variedItemEntries]);
+    const run = runFor([placeable, unplaceable]);
+
+    const placed = placeFloorPopulations({
+      run,
+      floor: generated,
+      content,
+      forcedEncounterId: placeable.id,
+    });
+    const failed = placeFloorPopulations({
+      run,
+      floor: generated,
+      content,
+      forcedEncounterId: unplaceable.id,
+    });
+
+    expect(placed.placements.some((entry) => entry.status === 'placed')).toBe(true);
+    expect(failed.placements.length).toBeGreaterThan(0);
+    expect(failed.placements.every((entry) => entry.status !== 'placed')).toBe(true);
+
+    // Vault item slots and the floor-loot pass are position-fixed, so they compare exactly; the
+    // fragment spawn's cell may legitimately shift (placed actors reserve cells), which the
+    // stream-state equality below still pins.
+    const lootOf = (state: ActiveRun) =>
+      state.items
+        .filter(
+          (item) =>
+            item.itemId.startsWith('item.vault.') || item.itemId.startsWith('item.floor-loot.'),
+        )
+        .map(({ itemId, contentId, quantity }) => ({ itemId, contentId, quantity }));
+
+    expect(lootOf(placed.state).length).toBeGreaterThan(0);
+    expect(lootOf(failed.state)).toEqual(lootOf(placed.state));
+    expect(failed.state.rng['loot-placement']).toEqual(placed.state.rng['loot-placement']);
+    expect(failed.state.rng['loot-placement']).not.toEqual(run.rng['loot-placement']);
   });
 });
 
