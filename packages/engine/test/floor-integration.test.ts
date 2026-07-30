@@ -40,8 +40,13 @@ function generatedFloor(
   const floor = JSON.parse(
     readFileSync(new URL('./fixtures/generated-floor-seed-1.json', import.meta.url), 'utf8'),
   ) as GeneratedFloor['floor'];
+  // Most cases here append the floor with no population argument, so the loot pass that hangs a
+  // door feature on every door tile never runs. A raw door tile would then be a bare tile the
+  // state invariant refuses, which is not what these cases are about -- so the fixture's door
+  // tiles are flattened to plain floor.
+  const tiles = floor.tiles.map((tile) => (tile === 2 ? 1 : tile));
   return {
-    floor: { ...floor, floorId, seed: floorSeed },
+    floor: { ...floor, floorId, seed: floorSeed, tiles },
     report: {
       generatorVersion: 2,
       attempt: 0,

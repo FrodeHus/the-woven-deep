@@ -2616,12 +2616,48 @@ describe('active-run save codec', () => {
   ] as const)('validates retained terrain %i as %s', (tile, reason) => {
     const demo = createDemoRun();
     const floor = demo.floors[0]!;
+    // A bare door tile is only a legal state where a vault placement slot covers it, so the door
+    // case is authored the way the town's house door is: terrain plus a fixture slot, no feature.
+    // That keeps the movement rejection on the terrain itself (a closed door *feature* would be
+    // bumped open instead).
+    const vaults =
+      tile === 2
+        ? [
+            {
+              placementId: 'placement.demo-door',
+              vaultId: 'vault.demo-door',
+              x: 1,
+              y: 0,
+              width: 1,
+              height: 1,
+              rotation: 0 as const,
+              reflected: false,
+              entrances: [],
+            },
+          ]
+        : floor.vaults;
+    const placementSlots =
+      tile === 2
+        ? [
+            {
+              slotId: 'slot.demo-door',
+              vaultPlacementId: 'placement.demo-door',
+              kind: 'fixture' as const,
+              required: true,
+              tags: ['house-door'],
+              x: 1,
+              y: 0,
+            },
+          ]
+        : floor.placementSlots;
     const initial = {
       ...demo,
       floors: [
         {
           ...floor,
           tiles: floor.tiles.map((current, index) => (index === 1 ? tile : current)),
+          vaults,
+          placementSlots,
         },
       ],
     };

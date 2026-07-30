@@ -325,6 +325,96 @@ describe('boss phases', () => {
     expect(decodeActiveRun(encodeActiveRun(reentered.state))).toEqual(reentered.state);
   });
 
+  it('drops the lock when an arena mutation opens a locked door', () => {
+    const { state, content } = fixture({
+      phases: [
+        {
+          ...definition().phases[0]!,
+          effects: [
+            {
+              effectId: 'effect.feature.mutate',
+              parameters: { state: 'door.open' },
+              requiresLivingTarget: false,
+            },
+          ],
+        },
+      ],
+    });
+    const door = {
+      featureId: 'feature.arena-door',
+      floorId: state.activeFloorId,
+      x: 5,
+      y: 3,
+      contentId: null,
+      coverTileId: 1 as const,
+      type: 'door' as const,
+      state: 'locked' as const,
+      lock: { difficulty: 14, keyContentId: null },
+    };
+    const phased = advanceBosses({
+      state: {
+        ...state,
+        features: [door],
+        actors: state.actors.map((actor) =>
+          actor.actorId === 'actor.boss' ? { ...actor, health: 60 } : actor,
+        ),
+      },
+      content,
+      eventId: 'event.arena-unlock',
+    });
+    expect(phased.state.features).toEqual([
+      {
+        featureId: door.featureId,
+        floorId: door.floorId,
+        x: door.x,
+        y: door.y,
+        contentId: null,
+        coverTileId: 1,
+        type: 'door',
+        state: 'open',
+      },
+    ]);
+  });
+
+  it('refuses an arena mutation that would lock a lockless door', () => {
+    const { state, content } = fixture({
+      phases: [
+        {
+          ...definition().phases[0]!,
+          effects: [
+            {
+              effectId: 'effect.feature.mutate',
+              parameters: { state: 'door.locked' },
+              requiresLivingTarget: false,
+            },
+          ],
+        },
+      ],
+    });
+    const door = {
+      featureId: 'feature.arena-door',
+      floorId: state.activeFloorId,
+      x: 5,
+      y: 3,
+      contentId: null,
+      coverTileId: 1 as const,
+      type: 'door' as const,
+      state: 'closed' as const,
+    };
+    const damaged = {
+      ...state,
+      features: [door],
+      actors: state.actors.map((actor) =>
+        actor.actorId === 'actor.boss' ? { ...actor, health: 60 } : actor,
+      ),
+    };
+    const before = structuredClone(damaged);
+    expect(() => advanceBosses({ state: damaged, content, eventId: 'event.arena-lock' })).toThrow(
+      /feature\.arena-door.*lock/i,
+    );
+    expect(damaged).toEqual(before);
+  });
+
   it('rolls back an earlier arena mutation when a later environment reference is missing', () => {
     const { state, content } = fixture({
       phases: [

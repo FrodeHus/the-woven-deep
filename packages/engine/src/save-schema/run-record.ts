@@ -352,6 +352,53 @@ function validateFloor(floorValue: SavedFloor, floorIndex: number, globalIds: Gl
   }
 }
 
+/**
+ * Every *generated* door tile must carry exactly one door feature. The terrain alone is an
+ * unopenable wall -- bump-to-open and the explicit open-door command both act on a door *feature*
+ * -- so a bare door tile can never be passed, and on a protected route that is a soft-locked run.
+ * Generation closes this at the source (`placeFloorLoot`'s door pass), and this is the same rule
+ * restated at the state boundary, where it also covers the paths that skip that pass: the
+ * `generated.populationPlacement` branch of `integrateGeneratedFloor`, and any doctored or
+ * hand-built save.
+ *
+ * Door tiles a vault `fixture` slot covers are exempt. Those are authored decoration entered and
+ * managed by their vault's own rules rather than by the door commands -- the town's house door is
+ * the shipped case: it is marked by a `fixture` slot, never opened, and the house is reached by
+ * standing beside it. `fixture` is the only exempt kind: a `door` slot always materializes a door
+ * feature (`fillFeatureSlots`), and every other kind is barred from door terrain when its vault
+ * compiles. Generated door tiles never sit on a slot, so the exemption cannot hide one. Two door
+ * features on one cell is always wrong, slot or not.
+ */
+function validateDoorTileCoverage(run: z.infer<typeof activeRunSchema>): void {
+  for (const [floorIndex, floorValue] of run.floors.entries()) {
+    const doorCells = new Map<number, number>();
+    for (const featureValue of run.features) {
+      if (featureValue.type !== 'door' || featureValue.floorId !== floorValue.floorId) continue;
+      const index = tileIndex(floorValue, featureValue.x, featureValue.y);
+      if (index === undefined) continue;
+      doorCells.set(index, (doorCells.get(index) ?? 0) + 1);
+    }
+    const fixtureCells = new Set<number>();
+    for (const placementSlot of floorValue.placementSlots) {
+      if (placementSlot.kind !== 'fixture') continue;
+      const index = tileIndex(floorValue, placementSlot.x, placementSlot.y);
+      if (index !== undefined) fixtureCells.add(index);
+    }
+    for (const [index, tileValue] of floorValue.tiles.entries()) {
+      if (tileValue !== 2) continue;
+      const doors = doorCells.get(index) ?? 0;
+      if (doors === 1) continue;
+      if (doors === 0 && fixtureCells.has(index)) continue;
+      const x = index % floorValue.width;
+      const y = Math.floor(index / floorValue.width);
+      fail(
+        `floors.${floorIndex}.tiles.${index}`,
+        `door tile ${x},${y} on floor ${floorValue.floorId} must carry exactly one door feature, found ${doors}`,
+      );
+    }
+  }
+}
+
 function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   const floorIds = new Set<string>();
   const globalIds: GlobalIds = {
@@ -1287,6 +1334,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       }
     }
   }
+
+  validateDoorTileCoverage(run);
 
   let previousRelationshipKey = '';
   for (const [relationshipIndex, relationshipValue] of run.relationships.entries()) {
