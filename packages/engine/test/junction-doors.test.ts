@@ -145,7 +145,7 @@ describe('junction door carving', () => {
     expect(carved.doorIndexes).toEqual([index(13, 3)]);
   });
 
-  it('is a pure deterministic function of its input', () => {
+  it('is a pure function of its input: repeated calls agree byte-for-byte', () => {
     const first = carveJunctionDoors(carveInput({ doorTilePercent: 50 }));
     const second = carveJunctionDoors(carveInput({ doorTilePercent: 50 }));
     expect(stableJson(first)).toBe(stableJson(second));
@@ -232,7 +232,7 @@ describe('generated door substrate', () => {
     expect(lockedDoors).toBeGreaterThan(0);
   });
 
-  it('generates byte-identical floors for the same seed', () => {
+  it('is a pure function of the request: repeated generation agrees byte-for-byte', () => {
     const request = floorRequest(seeds[0]!, 2);
     expect(stableJson(generateFloor(request).floor)).toBe(stableJson(generateFloor(request).floor));
   });

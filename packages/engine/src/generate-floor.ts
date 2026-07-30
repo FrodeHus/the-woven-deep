@@ -23,7 +23,8 @@ import { deriveSeed } from './random.js';
 
 /**
  * Seed discriminator for the junction-door pass. Attempt seeds derive from the same floor seed with
- * discriminators `1..32` (`deriveAttemptSeed`), so this constant cannot collide with one.
+ * discriminators `1..33` (`deriveAttemptSeed(seed, attempt + 1)` over attempts `0..31`, plus the
+ * fallback's `attemptLimit`-th derivation), so this constant cannot collide with one.
  */
 const DOOR_SEED_DISCRIMINATOR = 0x646f_6f72;
 
