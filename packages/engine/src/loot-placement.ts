@@ -121,6 +121,17 @@ function insideVault(floor: FloorSnapshot, cell: Point): boolean {
   );
 }
 
+/** Cells on this floor a feature already holds, so the door pass never doubles up on one. */
+function featureIndexes(run: ActiveRun, floor: FloorSnapshot): readonly number[] {
+  const indexes: number[] = [];
+  for (const feature of run.features) {
+    if (feature.floorId !== floor.floorId) continue;
+    const index = tileIndex(floor, feature.x, feature.y);
+    if (index !== undefined) indexes.push(index);
+  }
+  return indexes;
+}
+
 function occupiedIndexes(run: ActiveRun, floor: FloorSnapshot): ReadonlySet<number> {
   const occupied = new Set<number>();
   for (const entity of floor.entities) {
@@ -217,7 +228,8 @@ function drawCell(
 }
 
 /**
- * Scatters ground loot, chests, and locked doors across a generated floor.
+ * Scatters ground loot and chests across a generated floor, and hangs a door feature on every one
+ * of its door tiles.
  *
  * The pass is a pure function of `(run, floor, content, state)`: candidate cells are collected in
  * row-major order, every roll threads the supplied `loot-placement` state, and depth-0 floors (the
@@ -296,26 +308,43 @@ export function placeFloorLoot(
     features.push(feature);
   }
 
-  let lockedDoors = 0;
+  // Every door tile needs a door feature. The tile alone is an unopenable wall: bump-to-open and
+  // the explicit open-door command both work off a closed door *feature*, so a tile without one
+  // can never be passed -- and on a protected route that is a soft-locked run. Tiles a vault (or
+  // an earlier call on this same floor) already covered keep the feature they have.
+  const featureCells = new Set(featureIndexes(run, floor));
+  let doors = 0;
   for (let index = 0; index < floor.tiles.length; index += 1) {
     if (floor.tiles[index] !== DOOR_TILE_ID) continue;
-    if (protectedIndexes.has(index) || occupied.has(index) || placedIndexes.has(index)) continue;
-    const lockRoll = rollDie(cursor, PERCENT_SIDES);
-    cursor = lockRoll.state;
-    if (lockRoll.value > knobs.lockedDoorPercent) continue;
-    const door: DoorFeature = {
-      featureId: `feature.floor-loot.${floor.floorId}.door-${ordinal(lockedDoors)}`,
+    if (featureCells.has(index) || placedIndexes.has(index)) continue;
+    // Protected-route doors consume no roll and are never locked: keeping the stair route walkable
+    // is the invariant, and a closed door already satisfies it.
+    let locked = false;
+    if (!protectedIndexes.has(index)) {
+      const lockRoll = rollDie(cursor, PERCENT_SIDES);
+      cursor = lockRoll.state;
+      locked = lockRoll.value <= knobs.lockedDoorPercent;
+    }
+    const base = {
+      featureId: `feature.floor-loot.${floor.floorId}.door-${ordinal(doors)}`,
       floorId: floor.floorId,
       x: index % floor.width,
       y: Math.floor(index / floor.width),
       contentId: null,
       coverTileId: floor.tiles[index]!,
       type: 'door',
-      state: 'locked',
-      lock: { difficulty: knobs.chestLockDifficulty[band], keyContentId: null },
-    };
+    } as const;
+    // A `closed` door carries no `lock` record at all -- the save schema enforces the lock is
+    // present if and only if the door is `locked`.
+    const door: DoorFeature = locked
+      ? {
+          ...base,
+          state: 'locked',
+          lock: { difficulty: knobs.chestLockDifficulty[band], keyContentId: null },
+        }
+      : { ...base, state: 'closed' };
     features.push(door);
-    lockedDoors += 1;
+    doors += 1;
   }
 
   return { items, features, state: cursor };
