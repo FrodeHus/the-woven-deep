@@ -110,6 +110,7 @@ function droppedItemDefinition(): ItemContentEntry {
     equipment: null,
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };
@@ -465,6 +466,7 @@ describe('atomic world steps', () => {
         warningThresholds: [1],
         fuelTags: ['oil'],
       },
+      artifact: null,
       identification: { mode: 'known', poolId: null },
       effects: [],
     };

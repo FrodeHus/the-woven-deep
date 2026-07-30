@@ -1,4 +1,4 @@
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: item
     id: item.leather-armor
@@ -18,5 +18,6 @@ entries:
     equipment: { slots: [body], handedness: none, reservedSlots: [] }
     combat: { accuracy: 0, defense: 1, armor: 1, damage: null, range: 0, ammunitionTag: null }
     light: null
+    artifact: null
     identification: { mode: known, poolId: null }
     effects: []

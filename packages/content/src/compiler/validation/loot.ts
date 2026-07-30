@@ -8,6 +8,7 @@ import {
   MAX_LOOT_TABLE_ROLLS,
   MAX_LOOT_WEIGHT_TOTAL,
 } from '../../loot-limits.js';
+import { artifactItemIdSet } from './artifact.js';
 import { compareCodeUnits, issue, type LocatedContentEntry } from './shared.js';
 
 export function lootIssues(
@@ -25,6 +26,7 @@ export function lootIssues(
         ({ entry }) => (entry as EncounterContentEntry & { model: 'boss' }).definition.uniqueItemId,
       ),
   );
+  const artifactIds = artifactItemIdSet(locatedEntries);
   const graph = new Map<string, string[]>();
   for (const { entry, file } of tables) {
     const edges: string[] = [];
@@ -114,6 +116,15 @@ export function lootIssues(
             file,
             `${path}.contentId`,
             `guaranteed boss-unique item ${choice.contentId} cannot appear in ordinary loot`,
+          ),
+        );
+      }
+      if (choice.contentId !== null && artifactIds.has(choice.contentId)) {
+        issues.push(
+          issue(
+            file,
+            `${path}.contentId`,
+            `legendary artifact ${choice.contentId} cannot appear in ordinary loot`,
           ),
         );
       }

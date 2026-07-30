@@ -225,6 +225,7 @@ function merchantFixture(overrides: Partial<MerchantEncounterContentEntry> = {})
     equipment: null,
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };
@@ -1304,6 +1305,7 @@ describe('vault item slot consumption', () => {
     equipment: null,
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };
@@ -1744,6 +1746,7 @@ describe('vault door/chest feature slot spawn', () => {
     equipment: null,
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };

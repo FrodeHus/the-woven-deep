@@ -251,6 +251,7 @@ describe('inventory conservation properties', () => {
     equipment: null,
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };
@@ -354,6 +355,7 @@ describe('item light properties', () => {
               warningThresholds: [10],
               fuelTags: ['oil'],
             },
+            artifact: null,
             identification: { mode: 'known', poolId: null },
             effects: [],
           };
@@ -419,6 +421,7 @@ describe('survival resource properties', () => {
       warningThresholds: [50, 10],
       fuelTags: ['oil'],
     },
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };

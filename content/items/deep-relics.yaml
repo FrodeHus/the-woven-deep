@@ -1,4 +1,4 @@
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: item
     id: item.bound-signet
@@ -18,6 +18,7 @@ entries:
     equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
     combat: { accuracy: 0, defense: 1, armor: 1, damage: null, range: 0, ammunitionTag: null }
     light: null
+    artifact: null
     identification: { mode: known, poolId: null }
     effects: []
 
@@ -39,5 +40,6 @@ entries:
     equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
     combat: { accuracy: 1, defense: 1, armor: 0, damage: null, range: 0, ammunitionTag: null }
     light: null
+    artifact: null
     identification: { mode: known, poolId: null }
     effects: []

@@ -1,4 +1,5 @@
 import type {
+  ArtifactDefinition,
   CompiledContentPack,
   ItemContentEntry,
   MerchantEncounterContentEntry,
@@ -172,6 +173,26 @@ export function guaranteedUniqueItemIds(content: CompiledContentPack): ReadonlyS
       entry.kind === 'encounter' && entry.model === 'boss' ? [entry.definition.uniqueItemId] : [],
     ),
   );
+}
+
+/** Content IDs of items carrying an `artifact` block. */
+export function artifactItemIds(content: CompiledContentPack): ReadonlySet<OpaqueId> {
+  return new Set(
+    content.entries.flatMap((entry) =>
+      entry.kind === 'item' && entry.artifact !== null ? [entry.id] : [],
+    ),
+  );
+}
+
+/** The `artifact` definition for a content ID, or null when the item is not an artifact. */
+export function artifactById(
+  content: CompiledContentPack,
+  contentId: OpaqueId,
+): ArtifactDefinition | null {
+  const entry = content.entries.find(
+    (candidate) => candidate.kind === 'item' && candidate.id === contentId,
+  ) as ItemContentEntry | undefined;
+  return entry?.artifact ?? null;
 }
 
 export function merchantAcceptsItem(

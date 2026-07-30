@@ -241,7 +241,7 @@ describe('server-admin content documentation', () => {
       resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
       'utf8',
     );
-    for (const identifier of ['generation', 'doorTilePercent']) {
+    for (const identifier of ['generation', 'doorTilePercent', 'artifactOfferPercent']) {
       expect(reference, `missing generation documentation for ${identifier}`).toContain(
         `\`${identifier}\``,
       );
@@ -265,6 +265,7 @@ describe('server-admin content documentation', () => {
         '`generation: { doorTilePercent: 35 }` to the balance entry',
       // The v8 note used to claim "no other field changes"; v8 also made `floorLoot` required.
       'and the required balance `floorLoot` block',
+      'adds the optional item `artifact` block and the balance `generation.artifactOfferPercent` knob',
     ]) {
       expect(reference, `missing migration contract: ${contract}`).toContain(contract);
     }

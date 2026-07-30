@@ -43,6 +43,7 @@ function itemDef(id: string, overrides: Partial<ItemContentEntry> = {}): ItemCon
     equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
     ...overrides,

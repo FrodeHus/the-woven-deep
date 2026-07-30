@@ -1,4 +1,4 @@
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: item
     id: item.pitch-torch
@@ -25,5 +25,6 @@ entries:
       fuelPerTime: 2
       warningThresholds: [200, 80]
       fuelTags: []
+    artifact: null
     identification: { mode: known, poolId: null }
     effects: []

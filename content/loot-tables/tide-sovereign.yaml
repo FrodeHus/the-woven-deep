@@ -1,4 +1,4 @@
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: loot-table
     id: loot-table.tide-sovereign
