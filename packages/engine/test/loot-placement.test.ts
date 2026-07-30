@@ -11,7 +11,9 @@ import {
   createUnknownKnowledge,
   depthBandFor,
   placeFloorLoot,
+  preservesRequiredRoutes,
   protectedRouteIndexes,
+  requiredPoints,
   tileDefinition,
   validateContentBoundRun,
   type ActiveRun,
@@ -332,9 +334,113 @@ describe('placeFloorLoot', () => {
     }
   });
 
+  it('never places on a cell held by a living actor on this floor', () => {
+    const generated = floor();
+    // A cell the unobstructed pass actually uses, so occupying it proves the exclusion bites.
+    const actorCell = groundCells(
+      placeFloorLoot({ run: run(), floor: generated, content: content() }, SEEDS[0]!).items,
+    )[0]!;
+    const base = run();
+    const blocker = {
+      ...base.actors[0]!,
+      actorId: 'actor.floor-blocker',
+      playerControlled: false,
+      floorId: generated.floorId,
+      x: actorCell.x,
+      y: actorCell.y,
+      health: 5,
+    };
+    const blockedRun: ActiveRun = { ...base, actors: [...base.actors, blocker] };
+
+    for (const seed of SEEDS) {
+      const result = placeFloorLoot(
+        { run: blockedRun, floor: generated, content: content() },
+        seed,
+      );
+      const placed = [...groundCells(result.items), ...result.features];
+      expect(placed.some((cell) => cell.x === actorCell.x && cell.y === actorCell.y)).toBe(false);
+    }
+  });
+
+  it('pads the scatter ordinal so a batch of ten or more still sorts by placement order', () => {
+    const items = placeFloorLoot(fixture(), SEED).items;
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) {
+      expect(item.itemId).toMatch(/^item\.floor-loot\.floor\.loot-placement\.\d{6}\.\d{6}$/);
+    }
+    const sorted = [...items].map((item) => item.itemId).sort();
+    expect(sorted).toEqual(items.map((item) => item.itemId));
+  });
+
+  it('keeps the stairs mutually reachable after every lock is placed', () => {
+    const generated = floor();
+    for (const seed of SEEDS) {
+      const result = placeFloorLoot({ run: run(), floor: generated, content: content() }, seed);
+      const locked = result.features.filter((feature) => feature.state === 'locked');
+      expect(
+        preservesRequiredRoutes({
+          width: generated.width,
+          height: generated.height,
+          tiles: generated.tiles,
+          requiredPoints: requiredPoints(generated),
+          blockedPoints: locked.map((feature) => ({ x: feature.x, y: feature.y })),
+        }),
+      ).toBe(true);
+    }
+  });
+
   it('places nothing on depth-0 floors', () => {
     expect(placeFloorLoot(townFixture(), SEED)).toEqual({ items: [], features: [], state: SEED });
   });
+});
+
+describe('placeFloorLoot depth bands', () => {
+  /** One unique item per band and kind, so a drawn item identifies the exact table it came from. */
+  function bandedContent(): CompiledContentPack {
+    const shared = content();
+    const added: (ItemContentEntry | LootTableContentEntry)[] = [];
+    for (const kind of ['floor-scatter', 'chest'] as const) {
+      for (const band of ['shallow', 'mid', 'deep'] as const) {
+        const itemId = `item.test-${kind}-${band}`;
+        added.push(scatterItem(itemId), lootTable(`loot-table.${kind}-${band}`, [itemId]));
+      }
+    }
+    const replacedIds = new Set(added.map((entry) => entry.id));
+    return {
+      ...shared,
+      entries: [...shared.entries.filter((entry) => !replacedIds.has(entry.id)), ...added],
+    };
+  }
+
+  const bandDepths = (): Readonly<Record<'shallow' | 'mid' | 'deep', number>> => {
+    const bands = balanceEntry(bandedContent()).floorLoot.depthBands;
+    return { shallow: 1, mid: bands.shallowMaxDepth + 1, deep: bands.midMaxDepth + 1 };
+  };
+
+  for (const band of ['shallow', 'mid', 'deep'] as const) {
+    it(`draws ${band}-band floors from the ${band} scatter and chest tables`, () => {
+      const pack = bandedContent();
+      const depth = bandDepths()[band];
+      expect(depthBandFor(depth, balanceEntry(pack).floorLoot.depthBands)).toBe(band);
+
+      const scattered: string[] = [];
+      const chestTableIds: string[] = [];
+      for (const seed of SEEDS) {
+        const result = placeFloorLoot({ run: run(), floor: floor({ depth }), content: pack }, seed);
+        scattered.push(...result.items.map((item) => item.contentId));
+        chestTableIds.push(
+          ...result.features
+            .filter((feature): feature is ChestFeature => feature.type === 'chest')
+            .map((chest) => chest.lootTableId!),
+        );
+      }
+
+      expect(scattered.length).toBeGreaterThan(0);
+      expect([...new Set(scattered)]).toEqual([`item.test-floor-scatter-${band}`]);
+      expect(chestTableIds.length).toBeGreaterThan(0);
+      expect([...new Set(chestTableIds)]).toEqual([`loot-table.chest-${band}`]);
+    });
+  }
 });
 
 describe('engine-required floor loot table preflight', () => {

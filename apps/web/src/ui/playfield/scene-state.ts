@@ -220,7 +220,19 @@ export function nextSceneState(
     [hero.actorId, { x: hero.x, y: hero.y }],
     ...actorsOf(projection).map((actor) => [actor.actorId, { x: actor.x, y: actor.y }] as const),
   ]);
-  const effects = effectsForEvents(snapshot.lastEvents, hero.actorId, positions);
+  const eventEffects = effectsForEvents(snapshot.lastEvents, hero.actorId, positions);
+
+  // The hero's own `actor.died` is deliberately never projected (the conclusion overlay owns that
+  // moment), so the hero's death burst is keyed off the conclusion transition instead: it fires on
+  // the one snapshot where the death conclusion first appears, never off `actor.died`.
+  const heroDied = concludedByDeath(snapshot);
+  const burstsNow = heroDied && prev?.concludedByDeath !== true;
+  const effects: readonly TransientEffect[] = burstsNow
+    ? [
+        ...eventEffects,
+        { key: `death-burst.${hero.actorId}`, kind: 'death-burst', x: hero.x, y: hero.y },
+      ]
+    : eventEffects;
 
   const hurt = snapshot.lastEvents.some((event) => event.type === 'hero.damaged');
 
@@ -230,6 +242,6 @@ export function nextSceneState(
     groundItems,
     effects,
     hurtAt: hurt ? now : null,
-    concludedByDeath: concludedByDeath(snapshot),
+    concludedByDeath: heroDied,
   };
 }

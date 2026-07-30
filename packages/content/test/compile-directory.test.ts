@@ -983,6 +983,38 @@ describe('compileContentDirectory', () => {
     );
   });
 
+  it('accepts a zero floor-loot maximum so scatter piles and chests can be disabled', async () => {
+    const root = await fixture({
+      'content.yaml': contentFile(compactMonster, compactItem, compactVault),
+      'balance.yaml': contentFile(
+        compactBalance
+          .replace(
+            'scatterCount: {minimum: 2, maximum: 4}',
+            'scatterCount: {minimum: 0, maximum: 0}',
+          )
+          .replace('chestCount: {minimum: 0, maximum: 2}', 'chestCount: {minimum: 0, maximum: 0}'),
+      ),
+    });
+    const pack = await compileContentDirectory({ rootDir: root });
+    expect(pack.entries.find((entry) => entry.kind === 'balance')).toMatchObject({
+      floorLoot: { scatterCount: { maximum: 0 }, chestCount: { maximum: 0 } },
+    });
+  });
+
+  it('still rejects a floor-loot minimum above its maximum', async () => {
+    const root = await fixture({
+      'balance.yaml': contentFile(
+        compactBalance.replace(
+          'scatterCount: {minimum: 2, maximum: 4}',
+          'scatterCount: {minimum: 1, maximum: 0}',
+        ),
+      ),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /minimum must not exceed maximum/i,
+    );
+  });
+
   it('requires a positive rest maximum duration', async () => {
     const root = await fixture({
       'balance.yaml': contentFile(

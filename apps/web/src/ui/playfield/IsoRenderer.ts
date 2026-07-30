@@ -209,7 +209,9 @@ export class IsoRenderer {
   private gateTexture: Texture | null = null;
   private doorTexture: Texture | null = null;
   private archOpenTexture: Texture | null = null;
-  private crateTexture: Texture | null = null;
+  /** The chest crate's texture and its source rect together, so the chest branch has one source of
+   * truth: `null` means the sheet carries no crate art and a chest falls back to its glyph. */
+  private crate: Readonly<{ texture: Texture; rect: AtlasRect }> | null = null;
   private gradientTexture: Texture | null = null;
   private voidRockTexture: Texture | null = null;
   private voidRockSprite: TilingSprite | null = null;
@@ -329,8 +331,11 @@ export class IsoRenderer {
     this.archOpenTexture =
       this.atlas.archOpen === undefined ? null : this.atlasTexture(this.atlas.archOpen);
     // Absent only in a sheet without crate art -- a chest then falls back to its glyph.
-    this.crateTexture =
-      this.atlas.waresCrate === undefined ? null : this.atlasTexture(this.atlas.waresCrate);
+    const waresCrate = this.atlas.waresCrate;
+    this.crate =
+      waresCrate === undefined
+        ? null
+        : { texture: this.atlasTexture(waresCrate), rect: waresCrate };
     this.gradientTexture = this.buildRadialGradientTexture();
     this.voidRockTexture = this.buildVoidRockTexture();
 
@@ -438,13 +443,13 @@ export class IsoRenderer {
     this.gradientTexture?.destroy(true);
     // Canvas-backed like the gradient: this instance built it, so this instance frees its source.
     this.voidRockTexture?.destroy(true);
-    // `gateTexture`/`doorTexture`/`archOpenTexture`/`crateTexture` are frame wrappers over the atlas
+    // `gateTexture`/`doorTexture`/`archOpenTexture`/`crate` are frame wrappers over the atlas
     // base source, so drop only the wrappers here and destroy the shared source once, via the base
     // texture.
     this.gateTexture?.destroy(false);
     this.doorTexture?.destroy(false);
     this.archOpenTexture?.destroy(false);
-    this.crateTexture?.destroy(false);
+    this.crate?.texture.destroy(false);
     // Cached actor/item crops are frame wrappers over their base sources, so drop only the wrappers
     // here and destroy each shared source once via its base texture below.
     for (const texture of this.actorTextures.values()) texture.destroy(false);
@@ -459,7 +464,7 @@ export class IsoRenderer {
     this.gateTexture = null;
     this.doorTexture = null;
     this.archOpenTexture = null;
-    this.crateTexture = null;
+    this.crate = null;
     this.gradientTexture = null;
     this.voidRockTexture = null;
     this.voidRockSprite = null;
@@ -727,9 +732,9 @@ export class IsoRenderer {
     let rect: AtlasRect;
     let widthScale = 1;
     if (feature.type === 'chest') {
-      if (this.atlas.waresCrate === undefined) return null;
-      texture = this.crateTexture;
-      rect = this.atlas.waresCrate;
+      if (this.crate === null) return null;
+      texture = this.crate.texture;
+      rect = this.crate.rect;
       widthScale = CHEST_SPRITE_WIDTH_SCALE;
     } else if (feature.type !== 'door') {
       return null;

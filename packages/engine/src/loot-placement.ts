@@ -19,8 +19,8 @@ const PERCENT_SIDES = 100;
 const ORDINAL_DIGITS = 6;
 
 /**
- * Zero-padded feature ordinal: ids within one floor's batch must sort in the order they were
- * placed, and an unpadded `10` sorts before `2`.
+ * Zero-padded feature and scatter-pile ordinal: ids within one floor's batch must sort in the order
+ * they were placed, and an unpadded `10` sorts before `2`.
  */
 function ordinal(value: number): string {
   return String(value).padStart(ORDINAL_DIGITS, '0');
@@ -82,6 +82,15 @@ function occupiedIndexes(run: ActiveRun, floor: FloorSnapshot): ReadonlySet<numb
   for (const feature of run.features) {
     if (feature.floorId !== floor.floorId) continue;
     const index = tileIndex(floor, feature.x, feature.y);
+    if (index !== undefined) occupied.add(index);
+  }
+  // `floor.entities` is the snapshot's own occupancy list and can lag the run's actors within a
+  // single `placeFloorPopulations` call (encounters commit to `run.actors`, not to the snapshot),
+  // so living actors on this floor are excluded here too -- otherwise a chest or locked door can
+  // land under a monster spawned moments earlier in the same pass.
+  for (const actor of run.actors) {
+    if (actor.floorId !== floor.floorId || actor.health <= 0) continue;
+    const index = tileIndex(floor, actor.x, actor.y);
     if (index !== undefined) occupied.add(index);
   }
   return occupied;
@@ -195,7 +204,7 @@ export function placeFloorLoot(
       content,
       tableId: `loot-table.floor-scatter-${band}`,
       state: cursor,
-      itemIdPrefix: `item.floor-loot.${floor.floorId}.${pile}`,
+      itemIdPrefix: `item.floor-loot.${floor.floorId}.${ordinal(pile)}`,
       floorId: floor.floorId,
       x: draw.cell.x,
       y: draw.cell.y,
