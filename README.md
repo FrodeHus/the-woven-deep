@@ -29,9 +29,11 @@ Death is not the end of a run's story, it's the beginning of the next one's.
 
 ## Playing it
 
-A single run is turn-based, procedurally generated, and unforgiving.
+A single run is turn-based, procedurally generated, and unforgiving — and drawn in moody isometric pixel art, from the lantern-lit hero down to the coins glinting on the floor.
 
 - Floors are woven fresh for every run, populated by encounter tables, vaults, and traps defined entirely in content files.
+- The Deep is worth looting: gold piles, scattered supplies, and chests — some locked. Iron keys are rare; lockpicks break.
+- Doors creak open as you push through them. The locked ones guard side passages and want a key, a pick, or a good reason.
 - Monsters behave according to their nature: lone hunters, packs with leaders, swarms that grow from a source, and rare bosses with phases of their own.
 - Potions and rings start unidentified. Drinking the crimson one is one way to find out what it does.
 - Light matters. Torches burn down, lanterns need lamp oil, and the dark is not on your side.
