@@ -8,10 +8,18 @@ import {
   carveJunctionDoors,
   createClassicTheme,
   createDemoRun,
+  createGeneratedDemoRun,
+  decodeActiveRun,
+  encodeActiveRun,
   generateFloor,
   junctionDoorCandidates,
   placeFloorLoot,
+  protectedRouteIndexes,
+  resolveCommand,
   stableJson,
+  tileDefinition,
+  type ActiveRun,
+  type Direction,
   type DoorFeature,
   type GenerateFloorRequest,
   type RoomBounds,
@@ -235,5 +243,126 @@ describe('generated door substrate', () => {
   it('is a pure function of the request: repeated generation agrees byte-for-byte', () => {
     const request = floorRequest(seeds[0]!, 2);
     expect(stableJson(generateFloor(request).floor)).toBe(stableJson(generateFloor(request).floor));
+  });
+
+  it('gives every generated door tile exactly one openable door feature', () => {
+    const run = createDemoRun();
+    let doorTiles = 0;
+    for (const [offset, seed] of seeds.entries()) {
+      const generated = generateFloor(floorRequest(seed, 1 + (offset % 3))).floor;
+      const loot = placeFloorLoot({ run, floor: generated, content }, run.rng['loot-placement']);
+      const doors = loot.features.filter(
+        (feature): feature is DoorFeature => feature.type === 'door',
+      );
+      const protectedIndexes = protectedRouteIndexes(generated);
+      for (let index = 0; index < generated.tiles.length; index += 1) {
+        if (generated.tiles[index] !== 2) continue;
+        doorTiles += 1;
+        const x = index % generated.width;
+        const y = Math.floor(index / generated.width);
+        const at = doors.filter((door) => door.x === x && door.y === y);
+        expect(at).toHaveLength(1);
+        const door = at[0]!;
+        expect(door.coverTileId).toBe(2);
+        if (door.state === 'locked') {
+          expect(protectedIndexes.has(index)).toBe(false);
+          expect(door.lock).toBeDefined();
+        } else {
+          expect(door.state).toBe('closed');
+          expect(door.lock).toBeUndefined();
+        }
+      }
+      expect(doors).toHaveLength(generated.tiles.filter((tile) => tile === 2).length);
+    }
+    expect(doorTiles).toBeGreaterThan(0);
+  });
+
+  it('keeps generated door features identical for the same seed', () => {
+    const run = createDemoRun();
+    const generated = generateFloor(floorRequest(seeds[0]!, 2)).floor;
+    const first = placeFloorLoot({ run, floor: generated, content }, run.rng['loot-placement']);
+    const second = placeFloorLoot({ run, floor: generated, content }, run.rng['loot-placement']);
+    expect(stableJson(first.features)).toBe(stableJson(second.features));
+  });
+
+  it('lets the hero bump every closed generated door open and still saves the run', () => {
+    const { run } = createGeneratedDemoRun(content);
+    const floor = run.floors.find((candidate) => candidate.floorId === run.activeFloorId)!;
+    const doorTiles = floor.tiles.filter((tile) => tile === 2).length;
+    expect(doorTiles).toBeGreaterThan(0);
+    const protectedIndexes = protectedRouteIndexes(floor);
+    const doors = run.features.filter(
+      (feature): feature is DoorFeature =>
+        feature.type === 'door' && feature.floorId === floor.floorId,
+    );
+    expect(doors).toHaveLength(doorTiles);
+
+    const directions: readonly Readonly<{ dx: number; dy: number; direction: Direction }>[] = [
+      { dx: 0, dy: -1, direction: 'south' },
+      { dx: 0, dy: 1, direction: 'north' },
+      { dx: -1, dy: 0, direction: 'east' },
+      { dx: 1, dy: 0, direction: 'west' },
+    ];
+    let bumped = 0;
+    for (const door of doors) {
+      const index = door.y * floor.width + door.x;
+      if (door.state === 'locked') {
+        expect(protectedIndexes.has(index)).toBe(false);
+        continue;
+      }
+      expect(door.state).toBe('closed');
+      const approach = directions.find((step) => {
+        const neighbor = { x: door.x + step.dx, y: door.y + step.dy };
+        const neighborIndex = neighbor.y * floor.width + neighbor.x;
+        return (
+          neighbor.x >= 0 &&
+          neighbor.y >= 0 &&
+          neighbor.x < floor.width &&
+          neighbor.y < floor.height &&
+          tileDefinition(floor.tiles[neighborIndex]!).walkable &&
+          !run.features.some(
+            (feature) =>
+              feature.floorId === floor.floorId &&
+              feature.x === neighbor.x &&
+              feature.y === neighbor.y,
+          ) &&
+          !run.actors.some(
+            (actor) =>
+              actor.health > 0 &&
+              actor.floorId === floor.floorId &&
+              !actor.playerControlled &&
+              actor.x === neighbor.x &&
+              actor.y === neighbor.y,
+          )
+        );
+      });
+      if (!approach) continue;
+      const hero = run.actors.find((actor) => actor.playerControlled)!;
+      const staged: ActiveRun = {
+        ...run,
+        actors: run.actors.map((actor) =>
+          actor.actorId === hero.actorId
+            ? { ...actor, x: door.x + approach.dx, y: door.y + approach.dy }
+            : actor,
+        ),
+      };
+      const result = resolveCommand(
+        staged,
+        {
+          type: 'move',
+          commandId: `command.bump-${door.featureId}`,
+          expectedRevision: staged.revision,
+          direction: approach.direction,
+        },
+        { content },
+      );
+      expect(result.result).toMatchObject({ status: 'applied' });
+      expect(
+        result.state.features.find((feature) => feature.featureId === door.featureId),
+      ).toMatchObject({ state: 'open' });
+      expect(() => decodeActiveRun(encodeActiveRun(result.state))).not.toThrow();
+      bumped += 1;
+    }
+    expect(bumped).toBeGreaterThan(0);
   });
 });

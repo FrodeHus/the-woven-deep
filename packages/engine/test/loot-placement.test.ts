@@ -278,17 +278,128 @@ describe('placeFloorLoot', () => {
     for (const door of doors) {
       const index = door.y * generated.width + door.x;
       expect(generated.tiles[index]).toBe(2);
-      expect(protectedIdx.has(index)).toBe(false);
-      expect(door.state).toBe('locked');
-      expect(door.lock?.difficulty).toBe(
-        balanceEntry(content()).floorLoot.chestLockDifficulty.shallow,
+      if (door.state === 'locked') {
+        expect(protectedIdx.has(index)).toBe(false);
+        expect(door.lock?.difficulty).toBe(
+          balanceEntry(content()).floorLoot.chestLockDifficulty.shallow,
+        );
+      } else {
+        expect(door.state).toBe('closed');
+        expect(door.lock).toBeUndefined();
+      }
+    }
+  });
+
+  /** A door tile planted on the stair-to-stair protected route, plus its index. */
+  function floorWithProtectedDoor(): Readonly<{ floor: FloorSnapshot; index: number }> {
+    const base = floor();
+    const anchors = new Set(
+      [base.stairUp!, base.stairDown!].map((anchor) => anchor.y * WIDTH + anchor.x),
+    );
+    const target = [...protectedRouteIndexes(base)].find(
+      (index) => !anchors.has(index) && base.tiles[index] === 1,
+    );
+    if (target === undefined) throw new Error('fixture must expose a protected route cell');
+    const tiles = [...base.tiles];
+    tiles[target] = 2;
+    return { floor: { ...base, tiles }, index: target };
+  }
+
+  it('gives every door tile a door feature, leaving none bare', () => {
+    const { floor: generated, index: protectedDoor } = floorWithProtectedDoor();
+    const doorIndexes = generated.tiles
+      .map((tile, index) => (tile === 2 ? index : -1))
+      .filter((index) => index >= 0);
+    expect(doorIndexes).toContain(protectedDoor);
+    for (const seed of SEEDS) {
+      const doors = placeFloorLoot(
+        { run: run(), floor: generated, content: content() },
+        seed,
+      ).features.filter((feature): feature is DoorFeature => feature.type === 'door');
+      for (const index of doorIndexes) {
+        const at = doors.filter(
+          (door) => door.x === index % WIDTH && door.y === Math.floor(index / WIDTH),
+        );
+        expect(at).toHaveLength(1);
+        expect(at[0]!.coverTileId).toBe(2);
+      }
+      expect(doors).toHaveLength(doorIndexes.length);
+    }
+  });
+
+  it('leaves protected-route door tiles closed and never locked', () => {
+    const { floor: generated, index: protectedDoor } = floorWithProtectedDoor();
+    for (const seed of SEEDS) {
+      const door = placeFloorLoot(
+        { run: run(), floor: generated, content: content() },
+        seed,
+      ).features.find(
+        (feature): feature is DoorFeature =>
+          feature.type === 'door' &&
+          feature.x === protectedDoor % WIDTH &&
+          feature.y === Math.floor(protectedDoor / WIDTH),
       );
+      expect(door?.state).toBe('closed');
+      expect(door?.lock).toBeUndefined();
+    }
+  });
+
+  it('produces both locked and closed doors across the seed set', () => {
+    const generated = floor();
+    const doors = SEEDS.flatMap((seed) =>
+      placeFloorLoot({ run: run(), floor: generated, content: content() }, seed).features.filter(
+        (feature): feature is DoorFeature => feature.type === 'door',
+      ),
+    );
+    expect(doors.some((door) => door.state === 'locked')).toBe(true);
+    expect(doors.some((door) => door.state === 'closed')).toBe(true);
+  });
+
+  it('numbers door features row-major across locked and closed alike', () => {
+    const { floor: generated } = floorWithProtectedDoor();
+    const doors = placeFloorLoot(
+      { run: run(), floor: generated, content: content() },
+      SEED,
+    ).features.filter((feature): feature is DoorFeature => feature.type === 'door');
+    expect(doors.length).toBeGreaterThan(1);
+    for (const door of doors) {
+      expect(door.featureId).toMatch(/^feature\.floor-loot\.floor\.loot-placement\.door-\d{6}$/);
+    }
+    expect([...doors].map((door) => door.featureId).sort()).toEqual(
+      doors.map((door) => door.featureId),
+    );
+    const rowMajor = [...doors].sort((left, right) =>
+      left.y === right.y ? left.x - right.x : left.y - right.y,
+    );
+    expect(rowMajor.map((door) => door.featureId)).toEqual(doors.map((door) => door.featureId));
+  });
+
+  it('adds no second door feature where a vault already authored one', () => {
+    const generated = floor();
+    const doorCell = DOOR_CELLS[0]!;
+    const authored: DoorFeature = {
+      featureId: 'feature.vault.pre-existing-door',
+      floorId: generated.floorId,
+      x: doorCell.x,
+      y: doorCell.y,
+      contentId: null,
+      coverTileId: 2,
+      type: 'door',
+      state: 'locked',
+      lock: { difficulty: 9, keyContentId: null },
+    };
+    const authoredRun: ActiveRun = { ...run(), features: [authored] };
+    for (const seed of SEEDS) {
+      const doors = placeFloorLoot(
+        { run: authoredRun, floor: generated, content: content() },
+        seed,
+      ).features.filter((feature): feature is DoorFeature => feature.type === 'door');
+      expect(doors.some((door) => door.x === doorCell.x && door.y === doorCell.y)).toBe(false);
     }
   });
 
   it('never places on a cell held by a floor entity or an existing feature', () => {
     const generated = floor();
-    const protectedIdx = protectedRouteIndexes(generated);
     // Cells the unobstructed pass actually uses, so blocking them proves the exclusion bites.
     const baseline = SEEDS.flatMap((seed) => [
       ...groundCells(
@@ -302,14 +413,10 @@ describe('placeFloorLoot', () => {
     const featureCell = baseline.find(
       (cell) => cell.x !== entityCell.x || cell.y !== entityCell.y,
     )!;
-    const doorCell = DOOR_CELLS.find((door) => !protectedIdx.has(door.y * WIDTH + door.x))!;
 
     const blocked: FloorSnapshot = {
       ...generated,
-      entities: [
-        { entityId: 'actor.blocker', x: entityCell.x, y: entityCell.y },
-        { entityId: 'actor.door-blocker', x: doorCell.x, y: doorCell.y },
-      ],
+      entities: [{ entityId: 'actor.blocker', x: entityCell.x, y: entityCell.y }],
     };
     const blockingFeature: ChestFeature = {
       featureId: 'feature.pre-existing.chest',
@@ -329,7 +436,7 @@ describe('placeFloorLoot', () => {
     for (const seed of SEEDS) {
       const result = placeFloorLoot({ run: blockedRun, floor: blocked, content: content() }, seed);
       const placed = [...groundCells(result.items), ...result.features];
-      for (const occupied of [entityCell, featureCell, doorCell]) {
+      for (const occupied of [entityCell, featureCell]) {
         expect(placed.some((cell) => cell.x === occupied.x && cell.y === occupied.y)).toBe(false);
       }
     }
