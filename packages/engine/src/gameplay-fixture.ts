@@ -7,6 +7,7 @@ import type {
   VaultContentEntry,
 } from '@woven-deep/content';
 import { emptyEquipment, heroPerception, type ActorState } from './actor-model.js';
+import { balanceEntry } from './balance.js';
 import { deriveActorStats } from './attributes.js';
 import { validateContentBoundRun } from './content-bound-validation.js';
 import { itemLightSources } from './equipment.js';
@@ -308,10 +309,26 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
     height: HEIGHT,
     theme: createClassicTheme(WIDTH, HEIGHT, { ambient: { color: [0, 0, 0], strength: 0 } }),
     vaults,
+    doorTilePercent: balanceEntry(pack).generation.doorTilePercent,
     requiredVaultId: 'vault.lampwright-cache',
   });
 
-  const door = rowMajorCells(generated.floor, (_point, tile) => tile === 2)[0];
+  const demonstrationVault = generated.floor.vaults.find(
+    (placement) => placement.vaultId === 'vault.lampwright-cache',
+  );
+  if (!demonstrationVault)
+    throw new Error('generated gameplay floor requires the lampwright cache');
+  const insideDemonstrationVault = (point: Point): boolean =>
+    point.x >= demonstrationVault.x &&
+    point.x < demonstrationVault.x + demonstrationVault.width &&
+    point.y >= demonstrationVault.y &&
+    point.y < demonstrationVault.y + demonstrationVault.height;
+  // The scripted run is choreographed around the cache's authored doorway, not around whatever
+  // junction door the generator happened to carve elsewhere on the floor.
+  const door = rowMajorCells(
+    generated.floor,
+    (point, tile) => tile === 2 && insideDemonstrationVault(point),
+  )[0];
   if (!door) throw new Error('generated gameplay floor requires a closed door');
   const trapSlot = generated.floor.placementSlots.find((slot) => slot.kind === 'trap');
   const trap = trapSlot
@@ -347,20 +364,10 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
     throw new Error('generated gameplay floor requires two lock feature cells beside its door');
   const [chestCell, lockedDoorCell] = lockCells as [Point, Point];
   const reservedCells = new Set([...featureCells, cellKey(chestCell), cellKey(lockedDoorCell)]);
-  const demonstrationVault = generated.floor.vaults.find(
-    (placement) => placement.vaultId === 'vault.lampwright-cache',
-  );
-  if (!demonstrationVault)
-    throw new Error('generated gameplay floor requires the lampwright cache');
   const beetleCells = new Set(
     rowMajorCells(
       generated.floor,
-      (point, tile) =>
-        tileDefinition(tile).walkable &&
-        point.x >= demonstrationVault.x &&
-        point.x < demonstrationVault.x + demonstrationVault.width &&
-        point.y >= demonstrationVault.y &&
-        point.y < demonstrationVault.y + demonstrationVault.height,
+      (point, tile) => tileDefinition(tile).walkable && insideDemonstrationVault(point),
     ).map(cellKey),
   );
   const positions = selectActorCells(generated.floor, reservedCells, doorApproach, beetleCells);

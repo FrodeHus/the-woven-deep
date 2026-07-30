@@ -1,4 +1,5 @@
 import type { CompiledContentPack, VaultContentEntry } from '@woven-deep/content';
+import { balanceEntry } from './balance.js';
 import { addGeneratedFloor } from './floor-integration.js';
 import { createDemoRun } from './fixture.js';
 import { generateFloor, type GeneratedFloor } from './generate-floor.js';
@@ -47,6 +48,7 @@ export function createGeneratedDemoRun(pack: CompiledContentPack): GeneratedDemo
       ambient: { color: [19, 23, 31], strength: 7 },
     }),
     vaults,
+    doorTilePercent: balanceEntry(pack).generation.doorTilePercent,
     requiredVaultId: 'vault.lampwright-cache',
   });
   const stairUp = generated.floor.stairUp;

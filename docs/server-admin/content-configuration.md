@@ -137,9 +137,25 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `house` | object | Yes | Player house sizing, described below. The bundled value is `{ baseCapacity: 6, strongboxIncrement: 4 }`. |
 | `encounterDensity` | object | Yes | Dungeon encounter density, described below. The bundled value is `{ openCellsPerEncounter: 800 }`. |
 | `fragmentSpawnRollDenominator` | positive integer | Yes | Odds denominator (1-in-N) for the rare Ancient Tablet fragment spawn rolled once per floor generation. The bundled value is `40`. |
+| `generation` | object | Yes | Dungeon generation knobs described below. The bundled value is `{ doorTilePercent: 35 }`. |
 | `floorLoot` | object | Yes | Floor-loot placement knobs described below. |
 
 `house` carries a positive safe integer `baseCapacity` (the player house's starting storage capacity) and a positive safe integer `strongboxIncrement` (additional capacity granted per purchased strongbox upgrade). `encounterDensity` carries a positive safe integer `openCellsPerEncounter`, the average number of walkable (open) floor cells the generator budgets per placed encounter.
+
+### Dungeon generation
+
+`generation` bounds the shape of a generated floor.
+
+| Field | Type | Required | Rules and meaning |
+|---|---|---|---|
+| `doorTilePercent` | integer 0-100 | Yes | Percent chance, rolled once per corridor-to-room junction of a finished floor, that the junction becomes a closed door tile (`terrain.door`). Junctions are the one-wide passage mouths where a corridor meets a room; stairs and their surrounding cells, vault footprints and the ring around them (vaults author their own doorways), and junctions already beside a door tile are never converted. `0` disables generated doors, leaving only vault-authored ones. Door tiles are the substrate the locked-door pass rolls `floorLoot.lockedDoorPercent` against, so raising this knob raises the expected locked-door count with it. |
+
+```yaml
+generation:
+  doorTilePercent: 35
+```
+
+The pass runs after the floor's topology and vaults are final and before any population or loot placement, and draws from a stream derived from the floor seed alone, so the seed fully determines which junctions carry doors. Door tiles are traversable-once-opened, so no setting of this knob can disconnect a floor or lengthen the required stair route.
 
 ### Floor loot
 
@@ -249,6 +265,8 @@ entries:
     house: { baseCapacity: 6, strongboxIncrement: 4 }
     encounterDensity: { openCellsPerEncounter: 800 }
     fragmentSpawnRollDenominator: 40
+    generation:
+      doorTilePercent: 35
     floorLoot:
       scatterCount: { minimum: 2, maximum: 4 }
       chestCount: { minimum: 0, maximum: 2 }

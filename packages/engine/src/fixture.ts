@@ -112,6 +112,7 @@ export function createDemoContentPack(): CompiledContentPack {
         house: { baseCapacity: 6, strongboxIncrement: 4 },
         encounterDensity: { openCellsPerEncounter: 800 },
         fragmentSpawnRollDenominator: 40,
+        generation: { doorTilePercent: 35 },
         floorLoot: {
           scatterCount: { minimum: 2, maximum: 4 },
           chestCount: { minimum: 0, maximum: 2 },

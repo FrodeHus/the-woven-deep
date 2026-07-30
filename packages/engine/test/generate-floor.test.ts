@@ -9,6 +9,7 @@ import type {
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   analyzeConnectivity,
+  balanceEntry,
   createDemoRun,
   createClassicTheme,
   generateFloor,
@@ -39,6 +40,7 @@ function request(): GenerateFloorRequest {
     height,
     theme: createClassicTheme(width, height, { ambient }),
     vaults,
+    doorTilePercent: balanceEntry(content).generation.doorTilePercent,
     requiredVaultId: 'vault.lampwright-cache',
   };
 }
@@ -185,6 +187,7 @@ describe('full floor generation', () => {
       height,
       theme: createClassicTheme(width, height, { ambient, minimumStairDistance: 10 }),
       vaults: [],
+      doorTilePercent: 0,
       attemptLimit: 2,
       topologyFactory: (_request, attempt) => ({
         ok: true,

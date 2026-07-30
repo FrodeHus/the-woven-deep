@@ -18,9 +18,47 @@ import {
   type PopulationSkipped,
 } from './population-placement.js';
 import { placeVaults } from './vault-placement.js';
+import { carveJunctionDoors } from './junction-doors.js';
+import { deriveSeed } from './random.js';
+
+/**
+ * Seed discriminator for the junction-door pass. Attempt seeds derive from the same floor seed with
+ * discriminators `1..32` (`deriveAttemptSeed`), so this constant cannot collide with one.
+ */
+const DOOR_SEED_DISCRIMINATOR = 0x646f_6f72;
+
+/**
+ * Carves junction doors into a final topology's tiles. Runs after vault placement (vault footprints
+ * are off limits) and before any population or loot placement, and draws from a stream derived from
+ * the floor seed alone -- door tiles are floor shape, so the floor seed must fully determine them.
+ */
+function withJunctionDoors(
+  request: GenerateFloorRequest,
+  topology: TopologyDraft,
+  placement: Extract<ReturnType<typeof placeVaults>, { ok: true }>,
+): Extract<ReturnType<typeof placeVaults>, { ok: true }> {
+  if (request.doorTilePercent === 0) return placement;
+  const carved = carveJunctionDoors({
+    width: topology.width,
+    height: topology.height,
+    tiles: placement.tiles,
+    rooms: topology.rooms,
+    stairUp: topology.stairUp,
+    stairDown: topology.stairDown,
+    vaults: placement.vaults,
+    doorTilePercent: request.doorTilePercent,
+    state: deriveSeed(topology.floorSeed, DOOR_SEED_DISCRIMINATOR),
+  });
+  return { ...placement, tiles: carved.tiles };
+}
 
 export interface GenerateFloorRequest extends GenerateTopologyRequest {
   readonly vaults: readonly VaultContentEntry[];
+  /**
+   * Percent chance, rolled per corridor-to-room junction, that the junction becomes a closed door
+   * tile. Supplied by the caller from the balance entry's `generation.doorTilePercent`.
+   */
+  readonly doorTilePercent: number;
   readonly requiredVaultId?: string;
   readonly vaultTags?: readonly string[];
   readonly population?: Readonly<{
@@ -200,6 +238,16 @@ export function generateFloor(request: GenerateFloorRequest): GeneratedFloor {
   if (!Array.isArray(request.vaults)) {
     throw new GenerationError('generation.invalid-request', 'vaults must be a dense array');
   }
+  if (
+    !Number.isSafeInteger(request.doorTilePercent) ||
+    request.doorTilePercent < 0 ||
+    request.doorTilePercent > 100
+  ) {
+    throw new GenerationError(
+      'generation.invalid-request',
+      'door tile percent must be an integer from 0 through 100',
+    );
+  }
   const rejectionCounts: Partial<Record<GenerationRejectionCode, number>> = {};
   const factory = request.topologyFactory ?? generateTopologyAttempt;
   let populationRun = request.population?.run;
@@ -219,7 +267,11 @@ export function generateFloor(request: GenerateFloorRequest): GeneratedFloor {
       increment(rejectionCounts, placement.code);
       continue;
     }
-    const floor = floorSnapshot(request, topology.draft, placement);
+    const floor = floorSnapshot(
+      request,
+      topology.draft,
+      withJunctionDoors(request, topology.draft, placement),
+    );
     const population =
       populationRun === undefined ? null : withPopulation(request, populationRun, floor);
     if (population?.status === 'rejected') {
@@ -247,7 +299,7 @@ export function generateFloor(request: GenerateFloorRequest): GeneratedFloor {
     lights: [],
     placementSlots: [],
   };
-  const floor = floorSnapshot(request, topology, placement);
+  const floor = floorSnapshot(request, topology, withJunctionDoors(request, topology, placement));
   const population =
     populationRun === undefined ? null : withPopulation(request, populationRun, floor);
   const acceptedPopulation:

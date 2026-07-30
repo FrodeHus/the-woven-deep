@@ -235,6 +235,18 @@ describe('server-admin content documentation', () => {
     }
   });
 
+  it('documents the generation balance knobs', async () => {
+    const reference = await readFile(
+      resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
+      'utf8',
+    );
+    for (const identifier of ['generation', 'doorTilePercent']) {
+      expect(reference, `missing generation documentation for ${identifier}`).toContain(
+        `\`${identifier}\``,
+      );
+    }
+  });
+
   it('documents the floorLoot balance knobs', async () => {
     const reference = await readFile(
       resolve(import.meta.dirname, '../../../docs/server-admin/content-configuration.md'),
