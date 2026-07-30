@@ -199,6 +199,24 @@ describe('artifact validation', () => {
     );
   });
 
+  it('rejects a signature whose rechargePerFloor exceeds charges', async () => {
+    const root = await fixture({
+      'content.yaml': contentFile(
+        compactMonster,
+        compactVault,
+        compactBalance,
+        compactSignatureSpell,
+        artifactItem({
+          artifact:
+            '{canon: true, signature: {spellId: spell.test-signature, charges: 2, rechargePerFloor: 3}, drawbackModifiers: {maxWeave: -10}, light: null}',
+        }),
+      ),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /rechargePerFloor cannot exceed charges/i,
+    );
+  });
+
   it('rejects a signature spellId that does not resolve to a spell', async () => {
     const root = await fixture({
       'content.yaml': contentFile(

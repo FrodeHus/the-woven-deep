@@ -17,6 +17,10 @@ entries:
     equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
     combat: { accuracy: 1, defense: 1, armor: 1, damage: null, range: 0, ammunitionTag: null }
     light: null
-    artifact: null
+    artifact:
+      canon: true
+      signature: { spellId: spell.fireball, charges: 2, rechargePerFloor: 1 }
+      drawbackModifiers: { maxHealth: -3 }
+      light: null
     identification: { mode: known, poolId: null }
     effects: []

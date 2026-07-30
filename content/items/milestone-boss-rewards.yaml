@@ -18,7 +18,11 @@ entries:
     equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
     combat: { accuracy: 1, defense: 0, armor: 0, damage: null, range: 0, ammunitionTag: null }
     light: null
-    artifact: null
+    artifact:
+      canon: true
+      signature: { spellId: spell.cinder-breath, charges: 2, rechargePerFloor: 1 }
+      drawbackModifiers: { maxWeave: -2 }
+      light: null
     identification: { mode: known, poolId: null }
     effects: []
   - kind: item
@@ -39,7 +43,11 @@ entries:
     equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
     combat: { accuracy: 1, defense: 1, armor: 0, damage: null, range: 0, ammunitionTag: null }
     light: null
-    artifact: null
+    artifact:
+      canon: true
+      signature: { spellId: spell.frost-nova, charges: 2, rechargePerFloor: 1 }
+      drawbackModifiers: { weaveRegen: -1 }
+      light: null
     identification: { mode: known, poolId: null }
     effects: []
   - kind: item
@@ -60,6 +68,10 @@ entries:
     equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
     combat: { accuracy: 1, defense: 0, armor: 1, damage: null, range: 0, ammunitionTag: null }
     light: null
-    artifact: null
+    artifact:
+      canon: true
+      signature: { spellId: spell.static-field, charges: 3, rechargePerFloor: 1 }
+      drawbackModifiers: { meleeAccuracy: -1 }
+      light: null
     identification: { mode: known, poolId: null }
     effects: []

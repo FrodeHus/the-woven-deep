@@ -33,7 +33,7 @@ describe('bundled content', () => {
       ),
     ).toEqual({
       monster: 46,
-      item: 49,
+      item: 52,
       spell: 14,
       trap: 2,
       'loot-table': 28,

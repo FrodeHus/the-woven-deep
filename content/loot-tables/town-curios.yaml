@@ -15,4 +15,3 @@ entries:
       - { contentId: item.ember-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1, minDepth: 10 }
       - { contentId: item.etched-ring, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, minDepth: 15 }
       - { contentId: item.echo-remnant, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, minDepth: 20 }
-      - { contentId: item.echo-heartstone, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, minDepth: 15 }
