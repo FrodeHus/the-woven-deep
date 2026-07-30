@@ -168,7 +168,7 @@ floorLoot:
   chestLockDifficulty: { shallow: 10, mid: 13, deep: 16 }
 ```
 
-The floor-loot placement pass resolves its rolls against six bundled loot tables, one per depth band and placement kind: `loot-table.floor-scatter-shallow`, `loot-table.floor-scatter-mid`, `loot-table.floor-scatter-deep`, `loot-table.chest-shallow`, `loot-table.chest-mid`, and `loot-table.chest-deep` (`content/loot-tables/floor-scatter-*.yaml` and `content/loot-tables/chest-*.yaml`). The engine resolves these ids at floor-generation time, choosing the band from `depthBands` and the kind (scattered item vs. chest) from the placement roll; nothing validates the six ids at compile time, so a missing table throws a mid-run error on descent, not a build-time failure. Do not remove or rename any of the six (a compile-time guard is a planned follow-up).
+The floor-loot placement pass resolves its rolls against six bundled loot tables, one per depth band and placement kind: `loot-table.floor-scatter-shallow`, `loot-table.floor-scatter-mid`, `loot-table.floor-scatter-deep`, `loot-table.chest-shallow`, `loot-table.chest-mid`, and `loot-table.chest-deep` (`content/loot-tables/floor-scatter-*.yaml` and `content/loot-tables/chest-*.yaml`). The engine resolves these ids at floor-generation time, choosing the band from `depthBands` and the kind (scattered item vs. chest) from the placement roll. All six are validated at run preflight (run creation and every save load), so removing or renaming one — or leaving it with no choice eligible at its own band depth — fails immediately with a diagnostic naming the id, rather than throwing mid-run on the first descent into that band. Do not remove or rename any of the six.
 
 ### Point-buy attribute table
 

@@ -13,6 +13,7 @@ import {
   placeFloorLoot,
   protectedRouteIndexes,
   tileDefinition,
+  validateContentBoundRun,
   type ActiveRun,
   type ChestFeature,
   type DoorFeature,
@@ -333,6 +334,80 @@ describe('placeFloorLoot', () => {
 
   it('places nothing on depth-0 floors', () => {
     expect(placeFloorLoot(townFixture(), SEED)).toEqual({ items: [], features: [], state: SEED });
+  });
+});
+
+describe('engine-required floor loot table preflight', () => {
+  const requiredTableIds = [
+    'loot-table.floor-scatter-shallow',
+    'loot-table.floor-scatter-mid',
+    'loot-table.floor-scatter-deep',
+    'loot-table.chest-shallow',
+    'loot-table.chest-mid',
+    'loot-table.chest-deep',
+  ] as const;
+
+  it('accepts a pack carrying every engine-required table', () => {
+    expect(() => validateContentBoundRun(run(), content())).not.toThrow();
+  });
+
+  for (const missing of requiredTableIds) {
+    it(`rejects a pack missing ${missing}`, () => {
+      const complete = content();
+      const pack: CompiledContentPack = {
+        ...complete,
+        entries: complete.entries.filter((entry) => entry.id !== missing),
+      };
+      expect(() => validateContentBoundRun(run(), pack)).toThrow(missing);
+    });
+  }
+
+  it('rejects a required table whose graph resolves no choice in its own depth band', () => {
+    const complete = content();
+    const bands = balanceEntry(complete).floorLoot.depthBands;
+    // Every choice is banded above the deep representative depth, so the projection keeps none and
+    // the mid-run roll would divide by a zero weight total on the first deep descent.
+    const starved: LootTableContentEntry = {
+      ...lootTable('loot-table.chest-deep', [scatterItems[0]!.id]),
+      choices: [
+        {
+          contentId: scatterItems[0]!.id,
+          lootTableId: null,
+          weight: 1,
+          minimumQuantity: 1,
+          maximumQuantity: 1,
+          minDepth: bands.midMaxDepth + 100,
+        },
+      ],
+    };
+    const pack: CompiledContentPack = {
+      ...complete,
+      entries: complete.entries.map((entry) => (entry.id === starved.id ? starved : entry)),
+    };
+
+    expect(() => validateContentBoundRun(run(), pack)).toThrow('loot-table.chest-deep');
+  });
+
+  it('rejects a required table whose graph points at a table that does not exist', () => {
+    const complete = content();
+    const dangling: LootTableContentEntry = {
+      ...lootTable('loot-table.floor-scatter-mid', []),
+      choices: [
+        {
+          contentId: null,
+          lootTableId: 'loot-table.does-not-exist',
+          weight: 1,
+          minimumQuantity: 1,
+          maximumQuantity: 1,
+        },
+      ],
+    };
+    const pack: CompiledContentPack = {
+      ...complete,
+      entries: complete.entries.map((entry) => (entry.id === dangling.id ? dangling : entry)),
+    };
+
+    expect(() => validateContentBoundRun(run(), pack)).toThrow(/loot-table\.does-not-exist/);
   });
 });
 

@@ -17,7 +17,9 @@ import {
   normalizeFallenHero,
   retainEchoCandidates,
 } from './champion.js';
-import { createPopulationLoot, recordedHeirloomContentId } from './inventory.js';
+import { createPopulationLoot, projectLootGraph, recordedHeirloomContentId } from './inventory.js';
+import { balanceEntry } from './balance.js';
+import type { DepthBand } from './loot-placement.js';
 import { stableJson } from './stable-json.js';
 import { boundedDisplayText } from './display-text.js';
 
@@ -36,12 +38,61 @@ function itemDefinition(
   return definition;
 }
 
+/**
+ * Loot tables `placeFloorLoot` resolves by exact id -- `loot-table.floor-scatter-<band>` and
+ * `loot-table.chest-<band>` -- on every generated floor. The ids are constructed, not authored, so
+ * a pack that removes or renames one would otherwise only fail on the first descent into that
+ * band, mid-run.
+ */
+const ENGINE_REQUIRED_LOOT_TABLE_KINDS = ['floor-scatter', 'chest'] as const;
+const DEPTH_BANDS: readonly DepthBand[] = ['shallow', 'mid', 'deep'];
+
+/**
+ * Preflights the six engine-required floor-loot tables at run creation/load: each id must resolve
+ * to a `loot-table` entry whose graph projects cleanly at a depth representative of its own band,
+ * and must keep at least one eligible choice there (an all-pruned projection would divide by a
+ * zero weight total when the floor actually rolls). Representative depths come from the authored
+ * `floorLoot.depthBands` thresholds, so retuning the bands retunes the preflight with them.
+ */
+function validateEngineRequiredLootTables(pack: CompiledContentPack): void {
+  const bands = balanceEntry(pack).floorLoot.depthBands;
+  const representativeDepth: Readonly<Record<DepthBand, number>> = {
+    shallow: 1,
+    mid: bands.shallowMaxDepth + 1,
+    deep: bands.midMaxDepth + 1,
+  };
+  for (const kind of ENGINE_REQUIRED_LOOT_TABLE_KINDS) {
+    for (const band of DEPTH_BANDS) {
+      const tableId = `loot-table.${kind}-${band}`;
+      const label = `content-bound validation: engine-required floor loot table ${tableId}`;
+      const entry = pack.entries.find((candidate) => candidate.id === tableId);
+      if (entry === undefined || entry.kind !== 'loot-table') {
+        throw new Error(
+          `${label} does not exist; floor generation resolves it by exact id on every ` +
+            `${band}-band floor`,
+        );
+      }
+      const depth = representativeDepth[band];
+      const projected = projectLootGraph({
+        content: pack,
+        rootTableId: tableId,
+        depth,
+        preflightLabel: label,
+      });
+      if (projected.get(tableId)!.choices.length === 0) {
+        throw new Error(`${label} has no choice eligible at ${band}-band depth ${depth}`);
+      }
+    }
+  }
+}
+
 export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPack): void {
   if (run.contentHash !== pack.hash) {
     throw new Error(
       `content-bound validation: content hash ${pack.hash} does not match run ${run.contentHash}`,
     );
   }
+  validateEngineRequiredLootTables(pack);
   const entries = entryMap(pack);
   const actors = new Map(run.actors.map((actor) => [actor.actorId, actor]));
   const expectedEncounterIds = pack.entries
