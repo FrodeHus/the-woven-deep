@@ -403,6 +403,13 @@ export function App({
   const router = useScreenRouter(quickstart);
   const { screen } = router;
   const [session, setSession] = useState<RunSession>();
+  // The live session, mirrored for `dropToGuest` below: the sign-out/delete teardown runs from a
+  // promise callback, long after the click that started it, so it must not decide against the
+  // session its closure happened to capture. Written after commit, never while rendering.
+  const sessionRef = useRef<RunSession | undefined>(undefined);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
   const [chargenSeed, setChargenSeed] = useState<Uint32State>();
   const [portraitGlyph, setPortraitGlyph] = useState<string>();
   const [conclusion, setConclusion] = useState<{
@@ -481,10 +488,15 @@ export function App({
    * lives here, in the two actions that can cause it, rather than in an effect watching
    * `account.status` -- signing out and deleting the account are the only ways the status ever
    * leaves `'signed-in'`, and doing it in the action keeps the whole transition one atomic update.
-   * A guest never has a `ProfileSession`, so the guest boot/play path is untouched. */
+   * A guest never has a `ProfileSession`, so the guest boot/play path is untouched.
+   *
+   * The `ProfileSession` check reads `sessionRef`, not the `session` this closure captured: both
+   * callers run this from a promise callback, and a `ProfileSession.connect` that resolves between
+   * the click and the server's reply would otherwise be missed -- the WS would survive the sign-out
+   * with the player left on a play screen no longer backed by an account. */
   function dropToGuest(): void {
     setAccount(GUEST_ACCOUNT);
-    if (!(session instanceof ProfileSession)) return;
+    if (!(sessionRef.current instanceof ProfileSession)) return;
     setSession(undefined);
     setProfileError(undefined);
     closeOverlay();

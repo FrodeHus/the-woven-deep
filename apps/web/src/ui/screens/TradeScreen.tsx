@@ -225,9 +225,12 @@ export function TradeScreen({
   // A dispatch (e.g. selling the last offer) can shorten the active side under the stored selection,
   // so the effective selection is clamped while rendering rather than written back from the focus
   // effect below: it is a pure function of the stored index and the current row count, and deriving
-  // it keeps the highlight on a real row from the very render that shortened the list.
-  const selectedIndex =
-    activeRows.length > 0 ? Math.max(0, Math.min(storedIndex, activeRows.length - 1)) : storedIndex;
+  // it keeps the highlight on a real row from the very render that shortened the list. The arrow keys
+  // clamp on write as well, so the stored index never outlives a row count it was valid for -- a
+  // shrink followed by a regrow must not put the selection back on the row it used to be on.
+  const clampIndex = (index: number): number =>
+    activeRows.length > 0 ? Math.max(0, Math.min(index, activeRows.length - 1)) : index;
+  const selectedIndex = clampIndex(storedIndex);
 
   // Keeps DOM focus on whichever listbox owns keyboard selection: the container while the picker is
   // open (so its `onKeyDown` drives the picker), otherwise the active side's listbox. Runs on first
@@ -282,7 +285,9 @@ export function TradeScreen({
       event.preventDefault();
       event.stopPropagation();
       const delta = event.key === 'ArrowDown' ? 1 : -1;
-      setSelectedIndex((selectedIndex + delta + activeRows.length) % activeRows.length);
+      setSelectedIndex(
+        (index) => (clampIndex(index) + delta + activeRows.length) % activeRows.length,
+      );
       return;
     }
     if (event.key === 'Enter') {

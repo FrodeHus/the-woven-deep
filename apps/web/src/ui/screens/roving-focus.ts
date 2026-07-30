@@ -20,8 +20,11 @@ export function useListNavigation(length: number): {
   // The list can shrink under a stored index (e.g. selling the last offer), so the effective
   // selection is clamped while rendering rather than written back through an effect: the clamp is a
   // pure function of the stored index and the current length, and deriving it keeps the selection
-  // valid on the very render that shortened the list.
-  const selectedIndex = length > 0 ? Math.min(storedIndex, length - 1) : storedIndex;
+  // valid on the very render that shortened the list. Every write below clamps too, so the stored
+  // index never outlives a length it was valid for -- a shrink followed by a regrow must not put the
+  // selection back on the row it used to be on.
+  const clampIndex = (index: number): number => (length > 0 ? Math.min(index, length - 1) : index);
+  const selectedIndex = clampIndex(storedIndex);
 
   // Refocus the current option whenever the selection moves OR the list itself changes. The
   // `length` dependency matters when an action removes the focused option (e.g. selling the
@@ -32,7 +35,7 @@ export function useListNavigation(length: number): {
     itemRefs.current[selectedIndex]?.focus();
   }, [selectedIndex, length]);
 
-  const setSelectedIndex = (index: number): void => setStoredIndexState(index);
+  const setSelectedIndex = (index: number): void => setStoredIndexState(clampIndex(index));
 
   const registerItem =
     (index: number) =>
@@ -44,12 +47,12 @@ export function useListNavigation(length: number): {
     if (length === 0) return false;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setStoredIndexState((selectedIndex + 1) % length);
+      setStoredIndexState((index) => (clampIndex(index) + 1) % length);
       return true;
     }
     if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setStoredIndexState((selectedIndex - 1 + length) % length);
+      setStoredIndexState((index) => (clampIndex(index) - 1 + length) % length);
       return true;
     }
     return false;
