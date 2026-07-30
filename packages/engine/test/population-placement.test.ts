@@ -1395,6 +1395,33 @@ describe('vault item slot consumption', () => {
     });
   }
 
+  /**
+   * The shared `floor()` helper is 9x7, which the balance `floorLoot.minimumAnchorDistance` of 8
+   * culls to an empty candidate pool -- `placeFloorLoot` then places nothing, so any assertion
+   * about floor loot on it is vacuous. This floor is wide enough to leave a live pool, so the
+   * scatter/chest `drawCell` path is genuinely exercised.
+   */
+  function wideItemCacheFloor(vaultId: string): FloorSnapshot {
+    const width = 31;
+    const height = 15;
+    const tiles = Array.from({ length: width * height }, (_, index) => {
+      const x = index % width;
+      const y = Math.floor(index / width);
+      return x === 0 || y === 0 || x === width - 1 || y === height - 1
+        ? (0 as const)
+        : (1 as const);
+    });
+    return {
+      ...itemCacheFloor(vaultId),
+      width,
+      height,
+      tiles,
+      knowledge: createUnknownKnowledge(tiles.length),
+      stairUp: { x: 2, y: 2 },
+      stairDown: { x: 28, y: 12 },
+    };
+  }
+
   it('fills a vault item slot from its loot table at the slot position', () => {
     const encounter = individual('encounter.item-cache-loot-table');
     const vault = itemCacheVault('vault.item-cache-test', {
@@ -1562,7 +1589,7 @@ describe('vault item slot consumption', () => {
       lootTableId: variedLootTable.id,
       contentId: null,
     });
-    const generated = itemCacheFloor(vault.id);
+    const generated = wideItemCacheFloor(vault.id);
     const content = pack([placeable, unplaceable], [vault, variedLootTable, ...variedItemEntries]);
     const run = runFor([placeable, unplaceable]);
 
@@ -1594,7 +1621,13 @@ describe('vault item slot consumption', () => {
         )
         .map(({ itemId, contentId, quantity }) => ({ itemId, contentId, quantity }));
 
-    expect(lootOf(placed.state).length).toBeGreaterThan(0);
+    // Both halves must be non-empty, or the comparison would pass on two empty sets: the vault
+    // slot proves `fillItemSlots` ran, the scatter piles prove `placeFloorLoot` had a live
+    // candidate pool and actually drew cells.
+    expect(lootOf(placed.state).some((item) => item.itemId.startsWith('item.vault.'))).toBe(true);
+    expect(lootOf(placed.state).some((item) => item.itemId.startsWith('item.floor-loot.'))).toBe(
+      true,
+    );
     expect(lootOf(failed.state)).toEqual(lootOf(placed.state));
     expect(failed.state.rng['loot-placement']).toEqual(placed.state.rng['loot-placement']);
     expect(failed.state.rng['loot-placement']).not.toEqual(run.rng['loot-placement']);

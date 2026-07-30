@@ -16,6 +16,7 @@ import {
   requiredPoints,
   tileDefinition,
   validateContentBoundRun,
+  validateRequiredFloorLootTables,
   type ActiveRun,
   type ChestFeature,
   type DoorFeature,
@@ -454,7 +455,20 @@ describe('engine-required floor loot table preflight', () => {
   ] as const;
 
   it('accepts a pack carrying every engine-required table', () => {
-    expect(() => validateContentBoundRun(run(), content())).not.toThrow();
+    expect(() => validateRequiredFloorLootTables(content())).not.toThrow();
+  });
+
+  it('is not part of the per-command content-bound validation', () => {
+    // Pack contents cannot change mid-run, so the six ids are checked at run creation and at save
+    // load only -- never on the hot per-command path.
+    const complete = content();
+    const stripped: CompiledContentPack = {
+      ...complete,
+      entries: complete.entries.filter(
+        (entry) => !requiredTableIds.some((tableId) => tableId === entry.id),
+      ),
+    };
+    expect(() => validateContentBoundRun(run(), stripped)).not.toThrow();
   });
 
   for (const missing of requiredTableIds) {
@@ -464,7 +478,7 @@ describe('engine-required floor loot table preflight', () => {
         ...complete,
         entries: complete.entries.filter((entry) => entry.id !== missing),
       };
-      expect(() => validateContentBoundRun(run(), pack)).toThrow(missing);
+      expect(() => validateRequiredFloorLootTables(pack)).toThrow(missing);
     });
   }
 
@@ -491,7 +505,7 @@ describe('engine-required floor loot table preflight', () => {
       entries: complete.entries.map((entry) => (entry.id === starved.id ? starved : entry)),
     };
 
-    expect(() => validateContentBoundRun(run(), pack)).toThrow('loot-table.chest-deep');
+    expect(() => validateRequiredFloorLootTables(pack)).toThrow('loot-table.chest-deep');
   });
 
   it('rejects a required table whose graph points at a table that does not exist', () => {
@@ -513,7 +527,7 @@ describe('engine-required floor loot table preflight', () => {
       entries: complete.entries.map((entry) => (entry.id === dangling.id ? dangling : entry)),
     };
 
-    expect(() => validateContentBoundRun(run(), pack)).toThrow(/loot-table\.does-not-exist/);
+    expect(() => validateRequiredFloorLootTables(pack)).toThrow(/loot-table\.does-not-exist/);
   });
 });
 

@@ -1230,10 +1230,14 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
     run = applied.run;
     if (applied.stop) break;
   }
-  // Every `loot-placement` draw for the floor happens here, after the placement attempts and
-  // independent of whether any of them succeeded: a floor where all encounters fail still fills
-  // its vault item slots, rolls its fragment spawn, and scatters its floor loot, so an encounter
-  // or balance change can never shift downstream loot by starving this stream (#131).
+  // Every `loot-placement` draw for the floor happens here, after the placement attempts: a floor
+  // where all encounters fail still fills its vault item slots, rolls its fragment spawn, and
+  // scatters its floor loot, so no encounter or balance change can starve this stream of the draws
+  // it owes (#131). That is the guarantee -- unconditional draws, not identical ones. Placement
+  // outcomes still legitimately move where loot lands and, through cell culling, how many draws a
+  // pass makes: placed actors reserve cells against the fragment spawn's `openFloorCells` and
+  // against `placeFloorLoot`'s candidate pool. Only the vault item slots, whose positions come
+  // from the floor's own slots, are outcome-independent in position as well as in count.
   const itemSlots = fillItemSlots({ ...input, run }, run.rng['loot-placement']);
   run = {
     ...run,
