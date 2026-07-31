@@ -30,19 +30,31 @@ async function fixture(files: Record<string, string>): Promise<string> {
 const DEFAULT_ARTIFACT =
   '{canon: true, signature: {spellId: spell.test-signature, charges: 3, rechargePerFloor: 1}, drawbackModifiers: {maxWeave: -10}, light: null}';
 
+const DEFAULT_EQUIPMENT = '{slots: [neck], handedness: none, reservedSlots: []}';
+const COMPACT_LIGHT =
+  '{color: [255, 217, 160], radius: 7, strength: 180, fuelCapacity: 2400, fuelPerTime: 1, warningThresholds: [600], fuelTags: [lamp-oil]}';
+
 function artifactItem(overrides: {
   readonly rarity?: string;
   readonly stackLimit?: number;
   readonly identification?: string;
   readonly combat?: string;
   readonly artifact?: string;
+  readonly equipment?: string;
+  readonly heirloomEligible?: boolean;
+  readonly light?: string;
+  readonly effects?: string;
 }): string {
   const rarity = overrides.rarity ?? 'legendary';
   const stackLimit = overrides.stackLimit ?? 1;
   const identification = overrides.identification ?? '{mode: known, poolId: null}';
   const combat = overrides.combat ?? 'null';
   const artifact = overrides.artifact ?? DEFAULT_ARTIFACT;
-  return `{kind: item, id: item.test-artifact, name: Test artifact, glyph: "!", color: "#e37b46", tags: [artifact], minDepth: 1, maxDepth: 20, category: misc, stackLimit: ${stackLimit}, price: 999, rarity: ${rarity}, actionCost: 100, equipment: null, combat: ${combat}, light: null, artifact: ${artifact}, identification: ${identification}, effects: []}`;
+  const equipment = overrides.equipment ?? DEFAULT_EQUIPMENT;
+  const heirloomEligible = overrides.heirloomEligible ?? true;
+  const light = overrides.light ?? 'null';
+  const effects = overrides.effects ?? '[]';
+  return `{kind: item, id: item.test-artifact, name: Test artifact, glyph: "!", color: "#e37b46", tags: [artifact], minDepth: 1, maxDepth: 20, category: misc, stackLimit: ${stackLimit}, price: 999, rarity: ${rarity}, heirloomEligible: ${heirloomEligible}, actionCost: 100, equipment: ${equipment}, combat: ${combat}, light: ${light}, artifact: ${artifact}, identification: ${identification}, effects: ${effects}}`;
 }
 
 describe('artifact validation', () => {
@@ -251,6 +263,114 @@ describe('artifact validation', () => {
     await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
       /artifact light requires a non-null item light block/i,
     );
+  });
+
+  it('rejects an artifact item that is not heirloom eligible', async () => {
+    const root = await fixture({
+      'content.yaml': contentFile(
+        compactMonster,
+        compactVault,
+        compactBalance,
+        compactSignatureSpell,
+        artifactItem({ heirloomEligible: false }),
+      ),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /artifact items must be heirloomEligible/i,
+    );
+  });
+
+  it('rejects an artifact item with no equipment block', async () => {
+    const root = await fixture({
+      'content.yaml': contentFile(
+        compactMonster,
+        compactVault,
+        compactBalance,
+        compactSignatureSpell,
+        artifactItem({ equipment: 'null' }),
+      ),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /artifact items require a non-null equipment block/i,
+    );
+  });
+
+  it('rejects an artifact item carrying a self-consuming effect', async () => {
+    const root = await fixture({
+      'content.yaml': contentFile(
+        compactMonster,
+        compactVault,
+        compactBalance,
+        compactSignatureSpell,
+        artifactItem({
+          effects:
+            '[{effectId: effect.item.consume, parameters: {quantity: 1}, requiresLivingTarget: false}]',
+        }),
+      ),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /artifact items must not carry self-consuming effects/i,
+    );
+  });
+
+  it('rejects a light artifact that is not fuelless', async () => {
+    const root = await fixture({
+      'content.yaml': contentFile(
+        compactMonster,
+        compactVault,
+        compactBalance,
+        compactSignatureSpell,
+        artifactItem({
+          light: COMPACT_LIGHT,
+          artifact:
+            '{canon: true, signature: {spellId: spell.test-signature, charges: 3, rechargePerFloor: 1}, drawbackModifiers: {maxWeave: -10}, light: {fuelless: false, inextinguishable: false}}',
+        }),
+      ),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /artifact items with a light block must be fuelless/i,
+    );
+  });
+
+  it('rejects a light artifact that declares no artifact light behavior', async () => {
+    const root = await fixture({
+      'content.yaml': contentFile(
+        compactMonster,
+        compactVault,
+        compactBalance,
+        compactSignatureSpell,
+        artifactItem({
+          light: COMPACT_LIGHT,
+          artifact:
+            '{canon: true, signature: {spellId: spell.test-signature, charges: 3, rechargePerFloor: 1}, drawbackModifiers: {maxWeave: -10}, light: null}',
+        }),
+      ),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /artifact items with a light block must be fuelless/i,
+    );
+  });
+
+  it('compiles a fuelless inextinguishable light artifact', async () => {
+    const root = await fixture({
+      'content.yaml': contentFile(
+        compactMonster,
+        compactVault,
+        compactBalance,
+        compactSignatureSpell,
+        artifactItem({
+          light: COMPACT_LIGHT,
+          combat:
+            '{accuracy: 0, defense: 1, armor: 0, damage: null, range: 0, ammunitionTag: null}',
+          artifact:
+            '{canon: true, signature: null, drawbackModifiers: {}, light: {fuelless: true, inextinguishable: true}}',
+        }),
+      ),
+    });
+    const compiled = await compileContentDirectory({ rootDir: root });
+    expect(compiled.entries.find((entry) => entry.id === 'item.test-artifact')).toMatchObject({
+      artifact: { light: { fuelless: true, inextinguishable: true } },
+    });
   });
 
   it('rejects an artifact contentId appearing in an ordinary loot-table choice', async () => {

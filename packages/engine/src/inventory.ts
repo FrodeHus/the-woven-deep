@@ -484,6 +484,9 @@ export function createRecordedHeirloom(
   const definition = itemDefinition(input.content, resolvedContentId);
   const fallback = resolvedContentId !== input.snapshot.contentId;
   const displayName = boundedDisplayText(fallback ? definition.name : input.snapshot.displayName);
+  // A fuelless artifact carries its capacity as a constant, never a reserve, so the recovered
+  // instance is restored to it: whatever the record held, the lantern can be lit again.
+  const fuelless = definition.artifact?.light?.fuelless === true;
   const item: ItemInstance = {
     itemId: input.itemId,
     contentId: definition.id,
@@ -492,7 +495,7 @@ export function createRecordedHeirloom(
     enchantment: fallback ? null : input.snapshot.enchantment,
     identified: true,
     charges: fallback ? null : input.snapshot.charges,
-    fuel: fallback ? (definition.light?.fuelCapacity ?? null) : input.snapshot.fuel,
+    fuel: fallback || fuelless ? (definition.light?.fuelCapacity ?? null) : input.snapshot.fuel,
     enabled: definition.light === null ? null : false,
     location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y },
     heirloom: {
@@ -525,12 +528,17 @@ export function recordedHeirloomContentId(
     (entry): entry is ItemContentEntry =>
       entry.kind === 'item' && entry.id === input.snapshot.contentId,
   );
+  // An artifact light is fuelless by content rule, so its recorded fuel says nothing about
+  // whether the item is still itself; materialization restores the constant capacity instead.
+  // Judging it by the ordinary reserve check would degrade the Grace to the fallback relic.
   const fuelCompatible =
-    recorded?.light === null
-      ? input.snapshot.fuel === null
-      : recorded?.light !== undefined &&
-        input.snapshot.fuel !== null &&
-        input.snapshot.fuel <= recorded.light.fuelCapacity;
+    recorded?.artifact != null
+      ? true
+      : recorded?.light === null
+        ? input.snapshot.fuel === null
+        : recorded?.light !== undefined &&
+          input.snapshot.fuel !== null &&
+          input.snapshot.fuel <= recorded.light.fuelCapacity;
   const modifiersCompatible = Object.keys(input.snapshot.enchantment?.modifiers ?? {}).every(
     (name) => (DERIVED_STAT_NAMES as readonly string[]).includes(name),
   );

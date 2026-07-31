@@ -400,3 +400,121 @@ describe('equipment planning and item lights', () => {
     expect(isExplored(result.state.floors[0]!.knowledge, hero.y * floor.width + hero.x)).toBe(true);
   });
 });
+
+describe("Maria's Grace is inextinguishable", () => {
+  const grace = definition('item.marias-grace', {
+    category: 'light',
+    rarity: 'legendary',
+    equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
+    light: {
+      color: [255, 217, 160],
+      radius: 7,
+      strength: 180,
+      fuelCapacity: 2400,
+      fuelPerTime: 1,
+      warningThresholds: [600],
+      fuelTags: ['lamp-oil'],
+    },
+    artifact: {
+      canon: true,
+      signature: null,
+      drawbackModifiers: {},
+      light: { fuelless: true, inextinguishable: true },
+    },
+  });
+
+  function graceRun(enabled: boolean) {
+    const base = createDemoRun();
+    const graceItem: ItemInstance = {
+      ...item('item.marias-grace.1', grace.id, {
+        type: 'equipped',
+        actorId: 'hero.demo',
+        slot: 'off-hand',
+      }),
+      fuel: 2400,
+      enabled,
+    };
+    const hero = {
+      ...base.actors[0]!,
+      equipment: { ...base.actors[0]!.equipment, 'off-hand': graceItem.itemId },
+    };
+    return { run: { ...base, actors: [hero], items: [graceItem] }, content: pack(grace) };
+  }
+
+  it('refuses to douse a lit artifact light', () => {
+    const { run, content } = graceRun(true);
+    const result = resolveCommand(
+      run,
+      {
+        type: 'toggle-light',
+        commandId: 'command.douse-grace',
+        expectedRevision: 0,
+        itemId: 'item.marias-grace.1',
+        enabled: false,
+      },
+      { content },
+    );
+    expect(result.result).toMatchObject({ status: 'invalid', reason: 'light.inextinguishable' });
+    expect(result.state.items[0]?.enabled).toBe(true);
+  });
+
+  it('still lights a doused artifact light', () => {
+    const { run, content } = graceRun(false);
+    const result = resolveCommand(
+      run,
+      {
+        type: 'toggle-light',
+        commandId: 'command.light-grace',
+        expectedRevision: 0,
+        itemId: 'item.marias-grace.1',
+        enabled: true,
+      },
+      { content },
+    );
+    expect(result.result).toMatchObject({ status: 'applied' });
+    expect(result.state.items[0]?.enabled).toBe(true);
+  });
+
+  it('leaves an ordinary lantern extinguishable', () => {
+    const lantern = definition('item.plain-lantern', {
+      category: 'light',
+      equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
+      light: {
+        color: [255, 180, 80],
+        radius: 3,
+        strength: 180,
+        fuelCapacity: 100,
+        fuelPerTime: 1,
+        warningThresholds: [20],
+        fuelTags: ['oil'],
+      },
+    });
+    const base = createDemoRun();
+    const lanternItem: ItemInstance = {
+      ...item('item.plain-lantern.1', lantern.id, {
+        type: 'equipped',
+        actorId: 'hero.demo',
+        slot: 'off-hand',
+      }),
+      fuel: 100,
+      enabled: true,
+    };
+    const hero = {
+      ...base.actors[0]!,
+      equipment: { ...base.actors[0]!.equipment, 'off-hand': lanternItem.itemId },
+    };
+    const result = resolveCommand(
+      { ...base, actors: [hero], items: [lanternItem] },
+      {
+        type: 'toggle-light',
+        commandId: 'command.douse-lantern',
+        expectedRevision: 0,
+        itemId: lanternItem.itemId,
+        enabled: false,
+      },
+      { content: pack(lantern) },
+    );
+    expect(result.result).toMatchObject({ status: 'applied' });
+    expect(result.state.items[0]?.enabled).toBe(false);
+  });
+});

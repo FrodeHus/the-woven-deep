@@ -87,6 +87,46 @@ function artifactItemIssues(
     );
   }
 
+  // An artifact is a singleton that must survive its bearer: the champion recovery path only
+  // materializes the recorded content ID when the item is heirloom eligible and equippable, and a
+  // light artifact only survives that path intact when its fuel never matters.
+  if (item.heirloomEligible !== true) {
+    issues.push(
+      issue(
+        file,
+        `$.entries.${item.id}.heirloomEligible`,
+        'artifact items must be heirloomEligible so a fallen hero can pass them on',
+      ),
+    );
+  }
+  if (item.equipment === null) {
+    issues.push(
+      issue(
+        file,
+        `$.entries.${item.id}.equipment`,
+        'artifact items require a non-null equipment block so a fallen hero can pass them on',
+      ),
+    );
+  }
+  if (item.effects.some((effect) => effect.effectId === 'effect.item.consume')) {
+    issues.push(
+      issue(
+        file,
+        `$.entries.${item.id}.effects`,
+        'artifact items must not carry self-consuming effects: an artifact can never be erased from circulation',
+      ),
+    );
+  }
+  if (item.light !== null && artifact.light?.fuelless !== true) {
+    issues.push(
+      issue(
+        file,
+        `${path}.light`,
+        'artifact items with a light block must be fuelless so recovery cannot degrade them',
+      ),
+    );
+  }
+
   return issues;
 }
 

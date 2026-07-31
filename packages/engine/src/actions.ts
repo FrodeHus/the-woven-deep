@@ -9,6 +9,7 @@ import { resolveEffectSequence, resolveEffectSweep } from './effects.js';
 import { heroCasterAptitude, spellLearnTarget } from './caster.js';
 import { parseEffectParameters } from './parameter-contracts.js';
 import { equipItem, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
+import { artifactById } from './commerce.js';
 import { closeDoor, openDoor } from './features.js';
 import { isTownFloorActive } from './town-floor.js';
 import type { ActorState } from './actor-model.js';
@@ -813,6 +814,16 @@ export function validatePlayerAction(
   }
   if (input.command.type === 'toggle-light') {
     const command = input.command;
+    // An inextinguishable artifact refuses to be hidden once it burns. Lighting one stays legal:
+    // heirloom materialization hands it over doused.
+    const held = input.state.items.find((item) => item.itemId === command.itemId);
+    if (
+      !command.enabled &&
+      held?.enabled === true &&
+      artifactById(input.context.content, held.contentId)?.light?.inextinguishable === true
+    ) {
+      return { status: 'invalid', reason: 'light.inextinguishable' };
+    }
     const transition = toggleItemLight({
       run: input.state,
       content: input.context.content,

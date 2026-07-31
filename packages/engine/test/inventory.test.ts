@@ -743,6 +743,55 @@ describe('createRecordedHeirloom artifact recovery', () => {
     expect(created.displayName).toBe("Maria's Grace");
   });
 
+  it('materializes a fuelless light artifact as itself, lightable and doused', () => {
+    const pack = content(
+      itemDefinition('item.marias-grace', 1, {
+        name: "Maria's Grace",
+        tags: [],
+        glyph: '(',
+        color: '#ffd9a0',
+        category: 'light',
+        rarity: 'legendary',
+        heirloomEligible: true,
+        equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
+        light: {
+          color: [255, 217, 160],
+          radius: 7,
+          strength: 180,
+          fuelCapacity: 2400,
+          fuelPerTime: 1,
+          warningThresholds: [600],
+          fuelTags: ['lamp-oil'],
+        },
+        artifact: {
+          canon: true,
+          signature: null,
+          drawbackModifiers: {},
+          light: { fuelless: true, inextinguishable: true },
+        },
+      }),
+      itemDefinition('item.champion-fallback-relic', 1, {
+        name: 'Fallback relic',
+        rarity: 'common',
+        heirloomEligible: true,
+        equipment: { slots: ['neck'], handedness: 'one-handed', reservedSlots: [] },
+      }),
+    );
+    const created = createRecordedHeirloom({
+      content: pack,
+      snapshot: snapshot({ fuel: null }),
+      equippedItemContentIds: ['item.coin'],
+      fallbackItemId: 'item.champion-fallback-relic',
+      itemId: 'item.heirloom.population-3',
+      floorId: 'floor.1',
+      x: 3,
+      y: 4,
+    });
+    expect(created.fallback).toBe(false);
+    expect(created.item.contentId).toBe('item.marias-grace');
+    expect(created.item).toMatchObject({ fuel: 2400, enabled: false });
+  });
+
   it('still degrades a backpack-held ORDINARY item to the fallback relic', () => {
     const pack = content(
       itemDefinition('item.plain-sword', 1, {

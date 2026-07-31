@@ -594,6 +594,68 @@ describe('boss phases', () => {
     );
   });
 
+  it('leaves an inextinguishable artifact lit when the arena douses lights', () => {
+    const { state, content } = fixture({
+      phases: [
+        {
+          ...definition().phases[0]!,
+          effects: [
+            {
+              effectId: 'effect.light.toggle',
+              parameters: { enabled: false },
+              requiresLivingTarget: false,
+            },
+          ],
+        },
+      ],
+    });
+    const grace: ItemContentEntry = {
+      ...item('item.marias-grace'),
+      stackLimit: 1,
+      equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
+      light: {
+        color: [255, 217, 160] as const,
+        radius: 7,
+        strength: 180,
+        fuelCapacity: 2400,
+        fuelPerTime: 1,
+        warningThresholds: [600],
+        fuelTags: ['lamp-oil'],
+      },
+      artifact: {
+        canon: true,
+        signature: null,
+        drawbackModifiers: {},
+        light: { fuelless: true, inextinguishable: true },
+      },
+    };
+    const graceItem = {
+      itemId: 'item.marias-grace.1',
+      contentId: grace.id,
+      quantity: 1,
+      condition: 100,
+      enchantment: null,
+      identified: true,
+      charges: null,
+      fuel: 2400,
+      enabled: true,
+      location: { type: 'backpack' as const, actorId: 'actor.boss' },
+    };
+    const phased = advanceBosses({
+      state: {
+        ...state,
+        items: [graceItem],
+        actors: state.actors.map((actor) =>
+          actor.actorId === 'actor.boss' ? { ...actor, health: 60 } : actor,
+        ),
+      },
+      content: { ...content, entries: [...content.entries, grace] },
+      eventId: 'event.arena-douse',
+    });
+    expect(phased.state.items).toEqual([graceItem]);
+    expect(phased.events.some((event) => event.type === 'item.light-toggled')).toBe(false);
+  });
+
   it('crosses multiple thresholds once in authored descending order and changes behavior, effects, and modifiers atomically', () => {
     const { state, content } = fixture();
     const damaged = {
