@@ -202,6 +202,22 @@ export function equipmentModifiers(
     for (const [name, amount] of Object.entries(item.enchantment?.modifiers ?? {})) {
       modifiers[name] = (modifiers[name] ?? 0) + amount;
     }
+    // Curse drawbacks ride the enchantment-side path, never `base`. `publicModifiers` falls back to
+    // `base` for an unidentified item, so folding a curse into `base` would leak the drawback on the
+    // character sheet before the hero has any way to know the item is cursed. Artifact drawbacks can
+    // safely fold into `base` above only because artifacts are always identification mode `known`.
+    const curseId = item.curse?.curseId;
+    if (curseId !== undefined) {
+      const curse = input.content.entries.find(
+        (entry) => entry.kind === 'curse' && entry.id === curseId,
+      );
+      if (!curse || curse.kind !== 'curse') {
+        throw new Error(`internal invariant: curse definition ${curseId} does not exist`);
+      }
+      for (const [name, amount] of Object.entries(curse.drawbackModifiers)) {
+        modifiers[name] = (modifiers[name] ?? 0) + amount;
+      }
+    }
     sources.push({ itemId, modifiers, publicModifiers: item.identified ? modifiers : base });
   }
   return sources;
