@@ -362,6 +362,7 @@ export function PlayScreen({
           talkAvailable={dialogueTargetAvailable(projection, pack)}
           onCast={targeting.begin}
           onStartExplore={autoTravel.startExplore}
+          onTravelToStairs={autoTravel.travelToStairs}
         />
       </div>
     </ScreenFade>

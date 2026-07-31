@@ -70,6 +70,7 @@ function harness(
     onOpenOverlay?: (overlay: string) => void;
     onCast?: (spellId: string) => void;
     onStartExplore?: () => void;
+    onTravelToStairs?: (direction: 'up' | 'down') => void;
     projection?: GameplayProjection;
   }> = {},
 ) {
@@ -78,6 +79,7 @@ function harness(
   const onOpenOverlay = overrides.onOpenOverlay ?? vi.fn();
   const onCast = overrides.onCast ?? vi.fn();
   const onStartExplore = overrides.onStartExplore ?? vi.fn();
+  const onTravelToStairs = overrides.onTravelToStairs ?? vi.fn();
   render(
     <UiProviders
       pack={pack}
@@ -94,10 +96,11 @@ function harness(
         talkAvailable={overrides.talkAvailable ?? false}
         onCast={onCast}
         onStartExplore={onStartExplore}
+        onTravelToStairs={onTravelToStairs}
       />
     </UiProviders>,
   );
-  return { dispatch, onOpenChange, onOpenOverlay, onCast, onStartExplore };
+  return { dispatch, onOpenChange, onOpenOverlay, onCast, onStartExplore, onTravelToStairs };
 }
 
 describe('CommandPalette', () => {
@@ -211,6 +214,30 @@ describe('CommandPalette', () => {
     expect(onStartExplore).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenCalledWith(false);
     // A discovery surface, not a parallel command path: no intent is dispatched for this entry.
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('selecting the descend entry calls onTravelToStairs("down") instead of dispatching the raw descend intent', async () => {
+    const user = userEvent.setup();
+    const { onTravelToStairs, onOpenChange, dispatch } = harness();
+
+    await user.type(screen.getByRole('combobox'), 'descend');
+    await user.keyboard('{Enter}');
+
+    expect(onTravelToStairs).toHaveBeenCalledWith('down');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('selecting the ascend entry calls onTravelToStairs("up") instead of dispatching the raw ascend intent', async () => {
+    const user = userEvent.setup();
+    const { onTravelToStairs, onOpenChange, dispatch } = harness();
+
+    await user.type(screen.getByRole('combobox'), 'ascend');
+    await user.keyboard('{Enter}');
+
+    expect(onTravelToStairs).toHaveBeenCalledWith('up');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(dispatch).not.toHaveBeenCalled();
   });
 });
