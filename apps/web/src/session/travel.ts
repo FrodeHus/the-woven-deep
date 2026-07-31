@@ -22,7 +22,7 @@ import { actorsOf, featuresOf, groundItemsOf, heroOf } from './projection-view.j
  * only *potentially* traversable -- the path may end/step there, where the ordinary `move` intent
  * auto-opens it (see `command-builder.ts`), and the advance loop then stops because opening a door
  * does not move the hero onto it. Walls/pillars/void are never traversable. */
-const PASSABLE_TOKENS: ReadonlySet<string> = new Set([
+export const PASSABLE_TOKENS: ReadonlySet<string> = new Set([
   'terrain.floor',
   'terrain.stair',
   'terrain.door',

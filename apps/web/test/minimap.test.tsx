@@ -82,4 +82,21 @@ describe('MinimapPanel click-to-travel', () => {
 
     expect(container.querySelector('[data-cell="3,2"]')).toBeNull();
   });
+
+  it('a discovered wall gets no click handler and no pointer cursor -- resolveClick would refuse it anyway', () => {
+    const onTravelTo = vi.fn();
+    const projection = makeProjection({ hero: { x: 5, y: 4 }, walls: [{ x: 6, y: 4 }] });
+    const lit = {
+      ...projection,
+      hero: { ...projection.hero, equipment: { offHand: { itemId: 'item.torch', enabled: true } } },
+    };
+    const snapshot = { projection: lit } as unknown as SessionSnapshot;
+    const { container } = render(<MinimapPanel snapshot={snapshot} onTravelTo={onTravelTo} />);
+
+    const wall = container.querySelector('[data-cell="6,4"]');
+    expect(wall).not.toBeNull();
+    expect(wall).not.toHaveStyle({ cursor: 'pointer' });
+    fireEvent.click(wall!);
+    expect(onTravelTo).not.toHaveBeenCalled();
+  });
 });
