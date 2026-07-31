@@ -32,6 +32,13 @@ const EMBER_ARTIFACT = 'item.warden-ember';
 const EMBER_ARTIFACT_ITEM_ID = 'item.warden-ember.1';
 const EMBER_SCROLL_ITEM_ID = 'item.ember-scroll.1';
 
+/** The Drowned Crown: `signature: { spellId: spell.frost-nova, charges: 2, rechargePerFloor: 1 }`
+ * -- an AoE (`target.burst`, radius 2) signature, paired with the frost-nova scroll that reads the
+ * same spell, so the sweep path is compared the same way the single-target one is. */
+const NOVA_ARTIFACT = 'item.tide-crown';
+const NOVA_ARTIFACT_ITEM_ID = 'item.tide-crown.1';
+const NOVA_SCROLL_ITEM_ID = 'item.frost-nova-scroll.1';
+
 function instance(
   contentId: string,
   itemId: string,
@@ -181,6 +188,60 @@ describe('artifact signature cast', () => {
     expect(read.result.status).toBe('applied');
     // The scroll destroys itself; the artifact spends a charge. Everything else -- the spell's own
     // effect events, in order -- is identical, and so is the randomness the cast draws.
+    expect(comparableEvents(cast.events)).toEqual(
+      comparableEvents(read.events.filter((event) => event.type !== 'item.consumed')),
+    );
+    expect(cast.state.rng).toEqual(read.state.rng);
+  });
+
+  it('sweeps an AoE signature over the burst and matches the equivalent scroll, minus consumption', () => {
+    const { run: artifactRun, target } = runCarrying((actorId) => [
+      instance(NOVA_ARTIFACT, NOVA_ARTIFACT_ITEM_ID, actorId, 2),
+    ]);
+    const { run: scrollRun } = runCarrying((actorId) => [
+      instance('item.frost-nova-scroll', NOVA_SCROLL_ITEM_ID, actorId, null),
+    ]);
+    const rat = artifactRun.actors.find((actor) => actor.contentId === 'monster.cave-rat')!;
+
+    const command = {
+      commandId: 'command.nova',
+      expectedRevision: artifactRun.revision,
+      target,
+    } as const;
+    const cast = resolveCommand(
+      artifactRun,
+      { type: 'use-item', ...command, itemId: NOVA_ARTIFACT_ITEM_ID },
+      { content: pack },
+    );
+    const read = resolveCommand(
+      scrollRun,
+      { type: 'use-item', ...command, itemId: NOVA_SCROLL_ITEM_ID },
+      { content: pack },
+    );
+
+    expect(cast.result.status).toBe('applied');
+    expect(read.result.status).toBe('applied');
+    expect(cast.state.items.find((item) => item.itemId === NOVA_ARTIFACT_ITEM_ID)?.charges).toBe(1);
+    const ratAfter = cast.state.actors.find((actor) => actor.actorId === rat.actorId)!;
+    expect(ratAfter.health).toBeLessThan(rat.health);
+    // The sweep path, not the single-target one: an AoE signature demands an aim cell, and is
+    // rejected without one exactly as an AoE scroll is -- consuming no charge and no randomness.
+    const unaimed = resolveCommand(
+      artifactRun,
+      {
+        type: 'use-item',
+        commandId: 'command.nova-unaimed',
+        expectedRevision: artifactRun.revision,
+        itemId: NOVA_ARTIFACT_ITEM_ID,
+        target: null,
+      },
+      { content: pack },
+    );
+    expect(unaimed.result).toMatchObject({ status: 'invalid', reason: 'target.invalid' });
+    expect(unaimed.state.items.find((item) => item.itemId === NOVA_ARTIFACT_ITEM_ID)?.charges).toBe(
+      2,
+    );
+    expect(unaimed.state.rng).toEqual(artifactRun.rng);
     expect(comparableEvents(cast.events)).toEqual(
       comparableEvents(read.events.filter((event) => event.type !== 'item.consumed')),
     );

@@ -496,6 +496,9 @@ export function createRecordedHeirloom(
     condition: fallback ? 100 : input.snapshot.condition,
     enchantment: fallback ? null : input.snapshot.enchantment,
     identified: true,
+    // A recovered artifact keeps the charges its bearer left it holding -- being reclaimed is not a
+    // refill. The fallback branch resolved a DIFFERENT item than the record named, so the recorded
+    // charge count belongs to nothing here and the substitute starts with no charge track at all.
     charges: fallback ? null : input.snapshot.charges,
     fuel: fallback || fuelless ? (definition.light?.fuelCapacity ?? null) : input.snapshot.fuel,
     enabled: definition.light === null ? null : false,

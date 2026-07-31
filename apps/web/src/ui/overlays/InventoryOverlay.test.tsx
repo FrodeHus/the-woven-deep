@@ -638,6 +638,23 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(screen.getByRole('button', { name: /Use/ })).toBeInTheDocument();
   });
 
+  it('disables the cast affordance for a spent signature artifact', () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.ember.1',
+        contentId: 'item.warden-ember',
+        name: "Warden's Ember",
+        category: 'ring',
+        charges: 0,
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.getByText('0 / 3')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Cast Ember bolt/ })).toBeDisabled();
+  });
+
   it('casting a signature artifact enters the shared aim mode for its spell', async () => {
     const user = userEvent.setup();
     const beginScroll = vi.fn();

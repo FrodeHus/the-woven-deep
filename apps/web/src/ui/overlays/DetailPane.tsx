@@ -28,18 +28,25 @@ function ActionButton({
   label,
   chord,
   tone = 'accent',
+  disabled = false,
   onClick,
 }: Readonly<{
   label: string;
   chord: string;
   tone?: ActionTone;
+  disabled?: boolean;
   onClick: () => void;
 }>): JSX.Element {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`cursor-pointer border bg-raised px-3 py-1.5 font-mono text-xs ${ACTION_TONE_CLASS[tone]}`}
+      disabled={disabled}
+      className={`border bg-raised px-3 py-1.5 font-mono text-xs ${
+        disabled
+          ? 'cursor-not-allowed border-subtle text-subtle'
+          : `cursor-pointer ${ACTION_TONE_CLASS[tone]}`
+      }`}
     >
       {label} <span className="opacity-60">[{chord}]</span>
     </button>
@@ -208,10 +215,14 @@ export function DetailPane({
           tone="accent"
           onClick={onEquip}
         />
+        {/* A spent relic cannot be spoken until the next floor wakes it. The engine rejects the
+         * cast with `signature.no-charges` regardless -- this only stops the pane offering an
+         * action that is already known to fail. */}
         <ActionButton
           label={signature ? `Cast ${signature.name}` : 'Use'}
           chord="u"
           tone="good"
+          disabled={signature !== undefined && (item.charges ?? 0) <= 0}
           onClick={onUse}
         />
         <ActionButton label="Drop" chord="d" tone="danger" onClick={onDrop} />
