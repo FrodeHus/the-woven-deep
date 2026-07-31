@@ -342,6 +342,19 @@ describe('occludedWallIndices (dynamic hero-proximity occlusion)', () => {
     const cells = grid(4, 4, wallAt);
     expect(occludedWallIndices(cells, 4, 4, 'occ', atlas, 1, false, undefined).size).toBe(0);
   });
+
+  it('never stubs a wall whose only covered vicinity cell is the doorway beside the hero', () => {
+    const atlas = makeAtlas();
+    // Hero at (1,2) with the door mouth at (1,1) directly north; the wall at (2,1) covers (1,1).
+    // Stubbing it would only "reveal" a full-height door, at the cost of the arch's own masonry.
+    const cells = grid(4, 4, (x, y) => {
+      if (x === 1 && y === 1) return 'terrain.door';
+      if (y === 1) return 'terrain.wall';
+      return 'terrain.floor';
+    });
+    const set = occludedWallIndices(cells, 4, 4, 'occ', atlas, 1, false, { x: 1, y: 2 });
+    expect(set.has(1 * 4 + 2)).toBe(false);
+  });
 });
 
 describe('planFloorBake occlusion stub', () => {

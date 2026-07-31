@@ -76,8 +76,15 @@ export function cellSeed(floorId: string, x: number, y: number): number {
   return (hash ^ (x * 73856093) ^ (y * 19349663)) >>> 0;
 }
 
+/**
+ * Whether a neighbouring family reads as open space when shaping a wall cell. Walls and void are
+ * closed for the obvious reason; DOORS are closed too, because a door is masonry standing in the
+ * wall line rather than a gap in it. Counting a door as open pushed both cells flanking every
+ * doorway into the rounded boulder shapes, which read as rubble and left the door arch standing on
+ * open floor like a stage prop instead of embedded in wall mass.
+ */
 function isOpenFamily(family: TileFamily): boolean {
-  return family !== 'wall' && family !== 'void';
+  return family !== 'wall' && family !== 'void' && family !== 'door' && family !== 'town-door';
 }
 
 /**

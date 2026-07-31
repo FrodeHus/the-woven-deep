@@ -214,3 +214,22 @@ describe('skinFloor town', () => {
     }
   });
 });
+
+describe('walls flanking a doorway', () => {
+  // A doorway in a wall line: the mouth at (2,1), floor north and south of it, wall to either side.
+  // A door is masonry standing in the wall line, not open space, so the wall cells beside it must
+  // keep the full wall cube -- as rounded boulder shapes they read as rubble and leave the door
+  // arch standing alone on open floor.
+  it('keeps the wall cells beside a door as full wall cubes', () => {
+    // Row 0 is undug rock with the corridor cell at (2,0); row 1 is the room's wall ring with the
+    // door mouth at (2,1); row 2 is the room floor.
+    const tokenAt = (x: number, y: number): string => {
+      if (x === 2 && y === 0) return 'terrain.floor';
+      if (x === 2 && y === 1) return 'terrain.door';
+      if (y <= 1) return 'terrain.wall';
+      return 'terrain.floor';
+    };
+    const skins = skinFloor(grid(5, 3, tokenAt), 5, 3, 'floor-door', false);
+    for (const x of [1, 3]) expect(skins[1 * 5 + x]!.family).toBe('wall');
+  });
+});
