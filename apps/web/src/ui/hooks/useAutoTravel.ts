@@ -103,7 +103,8 @@ export function useAutoTravel({
     pendingStepRef.current = setTimeout(() => {
       pendingStepRef.current = null;
       if (travelRef.current === null || disabledRef.current) return;
-      travelRef.current = advanceTravel({ projection, travel: travelRef.current, dispatch });
+      const outcome = advanceTravel({ projection, travel: travelRef.current, dispatch });
+      travelRef.current = outcome.status === 'stepping' ? outcome.travel : null;
       lastDispatchAtRef.current = Date.now();
     }, delay);
   }, [projection, dispatch, clearPendingStep]);
@@ -122,11 +123,12 @@ export function useAutoTravel({
     // Kick off the first step immediately against the current projection -- no added click
     // latency; every subsequent step is driven by the effect above, paced to `STEP_MS`, as each
     // resulting projection publishes.
-    travelRef.current = advanceTravel({
+    const outcome = advanceTravel({
       projection,
       travel: beginTravel(projection, plan),
       dispatch,
     });
+    travelRef.current = outcome.status === 'stepping' ? outcome.travel : null;
     lastDispatchAtRef.current = Date.now();
   };
 
