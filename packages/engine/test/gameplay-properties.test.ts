@@ -89,6 +89,12 @@ describe('cross-system gameplay sequence properties', () => {
       fc.constant('search' as const),
       fc.constantFrom(...directions),
     );
+    // numRuns is capped at 300 (not the usual 500) because this single synchronous fc.assert
+    // call is the slowest test in the engine suite: on CI's slower 2-core runner it took long
+    // enough (measured 64s+ at 500 runs, against ~29s locally) to trip vitest's hardcoded
+    // 60s worker-RPC "onTaskUpdate" ack timeout (not the testTimeout below, which cannot
+    // raise it) and fail the whole run with an unhandled birpc timeout error. 300 keeps a
+    // wide, still-seeded-deterministic fuzz surface with headroom under that ceiling.
     fc.assert(
       fc.property(fc.array(action, { minLength: 1, maxLength: 10 }), (actions) => {
         let state = structuredClone(gameplayRun);
@@ -122,7 +128,7 @@ describe('cross-system gameplay sequence properties', () => {
           expect(projection).not.toContain('artifactsUndiscovered');
         }
       }),
-      { seed: 0x4a09, numRuns: 500 },
+      { seed: 0x4a09, numRuns: 300 },
     );
   }, 120_000);
 });
