@@ -11,6 +11,7 @@ import {
   WALL_OVERSCAN,
   type FloorBakePlan,
 } from './floor-bake.js';
+import { withImpliedDoorFrames } from './door-frames.js';
 
 // A synthetic atlas with uniform square rects keeps the geometry assertions arithmetic-clean; the
 // live sheet's rects are tight measured crops (see atlas.test.ts). `x` distinguishes fixtures for
@@ -123,6 +124,54 @@ describe('planFloorBake ordering', () => {
     expect(plan.draws[1]!.rect).toEqual(atlas.pillar); // (0,1) sum 1, x 0
     expect(plan.draws[2]!.rect).toEqual(atlas.stairs); // (1,0) sum 1, x 1
     expect(atlas.floors).toContainEqual(plan.draws[3]!.rect); // (1,1) sum 2, some floor variant
+  });
+});
+
+describe('planFloorBake implied door frames', () => {
+  // A door first seen down a corridor: the doorway is visible, the masonry either side of it is
+  // not yet discovered. Baking the raw projection leaves the arch standing in open darkness, so
+  // the frame is implied before the bake (`withImpliedDoorFrames`).
+  const corridor = (x: number, y: number): string | undefined => {
+    if (x === 1 && y === 1) return 'terrain.door';
+    if (x === 1) return 'terrain.floor';
+    return undefined;
+  };
+  const unknownOutsideCorridor = (x: number): Partial<ObservableCell> =>
+    x === 1 ? {} : { knowledge: 'unknown', intensity: 0 };
+
+  it('bakes wall cubes at the undiscovered cells flanking a visible door', () => {
+    const atlas = makeAtlas();
+    const cells = grid(3, 3, corridor, (x) => unknownOutsideCorridor(x));
+    const framed = withImpliedDoorFrames(cells, 3, 3);
+
+    const rawPlan = planFloorBake(cells, 3, 3, 'floor-door-frame', atlas, 1, false);
+    const framedPlan = planFloorBake(framed, 3, 3, 'floor-door-frame', atlas, 1, false);
+
+    expect(rawPlan.draws).toHaveLength(3); // two corridor floors and the door, nothing beside it
+    expect(framedPlan.draws).toHaveLength(5);
+    const added = framedPlan.draws.filter(
+      (draw) =>
+        !rawPlan.draws.some((existing) => existing.dx === draw.dx && existing.dy === draw.dy),
+    );
+    expect(added).toHaveLength(2);
+    // Standing wall mass: a plain cube, or the Weave-conduit cube the skinner seeds in its place.
+    const wallRects = [...atlas.walls, ...atlas.weaveWalls];
+    for (const draw of added) expect(wallRects).toContainEqual(draw.rect);
+  });
+
+  it('leaves a bake whose door flanks are already discovered unchanged', () => {
+    const atlas = makeAtlas();
+    const tokenAt = (x: number, y: number): string => {
+      if (x === 1 && y === 1) return 'terrain.door';
+      if (x === 1) return 'terrain.floor';
+      return 'terrain.wall';
+    };
+    const cells = grid(3, 3, tokenAt);
+    const framed = withImpliedDoorFrames(cells, 3, 3);
+
+    expect(planFloorBake(framed, 3, 3, 'floor-door-known', atlas, 1, false)).toStrictEqual(
+      planFloorBake(cells, 3, 3, 'floor-door-known', atlas, 1, false),
+    );
   });
 });
 
