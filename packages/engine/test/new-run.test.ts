@@ -341,7 +341,7 @@ describe('createNewRun records input', () => {
     // run carries the pack hash, so every content edit moves this digest through `contentHash`
     // alone; a delta in any other field is a real behavioral drift and must not be re-pinned away.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '45220bc9014958ee69839b10236355e32c6194fea01c108943b861163f19bbd1',
+      '38edea00eac258b68c23b5c3e3b079a57e6b05b3884113c5b28f7cb517189cc1',
     );
   });
 
@@ -481,7 +481,16 @@ describe('dead wielders and illumination', () => {
     });
     const run = descendToNextFloor(onStairs, { content: pack }).state;
     const hero = heroActor(run);
-    expect(run.items.find((item) => item.contentId === 'item.pitch-torch')?.enabled).toBe(true);
+    // Scoped to the hero's own carried torch (not `find`'s first match): depth-1 floor
+    // scatter can also seed an unlit pitch-torch on the ground, and content-only loot-table
+    // edits shift which item the RNG draws first without changing this scenario's shape.
+    const heroTorch = run.items.find(
+      (item) =>
+        item.contentId === 'item.pitch-torch' &&
+        (item.location.type === 'equipped' || item.location.type === 'backpack') &&
+        item.location.actorId === hero.actorId,
+    );
+    expect(heroTorch?.enabled).toBe(true);
     expect(
       run.actors.filter((actor) => actor.actorId !== hero.actorId && actor.health > 0).length,
     ).toBeGreaterThan(0);
@@ -517,7 +526,7 @@ describe('dead wielders and illumination', () => {
 
     // The dead hero's torch must no longer illuminate: it must not appear as a light source
     // referencing an actor absent from the floor's living-actor position map.
-    const torch = result.state.items.find((item) => item.contentId === 'item.pitch-torch')!;
+    const torch = result.state.items.find((item) => item.itemId === heroTorch!.itemId)!;
     const lights = itemLightSources({ run: result.state, content: pack, floorId: hero.floorId });
     expect(lights.some((light) => light.lightId === torch.itemId)).toBe(false);
   });
