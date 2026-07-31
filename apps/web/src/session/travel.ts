@@ -351,15 +351,21 @@ export function advanceTravel(
   const hero = heroOf(projection);
 
   let cursor = travel.cursor;
+  let desynced = false;
   if (travel.pendingPickup !== null) {
     const still = groundItemUnderHero(projection);
-    if (still?.itemId === travel.pendingPickup) return { status: 'stopped', reason: 'blocked' };
+    if (still?.itemId === travel.pendingPickup) desynced = true;
   } else if (travel.awaiting !== null) {
     if (hero.x === travel.awaiting.x && hero.y === travel.awaiting.y) cursor += 1;
-    else return { status: 'stopped', reason: 'blocked' };
+    else desynced = true;
   }
 
+  // The desync and the interruption are usually the SAME event seen from two sides: a refused move
+  // emits `action.invalid` and leaves the hero off `awaiting`; an ambush both damages the hero and
+  // costs the step. The stop rule is consulted first so the player is told what actually happened;
+  // `'blocked'` is only the fallback for a desync no rule can explain.
   const stop = travel.stopWhen({ projection, lastEvents });
+  if (desynced) return { status: 'stopped', reason: stop ?? 'blocked' };
   if (stop !== null) return { status: 'stopped', reason: stop };
 
   if (travel.autoPickup !== null) {

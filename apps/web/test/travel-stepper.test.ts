@@ -224,6 +224,54 @@ describe('advanceTravel with the generalized stepper', () => {
     expect(second).toEqual({ status: 'stopped', reason: 'blocked' });
   });
 
+  it('reports the engine reason, not the silent blocked, when the refused step emitted action.invalid', () => {
+    const dispatch = vi.fn<(intent: PlayerIntent) => void>();
+    const start = makeProjection({ hero: { x: 5, y: 5 } });
+    const travel = beginTravel(
+      start,
+      { steps: [{ x: 6, y: 5 }], onArrive: null },
+      { mode: 'explore', stopWhen: classicStopPredicate({ start, autoPickup: takeNothing }) },
+    );
+    const first = advanceTravel({ projection: start, travel, dispatch });
+    // The move was refused: the hero did not reach the awaited cell AND the engine said why.
+    const outcome = advanceTravel({
+      projection: start,
+      travel: (first as { travel: ReturnType<typeof beginTravel> }).travel,
+      dispatch,
+      lastEvents: [{ type: 'action.invalid', reason: 'blocked.door' } as unknown as PublicEvent],
+    });
+    expect(outcome).toEqual({ status: 'stopped', reason: 'action-invalid' });
+  });
+
+  it('reports hero-damaged when the ambush that cost the step also drew blood', () => {
+    const dispatch = vi.fn<(intent: PlayerIntent) => void>();
+    const start = makeProjection({ hero: { x: 5, y: 5 } });
+    const travel = beginTravel(start, { steps: [{ x: 6, y: 5 }], onArrive: null });
+    const first = advanceTravel({ projection: start, travel, dispatch });
+    const hurt = makeProjection({ hero: { x: 5, y: 5, health: 14 } });
+    expect(
+      advanceTravel({
+        projection: hurt,
+        travel: (first as { travel: ReturnType<typeof beginTravel> }).travel,
+        dispatch,
+      }),
+    ).toEqual({ status: 'stopped', reason: 'hero-damaged' });
+  });
+
+  it('still falls back to blocked when nothing explains the desync', () => {
+    const dispatch = vi.fn<(intent: PlayerIntent) => void>();
+    const start = makeProjection({ hero: { x: 5, y: 5 } });
+    const travel = beginTravel(start, { steps: [{ x: 6, y: 5 }], onArrive: null });
+    const first = advanceTravel({ projection: start, travel, dispatch });
+    expect(
+      advanceTravel({
+        projection: start,
+        travel: (first as { travel: ReturnType<typeof beginTravel> }).travel,
+        dispatch,
+      }),
+    ).toEqual({ status: 'stopped', reason: 'blocked' });
+  });
+
   it('re-plans every step in explore mode and reports arrival when the planner runs dry', () => {
     const dispatch = vi.fn<(intent: PlayerIntent) => void>();
     const projection = makeProjection({ hero: { x: 5, y: 5 } });
