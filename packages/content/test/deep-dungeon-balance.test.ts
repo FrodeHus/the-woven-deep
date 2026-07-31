@@ -46,7 +46,7 @@ describe('deep-dungeon difficulty ramp', () => {
     });
     const byId = new Map(pack.entries.map((entry) => [entry.id, entry]));
     const boss = byId.get('monster.weakened-heart') as MonsterContentEntry;
-    expect(boss.health).toBe(58);
+    expect(boss.health).toBe(90);
     expect(boss.threat).toBe(20);
     for (const id of NEW_MONSTERS) {
       const monster = byId.get(id) as MonsterContentEntry;
