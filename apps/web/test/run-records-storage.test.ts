@@ -575,4 +575,27 @@ describe('session run record repository artifact ledger', () => {
 
     expect(() => createSessionRunRecordRepository(storage)).toThrow(SessionHallCorruptError);
   });
+
+  it('rejects a blob whose applied artifact ids have the wrong shape', () => {
+    const storage = fakeStorage();
+    storage.set(
+      RECORDS_KEY,
+      JSON.stringify({
+        version: 2,
+        records: [],
+        heart: null,
+        lifetime: {
+          conqueredChampionRecordIds: [],
+          grantedAchievementIds: [],
+          discoveryProtection: [],
+          totals: metrics(),
+        },
+        appliedDeltaRecordIds: [],
+        artifactLedger: [],
+        appliedArtifactRecordIds: 'not an array',
+      }),
+    );
+
+    expect(() => createSessionRunRecordRepository(storage)).toThrow(SessionHallCorruptError);
+  });
 });

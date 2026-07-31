@@ -43,10 +43,15 @@ function record(recordId: string, heroName: string, total: number): StoredHallRe
 }
 
 /**
- * find → die-with → recover → evict, scripted once and replayed against every
+ * find → die-with → recover → evict → re-lose → conquer, scripted once and replayed against every
  * `RunRecordRepository` implementation. The ordering matters: Bram is still standing when Cleo
  * recovers the artifact from him, so Bram never earns a `reclaimed-by-the-deep` stint — only
  * Cleo does, once the ten rivals push her out of the Hall.
+ *
+ * The closing conquest step exercises the *other* release branch: Dain outranks every rival and
+ * stays in the standings throughout, so only `lifetime.conqueredChampionRecordIds` can release
+ * his artifact. Lifetime deltas are applied before the artifact batch that reconciles, matching
+ * the ordering hosts must use.
  */
 function runScenario(repository: RunRecordRepository): ArtifactLedger {
   const ada = record('record.ada', 'Ada', 40);
@@ -101,6 +106,32 @@ function runScenario(repository: RunRecordRepository): ArtifactLedger {
     repository.appendRecord(record(`record.rival${index}`, `Rival ${index}`, 500 + index));
   }
 
+  // Dain re-finds it and dies with it. He tops the Hall and stays there, so the eviction branch
+  // can never release this stint — only conquering his champion record can.
+  const dain = record('record.dain', 'Dain', 900);
+  repository.appendRecord(dain);
+  repository.applyArtifactDeltas({
+    recordId: dain.recordId,
+    stints: [
+      {
+        artifactId: ARTIFACT_ID,
+        stint: { heroName: 'Dain', recordId: dain.recordId, outcome: 'died-with', depth: 9 },
+        newStatus: 'lost',
+        holderRecordId: dain.recordId,
+      },
+    ],
+  });
+
+  const conqueror = record('record.conqueror', 'Enid', 100);
+  repository.applyDeltas({
+    recordId: conqueror.recordId,
+    newlyConqueredChampionRecordIds: [dain.recordId],
+    achievementGrants: [],
+    discoveryProtectionUpdates: [],
+    metrics: emptyRunMetrics(),
+  });
+  repository.appendRecord(conqueror);
+
   return repository.artifactLedger();
 }
 
@@ -114,6 +145,8 @@ const expectedLedger: ArtifactLedger = [
       { heroName: 'Bram', recordId: 'record.bram', outcome: 'died-with', depth: 6 },
       { heroName: 'Cleo', recordId: 'record.cleo', outcome: 'recovered', depth: 7 },
       { heroName: 'Cleo', recordId: 'record.cleo', outcome: 'reclaimed-by-the-deep', depth: 0 },
+      { heroName: 'Dain', recordId: 'record.dain', outcome: 'died-with', depth: 9 },
+      { heroName: 'Dain', recordId: 'record.dain', outcome: 'reclaimed-by-the-deep', depth: 0 },
     ],
   },
 ];

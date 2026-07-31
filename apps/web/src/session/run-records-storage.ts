@@ -361,8 +361,10 @@ export function createSessionRunRecordRepository(storage: SessionStorageLike): R
     },
     applyArtifactDeltas(deltas: ArtifactDeltas) {
       if (appliedArtifactRecordIds.has(deltas.recordId)) return;
-      appliedArtifactRecordIds.add(deltas.recordId);
+      // Fold before marking applied: a batch rejected by the ledger's invariant checks must not
+      // burn its recordId, or a corrected retry would silently no-op.
       artifactLedger = foldArtifactDeltas(artifactLedger, deltas);
+      appliedArtifactRecordIds.add(deltas.recordId);
       reconcile();
       persist();
     },

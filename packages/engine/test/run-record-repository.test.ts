@@ -425,4 +425,34 @@ describe('in-memory repository artifact ledger', () => {
       }),
     ).toThrow(/holder/i);
   });
+
+  it('a rejected batch does not burn its recordId: a corrected retry still applies', () => {
+    const repository = createInMemoryRunRecordRepository();
+    const record = storedRecord();
+    repository.appendRecord(record);
+
+    const malformed: ArtifactDeltas = {
+      recordId: record.recordId,
+      stints: [
+        {
+          artifactId: 'artifact.sundered-crown',
+          stint: {
+            heroName: record.heroName,
+            recordId: record.recordId,
+            outcome: 'died-with',
+            depth: 5,
+          },
+          newStatus: 'lost',
+          holderRecordId: null,
+        },
+      ],
+    };
+
+    expect(() => repository.applyArtifactDeltas(malformed)).toThrow(/holder/i);
+    expect(repository.artifactLedger()).toEqual([]);
+
+    repository.applyArtifactDeltas(lostToDeltas(record.recordId, record.heroName));
+    expect(repository.artifactLedger()[0]?.status).toBe('lost');
+    expect(repository.artifactLedger()[0]?.provenance).toHaveLength(1);
+  });
 });

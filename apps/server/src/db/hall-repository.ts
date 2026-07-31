@@ -192,12 +192,21 @@ export class ServerRunRecordRepository implements RunRecordRepository {
    * and writes it back. Runs on every event that can change standings membership — a Hall append,
    * and each applied batch of artifact deltas — mirroring the in-memory reference. */
   private reconcileArtifacts(envelope: LifetimeEnvelope): void {
+    // An empty ledger has nothing to release, so the append path costs no standings scan and no
+    // write for the overwhelmingly common profile that has never touched an artifact.
+    if (envelope.artifactLedger.length === 0) return;
     const reconciled = reconcileArtifactLedger({
       ledger: envelope.artifactLedger,
       standings: this.standings(MAX_STANDINGS),
       lifetime: deriveLifetime(envelope),
     });
-    this.writeState({ lifetimeEnvelope: { ...envelope, artifactLedger: reconciled } });
+    this.writeState({
+      lifetimeEnvelope: {
+        ...envelope,
+        version: HALL_STORE_VERSION,
+        artifactLedger: reconciled,
+      },
+    });
   }
 
   private writeState(
