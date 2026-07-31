@@ -97,4 +97,18 @@ describe('MinimapPanel', () => {
     expect(screen.queryByTestId('minimap-stair-down')).not.toBeInTheDocument();
     expect(screen.getByTestId('minimap')).toHaveAttribute('data-light-out', 'true');
   });
+
+  it('keeps the town minimap lit even without a burning light, matching the fully-lit playfield', () => {
+    render(
+      <MinimapPanel
+        snapshot={snapshotOf(true, {
+          lit: false,
+          cells: [cell(0, 0, 0, 'visible', { glyph: '>', token: 'terrain.stair' })],
+        })}
+      />,
+    );
+    expect(screen.queryByTestId('minimap-no-light')).not.toBeInTheDocument();
+    expect(screen.getByTestId('minimap-stair-down')).toBeInTheDocument();
+    expect(screen.getByTestId('minimap')).not.toHaveAttribute('data-light-out');
+  });
 });

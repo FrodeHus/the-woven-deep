@@ -64,12 +64,14 @@ const MINIMAP_CELL = '3px';
  *
  * With no burning light (`heroLightIsOut`), the map goes dark instead: reading a floor plan by
  * touch is not a thing a hero in the dark gets to do, so the panel keeps its frame and label and
- * renders a single "no light" line in place of the grid.
+ * renders a single "no light" line in place of the grid. The town is exempt: the playfield renders
+ * town fully lit from per-cell intensity regardless of a carried light, so dousing a torch there
+ * must not blank the minimap out from under it.
  */
 export function MinimapPanel({ snapshot }: PanelProps): JSX.Element {
   const floor = snapshot.projection.floor;
   const hero = heroOf(snapshot.projection);
-  const lightOut = heroLightIsOut(hero.equipment);
+  const lightOut = !floor.town && heroLightIsOut(hero.equipment);
 
   if (lightOut) {
     return (
