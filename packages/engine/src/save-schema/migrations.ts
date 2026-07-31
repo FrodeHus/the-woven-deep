@@ -165,7 +165,8 @@ export const legacyRecordedV11 = z.strictObject({
 // A v12 command record is byte-identical to a v11 one: the artifact bump at v13 added run fields
 // only, no event or command shape. Aliased (rather than re-spelled) so the two frozen shapes can
 // never drift apart, and named for v12 so a future event change freezes its own literal here.
-export const legacyRecordedV12 = legacyRecordedV11;
+// Not exported: knip rejects duplicate exports of one value, and nothing outside this file reads it.
+const legacyRecordedV12 = legacyRecordedV11;
 export const legacyRecorded = z.strictObject({
   command: commandV7,
   result: processedResult,
