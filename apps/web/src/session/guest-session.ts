@@ -21,6 +21,7 @@ import {
   type GameplayProjection,
   type HallRecordEnrichment,
   type NewRunHero,
+  type NewRunRecordsInput,
   type PublicDecision,
   type PublicEvent,
   type RunConclusionProjection,
@@ -100,6 +101,7 @@ export class GuestSession implements RunSession {
   private readonly pack: CompiledContentPack;
   private readonly storage: SessionStorageLike;
   private readonly hero: NewRunHero;
+  private readonly records: (() => NewRunRecordsInput) | undefined;
   private run: ActiveRun;
   private commandSequence: number;
   private log: readonly LogLine[] = [];
@@ -136,6 +138,12 @@ export class GuestSession implements RunSession {
        * silently win over the wizard's just-confirmed hero (see App.tsx's chargen `onConfirm`).
        * "Continue" and quickstart callers must NOT set this — they rely on restore semantics. */
       startFresh?: boolean;
+      /** The guest's cross-run history for any run this session creates: Hall standings (the
+       * champion/Echo encounters), the artifacts still undiscovered, and the champions already
+       * conquered. A THUNK, read fresh on every `freshRun` rather than snapshotted here, so a run
+       * begun after this page life's own finalize inherits that finalize's record. Omitting it
+       * creates history-free runs (the pre-records behaviour). */
+      records?: () => NewRunRecordsInput;
     }>,
   ) {
     this.pack = input.pack;
@@ -144,6 +152,7 @@ export class GuestSession implements RunSession {
     const onboardingLoad = loadOnboarding(this.localStorage);
     this.onboarding = onboardingLoad.state;
     this.hero = input.hero ?? DEFAULT_GUEST_HERO;
+    this.records = input.records;
     const booted = this.boot(input.seed, input.startFresh ?? false);
     this.run = booted.run;
     this.notice = booted.notice;
@@ -213,7 +222,16 @@ export class GuestSession implements RunSession {
   }
 
   private freshRun(seed?: Uint32State): ActiveRun {
-    return createNewRun({ pack: this.pack, seed: seed ?? randomSeed(), hero: this.hero });
+    // The provider is called HERE, not stored at construction: the guest's Hall changes within a
+    // page life (a finalize appends a record, the settings overlay can wipe the whole store), and
+    // the run started right after must see the Hall as it stands now.
+    const records = this.records?.();
+    return createNewRun({
+      pack: this.pack,
+      seed: seed ?? randomSeed(),
+      hero: this.hero,
+      ...(records === undefined ? {} : { records }),
+    });
   }
 
   private nextCommandId(): string {

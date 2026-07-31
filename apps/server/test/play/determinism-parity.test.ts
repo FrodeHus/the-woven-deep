@@ -4,8 +4,10 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
+  artifactItemIds,
   createNewRun,
   encodeActiveRun,
+  undiscoveredArtifactIds,
   DEFAULT_GUEST_HERO,
   type ActiveRun,
   type Uint32State,
@@ -146,14 +148,29 @@ function freshRepos(): {
 
 describe('cross-process determinism parity (client core vs. server play path)', () => {
   it('produces byte-identical encodeActiveRun after every intent, and at the end', () => {
-    // Client core side: the same seed/hero/pack, driven purely through dispatchIntent.
-    const clientInitialRun = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const { database, repo, hallRepo } = freshRepos();
+
+    // Client core side: the same seed/hero/pack AND the same cross-run history the server seeds
+    // its run from (an untouched Hall here) -- run creation consumes randomness off the records
+    // input, so the two sides must agree on it for the parity claim to mean anything.
+    const clientInitialRun = createNewRun({
+      pack,
+      seed: SEED,
+      hero: DEFAULT_GUEST_HERO,
+      records: {
+        standings: hallRepo.standings(10),
+        undiscoveredArtifactIds: undiscoveredArtifactIds(
+          hallRepo.artifactLedger(),
+          artifactItemIds(pack),
+        ),
+        conqueredChampionRecordIds: hallRepo.lifetime().conqueredChampionRecordIds,
+      },
+    });
     const clientRunsAfterEachIntent = driveClientCore(clientInitialRun, INTENT_SEQUENCE);
     const clientBlobsAfterEachIntent = clientRunsAfterEachIntent.map((run) => encodeActiveRun(run));
 
     // Server side: the same seed/hero/pack, driven through ServerPlaySession.applyIntent over an
     // in-memory SQLite repo -- the server's real play path.
-    const { database, repo, hallRepo } = freshRepos();
     const session = new ServerPlaySession({
       pack,
       repo,

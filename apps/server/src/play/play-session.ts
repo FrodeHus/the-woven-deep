@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
+  artifactItemIds,
   createNewRun,
   decodeActiveRun,
   encodeActiveRun,
@@ -8,6 +9,7 @@ import {
   isHeartBossActive,
   projectGameplayState,
   projectRunConclusion,
+  undiscoveredArtifactIds,
   DEFAULT_GUEST_HERO,
   type ActiveRun,
   type AchievementGrant,
@@ -38,6 +40,10 @@ import type { ServerRunRecordRepository } from '../db/hall-repository.js';
  * immediately and resets the counter.
  */
 export const MOVEMENT_CHECKPOINT_INTERVAL = 10;
+
+/** How many Hall standings a new run inherits — the engine's own cap (`createNewRun` rejects
+ * more than ten, and the Hall repository never reports more than that either). */
+const MAX_NEW_RUN_STANDINGS = 10;
 
 /**
  * Event kinds that make a command "consequential" — worth persisting immediately. Everything NOT
@@ -209,7 +215,24 @@ export class ServerPlaySession {
           throw new LockedClassError(classEntry.id);
         }
       }
-      this.run = createNewRun({ pack: this.pack, seed: input.seed, hero });
+      this.run = createNewRun({
+        pack: this.pack,
+        seed: input.seed,
+        hero,
+        // The profile's cross-run history: Hall standings become this run's champion/Echo
+        // encounters, the ledger's still-unsecured artifacts become its vault-artifact pool, and
+        // the lifetime's conquered champions stay conquered. `standings()` already returns at most
+        // `MAX_STANDINGS`, rank-contiguous, and `lifetime()` keeps its conquered ids sorted +
+        // unique -- both invariants `createNewRun`'s validation requires.
+        records: {
+          standings: this.hallRepo.standings(MAX_NEW_RUN_STANDINGS),
+          undiscoveredArtifactIds: undiscoveredArtifactIds(
+            this.hallRepo.artifactLedger(),
+            artifactItemIds(this.pack),
+          ),
+          conqueredChampionRecordIds: this.hallRepo.lifetime().conqueredChampionRecordIds,
+        },
+      });
       this.persist();
     }
     // A reconnect may load a run that concluded but never finished finalizing (e.g. a crash

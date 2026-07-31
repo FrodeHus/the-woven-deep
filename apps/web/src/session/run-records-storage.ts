@@ -1,5 +1,7 @@
+import type { CompiledContentPack } from '@woven-deep/content';
 import {
   applyArtifactDeltas as foldArtifactDeltas,
+  artifactItemIds,
   emptyArtifactLedger,
   normalizeStoredMetrics,
   reconcileArtifactLedger,
@@ -12,8 +14,10 @@ import {
   type LifetimeState,
   type OpaqueId,
   type RunMetrics,
+  type NewRunRecordsInput,
   type RunRecordRepository,
   type StoredHallRecord,
+  undiscoveredArtifactIds,
 } from '@woven-deep/engine';
 import type { SessionStorageLike } from './storage.js';
 
@@ -368,5 +372,26 @@ export function createSessionRunRecordRepository(storage: SessionStorageLike): R
       reconcile();
       persist();
     },
+  };
+}
+
+/**
+ * The guest's cross-run history in the shape `createNewRun` takes: the Hall standings that become
+ * this run's champion/Echo encounters, the artifacts the guest has not secured yet (the vault
+ * offer pool), and the champions already conquered. Read at every run creation rather than cached
+ * — `GuestSession` takes this as a thunk precisely so a run started after a finalize sees that
+ * finalize's record.
+ */
+export function newRunRecords(
+  repository: RunRecordRepository,
+  pack: CompiledContentPack,
+): NewRunRecordsInput {
+  return {
+    standings: repository.standings(MAX_STANDINGS),
+    undiscoveredArtifactIds: undiscoveredArtifactIds(
+      repository.artifactLedger(),
+      artifactItemIds(pack),
+    ),
+    conqueredChampionRecordIds: repository.lifetime().conqueredChampionRecordIds,
   };
 }

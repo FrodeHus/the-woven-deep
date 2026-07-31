@@ -3,16 +3,20 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
+  artifactItemIds,
   createNewRun,
   decodeActiveRun,
   DEFAULT_GUEST_HERO,
   descendToNextFloor,
   emptyEquipment,
   encodeActiveRun,
+  undiscoveredArtifactIds,
   RECENT_COMMAND_LIMIT,
   type ActiveRun,
   type ActorState,
   type ItemInstance,
+  type NewRunRecordsInput,
+  type RunRecordRepository,
   type Uint32State,
 } from '@woven-deep/engine';
 import { SIGHTINGS_KEY } from '../src/session/codex.js';
@@ -809,6 +813,110 @@ describe('GuestSession', () => {
       expect(projection!.finalized).toBe(false);
       expect(projection!.score).toBeNull();
       expect(projection!.heirloom).toBeNull();
+    });
+  });
+
+  describe('hall records seeding', () => {
+    /** A run that really descended to depth 1 and died there — so the Hall record it finalizes
+     * into carries a `deathDepth` an actual floor can host the champion on. */
+    function deadRunAtDepth1(seed: Uint32State): ActiveRun {
+      const descended = depth1Run(seed);
+      const hero = descended.actors.find((actor) => actor.playerControlled)!;
+      return {
+        ...descended,
+        actors: descended.actors.map((actor) =>
+          actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+        ),
+        conclusion: {
+          completionType: 'died',
+          cause: {
+            killerContentId: null,
+            depth: 1,
+            turn: descended.turn,
+            worldTime: descended.worldTime,
+          },
+          concludedAtRevision: descended.revision,
+          finalized: false,
+        },
+      };
+    }
+
+    /** The session only writes the save on its first applied command, so a fresh run is read back
+     * through one harmless `wait` dispatch. */
+    function persistedRun(session: GuestSession, storage: FakeStorage): ActiveRun {
+      session.dispatch({ type: 'wait' });
+      return decodeActiveRun(storage.peek()!, pack);
+    }
+
+    /** Exactly what App.tsx hands the session: a thunk over the live Hall repository. */
+    function recordsThunk(repository: RunRecordRepository): () => NewRunRecordsInput {
+      return () => ({
+        standings: repository.standings(10),
+        undiscoveredArtifactIds: undiscoveredArtifactIds(
+          repository.artifactLedger(),
+          artifactItemIds(pack),
+        ),
+        conqueredChampionRecordIds: repository.lifetime().conqueredChampionRecordIds,
+      });
+    }
+
+    it('carries the repository standings and undiscovered artifacts into a fresh run', () => {
+      const storage = fakeStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      storage.set(SAVE_KEY, encodeActiveRun(deadRunAtDepth1(SEED)));
+      new GuestSession({ pack, storage }).finalizeConcludedRun(repository, {
+        achievedAt: 'Run #1',
+        portraitGlyph: '@',
+      });
+      const recordId = repository.records()[0]!.recordId;
+
+      const session = new GuestSession({
+        pack,
+        storage,
+        seed: SEED,
+        startFresh: true,
+        records: recordsThunk(repository),
+      });
+
+      const run = persistedRun(session, storage);
+      expect(run.fallenHeroStandings.map((standing) => standing.hallRecordId)).toEqual([recordId]);
+      expect(run.fallenHeroDecisions[0]).toMatchObject({ role: 'champion', retained: true });
+      expect(run.artifactsUndiscovered).toEqual(
+        undiscoveredArtifactIds(repository.artifactLedger(), artifactItemIds(pack)),
+      );
+      expect(session.getSnapshot().conclusion).toBeNull();
+    });
+
+    it('reads the records provider on every fresh run, so a run started after a finalize sees the updated standings', () => {
+      const storage = fakeStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      // The provider value is created ONCE, before any record exists -- a construction-time
+      // snapshot would freeze the empty Hall into every later run.
+      const records = recordsThunk(repository);
+
+      const first = new GuestSession({ pack, storage, seed: SEED, startFresh: true, records });
+      expect(persistedRun(first, storage).fallenHeroStandings).toEqual([]);
+
+      storage.set(SAVE_KEY, encodeActiveRun(deadRunAtDepth1(SEED)));
+      new GuestSession({ pack, storage }).finalizeConcludedRun(repository, {
+        achievedAt: 'Run #1',
+        portraitGlyph: '@',
+      });
+      const recordId = repository.records()[0]!.recordId;
+
+      const second = new GuestSession({ pack, storage, seed: SEED, startFresh: true, records });
+
+      expect(
+        persistedRun(second, storage).fallenHeroStandings.map((standing) => standing.hallRecordId),
+      ).toEqual([recordId]);
+    });
+
+    it('creates a history-free run when no records provider is supplied', () => {
+      const storage = fakeStorage();
+      const run = persistedRun(new GuestSession({ pack, storage, seed: SEED }), storage);
+      expect(run.fallenHeroStandings).toEqual([]);
+      expect(run.artifactsUndiscovered).toEqual([]);
+      expect(run.offeredArtifact).toBeNull();
     });
   });
 

@@ -174,8 +174,20 @@ function instantiateHeroItem(
  * guest path, byte-identical to a run created before records existed.
  */
 export interface NewRunRecordsInput {
+  /**
+   * The Hall's top standings, at most ten and contiguously ranked from 1 (`validateActiveRun`
+   * rejects anything else). A `RunRecordRepository.standings(limit)` result already satisfies
+   * both — it is the only intended source.
+   */
   readonly standings: readonly FallenHeroStandingSnapshot[];
+  /** Artifact ids the player has not secured yet. Any order; ids the pack does not define as
+   * artifacts are dropped, and the survivors are de-duplicated and sorted here. */
   readonly undiscoveredArtifactIds: readonly OpaqueId[];
+  /**
+   * Hall record ids whose champion this player has already put down — they stay conquered rather
+   * than being re-raised. Must be SORTED and UNIQUE (`validateActiveRun` throws otherwise);
+   * `RunRecordRepository.lifetime().conqueredChampionRecordIds` is maintained that way.
+   */
   readonly conqueredChampionRecordIds: readonly OpaqueId[];
 }
 
