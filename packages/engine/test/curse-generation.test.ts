@@ -126,6 +126,22 @@ describe('applyCurseRolls', () => {
       true,
     );
   });
+
+  it('is independent of input order: a shuffled item array assigns the same curse per itemId and advances the stream identically', () => {
+    const items = swords(8);
+    const shuffled = [...items].reverse();
+    const forward = applyCurseRolls({ content: pack, items, band: 'deep', state: [5, 9, 1, 3] });
+    const reversed = applyCurseRolls({
+      content: pack,
+      items: shuffled,
+      band: 'deep',
+      state: [5, 9, 1, 3],
+    });
+    const byItemId = (result: readonly ItemInstance[]): ReadonlyMap<string, unknown> =>
+      new Map(result.map((item) => [item.itemId, item.curse]));
+    expect(byItemId(forward.items)).toEqual(byItemId(reversed.items));
+    expect(forward.state).toEqual(reversed.state);
+  });
 });
 
 describe('curseChanceBps', () => {

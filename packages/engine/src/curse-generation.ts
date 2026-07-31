@@ -98,6 +98,14 @@ export function applyCurseRolls(
         'internal invariant: curse roll succeeded but the pack defines no curse entries',
       );
     }
+    // Conditional draw: the identity roll below is only spent when the chance roll just above
+    // succeeded, so how far the caller's stream advances depends on the pack's curse content (how
+    // many curse entries exist) as well as on how many chance rolls landed. That is safe -- not a
+    // determinism hole -- because `run.contentHash` binds the exact pack a run replays against;
+    // the stream position is deterministic *for that pack*, which is the only replay contract this
+    // engine makes. A pack edit that adds/removes a curse entry, or changes a `curses` balance
+    // knob, is content-hash-visible and is expected to move every downstream roll, the same as any
+    // other loot-table edit.
     const pick = rollDie(cursor, curseIds.length);
     cursor = pick.state;
     const curseId = curseIds[pick.value - 1]!;

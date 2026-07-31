@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type {
+  BalanceContentEntry,
   CompiledContentPack,
+  CurseContentEntry,
   ItemContentEntry,
   LootTableContentEntry,
 } from '@woven-deep/content';
@@ -739,4 +741,80 @@ it('depthBandFor maps thresholds inclusively', () => {
   expect(depthBandFor(7, bands)).toBe('mid');
   expect(depthBandFor(13, bands)).toBe('mid');
   expect(depthBandFor(14, bands)).toBe('deep');
+});
+
+const weaponScatterItem: ItemContentEntry = {
+  ...scatterItem('item.test-scatter-weapon'),
+  category: 'weapon',
+  equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
+  combat: {
+    accuracy: 0,
+    defense: 0,
+    armor: 0,
+    damage: { count: 1, sides: 4, bonus: 0 },
+    range: 1,
+    ammunitionTag: null,
+  },
+};
+
+const scatterCurse: CurseContentEntry = {
+  kind: 'curse',
+  id: 'curse.scatter-weapon-test',
+  name: 'Test Scatter Curse',
+  tags: ['curse', 'weapon'],
+  revealText: 'It scatters, and still it hungers.',
+  drawbackModifiers: { meleeAccuracy: -1 },
+  trigger: null,
+};
+
+/** Every band's `chanceBps` forced to 10000 and `capBps` raised to 10000 (uncapped) so a curse
+ * always resolves once rolled -- the demo pack's authored `capBps` (5000) would otherwise clamp a
+ * forced 10000 chance back down to a 50/50. */
+function forceCurseChance(pack: CompiledContentPack): CompiledContentPack {
+  return {
+    ...pack,
+    entries: pack.entries.map((entry) => {
+      if (entry.kind !== 'balance') return entry;
+      const balance = entry as BalanceContentEntry;
+      return {
+        ...balance,
+        curses: {
+          ...balance.curses,
+          chanceBps: { shallow: 10000, mid: 10000, deep: 10000 },
+          capBps: 10000,
+        },
+      };
+    }),
+  };
+}
+
+/** `fixture()`'s default floor sits at depth 3, which the demo pack's depth bands (shallowMaxDepth
+ * 6) resolve to `shallow` -- only the shallow scatter table is swapped for an all-weapon choice
+ * list so every drawn scatter item is curse-eligible. */
+function cursedScatterContent(): CompiledContentPack {
+  const base = content();
+  const withWeaponTable: CompiledContentPack = {
+    ...base,
+    entries: [
+      ...base.entries.filter((entry) => entry.id !== 'loot-table.floor-scatter-shallow'),
+      weaponScatterItem,
+      scatterCurse,
+      lootTable('loot-table.floor-scatter-shallow', [weaponScatterItem.id]),
+    ],
+  };
+  return forceCurseChance(withWeaponTable);
+}
+
+describe('placeFloorLoot curses', () => {
+  it('rolls a curse onto every eligible scattered item, threading the loot-placement stream', () => {
+    const f = fixture();
+    const cursedContent = cursedScatterContent();
+    const result = placeFloorLoot({ ...f, content: cursedContent }, SEED);
+    const weaponItems = result.items.filter((item) => item.contentId === weaponScatterItem.id);
+    expect(weaponItems.length).toBeGreaterThan(0);
+    for (const item of weaponItems) {
+      expect(item.curse).toEqual({ curseId: scatterCurse.id, revealed: false });
+    }
+    expect(result.state).not.toEqual(SEED);
+  });
 });

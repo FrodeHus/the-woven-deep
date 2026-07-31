@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type {
+  BalanceContentEntry,
   CompiledContentPack,
   ContentEntry,
+  CurseContentEntry,
   EncounterContentEntry,
   ItemContentEntry,
   LootTableContentEntry,
@@ -124,6 +126,27 @@ function pack(
       ...extras,
       ...encounters,
     ],
+  };
+}
+
+/** Every band's `chanceBps` forced to 10000 and `capBps` raised to 10000 (uncapped) so a curse
+ * always resolves once rolled -- the demo pack's authored `capBps` (5000) would otherwise clamp a
+ * forced 10000 chance back down to a 50/50. */
+function forceCurseChance(content: CompiledContentPack): CompiledContentPack {
+  return {
+    ...content,
+    entries: content.entries.map((entry) => {
+      if (entry.kind !== 'balance') return entry;
+      const balance = entry as BalanceContentEntry;
+      return {
+        ...balance,
+        curses: {
+          ...balance.curses,
+          chanceBps: { shallow: 10000, mid: 10000, deep: 10000 },
+          capBps: 10000,
+        },
+      };
+    }),
   };
 }
 
@@ -2075,6 +2098,73 @@ describe('vault item slot consumption', () => {
         }),
       ]);
     });
+  });
+
+  it("rolls a curse onto an eligible vault item-slot drop, threading run.rng['loot-placement']", () => {
+    const weaponEntry: ItemContentEntry = {
+      ...stockItemEntry,
+      id: 'item.test-cache-weapon',
+      name: 'Test Cache Weapon',
+      category: 'weapon',
+      equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
+      combat: {
+        accuracy: 0,
+        defense: 0,
+        armor: 0,
+        damage: { count: 1, sides: 4, bonus: 0 },
+        range: 1,
+        ammunitionTag: null,
+      },
+    };
+    const weaponLootTable: LootTableContentEntry = {
+      kind: 'loot-table',
+      id: 'loot-table.test-item-cache-weapon',
+      name: 'Test Item Cache Weapon',
+      tags: [],
+      rolls: 1,
+      choices: [
+        {
+          contentId: weaponEntry.id,
+          lootTableId: null,
+          weight: 1,
+          minimumQuantity: 1,
+          maximumQuantity: 1,
+        },
+      ],
+    };
+    const cacheCurse: CurseContentEntry = {
+      kind: 'curse',
+      id: 'curse.vault-cache-test',
+      name: 'Test Vault Curse',
+      tags: ['curse', 'weapon'],
+      revealText: 'The cache remembers what it was made to guard.',
+      drawbackModifiers: { meleeAccuracy: -1 },
+      trigger: null,
+    };
+    const encounter = individual('encounter.item-cache-curse');
+    const vault = itemCacheVault('vault.item-cache-curse-test', {
+      lootTableId: weaponLootTable.id,
+      contentId: null,
+    });
+    const generated = itemCacheFloor(vault.id);
+    const content = forceCurseChance(
+      pack([encounter], [vault, weaponLootTable, weaponEntry, cacheCurse]),
+    );
+    const run = runFor([encounter]);
+
+    const result = placeFloorPopulations({
+      run,
+      floor: generated,
+      content,
+      forcedEncounterId: encounter.id,
+    });
+
+    const placed = result.state.items.filter((item) => item.contentId === weaponEntry.id);
+    expect(placed.length).toBeGreaterThan(0);
+    for (const item of placed) {
+      expect(item.curse).toEqual({ curseId: cacheCurse.id, revealed: false });
+    }
+    expect(result.state.rng['loot-placement']).not.toEqual(run.rng['loot-placement']);
   });
 });
 

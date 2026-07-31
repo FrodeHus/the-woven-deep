@@ -1,8 +1,11 @@
 import type { CompiledContentPack, MonsterContentEntry } from '@woven-deep/content';
 import type { ActorState } from './actor-model.js';
+import { balanceEntry } from './balance.js';
 import { entryById } from './content-index.js';
+import { applyCurseRolls } from './curse-generation.js';
 import { withRngStream } from './effects.js';
 import { createFloorLootFromTable } from './inventory.js';
+import { depthBandFor } from './loot-placement.js';
 import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
 import { rollDie } from './random.js';
 import { compareCodeUnits } from './stable-json.js';
@@ -47,20 +50,27 @@ export function dropMonsterLoot(
     y: input.deadActor.y,
     depth: floor.depth,
   });
+  const band = depthBandFor(floor.depth, balanceEntry(input.content).floorLoot.depthBands);
+  const cursed = applyCurseRolls({
+    content: input.content,
+    items: loot.items,
+    band,
+    state: loot.state,
+  });
 
-  if (loot.items.length === 0) {
-    return { state: withRngStream(input.state, 'loot', loot.state), events: [] };
+  if (cursed.items.length === 0) {
+    return { state: withRngStream(input.state, 'loot', cursed.state), events: [] };
   }
-  for (const item of loot.items)
+  for (const item of cursed.items)
     if (input.state.items.some((entry) => entry.itemId === item.itemId)) {
       throw new Error(`internal invariant: monster loot item ${item.itemId} already exists`);
     }
-  const items = [...input.state.items, ...loot.items].sort((left, right) =>
+  const items = [...input.state.items, ...cursed.items].sort((left, right) =>
     compareCodeUnits(left.itemId, right.itemId),
   );
-  const itemIds = loot.items.map((item) => item.itemId).sort(compareCodeUnits);
+  const itemIds = cursed.items.map((item) => item.itemId).sort(compareCodeUnits);
   return {
-    state: { ...input.state, items, rng: { ...input.state.rng, loot: loot.state } },
+    state: { ...input.state, items, rng: { ...input.state.rng, loot: cursed.state } },
     events: [
       {
         type: 'loot.dropped',

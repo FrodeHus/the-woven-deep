@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type {
+  BalanceContentEntry,
   BossEncounterDefinition,
   CompiledContentPack,
+  CurseContentEntry,
   EncounterContentEntry,
   ItemContentEntry,
   LootTableContentEntry,
@@ -1223,5 +1225,109 @@ describe('boss relic discovery gate', () => {
     expect(
       result.state.items.filter((entry) => entry.itemId === 'item.reward.population.boss.unique'),
     ).toEqual([expect.objectContaining({ contentId: 'item.unique' })]);
+  });
+});
+
+/** Every band's `chanceBps` forced to 10000 and `capBps` raised to 10000 (uncapped) so a curse
+ * always resolves once rolled -- the demo pack's authored `capBps` (5000) would otherwise clamp a
+ * forced 10000 chance back down to a 50/50. */
+function forceCurseChance(content: CompiledContentPack): CompiledContentPack {
+  return {
+    ...content,
+    entries: content.entries.map((entry) => {
+      if (entry.kind !== 'balance') return entry;
+      const balance = entry as BalanceContentEntry;
+      return {
+        ...balance,
+        curses: {
+          ...balance.curses,
+          chanceBps: { shallow: 10000, mid: 10000, deep: 10000 },
+          capBps: 10000,
+        },
+      };
+    }),
+  };
+}
+
+describe('boss reward curses', () => {
+  it('rolls a curse onto the table-drawn reward, never onto the guaranteed unique', () => {
+    const rewardCurse: CurseContentEntry = {
+      kind: 'curse',
+      id: 'curse.boss-reward-test',
+      name: 'Test Reward Curse',
+      tags: ['curse', 'weapon'],
+      revealText: 'What the boss guarded now guards itself.',
+      drawbackModifiers: { meleeAccuracy: -1 },
+      trigger: null,
+    };
+    const weaponRewardTable: LootTableContentEntry = {
+      ...table,
+      rolls: 1,
+      choices: [
+        {
+          contentId: 'item.extra-a',
+          lootTableId: null,
+          weight: 1,
+          minimumQuantity: 1,
+          maximumQuantity: 1,
+        },
+      ],
+    };
+    const { state, content } = fixture();
+    const weaponContent = forceCurseChance({
+      ...content,
+      entries: [
+        ...content.entries.map((entry) => {
+          if (entry.kind !== 'item' || entry.id !== 'item.extra-a') return entry;
+          return {
+            ...entry,
+            category: 'weapon' as const,
+            equipment: {
+              slots: ['main-hand' as const],
+              handedness: 'one-handed' as const,
+              reservedSlots: [],
+            },
+            combat: {
+              accuracy: 0,
+              defense: 0,
+              armor: 0,
+              damage: { count: 1, sides: 4, bonus: 0 },
+              range: 1,
+              ammunitionTag: null,
+            },
+          };
+        }),
+        rewardCurse,
+      ],
+    });
+    const finalContent: CompiledContentPack = {
+      ...weaponContent,
+      entries: weaponContent.entries.map((entry) =>
+        entry.kind === 'loot-table' && entry.id === table.id ? weaponRewardTable : entry,
+      ),
+    };
+    const defeated = {
+      ...state,
+      actors: state.actors.map((actor) =>
+        actor.actorId === 'actor.boss' ? { ...actor, health: 0 } : actor,
+      ),
+    };
+
+    const result = advanceBosses({
+      state: defeated,
+      content: finalContent,
+      eventId: 'event.curse-reward',
+    });
+
+    const bossItems = result.state.items.filter((entry) =>
+      entry.itemId.startsWith('item.reward.population.boss.'),
+    );
+    const unique = bossItems.find((entry) => entry.contentId === 'item.unique');
+    expect(unique?.curse).toBeUndefined();
+    const weaponReward = bossItems.filter((entry) => entry.contentId === 'item.extra-a');
+    expect(weaponReward.length).toBeGreaterThan(0);
+    for (const item of weaponReward) {
+      expect(item.curse).toEqual({ curseId: rewardCurse.id, revealed: false });
+    }
   });
 });
