@@ -17,15 +17,43 @@ sprite. Generators cannot emit alpha; transparency is produced afterwards by the
   neighbors, nothing touching another sprite or the sheet edge. Sprites drawn too large get
   guillotined by slicing — the whole figure must sit inside its cell with margin.
 - Isometric game-art consistency with the tile sheets: classic 2:1 isometric camera, single
-  hard-ish key light from upper-left, CLEAN CEL-SHADED style — flat value steps, crisp edges, no
-  outlines, no painterly rendering, silhouette readable as a black shape at 32 px.
+  hard-ish WARM key light from upper-left (implied torchlight, weak), CLEAN CEL-SHADED style —
+  flat value steps, crisp edges, no outlines, no painterly rendering, silhouette readable as a
+  black shape at 32 px.
 - NO ground shadow, NO contact shading, NO ground plate under any figure: the renderer draws its
   own shadow ellipse beneath every actor and item. Alpha must end exactly at the figure's own
   silhouette.
 - Figures STAND ON an invisible floor plane (feet/base at the sprite's bottom edge — the renderer
   base-anchors them to the cell's floor diamond). Never draw the floor itself.
-- Palette: keep the tile sheets' discipline — cool desaturated base, limited colors, one dominant
-  hue per figure (given per entry below), warm/violet accents only where the entry says so.
+- Palette: keep the tile sheets' DARK GOTHIC discipline. These figures live in the same cursed
+  undercroft the tiles describe, and must sit in the same value range:
+    * The base of every figure is dark — grimed, worn, weather-beaten. Cloth is soot-stained and
+      travel-ruined, leather is black-brown and cracked, metal is tarnished or rust-bloomed, never
+      polished or chromed. Fur and hide are dark and matted.
+    * NOTHING on a figure is white or near-white. Bone, salt crust, and pale flesh top out at a
+      dull grey-bone (#8e887c), not ivory. If a colour looks bright on a white page, it is wrong.
+    * The dominant hue given per entry is a TINT over that dark base, not a flat bright fill: read
+      each hex as the colour of the figure's LIT edges and accent details, with the body itself
+      several steps darker and desaturated toward charcoal.
+    * SATURATED COLOUR IS RESERVED for two things only: implied firelight/ember (amber #c8712f
+      through #e08b3a) and the violet Weave-glow (#7c4fd0 core, #a06cff hot centre). Ember-,
+      Weave-, and boss-class entries may carry real internal glow; everything else is lit only by
+      the weak upper-left torchlight.
+    * Decay and age are the default: grime in every crease, rust at every buckle, stains and old
+      dried blood (#4a1f1c) used SPARINGLY — a mark or two on a figure, never gore.
+- SILHOUETTE OVER VALUE. Because the figures are dark and the floor beneath them is dark, an
+  actor cannot separate from the ground by brightness alone. Separation comes from (a) a crisp
+  warm rim light along the upper-left contour of every figure, and (b) an unmistakable outline —
+  distinctive limb count, stance, weapon, hunch, or crown. The existing silhouette-readability
+  rules are unchanged and matter MORE in this register, not less.
+- AVOID: anything pale, frosty, icy, chalky, or bleached; clean or new-looking gear; bright
+  daylight rendering; cheerful saturated costume colour; glossy specular metal.
+
+PASTE-READY MOOD LINE (append to any per-row prompt): "grim dark-fantasy dungeon sprite, soot-
+stained worn gear, tarnished rust-bloomed metal, charcoal and near-black base values, nothing
+white, single weak warm torchlight from upper-left with a crisp warm rim on the lit contour, deep
+shadow elsewhere, violet arcane glow as the only other colour, clean cel-shaded flat value steps,
+oppressive and menacing, no daylight, no bright costume colour."
 ```
 
 ## Sheet 1 — Actors (`actors.png`)
@@ -58,7 +86,7 @@ Row order is the slicing contract — keep it exactly. Dominant hue per entry in
   (#5f7d4e, venom-thread spitter).
 - **Row 3 — spiders (large) & oozes:** Carapace broodmother (#4a4358, LARGE swollen matriarch,
   egg sacs); Shroud widow (#3f3a4d, LARGE black widow, near-invisible dark); Tallow slither
-  (#c9b45f, slick candle-fat ooze); Wax crawler (#d8cf8a, pale thin wall-crawler); Rendering glut
+  (#c9b45f, slick candle-fat ooze); Wax crawler (#a89c66, sallow thin wall-crawler); Rendering glut
   (#b39a4a, LARGE ooze with hardened leathery rind); Cinder ooze (#d07a3a, ember-soaked ooze
   glowing dull orange from within); Caustic pool (#7fae55, low acid puddle that spits); 1 cell
   reserved.
@@ -68,7 +96,7 @@ Row order is the slicing contract — keep it exactly. Dominant hue per entry in
   Warden (#d06a42, LARGE pacing guardian); The Ashfather (#ff6a2a, LARGE boss — the first fire,
   ember-cracked and ancient); 1 cell reserved.
 - **Row 5 — drowned:** Drowned shambler (#6a8a8f, bloated brine zombie); Brine skeleton
-  (#b8c0b0, salt-white bones); Sodden lurcher (#4f6b6a, barnacle-crusted husk); Wailing echo
+  (#8e887c, salt-crusted grey bone — dull, never ivory); Sodden lurcher (#4f6b6a, barnacle-crusted husk); Wailing echo
   (#7fa0b8, translucent looping drowning-cry wraith — the ONE ghostly/translucent-looking actor,
   suggest transparency with pale value steps, not real alpha); Tide revenant (#3f5f66, drowned
   commander); The Tide-Sovereign (#3a8fb0, LARGE boss — crowned drowned king, water answering
@@ -91,13 +119,19 @@ Items are DISPLAY OBJECTS, not figures: drawn as if lying on or propped against 
 floor plane, slight 3/4 top-down tilt so the shape reads, filling ~50-60% of the cell. Same
 no-shadow rule. One sprite per entry; shared-base entries (scrolls, tomes) are single sprites
 reused by the renderer for the whole category with per-spell tinting — do NOT draw one per spell.
+
+Same dark register as the actors: dungeon salvage, not shop stock. Steel is dark and dulled with
+a single crisp warm highlight rather than an even sheen; wood is dark-oiled and scuffed; leather
+is black-brown; vellum is aged tobacco-brown, never white paper; glass is smoke-dark with the
+liquid inside providing the only saturation. Gold and brass read as warm dark metal with tight
+ember-lit highlights, not as bright yellow.
 ```
 
-- **Row 0 — weapons & ammo:** Iron sword (#c2c6c8, plain town-forged blade); Hunting bow
+- **Row 0 — weapons & ammo:** Iron sword (#98a0a4, plain town-forged blade, dulled and nicked); Hunting bow
   (#a67b4f, simple recurve + quiver hint); Wooden arrows (#b99a70, small arrow bundle); 5
   reserved (future weapon families).
 - **Row 1 — armor & shields:** Leather armor (#9f7655, waxed hide cuirass); Cloth wrap
-  (#c9c3b0, folded layered weave-cloth); Wooden shield (#ad8455, banded oak round shield); 5
+  (#9a9484, folded layered weave-cloth, travel-stained); Wooden shield (#ad8455, banded oak round shield); 5
   reserved.
 - **Row 2 — lights & tools:** Pitch torch (#e49a4a, rag-and-pitch stave, unlit); Brass lantern
   (#e8c879, hooded brass lantern); Lamp oil (#d2b45f, stoppered oil flask); Tarnished iron key
@@ -118,8 +152,23 @@ reused by the renderer for the whole category with per-spell tinting — do NOT 
   cinder); The Drowned Crown (#3a8fb0, coral-crusted crown); The Herald's Sigil (#c9425f,
   angular heart-red sigil plate); Echo heartstone (#c9425f, faceted heart-red stone); 2
   reserved.
-- **Row 7 — currency & misc:** Gold coins (small loose pile — ground-loot rendering for
-  currency); Gold pouch (tied pouch — larger amounts); 6 reserved.
+- **Row 7 — currency, artifacts & misc:** Gold coins (small loose pile — ground-loot rendering for
+  currency); Gold pouch (tied pouch — larger amounts); **Maria's Grace** (#ffd9a0, a small brass
+  lantern, dark tarnished body, a warm living flame behind its panes throwing a soft halo — the
+  halo is painted INTO the sprite as a tight warm bloom on the lantern's own metal and glass, never
+  as a ground glow or aura outside the silhouette); **Thread-Count's Needle** (#c9d6a3, a pale
+  ring of dull silver-green metal with a fine thread motif wound through it, one loose thread-end
+  trailing, faint cold sheen); **The Last Cartographer's Compass** (#8fb0c9, a blued-steel ring
+  compass, dark oxide body, a delicate needle and engraved bearing marks catching a thin cool
+  highlight); 3 reserved.
+
+Artifact sprites (the three named entries above) are the exception to "everything is salvage".
+They render in-game with gold-accented names, so they must read PREMIUM at a glance: sharper
+craftsmanship than the surrounding loot, intact rather than worn, a denser cluster of small
+deliberate detail (engraving, filigree, inlay), and one extra value step of contrast between the
+lit edge and the body so they pop out of a floor pile. They still obey the dark palette — premium
+here means finely made and quietly luminous, not bright or shiny. Keep each one's silhouette
+unmistakable at 32 px: lantern, ring-with-thread, ring-with-needle are three distinct shapes.
 
 ## Start from the template
 
