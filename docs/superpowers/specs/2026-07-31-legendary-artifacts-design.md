@@ -164,8 +164,17 @@ implementation, following the block rules). Plus:
 
 ## Client
 
-- Artifact names render in a distinct gold style in inspect, log lines, and the HUD pickup
-  toast — the same `text-accent` token the HUD spends on the carried-gold count. **Amended
+- Artifact names render in a distinct gold style everywhere the client names an item: the
+  inspect pane, the Hall's Relics panel, and the playfield's hover popover — the same
+  `text-accent` token the HUD spends on the carried-gold count. **Amended (Task 12, fix round
+  1):** the original "log lines and the HUD pickup toast" is struck because neither surface
+  names an item. There is no pickup-toast component at all, and every `item.*` line in the
+  adventure log is deliberately generic ("You pick up an item.") — the `item.picked-up`
+  `PublicEvent` carries only an instance `itemId`, no name and no `contentId`, and the log fold
+  is a pure function over events with neither the pack nor a projection in hand. Naming items
+  in the log is therefore a change to the log's vocabulary, not a styling one, and is left as
+  a follow-up; whenever it happens, the gold treatment is one `isArtifact(pack, contentId)`
+  call at that same seam, exactly as the hover popover now does. **Amended
   (Task 12):** artifact-ness and provenance are both resolved CLIENT-SIDE from the compiled
   pack and the records repository, not from `ItemView`. The client owns the pack, so an
   item's `artifact` block is a lookup by `contentId` (absent for an unidentified item, whose
@@ -177,7 +186,9 @@ implementation, following the block rules). Plus:
 - Inspect overlay shows provenance lines, oldest first: `Borne by <heroName> — <outcome text>
   at depth <depth>` (`died-with` → "fell", `recovered` → "reclaimed it", `escaped-with` →
   "carried it out", `reclaimed-by-the-deep` → "the Deep took it back"; the depth clause is
-  dropped for a depth-0 stint, which is what the ledger's reconcile pass stamps). An
+  dropped only for a depth-0 `reclaimed-by-the-deep` stint — the reconcile pass has no depth to
+  record — while every other outcome prints its depth verbatim, a genuine depth 0 included,
+  since a hero can fall or turn back in town). An
   `escaped-with` stint's text is overridden by the Hall record's own `completionType` where
   the record is available (joined client-side by `recordId`) — a hero who became the Heart
   reads "was bound into the Heart with it", not "carried it out".

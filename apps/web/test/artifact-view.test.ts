@@ -53,9 +53,18 @@ describe('provenanceLine', () => {
     );
   });
 
-  it('omits the depth clause for a depth-0 stint (the reconcile pass records no depth)', () => {
+  it('omits the depth clause for a depth-0 reclaim stint (the reconcile pass records no depth)', () => {
     expect(provenanceLine(stint({ outcome: 'reclaimed-by-the-deep', depth: 0 }), undefined)).toBe(
       'Borne by Kaelen — the Deep took it back',
+    );
+  });
+
+  it('keeps a genuine depth 0 for every other outcome (a hero can fall in town)', () => {
+    expect(provenanceLine(stint({ outcome: 'died-with', depth: 0 }), undefined)).toBe(
+      'Borne by Kaelen — fell at depth 0',
+    );
+    expect(provenanceLine(stint({ outcome: 'escaped-with', depth: 0 }), 'refused')).toBe(
+      'Borne by Kaelen — refused the Deep with it at depth 0',
     );
   });
 

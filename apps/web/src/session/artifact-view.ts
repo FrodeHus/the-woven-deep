@@ -83,8 +83,10 @@ const ESCAPE_TEXT: Readonly<Record<CompletionType, string>> = {
 
 /**
  * One provenance line: `Borne by <heroName> — <outcome text> at depth <depth>`. The depth clause is
- * dropped for a depth-0 stint -- the ledger's reconcile pass stamps `reclaimed-by-the-deep` with no
- * depth at all, and "at depth 0" would read as the surface.
+ * dropped only for a depth-0 `reclaimed-by-the-deep` stint, which is what the ledger's reconcile
+ * pass stamps when it has no depth to record -- "at depth 0" would read as the surface. Every other
+ * outcome keeps its depth verbatim, including a genuine depth 0: a hero can die (or refuse, or
+ * become the Heart) in town, and finalization stamps that real depth on the stint.
  */
 export function provenanceLine(
   stint: ArtifactStint,
@@ -94,7 +96,8 @@ export function provenanceLine(
     stint.outcome === 'escaped-with' && completionType !== undefined
       ? ESCAPE_TEXT[completionType]
       : OUTCOME_TEXT[stint.outcome];
-  const where = stint.depth === 0 ? '' : ` at depth ${stint.depth}`;
+  const depthless = stint.outcome === 'reclaimed-by-the-deep' && stint.depth === 0;
+  const where = depthless ? '' : ` at depth ${stint.depth}`;
   return `Borne by ${stint.heroName} — ${text}${where}`;
 }
 
@@ -146,6 +149,11 @@ export interface RelicsOverview {
  * (a fallen hero holds it) or back to `undiscovered` after the Deep reclaimed it -- the player has
  * seen it either way, so its name and last stint stay visible; only artifacts with no ledger entry
  * at all are unfound.
+ *
+ * This "known" set is deliberately NOT the engine's `undiscoveredArtifactIds`, which asks a
+ * different question: that one drives spawn weighting (anything not currently held by a champion is
+ * placeable again), this one drives spoiler avoidance (anything the player has laid eyes on may be
+ * named). A reclaimed relic is in both -- placeable there, still named here.
  */
 export function relicsOverview(
   pack: CompiledContentPack,
