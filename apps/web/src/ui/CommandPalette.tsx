@@ -33,14 +33,15 @@ const OVERLAY_ENTRIES: readonly OverlayId[] = [
  * `onTravelToStairs` below rather than a raw intent, so the palette entry behaves like the key
  * (walk to a discovered stair, then descend/ascend) instead of dispatching an intent the engine
  * rejects off-stair. */
-const INTENT_ENTRIES: Readonly<Record<'wait' | 'rest' | 'pickup' | 'house' | 'trade', PlayerIntent>> =
-  {
-    wait: { type: 'wait' },
-    rest: { type: 'rest' },
-    pickup: { type: 'pickup' },
-    house: { type: 'house' },
-    trade: { type: 'trade-open' },
-  };
+const INTENT_ENTRIES: Readonly<
+  Record<'wait' | 'rest' | 'pickup' | 'house' | 'trade', PlayerIntent>
+> = {
+  wait: { type: 'wait' },
+  rest: { type: 'rest' },
+  pickup: { type: 'pickup' },
+  house: { type: 'house' },
+  trade: { type: 'trade-open' },
+};
 
 export interface CommandPaletteProps {
   readonly open: boolean;
@@ -192,11 +193,7 @@ export function CommandPalette({
                       ? () => runStairs('up')
                       : () => runIntent(INTENT_ENTRIES[action]);
                 return (
-                  <CommandItem
-                    key={action}
-                    value={label}
-                    onSelect={onSelect}
-                  >
+                  <CommandItem key={action} value={label} onSelect={onSelect}>
                     <span>{label}</span>
                     {shortcut && <CommandShortcut>{shortcut}</CommandShortcut>}
                   </CommandItem>
