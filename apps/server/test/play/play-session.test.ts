@@ -258,67 +258,74 @@ describe('ServerPlaySession', () => {
       expect(run.artifactsUndiscovered.length).toBeGreaterThan(0);
     });
 
-    it('carries the seeded champion decision through a real descent and stands the champion on the death-depth floor, slot or no slot', () => {
-      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
-      const record = seedHallRecord(hallRepo, CHAMPION_DEPTH);
-      newSession(database, { repo, hallRepo }).open({ seed: SEED });
+    // A real multi-floor descent through resolveCommand: comfortably under a second locally but
+    // beyond vitest's 5s default on slower CI runners, hence the explicit timeout.
+    it(
+      'carries the seeded champion decision through a real descent and stands the champion on the death-depth floor, slot or no slot',
+      { timeout: 30_000 },
+      () => {
+        const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+        const record = seedHallRecord(hallRepo, CHAMPION_DEPTH);
+        newSession(database, { repo, hallRepo }).open({ seed: SEED });
 
-      while (activeDepthOf(storedRun()) < CHAMPION_DEPTH) {
-        const staged = stageOnStairs(storedRun());
-        const session = newSession(database, { repo, hallRepo });
-        session.open({ seed: SEED });
-        const outcome = session.applyIntent({
-          commandId: `command.descend-${String(staged.revision)}`,
-          expectedRevision: staged.revision,
-          intent: { type: 'descend' },
+        while (activeDepthOf(storedRun()) < CHAMPION_DEPTH) {
+          const staged = stageOnStairs(storedRun());
+          const session = newSession(database, { repo, hallRepo });
+          session.open({ seed: SEED });
+          const outcome = session.applyIntent({
+            commandId: `command.descend-${String(staged.revision)}`,
+            expectedRevision: staged.revision,
+            intent: { type: 'descend' },
+          });
+          expect(outcome.kind).toBe('state');
+        }
+
+        const run = storedRun();
+        expect(activeDepthOf(run)).toBe(CHAMPION_DEPTH);
+        // The descent ran the real placement pass on every generated floor. Whether or not the
+        // death-depth floor happened to roll a vault authoring a fallen-hero slot, the open-cell
+        // fallback guarantees the champion is standing there -- this is the production-shaped
+        // proof, with nothing injected.
+        const standing = run.populations.find((population) => population.model === 'champion');
+        expect(standing).toBeDefined();
+        expect(standing!.hallRecordId).toBe(record.recordId);
+        const championActor = run.actors.find((actor) => actor.actorId === standing!.actorId);
+        expect(championActor).toBeDefined();
+        expect(championActor!.floorId).toBe(activeFloorOf(run).floorId);
+        // Not yet met: the decision is spent only on the encounter, not on placement.
+        expect(run.fallenHeroDecisions[0]).toMatchObject({ retained: true, encountered: false });
+
+        // Slot-preferred: replaying the same pass against a floor that DOES author a fallen-hero
+        // slot stands the champion on that slot rather than on a fallback cell.
+        const slotted = withFallenHeroSlot(activeFloorOf(run));
+        const arenaSlots = slotted.placementSlots.filter(
+          (candidate) =>
+            candidate.kind === 'monster' &&
+            !candidate.required &&
+            candidate.tags.some(
+              (tag) => tag === 'side-arena' || tag === 'fallen-hero' || tag === 'champion',
+            ),
+        );
+        const placed = placeFallenHeroEncounters({
+          run: {
+            ...run,
+            populations: [],
+            actors: run.actors.filter((actor) => actor.playerControlled),
+          },
+          floor: slotted,
+          content: pack,
         });
-        expect(outcome.kind).toBe('state');
-      }
-
-      const run = storedRun();
-      expect(activeDepthOf(run)).toBe(CHAMPION_DEPTH);
-      // The descent ran the real placement pass on every generated floor. Whether or not the
-      // death-depth floor happened to roll a vault authoring a fallen-hero slot, the open-cell
-      // fallback guarantees the champion is standing there -- this is the production-shaped
-      // proof, with nothing injected.
-      const standing = run.populations.find((population) => population.model === 'champion');
-      expect(standing).toBeDefined();
-      expect(standing!.hallRecordId).toBe(record.recordId);
-      const championActor = run.actors.find((actor) => actor.actorId === standing!.actorId);
-      expect(championActor).toBeDefined();
-      expect(championActor!.floorId).toBe(activeFloorOf(run).floorId);
-      // Not yet met: the decision is spent only on the encounter, not on placement.
-      expect(run.fallenHeroDecisions[0]).toMatchObject({ retained: true, encountered: false });
-
-      // Slot-preferred: replaying the same pass against a floor that DOES author a fallen-hero
-      // slot stands the champion on that slot rather than on a fallback cell.
-      const slotted = withFallenHeroSlot(activeFloorOf(run));
-      const arenaSlots = slotted.placementSlots.filter(
-        (candidate) =>
-          candidate.kind === 'monster' &&
-          !candidate.required &&
-          candidate.tags.some(
-            (tag) => tag === 'side-arena' || tag === 'fallen-hero' || tag === 'champion',
+        const champion = placed.populations.find((population) => population.model === 'champion');
+        expect(champion).toBeDefined();
+        expect(champion!.hallRecordId).toBe(record.recordId);
+        expect(
+          arenaSlots.some(
+            (candidate) =>
+              candidate.x === placed.actors[0]!.x && candidate.y === placed.actors[0]!.y,
           ),
-      );
-      const placed = placeFallenHeroEncounters({
-        run: {
-          ...run,
-          populations: [],
-          actors: run.actors.filter((actor) => actor.playerControlled),
-        },
-        floor: slotted,
-        content: pack,
-      });
-      const champion = placed.populations.find((population) => population.model === 'champion');
-      expect(champion).toBeDefined();
-      expect(champion!.hallRecordId).toBe(record.recordId);
-      expect(
-        arenaSlots.some(
-          (candidate) => candidate.x === placed.actors[0]!.x && candidate.y === placed.actors[0]!.y,
-        ),
-      ).toBe(true);
-    });
+        ).toBe(true);
+      },
+    );
 
     it('creates a history-free run for a profile with an empty Hall', () => {
       const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
