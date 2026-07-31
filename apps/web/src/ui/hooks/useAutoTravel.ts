@@ -136,8 +136,18 @@ export function useAutoTravel({
   // cancelling here only drops the remaining steps so the two input paths never fight over the
   // hero. This listener is registered before the key dispatcher's own (this hook is called first in
   // `PlayScreen`), so a key that starts a NEW walk is not cancelled by its own keydown.
+  //
+  // A keydown whose default was already prevented is not a "real keypress" in that sense: cmdk
+  // calls `preventDefault()` on the Enter that selects a `CommandPalette` item, and that same
+  // keydown bubbles on to this window listener AFTER `onSelect` (e.g. `runExplore` ->
+  // `onStartExplore`) has already fired synchronously and started the walk. Cancelling
+  // unconditionally here would kill the walk it just started, one step in. Ignoring
+  // default-prevented keydowns leaves every other cancel path (manual movement, opening an
+  // overlay via its hotkey, etc.) intact, since none of those preventDefault the key that reaches
+  // this listener.
   useEffect(() => {
-    const cancel = (): void => {
+    const cancel = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented) return;
       travelRef.current = null;
       clearPendingStep();
     };

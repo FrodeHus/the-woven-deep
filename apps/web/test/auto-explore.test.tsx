@@ -333,6 +333,34 @@ describe('auto-explore', () => {
     expect(moves(session)).toHaveLength(3);
   });
 
+  it('selecting Auto-explore from the CommandPalette with Enter starts the walk and does not cancel it after the first step', async () => {
+    const { walls, unknownCells } = eastCorridor();
+    const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 }, walls, unknownCells }));
+    await renderPlay(session);
+
+    // Open the palette and narrow to the single "Auto-explore" entry, all under real timers so
+    // the palette's own render/filter settle normally.
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    const input = await screen.findByRole('combobox');
+    fireEvent.change(input, { target: { value: 'explore' } });
+    await screen.findByText('Auto-explore');
+
+    vi.useFakeTimers();
+
+    // cmdk's own root `onKeyDown` handles this Enter synchronously (calling `preventDefault` and
+    // firing `onSelect` -> `runExplore` -> `onStartExplore`, dispatching the first move) before the
+    // SAME event continues bubbling up to `useAutoTravel`'s window-level cancel listener. Regression
+    // guard for the bug: that listener used to cancel unconditionally, killing the walk one step in.
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
+
+    session.publish(projectionOf({ hero: { x: 21, y: 10 }, walls, unknownCells }));
+    act(() => {
+      vi.advanceTimersByTime(EXPLORE_STEP_MS);
+    });
+    expect(moves(session)).toHaveLength(2);
+  });
+
   it('descends when the hero stands on the down stair and reports undiscovered stairs otherwise', async () => {
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
     await renderPlay(session);
