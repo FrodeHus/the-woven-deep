@@ -21,13 +21,14 @@ export type SessionNotice =
   | { readonly kind: 'fresh' }
   | { readonly kind: 'save-discarded'; readonly reason: string }
   | { readonly kind: 'storage'; readonly failure: StorageFailure }
-  /** A corrupted cross-reload blob (the sighting cache or the onboarding mastery ledger) was
+  /** A corrupted cross-reload blob (the sighting cache, the onboarding mastery ledger, or a Hall
+   * of Records too malformed to seed a new run's standings) was
    * silently reset to its fresh/empty state -- per the plan's error-handling section, this must
    * still surface the standard dismissible notice rather than resetting invisibly. Dismissible
    * (not a `storage` failure -- the write itself succeeded; it's the previously-stored READ that
    * was unreadable), so it flows through the exact same `role="status"` session-banner every other
    * dismissible notice here uses. */
-  | { readonly kind: 'data-reset'; readonly source: 'sightings' | 'onboarding' }
+  | { readonly kind: 'data-reset'; readonly source: 'sightings' | 'onboarding' | 'hall' }
   /** `ProfileSession`-only (never produced by `GuestSession`): a NEWER connection for the same
    * profile has taken over the run (the server's `superseded` message, Task 7's newest-wins
    * eviction) -- this tab's session is now terminal/read-only. */

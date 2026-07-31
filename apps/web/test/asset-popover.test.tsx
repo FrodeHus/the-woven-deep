@@ -65,6 +65,53 @@ describe('AssetPopover', () => {
     expect(document.querySelector('.threat-popover-description')).not.toBeInTheDocument();
   });
 
+  it("names an artifact on the ground in the HUD's gold accent, and an ordinary item plainly", () => {
+    const { unmount } = render(
+      <AssetPopover
+        asset={{
+          title: "Maria's Grace",
+          detail: 'Light',
+          x: 2,
+          y: 3,
+          contentId: 'item.marias-grace',
+        }}
+        leftPx={16}
+        topPx={48}
+        paneWidthPx={200}
+        paneHeightPx={200}
+        pack={pack}
+      />,
+    );
+    expect(screen.getByText("Maria's Grace")).toHaveClass('text-accent');
+    unmount();
+
+    render(
+      <AssetPopover
+        asset={{ title: 'Iron sword', detail: 'Weapon', x: 2, y: 3, contentId: 'item.iron-sword' }}
+        leftPx={16}
+        topPx={48}
+        paneWidthPx={200}
+        paneHeightPx={200}
+        pack={pack}
+      />,
+    );
+    expect(screen.getByText('Iron sword')).not.toHaveClass('text-accent');
+  });
+
+  it('leaves an unidentified relic on the floor unstyled (no contentId resolves)', () => {
+    render(
+      <AssetPopover
+        asset={{ title: 'Unidentified item', detail: 'Unidentified', x: 2, y: 3 }}
+        leftPx={16}
+        topPx={48}
+        paneWidthPx={200}
+        paneHeightPx={200}
+        pack={pack}
+      />,
+    );
+    expect(screen.getByText('Unidentified item')).not.toHaveClass('text-accent');
+  });
+
   it('shows the honest hardcoded copy for a stair tile, with no facts', () => {
     render(
       <AssetPopover

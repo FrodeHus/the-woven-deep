@@ -194,15 +194,18 @@ describe('vault placement', () => {
         presentation: { glyph: '*', token: 'fixture.lamp' },
       }),
     ]);
+    // Two item slots: the authored cache, and the optional artifact-offer slot the run fills.
     expect(first.placementSlots.map((slot) => slot.kind).sort()).toEqual([
       'fixture',
       'item',
+      'item',
+      'monster',
       'monster',
       'npc',
       'objective',
       'trap',
     ]);
-    expect(new Set(first.placementSlots.map((slot) => slot.slotId)).size).toBe(6);
+    expect(new Set(first.placementSlots.map((slot) => slot.slotId)).size).toBe(8);
     expect(
       first.placementSlots.every((slot) => slot.vaultPlacementId === first.vaults[0]!.placementId),
     ).toBe(true);
@@ -282,7 +285,7 @@ describe('vault placement', () => {
       'vault-placement.vault-test.1',
     ]);
     expect(new Set(placed.lights.map((light) => light.lightId)).size).toBe(2);
-    expect(new Set(placed.placementSlots.map((slot) => slot.slotId)).size).toBe(12);
+    expect(new Set(placed.placementSlots.map((slot) => slot.slotId)).size).toBe(16);
   });
 
   it('uses template weights in stable ID order before a uniform stable candidate draw', () => {

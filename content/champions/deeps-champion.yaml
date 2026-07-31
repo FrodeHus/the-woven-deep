@@ -1,4 +1,4 @@
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: fallen-champion-template
     id: fallen-champion-template.core

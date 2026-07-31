@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
   heroFromChoices,
+  newRunRecords,
   type HeroChoices,
   type RunConclusionProjection,
   type RunRecordRepository,
@@ -396,6 +397,16 @@ export function App({
   const storage = useMemo(() => storageOverride ?? browserSessionStorage(), [storageOverride]);
 
   const [repository, hallNotice] = useHallRepository(storage, storageEpoch);
+  // The guest's cross-run history, handed to every `GuestSession` as a THUNK rather than a value:
+  // a run started later in this page life (chargen after a death, a fresh quickstart) must read
+  // the Hall as it stands at that moment, including the record its own previous run just
+  // finalized. Curried over the pack because every construction site already has one in hand,
+  // while this hook runs before the pack has loaded; `repository` is stable per storage epoch, so
+  // `recordsFor` is too.
+  const recordsFor = useMemo(
+    () => (loaded: CompiledContentPack) => () => newRunRecords(repository, loaded),
+    [repository],
+  );
 
   // Read once at boot -- `window.location.search` never changes for the life of this component
   // (the app never navigates), so this is the one place `isQuickstart` needs calling repeatedly.
@@ -476,10 +487,21 @@ export function App({
     const seed = parseSeedFromQuery(window.location.search);
     setSession(
       seed
-        ? new GuestSession({ pack, storage, seed, localStorage: localStorageInstance })
-        : new GuestSession({ pack, storage, localStorage: localStorageInstance }),
+        ? new GuestSession({
+            pack,
+            storage,
+            seed,
+            localStorage: localStorageInstance,
+            records: recordsFor(pack),
+          })
+        : new GuestSession({
+            pack,
+            storage,
+            localStorage: localStorageInstance,
+            records: recordsFor(pack),
+          }),
     );
-  }, [pack, storage, session, screen, localStorageInstance]);
+  }, [pack, storage, session, screen, localStorageInstance, recordsFor]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   /** Drops the profile back to guest: flips `account` to `GUEST_ACCOUNT` and, if a live
@@ -646,7 +668,14 @@ export function App({
               if (account.status !== 'guest') return;
               closeOverlay();
               setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
-              setSession(new GuestSession({ pack, storage, localStorage: localStorageInstance }));
+              setSession(
+                new GuestSession({
+                  pack,
+                  storage,
+                  localStorage: localStorageInstance,
+                  records: recordsFor(pack),
+                }),
+              );
               router.toPlay();
             }}
             onHall={() => router.toHall('title')}
@@ -724,6 +753,7 @@ export function App({
                 hero,
                 startFresh: true,
                 localStorage: localStorageInstance,
+                records: recordsFor(pack),
               }),
             );
             router.toPlay();
@@ -736,7 +766,11 @@ export function App({
       const { returnTo } = screen;
       return (
         <main className="shell">
-          <HallScreen repository={repository} onBack={() => router.returnFromHall(returnTo)} />
+          <HallScreen
+            pack={pack}
+            repository={repository}
+            onBack={() => router.returnFromHall(returnTo)}
+          />
         </main>
       );
     }
@@ -819,6 +853,7 @@ export function App({
           settings={settings}
           onChangeSettings={handleSettingsChange}
           session={session}
+          repository={repository}
         >
           {renderScreen(pack)}
         </UiProviders>

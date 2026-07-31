@@ -54,7 +54,7 @@ export interface BalanceContentEntry extends BaseContentEntry {
     attemptCap: number;
   }>;
   readonly fragmentSpawnRollDenominator: number;
-  readonly generation: Readonly<{ doorTilePercent: number }>;
+  readonly generation: Readonly<{ doorTilePercent: number; artifactOfferPercent: number }>;
   readonly floorLoot: Readonly<{
     scatterCount: Readonly<{ minimum: number; maximum: number }>;
     chestCount: Readonly<{ minimum: number; maximum: number }>;

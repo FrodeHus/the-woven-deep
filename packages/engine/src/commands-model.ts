@@ -228,6 +228,8 @@ export type InvalidActionReason =
   | 'item.quantity'
   | 'item.incompatible'
   | 'item.id-conflict'
+  | 'light.inextinguishable'
+  | 'signature.no-charges'
   | 'target.not_visible'
   | 'target.out_of_range'
   | 'target.blocked'

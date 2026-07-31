@@ -5,9 +5,14 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   createNewRun,
+  descendToNextFloor,
   encodeActiveRun,
+  finalizeRun,
+  heroActor,
+  newRunRecords,
   DEFAULT_GUEST_HERO,
   type ActiveRun,
+  type StoredHallRecord,
   type Uint32State,
 } from '@woven-deep/engine';
 import { dispatchIntent, type PlayerIntent } from '@woven-deep/session-core';
@@ -125,6 +130,51 @@ function driveServerSide(
   return blobsAfterEachIntent;
 }
 
+/** Appends one authentic Hall record — a run that really descended to depth 1 and died there,
+ * finalized through the engine — so the parity run below inherits a standing. */
+function seedHallRecord(hallRepo: ServerRunRecordRepository): StoredHallRecord {
+  const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+  const town = fresh.floors.find((floor) => floor.floorId === fresh.activeFloorId)!;
+  const heroOnStairs = heroActor(fresh);
+  const descended = descendToNextFloor(
+    {
+      ...fresh,
+      actors: fresh.actors.map((actor) =>
+        actor.actorId === heroOnStairs.actorId
+          ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y }
+          : actor,
+      ),
+    },
+    { content: pack },
+  ).state;
+  const hero = heroActor(descended);
+  const died: ActiveRun = {
+    ...descended,
+    actors: descended.actors.map((actor) =>
+      actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+    ),
+    conclusion: {
+      completionType: 'died',
+      cause: {
+        killerContentId: null,
+        depth: 1,
+        turn: descended.turn,
+        worldTime: descended.worldTime,
+      },
+      concludedAtRevision: descended.revision,
+      finalized: false,
+    },
+  };
+  const finalized = finalizeRun({ run: died, content: pack, lifetime: hallRepo.lifetime() });
+  const stored: StoredHallRecord = {
+    ...finalized.record,
+    enrichment: { achievedAt: FIXED_CLOCK(), portraitGlyph: '@' },
+  };
+  hallRepo.appendRecord(stored);
+  hallRepo.applyDeltas(finalized.deltas);
+  return stored;
+}
+
 function freshRepos(): {
   database: Database.Database;
   repo: ActiveRunRepository;
@@ -146,14 +196,28 @@ function freshRepos(): {
 
 describe('cross-process determinism parity (client core vs. server play path)', () => {
   it('produces byte-identical encodeActiveRun after every intent, and at the end', () => {
-    // Client core side: the same seed/hero/pack, driven purely through dispatchIntent.
-    const clientInitialRun = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const { database, repo, hallRepo } = freshRepos();
+    // A non-empty Hall, so the two sides' records inputs are actually distinguishable: with an
+    // untouched Hall every standings window (and every cap) collapses to the same empty list, and
+    // a divergence between the hosts would slip through this test unnoticed.
+    seedHallRecord(hallRepo);
+    expect(hallRepo.standings(10)).toHaveLength(1);
+
+    // Client core side: the same seed/hero/pack AND the same cross-run history the server seeds
+    // its run from, through the same shared `newRunRecords` builder -- run creation consumes
+    // randomness off the records input, so the two sides must agree on it for the parity claim to
+    // mean anything.
+    const clientInitialRun = createNewRun({
+      pack,
+      seed: SEED,
+      hero: DEFAULT_GUEST_HERO,
+      records: newRunRecords(hallRepo, pack),
+    });
     const clientRunsAfterEachIntent = driveClientCore(clientInitialRun, INTENT_SEQUENCE);
     const clientBlobsAfterEachIntent = clientRunsAfterEachIntent.map((run) => encodeActiveRun(run));
 
     // Server side: the same seed/hero/pack, driven through ServerPlaySession.applyIntent over an
     // in-memory SQLite repo -- the server's real play path.
-    const { database, repo, hallRepo } = freshRepos();
     const session = new ServerPlaySession({
       pack,
       repo,

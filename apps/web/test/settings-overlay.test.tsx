@@ -413,7 +413,22 @@ describe('SettingsOverlay composed with PlayScreen/App', () => {
             restsCompleted: 0,
           },
           reputations: [],
-          heirloom: null,
+          // A real finalized record always carries a heirloom (the engine falls back to a relic
+          // when nothing eligible was held), and a run created from this Hall now inherits this
+          // record as a standing — whose schema requires the snapshot to be present.
+          heirloom: {
+            contentId: 'item.iron-sword',
+            sourceItemId: 'item.settings-overlay-original',
+            enchantment: null,
+            condition: 81,
+            charges: null,
+            fuel: null,
+            qualityRank: 2,
+            displayName: 'Iron Sword',
+            glyph: ')',
+            color: '#d8d8d8',
+            originatingHallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+          },
           build: {
             attributes: { might: 14, agility: 12, vitality: 16, wits: 10, resolve: 12 },
             equippedItemContentIds: [],

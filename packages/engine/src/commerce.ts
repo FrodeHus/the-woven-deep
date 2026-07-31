@@ -1,4 +1,5 @@
 import type {
+  ArtifactDefinition,
   CompiledContentPack,
   ItemContentEntry,
   MerchantEncounterContentEntry,
@@ -174,6 +175,43 @@ export function guaranteedUniqueItemIds(content: CompiledContentPack): ReadonlyS
   );
 }
 
+/** Content IDs of items carrying an `artifact` block. */
+export function artifactItemIds(content: CompiledContentPack): ReadonlySet<OpaqueId> {
+  return new Set(
+    content.entries.flatMap((entry) =>
+      entry.kind === 'item' && entry.artifact !== null ? [entry.id] : [],
+    ),
+  );
+}
+
+/** The `artifact` definition for a content ID, or null when the item is not an artifact. */
+export function artifactById(
+  content: CompiledContentPack,
+  contentId: OpaqueId,
+): ArtifactDefinition | null {
+  const entry = content.entries.find(
+    (candidate) => candidate.kind === 'item' && candidate.id === contentId,
+  ) as ItemContentEntry | undefined;
+  return entry?.artifact ?? null;
+}
+
+/**
+ * The content ID a defeated boss actually drops as its guaranteed unique, or `null` when the drop
+ * is withheld. A boss relic that is a legendary artifact is a singleton in circulation: it exists
+ * once per profile, so the boss may only mint it while it is still undiscovered. Once some hero
+ * has found it, the relic lives in the Hall's ledger -- carried, or waiting on the champion who
+ * died holding it -- and the boss drops its enhanced loot alone. Non-artifact uniques are never
+ * gated: they are per-run rewards, not circulating objects.
+ */
+export function bossUniqueDropId(
+  content: CompiledContentPack,
+  run: Readonly<{ artifactsUndiscovered: readonly OpaqueId[] }>,
+  uniqueItemId: OpaqueId,
+): OpaqueId | null {
+  if (!artifactItemIds(content).has(uniqueItemId)) return uniqueItemId;
+  return run.artifactsUndiscovered.includes(uniqueItemId) ? uniqueItemId : null;
+}
+
 export function merchantAcceptsItem(
   item: ItemInstance,
   definition: ItemContentEntry,
@@ -188,6 +226,11 @@ export function merchantAcceptsItem(
   return (
     item.location.type === 'backpack' &&
     item.heirloom === undefined &&
+    // A legendary artifact is a singleton the Hall tracks by hand: it leaves the run only through
+    // the hero's death or escape, never across a counter. Selling one would also hand it to a
+    // merchant whose stock is deleted outright when the merchant dies or departs -- the artifact
+    // would be gone from circulation with no stint recorded, which the spec forbids.
+    definition.artifact === null &&
     Number.isSafeInteger(definition.price) &&
     definition.price > 0 &&
     encounter.definition.acceptedCategories.includes(definition.category) &&

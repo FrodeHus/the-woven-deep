@@ -44,6 +44,24 @@ export interface IdentificationDefinition {
   readonly poolId: string | null;
 }
 
+export interface ArtifactSignatureDefinition {
+  readonly spellId: ContentId;
+  readonly charges: number;
+  readonly rechargePerFloor: number;
+}
+
+export interface ArtifactLightDefinition {
+  readonly fuelless: boolean;
+  readonly inextinguishable: boolean;
+}
+
+export interface ArtifactDefinition {
+  readonly canon: true;
+  readonly signature: ArtifactSignatureDefinition | null;
+  readonly drawbackModifiers: Readonly<Record<string, number>>;
+  readonly light: ArtifactLightDefinition | null;
+}
+
 export interface ItemContentEntry extends PresentedContentEntry {
   readonly kind: 'item';
   readonly category: ItemCategory;
@@ -58,6 +76,7 @@ export interface ItemContentEntry extends PresentedContentEntry {
   readonly equipment: EquipmentDefinition | null;
   readonly combat: CombatItemDefinition | null;
   readonly light: LightItemDefinition | null;
+  readonly artifact: ArtifactDefinition | null;
   readonly identification: IdentificationDefinition;
   readonly effects: readonly EffectDefinition[];
 }

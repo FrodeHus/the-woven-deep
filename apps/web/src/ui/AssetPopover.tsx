@@ -2,6 +2,7 @@ import type { CSSProperties, JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { itemById } from '../session/pack-queries.js';
 import { itemKnownFacts } from '../session/item-facts.js';
+import { isArtifact } from '../session/artifact-view.js';
 
 /** A hovered non-actor asset: a floor item or a notable tile (stairs, a door). `title` names it and
  * `detail` describes what it is -- the honest best available, since the compiled content pack carries
@@ -57,10 +58,14 @@ export function AssetPopover({
     top: `${Math.max(0, Math.min(topPx, paneHeightPx))}px`,
   };
   const content = asset.contentId === undefined ? undefined : itemById(pack, asset.contentId);
+  /** The one HUD surface that names an item, so it carries the same gold an artifact gets in the
+   * inspect pane and the Hall. Gated on `contentId`, which the projection omits for an unidentified
+   * item -- so hovering an unknown relic on the floor never gives it away. */
+  const artifact = isArtifact(pack, asset.contentId);
 
   return (
     <div role="tooltip" className="threat-popover framed" style={style}>
-      <strong>{asset.title}</strong>
+      <strong className={artifact ? 'text-accent' : undefined}>{asset.title}</strong>
       {asset.glyph && <span aria-hidden="true">{asset.glyph}</span>}
       <div>{asset.detail}</div>
       {content?.description && <p className="threat-popover-description">{content.description}</p>}

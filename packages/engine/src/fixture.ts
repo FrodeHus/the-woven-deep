@@ -115,7 +115,7 @@ export function createDemoContentPack(): CompiledContentPack {
           attemptCap: 16,
         },
         fragmentSpawnRollDenominator: 40,
-        generation: { doorTilePercent: 35 },
+        generation: { doorTilePercent: 35, artifactOfferPercent: 12 },
         floorLoot: {
           scatterCount: { minimum: 2, maximum: 4 },
           chestCount: { minimum: 0, maximum: 2 },
@@ -210,6 +210,7 @@ export function createDemoContentPack(): CompiledContentPack {
         equipment: null,
         combat: null,
         light: null,
+        artifact: null,
         identification: { mode: 'known', poolId: null },
         effects: [],
       },
@@ -333,6 +334,8 @@ export function createDemoRun(): ActiveRun {
     fallenHeroStandings: [],
     fallenHeroDecisions: [],
     conqueredChampionRecordIds: [],
+    offeredArtifact: null,
+    artifactsUndiscovered: [],
     metrics: emptyRunMetrics(),
     conclusion: null,
     // Matches this fixture's bundled balance base (see createDemoContentPack); migrations never

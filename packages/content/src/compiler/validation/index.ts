@@ -1,5 +1,6 @@
 import type { ContentCompileIssue } from '../error.js';
 import { achievementIssues } from './achievement.js';
+import { artifactIssues } from './artifact.js';
 import { backgroundEntriesIssues } from './background.js';
 import { balanceEntriesIssues } from './balance.js';
 import { championTemplateEntriesIssues } from './champion-template.js';
@@ -31,6 +32,7 @@ export function validateContentEntries(
   issues.push(...dialogueIssues(locatedEntries, byId));
   issues.push(...npcFactionIssues(locatedEntries));
   issues.push(...itemIssues(locatedEntries, byId));
+  issues.push(...artifactIssues(locatedEntries, byId));
   issues.push(...classEntriesIssues(locatedEntries, byId));
   issues.push(...backgroundEntriesIssues(locatedEntries, byId));
   issues.push(...spellTrapIssues(locatedEntries, byId));

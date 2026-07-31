@@ -11,6 +11,7 @@ import {
   legacyActiveRunV9Schema,
   legacyActiveRunV10Schema,
   legacyActiveRunV11Schema,
+  legacyActiveRunV12Schema,
   emptyLegacyRunMetricsV9,
   validateActiveRun,
 } from './save-schema.js';
@@ -125,38 +126,62 @@ function migrateV11ToV12(input: unknown): unknown {
   };
 }
 
-function migrateLegacy(input: unknown, schemaVersion: 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11): ActiveRun {
+// The artifact bump is field-defaults only: a mid-run v12 save resumes with no artifact offered and
+// an empty undrawn pool, so it neither offers nor drops anything for the rest of that run.
+function migrateV12ToV13(input: unknown): unknown {
+  const v12 = legacyActiveRunV12Schema.parse(input);
+  return { ...v12, schemaVersion: 13, offeredArtifact: null, artifactsUndiscovered: [] };
+}
+
+function migrateLegacy(
+  input: unknown,
+  schemaVersion: 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12,
+): ActiveRun {
   try {
     const migrated =
       schemaVersion === 4
-        ? migrateV11ToV12(
-            migrateV10ToV11(
-              migrateV9ToV10(
-                migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input))))),
+        ? migrateV12ToV13(
+            migrateV11ToV12(
+              migrateV10ToV11(
+                migrateV9ToV10(
+                  migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input))))),
+                ),
               ),
             ),
           )
         : schemaVersion === 5
-          ? migrateV11ToV12(
-              migrateV10ToV11(
-                migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input))))),
+          ? migrateV12ToV13(
+              migrateV11ToV12(
+                migrateV10ToV11(
+                  migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input))))),
+                ),
               ),
             )
           : schemaVersion === 6
-            ? migrateV11ToV12(
-                migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(input))))),
+            ? migrateV12ToV13(
+                migrateV11ToV12(
+                  migrateV10ToV11(
+                    migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(input)))),
+                  ),
+                ),
               )
             : schemaVersion === 7
-              ? migrateV11ToV12(
-                  migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(input)))),
+              ? migrateV12ToV13(
+                  migrateV11ToV12(
+                    migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(input)))),
+                  ),
                 )
               : schemaVersion === 8
-                ? migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(input))))
+                ? migrateV12ToV13(
+                    migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(input)))),
+                  )
                 : schemaVersion === 9
-                  ? migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(input)))
+                  ? migrateV12ToV13(migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(input))))
                   : schemaVersion === 10
-                    ? migrateV11ToV12(migrateV10ToV11(input))
-                    : migrateV11ToV12(input);
+                    ? migrateV12ToV13(migrateV11ToV12(migrateV10ToV11(input)))
+                    : schemaVersion === 11
+                      ? migrateV12ToV13(migrateV11ToV12(input))
+                      : migrateV12ToV13(input);
     return validateActiveRun(migrated);
   } catch (cause) {
     if (cause instanceof SaveLoadError) throw cause;
@@ -204,7 +229,8 @@ export function decodeActiveRun(json: string, content?: CompiledContentPack): Ac
     schemaVersion === 8 ||
     schemaVersion === 9 ||
     schemaVersion === 10 ||
-    schemaVersion === 11
+    schemaVersion === 11 ||
+    schemaVersion === 12
   ) {
     return migrateLegacy(input, schemaVersion);
   }

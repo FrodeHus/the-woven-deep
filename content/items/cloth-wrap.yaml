@@ -1,4 +1,4 @@
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: item
     id: item.cloth-wrap
@@ -17,5 +17,6 @@ entries:
     equipment: { slots: [body], handedness: none, reservedSlots: [] }
     combat: { accuracy: 0, defense: 0, armor: 0, damage: null, range: 0, ammunitionTag: null }
     light: null
+    artifact: null
     identification: { mode: known, poolId: null }
     effects: []

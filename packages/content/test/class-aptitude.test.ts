@@ -3,7 +3,7 @@ import { contentFileSchema } from '../src/compiler/schema.js';
 
 function classFile(extra: Record<string, unknown>) {
   return {
-    schemaVersion: 9,
+    schemaVersion: 10,
     entries: [
       {
         kind: 'class',

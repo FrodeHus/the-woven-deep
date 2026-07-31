@@ -59,6 +59,7 @@ function itemDef(id: string): ItemContentEntry {
     equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };

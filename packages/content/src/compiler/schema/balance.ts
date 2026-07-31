@@ -77,6 +77,7 @@ export const balanceEntry = z
     fragmentSpawnRollDenominator: z.number().int().min(1),
     generation: z.strictObject({
       doorTilePercent: z.number().int().min(0).max(100),
+      artifactOfferPercent: z.number().int().min(0).max(100),
     }),
     floorLoot: z.strictObject({
       // `maximum: 0` disables scatter piles or chests outright; the superRefine below still

@@ -5,13 +5,14 @@ import {
   type JSX,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import type { CompletionType } from '@woven-deep/content';
+import type { CompiledContentPack, CompletionType } from '@woven-deep/content';
 import {
   compareHallRecords,
   type OpaqueId,
   type RunRecordRepository,
   type StoredHallRecord,
 } from '@woven-deep/engine';
+import { relicsOverview } from '../../session/artifact-view.js';
 import { useListNavigation } from './roving-focus.js';
 import { Button } from '../components/button.js';
 import { Label } from '../components/label.js';
@@ -19,6 +20,9 @@ import { cn } from '../lib/cn.js';
 
 export interface HallScreenProps {
   readonly repository: RunRecordRepository;
+  /** The Hall reads the pack only for the Relics panel: artifact display names, and how many
+   * artifacts exist at all (the unfound count is that total minus what the ledger has seen). */
+  readonly pack: CompiledContentPack;
   readonly onBack: () => void;
 }
 
@@ -64,8 +68,14 @@ function matchesFilters(
  * Like `ConclusionScreen`, the Hall is explicitly marked unverified/session-only: this is the
  * guest client, with no server-side confirmation of anything shown here.
  */
-export function HallScreen({ repository, onBack }: HallScreenProps): JSX.Element {
+export function HallScreen({ repository, pack, onBack }: HallScreenProps): JSX.Element {
   const records = useMemo(() => [...repository.records()].sort(compareHallRecords), [repository]);
+  // Provenance is joined here, client-side: the ledger names an artifact and its stints, the Hall
+  // records name how each of those runs ended (see `relicsOverview`).
+  const relics = useMemo(
+    () => relicsOverview(pack, repository.artifactLedger(), repository.records()),
+    [pack, repository],
+  );
   const [outcomeFilter, setOutcomeFilter] = useState<OutcomeFilter>('all');
   const [classFilter, setClassFilter] = useState<ClassFilter>('all');
   const [expandedRecordId, setExpandedRecordId] = useState<OpaqueId | null>(null);
@@ -208,6 +218,34 @@ export function HallScreen({ repository, onBack }: HallScreenProps): JSX.Element
             );
           })}
         </ul>
+      )}
+
+      {relics.artifactCount > 0 && (
+        <section
+          aria-label="Relics of the Deep"
+          className="flex flex-col gap-1.5 rounded-md border border-line bg-surface px-3 py-2.5"
+        >
+          <h2 className="font-serif text-lg text-accent">Relics of the Deep</h2>
+          {relics.known.length > 0 && (
+            <ul className="m-0 flex list-none flex-col gap-1 p-0">
+              {relics.known.map((relic) => (
+                <li key={relic.artifactId} className="flex flex-col">
+                  {/* Gold, like the inspect pane's artifact name and the HUD's gold count. */}
+                  <span className="text-sm text-accent">{relic.name}</span>
+                  <span className="text-xs text-muted">{relic.lastStint}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {/* A count, never names: what is still out there stays a discovery. */}
+          <p className="text-xs italic text-subtle">
+            {relics.undiscoveredCount === 0
+              ? 'Every relic has been accounted for.'
+              : `${relics.undiscoveredCount} ${
+                  relics.undiscoveredCount === 1 ? 'relic remains' : 'relics remain'
+                } unfound`}
+          </p>
+        </section>
       )}
 
       <Button type="button" variant="outline" className="self-start" onClick={onBack}>

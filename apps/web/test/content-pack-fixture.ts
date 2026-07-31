@@ -87,7 +87,7 @@ const entries: readonly ContentEntry[] = [
       attemptCap: 16,
     },
     fragmentSpawnRollDenominator: 40,
-    generation: { doorTilePercent: 35 },
+    generation: { doorTilePercent: 35, artifactOfferPercent: 12 },
     floorLoot: {
       scatterCount: { minimum: 2, maximum: 4 },
       chestCount: { minimum: 0, maximum: 2 },
@@ -138,6 +138,7 @@ const entries: readonly ContentEntry[] = [
       warningThresholds: [100],
       fuelTags: ['lamp-oil'],
     },
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   },

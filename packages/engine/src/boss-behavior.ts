@@ -6,6 +6,7 @@ import {
 } from '@woven-deep/content';
 import { withActor, type ActorState } from './actor-model.js';
 import { applyEffectResult, resolveEffectSequence, type EffectOperations } from './effects.js';
+import { artifactById, bossUniqueDropId } from './commerce.js';
 import { consumeItemQuantityFromItems, createPopulationLoot } from './inventory.js';
 import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
 import type { BossPopulation } from './population-model.js';
@@ -163,6 +164,15 @@ function bossEffectOperations(
           (item.location.type === 'backpack' || item.location.type === 'equipped') &&
           item.location.actorId === operation.targetActorId;
         if (!owned || requireItem(input.content, item.contentId).light === null) return item;
+        // An inextinguishable artifact is still a light the arena reached, so it satisfies the
+        // target-exists invariant below -- the arena simply cannot put it out.
+        if (
+          !enabled &&
+          artifactById(input.content, item.contentId)?.light?.inextinguishable === true
+        ) {
+          changed += 1;
+          return item;
+        }
         if (enabled && (item.fuel ?? 0) <= 0)
           throw new Error(`internal invariant: boss arena light ${item.itemId} has no fuel`);
         changed += 1;
@@ -437,6 +447,13 @@ function createRewards(
   const floor = input.state.floors.find(
     (candidate) => candidate.floorId === input.population.floorId,
   )!;
+  // A relic already in circulation is withheld: the boss still drops its enhanced loot, and the
+  // unique costs no randomness either way, so the loot stream is identical whichever branch runs.
+  const uniqueContentId = bossUniqueDropId(
+    input.content,
+    input.state,
+    input.definition.uniqueItemId,
+  );
   const { state, createdItems, unique, receipt } = createPopulationLoot({
     content: input.content,
     state: input.state,
@@ -446,8 +463,9 @@ function createRewards(
     x: input.boss.x,
     y: input.boss.y,
     depth: floor.depth,
-    uniqueContentId: input.definition.uniqueItemId,
-    uniqueItemId: `item.reward.${input.population.populationId}.unique`,
+    uniqueContentId,
+    uniqueItemId:
+      uniqueContentId === null ? null : `item.reward.${input.population.populationId}.unique`,
     existsError: (item) =>
       `internal invariant: boss reward item ${item.itemId} already exists without reward state`,
   });
@@ -469,7 +487,7 @@ function createRewards(
         populationId: population.populationId,
         actorId: population.actorId,
         encounterId: population.encounterId,
-        uniqueItemId: unique!.itemId,
+        uniqueItemId: unique?.itemId ?? null,
         itemIds: createdItems.map((item) => item.itemId),
       },
     ],

@@ -225,6 +225,7 @@ function merchantFixture(overrides: Partial<MerchantEncounterContentEntry> = {})
     equipment: null,
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };
@@ -1520,6 +1521,7 @@ describe('vault item slot consumption', () => {
     equipment: null,
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };
@@ -1848,6 +1850,232 @@ describe('vault item slot consumption', () => {
     expect(failed.state.rng['loot-placement']).toEqual(placed.state.rng['loot-placement']);
     expect(failed.state.rng['loot-placement']).not.toEqual(run.rng['loot-placement']);
   });
+
+  describe('artifact offer slots', () => {
+    const artifactEntry: ItemContentEntry = {
+      ...stockItemEntry,
+      id: 'item.test-artifact',
+      name: 'Test Artifact',
+      category: 'misc',
+      stackLimit: 1,
+      rarity: 'legendary',
+      artifact: { canon: true, signature: null, drawbackModifiers: { defense: -1 }, light: null },
+    };
+
+    /** A vault whose only slots are optional, artifact-tagged, and name neither loot source. */
+    function artifactVault(id: string, slotIds: readonly string[]): VaultContentEntry {
+      return {
+        ...itemCacheVault(id, { lootTableId: null, contentId: null }),
+        layout: [slotIds.map((_, index) => String(index)).join('')],
+        legend: Object.fromEntries(
+          slotIds.map((slotId, index) => [
+            String(index),
+            {
+              terrain: 'floor' as const,
+              entrance: false,
+              light: null,
+              slot: {
+                id: slotId,
+                kind: 'item' as const,
+                required: false,
+                tags: ['artifact'],
+                lootTableId: null,
+                contentId: null,
+              },
+            },
+          ]),
+        ),
+      };
+    }
+
+    function artifactFloor(vaultId: string, slotIds: readonly string[]): FloorSnapshot {
+      return floor({
+        vaults: [
+          {
+            placementId: 'vault-placement.test.0',
+            vaultId,
+            x: 3,
+            y: 2,
+            width: slotIds.length,
+            height: 1,
+            rotation: 0,
+            reflected: false,
+            entrances: [],
+          },
+        ],
+        placementSlots: slotIds.map((slotId, index) => ({
+          slotId: `slot.test.0.${slotId}`,
+          vaultPlacementId: 'vault-placement.test.0',
+          kind: 'item' as const,
+          required: false,
+          tags: ['artifact'],
+          x: 3 + index,
+          y: 2,
+        })),
+      });
+    }
+
+    it('materializes the offered artifact at an artifact-tagged slot without consuming randomness', () => {
+      const encounter = individual('encounter.artifact-offer');
+      const vault = artifactVault('vault.artifact-offer-test', ['offer']);
+      const generated = artifactFloor(vault.id, ['offer']);
+      const content = pack([encounter], [vault, artifactEntry]);
+      const base = runFor([encounter]);
+
+      const offered = placeFloorPopulations({
+        run: {
+          ...base,
+          offeredArtifact: artifactEntry.id,
+          artifactsUndiscovered: [artifactEntry.id],
+        },
+        floor: generated,
+        content,
+        forcedEncounterId: encounter.id,
+      });
+      const withoutOffer = placeFloorPopulations({
+        run: base,
+        floor: generated,
+        content,
+        forcedEncounterId: encounter.id,
+      });
+
+      expect(
+        offered.state.items.filter((item) => item.itemId.startsWith('item.artifact-offer.')),
+      ).toEqual([
+        expect.objectContaining({
+          itemId: 'item.artifact-offer.slot.test.0.offer',
+          contentId: artifactEntry.id,
+          quantity: 1,
+          condition: 100,
+          identified: true,
+          location: { type: 'floor', floorId: generated.floorId, x: 3, y: 2 },
+        }),
+      ]);
+      // Placing the offer is a pure authoring act: both streams land where a skipped slot leaves
+      // them, so an offer can never shift any other placement decision.
+      expect(offered.state.rng['loot-placement']).toEqual(withoutOffer.state.rng['loot-placement']);
+      expect(offered.state.rng.encounters).toEqual(withoutOffer.state.rng.encounters);
+    });
+
+    it('skips an artifact-tagged slot when the run carries no offer', () => {
+      const encounter = individual('encounter.artifact-no-offer');
+      const vault = artifactVault('vault.artifact-no-offer-test', ['offer']);
+      const generated = artifactFloor(vault.id, ['offer']);
+
+      const result = placeFloorPopulations({
+        run: runFor([encounter]),
+        floor: generated,
+        content: pack([encounter], [vault, artifactEntry]),
+        forcedEncounterId: encounter.id,
+      });
+
+      expect(
+        result.state.items.filter((item) => item.itemId.startsWith('item.artifact-offer.')),
+      ).toEqual([]);
+      expect(result.state.items.filter((item) => item.itemId.startsWith('item.vault.'))).toEqual(
+        [],
+      );
+    });
+
+    it('materializes the offer at most once per run', () => {
+      const encounter = individual('encounter.artifact-twice');
+      const vault = artifactVault('vault.artifact-twice-test', ['first', 'second']);
+      const generated = artifactFloor(vault.id, ['first', 'second']);
+      const content = pack([encounter], [vault, artifactEntry]);
+      const run = {
+        ...runFor([encounter]),
+        offeredArtifact: artifactEntry.id,
+        artifactsUndiscovered: [artifactEntry.id],
+      };
+
+      const first = placeFloorPopulations({
+        run,
+        floor: generated,
+        content,
+        forcedEncounterId: encounter.id,
+      });
+      const offers = first.state.items.filter((item) =>
+        item.itemId.startsWith('item.artifact-offer.'),
+      );
+      expect(offers).toHaveLength(1);
+      expect(offers[0]!.itemId).toBe('item.artifact-offer.slot.test.0.first');
+
+      // A later floor of the same run, offer instance already in `run.items`, places nothing.
+      const second = placeFloorPopulations({
+        run: { ...run, items: [...run.items, ...offers] },
+        floor: { ...generated, floorId: 'floor.population-2' },
+        content,
+        forcedEncounterId: encounter.id,
+      });
+
+      expect(
+        second.state.items.filter((item) => item.itemId.startsWith('item.artifact-offer.')),
+      ).toEqual(offers);
+    });
+
+    it('skips an artifact-tagged slot when the floor is shallower than the offer minDepth', () => {
+      const midBandArtifact: ItemContentEntry = { ...artifactEntry, minDepth: 7 };
+      const encounter = individual('encounter.artifact-shallow');
+      const vault = artifactVault('vault.artifact-shallow-test', ['offer']);
+      const generated = artifactFloor(vault.id, ['offer']);
+      const content = pack([encounter], [vault, midBandArtifact]);
+      const base = runFor([encounter]);
+      const run = {
+        ...base,
+        offeredArtifact: midBandArtifact.id,
+        artifactsUndiscovered: [midBandArtifact.id],
+      };
+
+      expect(generated.depth).toBe(3);
+      const shallow = placeFloorPopulations({
+        run,
+        floor: { ...generated, depth: 1 },
+        content,
+        forcedEncounterId: encounter.id,
+      });
+      const withoutOffer = placeFloorPopulations({
+        run: base,
+        floor: { ...generated, depth: 1 },
+        content,
+        forcedEncounterId: encounter.id,
+      });
+
+      expect(
+        shallow.state.items.filter((item) => item.itemId.startsWith('item.artifact-offer.')),
+      ).toEqual([]);
+      expect(shallow.state.rng['loot-placement']).toEqual(withoutOffer.state.rng['loot-placement']);
+      expect(shallow.state.rng.encounters).toEqual(withoutOffer.state.rng.encounters);
+    });
+
+    it('materializes the offer once the floor reaches the offer minDepth', () => {
+      const midBandArtifact: ItemContentEntry = { ...artifactEntry, minDepth: 7 };
+      const encounter = individual('encounter.artifact-deep');
+      const vault = artifactVault('vault.artifact-deep-test', ['offer']);
+      const generated = artifactFloor(vault.id, ['offer']);
+      const content = pack([encounter], [vault, midBandArtifact]);
+      const run = {
+        ...runFor([encounter]),
+        offeredArtifact: midBandArtifact.id,
+        artifactsUndiscovered: [midBandArtifact.id],
+      };
+
+      const deep = placeFloorPopulations({
+        run,
+        floor: { ...generated, depth: 8 },
+        content,
+        forcedEncounterId: encounter.id,
+      });
+
+      expect(
+        deep.state.items.filter((item) => item.itemId.startsWith('item.artifact-offer.')),
+      ).toEqual([
+        expect.objectContaining({
+          itemId: 'item.artifact-offer.slot.test.0.offer',
+          contentId: midBandArtifact.id,
+        }),
+      ]);
+    });
+  });
 });
 
 describe('vault door/chest feature slot spawn', () => {
@@ -1960,6 +2188,7 @@ describe('vault door/chest feature slot spawn', () => {
     equipment: null,
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };

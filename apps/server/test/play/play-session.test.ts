@@ -4,13 +4,20 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
+  artifactItemIds,
   createNewRun,
   decodeActiveRun,
+  descendToNextFloor,
   encodeActiveRun,
+  finalizeRun,
   heroActor,
   isHeartBossActive,
+  placeFallenHeroEncounters,
+  undiscoveredArtifactIds,
   DEFAULT_GUEST_HERO,
   type ActiveRun,
+  type FloorSnapshot,
+  type StoredHallRecord,
   type Uint32State,
 } from '@woven-deep/engine';
 import { runMigrations } from '../../src/database.js';
@@ -101,6 +108,102 @@ function storeConcludedRun(repo: ActiveRunRepository, overrides: Partial<ActiveR
   });
 }
 
+/** The depth the seeded Hall record died at — the depth its champion must then appear on. Kept
+ * shallow so the test walks only three real floor transitions to reach it, and picked because this
+ * seed's depth-3 floor carries a vault placement (the champion slot below needs one). */
+const CHAMPION_DEPTH = 3;
+
+/** Moves the hero onto the active floor's stair-down (so the transition below is legal) — the
+ * standard test shortcut for reaching a depth without walking the whole floor. */
+function onStairDown(run: ActiveRun): ActiveRun {
+  const floor = run.floors.find((candidate) => candidate.floorId === run.activeFloorId)!;
+  const hero = heroActor(run);
+  return {
+    ...run,
+    actors: run.actors.map((actor) =>
+      actor.actorId === hero.actorId
+        ? { ...actor, x: floor.stairDown!.x, y: floor.stairDown!.y }
+        : actor,
+    ),
+  };
+}
+
+function activeFloorOf(run: ActiveRun): FloorSnapshot {
+  return run.floors.find((floor) => floor.floorId === run.activeFloorId)!;
+}
+
+function activeDepthOf(run: ActiveRun): number {
+  return activeFloorOf(run).depth;
+}
+
+/** Adds an optional `fallen-hero` monster slot on an open walkable tile inside an existing vault
+ * placement, so the slot-preferred half of champion placement can be exercised on a floor whose
+ * rolled vaults happen not to author one. */
+function withFallenHeroSlot(floor: FloorSnapshot): FloorSnapshot {
+  const vault = floor.vaults[0];
+  if (vault === undefined) throw new Error('test setup failure: floor has no vault placement');
+  const occupied = new Set(floor.entities.map((entity) => `${entity.x},${entity.y}`));
+  const inVault = (x: number, y: number): boolean =>
+    x >= vault.x && x < vault.x + vault.width && y >= vault.y && y < vault.y + vault.height;
+  for (let y = 1; y < floor.height - 1; y += 1) {
+    for (let x = 1; x < floor.width - 1; x += 1) {
+      if (!inVault(x, y) || floor.tiles[y * floor.width + x] !== 1) continue;
+      if (occupied.has(`${x},${y}`)) continue;
+      return {
+        ...floor,
+        placementSlots: [
+          ...floor.placementSlots,
+          {
+            slotId: 'slot.test.fallen-hero',
+            vaultPlacementId: vault.placementId,
+            kind: 'monster',
+            required: false,
+            tags: ['fallen-hero'],
+            x,
+            y,
+          },
+        ],
+      };
+    }
+  }
+  throw new Error('test setup failure: no free walkable vault tile for a fallen-hero slot');
+}
+
+/** Appends one authentic Hall record (built through the engine's own `finalizeRun`, exactly like
+ * the production finalize path) for a run that really descended to `depth` and died there, so
+ * `standings()` reports a `deathDepth` an actual floor can host its champion on. */
+function seedHallRecord(
+  hallRepo: ServerRunRecordRepository,
+  depth: number,
+  seed: Uint32State = SEED,
+): StoredHallRecord {
+  let base = createNewRun({ pack, seed, hero: DEFAULT_GUEST_HERO });
+  while (activeDepthOf(base) < depth) {
+    base = descendToNextFloor(onStairDown(base), { content: pack }).state;
+  }
+  const hero = heroActor(base);
+  const run: ActiveRun = {
+    ...base,
+    actors: base.actors.map((actor) =>
+      actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+    ),
+    conclusion: {
+      completionType: 'died',
+      cause: { killerContentId: null, depth, turn: base.turn, worldTime: base.worldTime },
+      concludedAtRevision: base.revision,
+      finalized: false,
+    },
+  };
+  const finalized = finalizeRun({ run, content: pack, lifetime: hallRepo.lifetime() });
+  const stored: StoredHallRecord = {
+    ...finalized.record,
+    enrichment: { achievedAt: FIXED_CLOCK(), portraitGlyph: '@' },
+  };
+  hallRepo.appendRecord(stored);
+  hallRepo.applyDeltas(finalized.deltas);
+  return stored;
+}
+
 describe('ServerPlaySession', () => {
   let database: Database.Database;
   let repo: ActiveRunRepository;
@@ -108,6 +211,131 @@ describe('ServerPlaySession', () => {
   beforeEach(() => {
     database = freshDatabase();
     repo = new ActiveRunRepository(database);
+  });
+
+  describe('hall records seeding', () => {
+    /** Teleports the hero onto the active floor's stair-down and writes the run back to
+     * `active_runs`, so the next session's descend intent is legal without walking the floor. */
+    function stageOnStairs(run: ActiveRun): ActiveRun {
+      const staged = onStairDown(run);
+      repo.upsert({
+        profileId: PROFILE,
+        runBlob: encodeActiveRun(staged),
+        revision: staged.revision,
+        contentHash: pack.hash,
+        updatedAt: FIXED_CLOCK(),
+      });
+      return staged;
+    }
+
+    function storedRun(): ActiveRun {
+      return decodeActiveRun(repo.get(PROFILE)!.runBlob, pack);
+    }
+
+    it('seeds a fresh run with the profile standings, conquered champions, and undiscovered artifacts', () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      const record = seedHallRecord(hallRepo, CHAMPION_DEPTH);
+
+      newSession(database, { repo, hallRepo }).open({ seed: SEED });
+
+      const run = storedRun();
+      expect(run.fallenHeroStandings.map((standing) => standing.hallRecordId)).toEqual([
+        record.recordId,
+      ]);
+      expect(run.fallenHeroStandings[0]!.deathDepth).toBe(CHAMPION_DEPTH);
+      expect(run.fallenHeroDecisions[0]).toMatchObject({
+        hallRecordId: record.recordId,
+        role: 'champion',
+        retained: true,
+      });
+      expect(run.conqueredChampionRecordIds).toEqual(
+        hallRepo.lifetime().conqueredChampionRecordIds,
+      );
+      // An empty ledger means every artifact the pack defines is still undiscovered.
+      expect(run.artifactsUndiscovered).toEqual(
+        undiscoveredArtifactIds(hallRepo.artifactLedger(), artifactItemIds(pack)),
+      );
+      expect(run.artifactsUndiscovered.length).toBeGreaterThan(0);
+    });
+
+    // A real multi-floor descent through resolveCommand: comfortably under a second locally but
+    // beyond vitest's 5s default on slower CI runners, hence the explicit timeout.
+    it(
+      'carries the seeded champion decision through a real descent and stands the champion on the death-depth floor, slot or no slot',
+      { timeout: 30_000 },
+      () => {
+        const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+        const record = seedHallRecord(hallRepo, CHAMPION_DEPTH);
+        newSession(database, { repo, hallRepo }).open({ seed: SEED });
+
+        while (activeDepthOf(storedRun()) < CHAMPION_DEPTH) {
+          const staged = stageOnStairs(storedRun());
+          const session = newSession(database, { repo, hallRepo });
+          session.open({ seed: SEED });
+          const outcome = session.applyIntent({
+            commandId: `command.descend-${String(staged.revision)}`,
+            expectedRevision: staged.revision,
+            intent: { type: 'descend' },
+          });
+          expect(outcome.kind).toBe('state');
+        }
+
+        const run = storedRun();
+        expect(activeDepthOf(run)).toBe(CHAMPION_DEPTH);
+        // The descent ran the real placement pass on every generated floor. Whether or not the
+        // death-depth floor happened to roll a vault authoring a fallen-hero slot, the open-cell
+        // fallback guarantees the champion is standing there -- this is the production-shaped
+        // proof, with nothing injected.
+        const standing = run.populations.find((population) => population.model === 'champion');
+        expect(standing).toBeDefined();
+        expect(standing!.hallRecordId).toBe(record.recordId);
+        const championActor = run.actors.find((actor) => actor.actorId === standing!.actorId);
+        expect(championActor).toBeDefined();
+        expect(championActor!.floorId).toBe(activeFloorOf(run).floorId);
+        // Not yet met: the decision is spent only on the encounter, not on placement.
+        expect(run.fallenHeroDecisions[0]).toMatchObject({ retained: true, encountered: false });
+
+        // Slot-preferred: replaying the same pass against a floor that DOES author a fallen-hero
+        // slot stands the champion on that slot rather than on a fallback cell.
+        const slotted = withFallenHeroSlot(activeFloorOf(run));
+        const arenaSlots = slotted.placementSlots.filter(
+          (candidate) =>
+            candidate.kind === 'monster' &&
+            !candidate.required &&
+            candidate.tags.some(
+              (tag) => tag === 'side-arena' || tag === 'fallen-hero' || tag === 'champion',
+            ),
+        );
+        const placed = placeFallenHeroEncounters({
+          run: {
+            ...run,
+            populations: [],
+            actors: run.actors.filter((actor) => actor.playerControlled),
+          },
+          floor: slotted,
+          content: pack,
+        });
+        const champion = placed.populations.find((population) => population.model === 'champion');
+        expect(champion).toBeDefined();
+        expect(champion!.hallRecordId).toBe(record.recordId);
+        expect(
+          arenaSlots.some(
+            (candidate) =>
+              candidate.x === placed.actors[0]!.x && candidate.y === placed.actors[0]!.y,
+          ),
+        ).toBe(true);
+      },
+    );
+
+    it('creates a history-free run for a profile with an empty Hall', () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      newSession(database, { repo, hallRepo }).open({ seed: SEED });
+
+      const run = storedRun();
+      expect(run.fallenHeroStandings).toEqual([]);
+      expect(run.fallenHeroDecisions).toEqual([]);
+      expect(run.artifactsUndiscovered.length).toBeGreaterThan(0);
+    });
   });
 
   it('creates and immediately persists a fresh run on open', () => {
@@ -276,6 +504,24 @@ describe('ServerPlaySession', () => {
       expect(snapshot.conclusion!.score).not.toBeNull();
       expect(snapshot.conclusion!.score).toEqual(hallRepo.records()[0]!.score);
       expect(snapshot.conclusion!.heirloom).toEqual(hallRepo.records()[0]!.heirloom);
+    });
+
+    it('applies the lifetime deltas before the artifact deltas so conquest is visible at reconcile', () => {
+      storeConcludedRun(repo);
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      const calls: string[] = [];
+      vi.spyOn(hallRepo, 'applyDeltas').mockImplementation((deltas) => {
+        calls.push('applyDeltas');
+        return ServerRunRecordRepository.prototype.applyDeltas.call(hallRepo, deltas);
+      });
+      vi.spyOn(hallRepo, 'applyArtifactDeltas').mockImplementation((deltas) => {
+        calls.push('applyArtifactDeltas');
+        return ServerRunRecordRepository.prototype.applyArtifactDeltas.call(hallRepo, deltas);
+      });
+
+      newSession(database, { repo, hallRepo }).open({ seed: SEED });
+
+      expect(calls).toEqual(['applyDeltas', 'applyArtifactDeltas']);
     });
 
     it('a resent command after conclusion does not double-finalize (no second Hall record, no throw)', () => {

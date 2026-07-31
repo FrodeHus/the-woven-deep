@@ -1,6 +1,7 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { HeroView, OwnedItemView } from '../../session/projection-view.js';
 import { itemById } from '../../session/pack-queries.js';
+import { isFuellessLight } from '../../session/artifact-view.js';
 
 /** The real item-category vocabulary the content model/engine projection actually emits (see
  * `packages/content/src/model.ts`'s `ItemCategory`) -- never invented. */
@@ -145,6 +146,10 @@ export function visibleEntries(
  * the first matching equipped light in `hero.equipment`'s own key order -- mirrors
  * `allMenuEntries`'s equipped-item ordering; the content pack never equips two lights that share
  * a fuel tag, so "first match" is unambiguous in practice.
+ *
+ * A fuelless artifact light is never a target, even though it authors `fuelTags` like any other
+ * light: it burns without spending fuel, so pouring oil into it would be a no-op the player was
+ * invited to make. Gating here (rather than on the button) also removes the `r` key's dispatch.
  */
 export function equippedLightMatchingFuel(
   pack: CompiledContentPack,
@@ -162,6 +167,7 @@ export function equippedLightMatchingFuel(
     )
     .find((item) => {
       if (item.contentId === undefined) return false;
+      if (isFuellessLight(pack, item.contentId)) return false;
       const lightEntry = itemById(pack, item.contentId);
       return (
         lightEntry !== undefined &&

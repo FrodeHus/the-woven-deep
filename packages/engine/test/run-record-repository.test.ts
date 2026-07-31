@@ -4,9 +4,11 @@ import {
   createInMemoryRunRecordRepository,
   emptyRunMetrics,
   standingsFromRecords,
+  type ArtifactDeltas,
   type HallRecordOrdering,
   type HeartLineageRecord,
   type LifetimeDeltas,
+  type OpaqueId,
   type RunMetrics,
   type StoredHallRecord,
 } from '../src/index.js';
@@ -304,5 +306,153 @@ describe('createInMemoryRunRecordRepository', () => {
     const mergedOnce = afterSecond.totals;
     expect(repository.lifetime().totals).toEqual(mergedOnce);
     expect(repository.lifetime()).toEqual(afterSecond);
+  });
+});
+
+function outrankingRecords(count: number): readonly StoredHallRecord[] {
+  return Array.from({ length: count }, (_unused, index) =>
+    storedRecord({
+      recordId: `record.rival${index}`,
+      heroName: `Rival ${index}`,
+      score: { lines: [], total: 500 + index },
+    }),
+  );
+}
+
+function lostToDeltas(recordId: OpaqueId, heroName: string): ArtifactDeltas {
+  return {
+    recordId,
+    stints: [
+      {
+        artifactId: 'artifact.sundered-crown',
+        stint: { heroName, recordId, outcome: 'died-with', depth: 5 },
+        newStatus: 'lost',
+        holderRecordId: recordId,
+      },
+    ],
+  };
+}
+
+describe('in-memory repository artifact ledger', () => {
+  it('starts with an empty ledger', () => {
+    expect(createInMemoryRunRecordRepository().artifactLedger()).toEqual([]);
+  });
+
+  it('applyArtifactDeltas folds a stint onto the ledger', () => {
+    const repository = createInMemoryRunRecordRepository();
+    const record = storedRecord();
+    repository.appendRecord(record);
+    repository.applyArtifactDeltas(lostToDeltas(record.recordId, record.heroName));
+
+    expect(repository.artifactLedger()).toEqual([
+      {
+        artifactId: 'artifact.sundered-crown',
+        status: 'lost',
+        holderRecordId: record.recordId,
+        provenance: [
+          {
+            heroName: record.heroName,
+            recordId: record.recordId,
+            outcome: 'died-with',
+            depth: 5,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('applyArtifactDeltas is idempotent by recordId', () => {
+    const repository = createInMemoryRunRecordRepository();
+    const record = storedRecord();
+    repository.appendRecord(record);
+    const deltas = lostToDeltas(record.recordId, record.heroName);
+
+    repository.applyArtifactDeltas(deltas);
+    const afterFirst = repository.artifactLedger();
+    repository.applyArtifactDeltas(deltas);
+
+    expect(repository.artifactLedger()).toEqual(afterFirst);
+    expect(repository.artifactLedger()[0].provenance).toHaveLength(1);
+  });
+
+  it('reconciles on appendRecord: an evicted holder releases the artifact back to the deep', () => {
+    const repository = createInMemoryRunRecordRepository();
+    const holder = storedRecord();
+    repository.appendRecord(holder);
+    repository.applyArtifactDeltas(lostToDeltas(holder.recordId, holder.heroName));
+    expect(repository.artifactLedger()[0].status).toBe('lost');
+
+    for (const rival of outrankingRecords(10)) {
+      repository.appendRecord(rival);
+    }
+
+    expect(repository.artifactLedger()).toEqual([
+      {
+        artifactId: 'artifact.sundered-crown',
+        status: 'undiscovered',
+        holderRecordId: null,
+        provenance: [
+          { heroName: holder.heroName, recordId: holder.recordId, outcome: 'died-with', depth: 5 },
+          {
+            heroName: holder.heroName,
+            recordId: holder.recordId,
+            outcome: 'reclaimed-by-the-deep',
+            depth: 0,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('rejects a delta whose status and holder disagree', () => {
+    const repository = createInMemoryRunRecordRepository();
+    expect(() =>
+      repository.applyArtifactDeltas({
+        recordId: 'record.broken',
+        stints: [
+          {
+            artifactId: 'artifact.sundered-crown',
+            stint: {
+              heroName: 'Ada',
+              recordId: 'record.broken',
+              outcome: 'died-with',
+              depth: 2,
+            },
+            newStatus: 'lost',
+            holderRecordId: null,
+          },
+        ],
+      }),
+    ).toThrow(/holder/i);
+  });
+
+  it('a rejected batch does not burn its recordId: a corrected retry still applies', () => {
+    const repository = createInMemoryRunRecordRepository();
+    const record = storedRecord();
+    repository.appendRecord(record);
+
+    const malformed: ArtifactDeltas = {
+      recordId: record.recordId,
+      stints: [
+        {
+          artifactId: 'artifact.sundered-crown',
+          stint: {
+            heroName: record.heroName,
+            recordId: record.recordId,
+            outcome: 'died-with',
+            depth: 5,
+          },
+          newStatus: 'lost',
+          holderRecordId: null,
+        },
+      ],
+    };
+
+    expect(() => repository.applyArtifactDeltas(malformed)).toThrow(/holder/i);
+    expect(repository.artifactLedger()).toEqual([]);
+
+    repository.applyArtifactDeltas(lostToDeltas(record.recordId, record.heroName));
+    expect(repository.artifactLedger()[0]?.status).toBe('lost');
+    expect(repository.artifactLedger()[0]?.provenance).toHaveLength(1);
   });
 });

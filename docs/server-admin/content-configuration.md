@@ -80,7 +80,7 @@ content/
 Every file is one strict document:
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: monster
     id: monster.example
@@ -93,7 +93,7 @@ Unknown fields are errors, including plausible misspellings.
 
 | Field | Type | Required/default | Rules and meaning |
 |---|---|---|---|
-| `schemaVersion` | integer | Required | Must be exactly `9`. |
+| `schemaVersion` | integer | Required | Must be exactly `10`. |
 | `entries` | array | Required, at least one | May contain any supported content kind. |
 | `kind` | enum | Required | One of `monster`, `npc`, `npc-faction`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, `condition`, `encounter`, `fallen-champion-template`, `achievement`, `class`, `background`, or `trait`. |
 | `id` | string | Required | Globally unique stable ID such as `monster.cave-rat`. |
@@ -137,7 +137,7 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `house` | object | Yes | Player house sizing, described below. The bundled value is `{ baseCapacity: 6, strongboxIncrement: 4 }`. |
 | `encounterDensity` | object | Yes | Dungeon encounter density, described below. The bundled value is `{ monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 }, attemptCap: 16 }`. |
 | `fragmentSpawnRollDenominator` | positive integer | Yes | Odds denominator (1-in-N) for the rare Ancient Tablet fragment spawn rolled once per floor generation. The bundled value is `40`. |
-| `generation` | object | Yes | Dungeon generation knobs described below. The bundled value is `{ doorTilePercent: 35 }`. |
+| `generation` | object | Yes | Dungeon generation knobs described below. The bundled value is `{ doorTilePercent: 35, artifactOfferPercent: 12 }`. |
 | `floorLoot` | object | Yes | Floor-loot placement knobs described below. |
 
 `house` carries a positive safe integer `baseCapacity` (the player house's starting storage capacity) and a positive safe integer `strongboxIncrement` (additional capacity granted per purchased strongbox upgrade). `encounterDensity` budgets a floor's population in **monsters**, not in placement attempts. `monstersPerThousandWalkable` carries a positive safe integer for each of `shallow`, `mid`, and `deep` — how many monsters a floor should hold per thousand walkable (open) cells in that depth band. The bands are the same ones `floorLoot.depthBands` defines (`shallowMaxDepth`, `midMaxDepth`), so retuning those boundaries retunes spawn density with them. The floor's target is `ceil(walkableCells * monstersPerThousandWalkable[band] / 1000)`, and the generator keeps placing encounters until that many monsters exist on the floor. Because one encounter can contribute anywhere from one monster (an `individual`) to several (a `group`), the number of placements needed varies; `attemptCap` (an integer from 1 through 32) bounds how many placement attempts a floor may consume regardless, so an unlucky floor whose encounters keep failing to fit still terminates. Guaranteed milestone bosses are placed before this loop and do not count against either the target or the cap. Only the actors an encounter creates at placement time are budgeted: a `swarm` contributes its source actor, and the members it spawns later during play are not counted, so a floor seeded with swarms grows past its target as the run proceeds.
@@ -149,10 +149,12 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | Field | Type | Required | Rules and meaning |
 |---|---|---|---|
 | `doorTilePercent` | integer 0-100 | Yes | Percent chance, rolled once per corridor-to-room junction of a finished floor, that the junction becomes a closed door tile (`terrain.door`). Junctions are the one-wide passage mouths where a corridor meets a room; stairs and their surrounding cells, vault footprints and the ring around them (vaults author their own doorways), and junctions already beside a door tile are never converted. `0` disables generated doors, leaving only vault-authored ones. Door tiles are the substrate the locked-door pass rolls `floorLoot.lockedDoorPercent` against, so raising this knob raises the expected locked-door count with it. |
+| `artifactOfferPercent` | integer 0-100 | Yes | Percent chance used by the legendary-artifact offer roll. The bundled value is `12`. |
 
 ```yaml
 generation:
   doorTilePercent: 35
+  artifactOfferPercent: 12
 ```
 
 The pass runs after the floor's topology and vaults are final and before any population or loot placement, and draws from a stream derived from the floor seed alone, so the seed fully determines which junctions carry doors. Door tiles are traversable-once-opened, so no setting of this knob can disconnect a floor or lengthen the required stair route.
@@ -207,7 +209,7 @@ pointBuy:
 ```
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: balance
     id: balance.core-gameplay
@@ -317,7 +319,7 @@ The `score` object supplies every coefficient used to compute a deterministic ru
 | `rarity` | enum | Yes | `common`, `uncommon`, `rare`, or `legendary`. |
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -472,8 +474,10 @@ Content schema version `8` added the `currency` item category (see `item.gold-co
 
 Content schema version `9` adds the required balance `generation` block with `doorTilePercent`, the knob the junction-door pass rolls. Migration from 8: bump every file's `schemaVersion` to 9 and add `generation: { doorTilePercent: 35 }` to the balance entry; no other field changes. Every bundled source file declares `schemaVersion: 9`, and the compiled pack hash covers the bumped envelope, so a pinned pack hash changes with this version even when no entry content changed.
 
+Content schema version `10` adds the optional item `artifact` block and the balance `generation.artifactOfferPercent` knob. Migration from 9: bump every file's `schemaVersion` to 10, add `artifact: null` to every existing item entry (the field is required-but-nullable, following the same convention as `light`), and add `artifactOfferPercent: 12` to the balance entry's `generation` block. An item's `artifact` block is only valid on a `rarity: legendary`, `stackLimit: 1`, `identification: { mode: known }` item that declares a signature spell, a combat block, or both, and at least one negative `drawbackModifiers` entry unless `artifact.light.inextinguishable` is true; a content ID carrying an `artifact` block can never appear in an ordinary loot-table choice, the same exclusion boss-unique items already have. Because an artifact is a singleton that has to survive its bearer, an artifact item must also be `heirloomEligible: true`, carry a non-null `equipment` block (the champion recovery path materializes the fallback relic otherwise), and take none of the routes out of circulation: no self-consuming effect (`effect.item.consume`, `effect.fuel.transfer`), and no consumption tag — an artifact's `tags` may not intersect any item's `light.fuelTags` (which would let it be burned as lamp fuel) nor contain `lockpick` (which the lock roll spends). An artifact item with a non-null `light` block must declare `artifact.light.fuelless: true`, so recovery can never degrade it over a fuel reserve.
+
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: encounter
     id: encounter.cave-rat-individuals
@@ -517,7 +521,7 @@ the entire pack.
 The Champion heirloom is selected once at the original death from unique equipped item instances only. Backpack items never qualify, and a multi-slot item is still one candidate. Better rarity and positive quality ranks raise its weight, but common equipment retains a non-zero chance. There is no minimum rarity and no reroll, so damaged, depleted, or mundane equipped gear remains possible. If nothing equipped is eligible, the fallback relic is recorded.
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: fallen-champion-template
     id: fallen-champion-template.core
@@ -558,12 +562,34 @@ entries:
 | `equipment` | object or null | Yes | Slots, handedness, and reserved slots. |
 | `combat` | object or null | Yes | Accuracy, defense, armor, optional damage dice, non-negative range, and optional ammunition tag. A non-null ammunition tag must match a tag on an ammunition item. |
 | `light` | object or null | Yes | RGB color, radius 1–32, strength 1–255, positive fuel capacity/use, descending unique warning thresholds no greater than capacity, and accepted fuel tags. |
+| `artifact` | object or null | Yes | Legendary-artifact definition, described below. Null for every ordinary item. |
 | `identification` | object | Yes | Mode `known`, `shuffled`, or `instance`, plus a separate identification-pool reference under the rules below. The item `name` is always its real, identified name. |
 | `effects` | effect array | Yes | Ordered primitive effects, possibly empty. |
 
 Equipment `slots` use `main-hand`, `off-hand`, `body`, `head`, `hands`, `feet`, `neck`, `left-ring`, or `right-ring`. Handedness is `one-handed`, `two-handed`, or `none`. Two-handed items use `main-hand` and reserve `off-hand`; a slot cannot also be reserved.
 
 Category compatibility is strict: weapons require equipment plus damage; armor and shields require equipment plus non-damaging combat values; light items require a `light` object; and ammunition cannot be equipped or emit light. `fuelTags` are matched against tags on fuel item definitions. An empty `fuelTags` list describes a non-refillable light.
+
+### The `artifact` block
+
+`artifact` marks an item as a legendary artifact. It is `null` on every non-artifact item.
+
+| Field | Type | Required | Rules and meaning |
+|---|---|---|---|
+| `canon` | `true` | Yes | Literal marker; the block is never authored with any other value. |
+| `signature` | object or null | Yes | A signature spell the artifact grants: `spellId` (must resolve to a `spell`), a positive `charges`, and a non-negative `rechargePerFloor` that cannot exceed `charges`. Null when the artifact grants no signature spell. |
+| `drawbackModifiers` | map of `DerivedStatName` to integer | Yes | Negative derived-stat penalties the artifact imposes while carried or equipped. Every key must be a registered derived-stat name and every value must be negative. May be empty only when `light.inextinguishable` is `true`. |
+| `light` | object or null | Yes | `fuelless` and `inextinguishable` booleans describing an artifact's light behavior. A non-null `artifact.light` requires the item's own `light` block to also be non-null. |
+
+An artifact item must additionally satisfy: `rarity: legendary`, `stackLimit: 1`, `identification: { mode: known }`, and at least one of `signature` or a non-null `combat` block (or both). A content ID carrying a non-null `artifact` block can never appear as a direct choice in a loot table -- the same exclusion already applied to guaranteed boss-unique items -- since artifacts are offered through the dedicated artifact-offer roll (`generation.artifactOfferPercent`) rather than ordinary loot placement.
+
+```yaml
+artifact:
+  canon: true
+  signature: { spellId: spell.cinder-breath, charges: 3, rechargePerFloor: 1 }
+  drawbackModifiers: { maxWeave: -10 }
+  light: null
+```
 
 Identification modes have distinct contracts:
 
@@ -574,7 +600,7 @@ Identification modes have distinct contracts:
 Items never contain their unidentified names. The generated mapping is saved with the run, so save/reload cannot reroll it, and a later run receives a new mapping. Items using the same pool must have the pool's category. The compiler requires at least as many unique verb–noun combinations as item definitions using the pool.
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: item
     id: item.brass-lantern
@@ -599,6 +625,7 @@ entries:
       fuelPerTime: 1
       warningThresholds: [600, 300, 100]
       fuelTags: [lamp-oil]
+    artifact: null
     identification: { mode: known, poolId: null }
     effects: []
 ```
@@ -610,7 +637,7 @@ Identification pools are normal content-pack entries and may be placed in any `.
 The pool's `name` is an administrator-facing label. It is not shown as an unidentified item name.
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: identification-pool
     id: identification-pool.potions
@@ -641,7 +668,7 @@ identification: { mode: shuffled, poolId: identification-pool.potions }
 | `effects` | non-empty effect array | Yes | Applied in listed order. |
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: spell
     id: spell.mend
@@ -669,7 +696,7 @@ entries:
 | `effects` | non-empty effect array | Yes | Ordered trigger effects. |
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: trap
     id: trap.poison-dart
@@ -712,7 +739,7 @@ Boss guaranteed-unique content is forbidden anywhere in an ordinary loot graph, 
 | `choices[].minDepth`, `choices[].maxDepth` | safe integers 0–999 | No | Optional per-choice depth band. Absent means unbanded: the choice is always available, matching prior behavior. When present, `0 <= minDepth <= maxDepth <= 999`; `minDepth` may be given alone to mean "available from this depth onward." Town merchant restocks use these bands to widen their stock at `balance.restockMilestones` so deeper runs surface new goods. Honoring the band during loot and stock rolls is engine work tracked separately from this content-layer authoring and validation. |
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: loot-table
     id: loot-table.basic-supplies
@@ -750,10 +777,12 @@ Terrain is `wall`, `floor`, `closed-door`, `pillar`, `stair-up`, `stair-down`, o
 
 A slot's `lootTableId` and `contentId` name what it can contain once placed. A `kind: item` or `kind: chest` slot must set exactly one of them (a loot table to roll from, or a single fixed item); every other slot kind must leave both `null`. Whichever is set must resolve to the matching content kind (`loot-table` or `item`).
 
+**The artifact-offer exception.** `artifact` is a reserved slot tag. A `kind: item` slot tagged `artifact` must set **neither** `lootTableId` nor `contentId`, and must be `required: false`. It holds the run's own legendary-artifact offer, drawn at run creation from the artifacts that player has not yet found, so there is nothing for an author to point at — and most runs carry no offer, which is why the slot has to be optional and generates empty. A run offers at most one artifact no matter how many such slots it meets. The tag is only meaningful on `kind: item`; on any other slot kind it is an ordinary descriptive tag and the usual both-`null` rule applies.
+
 A `kind: door` or `kind: chest` slot authors a locked feature and must set `difficulty` (a safe integer from `1` to `30`, the DC a lockpick check must meet or beat). A `kind: door` slot may also set `keyContentId`, naming an `item` that opens it without a check; every other slot kind must leave `difficulty` and `keyContentId` unset. A `chest` slot may not set `keyContentId` (chests take no keys).
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: vault
     id: vault.locked-cache
@@ -778,7 +807,7 @@ entries:
 ```
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: vault
     id: vault.small-cache
@@ -828,7 +857,7 @@ The bundled `content/vaults/town.yaml` is the complete copyable reference: a wal
 Replace and refresh produce one stack; intensify adds one up to the cap. Every reapplication refreshes source, application time, and deadline. Timed applications may omit duration to use the default or supply a positive override no greater than the maximum. Permanent conditions reject an override. Removal and expiration remove the complete condition instance.
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: condition
     id: condition.stunned
@@ -861,7 +890,7 @@ The `criteria.type` field is one of the four registered criteria types:
 | `complete-ending` | `ending` (`became-heart`, `refused`, or `broke-cycle`) | Grants when the run concludes with the matching ending. |
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: achievement
     id: achievement.defeated-the-deeps-champion
@@ -903,7 +932,7 @@ Each kit has a slug `kitId` unique within the class, a display `name`, an `equip
 | `backpack[].quantity` | positive safe integer | Defaults to `1` | Starting stack size. |
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: class
     id: class.wayfarer
@@ -946,7 +975,7 @@ entries:
 `background` and `trait` both carry a `modifiers` derived-stat integer map (non-zero safe-integer values, keys drawn from the same closed stat names as condition modifiers: `maxHealth`, `meleeAccuracy`, `meleeDamageBonus`, `rangedAccuracy`, `defense`, `search`, `disarm`). A `trait` must declare exactly one modifier key; a `background` may declare any number, including zero. A `background` additionally carries `extraItems`, an array of `{ contentId, quantity }` starting-inventory grants using the same shape as a class kit's `backpack`, each `contentId` resolving to an `item` entry.
 
 ```yaml
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: background
     id: background.caravan-guard
@@ -1042,4 +1071,4 @@ Never silently attach an active run to a different content hash. Keep old conten
 
 ## Complete examples
 
-Each content-kind section above contains a complete copyable `schemaVersion: 9` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.
+Each content-kind section above contains a complete copyable `schemaVersion: 10` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.

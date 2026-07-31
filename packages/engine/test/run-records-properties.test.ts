@@ -97,6 +97,7 @@ function blade(): ItemContentEntry {
       ammunitionTag: null,
     },
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };

@@ -6,10 +6,11 @@ const AIMED_TARGETING = new Set(['target.actor', 'target.burst', 'target.line', 
 
 /**
  * The aim-requiring spell an item casts when used, or `null` when using it needs no aim step.
- * A scroll carries a `spellId`; if that spell targets an actor or an area, using the scroll opens
- * the same free-cursor targeting mode as casting (see `useSpellTargeting.beginScroll`). Self-target
- * scrolls, potions, food, and tomes (which LEARN a spell via `effect.spell.learn` rather than cast
- * one) return `null` and stay fire-and-forget.
+ * A scroll carries a `spellId` and an artifact carries `artifact.signature.spellId`; if that spell
+ * targets an actor or an area, using the item opens the same free-cursor targeting mode as casting
+ * (see `useSpellTargeting.beginScroll`). Self-target scrolls, potions, food, tomes (which LEARN a
+ * spell via `effect.spell.learn` rather than cast one), and signature-less artifacts return `null`
+ * and stay fire-and-forget.
  */
 export function scrollAimSpell(
   pack: CompiledContentPack,
@@ -17,7 +18,7 @@ export function scrollAimSpell(
 ): Pick<CastableSpellView, 'spellId' | 'name' | 'range' | 'targetingId' | 'aoe'> | null {
   if (contentId === undefined) return null;
   const item = itemById(pack, contentId);
-  const spellId = item?.spellId;
+  const spellId = item?.artifact?.signature?.spellId ?? item?.spellId;
   if (typeof spellId !== 'string') return null;
   const spell = spellEntries(pack).find((entry) => entry.id === spellId);
   if (!spell || !AIMED_TARGETING.has(spell.targetingId)) return null;

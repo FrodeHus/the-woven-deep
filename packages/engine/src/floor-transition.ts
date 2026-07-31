@@ -1,6 +1,7 @@
 import type { CompiledContentPack, VaultContentEntry } from '@woven-deep/content';
 import type { DomainEvent, OpaqueId, Point } from './model.js';
 import { balanceEntry } from './actions.js';
+import { artifactById } from './commerce.js';
 import { heroActor, heroPerception } from './actor-model.js';
 import { FINAL_CHAMBER_DEPTH, generateFinalChamberFloor } from './final-chamber.js';
 import { depthFloorId } from './floor-id.js';
@@ -111,6 +112,37 @@ function applyMerchantRestocks(
 }
 
 /**
+ * Recharges every signature artifact the hero is carrying (backpack or equipment slot) by its
+ * `rechargePerFloor`, capped at the signature's own `charges` maximum. Deterministic and
+ * randomness-free, and silent: charges are projected instance state (`ItemView.charges`), and no
+ * existing item state change of this kind -- a light burning its fuel down, most directly -- narrates
+ * itself with an event either.
+ *
+ * Only ever called for a floor the run has never entered before. Re-entering a stored floor leaves
+ * charges exactly where they were, so walking a staircase back and forth can never refill a relic;
+ * the descent into new dark is what feeds it.
+ */
+function applySignatureRecharge(
+  input: Readonly<{ state: ActiveRun; content: CompiledContentPack }>,
+): ActiveRun {
+  const hero = heroActor(input.state);
+  const items = input.state.items.map((item) => {
+    if (
+      (item.location.type !== 'backpack' && item.location.type !== 'equipped') ||
+      item.location.actorId !== hero.actorId ||
+      item.charges === null
+    ) {
+      return item;
+    }
+    const signature = artifactById(input.content, item.contentId)?.signature ?? null;
+    if (signature === null || signature.rechargePerFloor === 0) return item;
+    const charges = Math.min(item.charges + signature.rechargePerFloor, signature.charges);
+    return charges === item.charges ? item : { ...item, charges };
+  });
+  return { ...input.state, items };
+}
+
+/**
  * Generates and enters the floor below the hero's current one. The hero must stand on the active
  * floor's stair-down tile; the run must not already be concluded. Mirrors `createNewRun`'s
  * floor-generation settings (same width/height/theme) so the whole run stays on one generation
@@ -188,7 +220,13 @@ export function descendToNextFloor(
       }).knowledge,
     };
     const withChamber = validateActiveRun(
-      recordFloorEntered({ ...moved, floors: [...moved.floors, litChamberFloor] }, nextDepth),
+      applySignatureRecharge({
+        state: recordFloorEntered(
+          { ...moved, floors: [...moved.floors, litChamberFloor] },
+          nextDepth,
+        ),
+        content: context.content,
+      }),
     );
     const restocked = applyMerchantRestocks({ state: withChamber, content: context.content });
     return { state: restocked.state, events: restocked.events };
@@ -234,7 +272,11 @@ export function descendToNextFloor(
   const integrated = integrateGeneratedFloor(moved, generated, allocation, {
     content: context.content,
   });
-  const restocked = applyMerchantRestocks({ state: integrated.state, content: context.content });
+  const recharged = applySignatureRecharge({
+    state: integrated.state,
+    content: context.content,
+  });
+  const restocked = applyMerchantRestocks({ state: recharged, content: context.content });
   return { state: restocked.state, events: [...integrated.events, ...restocked.events] };
 }
 

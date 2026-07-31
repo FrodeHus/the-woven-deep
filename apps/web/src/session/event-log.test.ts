@@ -11,6 +11,22 @@ describe('foldEventsIntoLog', () => {
     expect(log.map((line) => line.text)).toContain('You learn a new spell.');
   });
 
+  it('renders a refused inextinguishable-light line', () => {
+    const { log } = foldEventsIntoLog(
+      [],
+      [
+        {
+          type: 'action.invalid',
+          eventId: 'e1',
+          commandId: 'command.douse-grace',
+          reason: 'light.inextinguishable',
+        },
+      ],
+      0,
+    );
+    expect(log).toMatchObject([{ text: 'Its light will not be hidden.', tone: 'system' }]);
+  });
+
   it('renders a currency-collected line', () => {
     const { log } = foldEventsIntoLog(
       [],

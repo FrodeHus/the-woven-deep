@@ -47,6 +47,24 @@ const identification = z.strictObject({
   poolId: stableIdSchema.nullable(),
 });
 
+const artifactSignature = z.strictObject({
+  spellId: stableIdSchema,
+  charges: safePositive,
+  rechargePerFloor: safeNonNegative,
+});
+
+const artifactLight = z.strictObject({
+  fuelless: z.boolean(),
+  inextinguishable: z.boolean(),
+});
+
+const itemArtifact = z.strictObject({
+  canon: z.literal(true),
+  signature: artifactSignature.nullable(),
+  drawbackModifiers: z.record(z.string(), safeInteger),
+  light: artifactLight.nullable(),
+});
+
 export const itemEntry = z.strictObject({
   ...presented,
   ...depthRange,
@@ -61,6 +79,7 @@ export const itemEntry = z.strictObject({
   equipment: equipment.nullable(),
   combat: combat.nullable(),
   light: itemLight.nullable(),
+  artifact: itemArtifact.nullable(),
   identification,
   effects: z.array(effect),
 });

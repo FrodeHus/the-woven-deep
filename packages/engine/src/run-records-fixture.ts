@@ -567,7 +567,13 @@ export function resolveRunRecordsDemoCommand(
   };
 }
 
-/** Finalizes the concluded run through `finalizeRun` with a fresh in-memory repository lifetime. */
+/**
+ * Finalizes the concluded run through `finalizeRun` with a fresh in-memory repository lifetime.
+ *
+ * `finalizeRun` also returns `artifactDeltas`, which this fixture deliberately drops: the demo run
+ * holds no artifact, so the deltas are always empty, and the demo's hashed surface stays the pre-
+ * artifact one. A host must never drop them -- see `RunRecordRepository` for the applied ordering.
+ */
 export function finalizeRunRecordsDemo(
   state: ActiveRun,
   pack: CompiledContentPack,

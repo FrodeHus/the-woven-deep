@@ -460,7 +460,8 @@ export interface BossRewardCreatedEvent {
   readonly populationId: OpaqueId;
   readonly actorId: OpaqueId;
   readonly encounterId: OpaqueId;
-  readonly uniqueItemId: OpaqueId;
+  /** Null when the boss relic was withheld because it is no longer undiscovered. */
+  readonly uniqueItemId: OpaqueId | null;
   readonly itemIds: readonly OpaqueId[];
 }
 export interface ChampionDefeatedEvent {

@@ -185,6 +185,30 @@ function candidateCells(
   return cells;
 }
 
+/**
+ * The floor's open-cell placement envelope, in row-major order: walkable, off a protected stair
+ * route, clear of committed features and of every body (snapshot entities and living actors
+ * alike), outside every vault footprint, and at least the authored anchor distance from either
+ * stair.
+ *
+ * Exported so a pass that needs a cell but draws no loot -- champion placement on a floor whose
+ * vaults author no fallen-hero slot -- lands under exactly the constraints scatter piles and
+ * chests obey, by sharing the function rather than restating the rules.
+ */
+export function openPlacementCells(input: Readonly<PlaceFloorLootInput>): readonly Point[] {
+  const knobs = balanceEntry(input.content).floorLoot;
+  const occupied = new Set<number>([
+    ...featureIndexes(input.run, input.floor),
+    ...bodyIndexes(input.run, input.floor),
+  ]);
+  return candidateCells(
+    input,
+    knobs.minimumAnchorDistance,
+    protectedRouteIndexes(input.floor),
+    occupied,
+  );
+}
+
 function wallAdjacent(floor: FloorSnapshot, cell: Point): boolean {
   const neighbors: readonly Point[] = [
     { x: cell.x, y: cell.y - 1 },

@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, type JSX, type ReactNode } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
+import type { RunRecordRepository } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../session/guest-session.js';
 import type { RunSession } from '../session/run-session.js';
 import { resolveKeymap, type ResolvedKeymap, type Settings } from '../session/settings.js';
@@ -14,6 +15,7 @@ const SettingsContext = createContext<{
 const SessionContext = createContext<{ session: RunSession; snapshot: SessionSnapshot } | null>(
   null,
 );
+const RepositoryContext = createContext<RunRecordRepository | null>(null);
 
 export function usePack(): CompiledContentPack {
   const value = useContext(PackContext);
@@ -29,6 +31,16 @@ export function useSettingsCtx(): {
   const value = useContext(SettingsContext);
   if (!value) throw new Error('useSettingsCtx must be used within UiProviders');
   return value;
+}
+
+/**
+ * The profile's records repository, or `null` where none is mounted (the pre-boot tree, and every
+ * test that renders an overlay without one). Cross-run history -- the Hall records and the artifact
+ * ledger -- lives here rather than in a projection: the engine never holds the ledger, so an
+ * overlay that wants an artifact's provenance joins it client-side off this repository.
+ */
+export function useRecordsRepository(): RunRecordRepository | null {
+  return useContext(RepositoryContext);
 }
 
 export function useSessionCtx(): {
@@ -53,12 +65,16 @@ export function UiProviders({
   settings,
   onChangeSettings,
   session,
+  repository,
   children,
 }: Readonly<{
   pack: CompiledContentPack;
   settings: Settings;
   onChangeSettings: (next: Settings) => void;
   session?: RunSession | undefined;
+  /** Optional so every pre-existing caller/test keeps compiling: without one, `useRecordsRepository`
+   * yields `null` and the features that read cross-run history simply render nothing. */
+  repository?: RunRecordRepository | undefined;
   children: ReactNode;
 }>): JSX.Element {
   const settingsValue = useMemo(
@@ -68,7 +84,9 @@ export function UiProviders({
   const tree = session ? <SessionBridge session={session}>{children}</SessionBridge> : children;
   return (
     <PackContext.Provider value={pack}>
-      <SettingsContext.Provider value={settingsValue}>{tree}</SettingsContext.Provider>
+      <SettingsContext.Provider value={settingsValue}>
+        <RepositoryContext.Provider value={repository ?? null}>{tree}</RepositoryContext.Provider>
+      </SettingsContext.Provider>
     </PackContext.Provider>
   );
 }

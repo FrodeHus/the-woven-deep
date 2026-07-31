@@ -163,6 +163,40 @@ describe('survival clocks', () => {
     expect(result.state.items[0]?.fuel).toBe(12);
   });
 
+  it('never drains, warns about, or extinguishes a fuelless artifact light', () => {
+    const grace: ItemContentEntry = {
+      ...light(),
+      id: 'item.marias-grace',
+      name: "Maria's Grace",
+      rarity: 'legendary',
+      artifact: {
+        canon: true,
+        signature: null,
+        drawbackModifiers: {},
+        light: { fuelless: true, inextinguishable: true },
+      },
+    };
+    const base = fixture({ elapsed: 7, fuel: 20 });
+    const input = {
+      ...base,
+      content: { ...base.content, entries: [...base.content.entries, grace] },
+      state: {
+        ...base.state,
+        items: [{ ...base.state.items[0]!, contentId: grace.id }],
+      },
+    };
+    let state = input.state;
+    const events: { readonly type: string }[] = [];
+    for (let step = 0; step < 5; step += 1) {
+      const result = advanceSurvival({ ...input, state });
+      state = result.state;
+      events.push(...result.events);
+    }
+    expect(state.items[0]).toMatchObject({ fuel: 20, enabled: true });
+    expect(events.some((event) => event.type === 'fuel.warning')).toBe(false);
+    expect(events.some((event) => event.type === 'item.light-extinguished')).toBe(false);
+  });
+
   it('restores only effective food reserve at the maximum', () => {
     const input = fixture({ elapsed: 0, hunger: 95 });
     const result = resolveEffectSequence({
