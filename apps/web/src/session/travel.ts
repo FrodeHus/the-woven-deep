@@ -1,4 +1,11 @@
-import { findPath, type Direction, type GameplayProjection, type Point } from '@woven-deep/engine';
+import {
+  findPath,
+  type Direction,
+  type GameplayProjection,
+  type Point,
+  type PublicEvent,
+} from '@woven-deep/engine';
+import { groundItemUnderHero, type AutoPickupPolicy } from './auto-pickup.js';
 import type { PlayerIntent } from './intents.js';
 import { actorsOf, featuresOf, groundItemsOf, heroOf } from './projection-view.js';
 
@@ -15,7 +22,7 @@ import { actorsOf, featuresOf, groundItemsOf, heroOf } from './projection-view.j
  * only *potentially* traversable -- the path may end/step there, where the ordinary `move` intent
  * auto-opens it (see `command-builder.ts`), and the advance loop then stops because opening a door
  * does not move the hero onto it. Walls/pillars/void are never traversable. */
-const PASSABLE_TOKENS: ReadonlySet<string> = new Set([
+export const PASSABLE_TOKENS: ReadonlySet<string> = new Set([
   'terrain.floor',
   'terrain.stair',
   'terrain.door',
@@ -162,17 +169,28 @@ export function resolveClick(projection: GameplayProjection, cell: Point): Trave
   return { steps: path, onArrive: item ? 'pickup' : null };
 }
 
-/** A travel in flight: the plan plus the cursor into `steps`, the cell the last dispatched move is
- * expected to land the hero on (`awaiting`), and the baselines the interruption rules compare
- * against (hero health, and which hostiles were already visible when travel began). */
-export interface ActiveTravel {
-  readonly steps: readonly Point[];
-  readonly cursor: number;
-  readonly awaiting: Point | null;
-  readonly onArrive: 'pickup' | null;
-  readonly startHealth: number;
-  readonly startHostileIds: ReadonlySet<string>;
-}
+/** Which walk is in flight. `travel` is the click-to-travel walk (minimal interruptions, unchanged
+ * behavior); `explore` re-plans a frontier path every step; `stairs` walks a fixed path to a
+ * discovered stair. Explore and stairs share the classic stop set and auto-pickup. */
+export type TravelMode = 'travel' | 'explore' | 'stairs';
+
+/** Why an auto-walk stopped, in the player's terms -- the caller turns this into a log line. */
+export type StopReason =
+  | 'hero-damaged'
+  | 'hostile-appeared'
+  | 'item-spotted'
+  | 'stair-found'
+  | 'feature-revealed'
+  | 'hunger'
+  | 'light'
+  | 'sound'
+  | 'action-invalid';
+
+/** A pure interruption rule, evaluated against the latest authoritative projection and the events
+ * the most recent dispatch produced, BEFORE each step is taken. */
+export type StopPredicate = (
+  input: Readonly<{ projection: GameplayProjection; lastEvents: readonly PublicEvent[] }>,
+) => StopReason | null;
 
 function hostileActorIds(projection: GameplayProjection): ReadonlySet<string> {
   return new Set(
@@ -182,55 +200,216 @@ function hostileActorIds(projection: GameplayProjection): ReadonlySet<string> {
   );
 }
 
-export function beginTravel(projection: GameplayProjection, plan: TravelPlan): ActiveTravel {
+/**
+ * The two interruptions EVERY mode honors, baselined against the projection the walk began from:
+ * the hero lost health this turn, or a hostile that was not already visible has appeared. This is
+ * click-to-travel's complete stop set.
+ */
+export function baseStopPredicate(start: GameplayProjection): StopPredicate {
+  const startHealth = heroOf(start).health;
+  const startHostileIds = hostileActorIds(start);
+  return ({ projection }) => {
+    if (heroOf(projection).health < startHealth) return 'hero-damaged';
+    for (const id of hostileActorIds(projection)) {
+      if (!startHostileIds.has(id)) return 'hostile-appeared';
+    }
+    return null;
+  };
+}
+
+function discoveredStairKeys(projection: GameplayProjection): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const cell of projection.floor.cells) {
+    if (cell.knowledge !== 'unknown' && cell.token === 'terrain.stair')
+      keys.add(`${cell.x},${cell.y}`);
+  }
+  return keys;
+}
+
+function reasonForEvent(event: PublicEvent): StopReason | null {
+  switch (event.type) {
+    case 'feature.revealed':
+      return 'feature-revealed';
+    case 'hunger.stage-changed':
+      return 'hunger';
+    case 'fuel.warning':
+    case 'item.light-extinguished':
+      return 'light';
+    case 'sound.heard':
+      return 'sound';
+    case 'action.invalid':
+      return 'action-invalid';
+    default:
+      return null;
+  }
+}
+
+/**
+ * The classic roguelike stop set for auto-explore and stairs-travel: the base rules plus anything
+ * that changes what the player would want to do next -- a new item worth deciding about, a stair
+ * leaving the unknown, a revealed feature, worsening hunger, a failing light, a sound, or a
+ * rejected action. Items the `autoPickup` policy would sweep up never count as "new" (the walk
+ * takes them and carries on), which is what keeps gold from halting every explore.
+ *
+ * The modal condition from the design (`pendingDecision`/`trade`/`conclusion`/`houseOpen`) needs no
+ * rule here: `PlayScreen` already composes `isModalActive` and passes it as `useAutoTravel`'s
+ * `disabled`, which clears the walk outright.
+ *
+ * `offered` is the caller's own record of items it has already stopped for. The `start` baseline is
+ * a single walk's, and it is FOV-scoped -- an item that has left the hero's sight is absent from
+ * the next walk's baseline, so without a longer-lived record the same declined item halts every
+ * later leg that re-enters its room. `useAutoTravel` owns one per floor; items the policy sweeps up
+ * never enter it, since those were never offered.
+ */
+export function classicStopPredicate(
+  input: Readonly<{
+    start: GameplayProjection;
+    autoPickup: AutoPickupPolicy;
+    offered?: Set<string>;
+  }>,
+): StopPredicate {
+  const { start, autoPickup, offered } = input;
+  const base = baseStopPredicate(start);
+  const startItemIds = new Set(groundItemsOf(start).map((item) => item.itemId));
+  const startStairKeys = discoveredStairKeys(start);
+  return ({ projection, lastEvents }) => {
+    const baseReason = base({ projection, lastEvents });
+    if (baseReason !== null) return baseReason;
+    for (const item of groundItemsOf(projection)) {
+      if (startItemIds.has(item.itemId)) continue;
+      if (offered?.has(item.itemId) === true) continue;
+      if (autoPickup(projection, item)) continue;
+      offered?.add(item.itemId);
+      return 'item-spotted';
+    }
+    for (const key of discoveredStairKeys(projection)) {
+      if (!startStairKeys.has(key)) return 'stair-found';
+    }
+    for (const event of lastEvents) {
+      const reason = reasonForEvent(event);
+      if (reason !== null) return reason;
+    }
+    return null;
+  };
+}
+
+/** A travel in flight: the plan plus the cursor into `steps`, the cell the last dispatched move is
+ * expected to land the hero on (`awaiting`), the interruption rule, the optional per-step re-planner
+ * (explore), the optional auto-pickup policy, and `pendingPickup` -- the itemId of a pickup
+ * dispatched last turn, which tells the stepper the hero is NOT expected to have moved. */
+export interface ActiveTravel {
+  readonly steps: readonly Point[];
+  readonly cursor: number;
+  readonly awaiting: Point | null;
+  readonly onArrive: 'pickup' | null;
+  readonly mode: TravelMode;
+  readonly stopWhen: StopPredicate;
+  readonly replan: ((projection: GameplayProjection) => readonly Point[] | null) | null;
+  readonly autoPickup: AutoPickupPolicy | null;
+  readonly pendingPickup: string | null;
+}
+
+export interface BeginTravelOptions {
+  readonly mode?: TravelMode;
+  readonly stopWhen?: StopPredicate;
+  readonly autoPickup?: AutoPickupPolicy;
+  /** Explore's frontier planner, injected rather than imported so `travel.ts` never depends on
+   * `explore.ts` (which depends on `cellNavigability` here). */
+  readonly replan?: (projection: GameplayProjection) => readonly Point[] | null;
+}
+
+export function beginTravel(
+  projection: GameplayProjection,
+  plan: TravelPlan,
+  options: BeginTravelOptions = {},
+): ActiveTravel {
   return {
     steps: plan.steps,
     cursor: 0,
     awaiting: null,
     onArrive: plan.onArrive,
-    startHealth: heroOf(projection).health,
-    startHostileIds: hostileActorIds(projection),
+    mode: options.mode ?? 'travel',
+    stopWhen: options.stopWhen ?? baseStopPredicate(projection),
+    replan: options.replan ?? null,
+    autoPickup: options.autoPickup ?? null,
+    pendingPickup: null,
   };
 }
 
+/** What one call to `advanceTravel` did: dispatched an intent and handed back the next travel
+ * state; stopped for a reportable reason (or `'blocked'`, which is the silent "the projection did
+ * not confirm the step" case); or finished. */
+export type AdvanceOutcome =
+  | Readonly<{ status: 'stepping'; travel: ActiveTravel }>
+  | Readonly<{ status: 'stopped'; reason: StopReason | 'blocked' }>
+  | Readonly<{ status: 'arrived' }>;
+
 /**
  * Advances an in-flight travel by exactly one step against the latest authoritative `projection`,
- * dispatching at most one intent, and returns the next `ActiveTravel` -- or `null` when travel is
- * finished or must stop. It stays in sync with the engine by only ever advancing the cursor once the
- * projection confirms the previous move landed the hero on `awaiting`; if it did not (blocked, a
- * closed door that merely opened, or a hostile the move struck instead), travel stops. It also stops
- * on the grounded interruptions: the hero lost health this turn, or a hostile that was not already
- * visible when travel began has appeared.
+ * dispatching at most one intent. It stays in sync with the engine by only ever advancing the
+ * cursor once the projection confirms the previous move landed the hero on `awaiting` -- except
+ * after a pickup turn, where the hero is not expected to have moved at all and the cursor holds.
+ * If the pickup did not actually clear the item, the walk stops rather than dispatching it forever.
  */
 export function advanceTravel(
   input: Readonly<{
     projection: GameplayProjection;
     travel: ActiveTravel;
     dispatch: (intent: PlayerIntent) => void;
+    lastEvents?: readonly PublicEvent[];
   }>,
-): ActiveTravel | null {
-  const { projection, travel, dispatch } = input;
+): AdvanceOutcome {
+  const { projection, travel, dispatch, lastEvents = [] } = input;
   const hero = heroOf(projection);
 
   let cursor = travel.cursor;
-  if (travel.awaiting !== null) {
+  let desynced = false;
+  if (travel.pendingPickup !== null) {
+    const still = groundItemUnderHero(projection);
+    if (still?.itemId === travel.pendingPickup) desynced = true;
+  } else if (travel.awaiting !== null) {
     if (hero.x === travel.awaiting.x && hero.y === travel.awaiting.y) cursor += 1;
-    else return null;
+    else desynced = true;
   }
 
-  if (hero.health < travel.startHealth) return null;
-  for (const id of hostileActorIds(projection)) {
-    if (!travel.startHostileIds.has(id)) return null;
+  // The desync and the interruption are usually the SAME event seen from two sides: a refused move
+  // emits `action.invalid` and leaves the hero off `awaiting`; an ambush both damages the hero and
+  // costs the step. The stop rule is consulted first so the player is told what actually happened;
+  // `'blocked'` is only the fallback for a desync no rule can explain.
+  const stop = travel.stopWhen({ projection, lastEvents });
+  if (desynced) return { status: 'stopped', reason: stop ?? 'blocked' };
+  if (stop !== null) return { status: 'stopped', reason: stop };
+
+  if (travel.autoPickup !== null) {
+    const item = groundItemUnderHero(projection);
+    if (item && travel.autoPickup(projection, item)) {
+      dispatch({ type: 'pickup' });
+      return {
+        status: 'stepping',
+        travel: { ...travel, cursor, awaiting: null, pendingPickup: item.itemId },
+      };
+    }
   }
 
-  if (cursor >= travel.steps.length) {
+  let steps = travel.steps;
+  if (travel.replan !== null) {
+    const replanned = travel.replan(projection);
+    if (replanned === null || replanned.length === 0) return { status: 'arrived' };
+    steps = replanned;
+    cursor = 0;
+  }
+
+  if (cursor >= steps.length) {
     if (travel.onArrive === 'pickup') dispatch({ type: 'pickup' });
-    return null;
+    return { status: 'arrived' };
   }
 
-  const next = travel.steps[cursor]!;
+  const next = steps[cursor]!;
   const direction = directionBetween(hero, next);
-  if (direction === null) return null;
+  if (direction === null) return { status: 'stopped', reason: 'blocked' };
   dispatch({ type: 'move', direction });
-  return { ...travel, cursor, awaiting: next };
+  return {
+    status: 'stepping',
+    travel: { ...travel, steps, cursor, awaiting: next, pendingPickup: null },
+  };
 }

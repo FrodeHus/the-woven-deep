@@ -1,6 +1,7 @@
 import type { CSSProperties, JSX } from 'react';
-import type { ObservableCell } from '@woven-deep/engine';
+import type { ObservableCell, Point } from '@woven-deep/engine';
 import { heroOf } from '../../session/projection-view.js';
+import { PASSABLE_TOKENS } from '../../session/travel.js';
 import { visibleForeground } from '../cell-color.js';
 import { heroLightIsOut, type PanelProps } from './types.js';
 
@@ -27,22 +28,44 @@ function stairMarkerColor(cell: ObservableCell): string | undefined {
 function MinimapCell({
   cell,
   isHero,
-}: Readonly<{ cell: ObservableCell; isHero: boolean }>): JSX.Element {
+  onTravelTo,
+}: Readonly<{
+  cell: ObservableCell;
+  isHero: boolean;
+  onTravelTo?: ((cell: Point) => void) | undefined;
+}>): JSX.Element {
+  // A never-discovered cell renders nothing and takes no click: the minimap must never let a
+  // player travel somewhere the hero has not seen (the same rule `cellNavigability` enforces).
   if (cell.knowledge === 'unknown') return <span className="block bg-transparent" />;
-  if (isHero) return <span className="block bg-accent" />;
+
+  // Every discovered PASSABLE cell is clickable and routes through the SAME `autoTravel.travelTo`
+  // the iso canvas uses, so an unreachable cell is refused by `resolveClick` rather than by a
+  // second, divergent rule here. A discovered wall (or any other non-passable token) never gets the
+  // handler or the pointer cursor: `resolveClick` would refuse it anyway, but offering the pointer
+  // cursor there promises a walk that can never happen.
+  const passable = cell.token !== undefined && PASSABLE_TOKENS.has(cell.token);
+  const handler = passable ? onTravelTo : undefined;
+  const clickable = {
+    'data-cell': `${cell.x},${cell.y}`,
+    ...(handler ? { onClick: () => handler({ x: cell.x, y: cell.y }) } : {}),
+  } as const;
+  const cursor: CSSProperties = { cursor: handler ? 'pointer' : undefined };
+
+  if (isHero) return <span {...clickable} className="block bg-accent" style={cursor} />;
 
   const stair = stairMarkerColor(cell);
   if (stair !== undefined) {
     return (
       <span
+        {...clickable}
         data-testid={`minimap-stair-${cell.glyph === '>' ? 'down' : 'up'}`}
         className="block"
-        style={{ backgroundColor: stair }}
+        style={{ ...cursor, backgroundColor: stair }}
       />
     );
   }
 
-  const style: CSSProperties = {};
+  const style: CSSProperties = { ...cursor };
   if (cell.tint) {
     style.backgroundColor = visibleForeground(
       cell.tint,
@@ -50,7 +73,7 @@ function MinimapCell({
     );
   }
 
-  return <span className="block bg-muted" style={style} />;
+  return <span {...clickable} className="block bg-muted" style={style} />;
 }
 
 const MINIMAP_CELL = '3px';
@@ -68,7 +91,10 @@ const MINIMAP_CELL = '3px';
  * town fully lit from per-cell intensity regardless of a carried light, so dousing a torch there
  * must not blank the minimap out from under it.
  */
-export function MinimapPanel({ snapshot }: PanelProps): JSX.Element {
+export function MinimapPanel({
+  snapshot,
+  onTravelTo,
+}: PanelProps & Readonly<{ onTravelTo?: (cell: Point) => void }>): JSX.Element {
   const floor = snapshot.projection.floor;
   const hero = heroOf(snapshot.projection);
   const lightOut = !floor.town && heroLightIsOut(hero.equipment);
@@ -112,6 +138,7 @@ export function MinimapPanel({ snapshot }: PanelProps): JSX.Element {
             key={cell.index}
             cell={cell}
             isHero={cell.x === hero.x && cell.y === hero.y}
+            onTravelTo={onTravelTo}
           />
         ))}
       </div>

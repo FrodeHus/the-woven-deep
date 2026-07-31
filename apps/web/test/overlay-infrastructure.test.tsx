@@ -55,7 +55,7 @@ const OVERLAY_KEYS: Readonly<
   'character-sheet': { key: 'c', shift: false },
   'map-journal': { key: 'm', shift: false },
   codex: { key: 'x', shift: false },
-  settings: { key: 'o', shift: false },
+  settings: { key: 'O', shift: true },
   help: { key: '?', shift: true },
 };
 
@@ -222,6 +222,7 @@ describe('registry overlay infrastructure', () => {
         reducedMotion: 'on',
         theme: 'tapestry',
         onboarding: 'on',
+        autoPickupConsumables: true,
         bindings: {},
       };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
@@ -245,6 +246,7 @@ describe('registry overlay infrastructure', () => {
         reducedMotion: 'system',
         theme: 'tapestry',
         onboarding: 'on',
+        autoPickupConsumables: true,
         bindings: {},
       };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
@@ -265,6 +267,7 @@ describe('registry overlay infrastructure', () => {
         reducedMotion: 'system',
         theme: 'tapestry',
         onboarding: 'on',
+        autoPickupConsumables: true,
         bindings: {},
       };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
@@ -284,6 +287,7 @@ describe('registry overlay infrastructure', () => {
         reducedMotion: 'system',
         theme: 'high-contrast',
         onboarding: 'on',
+        autoPickupConsumables: true,
         bindings: {},
       };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });
@@ -303,6 +307,7 @@ describe('registry overlay infrastructure', () => {
         reducedMotion: 'off',
         theme: 'tapestry',
         onboarding: 'on',
+        autoPickupConsumables: true,
         bindings: {},
       };
       const localStorage = fakeStorage({ [SETTINGS_KEY]: JSON.stringify(settings) });

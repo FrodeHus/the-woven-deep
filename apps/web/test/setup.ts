@@ -110,6 +110,24 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
 
+// jsdom has no PointerEvent constructor. Base UI's `Switch` root synthesizes one (`new
+// PointerEvent('click', ...)`) on its hidden native input to keep the input and the visible
+// `role="switch"` element in sync on every click -- without this stand-in, clicking any Switch
+// (settings-overlay auto-pickup/onboarding toggles) throws "PointerEvent is not a constructor".
+if (typeof (globalThis as unknown as { PointerEvent?: unknown }).PointerEvent === 'undefined') {
+  class PointerEventPolyfill extends MouseEvent {
+    readonly pointerId: number;
+    readonly pointerType: string;
+    constructor(type: string, params: PointerEventInit = {}) {
+      super(type, params);
+      this.pointerId = params.pointerId ?? 0;
+      this.pointerType = params.pointerType ?? '';
+    }
+  }
+  (globalThis as unknown as { PointerEvent: typeof PointerEventPolyfill }).PointerEvent =
+    PointerEventPolyfill;
+}
+
 afterEach(() => {
   cleanup();
 });

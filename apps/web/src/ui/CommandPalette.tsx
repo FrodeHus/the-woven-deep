@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { ACTION_LABELS, chordKey, type ActionId } from '../session/settings.js';
 import type { PlayerIntent } from '../session/intents.js';
+import type { StairDirection } from '../session/stairs.js';
 import {
   Command,
   CommandEmpty,
@@ -28,15 +29,16 @@ const OVERLAY_ENTRIES: readonly OverlayId[] = [
 /** Static action -> intent map for every non-overlay verb the palette can dispatch. Deliberately
  * excludes every `move.*` action -- the palette is a discovery surface for VERBS, not a parallel
  * way to take a step (see the task brief). `house`/`trade` are further gated at render time by
- * `isTownContext`/`tradeAvailable`. */
+ * `isTownContext`/`tradeAvailable`. `descend`/`ascend` are excluded too: they route through
+ * `onTravelToStairs` below rather than a raw intent, so the palette entry behaves like the key
+ * (walk to a discovered stair, then descend/ascend) instead of dispatching an intent the engine
+ * rejects off-stair. */
 const INTENT_ENTRIES: Readonly<
-  Record<'wait' | 'rest' | 'pickup' | 'descend' | 'ascend' | 'house' | 'trade', PlayerIntent>
+  Record<'wait' | 'rest' | 'pickup' | 'house' | 'trade', PlayerIntent>
 > = {
   wait: { type: 'wait' },
   rest: { type: 'rest' },
   pickup: { type: 'pickup' },
-  descend: { type: 'descend' },
-  ascend: { type: 'ascend' },
   house: { type: 'house' },
   trade: { type: 'trade-open' },
 };
@@ -52,6 +54,13 @@ export interface CommandPaletteProps {
    * valid target is actually adjacent (see `dialogueTargetAvailable`, `projection-view.ts`). */
   readonly talkAvailable: boolean;
   readonly onCast: (spellId: string) => void;
+  /** Starts auto-explore -- the same `useAutoTravel` handler the `o` key reaches, so the palette
+   * stays a discovery surface over existing commands rather than a parallel path. */
+  readonly onStartExplore: () => void;
+  /** Descend/ascend -- the same `useAutoTravel.travelToStairs` handler the `>`/`<` keys reach:
+   * descend/ascend in place when already on the matching stair, otherwise walk to a discovered one
+   * first. Kept separate from `onStartExplore` because it's parameterized by direction. */
+  readonly onTravelToStairs: (direction: StairDirection) => void;
 }
 
 /**
@@ -68,6 +77,8 @@ export function CommandPalette({
   tradeAvailable,
   talkAvailable,
   onCast,
+  onStartExplore,
+  onTravelToStairs,
 }: Readonly<CommandPaletteProps>): JSX.Element {
   const sessionCtx = useSessionCtx();
   const { keymap } = useSettingsCtx();
@@ -92,6 +103,16 @@ export function CommandPalette({
     onOpenChange(false);
   };
 
+  const runExplore = (): void => {
+    onStartExplore();
+    onOpenChange(false);
+  };
+
+  const runStairs = (direction: StairDirection): void => {
+    onTravelToStairs(direction);
+    onOpenChange(false);
+  };
+
   // Same gating as the HUD Spells panel (Task 7): omit spells the hero can't afford rather than
   // rendering a disabled entry -- the palette has no built-in "disabled but visible" affordance
   // used elsewhere, so omission keeps this list consistent with a plain filterable action list.
@@ -109,7 +130,7 @@ export function CommandPalette({
       ? ACTION_LABELS.descend
       : `Return to depth ${returnAnchorDepth}`;
 
-  const intentActions: readonly (keyof typeof INTENT_ENTRIES)[] = [
+  const intentActions: readonly (keyof typeof INTENT_ENTRIES | 'descend' | 'ascend')[] = [
     'wait',
     'rest',
     'pickup',
@@ -158,15 +179,21 @@ export function CommandPalette({
               })}
             </CommandGroup>
             <CommandGroup heading="Actions">
+              <CommandItem value={ACTION_LABELS['auto-explore']} onSelect={runExplore}>
+                <span>{ACTION_LABELS['auto-explore']}</span>
+                {hint('auto-explore') && <CommandShortcut>{hint('auto-explore')}</CommandShortcut>}
+              </CommandItem>
               {intentActions.map((action) => {
                 const label = action === 'descend' ? descendLabel : ACTION_LABELS[action];
                 const shortcut = hint(action);
+                const onSelect =
+                  action === 'descend'
+                    ? () => runStairs('down')
+                    : action === 'ascend'
+                      ? () => runStairs('up')
+                      : () => runIntent(INTENT_ENTRIES[action]);
                 return (
-                  <CommandItem
-                    key={action}
-                    value={label}
-                    onSelect={() => runIntent(INTENT_ENTRIES[action])}
-                  >
+                  <CommandItem key={action} value={label} onSelect={onSelect}>
                     <span>{label}</span>
                     {shortcut && <CommandShortcut>{shortcut}</CommandShortcut>}
                   </CommandItem>

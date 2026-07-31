@@ -77,7 +77,8 @@ describe('routeKey', () => {
       type: 'pickup',
     });
     expect(routeKey({ event: keyEvent('>'), overlayOpen: false, keymap: defaultKeymap })).toEqual({
-      type: 'descend',
+      type: 'travel-to-stairs',
+      direction: 'down',
     });
     expect(routeKey({ event: keyEvent('i'), overlayOpen: false, keymap: defaultKeymap })).toEqual({
       type: 'open-overlay',
@@ -107,9 +108,10 @@ describe('routeKey', () => {
     });
   });
 
-  it('maps < to ascend and (Shift+)H to house -- bare "h" stays bound to west movement', () => {
+  it('maps < to ascend (via travel-to-stairs) and (Shift+)H to house -- bare "h" stays bound to west movement', () => {
     expect(routeKey({ event: keyEvent('<'), overlayOpen: false, keymap: defaultKeymap })).toEqual({
-      type: 'ascend',
+      type: 'travel-to-stairs',
+      direction: 'up',
     });
     expect(
       routeKey({
@@ -213,9 +215,13 @@ describe('routeKey', () => {
       expect(routeKey({ event: keyEvent('x'), overlayOpen: false, keymap: defaultKeymap })).toEqual(
         { type: 'open-overlay', overlay: 'codex' },
       );
-      expect(routeKey({ event: keyEvent('o'), overlayOpen: false, keymap: defaultKeymap })).toEqual(
-        { type: 'open-overlay', overlay: 'settings' },
-      );
+      expect(
+        routeKey({
+          event: keyEvent('O', { shiftKey: true }),
+          overlayOpen: false,
+          keymap: defaultKeymap,
+        }),
+      ).toEqual({ type: 'open-overlay', overlay: 'settings' });
       expect(
         routeKey({
           event: keyEvent('?', { shiftKey: true }),
@@ -226,11 +232,18 @@ describe('routeKey', () => {
     });
 
     it('blocks overlay-open keys while an overlay is already open', () => {
-      for (const key of ['c', 'm', 'x', 'o']) {
+      for (const key of ['c', 'm', 'x']) {
         expect(
           routeKey({ event: keyEvent(key), overlayOpen: true, keymap: defaultKeymap }),
         ).toBeNull();
       }
+      expect(
+        routeKey({
+          event: keyEvent('O', { shiftKey: true }),
+          overlayOpen: true,
+          keymap: defaultKeymap,
+        }),
+      ).toBeNull();
     });
   });
 
@@ -314,6 +327,46 @@ describe('routeKey', () => {
       });
     });
   });
+
+  describe('auto-explore and stairs travel', () => {
+    it('maps o to start-explore', () => {
+      expect(routeKey({ event: keyEvent('o'), overlayOpen: false, keymap: defaultKeymap })).toEqual(
+        { type: 'start-explore' },
+      );
+    });
+
+    it('maps > and < to travel-to-stairs rather than raw descend/ascend intents', () => {
+      expect(routeKey({ event: keyEvent('>'), overlayOpen: false, keymap: defaultKeymap })).toEqual(
+        { type: 'travel-to-stairs', direction: 'down' },
+      );
+      expect(routeKey({ event: keyEvent('<'), overlayOpen: false, keymap: defaultKeymap })).toEqual(
+        { type: 'travel-to-stairs', direction: 'up' },
+      );
+    });
+
+    it('routes a rebound auto-explore key and forwards both outcomes to their handlers', () => {
+      const handlers = {
+        dispatch: vi.fn(),
+        openOverlay: vi.fn(),
+        closeOverlay: vi.fn(),
+        dismissHint: vi.fn(),
+        useBeltSlot: vi.fn(),
+        startExplore: vi.fn(),
+        travelToStairs: vi.fn(),
+      };
+      const keymap = resolveKeymap({ 'auto-explore': { key: 'e', shift: false } });
+      const dispatcher = createKeyDispatcher(
+        handlers,
+        () => false,
+        () => keymap,
+      );
+      dispatcher(keyEvent('e'));
+      expect(handlers.startExplore).toHaveBeenCalledTimes(1);
+      dispatcher(keyEvent('>'));
+      expect(handlers.travelToStairs).toHaveBeenCalledWith('down');
+      expect(handlers.dispatch).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('createKeyDispatcher (repeat rate-limit guard)', () => {
@@ -328,6 +381,8 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
         closeOverlay: vi.fn(),
         dismissHint: vi.fn(),
         useBeltSlot: vi.fn(),
+        startExplore: vi.fn(),
+        travelToStairs: vi.fn(),
       },
       () => false,
       () => defaultKeymap,
@@ -363,6 +418,8 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
         closeOverlay: vi.fn(),
         dismissHint: vi.fn(),
         useBeltSlot: vi.fn(),
+        startExplore: vi.fn(),
+        travelToStairs: vi.fn(),
       },
       () => false,
       () => defaultKeymap,
@@ -382,7 +439,15 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const closeOverlay = vi.fn();
     let overlayOpen = false;
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay, closeOverlay, dismissHint: vi.fn(), useBeltSlot: vi.fn() },
+      {
+        dispatch,
+        openOverlay,
+        closeOverlay,
+        dismissHint: vi.fn(),
+        useBeltSlot: vi.fn(),
+        startExplore: vi.fn(),
+        travelToStairs: vi.fn(),
+      },
       () => overlayOpen,
       () => defaultKeymap,
     );
@@ -401,7 +466,15 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const dispatch = vi.fn();
     const openOverlay = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay, closeOverlay: vi.fn(), dismissHint: vi.fn(), useBeltSlot: vi.fn() },
+      {
+        dispatch,
+        openOverlay,
+        closeOverlay: vi.fn(),
+        dismissHint: vi.fn(),
+        useBeltSlot: vi.fn(),
+        startExplore: vi.fn(),
+        travelToStairs: vi.fn(),
+      },
       () => false,
       () => defaultKeymap,
     );
@@ -416,7 +489,15 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const dispatch = vi.fn();
     const dismissHint = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint, useBeltSlot: vi.fn() },
+      {
+        dispatch,
+        openOverlay: vi.fn(),
+        closeOverlay: vi.fn(),
+        dismissHint,
+        useBeltSlot: vi.fn(),
+        startExplore: vi.fn(),
+        travelToStairs: vi.fn(),
+      },
       () => false,
       () => defaultKeymap,
     );
@@ -430,7 +511,15 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const dispatch = vi.fn();
     const useBeltSlot = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint: vi.fn(), useBeltSlot },
+      {
+        dispatch,
+        openOverlay: vi.fn(),
+        closeOverlay: vi.fn(),
+        dismissHint: vi.fn(),
+        useBeltSlot,
+        startExplore: vi.fn(),
+        travelToStairs: vi.fn(),
+      },
       () => false,
       () => defaultKeymap,
     );
@@ -445,7 +534,15 @@ describe('createKeyDispatcher (repeat rate-limit guard)', () => {
     const dispatch = vi.fn();
     const useBeltSlot = vi.fn();
     const handler = createKeyDispatcher(
-      { dispatch, openOverlay: vi.fn(), closeOverlay: vi.fn(), dismissHint: vi.fn(), useBeltSlot },
+      {
+        dispatch,
+        openOverlay: vi.fn(),
+        closeOverlay: vi.fn(),
+        dismissHint: vi.fn(),
+        useBeltSlot,
+        startExplore: vi.fn(),
+        travelToStairs: vi.fn(),
+      },
       () => false,
       () => defaultKeymap,
     );

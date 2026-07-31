@@ -40,4 +40,8 @@ export interface RunSession {
    * `contentId` twice is a no-op the second time, with no duplicate log line. Both `GuestSession`
    * and `ProfileSession` implement this identically over their own held `Sightings`/log. */
   revealLore(contentId: string): void;
+  /** Appends a client-only system line to the same message log the engine's events fold into --
+   * how auto-explore reports why it stopped, or that there is nothing left to explore. Never a
+   * dispatch: no turn passes, no randomness is consumed. */
+  noteSystemLine(text: string): void;
 }

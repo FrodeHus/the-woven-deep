@@ -141,7 +141,7 @@ describe('settings roaming (Task 12)', () => {
     await waitFor(() => expect(puts).toHaveLength(1));
 
     const { fireEvent } = await import('@testing-library/react');
-    fireEvent.keyDown(window, { key: 'o' });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
     await screen.findByRole('dialog', { name: 'Settings' });
 
     // Fake timers only from here on -- opening the dialog above needed real timers/microtasks.
@@ -178,7 +178,7 @@ describe('settings roaming (Task 12)', () => {
     await screen.findByRole('img', { name: /dungeon/i });
 
     const { fireEvent } = await import('@testing-library/react');
-    fireEvent.keyDown(window, { key: 'o' });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
     await screen.findByRole('dialog', { name: 'Settings' });
     const user = userEvent.setup();
     await user.click(screen.getByRole('combobox', { name: /theme/i }));

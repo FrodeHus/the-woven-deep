@@ -87,7 +87,7 @@ describe('SettingsOverlay (component-level)', () => {
     expect(bindingRow('Move west')).toHaveTextContent('h');
     expect(bindingRow('Pick up')).toHaveTextContent('g');
     expect(bindingRow('Rest')).toHaveTextContent('Shift+R');
-    expect(bindingRow('Settings')).toHaveTextContent('o');
+    expect(bindingRow('Settings')).toHaveTextContent('Shift+O');
   });
 
   it('font scale: selecting a step calls onChange with the new fontScale, and the preview reflects it live', async () => {
@@ -225,6 +225,20 @@ describe('SettingsOverlay (component-level)', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ bindings: {} }));
   });
 
+  it('toggles auto-pickup for consumables', async () => {
+    const user = userEvent.setup();
+    const { onChange } = harness();
+    // `getByLabelText` is ambiguous here: Base UI's Switch wires the same label to both the
+    // visible `role="switch"` element and its hidden native checkbox input, so two elements
+    // share the accessible name -- target the switch role directly instead. Base UI's Switch
+    // handles pointer events internally (like the `Select` popups above), so `userEvent.click`
+    // is required -- a plain `fireEvent.click` throws (`PointerEvent is not a constructor`).
+    await user.click(screen.getByRole('switch', { name: /pick up food, potions/i }));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ autoPickupConsumables: false }),
+    );
+  });
+
   it('clear guest session requires the exact word before the button enables, then calls onClearGuestSession', async () => {
     const user = userEvent.setup();
     const { onClearGuestSession } = harness();
@@ -258,7 +272,7 @@ describe('SettingsOverlay composed with PlayScreen/App', () => {
   }
 
   async function openSettings(): Promise<void> {
-    fireEvent.keyDown(window, { key: 'o' });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
     await screen.findByRole('dialog', { name: 'Settings' });
   }
 

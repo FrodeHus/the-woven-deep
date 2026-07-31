@@ -1172,4 +1172,33 @@ describe('GuestSession', () => {
       expect(persisted.itemIds).toContain('item.hunting-bow');
     });
   });
+
+  describe('noteSystemLine (auto-explore stop reports)', () => {
+    it('appends a system-tone line, notifies subscribers, and never clears lastEvents', () => {
+      const storage = fakeStorage();
+      const session = new GuestSession({ pack, storage, seed: SEED });
+
+      // A resolved turn leaves `lastEvents` populated -- `ui/playfield/scene-state.ts` derives the
+      // hero hurt flash and the event particles from it. An auto-explore stop note is written a
+      // step-interval later, against that very snapshot, so it must not erase them.
+      session.dispatch({ type: 'wait' });
+      const events = session.getSnapshot().lastEvents;
+      expect(events.length).toBeGreaterThan(0);
+
+      let notified = 0;
+      session.subscribe(() => {
+        notified += 1;
+      });
+
+      session.noteSystemLine('You have explored this floor.');
+
+      const snapshot = session.getSnapshot();
+      expect(snapshot.log.at(-1)).toMatchObject({
+        text: 'You have explored this floor.',
+        tone: 'system',
+      });
+      expect(notified).toBe(1);
+      expect(snapshot.lastEvents).toEqual(events);
+    });
+  });
 });

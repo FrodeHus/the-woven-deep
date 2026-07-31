@@ -13,6 +13,9 @@ export type ActionId =
   | 'wait'
   | 'rest'
   | 'pickup'
+  // Walks the hero toward unexplored ground until something interesting happens -- a client-side
+  // convenience that replays ordinary `move`/`pickup` intents, never an engine command.
+  | 'auto-explore'
   | 'descend'
   | 'ascend'
   | 'inventory'
@@ -53,6 +56,10 @@ export interface Settings {
    * either way, since it lives in a separate localStorage key, not here. Forward-tolerant like
    * every other field on this type -- an unrecognized stored value falls back to `'on'`. */
   readonly onboarding: 'on' | 'off';
+  /** Whether auto-explore and stairs-travel sweep up food, potions, scrolls, ammunition and fuel
+   * along the way -- `true` by default. Gold is always collected regardless of this setting, and
+   * artifacts never are (see `session/auto-pickup.ts`). */
+  readonly autoPickupConsumables: boolean;
   /** Overrides only -- any `ActionId` absent here uses its `DEFAULT_BINDINGS` chord. */
   readonly bindings: Readonly<Partial<Record<ActionId, KeyChord>>>;
 }
@@ -64,6 +71,7 @@ export const DEFAULT_SETTINGS: Settings = {
   reducedMotion: 'system',
   theme: 'tapestry',
   onboarding: 'on',
+  autoPickupConsumables: true,
   bindings: {},
 };
 
@@ -75,6 +83,7 @@ export const ACTION_IDS: readonly ActionId[] = [
   'wait',
   'rest',
   'pickup',
+  'auto-explore',
   'descend',
   'ascend',
   'inventory',
@@ -111,8 +120,9 @@ export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
   wait: 'Wait',
   rest: 'Rest',
   pickup: 'Pick up',
-  descend: 'Descend',
-  ascend: 'Ascend',
+  'auto-explore': 'Auto-explore',
+  descend: 'Descend / go to down stairs',
+  ascend: 'Ascend / go to up stairs',
   inventory: 'Inventory',
   house: 'House/Town',
   trade: 'Trade',
@@ -132,7 +142,7 @@ export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
  * The shipped keymap. Movement defaults are the vi keys (arrows/numpad are separate, hardwired
  * synonyms baked into `KeyRouter.ts` -- they are never represented here and can never be
  * rebound away from movement). Every other default matches `KeyRouter.ts`'s `KEYMAP` exactly,
- * plus the six overlay-open keys (`c`/`m`/`v`/`x`/`o`/`Shift+?`).
+ * plus the six overlay-open keys (`c`/`m`/`v`/`x`/`Shift+O`/`Shift+?`).
  */
 export const DEFAULT_BINDINGS: Readonly<Record<ActionId, KeyChord>> = {
   'move.n': chord('k'),
@@ -146,6 +156,7 @@ export const DEFAULT_BINDINGS: Readonly<Record<ActionId, KeyChord>> = {
   wait: chord('.'),
   rest: chord('R', true),
   pickup: chord('g'),
+  'auto-explore': chord('o'),
   descend: chord('>'),
   ascend: chord('<'),
   inventory: chord('i'),
@@ -158,7 +169,7 @@ export const DEFAULT_BINDINGS: Readonly<Record<ActionId, KeyChord>> = {
   'map-journal': chord('m'),
   spellbook: chord('v'),
   codex: chord('x'),
-  settings: chord('o'),
+  settings: chord('O', true),
   help: chord('?', true),
   // Free (never hardwired, never used by any other default) -- see `chordReserved`.
   'dismiss-hint': chord("'"),
@@ -304,6 +315,10 @@ function parseSettingsJson(
   const onboarding = ONBOARDING_VALUES.includes(record.onboarding as Settings['onboarding'])
     ? (record.onboarding as Settings['onboarding'])
     : DEFAULT_SETTINGS.onboarding;
+  const autoPickupConsumables =
+    typeof record.autoPickupConsumables === 'boolean'
+      ? record.autoPickupConsumables
+      : DEFAULT_SETTINGS.autoPickupConsumables;
 
   const rawBindings =
     typeof record.bindings === 'object' && record.bindings !== null
@@ -330,7 +345,14 @@ function parseSettingsJson(
     accepted[actionId] = candidate;
   }
 
-  const settings: Settings = { fontScale, reducedMotion, theme, onboarding, bindings: accepted };
+  const settings: Settings = {
+    fontScale,
+    reducedMotion,
+    theme,
+    onboarding,
+    autoPickupConsumables,
+    bindings: accepted,
+  };
   return { settings, corrupted: false, droppedOverrides };
 }
 

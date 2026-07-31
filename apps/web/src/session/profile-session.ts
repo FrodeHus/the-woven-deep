@@ -362,6 +362,13 @@ export class ProfileSession implements RunSession {
     this.notify();
   }
 
+  /** Mirrors `GuestSession.noteSystemLine` -- see `RunSession.noteSystemLine`'s doc comment. */
+  noteSystemLine(text: string): void {
+    this.appendSystemLine(text);
+    this.snapshot = this.buildSnapshot();
+    this.notify();
+  }
+
   private noteOnboardingIntent(intentType: string): void {
     this.onboarding = recordIntent(this.onboarding, intentType);
     try {

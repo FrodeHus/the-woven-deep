@@ -177,6 +177,7 @@ describe('loadSettings / saveSettings round-trip', () => {
       reducedMotion: 'on',
       theme: 'high-contrast',
       onboarding: 'off',
+      autoPickupConsumables: false,
       bindings: { wait: { key: 'z', shift: false } },
     };
     expect(saveSettings(storage, settings)).toEqual({ ok: true });
@@ -327,6 +328,7 @@ describe('loadSettings / saveSettings round-trip', () => {
       reducedMotion: 'off',
       theme: 'tapestry',
       onboarding: 'on',
+      autoPickupConsumables: true,
       bindings: { wait: { key: 'z', shift: false } },
     });
   });
@@ -420,6 +422,24 @@ describe('loadSettings / saveSettings round-trip', () => {
     const result = loadSettings(storage);
     expect(result.droppedOverrides).toEqual(['wait']);
     expect(result.settings.bindings).toEqual({ pickup: { key: 'z', shift: false } });
+  });
+});
+
+describe('autoPickupConsumables', () => {
+  it('defaults to on when the stored blob predates the field', () => {
+    const storage = fakeStorage({
+      [SETTINGS_KEY]: JSON.stringify({ fontScale: 1, bindings: {} }),
+    });
+    expect(loadSettings(storage).settings.autoPickupConsumables).toBe(true);
+    expect(loadSettings(storage).corrupted).toBe(false);
+  });
+
+  it('round-trips an explicit off, and ignores a non-boolean', () => {
+    const storage = fakeStorage();
+    saveSettings(storage, { ...DEFAULT_SETTINGS, autoPickupConsumables: false });
+    expect(loadSettings(storage).settings.autoPickupConsumables).toBe(false);
+    storage.set(SETTINGS_KEY, JSON.stringify({ autoPickupConsumables: 'yes' }));
+    expect(loadSettings(storage).settings.autoPickupConsumables).toBe(true);
   });
 });
 

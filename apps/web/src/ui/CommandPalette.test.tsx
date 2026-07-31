@@ -69,6 +69,8 @@ function harness(
     onOpenChange?: (open: boolean) => void;
     onOpenOverlay?: (overlay: string) => void;
     onCast?: (spellId: string) => void;
+    onStartExplore?: () => void;
+    onTravelToStairs?: (direction: 'up' | 'down') => void;
     projection?: GameplayProjection;
   }> = {},
 ) {
@@ -76,6 +78,8 @@ function harness(
   const onOpenChange = overrides.onOpenChange ?? vi.fn();
   const onOpenOverlay = overrides.onOpenOverlay ?? vi.fn();
   const onCast = overrides.onCast ?? vi.fn();
+  const onStartExplore = overrides.onStartExplore ?? vi.fn();
+  const onTravelToStairs = overrides.onTravelToStairs ?? vi.fn();
   render(
     <UiProviders
       pack={pack}
@@ -91,10 +95,12 @@ function harness(
         tradeAvailable={overrides.tradeAvailable ?? false}
         talkAvailable={overrides.talkAvailable ?? false}
         onCast={onCast}
+        onStartExplore={onStartExplore}
+        onTravelToStairs={onTravelToStairs}
       />
     </UiProviders>,
   );
-  return { dispatch, onOpenChange, onOpenOverlay, onCast };
+  return { dispatch, onOpenChange, onOpenOverlay, onCast, onStartExplore, onTravelToStairs };
 }
 
 describe('CommandPalette', () => {
@@ -168,9 +174,9 @@ describe('CommandPalette', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('labels the descend entry "Descend" with no pending recall anchor', () => {
+  it('labels the descend entry "Descend / go to down stairs" with no pending recall anchor', () => {
     harness();
-    expect(screen.getByText('Descend')).toBeInTheDocument();
+    expect(screen.getByText('Descend / go to down stairs')).toBeInTheDocument();
   });
 
   it('relabels the descend entry "Return to depth N" when a recall anchor is set', () => {
@@ -180,7 +186,7 @@ describe('CommandPalette', () => {
     harness({ projection });
 
     expect(screen.getByText(`Return to depth ${anchor.depth}`)).toBeInTheDocument();
-    expect(screen.queryByText('Descend')).not.toBeInTheDocument();
+    expect(screen.queryByText('Descend / go to down stairs')).not.toBeInTheDocument();
   });
 
   it('omits the Cast entry when the hero cannot afford its Weave cost', () => {
@@ -196,5 +202,42 @@ describe('CommandPalette', () => {
     harness({ projection });
 
     expect(screen.queryByText('Cast: Ember bolt')).not.toBeInTheDocument();
+  });
+
+  it('typing "explore" and Enter starts auto-explore and closes the palette', async () => {
+    const user = userEvent.setup();
+    const { onStartExplore, onOpenChange, dispatch } = harness();
+
+    await user.type(screen.getByRole('combobox'), 'explore');
+    await user.keyboard('{Enter}');
+
+    expect(onStartExplore).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    // A discovery surface, not a parallel command path: no intent is dispatched for this entry.
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('selecting the descend entry calls onTravelToStairs("down") instead of dispatching the raw descend intent', async () => {
+    const user = userEvent.setup();
+    const { onTravelToStairs, onOpenChange, dispatch } = harness();
+
+    await user.type(screen.getByRole('combobox'), 'descend');
+    await user.keyboard('{Enter}');
+
+    expect(onTravelToStairs).toHaveBeenCalledWith('down');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('selecting the ascend entry calls onTravelToStairs("up") instead of dispatching the raw ascend intent', async () => {
+    const user = userEvent.setup();
+    const { onTravelToStairs, onOpenChange, dispatch } = harness();
+
+    await user.type(screen.getByRole('combobox'), 'ascend');
+    await user.keyboard('{Enter}');
+
+    expect(onTravelToStairs).toHaveBeenCalledWith('up');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

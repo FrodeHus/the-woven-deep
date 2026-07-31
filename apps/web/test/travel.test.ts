@@ -8,6 +8,7 @@ import {
   computeTravelPath,
   directionBetween,
   resolveClick,
+  type ActiveTravel,
   type TravelPlan,
 } from '../src/session/travel.js';
 import { buildIntent } from '@woven-deep/session-core';
@@ -271,13 +272,20 @@ describe('resolveClick', () => {
 });
 
 describe('advanceTravel', () => {
+  function stepping(outcome: ReturnType<typeof advanceTravel>): ActiveTravel {
+    expect(outcome.status).toBe('stepping');
+    return (outcome as { readonly travel: ActiveTravel }).travel;
+  }
+
   it('dispatches the first move toward the next step and awaits it', () => {
     const projection = makeProjection({ hero: { x: 5, y: 5 } });
     const dispatch = vi.fn<(intent: PlayerIntent) => void>();
     const plan: TravelPlan = { steps: [{ x: 6, y: 5 }], onArrive: null };
-    const next = advanceTravel({ projection, travel: beginTravel(projection, plan), dispatch });
+    const next = stepping(
+      advanceTravel({ projection, travel: beginTravel(projection, plan), dispatch }),
+    );
     expect(dispatch).toHaveBeenCalledExactlyOnceWith({ type: 'move', direction: 'east' });
-    expect(next?.awaiting).toEqual({ x: 6, y: 5 });
+    expect(next.awaiting).toEqual({ x: 6, y: 5 });
   });
 
   it('advances the cursor only once the projection confirms the hero reached the awaited cell', () => {
@@ -290,15 +298,15 @@ describe('advanceTravel', () => {
       ],
       onArrive: null,
     };
-    const afterFirst = advanceTravel({
-      projection: start,
-      travel: beginTravel(start, plan),
-      dispatch,
-    })!;
+    const afterFirst = stepping(
+      advanceTravel({ projection: start, travel: beginTravel(start, plan), dispatch }),
+    );
     const moved = makeProjection({ hero: { x: 6, y: 5 } });
-    const afterSecond = advanceTravel({ projection: moved, travel: afterFirst, dispatch });
+    const afterSecond = stepping(
+      advanceTravel({ projection: moved, travel: afterFirst, dispatch }),
+    );
     expect(dispatch).toHaveBeenNthCalledWith(2, { type: 'move', direction: 'east' });
-    expect(afterSecond?.awaiting).toEqual({ x: 7, y: 5 });
+    expect(afterSecond.awaiting).toEqual({ x: 7, y: 5 });
   });
 
   it('stops (returns null) when the awaited step did not move the hero (blocked)', () => {
@@ -311,14 +319,15 @@ describe('advanceTravel', () => {
       ],
       onArrive: null,
     };
-    const afterFirst = advanceTravel({
-      projection: start,
-      travel: beginTravel(start, plan),
-      dispatch,
-    })!;
+    const afterFirst = stepping(
+      advanceTravel({ projection: start, travel: beginTravel(start, plan), dispatch }),
+    );
     // Hero did NOT advance (e.g. a hostile struck, or a door merely opened).
     const stuck = makeProjection({ hero: { x: 5, y: 5 } });
-    expect(advanceTravel({ projection: stuck, travel: afterFirst, dispatch })).toBeNull();
+    expect(advanceTravel({ projection: stuck, travel: afterFirst, dispatch })).toEqual({
+      status: 'stopped',
+      reason: 'blocked',
+    });
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
@@ -332,13 +341,14 @@ describe('advanceTravel', () => {
       ],
       onArrive: null,
     };
-    const afterFirst = advanceTravel({
-      projection: start,
-      travel: beginTravel(start, plan),
-      dispatch,
-    })!;
+    const afterFirst = stepping(
+      advanceTravel({ projection: start, travel: beginTravel(start, plan), dispatch }),
+    );
     const hurt = makeProjection({ hero: { x: 6, y: 5, health: 7 } });
-    expect(advanceTravel({ projection: hurt, travel: afterFirst, dispatch })).toBeNull();
+    expect(advanceTravel({ projection: hurt, travel: afterFirst, dispatch })).toEqual({
+      status: 'stopped',
+      reason: 'hero-damaged',
+    });
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
@@ -352,16 +362,17 @@ describe('advanceTravel', () => {
       ],
       onArrive: null,
     };
-    const afterFirst = advanceTravel({
-      projection: start,
-      travel: beginTravel(start, plan),
-      dispatch,
-    })!;
+    const afterFirst = stepping(
+      advanceTravel({ projection: start, travel: beginTravel(start, plan), dispatch }),
+    );
     const ambush = makeProjection({
       hero: { x: 6, y: 5 },
       actors: [{ actorId: 'rat', x: 8, y: 5, disposition: 'hostile', health: 4 }],
     });
-    expect(advanceTravel({ projection: ambush, travel: afterFirst, dispatch })).toBeNull();
+    expect(advanceTravel({ projection: ambush, travel: afterFirst, dispatch })).toEqual({
+      status: 'stopped',
+      reason: 'hostile-appeared',
+    });
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
@@ -369,13 +380,13 @@ describe('advanceTravel', () => {
     const dispatch = vi.fn<(intent: PlayerIntent) => void>();
     const start = makeProjection({ hero: { x: 5, y: 5 } });
     const plan: TravelPlan = { steps: [{ x: 6, y: 5 }], onArrive: 'pickup' };
-    const afterFirst = advanceTravel({
-      projection: start,
-      travel: beginTravel(start, plan),
-      dispatch,
-    })!;
+    const afterFirst = stepping(
+      advanceTravel({ projection: start, travel: beginTravel(start, plan), dispatch }),
+    );
     const arrived = makeProjection({ hero: { x: 6, y: 5 } });
-    expect(advanceTravel({ projection: arrived, travel: afterFirst, dispatch })).toBeNull();
+    expect(advanceTravel({ projection: arrived, travel: afterFirst, dispatch })).toEqual({
+      status: 'arrived',
+    });
     expect(dispatch).toHaveBeenLastCalledWith({ type: 'pickup' });
   });
 });
