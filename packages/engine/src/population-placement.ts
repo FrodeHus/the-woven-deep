@@ -1066,6 +1066,11 @@ function floorMonsterTarget(
  * The placement-attempt ceiling for one floor. Bounds the monster-budget loop so a floor whose
  * encounters keep failing to fit (every attempt a `skipped`, contributing no monsters) still
  * terminates instead of spinning until the target is met.
+ *
+ * Not a purely theoretical guard: at the bundled deep density a real floor spends 5-14 of its 16
+ * attempts, so raising the per-thousand rates or thinning the deep encounter pool further can make
+ * this cap bind before the target is met -- which shows up as a quietly under-populated floor, not
+ * as an error. Retune `attemptCap` alongside `monstersPerThousandWalkable`.
  */
 function floorAttemptCap(attemptCap: number): number {
   if (!Number.isSafeInteger(attemptCap) || attemptCap <= 0) {

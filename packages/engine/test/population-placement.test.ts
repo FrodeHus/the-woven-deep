@@ -1130,6 +1130,28 @@ function openFloor(
   });
 }
 
+// The same footprint as `openFloor`, with a solid wall block filling the middle of the interior:
+// fewer walkable cells, identical `width * height`. The block leaves a wide open ring on all four
+// sides, so the stairs stay connected by many routes and placement candidates remain plentiful --
+// the only thing that differs from `openFloor` is how much open floor there is to budget against.
+function walledCoreFloor(
+  width: number,
+  height: number,
+  floorId: string,
+  depth: number,
+): FloorSnapshot {
+  const base = openFloor(width, height, floorId, depth);
+  const tiles = [...base.tiles];
+  const left = Math.floor(width / 4);
+  const right = width - left - 1;
+  const top = Math.floor(height / 4);
+  const bottom = height - top - 1;
+  for (let y = top; y <= bottom; y += 1) {
+    for (let x = left; x <= right; x += 1) tiles[y * width + x] = 0;
+  }
+  return { ...base, tiles: tiles as FloorSnapshot['tiles'] };
+}
+
 // A floor that is entirely wall except an L-shaped 1-wide corridor connecting its stairs and
 // exactly one dead-end branch cell off that corridor: the corridor itself is the sole route
 // between the stairs, so `placePopulation`'s route protection excludes every corridor cell from
@@ -1277,6 +1299,41 @@ describe('placeFloorPopulations (encounter density)', () => {
     expect(monstersPlacedBy(largeResult)).toBe(
       expectedTarget(openCellCount(large), MONSTERS_PER_THOUSAND.shallow),
     );
+  });
+
+  it('gives floors of equal width*height but different walkable counts different targets', () => {
+    // The discriminating case: identical footprints, so a budget keyed off `width * height` would
+    // give these two floors the same target. Only a walkable-keyed budget tells them apart.
+    const openEncounter = unlimitedIndividual('encounter.density-equal-area-open');
+    const walledEncounter = unlimitedIndividual('encounter.density-equal-area-walled');
+    const width = 40;
+    const height = 20;
+    const mostlyOpen = openFloor(width, height, 'floor.density-equal-area-open', 3);
+    const partlyWalled = walledCoreFloor(width, height, 'floor.density-equal-area-walled', 3);
+
+    expect(mostlyOpen.width * mostlyOpen.height).toBe(partlyWalled.width * partlyWalled.height);
+    const openCells = openCellCount(mostlyOpen);
+    const walledCells = openCellCount(partlyWalled);
+    expect(walledCells).toBeLessThan(openCells);
+
+    const openResult = placeFloorPopulations({
+      run: runFor([openEncounter]),
+      floor: mostlyOpen,
+      content: pack([openEncounter]),
+    });
+    const walledResult = placeFloorPopulations({
+      run: runFor([walledEncounter]),
+      floor: partlyWalled,
+      content: pack([walledEncounter]),
+    });
+
+    expect(monstersPlacedBy(openResult)).toBe(
+      expectedTarget(openCells, MONSTERS_PER_THOUSAND.shallow),
+    );
+    expect(monstersPlacedBy(walledResult)).toBe(
+      expectedTarget(walledCells, MONSTERS_PER_THOUSAND.shallow),
+    );
+    expect(monstersPlacedBy(walledResult)).toBeLessThan(monstersPlacedBy(openResult));
   });
 
   it('reaches the same target in fewer placements when encounters bring several monsters each', () => {
