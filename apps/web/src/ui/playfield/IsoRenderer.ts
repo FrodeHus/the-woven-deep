@@ -36,6 +36,14 @@ import {
 } from './light-layer.js';
 import { selectNewEffects, spawnForEffect, stepParticles, type Particle } from './particles.js';
 import {
+  stairGlowAlpha,
+  stairGlowsForFloor,
+  STAIR_DOWN_GLOW_COLOR,
+  STAIR_GLOW_RADIUS_TILES,
+  STAIR_UP_GLOW_COLOR,
+  type StairGlowSpec,
+} from './stair-glow.js';
+import {
   motionPosition,
   nextSceneState,
   type ActorSprite,
@@ -177,6 +185,12 @@ interface LightDisplay {
   readonly isHero: boolean;
 }
 
+/** A mounted stair glow: the additive pool sprite plus the pure spec driving its breathing. */
+interface StairGlowDisplay {
+  readonly sprite: Sprite;
+  readonly spec: StairGlowSpec;
+}
+
 /**
  * The PixiJS v8 isometric renderer. A thin composition root: every placement/skinning/fog decision
  * already lives in a tested pure module (`iso-math`, `tile-skinning`, `floor-bake`, `scene-state`,
@@ -235,6 +249,7 @@ export class IsoRenderer {
   private readonly fovOverpaint = new Graphics();
   private readonly lightMapSprite = new Sprite();
   private readonly overlayContainer = new Container();
+  private readonly stairGlowContainer = new Container();
   private readonly targetingGraphics = new Graphics();
   private readonly hoverGraphics = new Graphics();
   private readonly effectsContainer = new Container();
@@ -248,6 +263,7 @@ export class IsoRenderer {
    * `setSnapshot` before the feature/item/actor rebuilds that consume it. */
   private cellByKey = new Map<string, ObservableCell>();
   private lights: readonly LightDisplay[] = [];
+  private stairGlows: readonly StairGlowDisplay[] = [];
   private actorDisplays: readonly ActorDisplay[] = [];
   private itemDisplays: readonly ItemDisplay[] = [];
   private targeting: TargetingVisual | null = null;
@@ -391,6 +407,7 @@ export class IsoRenderer {
     this.rebuildGroundItems();
     this.rebuildActors();
     this.rebuildLights(floor.cells, hero);
+    this.rebuildStairGlows(floor.cells);
     this.rebuildFov(cells);
   }
 
@@ -528,7 +545,12 @@ export class IsoRenderer {
     // The hover cursor sits in the OVERLAY, above the baked floor/wall sprite and above the multiply
     // light-map, so a cell hidden behind a full-height wall cube still shows its outline glowing
     // through -- the whole point of a navigation cursor is that it reads where the floor does not.
+    // The stair glow rides in the overlay, ABOVE the multiply light-map, so a remembered stair keeps
+    // its ember instead of being crushed to the remembered gray -- the whole point is that a way out
+    // stays findable in a dim room. It is the overlay's backmost child, so the hover cursor and the
+    // targeting reticle always draw over it.
     this.overlayContainer.addChild(
+      this.stairGlowContainer,
       this.hoverGraphics,
       this.targetingGraphics,
       this.effectsContainer,
@@ -982,6 +1004,33 @@ export class IsoRenderer {
     this.lights = displays;
   }
 
+  /** Mounts one additive pool per discovered stair (`stairGlowsForFloor`), tinted warm for a way
+   * down and cool for a way up. Sized well under a light pool's reach so it reads as the stairwell
+   * breathing, not as a lamp standing on it. */
+  private rebuildStairGlows(cells: readonly ObservableCell[]): void {
+    this.stairGlowContainer.removeChildren().forEach((child) => child.destroy());
+    const gradient = this.gradientTexture;
+    if (gradient === null) {
+      this.stairGlows = [];
+      return;
+    }
+    const displays: StairGlowDisplay[] = [];
+    for (const spec of stairGlowsForFloor(cells)) {
+      const sprite = new Sprite(gradient);
+      sprite.anchor.set(0.5, 0.5);
+      sprite.blendMode = 'add';
+      sprite.tint = spec.direction === 'down' ? STAIR_DOWN_GLOW_COLOR : STAIR_UP_GLOW_COLOR;
+      const diameter = lightPoolDiameterPx(STAIR_GLOW_RADIUS_TILES) * BAKE_SCALE;
+      sprite.width = diameter;
+      sprite.height = diameter;
+      const [lx, ly] = this.isoLocal(spec.x, spec.y);
+      sprite.position.set(lx, ly);
+      this.stairGlowContainer.addChild(sprite);
+      displays.push({ sprite, spec });
+    }
+    this.stairGlows = displays;
+  }
+
   private rebuildFov(cells: readonly ObservableCell[]): void {
     const visible = this.fovGraphics;
     const masked = this.fovOverpaint;
@@ -1118,6 +1167,7 @@ export class IsoRenderer {
     this.updateActors(now);
     this.updateItems(scene, now);
     this.updateLights(now);
+    this.updateStairGlows(now);
     this.updateDarknessCover(app, baseX, baseY);
     this.renderLightMap(app);
     this.updateVignette(app);
@@ -1170,6 +1220,13 @@ export class IsoRenderer {
       }
       const flicker = 0.8 + 0.2 * Math.sin(now * FLICKER_SPEED + light.spec.flickerSeed);
       light.sprite.alpha = light.spec.intensity * flicker;
+    }
+  }
+
+  /** Breathes every mounted stair glow through `stairGlowAlpha`, each on its own seeded phase. */
+  private updateStairGlows(now: number): void {
+    for (const glow of this.stairGlows) {
+      glow.sprite.alpha = stairGlowAlpha(glow.spec.phase, now);
     }
   }
 

@@ -4,6 +4,7 @@ import type { RunSession } from '../../session/run-session.js';
 import { chordKey, type ResolvedKeymap } from '../../session/settings.js';
 import { isPotion } from '../overlays/inventory-model.js';
 import { Gauge } from './Gauge.js';
+import { ProvisionsMeter } from './ProvisionsMeter.js';
 import type { PanelProps } from './types.js';
 
 const BELT_SIZE = 4;
@@ -50,7 +51,8 @@ export interface ActionBarProps extends PanelProps {
 
 /**
  * The bottom-center HUD card: the hero's life-thread and weave dials flank a belt of up to four
- * potions and (when the hero knows any spells) a quick-cast button for the first one, with a
+ * potions and (when the hero knows any spells) a quick-cast button for the first one, with the quiet
+ * provisions column beside the weave dial and a
  * static control-hint line underneath built from the *resolved* keymap so a rebound chord shows
  * correctly. Purely a floating chrome card -- `PlayScreen` positions it as floating bottom-center
  * chrome; this component owns only its own card layout.
@@ -98,6 +100,7 @@ export function ActionBar({ snapshot, session, keymap, onBeginCast }: ActionBarP
         <p className="font-mono text-[0.625rem] text-subtle">{hint}</p>
       </div>
       <Gauge label="Weave" value={hero.weave} max={hero.maxWeave} tone="weave" />
+      <ProvisionsMeter stage={hero.hungerStage} />
     </div>
   );
 }
