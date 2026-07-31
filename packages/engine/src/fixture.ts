@@ -110,7 +110,10 @@ export function createDemoContentPack(): CompiledContentPack {
         },
         restockMilestones: [5, 10, 15, 20],
         house: { baseCapacity: 6, strongboxIncrement: 4 },
-        encounterDensity: { openCellsPerEncounter: 800 },
+        encounterDensity: {
+          monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 },
+          attemptCap: 16,
+        },
         fragmentSpawnRollDenominator: 40,
         generation: { doorTilePercent: 35, artifactOfferPercent: 12 },
         floorLoot: {

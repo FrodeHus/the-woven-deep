@@ -200,7 +200,7 @@ describe('bundled content', () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
-    expect(pack.schemaVersion).toBe(10);
+    expect(pack.schemaVersion).toBe(11);
     const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
     expect(entries.get('achievement.defeated-the-deeps-champion')).toMatchObject({
       kind: 'achievement',
@@ -231,7 +231,10 @@ describe('bundled content', () => {
       },
       restockMilestones: [5, 10, 15, 20],
       house: { baseCapacity: 6, strongboxIncrement: 4 },
-      encounterDensity: { openCellsPerEncounter: 800 },
+      encounterDensity: {
+        monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 },
+        attemptCap: 16,
+      },
     });
     expect(entries.get('monster.cave-rat')).toMatchObject({ threat: 1 });
     expect(entries.get('monster.training-beetle')).toMatchObject({ threat: 2 });
