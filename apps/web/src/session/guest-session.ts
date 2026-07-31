@@ -122,6 +122,9 @@ export class GuestSession implements RunSession {
    * these flags make that guarantee explicit rather than incidental. */
   private sightingsCorruptionNotified = false;
   private onboardingCorruptionNotified = false;
+  /** Set by `freshRun` when the guest's Hall could not seed this run (see its doc comment); read
+   * once by the constructor, after the boot notice is assigned, to surface the reset notice. */
+  private hallCorrupted = false;
 
   constructor(
     input: Readonly<{
@@ -162,6 +165,8 @@ export class GuestSession implements RunSession {
     // both are one-time facts about this construction, but losing device-persistent mastery
     // progress is the more actionable one to tell the guest about.
     if (onboardingLoad.corrupted) this.markOnboardingCorrupted();
+    // Same posture, one rung more urgent: this run is missing its whole cross-run history.
+    if (this.hallCorrupted) this.markHallCorrupted();
     // "Accumulates ... on boot restore" -- a restored (or freshly-created) run's initial
     // projection may already show visible actors/identified items (e.g. a save restored mid-fight),
     // so the cache must sync once here too, not only after a subsequent dispatch. Reveals are
@@ -221,17 +226,34 @@ export class GuestSession implements RunSession {
     return restored.revision + RECENT_COMMAND_LIMIT + 1;
   }
 
+  /**
+   * Creates the run this session plays, seeded from the guest's cross-run history.
+   *
+   * The provider is called HERE, not stored at construction: the guest's Hall changes within a
+   * page life (a finalize appends a record, the settings overlay can wipe the whole store), and
+   * the run started right after must see the Hall as it stands now.
+   *
+   * That Hall lives in browser storage the player can edit, and it survives reloads — so a
+   * malformed record (hand-edited, or written by a build whose record shape has since changed)
+   * would otherwise throw out of run creation and leave a blank app that reloading cannot fix.
+   * A history-rejecting failure therefore degrades to a history-free run on the SAME seed and
+   * announces itself through the usual dismissible `data-reset` notice. Only the two failure
+   * shapes corrupt history can produce are caught -- `SaveLoadError` (the run schema rejecting a
+   * standing) and `RangeError` (the standings/conquered-id invariants); anything else is an
+   * engine or content bug and still propagates.
+   */
   private freshRun(seed?: Uint32State): ActiveRun {
-    // The provider is called HERE, not stored at construction: the guest's Hall changes within a
-    // page life (a finalize appends a record, the settings overlay can wipe the whole store), and
-    // the run started right after must see the Hall as it stands now.
+    const runSeed = seed ?? randomSeed();
     const records = this.records?.();
-    return createNewRun({
-      pack: this.pack,
-      seed: seed ?? randomSeed(),
-      hero: this.hero,
-      ...(records === undefined ? {} : { records }),
-    });
+    if (records !== undefined) {
+      try {
+        return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero, records });
+      } catch (error) {
+        if (!(error instanceof SaveLoadError || error instanceof RangeError)) throw error;
+        this.hallCorrupted = true;
+      }
+    }
+    return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero });
   }
 
   private nextCommandId(): string {
@@ -466,6 +488,13 @@ export class GuestSession implements RunSession {
     this.sightingsCorruptionNotified = true;
     if (this.notice !== null && this.notice.kind === 'storage') return;
     this.notice = { kind: 'data-reset', source: 'sightings' };
+  }
+
+  /** Same posture as `markSightingsCorrupted` above, for a Hall of Records that could not seed
+   * this run -- the run is playable, but without its standings, champions, or artifact offer. */
+  private markHallCorrupted(): void {
+    if (this.notice !== null && this.notice.kind === 'storage') return;
+    this.notice = { kind: 'data-reset', source: 'hall' };
   }
 
   /** Same posture as `markSightingsCorrupted` above, for the onboarding mastery ledger. */

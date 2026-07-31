@@ -15,9 +15,12 @@ export function noticeMessage(notice: DismissibleNotice): string {
   if (notice.kind === 'fresh') return 'A new run has begun.';
   if (notice.kind === 'restored') return 'Welcome back — your run was restored.';
   if (notice.kind === 'data-reset') {
-    return notice.source === 'sightings'
-      ? 'Your discovery log was unreadable and has been reset.'
-      : 'Your guidance progress was unreadable and has been reset.';
+    if (notice.source === 'sightings')
+      return 'Your discovery log was unreadable and has been reset.';
+    if (notice.source === 'hall') {
+      return 'Your Hall of Records was unreadable, so this run begins without its history.';
+    }
+    return 'Your guidance progress was unreadable and has been reset.';
   }
   if (notice.kind === 'superseded') {
     return 'This run was opened elsewhere — this tab is now read-only.';

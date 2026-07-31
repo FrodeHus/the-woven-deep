@@ -6,6 +6,7 @@ import {
   normalizeStoredMetrics,
   reconcileArtifactLedger,
   standingsFromRecords,
+  MAX_STANDINGS,
   type AchievementGrant,
   type ArtifactDeltas,
   type ArtifactLedger,
@@ -16,10 +17,6 @@ import {
   type RunRecordRepository,
   type StoredHallRecord,
 } from '@woven-deep/engine';
-
-/** The Hall standings cap the engine's `standingsFromRecords` enforces; the server reconciles the
- * artifact ledger against the same window so an eviction here matches the engine reference. */
-const MAX_STANDINGS = 10;
 
 interface HallRecordRow {
   profile_id: string;

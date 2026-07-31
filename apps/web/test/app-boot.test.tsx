@@ -10,7 +10,9 @@ import {
   createNewRun,
   decodeActiveRun,
   DEFAULT_GUEST_HERO,
+  descendToNextFloor,
   encodeActiveRun,
+  finalizeRun,
   heroFromChoices,
   isHeartBossActive,
   projectGameplayState,
@@ -126,6 +128,64 @@ function deadRunSave(seed: Uint32State = SEED): string {
       finalized: false,
     },
   });
+}
+
+/** Appends one authentic Hall record — a run that really descended to depth 1 and died there,
+ * finalized through the engine — into `storage`'s guest Hall, and returns its record id. The Hall
+ * a quickstart boot then reads is the real persisted shape, not a hand-rolled blob. */
+function seedGuestHall(storage: SessionStorageLike): string {
+  const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+  const town = fresh.floors.find((floor) => floor.floorId === fresh.activeFloorId)!;
+  const heroInTown = fresh.actors.find((actor) => actor.playerControlled)!;
+  const descended = descendToNextFloor(
+    {
+      ...fresh,
+      actors: fresh.actors.map((actor) =>
+        actor.actorId === heroInTown.actorId
+          ? { ...actor, x: town.stairDown!.x, y: town.stairDown!.y }
+          : actor,
+      ),
+    },
+    { content: pack },
+  ).state;
+  const hero = descended.actors.find((actor) => actor.playerControlled)!;
+  const died: ActiveRun = {
+    ...descended,
+    actors: descended.actors.map((actor) =>
+      actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+    ),
+    conclusion: {
+      completionType: 'died',
+      cause: {
+        killerContentId: null,
+        depth: 1,
+        turn: descended.turn,
+        worldTime: descended.worldTime,
+      },
+      concludedAtRevision: descended.revision,
+      finalized: false,
+    },
+  };
+  const repository = createSessionRunRecordRepository(storage);
+  const finalized = finalizeRun({ run: died, content: pack, lifetime: repository.lifetime() });
+  repository.appendRecord({
+    ...finalized.record,
+    enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
+  });
+  repository.applyDeltas(finalized.deltas);
+  return finalized.record.recordId;
+}
+
+/** Corrupts the seeded Hall the way a hand-edited (or older-build) blob realistically would: a
+ * record whose heirloom snapshot is missing. The Hall's own load only checks the blob's outer
+ * shape, so this survives into `standings()` and is rejected by run creation instead. */
+function poisonGuestHall(storage: SessionStorageLike): void {
+  seedGuestHall(storage);
+  const blob = JSON.parse(storage.get(RECORDS_KEY)!) as {
+    records: { heirloom: unknown }[];
+  };
+  blob.records[0]!.heirloom = null;
+  storage.set(RECORDS_KEY, JSON.stringify(blob));
 }
 
 /** A fully in-memory `WebSocketLike` for the signed-in `ProfileSession` boot tests below --
@@ -282,6 +342,44 @@ describe('App boot flow', () => {
     await waitFor(() => expect(storage.peek()).not.toBeNull());
     const saved = decodeActiveRun(storage.peek()!);
     expect(saved.hero.name).toBe(DEFAULT_GUEST_HERO.name);
+  });
+
+  it('?quickstart=1 seeds the created run from the guest Hall (standings reach createNewRun)', async () => {
+    window.history.pushState({}, '', '/play?quickstart=1');
+    const storage = fakeStorage();
+    const recordId = seedGuestHall(storage);
+
+    render(<App fetcher={packFetcher()} storage={storage} />);
+    expect(await screen.findByRole('img', { name: /dungeon/i })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '.' });
+    await waitFor(() => expect(storage.peek()).not.toBeNull());
+    const saved = decodeActiveRun(storage.peek()!, pack);
+    // Without App passing its Hall repository into the session, this run would have no history
+    // at all -- these three are exactly what the wiring delivers.
+    expect(saved.fallenHeroStandings.map((standing) => standing.hallRecordId)).toEqual([recordId]);
+    expect(saved.fallenHeroDecisions[0]).toMatchObject({ role: 'champion', retained: true });
+    expect(saved.artifactsUndiscovered.length).toBeGreaterThan(0);
+  });
+
+  it('?quickstart=1 still boots a playable, history-free run (with a reset notice) when the guest Hall is too malformed to seed one', async () => {
+    window.history.pushState({}, '', '/play?quickstart=1');
+    const storage = fakeStorage();
+    poisonGuestHall(storage);
+
+    render(<App fetcher={packFetcher()} storage={storage} />);
+    // The app is alive and playable rather than blank -- the failure mode this guards is a throw
+    // out of run creation inside a React state update, which sessionStorage would survive.
+    expect(await screen.findByRole('img', { name: /dungeon/i })).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Hall of Records was unreadable, so this run begins without/i),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '.' });
+    await waitFor(() => expect(storage.peek()).not.toBeNull());
+    const saved = decodeActiveRun(storage.peek()!, pack);
+    expect(saved.fallenHeroStandings).toEqual([]);
+    expect(saved.fallenHeroDecisions).toEqual([]);
   });
 
   it('?quickstart=1&seed=11.22.33.44 is deterministic', async () => {

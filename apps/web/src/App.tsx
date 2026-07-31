@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
   heroFromChoices,
+  newRunRecords,
   type HeroChoices,
   type RunConclusionProjection,
   type RunRecordRepository,
@@ -15,7 +16,6 @@ import { GuestSession, type SessionNotice } from './session/guest-session.js';
 import { ProfileSession } from './session/profile-session.js';
 import type { RunSession } from './session/run-session.js';
 import { clearGuestSession } from './session/clear-guest-session.js';
-import { newRunRecords } from './session/run-records-storage.js';
 import { randomSeed } from './session/seed.js';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from './session/settings.js';
 import { useRunSession } from './session/store.js';

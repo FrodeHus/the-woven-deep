@@ -3,14 +3,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
-  artifactItemIds,
   createNewRun,
   decodeActiveRun,
   DEFAULT_GUEST_HERO,
   descendToNextFloor,
   emptyEquipment,
   encodeActiveRun,
-  undiscoveredArtifactIds,
+  newRunRecords,
   RECENT_COMMAND_LIMIT,
   type ActiveRun,
   type ActorState,
@@ -848,16 +847,10 @@ describe('GuestSession', () => {
       return decodeActiveRun(storage.peek()!, pack);
     }
 
-    /** Exactly what App.tsx hands the session: a thunk over the live Hall repository. */
+    /** Exactly what App.tsx hands the session: a thunk over the live Hall repository, through the
+     * one shared builder both hosts use. */
     function recordsThunk(repository: RunRecordRepository): () => NewRunRecordsInput {
-      return () => ({
-        standings: repository.standings(10),
-        undiscoveredArtifactIds: undiscoveredArtifactIds(
-          repository.artifactLedger(),
-          artifactItemIds(pack),
-        ),
-        conqueredChampionRecordIds: repository.lifetime().conqueredChampionRecordIds,
-      });
+      return () => newRunRecords(repository, pack);
     }
 
     it('carries the repository standings and undiscovered artifacts into a fresh run', () => {
@@ -882,7 +875,7 @@ describe('GuestSession', () => {
       expect(run.fallenHeroStandings.map((standing) => standing.hallRecordId)).toEqual([recordId]);
       expect(run.fallenHeroDecisions[0]).toMatchObject({ role: 'champion', retained: true });
       expect(run.artifactsUndiscovered).toEqual(
-        undiscoveredArtifactIds(repository.artifactLedger(), artifactItemIds(pack)),
+        newRunRecords(repository, pack).undiscoveredArtifactIds,
       );
       expect(session.getSnapshot().conclusion).toBeNull();
     });
@@ -909,6 +902,48 @@ describe('GuestSession', () => {
       expect(
         persistedRun(second, storage).fallenHeroStandings.map((standing) => standing.hallRecordId),
       ).toEqual([recordId]);
+    });
+
+    it('degrades to a history-free run with a data-reset notice when the Hall cannot seed one', () => {
+      const storage = fakeStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      storage.set(SAVE_KEY, encodeActiveRun(deadRunAtDepth1(SEED)));
+      new GuestSession({ pack, storage }).finalizeConcludedRun(repository, {
+        achievedAt: 'Run #1',
+        portraitGlyph: '@',
+      });
+      // A standing the run schema rejects — the shape a hand-edited or older-build Hall blob can
+      // realistically reach `createNewRun` with.
+      const poisoned = () => ({
+        ...newRunRecords(repository, pack),
+        standings: newRunRecords(repository, pack).standings.map((standing) => ({
+          ...standing,
+          heirloom: null as unknown as (typeof standing)['heirloom'],
+        })),
+      });
+
+      let session!: GuestSession;
+      expect(() => {
+        session = new GuestSession({
+          pack,
+          storage,
+          seed: SEED,
+          startFresh: true,
+          records: poisoned,
+        });
+      }).not.toThrow();
+
+      expect(session.getSnapshot().notice).toEqual({ kind: 'data-reset', source: 'hall' });
+      const run = persistedRun(session, storage);
+      expect(run.fallenHeroStandings).toEqual([]);
+      expect(run.fallenHeroDecisions).toEqual([]);
+      // Still a playable run on the requested seed, not a half-built one.
+      expect(run.runSeed).toEqual(SEED);
+      expect(encodeActiveRun(run)).toBe(
+        encodeActiveRun(
+          persistedRun(new GuestSession({ pack, storage, seed: SEED, startFresh: true }), storage),
+        ),
+      );
     });
 
     it('creates a history-free run when no records provider is supplied', () => {
