@@ -101,3 +101,18 @@ Vitest, following `apps/web/test/travel.test.ts` and `auto-travel.test.tsx` patt
 - Router: `o` starts explore; `>` on stairs descends, `>` elsewhere starts stairs-travel; rebinding works.
 - Minimap: click on a known cell starts travel; unknown cells inert.
 - Settings: parse round-trip with and without the new field.
+
+## Amendments (2026-07-31, during implementation)
+
+1. **`ActionId` naming and the `o` collision.** The spec asks for an `autoExplore` action defaulting to `o`, but `o` is already `settings`' default chord and every other multi-word `ActionId` in `settings.ts` is kebab-case. Resolution: the new id is `'auto-explore'` bound to `o`, and `settings` moves to `Shift+O`.
+2. **No new stairs `ActionId`s.** The spec asks for `travelDownStairs`/`travelUpStairs` defaulting to `>`/`<`, but `descend`/`ascend` already own those chords and `resolveKeymap`'s `byChord` map admits exactly one action per chord. Resolution: the existing `descend`/`ascend` actions are overloaded — `routeKey` returns `{ type: 'travel-to-stairs', direction }` for them and the handler picks descend-vs-travel from the live projection. One binding, one row in Help/Settings, the spec's overload rule preserved exactly.
+3. **Frontier excludes the hero's own cell.** A zero-length path cannot be walked and would spin the pacing loop, so `computeExplorePath` never targets the origin.
+4. **The new-item stop excludes auto-pickable items.** The spec says "excluding items auto-picked this run of explore"; implemented as "the item-spotted stop fires only for items the auto-pickup policy declines", which is the same rule stated causally instead of historically.
+5. **Auto-pickup runs in `explore` and `stairs` modes only.** Click-travel keeps today's behavior verbatim (minimal stop set, explicit on-arrival pickup) per the locked decision.
+6. **The modal stop condition needs no predicate.** `PlayScreen` already composes `isModalActive` and passes it as `useAutoTravel`'s `disabled`, which clears the walk — the spec's modal row is satisfied by existing code.
+
+Additional review-driven behavior changes, folded in during Task 9:
+
+7. **Desync stop reporting.** `advanceTravel` evaluates `stopWhen` on the desync path too, and prefers a real reason over `'blocked'` — `'blocked'` is only the fallback for a desync no rule can explain. This honors the spec's `action.invalid` row instead of masking a reportable stop behind the generic desync branch.
+8. **Offered-item set.** A per-floor set of already-reported item ids (`offeredItemIds` in `useAutoTravel`, threaded through `advanceTravel` as `offered`) prevents the item-spotted stop from re-firing when a later explore leg re-enters a room containing an item already reported this floor visit. Auto-picked items never enter the set, since they were never offered as a stop.
+9. **Non-clearing system note.** The guest and profile sessions gained `noteSystemLine`, which appends a client-only log line via `appendSystemNote` rather than `appendSystemLine`, so stop-reason lines from explore/stairs-travel do not blank the `lastEvents` (and therefore any pending damage/status effects) already shown in the log.
