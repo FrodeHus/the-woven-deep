@@ -17,7 +17,7 @@ entries:
       - "#######"
       - "+..O..#"
       - "#.m.n.#"
-      - "#..t..#"
+      - "#..t.r#"
       - "#O.i.O#"
       - "#..*.a#"
       - "#######"
@@ -47,6 +47,10 @@ entries:
       "i":
         terrain: floor
         slot: { id: deep-cache, kind: item, required: true, tags: [cache, deep], lootTableId: loot-table.echo-wrought }
+      # Names no loot source: the run's own artifact offer fills it, and most runs leave it empty.
+      "r":
+        terrain: floor
+        slot: { id: artifact-offer, kind: item, required: false, tags: [artifact, deep] }
       "a":
         terrain: floor
         slot: { id: fallen-hero-arena, kind: monster, required: false, tags: [side-arena, fallen-hero] }

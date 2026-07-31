@@ -17,6 +17,7 @@ import {
   normalizeFallenHero,
   retainEchoCandidates,
 } from './champion.js';
+import { bossUniqueDropId } from './commerce.js';
 import { createPopulationLoot, recordedHeirloomContentId } from './inventory.js';
 import { stableJson } from './stable-json.js';
 import { boundedDisplayText } from './display-text.js';
@@ -297,6 +298,9 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           );
         }
         const actor = actors.get(population.actorId)!;
+        // Replays the same discovery gate the drop used, so a run whose relic was withheld
+        // reconstructs a reward with no unique rather than failing the policy check.
+        const uniqueContentId = bossUniqueDropId(pack, run, encounter.definition.uniqueItemId);
         const { unique, receipt: expectedReceipt } = createPopulationLoot({
           content: pack,
           state: run,
@@ -306,20 +310,22 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           x: actor.x,
           y: actor.y,
           depth: floor.depth,
-          uniqueContentId: encounter.definition.uniqueItemId,
-          uniqueItemId: `${rewardPrefix}unique`,
+          uniqueContentId,
+          uniqueItemId: uniqueContentId === null ? null : `${rewardPrefix}unique`,
           lootState: population.rewardReceipt.lootStateBefore,
           dryRun: true,
         });
-        const guaranteed = run.items.filter((item) => item.itemId === unique!.itemId);
+        const guaranteed = run.items.filter((item) => item.itemId === `${rewardPrefix}unique`);
+        const expectedUniques = unique === null ? 0 : 1;
         if (
           stableJson(population.rewardReceipt) !== stableJson(expectedReceipt) ||
-          guaranteed.length !== 1 ||
-          guaranteed[0]!.contentId !== encounter.definition.uniqueItemId ||
-          guaranteed[0]!.quantity !== 1 ||
+          guaranteed.length !== expectedUniques ||
+          guaranteed.some(
+            (item) => item.contentId !== encounter.definition.uniqueItemId || item.quantity !== 1,
+          ) ||
           expectedReceipt.items.filter(
             (item) => item.contentId === encounter.definition.uniqueItemId,
-          ).length !== 1
+          ).length !== expectedUniques
         ) {
           throw new Error(
             `content-bound validation: boss reward ${population.populationId} does not match its deterministic policy`,

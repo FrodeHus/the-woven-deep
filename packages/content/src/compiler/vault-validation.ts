@@ -103,7 +103,23 @@ export function validateVaultEntry(
       const slotPath = `$.entries.${entry.id}.legend.${symbol}.slot`;
       if (slot.kind === 'item' || slot.kind === 'chest') {
         const setCount = Number(slot.lootTableId !== null) + Number(slot.contentId !== null);
-        if (setCount !== 1) {
+        // An `artifact`-tagged item slot names no loot source on purpose: what it holds is the
+        // run's own artifact offer, chosen at run creation from the player's undiscovered pool, so
+        // there is nothing for an author to point at. Every other item slot must still name
+        // exactly one source. Optional-only, because most runs carry no offer and the slot then
+        // generates empty.
+        const artifactOffer = slot.kind === 'item' && slot.tags.includes('artifact');
+        if (artifactOffer) {
+          if (setCount !== 0) {
+            add(
+              slotPath,
+              `artifact slot ${slot.id} must not set lootTableId or contentId; the run supplies the offer`,
+            );
+          }
+          if (slot.required) {
+            add(slotPath, `artifact slot ${slot.id} must be optional`);
+          }
+        } else if (setCount !== 1) {
           add(
             slotPath,
             `${slot.kind} slot ${slot.id} must set exactly one of lootTableId or contentId`,

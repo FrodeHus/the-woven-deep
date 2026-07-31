@@ -1060,3 +1060,106 @@ describe('boss recovery and defeat rewards', () => {
     expect(defeated).toEqual(before);
   });
 });
+
+describe('boss relic discovery gate', () => {
+  const ARTIFACT_ID = 'item.artifact-relic';
+
+  function artifactItem(): ItemContentEntry {
+    return {
+      ...item(ARTIFACT_ID),
+      stackLimit: 1,
+      artifact: {
+        canon: true,
+        signature: null,
+        drawbackModifiers: { defense: -1 },
+        light: null,
+      },
+    };
+  }
+
+  /**
+   * The boss fixture with its guaranteed unique replaced by an artifact, and the run's
+   * undiscovered pool under the test's control.
+   */
+  function relicFixture(undiscovered: readonly string[]) {
+    const base = fixture({ uniqueItemId: ARTIFACT_ID });
+    const content: CompiledContentPack = {
+      ...base.content,
+      entries: [...base.content.entries, artifactItem()],
+    };
+    const state: ActiveRun = {
+      ...base.state,
+      artifactsUndiscovered: [...undiscovered],
+      actors: base.state.actors.map((actor) =>
+        actor.actorId === 'actor.boss' ? { ...actor, health: 0 } : actor,
+      ),
+    };
+    return { state, content };
+  }
+
+  it('drops the relic while it is still undiscovered', () => {
+    const { state, content } = relicFixture([ARTIFACT_ID]);
+
+    const result = advanceBosses({ state, content, eventId: 'event.relic-undiscovered' });
+
+    expect(
+      result.state.items.filter((entry) => entry.itemId === 'item.reward.population.boss.unique'),
+    ).toEqual([expect.objectContaining({ contentId: ARTIFACT_ID, quantity: 1 })]);
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        type: 'boss.reward-created',
+        uniqueItemId: 'item.reward.population.boss.unique',
+      }),
+    );
+    expect(() => validateContentBoundRun(result.state, content)).not.toThrow();
+  });
+
+  it('withholds a relic that is no longer undiscovered without consuming extra randomness', () => {
+    const undiscovered = relicFixture([ARTIFACT_ID]);
+    const secured = relicFixture([]);
+
+    const dropped = advanceBosses({
+      state: undiscovered.state,
+      content: undiscovered.content,
+      eventId: 'event.relic-drop',
+    });
+    const withheld = advanceBosses({
+      state: secured.state,
+      content: secured.content,
+      eventId: 'event.relic-withheld',
+    });
+
+    expect(withheld.state.items.some((entry) => entry.contentId === ARTIFACT_ID)).toBe(false);
+    expect(
+      withheld.state.items.filter((entry) =>
+        entry.itemId.startsWith('item.reward.population.boss.loot'),
+      ).length,
+    ).toBe(2);
+    expect(withheld.events).toContainEqual(
+      expect.objectContaining({ type: 'boss.reward-created', uniqueItemId: null }),
+    );
+    // The unique costs no draws either way: the enhanced table lands on the same loot stream.
+    expect(withheld.state.rng.loot).toEqual(dropped.state.rng.loot);
+    expect(() => validateContentBoundRun(withheld.state, secured.content)).not.toThrow();
+    expect(() =>
+      validateContentBoundRun(decodeActiveRun(encodeActiveRun(withheld.state)), secured.content),
+    ).not.toThrow();
+  });
+
+  it('leaves a non-artifact unique reward untouched by the discovery pool', () => {
+    const base = fixture();
+    const state: ActiveRun = {
+      ...base.state,
+      artifactsUndiscovered: [],
+      actors: base.state.actors.map((actor) =>
+        actor.actorId === 'actor.boss' ? { ...actor, health: 0 } : actor,
+      ),
+    };
+
+    const result = advanceBosses({ state, content: base.content, eventId: 'event.plain-unique' });
+
+    expect(
+      result.state.items.filter((entry) => entry.itemId === 'item.reward.population.boss.unique'),
+    ).toEqual([expect.objectContaining({ contentId: 'item.unique' })]);
+  });
+});

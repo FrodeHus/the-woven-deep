@@ -195,6 +195,23 @@ export function artifactById(
   return entry?.artifact ?? null;
 }
 
+/**
+ * The content ID a defeated boss actually drops as its guaranteed unique, or `null` when the drop
+ * is withheld. A boss relic that is a legendary artifact is a singleton in circulation: it exists
+ * once per profile, so the boss may only mint it while it is still undiscovered. Once some hero
+ * has found it, the relic lives in the Hall's ledger -- carried, or waiting on the champion who
+ * died holding it -- and the boss drops its enhanced loot alone. Non-artifact uniques are never
+ * gated: they are per-run rewards, not circulating objects.
+ */
+export function bossUniqueDropId(
+  content: CompiledContentPack,
+  run: Readonly<{ artifactsUndiscovered: readonly OpaqueId[] }>,
+  uniqueItemId: OpaqueId,
+): OpaqueId | null {
+  if (!artifactItemIds(content).has(uniqueItemId)) return uniqueItemId;
+  return run.artifactsUndiscovered.includes(uniqueItemId) ? uniqueItemId : null;
+}
+
 export function merchantAcceptsItem(
   item: ItemInstance,
   definition: ItemContentEntry,

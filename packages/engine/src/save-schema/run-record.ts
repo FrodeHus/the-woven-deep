@@ -1234,10 +1234,18 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   for (const [populationIndex, populationValue] of run.populations.entries()) {
     if (populationValue.model === 'boss') {
       const uniqueRewardId = `item.reward.${populationValue.populationId}.unique`;
-      if (populationValue.rewardCreated && !items.has(uniqueRewardId)) {
+      // A boss relic that is an already-discovered legendary artifact is withheld, so the unique
+      // is not unconditionally present. Whether it exists is decided by the pack, which this
+      // content-free tier cannot read: the receipt is the run's own record of that decision, and
+      // items and receipt must agree in both directions. `content-bound-validation` then re-derives
+      // the receipt from the pack, so a receipt forged to omit the unique fails there.
+      const receiptHasUnique =
+        populationValue.rewardReceipt?.items.some((item) => item.itemId === uniqueRewardId) ??
+        false;
+      if (populationValue.rewardCreated && receiptHasUnique !== items.has(uniqueRewardId)) {
         fail(
           `populations.${populationIndex}.rewardCreated`,
-          'reward-created boss requires its guaranteed unique item',
+          'reward-created boss requires its guaranteed unique item exactly when its receipt lists one',
         );
       }
       if (
