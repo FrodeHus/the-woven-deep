@@ -12,7 +12,7 @@ import { preservesRequiredRoutes, protectedRouteIndexes, requiredPoints } from '
 import type { DungeonFeature } from './feature-model.js';
 import { heroHoldsFragment, tabletFragmentIds } from './final-chamber-fragments.js';
 import { createFloorItem, createFloorLootFromTable } from './inventory.js';
-import { placeFloorLoot } from './loot-placement.js';
+import { depthBandFor, placeFloorLoot } from './loot-placement.js';
 import type { ItemInstance } from './item-model.js';
 import { materializeMerchant } from './merchant-stock.js';
 import {
@@ -1025,35 +1025,53 @@ export function placePopulation(input: PlacePopulationInput): PopulationPlacemen
   };
 }
 
-const MINIMUM_FLOOR_POPULATION_ATTEMPTS = 1;
-const MAXIMUM_FLOOR_POPULATION_ATTEMPTS = 8;
+const MINIMUM_FLOOR_MONSTER_TARGET = 1;
+const WALKABLE_CELLS_PER_DENSITY_UNIT = 1000;
 
 /**
- * How many `placePopulation` attempts a floor gets, from its walkable (open) cell count and the
- * balance-defined encounter density: `floor(openCellCount / openCellsPerEncounter)`, clamped to
- * [1, 8]. Counting only walkable tiles (`tileDefinition(tile).walkable`) rather than raw
- * `width * height` keeps the budget proportional to the space encounters can actually occupy, so
- * two floors of equal footprint but different amounts of open floor get different budgets. Checked
- * integer division (floor of a non-negative integer quotient) -- never a float approximation.
+ * How many monsters a floor should hold, from its walkable (open) cell count and the balance-defined
+ * per-band density: `ceil(openCellCount * monstersPerThousandWalkable / 1000)`, floored at 1.
+ *
+ * The budget is denominated in monsters rather than in placement attempts because one attempt is
+ * not one monster: an `individual` encounter contributes one, a `group` contributes several, and a
+ * fixed attempt count therefore produced wildly different populations depending on which encounters
+ * happened to be drawn. Counting walkable tiles (`tileDefinition(tile).walkable`) rather than the
+ * raw `width * height` footprint keeps the budget proportional to the space encounters can actually
+ * occupy.
+ *
+ * Checked integer arithmetic throughout: the product is validated as a safe integer, and the
+ * division is a quotient/remainder ceiling -- never a float approximation.
  */
-function floorPopulationAttempts(
+function floorMonsterTarget(
   floor: Pick<FloorSnapshot, 'tiles'>,
-  openCellsPerEncounter: number,
+  monstersPerThousandWalkable: number,
 ): number {
-  if (!Number.isSafeInteger(openCellsPerEncounter) || openCellsPerEncounter <= 0) {
+  if (!Number.isSafeInteger(monstersPerThousandWalkable) || monstersPerThousandWalkable <= 0) {
     throw new RangeError(
-      'balance encounterDensity.openCellsPerEncounter must be a positive safe integer',
+      'balance encounterDensity.monstersPerThousandWalkable entries must be positive safe integers',
     );
   }
   let openCellCount = 0;
   for (const tile of floor.tiles) if (tileDefinition(tile).walkable) openCellCount += 1;
-  if (!Number.isSafeInteger(openCellCount))
-    throw new RangeError('floor open cell count overflow computing population attempts');
-  const raw = Math.floor(openCellCount / openCellsPerEncounter);
-  return Math.min(
-    MAXIMUM_FLOOR_POPULATION_ATTEMPTS,
-    Math.max(MINIMUM_FLOOR_POPULATION_ATTEMPTS, raw),
-  );
+  const product = openCellCount * monstersPerThousandWalkable;
+  if (!Number.isSafeInteger(product))
+    throw new RangeError('floor open cell count overflow computing the monster budget');
+  const quotient = Math.floor(product / WALKABLE_CELLS_PER_DENSITY_UNIT);
+  const remainder = product - quotient * WALKABLE_CELLS_PER_DENSITY_UNIT;
+  const target = remainder === 0 ? quotient : quotient + 1;
+  return Math.max(MINIMUM_FLOOR_MONSTER_TARGET, target);
+}
+
+/**
+ * The placement-attempt ceiling for one floor. Bounds the monster-budget loop so a floor whose
+ * encounters keep failing to fit (every attempt a `skipped`, contributing no monsters) still
+ * terminates instead of spinning until the target is met.
+ */
+function floorAttemptCap(attemptCap: number): number {
+  if (!Number.isSafeInteger(attemptCap) || attemptCap <= 0) {
+    throw new RangeError('balance encounterDensity.attemptCap must be a positive safe integer');
+  }
+  return attemptCap;
 }
 
 function sortByActorId(items: readonly ActorState[]): ActorState[] {
@@ -1153,12 +1171,24 @@ function applyPopulationPlacement(
 }
 
 /**
- * Fills a generated floor with encounters up to its density budget: repeatedly calls
+ * Fills a generated floor with encounters up to its **monster** budget: repeatedly calls
  * `placePopulation`, threading the RNG streams and encounter decisions from each attempt into the
  * next so every attempt sees the cells and populations the previous ones committed (distinct
- * populationIds, no double-booked cells). A `rejected` result (a required encounter with no legal
- * placement) stops the loop immediately -- the floor is full, and the caller decides whether that
- * means regenerating (as `generateFloor` does for its own guaranteed placements) or failing.
+ * populationIds, no double-booked cells), until one of four things happens:
+ *
+ * - the monsters placed by this loop reach the floor's target (`floorMonsterTarget` against the
+ *   depth band's `monstersPerThousandWalkable`) -- the ordinary exit;
+ * - `attemptCap` attempts are consumed -- the runaway guard, so a floor whose encounters keep
+ *   failing to fit terminates rather than spinning;
+ * - no encounter is eligible at all (`no-eligible-encounter`, which consumes no randomness and
+ *   cannot change on a later attempt, since eligibility only narrows as instances are created);
+ * - a `rejected` result (a required encounter with no legal placement) -- the floor is full, and
+ *   the caller decides whether that means regenerating (as `generateFloor` does for its own
+ *   guaranteed placements) or failing.
+ *
+ * An ordinary `skipped` placement (an optional encounter that found no legal cells) consumes an
+ * attempt but does **not** end the loop: the next attempt draws again and may well fit. Only the
+ * required-failure `rejected` status stops placement early.
  *
  * Before the weighted attempts, a guaranteed-boss pre-pass force-places any eligible `model:
  * 'boss'` encounter whose non-empty required vault tags (`requiredVaultTags` +
@@ -1170,10 +1200,10 @@ function applyPopulationPlacement(
  */
 export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulationsResult {
   const maps = contentMaps(input.content);
-  const attempts = floorPopulationAttempts(
-    input.floor,
-    maps.balance.encounterDensity.openCellsPerEncounter,
-  );
+  const density = maps.balance.encounterDensity;
+  const band = depthBandFor(input.floor.depth, maps.balance.floorLoot.depthBands);
+  const monsterTarget = floorMonsterTarget(input.floor, density.monstersPerThousandWalkable[band]);
+  const attemptCap = floorAttemptCap(density.attemptCap);
   const eventId = `event.${input.floor.floorId}.population`;
   let run = input.run;
   const placements: PopulationPlacementResult[] = [];
@@ -1215,7 +1245,11 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
     }
   }
 
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
+  // Monsters this loop placed. The guaranteed-boss pre-pass above is additive: its actors are on
+  // the floor but do not spend the weighted budget, so a milestone floor gets its boss *and* its
+  // full complement of ordinary encounters.
+  let placedMonsters = 0;
+  for (let attempt = 0; attempt < attemptCap && placedMonsters < monsterTarget; attempt += 1) {
     const placement = placePopulation({
       run,
       floor: input.floor,
@@ -1228,7 +1262,9 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
     placements.push(placement);
     const applied = applyPopulationPlacement(run, placement, events, eventId, input.floor.floorId);
     run = applied.run;
+    if (placement.status === 'placed') placedMonsters += placement.createdActors.length;
     if (applied.stop) break;
+    if (placement.status === 'skipped' && placement.reason === 'no-eligible-encounter') break;
   }
   // Every `loot-placement` draw for the floor happens here, after the placement attempts: a floor
   // where all encounters fail still fills its vault item slots, rolls its fragment spawn, and

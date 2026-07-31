@@ -116,7 +116,15 @@ describe('addGeneratedFloor', () => {
     expect(integrated.state.rng['merchant-stock']).not.toEqual(run.rng['merchant-stock']);
     expect(integrated.state.rng.combat).toEqual(run.rng.combat);
     expect(integrated.state.rng.loot).toEqual(run.rng.loot);
-    expect(integrated.events).toEqual([
+    // The floor's monster budget keeps drawing after the forced merchant, so the merchant's
+    // creation event is one of several -- what this case pins is that the merchant commits exactly
+    // once, atomically, with its actor, stock, and both owned streams.
+    expect(
+      integrated.events.filter(
+        (event) =>
+          event.type === 'population.created' && event.populationId === merchant.populationId,
+      ),
+    ).toEqual([
       expect.objectContaining({
         type: 'population.created',
         populationId: merchant.populationId,
@@ -249,18 +257,31 @@ describe('addGeneratedFloor', () => {
       content,
       forcedEncounterId: encounter.id,
     });
-    const population = integrated.state.populations[0]!;
-    expect(integrated.events).toEqual([
-      {
-        type: 'population.created',
-        eventId: 'event.floor.generated-01.population',
-        populationId: population.populationId,
-        encounterId: encounter.id,
-        floorId: population.floorId,
-        model: 'individual',
-        actorIds: population.livingMemberIds,
-      },
-    ]);
+    // Each committed placement emits exactly one `population.created` -- never a duplicate, and
+    // never one for a placement that did not commit. The floor's monster budget can take several
+    // placements to fill, so the assertion is one event per committed population rather than one
+    // event outright.
+    expect(integrated.events.map((event) => event.type)).toEqual(
+      integrated.state.populations.map(() => 'population.created'),
+    );
+    for (const population of integrated.state.populations) {
+      expect(
+        integrated.events.filter(
+          (event) =>
+            event.type === 'population.created' && event.populationId === population.populationId,
+        ),
+      ).toEqual([
+        {
+          type: 'population.created',
+          eventId: 'event.floor.generated-01.population',
+          populationId: population.populationId,
+          encounterId: encounter.id,
+          floorId: population.floorId,
+          model: 'individual',
+          actorIds: population.livingMemberIds,
+        },
+      ]);
+    }
     expect(
       projectDomainEvents({
         state: integrated.state,
@@ -310,7 +331,9 @@ describe('addGeneratedFloor', () => {
     expect(population.model).toBe('group');
     if (population.model !== 'group') throw new Error('expected group');
     expect(population.leaderActorId).not.toBeNull();
-    expect(integrated.events.map((event) => event.type)).toEqual([
+    // The first committed group emits its creation and leader events back to back; later
+    // placements from the same monster budget append their own pairs after them.
+    expect(integrated.events.slice(0, 2).map((event) => event.type)).toEqual([
       'population.created',
       'group.leader-created',
     ]);
@@ -355,15 +378,19 @@ describe('addGeneratedFloor', () => {
       forcedEncounterId: source.id,
     });
     expect(integrated.state.populations).toEqual([]);
-    expect(integrated.events).toEqual([
-      {
+    // An optional skip consumes an attempt but does not end the loop, so the impossible encounter
+    // is drawn and skipped once per attempt until the balance `attemptCap` stops it. Every event is
+    // the same skip diagnostic, and none of them publishes draft work.
+    expect(integrated.events.length).toBeGreaterThan(0);
+    expect(integrated.events).toEqual(
+      integrated.events.map(() => ({
         type: 'population.placement-skipped',
         eventId: 'event.floor.generated-01.population',
         encounterId: source.id,
         floorId: 'floor.generated-01',
         reason: 'no-valid-placement',
-      },
-    ]);
+      })),
+    );
     expect(
       projectDomainEvents({
         state: integrated.state,
@@ -426,9 +453,13 @@ describe('addGeneratedFloor', () => {
 
     expect(result.floors[1]!.entities).toHaveLength(0);
     expect(result.actors.filter((actor) => actor.populationId !== null).length).toBeGreaterThan(0);
-    expect(result.populations).toHaveLength(1);
-    expect(result.populations[0]!.floorId).toBe(generated.floor.floorId);
-    expect(result.encounterDecisions[0]!.instancesCreated).toBe(1);
+    // The floor's monster budget may take more than one placement to fill; every one of them
+    // commits onto the generated floor and is counted against the encounter's run instances.
+    expect(result.populations.length).toBeGreaterThan(0);
+    expect(result.populations.every((entry) => entry.floorId === generated.floor.floorId)).toBe(
+      true,
+    );
+    expect(result.encounterDecisions[0]!.instancesCreated).toBe(result.populations.length);
     expect(result.rng.generation).toEqual(allocation(run).nextGenerationState);
     expect(result.rng.encounters).not.toEqual(run.rng.encounters);
   });

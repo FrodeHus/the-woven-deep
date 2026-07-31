@@ -400,9 +400,15 @@ describe('advanceMerchantLifecycle', () => {
     expect(advanced.state.actors).not.toContainEqual(
       expect.objectContaining({ actorId: before.actorId }),
     );
-    expect(advanced.state.items.some((entry) => entry.location.type === 'merchant-stock')).toBe(
-      false,
-    );
+    // Scoped to the departing merchant: the floor's monster budget can seat a second travelling
+    // merchant (the encounter allows two per run), and that one keeps its stock.
+    expect(
+      advanced.state.items.some(
+        (entry) =>
+          entry.location.type === 'merchant-stock' &&
+          entry.location.populationId === population.populationId,
+      ),
+    ).toBe(false);
     const departed = merchantPopulation(advanced.state);
     expect(departed.lifecycle).toBe('departed');
     expect(departed.livingMemberIds).toEqual([]);
@@ -627,9 +633,15 @@ describe('world-step merchant deadlines', () => {
     const record = stepped.state.recentCommands.at(-1)!;
     expect(record.events.some((event) => event.type === 'merchant.departed')).toBe(true);
     expect(stepped.state.actors.some((actor) => actor.actorId === population.actorId)).toBe(false);
-    expect(stepped.state.items.some((entry) => entry.location.type === 'merchant-stock')).toBe(
-      false,
-    );
+    // Scoped to the merchant whose deadline passed; a second travelling merchant seated by the
+    // floor's monster budget keeps its own stock.
+    expect(
+      stepped.state.items.some(
+        (entry) =>
+          entry.location.type === 'merchant-stock' &&
+          entry.location.populationId === population.populationId,
+      ),
+    ).toBe(false);
     expect(merchantPopulation(stepped.state).lifecycle).toBe('departed');
     // The departed state satisfies every save invariant and survives a round trip.
     const restored = decodeActiveRun(encodeActiveRun(stepped.state));

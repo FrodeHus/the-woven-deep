@@ -1096,14 +1096,19 @@ describe('atomic population placement', () => {
   });
 });
 
-// `placeFloorPopulations` fills a floor up to its density budget: attempts =
-// clamp(floor(openCellCount / openCellsPerEncounter), 1, 8), where `openCellCount` counts only
-// walkable tiles (`tileDefinition(tile).walkable`), not the raw `width * height` footprint.
-// `createDemoContentPack`'s balance (via `pack`) carries the bundled `openCellsPerEncounter: 800`.
+// `placeFloorPopulations` fills a floor up to its *monster* budget: target =
+// max(1, ceil(openCellCount * monstersPerThousandWalkable[band] / 1000)), where `openCellCount`
+// counts only walkable tiles (`tileDefinition(tile).walkable`), not the raw `width * height`
+// footprint, and `band` comes from the floor's depth against `floorLoot.depthBands`. The loop runs
+// until that many monsters are placed, `attemptCap` attempts are consumed, no encounter is
+// eligible, or a required encounter is rejected. `createDemoContentPack`'s balance (via `pack`)
+// carries the bundled `monstersPerThousandWalkable: { shallow: 6, mid: 8, deep: 10 }`,
+// `attemptCap: 16`, and `depthBands: { shallowMaxDepth: 6, midMaxDepth: 13 }`.
 function openFloor(
   width: number,
   height: number,
   floorId = `floor.density-${width}x${height}`,
+  depth = 3,
 ): FloorSnapshot {
   const tiles = Array.from({ length: width * height }, (_, index) => {
     const x = index % width;
@@ -1117,6 +1122,7 @@ function openFloor(
     floorId,
     width,
     height,
+    depth,
     tiles,
     stairUp: { x: 1, y: 1 },
     stairDown: { x: width - 2, y: height - 2 },
@@ -1152,69 +1158,52 @@ function corridorWithOneBranchFloor(
   });
 }
 
-// The number of walkable tiles on a floor -- the same count `floorPopulationAttempts` budgets
-// against.
+// The number of walkable tiles on a floor -- the same count `floorMonsterTarget` budgets against.
 function openCellCount(target: FloorSnapshot): number {
   return target.tiles.filter((tile) => tileDefinition(tile).walkable).length;
 }
 
-// clamp(floor(open / 800), 1, 8) -- mirrors `floorPopulationAttempts`'s formula so the test
-// derives its expectation from the fixture rather than a hand-computed constant.
-function expectedAttempts(open: number): number {
-  return Math.min(8, Math.max(1, Math.floor(open / 800)));
+// The bundled balance knobs the demo pack carries, restated so each expectation is derived from the
+// fixture's own walkable-cell count rather than a hand-computed constant.
+const MONSTERS_PER_THOUSAND = { shallow: 6, mid: 8, deep: 10 } as const;
+const ATTEMPT_CAP = 16;
+
+// max(1, ceil(open * perThousand / 1000)) -- mirrors `floorMonsterTarget`'s checked integer
+// arithmetic (quotient + remainder, never a float).
+function expectedTarget(open: number, perThousand: number): number {
+  const product = open * perThousand;
+  const quotient = Math.floor(product / 1000);
+  return Math.max(1, product % 1000 === 0 ? quotient : quotient + 1);
 }
 
-// Counts exact attempts regardless of a floor's placement legality: the encounter is already at
-// its instance cap, so every attempt is a cheap "no-eligible-encounter" skip and the loop always
-// runs its full budget.
-function attemptsFor(target: FloorSnapshot, encounterId: string): number {
-  const encounter = individual(encounterId, { maximumInstancesPerRun: 1 });
-  const run: ActiveRun = {
-    ...runFor([encounter]),
-    encounterDecisions: [
-      {
-        encounterId: encounter.id,
-        baseProbability: 1,
-        protectionBonus: 0,
-        effectiveProbability: 1,
-        eligible: true,
-        reachedEligibleDepth: false,
-        encountered: false,
-        instancesCreated: 1,
-      },
-    ],
-  };
-  const result = placeFloorPopulations({ run, floor: target, content: pack([encounter]) });
-  expect(
-    result.placements.every(
-      (entry) => entry.status === 'skipped' && entry.reason === 'no-eligible-encounter',
-    ),
-  ).toBe(true);
-  return result.placements.length;
+// Monsters this floor's density loop actually placed -- the quantity the budget is denominated in.
+function monstersPlacedBy(result: ReturnType<typeof placeFloorPopulations>): number {
+  return result.placements.reduce(
+    (total, entry) => (entry.status === 'placed' ? total + entry.createdActors.length : total),
+    0,
+  );
+}
+
+// A one-monster-per-placement encounter with headroom well past any target these fixtures produce,
+// so the instance cap never masks the budget under test.
+function unlimitedIndividual(id: string): EncounterContentEntry {
+  return individual(id, { maximumInstancesPerRun: 64 });
 }
 
 describe('placeFloorPopulations (encounter density)', () => {
-  it('scales an 80x25 floor to its open-cell budget', () => {
-    const target = openFloor(80, 25);
-    const open = openCellCount(target);
-
-    const attempts = attemptsFor(target, 'encounter.density-80x25');
-
-    expect(attempts).toBe(expectedAttempts(open));
-  });
-
-  it('places one population per attempt on a 160x50 floor, all threaded onto the same run', () => {
-    const encounter = individual('encounter.density-160x50', { maximumInstancesPerRun: 8 });
-    const run = runFor([encounter]);
-    const target = openFloor(160, 50);
-    const expected = expectedAttempts(openCellCount(target));
+  it('fills a shallow floor to its monsters-per-thousand-walkable target', () => {
+    const encounter = unlimitedIndividual('encounter.density-shallow');
+    const target = openFloor(40, 20, 'floor.density-shallow', 3);
+    const expected = expectedTarget(openCellCount(target), MONSTERS_PER_THOUSAND.shallow);
 
     const result = placeFloorPopulations({
-      run,
+      run: runFor([encounter]),
       floor: target,
       content: pack([encounter]),
     });
 
+    // Every placement is a single-monster `individual`, so the loop lands exactly on the target.
+    expect(monstersPlacedBy(result)).toBe(expected);
     expect(result.placements).toHaveLength(expected);
     expect(result.placements.every((entry) => entry.status === 'placed')).toBe(true);
     // Distinct populationIds, all threaded onto the same run.
@@ -1222,53 +1211,223 @@ describe('placeFloorPopulations (encounter density)', () => {
       result.state.populations.map((population) => population.populationId),
     );
     expect(populationIds.size).toBe(expected);
-    expect(result.state.actors.filter((actor) => actor.populationId !== null)).toHaveLength(
-      expected,
+  });
+
+  it('raises the target in the mid and deep bands on an identical floor', () => {
+    const shallowEncounter = unlimitedIndividual('encounter.density-band-shallow');
+    const midEncounter = unlimitedIndividual('encounter.density-band-mid');
+    // The deep-band floor sits at depth 14, so its encounter needs a matching depth range.
+    const deepEncounter = individual('encounter.density-band-deep', {
+      maximumInstancesPerRun: 64,
+      maxDepth: 20,
+    });
+    // `floorLoot.depthBands` is { shallowMaxDepth: 6, midMaxDepth: 13 }: depths 3 / 7 / 14 sit one
+    // in each band, on floors with an identical walkable-cell count.
+    const shallowFloor = openFloor(40, 20, 'floor.band-shallow', 3);
+    const midFloor = openFloor(40, 20, 'floor.band-mid', 7);
+    const deepFloor = openFloor(40, 20, 'floor.band-deep', 14);
+    const open = openCellCount(shallowFloor);
+    expect(openCellCount(midFloor)).toBe(open);
+    expect(openCellCount(deepFloor)).toBe(open);
+
+    const shallow = placeFloorPopulations({
+      run: runFor([shallowEncounter]),
+      floor: shallowFloor,
+      content: pack([shallowEncounter]),
+    });
+    const mid = placeFloorPopulations({
+      run: runFor([midEncounter]),
+      floor: midFloor,
+      content: pack([midEncounter]),
+    });
+    const deep = placeFloorPopulations({
+      run: runFor([deepEncounter]),
+      floor: deepFloor,
+      content: pack([deepEncounter]),
+    });
+
+    expect(monstersPlacedBy(shallow)).toBe(expectedTarget(open, MONSTERS_PER_THOUSAND.shallow));
+    expect(monstersPlacedBy(mid)).toBe(expectedTarget(open, MONSTERS_PER_THOUSAND.mid));
+    expect(monstersPlacedBy(deep)).toBe(expectedTarget(open, MONSTERS_PER_THOUSAND.deep));
+    expect(monstersPlacedBy(shallow)).toBeLessThan(monstersPlacedBy(mid));
+    expect(monstersPlacedBy(mid)).toBeLessThan(monstersPlacedBy(deep));
+  });
+
+  it('scales the target with walkable area, not with footprint alone', () => {
+    const smallEncounter = unlimitedIndividual('encounter.density-small');
+    const largeEncounter = unlimitedIndividual('encounter.density-large');
+    const small = openFloor(40, 20, 'floor.density-small', 3);
+    const large = openFloor(60, 30, 'floor.density-large', 3);
+    expect(openCellCount(large)).toBeGreaterThan(openCellCount(small));
+
+    const smallResult = placeFloorPopulations({
+      run: runFor([smallEncounter]),
+      floor: small,
+      content: pack([smallEncounter]),
+    });
+    const largeResult = placeFloorPopulations({
+      run: runFor([largeEncounter]),
+      floor: large,
+      content: pack([largeEncounter]),
+    });
+
+    expect(monstersPlacedBy(smallResult)).toBe(
+      expectedTarget(openCellCount(small), MONSTERS_PER_THOUSAND.shallow),
+    );
+    expect(monstersPlacedBy(largeResult)).toBe(
+      expectedTarget(openCellCount(large), MONSTERS_PER_THOUSAND.shallow),
     );
   });
 
-  it('clamps attempts at 8 for an arbitrarily large floor', () => {
-    const massiveFloor = openFloor(200, 100);
-    const open = openCellCount(massiveFloor);
-    // A large enough floor pushes the nominal budget (floor(open / 800)) past the clamp.
-    expect(Math.floor(open / 800)).toBeGreaterThan(8);
+  it('reaches the same target in fewer placements when encounters bring several monsters each', () => {
+    // A group of exactly three (minimum === maximum in a single role) contributes three monsters
+    // per placement, so the same monster target is met in a third of the placements an
+    // `individual` pack needs -- the variance the old attempt-budget model was blind to.
+    const trio: EncounterContentEntry = {
+      ...individual('encounter.density-trio', { maximumInstancesPerRun: 64 }),
+      model: 'group',
+      definition: {
+        roles: [
+          {
+            roleId: 'front',
+            monsterId: 'monster.test-a',
+            minimumQuantity: 3,
+            maximumQuantity: 3,
+            formationPreference: 'front',
+            behaviorParameters: {},
+          },
+        ],
+        formation: 'line',
+        communicationRadius: 4,
+        leaderChance: 0,
+        leaderRoleId: null,
+        leaderAccentColor: '#ffcc00',
+        leaderAlternateGlyph: 'L',
+        coordinationModifiers: { accuracy: 0, defense: 0, damage: 0 },
+        leaderDeathResponse: 'weaken',
+        responseParameters: {},
+        supernaturalBond: false,
+        collapseRewards: 'none',
+      },
+    } as EncounterContentEntry;
+    const target = openFloor(40, 20, 'floor.density-trio', 3);
+    const expected = expectedTarget(openCellCount(target), MONSTERS_PER_THOUSAND.shallow);
 
-    const attempts = attemptsFor(massiveFloor, 'encounter.density-clamp');
+    const result = placeFloorPopulations({
+      run: runFor([trio]),
+      floor: target,
+      content: pack([trio]),
+    });
 
-    expect(attempts).toBe(8);
+    expect(result.placements.every((entry) => entry.status === 'placed')).toBe(true);
+    expect(result.placements).toHaveLength(Math.ceil(expected / 3));
+    // The loop stops on the placement that meets the target; it never overshoots by more than the
+    // last encounter's own size.
+    expect(monstersPlacedBy(result)).toBeGreaterThanOrEqual(expected);
+    expect(monstersPlacedBy(result)).toBeLessThan(expected + 3);
   });
 
-  it('gives floors of equal width*height but different open-cell counts different attempts', () => {
-    const width = 100;
-    const height = 40;
-    const mostlyOpen = openFloor(width, height, 'floor.density-equal-area-open');
-    const mostlyWalled = corridorWithOneBranchFloor(width, height, { x: 1, y: height - 2 });
+  it('bounds a floor that keeps failing to place at the attempt cap', () => {
+    const encounter = individual('encounter.density-capped', { maximumInstancesPerRun: 64 });
+    // Only one legal (non-route) cell exists on the whole floor: the corridor connecting the stairs
+    // is protected and excluded from candidates. The first attempt claims the branch cell and every
+    // later attempt is an optional `no-valid-placement` skip, so the monster target is never met
+    // and only `attemptCap` stops the loop.
+    const floorWithOneCell = corridorWithOneBranchFloor(1600, 10, { x: 800, y: 3 });
+    expect(
+      expectedTarget(openCellCount(floorWithOneCell), MONSTERS_PER_THOUSAND.shallow),
+    ).toBeGreaterThan(1);
 
-    expect(mostlyOpen.width * mostlyOpen.height).toBe(mostlyWalled.width * mostlyWalled.height);
-    const openCells = openCellCount(mostlyOpen);
-    const walledCells = openCellCount(mostlyWalled);
-    expect(openCells).not.toBe(walledCells);
+    const result = placeFloorPopulations({
+      run: runFor([encounter]),
+      floor: floorWithOneCell,
+      content: pack([encounter]),
+    });
 
-    const openAttempts = attemptsFor(mostlyOpen, 'encounter.density-equal-area-open');
-    const walledAttempts = attemptsFor(mostlyWalled, 'encounter.density-equal-area-walled');
-
-    expect(openAttempts).toBe(expectedAttempts(openCells));
-    expect(walledAttempts).toBe(expectedAttempts(walledCells));
-    expect(openAttempts).not.toBe(walledAttempts);
+    expect(result.placements).toHaveLength(ATTEMPT_CAP);
+    expect(monstersPlacedBy(result)).toBe(1);
+    // Skips consume attempts but do not end placement: every attempt after the first ran.
+    expect(result.placements[0]).toMatchObject({ status: 'placed' });
+    expect(
+      result.placements
+        .slice(1)
+        .every((entry) => entry.status === 'skipped' && entry.reason === 'required-route-blocked'),
+    ).toBe(true);
   });
 
-  it('stops the loop as soon as a required encounter is rejected, short of the attempt budget', () => {
+  it('keeps drawing after a skipped placement until the target is met', () => {
+    // `vault-only` can never place on a vault-less floor, so every draw of it is a skip. The floor
+    // still reaches its full monster target from the draws of `ordinary` in between.
+    const vaultOnly = individual('encounter.density-vault-only', {
+      maximumInstancesPerRun: 64,
+      weight: 3,
+      placement: { ...placement, requiresVaultSlot: true },
+    });
+    const ordinary = unlimitedIndividual('encounter.density-ordinary');
+    const target = openFloor(40, 20, 'floor.density-mixed', 3);
+    const expected = expectedTarget(openCellCount(target), MONSTERS_PER_THOUSAND.shallow);
+
+    const result = placeFloorPopulations({
+      run: runFor([vaultOnly, ordinary]),
+      floor: target,
+      content: pack([vaultOnly, ordinary]),
+    });
+
+    const skipped = result.placements.filter((entry) => entry.status === 'skipped');
+    expect(skipped.length).toBeGreaterThan(0);
+    expect(result.placements.length).toBeGreaterThan(expected);
+    expect(result.placements.length).toBeLessThanOrEqual(ATTEMPT_CAP);
+    expect(monstersPlacedBy(result)).toBe(expected);
+    // The last attempt is the one that met the target, proving the skips before it did not end the
+    // loop.
+    expect(result.placements[result.placements.length - 1]).toMatchObject({ status: 'placed' });
+  });
+
+  it('stops immediately when no encounter is eligible', () => {
+    // The encounter is already at its instance cap, so the first attempt is a cheap
+    // `no-eligible-encounter` skip that consumes no randomness. Eligibility only ever narrows, so
+    // re-drawing could not change the outcome -- the loop ends rather than burning the attempt cap.
+    const encounter = individual('encounter.density-ineligible', { maximumInstancesPerRun: 1 });
+    const run: ActiveRun = {
+      ...runFor([encounter]),
+      encounterDecisions: [
+        {
+          encounterId: encounter.id,
+          baseProbability: 1,
+          protectionBonus: 0,
+          effectiveProbability: 1,
+          eligible: true,
+          reachedEligibleDepth: false,
+          encountered: false,
+          instancesCreated: 1,
+        },
+      ],
+    };
+    const target = openFloor(40, 20, 'floor.density-ineligible', 3);
+    expect(expectedTarget(openCellCount(target), MONSTERS_PER_THOUSAND.shallow)).toBeGreaterThan(1);
+
+    const result = placeFloorPopulations({ run, floor: target, content: pack([encounter]) });
+
+    expect(result.placements).toHaveLength(1);
+    expect(result.placements[0]).toMatchObject({
+      status: 'skipped',
+      reason: 'no-eligible-encounter',
+    });
+    expect(result.state.rng.encounters).toEqual(run.rng.encounters);
+  });
+
+  it('stops the loop as soon as a required encounter is rejected, short of the monster target', () => {
     const encounter = individual('encounter.density-rejected', {
-      maximumInstancesPerRun: 8,
+      maximumInstancesPerRun: 64,
       placement: { ...placement, failureMode: 'required' },
     });
     const run = runFor([encounter]);
-    // A long, thin corridor floor: its open-cell budget is well above 1 (a corridor this long has
-    // enough walkable cells to clear the 800-per-encounter threshold twice over), but only one
-    // legal (non-route) cell exists on the whole floor -- the corridor connecting the stairs is
-    // protected and excluded from candidates.
+    // A long, thin corridor floor: its monster target is well above 1, but only one legal
+    // (non-route) cell exists on the whole floor.
     const floorWithOneCell = corridorWithOneBranchFloor(1600, 10, { x: 800, y: 3 });
-    expect(expectedAttempts(openCellCount(floorWithOneCell))).toBeGreaterThan(1);
+    expect(
+      expectedTarget(openCellCount(floorWithOneCell), MONSTERS_PER_THOUSAND.shallow),
+    ).toBeGreaterThan(1);
 
     const result = placeFloorPopulations({
       run,
