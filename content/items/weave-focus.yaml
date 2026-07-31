@@ -5,17 +5,22 @@ entries:
     name: Weave focus
     glyph: "*"
     color: "#8a6fd1"
-    description: A knotted skein of thread, worried smooth by idle fingers. It holds no power of its own -- it just gives the hands something to do while the mind reaches for the Weave.
+    description: A knotted skein of thread, worn smooth by idle fingers, strung on a cord long enough to hang at the throat. Worn rather than merely carried, it steadies the mind's reach for the Weave the way a worry stone steadies the hand.
     tags: [focus, trinket]
     minDepth: 1
     maxDepth: 20
     category: misc
     stackLimit: 1
-    price: 6
+    price: 12
     rarity: common
     actionCost: 100
-    equipment: null
-    combat: null
+    # Note: modest weaveRegen would fit this item's flavor best, but weaveRegen-style
+    # derived-stat bonuses are only expressible via artifact.drawbackModifiers, which
+    # requires canon: true (legendary-tier). Ordinary equippable items carry bonuses
+    # through the combat block instead, so this focus grants a small defense edge --
+    # the steadier hand a worn focus implies.
+    equipment: { slots: [neck], handedness: none, reservedSlots: [] }
+    combat: { accuracy: 0, defense: 1, armor: 0, damage: null, range: 0, ammunitionTag: null }
     light: null
     artifact: null
     identification: { mode: known, poolId: null }
