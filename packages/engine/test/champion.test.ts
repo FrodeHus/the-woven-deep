@@ -499,7 +499,9 @@ describe('normalization and optional placement', () => {
     const actor = placed.actors[0]!;
     // First qualifying cell in row-major order: (1,1) holds the hero, so (2,1) wins.
     expect({ x: actor.x, y: actor.y }).toEqual({ x: 2, y: 1 });
-    // The full envelope: walkable, outside the vault footprint, off a body.
+    // The parts of the envelope this floor can exercise: walkable, outside the vault footprint,
+    // off a body. (Stair anchors and protected routes are covered by the chokepoint case below,
+    // which authors objective points; this fixture floor has neither stair.)
     expect(floor.tiles[actor.y * floor.width + actor.x]).toBe(1);
     expect(
       floor.vaults.some(
@@ -523,6 +525,63 @@ describe('normalization and optional placement', () => {
     const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
     const slot = run.floors[0]!.placementSlots[0]!;
     expect({ x: placed.actors[0]!.x, y: placed.actors[0]!.y }).toEqual({ x: slot.x, y: slot.y });
+  });
+
+  it('falls back when the only fallen-hero slot exists but is unroutable, rather than erasing the champion', () => {
+    // A floor whose two objective points are joined by a single corridor cell, and whose only
+    // authored fallen-hero slot sits ON that chokepoint: standing there would sever the required
+    // route, so the slot is unusable. The fallback still owes the run its champion.
+    const lines = ['#######', '#.....#', '###.###', '#.....#', '#######'] as const;
+    const tiles = lines.flatMap((line) => [...line].map((glyph) => (glyph === '#' ? 0 : 1)));
+    const base = withArena(initialized([standing(1)]), 4, 0);
+    const floor = base.floors[0]!;
+    const run: ActiveRun = {
+      ...base,
+      floors: [
+        {
+          ...floor,
+          tiles,
+          vaults: [{ ...floor.vaults[0]!, x: 3, y: 2, width: 1, height: 1 }],
+          placementSlots: [
+            {
+              slotId: 'slot.objective-west',
+              vaultPlacementId: floor.vaults[0]!.placementId,
+              kind: 'objective',
+              required: true,
+              tags: [],
+              x: 1,
+              y: 1,
+            },
+            {
+              slotId: 'slot.objective-east',
+              vaultPlacementId: floor.vaults[0]!.placementId,
+              kind: 'objective',
+              required: true,
+              tags: [],
+              x: 1,
+              y: 3,
+            },
+            {
+              slotId: 'slot.side-choke',
+              vaultPlacementId: floor.vaults[0]!.placementId,
+              kind: 'monster',
+              required: false,
+              tags: ['side-arena', 'fallen-hero'],
+              x: 3,
+              y: 2,
+            },
+          ],
+        },
+      ],
+    };
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    expect(placed.populations).toHaveLength(1);
+    const actor = placed.actors[0]!;
+    // Not the chokepoint slot, and not on the protected route between the two objectives.
+    expect({ x: actor.x, y: actor.y }).not.toEqual({ x: 3, y: 2 });
+    expect({ x: actor.x, y: actor.y }).toEqual({ x: 4, y: 1 });
+    const again = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    expect(again.actors).toEqual(placed.actors);
   });
 
   it('skips the champion when the floor offers neither a slot nor a qualifying open cell', () => {

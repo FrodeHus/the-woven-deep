@@ -231,6 +231,8 @@ _Task 7's implementation surfaced a load-bearing gap: `placeFallenHeroEncounters
 
 **Design (binding):** slot-preferred, fallback-guaranteed. When the death-depth floor offers a tagged slot, use it exactly as today. When it does not, fall back to a deterministic open-cell placement: the same constraint envelope the floor-loot pass uses (walkable, off protected routes, outside vault footprints, ≥ the anchor distance from stairs), row-major deterministic pick (NO new randomness — first qualifying cell, or thread the population-gates stream if a roll already exists in this path; keep stream discipline identical to the slot path). A champion whose floor genuinely has no qualifying cell skips exactly as an absent slot does today. Result: "the Deep remembers" is reliable, vault arenas remain the premium presentation.
 
+Amendment note: the fallback fires when no tagged slot exists OR when no tagged slot is routable — a blocked arena must not erase the champion.
+
 - [x] **Step 1: Failing test** — a run with a rank-1 standing at depth N and NO tagged slot on that floor still places the champion (open-cell fallback, all constraints asserted); with a tagged slot, placement is byte-identical to today; determinism across identical inputs.
 - [x] **Step 2: FAIL. Step 3: Implement** (fallback + the two/three authored vault slots). **Step 4: PASS** engine non-demo + content:validate. **Step 5: Commit** — `fix: guarantee champion placement with an open-cell fallback`.
 
