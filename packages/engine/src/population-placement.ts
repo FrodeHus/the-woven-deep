@@ -504,7 +504,11 @@ function unfilledItemSlots(
  * An `artifact`-tagged slot is the exception that names no loot source at all: it is the vault
  * offer, and what it holds was decided once at run creation (`run.offeredArtifact`). It is placed
  * without touching any stream, at most once per run, and silently left empty when this run carries
- * no offer -- a vault authored with the slot must still generate normally for every other run.
+ * no offer -- a vault authored with the slot must still generate normally for every other run. It
+ * is also left empty when the current floor's depth is below the offered artifact's own authored
+ * `minDepth`: a shallow vault (item-cache-band `minDepth`) can carry the `artifact` slot tag while
+ * the offer itself is authored for a deeper band, and the slot must wait for a qualifying floor
+ * rather than hand out a mid/deep-band artifact early -- still without touching any stream.
  */
 function fillItemSlots(
   input: PlacePopulationInput,
@@ -520,6 +524,8 @@ function fillItemSlots(
     const itemId = `item.vault.${slot.slotId}`;
     if (slot.tags.includes('artifact') || vaultSlot.tags.includes('artifact')) {
       if (input.run.offeredArtifact === null || offerPlaced) continue;
+      const artifactEntry = artifactItemEntry(input.content, input.run.offeredArtifact);
+      if (input.floor.depth < artifactEntry.minDepth) continue;
       items.push(
         createFloorItem({
           content: input.content,
@@ -562,6 +568,20 @@ function fillItemSlots(
     }
   }
   return { items, state: currentState ?? state };
+}
+
+/** Resolves the offered artifact's own item entry so the vault slot can check its authored
+ * `minDepth` band -- a shallow vault (e.g. an early item-cache) must not hand out a mid/deep-band
+ * artifact just because it happens to carry the `artifact`-tagged slot. */
+function artifactItemEntry(content: CompiledContentPack, artifactId: OpaqueId): ItemContentEntry {
+  const entry = content.entries.find(
+    (candidate): candidate is ItemContentEntry =>
+      candidate.kind === 'item' && candidate.id === artifactId,
+  );
+  if (entry === undefined) {
+    throw new Error(`internal invariant: offered artifact ${artifactId} has no item content entry`);
+  }
+  return entry;
 }
 
 function fragmentItemEntry(content: CompiledContentPack, fragmentId: string): ItemContentEntry {

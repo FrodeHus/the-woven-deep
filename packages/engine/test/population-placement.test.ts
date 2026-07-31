@@ -1796,6 +1796,69 @@ describe('vault item slot consumption', () => {
         second.state.items.filter((item) => item.itemId.startsWith('item.artifact-offer.')),
       ).toEqual(offers);
     });
+
+    it('skips an artifact-tagged slot when the floor is shallower than the offer minDepth', () => {
+      const midBandArtifact: ItemContentEntry = { ...artifactEntry, minDepth: 7 };
+      const encounter = individual('encounter.artifact-shallow');
+      const vault = artifactVault('vault.artifact-shallow-test', ['offer']);
+      const generated = artifactFloor(vault.id, ['offer']);
+      const content = pack([encounter], [vault, midBandArtifact]);
+      const base = runFor([encounter]);
+      const run = {
+        ...base,
+        offeredArtifact: midBandArtifact.id,
+        artifactsUndiscovered: [midBandArtifact.id],
+      };
+
+      expect(generated.depth).toBe(3);
+      const shallow = placeFloorPopulations({
+        run,
+        floor: { ...generated, depth: 1 },
+        content,
+        forcedEncounterId: encounter.id,
+      });
+      const withoutOffer = placeFloorPopulations({
+        run: base,
+        floor: { ...generated, depth: 1 },
+        content,
+        forcedEncounterId: encounter.id,
+      });
+
+      expect(
+        shallow.state.items.filter((item) => item.itemId.startsWith('item.artifact-offer.')),
+      ).toEqual([]);
+      expect(shallow.state.rng['loot-placement']).toEqual(withoutOffer.state.rng['loot-placement']);
+      expect(shallow.state.rng.encounters).toEqual(withoutOffer.state.rng.encounters);
+    });
+
+    it('materializes the offer once the floor reaches the offer minDepth', () => {
+      const midBandArtifact: ItemContentEntry = { ...artifactEntry, minDepth: 7 };
+      const encounter = individual('encounter.artifact-deep');
+      const vault = artifactVault('vault.artifact-deep-test', ['offer']);
+      const generated = artifactFloor(vault.id, ['offer']);
+      const content = pack([encounter], [vault, midBandArtifact]);
+      const run = {
+        ...runFor([encounter]),
+        offeredArtifact: midBandArtifact.id,
+        artifactsUndiscovered: [midBandArtifact.id],
+      };
+
+      const deep = placeFloorPopulations({
+        run,
+        floor: { ...generated, depth: 8 },
+        content,
+        forcedEncounterId: encounter.id,
+      });
+
+      expect(
+        deep.state.items.filter((item) => item.itemId.startsWith('item.artifact-offer.')),
+      ).toEqual([
+        expect.objectContaining({
+          itemId: 'item.artifact-offer.slot.test.0.offer',
+          contentId: midBandArtifact.id,
+        }),
+      ]);
+    });
   });
 });
 
