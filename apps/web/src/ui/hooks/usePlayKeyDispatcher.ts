@@ -7,6 +7,7 @@ import type { ResolvedKeymap } from '../../session/settings.js';
 import { isPotion } from '../overlays/inventory-model.js';
 import { createKeyDispatcher, type OverlayActionId } from '../KeyRouter.js';
 import type { OverlayId } from '../overlays/registry.js';
+import type { StairDirection } from '../../session/stairs.js';
 
 export interface PlayKeyDispatcherParams {
   readonly session: RunSession;
@@ -30,6 +31,11 @@ export interface PlayKeyDispatcherParams {
    * to `closeOverlay` here, which is a no-op with no overlay/house/trade/decision open, so it
    * doesn't fight `useSpellTargeting`'s own Escape-cancels-targeting handling. */
   readonly targetingActive?: boolean;
+  /** Starts auto-explore -- `useAutoTravel`'s own handler, forwarded by `PlayScreen`. Not an
+   * intent, so it never goes through `session.dispatch` from here. */
+  readonly onStartExplore: () => void;
+  /** `>`/`<`: descend/ascend on the stair, otherwise walk to a discovered one. */
+  readonly onTravelToStairs: (direction: StairDirection) => void;
 }
 
 /**
@@ -49,6 +55,8 @@ export function usePlayKeyDispatcher({
   keymap,
   activeHintRef,
   targetingActive = false,
+  onStartExplore,
+  onTravelToStairs,
 }: PlayKeyDispatcherParams): void {
   useEffect(() => {
     const dispatcher = createKeyDispatcher(
@@ -94,9 +102,8 @@ export function usePlayKeyDispatcher({
           // Deliberately no `pendingFinalChamberChoice` branch: the choice is never answered by
           // Escape (see this param's doc comment above) -- it just stays pending.
         },
-        // Task 7 wires auto-explore and stairs travel for real.
-        startExplore: () => {},
-        travelToStairs: () => {},
+        startExplore: () => onStartExplore(),
+        travelToStairs: (direction) => onTravelToStairs(direction),
       },
       () =>
         overlay !== null ||
@@ -121,5 +128,7 @@ export function usePlayKeyDispatcher({
     keymap,
     activeHintRef,
     targetingActive,
+    onStartExplore,
+    onTravelToStairs,
   ]);
 }

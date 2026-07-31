@@ -69,6 +69,7 @@ function harness(
     onOpenChange?: (open: boolean) => void;
     onOpenOverlay?: (overlay: string) => void;
     onCast?: (spellId: string) => void;
+    onStartExplore?: () => void;
     projection?: GameplayProjection;
   }> = {},
 ) {
@@ -76,6 +77,7 @@ function harness(
   const onOpenChange = overrides.onOpenChange ?? vi.fn();
   const onOpenOverlay = overrides.onOpenOverlay ?? vi.fn();
   const onCast = overrides.onCast ?? vi.fn();
+  const onStartExplore = overrides.onStartExplore ?? vi.fn();
   render(
     <UiProviders
       pack={pack}
@@ -91,10 +93,11 @@ function harness(
         tradeAvailable={overrides.tradeAvailable ?? false}
         talkAvailable={overrides.talkAvailable ?? false}
         onCast={onCast}
+        onStartExplore={onStartExplore}
       />
     </UiProviders>,
   );
-  return { dispatch, onOpenChange, onOpenOverlay, onCast };
+  return { dispatch, onOpenChange, onOpenOverlay, onCast, onStartExplore };
 }
 
 describe('CommandPalette', () => {
@@ -196,5 +199,18 @@ describe('CommandPalette', () => {
     harness({ projection });
 
     expect(screen.queryByText('Cast: Ember bolt')).not.toBeInTheDocument();
+  });
+
+  it('typing "explore" and Enter starts auto-explore and closes the palette', async () => {
+    const user = userEvent.setup();
+    const { onStartExplore, onOpenChange, dispatch } = harness();
+
+    await user.type(screen.getByRole('combobox'), 'explore');
+    await user.keyboard('{Enter}');
+
+    expect(onStartExplore).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    // A discovery surface, not a parallel command path: no intent is dispatched for this entry.
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

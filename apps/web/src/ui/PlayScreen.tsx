@@ -133,6 +133,25 @@ export function PlayScreen({
 
   const targeting = useSpellTargeting(session, snapshot);
 
+  const isModalActive =
+    overlay !== null ||
+    snapshot.houseOpen ||
+    projection.trade !== undefined ||
+    snapshot.pendingDecision !== null ||
+    snapshot.pendingFinalChamberChoice !== null ||
+    targeting.activeSpellId !== null;
+
+  // Must run BEFORE `usePlayKeyDispatcher` below: its cancel-on-keydown listener has to register
+  // first, or pressing the explore/stairs key would cancel the walk it just started instead of
+  // starting it.
+  const autoTravel = useAutoTravel({
+    session,
+    snapshot,
+    pack,
+    autoPickupConsumables: settings.autoPickupConsumables,
+    disabled: isModalActive,
+  });
+
   usePlayKeyDispatcher({
     session,
     overlay,
@@ -145,15 +164,10 @@ export function PlayScreen({
     keymap,
     activeHintRef,
     targetingActive: targeting.activeSpellId !== null,
+    onStartExplore: autoTravel.startExplore,
+    onTravelToStairs: autoTravel.travelToStairs,
   });
 
-  const isModalActive =
-    overlay !== null ||
-    snapshot.houseOpen ||
-    projection.trade !== undefined ||
-    snapshot.pendingDecision !== null ||
-    snapshot.pendingFinalChamberChoice !== null ||
-    targeting.activeSpellId !== null;
   const [paletteOpen, setPaletteOpen] = useCommandPaletteHotkey(isModalActive);
 
   const { hover, hoverAtCell } = useCellHover(snapshot);
@@ -161,13 +175,6 @@ export function PlayScreen({
   // while targeting is active, so the targeting visuals own the overlay uncontested and the cursor
   // reappears on the cell still under the pointer the moment the cast resolves or is cancelled.
   const [hoverCursor, setHoverCursor] = useState<HoverCursor | null>(null);
-  const autoTravel = useAutoTravel({
-    session,
-    snapshot,
-    pack,
-    autoPickupConsumables: settings.autoPickupConsumables,
-    disabled: isModalActive,
-  });
 
   const mapPaneRef = useRef<HTMLDivElement>(null);
   const [hoverAnchor, setHoverAnchor] = useState<{
@@ -354,6 +361,7 @@ export function PlayScreen({
           tradeAvailable={tradeIsAvailable(projection)}
           talkAvailable={dialogueTargetAvailable(projection, pack)}
           onCast={targeting.begin}
+          onStartExplore={autoTravel.startExplore}
         />
       </div>
     </ScreenFade>

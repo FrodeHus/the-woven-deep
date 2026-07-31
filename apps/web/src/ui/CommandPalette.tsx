@@ -52,6 +52,9 @@ export interface CommandPaletteProps {
    * valid target is actually adjacent (see `dialogueTargetAvailable`, `projection-view.ts`). */
   readonly talkAvailable: boolean;
   readonly onCast: (spellId: string) => void;
+  /** Starts auto-explore -- the same `useAutoTravel` handler the `o` key reaches, so the palette
+   * stays a discovery surface over existing commands rather than a parallel path. */
+  readonly onStartExplore: () => void;
 }
 
 /**
@@ -68,6 +71,7 @@ export function CommandPalette({
   tradeAvailable,
   talkAvailable,
   onCast,
+  onStartExplore,
 }: Readonly<CommandPaletteProps>): JSX.Element {
   const sessionCtx = useSessionCtx();
   const { keymap } = useSettingsCtx();
@@ -89,6 +93,11 @@ export function CommandPalette({
 
   const runCast = (spellId: string): void => {
     onCast(spellId);
+    onOpenChange(false);
+  };
+
+  const runExplore = (): void => {
+    onStartExplore();
     onOpenChange(false);
   };
 
@@ -158,6 +167,10 @@ export function CommandPalette({
               })}
             </CommandGroup>
             <CommandGroup heading="Actions">
+              <CommandItem value={ACTION_LABELS['auto-explore']} onSelect={runExplore}>
+                <span>{ACTION_LABELS['auto-explore']}</span>
+                {hint('auto-explore') && <CommandShortcut>{hint('auto-explore')}</CommandShortcut>}
+              </CommandItem>
               {intentActions.map((action) => {
                 const label = action === 'descend' ? descendLabel : ACTION_LABELS[action];
                 const shortcut = hint(action);
