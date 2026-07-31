@@ -7,10 +7,13 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   DEFAULT_GUEST_HERO,
+  createInMemoryRunRecordRepository,
   createNewRun,
   projectGameplayState,
   type ActiveRun,
+  type ArtifactLedger,
   type GameplayProjection,
+  type RunRecordRepository,
 } from '@woven-deep/engine';
 import type { GuestSession, SessionSnapshot } from '../../session/guest-session.js';
 import { DEFAULT_SETTINGS } from '../../session/settings.js';
@@ -83,13 +86,18 @@ function stubSession(snapshot: SessionSnapshot): {
   return { session, dispatch };
 }
 
-function renderInventory(session: GuestSession, overlayProps?: Readonly<InventoryOverlayProps>) {
+function renderInventory(
+  session: GuestSession,
+  overlayProps?: Readonly<InventoryOverlayProps>,
+  repository?: RunRecordRepository,
+) {
   return render(
     <UiProviders
       pack={pack}
       settings={DEFAULT_SETTINGS}
       onChangeSettings={() => {}}
       session={session}
+      repository={repository}
     >
       <InventoryOverlay
         onBeginScrollTargeting={overlayProps?.onBeginScrollTargeting}
@@ -97,6 +105,12 @@ function renderInventory(session: GuestSession, overlayProps?: Readonly<Inventor
       />
     </UiProviders>,
   );
+}
+
+/** A records repository whose artifact ledger is stated outright, so a provenance render case does
+ * not have to drive a run to its death to earn a stint. */
+function repositoryWithLedger(ledger: ArtifactLedger): RunRecordRepository {
+  return { ...createInMemoryRunRecordRepository(), artifactLedger: () => ledger };
 }
 
 describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
@@ -485,6 +499,240 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
       itemId: 'item.fireball-tome.1',
     });
     expect(beginScroll).not.toHaveBeenCalled();
+  });
+
+  it('renders an artifact name in the HUD gold accent, and an ordinary item in the plain heading color', () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.grace.1',
+        contentId: 'item.marias-grace',
+        name: "Maria's Grace",
+        category: 'light',
+        fuel: 2400,
+        enabled: true,
+      }),
+      item({
+        itemId: 'item.lantern.1',
+        contentId: 'item.brass-lantern',
+        name: 'Brass lantern',
+        category: 'light',
+        fuel: 900,
+        enabled: false,
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    const artifactHeading = screen.getByRole('heading', { name: "Maria's Grace" });
+    expect(artifactHeading).toHaveClass('text-accent');
+    expect(screen.getByText('Relic')).toBeInTheDocument();
+  });
+
+  it('hides the fuel row and the refuel affordance for a fuelless artifact light', async () => {
+    const user = userEvent.setup();
+    const snapshot = snapshotWithBackpack(
+      [
+        item({
+          itemId: 'item.oil-stack',
+          contentId: 'item.lamp-oil',
+          name: 'Lamp oil',
+          category: 'fuel',
+          quantity: 3,
+        }),
+      ],
+      {
+        'off-hand': item({
+          itemId: 'item.grace.1',
+          contentId: 'item.marias-grace',
+          name: "Maria's Grace",
+          category: 'light',
+          // A fuelless instance still HOLDS its capacity -- the gauge must hide on the pack's
+          // `artifact.light.fuelless` flag, never on `fuel === null`.
+          fuel: 2400,
+          enabled: true,
+        }),
+      },
+    );
+    const { session, dispatch } = stubSession(snapshot);
+    renderInventory(session);
+
+    // Lamp oil is selected first: no refuel affordance for the fuelless lantern it "matches".
+    expect(screen.queryByRole('button', { name: /Refuel/ })).not.toBeInTheDocument();
+    await user.keyboard('r');
+    expect(dispatch).not.toHaveBeenCalled();
+
+    const list = within(screen.getByRole('listbox', { name: 'Backpack items' }));
+    await user.click(list.getByRole('option', { name: /Maria's Grace/ }));
+    expect(screen.queryByText('Fuel')).not.toBeInTheDocument();
+  });
+
+  it('still shows the fuel row for an ordinary light', () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.lantern.1',
+        contentId: 'item.brass-lantern',
+        name: 'Brass lantern',
+        category: 'light',
+        fuel: 900,
+        enabled: false,
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.getByText('Fuel')).toBeInTheDocument();
+    expect(screen.getByText('900')).toBeInTheDocument();
+  });
+
+  it("states an artifact's drawback modifiers", () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.needle.1',
+        contentId: 'item.thread-counts-needle',
+        name: "Thread-Count's Needle",
+        category: 'ring',
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.getByText('maxHealth')).toBeInTheDocument();
+    expect(screen.getByText('-2')).toBeInTheDocument();
+  });
+
+  it("names an artifact's signature spell, its charges, and offers the cast affordance", () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.ember.1',
+        contentId: 'item.warden-ember',
+        name: "Warden's Ember",
+        category: 'ring',
+        charges: 2,
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.getByText('Signature')).toBeInTheDocument();
+    expect(screen.getByText('Ember bolt')).toBeInTheDocument();
+    expect(screen.getByText('2 / 3')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Cast Ember bolt/ })).toBeInTheDocument();
+  });
+
+  it('offers no cast affordance for an artifact with no signature', () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.grace.1',
+        contentId: 'item.marias-grace',
+        name: "Maria's Grace",
+        category: 'light',
+        fuel: 2400,
+        enabled: true,
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.queryByText('Signature')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Cast/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Use/ })).toBeInTheDocument();
+  });
+
+  it('disables the cast affordance for a spent signature artifact', () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.ember.1',
+        contentId: 'item.warden-ember',
+        name: "Warden's Ember",
+        category: 'ring',
+        charges: 0,
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.getByText('0 / 3')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Cast Ember bolt/ })).toBeDisabled();
+  });
+
+  it('casting a signature artifact enters the shared aim mode for its spell', async () => {
+    const user = userEvent.setup();
+    const beginScroll = vi.fn();
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.ember.1',
+        contentId: 'item.warden-ember',
+        name: "Warden's Ember",
+        category: 'ring',
+        charges: 3,
+      }),
+    ]);
+    const { session, dispatch } = stubSession(snapshot);
+    renderInventory(session, { onBeginScrollTargeting: beginScroll });
+
+    await user.keyboard('u');
+
+    expect(beginScroll).toHaveBeenCalledWith(
+      'item.ember.1',
+      expect.objectContaining({ spellId: 'spell.ember-bolt', targetingId: 'target.actor' }),
+    );
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("renders the artifact's provenance from the records repository's ledger", () => {
+    const ledger: ArtifactLedger = [
+      {
+        artifactId: 'item.marias-grace',
+        status: 'undiscovered',
+        holderRecordId: null,
+        provenance: [
+          {
+            heroName: 'Yrsa',
+            recordId: 'record.yrsa',
+            outcome: 'died-with',
+            depth: 12,
+          },
+          {
+            heroName: 'Yrsa',
+            recordId: 'record.yrsa',
+            outcome: 'reclaimed-by-the-deep',
+            depth: 0,
+          },
+        ],
+      },
+    ];
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.grace.1',
+        contentId: 'item.marias-grace',
+        name: "Maria's Grace",
+        category: 'light',
+        fuel: 2400,
+        enabled: true,
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session, undefined, repositoryWithLedger(ledger));
+
+    expect(screen.getByText('Borne by Yrsa — fell at depth 12')).toBeInTheDocument();
+    expect(screen.getByText('Borne by Yrsa — the Deep took it back')).toBeInTheDocument();
+  });
+
+  it('renders no provenance block for an ordinary item', () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.lantern.1',
+        contentId: 'item.brass-lantern',
+        name: 'Brass lantern',
+        category: 'light',
+        fuel: 900,
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session, undefined, repositoryWithLedger([]));
+
+    expect(screen.queryByText(/Borne by/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Provenance')).not.toBeInTheDocument();
   });
 
   it('renders nothing when there is no session in context', () => {

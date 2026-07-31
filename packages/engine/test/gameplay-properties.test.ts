@@ -118,6 +118,8 @@ describe('cross-system gameplay sequence properties', () => {
           const projection = stableJson(projectGameplayState({ state, content: gameplayPack }));
           expect(projection).not.toContain('appearanceByContentId');
           expect(projection).not.toContain('rng');
+          expect(projection).not.toContain('offeredArtifact');
+          expect(projection).not.toContain('artifactsUndiscovered');
         }
       }),
       { seed: 0x4a09, numRuns: 500 },
@@ -251,6 +253,7 @@ describe('inventory conservation properties', () => {
     equipment: null,
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };
@@ -354,6 +357,7 @@ describe('item light properties', () => {
               warningThresholds: [10],
               fuelTags: ['oil'],
             },
+            artifact: null,
             identification: { mode: 'known', poolId: null },
             effects: [],
           };
@@ -419,6 +423,7 @@ describe('survival resource properties', () => {
       warningThresholds: [50, 10],
       fuelTags: ['oil'],
     },
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };

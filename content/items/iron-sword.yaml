@@ -1,4 +1,4 @@
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: item
     id: item.iron-sword
@@ -24,5 +24,6 @@ entries:
       range: 1
       ammunitionTag: null
     light: null
+    artifact: null
     identification: { mode: known, poolId: null }
     effects: []

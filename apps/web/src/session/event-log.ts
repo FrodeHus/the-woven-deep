@@ -90,6 +90,10 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
           return { text: 'You cannot squeeze between those corners.', tone: 'system' };
         case 'blocked.actor':
           return { text: 'Something is in the way.', tone: 'system' };
+        case 'light.inextinguishable':
+          return { text: 'Its light will not be hidden.', tone: 'system' };
+        case 'signature.no-charges':
+          return { text: 'The relic is spent — it will wake on the next floor.', tone: 'system' };
         default:
           return { text: `That cannot be done (${event.reason}).`, tone: 'system' };
       }

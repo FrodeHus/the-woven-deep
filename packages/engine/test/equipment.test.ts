@@ -34,6 +34,7 @@ function definition(id: string, overrides: Partial<ItemContentEntry>): ItemConte
     equipment: null,
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
     ...overrides,
@@ -190,6 +191,73 @@ describe('equipment planning and item lights', () => {
     });
     expect(after.defense - before.defense).toBe(3);
     expect(sources[0]!.publicModifiers).toEqual({ defense: 2 });
+  });
+
+  it('applies artifact drawback modifiers while equipped, visible pre-identification', () => {
+    const cursedRing = definition('item.ring.cursed', {
+      category: 'ring',
+      equipment: { slots: ['left-ring', 'right-ring'], handedness: 'none', reservedSlots: [] },
+      artifact: {
+        canon: true,
+        signature: null,
+        drawbackModifiers: { defense: -1, maxHealth: -3 },
+        light: null,
+      },
+    });
+    const ringItem = {
+      ...item('item.ring.cursed.1', cursedRing.id, {
+        type: 'equipped',
+        actorId: 'hero.demo',
+        slot: 'left-ring',
+      }),
+      identified: false,
+    };
+    const base = createDemoRun();
+    const hero = {
+      ...base.actors[0]!,
+      equipment: { ...base.actors[0]!.equipment, 'left-ring': ringItem.itemId },
+    };
+    const run = { ...base, actors: [hero], items: [ringItem] };
+    const content = pack(cursedRing);
+    const sources = equipmentModifiers({ run, content, actorId: 'hero.demo' });
+    expect(sources[0]!.modifiers).toEqual({ defense: -1, maxHealth: -3 });
+    // Artifacts are always identified-known, so the drawback is folded into `base` and
+    // therefore visible in publicModifiers even for an instance flagged unidentified here.
+    expect(sources[0]!.publicModifiers).toEqual({ defense: -1, maxHealth: -3 });
+
+    const formulas = createDemoContentPack().entries.find(
+      (entry) => entry.kind === 'balance',
+    )!.formulas;
+    const before = deriveActorStats({
+      attributes: hero.attributes,
+      formulas,
+      weaveRegenAmount: 2,
+      equipmentModifiers: [],
+      conditionModifiers: [],
+    });
+    const equipped = deriveActorStats({
+      attributes: hero.attributes,
+      formulas,
+      weaveRegenAmount: 2,
+      equipmentModifiers: sources.map((source) => source.modifiers),
+      conditionModifiers: [],
+    });
+    expect(equipped.defense - before.defense).toBe(-1);
+    expect(equipped.maxHealth - before.maxHealth).toBe(-3);
+
+    const unequippedRun = {
+      ...run,
+      actors: [{ ...hero, equipment: { ...hero.equipment, 'left-ring': null } }],
+      items: [{ ...ringItem, location: { type: 'backpack' as const, actorId: 'hero.demo' } }],
+    };
+    expect(equipmentModifiers({ run: unequippedRun, content, actorId: 'hero.demo' })).toEqual([]);
+
+    const nonArtifactSources = equipmentModifiers({
+      run: { ...base, actors: [base.actors[0]!], items: [] },
+      content,
+      actorId: 'hero.demo',
+    });
+    expect(nonArtifactSources).toEqual([]);
   });
 
   it('emits light only from enabled equipped or floor-placed fueled items', () => {
@@ -397,5 +465,150 @@ describe('equipment planning and item lights', () => {
     );
     expect(result.result).toMatchObject({ status: 'applied' });
     expect(isExplored(result.state.floors[0]!.knowledge, hero.y * floor.width + hero.x)).toBe(true);
+  });
+});
+
+describe("Maria's Grace is inextinguishable", () => {
+  const grace = definition('item.marias-grace', {
+    category: 'light',
+    rarity: 'legendary',
+    equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
+    light: {
+      color: [255, 217, 160],
+      radius: 7,
+      strength: 180,
+      fuelCapacity: 2400,
+      fuelPerTime: 1,
+      warningThresholds: [600],
+      fuelTags: ['lamp-oil'],
+    },
+    artifact: {
+      canon: true,
+      signature: null,
+      drawbackModifiers: {},
+      light: { fuelless: true, inextinguishable: true },
+    },
+  });
+
+  function graceRun(enabled: boolean) {
+    const base = createDemoRun();
+    const graceItem: ItemInstance = {
+      ...item('item.marias-grace.1', grace.id, {
+        type: 'equipped',
+        actorId: 'hero.demo',
+        slot: 'off-hand',
+      }),
+      fuel: 2400,
+      enabled,
+    };
+    const hero = {
+      ...base.actors[0]!,
+      equipment: { ...base.actors[0]!.equipment, 'off-hand': graceItem.itemId },
+    };
+    return { run: { ...base, actors: [hero], items: [graceItem] }, content: pack(grace) };
+  }
+
+  it('refuses to douse a lit artifact light', () => {
+    const { run, content } = graceRun(true);
+    const result = resolveCommand(
+      run,
+      {
+        type: 'toggle-light',
+        commandId: 'command.douse-grace',
+        expectedRevision: 0,
+        itemId: 'item.marias-grace.1',
+        enabled: false,
+      },
+      { content },
+    );
+    expect(result.result).toMatchObject({ status: 'invalid', reason: 'light.inextinguishable' });
+    expect(result.state.items[0]?.enabled).toBe(true);
+  });
+
+  it('still lights a doused artifact light', () => {
+    const { run, content } = graceRun(false);
+    const result = resolveCommand(
+      run,
+      {
+        type: 'toggle-light',
+        commandId: 'command.light-grace',
+        expectedRevision: 0,
+        itemId: 'item.marias-grace.1',
+        enabled: true,
+      },
+      { content },
+    );
+    expect(result.result).toMatchObject({ status: 'applied' });
+    expect(result.state.items[0]?.enabled).toBe(true);
+  });
+
+  it('refuses a douse aimed at an artifact the hero does not hold as unavailable', () => {
+    const { run, content } = graceRun(true);
+    const loose = {
+      ...run,
+      actors: [{ ...run.actors[0]!, equipment: { ...run.actors[0]!.equipment, 'off-hand': null } }],
+      items: [
+        {
+          ...run.items[0]!,
+          location: { type: 'floor' as const, floorId: 'floor.demo', x: 1, y: 1 },
+        },
+      ],
+    };
+    const result = resolveCommand(
+      loose,
+      {
+        type: 'toggle-light',
+        commandId: 'command.douse-loose-grace',
+        expectedRevision: 0,
+        itemId: 'item.marias-grace.1',
+        enabled: false,
+      },
+      { content },
+    );
+    expect(result.result).toMatchObject({ status: 'invalid', reason: 'item.unavailable' });
+    expect(result.state.items[0]?.enabled).toBe(true);
+  });
+
+  it('leaves an ordinary lantern extinguishable', () => {
+    const lantern = definition('item.plain-lantern', {
+      category: 'light',
+      equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
+      light: {
+        color: [255, 180, 80],
+        radius: 3,
+        strength: 180,
+        fuelCapacity: 100,
+        fuelPerTime: 1,
+        warningThresholds: [20],
+        fuelTags: ['oil'],
+      },
+    });
+    const base = createDemoRun();
+    const lanternItem: ItemInstance = {
+      ...item('item.plain-lantern.1', lantern.id, {
+        type: 'equipped',
+        actorId: 'hero.demo',
+        slot: 'off-hand',
+      }),
+      fuel: 100,
+      enabled: true,
+    };
+    const hero = {
+      ...base.actors[0]!,
+      equipment: { ...base.actors[0]!.equipment, 'off-hand': lanternItem.itemId },
+    };
+    const result = resolveCommand(
+      { ...base, actors: [hero], items: [lanternItem] },
+      {
+        type: 'toggle-light',
+        commandId: 'command.douse-lantern',
+        expectedRevision: 0,
+        itemId: lanternItem.itemId,
+        enabled: false,
+      },
+      { content: pack(lantern) },
+    );
+    expect(result.result).toMatchObject({ status: 'applied' });
+    expect(result.state.items[0]?.enabled).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
@@ -9,10 +9,14 @@ import {
   descendToNextFloor,
   emptyEquipment,
   encodeActiveRun,
+  newRunRecords,
   RECENT_COMMAND_LIMIT,
+  SaveLoadError,
   type ActiveRun,
   type ActorState,
   type ItemInstance,
+  type NewRunRecordsInput,
+  type RunRecordRepository,
   type Uint32State,
 } from '@woven-deep/engine';
 import { SIGHTINGS_KEY } from '../src/session/codex.js';
@@ -717,6 +721,34 @@ describe('GuestSession', () => {
       expect(second).toEqual(projection);
     });
 
+    it('applies the lifetime deltas before the artifact deltas so conquest is visible at reconcile', () => {
+      const storage = fakeStorage();
+      storage.set(SAVE_KEY, encodeActiveRun(deadRun(SEED)));
+      const session = new GuestSession({ pack, storage });
+
+      const repository = createSessionRunRecordRepository(storage);
+      const calls: string[] = [];
+      const recording: RunRecordRepository = {
+        ...repository,
+        appendRecord(stored) {
+          calls.push('appendRecord');
+          repository.appendRecord(stored);
+        },
+        applyDeltas(deltas) {
+          calls.push('applyDeltas');
+          repository.applyDeltas(deltas);
+        },
+        applyArtifactDeltas(deltas) {
+          calls.push('applyArtifactDeltas');
+          repository.applyArtifactDeltas(deltas);
+        },
+      };
+
+      session.finalizeConcludedRun(recording, { achievedAt: 'Run #1', portraitGlyph: '@' });
+
+      expect(calls).toEqual(['appendRecord', 'applyDeltas', 'applyArtifactDeltas']);
+    });
+
     it('finalizing a became-heart conclusion records the guest Hearth lineage', () => {
       /** Mirrors `deadRun` above, but concluded voluntarily (`became-heart`) rather than by death:
        * the hero stays alive, matching the Final Chamber choice's non-death conclusion shape. */
@@ -809,6 +841,179 @@ describe('GuestSession', () => {
       expect(projection!.finalized).toBe(false);
       expect(projection!.score).toBeNull();
       expect(projection!.heirloom).toBeNull();
+    });
+  });
+
+  describe('hall records seeding', () => {
+    /** A run that really descended to depth 1 and died there — so the Hall record it finalizes
+     * into carries a `deathDepth` an actual floor can host the champion on. */
+    function deadRunAtDepth1(seed: Uint32State): ActiveRun {
+      const descended = depth1Run(seed);
+      const hero = descended.actors.find((actor) => actor.playerControlled)!;
+      return {
+        ...descended,
+        actors: descended.actors.map((actor) =>
+          actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+        ),
+        conclusion: {
+          completionType: 'died',
+          cause: {
+            killerContentId: null,
+            depth: 1,
+            turn: descended.turn,
+            worldTime: descended.worldTime,
+          },
+          concludedAtRevision: descended.revision,
+          finalized: false,
+        },
+      };
+    }
+
+    /** The session only writes the save on its first applied command, so a fresh run is read back
+     * through one harmless `wait` dispatch. */
+    function persistedRun(session: GuestSession, storage: FakeStorage): ActiveRun {
+      session.dispatch({ type: 'wait' });
+      return decodeActiveRun(storage.peek()!, pack);
+    }
+
+    /** Exactly what App.tsx hands the session: a thunk over the live Hall repository, through the
+     * one shared builder both hosts use. */
+    function recordsThunk(repository: RunRecordRepository): () => NewRunRecordsInput {
+      return () => newRunRecords(repository, pack);
+    }
+
+    it('carries the repository standings and undiscovered artifacts into a fresh run', () => {
+      const storage = fakeStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      storage.set(SAVE_KEY, encodeActiveRun(deadRunAtDepth1(SEED)));
+      new GuestSession({ pack, storage }).finalizeConcludedRun(repository, {
+        achievedAt: 'Run #1',
+        portraitGlyph: '@',
+      });
+      const recordId = repository.records()[0]!.recordId;
+
+      const session = new GuestSession({
+        pack,
+        storage,
+        seed: SEED,
+        startFresh: true,
+        records: recordsThunk(repository),
+      });
+
+      const run = persistedRun(session, storage);
+      expect(run.fallenHeroStandings.map((standing) => standing.hallRecordId)).toEqual([recordId]);
+      expect(run.fallenHeroDecisions[0]).toMatchObject({ role: 'champion', retained: true });
+      expect(run.artifactsUndiscovered).toEqual(
+        newRunRecords(repository, pack).undiscoveredArtifactIds,
+      );
+      expect(session.getSnapshot().conclusion).toBeNull();
+    });
+
+    it('reads the records provider on every fresh run, so a run started after a finalize sees the updated standings', () => {
+      const storage = fakeStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      // The provider value is created ONCE, before any record exists -- a construction-time
+      // snapshot would freeze the empty Hall into every later run.
+      const records = recordsThunk(repository);
+
+      const first = new GuestSession({ pack, storage, seed: SEED, startFresh: true, records });
+      expect(persistedRun(first, storage).fallenHeroStandings).toEqual([]);
+
+      storage.set(SAVE_KEY, encodeActiveRun(deadRunAtDepth1(SEED)));
+      new GuestSession({ pack, storage }).finalizeConcludedRun(repository, {
+        achievedAt: 'Run #1',
+        portraitGlyph: '@',
+      });
+      const recordId = repository.records()[0]!.recordId;
+
+      const second = new GuestSession({ pack, storage, seed: SEED, startFresh: true, records });
+
+      expect(
+        persistedRun(second, storage).fallenHeroStandings.map((standing) => standing.hallRecordId),
+      ).toEqual([recordId]);
+    });
+
+    it('degrades to a history-free run with a data-reset notice when the Hall cannot seed one', () => {
+      const storage = fakeStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      storage.set(SAVE_KEY, encodeActiveRun(deadRunAtDepth1(SEED)));
+      new GuestSession({ pack, storage }).finalizeConcludedRun(repository, {
+        achievedAt: 'Run #1',
+        portraitGlyph: '@',
+      });
+      // A standing the run schema rejects — the shape a hand-edited or older-build Hall blob can
+      // realistically reach `createNewRun` with.
+      const poisoned = () => ({
+        ...newRunRecords(repository, pack),
+        standings: newRunRecords(repository, pack).standings.map((standing) => ({
+          ...standing,
+          heirloom: null as unknown as (typeof standing)['heirloom'],
+        })),
+      });
+
+      // The notice cannot distinguish corrupt history from an engine regression in the records
+      // path, so the original error must still reach the console before play degrades.
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      let session!: GuestSession;
+      try {
+        expect(() => {
+          session = new GuestSession({
+            pack,
+            storage,
+            seed: SEED,
+            startFresh: true,
+            records: poisoned,
+          });
+        }).not.toThrow();
+        expect(logged).toHaveBeenCalledTimes(1);
+        expect(logged.mock.calls[0]![1]).toBeInstanceOf(SaveLoadError);
+      } finally {
+        logged.mockRestore();
+      }
+
+      expect(session.getSnapshot().notice).toEqual({ kind: 'data-reset', source: 'hall' });
+      const run = persistedRun(session, storage);
+      expect(run.fallenHeroStandings).toEqual([]);
+      expect(run.fallenHeroDecisions).toEqual([]);
+      // Still a playable run on the requested seed, not a half-built one.
+      expect(run.runSeed).toEqual(SEED);
+      expect(encodeActiveRun(run)).toBe(
+        encodeActiveRun(
+          persistedRun(new GuestSession({ pack, storage, seed: SEED, startFresh: true }), storage),
+        ),
+      );
+    });
+
+    it('propagates a run-creation failure that is not about the history at all, rather than degrading', () => {
+      const storage = fakeStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        // An all-zero seed is rejected by `createNewRun` with or without records, so the
+        // recordless retry throws too: a bug that has nothing to do with the Hall must surface as
+        // itself, never as a silently history-free run blamed on the player's save.
+        expect(
+          () =>
+            new GuestSession({
+              pack,
+              storage,
+              seed: [0, 0, 0, 0],
+              startFresh: true,
+              records: recordsThunk(repository),
+            }),
+        ).toThrow(RangeError);
+        expect(logged).not.toHaveBeenCalled();
+      } finally {
+        logged.mockRestore();
+      }
+    });
+
+    it('creates a history-free run when no records provider is supplied', () => {
+      const storage = fakeStorage();
+      const run = persistedRun(new GuestSession({ pack, storage, seed: SEED }), storage);
+      expect(run.fallenHeroStandings).toEqual([]);
+      expect(run.artifactsUndiscovered).toEqual([]);
+      expect(run.offeredArtifact).toBeNull();
     });
   });
 

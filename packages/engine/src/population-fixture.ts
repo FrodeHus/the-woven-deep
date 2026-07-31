@@ -5,6 +5,7 @@ import type {
 } from '@woven-deep/content';
 import { heroPerception } from './actor-model.js';
 import { createFallenHeroRunDecisions, placeFallenHeroEncounters } from './champion.js';
+import { artifactItemIds } from './commerce.js';
 import { validateContentBoundRun } from './content-bound-validation.js';
 import { preservesRequiredRoutes } from './connectivity.js';
 import { createDemoRun } from './fixture.js';
@@ -261,6 +262,10 @@ export function createPopulationDemoRun(
   let run: ActiveRun = {
     ...base,
     contentHash: pack.hash,
+    // A host with no history supplies every artifact the pack defines as still undiscovered, and
+    // this demo stands in for exactly that host. Left empty, the boss relics would read as already
+    // found and the bosses would withhold them.
+    artifactsUndiscovered: [...artifactItemIds(pack)].sort(compareCodeUnits),
     activeFloorId: populationFloor.floorId,
     actors: base.actors.map((actor) => ({
       ...actor,

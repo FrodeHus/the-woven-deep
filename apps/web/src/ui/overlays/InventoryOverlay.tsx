@@ -8,7 +8,8 @@ import {
 import { heroOf } from '../../session/projection-view.js';
 import type { CastableSpellView } from '../../session/projection-view.js';
 import { scrollAimSpell } from '../../session/scroll-targeting.js';
-import { usePack, useSessionCtx } from '../providers.js';
+import { usePack, useRecordsRepository, useSessionCtx } from '../providers.js';
+import { provenanceLines } from '../../session/artifact-view.js';
 import { ListDetail, type ListDetailItem } from '../components/ListDetail.js';
 import { cn } from '../lib/cn.js';
 import { useItemActionKeys } from '../hooks/useItemActionKeys.js';
@@ -80,6 +81,11 @@ export function InventoryOverlay({
 }: Readonly<InventoryOverlayProps> = {}): JSX.Element | null {
   const sessionCtx = useSessionCtx();
   const pack = usePack();
+  // Provenance is a CROSS-RUN fact, so it comes off the records repository rather than the run's
+  // projection: the ledger's entries are keyed by the artifact's content id, and the Hall records
+  // supply each stint's completion type. Null repository (no profile mounted) simply means no
+  // provenance to show.
+  const repository = useRecordsRepository();
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [filter, setFilter] = useState<CategoryFilter>('all');
@@ -102,6 +108,9 @@ export function InventoryOverlay({
   const selected = entries[selectedIndex];
   const refuelTarget =
     hero && selected ? equippedLightMatchingFuel(pack, hero, selected.item) : undefined;
+  const provenance = repository
+    ? provenanceLines(repository.artifactLedger(), selected?.item.contentId, repository.records())
+    : [];
 
   function dispatchAction(action: 'equip' | 'unequip' | 'drop' | 'toggle-light'): void {
     if (!selected || !sessionCtx) return;
@@ -217,6 +226,7 @@ export function InventoryOverlay({
             entry={selected}
             refuelTarget={refuelTarget}
             pack={pack}
+            provenance={provenance}
             onEquip={() => dispatchAction(selected?.equipped ? 'unequip' : 'equip')}
             onUse={() => selected && applyUse(selected)}
             onDrop={() => dispatchAction('drop')}

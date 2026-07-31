@@ -3,6 +3,12 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { effectLabel } from '../labels.js';
 import { itemById } from '../../session/pack-queries.js';
 import { itemKnownFacts } from '../../session/item-facts.js';
+import {
+  artifactDrawbackRows,
+  artifactSignature,
+  isArtifact,
+  isFuellessLight,
+} from '../../session/artifact-view.js';
 import type { MenuEntry, ProjectedItemLike } from './inventory-model.js';
 
 /** The tone each action button borders in, mirroring the HUD's own tone vocabulary (`Gauge`'s
@@ -22,18 +28,25 @@ function ActionButton({
   label,
   chord,
   tone = 'accent',
+  disabled = false,
   onClick,
 }: Readonly<{
   label: string;
   chord: string;
   tone?: ActionTone;
+  disabled?: boolean;
   onClick: () => void;
 }>): JSX.Element {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`cursor-pointer border bg-raised px-3 py-1.5 font-mono text-xs ${ACTION_TONE_CLASS[tone]}`}
+      disabled={disabled}
+      className={`border bg-raised px-3 py-1.5 font-mono text-xs ${
+        disabled
+          ? 'cursor-not-allowed border-subtle text-subtle'
+          : `cursor-pointer ${ACTION_TONE_CLASS[tone]}`
+      }`}
     >
       {label} <span className="opacity-60">[{chord}]</span>
     </button>
@@ -56,6 +69,7 @@ export function DetailPane({
   entry,
   refuelTarget,
   pack,
+  provenance = [],
   onEquip,
   onUse,
   onDrop,
@@ -66,6 +80,10 @@ export function DetailPane({
   /** The equipped light `entry`'s item can refuel, if any -- see `equippedLightMatchingFuel`. */
   refuelTarget: ProjectedItemLike | undefined;
   pack: CompiledContentPack;
+  /** This artifact's circulation history, oldest first, already rendered as prose by
+   * `provenanceLines` -- empty for an ordinary item, and for an artifact no run has ever carried.
+   * Resolved by the caller from the records repository's ledger (the engine never holds it). */
+  provenance?: readonly string[];
   onEquip: () => void;
   onUse: () => void;
   onDrop: () => void;
@@ -84,10 +102,23 @@ export function DetailPane({
    * an unidentified item -- so an unidentified item resolves no entry and reveals none of these. */
   const content = item.contentId === undefined ? undefined : itemById(pack, item.contentId);
 
+  /** Artifact-ness is a property of the CONTENT (the pack's `artifact` block), never of the
+   * projected instance -- so an unidentified item, whose projection omits `contentId` entirely,
+   * cannot be recognized as one, and its gold name never gives it away. */
+  const artifact = isArtifact(pack, item.contentId);
+  const drawbacks = artifactDrawbackRows(pack, item.contentId);
+  /** The signature ability, if this artifact has one. Casting it IS using the item -- the same
+   * `onUse` intent a scroll goes through -- so the affordance only changes what the button says. */
+  const signature = artifactSignature(pack, item.contentId);
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
-        <h3 className="font-serif text-lg text-fg-strong">{item.name}</h3>
+        {/* Gold for an artifact: the same `text-accent` token the HUD spends on the carried-gold
+         * count (`TopBar`), rather than a color invented for this one pane. */}
+        <h3 className={`font-serif text-lg ${artifact ? 'text-accent' : 'text-fg-strong'}`}>
+          {item.name}
+        </h3>
         <div className="flex flex-wrap gap-1.5">
           <span className="border border-muted px-1.5 py-px text-[10px] uppercase tracking-[0.1em] text-muted">
             {item.category}
@@ -95,6 +126,11 @@ export function DetailPane({
           <span className="border border-muted px-1.5 py-px text-[10px] uppercase tracking-[0.1em] text-muted">
             {unidentified ? 'Unidentified' : 'Identified'}
           </span>
+          {artifact && (
+            <span className="border border-accent px-1.5 py-px text-[10px] uppercase tracking-[0.1em] text-accent">
+              Relic
+            </span>
+          )}
         </div>
       </div>
 
@@ -123,14 +159,54 @@ export function DetailPane({
           Object.entries(item.enchantment.modifiers).map(([stat, amount]) => (
             <FactRow key={stat} label={stat} value={`${amount >= 0 ? '+' : ''}${amount}`} />
           ))}
+        {drawbacks.map((row) => (
+          <FactRow
+            key={row.label}
+            label={row.label}
+            value={<span className="text-danger-fg">{row.value}</span>}
+          />
+        ))}
         <FactRow label="Condition" value={item.condition} />
-        {item.charges != null && <FactRow label="Charges" value={item.charges} />}
-        {item.fuel != null && <FactRow label="Fuel" value={item.fuel} />}
+        {/* A signature artifact states its charges as "spent / full" inside its own block below,
+         * so the bare instance count would only repeat it. */}
+        {item.charges != null && !signature && <FactRow label="Charges" value={item.charges} />}
+        {/* A fuelless artifact light carries a full reserve it never spends, so the gauge would
+         * read as a countdown that never moves -- it hides on the pack's `artifact.light.fuelless`
+         * flag, never on `fuel === null`. The refuel affordance is gone for the same reason, gated
+         * one level up in `equippedLightMatchingFuel`. */}
+        {item.fuel != null && !isFuellessLight(pack, item.contentId) && (
+          <FactRow label="Fuel" value={item.fuel} />
+        )}
         {item.enabled !== null && <FactRow label="State" value={item.enabled ? 'Lit' : 'Unlit'} />}
         {item.unknownProperties && <FactRow label="Properties" value="Unknown" />}
       </div>
 
+      {/* The signature block wears the same gold (`accent`) the artifact's name and Relic tag do,
+       * so a relic reads as one thing rather than a stat list with a stranger bolted on. */}
+      {signature && (
+        <section aria-label="Signature" className="flex flex-col gap-1 border border-accent p-2">
+          <h4 className="text-[10px] uppercase tracking-[0.14em] text-accent">Signature</h4>
+          <FactRow
+            label={signature.name}
+            value={`${item.charges ?? 0} / ${signature.maximumCharges}`}
+          />
+        </section>
+      )}
+
       {description && <p className="text-sm italic text-muted">{description}</p>}
+
+      {provenance.length > 0 && (
+        <section aria-label="Provenance" className="flex flex-col gap-1">
+          <h4 className="text-[10px] uppercase tracking-[0.14em] text-subtle">Provenance</h4>
+          <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
+            {provenance.map((line, index) => (
+              <li key={`${index}-${line}`} className="text-xs text-muted">
+                {line}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <ActionButton
@@ -139,7 +215,16 @@ export function DetailPane({
           tone="accent"
           onClick={onEquip}
         />
-        <ActionButton label="Use" chord="u" tone="good" onClick={onUse} />
+        {/* A spent relic cannot be spoken until the next floor wakes it. The engine rejects the
+         * cast with `signature.no-charges` regardless -- this only stops the pane offering an
+         * action that is already known to fail. */}
+        <ActionButton
+          label={signature ? `Cast ${signature.name}` : 'Use'}
+          chord="u"
+          tone="good"
+          disabled={signature !== undefined && (item.charges ?? 0) <= 0}
+          onClick={onUse}
+        />
         <ActionButton label="Drop" chord="d" tone="danger" onClick={onDrop} />
         {item.category === 'light' && (
           <ActionButton label="Toggle light" chord="l" tone="warn" onClick={onToggleLight} />

@@ -1,4 +1,4 @@
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: item
     id: item.brass-lantern
@@ -28,5 +28,6 @@ entries:
       fuelPerTime: 1
       warningThresholds: [600, 300, 100]
       fuelTags: [lamp-oil]
+    artifact: null
     identification: { mode: known, poolId: null }
     effects: []

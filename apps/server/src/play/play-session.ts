@@ -7,6 +7,7 @@ import {
   finalizeRun,
   isHeartBossActive,
   projectGameplayState,
+  newRunRecords,
   projectRunConclusion,
   DEFAULT_GUEST_HERO,
   type ActiveRun,
@@ -209,7 +210,17 @@ export class ServerPlaySession {
           throw new LockedClassError(classEntry.id);
         }
       }
-      this.run = createNewRun({ pack: this.pack, seed: input.seed, hero });
+      this.run = createNewRun({
+        pack: this.pack,
+        seed: input.seed,
+        hero,
+        // The profile's cross-run history, through the same builder the guest host uses: Hall
+        // standings become this run's champion/Echo encounters, the ledger's still-unsecured
+        // artifacts become its vault-artifact pool, and the lifetime's conquered champions stay
+        // conquered. A Hall this corrupt is a server-side bug, not survivable input (the guest's
+        // browser-storage Hall degrades instead) -- so a throw here propagates.
+        records: newRunRecords(this.hallRepo, this.pack),
+      });
       this.persist();
     }
     // A reconnect may load a run that concluded but never finished finalizing (e.g. a crash
@@ -374,7 +385,10 @@ export class ServerPlaySession {
 
     this.database.transaction(() => {
       this.hallRepo.appendRecord(stored);
+      // Lifetime deltas first, artifact deltas second: applying the artifact stints runs the
+      // ledger's reconcile pass, which must already see this run's newly conquered champions.
       this.hallRepo.applyDeltas(finalized.deltas);
+      this.hallRepo.applyArtifactDeltas(finalized.artifactDeltas);
 
       const unlocks = evaluateUnlocks({
         records: this.hallRepo.records(),

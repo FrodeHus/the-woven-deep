@@ -1,4 +1,4 @@
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: item
     id: item.lockpick
@@ -18,5 +18,6 @@ entries:
     equipment: null
     combat: null
     light: null
+    artifact: null
     identification: { mode: known, poolId: null }
     effects: []

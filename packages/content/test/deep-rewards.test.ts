@@ -24,7 +24,7 @@ describe('deep reward relics and merchant tiers', () => {
     }
   });
 
-  it('wires the relics into family kill-loot and the town restocks at the right depths', async () => {
+  it('keeps the relics out of ordinary loot now that they are artifacts, and the town restocks at the right depths', async () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
@@ -34,14 +34,12 @@ describe('deep reward relics and merchant tiers', () => {
       )!;
     const choice = (id: string, contentId: string) =>
       table(id).choices.find((entry) => entry.contentId === contentId);
-    expect(choice('loot-table.the-bound', 'item.bound-signet')).toMatchObject({ minDepth: 13 });
-    expect(choice('loot-table.echo-wrought', 'item.echo-heartstone')).toMatchObject({
-      minDepth: 15,
-    });
-    expect(choice('loot-table.town-curios', 'item.echo-heartstone')).toMatchObject({
-      minDepth: 15,
-    });
-    expect(choice('loot-table.town-arms', 'item.bound-signet')).toMatchObject({ minDepth: 13 });
+    // Artifacts are forbidden from ordinary loot graphs (Task 1 validation); the vault-pool
+    // offer path replaces family kill-loot and town restocks for these two relics.
+    expect(choice('loot-table.the-bound', 'item.bound-signet')).toBeUndefined();
+    expect(choice('loot-table.echo-wrought', 'item.echo-heartstone')).toBeUndefined();
+    expect(choice('loot-table.town-curios', 'item.echo-heartstone')).toBeUndefined();
+    expect(choice('loot-table.town-arms', 'item.bound-signet')).toBeUndefined();
     expect(choice('loot-table.town-provisioner', 'item.ashen-potion')).toMatchObject({
       minDepth: 15,
     });

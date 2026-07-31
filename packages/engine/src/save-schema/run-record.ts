@@ -117,6 +117,8 @@ export const activeRunSchema = z.strictObject({
   fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
+  offeredArtifact: identifier.nullable(),
+  artifactsUndiscovered: z.array(identifier).readonly(),
   metrics: runMetrics,
   conclusion: runConclusionSchema.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
@@ -995,6 +997,11 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     'conqueredChampionRecordIds',
     'conquered Champion record',
   );
+  validateOrderedIds(run.artifactsUndiscovered, 'artifactsUndiscovered', 'undiscovered artifact');
+  // An offer is always drawn from the undrawn pool, so a run can never offer an artifact it has
+  // already handed out (or one that was never in circulation).
+  if (run.offeredArtifact !== null && !run.artifactsUndiscovered.includes(run.offeredArtifact))
+    fail('offeredArtifact', 'offered artifact must still be undiscovered');
   for (let index = 0; index < run.fallenHeroDecisions.length; index += 1) {
     const decision = run.fallenHeroDecisions[index]!;
     if (decision.rank !== index + 1)
@@ -1227,10 +1234,18 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   for (const [populationIndex, populationValue] of run.populations.entries()) {
     if (populationValue.model === 'boss') {
       const uniqueRewardId = `item.reward.${populationValue.populationId}.unique`;
-      if (populationValue.rewardCreated && !items.has(uniqueRewardId)) {
+      // A boss relic that is an already-discovered legendary artifact is withheld, so the unique
+      // is not unconditionally present. Whether it exists is decided by the pack, which this
+      // content-free tier cannot read: the receipt is the run's own record of that decision, and
+      // items and receipt must agree in both directions. `content-bound-validation` then re-derives
+      // the receipt from the pack, so a receipt forged to omit the unique fails there.
+      const receiptHasUnique =
+        populationValue.rewardReceipt?.items.some((item) => item.itemId === uniqueRewardId) ??
+        false;
+      if (populationValue.rewardCreated && receiptHasUnique !== items.has(uniqueRewardId)) {
         fail(
           `populations.${populationIndex}.rewardCreated`,
-          'reward-created boss requires its guaranteed unique item',
+          'reward-created boss requires its guaranteed unique item exactly when its receipt lists one',
         );
       }
       if (

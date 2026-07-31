@@ -190,6 +190,14 @@ export function equipmentModifiers(
       base[definition.combat.ammunitionTag ? 'rangedAccuracy' : 'meleeAccuracy'] =
         definition.combat.accuracy;
     }
+    // Artifact drawbacks apply only while equipped — carried-but-unequipped artifacts
+    // contribute nothing, since equipmentModifiers is the sole stat path (spec amendment:
+    // the design's "carried-or-equipped" wording resolves to equipped-only here). Folded into
+    // `base`, before the enchantment loop, so drawbacks show in publicModifiers too — artifacts
+    // are always identified-known, so this is a reviewer-visible guarantee rather than a gate.
+    for (const [name, amount] of Object.entries(definition.artifact?.drawbackModifiers ?? {})) {
+      base[name as DerivedStatName] = (base[name as DerivedStatName] ?? 0) + amount;
+    }
     const modifiers = { ...base } as Record<string, number>;
     for (const [name, amount] of Object.entries(item.enchantment?.modifiers ?? {})) {
       modifiers[name] = (modifiers[name] ?? 0) + amount;

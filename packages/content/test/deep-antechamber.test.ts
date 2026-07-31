@@ -31,8 +31,17 @@ describe('deep antechamber vault and warded glyph trap', () => {
       .filter((slot): slot is NonNullable<typeof slot> => slot !== null);
     const trapSlot = slots.find((slot) => slot.kind === 'trap');
     expect(trapSlot?.contentId).toBe('trap.warded-glyph');
-    const itemSlot = slots.find((slot) => slot.kind === 'item');
+    const itemSlot = slots.find((slot) => slot.id === 'deep-cache');
     expect(itemSlot?.lootTableId).toBe('loot-table.echo-wrought');
-    expect(slots.filter((slot) => slot.kind === 'monster')).toHaveLength(2);
+    const artifactSlot = slots.find((slot) => slot.id === 'artifact-offer');
+    expect(artifactSlot).toMatchObject({
+      kind: 'item',
+      required: false,
+      lootTableId: null,
+      contentId: null,
+    });
+    expect(artifactSlot?.tags).toContain('artifact');
+    // Two ambushes plus the fallen-hero arena.
+    expect(slots.filter((slot) => slot.kind === 'monster')).toHaveLength(3);
   });
 });

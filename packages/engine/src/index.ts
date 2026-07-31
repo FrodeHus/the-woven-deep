@@ -90,6 +90,7 @@ export * from './run-conclusion.js';
 export * from './score-run.js';
 export * from './run-records-model.js';
 export * from './run-record-repository.js';
+export * from './artifact-ledger.js';
 export * from './heirloom-selection.js';
 export * from './run-finalize.js';
 export * from './reducer.js';

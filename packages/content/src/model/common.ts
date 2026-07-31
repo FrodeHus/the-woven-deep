@@ -17,7 +17,7 @@ import type { TraitContentEntry } from './trait.js';
 import type { TrapContentEntry } from './trap.js';
 import type { VaultContentEntry } from './vault.js';
 
-export const CONTENT_SCHEMA_VERSION = 9 as const;
+export const CONTENT_SCHEMA_VERSION = 10 as const;
 
 export type ContentId = string;
 export const CONTENT_KIND_IDS = [

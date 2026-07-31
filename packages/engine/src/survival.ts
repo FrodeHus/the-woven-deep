@@ -5,6 +5,7 @@ import type {
   ItemContentEntry,
 } from '@woven-deep/content';
 import { replaceActor, type ActorState } from './actor-model.js';
+import { artifactById } from './commerce.js';
 import { actorHasConditionTrait, advanceConditions, conditionModifiers } from './conditions.js';
 import { deriveActorStats, type DerivedStatModifier } from './attributes.js';
 import { equipmentModifiers } from './equipment.js';
@@ -163,6 +164,9 @@ export function consumeFuel(
   for (const item of active) {
     const light = itemDefinition(input.content, item.contentId).light;
     if (!light) continue;
+    // A fuelless artifact burns on nothing: it never drains, never warns, and is never doused by
+    // the clock, so its instance fuel stays at capacity for the whole run.
+    if (artifactById(input.content, item.contentId)?.light?.fuelless === true) continue;
     const previous = item.fuel!;
     const consumed = safeInteger(`${item.itemId} fuel consumed`, input.elapsed * light.fuelPerTime);
     const fuel = Math.max(0, previous - consumed);

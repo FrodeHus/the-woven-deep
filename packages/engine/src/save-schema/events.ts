@@ -495,7 +495,7 @@ export const bossRewardCreatedEvent = z.strictObject({
   populationId: identifier,
   actorId: identifier,
   encounterId: identifier,
-  uniqueItemId: identifier,
+  uniqueItemId: identifier.nullable(),
   itemIds: z.array(identifier).readonly(),
 });
 export const championEncounteredEvent = z.strictObject({

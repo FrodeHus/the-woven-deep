@@ -36,6 +36,13 @@ import { transformVault } from './vault-transform.js';
 export type PopulationPlacementFailureReason =
   'no-eligible-encounter' | 'no-valid-placement' | 'required-route-blocked';
 
+/**
+ * Item-id prefix of the run's single vault artifact offer. Also the one-per-run guard: a scan of
+ * `run.items` for this prefix is what stops a second artifact-tagged slot, on this floor or any
+ * later one, from minting a duplicate of a singleton relic.
+ */
+export const ARTIFACT_OFFER_ITEM_PREFIX = 'item.artifact-offer.';
+
 interface PlacementBase {
   readonly encounterId: OpaqueId | null;
   readonly reason?: PopulationPlacementFailureReason;
@@ -493,6 +500,15 @@ function unfilledItemSlots(
  * tail beside `placeFragmentSpawn`/`placeFloorLoot` rather than inside `placePopulation`, so the
  * stream advances even on a floor where every encounter placement fails. The already-filled
  * position check against `run.items` keeps a repeat call a no-op that leaves the stream untouched.
+ *
+ * An `artifact`-tagged slot is the exception that names no loot source at all: it is the vault
+ * offer, and what it holds was decided once at run creation (`run.offeredArtifact`). It is placed
+ * without touching any stream, at most once per run, and silently left empty when this run carries
+ * no offer -- a vault authored with the slot must still generate normally for every other run. It
+ * is also left empty when the current floor's depth is below the offered artifact's own authored
+ * `minDepth`: a shallow vault (item-cache-band `minDepth`) can carry the `artifact` slot tag while
+ * the offer itself is authored for a deeper band, and the slot must wait for a qualifying floor
+ * rather than hand out a mid/deep-band artifact early -- still without touching any stream.
  */
 function fillItemSlots(
   input: PlacePopulationInput,
@@ -500,10 +516,28 @@ function fillItemSlots(
 ): Readonly<{ items: readonly ItemInstance[]; state: Uint32State }> {
   let currentState: Uint32State | null = null;
   const items: ItemInstance[] = [];
+  let offerPlaced = input.run.items.some((item) =>
+    item.itemId.startsWith(ARTIFACT_OFFER_ITEM_PREFIX),
+  );
   for (const slot of unfilledItemSlots(input)) {
     const vaultSlot = originatingVaultSlot(input, slot);
     const itemId = `item.vault.${slot.slotId}`;
-    if (vaultSlot.lootTableId !== null) {
+    if (slot.tags.includes('artifact') || vaultSlot.tags.includes('artifact')) {
+      if (input.run.offeredArtifact === null || offerPlaced) continue;
+      const artifactEntry = artifactItemEntry(input.content, input.run.offeredArtifact);
+      if (input.floor.depth < artifactEntry.minDepth) continue;
+      items.push(
+        createFloorItem({
+          content: input.content,
+          contentId: input.run.offeredArtifact,
+          itemId: `${ARTIFACT_OFFER_ITEM_PREFIX}${slot.slotId}`,
+          floorId: input.floor.floorId,
+          x: slot.x,
+          y: slot.y,
+        }),
+      );
+      offerPlaced = true;
+    } else if (vaultSlot.lootTableId !== null) {
       const loot = createFloorLootFromTable({
         content: input.content,
         tableId: vaultSlot.lootTableId,
@@ -534,6 +568,20 @@ function fillItemSlots(
     }
   }
   return { items, state: currentState ?? state };
+}
+
+/** Resolves the offered artifact's own item entry so the vault slot can check its authored
+ * `minDepth` band -- a shallow vault (e.g. an early item-cache) must not hand out a mid/deep-band
+ * artifact just because it happens to carry the `artifact`-tagged slot. */
+function artifactItemEntry(content: CompiledContentPack, artifactId: OpaqueId): ItemContentEntry {
+  const entry = content.entries.find(
+    (candidate): candidate is ItemContentEntry =>
+      candidate.kind === 'item' && candidate.id === artifactId,
+  );
+  if (entry === undefined) {
+    throw new Error(`internal invariant: offered artifact ${artifactId} has no item content entry`);
+  }
+  return entry;
 }
 
 function fragmentItemEntry(content: CompiledContentPack, fragmentId: string): ItemContentEntry {

@@ -1,4 +1,4 @@
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: item
     id: item.bound-signet
@@ -13,11 +13,16 @@ entries:
     category: ring
     stackLimit: 1
     price: 150
-    rarity: rare
+    rarity: legendary
     actionCost: 100
     equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
     combat: { accuracy: 0, defense: 1, armor: 1, damage: null, range: 0, ammunitionTag: null }
     light: null
+    artifact:
+      canon: true
+      signature: { spellId: spell.weave-shield, charges: 2, rechargePerFloor: 1 }
+      drawbackModifiers: { search: -1 }
+      light: null
     identification: { mode: known, poolId: null }
     effects: []
 
@@ -39,5 +44,10 @@ entries:
     equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
     combat: { accuracy: 1, defense: 1, armor: 0, damage: null, range: 0, ammunitionTag: null }
     light: null
+    artifact:
+      canon: true
+      signature: { spellId: spell.enervate, charges: 3, rechargePerFloor: 1 }
+      drawbackModifiers: { defense: -1 }
+      light: null
     identification: { mode: known, poolId: null }
     effects: []

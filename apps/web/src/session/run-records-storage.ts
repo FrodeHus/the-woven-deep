@@ -1,6 +1,12 @@
 import {
+  applyArtifactDeltas as foldArtifactDeltas,
+  emptyArtifactLedger,
   normalizeStoredMetrics,
+  reconcileArtifactLedger,
   standingsFromRecords,
+  MAX_STANDINGS,
+  type ArtifactDeltas,
+  type ArtifactLedger,
   type DiscoveryProtectionBonus,
   type DiscoveryProtectionUpdate,
   type HeartLineageRecord,
@@ -35,7 +41,7 @@ export class SessionHallCorruptError extends Error {
  * future field additions only extend that (idempotent) normalizer, never a bespoke migration
  * step here.
  */
-const HALL_STORE_VERSION = 1;
+const HALL_STORE_VERSION = 2;
 
 interface PersistedHallState {
   readonly version: number;
@@ -43,7 +49,15 @@ interface PersistedHallState {
   readonly heart: HeartLineageRecord | null;
   readonly lifetime: LifetimeState;
   readonly appliedDeltaRecordIds: readonly OpaqueId[];
+  readonly artifactLedger: ArtifactLedger;
+  readonly appliedArtifactRecordIds: readonly OpaqueId[];
 }
+
+/** What a parsed blob is allowed to be before migration: a version-1 blob predates the artifact
+ * ledger entirely, so both ledger keys are optional on the way in and always present on the way
+ * out. */
+type ParsedHallState = Omit<PersistedHallState, 'artifactLedger' | 'appliedArtifactRecordIds'> &
+  Partial<Pick<PersistedHallState, 'artifactLedger' | 'appliedArtifactRecordIds'>>;
 
 function emptyLifetimeMetrics(): RunMetrics {
   return {
@@ -81,6 +95,8 @@ function emptyPersistedState(): PersistedHallState {
       totals: emptyLifetimeMetrics(),
     },
     appliedDeltaRecordIds: [],
+    artifactLedger: emptyArtifactLedger(),
+    appliedArtifactRecordIds: [],
   };
 }
 
@@ -88,10 +104,12 @@ function emptyPersistedState(): PersistedHallState {
  * shape: normalizes `lifetime.totals` (the running merge base future deltas fold into) and every
  * stored record's `metrics`. A no-op for already-complete data (current writes), since
  * `normalizeStoredMetrics` is idempotent. */
-function migratePersistedState(state: PersistedHallState): PersistedHallState {
+function migratePersistedState(state: ParsedHallState): PersistedHallState {
   return {
     ...state,
     version: HALL_STORE_VERSION,
+    artifactLedger: state.artifactLedger ?? emptyArtifactLedger(),
+    appliedArtifactRecordIds: state.appliedArtifactRecordIds ?? [],
     records: state.records.map((record) => ({
       ...record,
       metrics: normalizeStoredMetrics(record.metrics),
@@ -202,7 +220,7 @@ function mergedDiscoveryProtection(
 /** Narrow, non-exhaustive shape check: enough to reject a corrupt/foreign blob without trying to
  * fully re-validate every `StoredHallRecord` field (the engine itself is the source of truth for
  * those; a malformed record that slips through fails loudly the first time it's actually used). */
-function isValidPersistedState(value: unknown): value is PersistedHallState {
+function isValidPersistedState(value: unknown): value is ParsedHallState {
   if (value === null || typeof value !== 'object') return false;
   const candidate = value as Record<string, unknown>;
   if (!Array.isArray(candidate['records'])) return false;
@@ -216,6 +234,14 @@ function isValidPersistedState(value: unknown): value is PersistedHallState {
   if (lifetimeRecord['totals'] === null || typeof lifetimeRecord['totals'] !== 'object')
     return false;
   if (!Array.isArray(candidate['appliedDeltaRecordIds'])) return false;
+  // Version-1 blobs predate both keys; absent is migrated, present-but-wrong-shape is corrupt.
+  if (candidate['artifactLedger'] !== undefined && !Array.isArray(candidate['artifactLedger']))
+    return false;
+  if (
+    candidate['appliedArtifactRecordIds'] !== undefined &&
+    !Array.isArray(candidate['appliedArtifactRecordIds'])
+  )
+    return false;
   return true;
 }
 
@@ -247,13 +273,25 @@ export function createSessionRunRecordRepository(storage: SessionStorageLike): R
         'the stored Hall of Records blob is corrupt and has been reset',
       );
     }
-    state = migratePersistedState(parsed as PersistedHallState);
+    state = migratePersistedState(parsed as ParsedHallState);
   }
 
   const hall: StoredHallRecord[] = [...state.records];
   const appliedDeltaRecordIds = new Set<OpaqueId>(state.appliedDeltaRecordIds);
+  const appliedArtifactRecordIds = new Set<OpaqueId>(state.appliedArtifactRecordIds);
   let heart: HeartLineageRecord | null = state.heart;
   let lifetime: LifetimeState = state.lifetime;
+  let artifactLedger: ArtifactLedger = state.artifactLedger;
+
+  /** Mirrors the engine reference: reconcile on every event that can change standings membership
+   * — a Hall append, and each applied batch of artifact deltas. */
+  function reconcile(): void {
+    artifactLedger = reconcileArtifactLedger({
+      ledger: artifactLedger,
+      standings: standingsFromRecords(hall, MAX_STANDINGS),
+      lifetime,
+    });
+  }
 
   function persist(): void {
     const toPersist: PersistedHallState = {
@@ -262,6 +300,8 @@ export function createSessionRunRecordRepository(storage: SessionStorageLike): R
       heart,
       lifetime,
       appliedDeltaRecordIds: [...appliedDeltaRecordIds],
+      artifactLedger,
+      appliedArtifactRecordIds: [...appliedArtifactRecordIds],
     };
     storage.set(RECORDS_KEY, JSON.stringify(toPersist));
   }
@@ -280,6 +320,7 @@ export function createSessionRunRecordRepository(storage: SessionStorageLike): R
         );
       }
       hall.push(deepFreezeCopy(stored));
+      reconcile();
       persist();
     },
     currentHeart() {
@@ -310,6 +351,18 @@ export function createSessionRunRecordRepository(storage: SessionStorageLike): R
         ),
         totals: mergeMetrics(lifetime.totals, deltas.metrics),
       };
+      persist();
+    },
+    artifactLedger() {
+      return artifactLedger;
+    },
+    applyArtifactDeltas(deltas: ArtifactDeltas) {
+      if (appliedArtifactRecordIds.has(deltas.recordId)) return;
+      // Fold before marking applied: a batch rejected by the ledger's invariant checks must not
+      // burn its recordId, or a corrected retry would silently no-op.
+      artifactLedger = foldArtifactDeltas(artifactLedger, deltas);
+      appliedArtifactRecordIds.add(deltas.recordId);
+      reconcile();
       persist();
     },
   };

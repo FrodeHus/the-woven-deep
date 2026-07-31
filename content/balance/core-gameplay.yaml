@@ -1,4 +1,4 @@
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: balance
     startingCurrency: 40
@@ -107,6 +107,7 @@ entries:
     fragmentSpawnRollDenominator: 40
     generation:
       doorTilePercent: 35
+      artifactOfferPercent: 12
     floorLoot:
       scatterCount: { minimum: 2, maximum: 4 }
       chestCount: { minimum: 0, maximum: 2 }

@@ -14,6 +14,7 @@ import {
   type GameCommand,
   type HeartLineageRecord,
   type LifetimeDeltas,
+  type ArtifactDeltas,
   type OpaqueId,
   type RunMetrics,
   type StoredHallRecord,
@@ -142,6 +143,7 @@ const fallbackItem: ItemContentEntry = {
   equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
   combat: null,
   light: null,
+  artifact: null,
   identification: { mode: 'known', poolId: null },
   effects: [],
 };
@@ -437,5 +439,163 @@ describe('createSessionRunRecordRepository', () => {
     ).not.toThrow();
     expect(repository!.lifetime().totals.kills).toBe(7);
     expect(repository!.lifetime().totals.defeatedBossMonsterIds).toEqual(['monster.boss.new']);
+  });
+});
+
+function outrankingRecords(count: number): readonly StoredHallRecord[] {
+  return Array.from({ length: count }, (_unused, index) =>
+    storedRecord({
+      recordId: `record.rival${index}`,
+      heroName: `Rival ${index}`,
+      score: { lines: [], total: 500 + index },
+    }),
+  );
+}
+
+function lostToDeltas(recordId: OpaqueId, heroName: string): ArtifactDeltas {
+  return {
+    recordId,
+    stints: [
+      {
+        artifactId: 'artifact.sundered-crown',
+        stint: { heroName, recordId, outcome: 'died-with', depth: 5 },
+        newStatus: 'lost',
+        holderRecordId: recordId,
+      },
+    ],
+  };
+}
+
+describe('session run record repository artifact ledger', () => {
+  it('starts with an empty ledger', () => {
+    expect(createSessionRunRecordRepository(fakeStorage()).artifactLedger()).toEqual([]);
+  });
+
+  it('persists the ledger and the applied ids across a reconstruction', () => {
+    const storage = fakeStorage();
+    const first = createSessionRunRecordRepository(storage);
+    const record = storedRecord();
+    first.appendRecord(record);
+    first.applyArtifactDeltas(lostToDeltas(record.recordId, record.heroName));
+
+    const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
+    expect(persisted['version']).toBe(2);
+    expect(persisted['appliedArtifactRecordIds']).toEqual([record.recordId]);
+
+    const reopened = createSessionRunRecordRepository(storage);
+    expect(reopened.artifactLedger()).toEqual(first.artifactLedger());
+
+    // Idempotence survives the reload: the same deltas must not double-append provenance.
+    reopened.applyArtifactDeltas(lostToDeltas(record.recordId, record.heroName));
+    expect(reopened.artifactLedger()[0]?.provenance).toHaveLength(1);
+  });
+
+  it('reconciles on appendRecord: an evicted holder releases the artifact back to the deep', () => {
+    const repository = createSessionRunRecordRepository(fakeStorage());
+    const holder = storedRecord();
+    repository.appendRecord(holder);
+    repository.applyArtifactDeltas(lostToDeltas(holder.recordId, holder.heroName));
+    expect(repository.artifactLedger()[0]?.status).toBe('lost');
+
+    for (const rival of outrankingRecords(10)) {
+      repository.appendRecord(rival);
+    }
+
+    expect(repository.artifactLedger()).toEqual([
+      {
+        artifactId: 'artifact.sundered-crown',
+        status: 'undiscovered',
+        holderRecordId: null,
+        provenance: [
+          { heroName: holder.heroName, recordId: holder.recordId, outcome: 'died-with', depth: 5 },
+          {
+            heroName: holder.heroName,
+            recordId: holder.recordId,
+            outcome: 'reclaimed-by-the-deep',
+            depth: 0,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('migrates a version-1 blob by defaulting the ledger keys', () => {
+    const storage = fakeStorage();
+    storage.set(
+      RECORDS_KEY,
+      JSON.stringify({
+        version: 1,
+        records: [],
+        heart: null,
+        lifetime: {
+          conqueredChampionRecordIds: [],
+          grantedAchievementIds: [],
+          discoveryProtection: [],
+          totals: metrics(),
+        },
+        appliedDeltaRecordIds: [],
+        // no artifactLedger / appliedArtifactRecordIds
+      }),
+    );
+
+    const repository = createSessionRunRecordRepository(storage);
+    expect(repository.artifactLedger()).toEqual([]);
+
+    repository.recordHeart({
+      heroName: 'Ada',
+      classTags: ['fighter'],
+      hallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+      enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
+    });
+    const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
+    expect(persisted['version']).toBe(2);
+    expect(persisted['artifactLedger']).toEqual([]);
+    expect(persisted['appliedArtifactRecordIds']).toEqual([]);
+  });
+
+  it('rejects a blob whose artifact ledger keys have the wrong shape', () => {
+    const storage = fakeStorage();
+    storage.set(
+      RECORDS_KEY,
+      JSON.stringify({
+        version: 2,
+        records: [],
+        heart: null,
+        lifetime: {
+          conqueredChampionRecordIds: [],
+          grantedAchievementIds: [],
+          discoveryProtection: [],
+          totals: metrics(),
+        },
+        appliedDeltaRecordIds: [],
+        artifactLedger: 'not an array',
+        appliedArtifactRecordIds: [],
+      }),
+    );
+
+    expect(() => createSessionRunRecordRepository(storage)).toThrow(SessionHallCorruptError);
+  });
+
+  it('rejects a blob whose applied artifact ids have the wrong shape', () => {
+    const storage = fakeStorage();
+    storage.set(
+      RECORDS_KEY,
+      JSON.stringify({
+        version: 2,
+        records: [],
+        heart: null,
+        lifetime: {
+          conqueredChampionRecordIds: [],
+          grantedAchievementIds: [],
+          discoveryProtection: [],
+          totals: metrics(),
+        },
+        appliedDeltaRecordIds: [],
+        artifactLedger: [],
+        appliedArtifactRecordIds: 'not an array',
+      }),
+    );
+
+    expect(() => createSessionRunRecordRepository(storage)).toThrow(SessionHallCorruptError);
   });
 });

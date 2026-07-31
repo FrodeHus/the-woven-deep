@@ -357,7 +357,9 @@ export function createFloorItem(
     condition: 100,
     enchantment: null,
     identified: definition.identification.mode === 'known',
-    charges: null,
+    // An artifact with a signature ability enters circulation fully charged; everything else
+    // (including a signature-less artifact like Maria's Grace) carries no charge track at all.
+    charges: definition.artifact?.signature?.charges ?? null,
     fuel: definition.light?.fuelCapacity ?? null,
     enabled: definition.light === null ? null : false,
     location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y },
@@ -484,6 +486,9 @@ export function createRecordedHeirloom(
   const definition = itemDefinition(input.content, resolvedContentId);
   const fallback = resolvedContentId !== input.snapshot.contentId;
   const displayName = boundedDisplayText(fallback ? definition.name : input.snapshot.displayName);
+  // A fuelless artifact carries its capacity as a constant, never a reserve, so the recovered
+  // instance is restored to it: whatever the record held, the lantern can be lit again.
+  const fuelless = definition.artifact?.light?.fuelless === true;
   const item: ItemInstance = {
     itemId: input.itemId,
     contentId: definition.id,
@@ -491,8 +496,11 @@ export function createRecordedHeirloom(
     condition: fallback ? 100 : input.snapshot.condition,
     enchantment: fallback ? null : input.snapshot.enchantment,
     identified: true,
+    // A recovered artifact keeps the charges its bearer left it holding -- being reclaimed is not a
+    // refill. The fallback branch resolved a DIFFERENT item than the record named, so the recorded
+    // charge count belongs to nothing here and the substitute starts with no charge track at all.
     charges: fallback ? null : input.snapshot.charges,
-    fuel: fallback ? (definition.light?.fuelCapacity ?? null) : input.snapshot.fuel,
+    fuel: fallback || fuelless ? (definition.light?.fuelCapacity ?? null) : input.snapshot.fuel,
     enabled: definition.light === null ? null : false,
     location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y },
     heirloom: {
@@ -525,17 +533,27 @@ export function recordedHeirloomContentId(
     (entry): entry is ItemContentEntry =>
       entry.kind === 'item' && entry.id === input.snapshot.contentId,
   );
+  // An artifact light is fuelless by content rule, so its recorded fuel says nothing about
+  // whether the item is still itself; materialization restores the constant capacity instead.
+  // Judging it by the ordinary reserve check would degrade the Grace to the fallback relic.
   const fuelCompatible =
-    recorded?.light === null
-      ? input.snapshot.fuel === null
-      : recorded?.light !== undefined &&
-        input.snapshot.fuel !== null &&
-        input.snapshot.fuel <= recorded.light.fuelCapacity;
+    recorded?.artifact != null
+      ? true
+      : recorded?.light === null
+        ? input.snapshot.fuel === null
+        : recorded?.light !== undefined &&
+          input.snapshot.fuel !== null &&
+          input.snapshot.fuel <= recorded.light.fuelCapacity;
   const modifiersCompatible = Object.keys(input.snapshot.enchantment?.modifiers ?? {}).every(
     (name) => (DERIVED_STAT_NAMES as readonly string[]).includes(name),
   );
+  // An artifact travels in the backpack as readily as in a slot, so it is absent from the record's
+  // equipped list as often as not. Requiring membership would silently degrade every recovered
+  // backpack artifact to the fallback relic; the remaining compatibility checks still apply.
+  const heldProof =
+    recorded?.artifact != null || input.equippedItemContentIds.includes(input.snapshot.contentId);
   return input.snapshot.sourceItemId !== null &&
-    input.equippedItemContentIds.includes(input.snapshot.contentId) &&
+    heldProof &&
     recorded?.heirloomEligible === true &&
     recorded.equipment !== null &&
     fuelCompatible &&

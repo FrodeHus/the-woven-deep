@@ -1,11 +1,14 @@
 import type {
   CompiledContentPack,
+  FallenChampionTemplateContentEntry,
   ItemContentEntry,
   MerchantEncounterContentEntry,
 } from '@woven-deep/content';
 import type { BaseAttributes, EquipmentSlot } from './actor-model.js';
 import { emptyEquipment, type ActorState } from './actor-model.js';
 import { balanceEntry } from './actions.js';
+import { createFallenHeroRunDecisions } from './champion.js';
+import { artifactItemIds, guaranteedUniqueItemIds } from './commerce.js';
 import { deriveActorStats, type DerivedStatModifier } from './attributes.js';
 import type { ClassicThemeSettings } from './generation-model.js';
 import { allocateIdentificationMap } from './identification.js';
@@ -14,7 +17,8 @@ import { validateRequiredFloorLootTables } from './loot-placement.js';
 import { materializeMerchant } from './merchant-stock.js';
 import type { ActiveRun, OpaqueId, Point, Uint32State } from './model.js';
 import { createEncounterRunDecisions } from './population-gates.js';
-import { deriveRngStreams, isNonZeroState } from './random.js';
+import type { FallenHeroStandingSnapshot } from './population-model.js';
+import { deriveRngStreams, isNonZeroState, rollDie } from './random.js';
 import { encodeRunSeed } from './run-records-model.js';
 import { emptyRunMetrics } from './run-metrics.js';
 import { validateActiveRun } from './save-schema.js';
@@ -164,14 +168,60 @@ function instantiateHeroItem(
   };
 }
 
+/**
+ * The player's cross-run history, supplied by the host from its repositories. Omitting it creates
+ * a history-free run: no Hall standings, no conquered champions, and no artifact offer -- the
+ * guest path, byte-identical to a run created before records existed.
+ */
+export interface NewRunRecordsInput {
+  /**
+   * The Hall's top standings, at most ten and contiguously ranked from 1 (`validateActiveRun`
+   * rejects anything else). A `RunRecordRepository.standings(limit)` result already satisfies
+   * both — it is the only intended source.
+   */
+  readonly standings: readonly FallenHeroStandingSnapshot[];
+  /** Artifact ids the player has not secured yet. Any order; ids the pack does not define as
+   * artifacts are dropped, and the survivors are de-duplicated and sorted here. */
+  readonly undiscoveredArtifactIds: readonly OpaqueId[];
+  /**
+   * Hall record ids whose champion this player has already put down — they stay conquered rather
+   * than being re-raised. Must be SORTED and UNIQUE (`validateActiveRun` throws otherwise);
+   * `RunRecordRepository.lifetime().conqueredChampionRecordIds` is maintained that way.
+   */
+  readonly conqueredChampionRecordIds: readonly OpaqueId[];
+}
+
+function championTemplate(pack: CompiledContentPack): FallenChampionTemplateContentEntry {
+  const entry = pack.entries.find(
+    (candidate): candidate is FallenChampionTemplateContentEntry =>
+      candidate.kind === 'fallen-champion-template',
+  );
+  if (!entry)
+    throw new Error('createNewRun requires a fallen-champion-template for Hall standings');
+  return entry;
+}
+
+/**
+ * The artifacts this run may offer in a deep vault: undiscovered ids the pack actually defines as
+ * artifacts, minus every boss `uniqueItemId` (those are earned off their boss, never vault-rolled).
+ */
+function vaultArtifactPool(
+  pack: CompiledContentPack,
+  undiscovered: readonly OpaqueId[],
+): readonly OpaqueId[] {
+  const bossUniques = guaranteedUniqueItemIds(pack);
+  return undiscovered.filter((artifactId) => !bossUniques.has(artifactId));
+}
+
 export function createNewRun(
   input: Readonly<{
     pack: CompiledContentPack;
     seed: Uint32State;
     hero: NewRunHero;
+    records?: NewRunRecordsInput;
   }>,
 ): ActiveRun {
-  const { pack, seed, hero } = input;
+  const { pack, seed, hero, records } = input;
   if (!isNonZeroState(seed)) throw new RangeError('run seed must not be all zero');
   // Pack-only preflight, run once here rather than per command: a pack missing one of the
   // engine-required floor loot tables must fail at run creation, not on the first descent.
@@ -198,7 +248,47 @@ export function createNewRun(
     protectionBonuses: [],
     state: identified.rng['population-gates'],
   });
-  const initializedRng = { ...identified.rng, 'population-gates': gates.state };
+  // Hall standings ride the same `population-gates` stream the encounter gates just advanced, in
+  // that order. With no standings the call is skipped entirely: it would consume nothing, but a
+  // pack without a champion template must still be able to create a history-free run.
+  const standings = records?.standings ?? [];
+  const fallenHeroes =
+    standings.length > 0
+      ? createFallenHeroRunDecisions({
+          standings,
+          conqueredChampionRecordIds: records!.conqueredChampionRecordIds,
+          template: championTemplate(pack),
+          state: gates.state,
+        })
+      : { decisions: [], state: gates.state };
+
+  const artifactIds = artifactItemIds(pack);
+  const artifactsUndiscovered = [...new Set(records?.undiscoveredArtifactIds ?? [])]
+    .filter((artifactId) => artifactIds.has(artifactId))
+    .sort(compareCodeUnits);
+
+  // The artifact offer is the first (and at creation the only) consumer of `run-records`: one
+  // percentile roll for whether this run offers a vault artifact, and on success one uniform roll
+  // over the pool. An empty pool consumes no randomness at all, so a player who has secured every
+  // artifact draws the same stream as one whose host supplied no records.
+  const offerPool = vaultArtifactPool(pack, artifactsUndiscovered);
+  let runRecordsState = identified.rng['run-records'];
+  let offeredArtifact: OpaqueId | null = null;
+  if (offerPool.length > 0) {
+    const offerRoll = rollDie(runRecordsState, 100);
+    runRecordsState = offerRoll.state;
+    if (offerRoll.value <= balance.generation.artifactOfferPercent) {
+      const pick = rollDie(runRecordsState, offerPool.length);
+      runRecordsState = pick.state;
+      offeredArtifact = offerPool[pick.value - 1]!;
+    }
+  }
+
+  const initializedRng = {
+    ...identified.rng,
+    'population-gates': fallenHeroes.state,
+    'run-records': runRecordsState,
+  };
 
   // The town is authored, not generated: it consumes no randomness, so the RNG streams above stay
   // untouched at their post-identification/post-gates values -- no floor-seed allocation happens.
@@ -307,9 +397,11 @@ export function createNewRun(
     recentCommands: [],
     encounterDecisions: gates.decisions,
     populations: [],
-    fallenHeroStandings: [],
-    fallenHeroDecisions: [],
-    conqueredChampionRecordIds: [],
+    fallenHeroStandings: standings,
+    fallenHeroDecisions: fallenHeroes.decisions,
+    conqueredChampionRecordIds: records?.conqueredChampionRecordIds ?? [],
+    offeredArtifact,
+    artifactsUndiscovered,
     // The town never counts toward floorsEntered/deepestDepth: those track dungeon progress, and
     // the hero starts in town without ever "entering" it via a transition.
     metrics: emptyRunMetrics(),

@@ -33,7 +33,7 @@ describe('bundled content', () => {
       ),
     ).toEqual({
       monster: 46,
-      item: 49,
+      item: 52,
       spell: 14,
       trap: 2,
       'loot-table': 28,
@@ -200,7 +200,7 @@ describe('bundled content', () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
-    expect(pack.schemaVersion).toBe(9);
+    expect(pack.schemaVersion).toBe(10);
     const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
     expect(entries.get('achievement.defeated-the-deeps-champion')).toMatchObject({
       kind: 'achievement',

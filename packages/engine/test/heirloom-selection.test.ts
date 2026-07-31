@@ -10,8 +10,10 @@ import type {
 import {
   createDemoContentPack,
   createDemoRun,
+  heldArtifactIds,
   rollDie,
   selectHeirloom,
+  selectRecordHeirloom,
   type ActiveRun,
   type EquipmentSlot,
   type ItemInstance,
@@ -38,6 +40,7 @@ function itemDef(id: string, overrides: Partial<ItemContentEntry> = {}): ItemCon
     equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
     ...overrides,
@@ -160,6 +163,20 @@ function pack(extra: readonly ItemContentEntry[] = []): CompiledContentPack {
       ...extra,
     ],
   };
+}
+
+function artifactDef(id: string, overrides: Partial<ItemContentEntry> = {}): ItemContentEntry {
+  return itemDef(id, {
+    rarity: 'legendary',
+    equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
+    artifact: {
+      canon: true,
+      signature: null,
+      drawbackModifiers: { defense: -1 },
+      light: null,
+    },
+    ...overrides,
+  });
 }
 
 function equippedItem(
@@ -406,6 +423,18 @@ describe('selectHeirloom', () => {
     expect(result.nextRunRecordsState).toEqual(deadHeroRun.rng['run-records']);
   });
 
+  it('never lets an artifact win the ordinary roll even while equipped and eligible', () => {
+    const content = pack([itemDef('item.sword'), artifactDef('item.marias-grace')]);
+    const deadHeroRun = deadRun([
+      equippedItem('item.hero.a-grace', 'item.marias-grace', 'off-hand'),
+      equippedItem('item.hero.b-sword', 'item.sword', 'main-hand'),
+    ]);
+    const result = selectHeirloom({ run: deadHeroRun, content, template, recordId });
+    expect(result.snapshot.sourceItemId).toBe('item.hero.b-sword');
+    // the sword is the only candidate: one roll over its weight alone (rare = 8)
+    expect(result.nextRunRecordsState).toEqual(rollDie(deadHeroRun.rng['run-records'], 8).state);
+  });
+
   it('throws for a living hero', () => {
     const content = pack([itemDef('item.sword')]);
     const run = {
@@ -413,5 +442,126 @@ describe('selectHeirloom', () => {
       conclusion: null,
     };
     expect(() => selectHeirloom({ run, content, template, recordId })).toThrow(/conclud/i);
+  });
+});
+
+describe('heldArtifactIds', () => {
+  it('collects the hero-held artifacts from both equipment and the backpack, sorted and deduped', () => {
+    const content = pack([
+      itemDef('item.sword'),
+      artifactDef('item.z-grace'),
+      artifactDef('item.a-needle', {
+        equipment: { slots: ['left-ring'], handedness: 'one-handed', reservedSlots: [] },
+      }),
+      artifactDef('item.floor-relic'),
+    ]);
+    const run = deadRun([
+      equippedItem('item.hero.sword', 'item.sword', 'main-hand'),
+      equippedItem('item.hero.grace', 'item.z-grace', 'off-hand'),
+      {
+        ...equippedItem('item.hero.needle', 'item.a-needle', 'left-ring'),
+        location: { type: 'backpack', actorId: 'hero.demo' },
+      },
+      {
+        ...equippedItem('item.floor.relic', 'item.floor-relic', 'off-hand'),
+        location: { type: 'floor', floorId: 'floor.1', x: 2, y: 3 },
+      },
+    ]);
+    expect(heldArtifactIds(run, content)).toEqual(['item.a-needle', 'item.z-grace']);
+  });
+
+  it('is empty when the hero holds no artifact', () => {
+    const content = pack([itemDef('item.sword')]);
+    const run = deadRun([equippedItem('item.hero.sword', 'item.sword', 'main-hand')]);
+    expect(heldArtifactIds(run, content)).toEqual([]);
+  });
+});
+
+describe('selectRecordHeirloom', () => {
+  it('promotes a single equipped artifact over ordinary candidates without consuming randomness', () => {
+    const content = pack([itemDef('item.sword'), artifactDef('item.marias-grace')]);
+    const run = deadRun([
+      equippedItem('item.hero.sword', 'item.sword', 'main-hand'),
+      equippedItem('item.hero.grace', 'item.marias-grace', 'off-hand', {
+        condition: 71,
+        fuel: 12,
+        enchantment: { enchantmentId: 'enchantment.honed', modifiers: { defense: 1 } },
+      }),
+    ]);
+    const result = selectRecordHeirloom({
+      run,
+      content,
+      template,
+      recordId,
+      heldArtifactIds: heldArtifactIds(run, content),
+    });
+    expect(result.snapshot).toEqual({
+      contentId: 'item.marias-grace',
+      sourceItemId: 'item.hero.grace',
+      enchantment: { enchantmentId: 'enchantment.honed', modifiers: { defense: 1 } },
+      condition: 71,
+      charges: null,
+      fuel: 12,
+      qualityRank: 1,
+      displayName: 'Name of item.marias-grace',
+      glyph: ')',
+      color: '#c0c0c0',
+      originatingHallRecordId: recordId,
+    });
+    // exactly one held artifact: no roll at all, so the ordinary roll never runs either
+    expect(result.nextRunRecordsState).toEqual(run.rng['run-records']);
+  });
+
+  it('promotes an artifact carried only in the backpack', () => {
+    const content = pack([itemDef('item.sword'), artifactDef('item.marias-grace')]);
+    const run = deadRun([
+      equippedItem('item.hero.sword', 'item.sword', 'main-hand'),
+      {
+        ...equippedItem('item.hero.grace', 'item.marias-grace', 'off-hand'),
+        location: { type: 'backpack', actorId: 'hero.demo' },
+      },
+    ]);
+    const result = selectRecordHeirloom({
+      run,
+      content,
+      template,
+      recordId,
+      heldArtifactIds: heldArtifactIds(run, content),
+    });
+    expect(result.snapshot.contentId).toBe('item.marias-grace');
+    expect(result.snapshot.sourceItemId).toBe('item.hero.grace');
+    expect(result.nextRunRecordsState).toEqual(run.rng['run-records']);
+  });
+
+  it('rolls once with equal weights among two held artifacts', () => {
+    const content = pack([
+      artifactDef('item.a-needle', {
+        equipment: { slots: ['left-ring'], handedness: 'one-handed', reservedSlots: [] },
+      }),
+      artifactDef('item.z-grace'),
+    ]);
+    const run = deadRun([
+      equippedItem('item.hero.a-needle', 'item.a-needle', 'left-ring'),
+      equippedItem('item.hero.z-grace', 'item.z-grace', 'off-hand'),
+    ]);
+    const roll = rollDie(run.rng['run-records'], 2);
+    const expected = roll.value === 1 ? 'item.hero.a-needle' : 'item.hero.z-grace';
+    const result = selectRecordHeirloom({
+      run,
+      content,
+      template,
+      recordId,
+      heldArtifactIds: heldArtifactIds(run, content),
+    });
+    expect(result.snapshot.sourceItemId).toBe(expected);
+    expect(result.nextRunRecordsState).toEqual(roll.state);
+  });
+
+  it('delegates byte-identically to ordinary selection when no artifact is held', () => {
+    const content = pack([itemDef('item.sword')]);
+    const run = deadRun([equippedItem('item.hero.sword', 'item.sword', 'main-hand')]);
+    expect(selectRecordHeirloom({ run, content, template, recordId, heldArtifactIds: [] })).toEqual(
+      selectHeirloom({ run, content, template, recordId }),
+    );
   });
 });

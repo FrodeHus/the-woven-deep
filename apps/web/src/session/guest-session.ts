@@ -21,6 +21,7 @@ import {
   type GameplayProjection,
   type HallRecordEnrichment,
   type NewRunHero,
+  type NewRunRecordsInput,
   type PublicDecision,
   type PublicEvent,
   type RunConclusionProjection,
@@ -100,6 +101,7 @@ export class GuestSession implements RunSession {
   private readonly pack: CompiledContentPack;
   private readonly storage: SessionStorageLike;
   private readonly hero: NewRunHero;
+  private readonly records: (() => NewRunRecordsInput) | undefined;
   private run: ActiveRun;
   private commandSequence: number;
   private log: readonly LogLine[] = [];
@@ -120,6 +122,9 @@ export class GuestSession implements RunSession {
    * these flags make that guarantee explicit rather than incidental. */
   private sightingsCorruptionNotified = false;
   private onboardingCorruptionNotified = false;
+  /** Set by `freshRun` when the guest's Hall could not seed this run (see its doc comment); read
+   * once by the constructor, after the boot notice is assigned, to surface the reset notice. */
+  private hallCorrupted = false;
 
   constructor(
     input: Readonly<{
@@ -136,6 +141,12 @@ export class GuestSession implements RunSession {
        * silently win over the wizard's just-confirmed hero (see App.tsx's chargen `onConfirm`).
        * "Continue" and quickstart callers must NOT set this — they rely on restore semantics. */
       startFresh?: boolean;
+      /** The guest's cross-run history for any run this session creates: Hall standings (the
+       * champion/Echo encounters), the artifacts still undiscovered, and the champions already
+       * conquered. A THUNK, read fresh on every `freshRun` rather than snapshotted here, so a run
+       * begun after this page life's own finalize inherits that finalize's record. Omitting it
+       * creates history-free runs (the pre-records behaviour). */
+      records?: () => NewRunRecordsInput;
     }>,
   ) {
     this.pack = input.pack;
@@ -144,6 +155,7 @@ export class GuestSession implements RunSession {
     const onboardingLoad = loadOnboarding(this.localStorage);
     this.onboarding = onboardingLoad.state;
     this.hero = input.hero ?? DEFAULT_GUEST_HERO;
+    this.records = input.records;
     const booted = this.boot(input.seed, input.startFresh ?? false);
     this.run = booted.run;
     this.notice = booted.notice;
@@ -153,6 +165,8 @@ export class GuestSession implements RunSession {
     // both are one-time facts about this construction, but losing device-persistent mastery
     // progress is the more actionable one to tell the guest about.
     if (onboardingLoad.corrupted) this.markOnboardingCorrupted();
+    // Same posture, one rung more urgent: this run is missing its whole cross-run history.
+    if (this.hallCorrupted) this.markHallCorrupted();
     // "Accumulates ... on boot restore" -- a restored (or freshly-created) run's initial
     // projection may already show visible actors/identified items (e.g. a save restored mid-fight),
     // so the cache must sync once here too, not only after a subsequent dispatch. Reveals are
@@ -212,8 +226,46 @@ export class GuestSession implements RunSession {
     return restored.revision + RECENT_COMMAND_LIMIT + 1;
   }
 
+  /**
+   * Creates the run this session plays, seeded from the guest's cross-run history.
+   *
+   * The provider is called HERE, not stored at construction: the guest's Hall changes within a
+   * page life (a finalize appends a record, the settings overlay can wipe the whole store), and
+   * the run started right after must see the Hall as it stands now.
+   *
+   * That Hall lives in browser storage the player can edit, and it survives reloads — so a
+   * malformed record (hand-edited, or written by a build whose record shape has since changed)
+   * would otherwise throw out of run creation and leave a blank app that reloading cannot fix.
+   * The mechanism is therefore attempt-with-records → retry-recordless-on-the-same-seed →
+   * propagate whatever the retry itself throws (a failure with no history in play was never about
+   * the Hall, so it is never swallowed). `SaveLoadError`/`RangeError` narrows the catch to the
+   * shapes corrupt history actually produces; anything else propagates immediately.
+   *
+   * The retry cannot tell a corrupt Hall from an engine regression in the records path, and the
+   * player-facing notice deliberately says "Hall" either way — so once the retry has SUCCEEDED
+   * (i.e. play really is degrading), the original error is logged. Without that, a bug in (say)
+   * `createFallenHeroRunDecisions` would leave no trace anywhere: every run would silently lose
+   * its history and blame the player's save.
+   */
   private freshRun(seed?: Uint32State): ActiveRun {
-    return createNewRun({ pack: this.pack, seed: seed ?? randomSeed(), hero: this.hero });
+    const runSeed = seed ?? randomSeed();
+    const records = this.records?.();
+    if (records === undefined) {
+      return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero });
+    }
+    let historyFailure: unknown;
+    try {
+      return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero, records });
+    } catch (error) {
+      if (!(error instanceof SaveLoadError || error instanceof RangeError)) throw error;
+      historyFailure = error;
+    }
+    // Anything this retry throws propagates untouched and unlogged: a creation that fails with no
+    // history in play was never about the Hall, so it must surface as itself.
+    const run = createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero });
+    console.error('Hall of Records could not seed this run; starting without it:', historyFailure);
+    this.hallCorrupted = true;
+    return run;
   }
 
   private nextCommandId(): string {
@@ -450,6 +502,13 @@ export class GuestSession implements RunSession {
     this.notice = { kind: 'data-reset', source: 'sightings' };
   }
 
+  /** Same posture as `markSightingsCorrupted` above, for a Hall of Records that could not seed
+   * this run -- the run is playable, but without its standings, champions, or artifact offer. */
+  private markHallCorrupted(): void {
+    if (this.notice !== null && this.notice.kind === 'storage') return;
+    this.notice = { kind: 'data-reset', source: 'hall' };
+  }
+
   /** Same posture as `markSightingsCorrupted` above, for the onboarding mastery ledger. */
   private markOnboardingCorrupted(): void {
     if (this.onboardingCorruptionNotified) return;
@@ -562,7 +621,10 @@ export class GuestSession implements RunSession {
     });
     const stored: StoredHallRecord = { ...finalized.record, enrichment };
     repository.appendRecord(stored);
+    // Lifetime deltas first, artifact deltas second: applying the artifact stints runs the
+    // ledger's reconcile pass, which must already see this run's newly conquered champions.
     repository.applyDeltas(finalized.deltas);
+    repository.applyArtifactDeltas(finalized.artifactDeltas);
     // Becoming the Heart writes the guest's lineage slot in the same finalize: the next new run
     // reads it back as its inherited Heart, so this must happen before `this.persist()` below.
     if (finalized.record.completionType === 'became-heart') {

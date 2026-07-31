@@ -31,6 +31,7 @@ function itemDef(id: string): ItemContentEntry {
     equipment: null,
     combat: null,
     light: null,
+    artifact: null,
     identification: { mode: 'known', poolId: null },
     effects: [],
   };

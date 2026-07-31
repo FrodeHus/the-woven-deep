@@ -1,4 +1,15 @@
+import type { CompiledContentPack } from '@woven-deep/content';
+import {
+  applyArtifactDeltas as foldArtifactDeltas,
+  emptyArtifactLedger,
+  reconcileArtifactLedger,
+  undiscoveredArtifactIds,
+  type ArtifactDeltas,
+  type ArtifactLedger,
+} from './artifact-ledger.js';
+import { artifactItemIds } from './commerce.js';
 import type { OpaqueId } from './model.js';
+import type { NewRunRecordsInput } from './new-run.js';
 import type { DiscoveryProtectionBonus } from './population-gates.js';
 import type { FallenHeroStandingSnapshot } from './population-model.js';
 import type {
@@ -11,7 +22,13 @@ import { emptyRunMetrics, type RunMetrics } from './run-metrics.js';
 import { compareHallRecords } from './score-run.js';
 import { compareCodeUnits } from './stable-json.js';
 
-const MAX_STANDINGS = 10;
+/**
+ * The most Hall standings anything may carry: `standingsFromRecords` caps its output here, and
+ * `createNewRun`/`validateActiveRun` reject a run seeded with more. Exported so every host — the
+ * server's SQLite Hall, the guest's session-storage Hall — caps against this one definition
+ * instead of its own copy.
+ */
+export const MAX_STANDINGS = 10;
 
 /**
  * Recursively deep-copies and deep-freezes a value. Arrays and plain objects are cloned
@@ -149,6 +166,15 @@ export interface RunRecordRepository {
   recordHeart(record: HeartLineageRecord): void;
   lifetime(): LifetimeState;
   applyDeltas(deltas: LifetimeDeltas): void;
+  /** The profile's artifact ledger, already reconciled against the current standings. */
+  artifactLedger(): ArtifactLedger;
+  /**
+   * Folds one run's artifact stints onto the ledger — idempotent by `deltas.recordId` — and then
+   * reconciles, so an artifact whose holder just fell out of the Hall is released in the same
+   * call. Deltas must be applied BEFORE reconciling (see `reconcileArtifactLedger`), which is
+   * why this is a single repository operation rather than two.
+   */
+  applyArtifactDeltas(deltas: ArtifactDeltas): void;
 }
 
 /**
@@ -163,13 +189,25 @@ export interface RunRecordRepository {
 export function createInMemoryRunRecordRepository(): RunRecordRepository {
   const hall: StoredHallRecord[] = [];
   const appliedDeltaRecordIds = new Set<OpaqueId>();
+  const appliedArtifactRecordIds = new Set<OpaqueId>();
   let heart: HeartLineageRecord | null = null;
+  let artifactLedger: ArtifactLedger = emptyArtifactLedger();
   let lifetime: LifetimeState = {
     conqueredChampionRecordIds: [],
     grantedAchievementIds: [],
     discoveryProtection: [],
     totals: emptyRunMetrics(),
   };
+
+  /** Standings membership is what decides whether a lost artifact is released, so reconcile runs
+   * on every event that can change it: a Hall append, and each applied batch of artifact deltas. */
+  function reconcile(): void {
+    artifactLedger = reconcileArtifactLedger({
+      ledger: artifactLedger,
+      standings: standingsFromRecords(hall, MAX_STANDINGS),
+      lifetime,
+    });
+  }
 
   return {
     standings(limit) {
@@ -185,6 +223,7 @@ export function createInMemoryRunRecordRepository(): RunRecordRepository {
         );
       }
       hall.push(deepFreezeCopy(stored));
+      reconcile();
     },
     currentHeart() {
       return heart;
@@ -214,5 +253,40 @@ export function createInMemoryRunRecordRepository(): RunRecordRepository {
         totals: mergeMetrics(lifetime.totals, deltas.metrics),
       };
     },
+    artifactLedger() {
+      return artifactLedger;
+    },
+    applyArtifactDeltas(deltas) {
+      if (appliedArtifactRecordIds.has(deltas.recordId)) return;
+      // Fold before marking applied: a batch rejected by the ledger's invariant checks must not
+      // burn its recordId, or a corrected retry would silently no-op.
+      artifactLedger = foldArtifactDeltas(artifactLedger, deltas);
+      appliedArtifactRecordIds.add(deltas.recordId);
+      reconcile();
+    },
+  };
+}
+
+/**
+ * The player's cross-run history in the exact shape `createNewRun` takes, read off any
+ * `RunRecordRepository`: the Hall standings that become this run's champion/Echo encounters, the
+ * artifacts still unsecured (the vault-offer pool), and the champions already conquered.
+ *
+ * The ONE builder both hosts use (the server's SQLite Hall and the guest's session-storage Hall
+ * both implement `RunRecordRepository`), so the two can never drift apart on the standings cap or
+ * on which ledger entries count as offerable. Cheap and side-effect-free: call it per run
+ * creation rather than caching, so a run started after a finalize sees that finalize's record.
+ */
+export function newRunRecords(
+  repository: RunRecordRepository,
+  content: CompiledContentPack,
+): NewRunRecordsInput {
+  return {
+    standings: repository.standings(MAX_STANDINGS),
+    undiscoveredArtifactIds: undiscoveredArtifactIds(
+      repository.artifactLedger(),
+      artifactItemIds(content),
+    ),
+    conqueredChampionRecordIds: repository.lifetime().conqueredChampionRecordIds,
   };
 }

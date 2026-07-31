@@ -1,0 +1,89 @@
+schemaVersion: 10
+entries:
+  - kind: item
+    id: item.thread-counts-needle
+    name: Thread-Count's Needle
+    glyph: "="
+    color: "#c9d6a3"
+    description: A sliver of pale metal, thin as a hair, that hums when a fight is close. It threads a current through whoever wears it and lets that current jump between blows.
+    lore: "The Thread-Counts wove without hands, only tension. This is the one needle that outlasted its loom, and it still remembers how to find the next thread to pull."
+    tags: [vault-reward, arcane, offense]
+    minDepth: 7
+    maxDepth: 20
+    category: ring
+    stackLimit: 1
+    price: 220
+    rarity: legendary
+    actionCost: 100
+    equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
+    combat: { accuracy: 1, defense: 0, armor: 0, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    artifact:
+      canon: true
+      signature: { spellId: spell.chain-spark, charges: 3, rechargePerFloor: 1 }
+      drawbackModifiers: { maxHealth: -2 }
+      light: null
+    identification: { mode: known, poolId: null }
+    effects: []
+
+  - kind: item
+    id: item.last-cartographers-compass
+    name: The Last Cartographer's Compass
+    glyph: "="
+    color: "#8fb0c9"
+    description: A verdigris needle turns in its housing even where there is no north left to find. It knows the way back out better than it knows the way forward.
+    lore: "The Cartographer who carried it mapped the Deep until the Deep stopped holding still for the mapping. This is the last thing they finished — a way home that does not care what it costs to see the dark clearly along the way."
+    tags: [vault-reward, arcane, utility]
+    minDepth: 7
+    maxDepth: 20
+    category: ring
+    stackLimit: 1
+    price: 210
+    rarity: legendary
+    actionCost: 100
+    equipment: { slots: [left-ring, right-ring], handedness: none, reservedSlots: [] }
+    combat: { accuracy: 0, defense: 1, armor: 0, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    artifact:
+      canon: true
+      signature: { spellId: spell.recall, charges: 1, rechargePerFloor: 0 }
+      drawbackModifiers: { lightOutRevealRadius: -1 }
+      light: null
+    identification: { mode: known, poolId: null }
+    effects: []
+
+  - kind: item
+    id: item.marias-grace
+    name: Maria's Grace
+    glyph: "("
+    color: "#ffd9a0"
+    description: A lantern that burns without oil and without end. Its flame cannot be lowered, banked, or blown out — the light it throws cannot be hidden, not even from what should stay hidden from.
+    lore: "Maria carried it into places that were supposed to stay unlit. It never once asked her for fuel, and it never once let her hide. Some say that was the whole of the gift."
+    tags: [vault-reward, light, utility]
+    minDepth: 7
+    maxDepth: 20
+    category: light
+    stackLimit: 1
+    price: 240
+    rarity: legendary
+    actionCost: 100
+    equipment:
+      slots: [off-hand]
+      handedness: one-handed
+      reservedSlots: []
+    combat: { accuracy: 0, defense: 1, armor: 0, damage: null, range: 0, ammunitionTag: null }
+    light:
+      color: [255, 217, 160]
+      radius: 7
+      strength: 180
+      fuelCapacity: 2400
+      fuelPerTime: 1
+      warningThresholds: [600, 300, 100]
+      fuelTags: [lamp-oil]
+    artifact:
+      canon: true
+      signature: null
+      drawbackModifiers: {}
+      light: { fuelless: true, inextinguishable: true }
+    identification: { mode: known, poolId: null }
+    effects: []

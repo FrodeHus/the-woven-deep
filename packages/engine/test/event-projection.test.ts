@@ -736,6 +736,7 @@ describe('public event projection', () => {
       equipment: null,
       combat: null,
       light: null,
+      artifact: null,
       identification: { mode: 'known' as const, poolId: null },
       effects: [],
     };

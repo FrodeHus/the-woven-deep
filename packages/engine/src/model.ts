@@ -145,7 +145,7 @@ export interface HouseState {
 }
 
 export interface ActiveRun {
-  readonly schemaVersion: 12;
+  readonly schemaVersion: 13;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly runId: OpaqueId;
@@ -177,6 +177,17 @@ export interface ActiveRun {
   readonly fallenHeroStandings: readonly FallenHeroStandingSnapshot[];
   readonly fallenHeroDecisions: readonly FallenHeroRunDecision[];
   readonly conqueredChampionRecordIds: readonly OpaqueId[];
+  /**
+   * The artifact this run may still be offered, or `null` once it has been taken or never drawn.
+   * Hidden: it never reaches a projection, so the hero learns of an artifact only when it appears.
+   * When non-null it is always a member of `artifactsUndiscovered`.
+   */
+  readonly offeredArtifact: OpaqueId | null;
+  /**
+   * The artifacts still in circulation for this run, sorted and duplicate-free. Hidden for the same
+   * reason as `offeredArtifact`: the undrawn pool must not be readable from the client.
+   */
+  readonly artifactsUndiscovered: readonly OpaqueId[];
   readonly metrics: RunMetrics;
   readonly conclusion: RunConclusion | null;
   readonly house: HouseState;

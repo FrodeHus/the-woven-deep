@@ -1,4 +1,4 @@
-schemaVersion: 9
+schemaVersion: 10
 entries:
   - kind: item
     id: item.chain-spark-tome
@@ -17,6 +17,7 @@ entries:
     equipment: null
     combat: null
     light: null
+    artifact: null
     identification: { mode: known, poolId: null }
     effects:
       - { effectId: effect.spell.learn, parameters: { spellId: spell.chain-spark }, requiresLivingTarget: false }
