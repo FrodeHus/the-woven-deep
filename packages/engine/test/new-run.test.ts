@@ -338,11 +338,10 @@ describe('createNewRun records input', () => {
     expect(omitted.fallenHeroDecisions).toEqual([]);
     expect(omitted.conqueredChampionRecordIds).toEqual([]);
     // Pinned digest: the no-records path must never drift, including its RNG streams. The encoded
-    // run carries the pack hash, so every content edit moves it. Re-pinned for the artifact ledger:
-    // diffing the encoded run against the revision that first pinned this digest shows exactly one
-    // changed field, `contentHash` -- no engine behavior moved with the content.
+    // run carries the pack hash, so every content edit moves this digest through `contentHash`
+    // alone; a delta in any other field is a real behavioral drift and must not be re-pinned away.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      'ee218a979c22da4c8b12b06f30e058866e6500dd94badd6df62dd50564eb4a91',
+      '45220bc9014958ee69839b10236355e32c6194fea01c108943b861163f19bbd1',
     );
   });
 
