@@ -59,3 +59,15 @@ entries:
       effect:
         effectId: effect.damage
         parameters: { damageType: physical, dice: { count: 1, sides: 2, bonus: 0 } }
+
+  - kind: curse
+    id: curse.embermarked
+    name: Embermarked
+    tags: [curse, weapon]
+    revealText: "Every kill fans a coal buried just under the skin."
+    trigger:
+      on: on-kill
+      chanceBps: 3000
+      effect:
+        effectId: effect.condition.apply
+        parameters: { conditionId: condition.burning, duration: 200 }

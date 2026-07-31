@@ -342,9 +342,10 @@ describe('createNewRun records input', () => {
     // alone; a delta in any other field is a real behavioral drift and must not be re-pinned away.
     // Re-pinned for the identification.mode: instance sweep (base weapon/armor/shield/ring/light
     // equipment moves off `known`), which changes the default hero's starting-item identified
-    // state and therefore this digest -- expected drift, not a behavioral regression.
+    // state, and again for the sixth (trigger-only) curse added to the roster, which moves
+    // `contentHash` -- both are expected drift, not a behavioral regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '6723f50d6cf1e774b7ec3747c3663679f4d5ecec77f9dacb44f3f34ae425520f',
+      '2e867dea758a8f53b94a80270f8dbee49b151315c4e9e1592dedf9547be2fb92',
     );
   });
 
