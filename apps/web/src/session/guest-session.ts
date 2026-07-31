@@ -427,6 +427,18 @@ export class GuestSession implements RunSession {
     this.lastEvents = [];
   }
 
+  /** A client-only system line (auto-explore's stop reports) on the same log the engine's events
+   * fold into. Same tone as `appendSystemLine`, but -- exactly like `appendReveal` below -- it
+   * never clears `lastEvents`: it is written at the tail of a walk the engine has already resolved,
+   * so the effects layer (`ui/playfield/scene-state.ts` derives the hurt flash and event particles
+   * from `snapshot.lastEvents`) must keep the events of the turn that stopped the walk. */
+  private appendSystemNote(text: string): void {
+    let entries = [...this.log, { id: this.nextLogId, text, tone: 'system' as const }];
+    this.nextLogId += 1;
+    if (entries.length > LOG_CAPACITY) entries = entries.slice(entries.length - LOG_CAPACITY);
+    this.log = entries;
+  }
+
   /** Appends a client-only flavor line (a lore first-reveal, `newLoreReveals`) straight onto the
    * SAME log the engine's own events fold into (`foldEventsIntoLog`) -- there is no separate
    * client-log buffer to merge in `LogPanel`; this is deliberately the least-invasive of the two
@@ -575,9 +587,11 @@ export class GuestSession implements RunSession {
   }
 
   /** See `RunSession.noteSystemLine` -- a client-only line (auto-explore's stop reports) on the
-   * same log the engine's events fold into, with no dispatch and no turn. */
+   * same log the engine's events fold into, with no dispatch and no turn. Goes through
+   * `appendSystemNote` rather than `appendSystemLine` so it never erases the `lastEvents` of the
+   * turn that stopped the walk. */
   noteSystemLine(text: string): void {
-    this.appendSystemLine(text);
+    this.appendSystemNote(text);
     this.publish();
   }
 

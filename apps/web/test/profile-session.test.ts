@@ -429,4 +429,32 @@ describe('ProfileSession', () => {
       expect(notified).toBe(1);
     });
   });
+
+  describe('noteSystemLine (auto-explore stop reports)', () => {
+    it('appends a system-tone line, notifies subscribers, and leaves lastEvents alone', async () => {
+      const { socket, connectPromise } = harness();
+      const run = freshRun();
+      const events: readonly PublicEvent[] = [
+        { type: 'hero.waited', eventId: 'e1', heroId: 'hero.guest', x: 5, y: 9 } as PublicEvent,
+      ];
+      socket().emit(HELLO);
+      socket().emit({ type: 'state', snapshot: snapshotOf(run, { lastEvents: events }) });
+      const session = await connectPromise;
+
+      let notified = 0;
+      session.subscribe(() => {
+        notified += 1;
+      });
+
+      session.noteSystemLine('You have explored this floor.');
+
+      const snapshot = session.getSnapshot();
+      expect(snapshot.log.at(-1)).toMatchObject({
+        text: 'You have explored this floor.',
+        tone: 'system',
+      });
+      expect(notified).toBe(1);
+      expect(snapshot.lastEvents).toEqual(events);
+    });
+  });
 });
