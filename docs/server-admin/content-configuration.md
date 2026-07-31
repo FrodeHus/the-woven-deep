@@ -135,12 +135,12 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `pointBuy` | object | Yes | Chargen point-buy attribute table described below. |
 | `restockMilestones` | array of positive safe integers | Yes | Strictly increasing world-time milestones at which town merchant stock restocks. The bundled value is `[5, 10, 15, 20]`. |
 | `house` | object | Yes | Player house sizing, described below. The bundled value is `{ baseCapacity: 6, strongboxIncrement: 4 }`. |
-| `encounterDensity` | object | Yes | Dungeon encounter density, described below. The bundled value is `{ openCellsPerEncounter: 800 }`. |
+| `encounterDensity` | object | Yes | Dungeon encounter density, described below. The bundled value is `{ monstersPerThousandWalkable: { shallow: 6, mid: 8, deep: 10 }, attemptCap: 16 }`. |
 | `fragmentSpawnRollDenominator` | positive integer | Yes | Odds denominator (1-in-N) for the rare Ancient Tablet fragment spawn rolled once per floor generation. The bundled value is `40`. |
 | `generation` | object | Yes | Dungeon generation knobs described below. The bundled value is `{ doorTilePercent: 35 }`. |
 | `floorLoot` | object | Yes | Floor-loot placement knobs described below. |
 
-`house` carries a positive safe integer `baseCapacity` (the player house's starting storage capacity) and a positive safe integer `strongboxIncrement` (additional capacity granted per purchased strongbox upgrade). `encounterDensity` carries a positive safe integer `openCellsPerEncounter`, the average number of walkable (open) floor cells the generator budgets per placed encounter.
+`house` carries a positive safe integer `baseCapacity` (the player house's starting storage capacity) and a positive safe integer `strongboxIncrement` (additional capacity granted per purchased strongbox upgrade). `encounterDensity` budgets a floor's population in **monsters**, not in placement attempts. `monstersPerThousandWalkable` carries a positive safe integer for each of `shallow`, `mid`, and `deep` — how many monsters a floor should hold per thousand walkable (open) cells in that depth band. The bands are the same ones `floorLoot.depthBands` defines (`shallowMaxDepth`, `midMaxDepth`), so retuning those boundaries retunes spawn density with them. The floor's target is `ceil(walkableCells * monstersPerThousandWalkable[band] / 1000)`, and the generator keeps placing encounters until that many monsters exist on the floor. Because one encounter can contribute anywhere from one monster (an `individual`) to several (a `group`), the number of placements needed varies; `attemptCap` (an integer from 1 through 32) bounds how many placement attempts a floor may consume regardless, so an unlucky floor whose encounters keep failing to fit still terminates. Guaranteed milestone bosses are placed before this loop and do not count against either the target or the cap.
 
 ### Dungeon generation
 
@@ -263,7 +263,9 @@ entries:
         - { value: 30, cost: 60 }
     restockMilestones: [5, 10, 15, 20]
     house: { baseCapacity: 6, strongboxIncrement: 4 }
-    encounterDensity: { openCellsPerEncounter: 800 }
+    encounterDensity:
+      monstersPerThousandWalkable: { shallow: 6, mid: 8, deep: 10 }
+      attemptCap: 16
     fragmentSpawnRollDenominator: 40
     generation:
       doorTilePercent: 35

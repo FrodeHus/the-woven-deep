@@ -227,7 +227,8 @@ describe('server-admin content documentation', () => {
       'baseCapacity',
       'strongboxIncrement',
       'encounterDensity',
-      'openCellsPerEncounter',
+      'monstersPerThousandWalkable',
+      'attemptCap',
       'town',
     ]) {
       expect(reference, `missing town documentation for ${identifier}`).toContain(
