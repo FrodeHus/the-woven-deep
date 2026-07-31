@@ -3,7 +3,7 @@ import { contentFileSchema } from '../src/compiler/schema.js';
 
 function spellFile(aoe: unknown) {
   return {
-    schemaVersion: 11,
+    schemaVersion: 12,
     entries: [
       {
         kind: 'spell',

@@ -3,6 +3,7 @@ import type { BackgroundContentEntry } from './background.js';
 import type { BalanceContentEntry } from './balance.js';
 import type { ClassContentEntry } from './class.js';
 import type { ConditionContentEntry } from './condition.js';
+import type { CurseContentEntry } from './curse.js';
 import type { DialogueContentEntry } from './dialogue.js';
 import type { EncounterContentEntry } from './encounter.js';
 import type { FallenChampionTemplateContentEntry } from './champion.js';
@@ -17,7 +18,7 @@ import type { TraitContentEntry } from './trait.js';
 import type { TrapContentEntry } from './trap.js';
 import type { VaultContentEntry } from './vault.js';
 
-export const CONTENT_SCHEMA_VERSION = 11 as const;
+export const CONTENT_SCHEMA_VERSION = 12 as const;
 
 export type ContentId = string;
 export const CONTENT_KIND_IDS = [
@@ -39,6 +40,7 @@ export const CONTENT_KIND_IDS = [
   'class',
   'background',
   'trait',
+  'curse',
 ] as const;
 export type ContentKind = (typeof CONTENT_KIND_IDS)[number];
 export const DERIVED_STAT_NAMES = [
@@ -182,7 +184,8 @@ export type ContentEntry =
   | AchievementContentEntry
   | ClassContentEntry
   | BackgroundContentEntry
-  | TraitContentEntry;
+  | TraitContentEntry
+  | CurseContentEntry;
 
 export interface ContentGenerationReport {
   readonly foundationalCategories: readonly string[];

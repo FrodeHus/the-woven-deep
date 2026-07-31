@@ -18,7 +18,7 @@ function scroll(spellId: string): string {
 }
 
 function contentFile(...entries: readonly string[]): string {
-  return `schemaVersion: 11\nentries: [${entries.join(', ')}]\n`;
+  return `schemaVersion: 12\nentries: [${entries.join(', ')}]\n`;
 }
 
 async function fixture(files: Record<string, string>): Promise<string> {

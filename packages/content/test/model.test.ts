@@ -18,15 +18,15 @@ describe('content model', () => {
       generationReport: { foundationalCategories: [] },
     };
 
-    expect(pack.schemaVersion).toBe(11);
-    expect(CONTENT_SCHEMA_VERSION).toBe(11);
+    expect(pack.schemaVersion).toBe(12);
+    expect(CONTENT_SCHEMA_VERSION).toBe(12);
     expect(pack.hash).toHaveLength(64);
   });
 
   it('exposes every schema-v7 content kind', () => {
     const kinds: ContentKind[] = [...CONTENT_KIND_IDS];
 
-    expect(kinds).toHaveLength(18);
+    expect(kinds).toHaveLength(19);
     expect(kinds).toEqual(expect.arrayContaining(['npc', 'npc-faction']));
     expect(kinds).toContain('condition');
     expect(kinds).toContain('dialogue');
@@ -34,6 +34,7 @@ describe('content model', () => {
     expect(kinds).toContain('encounter');
     expect(kinds).toContain('fallen-champion-template');
     expect(kinds).toContain('achievement');
+    expect(kinds).toContain('curse');
     expect(CONTENT_KIND_IDS).toEqual(expect.arrayContaining(['class', 'background', 'trait']));
   });
 
@@ -56,7 +57,7 @@ describe('content model', () => {
         entries: [],
         generationReport: { foundationalCategories: [] },
       }),
-    ).toThrow(/Unsupported content schema version 6; expected 11/);
+    ).toThrow(/Unsupported content schema version 6; expected 12/);
   });
 
   it('rejects a stored schema-v1 pack before exposing entries', async () => {
@@ -75,7 +76,7 @@ describe('content model', () => {
     const { validateCompiledContentPack } = await import('../src/index.js');
     expect(() =>
       validateCompiledContentPack({
-        schemaVersion: 11,
+        schemaVersion: 12,
         hash: '0'.repeat(64),
         entries: [
           {

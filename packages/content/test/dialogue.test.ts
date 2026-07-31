@@ -19,7 +19,7 @@ const compactDialogue =
   '{kind: dialogue, id: dialogue.lampwright, name: Lampwright dialogue, tags: [], greeting: "Care for some oil?", topics: [{id: greeting, prompt: "Hello", response: "Welcome, traveller.", reveals: [trade], once: false}, {id: trade, prompt: "What do you sell?", response: "Lamps and oil.", consequence: {kind: open-trade}}, {id: rumor, prompt: "Any news?", response: "The wardens grow restless.", consequence: {kind: reputation, factionId: npc-faction.lampwrights, amount: 5}}, {id: lore, prompt: "Tell me about the rats.", response: "They gnaw at everything.", consequence: {kind: reveal-lore, contentId: monster.rat}}]}';
 
 function contentFile(...entries: readonly string[]): string {
-  return `schemaVersion: 11\nentries: [${entries.join(', ')}]\n`;
+  return `schemaVersion: 12\nentries: [${entries.join(', ')}]\n`;
 }
 
 async function fixture(files: Record<string, string>): Promise<string> {
