@@ -692,6 +692,16 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         );
       }
     }
+    if (item.curse !== undefined) {
+      const curse = pack.entries.find(
+        (entry) => entry.kind === 'curse' && entry.id === item.curse!.curseId,
+      );
+      if (!curse) {
+        throw new Error(
+          `content-bound validation: item ${item.itemId} carries unknown curse ${item.curse.curseId}`,
+        );
+      }
+    }
   }
   for (const entry of pack.entries) {
     if (entry.kind !== 'item' || !entry.equipment) continue;

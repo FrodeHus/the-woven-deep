@@ -36,12 +36,12 @@ beforeAll(async () => {
 const SEED = [11, 22, 33, 44] as const;
 
 describe('createNewRun', () => {
-  it('builds a valid, deterministic schema-v13 run starting in the authored town', () => {
+  it('builds a valid, deterministic schema-v14 run starting in the authored town', () => {
     const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(13);
+    expect(first.schemaVersion).toBe(14);
     expect(first.offeredArtifact).toBeNull();
     expect(first.artifactsUndiscovered).toEqual([]);
     expect(first.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
@@ -283,6 +283,7 @@ describe('createNewRun records input', () => {
         condition: 81,
         charges: null,
         fuel: null,
+        curse: null,
         qualityRank: 2,
         displayName: `Iron Sword ${rank}`,
         glyph: ')',
@@ -343,9 +344,10 @@ describe('createNewRun records input', () => {
     // Re-pinned for the identification.mode: instance sweep (base weapon/armor/shield/ring/light
     // equipment moves off `known`), which changes the default hero's starting-item identified
     // state, and again for the sixth (trigger-only) curse added to the roster, which moves
-    // `contentHash` -- both are expected drift, not a behavioral regression.
+    // `contentHash` -- both are expected drift, not a behavioral regression. Re-pinned again for
+    // save schema v14 (`ItemInstance.curse`), which moves `schemaVersion` alone.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '2e867dea758a8f53b94a80270f8dbee49b151315c4e9e1592dedf9547be2fb92',
+      '88f636a426e1c513dd5a16fdca5259db0a350f37676ce2d9d776a3894adb328e',
     );
   });
 

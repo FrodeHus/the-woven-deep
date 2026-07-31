@@ -46,6 +46,7 @@ export const heirloomItemMetadata = z.strictObject({
   originatingRank: z.literal(1),
   sourceItemId: nullableIdentifier,
 });
+export const itemCurse = z.strictObject({ curseId: identifier, revealed: z.boolean() });
 export const itemFields = {
   itemId: identifier,
   contentId: identifier,
@@ -57,6 +58,7 @@ export const itemFields = {
   fuel: safeNonNegative.nullable(),
   enabled: z.boolean().nullable(),
   heirloom: heirloomItemMetadata.optional(),
+  curse: itemCurse.optional(),
 } as const;
 export const item = z.strictObject({ ...itemFields, location: itemLocation });
 export const discovery = z.strictObject({

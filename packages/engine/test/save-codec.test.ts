@@ -274,6 +274,17 @@ describe('active-run save codec', () => {
     return { ...current, schemaVersion: 12 };
   }
 
+  // v13 saves are structurally identical to the current shape apart from `curse` on items and
+  // recorded heirlooms, which the cursed-item feature introduced at v14.
+  function v13Fixture(): Record<string, unknown> {
+    const current = structuredClone(createDemoRun()) as any;
+    return { ...current, schemaVersion: 13 };
+  }
+
+  function stripV14Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
+    return { ...structuredClone(run), schemaVersion: 13 };
+  }
+
   function concludedRun(): ReturnType<typeof createDemoRun> {
     const base = createDemoRun();
     const heroActor = { ...base.actors[0]!, health: 0 };
@@ -502,11 +513,74 @@ describe('active-run save codec', () => {
     return population;
   }
 
-  it('migrates strict schema v4 state through v5, v6, v7, v8, v9, v10, v11, v12, and v13 and preserves every former field', () => {
+  // A content-bound run (real compiled pack, real item/curse content ids) for the curse save
+  // codec tests, which need to round-trip against `compiledContent` rather than the lightweight
+  // demo pack.
+  function baseRun(): any {
+    return structuredClone(createGameplayDemoRun(compiledContent).run) as any;
+  }
+
+  function withCursedItem(
+    run: any,
+    curse: Readonly<{ curseId: string; revealed: boolean }>,
+  ): any {
+    const [first, ...rest] = run.items;
+    return { ...run, items: [{ ...first, curse: { ...curse } }, ...rest] };
+  }
+
+  function heirloomFixture(): Record<string, unknown> {
+    return {
+      contentId: 'item.iron-sword',
+      sourceItemId: 'item.recorded.heirloom',
+      enchantment: null,
+      condition: 90,
+      charges: null,
+      fuel: null,
+      curse: null,
+      qualityRank: 0,
+      displayName: 'Old Iron Sword',
+      glyph: ')',
+      color: '#c0c0c0',
+      originatingHallRecordId: 'hall.heirloom',
+    };
+  }
+
+  function withRecordedHeirloom(run: any, heirloom: Record<string, unknown>): any {
+    const heroActor = run.actors.find((actor: any) => actor.actorId === run.hero.actorId);
+    const standing = {
+      rank: 1,
+      hallRecordId: heirloom.originatingHallRecordId,
+      heroName: 'Test Hero',
+      portraitGlyph: '@',
+      classTags: ['fighter'],
+      attributes: heroActor.attributes,
+      equippedItemContentIds: [heirloom.contentId],
+      signatureAbilityIds: [],
+      deathDepth: 1,
+      sourceContentHash: run.contentHash,
+      heirloom,
+    };
+    const decision = {
+      hallRecordId: standing.hallRecordId,
+      rank: 1,
+      role: 'champion' as const,
+      gateRoll: null,
+      retained: true,
+      encountered: false,
+      defeated: false,
+    };
+    return { ...run, fallenHeroStandings: [standing], fallenHeroDecisions: [decision] };
+  }
+
+  function recordedHeirloomOf(run: any): Record<string, unknown> {
+    return run.fallenHeroStandings[0].heirloom;
+  }
+
+  it('migrates strict schema v4 state through v5, v6, v7, v8, v9, v10, v11, v12, v13, and v14 and preserves every former field', () => {
     const legacy = v4Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(13);
+    expect(decoded.schemaVersion).toBe(14);
     expect(decoded.hero.currency).toBe(0);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
@@ -526,11 +600,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v5 state through v6, v7, v8, v9, v10, v11, v12, and v13 and preserves every former field', () => {
+  it('migrates strict schema v5 state through v6, v7, v8, v9, v10, v11, v12, v13, and v14 and preserves every former field', () => {
     const legacy = v5Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(13);
+    expect(decoded.schemaVersion).toBe(14);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
     expect(decoded.metrics).toEqual(emptyRunMetrics());
@@ -545,11 +619,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v6 state through v7, v8, v9, v10, v11, v12, and v13 and preserves every former field', () => {
+  it('migrates strict schema v6 state through v7, v8, v9, v10, v11, v12, v13, and v14 and preserves every former field', () => {
     const legacy = v6Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(13);
+    expect(decoded.schemaVersion).toBe(14);
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
     expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
@@ -560,11 +634,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v7 state to v13 and preserves every former field', () => {
+  it('migrates strict schema v7 state to v14 and preserves every former field', () => {
     const legacy = v7Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(13);
+    expect(decoded.schemaVersion).toBe(14);
     expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
     expect(decoded.restockedMilestones).toEqual([]);
     // A pre-Weave hero migrates to full Weave: maxWeave is base 4 + Wits, and weave starts full.
@@ -577,11 +651,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v8 state to v13 and preserves every former field', () => {
+  it('migrates strict schema v8 state to v14 and preserves every former field', () => {
     const legacy = v8Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(13);
+    expect(decoded.schemaVersion).toBe(14);
     // A pre-Weave hero migrates to full Weave: maxWeave is base 4 + Wits, and weave starts full.
     const migratedHero = decoded.actors.find((actor) => actor.actorId === decoded.hero.actorId)!;
     expect(migratedHero.maxWeave).toBe(4 + migratedHero.attributes.wits);
@@ -598,11 +672,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v9 state to v13 and preserves every former field', () => {
+  it('migrates strict schema v9 state to v14 and preserves every former field', () => {
     const legacy = v9Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(13);
+    expect(decoded.schemaVersion).toBe(14);
     expect(decoded.metrics.defeatedBossMonsterIds).toEqual([]);
     expect(stripV10Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
@@ -610,22 +684,22 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v10 state to v13 and preserves every former field', () => {
+  it('migrates strict schema v10 state to v14 and preserves every former field', () => {
     const legacy = v10Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(13);
+    expect(decoded.schemaVersion).toBe(14);
     expect(stripV11Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
       encodeActiveRun(decoded),
     );
   });
 
-  it('migrates strict schema v11 state to v13 and preserves every former field', () => {
+  it('migrates strict schema v11 state to v14 and preserves every former field', () => {
     const legacy = v11Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(13);
+    expect(decoded.schemaVersion).toBe(14);
     expect(decoded.rng['loot-placement']).toEqual(
       deriveRngStreams(legacy.runSeed as any)['loot-placement'],
     );
@@ -635,17 +709,57 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v12 state to v13 and preserves every former field', () => {
+  it('migrates strict schema v12 state to v14 and preserves every former field', () => {
     const legacy = v12Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(13);
+    expect(decoded.schemaVersion).toBe(14);
     expect(decoded.offeredArtifact).toBeNull();
     expect(decoded.artifactsUndiscovered).toEqual([]);
     expect(stripV13Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
       encodeActiveRun(decoded),
     );
+  });
+
+  it('migrates strict schema v13 state to v14 and preserves every former field', () => {
+    const legacy = v13Fixture();
+    const decoded = decodeActiveRun(JSON.stringify(legacy));
+
+    expect(decoded.schemaVersion).toBe(14);
+    expect(stripV14Fields(decoded)).toEqual(legacy);
+    expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
+      encodeActiveRun(decoded),
+    );
+  });
+
+  it('migrates a v13 save by defaulting the curse field to absent', () => {
+    const v13 = v13Fixture();
+    for (const item of v13.items as Record<string, unknown>[]) delete item.curse;
+    const decoded = decodeActiveRun(JSON.stringify(v13));
+    expect(decoded.items.every((item) => item.curse === undefined)).toBe(true);
+    expect(decoded.schemaVersion).toBe(14);
+  });
+
+  it('round-trips a cursed item byte-identically', () => {
+    const run = withCursedItem(baseRun(), { curseId: 'curse.hungering-edge', revealed: true });
+    const encoded = encodeActiveRun(run);
+    expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
+  });
+
+  it('rejects a curse block naming a curse the pack does not define', () => {
+    const run = withCursedItem(baseRun(), { curseId: 'curse.not-real', revealed: false });
+    expect(() => validateContentBoundRun(run, compiledContent)).toThrow(/curse.not-real/);
+  });
+
+  it('preserves the curse across a recorded heirloom snapshot', () => {
+    const snapshot = { ...heirloomFixture(), curse: { curseId: 'curse.leaden-weight', revealed: true } };
+    const run = withRecordedHeirloom(baseRun(), snapshot);
+    const decoded = decodeActiveRun(encodeActiveRun(run));
+    expect(recordedHeirloomOf(decoded).curse).toEqual({
+      curseId: 'curse.leaden-weight',
+      revealed: true,
+    });
   });
 
   it('round-trips a run carrying an offered artifact to identical stable bytes', () => {
@@ -1484,6 +1598,7 @@ describe('active-run save codec', () => {
       condition: 90,
       charges: null,
       fuel: null,
+      curse: null,
       qualityRank: 3,
       displayName: 'Old iron sword',
       glyph: ')',
@@ -2457,7 +2572,7 @@ describe('active-run save codec', () => {
     );
   });
 
-  it.each([0, 1, 2, 3, 14])(
+  it.each([0, 1, 2, 3, 15])(
     'rejects unsupported schema version %i without partial state',
     (schemaVersion) => {
       try {

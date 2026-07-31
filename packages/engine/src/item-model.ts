@@ -13,6 +13,11 @@ export interface ItemEnchantmentState {
   readonly modifiers: Readonly<Record<string, number>>;
 }
 
+export interface ItemCurseState {
+  readonly curseId: OpaqueId;
+  readonly revealed: boolean;
+}
+
 export interface HeirloomItemMetadata {
   readonly displayName: string;
   readonly glyph: string;
@@ -34,6 +39,7 @@ export interface ItemInstance {
   readonly enabled: boolean | null;
   readonly location: ItemLocation;
   readonly heirloom?: HeirloomItemMetadata;
+  readonly curse?: ItemCurseState;
 }
 
 export interface IdentificationState {
