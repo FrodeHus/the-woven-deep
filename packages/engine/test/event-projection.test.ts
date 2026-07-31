@@ -1011,4 +1011,18 @@ describe('public event projection', () => {
     const json = stableJson(output);
     expect(json).not.toMatch(/item\.hidden|feature\.hidden|"from"|"to"/);
   });
+
+  it('passes curse.revealed through unconditionally, revealText intact', () => {
+    const input = fixture();
+    const event: DomainEvent = {
+      type: 'curse.revealed',
+      eventId: 'event.curse',
+      itemId: 'item.cursed.1',
+      curseId: 'curse.leaden-weight',
+      revealText: 'It settles onto you like wet earth, and does not lift.',
+    };
+    expect(
+      projectDomainEvents({ ...input, events: [event], heroId: input.state.hero.actorId }),
+    ).toEqual([event]);
+  });
 });

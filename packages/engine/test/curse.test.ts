@@ -9,9 +9,11 @@ import {
   createDemoContentPack,
   createDemoRun,
   dropItem,
+  encodeActiveRun,
   equipmentPlan,
   identifyItemCompletely,
   merchantAcceptsItem,
+  projectDomainEvents,
   resolveCommand,
   unequipItem,
   type ItemInstance,
@@ -144,12 +146,44 @@ describe('sticky equipment and curse.revealed', () => {
     );
     expect(resolved.result).toMatchObject({ status: 'applied' });
     expect(resolved.events).toContainEqual(
-      expect.objectContaining({ type: 'curse.revealed', curseId: 'curse.leaden-weight' }),
+      expect.objectContaining({
+        type: 'curse.revealed',
+        curseId: 'curse.leaden-weight',
+        revealText: leadenWeight.revealText,
+      }),
     );
     expect(itemOf(resolved.state, swordId).curse).toEqual({
       curseId: 'curse.leaden-weight',
       revealed: true,
     });
+  });
+
+  it('refuses to unequip a revealed cursed item through resolveCommand, and the resulting action.invalid event encodes cleanly', () => {
+    const { run, content } = withBackpackCursedSword({ revealed: false });
+    const equipped = resolveCommand(
+      run,
+      {
+        type: 'equip',
+        commandId: 'command.equip',
+        expectedRevision: 0,
+        itemId: swordId,
+        slot: 'main-hand',
+      },
+      { content },
+    );
+    expect(equipped.result).toMatchObject({ status: 'applied' });
+    expect(itemOf(equipped.state, swordId).curse!.revealed).toBe(true);
+
+    const unequipped = resolveCommand(
+      equipped.state,
+      { type: 'unequip', commandId: 'command.unequip', expectedRevision: 1, slot: 'main-hand' },
+      { content },
+    );
+    expect(unequipped.result).toMatchObject({ status: 'invalid', reason: 'item.cursed' });
+    expect(unequipped.events).toContainEqual(
+      expect.objectContaining({ type: 'action.invalid', reason: 'item.cursed' }),
+    );
+    expect(() => encodeActiveRun(unequipped.state)).not.toThrow();
   });
 
   it('refuses to unequip a revealed cursed item', () => {
