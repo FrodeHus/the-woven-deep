@@ -331,6 +331,8 @@ export function createDemoRun(): ActiveRun {
     fallenHeroStandings: [],
     fallenHeroDecisions: [],
     conqueredChampionRecordIds: [],
+    offeredArtifact: null,
+    artifactsUndiscovered: [],
     metrics: emptyRunMetrics(),
     conclusion: null,
     // Matches this fixture's bundled balance base (see createDemoContentPack); migrations never

@@ -118,6 +118,8 @@ describe('cross-system gameplay sequence properties', () => {
           const projection = stableJson(projectGameplayState({ state, content: gameplayPack }));
           expect(projection).not.toContain('appearanceByContentId');
           expect(projection).not.toContain('rng');
+          expect(projection).not.toContain('offeredArtifact');
+          expect(projection).not.toContain('artifactsUndiscovered');
         }
       }),
       { seed: 0x4a09, numRuns: 500 },

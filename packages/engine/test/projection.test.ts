@@ -768,6 +768,26 @@ describe('gameplay projection', () => {
     expect(projected.conclusion).toBeNull();
   });
 
+  it('never projects the hidden artifact run fields', () => {
+    const base = createDemoRun();
+    const withArtifacts: ActiveRun = {
+      ...base,
+      offeredArtifact: 'artifact.b',
+      artifactsUndiscovered: ['artifact.a', 'artifact.b'],
+    };
+    const projected = projectGameplayState({
+      state: withArtifacts,
+      content: createDemoContentPack(),
+    });
+
+    expect(projected).not.toHaveProperty('offeredArtifact');
+    expect(projected).not.toHaveProperty('artifactsUndiscovered');
+    const serialized = stableJson(projected);
+    expect(serialized).not.toContain('offeredArtifact');
+    expect(serialized).not.toContain('artifactsUndiscovered');
+    expect(serialized).not.toContain('artifact.a');
+  });
+
   it('carries no trade projection without an active trade session', () => {
     const base = createDemoRun();
     expect(

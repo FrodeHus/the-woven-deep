@@ -310,6 +310,8 @@ export function createNewRun(
     fallenHeroStandings: [],
     fallenHeroDecisions: [],
     conqueredChampionRecordIds: [],
+    offeredArtifact: null,
+    artifactsUndiscovered: [],
     // The town never counts toward floorsEntered/deepestDepth: those track dungeon progress, and
     // the hero starts in town without ever "entering" it via a transition.
     metrics: emptyRunMetrics(),

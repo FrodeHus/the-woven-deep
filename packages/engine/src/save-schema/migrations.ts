@@ -162,6 +162,10 @@ export const legacyRecordedV11 = z.strictObject({
   events: z.array(legacyAuthoritativeEventV11).readonly(),
   publicEvents: z.array(legacyPublicEventV11).readonly(),
 });
+// A v12 command record is byte-identical to a v11 one: the artifact bump at v13 added run fields
+// only, no event or command shape. Aliased (rather than re-spelled) so the two frozen shapes can
+// never drift apart, and named for v12 so a future event change freezes its own literal here.
+export const legacyRecordedV12 = legacyRecordedV11;
 export const legacyRecorded = z.strictObject({
   command: commandV7,
   result: processedResult,
@@ -220,6 +224,25 @@ export const legacyV5RngEntries = Object.fromEntries(
 export const legacyV11RngEntries = Object.fromEntries(
   LEGACY_V11_RNG_STREAM_NAMES.map((name) => [name, uint32State]),
 ) as Record<(typeof LEGACY_V11_RNG_STREAM_NAMES)[number], typeof uint32State>;
+// The eleven streams a v12 save carries, spelled out as a frozen literal rather than derived from
+// the live `RNG_STREAM_NAMES`: a new stream must never retroactively become required of a genuine
+// v12 save.
+export const LEGACY_V12_RNG_STREAM_NAMES = [
+  'generation',
+  'encounters',
+  'population-gates',
+  'merchant-stock',
+  'merchant-runtime',
+  'combat',
+  'loot',
+  'effects',
+  'narrative',
+  'run-records',
+  'loot-placement',
+] as const;
+export const legacyV12RngEntries = Object.fromEntries(
+  LEGACY_V12_RNG_STREAM_NAMES.map((name) => [name, uint32State]),
+) as Record<(typeof LEGACY_V12_RNG_STREAM_NAMES)[number], typeof uint32State>;
 export const legacyV5Event = z.discriminatedUnion('type', [
   ...eventOptions,
   populationCreatedEvent,
@@ -424,6 +447,55 @@ export const legacyActiveRunV10Schema = z.strictObject({
   returnAnchorFloorId: identifier.optional(),
   floors: z.array(floor).min(1).readonly(),
   recentCommands: z.array(legacyRecordedV10).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(),
+  populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+  metrics: runMetrics,
+  conclusion: runConclusionSchema.nullable(),
+  house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
+  restockedMilestones: z.array(positiveQuantity).readonly(),
+});
+
+// The pre-artifact save shape: identical to the current run schema except it carries neither
+// `offeredArtifact` nor `artifactsUndiscovered`, which the artifact offer introduced at v13.
+// Spelled out as a frozen literal (not derived from the live `activeRunSchema`) so a future schema
+// bump can't silently change what a real v12 save is validated against.
+export const legacyActiveRunV12Schema = z.strictObject({
+  schemaVersion: z.literal(12),
+  gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  runId: identifier,
+  runSeed: uint32Tuple,
+  rng: z.strictObject(legacyV12RngEntries),
+  revision: safeNonNegative,
+  turn: safeNonNegative,
+  worldTime: safeNonNegative,
+  hero,
+  reputations: z
+    .array(z.strictObject({ factionId: identifier, value: z.number().int().safe() }))
+    .readonly(),
+  activeTrade: z
+    .strictObject({
+      merchantPopulationId: identifier,
+      merchantActorId: identifier,
+      openedByCommandId: identifier,
+      openedAtRevision: safeNonNegative,
+      completedCommerce: z.boolean(),
+    })
+    .nullable(),
+  actors: z.array(actor).min(1).readonly(),
+  items: z.array(item).readonly(),
+  features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(),
+  survival,
+  identification,
+  activeFloorId: identifier,
+  activeFloorEnteredAt: safeNonNegative,
+  returnAnchorFloorId: identifier.optional(),
+  floors: z.array(floor).min(1).readonly(),
+  recentCommands: z.array(legacyRecordedV12).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
   fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
