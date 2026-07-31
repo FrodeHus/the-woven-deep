@@ -3,9 +3,20 @@ import type { TileId, Uint32State, VaultPlacement } from './model.js';
 import { rollDie } from './random.js';
 import { tileDefinition } from './terrain.js';
 
+const WALL_TILE_ID: TileId = 0;
 const FLOOR_TILE_ID: TileId = 1;
 const DOOR_TILE_ID: TileId = 2;
 const PERCENT_SIDES = 100;
+
+/**
+ * How much walkable space a door must guard before it is worth hanging. A mouth whose far side
+ * opens onto fewer cells than this -- and which reaches no room from there -- guards a dead-end
+ * stub: the player opens it and finds nothing, which reads as a bug rather than as architecture.
+ * Small enough that a genuine short link between two rooms still qualifies (those qualify by
+ * reaching a room, not by size), large enough to reject the two- and three-cell nubs rot-js leaves
+ * behind.
+ */
+const MINIMUM_GUARDED_REGION_CELLS = 8;
 
 export interface JunctionDoorGeometry {
   readonly width: number;
@@ -95,10 +106,77 @@ function traversableAt(input: JunctionDoorGeometry, x: number, y: number): boole
 }
 
 /**
+ * A door hangs in masonry, so both cells flanking the mouth must be actual WALL tiles -- not merely
+ * anything non-traversable. Void, pillars and any future non-traversable terrain are all things the
+ * renderer draws as something other than a wall cube (or as nothing at all), and a door jammed
+ * between two of them stands on open floor like a stage prop.
+ */
+function wallAt(input: JunctionDoorGeometry, x: number, y: number): boolean {
+  if (x < 0 || y < 0 || x >= input.width || y >= input.height) return false;
+  return input.tiles[y * input.width + x] === WALL_TILE_ID;
+}
+
+/**
+ * Whether a mouth at `index` guards somewhere worth going: flood the walkable region beyond `start`
+ * with the mouth itself treated as blocked, and accept as soon as the region reaches a room
+ * rectangle (a corridor between two rooms always qualifies, however short), holds a staircase, or
+ * grows to {@link MINIMUM_GUARDED_REGION_CELLS}. Bounded by that same constant, so the scan stays
+ * cheap and its cost never depends on how large the far region actually is.
+ *
+ * The staircase condition is stated outright rather than left to the room mask. Rot-js reports a
+ * room as its whole rectangle, so a small stair pocket carved inside one is accepted incidentally
+ * today -- but a pocket dug outside every rectangle is exactly as worth guarding, and a floor
+ * transition is the single most worthwhile thing a door can stand between the player and.
+ */
+function guardsRegion(
+  input: JunctionDoorGeometry,
+  rooms: Uint8Array,
+  index: number,
+  start: number,
+): boolean {
+  const { width, height } = input;
+  const stairIndexes = new Set<number>();
+  for (const stair of [input.stairUp, input.stairDown]) {
+    if (stair === null) continue;
+    if (stair.x < 0 || stair.y < 0 || stair.x >= width || stair.y >= height) continue;
+    stairIndexes.add(stair.y * width + stair.x);
+  }
+  const visited = new Set<number>([start]);
+  const queue = [start];
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const current = queue[cursor]!;
+    if (rooms[current] === 1) return true;
+    if (stairIndexes.has(current)) return true;
+    if (visited.size >= MINIMUM_GUARDED_REGION_CELLS) return true;
+    const x = current % width;
+    const y = Math.floor(current / width);
+    const neighbors = [
+      y > 0 ? current - width : -1,
+      x + 1 < width ? current + 1 : -1,
+      y + 1 < height ? current + width : -1,
+      x > 0 ? current - 1 : -1,
+    ];
+    for (const next of neighbors) {
+      if (next === -1 || next === index || visited.has(next)) continue;
+      if (!tileDefinition(input.tiles[next]!).potentiallyTraversable) continue;
+      visited.add(next);
+      queue.push(next);
+    }
+  }
+  return false;
+}
+
+/**
  * Junction cells of a final topology, in row-major order: plain floor cells outside every room
  * rectangle whose only two traversable orthogonal neighbors sit opposite each other (a one-wide
  * passage cell) with at least one of them inside a room. That is exactly the mouth where a corridor
  * meets a room -- the cell a hand-built dungeon would hang a door on.
+ *
+ * Two further rules keep a door reading as architecture rather than as scenery. Both cells flanking
+ * the mouth must be wall tiles, so the door is always embedded in visible wall mass. And the mouth
+ * must guard passage to somewhere worth going: the region beyond its non-room side has to reach a
+ * room, hold a staircase, or hold at least {@link MINIMUM_GUARDED_REGION_CELLS} cells, so a door
+ * never opens onto a dead-end stub. A mouth with a room on both sides always qualifies.
  */
 export function junctionDoorCandidates(input: JunctionDoorGeometry): readonly number[] {
   assertGeometry(input);
@@ -119,10 +197,20 @@ export function junctionDoorCandidates(input: JunctionDoorGeometry): readonly nu
       const vertical = north && south;
       const horizontal = east && west;
       if (!vertical && !horizontal) continue;
-      const roomSide = vertical
-        ? rooms[index - input.width] === 1 || rooms[index + input.width] === 1
-        : rooms[index - 1] === 1 || rooms[index + 1] === 1;
-      if (!roomSide) continue;
+      const sides = vertical ? [index - input.width, index + input.width] : [index - 1, index + 1];
+      if (!sides.some((side) => rooms[side] === 1)) continue;
+      const flanks: readonly [number, number][] = vertical
+        ? [
+            [x - 1, y],
+            [x + 1, y],
+          ]
+        : [
+            [x, y - 1],
+            [x, y + 1],
+          ];
+      if (!flanks.every(([fx, fy]) => wallAt(input, fx, fy))) continue;
+      const beyond = sides.filter((side) => rooms[side] !== 1);
+      if (!beyond.every((side) => guardsRegion(input, rooms, index, side))) continue;
       candidates.push(index);
     }
   return candidates;
@@ -134,8 +222,9 @@ export function junctionDoorCandidates(input: JunctionDoorGeometry): readonly nu
  * Pure and deterministic: candidates are collected in row-major order and each one consumes exactly
  * one hundred-sided roll from the supplied state, so the floor seed alone fixes which junctions
  * become doors. Door tiles are `potentiallyTraversable`, so no conversion can disconnect the floor;
- * a junction orthogonally adjacent to a door tile (authored by a vault or converted earlier in this
- * same pass) is skipped without a roll so doors never come in slabs.
+ * a junction within Chebyshev distance 1 of a door tile (authored by a vault or converted earlier
+ * in this same pass, row-major precedence) is skipped without a roll so doors never come in slabs
+ * -- diagonally paired doors read as clutter just as orthogonal ones do.
  */
 export function carveJunctionDoors(input: JunctionDoorInput): JunctionDoorResult {
   const { doorTilePercent } = input;
@@ -154,13 +243,13 @@ export function carveJunctionDoors(input: JunctionDoorInput): JunctionDoorResult
   for (const index of candidates) {
     const x = index % input.width;
     const y = Math.floor(index / input.width);
-    const beside = [
-      y > 0 ? tiles[index - input.width] : undefined,
-      x + 1 < input.width ? tiles[index + 1] : undefined,
-      y + 1 < input.height ? tiles[index + input.width] : undefined,
-      x > 0 ? tiles[index - 1] : undefined,
-    ];
-    if (beside.some((tile) => tile === DOOR_TILE_ID)) continue;
+    let crowded = false;
+    for (let ny = Math.max(0, y - 1); ny <= Math.min(input.height - 1, y + 1); ny += 1)
+      for (let nx = Math.max(0, x - 1); nx <= Math.min(input.width - 1, x + 1); nx += 1) {
+        if (nx === x && ny === y) continue;
+        if (tiles[ny * input.width + nx] === DOOR_TILE_ID) crowded = true;
+      }
+    if (crowded) continue;
     const roll = rollDie(cursor, PERCENT_SIDES);
     cursor = roll.state;
     if (roll.value > doorTilePercent) continue;

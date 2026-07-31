@@ -122,10 +122,14 @@ function wallCoversBehind(
 
 /**
  * The grid indices of the walls that must render as occlusion stubs this frame: every drawn wall
- * whose raised body covers the HERO's vicinity on screen (the hero's cell or an orthogonal
- * neighbour). Dynamic -- it depends on `hero`, so it changes as the hero moves, and is empty when
- * `hero` is undefined. Pure; both `planFloorBake` (to stub the walls) and the renderer's rebake key
- * (to trigger a rebuild only when the set actually changes) derive from this one function.
+ * whose raised body covers the HERO's vicinity on screen (the hero's cell, or an orthogonal
+ * neighbour the hero could actually be seen over). A neighbour that is itself a wall or a door is
+ * NOT in that vicinity: shortening a wall to reveal a full-height doorway reveals nothing, and it
+ * unbuilds the very masonry the door is meant to hang in -- a doorway with a stub beside it reads
+ * as a free-standing arch. Dynamic -- it depends on `hero`, so it changes as the hero moves, and is
+ * empty when `hero` is undefined. Pure; both `planFloorBake` (to stub the walls) and the renderer's
+ * rebake key (to trigger a rebuild only when the set actually changes) derive from this one
+ * function.
  */
 export function occludedWallIndices(
   cells: readonly ObservableCell[],
@@ -145,13 +149,19 @@ export function occludedWallIndices(
   const dw = TILE_HALF_W * 2 * scale;
   const floorHalfDh = TILE_HALF_H * scale;
 
-  const vicinity = new Set<string>([
-    `${hero.x},${hero.y}`,
-    `${hero.x},${hero.y - 1}`,
-    `${hero.x},${hero.y + 1}`,
-    `${hero.x - 1},${hero.y}`,
-    `${hero.x + 1},${hero.y}`,
-  ]);
+  const seenOver = (x: number, y: number): boolean => {
+    const family = familyAt(x, y);
+    return !isWallFamily(family) && family !== 'door' && family !== 'town-door';
+  };
+  const vicinity = new Set<string>([`${hero.x},${hero.y}`]);
+  for (const [nx, ny] of [
+    [hero.x, hero.y - 1],
+    [hero.x, hero.y + 1],
+    [hero.x - 1, hero.y],
+    [hero.x + 1, hero.y],
+  ] as readonly [number, number][]) {
+    if (seenOver(nx, ny)) vicinity.add(`${nx},${ny}`);
+  }
 
   for (let i = 0; i < cells.length; i += 1) {
     const cell = cells[i]!;

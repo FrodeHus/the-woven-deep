@@ -117,6 +117,78 @@ export function analyzeConnectivity(input: ConnectivityInput): ConnectivityAnaly
   };
 }
 
+/**
+ * Every traversable cell whose removal would split the component it belongs to -- the articulation
+ * points of the floor's walkable graph, in one linear pass (iterative Tarjan lowlink, so a large
+ * floor can never blow the call stack).
+ *
+ * A cell in here is a cell nothing that permanently blocks movement may stand on: block it and some
+ * other pair of cells stops being mutually reachable. Chest placement culls its candidate pool with
+ * this; a one-wide ledge is exactly such a cell, and a chest dropped there strands the hero behind
+ * the diagonal-corner rule with no way through.
+ *
+ * The graph is the `potentiallyTraversable` one `analyzeConnectivity` walks, not the `walkable` one:
+ * doors open, so a closed door must not be read as a cut in the floor.
+ */
+export function articulationIndexes(
+  input: Readonly<{ width: number; height: number; tiles: readonly TileId[] }>,
+): ReadonlySet<number> {
+  const { width, height, tiles } = input;
+  if (
+    !Number.isSafeInteger(width) ||
+    !Number.isSafeInteger(height) ||
+    width <= 0 ||
+    height <= 0 ||
+    tiles.length !== width * height
+  ) {
+    throw new RangeError('articulation dimensions and dense tile count must agree');
+  }
+  const traversable = (index: number): boolean =>
+    tileDefinition(tiles[index]!).potentiallyTraversable;
+  const discovered = new Int32Array(tiles.length).fill(-1);
+  const low = new Int32Array(tiles.length).fill(-1);
+  const result = new Set<number>();
+  let timer = 0;
+
+  for (let root = 0; root < tiles.length; root += 1) {
+    if (discovered[root] !== -1 || !traversable(root)) continue;
+    discovered[root] = timer;
+    low[root] = timer;
+    timer += 1;
+    let rootChildren = 0;
+    const stack: { node: number; parent: number; cursor: number }[] = [
+      { node: root, parent: -1, cursor: 0 },
+    ];
+    while (stack.length > 0) {
+      const frame = stack[stack.length - 1]!;
+      const neighbors = candidateNeighbors(frame.node, width, height);
+      if (frame.cursor < neighbors.length) {
+        const next = neighbors[frame.cursor]!;
+        frame.cursor += 1;
+        if (!traversable(next)) continue;
+        if (discovered[next] === -1) {
+          discovered[next] = timer;
+          low[next] = timer;
+          timer += 1;
+          if (frame.node === root) rootChildren += 1;
+          stack.push({ node: next, parent: frame.node, cursor: 0 });
+        } else if (next !== frame.parent) {
+          low[frame.node] = Math.min(low[frame.node]!, discovered[next]!);
+        }
+        continue;
+      }
+      stack.pop();
+      const parent = stack[stack.length - 1];
+      if (parent === undefined) continue;
+      low[parent.node] = Math.min(low[parent.node]!, low[frame.node]!);
+      if (parent.node !== root && low[frame.node]! >= discovered[parent.node]!)
+        result.add(parent.node);
+    }
+    if (rootChildren > 1) result.add(root);
+  }
+  return result;
+}
+
 export function preservesRequiredRoutes(input: RequiredRouteInput): boolean {
   const { width, height, tiles } = input;
   if (

@@ -17,6 +17,7 @@ import { equippedLightSource } from '../light-sources.js';
 import { featuresOf, heroOf, type FeatureView } from '../../session/projection-view.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { AtlasRect, PlayfieldAtlas, SpriteAtlas } from './atlas.js';
+import { withImpliedDoorFrames } from './door-frames.js';
 import { bakeFloor, bakeKey, occludedWallIndices, planFloorBake } from './floor-bake.js';
 import { TILE_HALF_H, TILE_HALF_W, worldToScreen, cellAtScreen, type IsoView } from './iso-math.js';
 import { groundItemHoverOffset, resolveActorRect, resolveItemSprite } from './sprite-mapping.js';
@@ -370,7 +371,12 @@ export class IsoRenderer {
     this.floorWidth = floor.width;
     this.floorHeight = floor.height;
 
-    this.cellByKey = new Map(floor.cells.map((cell) => [`${cell.x},${cell.y}`, cell] as const));
+    // A discovered doorway implies the masonry it hangs in, even where the hero has not lit that
+    // masonry yet; without it an arch first seen down a corridor floats in the dark. The frame is
+    // baked AND fogged from these cells, so it carries the door's own knowledge tier and light.
+    const cells = withImpliedDoorFrames(floor.cells, floor.width, floor.height);
+
+    this.cellByKey = new Map(cells.map((cell) => [`${cell.x},${cell.y}`, cell] as const));
 
     const hero = heroOf(snapshot.projection);
     if (!this.cameraInitialized) {
@@ -380,12 +386,12 @@ export class IsoRenderer {
     }
 
     this.resolveHeroLight(snapshot);
-    this.rebakeIfNeeded(floor.cells, floor.floorId, floor.town, hero);
+    this.rebakeIfNeeded(cells, floor.floorId, floor.town, hero);
     this.rebuildFeatures(snapshot);
     this.rebuildGroundItems();
     this.rebuildActors();
     this.rebuildLights(floor.cells, hero);
-    this.rebuildFov(floor.cells);
+    this.rebuildFov(cells);
   }
 
   setTargeting(visual: TargetingVisual | null): void {
