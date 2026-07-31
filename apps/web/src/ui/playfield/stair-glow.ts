@@ -24,10 +24,10 @@ export const STAIR_UP_GLOW_COLOR = 0x7fb6ff;
 
 /** The floor of the breathing band. Deliberately non-zero: the glow never blinks fully out, it
  * just recedes. */
-export const STAIR_GLOW_MIN_ALPHA = 0.08;
+export const STAIR_GLOW_MIN_ALPHA = 0.14;
 /** The ceiling of the breathing band. Ambiance, not UI -- a stair must never look like a marker
  * pinned on the world, so this stays far below the light pools it shares the scene with. */
-export const STAIR_GLOW_MAX_ALPHA = 0.2;
+export const STAIR_GLOW_MAX_ALPHA = 0.28;
 
 /** How far a stair glow reaches, in grid cells. Roughly one and a half tiles across: enough to
  * bloom past the tile's own edges, not enough to light a neighbour. */
