@@ -135,7 +135,7 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `pointBuy` | object | Yes | Chargen point-buy attribute table described below. |
 | `restockMilestones` | array of positive safe integers | Yes | Strictly increasing world-time milestones at which town merchant stock restocks. The bundled value is `[5, 10, 15, 20]`. |
 | `house` | object | Yes | Player house sizing, described below. The bundled value is `{ baseCapacity: 6, strongboxIncrement: 4 }`. |
-| `encounterDensity` | object | Yes | Dungeon encounter density, described below. The bundled value is `{ monstersPerThousandWalkable: { shallow: 6, mid: 8, deep: 10 }, attemptCap: 16 }`. |
+| `encounterDensity` | object | Yes | Dungeon encounter density, described below. The bundled value is `{ monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 }, attemptCap: 16 }`. |
 | `fragmentSpawnRollDenominator` | positive integer | Yes | Odds denominator (1-in-N) for the rare Ancient Tablet fragment spawn rolled once per floor generation. The bundled value is `40`. |
 | `generation` | object | Yes | Dungeon generation knobs described below. The bundled value is `{ doorTilePercent: 35 }`. |
 | `floorLoot` | object | Yes | Floor-loot placement knobs described below. |
@@ -264,7 +264,7 @@ entries:
     restockMilestones: [5, 10, 15, 20]
     house: { baseCapacity: 6, strongboxIncrement: 4 }
     encounterDensity:
-      monstersPerThousandWalkable: { shallow: 6, mid: 8, deep: 10 }
+      monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 }
       attemptCap: 16
     fragmentSpawnRollDenominator: 40
     generation:

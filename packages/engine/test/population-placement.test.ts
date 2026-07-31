@@ -1102,7 +1102,7 @@ describe('atomic population placement', () => {
 // footprint, and `band` comes from the floor's depth against `floorLoot.depthBands`. The loop runs
 // until that many monsters are placed, `attemptCap` attempts are consumed, no encounter is
 // eligible, or a required encounter is rejected. `createDemoContentPack`'s balance (via `pack`)
-// carries the bundled `monstersPerThousandWalkable: { shallow: 6, mid: 8, deep: 10 }`,
+// carries the bundled `monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 }`,
 // `attemptCap: 16`, and `depthBands: { shallowMaxDepth: 6, midMaxDepth: 13 }`.
 function openFloor(
   width: number,
@@ -1187,7 +1187,7 @@ function openCellCount(target: FloorSnapshot): number {
 
 // The bundled balance knobs the demo pack carries, restated so each expectation is derived from the
 // fixture's own walkable-cell count rather than a hand-computed constant.
-const MONSTERS_PER_THOUSAND = { shallow: 6, mid: 8, deep: 10 } as const;
+const MONSTERS_PER_THOUSAND = { shallow: 7, mid: 8, deep: 10 } as const;
 const ATTEMPT_CAP = 16;
 
 // max(1, ceil(open * perThousand / 1000)) -- mirrors `floorMonsterTarget`'s checked integer

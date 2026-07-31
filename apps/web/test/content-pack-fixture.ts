@@ -83,7 +83,7 @@ const entries: readonly ContentEntry[] = [
     restockMilestones: [5, 10, 15, 20],
     house: { baseCapacity: 6, strongboxIncrement: 4 },
     encounterDensity: {
-      monstersPerThousandWalkable: { shallow: 6, mid: 8, deep: 10 },
+      monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 },
       attemptCap: 16,
     },
     fragmentSpawnRollDenominator: 40,
