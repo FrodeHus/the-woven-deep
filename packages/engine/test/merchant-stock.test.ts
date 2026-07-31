@@ -145,9 +145,11 @@ describe('merchant stock materialization', () => {
 
     expect(result.items.length).toBeGreaterThan(0);
     expect(result.items.every((item) => item.contentId === eligibleId)).toBe(true);
+    // `item.brass-lantern` moved to `identification.mode: instance` in the cursed-items
+    // identification sweep, so freshly materialized stock is no longer pre-identified.
     expect(
       result.items.every(
-        (item) => item.identified === true && item.fuel !== null && item.enabled === false,
+        (item) => item.identified === false && item.fuel !== null && item.enabled === false,
       ),
     ).toBe(true);
     expect(input.run.rng.combat).toEqual(fixture().run.rng.combat);

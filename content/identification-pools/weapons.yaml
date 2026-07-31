@@ -1,0 +1,30 @@
+schemaVersion: 12
+entries:
+  - kind: identification-pool
+    id: identification-pool.weapons
+    name: Weapon unidentified names
+    tags: [identification, weapon]
+    category: weapon
+    verbs:
+      - Aching
+      - Biting
+      - Humming
+      - Keen
+      - Restless
+      - Silent
+      - Trembling
+      - Whetted
+    nouns:
+      - blade
+      - brand
+      - edge
+      - grip
+      - haft
+      - iron
+      - point
+      - weapon
+    visuals:
+      - { id: visual.dull-iron, glyph: "/", color: "#8a8a86" }
+      - { id: visual.notched-steel, glyph: "/", color: "#a8adb0" }
+      - { id: visual.oiled-bronze, glyph: "/", color: "#a67b4f" }
+      - { id: visual.pitted-blackiron, glyph: "/", color: "#4a4844" }

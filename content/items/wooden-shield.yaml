@@ -19,5 +19,5 @@ entries:
     combat: { accuracy: 0, defense: 2, armor: 0, damage: null, range: 0, ammunitionTag: null }
     light: null
     artifact: null
-    identification: { mode: known, poolId: null }
+    identification: { mode: instance, poolId: identification-pool.shields }
     effects: []

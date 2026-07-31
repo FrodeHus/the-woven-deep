@@ -29,5 +29,5 @@ entries:
       warningThresholds: [600, 300, 100]
       fuelTags: [lamp-oil]
     artifact: null
-    identification: { mode: known, poolId: null }
+    identification: { mode: instance, poolId: identification-pool.light-sources }
     effects: []

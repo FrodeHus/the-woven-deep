@@ -53,6 +53,11 @@ export interface BalanceContentEntry extends BaseContentEntry {
     monstersPerThousandWalkable: Readonly<{ shallow: number; mid: number; deep: number }>;
     attemptCap: number;
   }>;
+  readonly curses: Readonly<{
+    readonly chanceBps: Readonly<{ shallow: number; mid: number; deep: number }>;
+    readonly enchantedMultiplierBps: number;
+    readonly capBps: number;
+  }>;
   readonly fragmentSpawnRollDenominator: number;
   readonly generation: Readonly<{ doorTilePercent: number; artifactOfferPercent: number }>;
   readonly floorLoot: Readonly<{

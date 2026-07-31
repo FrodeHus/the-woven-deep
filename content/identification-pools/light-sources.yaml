@@ -1,0 +1,30 @@
+schemaVersion: 12
+entries:
+  - kind: identification-pool
+    id: identification-pool.light-sources
+    name: Light source unidentified names
+    tags: [identification, light]
+    category: light
+    verbs:
+      - Flickering
+      - Guttering
+      - Hissing
+      - Popping
+      - Smoking
+      - Sputtering
+      - Steady
+      - Wavering
+    nouns:
+      - brand
+      - ember
+      - flame
+      - glow
+      - lamp
+      - light
+      - torch
+      - wick
+    visuals:
+      - { id: visual.dented-brass, glyph: "¤", color: "#e8c879" }
+      - { id: visual.resin-pitch, glyph: "!", color: "#e49a4a" }
+      - { id: visual.smoked-glass, glyph: "¤", color: "#8a8a86" }
+      - { id: visual.tarnished-tin, glyph: "¤", color: "#c9c3b0" }

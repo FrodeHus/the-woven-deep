@@ -1,0 +1,30 @@
+schemaVersion: 12
+entries:
+  - kind: identification-pool
+    id: identification-pool.armor
+    name: Armor unidentified names
+    tags: [identification, armor]
+    category: armor
+    verbs:
+      - Boiled
+      - Creaking
+      - Padded
+      - Patched
+      - Quilted
+      - Scarred
+      - Stitched
+      - Worn
+    nouns:
+      - cuirass
+      - hauberk
+      - hide
+      - jerkin
+      - mail
+      - plating
+      - vest
+      - wrap
+    visuals:
+      - { id: visual.cracked-leather, glyph: "[", color: "#9f7655" }
+      - { id: visual.rusted-plate, glyph: "[", color: "#8a6a52" }
+      - { id: visual.tattered-cloth, glyph: "[", color: "#c9c3b0" }
+      - { id: visual.waxed-hide, glyph: "[", color: "#7c5a3a" }

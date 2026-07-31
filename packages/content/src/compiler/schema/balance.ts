@@ -74,6 +74,15 @@ export const balanceEntry = z
       }),
       attemptCap: z.number().int().min(1).max(32),
     }),
+    curses: z.strictObject({
+      chanceBps: z.strictObject({
+        shallow: z.number().int().safe().min(0).max(10000),
+        mid: z.number().int().safe().min(0).max(10000),
+        deep: z.number().int().safe().min(0).max(10000),
+      }),
+      enchantedMultiplierBps: z.number().int().safe().min(10000).max(100000),
+      capBps: z.number().int().safe().min(0).max(10000),
+    }),
     fragmentSpawnRollDenominator: z.number().int().min(1),
     generation: z.strictObject({
       doorTilePercent: z.number().int().min(0).max(100),

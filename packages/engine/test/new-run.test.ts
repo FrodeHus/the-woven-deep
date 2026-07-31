@@ -340,8 +340,11 @@ describe('createNewRun records input', () => {
     // Pinned digest: the no-records path must never drift, including its RNG streams. The encoded
     // run carries the pack hash, so every content edit moves this digest through `contentHash`
     // alone; a delta in any other field is a real behavioral drift and must not be re-pinned away.
+    // Re-pinned for the identification.mode: instance sweep (base weapon/armor/shield/ring/light
+    // equipment moves off `known`), which changes the default hero's starting-item identified
+    // state and therefore this digest -- expected drift, not a behavioral regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '38edea00eac258b68c23b5c3e3b079a57e6b05b3884113c5b28f7cb517189cc1',
+      '6723f50d6cf1e774b7ec3747c3663679f4d5ecec77f9dacb44f3f34ae425520f',
     );
   });
 

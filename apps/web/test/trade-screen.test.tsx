@@ -704,6 +704,18 @@ describe('TradeScreen identify target picker', () => {
   function runWithUnidentifiedPair(): ActiveRun {
     let run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const hero = heroActor(run);
+    // The default kit's equipped weapon/armor/light moved to `identification.mode: instance` in
+    // the cursed-items identification sweep, so they start unidentified same as any other base
+    // equipment drop. Mark them identified here so this test's target-list assertions stay about
+    // exactly the two backpack potions it's actually exercising.
+    run = validateActiveRun({
+      ...run,
+      items: run.items.map((item) =>
+        item.location.type === 'equipped' && item.location.actorId === hero.actorId
+          ? { ...item, identified: true }
+          : item,
+      ),
+    });
     const unidentified: readonly ItemInstance[] = [
       {
         itemId: 'item.hero.test-potion-a',

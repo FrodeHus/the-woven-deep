@@ -1,0 +1,61 @@
+schemaVersion: 12
+entries:
+  - kind: curse
+    id: curse.hungering-edge
+    name: Hungering Edge
+    tags: [curse, weapon]
+    revealText: "The blade drinks deep — and will not let go."
+    drawbackModifiers: { maxHealth: -3 }
+    trigger:
+      on: on-kill
+      chanceBps: 5000
+      effect:
+        effectId: effect.damage
+        parameters: { damageType: arcane, dice: { count: 1, sides: 3, bonus: 0 } }
+
+  - kind: curse
+    id: curse.leaden-weight
+    name: Leaden Weight
+    tags: [curse, armor]
+    revealText: "It settles onto you like wet earth, and does not lift."
+    drawbackModifiers: { defense: -1, meleeAccuracy: -1 }
+    trigger: null
+
+  - kind: curse
+    id: curse.cold-tether
+    name: Cold Tether
+    tags: [curse, ring]
+    revealText: "Something on the other end of it pulls, once, and waits."
+    drawbackModifiers: { maxWeave: -2 }
+    trigger:
+      on: on-floor-enter
+      chanceBps: 3000
+      effect:
+        effectId: effect.condition.apply
+        parameters: { conditionId: condition.chilled, duration: 300 }
+
+  - kind: curse
+    id: curse.hollow-step
+    name: Hollow Step
+    tags: [curse, light]
+    revealText: "Your own shadow arrives a moment after you do."
+    drawbackModifiers: { lightOutRevealRadius: -1 }
+    trigger:
+      on: on-hurt-below-half
+      chanceBps: 10000
+      effect:
+        effectId: effect.force-move
+        parameters: { distance: 1 }
+
+  - kind: curse
+    id: curse.gnawing-want
+    name: Gnawing Want
+    tags: [curse, ring]
+    revealText: "A hunger that is not yours takes up residence behind your ribs."
+    drawbackModifiers: { search: -1 }
+    trigger:
+      on: on-floor-enter
+      chanceBps: 10000
+      effect:
+        effectId: effect.damage
+        parameters: { damageType: physical, dice: { count: 1, sides: 2, bonus: 0 } }
