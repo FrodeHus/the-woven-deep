@@ -1,9 +1,13 @@
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
-import type { ClassContentEntry } from '@woven-deep/content';
+import type { ClassContentEntry, FallenChampionTemplateContentEntry } from '@woven-deep/content';
 import {
+  artifactItemIds,
+  createFallenHeroRunDecisions,
+  guaranteedUniqueItemIds,
   createNewRun,
   DEFAULT_GUEST_HERO,
   decodeActiveRun,
@@ -16,6 +20,7 @@ import {
   validateActiveRun,
   validateContentBoundRun,
   type ActiveRun,
+  type FallenHeroStandingSnapshot,
   type HeroChoices,
   type ResolutionContext,
 } from '../src/index.js';
@@ -254,6 +259,196 @@ describe('createNewRun', () => {
       // The save itself is fine, so decoding it without a pack still succeeds.
       expect(() => decodeActiveRun(blob)).not.toThrow();
     });
+  });
+});
+
+describe('createNewRun records input', () => {
+  function standing(rank: number): FallenHeroStandingSnapshot {
+    const hallRecordId = `hall.new-run-${rank}`;
+    return {
+      rank,
+      hallRecordId,
+      heroName: rank === 1 ? 'Ada' : `Bryn ${rank}`,
+      portraitGlyph: '@',
+      classTags: ['fighter'],
+      attributes: { might: 18 - rank, agility: 12, vitality: 16, wits: 10, resolve: 14 },
+      equippedItemContentIds: ['item.iron-sword'],
+      signatureAbilityIds: ['spell.ember-bolt'],
+      deathDepth: 5,
+      sourceContentHash: 'b'.repeat(64),
+      heirloom: {
+        contentId: 'item.iron-sword',
+        sourceItemId: `item.new-run-original-${rank}`,
+        enchantment: null,
+        condition: 81,
+        charges: null,
+        fuel: null,
+        qualityRank: 2,
+        displayName: `Iron Sword ${rank}`,
+        glyph: ')',
+        color: '#d8d8d8',
+        originatingHallRecordId: hallRecordId,
+      },
+    };
+  }
+
+  function championTemplate(source: CompiledContentPack): FallenChampionTemplateContentEntry {
+    const entry = source.entries.find(
+      (candidate): candidate is FallenChampionTemplateContentEntry =>
+        candidate.kind === 'fallen-champion-template',
+    );
+    if (!entry) throw new Error('content pack requires a fallen-champion-template');
+    return entry;
+  }
+
+  function packWithOfferPercent(percent: number): CompiledContentPack {
+    return {
+      ...pack,
+      entries: pack.entries.map((entry) =>
+        entry.kind === 'balance'
+          ? { ...entry, generation: { ...entry.generation, artifactOfferPercent: percent } }
+          : entry,
+      ),
+    };
+  }
+
+  function vaultPool(source: CompiledContentPack): readonly string[] {
+    const bossUniques = guaranteedUniqueItemIds(source);
+    return [...artifactItemIds(source)].filter((id) => !bossUniques.has(id)).sort();
+  }
+
+  const EMPTY_RECORDS = {
+    standings: [],
+    undiscoveredArtifactIds: [],
+    conqueredChampionRecordIds: [],
+  } as const;
+
+  it('leaves the omitted-records run byte-identical to the recordless creation path', () => {
+    const omitted = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const empty = createNewRun({
+      pack,
+      seed: SEED,
+      hero: DEFAULT_GUEST_HERO,
+      records: EMPTY_RECORDS,
+    });
+    expect(encodeActiveRun(empty)).toBe(encodeActiveRun(omitted));
+    expect(omitted.offeredArtifact).toBeNull();
+    expect(omitted.artifactsUndiscovered).toEqual([]);
+    expect(omitted.fallenHeroStandings).toEqual([]);
+    expect(omitted.fallenHeroDecisions).toEqual([]);
+    expect(omitted.conqueredChampionRecordIds).toEqual([]);
+    // Pinned pre-change digest: the no-records path must never drift, including its RNG streams.
+    expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
+      '0f9177d0bd633bf4ee3c738adccc30e13df2fd3d6a71e3e9f61446d5931429d1',
+    );
+  });
+
+  it('seeds standings, conquered ids, and fallen-hero decisions from the records input', () => {
+    const standings = [standing(1), standing(2), standing(3)];
+    const conquered = ['hall.new-run-1'];
+    const run = createNewRun({
+      pack,
+      seed: SEED,
+      hero: DEFAULT_GUEST_HERO,
+      records: { standings, undiscoveredArtifactIds: [], conqueredChampionRecordIds: conquered },
+    });
+    const base = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const expected = createFallenHeroRunDecisions({
+      standings,
+      conqueredChampionRecordIds: conquered,
+      template: championTemplate(pack),
+      state: base.rng['population-gates'],
+    });
+    expect(run.fallenHeroStandings).toEqual(standings);
+    expect(run.conqueredChampionRecordIds).toEqual(conquered);
+    expect(run.fallenHeroDecisions).toEqual(expected.decisions);
+    expect(run.rng['population-gates']).toEqual(expected.state);
+    // The conquered champion is not retained; the Echoes carry their gate rolls.
+    expect(run.fallenHeroDecisions[0]?.retained).toBe(false);
+    expect(run.fallenHeroDecisions[1]?.gateRoll).not.toBeNull();
+    expect(() => validateActiveRun(run)).not.toThrow();
+    expect(() => validateContentBoundRun(run, pack)).not.toThrow();
+  });
+
+  it('sorts undiscovered artifact ids and drops ids the pack does not define as artifacts', () => {
+    const pool = vaultPool(pack);
+    expect(pool.length).toBeGreaterThan(1);
+    const unsorted = [pool[1]!, pool[0]!, 'item.iron-sword', 'item.not-in-this-pack'];
+    const run = createNewRun({
+      pack: packWithOfferPercent(0),
+      seed: SEED,
+      hero: DEFAULT_GUEST_HERO,
+      records: {
+        standings: [],
+        undiscoveredArtifactIds: unsorted,
+        conqueredChampionRecordIds: [],
+      },
+    });
+    expect(run.artifactsUndiscovered).toEqual([pool[0]!, pool[1]!]);
+  });
+
+  it('rolls the artifact offer deterministically off the run-records stream', () => {
+    const records = {
+      standings: [],
+      undiscoveredArtifactIds: vaultPool(pack),
+      conqueredChampionRecordIds: [],
+    } as const;
+    const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO, records });
+    const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO, records });
+    expect(encodeActiveRun(second)).toBe(encodeActiveRun(first));
+    expect(first.offeredArtifact).toBe(second.offeredArtifact);
+    // The offer roll is the only creation-time consumer of `run-records`.
+    const base = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    expect(first.rng['run-records']).not.toEqual(base.rng['run-records']);
+  });
+
+  it('consumes no run-records randomness when the vault pool is empty', () => {
+    const base = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const bossUniquesOnly = [...guaranteedUniqueItemIds(pack)].filter((id) =>
+      artifactItemIds(pack).has(id),
+    );
+    expect(bossUniquesOnly.length).toBeGreaterThan(0);
+    const run = createNewRun({
+      pack,
+      seed: SEED,
+      hero: DEFAULT_GUEST_HERO,
+      records: {
+        standings: [],
+        undiscoveredArtifactIds: bossUniquesOnly,
+        conqueredChampionRecordIds: [],
+      },
+    });
+    expect(run.offeredArtifact).toBeNull();
+    expect(run.rng['run-records']).toEqual(base.rng['run-records']);
+  });
+
+  it('never offers at artifactOfferPercent 0 and always offers a pool member at 100', () => {
+    const pool = vaultPool(pack);
+    const records = {
+      standings: [],
+      undiscoveredArtifactIds: pool,
+      conqueredChampionRecordIds: [],
+    } as const;
+    const seeds = [SEED, [5, 6, 7, 8], [101, 202, 303, 404], [7, 7, 7, 7]] as const;
+    for (const seed of seeds) {
+      const never = createNewRun({
+        pack: packWithOfferPercent(0),
+        seed,
+        hero: DEFAULT_GUEST_HERO,
+        records,
+      });
+      expect(never.offeredArtifact).toBeNull();
+      const always = createNewRun({
+        pack: packWithOfferPercent(100),
+        seed,
+        hero: DEFAULT_GUEST_HERO,
+        records,
+      });
+      expect(always.offeredArtifact).not.toBeNull();
+      expect(pool).toContain(always.offeredArtifact);
+      expect(always.artifactsUndiscovered).toContain(always.offeredArtifact);
+      expect(() => validateActiveRun(always)).not.toThrow();
+    }
   });
 });
 
