@@ -136,9 +136,9 @@ function activeDepthOf(run: ActiveRun): number {
   return activeFloorOf(run).depth;
 }
 
-/** Adds the optional `fallen-hero` monster slot no shipping vault authors yet (Task 9 owns that
- * content), on an open walkable tile inside an existing vault placement, so the engine's champion
- * placement pass has somewhere to stand the champion. */
+/** Adds an optional `fallen-hero` monster slot on an open walkable tile inside an existing vault
+ * placement, so the slot-preferred half of champion placement can be exercised on a floor whose
+ * rolled vaults happen not to author one. */
 function withFallenHeroSlot(floor: FloorSnapshot): FloorSnapshot {
   const vault = floor.vaults[0];
   if (vault === undefined) throw new Error('test setup failure: floor has no vault placement');
@@ -258,7 +258,7 @@ describe('ServerPlaySession', () => {
       expect(run.artifactsUndiscovered.length).toBeGreaterThan(0);
     });
 
-    it('carries the seeded champion decision through a real descent to the standing death depth, and places the champion once a floor offers a fallen-hero slot', () => {
+    it('carries the seeded champion decision through a real descent and stands the champion on the death-depth floor, slot or no slot', () => {
       const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
       const record = seedHallRecord(hallRepo, CHAMPION_DEPTH);
       newSession(database, { repo, hallRepo }).open({ seed: SEED });
@@ -277,22 +277,47 @@ describe('ServerPlaySession', () => {
 
       const run = storedRun();
       expect(activeDepthOf(run)).toBe(CHAMPION_DEPTH);
-      // The descent ran the real placement pass on every generated floor; the champion decision
-      // is still retained and unspent because no vault in the shipping pack authors a
-      // `fallen-hero`/`side-arena`/`champion` placement slot yet (Task 9 owns the content side).
+      // The descent ran the real placement pass on every generated floor. Whether or not the
+      // death-depth floor happened to roll a vault authoring a fallen-hero slot, the open-cell
+      // fallback guarantees the champion is standing there -- this is the production-shaped
+      // proof, with nothing injected.
+      const standing = run.populations.find((population) => population.model === 'champion');
+      expect(standing).toBeDefined();
+      expect(standing!.hallRecordId).toBe(record.recordId);
+      const championActor = run.actors.find((actor) => actor.actorId === standing!.actorId);
+      expect(championActor).toBeDefined();
+      expect(championActor!.floorId).toBe(activeFloorOf(run).floorId);
+      // Not yet met: the decision is spent only on the encounter, not on placement.
       expect(run.fallenHeroDecisions[0]).toMatchObject({ retained: true, encountered: false });
 
-      // Give the death-depth floor the slot the content pack is still missing and run the very
-      // same placement pass the transition above ran: the seeded standing becomes a real champion
-      // population, which is what the wiring under test exists to make possible.
+      // Slot-preferred: replaying the same pass against a floor that DOES author a fallen-hero
+      // slot stands the champion on that slot rather than on a fallback cell.
+      const slotted = withFallenHeroSlot(activeFloorOf(run));
+      const arenaSlots = slotted.placementSlots.filter(
+        (candidate) =>
+          candidate.kind === 'monster' &&
+          !candidate.required &&
+          candidate.tags.some(
+            (tag) => tag === 'side-arena' || tag === 'fallen-hero' || tag === 'champion',
+          ),
+      );
       const placed = placeFallenHeroEncounters({
-        run,
-        floor: withFallenHeroSlot(activeFloorOf(run)),
+        run: {
+          ...run,
+          populations: [],
+          actors: run.actors.filter((actor) => actor.playerControlled),
+        },
+        floor: slotted,
         content: pack,
       });
       const champion = placed.populations.find((population) => population.model === 'champion');
       expect(champion).toBeDefined();
       expect(champion!.hallRecordId).toBe(record.recordId);
+      expect(
+        arenaSlots.some(
+          (candidate) => candidate.x === placed.actors[0]!.x && candidate.y === placed.actors[0]!.y,
+        ),
+      ).toBe(true);
     });
 
     it('creates a history-free run for a profile with an empty Hall', () => {

@@ -198,11 +198,12 @@ describe('vault placement', () => {
       'fixture',
       'item',
       'monster',
+      'monster',
       'npc',
       'objective',
       'trap',
     ]);
-    expect(new Set(first.placementSlots.map((slot) => slot.slotId)).size).toBe(6);
+    expect(new Set(first.placementSlots.map((slot) => slot.slotId)).size).toBe(7);
     expect(
       first.placementSlots.every((slot) => slot.vaultPlacementId === first.vaults[0]!.placementId),
     ).toBe(true);
@@ -282,7 +283,7 @@ describe('vault placement', () => {
       'vault-placement.vault-test.1',
     ]);
     expect(new Set(placed.lights.map((light) => light.lightId)).size).toBe(2);
-    expect(new Set(placed.placementSlots.map((slot) => slot.slotId)).size).toBe(12);
+    expect(new Set(placed.placementSlots.map((slot) => slot.slotId)).size).toBe(14);
   });
 
   it('uses template weights in stable ID order before a uniform stable candidate draw', () => {

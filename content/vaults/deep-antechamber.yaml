@@ -19,7 +19,7 @@ entries:
       - "#.m.n.#"
       - "#..t..#"
       - "#O.i.O#"
-      - "#..*..#"
+      - "#..*.a#"
       - "#######"
     legend:
       "#": { terrain: wall }
@@ -47,3 +47,6 @@ entries:
       "i":
         terrain: floor
         slot: { id: deep-cache, kind: item, required: true, tags: [cache, deep], lootTableId: loot-table.echo-wrought }
+      "a":
+        terrain: floor
+        slot: { id: fallen-hero-arena, kind: monster, required: false, tags: [side-arena, fallen-hero, deep] }

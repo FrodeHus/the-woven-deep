@@ -337,9 +337,12 @@ describe('createNewRun records input', () => {
     expect(omitted.fallenHeroStandings).toEqual([]);
     expect(omitted.fallenHeroDecisions).toEqual([]);
     expect(omitted.conqueredChampionRecordIds).toEqual([]);
-    // Pinned pre-change digest: the no-records path must never drift, including its RNG streams.
+    // Pinned digest: the no-records path must never drift, including its RNG streams. Re-pinned
+    // once, for the two vaults that gained a `fallen-hero` slot -- the encoded run carries the
+    // pack hash, and reverting only the vault YAML restores the previous digest exactly, so no
+    // engine behavior moved with it.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '0f9177d0bd633bf4ee3c738adccc30e13df2fd3d6a71e3e9f61446d5931429d1',
+      '77aeebe32f079e3fc86f78bfc3e123d18faa41e208db280aa26fd294763646a3',
     );
   });
 

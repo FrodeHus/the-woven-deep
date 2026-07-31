@@ -18,7 +18,7 @@ entries:
       - "#m.n.i#"
       - "+t.O.f#"
       - "#*..q.#"
-      - "#.....#"
+      - "#..a..#"
       - "#######"
     legend:
       "#": { terrain: wall }
@@ -52,3 +52,6 @@ entries:
       "q":
         terrain: floor
         slot: { id: objective-shrine, kind: objective, required: true, tags: [shrine, lamplight] }
+      "a":
+        terrain: floor
+        slot: { id: fallen-hero-arena, kind: monster, required: false, tags: [side-arena, fallen-hero] }

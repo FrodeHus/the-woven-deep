@@ -11,7 +11,15 @@ import {
   createRecordedHeirloom,
   validateEchoLootGraph,
 } from './inventory.js';
-import type { ActiveRun, DomainEvent, FloorSnapshot, OpaqueId, Uint32State } from './model.js';
+import { openPlacementCells } from './loot-placement.js';
+import type {
+  ActiveRun,
+  DomainEvent,
+  FloorSnapshot,
+  OpaqueId,
+  Point,
+  Uint32State,
+} from './model.js';
 import type {
   ChampionPopulation,
   EchoPopulation,
@@ -393,6 +401,9 @@ export function placeFallenHeroEncounters(
   const createdActors: ActorState[] = [];
   const populations = [...input.run.populations];
   let slots = candidateSlots(floor);
+  // Resolved on first miss only: most floors never need the fallback, and the scan is a full
+  // row-major sweep of the floor.
+  let openCells: readonly Point[] | null = null;
   const selectedCells: Readonly<{ x: number; y: number }>[] = populations
     .filter(
       (population): population is ChampionPopulation | EchoPopulation =>
@@ -421,8 +432,7 @@ export function placeFallenHeroEncounters(
       decision.encountered ||
       decision.defeated ||
       exists ||
-      standing.deathDepth !== floor.depth ||
-      slots.length === 0
+      standing.deathDepth !== floor.depth
     )
       return decision;
     let normalized: NormalizedFallenHero;
@@ -443,19 +453,32 @@ export function placeFallenHeroEncounters(
       }
       throw error;
     }
-    const index = slots.findIndex((slot) =>
+    const routable = (cell: Point): boolean =>
       preservesRequiredRoutes({
         width: floor.width,
         height: floor.height,
         tiles: floor.tiles,
         requiredPoints: requiredPoints(floor),
-        blockedPoints: [...selectedCells, { x: slot.x, y: slot.y }],
-      }),
-    );
-    if (index < 0) return decision;
-    const slot = slots[index]!;
-    selectedCells.push({ x: slot.x, y: slot.y });
-    slots = slots.filter((_, slotIndex) => slotIndex !== index);
+        blockedPoints: [...selectedCells, cell],
+      });
+    const index = slots.findIndex((candidate) => routable({ x: candidate.x, y: candidate.y }));
+    let cell: Point;
+    if (index >= 0) {
+      const slot = slots[index]!;
+      cell = { x: slot.x, y: slot.y };
+      slots = slots.filter((_, slotIndex) => slotIndex !== index);
+    } else {
+      // No authored arena on this floor -- and no shipping floor is guaranteed to roll one. The
+      // champion stands on the first cell of the floor-loot placement envelope instead, so "the
+      // Deep remembers" holds everywhere while vault arenas stay the premium presentation.
+      // Row-major first-qualifying, never a draw: this whole pass consumes no randomness.
+      openCells ??= openPlacementCells({ run: input.run, floor, content: input.content });
+      const openIndex = openCells.findIndex(routable);
+      if (openIndex < 0) return decision;
+      cell = openCells[openIndex]!;
+      openCells = openCells.filter((_, cellIndex) => cellIndex !== openIndex);
+    }
+    selectedCells.push(cell);
     const suffix = decision.role === 'champion' ? 'champion' : `echo-${decision.rank}`;
     const populationId = `population.fallen-${suffix}.${standing.hallRecordId}`;
     const actorId = `actor.${populationId}.001`;
@@ -465,8 +488,8 @@ export function placeFallenHeroEncounters(
       contentId: normalized.monsterId,
       playerControlled: false,
       floorId: floor.floorId,
-      x: slot.x,
-      y: slot.y,
+      x: cell.x,
+      y: cell.y,
       attributes: normalized.attributes,
       health: normalized.health,
       maxHealth: normalized.health,

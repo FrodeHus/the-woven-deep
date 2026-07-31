@@ -220,6 +220,22 @@ Omitted `records` = empty everything (all existing tests/fixtures unchanged). Wi
 
 ---
 
+### Task 7b: Champion placement substrate (plan amendment, added mid-execution)
+
+_Task 7's implementation surfaced a load-bearing gap: `placeFallenHeroEncounters` spawns champions only into vault slots tagged `side-arena`/`fallen-hero`/`champion`, and NO shipping vault authors one — champions (and therefore artifact recovery) can never occur in play. Same failure shape as the locked-door substrate gap (#132)._
+
+**Files:**
+- Modify: `packages/engine/src/champion.ts` (`placeFallenHeroEncounters` placement fallback)
+- Modify: `content/vaults/` — add optional `fallen-hero`-tagged slots to two or three vaults spread across depth bands
+- Test: champion placement suite
+
+**Design (binding):** slot-preferred, fallback-guaranteed. When the death-depth floor offers a tagged slot, use it exactly as today. When it does not, fall back to a deterministic open-cell placement: the same constraint envelope the floor-loot pass uses (walkable, off protected routes, outside vault footprints, ≥ the anchor distance from stairs), row-major deterministic pick (NO new randomness — first qualifying cell, or thread the population-gates stream if a roll already exists in this path; keep stream discipline identical to the slot path). A champion whose floor genuinely has no qualifying cell skips exactly as an absent slot does today. Result: "the Deep remembers" is reliable, vault arenas remain the premium presentation.
+
+- [x] **Step 1: Failing test** — a run with a rank-1 standing at depth N and NO tagged slot on that floor still places the champion (open-cell fallback, all constraints asserted); with a tagged slot, placement is byte-identical to today; determinism across identical inputs.
+- [x] **Step 2: FAIL. Step 3: Implement** (fallback + the two/three authored vault slots). **Step 4: PASS** engine non-demo + content:validate. **Step 5: Commit** — `fix: guarantee champion placement with an open-cell fallback`.
+
+---
+
 ### Task 8: Finalize — artifact deltas + priority selection + recovery fix
 
 **Files:**

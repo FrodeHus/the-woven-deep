@@ -89,7 +89,8 @@ describe('deep antechamber placement', () => {
     const kinds = placed.placementSlots.map((slot) => slot.kind).sort();
     expect(kinds).toContain('trap');
     expect(kinds).toContain('item');
-    expect(placed.placementSlots.filter((slot) => slot.kind === 'monster')).toHaveLength(2);
+    // Two ambush slots plus the optional fallen-hero arena.
+    expect(placed.placementSlots.filter((slot) => slot.kind === 'monster')).toHaveLength(3);
   });
 
   it('is rejected outside its depth band', () => {

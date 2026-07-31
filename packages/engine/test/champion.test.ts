@@ -471,13 +471,76 @@ describe('normalization and optional placement', () => {
         },
       ],
     };
+    // Required slots stay off limits, but the champion is still placed -- on the open-cell
+    // fallback, outside the vault the required slots belong to.
+    const required = placeFallenHeroEncounters({
+      run: requiredSlotRun,
+      floor: requiredSlotRun.floors[0]!,
+      content: pack(),
+    });
+    expect(required.populations).toHaveLength(1);
     expect(
-      placeFallenHeroEncounters({
-        run: requiredSlotRun,
-        floor: requiredSlotRun.floors[0]!,
-        content: pack(),
-      }).populations,
-    ).toHaveLength(0);
+      requiredSlotRun.floors[0]!.placementSlots.some(
+        (slot) => slot.x === required.actors[0]!.x && slot.y === required.actors[0]!.y,
+      ),
+    ).toBe(false);
+  });
+
+  it('falls back to a deterministic open cell when the death-depth floor authors no fallen-hero slot', () => {
+    // `withArena(run, 4, 0)` keeps the vault footprint (x 4..6) but authors zero slots, which is
+    // every shipping floor that rolls no fallen-hero vault.
+    const run = withArena(initialized([standing(1)]), 4, 0);
+    const floor = run.floors[0]!;
+    expect(floor.placementSlots).toHaveLength(0);
+
+    const placed = placeFallenHeroEncounters({ run, floor, content: pack() });
+    expect(placed.populations).toHaveLength(1);
+    expect(placed.populations[0]!.model).toBe('champion');
+    const actor = placed.actors[0]!;
+    // First qualifying cell in row-major order: (1,1) holds the hero, so (2,1) wins.
+    expect({ x: actor.x, y: actor.y }).toEqual({ x: 2, y: 1 });
+    // The full envelope: walkable, outside the vault footprint, off a body.
+    expect(floor.tiles[actor.y * floor.width + actor.x]).toBe(1);
+    expect(
+      floor.vaults.some(
+        (vault) =>
+          actor.x >= vault.x &&
+          actor.x < vault.x + vault.width &&
+          actor.y >= vault.y &&
+          actor.y < vault.y + vault.height,
+      ),
+    ).toBe(false);
+    expect(run.actors.some((other) => other.x === actor.x && other.y === actor.y)).toBe(false);
+    // Identical inputs, identical placement -- the fallback draws no randomness.
+    const again = placeFallenHeroEncounters({ run, floor, content: pack() });
+    expect(again.actors).toEqual(placed.actors);
+    expect(again.populations).toEqual(placed.populations);
+    expect(again.decisions).toEqual(placed.decisions);
+  });
+
+  it('prefers an authored slot over the open-cell fallback', () => {
+    const run = withArena(initialized([standing(1)]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const slot = run.floors[0]!.placementSlots[0]!;
+    expect({ x: placed.actors[0]!.x, y: placed.actors[0]!.y }).toEqual({ x: slot.x, y: slot.y });
+  });
+
+  it('skips the champion when the floor offers neither a slot nor a qualifying open cell', () => {
+    const base = withArena(initialized([standing(1)]), 4, 0);
+    const floor = base.floors[0]!;
+    // One vault swallowing every walkable cell leaves the fallback nothing to stand on.
+    const run: ActiveRun = {
+      ...base,
+      floors: [
+        {
+          ...floor,
+          vaults: [{ ...floor.vaults[0]!, x: 0, y: 0, width: floor.width, height: floor.height }],
+        },
+      ],
+    };
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    expect(placed.populations).toHaveLength(0);
+    expect(placed.decisions[0]).toMatchObject({ retained: true, encountered: false });
   });
 
   it('places the Champion independently of normal encounter decisions and suppresses repeat placement', () => {
