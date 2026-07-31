@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeConnectivity, type TileId } from '../src/index.js';
+import { analyzeConnectivity, articulationIndexes, type TileId } from '../src/index.js';
 
 const grid = (lines: readonly string[]): { width: number; height: number; tiles: TileId[] } => ({
   width: lines[0]!.length,
@@ -48,5 +48,34 @@ describe('four-way topology connectivity', () => {
     expect(result.componentSize).toBe(1);
     expect(result.traversableCellCount).toBe(2);
     expect(result.connected).toBe(false);
+  });
+});
+
+describe('articulation cells', () => {
+  const at = (width: number, x: number, y: number): number => y * width + x;
+
+  it('finds the one-wide ledge joining two chambers, and its two mouths', () => {
+    const shape = grid(['#######', '#..#..#', '#..#..#', '#..#..#', '#######']);
+    const bridged = { ...shape, tiles: [...shape.tiles] };
+    bridged.tiles[at(7, 3, 2)] = 1 as TileId;
+    const cells = articulationIndexes(bridged);
+    // The ledge itself plus the chamber cell at each end: blocking any one of the three strands
+    // the chamber on the far side.
+    expect([...cells].sort((left, right) => left - right)).toEqual([
+      at(7, 2, 2),
+      at(7, 3, 2),
+      at(7, 4, 2),
+    ]);
+  });
+
+  it('marks nothing in an open chamber', () => {
+    expect(articulationIndexes(grid(['#####', '#...#', '#...#', '#...#', '#####'])).size).toBe(0);
+  });
+
+  it('walks closed doors as open passage, so a door is never a cut', () => {
+    const cells = articulationIndexes(grid(['#####', '#.+.#', '#####']));
+    expect(cells.has(at(5, 2, 1))).toBe(true);
+    const sealed = articulationIndexes(grid(['#####', '#.#.#', '#####']));
+    expect(sealed.size).toBe(0);
   });
 });

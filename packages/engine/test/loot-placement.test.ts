@@ -5,6 +5,7 @@ import type {
   LootTableContentEntry,
 } from '@woven-deep/content';
 import {
+  analyzeConnectivity,
   balanceEntry,
   createDemoContentPack,
   createDemoRun,
@@ -155,6 +156,44 @@ function floor(overrides: Partial<FloorSnapshot> = {}): FloorSnapshot {
   };
 }
 
+/**
+ * A floor whose only route between the stair block and the far chamber is a one-wide ledge: every
+ * corridor cell (and the chamber mouth) is an articulation point of the walkable graph, so a chest
+ * dropped on one seals the run. The stairs sit together in the left block, which keeps the whole
+ * ledge OFF the protected stair route -- the pre-existing exclusion the chest pass already honours,
+ * and the reason a plain route check never caught this.
+ */
+function ledgeFloor(): FloorSnapshot {
+  const tiles: TileId[] = Array.from({ length: WIDTH * HEIGHT }, () => 0 as TileId);
+  const open = (x: number, y: number): void => {
+    tiles[y * WIDTH + x] = 1 as TileId;
+  };
+  for (let y = 1; y <= 13; y += 1) for (let x = 1; x <= 4; x += 1) open(x, y);
+  for (let x = 5; x <= 20; x += 1) open(x, 7);
+  for (let y = 2; y <= 12; y += 1) for (let x = 21; x <= 29; x += 1) open(x, y);
+  tiles[2 * WIDTH + 2] = 4 as TileId;
+  tiles[12 * WIDTH + 2] = 5 as TileId;
+  return floor({
+    tiles,
+    stairUp: { x: 2, y: 2 },
+    stairDown: { x: 2, y: 12 },
+    vaults: [],
+  });
+}
+
+/** A wider seed set than `SEEDS`: the ledge only draws a chest on some seeds, so the sweep needs
+ * enough draws for the unguarded pass to actually land on one. */
+const LEDGE_SEEDS: readonly Uint32State[] = Array.from(
+  { length: 40 },
+  (_, index) =>
+    [
+      (0x5100_0001 + index * 0x0013_2331) >>> 0,
+      (0x6200_0002 + index * 0x0047_5567) >>> 0,
+      (0x7300_0003 + index * 0x0079_889b) >>> 0,
+      (0x8400_0004 + index * 0x00ab_bbcd) >>> 0,
+    ] as Uint32State,
+);
+
 function run(): ActiveRun {
   return createDemoRun();
 }
@@ -265,6 +304,28 @@ describe('placeFloorLoot', () => {
         true,
       );
     }
+  });
+
+  it('never seals a narrow ledge with a chest, and still fills the open chamber', () => {
+    const ledged = ledgeFloor();
+    let chests = 0;
+    for (const seed of LEDGE_SEEDS) {
+      const placed = placeFloorLoot({ run: run(), floor: ledged, content: content() }, seed)
+        .features.filter((feature): feature is ChestFeature => feature.type === 'chest')
+        .map((chest) => ({ x: chest.x, y: chest.y }));
+      chests += placed.length;
+      for (const chest of placed) {
+        const sealed = [...ledged.tiles];
+        sealed[chest.y * ledged.width + chest.x] = 0 as TileId;
+        const analysis = analyzeConnectivity({
+          width: ledged.width,
+          height: ledged.height,
+          tiles: sealed,
+        });
+        expect({ chest, connected: analysis.connected }).toEqual({ chest, connected: true });
+      }
+    }
+    expect(chests).toBeGreaterThan(0);
   });
 
   it('locks doors only on door tiles off the protected routes', () => {

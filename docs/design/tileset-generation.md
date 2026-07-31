@@ -15,14 +15,41 @@ Isometric dungeon-and-town tileset sprite sheet, single 1024x1024 PNG, solid mag
 gradient, no transparency. ONE SHEET, mixing materials by row group — dungeon rows and town rows
 share the same grid and discipline but carry different masonry.
 
-MATERIALS:
-  DUNGEON rows — pale blue-grey worked/cut limestone blocks, moss-green floor slab accents, navy
-    shadow, warm amber lamplight.
-  TOWN rows — warm grey cobbles, timber-and-plaster over stone footings, oiled wood, brass lamp
-    fittings.
+MOOD — DARK GOTHIC DUNGEON, oppressive and old. Think a cursed undercroft nobody has cleaned in
+three hundred years, lit by a single guttering torch you are carrying. Not a snowfield, not a
+museum, not a clean fantasy keep. The sheet should feel like something is already down here with
+you.
 
-Both materials keep the same discipline across the whole sheet: cool desaturated stone, one warm
-accent, flat value steps.
+VALUE RANGE — THIS IS THE MOST IMPORTANT RULE ON THE SHEET. The whole tileset lives in the bottom
+half of the value scale:
+- The LIGHTEST tone anywhere on a floor tile is a MID-GREY (roughly #6b6a68 / 42% luminance). No
+  white. No off-white. No pale grey. If a floor reads as "light stone", it is wrong — darken it.
+- Typical worked stone sits in charcoal (#33322f–#4a4844). Side faces drop to deep shadow
+  (#24262a–#1c1d20). Recesses, joints, and stairwell mouths go near-black (#0e0f12), never pure
+  black.
+- Only two things may exceed mid-grey: an actual flame/ember source, and the violet Weave glow.
+  Everything else stays under it.
+
+MATERIALS:
+  DUNGEON rows — cold charcoal granite and soot-darkened limestone, blocks worked long ago and
+    left to rot: black mortar joints, hairline cracks, damp seepage streaks running down from
+    joints, dark olive-black moss creeping out of the shadowed edges, rust bleeding from old iron
+    fittings, sparse dried-blood umber staining (#4a1f1c) — used SPARINGLY, a stain or two per
+    sheet, never gore.
+  TOWN rows — soot-grey cobbles worn slick, weathered near-black timber over damp stone footings,
+    tarnished dull brass, oiled dark wood. The town is a huddle against the dark, not a bright
+    market — same value range as the dungeon, just slightly warmer in hue.
+
+Both materials keep the same discipline: near-monochrome dark stone carrying the whole sheet, with
+colour arriving only as (a) WARM FIRELIGHT — amber/ember orange (#c8712f, #e08b3a) implied as
+though a torch were just off-frame, catching only the upper-left edges and top faces, and (b) the
+ARCANE ACCENT — luminous violet Weave-glow (#7c4fd0 core, #a06cff hot centre) on conduit threads
+and stair wells. Warm light and violet glow are the ONLY saturated colours; everything they do not
+touch falls away into charcoal and black.
+
+DECAY: every surface is old. Cracked masonry, chipped corners, blocks slumped out of true, grime
+gathered in every joint, moss and mineral crust where water has run. Age reads through SHAPE and
+VALUE (broken edges, dark recesses), not through noise spatter.
 
 STRICT GRID — this is machine-sliced, precision matters more than beauty:
 - Exactly 8 columns x 8 rows of 128x128-pixel cells. One tile per cell, nothing crossing cell
@@ -41,56 +68,118 @@ STRICT GRID — this is machine-sliced, precision matters more than beauty:
 - ONE FLOOR PLANE: every walkable top face occupies that exact diamond. Flat tiles must show NO
   side wall or kerb rising above it. Only wall cubes, rounded rocks, and standing objects may
   extend upward.
-- Lighting: single hard-ish key light from upper-left, identical across all tiles. NO cast
-  shadows on the ground outside the block.
+- Lighting: single hard-ish WARM key light from upper-left — implied torchlight, amber, weak.
+  Identical across all tiles. It grazes; it does not flood. The unlit faces fall to near-black
+  rather than to a lighter fill. NO cast shadows on the ground outside the block.
 - ABSOLUTELY NO ground plate, contact shadow, soft halo, or vignette under any tile: the magenta
   ends EXACTLY at the block's own silhouette (this silhouette becomes the alpha edge after keying).
 - QC: imagine each tile composited on pure magenta — nothing may darken the magenta except the
   block itself.
 
-STYLE — CLEAN CEL-SHADED GAME ART, not painterly illustration:
-- FLAT VALUE STEPS, not gradients. Top face lightest, the two side faces two distinct darker
-  values. Three nameable values per block. No airbrush, no glossy specular.
+STYLE — CLEAN CEL-SHADED GAME ART IN A DARK REGISTER, not painterly illustration:
+- FLAT VALUE STEPS, not gradients. Top face lightest (still only mid-grey), the two side faces two
+  distinct darker values, the lower side face near-black. Three nameable values per block. No
+  airbrush, no glossy specular.
 - CHUNKY MASONRY: roughly 3x3 large stones per wall face (dungeon), or timber framing over stone
-  footing (town); clean mortar/joint lines either way. Never gravel noise.
-- LOW TEXTURE NOISE: detail from shape and value; a few deliberate cracks, no grime spatter.
-- LIMITED COOL PALETTE (~8-10 colours across the whole sheet); warm light against cool stone is
-  the entire colour story, in both materials.
+  footing (town); black mortar/joint lines either way — joints read as dark gaps, not light lines.
+  Never gravel noise.
+- LOW TEXTURE NOISE: detail from shape and value; deliberate cracks, chipped corners, seepage
+  streaks. No grime spatter, no random speckling.
+- LIMITED DARK PALETTE (~8-10 colours across the whole sheet): charcoal, deep shadow, near-black,
+  a dark olive, a rust umber, plus amber firelight and violet Weave. Warm light and violet glow
+  against near-black stone is the ENTIRE colour story, in both materials.
 - CRISP EDGES, no outlines; silhouette-first — every object readable as a black shape at 32 px.
+  Because the art itself is dark, silhouette separation comes from the warm rim on the lit edges,
+  so keep that upper-left edge light crisp and unbroken on every block.
 - No text, no watermark, no border. Apply the row's material consistently across its own row.
-- AVOID: painterly dark-fantasy rendering, muddy realism, photoreal textures, gradient-heavy
-  shading, flourish detail that vanishes at game scale.
+- AVOID: anything pale, frosty, icy, snowy, chalky, whitewashed, or bleached; bright even
+  daylight; clean new-built stone; muddy photoreal realism; gradient-heavy painterly rendering;
+  flourish detail that vanishes at game scale.
+
+PASTE-READY MOOD LINE (append to any per-row prompt): "dark gothic dungeon tileset, charcoal and
+near-black worked stone, deep shadow recesses, damp grime and moss in the joints, rust and old
+stains, lightest tone no brighter than mid-grey, single weak warm torchlight from upper-left,
+luminous violet arcane glow as the only other colour, clean cel-shaded flat value steps, grim and
+oppressive, no white, no pale stone, no daylight."
 
 ROW LAYOUT (row 0 = top; fill every cell):
-- Row 0: 8 clean DUNGEON floor slabs — pale blue-grey limestone, moss-green accents, subtle
-  variation only. Must tile seamlessly.
-- Row 1: 8 DIRTY dungeon floor variants — mud-tracked, stained, soot-scorched, damp sheen, moss
-  patches, dust drifts, straw-flecked, rubble-flecked.
-- Row 2: 8 dungeon WALL cubes — full-height sharp-edged limestone blocks: cols 0-3 plain, cols
-  4-5 weathered/cracked, cols 6-7 with luminous violet Weave-conduit threads across the faces.
+- Row 0: 8 clean DUNGEON floor slabs — charcoal granite, black joints, dark olive moss creeping
+  from the edges, subtle variation only. Lightest tone mid-grey at most. Must tile seamlessly.
+- Row 1: 8 DIRTY dungeon floor variants — mud-tracked, grime-blackened, soot-scorched, damp
+  seepage sheen, moss-choked, dust drifts, straw-flecked, rubble-flecked. Darker than row 0, and
+  at most ONE of the eight carries a faint old dried-blood stain (#4a1f1c), never more.
+- Row 2: 8 dungeon WALL cubes — full-height sharp-edged charcoal blocks, soot-darkened, warm rim
+  light along the upper-left edges only: cols 0-3 plain, cols 4-5 weathered/cracked with rust
+  bleed from old iron pins, cols 6-7 with luminous violet Weave-conduit threads glowing across the
+  faces (the threads are the brightest thing on the sheet; the stone around them stays near-black).
 - Row 3: 8 ROUNDED dungeon wall pieces, same height, eroded silhouettes, cols 0-7: outer-corner
   boulders rounded toward NE, SE, SW, NW, then 2 end-cap stubs, then 2 lone rock masses.
-- Row 4: dungeon STAIRS & PASSAGES: col 0 stairs-down (steps cut INTO the floor plane, a well,
-  never a raised platform; stone painted unlit — the violet glow is animated separately), col 1
-  stairs-up (steps rising against a wall block), col 2 closed wooden door in stone frame, col 3
-  iron-barred gate (locked passage), col 4 stone pillar, col 5 broken pillar stump, col 6
-  wall-mounted lamp (lit), col 7 free-standing lamp post (lit).
-- Row 5: TOWN terrain: cols 0-1 cobbled plaza floors (warm grey cobbles). READ THIS TWICE — the
-  cobble floors are FLAT FLOOR TILES exactly like row 0: the cobbled surface fills the whole
-  diamond corner to corner at floor height, with NO timber trim, NO beam, NO kerb, NO fence, NO
-  edging of any kind along any edge of the diamond, and no side faces rising above the floor
-  plane. A cobble tile with a wooden border reads in-game as a raised planter box, and a plaza
-  tiled with them turns into a woven lattice of beams. Only the stone texture may vary between
-  the two variants. Then: cols 2-3 town building walls (timber-and-plaster over stone footing —
-  these are the WALL cubes, the only place timber framing belongs), col 4 house door (heavier,
-  dwelling-grade, distinct from the dungeon door), col 5 dungeon-entrance stair surround (worked
-  stone arch around a descending well), col 6 lamp post (unlit, brass fittings), col 7 hanging
-  shop sign on bracket.
+- Row 4: dungeon STAIRS & PASSAGES: col 0 stairs-down, col 1 stairs-up (both per the STAIR
+  SILHOUETTE rules below), col 2 closed wooden door — SOUTH-FACING wall plane (see the DOOR FORM
+  rules below), col 3 iron-barred gate, locked passage — SOUTH-FACING plane, col 4 stone pillar,
+  col 5 broken pillar stump, col 6 wall-mounted lamp (lit), col 7 free-standing lamp post (lit).
+- Row 5: TOWN terrain: cols 0-1 cobbled plaza floors (soot-grey cobbles, worn slick, black grout).
+  READ THIS TWICE — the cobble floors are FLAT FLOOR TILES exactly like row 0: the cobbled surface
+  fills the whole diamond corner to corner at floor height, with NO timber trim, NO beam, NO kerb,
+  NO fence, NO edging of any kind along any edge of the diamond, and no side faces rising above the
+  floor plane. A cobble tile with a wooden border reads in-game as a raised planter box, and a
+  plaza tiled with them turns into a woven lattice of beams. Only the stone texture may vary
+  between the two variants. Then: cols 2-3 town building walls (weathered near-black timber over
+  damp stone footing — these are the WALL cubes, the only place timber framing belongs), col 4
+  house door (heavier, dwelling-grade, distinct from the dungeon door — SOUTH-FACING plane), col 5
+  dungeon-entrance stair surround (worked stone arch around a descending well), col 6 lamp post
+  (unlit, tarnished brass fittings), col 7 hanging shop sign on bracket, weathered and unpainted.
 - Row 6: TOWN market stalls & dressing: col 0 provisioner stall (sacks, bread, produce), col 1
   arms stall (racked blades, shield), col 2 curios stall (odd trinkets, bottles, threads), col 3
-  spell-vendor stall (scrolls, candles, faint violet glow), col 4 empty stall counter with
-  awning, col 5 stacked wares crate, col 6 notice board, col 7 town well.
-- Row 7: reserved — extra floor/wall variants in either material, for future variety.
+  spell-vendor stall (scrolls, candles, violet glow), col 4 empty stall counter with awning, col 5
+  stacked wares crate — this doubles as the CLOSED chest (see CHEST STATES below), col 6 notice
+  board, col 7 town well. Stall canvas is dark and travel-stained; the only brightness is
+  candlelight and the spell-vendor's violet.
+- Row 7: EAST-FACING passage forms and CHEST STATES: col 0 closed wooden door, EAST-FACING plane;
+  col 1 iron-barred gate, EAST-FACING plane; col 2 open archway, SOUTH-FACING plane; col 3 open
+  archway, EAST-FACING plane; col 4 chest OPEN/looted; col 5 chest JAMMED; col 6 chest LOCKED; col
+  7 house door, EAST-FACING plane.
+
+DOOR FORM — the doors, gates and arches must be drawn as PROPER 45° ISOMETRIC SOLIDS sitting in
+the wall plane, matching the row-2 wall cubes' perspective exactly: a visible top edge (the door
+frame's upper surface receding at the same 2:1 slope as a wall cube's top face) plus ONE receding
+side face. They are NOT flat camera-facing elevations. A flat elevation cannot be mirrored to serve
+the other passage axis, which is why each passage feature is authored twice:
+- SOUTH-FACING (`...SouthFace`): the frame lies in the wall plane that recedes down-and-right —
+  the same plane as a wall cube's lower-right side face. The door leaf faces down-left toward the
+  camera-left.
+- EAST-FACING (`...EastFace`): the frame lies in the wall plane that recedes down-and-left — the
+  same plane as a wall cube's lower-left side face. The door leaf faces down-right.
+The two are NOT mirror images of one another in lighting: both keep the single upper-left key
+light, so the south face catches more of it and the east face sits deeper in shadow. Same leaf
+design, same hardware, same wear on both; only the plane and the lighting differ.
+
+STAIR SILHOUETTE — stairs must read at a glance from across a dark room:
+- Stairs-down: steps cut INTO the floor plane, a well, never a raised platform. The mouth of the
+  well is the DARKEST shape on the sheet — near-black (#0e0f12) swallowing the lower treads, so
+  the stairwell reads as a hole even at 32 px. Each visible tread carries a crisp WARM edge
+  highlight (#a8703a) along its leading lip: a ladder of bright lines descending into black. The
+  surrounding stone is stepped one hue WARMER than the adjacent floor (a dull ember-brown cast),
+  so a down-stair is distinguishable from floor by hue alone. Paint the stone unlit — the violet
+  glow is animated separately.
+- Stairs-up: steps rising against a wall block, silhouette climbing out of the tile. Deep shadow
+  under each tread's overhang, crisp COOL edge highlight (#8fa8c9) on each tread lip, and the
+  surrounding stone stepped one hue COOLER than the adjacent floor (a pale blue cast, still
+  well under mid-grey). Warm = down, cool = up; this hue step matches the in-world glow markers.
+- Neither stair may rely on the glow layer to be legible: with all lighting off, the tread ladder
+  and the black mouth alone must identify the tile.
+
+CHEST STATES — four variants of the same banded wooden chest, identical size, wood grain, and
+band metal across all four so they read as one object in different conditions. Dark oiled wood,
+black-iron banding, rust bloom at the rivets:
+- CLOSED — the row-6 `waresCrate` stands in for this today: lid down, intact, faint warm rim light
+  along the lid's upper edge.
+- OPEN/LOOTED — lid swung back and open, interior EMPTY and near-black inside; the empty cavity is
+  the readable cue. No treasure, no glint inside.
+- JAMMED — lid down but splintered: cracked lid boards, a pried-up corner, one band bent outward,
+  splinters catching the key light.
+- LOCKED — lid down, extra iron banding across the lid, and a heavy padlock hanging at the front
+  face, large enough to read at 32 px. The padlock is the whole silhouette cue.
 
 COMPANION ANIMATION SHEET — tiles-anim.png (OPTIONAL; nothing in the renderer consumes it yet, and
 the light layer already drives procedural shimmer, so the game ships fine without it). Single
@@ -190,6 +279,11 @@ Keys and what consumes them, by status:
 | `stairsUp` | `terrain.stair` up (tileId 4) | rendered |
 | `door` | `terrain.door` terrain cell + a closed door FEATURE (`IsoRenderer.featureSprite`) | rendered |
 | `gate` | **locked DOOR features only** (`featuresOf` projection entries) — restricted to `type: 'door'`; locked chests fall back to a glyph | rendered |
+| `doorSouthFace`, `doorEastFace` | per-axis closed door art (row 7 cols 0 / row 4 col 2) — the authoring contract for the NEXT sheet generation | reserved |
+| `gateSouthFace`, `gateEastFace` | per-axis locked-gate art | reserved |
+| `archOpenSouthFace`, `archOpenEastFace` | per-axis open archway art | reserved |
+| `houseDoorSouthFace`, `houseDoorEastFace` | per-axis town house-door art | reserved |
+| `chestOpen`, `chestJammed`, `chestLocked` | chest state variants; the closed state is served by `waresCrate` until a dedicated `chestClosed` ships | reserved |
 | `pillar` | `terrain.pillar` | rendered |
 | `townFloors[]`, `townWalls[]` | town vault terrain (plaza floor / building wall placement slots) | rendered |
 | `houseDoor` | town vault house-door placement slot | rendered |
@@ -200,6 +294,20 @@ Keys and what consumes them, by status:
 | `lampPostUnlit`, `shopSign` | town dressing — not yet placed by the town vault | reserved |
 | `stalls.provisioner`, `stalls.arms`, `stalls.curios`, `stalls.spellvendor` | town merchant-stall dressing — not yet placed by the town vault | reserved |
 | `stallCounter`, `waresCrate`, `noticeBoard`, `townWell` | town dressing — not yet placed by the town vault | reserved |
+
+### Passage-axis door art
+
+The shipped `door`/`gate`/`houseDoor` art is a flat camera-facing elevation. A renderer
+investigation confirmed it cannot be mirrored to serve the other passage axis: mirroring a
+camera-facing elevation produces the same camera-facing elevation, so a door in an east-west wall
+and a door in a north-south wall render identically and neither sits in its wall plane. The fix is
+authoring, not code — the DOOR FORM rules above require two sprites per passage feature, each a
+true 45° isometric solid in its own wall plane.
+
+Until a regenerated sheet ships those cells, the renderer keeps drawing the single existing
+`door`/`gate`/`houseDoor` sprite for both axes. The `...SouthFace`/`...EastFace` keys above are the
+contract the next generation targets; wiring the renderer to pick per axis is a follow-up that
+lands with the art, and the single-facing keys stay valid as the fallback.
 
 The `reserved` tier is not an exception to "no dead data" — it is the tier that keeps the rule
 coherent. Those keys are deliberately held for dressing the town vault's row layout already

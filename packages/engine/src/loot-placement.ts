@@ -1,6 +1,6 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import { balanceEntry } from './balance.js';
-import { protectedRouteIndexes } from './connectivity.js';
+import { articulationIndexes, protectedRouteIndexes } from './connectivity.js';
 import type { ChestFeature, DoorFeature, DungeonFeature } from './feature-model.js';
 import { createFloorLootFromTable, projectLootGraph } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
@@ -297,12 +297,21 @@ export function placeFloorLoot(
     items.push(...loot.items);
   }
 
+  // A chest on a one-wide ledge seals that route. `featureBlocksMovement` blocks a `locked` or
+  // `closed` chest (a `looted` or `jammed` one stops blocking), so the seal lifts once the hero
+  // gets it open -- but a locked chest the hero cannot pick never opens, and even a closed one
+  // blocks until the hero reaches it, which is impossible from the far side. Doors keep the looser
+  // protected-route rule: a door is meant to be opened and walked through. Articulation cells are
+  // culled from the pool BEFORE the draw rather than rejected after it, so the roll count stays a
+  // pure function of the floor.
+  const sealingIndexes = articulationIndexes(floor);
   const chestCount = rollRange(cursor, knobs.chestCount.minimum, knobs.chestCount.maximum);
   cursor = chestCount.state;
   for (let chest = 0; chest < chestCount.value; chest += 1) {
-    const preferred = remaining.filter((cell) => wallAdjacent(floor, cell));
+    const open = remaining.filter((cell) => !sealingIndexes.has(cell.y * floor.width + cell.x));
+    const preferred = open.filter((cell) => wallAdjacent(floor, cell));
     const draw = drawCell(
-      preferred.length > 0 ? preferred : remaining,
+      preferred.length > 0 ? preferred : open,
       remaining,
       knobs.minimumSpreadDistance,
       cursor,

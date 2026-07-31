@@ -119,6 +119,46 @@ describe('junction door detection', () => {
       index(7, 3),
     ]);
   });
+
+  it('excludes a mouth whose flanks are not wall tiles', () => {
+    const pillarFlank = twoRoomTiles();
+    pillarFlank[index(7, 2)] = 3 as TileId;
+    expect(junctionDoorCandidates(carveInput({ tiles: pillarFlank }))).toEqual([index(13, 3)]);
+    const voidFlank = twoRoomTiles();
+    voidFlank[index(13, 4)] = 6 as TileId;
+    expect(junctionDoorCandidates(carveInput({ tiles: voidFlank }))).toEqual([index(7, 3)]);
+  });
+
+  it('excludes a mouth that only guards a short dead-end stub', () => {
+    // Room A gains a south mouth at (4,6) opening onto a three-cell stub that reaches no room.
+    const stub = twoRoomTiles();
+    for (let y = 6; y <= 9; y += 1) stub[index(4, y)] = 1 as TileId;
+    expect(junctionDoorCandidates(carveInput({ tiles: stub }))).toEqual([
+      index(7, 3),
+      index(13, 3),
+    ]);
+  });
+
+  it('keeps a mouth guarding a sub-threshold pocket that holds a staircase', () => {
+    // The same three-cell stub the rule rejects above, with the stair-down sunk in its far end and
+    // no room rectangle anywhere near it: the pocket qualifies on the staircase alone, not because
+    // the flood happens to reach a room mask.
+    const stairPocket = twoRoomTiles();
+    for (let y = 6; y <= 9; y += 1) stairPocket[index(4, y)] = 1 as TileId;
+    stairPocket[index(4, 9)] = 5 as TileId;
+    expect(
+      junctionDoorCandidates(
+        carveInput({ tiles: stairPocket, stairDown: { x: 4, y: 9 }, stairUp: { x: 2, y: 2 } }),
+      ),
+    ).toContain(index(4, 6));
+  });
+
+  it('keeps a mouth guarding a long corridor even when it reaches no room', () => {
+    const longStub = twoRoomTiles();
+    for (let y = 6; y <= 10; y += 1) longStub[index(4, y)] = 1 as TileId;
+    for (let x = 5; x <= 12; x += 1) longStub[index(x, 10)] = 1 as TileId;
+    expect(junctionDoorCandidates(carveInput({ tiles: longStub }))).toContain(index(4, 6));
+  });
 });
 
 describe('junction door carving', () => {
@@ -149,6 +189,13 @@ describe('junction door carving', () => {
   it('never places a door beside an existing door tile', () => {
     const tiles = twoRoomTiles();
     tiles[index(6, 3)] = 2 as TileId;
+    const carved = carveJunctionDoors(carveInput({ tiles, doorTilePercent: 100 }));
+    expect(carved.doorIndexes).toEqual([index(13, 3)]);
+  });
+
+  it('never places a door diagonally beside an existing door tile', () => {
+    const tiles = twoRoomTiles();
+    tiles[index(6, 2)] = 2 as TileId;
     const carved = carveJunctionDoors(carveInput({ tiles, doorTilePercent: 100 }));
     expect(carved.doorIndexes).toEqual([index(13, 3)]);
   });
