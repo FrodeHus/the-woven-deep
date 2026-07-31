@@ -28,11 +28,13 @@ beforeAll(async () => {
 
 /**
  * Each seed generates a whole twenty-floor descent (topology, vaults, population, loot), which
- * costs around five seconds. Five keeps the file near twenty-five seconds locally -- deep enough
- * to cross every depth band and both milestone-boss vault depths on every seed, cheap enough that
- * no single case comes near the sixty-second per-test ceiling on a slow shared runner.
+ * costs around five seconds locally and roughly twelve on CI's two-core runner. Three keeps the
+ * whole FILE near thirty-six seconds there: vitest's worker heartbeat tolerates ~60s of blocked
+ * synchronous work per file in practice (a five-seed run totalled 60.4s on CI and tripped the
+ * "onTaskUpdate" timeout even though every case passed), so the budget is the file, not the case.
+ * Three seeds still cross every depth band and both milestone-boss vault depths.
  */
-const SEED_COUNT = 5;
+const SEED_COUNT = 3;
 
 /**
  * Seeds are derived from one authored constant by a fixed affine step rather than drawn: the suite
