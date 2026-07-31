@@ -256,6 +256,22 @@ export function SettingsOverlay({
         </div>
       </section>
 
+      <section aria-labelledby="settings-auto-pickup-heading" className="flex flex-col gap-2">
+        <h3 id="settings-auto-pickup-heading" className="text-sm font-semibold text-fg-strong">
+          Auto-pickup
+        </h3>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="settings-auto-pickup">
+            Pick up food, potions, scrolls, ammunition and fuel while exploring
+          </Label>
+          <Switch
+            id="settings-auto-pickup"
+            checked={settings.autoPickupConsumables}
+            onCheckedChange={(checked) => onChange({ ...settings, autoPickupConsumables: checked })}
+          />
+        </div>
+      </section>
+
       <section aria-labelledby="settings-motion-heading" className="flex flex-col gap-2">
         <h3 id="settings-motion-heading" className="text-sm font-semibold text-fg-strong">
           Reduce motion

@@ -225,6 +225,20 @@ describe('SettingsOverlay (component-level)', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ bindings: {} }));
   });
 
+  it('toggles auto-pickup for consumables', async () => {
+    const user = userEvent.setup();
+    const { onChange } = harness();
+    // `getByLabelText` is ambiguous here: Base UI's Switch wires the same label to both the
+    // visible `role="switch"` element and its hidden native checkbox input, so two elements
+    // share the accessible name -- target the switch role directly instead. Base UI's Switch
+    // handles pointer events internally (like the `Select` popups above), so `userEvent.click`
+    // is required -- a plain `fireEvent.click` throws (`PointerEvent is not a constructor`).
+    await user.click(screen.getByRole('switch', { name: /pick up food, potions/i }));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ autoPickupConsumables: false }),
+    );
+  });
+
   it('clear guest session requires the exact word before the button enables, then calls onClearGuestSession', async () => {
     const user = userEvent.setup();
     const { onClearGuestSession } = harness();

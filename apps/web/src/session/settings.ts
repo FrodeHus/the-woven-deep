@@ -53,6 +53,10 @@ export interface Settings {
    * either way, since it lives in a separate localStorage key, not here. Forward-tolerant like
    * every other field on this type -- an unrecognized stored value falls back to `'on'`. */
   readonly onboarding: 'on' | 'off';
+  /** Whether auto-explore and stairs-travel sweep up food, potions, scrolls, ammunition and fuel
+   * along the way -- `true` by default. Gold is always collected regardless of this setting, and
+   * artifacts never are (see `session/auto-pickup.ts`). */
+  readonly autoPickupConsumables: boolean;
   /** Overrides only -- any `ActionId` absent here uses its `DEFAULT_BINDINGS` chord. */
   readonly bindings: Readonly<Partial<Record<ActionId, KeyChord>>>;
 }
@@ -64,6 +68,7 @@ export const DEFAULT_SETTINGS: Settings = {
   reducedMotion: 'system',
   theme: 'tapestry',
   onboarding: 'on',
+  autoPickupConsumables: true,
   bindings: {},
 };
 
@@ -304,6 +309,10 @@ function parseSettingsJson(
   const onboarding = ONBOARDING_VALUES.includes(record.onboarding as Settings['onboarding'])
     ? (record.onboarding as Settings['onboarding'])
     : DEFAULT_SETTINGS.onboarding;
+  const autoPickupConsumables =
+    typeof record.autoPickupConsumables === 'boolean'
+      ? record.autoPickupConsumables
+      : DEFAULT_SETTINGS.autoPickupConsumables;
 
   const rawBindings =
     typeof record.bindings === 'object' && record.bindings !== null
@@ -330,7 +339,14 @@ function parseSettingsJson(
     accepted[actionId] = candidate;
   }
 
-  const settings: Settings = { fontScale, reducedMotion, theme, onboarding, bindings: accepted };
+  const settings: Settings = {
+    fontScale,
+    reducedMotion,
+    theme,
+    onboarding,
+    autoPickupConsumables,
+    bindings: accepted,
+  };
   return { settings, corrupted: false, droppedOverrides };
 }
 
