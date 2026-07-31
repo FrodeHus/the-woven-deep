@@ -499,6 +499,24 @@ describe('ServerPlaySession', () => {
       expect(snapshot.conclusion!.heirloom).toEqual(hallRepo.records()[0]!.heirloom);
     });
 
+    it('applies the lifetime deltas before the artifact deltas so conquest is visible at reconcile', () => {
+      storeConcludedRun(repo);
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      const calls: string[] = [];
+      vi.spyOn(hallRepo, 'applyDeltas').mockImplementation((deltas) => {
+        calls.push('applyDeltas');
+        return ServerRunRecordRepository.prototype.applyDeltas.call(hallRepo, deltas);
+      });
+      vi.spyOn(hallRepo, 'applyArtifactDeltas').mockImplementation((deltas) => {
+        calls.push('applyArtifactDeltas');
+        return ServerRunRecordRepository.prototype.applyArtifactDeltas.call(hallRepo, deltas);
+      });
+
+      newSession(database, { repo, hallRepo }).open({ seed: SEED });
+
+      expect(calls).toEqual(['applyDeltas', 'applyArtifactDeltas']);
+    });
+
     it('a resent command after conclusion does not double-finalize (no second Hall record, no throw)', () => {
       storeConcludedRun(repo);
       const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });

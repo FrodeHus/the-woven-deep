@@ -721,6 +721,34 @@ describe('GuestSession', () => {
       expect(second).toEqual(projection);
     });
 
+    it('applies the lifetime deltas before the artifact deltas so conquest is visible at reconcile', () => {
+      const storage = fakeStorage();
+      storage.set(SAVE_KEY, encodeActiveRun(deadRun(SEED)));
+      const session = new GuestSession({ pack, storage });
+
+      const repository = createSessionRunRecordRepository(storage);
+      const calls: string[] = [];
+      const recording: RunRecordRepository = {
+        ...repository,
+        appendRecord(stored) {
+          calls.push('appendRecord');
+          repository.appendRecord(stored);
+        },
+        applyDeltas(deltas) {
+          calls.push('applyDeltas');
+          repository.applyDeltas(deltas);
+        },
+        applyArtifactDeltas(deltas) {
+          calls.push('applyArtifactDeltas');
+          repository.applyArtifactDeltas(deltas);
+        },
+      };
+
+      session.finalizeConcludedRun(recording, { achievedAt: 'Run #1', portraitGlyph: '@' });
+
+      expect(calls).toEqual(['appendRecord', 'applyDeltas', 'applyArtifactDeltas']);
+    });
+
     it('finalizing a became-heart conclusion records the guest Hearth lineage', () => {
       /** Mirrors `deadRun` above, but concluded voluntarily (`became-heart`) rather than by death:
        * the hero stays alive, matching the Final Chamber choice's non-death conclusion shape. */

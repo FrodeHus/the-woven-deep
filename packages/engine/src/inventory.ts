@@ -534,8 +534,13 @@ export function recordedHeirloomContentId(
   const modifiersCompatible = Object.keys(input.snapshot.enchantment?.modifiers ?? {}).every(
     (name) => (DERIVED_STAT_NAMES as readonly string[]).includes(name),
   );
+  // An artifact travels in the backpack as readily as in a slot, so it is absent from the record's
+  // equipped list as often as not. Requiring membership would silently degrade every recovered
+  // backpack artifact to the fallback relic; the remaining compatibility checks still apply.
+  const heldProof =
+    recorded?.artifact != null || input.equippedItemContentIds.includes(input.snapshot.contentId);
   return input.snapshot.sourceItemId !== null &&
-    input.equippedItemContentIds.includes(input.snapshot.contentId) &&
+    heldProof &&
     recorded?.heirloomEligible === true &&
     recorded.equipment !== null &&
     fuelCompatible &&

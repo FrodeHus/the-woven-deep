@@ -7,6 +7,7 @@ import type {
 import {
   canStack,
   createDemoContentPack,
+  createRecordedHeirloom,
   createDemoRun,
   consumeItemQuantity,
   createFloorLootFromTable,
@@ -19,6 +20,7 @@ import {
   splitStack,
   validateContentBoundRun,
   type ItemInstance,
+  type RecordedHeirloomSnapshot,
   type Uint32State,
 } from '../src/index.js';
 
@@ -674,5 +676,113 @@ describe('createFloorLootFromTable depth banding', () => {
       if (rolled.items.some((item) => item.contentId === 'item.deep-relic-b')) sawDeepRelic = true;
     }
     expect(sawDeepRelic).toBe(true);
+  });
+});
+
+describe('createRecordedHeirloom artifact recovery', () => {
+  const originatingHallRecordId = `record.${'3'.repeat(32)}.${'d'.repeat(16)}`;
+
+  function snapshot(overrides: Partial<RecordedHeirloomSnapshot> = {}): RecordedHeirloomSnapshot {
+    return {
+      contentId: 'item.marias-grace',
+      sourceItemId: 'item.hero.grace',
+      enchantment: null,
+      condition: 71,
+      charges: null,
+      fuel: null,
+      qualityRank: 0,
+      displayName: "Maria's Grace",
+      glyph: '(',
+      color: '#ffd9a0',
+      originatingHallRecordId,
+      ...overrides,
+    };
+  }
+
+  function artifactPack(): CompiledContentPack {
+    return content(
+      itemDefinition('item.marias-grace', 1, {
+        name: "Maria's Grace",
+        tags: [],
+        glyph: '(',
+        color: '#ffd9a0',
+        rarity: 'legendary',
+        heirloomEligible: true,
+        equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
+        artifact: {
+          canon: true,
+          signature: null,
+          drawbackModifiers: {},
+          light: { fuelless: true, inextinguishable: true },
+        },
+      }),
+      itemDefinition('item.champion-fallback-relic', 1, {
+        name: 'Fallback relic',
+        rarity: 'common',
+        heirloomEligible: true,
+        equipment: { slots: ['neck'], handedness: 'one-handed', reservedSlots: [] },
+      }),
+    );
+  }
+
+  it('materializes a backpack-held artifact as itself, not the fallback relic', () => {
+    const created = createRecordedHeirloom({
+      content: artifactPack(),
+      snapshot: snapshot(),
+      // the champion died with the artifact in the backpack: it is absent from the build snapshot
+      equippedItemContentIds: ['item.coin'],
+      fallbackItemId: 'item.champion-fallback-relic',
+      itemId: 'item.heirloom.population-1',
+      floorId: 'floor.1',
+      x: 3,
+      y: 4,
+    });
+    expect(created.fallback).toBe(false);
+    expect(created.item.contentId).toBe('item.marias-grace');
+    expect(created.item.condition).toBe(71);
+    expect(created.displayName).toBe("Maria's Grace");
+  });
+
+  it('still degrades a backpack-held ORDINARY item to the fallback relic', () => {
+    const pack = content(
+      itemDefinition('item.plain-sword', 1, {
+        rarity: 'rare',
+        heirloomEligible: true,
+        equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
+      }),
+      itemDefinition('item.champion-fallback-relic', 1, {
+        name: 'Fallback relic',
+        rarity: 'common',
+        heirloomEligible: true,
+        equipment: { slots: ['neck'], handedness: 'one-handed', reservedSlots: [] },
+      }),
+    );
+    const created = createRecordedHeirloom({
+      content: pack,
+      snapshot: snapshot({ contentId: 'item.plain-sword' }),
+      equippedItemContentIds: ['item.coin'],
+      fallbackItemId: 'item.champion-fallback-relic',
+      itemId: 'item.heirloom.population-2',
+      floorId: 'floor.1',
+      x: 3,
+      y: 4,
+    });
+    expect(created.fallback).toBe(true);
+    expect(created.item.contentId).toBe('item.champion-fallback-relic');
+  });
+
+  it('degrades an artifact snapshot that no longer exists in content', () => {
+    const created = createRecordedHeirloom({
+      content: artifactPack(),
+      snapshot: snapshot({ contentId: 'item.removed-artifact' }),
+      equippedItemContentIds: ['item.removed-artifact'],
+      fallbackItemId: 'item.champion-fallback-relic',
+      itemId: 'item.heirloom.population-3',
+      floorId: 'floor.1',
+      x: 3,
+      y: 4,
+    });
+    expect(created.fallback).toBe(true);
+    expect(created.item.contentId).toBe('item.champion-fallback-relic');
   });
 });

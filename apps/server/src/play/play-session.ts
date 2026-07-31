@@ -385,7 +385,10 @@ export class ServerPlaySession {
 
     this.database.transaction(() => {
       this.hallRepo.appendRecord(stored);
+      // Lifetime deltas first, artifact deltas second: applying the artifact stints runs the
+      // ledger's reconcile pass, which must already see this run's newly conquered champions.
       this.hallRepo.applyDeltas(finalized.deltas);
+      this.hallRepo.applyArtifactDeltas(finalized.artifactDeltas);
 
       const unlocks = evaluateUnlocks({
         records: this.hallRepo.records(),

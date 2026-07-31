@@ -621,7 +621,10 @@ export class GuestSession implements RunSession {
     });
     const stored: StoredHallRecord = { ...finalized.record, enrichment };
     repository.appendRecord(stored);
+    // Lifetime deltas first, artifact deltas second: applying the artifact stints runs the
+    // ledger's reconcile pass, which must already see this run's newly conquered champions.
     repository.applyDeltas(finalized.deltas);
+    repository.applyArtifactDeltas(finalized.artifactDeltas);
     // Becoming the Heart writes the guest's lineage slot in the same finalize: the next new run
     // reads it back as its inherited Heart, so this must happen before `this.persist()` below.
     if (finalized.record.completionType === 'became-heart') {

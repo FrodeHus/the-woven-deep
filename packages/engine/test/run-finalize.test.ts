@@ -15,6 +15,7 @@ import {
   encodeRunSeed,
   evaluateDiscoveryProtection,
   finalizeRun,
+  rollDie,
   scoreRun,
   selectHeirloom,
   type ActiveRun,
@@ -130,6 +131,15 @@ function pack(extra: readonly ContentEntry[] = []): CompiledContentPack {
     ...base,
     entries: [...base.entries, template, itemDef('item.fallback', { rarity: 'common' }), ...extra],
   };
+}
+
+function artifactDef(id: string, overrides: Partial<ItemContentEntry> = {}): ItemContentEntry {
+  return itemDef(id, {
+    rarity: 'legendary',
+    equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
+    artifact: { canon: true, signature: null, drawbackModifiers: { defense: -1 }, light: null },
+    ...overrides,
+  });
 }
 
 function equippedItem(itemId: string, contentId: string): ItemInstance {
@@ -471,6 +481,132 @@ describe('finalizeRun', () => {
     const finalized = finalizeRun({ run, content, lifetime: emptyLifetime() });
     expect(finalized.deltas.recordId).toBe(deriveHallRecordId(run.runSeed, run.contentHash));
     expect(finalized.deltas.metrics).toEqual(run.metrics);
+  });
+
+  describe('artifact deltas', () => {
+    it('records no stints when the hero held no artifact', () => {
+      const content = pack([itemDef('item.sword')]);
+      const run = concludedRun({ items: [equippedItem('item.hero.sword', 'item.sword')] });
+      const finalized = finalizeRun({ run, content, lifetime: emptyLifetime() });
+      expect(finalized.artifactDeltas).toEqual({
+        recordId: deriveHallRecordId(run.runSeed, run.contentHash),
+        stints: [],
+      });
+      // the ordinary heirloom roll still runs
+      expect(finalized.record.heirloom.contentId).toBe('item.sword');
+    });
+
+    it('makes a held artifact the record heirloom and loses it to this record', () => {
+      const content = pack([itemDef('item.sword'), artifactDef('item.marias-grace')]);
+      const run = concludedRun({
+        items: [
+          equippedItem('item.hero.sword', 'item.sword'),
+          {
+            ...equippedItem('item.hero.grace', 'item.marias-grace'),
+            location: { type: 'backpack', actorId: 'hero.demo' },
+          },
+        ],
+      });
+      const recordId = deriveHallRecordId(run.runSeed, run.contentHash);
+      const finalized = finalizeRun({ run, content, lifetime: emptyLifetime() });
+      expect(finalized.record.heirloom.contentId).toBe('item.marias-grace');
+      expect(finalized.artifactDeltas).toEqual({
+        recordId,
+        stints: [
+          {
+            artifactId: 'item.marias-grace',
+            stint: {
+              heroName: run.hero.name,
+              recordId,
+              outcome: 'died-with',
+              depth: run.conclusion!.cause.depth,
+            },
+            newStatus: 'lost',
+            holderRecordId: recordId,
+          },
+        ],
+      });
+      // a single held artifact needs no roll: the run-records stream never moves
+      expect(finalized.run.rng['run-records']).toEqual(run.rng['run-records']);
+    });
+
+    it('reclaims every held artifact the roll did not choose', () => {
+      const content = pack([
+        artifactDef('item.a-needle', {
+          equipment: { slots: ['left-ring'], handedness: 'one-handed', reservedSlots: [] },
+        }),
+        artifactDef('item.z-grace'),
+      ]);
+      const run = concludedRun({
+        items: [
+          equippedItem('item.hero.a-needle', 'item.a-needle'),
+          {
+            ...equippedItem('item.hero.z-grace', 'item.z-grace'),
+            location: { type: 'backpack', actorId: 'hero.demo' },
+          },
+        ],
+      });
+      const recordId = deriveHallRecordId(run.runSeed, run.contentHash);
+      const finalized = finalizeRun({ run, content, lifetime: emptyLifetime() });
+      const chosen = finalized.record.heirloom.contentId;
+      expect(['item.a-needle', 'item.z-grace']).toContain(chosen);
+      expect(finalized.artifactDeltas.stints.map((entry) => entry.artifactId)).toEqual([
+        'item.a-needle',
+        'item.z-grace',
+      ]);
+      const lost = finalized.artifactDeltas.stints.find((entry) => entry.artifactId === chosen)!;
+      const reclaimed = finalized.artifactDeltas.stints.find(
+        (entry) => entry.artifactId !== chosen,
+      )!;
+      expect(lost).toEqual({
+        artifactId: chosen,
+        stint: {
+          heroName: run.hero.name,
+          recordId,
+          outcome: 'died-with',
+          depth: run.conclusion!.cause.depth,
+        },
+        newStatus: 'lost',
+        holderRecordId: recordId,
+      });
+      expect(reclaimed).toEqual({
+        artifactId: reclaimed.artifactId,
+        stint: {
+          heroName: run.hero.name,
+          recordId,
+          outcome: 'reclaimed-by-the-deep',
+          depth: run.conclusion!.cause.depth,
+        },
+        newStatus: 'undiscovered',
+        holderRecordId: null,
+      });
+      // exactly one roll over the two equally-weighted artifacts
+      expect(finalized.run.rng['run-records']).toEqual(rollDie(run.rng['run-records'], 2).state);
+    });
+
+    it('records escaped-with when the run ended in anything but death while holding an artifact', () => {
+      const content = pack([artifactDef('item.marias-grace')]);
+      const run = concludedRun({
+        items: [equippedItem('item.hero.grace', 'item.marias-grace')],
+        conclusion: {
+          completionType: 'broke-cycle',
+          cause: { killerContentId: null, depth: 6, turn: 200, worldTime: 20_000 },
+          concludedAtRevision: 11,
+          finalized: false,
+        },
+      });
+      const recordId = deriveHallRecordId(run.runSeed, run.contentHash);
+      const finalized = finalizeRun({ run, content, lifetime: emptyLifetime() });
+      expect(finalized.artifactDeltas.stints).toEqual([
+        {
+          artifactId: 'item.marias-grace',
+          stint: { heroName: run.hero.name, recordId, outcome: 'escaped-with', depth: 6 },
+          newStatus: 'lost',
+          holderRecordId: recordId,
+        },
+      ]);
+      expect(finalized.record.heirloom.contentId).toBe('item.marias-grace');
+    });
   });
 
   it('computes discovery protection updates over the run decisions, sorted by encounter ID', () => {

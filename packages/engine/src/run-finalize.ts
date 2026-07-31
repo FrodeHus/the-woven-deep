@@ -25,7 +25,8 @@ import {
   type LifetimeState,
 } from './run-records-model.js';
 import { scoreRun } from './score-run.js';
-import { selectHeirloom } from './heirloom-selection.js';
+import { heldArtifactIds, selectRecordHeirloom } from './heirloom-selection.js';
+import type { ArtifactDeltas, ArtifactStint } from './artifact-ledger.js';
 import { compareCodeUnits } from './stable-json.js';
 
 function fallenChampionTemplate(content: CompiledContentPack): FallenChampionTemplateContentEntry {
@@ -119,11 +120,49 @@ function newlyConqueredChampionRecordIds(
 }
 
 /**
+ * One run's effect on the artifact ledger: the artifact that became this record's heirloom is
+ * `lost` to the record (`died-with`, or `escaped-with` when the hero left the Deep any other way),
+ * and every other artifact the hero was carrying is recycled straight back into circulation
+ * (`reclaimed-by-the-deep`, `undiscovered`, no holder). Sorted by artifact id; empty when the hero
+ * held none. The stint depth is where the run ended, which is where the artifact came to rest.
+ */
+function artifactStints(
+  input: Readonly<{
+    heldArtifactIds: readonly OpaqueId[];
+    chosenArtifactId: OpaqueId | null;
+    heroName: string;
+    recordId: OpaqueId;
+    completionType: HallRecord['completionType'];
+    depth: number;
+  }>,
+): ArtifactDeltas['stints'] {
+  const carriedOutcome: ArtifactStint['outcome'] =
+    input.completionType === 'died' ? 'died-with' : 'escaped-with';
+  return [...input.heldArtifactIds].sort(compareCodeUnits).map((artifactId) => {
+    const carried = artifactId === input.chosenArtifactId;
+    return {
+      artifactId,
+      stint: {
+        heroName: input.heroName,
+        recordId: input.recordId,
+        outcome: carried ? carriedOutcome : 'reclaimed-by-the-deep',
+        depth: input.depth,
+      },
+      newStatus: carried ? ('lost' as const) : ('undiscovered' as const),
+      holderRecordId: carried ? input.recordId : null,
+    };
+  });
+}
+
+/**
  * Finalizes a concluded run exactly once into its Hall record, achievement grants, and lifetime
  * deltas. Pure and clock-free: identical inputs produce byte-identical outputs, only the
- * `run-records` stream may advance (one heirloom roll at most), and the returned `LifetimeDeltas`
- * is plain data for the host to apply — the engine never touches the repository. Event IDs derive
- * from the deterministic record ID, so replaying finalization reproduces identical events.
+ * `run-records` stream may advance (one heirloom roll at most — the artifact-priority roll and the
+ * ordinary roll are alternatives, never both), and the returned `LifetimeDeltas`/`ArtifactDeltas`
+ * are plain data for the host to apply — the engine never touches the repository. Hosts must apply
+ * the lifetime deltas FIRST and the artifact deltas second, so the ledger's reconcile pass sees
+ * this run's conquests. Event IDs derive from the deterministic record ID, so replaying
+ * finalization reproduces identical events.
  */
 export function finalizeRun(
   input: Readonly<{
@@ -135,6 +174,7 @@ export function finalizeRun(
   run: ActiveRun;
   record: HallRecord;
   deltas: LifetimeDeltas;
+  artifactDeltas: ArtifactDeltas;
   events: readonly DomainEvent[];
 }> {
   const { run, content, lifetime } = input;
@@ -143,11 +183,13 @@ export function finalizeRun(
   const conclusion = run.conclusion;
 
   const recordId = deriveHallRecordId(run.runSeed, run.contentHash);
-  const heirloom = selectHeirloom({
+  const heldArtifacts = heldArtifactIds(run, content);
+  const heirloom = selectRecordHeirloom({
     run,
     content,
     template: fallenChampionTemplate(content),
     recordId,
+    heldArtifactIds: heldArtifacts,
   });
   const score = scoreRun({ run, content });
 
@@ -184,6 +226,18 @@ export function finalizeRun(
     metrics: run.metrics,
   };
 
+  const artifactDeltas: ArtifactDeltas = {
+    recordId,
+    stints: artifactStints({
+      heldArtifactIds: heldArtifacts,
+      chosenArtifactId: heldArtifacts.length === 0 ? null : heirloom.snapshot.contentId,
+      heroName: run.hero.name,
+      recordId,
+      completionType: conclusion.completionType,
+      depth: conclusion.cause.depth,
+    }),
+  };
+
   const eventId = `event.finalize.${recordId}`;
   const finalizedEvent: RunFinalizedEvent = {
     type: 'run.finalized',
@@ -207,6 +261,7 @@ export function finalizeRun(
     },
     record,
     deltas,
+    artifactDeltas,
     events: [finalizedEvent, ...grantEvents],
   };
 }
