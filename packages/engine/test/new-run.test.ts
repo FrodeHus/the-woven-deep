@@ -337,12 +337,12 @@ describe('createNewRun records input', () => {
     expect(omitted.fallenHeroStandings).toEqual([]);
     expect(omitted.fallenHeroDecisions).toEqual([]);
     expect(omitted.conqueredChampionRecordIds).toEqual([]);
-    // Pinned digest: the no-records path must never drift, including its RNG streams. Re-pinned
-    // once, for the two vaults that gained a `fallen-hero` slot -- the encoded run carries the
-    // pack hash, and reverting only the vault YAML restores the previous digest exactly, so no
-    // engine behavior moved with it.
+    // Pinned digest: the no-records path must never drift, including its RNG streams. The encoded
+    // run carries the pack hash, so every content edit moves it. Re-pinned for the artifact ledger:
+    // diffing the encoded run against the revision that first pinned this digest shows exactly one
+    // changed field, `contentHash` -- no engine behavior moved with the content.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '77aeebe32f079e3fc86f78bfc3e123d18faa41e208db280aa26fd294763646a3',
+      'ee218a979c22da4c8b12b06f30e058866e6500dd94badd6df62dd50564eb4a91',
     );
   });
 
