@@ -57,6 +57,7 @@ function fakeSession(): RunSession & { readonly dispatched: PlayerIntent[] } {
     recordOnboardingIntent: vi.fn(),
     dismissOnboardingHint: vi.fn(),
     revealLore: vi.fn(),
+    noteSystemLine: vi.fn(),
   };
 }
 

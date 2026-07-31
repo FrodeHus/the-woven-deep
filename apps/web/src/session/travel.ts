@@ -254,11 +254,21 @@ function reasonForEvent(event: PublicEvent): StopReason | null {
  * The modal condition from the design (`pendingDecision`/`trade`/`conclusion`/`houseOpen`) needs no
  * rule here: `PlayScreen` already composes `isModalActive` and passes it as `useAutoTravel`'s
  * `disabled`, which clears the walk outright.
+ *
+ * `offered` is the caller's own record of items it has already stopped for. The `start` baseline is
+ * a single walk's, and it is FOV-scoped -- an item that has left the hero's sight is absent from
+ * the next walk's baseline, so without a longer-lived record the same declined item halts every
+ * later leg that re-enters its room. `useAutoTravel` owns one per floor; items the policy sweeps up
+ * never enter it, since those were never offered.
  */
 export function classicStopPredicate(
-  input: Readonly<{ start: GameplayProjection; autoPickup: AutoPickupPolicy }>,
+  input: Readonly<{
+    start: GameplayProjection;
+    autoPickup: AutoPickupPolicy;
+    offered?: Set<string>;
+  }>,
 ): StopPredicate {
-  const { start, autoPickup } = input;
+  const { start, autoPickup, offered } = input;
   const base = baseStopPredicate(start);
   const startItemIds = new Set(groundItemsOf(start).map((item) => item.itemId));
   const startStairKeys = discoveredStairKeys(start);
@@ -267,7 +277,9 @@ export function classicStopPredicate(
     if (baseReason !== null) return baseReason;
     for (const item of groundItemsOf(projection)) {
       if (startItemIds.has(item.itemId)) continue;
+      if (offered?.has(item.itemId) === true) continue;
       if (autoPickup(projection, item)) continue;
+      offered?.add(item.itemId);
       return 'item-spotted';
     }
     for (const key of discoveredStairKeys(projection)) {

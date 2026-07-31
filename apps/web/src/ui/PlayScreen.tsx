@@ -161,7 +161,13 @@ export function PlayScreen({
   // while targeting is active, so the targeting visuals own the overlay uncontested and the cursor
   // reappears on the cell still under the pointer the moment the cast resolves or is cancelled.
   const [hoverCursor, setHoverCursor] = useState<HoverCursor | null>(null);
-  const autoTravel = useAutoTravel({ session, snapshot, disabled: isModalActive });
+  const autoTravel = useAutoTravel({
+    session,
+    snapshot,
+    pack,
+    autoPickupConsumables: settings.autoPickupConsumables,
+    disabled: isModalActive,
+  });
 
   const mapPaneRef = useRef<HTMLDivElement>(null);
   const [hoverAnchor, setHoverAnchor] = useState<{

@@ -124,6 +124,40 @@ describe('classicStopPredicate', () => {
     expect(stopWith(start, spotted, [], takeEverything)).toBeNull();
   });
 
+  it('offers a declined item only once across walks that share an `offered` set', () => {
+    const offered = new Set<string>();
+    const sword: Partial<GroundItemView> = {
+      itemId: 'item.sword',
+      category: 'weapon',
+      x: 7,
+      y: 5,
+    };
+    const bare = makeProjection({ hero: { x: 5, y: 5 } });
+    const spotted = makeProjection({ hero: { x: 5, y: 5 }, groundItems: [sword] });
+
+    const first = classicStopPredicate({ start: bare, autoPickup: takeNothing, offered });
+    expect(first({ projection: spotted, lastEvents: [] })).toBe('item-spotted');
+
+    // A later leg begins while the sword is out of sight, so its own baseline cannot remember it --
+    // the shared `offered` set is what keeps re-entering its room from re-offering it.
+    const second = classicStopPredicate({ start: bare, autoPickup: takeNothing, offered });
+    expect(second({ projection: spotted, lastEvents: [] })).toBeNull();
+  });
+
+  it('never records an auto-picked item as offered', () => {
+    const offered = new Set<string>();
+    const bare = makeProjection({ hero: { x: 5, y: 5 } });
+    const spotted = makeProjection({
+      hero: { x: 5, y: 5 },
+      groundItems: [{ itemId: 'item.gold', category: 'currency', x: 7, y: 5 }],
+    });
+    classicStopPredicate({ start: bare, autoPickup: takeEverything, offered })({
+      projection: spotted,
+      lastEvents: [],
+    });
+    expect(offered.size).toBe(0);
+  });
+
   it('stops when a stair leaves the unknown', () => {
     const start = makeProjection({
       hero: { x: 5, y: 5 },

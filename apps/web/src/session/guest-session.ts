@@ -574,6 +574,13 @@ export class GuestSession implements RunSession {
     this.publish();
   }
 
+  /** See `RunSession.noteSystemLine` -- a client-only line (auto-explore's stop reports) on the
+   * same log the engine's events fold into, with no dispatch and no turn. */
+  noteSystemLine(text: string): void {
+    this.appendSystemLine(text);
+    this.publish();
+  }
+
   setHouseOpen(open: boolean): void {
     this.houseOpen = open;
     this.publish();
