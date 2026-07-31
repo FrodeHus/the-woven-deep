@@ -169,6 +169,8 @@ describe('artifact circulation across runs', () => {
       item.itemId.startsWith('item.artifact-offer.'),
     );
     expect(offer).toMatchObject({ contentId: artifactId, identified: true, condition: 100 });
+    // The singleton claim, asserted rather than assumed: one instance, not one placement.
+    expect(placedA.state.items.filter((item) => item.contentId === artifactId)).toHaveLength(1);
 
     const finalizedA = finalizeRun({
       run: died(intoHeroBackpack(placedA.state, offer!), 3),
@@ -200,6 +202,8 @@ describe('artifact circulation across runs', () => {
       records: newRunRecords(repository, pack),
     });
     expect(runB.artifactsUndiscovered).not.toContain(artifactId);
+    // Non-null: the offer really rolled, and it rolled something else.
+    expect(runB.offeredArtifact).not.toBeNull();
     expect(runB.offeredArtifact).not.toBe(artifactId);
     const standing = runB.fallenHeroStandings.find(
       (candidate) => candidate.hallRecordId === recordA.recordId,
@@ -258,6 +262,8 @@ describe('artifact circulation across runs', () => {
       (item) => item.itemId === 'item.heirloom.population.champion',
     );
     expect(heirloom?.contentId).toBe(artifactId);
+    // Still exactly one instance: the champion hands over the relic, it does not mint a copy.
+    expect(conquered.state.items.filter((item) => item.contentId === artifactId)).toHaveLength(1);
     expect(conquered.events).toContainEqual(
       expect.objectContaining({ type: 'champion.heirloom-created', fallback: false }),
     );

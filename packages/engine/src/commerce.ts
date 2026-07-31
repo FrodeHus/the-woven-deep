@@ -226,6 +226,11 @@ export function merchantAcceptsItem(
   return (
     item.location.type === 'backpack' &&
     item.heirloom === undefined &&
+    // A legendary artifact is a singleton the Hall tracks by hand: it leaves the run only through
+    // the hero's death or escape, never across a counter. Selling one would also hand it to a
+    // merchant whose stock is deleted outright when the merchant dies or departs -- the artifact
+    // would be gone from circulation with no stint recorded, which the spec forbids.
+    definition.artifact === null &&
     Number.isSafeInteger(definition.price) &&
     definition.price > 0 &&
     encounter.definition.acceptedCategories.includes(definition.category) &&

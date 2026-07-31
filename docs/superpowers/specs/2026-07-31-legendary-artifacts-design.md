@@ -181,7 +181,9 @@ implementation, following the block rules). Plus:
 - Save schema v12→v13: hidden `offeredArtifact` on the run + nothing else run-side (artifact
   instances are ordinary `ItemInstance`s; provenance metadata rides the existing heirloom
   path). One ordered migration (`offeredArtifact: null` for migrated saves — a mid-run save
-  from before the feature simply offers nothing).
+  from before the feature simply offers nothing and drops no boss relic for the rest of that
+  run — the migrated `artifactsUndiscovered` is empty, which the boss gate reads as "already
+  found").
 - `run-records` stream ordering specified: offer roll at run creation; artifact-priority
   heirloom roll at finalize (replacing, not preceding, the ordinary heirloom roll for
   artifact-holding records). Demo hashes re-pin once, each delta attributed.

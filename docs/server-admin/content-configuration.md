@@ -775,6 +775,8 @@ Terrain is `wall`, `floor`, `closed-door`, `pillar`, `stair-up`, `stair-down`, o
 
 A slot's `lootTableId` and `contentId` name what it can contain once placed. A `kind: item` or `kind: chest` slot must set exactly one of them (a loot table to roll from, or a single fixed item); every other slot kind must leave both `null`. Whichever is set must resolve to the matching content kind (`loot-table` or `item`).
 
+**The artifact-offer exception.** `artifact` is a reserved slot tag. A `kind: item` slot tagged `artifact` must set **neither** `lootTableId` nor `contentId`, and must be `required: false`. It holds the run's own legendary-artifact offer, drawn at run creation from the artifacts that player has not yet found, so there is nothing for an author to point at — and most runs carry no offer, which is why the slot has to be optional and generates empty. A run offers at most one artifact no matter how many such slots it meets. The tag is only meaningful on `kind: item`; on any other slot kind it is an ordinary descriptive tag and the usual both-`null` rule applies.
+
 A `kind: door` or `kind: chest` slot authors a locked feature and must set `difficulty` (a safe integer from `1` to `30`, the DC a lockpick check must meet or beat). A `kind: door` slot may also set `keyContentId`, naming an `item` that opens it without a check; every other slot kind must leave `difficulty` and `keyContentId` unset. A `chest` slot may not set `keyContentId` (chests take no keys).
 
 ```yaml

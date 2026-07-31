@@ -344,6 +344,34 @@ describe('merchant item acceptance', () => {
     );
   });
 
+  it('rejects legendary artifacts even when every other condition passes', () => {
+    // An artifact is a singleton the Hall tracks: it may never cross a merchant counter, whose
+    // stock is deleted outright when the merchant dies or departs.
+    const relic: ItemContentEntry = {
+      ...sword,
+      artifact: { canon: true, signature: null, drawbackModifiers: { defense: -1 }, light: null },
+    };
+    expect(merchantAcceptsItem(backpackItem(sword), sword, encounter, new Set())).toBe(true);
+    expect(merchantAcceptsItem(backpackItem(relic), relic, encounter, new Set())).toBe(false);
+
+    // And the authored relics, with their own categories forced into the accepted list so the
+    // rejection can only be the artifact block.
+    const authored = content.entries.filter(
+      (entry): entry is ItemContentEntry => entry.kind === 'item' && entry.artifact !== null,
+    );
+    expect(authored.length).toBeGreaterThan(0);
+    for (const entry of authored) {
+      const accepting: MerchantEncounterContentEntry = {
+        ...encounter,
+        definition: {
+          ...encounter.definition,
+          acceptedCategories: [...encounter.definition.acceptedCategories, entry.category],
+        },
+      };
+      expect(merchantAcceptsItem(backpackItem(entry), entry, accepting, new Set())).toBe(false);
+    }
+  });
+
   it('rejects a definition that does not match the item instance', () => {
     expect(() => merchantAcceptsItem(backpackItem(sword), ring, encounter, new Set())).toThrow(
       /does not match/,
