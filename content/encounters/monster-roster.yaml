@@ -409,7 +409,7 @@ entries:
     runAppearanceChance: 0.45
     discoveryProtectionIncrement: 0.05
     discoveryProtectionCap: 0.7
-    maximumInstancesPerRun: 8
+    maximumInstancesPerRun: 24
     placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition: { monsterId: monster.sodden-lurcher, minimumQuantity: 1, maximumQuantity: 2 }
@@ -428,7 +428,7 @@ entries:
     runAppearanceChance: 0.35
     discoveryProtectionIncrement: 0.05
     discoveryProtectionCap: 0.6
-    maximumInstancesPerRun: 6
+    maximumInstancesPerRun: 24
     placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition: { monsterId: monster.wailing-echo, minimumQuantity: 1, maximumQuantity: 2 }
@@ -447,7 +447,7 @@ entries:
     runAppearanceChance: 0.3
     discoveryProtectionIncrement: 0.04
     discoveryProtectionCap: 0.55
-    maximumInstancesPerRun: 5
+    maximumInstancesPerRun: 24
     placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition: { monsterId: monster.tide-revenant, minimumQuantity: 1, maximumQuantity: 1 }
@@ -492,15 +492,15 @@ entries:
     tags: [armored, ashwrought, brute, fire]
     model: individual
     minDepth: 7
-    maxDepth: 11
+    maxDepth: 12
     environmentTags: []
     requiredVaultTags: []
     weight: 3
     rarity: uncommon
-    runAppearanceChance: 0.4
-    discoveryProtectionIncrement: 0.05
-    discoveryProtectionCap: 0.65
-    maximumInstancesPerRun: 7
+    runAppearanceChance: 1
+    discoveryProtectionIncrement: 0
+    discoveryProtectionCap: 1
+    maximumInstancesPerRun: 66
     placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition: { monsterId: monster.emberclad-reaver, minimumQuantity: 1, maximumQuantity: 2 }
@@ -511,7 +511,7 @@ entries:
     tags: [ashwrought, fire, ranged]
     model: individual
     minDepth: 7
-    maxDepth: 11
+    maxDepth: 12
     environmentTags: []
     requiredVaultTags: []
     weight: 3
@@ -519,7 +519,7 @@ entries:
     runAppearanceChance: 0.35
     discoveryProtectionIncrement: 0.04
     discoveryProtectionCap: 0.6
-    maximumInstancesPerRun: 6
+    maximumInstancesPerRun: 40
     placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition: { monsterId: monster.cinder-hurler, minimumQuantity: 1, maximumQuantity: 2 }
@@ -538,7 +538,7 @@ entries:
     runAppearanceChance: 0.25
     discoveryProtectionIncrement: 0.03
     discoveryProtectionCap: 0.45
-    maximumInstancesPerRun: 4
+    maximumInstancesPerRun: 20
     placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition: { monsterId: monster.ashen-juggernaut, minimumQuantity: 1, maximumQuantity: 1 }
@@ -557,7 +557,7 @@ entries:
     runAppearanceChance: 0.4
     discoveryProtectionIncrement: 0.05
     discoveryProtectionCap: 0.7
-    maximumInstancesPerRun: 8
+    maximumInstancesPerRun: 16
     placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 5, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition:
@@ -588,10 +588,10 @@ entries:
     requiredVaultTags: []
     weight: 5
     rarity: common
-    runAppearanceChance: 0.6
-    discoveryProtectionIncrement: 0.06
-    discoveryProtectionCap: 0.8
-    maximumInstancesPerRun: 10
+    runAppearanceChance: 1
+    discoveryProtectionIncrement: 0
+    discoveryProtectionCap: 1
+    maximumInstancesPerRun: 33
     placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition: { monsterId: monster.bound-wretch, minimumQuantity: 1, maximumQuantity: 3 }
@@ -610,7 +610,7 @@ entries:
     runAppearanceChance: 0.5
     discoveryProtectionIncrement: 0.05
     discoveryProtectionCap: 0.7
-    maximumInstancesPerRun: 8
+    maximumInstancesPerRun: 20
     placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 5, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition:
@@ -644,7 +644,7 @@ entries:
     runAppearanceChance: 0.3
     discoveryProtectionIncrement: 0.04
     discoveryProtectionCap: 0.55
-    maximumInstancesPerRun: 5
+    maximumInstancesPerRun: 12
     placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 4, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition:
@@ -676,7 +676,7 @@ entries:
     runAppearanceChance: 0.3
     discoveryProtectionIncrement: 0.04
     discoveryProtectionCap: 0.55
-    maximumInstancesPerRun: 5
+    maximumInstancesPerRun: 16
     placement: { minimumStairDistance: 6, minimumObjectiveDistance: 6, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition: { monsterId: monster.bound-hexbound, minimumQuantity: 1, maximumQuantity: 1 }
@@ -696,7 +696,7 @@ entries:
     runAppearanceChance: 0.55
     discoveryProtectionIncrement: 0.05
     discoveryProtectionCap: 0.75
-    maximumInstancesPerRun: 9
+    maximumInstancesPerRun: 33
     placement: { minimumStairDistance: 7, minimumObjectiveDistance: 7, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition: { monsterId: monster.echo-breaker, minimumQuantity: 1, maximumQuantity: 2 }
@@ -712,10 +712,10 @@ entries:
     requiredVaultTags: []
     weight: 4
     rarity: uncommon
-    runAppearanceChance: 0.45
-    discoveryProtectionIncrement: 0.05
-    discoveryProtectionCap: 0.65
-    maximumInstancesPerRun: 7
+    runAppearanceChance: 1
+    discoveryProtectionIncrement: 0
+    discoveryProtectionCap: 1
+    maximumInstancesPerRun: 24
     placement: { minimumStairDistance: 7, minimumObjectiveDistance: 7, maximumMemberDistance: 5, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition:
@@ -749,7 +749,7 @@ entries:
     runAppearanceChance: 0.35
     discoveryProtectionIncrement: 0.04
     discoveryProtectionCap: 0.6
-    maximumInstancesPerRun: 6
+    maximumInstancesPerRun: 33
     placement: { minimumStairDistance: 7, minimumObjectiveDistance: 7, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition: { monsterId: monster.echo-harrower, minimumQuantity: 1, maximumQuantity: 2 }
@@ -768,7 +768,7 @@ entries:
     runAppearanceChance: 0.25
     discoveryProtectionIncrement: 0.03
     discoveryProtectionCap: 0.45
-    maximumInstancesPerRun: 3
+    maximumInstancesPerRun: 12
     placement: { minimumStairDistance: 7, minimumObjectiveDistance: 7, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }
     intentPresentation: { visible: true }
     definition: { monsterId: monster.echo-sovereign, minimumQuantity: 1, maximumQuantity: 1 }
