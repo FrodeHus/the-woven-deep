@@ -7,6 +7,7 @@ import { applyEffectResult, resolveEffectSequence, resolveEffectSweep } from './
 import { spellLearnTarget } from './caster.js';
 import { validateTarget } from './targeting.js';
 import { consumeItemQuantity, dropItem, pickupItem, splitStack } from './inventory.js';
+import { artifactById } from './commerce.js';
 import {
   equipItem,
   itemLightSources,
@@ -44,6 +45,101 @@ import { combat, profile } from './combat-profile.js';
 import { entryById, requireItem } from './content-index.js';
 import { chargeActionEnergy } from './scheduler.js';
 import { activateHeartBoss } from './final-chamber-boss.js';
+
+/**
+ * The commit-time half of "using this item casts a spell" -- the scroll read and the artifact
+ * signature both land here, so the two resolve the referenced spell's own effects identically
+ * (AoE-aware via `resolveEffectSweep`) and draw the same randomness in the same order. What each
+ * route pays afterwards (the scroll's self-consumption, the artifact's charge) stays at the call
+ * site, which is the only place the two genuinely differ.
+ */
+function resolveItemSpell(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    actor: ActorState;
+    spellId: OpaqueId;
+    target: ActorState;
+    aimTarget?: Point;
+    eventId: OpaqueId;
+    failureLabel: string;
+  }>,
+): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+  const { state, content, actor, target, eventId } = input;
+  const spell = entryById(content, input.spellId);
+  if (!spell || spell.kind !== 'spell')
+    throw new Error(
+      `internal invariant: ${input.failureLabel} spell ${input.spellId} does not exist`,
+    );
+  if (spell.aoe !== undefined) {
+    if (input.aimTarget === undefined)
+      throw new Error(`internal invariant: AoE ${input.failureLabel} action missing aimTarget`);
+    const perception = targetContext(state, actor, content);
+    const area = validateTarget({
+      targetingId: spell.targetingId,
+      sourceActor: actor,
+      targetActorId: null,
+      target: input.aimTarget,
+      floor: perception.floor,
+      actors: state.actors,
+      visibilityWords: perception.visibilityWords,
+      illumination: perception.illumination,
+      range: spell.range,
+      aoe: spell.aoe,
+    });
+    if (!area.ok)
+      throw new Error(
+        `internal invariant: validated ${input.failureLabel} failed with ${area.reason}`,
+      );
+    const cellKeys = new Set(area.cells.map((cell) => `${cell.x},${cell.y}`));
+    const targetActorIds = state.actors
+      .filter(
+        (entry) =>
+          entry.floorId === actor.floorId &&
+          entry.health > 0 &&
+          entry.actorId !== actor.actorId &&
+          cellKeys.has(`${entry.x},${entry.y}`),
+      )
+      .map((entry) => entry.actorId);
+    const resolved = resolveEffectSweep({
+      effects: spell.effects,
+      actors: state.actors,
+      items: state.items,
+      content,
+      sourceActorId: actor.actorId,
+      casterActorId: actor.actorId,
+      includeCaster: false,
+      targetActorIds,
+      effectsState: state.rng.effects,
+      survival: state.survival,
+      survivalActorId: state.hero.actorId,
+      worldTime: state.worldTime,
+      eventId,
+      forceMoveDirection: { x: 1, y: 0 },
+      operations: {},
+    });
+    return { state: applyEffectResult(state, resolved), events: resolved.events };
+  }
+  const resolved = resolveEffectSequence({
+    effects: spell.effects,
+    actors: state.actors,
+    items: state.items,
+    content,
+    sourceActorId: actor.actorId,
+    targetActorId: target.actorId,
+    effectsState: state.rng.effects,
+    worldTime: state.worldTime,
+    eventId,
+    survival: state.survival,
+    survivalActorId: state.hero.actorId,
+    forceMoveDirection:
+      target.actorId === actor.actorId
+        ? { x: 1, y: 0 }
+        : { x: Math.sign(target.x - actor.x), y: Math.sign(target.y - actor.y) },
+    operations: {},
+  });
+  return { state: applyEffectResult(state, resolved), events: resolved.events };
+}
 
 function moveActor(state: ActiveRun, actorId: OpaqueId, to: Point): ActiveRun {
   return {
@@ -334,6 +430,46 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       itemId: source.itemId,
       targetActorId: target.actorId,
     });
+    // An artifact's signature ability resolves the SAME way a scroll's spell does, and diverges
+    // only in what pays for it: the artifact spends one instance charge and survives, where the
+    // scroll destroys itself. The Weave is never touched -- the charge is the whole cost -- so this
+    // branch deliberately skips the `cast` handler's `weaveCost` subtraction.
+    const signature = artifactById(content, definition.id)?.signature ?? null;
+    if (signature !== null) {
+      const cast = resolveItemSpell({
+        state,
+        content,
+        actor,
+        spellId: signature.spellId,
+        target,
+        ...(action.aimTarget === undefined ? {} : { aimTarget: action.aimTarget }),
+        eventId,
+        failureLabel: 'signature cast',
+      });
+      let next: ActiveRun = {
+        ...cast.state,
+        items: cast.state.items.map((item) =>
+          item.itemId === source.itemId ? { ...item, charges: (item.charges ?? 0) - 1 } : item,
+        ),
+      };
+      events.push(...cast.events);
+      // Same run-level recall handling as the `cast` handler: effect.recall mutates the run rather
+      // than an actor, so resolveEffectSequence skips it and the anchor is stamped here.
+      const spell = entryById(content, signature.spellId);
+      if (
+        spell?.kind === 'spell' &&
+        spell.effects.some((effect) => effect.effectId === 'effect.recall')
+      ) {
+        next = { ...next, returnAnchorFloorId: next.activeFloorId };
+        events.push({
+          type: 'hero.recalled',
+          eventId,
+          actorId: actor.actorId,
+          anchorFloorId: next.activeFloorId,
+        });
+      }
+      return { state: next, chargeEnergy: true };
+    }
     // A scroll (spellId set, no learn effect) resolves the referenced spell's own effects at the
     // target -- AoE-aware via resolveEffectSweep -- with no Weave and no aptitude gate, then
     // consumes itself via its own effects (effect.item.consume). This bypasses the item's own
@@ -341,100 +477,36 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
     const scrollSpellId =
       spellLearnTarget(definition.effects) === undefined ? definition.spellId : undefined;
     if (scrollSpellId !== undefined) {
-      const spell = entryById(content, scrollSpellId);
-      if (!spell || spell.kind !== 'spell')
-        throw new Error(`internal invariant: scroll spell ${scrollSpellId} does not exist`);
-      let next = state;
-      let spellEvents: readonly DomainEvent[];
-      if (spell.aoe !== undefined) {
-        if (action.aimTarget === undefined)
-          throw new Error('internal invariant: AoE scroll action missing aimTarget');
-        const perception = targetContext(next, actor, content);
-        const area = validateTarget({
-          targetingId: spell.targetingId,
-          sourceActor: actor,
-          targetActorId: null,
-          target: action.aimTarget,
-          floor: perception.floor,
-          actors: next.actors,
-          visibilityWords: perception.visibilityWords,
-          illumination: perception.illumination,
-          range: spell.range,
-          aoe: spell.aoe,
-        });
-        if (!area.ok)
-          throw new Error(`internal invariant: validated scroll read failed with ${area.reason}`);
-        const cellKeys = new Set(area.cells.map((cell) => `${cell.x},${cell.y}`));
-        const targetActorIds = next.actors
-          .filter(
-            (entry) =>
-              entry.floorId === actor.floorId &&
-              entry.health > 0 &&
-              entry.actorId !== actor.actorId &&
-              cellKeys.has(`${entry.x},${entry.y}`),
-          )
-          .map((entry) => entry.actorId);
-        const resolved = resolveEffectSweep({
-          effects: spell.effects,
-          actors: next.actors,
-          items: next.items,
-          content,
-          sourceActorId: actor.actorId,
-          casterActorId: actor.actorId,
-          includeCaster: false,
-          targetActorIds,
-          effectsState: next.rng.effects,
-          survival: next.survival,
-          survivalActorId: next.hero.actorId,
-          worldTime: next.worldTime,
-          eventId,
-          forceMoveDirection: { x: 1, y: 0 },
-          operations: {},
-        });
-        next = applyEffectResult(next, resolved);
-        spellEvents = resolved.events;
-      } else {
-        const resolved = resolveEffectSequence({
-          effects: spell.effects,
-          actors: next.actors,
-          items: next.items,
-          content,
-          sourceActorId: actor.actorId,
-          targetActorId: target.actorId,
-          effectsState: next.rng.effects,
-          worldTime: next.worldTime,
-          eventId,
-          survival: next.survival,
-          survivalActorId: next.hero.actorId,
-          forceMoveDirection:
-            target.actorId === actor.actorId
-              ? { x: 1, y: 0 }
-              : { x: Math.sign(target.x - actor.x), y: Math.sign(target.y - actor.y) },
-          operations: {},
-        });
-        next = applyEffectResult(next, resolved);
-        spellEvents = resolved.events;
-      }
+      const read = resolveItemSpell({
+        state,
+        content,
+        actor,
+        spellId: scrollSpellId,
+        target,
+        ...(action.aimTarget === undefined ? {} : { aimTarget: action.aimTarget }),
+        eventId,
+        failureLabel: 'scroll read',
+      });
       // Consume the scroll via its own effects (effect.item.consume), independent of the spell's
       // effects resolved above.
       const consumed = resolveEffectSequence({
         effects: definition.effects,
-        actors: next.actors,
-        items: next.items,
+        actors: read.state.actors,
+        items: read.state.items,
         content,
         sourceActorId: actor.actorId,
         sourceItemId: source.itemId,
         targetActorId: actor.actorId,
-        effectsState: next.rng.effects,
-        worldTime: next.worldTime,
+        effectsState: read.state.rng.effects,
+        worldTime: read.state.worldTime,
         eventId,
-        survival: next.survival,
-        survivalActorId: next.hero.actorId,
+        survival: read.state.survival,
+        survivalActorId: read.state.hero.actorId,
         forceMoveDirection: { x: 1, y: 0 },
         operations: {},
       });
-      next = applyEffectResult(next, consumed);
-      events.push(...spellEvents);
+      const next = applyEffectResult(read.state, consumed);
+      events.push(...read.events);
       events.push(...consumed.events);
       return { state: next, chargeEnergy: true };
     }

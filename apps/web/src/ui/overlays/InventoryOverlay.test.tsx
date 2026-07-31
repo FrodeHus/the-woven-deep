@@ -600,6 +600,68 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(screen.getByText('-2')).toBeInTheDocument();
   });
 
+  it("names an artifact's signature spell, its charges, and offers the cast affordance", () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.ember.1',
+        contentId: 'item.warden-ember',
+        name: "Warden's Ember",
+        category: 'ring',
+        charges: 2,
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.getByText('Signature')).toBeInTheDocument();
+    expect(screen.getByText('Ember bolt')).toBeInTheDocument();
+    expect(screen.getByText('2 / 3')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Cast Ember bolt/ })).toBeInTheDocument();
+  });
+
+  it('offers no cast affordance for an artifact with no signature', () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.grace.1',
+        contentId: 'item.marias-grace',
+        name: "Maria's Grace",
+        category: 'light',
+        fuel: 2400,
+        enabled: true,
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.queryByText('Signature')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Cast/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Use/ })).toBeInTheDocument();
+  });
+
+  it('casting a signature artifact enters the shared aim mode for its spell', async () => {
+    const user = userEvent.setup();
+    const beginScroll = vi.fn();
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.ember.1',
+        contentId: 'item.warden-ember',
+        name: "Warden's Ember",
+        category: 'ring',
+        charges: 3,
+      }),
+    ]);
+    const { session, dispatch } = stubSession(snapshot);
+    renderInventory(session, { onBeginScrollTargeting: beginScroll });
+
+    await user.keyboard('u');
+
+    expect(beginScroll).toHaveBeenCalledWith(
+      'item.ember.1',
+      expect.objectContaining({ spellId: 'spell.ember-bolt', targetingId: 'target.actor' }),
+    );
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it("renders the artifact's provenance from the records repository's ledger", () => {
     const ledger: ArtifactLedger = [
       {

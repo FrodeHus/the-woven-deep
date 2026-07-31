@@ -3,7 +3,12 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { effectLabel } from '../labels.js';
 import { itemById } from '../../session/pack-queries.js';
 import { itemKnownFacts } from '../../session/item-facts.js';
-import { artifactDrawbackRows, isArtifact, isFuellessLight } from '../../session/artifact-view.js';
+import {
+  artifactDrawbackRows,
+  artifactSignature,
+  isArtifact,
+  isFuellessLight,
+} from '../../session/artifact-view.js';
 import type { MenuEntry, ProjectedItemLike } from './inventory-model.js';
 
 /** The tone each action button borders in, mirroring the HUD's own tone vocabulary (`Gauge`'s
@@ -95,6 +100,9 @@ export function DetailPane({
    * cannot be recognized as one, and its gold name never gives it away. */
   const artifact = isArtifact(pack, item.contentId);
   const drawbacks = artifactDrawbackRows(pack, item.contentId);
+  /** The signature ability, if this artifact has one. Casting it IS using the item -- the same
+   * `onUse` intent a scroll goes through -- so the affordance only changes what the button says. */
+  const signature = artifactSignature(pack, item.contentId);
 
   return (
     <div className="flex flex-col gap-3">
@@ -152,7 +160,9 @@ export function DetailPane({
           />
         ))}
         <FactRow label="Condition" value={item.condition} />
-        {item.charges != null && <FactRow label="Charges" value={item.charges} />}
+        {/* A signature artifact states its charges as "spent / full" inside its own block below,
+         * so the bare instance count would only repeat it. */}
+        {item.charges != null && !signature && <FactRow label="Charges" value={item.charges} />}
         {/* A fuelless artifact light carries a full reserve it never spends, so the gauge would
          * read as a countdown that never moves -- it hides on the pack's `artifact.light.fuelless`
          * flag, never on `fuel === null`. The refuel affordance is gone for the same reason, gated
@@ -163,6 +173,18 @@ export function DetailPane({
         {item.enabled !== null && <FactRow label="State" value={item.enabled ? 'Lit' : 'Unlit'} />}
         {item.unknownProperties && <FactRow label="Properties" value="Unknown" />}
       </div>
+
+      {/* The signature block wears the same gold (`accent`) the artifact's name and Relic tag do,
+       * so a relic reads as one thing rather than a stat list with a stranger bolted on. */}
+      {signature && (
+        <section aria-label="Signature" className="flex flex-col gap-1 border border-accent p-2">
+          <h4 className="text-[10px] uppercase tracking-[0.14em] text-accent">Signature</h4>
+          <FactRow
+            label={signature.name}
+            value={`${item.charges ?? 0} / ${signature.maximumCharges}`}
+          />
+        </section>
+      )}
 
       {description && <p className="text-sm italic text-muted">{description}</p>}
 
@@ -186,7 +208,12 @@ export function DetailPane({
           tone="accent"
           onClick={onEquip}
         />
-        <ActionButton label="Use" chord="u" tone="good" onClick={onUse} />
+        <ActionButton
+          label={signature ? `Cast ${signature.name}` : 'Use'}
+          chord="u"
+          tone="good"
+          onClick={onUse}
+        />
         <ActionButton label="Drop" chord="d" tone="danger" onClick={onDrop} />
         {item.category === 'light' && (
           <ActionButton label="Toggle light" chord="l" tone="warn" onClick={onToggleLight} />

@@ -97,6 +97,145 @@ function bumpedClosedDoor(
     : undefined;
 }
 
+/**
+ * Validation shared by every "using this item casts a spell" route: a scroll's own `spellId`, and
+ * an artifact's `artifact.signature.spellId`. The referenced spell's targeting and effects are what
+ * get validated -- never the item's own `target.actor` combat targeting -- with no Weave gate and no
+ * caster-aptitude gate, so the two routes are the same cast resolved from different sources.
+ *
+ * Every resolve here is a speculative dry-run: it must mutate neither `ActiveRun` nor RNG, so a
+ * rejection costs the run nothing. `action-dispatch.ts` re-derives the identical resolution at
+ * commit time and performs the real mutation.
+ */
+function validateItemSpellUse(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    actor: ActorState;
+    spellId: OpaqueId;
+    itemId: OpaqueId;
+    actionCost: number;
+    commandId: OpaqueId;
+    target: Readonly<{ x: number; y: number }> | null;
+  }>,
+): PlayerActionValidation {
+  const { state, content, actor, target: aim } = input;
+  const spell = entryById(content, input.spellId);
+  if (!spell || spell.kind !== 'spell') return { status: 'invalid', reason: 'action.unavailable' };
+  const perception = targetContext(state, actor, content);
+  if (spell.aoe !== undefined) {
+    if (aim === null) return { status: 'invalid', reason: 'target.invalid' };
+    const area = validateTarget({
+      targetingId: spell.targetingId,
+      sourceActor: actor,
+      targetActorId: null,
+      target: aim,
+      floor: perception.floor,
+      actors: state.actors,
+      visibilityWords: perception.visibilityWords,
+      illumination: perception.illumination,
+      range: spell.range,
+      aoe: spell.aoe,
+    });
+    if (!area.ok) return { status: 'invalid', reason: area.reason };
+    const cellKeys = new Set(area.cells.map((cell) => `${cell.x},${cell.y}`));
+    const targetActorIds = state.actors
+      .filter(
+        (entry) =>
+          entry.floorId === actor.floorId &&
+          entry.health > 0 &&
+          entry.actorId !== actor.actorId &&
+          cellKeys.has(`${entry.x},${entry.y}`),
+      )
+      .map((entry) => entry.actorId);
+    try {
+      resolveEffectSweep({
+        effects: spell.effects,
+        actors: state.actors,
+        items: state.items,
+        content,
+        sourceActorId: actor.actorId,
+        casterActorId: actor.actorId,
+        includeCaster: false,
+        targetActorIds,
+        effectsState: state.rng.effects,
+        survival: state.survival,
+        survivalActorId: state.hero.actorId,
+        worldTime: state.worldTime,
+        eventId: input.commandId,
+        forceMoveDirection: { x: 1, y: 0 },
+        operations: {},
+      });
+    } catch {
+      return { status: 'invalid', reason: 'action.unavailable' };
+    }
+    return {
+      type: 'use-item',
+      actorId: actor.actorId,
+      itemId: input.itemId,
+      targetActorId: actor.actorId,
+      cost: input.actionCost,
+      aimTarget: aim,
+    };
+  }
+  const candidate =
+    spell.targetingId === 'target.self'
+      ? actor
+      : state.actors.find(
+          (entry) =>
+            aim !== null &&
+            entry.floorId === actor.floorId &&
+            entry.health > 0 &&
+            entry.x === aim.x &&
+            entry.y === aim.y,
+        );
+  if (!candidate) return { status: 'invalid', reason: 'target.invalid' };
+  const resolvedTarget = validateTarget({
+    targetingId: spell.targetingId,
+    sourceActor: actor,
+    targetActorId: candidate.actorId,
+    target: aim,
+    floor: perception.floor,
+    actors: state.actors,
+    visibilityWords: perception.visibilityWords,
+    illumination: perception.illumination,
+    range: spell.range,
+  });
+  if (!resolvedTarget.ok) return { status: 'invalid', reason: resolvedTarget.reason };
+  try {
+    resolveEffectSequence({
+      effects: spell.effects,
+      actors: state.actors,
+      items: state.items,
+      content,
+      sourceActorId: actor.actorId,
+      targetActorId: candidate.actorId,
+      effectsState: state.rng.effects,
+      survival: state.survival,
+      survivalActorId: state.hero.actorId,
+      worldTime: state.worldTime,
+      eventId: input.commandId,
+      forceMoveDirection:
+        candidate.actorId === actor.actorId
+          ? { x: 1, y: 0 }
+          : {
+              x: Math.sign(candidate.x - actor.x),
+              y: Math.sign(candidate.y - actor.y),
+            },
+      operations: {},
+    });
+  } catch {
+    return { status: 'invalid', reason: 'action.unavailable' };
+  }
+  return {
+    type: 'use-item',
+    actorId: actor.actorId,
+    itemId: input.itemId,
+    targetActorId: candidate.actorId,
+    cost: input.actionCost,
+  };
+}
+
 export function validatePlayerAction(
   input: Readonly<{
     state: ActiveRun;
@@ -409,6 +548,45 @@ export function validatePlayerAction(
     const command = input.command;
     const source = input.state.items.find((item) => item.itemId === command.itemId);
     const definition = source ? itemEntry(input.context.content, source.contentId) : undefined;
+    // An artifact's signature ability is cast by USING the artifact, held either in the backpack or
+    // in an equipment slot -- a relic does not have to come off the hand to be spoken. It carries no
+    // item effects of its own (the pack authors `effects: []`), so this branch runs ahead of the
+    // effects gate below, and the spell is paid for with an instance charge rather than the Weave.
+    const signature =
+      source && definition
+        ? (artifactById(input.context.content, definition.id)?.signature ?? null)
+        : null;
+    if (signature !== null && source && definition) {
+      if (
+        (source.location.type !== 'backpack' && source.location.type !== 'equipped') ||
+        source.location.actorId !== actor.actorId
+      ) {
+        return { status: 'invalid', reason: 'item.unavailable' };
+      }
+      if ((source.charges ?? 0) <= 0) {
+        return { status: 'invalid', reason: 'signature.no-charges' };
+      }
+      const spell = entryById(input.context.content, signature.spellId);
+      // Mirrors the `cast` path's own recall guard: a recall signature spoken in town has nowhere
+      // to send the hero, and the rejection consumes neither a charge nor randomness.
+      if (
+        spell?.kind === 'spell' &&
+        spell.effects.some((effect) => effect.effectId === 'effect.recall') &&
+        isTownFloorActive(input.state)
+      ) {
+        return { status: 'invalid', reason: 'recall.already-town' };
+      }
+      return validateItemSpellUse({
+        state: input.state,
+        content: input.context.content,
+        actor,
+        spellId: signature.spellId,
+        itemId: source.itemId,
+        actionCost: definition.actionCost,
+        commandId: command.commandId,
+        target: command.target,
+      });
+    }
     if (
       !source ||
       source.location.type !== 'backpack' ||
@@ -443,124 +621,16 @@ export function validatePlayerAction(
     // cost and no caster-aptitude gate: any class can read a scroll.
     const scrollSpellId = learnSpellId === undefined ? definition.spellId : undefined;
     if (scrollSpellId !== undefined) {
-      const spell = entryById(input.context.content, scrollSpellId);
-      if (!spell || spell.kind !== 'spell')
-        return { status: 'invalid', reason: 'action.unavailable' };
-      const perception = targetContext(input.state, actor, input.context.content);
-      if (spell.aoe !== undefined) {
-        if (command.target === null) return { status: 'invalid', reason: 'target.invalid' };
-        const area = validateTarget({
-          targetingId: spell.targetingId,
-          sourceActor: actor,
-          targetActorId: null,
-          target: command.target,
-          floor: perception.floor,
-          actors: input.state.actors,
-          visibilityWords: perception.visibilityWords,
-          illumination: perception.illumination,
-          range: spell.range,
-          aoe: spell.aoe,
-        });
-        if (!area.ok) return { status: 'invalid', reason: area.reason };
-        const cellKeys = new Set(area.cells.map((cell) => `${cell.x},${cell.y}`));
-        const targetActorIds = input.state.actors
-          .filter(
-            (entry) =>
-              entry.floorId === actor.floorId &&
-              entry.health > 0 &&
-              entry.actorId !== actor.actorId &&
-              cellKeys.has(`${entry.x},${entry.y}`),
-          )
-          .map((entry) => entry.actorId);
-        try {
-          // Speculative resolve only: this dry-run must not mutate ActiveRun state or RNG. The
-          // commit-time sweep in action-dispatch.ts re-derives the same cells from aimTarget and
-          // performs the real mutation.
-          resolveEffectSweep({
-            effects: spell.effects,
-            actors: input.state.actors,
-            items: input.state.items,
-            content: input.context.content,
-            sourceActorId: actor.actorId,
-            casterActorId: actor.actorId,
-            includeCaster: false,
-            targetActorIds,
-            effectsState: input.state.rng.effects,
-            survival: input.state.survival,
-            survivalActorId: input.state.hero.actorId,
-            worldTime: input.state.worldTime,
-            eventId: command.commandId,
-            forceMoveDirection: { x: 1, y: 0 },
-            operations: {},
-          });
-        } catch {
-          return { status: 'invalid', reason: 'action.unavailable' };
-        }
-        return {
-          type: 'use-item',
-          actorId: actor.actorId,
-          itemId: source.itemId,
-          targetActorId: actor.actorId,
-          cost: definition.actionCost,
-          aimTarget: command.target,
-        };
-      }
-      const candidate =
-        spell.targetingId === 'target.self'
-          ? actor
-          : input.state.actors.find(
-              (entry) =>
-                command.target !== null &&
-                entry.floorId === actor.floorId &&
-                entry.health > 0 &&
-                entry.x === command.target.x &&
-                entry.y === command.target.y,
-            );
-      if (!candidate) return { status: 'invalid', reason: 'target.invalid' };
-      const target = validateTarget({
-        targetingId: spell.targetingId,
-        sourceActor: actor,
-        targetActorId: candidate.actorId,
-        target: command.target,
-        floor: perception.floor,
-        actors: input.state.actors,
-        visibilityWords: perception.visibilityWords,
-        illumination: perception.illumination,
-        range: spell.range,
-      });
-      if (!target.ok) return { status: 'invalid', reason: target.reason };
-      try {
-        resolveEffectSequence({
-          effects: spell.effects,
-          actors: input.state.actors,
-          items: input.state.items,
-          content: input.context.content,
-          sourceActorId: actor.actorId,
-          targetActorId: candidate.actorId,
-          effectsState: input.state.rng.effects,
-          survival: input.state.survival,
-          survivalActorId: input.state.hero.actorId,
-          worldTime: input.state.worldTime,
-          eventId: command.commandId,
-          forceMoveDirection:
-            candidate.actorId === actor.actorId
-              ? { x: 1, y: 0 }
-              : {
-                  x: Math.sign(candidate.x - actor.x),
-                  y: Math.sign(candidate.y - actor.y),
-                },
-          operations: {},
-        });
-      } catch {
-        return { status: 'invalid', reason: 'action.unavailable' };
-      }
-      return {
-        type: 'use-item',
-        actorId: actor.actorId,
+      return validateItemSpellUse({
+        state: input.state,
+        content: input.context.content,
+        actor,
+        spellId: scrollSpellId,
         itemId: source.itemId,
-        targetActorId: candidate.actorId,
-        cost: definition.actionCost,
-      };
+        actionCost: definition.actionCost,
+        commandId: command.commandId,
+        target: command.target,
+      });
     }
     let targetActor = actor;
     if (command.target !== null) {

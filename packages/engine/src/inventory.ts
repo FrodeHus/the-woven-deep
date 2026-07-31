@@ -357,7 +357,9 @@ export function createFloorItem(
     condition: 100,
     enchantment: null,
     identified: definition.identification.mode === 'known',
-    charges: null,
+    // An artifact with a signature ability enters circulation fully charged; everything else
+    // (including a signature-less artifact like Maria's Grace) carries no charge track at all.
+    charges: definition.artifact?.signature?.charges ?? null,
     fuel: definition.light?.fuelCapacity ?? null,
     enabled: definition.light === null ? null : false,
     location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y },

@@ -5,7 +5,7 @@ import type {
   ArtifactStintOutcome,
   StoredHallRecord,
 } from '@woven-deep/engine';
-import { itemById, itemEntries } from './pack-queries.js';
+import { itemById, itemEntries, spellEntries } from './pack-queries.js';
 
 /**
  * Everything the client knows about artifacts, in one framework-free module: whether an item IS an
@@ -39,6 +39,36 @@ export function isArtifact(pack: CompiledContentPack, contentId: string | undefi
  */
 export function isFuellessLight(pack: CompiledContentPack, contentId: string | undefined): boolean {
   return artifactOf(pack, contentId)?.light?.fuelless === true;
+}
+
+export interface SignatureView {
+  readonly spellId: string;
+  /** The spell's own display name, or its id when the pack somehow names no such spell (the
+   * compiler already rejects an unresolvable `signature.spellId`, so this is belt-and-braces). */
+  readonly name: string;
+  /** The signature's full charge track -- the ceiling a floor recharge tops the instance up to. */
+  readonly maximumCharges: number;
+  readonly rechargePerFloor: number;
+}
+
+/**
+ * The signature ability `contentId`'s artifact casts, or `undefined` when the item is not an
+ * artifact, is unidentified (no `contentId`), or is a signature-less artifact like Maria's Grace --
+ * which is exactly the set of items that must show no cast affordance.
+ */
+export function artifactSignature(
+  pack: CompiledContentPack,
+  contentId: string | undefined,
+): SignatureView | undefined {
+  const signature = artifactOf(pack, contentId)?.signature;
+  if (!signature) return undefined;
+  const spell = spellEntries(pack).find((entry) => entry.id === signature.spellId);
+  return {
+    spellId: signature.spellId,
+    name: spell?.name ?? signature.spellId,
+    maximumCharges: signature.charges,
+    rechargePerFloor: signature.rechargePerFloor,
+  };
 }
 
 export interface DrawbackRow {

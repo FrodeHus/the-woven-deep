@@ -307,6 +307,26 @@ Amendment note: the fallback fires when no tagged slot exists OR when no tagged 
 
 ---
 
+### Task 14: Signature ability activation (final-review amendment, user-approved 2026-07-31)
+
+_The final whole-branch review found Decision 3's activated signature ability schema'd, validated, and authored on 8 artifacts — but read by no engine or client code (a plan-coverage defect: no task wired it). User chose: implement before the PR._
+
+**Files:**
+- Modify: the item-use/cast resolution path (explore how scroll `spellId` casting works today — actions.ts/action-dispatch.ts use-item flow — and mirror it), `packages/engine/src/floor-transition.ts` (recharge on descend), instance creation sites (artifact instances start with `charges: signature.charges`), `apps/web/src/ui/overlays/DetailPane.tsx` (+ inventory-model) — signature spell name + charge pips + the cast/use affordance
+- Test: engine use/cast + recharge suites, web detail-pane test
+
+**Design (binding):**
+- An artifact with a `signature` casts its `spellId` through the EXISTING spell-effect resolution (same targeting/costs semantics as scroll casting, minus item consumption): the cast consumes one instance `charge` instead of the item; zero charges → invalid with an existing-or-new named reason; weave cost NOT charged (charges are the cost — note this explicitly in the spec's Decision 3 text as a clarifying amendment).
+- Recharge: on entering a NEW floor (descend path, once per floor entry), `charges = min(charges + rechargePerFloor, signature.charges)` — deterministic, no randomness, no event needed beyond what item state changes already produce (add a small `item.recharged`-class event ONLY if an existing event pattern demands it; otherwise silent state change is fine — decide and justify).
+- Save/schema: `ItemInstance.charges` already exists and round-trips — verify no schema change needed; artifact instance creation sites (vault offer via createFloorItem, boss unique via createPopulationLoot, heirloom materialization) must all seed/preserve charges correctly (heirloom snapshots already carry `charges` — recovered artifacts keep their spent state).
+- Client: signature block in the detail pane (spell name, charges as pips/count), the cast affordance wired to the existing use/cast intent, gold-consistent styling.
+- Demo hashes: charges seeding changes artifact instance bytes → the affected fixtures re-pin ONCE more with attribution (artifact instances now carry signature charges).
+
+- [x] **Step 1: Failing tests** — cast decrements charges + resolves the spell's effects exactly as the equivalent scroll cast (compare event streams); zero-charge cast invalid; recharge on descend capped at max; non-signature artifact (Maria's Grace) has no cast affordance; recovered artifact preserves spent charges; scroll behavior byte-identical.
+- [x] **Step 2: FAIL. Step 3: Implement engine. Step 4: Implement client + tests. Step 5: PASS** engine non-demo + web + content; re-pin affected fixtures with attribution; root gate. **Step 6: Commit(s)** — `feat: cast artifact signatures on charges` (+ `chore:` re-pin if separate).
+
+---
+
 ### Task 13: Re-pin, root gate, PR
 
 - [ ] **Step 1:** Rebuild content+engine; run every demo; per-fixture drift attribution (expected causes: content hash v10 + roster; save v13 fields; run-records stream offer roll in runs with artifact pools — note the DEMO packs may have no artifacts, in which case the offer roll consumes nothing and only content-hash/save-shape drift appears; anything else = STOP/BLOCKED).

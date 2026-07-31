@@ -27,6 +27,14 @@ primitives.
    charges; passive contribution = the existing `combat` block; drawback = always-on negative
    derived-stat modifiers via the enchantment-modifier validation path. No triggered/passive
    effect system, no new entries in the closed effect registry.
+
+   _Clarifying amendment (2026-07-31, Task 14, user-approved):_ a signature cast resolves through
+   the same item-use path a scroll read does — the referenced spell's own targeting and effects,
+   no caster-aptitude gate — and diverges only in what pays for it. **The charge is the entire
+   cost: the Weave is never charged**, and the artifact is spent rather than consumed (zero charges
+   → `signature.no-charges`). Charges refill by `rechargePerFloor` on entering a floor the run has
+   never visited, capped at `charges`; re-entering a stored floor refills nothing, so a staircase
+   cannot be walked for charges.
 4. **Singleton with recycling.** Each artifact exists at most once across the profile's
    history. Lost → recoverable via the holding hero's Champion. Holding record leaves the
    top-10 standings, or its Champion is conquered without pickup → the artifact returns to
