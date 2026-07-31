@@ -1,6 +1,7 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import { balanceEntry } from './balance.js';
 import { articulationIndexes, protectedRouteIndexes } from './connectivity.js';
+import { applyCurseRolls } from './curse-generation.js';
 import type { ChestFeature, DoorFeature, DungeonFeature } from './feature-model.js';
 import { createFloorLootFromTable, projectLootGraph } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
@@ -389,5 +390,6 @@ export function placeFloorLoot(
     doors += 1;
   }
 
-  return { items, features, state: cursor };
+  const cursed = applyCurseRolls({ content, items, band, state: cursor });
+  return { items: cursed.items, features, state: cursed.state };
 }

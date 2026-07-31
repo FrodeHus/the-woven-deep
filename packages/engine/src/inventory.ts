@@ -12,6 +12,9 @@ import {
   type LootTableContentEntry,
 } from '@woven-deep/content';
 import { actorById } from './actor-model.js';
+import { balanceEntry } from './balance.js';
+import { applyCurseRolls } from './curse-generation.js';
+import { depthBandFor } from './loot-placement.js';
 import type { ItemInstance } from './item-model.js';
 import type { ActiveRun, OpaqueId, Uint32State } from './model.js';
 import type { RecordedHeirloomSnapshot } from './population-model.js';
@@ -434,7 +437,18 @@ export function createPopulationLoot(
     y: input.y,
     depth: input.depth,
   });
-  const createdItems: readonly ItemInstance[] = unique ? [unique, ...loot.items] : [...loot.items];
+  // Curses roll only over the table-drawn loot, never `unique` -- a guaranteed unique drop is boss
+  // canon and must not vary run to run.
+  const band = depthBandFor(input.depth, balanceEntry(input.content).floorLoot.depthBands);
+  const cursed = applyCurseRolls({
+    content: input.content,
+    items: loot.items,
+    band,
+    state: loot.state,
+  });
+  const createdItems: readonly ItemInstance[] = unique
+    ? [unique, ...cursed.items]
+    : [...cursed.items];
   if (!input.dryRun) {
     for (const item of createdItems) {
       if (input.state.items.some((existing) => existing.itemId === item.itemId)) {
@@ -447,7 +461,7 @@ export function createPopulationLoot(
   }
   const receipt: PopulationLootReceipt = {
     lootStateBefore,
-    lootStateAfter: loot.state,
+    lootStateAfter: cursed.state,
     items: createdItems
       .map((item) => ({ itemId: item.itemId, contentId: item.contentId, quantity: item.quantity }))
       .sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
@@ -459,7 +473,7 @@ export function createPopulationLoot(
         items: [...input.state.items, ...createdItems].sort((left, right) =>
           compareCodeUnits(left.itemId, right.itemId),
         ),
-        rng: { ...input.state.rng, loot: loot.state },
+        rng: { ...input.state.rng, loot: cursed.state },
       };
   return { state, createdItems, unique, receipt };
 }
