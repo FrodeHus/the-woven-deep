@@ -55,7 +55,7 @@ const OVERLAY_KEYS: Readonly<
   'character-sheet': { key: 'c', shift: false },
   'map-journal': { key: 'm', shift: false },
   codex: { key: 'x', shift: false },
-  settings: { key: 'o', shift: false },
+  settings: { key: 'O', shift: true },
   help: { key: '?', shift: true },
 };
 

@@ -425,7 +425,7 @@ describe('App boot flow', () => {
     render(<App fetcher={packFetcher()} storage={storage} localStorage={localStorage} />);
     await screen.findByRole('img', { name: /dungeon/i });
 
-    fireEvent.keyDown(window, { key: 'o' });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
     await screen.findByRole('dialog', { name: 'Settings' });
     await user.type(screen.getByLabelText(/type "clear" to confirm/i), 'clear');
     await user.click(screen.getByRole('button', { name: 'Clear guest session' }));
@@ -896,7 +896,7 @@ describe('App identity/account — ProfileSession routing', () => {
     socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
     await screen.findByRole('img', { name: /dungeon/i });
 
-    fireEvent.keyDown(window, { key: 'o' });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
     await screen.findByRole('dialog', { name: 'Settings' });
     await user.click(screen.getByRole('button', { name: /^sign out$/i }));
 
@@ -982,7 +982,7 @@ describe('App identity/account — ProfileSession routing', () => {
     socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
     await screen.findByRole('img', { name: /dungeon/i });
 
-    fireEvent.keyDown(window, { key: 'o' });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
     await screen.findByRole('dialog', { name: 'Settings' });
     await user.type(screen.getByLabelText('Type "delete" to confirm'), 'delete');
     await user.click(screen.getByRole('button', { name: 'Delete account' }));

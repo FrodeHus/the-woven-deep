@@ -94,6 +94,9 @@ export function usePlayKeyDispatcher({
           // Deliberately no `pendingFinalChamberChoice` branch: the choice is never answered by
           // Escape (see this param's doc comment above) -- it just stays pending.
         },
+        // Task 7 wires auto-explore and stairs travel for real.
+        startExplore: () => {},
+        travelToStairs: () => {},
       },
       () =>
         overlay !== null ||

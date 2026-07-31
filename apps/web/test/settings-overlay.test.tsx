@@ -87,7 +87,7 @@ describe('SettingsOverlay (component-level)', () => {
     expect(bindingRow('Move west')).toHaveTextContent('h');
     expect(bindingRow('Pick up')).toHaveTextContent('g');
     expect(bindingRow('Rest')).toHaveTextContent('Shift+R');
-    expect(bindingRow('Settings')).toHaveTextContent('o');
+    expect(bindingRow('Settings')).toHaveTextContent('Shift+O');
   });
 
   it('font scale: selecting a step calls onChange with the new fontScale, and the preview reflects it live', async () => {
@@ -272,7 +272,7 @@ describe('SettingsOverlay composed with PlayScreen/App', () => {
   }
 
   async function openSettings(): Promise<void> {
-    fireEvent.keyDown(window, { key: 'o' });
+    fireEvent.keyDown(window, { key: 'O', shiftKey: true });
     await screen.findByRole('dialog', { name: 'Settings' });
   }
 

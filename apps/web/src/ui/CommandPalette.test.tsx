@@ -168,9 +168,9 @@ describe('CommandPalette', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('labels the descend entry "Descend" with no pending recall anchor', () => {
+  it('labels the descend entry "Descend / go to down stairs" with no pending recall anchor', () => {
     harness();
-    expect(screen.getByText('Descend')).toBeInTheDocument();
+    expect(screen.getByText('Descend / go to down stairs')).toBeInTheDocument();
   });
 
   it('relabels the descend entry "Return to depth N" when a recall anchor is set', () => {
@@ -180,7 +180,7 @@ describe('CommandPalette', () => {
     harness({ projection });
 
     expect(screen.getByText(`Return to depth ${anchor.depth}`)).toBeInTheDocument();
-    expect(screen.queryByText('Descend')).not.toBeInTheDocument();
+    expect(screen.queryByText('Descend / go to down stairs')).not.toBeInTheDocument();
   });
 
   it('omits the Cast entry when the hero cannot afford its Weave cost', () => {

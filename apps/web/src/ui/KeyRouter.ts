@@ -1,6 +1,7 @@
 import type { Direction } from '@woven-deep/engine';
 import type { PlayerIntent } from '../session/intents.js';
 import type { ActionId, ResolvedKeymap } from '../session/settings.js';
+import type { StairDirection } from '../session/stairs.js';
 
 /** The seven overlay-open commands whose outcome is `{ type: 'open-overlay', overlay }`. Typed
  * directly as this string union (rather than importing an `OverlayId` from elsewhere) so this
@@ -28,6 +29,12 @@ export type RouterOutcome =
   // it can't resolve a slot to an itemId itself; `usePlayKeyDispatcher` does that resolution and
   // dispatches the actual `{type:'backpack', action:'use', itemId}` intent.
   | { readonly type: 'use-belt-slot'; readonly slot: number }
+  // Starts auto-explore. Like `use-belt-slot`, this is a session-level action rather than a raw
+  // intent: `routeKey` has no projection access, and the walk is driven by `useAutoTravel`.
+  | { readonly type: 'start-explore' }
+  // `>`/`<`. The handler decides between today's `descend`/`ascend` intent (hero already on the
+  // matching stair) and starting a walk to a discovered one -- both need the live projection.
+  | { readonly type: 'travel-to-stairs'; readonly direction: StairDirection }
   | null;
 
 /**
@@ -110,9 +117,11 @@ function outcomeForAction(action: ActionId): RouterOutcome {
     case 'pickup':
       return { type: 'pickup' };
     case 'descend':
-      return { type: 'descend' };
+      return { type: 'travel-to-stairs', direction: 'down' };
     case 'ascend':
-      return { type: 'ascend' };
+      return { type: 'travel-to-stairs', direction: 'up' };
+    case 'auto-explore':
+      return { type: 'start-explore' };
     case 'house':
       return { type: 'house' };
     case 'trade':
@@ -201,6 +210,11 @@ export interface KeyDispatchHandlers {
   /** Drinks the potion currently in belt slot `slot` (0-based), resolved from the live snapshot --
    * a no-op if that slot is empty. */
   readonly useBeltSlot: (slot: number) => void;
+  /** Starts auto-explore against the live projection -- a no-op with a modal open. */
+  readonly startExplore: () => void;
+  /** Descends/ascends when the hero already stands on the matching stair, otherwise walks to a
+   * discovered one (or reports that none has been found). */
+  readonly travelToStairs: (direction: StairDirection) => void;
 }
 
 export type KeyDispatcher = (
@@ -254,6 +268,14 @@ export function createKeyDispatcher(
     }
     if (outcome.type === 'use-belt-slot') {
       handlers.useBeltSlot(outcome.slot);
+      return;
+    }
+    if (outcome.type === 'start-explore') {
+      handlers.startExplore();
+      return;
+    }
+    if (outcome.type === 'travel-to-stairs') {
+      handlers.travelToStairs(outcome.direction);
       return;
     }
     handlers.dispatch(outcome);

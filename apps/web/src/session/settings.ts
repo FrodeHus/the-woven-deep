@@ -13,6 +13,9 @@ export type ActionId =
   | 'wait'
   | 'rest'
   | 'pickup'
+  // Walks the hero toward unexplored ground until something interesting happens -- a client-side
+  // convenience that replays ordinary `move`/`pickup` intents, never an engine command.
+  | 'auto-explore'
   | 'descend'
   | 'ascend'
   | 'inventory'
@@ -80,6 +83,7 @@ export const ACTION_IDS: readonly ActionId[] = [
   'wait',
   'rest',
   'pickup',
+  'auto-explore',
   'descend',
   'ascend',
   'inventory',
@@ -116,8 +120,9 @@ export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
   wait: 'Wait',
   rest: 'Rest',
   pickup: 'Pick up',
-  descend: 'Descend',
-  ascend: 'Ascend',
+  'auto-explore': 'Auto-explore',
+  descend: 'Descend / go to down stairs',
+  ascend: 'Ascend / go to up stairs',
   inventory: 'Inventory',
   house: 'House/Town',
   trade: 'Trade',
@@ -137,7 +142,7 @@ export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
  * The shipped keymap. Movement defaults are the vi keys (arrows/numpad are separate, hardwired
  * synonyms baked into `KeyRouter.ts` -- they are never represented here and can never be
  * rebound away from movement). Every other default matches `KeyRouter.ts`'s `KEYMAP` exactly,
- * plus the six overlay-open keys (`c`/`m`/`v`/`x`/`o`/`Shift+?`).
+ * plus the six overlay-open keys (`c`/`m`/`v`/`x`/`Shift+O`/`Shift+?`).
  */
 export const DEFAULT_BINDINGS: Readonly<Record<ActionId, KeyChord>> = {
   'move.n': chord('k'),
@@ -151,6 +156,7 @@ export const DEFAULT_BINDINGS: Readonly<Record<ActionId, KeyChord>> = {
   wait: chord('.'),
   rest: chord('R', true),
   pickup: chord('g'),
+  'auto-explore': chord('o'),
   descend: chord('>'),
   ascend: chord('<'),
   inventory: chord('i'),
@@ -163,7 +169,7 @@ export const DEFAULT_BINDINGS: Readonly<Record<ActionId, KeyChord>> = {
   'map-journal': chord('m'),
   spellbook: chord('v'),
   codex: chord('x'),
-  settings: chord('o'),
+  settings: chord('O', true),
   help: chord('?', true),
   // Free (never hardwired, never used by any other default) -- see `chordReserved`.
   'dismiss-hint': chord("'"),
