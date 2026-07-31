@@ -135,7 +135,7 @@ export function OverlayHost({
               </span>
             )}
           </SheetHeader>
-          <OverlayErrorBoundary>{body}</OverlayErrorBoundary>
+          <OverlayScroll>{body}</OverlayScroll>
         </SheetContent>
       </Sheet>
     );
@@ -143,13 +143,36 @@ export function OverlayHost({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent data-testid={`overlay-${overlay}`}>
+      {/* The dialog frame is capped at the viewport and split into a fixed header row plus a
+          shrinkable body row, so `OverlayScroll` below has something to scroll inside; without the
+          cap a long body (the codex's sighting lists, the help overlay's mechanics notes) grew the
+          popup past the screen and clipped. */}
+      <DialogContent
+        data-testid={`overlay-${overlay}`}
+        className="max-h-[85dvh] grid-rows-[auto_minmax(0,1fr)]"
+      >
         <DialogHeader>
           <DialogTitle>{definition.title}</DialogTitle>
         </DialogHeader>
-        <OverlayErrorBoundary>{body}</OverlayErrorBoundary>
+        <OverlayScroll>{body}</OverlayScroll>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * The scroll container every overlay body sits in. `overflow-y-auto` only ever produces a scrollbar
+ * when the body actually outgrows the frame, so a short overlay (help, settings) is unchanged while
+ * a long one (the character sheet's attributes + derived stats + conditions, a full pack, the map
+ * journal) scrolls instead of running off the bottom edge. `min-h-0` is the load-bearing half: a
+ * flex/grid child defaults to a content-sized minimum, which would otherwise push the frame past the
+ * viewport and clip rather than scroll.
+ */
+function OverlayScroll({ children }: Readonly<{ children: JSX.Element }>): JSX.Element {
+  return (
+    <div data-testid="overlay-scroll" className="min-h-0 flex-1 overflow-y-auto pr-1">
+      <OverlayErrorBoundary>{children}</OverlayErrorBoundary>
+    </div>
   );
 }
 

@@ -32,6 +32,21 @@ describe('OverlayHost', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it('wraps the overlay body in a scroll container that only scrolls when it overflows', () => {
+    renderHost('help');
+    const scroll = screen.getByTestId('overlay-scroll');
+    expect(scroll).toBeInTheDocument();
+    // `overflow-y-auto` (not `scroll`) is the "only when it overflows" half; `min-h-0` is what lets
+    // the flex/grid child shrink instead of pushing the frame past the viewport and clipping.
+    expect(scroll.className).toContain('overflow-y-auto');
+    expect(scroll.className).toContain('min-h-0');
+  });
+
+  it('caps the dialog frame at the viewport so a long body scrolls rather than clipping', () => {
+    renderHost('help');
+    expect(screen.getByTestId('overlay-help').className).toContain('max-h-[85dvh]');
+  });
+
   it('sources the codex body from the sightings prop when no session is present (title screen)', async () => {
     const user = userEvent.setup();
     const caveRat: MonsterContentEntry = {
