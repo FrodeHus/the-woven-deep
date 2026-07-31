@@ -193,6 +193,73 @@ describe('equipment planning and item lights', () => {
     expect(sources[0]!.publicModifiers).toEqual({ defense: 2 });
   });
 
+  it('applies artifact drawback modifiers while equipped, visible pre-identification', () => {
+    const cursedRing = definition('item.ring.cursed', {
+      category: 'ring',
+      equipment: { slots: ['left-ring', 'right-ring'], handedness: 'none', reservedSlots: [] },
+      artifact: {
+        canon: true,
+        signature: null,
+        drawbackModifiers: { defense: -1, maxHealth: -3 },
+        light: null,
+      },
+    });
+    const ringItem = {
+      ...item('item.ring.cursed.1', cursedRing.id, {
+        type: 'equipped',
+        actorId: 'hero.demo',
+        slot: 'left-ring',
+      }),
+      identified: false,
+    };
+    const base = createDemoRun();
+    const hero = {
+      ...base.actors[0]!,
+      equipment: { ...base.actors[0]!.equipment, 'left-ring': ringItem.itemId },
+    };
+    const run = { ...base, actors: [hero], items: [ringItem] };
+    const content = pack(cursedRing);
+    const sources = equipmentModifiers({ run, content, actorId: 'hero.demo' });
+    expect(sources[0]!.modifiers).toEqual({ defense: -1, maxHealth: -3 });
+    // Artifacts are always identified-known, so the drawback is folded into `base` and
+    // therefore visible in publicModifiers even for an instance flagged unidentified here.
+    expect(sources[0]!.publicModifiers).toEqual({ defense: -1, maxHealth: -3 });
+
+    const formulas = createDemoContentPack().entries.find(
+      (entry) => entry.kind === 'balance',
+    )!.formulas;
+    const before = deriveActorStats({
+      attributes: hero.attributes,
+      formulas,
+      weaveRegenAmount: 2,
+      equipmentModifiers: [],
+      conditionModifiers: [],
+    });
+    const equipped = deriveActorStats({
+      attributes: hero.attributes,
+      formulas,
+      weaveRegenAmount: 2,
+      equipmentModifiers: sources.map((source) => source.modifiers),
+      conditionModifiers: [],
+    });
+    expect(equipped.defense - before.defense).toBe(-1);
+    expect(equipped.maxHealth - before.maxHealth).toBe(-3);
+
+    const unequippedRun = {
+      ...run,
+      actors: [{ ...hero, equipment: { ...hero.equipment, 'left-ring': null } }],
+      items: [{ ...ringItem, location: { type: 'backpack' as const, actorId: 'hero.demo' } }],
+    };
+    expect(equipmentModifiers({ run: unequippedRun, content, actorId: 'hero.demo' })).toEqual([]);
+
+    const nonArtifactSources = equipmentModifiers({
+      run: { ...base, actors: [base.actors[0]!], items: [] },
+      content,
+      actorId: 'hero.demo',
+    });
+    expect(nonArtifactSources).toEqual([]);
+  });
+
   it('emits light only from enabled equipped or floor-placed fueled items', () => {
     const lantern = definition('item.lantern', {
       category: 'light',
