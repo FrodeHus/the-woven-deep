@@ -52,8 +52,22 @@ beforeAll(async () => {
   };
 });
 
-/** A floor carrying the authored lampwright cache, with only its artifact-offer slot exposed. */
-function vaultFloor(floorId: string): FloorSnapshot {
+/** The authored `minDepth` band of an artifact's own item entry -- the depth its vault offer slot
+ * refuses to materialize above (see `fillItemSlots`). */
+function minDepthOf(artifactId: string): number {
+  const entry = pack.entries.find(
+    (candidate) => candidate.kind === 'item' && candidate.id === artifactId,
+  );
+  if (entry?.kind !== 'item') throw new Error(`pack has no item entry for ${artifactId}`);
+  return entry.minDepth;
+}
+
+/**
+ * A floor carrying the authored lampwright cache, with only its artifact-offer slot exposed. The
+ * caller passes a depth inside the offered artifact's own band: `fillItemSlots` leaves the offer
+ * slot empty on any floor shallower than that, so a fixed shallow depth would place nothing.
+ */
+function vaultFloor(floorId: string, depth: number): FloorSnapshot {
   const width = 13;
   const height = 11;
   const tiles = Array.from({ length: width * height }, (_, index) => {
@@ -67,7 +81,7 @@ function vaultFloor(floorId: string): FloorSnapshot {
     generatorVersion: 2,
     width,
     height,
-    depth: 3,
+    depth,
     tiles,
     entities: [],
     themeId: 'theme.cavern',
@@ -163,7 +177,8 @@ describe('artifact circulation across runs', () => {
     expect(artifactId).not.toBeNull();
     expect(runA.artifactsUndiscovered).toContain(artifactId);
 
-    const floorA = vaultFloor('floor.circulation.a');
+    const offerDepth = minDepthOf(artifactId!);
+    const floorA = vaultFloor('floor.circulation.a', offerDepth);
     const placedA = placeFloorPopulations({ run: runA, floor: floorA, content: pack });
     const offer = placedA.state.items.find((item) =>
       item.itemId.startsWith('item.artifact-offer.'),
@@ -173,7 +188,7 @@ describe('artifact circulation across runs', () => {
     expect(placedA.state.items.filter((item) => item.contentId === artifactId)).toHaveLength(1);
 
     const finalizedA = finalizeRun({
-      run: died(intoHeroBackpack(placedA.state, offer!), 3),
+      run: died(intoHeroBackpack(placedA.state, offer!), offerDepth),
       content: pack,
       lifetime: repository.lifetime(),
     });
@@ -269,7 +284,7 @@ describe('artifact circulation across runs', () => {
     );
 
     const finalizedB = finalizeRun({
-      run: died(intoHeroBackpack(conquered.state, heirloom!), 4),
+      run: died(intoHeroBackpack(conquered.state, heirloom!), offerDepth + 1),
       content: pack,
       lifetime: repository.lifetime(),
     });
