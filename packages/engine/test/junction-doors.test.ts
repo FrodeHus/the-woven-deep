@@ -139,6 +139,20 @@ describe('junction door detection', () => {
     ]);
   });
 
+  it('keeps a mouth guarding a sub-threshold pocket that holds a staircase', () => {
+    // The same three-cell stub the rule rejects above, with the stair-down sunk in its far end and
+    // no room rectangle anywhere near it: the pocket qualifies on the staircase alone, not because
+    // the flood happens to reach a room mask.
+    const stairPocket = twoRoomTiles();
+    for (let y = 6; y <= 9; y += 1) stairPocket[index(4, y)] = 1 as TileId;
+    stairPocket[index(4, 9)] = 5 as TileId;
+    expect(
+      junctionDoorCandidates(
+        carveInput({ tiles: stairPocket, stairDown: { x: 4, y: 9 }, stairUp: { x: 2, y: 2 } }),
+      ),
+    ).toContain(index(4, 6));
+  });
+
   it('keeps a mouth guarding a long corridor even when it reaches no room', () => {
     const longStub = twoRoomTiles();
     for (let y = 6; y <= 10; y += 1) longStub[index(4, y)] = 1 as TileId;

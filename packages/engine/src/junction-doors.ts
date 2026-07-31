@@ -118,10 +118,15 @@ function wallAt(input: JunctionDoorGeometry, x: number, y: number): boolean {
 
 /**
  * Whether a mouth at `index` guards somewhere worth going: flood the walkable region beyond `start`
- * with the mouth itself treated as blocked, and accept as soon as the region either reaches a room
- * rectangle (a corridor between two rooms always qualifies, however short) or grows to
- * {@link MINIMUM_GUARDED_REGION_CELLS}. Bounded by that same constant, so the scan stays cheap and
- * its cost never depends on how large the far region actually is.
+ * with the mouth itself treated as blocked, and accept as soon as the region reaches a room
+ * rectangle (a corridor between two rooms always qualifies, however short), holds a staircase, or
+ * grows to {@link MINIMUM_GUARDED_REGION_CELLS}. Bounded by that same constant, so the scan stays
+ * cheap and its cost never depends on how large the far region actually is.
+ *
+ * The staircase condition is stated outright rather than left to the room mask. Rot-js reports a
+ * room as its whole rectangle, so a small stair pocket carved inside one is accepted incidentally
+ * today -- but a pocket dug outside every rectangle is exactly as worth guarding, and a floor
+ * transition is the single most worthwhile thing a door can stand between the player and.
  */
 function guardsRegion(
   input: JunctionDoorGeometry,
@@ -130,11 +135,18 @@ function guardsRegion(
   start: number,
 ): boolean {
   const { width, height } = input;
+  const stairIndexes = new Set<number>();
+  for (const stair of [input.stairUp, input.stairDown]) {
+    if (stair === null) continue;
+    if (stair.x < 0 || stair.y < 0 || stair.x >= width || stair.y >= height) continue;
+    stairIndexes.add(stair.y * width + stair.x);
+  }
   const visited = new Set<number>([start]);
   const queue = [start];
   for (let cursor = 0; cursor < queue.length; cursor += 1) {
     const current = queue[cursor]!;
     if (rooms[current] === 1) return true;
+    if (stairIndexes.has(current)) return true;
     if (visited.size >= MINIMUM_GUARDED_REGION_CELLS) return true;
     const x = current % width;
     const y = Math.floor(current / width);
@@ -163,8 +175,8 @@ function guardsRegion(
  * Two further rules keep a door reading as architecture rather than as scenery. Both cells flanking
  * the mouth must be wall tiles, so the door is always embedded in visible wall mass. And the mouth
  * must guard passage to somewhere worth going: the region beyond its non-room side has to reach a
- * room or hold at least {@link MINIMUM_GUARDED_REGION_CELLS} cells, so a door never opens onto a
- * dead-end stub. A mouth with a room on both sides always qualifies.
+ * room, hold a staircase, or hold at least {@link MINIMUM_GUARDED_REGION_CELLS} cells, so a door
+ * never opens onto a dead-end stub. A mouth with a room on both sides always qualifies.
  */
 export function junctionDoorCandidates(input: JunctionDoorGeometry): readonly number[] {
   assertGeometry(input);
