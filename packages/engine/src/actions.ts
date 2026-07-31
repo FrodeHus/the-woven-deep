@@ -814,8 +814,17 @@ export function validatePlayerAction(
   }
   if (input.command.type === 'toggle-light') {
     const command = input.command;
-    // An inextinguishable artifact refuses to be hidden once it burns. Lighting one stays legal:
-    // heirloom materialization hands it over doused.
+    const transition = toggleItemLight({
+      run: input.state,
+      content: input.context.content,
+      actorId: actor.actorId,
+      itemId: command.itemId,
+      enabled: command.enabled,
+    });
+    // Ownership and reach are judged first: a light the hero does not hold is unavailable, never
+    // inextinguishable. An inextinguishable artifact the hero does hold refuses to be hidden once
+    // it burns; lighting one stays legal, since heirloom materialization hands it over doused.
+    if (!transition.ok) return { status: 'invalid', reason: transition.reason };
     const held = input.state.items.find((item) => item.itemId === command.itemId);
     if (
       !command.enabled &&
@@ -824,14 +833,6 @@ export function validatePlayerAction(
     ) {
       return { status: 'invalid', reason: 'light.inextinguishable' };
     }
-    const transition = toggleItemLight({
-      run: input.state,
-      content: input.context.content,
-      actorId: actor.actorId,
-      itemId: command.itemId,
-      enabled: command.enabled,
-    });
-    if (!transition.ok) return { status: 'invalid', reason: transition.reason };
     const definition = itemEntry(
       input.context.content,
       input.state.items.find((item) => item.itemId === command.itemId)!.contentId,

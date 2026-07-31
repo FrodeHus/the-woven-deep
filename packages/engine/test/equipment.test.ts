@@ -475,6 +475,33 @@ describe("Maria's Grace is inextinguishable", () => {
     expect(result.state.items[0]?.enabled).toBe(true);
   });
 
+  it('refuses a douse aimed at an artifact the hero does not hold as unavailable', () => {
+    const { run, content } = graceRun(true);
+    const loose = {
+      ...run,
+      actors: [{ ...run.actors[0]!, equipment: { ...run.actors[0]!.equipment, 'off-hand': null } }],
+      items: [
+        {
+          ...run.items[0]!,
+          location: { type: 'floor' as const, floorId: 'floor.demo', x: 1, y: 1 },
+        },
+      ],
+    };
+    const result = resolveCommand(
+      loose,
+      {
+        type: 'toggle-light',
+        commandId: 'command.douse-loose-grace',
+        expectedRevision: 0,
+        itemId: 'item.marias-grace.1',
+        enabled: false,
+      },
+      { content },
+    );
+    expect(result.result).toMatchObject({ status: 'invalid', reason: 'item.unavailable' });
+    expect(result.state.items[0]?.enabled).toBe(true);
+  });
+
   it('leaves an ordinary lantern extinguishable', () => {
     const lantern = definition('item.plain-lantern', {
       category: 'light',

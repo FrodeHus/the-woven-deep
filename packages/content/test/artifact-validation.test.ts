@@ -44,6 +44,7 @@ function artifactItem(overrides: {
   readonly heirloomEligible?: boolean;
   readonly light?: string;
   readonly effects?: string;
+  readonly tags?: string;
 }): string {
   const rarity = overrides.rarity ?? 'legendary';
   const stackLimit = overrides.stackLimit ?? 1;
@@ -54,7 +55,8 @@ function artifactItem(overrides: {
   const heirloomEligible = overrides.heirloomEligible ?? true;
   const light = overrides.light ?? 'null';
   const effects = overrides.effects ?? '[]';
-  return `{kind: item, id: item.test-artifact, name: Test artifact, glyph: "!", color: "#e37b46", tags: [artifact], minDepth: 1, maxDepth: 20, category: misc, stackLimit: ${stackLimit}, price: 999, rarity: ${rarity}, heirloomEligible: ${heirloomEligible}, actionCost: 100, equipment: ${equipment}, combat: ${combat}, light: ${light}, artifact: ${artifact}, identification: ${identification}, effects: ${effects}}`;
+  const tags = overrides.tags ?? '[artifact]';
+  return `{kind: item, id: item.test-artifact, name: Test artifact, glyph: "!", color: "#e37b46", tags: ${tags}, minDepth: 1, maxDepth: 20, category: misc, stackLimit: ${stackLimit}, price: 999, rarity: ${rarity}, heirloomEligible: ${heirloomEligible}, actionCost: 100, equipment: ${equipment}, combat: ${combat}, light: ${light}, artifact: ${artifact}, identification: ${identification}, effects: ${effects}}`;
 }
 
 describe('artifact validation', () => {
@@ -371,6 +373,56 @@ describe('artifact validation', () => {
     expect(compiled.entries.find((entry) => entry.id === 'item.test-artifact')).toMatchObject({
       artifact: { light: { fuelless: true, inextinguishable: true } },
     });
+  });
+
+  it('rejects an artifact whose tags make it burnable as another item fuel', async () => {
+    const lantern = `{kind: item, id: item.plain-lantern, name: Lantern, glyph: "(", color: "#ffcc88", tags: [], minDepth: 1, maxDepth: 20, category: light, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: {slots: [off-hand], handedness: one-handed, reservedSlots: []}, combat: null, light: ${COMPACT_LIGHT}, artifact: null, identification: {mode: known, poolId: null}, effects: []}`;
+    const root = await fixture({
+      'content.yaml': contentFile(
+        compactMonster,
+        compactVault,
+        compactBalance,
+        compactSignatureSpell,
+        lantern,
+        artifactItem({ tags: '[artifact, lamp-oil]' }),
+      ),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /artifact items must not carry a consumption tag/i,
+    );
+  });
+
+  it('rejects an artifact carrying the lockpick consumption tag', async () => {
+    const root = await fixture({
+      'content.yaml': contentFile(
+        compactMonster,
+        compactVault,
+        compactBalance,
+        compactSignatureSpell,
+        artifactItem({ tags: '[artifact, lockpick]' }),
+      ),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /artifact items must not carry a consumption tag/i,
+    );
+  });
+
+  it('rejects an artifact carrying a fuel-transfer effect', async () => {
+    const root = await fixture({
+      'content.yaml': contentFile(
+        compactMonster,
+        compactVault,
+        compactBalance,
+        compactSignatureSpell,
+        artifactItem({
+          effects:
+            '[{effectId: effect.fuel.transfer, parameters: {maximum: 3}, requiresLivingTarget: false}]',
+        }),
+      ),
+    });
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /artifact items must not carry self-consuming effects/i,
+    );
   });
 
   it('rejects an artifact contentId appearing in an ordinary loot-table choice', async () => {

@@ -3,10 +3,27 @@ import { DERIVED_STAT_NAMES } from '../../model.js';
 import type { ContentCompileIssue } from '../error.js';
 import { issue, referencedKindIssue, type LocatedContentEntry } from './shared.js';
 
+// Every way an item is destroyed by being spent on something else. `effect.item.consume` erases
+// the instance outright; `effect.fuel.transfer` pours it into a lamp; a tag that some light lists
+// in `fuelTags`, or the lockpick tag the lock roll consumes, makes it spendable without any effect
+// of its own. An artifact is a singleton in circulation and may take none of these routes out.
+const LOCKPICK_CONSUMPTION_TAG = 'lockpick';
+const CONSUMING_EFFECT_IDS: readonly string[] = ['effect.item.consume', 'effect.fuel.transfer'];
+
+function consumptionTags(entries: readonly LocatedContentEntry[]): ReadonlySet<string> {
+  const tags = new Set<string>([LOCKPICK_CONSUMPTION_TAG]);
+  for (const { entry } of entries) {
+    if (entry.kind !== 'item' || entry.light === null) continue;
+    for (const tag of entry.light.fuelTags) tags.add(tag);
+  }
+  return tags;
+}
+
 function artifactItemIssues(
   file: string,
   item: ItemContentEntry,
   byId: ReadonlyMap<string, ContentEntry>,
+  consumable: ReadonlySet<string>,
 ): ContentCompileIssue[] {
   const artifact = item.artifact;
   if (!artifact) return [];
@@ -108,12 +125,23 @@ function artifactItemIssues(
       ),
     );
   }
-  if (item.effects.some((effect) => effect.effectId === 'effect.item.consume')) {
+  for (const effect of item.effects) {
+    if (!CONSUMING_EFFECT_IDS.includes(effect.effectId)) continue;
     issues.push(
       issue(
         file,
         `$.entries.${item.id}.effects`,
-        'artifact items must not carry self-consuming effects: an artifact can never be erased from circulation',
+        `artifact items must not carry self-consuming effects: ${effect.effectId} can erase an artifact from circulation`,
+      ),
+    );
+  }
+  for (const tag of item.tags) {
+    if (!consumable.has(tag)) continue;
+    issues.push(
+      issue(
+        file,
+        `$.entries.${item.id}.tags`,
+        `artifact items must not carry a consumption tag: ${tag} lets an artifact be spent as fuel or as a lockpick`,
       ),
     );
   }
@@ -135,9 +163,10 @@ export function artifactIssues(
   byId: ReadonlyMap<string, ContentEntry>,
 ): ContentCompileIssue[] {
   const issues: ContentCompileIssue[] = [];
+  const consumable = consumptionTags(locatedEntries);
   for (const { entry, file } of locatedEntries) {
     if (entry.kind !== 'item') continue;
-    issues.push(...artifactItemIssues(file, entry, byId));
+    issues.push(...artifactItemIssues(file, entry, byId, consumable));
   }
   return issues;
 }
