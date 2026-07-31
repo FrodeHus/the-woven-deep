@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { resolve } from 'node:path';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
@@ -14,14 +15,20 @@ import {
   emptyRunMetrics,
   finalizeRun,
   type ActiveRun,
+  type ArtifactLedger,
   type LifetimeState,
   type RunMetrics,
   type RunRecordRepository,
   type StoredHallRecord,
   type Uint32State,
 } from '@woven-deep/engine';
-import type { CompletionType } from '@woven-deep/content';
+import type { CompiledContentPack, CompletionType } from '@woven-deep/content';
+import { compileContentDirectory } from '@woven-deep/content/compiler';
 import { HallScreen } from '../src/ui/screens/HallScreen.js';
+
+/** The Hall reads the pack only for artifact display names and the artifact roster's size; the
+ * demo pack authors no artifacts at all, so the Relics panel stays absent for every record test. */
+const demoPack = createDemoContentPack();
 
 const fallenChampionTemplate: FallenChampionTemplateContentEntry = {
   kind: 'fallen-champion-template',
@@ -193,6 +200,16 @@ function repositoryWith(records: readonly StoredHallRecord[]): RunRecordReposito
   return repository;
 }
 
+/** A repository whose artifact ledger is stated outright: the Relics panel is a pure read of
+ * `artifactLedger()` joined against `records()`, so seeding the ledger directly exercises it
+ * without driving a run to a death that happens to be holding a relic. */
+function repositoryWithLedger(
+  ledger: ArtifactLedger,
+  records: readonly StoredHallRecord[] = [],
+): RunRecordRepository {
+  return { ...repositoryWith(records), artifactLedger: () => ledger };
+}
+
 /** The listbox's own `role="option"` rows, scoped away from the native `<select><option>`
  * elements (which also carry an implicit `option` role) rendered by the outcome/class filters. */
 function hallRows(): readonly HTMLElement[] {
@@ -204,7 +221,7 @@ describe('HallScreen', () => {
     const { diedHighScore, becameHeart, brokeCycle } = threeRecords();
     const repository = repositoryWith([diedHighScore, becameHeart, brokeCycle]);
 
-    render(<HallScreen repository={repository} onBack={vi.fn()} />);
+    render(<HallScreen pack={demoPack} repository={repository} onBack={vi.fn()} />);
 
     const rows = hallRows();
     expect(rows).toHaveLength(3);
@@ -217,7 +234,7 @@ describe('HallScreen', () => {
     const { diedHighScore } = threeRecords();
     const repository = repositoryWith([diedHighScore]);
 
-    render(<HallScreen repository={repository} onBack={vi.fn()} />);
+    render(<HallScreen pack={demoPack} repository={repository} onBack={vi.fn()} />);
 
     const row = hallRows()[0]!;
     expect(within(row).getByText('@')).toBeInTheDocument();
@@ -235,7 +252,7 @@ describe('HallScreen', () => {
     const { diedHighScore, becameHeart, brokeCycle } = threeRecords();
     const repository = repositoryWith([diedHighScore, becameHeart, brokeCycle]);
 
-    render(<HallScreen repository={repository} onBack={vi.fn()} />);
+    render(<HallScreen pack={demoPack} repository={repository} onBack={vi.fn()} />);
 
     await user.selectOptions(screen.getByRole('combobox', { name: /outcome/i }), 'died');
 
@@ -249,7 +266,7 @@ describe('HallScreen', () => {
     const { diedHighScore, becameHeart, brokeCycle } = threeRecords();
     const repository = repositoryWith([diedHighScore, becameHeart, brokeCycle]);
 
-    render(<HallScreen repository={repository} onBack={vi.fn()} />);
+    render(<HallScreen pack={demoPack} repository={repository} onBack={vi.fn()} />);
 
     await user.selectOptions(screen.getByRole('combobox', { name: /class/i }), 'ranger');
 
@@ -263,7 +280,7 @@ describe('HallScreen', () => {
     const { diedHighScore } = threeRecords();
     const repository = repositoryWith([diedHighScore]);
 
-    render(<HallScreen repository={repository} onBack={vi.fn()} />);
+    render(<HallScreen pack={demoPack} repository={repository} onBack={vi.fn()} />);
 
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(hallRows()[0]).toHaveFocus();
@@ -285,7 +302,7 @@ describe('HallScreen', () => {
     const { diedHighScore, becameHeart } = threeRecords();
     const repository = repositoryWith([diedHighScore, becameHeart]);
 
-    render(<HallScreen repository={repository} onBack={vi.fn()} />);
+    render(<HallScreen pack={demoPack} repository={repository} onBack={vi.fn()} />);
 
     const rows = hallRows();
     expect(rows[0]).toHaveFocus();
@@ -303,7 +320,7 @@ describe('HallScreen', () => {
   it('renders an explanatory line when the Hall is empty', () => {
     const repository = createInMemoryRunRecordRepository();
 
-    render(<HallScreen repository={repository} onBack={vi.fn()} />);
+    render(<HallScreen pack={demoPack} repository={repository} onBack={vi.fn()} />);
 
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     expect(screen.getByText(/no runs have been recorded/i)).toBeInTheDocument();
@@ -312,10 +329,16 @@ describe('HallScreen', () => {
   it('marks the Hall as unverified and session-only', () => {
     const repository = createInMemoryRunRecordRepository();
 
-    render(<HallScreen repository={repository} onBack={vi.fn()} />);
+    render(<HallScreen pack={demoPack} repository={repository} onBack={vi.fn()} />);
 
     expect(screen.getByText(/unverified/i)).toBeInTheDocument();
     expect(screen.getByText(/this session only/i)).toBeInTheDocument();
+  });
+
+  it('shows no Relics panel for a pack that authors no artifacts', () => {
+    render(<HallScreen pack={demoPack} repository={repositoryWith([])} onBack={vi.fn()} />);
+
+    expect(screen.queryByRole('region', { name: /relics of the deep/i })).not.toBeInTheDocument();
   });
 
   it('returns via onBack on Escape and via the Back button', async () => {
@@ -323,14 +346,98 @@ describe('HallScreen', () => {
     const onBackFromEscape = vi.fn();
     const repository = createInMemoryRunRecordRepository();
 
-    const { unmount } = render(<HallScreen repository={repository} onBack={onBackFromEscape} />);
+    const { unmount } = render(
+      <HallScreen pack={demoPack} repository={repository} onBack={onBackFromEscape} />,
+    );
     await user.keyboard('{Escape}');
     expect(onBackFromEscape).toHaveBeenCalledTimes(1);
     unmount();
 
     const onBackFromButton = vi.fn();
-    render(<HallScreen repository={repository} onBack={onBackFromButton} />);
+    render(<HallScreen pack={demoPack} repository={repository} onBack={onBackFromButton} />);
     await user.click(screen.getByRole('button', { name: /back/i }));
     expect(onBackFromButton).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('HallScreen — Relics of the Deep', () => {
+  let pack: CompiledContentPack;
+
+  beforeAll(async () => {
+    pack = await compileContentDirectory({
+      rootDir: resolve(import.meta.dirname, '../../../content'),
+    });
+  });
+
+  function ledgerWithTwo(): ArtifactLedger {
+    return [
+      {
+        artifactId: 'item.bound-signet',
+        status: 'undiscovered',
+        holderRecordId: null,
+        provenance: [
+          { heroName: 'Ada', recordId: 'record.ada', outcome: 'escaped-with', depth: 20 },
+        ],
+      },
+      {
+        artifactId: 'item.marias-grace',
+        status: 'lost',
+        holderRecordId: 'record.yrsa',
+        provenance: [
+          { heroName: 'Yrsa', recordId: 'record.yrsa', outcome: 'died-with', depth: 12 },
+        ],
+      },
+    ];
+  }
+
+  it('names each relic the ledger knows with its last stint', () => {
+    const becameHeart = threeRecords().becameHeart;
+    const ada: StoredHallRecord = { ...becameHeart, recordId: 'record.ada', heroName: 'Ada' };
+
+    render(
+      <HallScreen
+        pack={pack}
+        repository={repositoryWithLedger(ledgerWithTwo(), [ada])}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const panel = within(screen.getByRole('region', { name: /relics of the deep/i }));
+    expect(panel.getByText('Bound signet')).toBeInTheDocument();
+    // Ada's record says she became the Heart, so her escaped-with stint reads from the RECORD,
+    // not from the raw stint outcome ("carried it out").
+    expect(
+      panel.getByText('Borne by Ada — was bound into the Heart with it at depth 20'),
+    ).toBeInTheDocument();
+    expect(panel.getByText("Maria's Grace")).toBeInTheDocument();
+    expect(panel.getByText('Borne by Yrsa — fell at depth 12')).toBeInTheDocument();
+  });
+
+  it('counts the relics still out there without naming any of them', () => {
+    render(
+      <HallScreen
+        pack={pack}
+        repository={repositoryWithLedger(ledgerWithTwo())}
+        onBack={vi.fn()}
+      />,
+    );
+
+    const artifactCount = pack.entries.filter(
+      (entry) => entry.kind === 'item' && entry.artifact !== null,
+    ).length;
+    const panel = within(screen.getByRole('region', { name: /relics of the deep/i }));
+    expect(panel.getByText(`${artifactCount - 2} relics remain unfound`)).toBeInTheDocument();
+    expect(panel.queryByText("Thread-Count's Needle")).not.toBeInTheDocument();
+  });
+
+  it('counts every relic as unfound for a profile that has touched none', () => {
+    render(<HallScreen pack={pack} repository={repositoryWith([])} onBack={vi.fn()} />);
+
+    const artifactCount = pack.entries.filter(
+      (entry) => entry.kind === 'item' && entry.artifact !== null,
+    ).length;
+    const panel = within(screen.getByRole('region', { name: /relics of the deep/i }));
+    expect(panel.getByText(`${artifactCount} relics remain unfound`)).toBeInTheDocument();
+    expect(panel.queryByRole('list')).not.toBeInTheDocument();
   });
 });

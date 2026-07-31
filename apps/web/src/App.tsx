@@ -766,7 +766,11 @@ export function App({
       const { returnTo } = screen;
       return (
         <main className="shell">
-          <HallScreen repository={repository} onBack={() => router.returnFromHall(returnTo)} />
+          <HallScreen
+            pack={pack}
+            repository={repository}
+            onBack={() => router.returnFromHall(returnTo)}
+          />
         </main>
       );
     }
@@ -849,6 +853,7 @@ export function App({
           settings={settings}
           onChangeSettings={handleSettingsChange}
           session={session}
+          repository={repository}
         >
           {renderScreen(pack)}
         </UiProviders>

@@ -165,11 +165,25 @@ implementation, following the block rules). Plus:
 ## Client
 
 - Artifact names render in a distinct gold style in inspect, log lines, and the HUD pickup
-  toast; `ItemView` gains `artifact?: { name: true }`-grade styling flag plus extended
-  provenance: `provenance.stints: readonly { heroName, outcome, depth }[]` (no record ids
-  leak beyond the existing originatingHallRecordId).
-- Inspect overlay shows provenance lines ("Borne by Kaelen — died at depth 14 · Reclaimed by
-  the Deep · Borne by Yrsa…").
+  toast — the same `text-accent` token the HUD spends on the carried-gold count. **Amended
+  (Task 12):** artifact-ness and provenance are both resolved CLIENT-SIDE from the compiled
+  pack and the records repository, not from `ItemView`. The client owns the pack, so an
+  item's `artifact` block is a lookup by `contentId` (absent for an unidentified item, whose
+  projection omits `contentId` entirely — so its gold name can never give it away), and no
+  styling flag is added to `ItemView`. Provenance *stints* come from
+  `repository.artifactLedger()`, keyed by the same `contentId`: the engine never holds the
+  ledger, so extending `ItemView.provenance` with stints would mean leaking repository state
+  into a projection. `ItemView` keeps only the existing `originatingHallRecordId`.
+- Inspect overlay shows provenance lines, oldest first: `Borne by <heroName> — <outcome text>
+  at depth <depth>` (`died-with` → "fell", `recovered` → "reclaimed it", `escaped-with` →
+  "carried it out", `reclaimed-by-the-deep` → "the Deep took it back"; the depth clause is
+  dropped for a depth-0 stint, which is what the ledger's reconcile pass stamps). An
+  `escaped-with` stint's text is overridden by the Hall record's own `completionType` where
+  the record is available (joined client-side by `recordId`) — a hero who became the Heart
+  reads "was bound into the Heart with it", not "carried it out".
+- Inspect also states an artifact's `drawbackModifiers` as signed rows, and hides the fuel
+  gauge and every refuel affordance when the pack says `artifact.light.fuelless` — never on
+  `fuel === null`, since a fuelless instance is created holding `fuel: fuelCapacity`.
 - Hall screen gains a compact "Relics of the Deep" panel: held/lost artifacts by name with
   their last stint; undiscovered shown only as a count ("3 relics remain unfound") — no
   spoilers.
