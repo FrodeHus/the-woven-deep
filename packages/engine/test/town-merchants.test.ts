@@ -372,7 +372,9 @@ describe('milestone restock', () => {
     const redescended = descendToNextFloor(backAtD4, context());
     expect(redescended.state.restockedMilestones).toEqual([5]);
     expect(townMerchants(redescended.state).map((m) => m.stockItemIds)).toEqual(stockAfterFirst);
-    expect(redescended.events).toEqual([]);
+    expect(redescended.events).toEqual([
+      expect.objectContaining({ type: 'floor.entered', depth: 5, firstEntry: false }),
+    ]);
   });
 
   it('fires every milestone the dungeon high-water mark has already passed in a single descend, in ascending order, exactly once', () => {

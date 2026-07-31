@@ -230,6 +230,13 @@ export const spellCastEvent = z.strictObject({
   actorId: identifier,
   spellId: identifier,
 });
+export const floorEnteredEvent = z.strictObject({
+  type: z.literal('floor.entered'),
+  eventId: identifier,
+  floorId: identifier,
+  depth: safeNonNegative,
+  firstEntry: z.boolean(),
+});
 export const itemEquippedEvent = z.strictObject({
   type: z.literal('item.equipped'),
   eventId: identifier,
@@ -807,6 +814,7 @@ export const eventOptions = [
   itemUsedEvent,
   spellLearnedEvent,
   heroRecalledEvent,
+  floorEnteredEvent,
   spellCastEvent,
   itemEquippedEvent,
   itemUnequippedEvent,
@@ -979,6 +987,7 @@ import type {
   EchoLootCreatedEvent,
   FeatureRevealedEvent,
   FeatureSearchEvent,
+  FloorEnteredEvent,
   FuelWarningEvent,
   GroupAwarenessSharedEvent,
   GroupLeaderCreatedEvent,
@@ -1107,6 +1116,9 @@ type _HeroRecalledDrift = Expect<
   SchemaMatches<z.infer<typeof heroRecalledEvent>, HeroRecalledEvent>
 >;
 type _SpellCastDrift = Expect<SchemaMatches<z.infer<typeof spellCastEvent>, SpellCastEvent>>;
+type _FloorEnteredDrift = Expect<
+  SchemaMatches<z.infer<typeof floorEnteredEvent>, FloorEnteredEvent>
+>;
 type _ItemEquippedDrift = Expect<
   SchemaMatches<z.infer<typeof itemEquippedEvent>, ItemEquippedEvent>
 >;

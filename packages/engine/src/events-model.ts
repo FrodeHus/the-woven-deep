@@ -225,6 +225,13 @@ export interface HeroRecalledEvent {
   readonly actorId: OpaqueId;
   readonly anchorFloorId: OpaqueId;
 }
+export interface FloorEnteredEvent {
+  readonly type: 'floor.entered';
+  readonly eventId: OpaqueId;
+  readonly floorId: OpaqueId;
+  readonly depth: number;
+  readonly firstEntry: boolean;
+}
 export interface SpellCastEvent {
   readonly type: 'spell.cast';
   readonly eventId: OpaqueId;
@@ -815,6 +822,7 @@ export type DomainEvent =
   | ItemUsedEvent
   | SpellLearnedEvent
   | HeroRecalledEvent
+  | FloorEnteredEvent
   | SpellCastEvent
   | ItemEquippedEvent
   | ItemUnequippedEvent

@@ -10,6 +10,7 @@ import {
   descendToNextFloor,
   encodeActiveRun,
   enterStoredFloor,
+  FINAL_CHAMBER_DEPTH,
   heroActor,
   resolveCommand,
   stableJson,
@@ -188,14 +189,18 @@ describe('ascendToPreviousFloor / stored-floor descent round-trip', () => {
       toD1.state.floors.find((floor) => floor.floorId === d1FloorId)!.stairUp!,
     );
     const ascended = ascendToPreviousFloor(onD1StairUp, { content: pack });
-    expect(ascended.events).toEqual([]);
+    expect(ascended.events).toEqual([
+      expect.objectContaining({ type: 'floor.entered', depth: 0, firstEntry: false }),
+    ]);
     expect(ascended.state.activeFloorId).toBe(depthFloorId(0));
     const heroInTown = heroActor(ascended.state);
     expect({ x: heroInTown.x, y: heroInTown.y }).toEqual(ascended.state.floors[0]!.stairDown);
 
     const onTownStairsAgain = teleportHeroTo(ascended.state, ascended.state.floors[0]!.stairDown!);
     const backToD1 = descendToNextFloor(onTownStairsAgain, { content: pack });
-    expect(backToD1.events).toEqual([]);
+    expect(backToD1.events).toEqual([
+      expect.objectContaining({ type: 'floor.entered', depth: 1, firstEntry: false }),
+    ]);
     expect(backToD1.state.activeFloorId).toBe(d1FloorId);
     const hero = heroActor(backToD1.state);
     expect({ x: hero.x, y: hero.y }).toEqual(floorById(backToD1.state, d1FloorId).stairUp);
@@ -236,6 +241,92 @@ describe('ascendToPreviousFloor / stored-floor descent round-trip', () => {
       },
     };
     expect(() => ascendToPreviousFloor(concluded, { content: pack })).toThrow(/conclud/i);
+  });
+});
+
+describe('floor.entered event', () => {
+  /** Descends the given run all the way from its current floor to depth 19, teleporting the hero
+   * onto each new floor's stair-down so it never needs to actually walk there. */
+  function descendToDepth19(run: ActiveRun): ActiveRun {
+    let state = run;
+    while (true) {
+      const activeFloor = state.floors.find((floor) => floor.floorId === state.activeFloorId);
+      if (activeFloor === undefined) throw new Error('test setup failure: active floor missing');
+      if (activeFloor.depth >= 19) return state;
+      const stairDown = activeFloor.stairDown;
+      if (stairDown === null) throw new Error('test setup failure: floor has no stair-down');
+      const onStairs = teleportHeroTo(state, stairDown);
+      state = descendToNextFloor(onStairs, { content: pack }).state;
+    }
+  }
+
+  it('emits floor.entered on a generated descent', () => {
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const toD1 = descendToNextFloor(teleportHeroTo(run, run.floors[0]!.stairDown!), {
+      content: pack,
+    });
+    const d1 = toD1.state.floors.find((floor) => floor.floorId === toD1.state.activeFloorId)!;
+    const toD2 = descendToNextFloor(teleportHeroTo(toD1.state, d1.stairDown!), { content: pack });
+    expect(toD2.events).toContainEqual(
+      expect.objectContaining({ type: 'floor.entered', depth: 2, firstEntry: true }),
+    );
+  });
+
+  it('emits floor.entered with firstEntry false on a stored re-descent', () => {
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const toD1 = descendToNextFloor(teleportHeroTo(run, run.floors[0]!.stairDown!), {
+      content: pack,
+    });
+    const d1FloorId = toD1.state.activeFloorId;
+    const d1 = toD1.state.floors.find((floor) => floor.floorId === d1FloorId)!;
+    const ascended = ascendToPreviousFloor(teleportHeroTo(toD1.state, d1.stairUp!), {
+      content: pack,
+    });
+    const redescended = descendToNextFloor(
+      teleportHeroTo(ascended.state, ascended.state.floors[0]!.stairDown!),
+      { content: pack },
+    );
+    expect(redescended.events).toContainEqual(
+      expect.objectContaining({ type: 'floor.entered', firstEntry: false }),
+    );
+  });
+
+  it('emits floor.entered on an ascent', () => {
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const toD1 = descendToNextFloor(teleportHeroTo(run, run.floors[0]!.stairDown!), {
+      content: pack,
+    });
+    const d1 = toD1.state.floors.find((floor) => floor.floorId === toD1.state.activeFloorId)!;
+    const ascended = ascendToPreviousFloor(teleportHeroTo(toD1.state, d1.stairUp!), {
+      content: pack,
+    });
+    expect(ascended.events).toContainEqual(
+      expect.objectContaining({ type: 'floor.entered', firstEntry: false }),
+    );
+  });
+
+  it('emits floor.entered on entering the Final Chamber', () => {
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const atDepth19 = descendToDepth19(run);
+    const activeFloor = atDepth19.floors.find(
+      (floor) => floor.floorId === atDepth19.activeFloorId,
+    )!;
+    const onStairs = teleportHeroTo(atDepth19, activeFloor.stairDown!);
+    const descended = descendToNextFloor(onStairs, { content: pack });
+    expect(descended.events).toContainEqual(
+      expect.objectContaining({
+        type: 'floor.entered',
+        depth: FINAL_CHAMBER_DEPTH,
+        firstEntry: true,
+      }),
+    );
+  });
+
+  it('consumes no randomness to emit the event', () => {
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    const before = teleportHeroTo(run, run.floors[0]!.stairDown!);
+    const after = descendToNextFloor(before, { content: pack });
+    expect(after.state.rng.effects).toEqual(before.rng.effects);
   });
 });
 

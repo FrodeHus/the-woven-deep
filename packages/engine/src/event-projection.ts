@@ -186,6 +186,7 @@ export function projectDomainEvents(
       case 'rest.completed':
       case 'identification.appearance-revealed':
       case 'curse.revealed':
+      case 'floor.entered':
         output.push(event);
         break;
       case 'attack.hit':

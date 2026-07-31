@@ -1,5 +1,5 @@
 import type { CompiledContentPack, VaultContentEntry } from '@woven-deep/content';
-import type { DomainEvent, OpaqueId, Point } from './model.js';
+import type { DomainEvent, FloorEnteredEvent, OpaqueId, Point } from './model.js';
 import { balanceEntry } from './actions.js';
 import { artifactById } from './commerce.js';
 import { heroActor, heroPerception } from './actor-model.js';
@@ -143,6 +143,25 @@ function applySignatureRecharge(
 }
 
 /**
+ * Builds the `floor.entered` event fired on every floor transition (generated descent, stored
+ * re-entry, ascent, Final Chamber arrival) -- the hook Task 8's on-floor-enter trigger post-pass
+ * fires from regardless of `firstEntry`. `eventId` is derived deterministically from the floor and
+ * the run's `worldTime`, matching the restock-event convention in `applyMerchantRestocks`, so no
+ * randomness or external id source is needed.
+ */
+function floorEnteredEvent(
+  input: Readonly<{ floorId: OpaqueId; depth: number; firstEntry: boolean; worldTime: number }>,
+): FloorEnteredEvent {
+  return {
+    type: 'floor.entered',
+    eventId: `event.${input.floorId}.entered-${input.worldTime}`,
+    floorId: input.floorId,
+    depth: input.depth,
+    firstEntry: input.firstEntry,
+  };
+}
+
+/**
  * Generates and enters the floor below the hero's current one. The hero must stand on the active
  * floor's stair-down tile; the run must not already be concluded. Mirrors `createNewRun`'s
  * floor-generation settings (same width/height/theme) so the whole run stays on one generation
@@ -182,7 +201,13 @@ export function descendToNextFloor(
     }
     const entered = enterStoredFloor(run, { floorId, arrival });
     const restocked = applyMerchantRestocks({ state: entered, content: context.content });
-    return { state: restocked.state, events: restocked.events };
+    const entryEvent = floorEnteredEvent({
+      floorId,
+      depth: nextDepth,
+      firstEntry: false,
+      worldTime: run.worldTime,
+    });
+    return { state: restocked.state, events: [entryEvent, ...restocked.events] };
   }
 
   // The Final Chamber is authored, not generated (mirroring the town's own bootstrap in
@@ -229,7 +254,13 @@ export function descendToNextFloor(
       }),
     );
     const restocked = applyMerchantRestocks({ state: withChamber, content: context.content });
-    return { state: restocked.state, events: restocked.events };
+    const entryEvent = floorEnteredEvent({
+      floorId,
+      depth: nextDepth,
+      firstEntry: true,
+      worldTime: run.worldTime,
+    });
+    return { state: restocked.state, events: [entryEvent, ...restocked.events] };
   }
 
   const allocation = allocateFloorSeed(run.rng.generation);
@@ -277,7 +308,16 @@ export function descendToNextFloor(
     content: context.content,
   });
   const restocked = applyMerchantRestocks({ state: recharged, content: context.content });
-  return { state: restocked.state, events: [...integrated.events, ...restocked.events] };
+  const entryEvent = floorEnteredEvent({
+    floorId,
+    depth: nextDepth,
+    firstEntry: true,
+    worldTime: run.worldTime,
+  });
+  return {
+    state: restocked.state,
+    events: [entryEvent, ...integrated.events, ...restocked.events],
+  };
 }
 
 /**
@@ -338,10 +378,10 @@ export function enterStoredFloor(
 /**
  * Ascends the hero from the active floor's stair-up tile to the floor one depth shallower (town
  * for depth 1), arriving on that floor's stair-down tile. The target floor is always already
- * stored: a floor can only be reached by descending from it in the first place. Never generates,
- * never records `floorsEntered` (only first-ever entries count, and this revisits a floor already
- * counted), and emits no events -- nothing happens to the world by moving between floors that
- * already exist.
+ * stored: a floor can only be reached by descending from it in the first place. Never generates
+ * and never records `floorsEntered` (only first-ever entries count, and this revisits a floor
+ * already counted) -- the only event emitted is `floor.entered` with `firstEntry: false`, the same
+ * hook a stored re-descent fires.
  */
 export function ascendToPreviousFloor(
   run: ActiveRun,
@@ -373,7 +413,13 @@ export function ascendToPreviousFloor(
   }
 
   const state = enterStoredFloor(run, { floorId: targetFloorId, arrival });
-  return { state, events: [] };
+  const entryEvent = floorEnteredEvent({
+    floorId: targetFloorId,
+    depth: targetFloor.depth,
+    firstEntry: false,
+    worldTime: run.worldTime,
+  });
+  return { state, events: [entryEvent] };
 }
 
 /**
