@@ -63,6 +63,7 @@ export const blockReason = z.enum([
   'item.quantity',
   'item.incompatible',
   'item.id-conflict',
+  'item.cursed',
   'light.inextinguishable',
   'signature.no-charges',
   'target.not_visible',

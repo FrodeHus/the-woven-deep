@@ -1,6 +1,7 @@
 import type { CompiledContentPack, DerivedStatName, ItemContentEntry } from '@woven-deep/content';
 import { actorById, type EquipmentSlot } from './actor-model.js';
 import type { DerivedStatModifier } from './attributes.js';
+import { itemIsWelded } from './curse.js';
 import type { ItemInstance } from './item-model.js';
 import type { LightSource } from './light-model.js';
 import type { ActiveRun, OpaqueId } from './model.js';
@@ -32,7 +33,10 @@ export type EquipmentPlan =
       unequip: readonly OpaqueId[];
       reservedSlots: readonly EquipmentSlot[];
     }>
-  | Readonly<{ ok: false; reason: 'item.missing' | 'item.unavailable' | 'inventory.full' }>;
+  | Readonly<{
+      ok: false;
+      reason: 'item.missing' | 'item.unavailable' | 'inventory.full' | 'item.cursed';
+    }>;
 
 function orderedSlots(slots: ReadonlySet<EquipmentSlot>): readonly EquipmentSlot[] {
   return SLOT_ORDER.filter((slot) => slots.has(slot));
@@ -72,7 +76,10 @@ export function equipmentPlan(
       item.location.slot,
       ...(existing?.reservedSlots ?? []),
     ]);
-    if ([...occupied].some((slot) => existingOccupied.has(slot))) displaced.push(item.itemId);
+    if ([...occupied].some((slot) => existingOccupied.has(slot))) {
+      if (itemIsWelded(item)) return { ok: false, reason: 'item.cursed' };
+      displaced.push(item.itemId);
+    }
   }
   displaced.sort();
   const slots = inventorySlotCount({ run: input.run, actorId: actor.actorId });
@@ -90,7 +97,10 @@ export function equipmentPlan(
 
 export type EquipmentTransition =
   | Readonly<{ ok: true; run: ActiveRun }>
-  | Readonly<{ ok: false; reason: 'item.missing' | 'item.unavailable' | 'inventory.full' }>;
+  | Readonly<{
+      ok: false;
+      reason: 'item.missing' | 'item.unavailable' | 'inventory.full' | 'item.cursed';
+    }>;
 
 export function equipItem(
   input: Readonly<{
@@ -143,6 +153,8 @@ export function unequipItem(
   if (!actor) return { ok: false, reason: 'item.missing' };
   const itemId = actor.equipment[input.slot];
   if (!itemId) return { ok: false, reason: 'item.unavailable' };
+  const instance = input.run.items.find((item) => item.itemId === itemId);
+  if (instance && itemIsWelded(instance)) return { ok: false, reason: 'item.cursed' };
   const slots = inventorySlotCount({ run: input.run, actorId: actor.actorId });
   if (slots.used >= slots.capacity) return { ok: false, reason: 'inventory.full' };
   const equipment = { ...actor.equipment, [input.slot]: null };

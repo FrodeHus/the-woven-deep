@@ -3,6 +3,7 @@ import type {
   IdentificationPoolContentEntry,
   ItemContentEntry,
 } from '@woven-deep/content';
+import { revealItemCurse } from './curse.js';
 import type { IdentificationState } from './item-model.js';
 import type { ActiveRun, DomainEvent, OpaqueId, RngStreams } from './model.js';
 import { rollDie } from './random.js';
@@ -164,7 +165,16 @@ export function identifyItemCompletely(
     itemId: input.itemId,
     eventId: input.eventId,
   });
-  return { state: identified.state, events: [...appearance.events, ...identified.events] };
+  const revealed = revealItemCurse({
+    run: identified.state,
+    content: input.content,
+    itemId: input.itemId,
+    eventId: input.eventId,
+  });
+  return {
+    state: revealed.state,
+    events: [...appearance.events, ...identified.events, ...revealed.events],
+  };
 }
 
 export function projectItem(
