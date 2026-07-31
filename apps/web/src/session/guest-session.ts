@@ -236,24 +236,36 @@ export class GuestSession implements RunSession {
    * That Hall lives in browser storage the player can edit, and it survives reloads — so a
    * malformed record (hand-edited, or written by a build whose record shape has since changed)
    * would otherwise throw out of run creation and leave a blank app that reloading cannot fix.
-   * A history-rejecting failure therefore degrades to a history-free run on the SAME seed and
-   * announces itself through the usual dismissible `data-reset` notice. Only the two failure
-   * shapes corrupt history can produce are caught -- `SaveLoadError` (the run schema rejecting a
-   * standing) and `RangeError` (the standings/conquered-id invariants); anything else is an
-   * engine or content bug and still propagates.
+   * The mechanism is therefore attempt-with-records → retry-recordless-on-the-same-seed →
+   * propagate whatever the retry itself throws (a failure with no history in play was never about
+   * the Hall, so it is never swallowed). `SaveLoadError`/`RangeError` narrows the catch to the
+   * shapes corrupt history actually produces; anything else propagates immediately.
+   *
+   * The retry cannot tell a corrupt Hall from an engine regression in the records path, and the
+   * player-facing notice deliberately says "Hall" either way — so once the retry has SUCCEEDED
+   * (i.e. play really is degrading), the original error is logged. Without that, a bug in (say)
+   * `createFallenHeroRunDecisions` would leave no trace anywhere: every run would silently lose
+   * its history and blame the player's save.
    */
   private freshRun(seed?: Uint32State): ActiveRun {
     const runSeed = seed ?? randomSeed();
     const records = this.records?.();
-    if (records !== undefined) {
-      try {
-        return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero, records });
-      } catch (error) {
-        if (!(error instanceof SaveLoadError || error instanceof RangeError)) throw error;
-        this.hallCorrupted = true;
-      }
+    if (records === undefined) {
+      return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero });
     }
-    return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero });
+    let historyFailure: unknown;
+    try {
+      return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero, records });
+    } catch (error) {
+      if (!(error instanceof SaveLoadError || error instanceof RangeError)) throw error;
+      historyFailure = error;
+    }
+    // Anything this retry throws propagates untouched and unlogged: a creation that fails with no
+    // history in play was never about the Hall, so it must surface as itself.
+    const run = createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero });
+    console.error('Hall of Records could not seed this run; starting without it:', historyFailure);
+    this.hallCorrupted = true;
+    return run;
   }
 
   private nextCommandId(): string {

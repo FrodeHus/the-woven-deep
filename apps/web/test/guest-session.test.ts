@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
@@ -11,6 +11,7 @@ import {
   encodeActiveRun,
   newRunRecords,
   RECENT_COMMAND_LIMIT,
+  SaveLoadError,
   type ActiveRun,
   type ActorState,
   type ItemInstance,
@@ -922,16 +923,25 @@ describe('GuestSession', () => {
         })),
       });
 
+      // The notice cannot distinguish corrupt history from an engine regression in the records
+      // path, so the original error must still reach the console before play degrades.
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
       let session!: GuestSession;
-      expect(() => {
-        session = new GuestSession({
-          pack,
-          storage,
-          seed: SEED,
-          startFresh: true,
-          records: poisoned,
-        });
-      }).not.toThrow();
+      try {
+        expect(() => {
+          session = new GuestSession({
+            pack,
+            storage,
+            seed: SEED,
+            startFresh: true,
+            records: poisoned,
+          });
+        }).not.toThrow();
+        expect(logged).toHaveBeenCalledTimes(1);
+        expect(logged.mock.calls[0]![1]).toBeInstanceOf(SaveLoadError);
+      } finally {
+        logged.mockRestore();
+      }
 
       expect(session.getSnapshot().notice).toEqual({ kind: 'data-reset', source: 'hall' });
       const run = persistedRun(session, storage);
@@ -944,6 +954,30 @@ describe('GuestSession', () => {
           persistedRun(new GuestSession({ pack, storage, seed: SEED, startFresh: true }), storage),
         ),
       );
+    });
+
+    it('propagates a run-creation failure that is not about the history at all, rather than degrading', () => {
+      const storage = fakeStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        // An all-zero seed is rejected by `createNewRun` with or without records, so the
+        // recordless retry throws too: a bug that has nothing to do with the Hall must surface as
+        // itself, never as a silently history-free run blamed on the player's save.
+        expect(
+          () =>
+            new GuestSession({
+              pack,
+              storage,
+              seed: [0, 0, 0, 0],
+              startFresh: true,
+              records: recordsThunk(repository),
+            }),
+        ).toThrow(RangeError);
+        expect(logged).not.toHaveBeenCalled();
+      } finally {
+        logged.mockRestore();
+      }
     });
 
     it('creates a history-free run when no records provider is supplied', () => {

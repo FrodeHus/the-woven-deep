@@ -366,11 +366,16 @@ describe('App boot flow', () => {
     window.history.pushState({}, '', '/play?quickstart=1');
     const storage = fakeStorage();
     poisonGuestHall(storage);
+    // Degrading is deliberately loud in the console (the notice cannot say whether the Hall or the
+    // engine was at fault), so assert that too rather than letting it spill into the suite output.
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     render(<App fetcher={packFetcher()} storage={storage} />);
     // The app is alive and playable rather than blank -- the failure mode this guards is a throw
     // out of run creation inside a React state update, which sessionStorage would survive.
     expect(await screen.findByRole('img', { name: /dungeon/i })).toBeInTheDocument();
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
     expect(
       await screen.findByText(/Hall of Records was unreadable, so this run begins without/i),
     ).toBeInTheDocument();
