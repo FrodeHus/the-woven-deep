@@ -59,6 +59,7 @@ function storedRecord(overrides: Partial<StoredHallRecord> = {}): StoredHallReco
       condition: 100,
       charges: null,
       fuel: null,
+      curse: null,
       qualityRank: 1,
       displayName: "Ada's Iron Sword",
       glyph: ')',
@@ -91,6 +92,7 @@ function secondStoredRecord(): StoredHallRecord {
       condition: 100,
       charges: null,
       fuel: null,
+      curse: null,
       qualityRank: 1,
       displayName: "Bryn's Iron Sword",
       glyph: ')',
@@ -479,7 +481,7 @@ describe('session run record repository artifact ledger', () => {
     first.applyArtifactDeltas(lostToDeltas(record.recordId, record.heroName));
 
     const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
-    expect(persisted['version']).toBe(2);
+    expect(persisted['version']).toBe(3);
     expect(persisted['appliedArtifactRecordIds']).toEqual([record.recordId]);
 
     const reopened = createSessionRunRecordRepository(storage);
@@ -548,9 +550,54 @@ describe('session run record repository artifact ledger', () => {
       enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
     });
     const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
-    expect(persisted['version']).toBe(2);
+    expect(persisted['version']).toBe(3);
     expect(persisted['artifactLedger']).toEqual([]);
     expect(persisted['appliedArtifactRecordIds']).toEqual([]);
+  });
+
+  it('migrates a version-2 blob (pre-curse) by defaulting every recorded heirloom curse to null and round-trips', () => {
+    // A genuine version-2 blob predates `RecordedHeirloomSnapshot.curse` entirely: no `curse` key
+    // on the record's heirloom, not merely `curse: null`.
+    const preCurseHeirloom = { ...storedRecord().heirloom } as Record<string, unknown>;
+    delete preCurseHeirloom['curse'];
+    const preCurseRecord = { ...storedRecord(), heirloom: preCurseHeirloom };
+
+    const v2Blob = {
+      version: 2,
+      records: [preCurseRecord],
+      heart: null,
+      lifetime: {
+        conqueredChampionRecordIds: [],
+        grantedAchievementIds: [],
+        discoveryProtection: [],
+        totals: metrics(),
+      },
+      appliedDeltaRecordIds: [],
+      artifactLedger: [],
+      appliedArtifactRecordIds: [],
+    };
+
+    const storage = fakeStorage();
+    storage.set(RECORDS_KEY, JSON.stringify(v2Blob));
+
+    const repository = createSessionRunRecordRepository(storage);
+    expect(repository.records()[0]?.heirloom.curse).toBeNull();
+
+    // Persisting after load must round-trip the migrated blob at the current version.
+    repository.recordHeart({
+      heroName: 'Ada',
+      classTags: ['fighter'],
+      hallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+      enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
+    });
+    const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
+    expect(persisted['version']).toBe(3);
+    const persistedRecords = persisted['records'] as readonly Record<string, unknown>[];
+    const persistedHeirloom = persistedRecords[0]?.['heirloom'] as Record<string, unknown>;
+    expect(persistedHeirloom['curse']).toBeNull();
+
+    const reloaded = createSessionRunRecordRepository(storage);
+    expect(reloaded.records()[0]?.heirloom.curse).toBeNull();
   });
 
   it('rejects a blob whose artifact ledger keys have the wrong shape', () => {

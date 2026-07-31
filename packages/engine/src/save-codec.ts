@@ -134,11 +134,20 @@ function migrateV12ToV13(input: unknown): unknown {
   return { ...v12, schemaVersion: 13, offeredArtifact: null, artifactsUndiscovered: [] };
 }
 
-// The curse bump is field-absence only: a mid-run v13 save resumes with no cursed items, so
-// nothing already in that hero's pack sprouts a curse on load.
+// The curse bump adds one optional item field (`ItemInstance.curse`, absent on every existing
+// item, no default to write) and one required-nullable recorded-heirloom field
+// (`RecordedHeirloomSnapshot.curse`, which must be written as `null` for every already-recorded
+// Hall standing, since the live schema requires the key). Neither can sprout a curse on load.
 function migrateV13ToV14(input: unknown): unknown {
   const v13 = legacyActiveRunV13Schema.parse(input);
-  return { ...v13, schemaVersion: 14 };
+  return {
+    ...v13,
+    schemaVersion: 14,
+    fallenHeroStandings: v13.fallenHeroStandings.map((standing) => ({
+      ...standing,
+      heirloom: { ...standing.heirloom, curse: null },
+    })),
+  };
 }
 
 function migrateLegacy(

@@ -50,6 +50,7 @@ function projection(overrides: Partial<RunConclusionProjection> = {}): RunConclu
       condition: 100,
       charges: null,
       fuel: null,
+      curse: null,
       qualityRank: 1,
       displayName: "Ada's Lantern",
       glyph: '¤',

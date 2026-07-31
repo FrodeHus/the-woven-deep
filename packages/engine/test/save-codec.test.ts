@@ -281,8 +281,23 @@ describe('active-run save codec', () => {
     return { ...current, schemaVersion: 13 };
   }
 
+  // Strips everything the cursed-item feature introduced at v14: `curse` on items (optional, so
+  // simply omitted) and `curse` on every recorded heirloom snapshot (required, so removed rather
+  // than merely nulled — a genuine v13 save never had the key).
   function stripV14Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
-    return { ...structuredClone(run), schemaVersion: 13 };
+    const current = structuredClone(run) as any;
+    return {
+      ...current,
+      schemaVersion: 13,
+      items: current.items.map((item: Record<string, unknown>) => {
+        const { curse: _curse, ...rest } = item;
+        return rest;
+      }),
+      fallenHeroStandings: current.fallenHeroStandings.map((standing: any) => {
+        const { curse: _curse, ...heirloomRest } = standing.heirloom;
+        return { ...standing, heirloom: heirloomRest };
+      }),
+    };
   }
 
   function concludedRun(): ReturnType<typeof createDemoRun> {
@@ -545,6 +560,13 @@ describe('active-run save codec', () => {
     };
   }
 
+  // A recorded-heirloom snapshot as a genuine pre-curse save would have stored it: no `curse` key
+  // at all (the field did not exist before v14), not merely `curse: null`.
+  function preCurseHeirloomFixture(): Record<string, unknown> {
+    const { curse: _curse, ...rest } = heirloomFixture();
+    return rest;
+  }
+
   function withRecordedHeirloom(run: any, heirloom: Record<string, unknown>): any {
     const heroActor = run.actors.find((actor: any) => actor.actorId === run.hero.actorId);
     const standing = {
@@ -739,6 +761,28 @@ describe('active-run save codec', () => {
     const decoded = decodeActiveRun(JSON.stringify(v13));
     expect(decoded.items.every((item) => item.curse === undefined)).toBe(true);
     expect(decoded.schemaVersion).toBe(14);
+  });
+
+  // A real v13 save can carry a recorded Hall standing whose heirloom predates the `curse` field
+  // entirely (no key, not `curse: null`). `RecordedHeirloomSnapshot.curse` is required (unlike the
+  // optional `ItemInstance.curse`), so the migration must write a default in, not merely tolerate
+  // absence.
+  it('migrates a v13 save with a Hall standing by defaulting the recorded heirloom curse to null', () => {
+    const legacy = withRecordedHeirloom(v13Fixture(), preCurseHeirloomFixture());
+    const decoded = decodeActiveRun(JSON.stringify(legacy));
+    expect(decoded.schemaVersion).toBe(14);
+    expect(decoded.fallenHeroStandings[0]!.heirloom.curse).toBeNull();
+  });
+
+  // The same defaulting must survive the full legacy chain: a v12 save's `fallenHeroStandings`
+  // reaches `migrateV13ToV14` only after parsing through every intermediate frozen schema, each of
+  // which must accept a pre-curse heirloom (not just the v13 one).
+  it('migrates a v12 save with a Hall standing through v14, defaulting item and heirloom curse', () => {
+    const legacy = withRecordedHeirloom(v12Fixture(), preCurseHeirloomFixture());
+    const decoded = decodeActiveRun(JSON.stringify(legacy));
+    expect(decoded.schemaVersion).toBe(14);
+    expect(decoded.fallenHeroStandings[0]!.heirloom.curse).toBeNull();
+    expect(decoded.items.every((item) => item.curse === undefined)).toBe(true);
   });
 
   it('round-trips a cursed item byte-identically', () => {

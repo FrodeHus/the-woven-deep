@@ -46,7 +46,6 @@ import {
 import {
   encounterDecision,
   fallenDecision,
-  fallenStanding,
   hero,
   heroV6,
   identification,
@@ -58,6 +57,43 @@ import {
 } from './population.js';
 import { runConclusionSchema, runKillsByModel, runMetrics } from './run-record.js';
 import { ENGINE_GAME_VERSION, RECENT_COMMAND_LIMIT } from '../versions.js';
+
+// The pre-curse heirloom snapshot: identical to the live `heirloom` except it carries no `curse`,
+// which the cursed-item feature introduced at v14. Spelled out as a frozen literal (not derived
+// from the live `heirloom`) so a future schema bump can't silently change what a real pre-v14
+// recorded heirloom is validated against. Shared by every legacy run schema (v4-v13): the heirloom
+// shape has not changed across those versions apart from this field.
+const legacyHeirloomV13 = z.strictObject({
+  contentId: identifier,
+  sourceItemId: nullableIdentifier,
+  enchantment: z
+    .strictObject({
+      enchantmentId: identifier,
+      modifiers: z.record(z.string(), z.number().int().safe()).readonly(),
+    })
+    .nullable(),
+  condition: safeNonNegative,
+  charges: safeNonNegative.nullable(),
+  fuel: safeNonNegative.nullable(),
+  qualityRank: safeNonNegative,
+  displayName: heroName,
+  glyph: z.string().refine((value) => [...value].length === 1, 'must be one Unicode glyph'),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  originatingHallRecordId: identifier,
+});
+const legacyFallenStandingV13 = z.strictObject({
+  rank: z.number().int().min(1).max(10),
+  hallRecordId: identifier,
+  heroName,
+  portraitGlyph: z.string().refine((value) => [...value].length === 1),
+  classTags: z.array(z.string().min(1).max(80)).readonly(),
+  attributes,
+  equippedItemContentIds: z.array(identifier).readonly(),
+  signatureAbilityIds: z.array(identifier).readonly(),
+  deathDepth: z.number().int().safe().positive(),
+  sourceContentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  heirloom: legacyHeirloomV13,
+});
 
 export const legacyPopulationCreatedEvent = z.strictObject({
   type: z.literal('population.created'),
@@ -365,7 +401,7 @@ export const legacyActiveRunV7Schema = z.strictObject({
   recentCommands: z.array(recordedV7).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(populationV7).readonly(),
-  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: legacyRunMetricsV9,
@@ -412,7 +448,7 @@ export const legacyActiveRunV9Schema = z.strictObject({
   recentCommands: z.array(legacyRecordedV10).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
-  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: legacyRunMetricsV9,
@@ -461,7 +497,7 @@ export const legacyActiveRunV10Schema = z.strictObject({
   recentCommands: z.array(legacyRecordedV10).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
-  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: runMetrics,
@@ -487,42 +523,6 @@ const legacyItemFieldsV13 = {
   heirloom: heirloomItemMetadata.optional(),
 } as const;
 const legacyItemV13 = z.strictObject({ ...legacyItemFieldsV13, location: itemLocation });
-
-// The pre-curse heirloom snapshot: identical to the live `heirloom` except it carries no `curse`,
-// which the cursed-item feature introduced at v14. Spelled out as a frozen literal (not derived
-// from the live `heirloom`) so a future schema bump can't silently change what a real v13 recorded
-// heirloom is validated against.
-const legacyHeirloomV13 = z.strictObject({
-  contentId: identifier,
-  sourceItemId: nullableIdentifier,
-  enchantment: z
-    .strictObject({
-      enchantmentId: identifier,
-      modifiers: z.record(z.string(), z.number().int().safe()).readonly(),
-    })
-    .nullable(),
-  condition: safeNonNegative,
-  charges: safeNonNegative.nullable(),
-  fuel: safeNonNegative.nullable(),
-  qualityRank: safeNonNegative,
-  displayName: heroName,
-  glyph: z.string().refine((value) => [...value].length === 1, 'must be one Unicode glyph'),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  originatingHallRecordId: identifier,
-});
-const legacyFallenStandingV13 = z.strictObject({
-  rank: z.number().int().min(1).max(10),
-  hallRecordId: identifier,
-  heroName,
-  portraitGlyph: z.string().refine((value) => [...value].length === 1),
-  classTags: z.array(z.string().min(1).max(80)).readonly(),
-  attributes,
-  equippedItemContentIds: z.array(identifier).readonly(),
-  signatureAbilityIds: z.array(identifier).readonly(),
-  deathDepth: z.number().int().safe().positive(),
-  sourceContentHash: z.string().regex(/^[a-f0-9]{64}$/),
-  heirloom: legacyHeirloomV13,
-});
 
 // The pre-curse save shape: identical to the current run schema except items and recorded
 // heirlooms carry no `curse`, which the cursed-item feature introduced at v14. Spelled out as a
@@ -615,7 +615,7 @@ export const legacyActiveRunV12Schema = z.strictObject({
   recentCommands: z.array(legacyRecordedV12).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
-  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: runMetrics,
@@ -664,7 +664,7 @@ export const legacyActiveRunV11Schema = z.strictObject({
   recentCommands: z.array(legacyRecordedV11).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
-  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: runMetrics,
@@ -712,7 +712,7 @@ export const legacyActiveRunV8Schema = z.strictObject({
   recentCommands: z.array(legacyRecordedV10).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
-  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: legacyRunMetricsV9,
@@ -756,7 +756,7 @@ export const legacyActiveRunV6Schema = z.strictObject({
   recentCommands: z.array(recordedV7).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(populationV7).readonly(),
-  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: legacyRunMetricsV9,
@@ -800,7 +800,7 @@ export const legacyActiveRunV5Schema = z.strictObject({
   recentCommands: z.array(legacyV5Recorded).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(populationV7).readonly(),
-  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
 });
@@ -830,7 +830,7 @@ export const legacyActiveRunV4Schema = z.strictObject({
   recentCommands: z.array(legacyRecorded).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(legacyPopulation).readonly(),
-  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
 });

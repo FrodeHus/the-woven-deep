@@ -40,8 +40,13 @@ export class SessionHallCorruptError extends Error {
  * `RunMetrics` field added after this blob was written never breaks the guest's merge math —
  * future field additions only extend that (idempotent) normalizer, never a bespoke migration
  * step here.
+ *
+ * Bumped to 3 for `RecordedHeirloomSnapshot.curse` (engine save schema v14): unlike `RunMetrics`
+ * fields, `curse` is not normalized generically, since it is required-but-nullable rather than
+ * additive — every stored record's `heirloom.curse` is defaulted to `null` in
+ * `migratePersistedState` below.
  */
-const HALL_STORE_VERSION = 2;
+const HALL_STORE_VERSION = 3;
 
 interface PersistedHallState {
   readonly version: number;
@@ -113,6 +118,15 @@ function migratePersistedState(state: ParsedHallState): PersistedHallState {
     records: state.records.map((record) => ({
       ...record,
       metrics: normalizeStoredMetrics(record.metrics),
+      // Version-2-and-earlier blobs predate `curse` entirely (no key at all). Required-but-nullable
+      // on the engine type, so it needs an explicit default rather than the metrics normalizer's
+      // generic field-fill. Guarded against a malformed (non-object) `heirloom` — this loose
+      // migration step must not be where that surfaces; it still fails loudly the first time the
+      // record is actually used, same as every other malformed field this migration doesn't touch.
+      heirloom:
+        record.heirloom !== null && typeof record.heirloom === 'object'
+          ? { ...record.heirloom, curse: record.heirloom.curse ?? null }
+          : record.heirloom,
     })),
     lifetime: {
       ...state.lifetime,

@@ -692,13 +692,14 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         );
       }
     }
-    if (item.curse !== undefined) {
+    const itemCurse = item.curse;
+    if (itemCurse !== undefined) {
       const curse = pack.entries.find(
-        (entry) => entry.kind === 'curse' && entry.id === item.curse!.curseId,
+        (entry) => entry.kind === 'curse' && entry.id === itemCurse.curseId,
       );
       if (!curse) {
         throw new Error(
-          `content-bound validation: item ${item.itemId} carries unknown curse ${item.curse.curseId}`,
+          `content-bound validation: item ${item.itemId} carries unknown curse ${itemCurse.curseId}`,
         );
       }
     }
