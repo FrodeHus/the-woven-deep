@@ -3,6 +3,7 @@ import type {
   DerivedStatFormula,
   DerivedStatName,
   GameplayProjection,
+  HauntView,
   ObservableTradeProjection,
   OpaqueId,
   TileId,
@@ -314,6 +315,23 @@ export function adjacentLockedFeature(projection: GameplayProjection): FeatureVi
         chebyshev(feature, origin) === 1,
     )
     .sort((left, right) => (left.featureId < right.featureId ? -1 : 1))[0];
+}
+
+/** The living, unappeased haunt the hero is Chebyshev-adjacent to (but not standing on), if any --
+ * mirrors `adjacentMerchant`/`adjacentLockedFeature`'s adjacency rule and tie-break. Feeds both
+ * `command-builder.ts` (which resolves an `offer` intent's `targetActorId` from this) and the
+ * inventory overlay's Offer affordance. Reads the projection only: the engine re-validates
+ * adjacency, need, and ownership on `resolveOffer`, so this is a convenience resolver, never a
+ * trust boundary. */
+export function adjacentHaunt(projection: GameplayProjection): HauntView | undefined {
+  const origin = heroOf(projection);
+  return projection.haunts
+    .filter((haunt) => {
+      if (haunt.actorId === null || haunt.appeased) return false;
+      const actor = actorsOf(projection).find((candidate) => candidate.actorId === haunt.actorId);
+      return actor !== undefined && chebyshev(actor, origin) === 1;
+    })
+    .sort((left, right) => (left.hallRecordId < right.hallRecordId ? -1 : 1))[0];
 }
 
 /** Every item the hero currently holds, backpack and equipped alike -- the pool `heroHoldsTag`

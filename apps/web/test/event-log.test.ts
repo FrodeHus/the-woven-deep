@@ -71,6 +71,18 @@ function hauntSighted(hallRecordId: string, role: HauntView['role'] = 'champion'
   };
 }
 
+function hauntAppeased(hallRecordId: string, role: HauntView['role'] = 'echo'): PublicEvent {
+  return {
+    type: 'haunt.appeased',
+    eventId: 'e1',
+    actorId: 'a1',
+    hallRecordId,
+    role,
+    offeredItemId: 'item.offered.0001',
+    itemIds: ['item.released.0001'],
+  };
+}
+
 describe('foldEventsIntoLog', () => {
   it('renders combat, item, light, and survival events as readable lines', () => {
     const events: readonly PublicEvent[] = [
@@ -285,5 +297,40 @@ describe('foldEventsIntoLog', () => {
       pack,
     });
     expect(log).toEqual([]);
+  });
+
+  it('logs the farewell line when a haunt is appeased', () => {
+    const { log } = foldEventsIntoLog([], [hauntAppeased('record.a')], 0, {
+      haunts: [hauntView({ hallRecordId: 'record.a', role: 'echo', heroName: 'Mira' })],
+      pack,
+    });
+    expect(log[0]).toMatchObject({
+      text: 'Echo of Mira is at peace. The Deep releases what it held.',
+      tone: 'curse',
+    });
+  });
+
+  it('stays silent for an appeasement the context does not know', () => {
+    const { log } = foldEventsIntoLog([], [hauntAppeased('record.missing')], 0, {
+      haunts: [],
+      pack,
+    });
+    expect(log).toEqual([]);
+  });
+
+  it('logs the offer refusal without drama', () => {
+    const { log } = foldEventsIntoLog(
+      [],
+      [
+        {
+          type: 'action.invalid',
+          eventId: 'e1',
+          commandId: 'command.offer',
+          reason: 'offer.refused',
+        },
+      ],
+      0,
+    );
+    expect(log).toMatchObject([{ text: 'The haunt does not want this.', tone: 'system' }]);
   });
 });

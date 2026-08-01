@@ -1,6 +1,6 @@
 import type { JSX, ReactNode } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
-import type { DerivedStatName } from '@woven-deep/engine';
+import type { DerivedStatName, HauntView } from '@woven-deep/engine';
 import { effectLabel } from '../labels.js';
 import { DERIVED_STAT_LABELS } from '../derived-stats-display.js';
 import { itemById } from '../../session/pack-queries.js';
@@ -31,12 +31,16 @@ function ActionButton({
   chord,
   tone = 'accent',
   disabled = false,
+  title,
   onClick,
 }: Readonly<{
   label: string;
   chord: string;
   tone?: ActionTone;
   disabled?: boolean;
+  /** Native hover text -- used to state WHY a disabled action is disabled (e.g. the Offer
+   * button's "It does not want this."), rather than inventing a separate reason-text affordance. */
+  title?: string;
   onClick: () => void;
 }>): JSX.Element {
   return (
@@ -44,6 +48,7 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      {...(title === undefined ? {} : { title })}
       className={`border bg-raised px-3 py-1.5 font-mono text-xs ${
         disabled
           ? 'cursor-not-allowed border-subtle text-subtle'
@@ -70,6 +75,7 @@ function FactRow({ label, value }: Readonly<{ label: string; value: ReactNode }>
 export function DetailPane({
   entry,
   refuelTarget,
+  offerHaunt,
   pack,
   provenance = [],
   onEquip,
@@ -77,10 +83,16 @@ export function DetailPane({
   onDrop,
   onToggleLight,
   onRefuel,
+  onOffer,
 }: Readonly<{
   entry: MenuEntry | undefined;
   /** The equipped light `entry`'s item can refuel, if any -- see `equippedLightMatchingFuel`. */
   refuelTarget: ProjectedItemLike | undefined;
+  /** The living, unappeased haunt the hero is Chebyshev-adjacent to, if any -- see
+   * `adjacentHaunt`. The Offer action appears for any BACKPACK row while this is set (an equipped
+   * item is never offerable -- the engine rejects it as `item.unavailable`), enabled only when the
+   * haunt's `needCategories` includes the selected item's category. */
+  offerHaunt: HauntView | undefined;
   pack: CompiledContentPack;
   /** This artifact's circulation history, oldest first, already rendered as prose by
    * `provenanceLines` -- empty for an ordinary item, and for an artifact no run has ever carried.
@@ -91,6 +103,7 @@ export function DetailPane({
   onDrop: () => void;
   onToggleLight: () => void;
   onRefuel: () => void;
+  onOffer: () => void;
 }>): JSX.Element {
   if (!entry)
     return <p className="text-subtle">Select an item — ↑↓ to browse, e to equip, u to use.</p>;
@@ -257,6 +270,18 @@ export function DetailPane({
             chord="r"
             tone="warn"
             onClick={onRefuel}
+          />
+        )}
+        {offerHaunt && !equipped && (
+          <ActionButton
+            label="Offer"
+            chord="o"
+            tone="accent"
+            disabled={!offerHaunt.needCategories.includes(item.category)}
+            {...(offerHaunt.needCategories.includes(item.category)
+              ? {}
+              : { title: 'It does not want this.' })}
+            onClick={onOffer}
           />
         )}
       </div>

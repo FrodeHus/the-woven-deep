@@ -1041,10 +1041,14 @@ export function projectGameplayState(
       const actorId = population?.livingMemberIds[0] ?? null;
       // `retained` alone would leak the outcome of the hidden gate roll: a retained-but-dormant
       // decision the world has never placed or the hero has never crossed paths with. Gating on
-      // `encountered || actorId !== null` keeps that internal bookkeeping invisible until the
-      // haunt is actually placed on a floor or has been seen -- `encountered` sticks true forever
-      // once set, so a later fade/appeasement (which clears `actorId`) never re-hides it.
-      if (!decision.encountered && actorId === null) return [];
+      // `encountered` alone (Task 9) -- a placed-but-unseen haunt (`actorId !== null` while the
+      // hero has never actually laid eyes on it, since `observeEncounters`/world-step.ts only
+      // flips `encountered` once the population is genuinely visible) must stay invisible too: no
+      // Task-9 client consumer needs it (`adjacentHaunt`'s adjacency already implies visibility,
+      // and the spoken line fires off `haunt.sighted`, never off this field). `encountered` sticks
+      // true forever once set, so a later fade/appeasement (which clears `actorId`) never
+      // re-hides an already-known haunt.
+      if (!decision.encountered) return [];
       return [
         {
           hallRecordId: decision.hallRecordId,

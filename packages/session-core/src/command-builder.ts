@@ -12,6 +12,7 @@ import {
 import type { PlayerIntent } from './intents.js';
 import {
   actorsOf,
+  adjacentHaunt,
   adjacentLockedFeature,
   adjacentMerchant,
   chebyshev,
@@ -191,6 +192,25 @@ function buildPickLockIntent(
   };
 }
 
+function buildOfferIntent(
+  input: Readonly<{
+    projection: GameplayProjection;
+    commandId: OpaqueId;
+    expectedRevision: number;
+    itemId: OpaqueId;
+  }>,
+): BuiltIntent {
+  const { projection, commandId, expectedRevision, itemId } = input;
+  const haunt = adjacentHaunt(projection);
+  if (!haunt || haunt.actorId === null) {
+    return { kind: 'rejected', message: 'There is no haunt here to answer.' };
+  }
+  return {
+    kind: 'command',
+    command: { type: 'offer', itemId, targetActorId: haunt.actorId, commandId, expectedRevision },
+  };
+}
+
 function buildPickupIntent(
   input: Readonly<{
     projection: GameplayProjection;
@@ -343,6 +363,9 @@ export function buildIntent(
   }
   if (intent.type === 'pick-lock') {
     return buildPickLockIntent({ projection, commandId, expectedRevision });
+  }
+  if (intent.type === 'offer') {
+    return buildOfferIntent({ projection, commandId, expectedRevision, itemId: intent.itemId });
   }
   if (intent.type === 'descend') {
     return stairDownUnderHero(projection)

@@ -76,4 +76,8 @@ export type PlayerIntent =
       readonly type: 'cast';
       readonly spellId: OpaqueId;
       readonly target: { x: number; y: number };
-    };
+    }
+  // Offers a backpack item to the haunt the hero is Chebyshev-adjacent to. Carries no target:
+  // command-builder.ts resolves the adjacent haunt from `projection.haunts`, exactly the way
+  // `trade-open` resolves its merchant and `pick-lock` its feature.
+  | { readonly type: 'offer'; readonly itemId: OpaqueId };

@@ -1257,6 +1257,32 @@ describe('haunt projection', () => {
     };
   }
 
+  const placedUnencounteredId = 'hall.placed-unencountered';
+
+  /** Retained AND placed on a floor (a living population member exists), but never actually SEEN
+   * by the hero -- `observeEncounters` (world-step.ts) only flips `encountered` once the
+   * population is genuinely visible (in FOV, lit), so a placed-but-dark haunt is a real reachable
+   * state, not a hypothetical. Task 9's client only ever needs an ENCOUNTERED haunt (the offer
+   * affordance requires adjacency, which flips `encountered` in the same world-step; the spoken
+   * line fires off `haunt.sighted`, never off this projection field), so the gate is tightened to
+   * `encountered` alone -- `actorId !== null` on its own must NOT admit a haunt the hero has never
+   * laid eyes on. */
+  function runWithPlacedButUnencounteredHaunt(): ActiveRun {
+    const base = createDemoRun();
+    const standing = fallenStanding(placedUnencounteredId, { heroName: 'Unseen' });
+    return {
+      ...base,
+      fallenHeroStandings: [standing],
+      fallenHeroDecisions: [fallenDecision(placedUnencounteredId, 'champion')],
+      populations: [
+        championPopulation(placedUnencounteredId, {
+          actorId: 'actor.population.fallen-champion.placed-unencountered.001',
+          livingMemberIds: ['actor.population.fallen-champion.placed-unencountered.001'],
+        }),
+      ],
+    };
+  }
+
   const unretainedId = 'hall.unretained-echo';
 
   function runWithUnretainedEcho(): ActiveRun {
@@ -1331,6 +1357,17 @@ describe('haunt projection', () => {
   it('omits a retained decision that is neither encountered nor placed -- the hidden gate roll never leaks', () => {
     const projection = projectGameplayState({ state: runWithDormantHaunt(), content: pack });
     expect(projection.haunts.some((haunt) => haunt.hallRecordId === dormantId)).toBe(false);
+    expect(projection.haunts).toEqual([]);
+  });
+
+  it('omits a placed-but-unencountered haunt -- a living actorId alone is not enough', () => {
+    const projection = projectGameplayState({
+      state: runWithPlacedButUnencounteredHaunt(),
+      content: pack,
+    });
+    expect(projection.haunts.some((haunt) => haunt.hallRecordId === placedUnencounteredId)).toBe(
+      false,
+    );
     expect(projection.haunts).toEqual([]);
   });
 

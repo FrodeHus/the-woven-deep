@@ -799,6 +799,155 @@ describe('ServerPlaySession', () => {
       },
     );
 
+    /** A single walkable neighbor of `(x, y)` on `floor`, preferring cardinal directions -- the
+     * cell the hero is teleported onto to stand Chebyshev-adjacent to a real, placed champion
+     * without needing to know the floor's connectivity in advance. */
+    function walkableNeighbor(
+      floor: FloorSnapshot,
+      x: number,
+      y: number,
+    ): Readonly<{ x: number; y: number }> {
+      const offsets = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+        [1, 1],
+        [1, -1],
+        [-1, 1],
+        [-1, -1],
+      ];
+      for (const [dx, dy] of offsets) {
+        const nx = x + dx!;
+        const ny = y + dy!;
+        if (nx < 0 || ny < 0 || nx >= floor.width || ny >= floor.height) continue;
+        if (floor.tiles[ny * floor.width + nx] === 1) return { x: nx, y: ny };
+      }
+      throw new Error('test setup failure: champion has no walkable neighbor');
+    }
+
+    /**
+     * A real Wanderer session standing beside a genuinely placed champion haunt, holding a
+     * `travel-ration` (the `wayfarer` class's favored `food` category, per the content pack's
+     * `deeps-champion` appeasement block) ready to offer. Built through the SAME production path
+     * `'carries the seeded champion decision through a real descent...'` above exercises --
+     * `seedHallRecord` + a real multi-floor descent to the champion's death depth, so the champion
+     * is a genuine placed population/actor, not a hand-rolled fixture. Only the hero's position is
+     * then hand-adjusted (onto a walkable neighbor of the real champion actor), which is exactly
+     * the same "teleport onto a legal cell, write it back, reopen" trick `onStairDown`/`descendOnce`
+     * already use elsewhere in this file.
+     */
+    function wandererSessionBesideHaunt(
+      hallRepo: ServerRunRecordRepository,
+    ): Readonly<{ session: ServerPlaySession; itemId: string }> {
+      seedHallRecord(hallRepo, CHAMPION_DEPTH);
+      newSession(database, { repo, hallRepo }).open({ seed: SEED, mode: 'wanderer' });
+
+      function currentRun(): ActiveRun {
+        return decodeActiveRun(repo.get(PROFILE)!.runBlob, pack);
+      }
+
+      while (activeDepthOf(currentRun()) < CHAMPION_DEPTH) {
+        const staged = onStairDown(currentRun());
+        repo.upsert({
+          profileId: PROFILE,
+          runBlob: encodeActiveRun(staged),
+          revision: staged.revision,
+          contentHash: pack.hash,
+          updatedAt: FIXED_CLOCK(),
+          checkpointBlob: repo.get(PROFILE)!.checkpointBlob,
+        });
+        const stepSession = newSession(database, { repo, hallRepo });
+        stepSession.open({ seed: SEED, mode: 'wanderer' });
+        const outcome = stepSession.applyIntent({
+          commandId: `command.descend-${String(staged.revision)}`,
+          expectedRevision: staged.revision,
+          intent: { type: 'descend' },
+        });
+        if (outcome.kind !== 'state') {
+          throw new Error(`expected descend to transition, got ${outcome.kind}`);
+        }
+      }
+
+      const atDepth = currentRun();
+      const champion = atDepth.populations.find((population) => population.model === 'champion');
+      if (!champion) throw new Error('test setup failure: no champion placed at CHAMPION_DEPTH');
+      const championActor = atDepth.actors.find((actor) => actor.actorId === champion.actorId);
+      if (!championActor) throw new Error('test setup failure: champion actor is missing');
+      const hero = heroActor(atDepth);
+      const item = atDepth.items.find(
+        (candidate) =>
+          candidate.contentId === 'item.travel-ration' && candidate.location.type === 'backpack',
+      );
+      if (!item) throw new Error('test setup failure: hero has no travel ration to offer');
+      const beside = walkableNeighbor(activeFloorOf(atDepth), championActor.x, championActor.y);
+      const besideHaunt: ActiveRun = {
+        ...atDepth,
+        actors: atDepth.actors.map((actor) =>
+          actor.actorId === hero.actorId ? { ...actor, x: beside.x, y: beside.y } : actor,
+        ),
+      };
+      repo.upsert({
+        profileId: PROFILE,
+        runBlob: encodeActiveRun(besideHaunt),
+        revision: besideHaunt.revision,
+        contentHash: pack.hash,
+        updatedAt: FIXED_CLOCK(),
+        checkpointBlob: repo.get(PROFILE)!.checkpointBlob,
+      });
+      const session = newSession(database, { repo, hallRepo });
+      session.open({ seed: SEED, mode: 'wanderer' });
+      // The teleport above only rewrites position -- `GameplayProjection.haunts` gates on
+      // `decision.encountered` (Task 9's tightened gate: a placed-but-never-SEEN haunt must stay
+      // invisible), and `encountered` only flips true inside a real world-step's
+      // `observeEncounters` pass. One harmless `wait` lets that pass run for real, exactly the way
+      // a hero who genuinely walked up to the champion would have triggered it on the move that
+      // brought them adjacent.
+      const looked = session.applyIntent({
+        commandId: `command.look-${String(besideHaunt.revision)}`,
+        expectedRevision: revisionOf(session),
+        intent: { type: 'wait' },
+      });
+      if (
+        looked.kind !== 'state' ||
+        !looked.snapshot.projection.haunts.some((haunt) => haunt.encountered)
+      ) {
+        throw new Error(
+          'test setup failure: the haunt was never encountered after teleporting adjacent',
+        );
+      }
+      return { session, itemId: item.itemId };
+    }
+
+    it(
+      'writes nothing to the hall when a wanderer run appeases a haunt',
+      { timeout: 30_000 },
+      () => {
+        const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+        const { session, itemId } = wandererSessionBesideHaunt(hallRepo);
+        // `wandererSessionBesideHaunt` already seeded one CLASSIC Hall record (`seedHallRecord`,
+        // the champion's own death) before the Wanderer run under test even opened -- the
+        // invariant here is that the WANDERER run's own death adds nothing on top of it.
+        const recordsBeforeWandererDeath = hallRepo.records();
+        expect(recordsBeforeWandererDeath).toHaveLength(1);
+
+        const offered = session.applyIntent({
+          commandId: 'command.offer-1',
+          expectedRevision: revisionOf(session),
+          intent: { type: 'offer', itemId },
+        });
+        expect(offered.kind).toBe('state');
+        if (offered.kind === 'state') {
+          expect(offered.snapshot.projection.haunts.some((haunt) => haunt.appeased)).toBe(true);
+        }
+
+        killHero(session);
+        session.acceptDeath();
+
+        expect(hallRepo.records()).toEqual(recordsBeforeWandererDeath);
+      },
+    );
+
     it('produces no record when a wanderer run WINS', { timeout: 30_000 }, () => {
       const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
       storeConcludedWanderer('broke-cycle');

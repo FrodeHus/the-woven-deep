@@ -1,6 +1,6 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { HauntView, PublicEvent } from '@woven-deep/engine';
-import { hauntEncounterLine } from './haunt-lines.js';
+import { hauntEncounterLine, hauntFarewellLine } from './haunt-lines.js';
 
 export interface LogLine {
   readonly id: number;
@@ -104,6 +104,8 @@ function renderEvent(event: PublicEvent, context: LogContext | undefined): Rende
           return { text: 'Its light will not be hidden.', tone: 'system' };
         case 'item.cursed':
           return { text: 'It will not come free.', tone: 'system' };
+        case 'offer.refused':
+          return { text: 'The haunt does not want this.', tone: 'system' };
         case 'signature.no-charges':
           return { text: 'The relic is spent — it will wake on the next floor.', tone: 'system' };
         default:
@@ -130,6 +132,15 @@ function renderEvent(event: PublicEvent, context: LogContext | undefined): Rende
           candidate.hallRecordId === event.hallRecordId && candidate.role === event.role,
       );
       return haunt ? { text: hauntEncounterLine(haunt, context.pack), tone: 'curse' } : null;
+    }
+    case 'haunt.appeased': {
+      // Silent without context, exactly like `haunt.sighted` above.
+      if (!context) return null;
+      const haunt = context.haunts.find(
+        (candidate) =>
+          candidate.hallRecordId === event.hallRecordId && candidate.role === event.role,
+      );
+      return haunt ? { text: hauntFarewellLine(haunt), tone: 'curse' } : null;
     }
     default:
       return null;
