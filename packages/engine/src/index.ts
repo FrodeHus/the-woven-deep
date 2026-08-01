@@ -34,6 +34,7 @@ export * from './run-records-fixture.js';
 export * from './magic-fixture.js';
 export * from './population-gates.js';
 export * from './population-placement.js';
+export * from './depth-band.js';
 export * from './loot-placement.js';
 export * from './curse-generation.js';
 export * from './pathfinding.js';

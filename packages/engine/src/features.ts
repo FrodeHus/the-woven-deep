@@ -1,7 +1,7 @@
 import { actorById } from './actor-model.js';
 import { balanceEntry } from './balance.js';
 import { applyCurseRolls } from './curse-generation.js';
-import { depthBandFor } from './loot-placement.js';
+import { depthBandFor } from './depth-band.js';
 import type { ChestFeature, DoorFeature, DungeonFeature } from './feature-model.js';
 import {
   tileIndex,

@@ -2,7 +2,7 @@ import type { CompiledContentPack, CurseContentEntry, ItemCategory } from '@wove
 import { balanceEntry } from './balance.js';
 import { requireItem } from './content-index.js';
 import type { ItemInstance } from './item-model.js';
-import type { DepthBand } from './loot-placement.js';
+import type { DepthBand } from './depth-band.js';
 import type { Uint32State } from './model.js';
 import { rollDie } from './random.js';
 import { compareCodeUnits } from './stable-json.js';

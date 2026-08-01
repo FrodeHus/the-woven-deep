@@ -5,7 +5,7 @@ import { entryById } from './content-index.js';
 import { applyCurseRolls } from './curse-generation.js';
 import { withRngStream } from './effects.js';
 import { createFloorLootFromTable } from './inventory.js';
-import { depthBandFor } from './loot-placement.js';
+import { depthBandFor } from './depth-band.js';
 import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
 import { rollDie } from './random.js';
 import { compareCodeUnits } from './stable-json.js';

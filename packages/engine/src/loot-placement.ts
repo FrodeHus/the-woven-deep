@@ -2,6 +2,8 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { balanceEntry } from './balance.js';
 import { articulationIndexes, protectedRouteIndexes } from './connectivity.js';
 import { applyCurseRolls } from './curse-generation.js';
+import { DEPTH_BANDS, depthBandFor } from './depth-band.js';
+import type { DepthBand } from './depth-band.js';
 import type { ChestFeature, DoorFeature, DungeonFeature } from './feature-model.js';
 import { createFloorLootFromTable, projectLootGraph } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
@@ -27,8 +29,6 @@ function ordinal(value: number): string {
   return String(value).padStart(ORDINAL_DIGITS, '0');
 }
 
-export type DepthBand = 'shallow' | 'mid' | 'deep';
-
 export interface FloorLootResult {
   readonly items: readonly ItemInstance[];
   readonly features: readonly DungeonFeature[];
@@ -41,17 +41,7 @@ export interface PlaceFloorLootInput {
   readonly content: CompiledContentPack;
 }
 
-export function depthBandFor(
-  depth: number,
-  bands: Readonly<{ shallowMaxDepth: number; midMaxDepth: number }>,
-): DepthBand {
-  if (depth <= bands.shallowMaxDepth) return 'shallow';
-  if (depth <= bands.midMaxDepth) return 'mid';
-  return 'deep';
-}
-
 const REQUIRED_LOOT_TABLE_KINDS = ['floor-scatter', 'chest'] as const;
-const DEPTH_BANDS: readonly DepthBand[] = ['shallow', 'mid', 'deep'];
 
 /**
  * Preflights the six loot tables this module resolves by exact id --

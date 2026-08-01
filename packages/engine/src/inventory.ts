@@ -14,7 +14,7 @@ import {
 import { actorById } from './actor-model.js';
 import { balanceEntry } from './balance.js';
 import { applyCurseRolls } from './curse-generation.js';
-import { depthBandFor } from './loot-placement.js';
+import { depthBandFor } from './depth-band.js';
 import type { ItemInstance } from './item-model.js';
 import type { ActiveRun, OpaqueId, Uint32State } from './model.js';
 import type { RecordedHeirloomSnapshot } from './population-model.js';

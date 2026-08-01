@@ -14,7 +14,8 @@ import { applyCurseRolls } from './curse-generation.js';
 import type { DungeonFeature } from './feature-model.js';
 import { heroHoldsFragment, tabletFragmentIds } from './final-chamber-fragments.js';
 import { createFloorItem, createFloorLootFromTable } from './inventory.js';
-import { depthBandFor, placeFloorLoot } from './loot-placement.js';
+import { depthBandFor } from './depth-band.js';
+import { placeFloorLoot } from './loot-placement.js';
 import type { ItemInstance } from './item-model.js';
 import { materializeMerchant } from './merchant-stock.js';
 import {
