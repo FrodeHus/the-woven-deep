@@ -929,6 +929,53 @@ describe('ServerPlaySession', () => {
       expect(hallRepo.records()).toEqual([]);
     });
 
+    it('acceptDeath is a no-op on a LIVE wanderer run', { timeout: 30_000 }, () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      const session = newSession(database, { repo, hallRepo });
+      session.open({ seed: SEED, mode: 'wanderer' });
+      descendOnce(session);
+
+      // `accept-death` is client-sendable at any moment, and it deletes the active-run row. Past
+      // the mode check, `conclusion !== null` is the ONLY thing standing between a stray message
+      // and a live run being destroyed.
+      const outcome = session.acceptDeath();
+
+      expect(outcome.kind).toBe('state');
+      expect(outcome.snapshot.projection.conclusion).toBeNull();
+      expect(repo.get(PROFILE)).toBeDefined();
+      // Still playable: the run took the very next command.
+      const after = session.applyIntent({
+        commandId: 'c.after-accept',
+        expectedRevision: revisionOf(session),
+        intent: { type: 'wait' },
+      });
+      expect(after.kind).toBe('state');
+      expect(after.snapshot.revision).toBeGreaterThan(0);
+      expect(repo.get(PROFILE)).toBeDefined();
+    });
+
+    it(
+      'a stray accept-death after a rise leaves the restored run alive',
+      { timeout: 30_000 },
+      () => {
+        const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+        const session = newSession(database, { repo, hallRepo });
+        session.open({ seed: SEED, mode: 'wanderer' });
+        descendOnce(session);
+        killHero(session);
+        expect(session.riseAgain().snapshot.projection.conclusion).toBeNull();
+
+        // The rise already answered the death; a duplicate/late `accept-death` must not then delete
+        // the run the player is playing again.
+        const outcome = session.acceptDeath();
+
+        expect(outcome.snapshot.projection.conclusion).toBeNull();
+        expect(repo.get(PROFILE)).toBeDefined();
+        expect(repo.get(PROFILE)!.checkpointBlob).not.toBeNull();
+        expect(hallRepo.records()).toEqual([]);
+      },
+    );
+
     it('acceptDeath is a no-op for a classic run', { timeout: 30_000 }, () => {
       const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
       const session = newSession(database, { repo, hallRepo });

@@ -89,6 +89,10 @@ export function handleMessage(session: ServerPlaySession, raw: unknown): readonl
     ];
   }
 
+  // Neither of these enforces `expectedRevision`: the rewind target is the STORED checkpoint, not
+  // whatever revision the client last saw, and `conclusion !== null` is the real precondition --
+  // enforcing staleness here would strand a client whose reply was lost with a run it can neither
+  // rise from nor end.
   if (message.type === 'rise-again') {
     return [outcomeToMessage(session.riseAgain())];
   }
