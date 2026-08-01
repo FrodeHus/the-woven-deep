@@ -119,7 +119,18 @@ export function InventoryOverlay({
   }
 
   function dispatchOffer(): void {
-    if (!selected || !sessionCtx) return;
+    // Mirrors `dispatchRefuel`'s convention: the guard restates the button's own render/enabled
+    // condition, so the `o` chord can never fire a dispatch the button itself would have refused
+    // to offer (an equipped row, or a category the adjacent haunt does not want) -- the o key must
+    // never reach a case the button hides or disables.
+    if (
+      !selected ||
+      !offerHaunt ||
+      selected.equipped ||
+      !offerHaunt.needCategories.includes(selected.item.category) ||
+      !sessionCtx
+    )
+      return;
     sessionCtx.session.dispatch({ type: 'offer', itemId: selected.item.itemId });
   }
 

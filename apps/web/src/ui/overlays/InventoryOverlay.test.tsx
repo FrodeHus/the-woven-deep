@@ -400,7 +400,7 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(dispatch).toHaveBeenCalledWith({ type: 'offer', itemId: 'item.scroll.1' });
   });
 
-  it('disables the offer affordance for a category the adjacent haunt does not want', () => {
+  it('disables the offer affordance for a category the adjacent haunt does not want, and states why', () => {
     const snapshot = snapshotWithHaunt(
       [item({ itemId: 'item.scroll.1', name: 'Scroll', category: 'scroll' })],
       ['food'],
@@ -408,7 +408,9 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     const { session } = stubSession(snapshot);
     renderInventory(session);
 
-    expect(screen.getByRole('button', { name: /Offer/ })).toBeDisabled();
+    const offerButton = screen.getByRole('button', { name: /Offer/ });
+    expect(offerButton).toBeDisabled();
+    expect(offerButton).toHaveAttribute('title', 'It does not want this.');
   });
 
   it('never offers an equipped item, even beside a haunt that wants its category', () => {
@@ -419,6 +421,37 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     renderInventory(session);
 
     expect(screen.queryByRole('button', { name: /Offer/ })).not.toBeInTheDocument();
+  });
+
+  it('pressing o on an equipped row dispatches nothing -- the button is deliberately hidden there', async () => {
+    const user = userEvent.setup();
+    const snapshot = snapshotWithHaunt([], ['weapon'], {
+      'main-hand': item({ itemId: 'item.sword', name: 'Iron sword', category: 'weapon' }),
+    });
+    const { session, dispatch } = stubSession(snapshot);
+    renderInventory(session);
+
+    const list = within(screen.getByRole('listbox', { name: 'Backpack items' }));
+    await user.click(list.getByRole('option', { name: /Iron sword/ }));
+    await user.keyboard('o');
+
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('pressing o on a row with an unwanted category dispatches nothing -- the button is disabled there', async () => {
+    const user = userEvent.setup();
+    const snapshot = snapshotWithHaunt(
+      [item({ itemId: 'item.scroll.1', name: 'Scroll', category: 'scroll' })],
+      ['food'],
+    );
+    const { session, dispatch } = stubSession(snapshot);
+    renderInventory(session);
+
+    const list = within(screen.getByRole('listbox', { name: 'Backpack items' }));
+    await user.click(list.getByRole('option', { name: /Scroll/ }));
+    await user.keyboard('o');
+
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it('hides the offer action with no adjacent haunt', () => {
