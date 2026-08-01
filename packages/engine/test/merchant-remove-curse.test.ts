@@ -214,6 +214,10 @@ describe('trade-service remove-curse projection', () => {
     )!;
     expect(identify.targetItemIds).toEqual(['item.hero.unidentified']);
     expect(removeCurse.targetItemIds).toEqual(['item.hero.revealed-cursed', 'item.hero.worn-cursed']);
+    // Explicit, named leak check: the unrevealed curse on item.hero.hidden-cursed must stay
+    // invisible everywhere in the trade projection, not just absent from remove-curse by omission.
+    expect(identify.targetItemIds).not.toContain('item.hero.hidden-cursed');
+    expect(removeCurse.targetItemIds).not.toContain('item.hero.hidden-cursed');
   });
 });
 

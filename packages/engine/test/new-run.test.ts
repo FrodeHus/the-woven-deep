@@ -348,8 +348,21 @@ describe('createNewRun records input', () => {
     // save schema v14 (`ItemInstance.curse`), which moves `schemaVersion` alone, and again for
     // re-authoring `curse.hungering-edge`'s inert `maxHealth` drawback onto `meleeAccuracy`, which
     // was verified to move `contentHash` and nothing else in the encoded run.
+    // Re-pinned again for the Town Curios Dealer's new `merchant-service.remove-curse` offer
+    // (content/encounters/town-merchants.yaml) plus the matching `neutral`/`trusted` faction
+    // `serviceIds` grant (content/npc-factions/town-merchants.yaml): `materializeMerchant` rolls
+    // one `remainingUses` die per authored service
+    // (packages/engine/src/merchant-stock.ts:120-129), so the curios dealer's now-two-entry
+    // `services` list consumes one additional `merchant-stock` roll during town materialization.
+    // That shifts the shared `merchant-stock` stream for every merchant materialized afterward
+    // (verified: the Town Spell Vendor's stock selection changes downstream), so this re-pin moves
+    // `contentHash`, `items`, `populations`, and `rng['merchant-stock']` -- confirmed by diffing the
+    // decoded run objects field-by-field against the prior pin; no other key differs, and no other
+    // RNG stream moves. This is expected content-authoring drift from adding a merchant service (the
+    // same category the curse-roster note above and `curse-generation.ts`'s "a pack edit ... is
+    // expected to move every downstream roll" comment already describe), not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      'c001857d5bd56de950f833d3051e628217ffdbe16c946a05db0de8edbb2c561a',
+      'ef560991aac90b67c5f52c90f63343d3da92768808910680ed24b9c014b686f4',
     );
   });
 
