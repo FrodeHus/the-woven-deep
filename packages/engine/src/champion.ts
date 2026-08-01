@@ -597,6 +597,9 @@ export function advanceFallenHeroEncounters(
         snapshots: drop.snapshots,
         equippedItemContentIds: standing.equippedItemContentIds,
         fallbackItemId: definition.fallbackItemId,
+        // An artifact this run already holds an instance of degrades to the fallback relic rather
+        // than being minted twice -- see `circulatingArtifactContentIds`.
+        existingItems: state.items,
         itemIdPrefix: hauntDropItemIdPrefix(population.populationId),
         floorId: population.floorId,
         x: actor.x,
@@ -683,6 +686,9 @@ export function advanceFallenHeroEncounters(
         snapshots: [picked],
         equippedItemContentIds: standing.equippedItemContentIds,
         fallbackItemId: definition.fallbackItemId,
+        // Same singleton guard as the champion set: a haunt whose artifact is already in the run
+        // held only a memory of it, and surrenders the fallback relic instead.
+        existingItems: state.items,
         itemIdPrefix: hauntDropItemIdPrefix(population.populationId),
         floorId: population.floorId,
         x: actor.x,
@@ -712,12 +718,16 @@ export function advanceFallenHeroEncounters(
       // The recorded heirloom may now legitimately be on the ground -- it is the piece this haunt
       // guarded and just surrendered. What must still never happen is the ordinary SPOILS TABLE
       // producing it, which `validateEchoLootGraph` above already forbids at the content level, so
-      // this runtime guard now only has to exclude the piece we deliberately materialized.
-      const droppedPieceIds = new Set(pieces.map((piece) => piece.item.itemId));
+      // this runtime guard now only has to police the table's own output. The exclusion below is
+      // defensive rather than load-bearing: spoils are minted under `item.echo-loot.` and pieces
+      // under `item.haunt.`, so the two id spaces cannot collide as the code stands -- it states
+      // the rule (the deliberately surrendered piece is never the violation) so a future change to
+      // either prefix cannot turn this guard against the feature.
       if (
         loot.createdItems.some(
           (item) =>
-            !droppedPieceIds.has(item.itemId) && item.contentId === standing.heirloom.contentId,
+            !pieces.some((piece) => piece.item.itemId === item.itemId) &&
+            item.contentId === standing.heirloom.contentId,
         )
       ) {
         throw new Error('Echo ordinary loot must not create its recorded heirloom');

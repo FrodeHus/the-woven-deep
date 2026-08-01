@@ -308,6 +308,15 @@ function kitPack(): CompiledContentPack {
           fuelTags: ['oil'],
         },
       }),
+      item('item.hero-relic', {
+        name: 'Bound Signet',
+        category: 'ring',
+        glyph: '"',
+        color: '#88ddff',
+        rarity: 'legendary',
+        equipment: { slots: ['neck'], handedness: 'one-handed', reservedSlots: [] },
+        artifact: { canon: true, signature: null, drawbackModifiers: {}, light: null },
+      }),
       item('item.hero-ring', {
         name: 'Worn Signet',
         category: 'ring',
@@ -1783,5 +1792,101 @@ describe('echo haunt death-inventory piece', () => {
     const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' }).state;
     expect(() => validateContentBoundRun(after, kitPack())).not.toThrow();
     expect(decodeActiveRun(encodeActiveRun(after))).toEqual(after);
+  });
+});
+
+describe('haunt drops never mint a second copy of an artifact', () => {
+  /** A snapshot of the same singleton artifact as it was recorded by `rank`'s Hall record. Two
+   * records can legitimately both list it: it circulated through both heroes before it was lost. */
+  function relicSnapshot(rank: number): RecordedHeirloomSnapshot {
+    return {
+      ...standing(rank).heirloom,
+      contentId: 'item.hero-relic',
+      sourceItemId: `item.original-${rank}.relic`,
+      enchantment: null,
+      charges: null,
+      fuel: null,
+      condition: 80,
+      displayName: 'Bound Signet',
+      glyph: '"',
+      color: '#88ddff',
+    };
+  }
+
+  /** A champion (rank 1) and an echo (rank 2) on the same floor, both dead, both records naming the
+   * same artifact. The champion's population id sorts first, so it is materialized first. */
+  function bothHauntsKilled(echoRelic: boolean): ActiveRun {
+    const championStanding = standing(1, {
+      heirloom: relicSnapshot(1),
+      deathInventory: [relicSnapshot(1), withDeathInventory(2, 1)[1]!],
+      equippedItemContentIds: ['item.hero-armor', 'item.hero-relic'],
+    });
+    const echoPiece = echoRelic ? relicSnapshot(2) : withDeathInventory(2, 2)[1]!;
+    const echoStanding = standing(2, {
+      heirloom: echoPiece,
+      deathInventory: [echoPiece],
+      equippedItemContentIds: [echoPiece.contentId],
+    });
+    const selected = initialized([championStanding, echoStanding]);
+    const forced = {
+      ...selected,
+      fallenHeroDecisions: selected.fallenHeroDecisions.map((decision) =>
+        decision.rank === 2 ? { ...decision, retained: true, gateRoll: 1 } : decision,
+      ),
+    };
+    const run = withArena(forced, 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: kitPack() });
+    return {
+      ...run,
+      actors: [...run.actors, ...placed.actors]
+        .map((actor) => (actor.populationId === null ? actor : { ...actor, health: 0 }))
+        .sort((left, right) => left.actorId.localeCompare(right.actorId)),
+      populations: placed.populations,
+      fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor],
+    };
+  }
+
+  it('degrades the second haunt piece to the fallback relic and leaves exactly one instance', () => {
+    const state = bothHauntsKilled(true);
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' }).state;
+    // The champion is materialized first and hands back the real singleton.
+    expect(after.items.filter((item) => item.contentId === 'item.hero-relic')).toHaveLength(1);
+    const echo = after.populations.find((population) => population.model === 'echo')!;
+    const echoPiece = after.items.find((item) =>
+      item.itemId.startsWith(`item.haunt.${echo.populationId}.`),
+    )!;
+    // The echo held only a memory of it, so a relic still drops -- the every-piece-comes-back rule
+    // survives, it is the identity that degrades.
+    expect(echoPiece.contentId).toBe('item.fallback');
+    expect(echoPiece.heirloom?.originatingHallRecordId).toBe('hall.hero-2');
+  });
+
+  it('keeps the degraded outcome valid in both validation tiers', () => {
+    const state = bothHauntsKilled(true);
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' }).state;
+    expect(() => validateContentBoundRun(after, kitPack())).not.toThrow();
+    expect(decodeActiveRun(encodeActiveRun(after))).toEqual(after);
+  });
+
+  it('consumes no randomness for the guard', () => {
+    // Same scenario, once with the collision and once without: the guard only reads `run.items`, so
+    // the loot stream must land in exactly the same place either way.
+    const collided = advanceFallenHeroEncounters({
+      state: bothHauntsKilled(true),
+      content: kitPack(),
+      eventId: 'e1',
+    });
+    const clear = advanceFallenHeroEncounters({
+      state: bothHauntsKilled(false),
+      content: kitPack(),
+      eventId: 'e1',
+    });
+    expect(collided.state.rng.loot).toEqual(clear.state.rng.loot);
+    // Every other stream is untouched by either drop path.
+    expect({ ...collided.state.rng, loot: null }).toEqual({
+      ...bothHauntsKilled(true).rng,
+      loot: null,
+    });
   });
 });

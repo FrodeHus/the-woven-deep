@@ -537,11 +537,15 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         // reward is a SET. Re-materializing it through the very function the stepper drops with
         // keeps the two from drifting; the cell is irrelevant here (an item may since have been
         // picked up), so a placeholder location is passed and `location` is never compared.
+        const championPrefix = `${hauntDropItemIdPrefix(matching[0].populationId)}.`;
         const expectedPieces = materializeDeathInventory({
           content: pack,
           snapshots: hauntDropSnapshots(standing).snapshots,
           equippedItemContentIds: standing.equippedItemContentIds,
           fallbackItemId: championTemplate.fallbackItemId,
+          // The singleton guard re-derived: everything in the run EXCEPT this haunt's own pieces,
+          // which is exactly what it saw at drop time.
+          existingItems: run.items.filter((item) => !item.itemId.startsWith(championPrefix)),
           itemIdPrefix: hauntDropItemIdPrefix(matching[0].populationId),
           floorId: run.activeFloorId,
           x: 0,
@@ -571,6 +575,7 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           snapshots: hauntDropSnapshots(standing).snapshots,
           equippedItemContentIds: standing.equippedItemContentIds,
           fallbackItemId: championTemplate.fallbackItemId,
+          existingItems: run.items.filter((item) => !item.itemId.startsWith(`${prefix}.`)),
           itemIdPrefix: prefix,
           floorId: run.activeFloorId,
           x: 0,

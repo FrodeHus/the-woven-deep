@@ -1,4 +1,4 @@
-import type { CompiledContentPack } from '@woven-deep/content';
+import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
 import { createRecordedHeirloom } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
 import type { OpaqueId } from './model.js';
@@ -63,6 +63,31 @@ export function hauntDropSnapshots(
     : { snapshots: [...deathInventory, heirloom], heirloomIndex: deathInventory.length };
 }
 
+/**
+ * The artifact content ids `items` already holds an instance of.
+ *
+ * Two Hall records can each list the same artifact in their death inventories -- it circulated
+ * through both heroes before it was lost -- and both can be standings in one run. Handing back both
+ * would mint a second copy of a singleton and break artifact circulation's central pillar. A haunt
+ * whose artifact is already in the run held only a memory of it, so its piece degrades to the
+ * template's fallback relic: a piece still comes back, it just is not the relic itself.
+ */
+export function circulatingArtifactContentIds(
+  content: CompiledContentPack,
+  items: readonly ItemInstance[],
+): ReadonlySet<OpaqueId> {
+  const artifacts = new Set(
+    content.entries
+      .filter((entry): entry is ItemContentEntry => entry.kind === 'item' && entry.artifact != null)
+      .map((entry) => entry.id),
+  );
+  const circulating = new Set<OpaqueId>();
+  for (const item of items) {
+    if (artifacts.has(item.contentId)) circulating.add(item.contentId);
+  }
+  return circulating;
+}
+
 /** The item id prefix every piece a haunt population drops shares. Both validation tiers re-derive
  * it, so the drop and the checks that police it can never disagree about the scheme. */
 export function hauntDropItemIdPrefix(populationId: OpaqueId): string {
@@ -92,18 +117,24 @@ export function materializeDeathInventory(
     snapshots: readonly RecordedHeirloomSnapshot[];
     equippedItemContentIds: readonly OpaqueId[];
     fallbackItemId: OpaqueId;
+    /** Every item already in the run, so an artifact that is still in circulation is not minted a
+     * second time. Required rather than optional: a caller that forgot it would silently duplicate
+     * a singleton. Validation passes the same list minus the pieces it is re-deriving. */
+    existingItems: readonly ItemInstance[];
     itemIdPrefix: string;
     floorId: OpaqueId;
     x: number;
     y: number;
   }>,
 ): readonly MaterializedPiece[] {
+  const unavailableContentIds = circulatingArtifactContentIds(input.content, input.existingItems);
   return input.snapshots.map((snapshot, index) =>
     createRecordedHeirloom({
       content: input.content,
       snapshot,
       equippedItemContentIds: input.equippedItemContentIds,
       fallbackItemId: input.fallbackItemId,
+      unavailableContentIds,
       itemId: hauntPieceItemId(input.itemIdPrefix, index),
       floorId: input.floorId,
       x: input.x,

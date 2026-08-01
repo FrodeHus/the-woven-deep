@@ -4,6 +4,7 @@ import {
   createDemoContentPack,
   hauntDropSnapshots,
   materializeDeathInventory,
+  type ItemInstance,
   type RecordedHeirloomSnapshot,
   type Uint32State,
 } from '../src/index.js';
@@ -77,6 +78,15 @@ function pack(): CompiledContentPack {
           fuelTags: ['lamp-oil'],
         },
       }),
+      itemDefinition('item.relic', {
+        name: 'Bound Signet',
+        category: 'ring',
+        glyph: '"',
+        color: '#88ddff',
+        rarity: 'legendary',
+        equipment: { slots: ['neck'], handedness: 'one-handed', reservedSlots: [] },
+        artifact: { canon: true, signature: null, drawbackModifiers: {}, light: null },
+      }),
       itemDefinition('item.champion-fallback-relic', {
         name: 'Fallback relic',
         rarity: 'common',
@@ -138,6 +148,7 @@ describe('materializeDeathInventory', () => {
       snapshots: [heirloomFixture(), armorFixture(), lanternFixture()],
       equippedItemContentIds: ['item.iron-sword', 'item.leather-armor', 'item.lantern'],
       fallbackItemId: 'item.champion-fallback-relic',
+      existingItems: [],
       itemIdPrefix: 'item.haunt.population.fallen-champion.record.a',
       floorId,
       x: 3,
@@ -167,6 +178,7 @@ describe('materializeDeathInventory', () => {
       snapshots: [heirloomFixture(), { ...armorFixture(), contentId: 'item.deleted' }],
       equippedItemContentIds: ['item.iron-sword'],
       fallbackItemId: 'item.champion-fallback-relic',
+      existingItems: [],
       itemIdPrefix: 'item.haunt.x',
       floorId,
       x: 1,
@@ -191,6 +203,7 @@ describe('materializeDeathInventory', () => {
       ],
       equippedItemContentIds: ['item.iron-sword'],
       fallbackItemId: 'item.champion-fallback-relic',
+      existingItems: [],
       itemIdPrefix: 'item.haunt.x',
       floorId,
       x: 1,
@@ -205,6 +218,7 @@ describe('materializeDeathInventory', () => {
       snapshots: Array.from({ length: 12 }, () => heirloomFixture()),
       equippedItemContentIds: ['item.iron-sword'],
       fallbackItemId: 'item.champion-fallback-relic',
+      existingItems: [],
       itemIdPrefix: 'item.haunt.x',
       floorId,
       x: 1,
@@ -222,6 +236,7 @@ describe('materializeDeathInventory', () => {
       snapshots: [heirloomFixture(), armorFixture()],
       equippedItemContentIds: ['item.iron-sword', 'item.leather-armor'],
       fallbackItemId: 'item.champion-fallback-relic',
+      existingItems: [],
       itemIdPrefix: 'item.haunt.x',
       floorId,
       x: 1,
@@ -265,5 +280,71 @@ describe('hauntDropSnapshots', () => {
       snapshots: [relic],
       heirloomIndex: 0,
     });
+  });
+});
+
+describe('materializeDeathInventory artifact singleton guard', () => {
+  const relic = (): RecordedHeirloomSnapshot =>
+    snapshot({ contentId: 'item.relic', sourceItemId: 'item.hero.relic', enchantment: null });
+
+  function materialize(existingItems: readonly ItemInstance[]) {
+    return materializeDeathInventory({
+      content: pack(),
+      snapshots: [relic(), armorFixture()],
+      equippedItemContentIds: ['item.relic', 'item.leather-armor'],
+      fallbackItemId: 'item.champion-fallback-relic',
+      existingItems,
+      itemIdPrefix: 'item.haunt.x',
+      floorId,
+      x: 1,
+      y: 1,
+    });
+  }
+
+  it('materializes the artifact itself when nothing in the run holds one', () => {
+    const [piece] = materialize([]);
+    expect(piece!.fallback).toBe(false);
+    expect(piece!.item.contentId).toBe('item.relic');
+  });
+
+  it('degrades an artifact the run already holds, leaving the rest of the set alone', () => {
+    // Two Hall records can both name the same artifact -- it circulated through both heroes. The
+    // second haunt held only a memory of it.
+    const existing: ItemInstance = {
+      itemId: 'item.somewhere-else',
+      contentId: 'item.relic',
+      quantity: 1,
+      condition: 100,
+      enchantment: null,
+      identified: true,
+      charges: null,
+      fuel: null,
+      enabled: null,
+      location: { type: 'floor', floorId, x: 9, y: 9 },
+    };
+    const pieces = materialize([existing]);
+    expect(pieces[0]!.fallback).toBe(true);
+    expect(pieces[0]!.item.contentId).toBe('item.champion-fallback-relic');
+    // A piece still comes back, and the non-artifact piece is untouched.
+    expect(pieces).toHaveLength(2);
+    expect(pieces[1]!.fallback).toBe(false);
+    expect(pieces[1]!.item.contentId).toBe('item.leather-armor');
+  });
+
+  it('ignores an ordinary item the run already holds', () => {
+    const existing: ItemInstance = {
+      itemId: 'item.another-jerkin',
+      contentId: 'item.leather-armor',
+      quantity: 1,
+      condition: 100,
+      enchantment: null,
+      identified: true,
+      charges: null,
+      fuel: null,
+      enabled: null,
+      location: { type: 'floor', floorId, x: 9, y: 9 },
+    };
+    // Only singletons are guarded: ordinary gear is minted as often as records name it.
+    expect(materialize([existing])[1]!.fallback).toBe(false);
   });
 });
