@@ -127,7 +127,9 @@ function instanceSnapshot(
     condition: instance.condition,
     charges: instance.charges,
     fuel: instance.fuel,
-    curse: instance.curse ?? null,
+    // The Hall knows the item's history: a cursed heirloom travels cursed and revealed, so the
+    // recovering hero sees what they are picking up before they touch it.
+    curse: instance.curse ? { curseId: instance.curse.curseId, revealed: true } : null,
     qualityRank: qualityRank(instance),
     displayName: definition.name,
     glyph: definition.glyph,

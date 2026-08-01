@@ -516,6 +516,9 @@ export function createRecordedHeirloom(
     charges: fallback ? null : input.snapshot.charges,
     fuel: fallback || fuelless ? (definition.light?.fuelCapacity ?? null) : input.snapshot.fuel,
     enabled: definition.light === null ? null : false,
+    // A degraded fallback relic resolved a different item than the record named, so the recorded
+    // curse belongs to nothing here -- exactly the reasoning the charges branch above already uses.
+    ...(fallback || input.snapshot.curse === null ? {} : { curse: input.snapshot.curse }),
     location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y },
     heirloom: {
       displayName,
@@ -561,6 +564,11 @@ export function recordedHeirloomContentId(
   const modifiersCompatible = Object.keys(input.snapshot.enchantment?.modifiers ?? {}).every(
     (name) => (DERIVED_STAT_NAMES as readonly string[]).includes(name),
   );
+  const curseCompatible =
+    input.snapshot.curse === null ||
+    input.content.entries.some(
+      (entry) => entry.kind === 'curse' && entry.id === input.snapshot.curse!.curseId,
+    );
   // An artifact travels in the backpack as readily as in a slot, so it is absent from the record's
   // equipped list as often as not. Requiring membership would silently degrade every recovered
   // backpack artifact to the fallback relic; the remaining compatibility checks still apply.
@@ -571,7 +579,8 @@ export function recordedHeirloomContentId(
     recorded?.heirloomEligible === true &&
     recorded.equipment !== null &&
     fuelCompatible &&
-    modifiersCompatible
+    modifiersCompatible &&
+    curseCompatible
     ? input.snapshot.contentId
     : input.fallbackItemId;
 }
