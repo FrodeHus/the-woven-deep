@@ -901,13 +901,18 @@ export type DomainEvent =
  * lifecycle events (which redact through `population.notice`), this one passes through to the
  * client, which resolves `hallRecordId` against the projection's `haunts` block to speak the
  * farewell line -- the same lookup `haunt.sighted` drives. `itemIds` are the pieces now lying on
- * the floor in plain view, and `populationId` follows the precedent the trade events already set
- * for a population id the client is handed.
+ * the floor in plain view.
+ *
+ * Deliberately carries NO `populationId`, under the same ruling `haunt.sighted` was held to:
+ * population bookkeeping ids are not the client's to see, and an echo's spells out its RANK
+ * (`population.fallen-echo-${rank}...`). Should some future authoritative consumer need the
+ * population, the route is a separately-named public event (as `haunt.sighted` did for
+ * `champion.encountered`) rather than widening this one -- a zod discriminated union cannot carry
+ * two differently-shaped schemas under one `type`.
  */
 export interface HauntAppeasedEvent {
   readonly type: 'haunt.appeased';
   readonly eventId: OpaqueId;
-  readonly populationId: OpaqueId;
   readonly actorId: OpaqueId;
   readonly hallRecordId: OpaqueId;
   readonly role: 'champion' | 'echo';

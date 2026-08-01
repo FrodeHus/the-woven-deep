@@ -473,17 +473,27 @@ describe('resolveOffer', () => {
 
   it('emits haunt.appeased with the offering and the released pieces', () => {
     const { state, events } = appease(heroBesideHaunt({ pieces: 2 }));
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'haunt.appeased',
-        hallRecordId: HALL_RECORD_ID,
-        actorId: HAUNT_ACTOR_ID,
-        populationId: POPULATION_ID,
-        role: 'champion',
-        offeredItemId: OFFERED_ITEM_ID,
-        itemIds: droppedPieces(state).map((item) => item.itemId),
-      }),
-    );
+    expect(events).toContainEqual({
+      type: 'haunt.appeased',
+      eventId: 'e1',
+      actorId: HAUNT_ACTOR_ID,
+      hallRecordId: HALL_RECORD_ID,
+      role: 'champion',
+      offeredItemId: OFFERED_ITEM_ID,
+      itemIds: droppedPieces(state).map((item) => item.itemId),
+    });
+  });
+
+  it('never publishes the population id, which for an echo embeds its rank', () => {
+    // Same redaction ruling `haunt.sighted` was held to: population bookkeeping ids (and the rank
+    // an echo's population id spells out) are not the client's to see.
+    const { events } = appease(heroBesideHaunt({ role: 'echo' }));
+    const appeased = events.find((event) => event.type === 'haunt.appeased')!;
+    expect(Object.keys(appeased)).not.toContain('populationId');
+    // No field IS the population id. The released pieces' own item ids embed it by construction
+    // (`item.haunt.<populationId>.NNNN`), and those are ordinary floor items the client already
+    // sees in the item list -- that scheme predates this event and is not what the ruling covers.
+    expect(Object.values(appeased)).not.toContain(POPULATION_ID);
   });
 
   it('consumes no randomness', () => {
@@ -507,6 +517,18 @@ describe('resolveOffer', () => {
       expect(() => validateContentBoundRun(state, pack), role).not.toThrow();
     }
   });
+
+  it.each(['champion', 'echo'] as const)(
+    'rejects a save that lost a piece an appeased %s owes, at decode',
+    (role) => {
+      const { state } = appease(heroBesideHaunt({ role, pieces: 3 }));
+      const missingLastPiece: ActiveRun = {
+        ...state,
+        items: state.items.filter((item) => item.itemId !== `${PIECE_PREFIX}.0002`),
+      };
+      expect(() => encodeActiveRun(missingLastPiece)).toThrow(/death inventory it surrendered/i);
+    },
+  );
 
   it('survives a save round trip after an appeasement, for both roles', () => {
     for (const role of ['champion', 'echo'] as const) {

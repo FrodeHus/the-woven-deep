@@ -682,12 +682,11 @@ export const populationNoticePublicEvent = z.strictObject({
 export const hauntAppeasedEvent = z.strictObject({
   type: z.literal('haunt.appeased'),
   eventId: identifier,
-  populationId: identifier,
   actorId: identifier,
   hallRecordId: identifier,
   role: z.enum(['champion', 'echo']),
   offeredItemId: identifier,
-  itemIds: z.array(identifier),
+  itemIds: z.array(identifier).readonly(),
 });
 export const hauntSightedEvent = z.strictObject({
   type: z.literal('haunt.sighted'),

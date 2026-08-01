@@ -146,7 +146,6 @@ export function resolveOffer(
       {
         type: 'haunt.appeased',
         eventId: input.eventId,
-        populationId: population.populationId,
         actorId: action.targetActorId,
         hallRecordId: population.hallRecordId,
         role: population.model,

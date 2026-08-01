@@ -1313,9 +1313,14 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       );
     }
     const prefix = hauntDropItemIdPrefix(populationValue.populationId);
-    // A champion hands back every piece; an echo hands back exactly one, always at index zero.
+    // A champion hands back every piece. A DEFEATED echo hands back exactly one, always at index
+    // zero -- but an APPEASED one gave back the whole set, so it owes every piece too, and the
+    // rule has to say so here or a save missing pieces 1..N-1 decodes clean and only blows up
+    // later, mid-command, out of `validateContentBoundRun`.
     const required =
-      populationValue.model === 'champion' ? hauntDropSnapshots(standing).snapshots.length : 1;
+      populationValue.model === 'champion' || appeasedRecordIds.has(populationValue.hallRecordId)
+        ? hauntDropSnapshots(standing).snapshots.length
+        : 1;
     for (let index = 0; index < required; index += 1) {
       const expected = items.get(hauntPieceItemId(prefix, index));
       if (expected?.heirloom === undefined) {
