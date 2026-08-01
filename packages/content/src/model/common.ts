@@ -142,6 +142,7 @@ export type CompletionType = 'died' | 'became-heart' | 'refused' | 'broke-cycle'
 
 export const MERCHANT_SERVICE_IDS = [
   'merchant-service.identify',
+  'merchant-service.remove-curse',
   'merchant-service.strongbox',
 ] as const;
 export type MerchantServiceId = (typeof MERCHANT_SERVICE_IDS)[number];

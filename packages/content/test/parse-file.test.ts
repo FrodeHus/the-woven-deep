@@ -400,6 +400,25 @@ entries:
     ).toThrow(/strongbox service requires minimumUses and maximumUses of exactly 1/i);
   });
 
+  it('rejects the remove-curse service authored with zero maximum uses', () => {
+    const service = (maximumUses: number) =>
+      `{ serviceId: merchant-service.remove-curse, basePrice: 30, minimumUses: 0, maximumUses: ${maximumUses}, tierIds: [neutral] }`;
+    const encounterYaml = (servicesEntry: string) => `schemaVersion: 12
+entries:
+  - { kind: encounter, id: encounter.town-provisioner, name: Provisioner, tags: [], model: merchant, minDepth: 1, maxDepth: 1, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: common, runAppearanceChance: 1, maximumInstancesPerRun: 1, placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: required }, intentPresentation: { visible: true }, definition: { npcId: npc.town-provisioner, stockLootTableId: loot-table.town-provisioner, minimumStockRolls: 1, maximumStockRolls: 1, merchantSaleBps: 12000, merchantPurchaseBps: 6000, acceptedCategories: [food], services: [${servicesEntry}], permanent: true, aggressionResponse: flee, commerceReputationDelta: 0, aggressionReputationDelta: 0, deathReputationDelta: 0, stockDropFraction: 0 } }
+`;
+    expect(
+      parseContentFile({ path: 'encounters/town.yaml', source: encounterYaml(service(1)) })[0],
+    ).toMatchObject({
+      definition: {
+        services: [{ serviceId: 'merchant-service.remove-curse', minimumUses: 0, maximumUses: 1 }],
+      },
+    });
+    expect(() =>
+      parseContentFile({ path: 'encounters/invalid.yaml', source: encounterYaml(service(0)) }),
+    ).toThrow(/remove-curse service requires at least one use/i);
+  });
+
   it('publishes and parses strict schema-v6 class content', () => {
     const validClassYaml = `schemaVersion: 12
 entries:

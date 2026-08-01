@@ -263,6 +263,13 @@ const merchantService = z
         message: 'the strongbox service requires minimumUses and maximumUses of exactly 1',
       });
     }
+    if (service.serviceId === 'merchant-service.remove-curse' && service.maximumUses < 1) {
+      context.addIssue({
+        code: 'custom',
+        path: ['maximumUses'],
+        message: 'the remove-curse service requires at least one use',
+      });
+    }
   });
 const merchantEncounterDefinition = z
   .strictObject({

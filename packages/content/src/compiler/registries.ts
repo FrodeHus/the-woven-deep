@@ -47,6 +47,7 @@ export const NPC_BEHAVIOR_PARAMETER_SCHEMAS = {
 
 export const MERCHANT_SERVICE_IDS = [
   'merchant-service.identify',
+  'merchant-service.remove-curse',
   'merchant-service.strongbox',
 ] as const;
 export const MERCHANT_AGGRESSION_RESPONSES = ['flee', 'self-defense'] as const;

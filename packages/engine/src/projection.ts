@@ -45,7 +45,11 @@ import { deriveHallRecordId, type AchievementGrant, type HallRecord } from './ru
 import type { ScoreBreakdown } from './score-run.js';
 import { compareCodeUnits } from './stable-json.js';
 import { tileDefinition } from './terrain.js';
-import { activeTradeValidIgnoringDeparture, merchantFaction } from './trade.js';
+import {
+  activeTradeValidIgnoringDeparture,
+  merchantFaction,
+  serviceTargetItemIds,
+} from './trade.js';
 import { computeFieldOfView, isVisible } from './visibility.js';
 
 export type KnowledgeState = 'unknown' | 'remembered' | 'visible';
@@ -626,24 +630,6 @@ function projectActiveTrade(
         },
       ];
     });
-  const identifyTargetIds = state.items
-    .filter(
-      (item) =>
-        (item.location.type === 'backpack' || item.location.type === 'equipped') &&
-        item.location.actorId === hero.actorId,
-    )
-    .filter((item) => {
-      const definition = itemEntry(item.contentId);
-      if (!definition) return false;
-      const appearanceId = state.identification.appearanceByContentId[item.contentId];
-      const appearanceUnknown =
-        definition.identification.mode === 'shuffled' &&
-        appearanceId !== undefined &&
-        !state.identification.knownAppearanceIds.includes(appearanceId);
-      return !item.identified || appearanceUnknown;
-    })
-    .map((item) => item.itemId)
-    .sort(compareCodeUnits);
   const services = [...population.services]
     .filter(
       (service) =>
@@ -657,7 +643,7 @@ function projectActiveTrade(
         factionBps: tier.purchasePriceBps,
       }),
       remainingUses: service.remainingUses,
-      targetItemIds: identifyTargetIds,
+      targetItemIds: serviceTargetItemIds({ state, content, serviceId: service.serviceId }),
     }));
   return {
     merchantPopulationId: population.populationId,
