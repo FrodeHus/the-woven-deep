@@ -208,10 +208,16 @@ function proveMilestone(result, split, content) {
       result.initial.populations.some((population) => population.model === 'boss'),
     'forced fixture did not override a normally rejected production encounter gate',
   );
+  // A haunt defeat hands back a set now -- a Champion its whole recorded death inventory, an Echo
+  // exactly one piece of it (which MAY be the recorded heirloom itself; see `population-fixture.ts`'s
+  // "at most one heirloom item in the run" comment). This fixture's Champion and Echo both fall, so
+  // both heirlooms are expected to surface among the dropped items.
   const heirlooms = result.state.items.filter((item) => item.heirloom !== undefined);
   assert(
-    heirlooms.length === 1 && heirlooms[0].heirloom.displayName === "Ada's Iron Sword",
-    'exact Champion heirloom was not preserved',
+    heirlooms.length === 2 &&
+      heirlooms.some((item) => item.heirloom.displayName === "Ada's Iron Sword") &&
+      heirlooms.some((item) => item.heirloom.displayName === "Bryn's Iron Sword"),
+    'exact Champion and Echo heirlooms were not preserved',
   );
   assert(
     result.state.items.some(
