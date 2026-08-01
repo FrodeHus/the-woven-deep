@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { CompiledContentPack, CurseContentEntry, ItemContentEntry } from '@woven-deep/content';
+import { CURSE_TRIGGER_EFFECT_IDS } from '@woven-deep/content';
 import {
   applyCurseTriggers,
   createDemoContentPack,
   createDemoRun,
+  DIRECT_EFFECT_IDS,
+  heroActor,
   type ActiveRun,
+  type ActorState,
   type DomainEvent,
   type ItemInstance,
 } from '../src/index.js';
@@ -49,6 +53,19 @@ function damageCurse(
       effectId: 'effect.damage',
       requiresLivingTarget: true,
       parameters: { damageType: 'arcane', dice: { count: 1, sides: 3, bonus: 0 } },
+    },
+  });
+}
+
+/** An `on-hurt-below-half` curse whose effect is a forced shove `distance` cells east. */
+function shoveCurse(id: string, distance: number): CurseContentEntry {
+  return curse(id, {
+    on: 'on-hurt-below-half',
+    chanceBps: 10000,
+    effect: {
+      effectId: 'effect.force-move',
+      requiresLivingTarget: true,
+      parameters: { distance },
     },
   });
 }
@@ -179,7 +196,10 @@ const unlikely = curse('curse.faint-whisper', {
   },
 });
 
-const content = pack(onKill, secondOnKill, onHurt, onFloorEnter, inert, unlikely);
+const shove = shoveCurse('curse.hollow-step.shove', 1);
+const longShove = shoveCurse('curse.hollow-step.lunge', 2);
+
+const content = pack(onKill, secondOnKill, onHurt, onFloorEnter, inert, unlikely, shove, longShove);
 
 function fired(state: ActiveRun, event: DomainEvent): boolean {
   return applyCurseTriggers({ state, content, events: [event], eventId: 'c1' }).events.length > 0;
@@ -364,5 +384,96 @@ describe('applyCurseTriggers', () => {
     });
     expect(result.state).toBe(state);
     expect(result.events).toEqual([]);
+  });
+});
+
+describe('curse-fired forced movement', () => {
+  const CROSSING = { amount: 11, health: 9 } as const;
+
+  /** Places the hero at `x` on the demo floor's open row, optionally with a neighbour east of it. */
+  function shoveState(
+    input: Readonly<{ curseId: string; x: number; neighbourHealth?: number }>,
+  ): ActiveRun {
+    const base = withEquippedCursedSword({ curseId: input.curseId, revealed: true });
+    const hero: ActorState = { ...base.actors[0]!, x: input.x, y: 1 };
+    const neighbour: ActorState = {
+      ...hero,
+      actorId: 'monster.blocker',
+      contentId: 'monster.blocker',
+      playerControlled: false,
+      x: input.x + 1,
+      health: input.neighbourHealth ?? 0,
+      disposition: 'hostile',
+    };
+    return {
+      ...base,
+      actors: input.neighbourHealth === undefined ? [hero] : [hero, neighbour],
+    };
+  }
+
+  function trigger(state: ActiveRun) {
+    return applyCurseTriggers({
+      state,
+      content,
+      events: [damagedEvent(CROSSING)],
+      eventId: 'c1',
+    });
+  }
+
+  it('delivers a shove onto a legal cell and refreshes the hero knowledge there', () => {
+    const state = shoveState({ curseId: shove.id, x: 1 });
+    const result = trigger(state);
+
+    expect(result.events).toContainEqual(
+      expect.objectContaining({ type: 'actor.forced-move', to: { x: 2, y: 1 } }),
+    );
+    expect(heroActor(result.state)).toMatchObject({ x: 2, y: 1 });
+    // Stale knowledge would leave the projection centred on the cell the hero was shoved off.
+    expect(result.state.floors[0]!.knowledge).not.toEqual(state.floors[0]!.knowledge);
+  });
+
+  it('drops a shove into a wall, out of bounds, or onto a living actor without moving the hero', () => {
+    const blocked: readonly Readonly<{ label: string; state: ActiveRun }>[] = [
+      // The demo floor's open row is x 1..5; x 6 is wall, x 7 is off the floor entirely.
+      { label: 'wall', state: shoveState({ curseId: shove.id, x: 5 }) },
+      { label: 'out of bounds', state: shoveState({ curseId: longShove.id, x: 5 }) },
+      { label: 'living actor', state: shoveState({ curseId: shove.id, x: 1, neighbourHealth: 5 }) },
+    ];
+    for (const { label, state } of blocked) {
+      const result = trigger(state);
+      expect(
+        result.events.filter((event) => event.type === 'actor.forced-move'),
+        label,
+      ).toHaveLength(0);
+      expect(heroActor(result.state), label).toMatchObject({
+        x: heroActor(state).x,
+        y: heroActor(state).y,
+      });
+      expect(result.state.floors, label).toEqual(state.floors);
+    }
+  });
+
+  it('leaves the effects stream in the same position whether the shove lands or is dropped', () => {
+    const delivered = trigger(shoveState({ curseId: shove.id, x: 1 }));
+    const intoWall = trigger(shoveState({ curseId: shove.id, x: 5 }));
+    const ontoActor = trigger(shoveState({ curseId: shove.id, x: 1, neighbourHealth: 5 }));
+
+    expect(intoWall.state.rng.effects).toEqual(delivered.state.rng.effects);
+    expect(ontoActor.state.rng.effects).toEqual(delivered.state.rng.effects);
+  });
+
+  it('shoves the hero onto a cell held only by a corpse', () => {
+    const result = trigger(shoveState({ curseId: shove.id, x: 1, neighbourHealth: 0 }));
+    expect(heroActor(result.state)).toMatchObject({ x: 2, y: 1 });
+  });
+});
+
+describe('curse trigger effect allowlist', () => {
+  it('is a subset of the effects resolveEffectSequence resolves without an operation table', () => {
+    // The post-pass passes `operations: {}`; anything outside DIRECT_EFFECT_IDS would throw
+    // "effect operation ... is unavailable" at runtime instead of failing here.
+    for (const effectId of CURSE_TRIGGER_EFFECT_IDS) {
+      expect(DIRECT_EFFECT_IDS.has(effectId), effectId).toBe(true);
+    }
   });
 });

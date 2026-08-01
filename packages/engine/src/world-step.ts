@@ -19,7 +19,7 @@ import {
   type PublicEvent,
 } from './model.js';
 import { refreshKnowledge } from './perception.js';
-import { heroFloorPerception } from './run-perception.js';
+import { heroFloorPerception, refreshHeroKnowledge } from './run-perception.js';
 import { markEncounterObserved } from './population-gates.js';
 import { updatePopulationIntent } from './population-intent.js';
 import { updateActorMemory, visibleTargetObservations } from './population-perception.js';
@@ -39,7 +39,6 @@ import {
 } from './merchant-behavior.js';
 import { advanceToNextReady, READINESS_THRESHOLD, selectReadyActor } from './scheduler.js';
 import { compareCodeUnits } from './stable-json.js';
-import { deriveRunActorStats } from './stats.js';
 import { isTownFloorActive } from './town-floor.js';
 
 export interface WorldStepResult {
@@ -67,27 +66,6 @@ const actorDamageMitigation: ActorDamageMitigation = (input) => {
   if (!actor) throw new Error(`internal invariant: actor ${input.actorId} does not exist`);
   return damageMitigation(actor, input.content, input.damageType);
 };
-
-function refreshHeroKnowledge(state: ActiveRun, content: CompiledContentPack): ActiveRun {
-  const hero = heroActor(state);
-  const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
-  if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
-  const derived = deriveRunActorStats({ state, content, actor: hero });
-  const knowledge = heroFloorPerception({
-    state,
-    content,
-    lightOutMemory: {
-      commitsMemory: derived.lightOutCommitsMemory > 0,
-      revealRadius: derived.lightOutRevealRadius,
-    },
-  }).knowledge;
-  return {
-    ...state,
-    floors: state.floors.map((candidate) =>
-      candidate === floor ? { ...candidate, knowledge } : candidate,
-    ),
-  };
-}
 
 function prepareIndividualTurn(
   input: Readonly<{

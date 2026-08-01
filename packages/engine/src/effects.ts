@@ -93,7 +93,12 @@ export interface EffectSequenceInput {
   >;
 }
 
-const DIRECT_EFFECTS = new Set([
+/**
+ * Effects `resolveEffectSequence` resolves itself, with no caller-supplied operation. Exported so
+ * callers that pass `operations: {}` (the curse trigger post-pass) can assert their own effect
+ * allowlist is a subset of it rather than asserting it by comment.
+ */
+export const DIRECT_EFFECT_IDS: ReadonlySet<string> = new Set([
   'effect.damage',
   'effect.heal',
   'effect.condition.apply',
@@ -196,7 +201,7 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
         `invalid effect ${effect.effectId} at effects.${index}: ${parsed.error.issues[0]!.message}`,
       );
     if (
-      !DIRECT_EFFECTS.has(effect.effectId) &&
+      !DIRECT_EFFECT_IDS.has(effect.effectId) &&
       !RUN_LEVEL_EFFECTS.has(effect.effectId) &&
       !input.operations[effect.effectId]
     ) {

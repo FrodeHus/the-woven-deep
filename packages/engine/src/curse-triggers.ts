@@ -8,9 +8,13 @@ import { heroActor } from './actor-model.js';
 import { revealItemCurse } from './curse.js';
 import { applyEffectResult, resolveEffectSequence, withRngStream } from './effects.js';
 import { EQUIPMENT_SLOT_ORDER } from './equipment.js';
+import { featureTiles } from './features.js';
 import type { ItemInstance } from './item-model.js';
-import type { ActiveRun, DomainEvent, OpaqueId } from './model.js';
+import { tileIndex, type ActiveRun, type DomainEvent, type OpaqueId } from './model.js';
+import { parseEffectParameters } from './parameter-contracts.js';
 import { rollDie } from './random.js';
+import { refreshHeroKnowledge } from './run-perception.js';
+import { tileDefinition } from './terrain.js';
 
 /** Basis-point resolution of a curse trigger's `chanceBps` roll: 10000 bps == always. */
 const BPS_RESOLUTION = 10000;
@@ -80,6 +84,41 @@ function matchedTriggers(state: ActiveRun, events: readonly DomainEvent[]): Read
   return matched;
 }
 
+/**
+ * True when a curse's forced shove would land the hero somewhere no actor may legally stand: off
+ * the floor, on unwalkable terrain (a closed door counts -- `featureTiles` covers the cell), or on
+ * top of a living actor.
+ *
+ * `resolveEffectSequence` applies `effect.force-move` as a raw coordinate write with no such check,
+ * which is survivable for the caster-driven call sites that aim at a validated neighbour but not
+ * for a curse that fires wherever the hero happens to be standing: `encodeActiveRun` validates on
+ * write (`ensureActorWalkable`), so an unguarded shove into a wall crashes the session's next
+ * persist. A blocked shove is dropped -- the hero does not move and no `actor.forced-move` event is
+ * emitted -- while the chance roll is still spent, so the effects stream lands in exactly the same
+ * position whether the shove was blocked or delivered.
+ */
+function forceMoveBlocked(state: ActiveRun, effect: EffectDefinition): boolean {
+  const distance = parseEffectParameters(effect, 'effect.force-move').distance;
+  const hero = heroActor(state);
+  const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
+  if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
+  const x = hero.x + CURSE_FORCE_MOVE_DIRECTION.x * distance;
+  const y = hero.y + CURSE_FORCE_MOVE_DIRECTION.y * distance;
+  if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y))
+    throw new RangeError('forced movement destination overflowed');
+  const index = tileIndex(floor, x, y);
+  if (index === undefined) return true;
+  if (!tileDefinition(featureTiles(state, floor.floorId)[index]!).walkable) return true;
+  return state.actors.some(
+    (actor) =>
+      actor.actorId !== hero.actorId &&
+      actor.floorId === floor.floorId &&
+      actor.health > 0 &&
+      actor.x === x &&
+      actor.y === y,
+  );
+}
+
 function fireTrigger(
   input: Readonly<{
     state: ActiveRun;
@@ -98,8 +137,10 @@ function fireTrigger(
     eventId: input.eventId,
   });
   const hero = heroActor(revealed.state);
+  const blockedShove =
+    input.effect.effectId === 'effect.force-move' && forceMoveBlocked(revealed.state, input.effect);
   const resolved = resolveEffectSequence({
-    effects: [input.effect],
+    effects: blockedShove ? [] : [input.effect],
     actors: revealed.state.actors,
     items: revealed.state.items,
     features: revealed.state.features,
@@ -113,13 +154,18 @@ function fireTrigger(
     survival: revealed.state.survival,
     survivalActorId: revealed.state.hero.actorId,
     forceMoveDirection: CURSE_FORCE_MOVE_DIRECTION,
-    // Every effect a curse trigger may declare is a member of `DIRECT_EFFECTS`
-    // (`CURSE_TRIGGER_EFFECT_IDS` is validated against that set at compile time), so no operation
-    // table is needed and `resolveEffectSequence` cannot reject the effect as unavailable.
+    // Every effect a curse trigger may declare is a member of `DIRECT_EFFECT_IDS`, which
+    // `curse-triggers.test.ts` asserts over the whole `CURSE_TRIGGER_EFFECT_IDS` allowlist, so no
+    // operation table is needed and `resolveEffectSequence` cannot reject the effect as unavailable.
     operations: {},
   });
+  const applied = applyEffectResult(revealed.state, resolved);
+  // A delivered shove moves the hero, so its field of view has to be rebuilt here: the post-pass
+  // runs after the world step's own knowledge refresh, and the projection would otherwise render
+  // the floor as seen from the cell the hero was shoved off. Skipped when nothing moved.
+  const moved = resolved.events.some((event) => event.type === 'actor.forced-move');
   return {
-    state: applyEffectResult(revealed.state, resolved),
+    state: moved ? refreshHeroKnowledge(applied, input.content) : applied,
     events: [...revealed.events, ...resolved.events],
   };
 }
@@ -134,6 +180,11 @@ function fireTrigger(
  * Never fires -- and never touches any RNG stream -- for a concluded run or a hero already at zero
  * health, for an unequipped cursed item, or for a curse whose definition declares no trigger.
  * Revealed-ness gates nothing: an equipped curse that fires reveals itself in the same pass.
+ *
+ * Deliberately non-cascading: matching is computed once, up front, over the caller's event list
+ * only. Events a trigger itself emits are never re-scanned, so a curse can neither retrigger itself
+ * nor set another curse off -- an on-hurt-below-half curse whose own damage crosses the threshold
+ * stops there.
  */
 export function applyCurseTriggers(
   input: Readonly<{
