@@ -339,6 +339,31 @@ describe('active-run save codec', () => {
     return { ...current, schemaVersion: 14 };
   }
 
+  // v15 saves are structurally identical to the current shape apart from `cause`/`deathInventory`
+  // on every standing and `appeased` on every decision, which the haunts feature introduced at v16.
+  function v15Fixture(): Record<string, unknown> {
+    const current = structuredClone(createDemoRun()) as any;
+    return { ...current, schemaVersion: 15 };
+  }
+
+  // Strips everything the haunts feature introduced at v16: `cause`/`deathInventory` on every
+  // standing and `appeased` on every decision.
+  function stripV16Fields(run: ReturnType<typeof createDemoRun>): Record<string, unknown> {
+    const current = structuredClone(run) as any;
+    return {
+      ...current,
+      schemaVersion: 15,
+      fallenHeroStandings: current.fallenHeroStandings.map((standing: any) => {
+        const { cause: _cause, deathInventory: _deathInventory, ...rest } = standing;
+        return rest;
+      }),
+      fallenHeroDecisions: current.fallenHeroDecisions.map((decision: any) => {
+        const { appeased: _appeased, ...rest } = decision;
+        return rest;
+      }),
+    };
+  }
+
   function concludedRun(): ReturnType<typeof createDemoRun> {
     const base = createDemoRun();
     const heroActor = { ...base.actors[0]!, health: 0 };
@@ -603,9 +628,35 @@ describe('active-run save codec', () => {
     return rest;
   }
 
-  function withRecordedHeirloom(run: any, heirloom: Record<string, unknown>): any {
+  // A second equipped-item snapshot distinct from the heirloom, for `deathInventory` fixtures that
+  // need more than one member.
+  function secondEquippedFixture(): Record<string, unknown> {
+    return {
+      contentId: 'item.leather-cap',
+      sourceItemId: 'item.recorded.second-equipped',
+      enchantment: null,
+      condition: 75,
+      charges: null,
+      fuel: null,
+      curse: null,
+      qualityRank: 0,
+      displayName: 'Worn Leather Cap',
+      glyph: '[',
+      color: '#8a6d3b',
+      originatingHallRecordId: 'hall.heirloom',
+    };
+  }
+
+  // `legacy: true` produces a standing/decision with no `cause`/`deathInventory`/`appeased` key at
+  // all (the fields did not exist before v16) -- what a genuine pre-haunt save actually stored.
+  // Default (`legacy` omitted) produces the live shape, valid against the current `activeRunSchema`.
+  function withRecordedHeirloom(
+    run: any,
+    heirloom: Record<string, unknown>,
+    options: Readonly<{ legacy?: boolean }> = {},
+  ): any {
     const heroActor = run.actors.find((actor: any) => actor.actorId === run.hero.actorId);
-    const standing = {
+    const standing: Record<string, unknown> = {
       rank: 1,
       hallRecordId: heirloom.originatingHallRecordId,
       heroName: 'Test Hero',
@@ -618,7 +669,7 @@ describe('active-run save codec', () => {
       sourceContentHash: run.contentHash,
       heirloom,
     };
-    const decision = {
+    const decision: Record<string, unknown> = {
       hallRecordId: standing.hallRecordId,
       rank: 1,
       role: 'champion' as const,
@@ -627,18 +678,80 @@ describe('active-run save codec', () => {
       encountered: false,
       defeated: false,
     };
+    if (!options.legacy) {
+      standing.cause = null;
+      standing.deathInventory = [heirloom];
+      decision.appeased = false;
+    }
     return { ...run, fallenHeroStandings: [standing], fallenHeroDecisions: [decision] };
+  }
+
+  // Builds a live-shape (v16) haunt standing, then overrides `cause`/`deathInventory` to the given
+  // values -- unlike `withRecordedHeirloom`'s own defaults (`cause: null`, `deathInventory: [heirloom]`),
+  // which model a legacy standing migrated forward, not a fresh haunt capture.
+  function withHauntStanding(
+    run: any,
+    overrides: Readonly<{
+      cause: Record<string, unknown> | null;
+      deathInventory: readonly Record<string, unknown>[];
+    }>,
+  ): any {
+    const heirloom = overrides.deathInventory[0]!;
+    const withStanding = withRecordedHeirloom(run, heirloom);
+    const standing = { ...withStanding.fallenHeroStandings[0], ...overrides };
+    return { ...withStanding, fallenHeroStandings: [standing] };
+  }
+
+  // Builds a live-shape decision whose haunt was appeased rather than defeated.
+  function withAppeasedDecision(run: any): any {
+    const withStanding = withRecordedHeirloom(run, heirloomFixture());
+    const decision = { ...withStanding.fallenHeroDecisions[0], appeased: true, defeated: false };
+    return { ...withStanding, fallenHeroDecisions: [decision] };
+  }
+
+  // A genuine pre-haunt blob at the given legacy schema version, carrying an actual standing/decision
+  // (no `cause`/`deathInventory`/`appeased` key anywhere) -- proves the migration chain actually
+  // defaults these fields, rather than vacuously passing over an empty `fallenHeroStandings` array.
+  function legacyFixtureAtVersion(
+    version: 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15,
+  ): Record<string, unknown> {
+    const builders: Record<number, () => Record<string, unknown>> = {
+      4: v4Fixture,
+      5: v5Fixture,
+      6: v6Fixture,
+      7: v7Fixture,
+      8: v8Fixture,
+      9: v9Fixture,
+      10: v10Fixture,
+      11: v11Fixture,
+      12: v12Fixture,
+      13: v13Fixture,
+      14: v14Fixture,
+      15: v15Fixture,
+    };
+    const base = builders[version]!();
+    // Curse (`ItemInstance.curse`/`RecordedHeirloomSnapshot.curse`) landed at v14: earlier versions
+    // never had the key at all.
+    const heirloom = version >= 14 ? heirloomFixture() : preCurseHeirloomFixture();
+    return withRecordedHeirloom(base, heirloom, { legacy: true });
+  }
+
+  // A JSON-safe pre-haunt (v15) run fixture carrying a genuine standing -- the seed for the
+  // "migrates a v15 standing" test, which forces its `schemaVersion` down to 15 (already its value)
+  // to mirror the brief's exact test shape.
+  function encodedFixtureWithStandings(): Record<string, unknown> {
+    return legacyFixtureAtVersion(15);
   }
 
   function recordedHeirloomOf(run: any): Record<string, unknown> {
     return run.fallenHeroStandings[0].heirloom;
   }
 
-  it('migrates strict schema v4 state through v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, and v15 and preserves every former field', () => {
+  it('migrates strict schema v4 state through v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, and v16 and preserves every former field', () => {
     const legacy = v4Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
     expect(decoded.hero.currency).toBe(0);
     expect(decoded.hero.classTags).toEqual([]);
@@ -659,11 +772,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v5 state through v6, v7, v8, v9, v10, v11, v12, v13, v14, and v15 and preserves every former field', () => {
+  it('migrates strict schema v5 state through v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, and v16 and preserves every former field', () => {
     const legacy = v5Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
@@ -679,11 +792,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v6 state through v7, v8, v9, v10, v11, v12, v13, v14, and v15 and preserves every former field', () => {
+  it('migrates strict schema v6 state through v7, v8, v9, v10, v11, v12, v13, v14, v15, and v16 and preserves every former field', () => {
     const legacy = v6Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
@@ -695,11 +808,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v7 state to v15 and preserves every former field', () => {
+  it('migrates strict schema v7 state to v16 and preserves every former field', () => {
     const legacy = v7Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
     expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
     expect(decoded.restockedMilestones).toEqual([]);
@@ -713,11 +826,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v8 state to v15 and preserves every former field', () => {
+  it('migrates strict schema v8 state to v16 and preserves every former field', () => {
     const legacy = v8Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
     // A pre-Weave hero migrates to full Weave: maxWeave is base 4 + Wits, and weave starts full.
     const migratedHero = decoded.actors.find((actor) => actor.actorId === decoded.hero.actorId)!;
@@ -735,11 +848,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v9 state to v15 and preserves every former field', () => {
+  it('migrates strict schema v9 state to v16 and preserves every former field', () => {
     const legacy = v9Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
     expect(decoded.metrics.defeatedBossMonsterIds).toEqual([]);
     expect(stripV10Fields(decoded)).toEqual(legacy);
@@ -748,11 +861,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v10 state to v15 and preserves every former field', () => {
+  it('migrates strict schema v10 state to v16 and preserves every former field', () => {
     const legacy = v10Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
     expect(stripV11Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
@@ -760,11 +873,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v11 state to v15 and preserves every former field', () => {
+  it('migrates strict schema v11 state to v16 and preserves every former field', () => {
     const legacy = v11Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
     expect(decoded.rng['loot-placement']).toEqual(
       deriveRngStreams(legacy.runSeed as any)['loot-placement'],
@@ -775,11 +888,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v12 state to v15 and preserves every former field', () => {
+  it('migrates strict schema v12 state to v16 and preserves every former field', () => {
     const legacy = v12Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
     expect(decoded.offeredArtifact).toBeNull();
     expect(decoded.artifactsUndiscovered).toEqual([]);
@@ -789,11 +902,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v13 state to v15 and preserves every former field', () => {
+  it('migrates strict schema v13 state to v16 and preserves every former field', () => {
     const legacy = v13Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
     expect(stripV14Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
@@ -801,11 +914,11 @@ describe('active-run save codec', () => {
     );
   });
 
-  it('migrates strict schema v14 state to v15 and preserves every former field', () => {
+  it('migrates strict schema v14 state to v16 and preserves every former field', () => {
     const legacy = v14Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
     expect(stripV15Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
@@ -813,11 +926,275 @@ describe('active-run save codec', () => {
     );
   });
 
+  it('migrates strict schema v15 state to v16 and preserves every former field', () => {
+    const legacy = v15Fixture();
+    const decoded = decodeActiveRun(JSON.stringify(legacy));
+
+    expect(decoded.schemaVersion).toBe(16);
+    expect(decoded.mode).toBe('classic');
+    expect(stripV16Fields(decoded)).toEqual(legacy);
+    expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
+      encodeActiveRun(decoded),
+    );
+  });
+
+  it('migrates a v15 standing to a cause-less single-item death inventory', () => {
+    const v15 = { ...structuredClone(encodedFixtureWithStandings()), schemaVersion: 15 };
+    const decoded = decodeActiveRun(JSON.stringify(v15), compiledContent);
+    expect(decoded.schemaVersion).toBe(16);
+    for (const standing of decoded.fallenHeroStandings) {
+      expect(standing.cause).toBeNull();
+      expect(standing.deathInventory).toEqual([standing.heirloom]);
+    }
+    for (const decision of decoded.fallenHeroDecisions) {
+      expect(decision.appeased).toBe(false);
+    }
+  });
+
+  /**
+   * A genuine pre-haunt (v15) blob carrying a haunt that was already PUT DOWN before the death
+   * inventory drop existed: a champion whose single reward is `item.heirloom.${populationId}`, and
+   * an echo that surrendered no piece at all (it only ever dropped spoils). Both are states the
+   * v16 rules would otherwise reject outright, bricking the save.
+   */
+  function v15WithDefeatedHaunts(): Record<string, unknown> {
+    const base: any = structuredClone(createDemoRun());
+    const hero = base.actors[0];
+    const championPopulationId = 'population.fallen-champion.hall-a';
+    const echoPopulationId = 'population.fallen-echo-2.hall-b';
+    const championActorId = 'actor.fallen-champion.001';
+    const echoActorId = 'actor.fallen-echo.001';
+    const corpse = (actorId: string, populationId: string, x: number) => ({
+      ...structuredClone(hero),
+      actorId,
+      contentId: 'monster.champion-fallback',
+      playerControlled: false,
+      x,
+      y: 1,
+      health: 0,
+      disposition: 'hostile',
+      populationId,
+      populationPresentation: { name: 'Fallen', glyph: '@', color: '#ffffff', leader: false },
+    });
+    const snapshot = (recordId: string, contentId: string) => ({
+      contentId,
+      sourceItemId: `item.recorded.${recordId}`,
+      enchantment: null,
+      condition: 90,
+      charges: null,
+      fuel: null,
+      curse: null,
+      qualityRank: 0,
+      displayName: 'Old Iron Sword',
+      glyph: ')',
+      color: '#c0c0c0',
+      originatingHallRecordId: recordId,
+    });
+    const championHeirloom = snapshot('hall.a', 'item.iron-sword');
+    const echoHeirloom = snapshot('hall.b', 'item.iron-sword');
+    return {
+      ...base,
+      schemaVersion: 15,
+      actors: [
+        hero,
+        corpse(championActorId, championPopulationId, 2),
+        corpse(echoActorId, echoPopulationId, 3),
+      ].sort((left: any, right: any) => (left.actorId < right.actorId ? -1 : 1)),
+      items: [
+        {
+          itemId: `item.heirloom.${championPopulationId}`,
+          contentId: 'item.iron-sword',
+          quantity: 1,
+          condition: 90,
+          enchantment: null,
+          identified: true,
+          charges: null,
+          fuel: null,
+          enabled: null,
+          location: { type: 'floor', floorId: hero.floorId, x: 2, y: 1 },
+          heirloom: {
+            displayName: 'Old Iron Sword',
+            glyph: ')',
+            color: '#c0c0c0',
+            originatingHallRecordId: 'hall.a',
+            originatingRank: 1,
+            sourceItemId: championHeirloom.sourceItemId,
+          },
+        },
+      ],
+      populations: [
+        {
+          populationId: championPopulationId,
+          encounterId: 'fallen-champion-template.core',
+          floorId: hero.floorId,
+          createdAt: 0,
+          model: 'champion',
+          livingMemberIds: [],
+          formerMemberIds: [championActorId],
+          actorId: championActorId,
+          hallRecordId: 'hall.a',
+          rank: 1,
+          defeated: true,
+          rewardCreated: true,
+          equipmentContentIds: [],
+          abilityIds: [],
+        },
+        {
+          populationId: echoPopulationId,
+          encounterId: 'fallen-champion-template.core',
+          floorId: hero.floorId,
+          createdAt: 0,
+          model: 'echo',
+          livingMemberIds: [],
+          formerMemberIds: [echoActorId],
+          actorId: echoActorId,
+          hallRecordId: 'hall.b',
+          rank: 2,
+          defeated: true,
+          lootCreated: true,
+          equipmentContentIds: [],
+          abilityIds: [],
+        },
+      ].sort((left: any, right: any) => (left.populationId < right.populationId ? -1 : 1)),
+      fallenHeroStandings: [
+        {
+          rank: 1,
+          hallRecordId: 'hall.a',
+          heroName: 'Kaelen',
+          portraitGlyph: '@',
+          classTags: ['fighter'],
+          attributes: hero.attributes,
+          equippedItemContentIds: ['item.iron-sword'],
+          signatureAbilityIds: [],
+          deathDepth: 4,
+          sourceContentHash: base.contentHash,
+          heirloom: championHeirloom,
+        },
+        {
+          rank: 2,
+          hallRecordId: 'hall.b',
+          heroName: 'Mira',
+          portraitGlyph: '@',
+          classTags: ['scout'],
+          attributes: hero.attributes,
+          equippedItemContentIds: ['item.iron-sword'],
+          signatureAbilityIds: [],
+          deathDepth: 3,
+          sourceContentHash: base.contentHash,
+          heirloom: echoHeirloom,
+        },
+      ],
+      fallenHeroDecisions: [
+        {
+          hallRecordId: 'hall.a',
+          rank: 1,
+          role: 'champion',
+          gateRoll: null,
+          retained: true,
+          encountered: true,
+          defeated: true,
+        },
+        {
+          hallRecordId: 'hall.b',
+          rank: 2,
+          role: 'echo',
+          gateRoll: 1,
+          retained: true,
+          encountered: true,
+          defeated: true,
+        },
+      ],
+    };
+  }
+
+  it('migrates a v15 save whose champion was already defeated, renaming its reward to a death-inventory piece', () => {
+    const decoded = decodeActiveRun(JSON.stringify(v15WithDefeatedHaunts()));
+    expect(decoded.schemaVersion).toBe(16);
+    const champion = decoded.populations.find(
+      (population) => population.model === 'champion',
+    ) as Extract<(typeof decoded.populations)[number], { model: 'champion' }>;
+    const pieceId = `item.haunt.${champion.populationId}.0000`;
+    expect(decoded.items.map((item) => item.itemId)).toContain(pieceId);
+    expect(decoded.items.some((item) => item.itemId.startsWith('item.heirloom.'))).toBe(false);
+    expect(decoded.items.find((item) => item.itemId === pieceId)!.heirloom).toMatchObject({
+      originatingHallRecordId: 'hall.a',
+      originatingRank: 1,
+    });
+    const encoded = encodeActiveRun(decoded);
+    expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
+  });
+
+  it('migrates a v15 save whose echo was already defeated and never surrendered a piece', () => {
+    const decoded = decodeActiveRun(JSON.stringify(v15WithDefeatedHaunts()));
+    const echo = decoded.populations.find((population) => population.model === 'echo')!;
+    expect(
+      decoded.items.some((item) => item.itemId.startsWith(`item.haunt.${echo.populationId}.`)),
+    ).toBe(false);
+    const encoded = encodeActiveRun(decoded);
+    expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
+  });
+
+  it('refuses a pre-haunt reward marker that would excuse a partially deleted drop', () => {
+    // The marker is the one mechanism that lets a rewarded haunt owe no pieces. It must never be
+    // usable to explain away a v16 drop with items removed from it.
+    const decoded = decodeActiveRun(JSON.stringify(v15WithDefeatedHaunts()));
+    const champion = decoded.populations.find((population) => population.model === 'champion')!;
+    const forged = {
+      ...decoded,
+      populations: decoded.populations.map((population) =>
+        population.populationId === champion.populationId
+          ? { ...population, preHauntReward: true as const }
+          : population,
+      ),
+    };
+    expect(() => encodeActiveRun(forged)).toThrow(
+      /pre-haunt reward cannot coexist with death-inventory pieces/i,
+    );
+  });
+
+  it('migrates every legacy entry version through the frozen pre-haunt standing schema', () => {
+    for (const version of [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] as const) {
+      const decoded = decodeActiveRun(
+        JSON.stringify(legacyFixtureAtVersion(version)),
+        compiledContent,
+      );
+      expect(decoded.schemaVersion).toBe(16);
+      expect(decoded.fallenHeroStandings.every((standing) => standing.cause === null)).toBe(true);
+      expect(
+        decoded.fallenHeroStandings.every((standing) => standing.deathInventory.length === 1),
+      ).toBe(true);
+      expect(decoded.fallenHeroDecisions.every((decision) => decision.appeased === false)).toBe(
+        true,
+      );
+    }
+  });
+
+  it('round-trips a haunt standing byte-identically', () => {
+    const run = withHauntStanding(baseRun(), {
+      cause: { killerContentId: 'monster.bone-gnawer', depth: 7, turn: 412, worldTime: 41200 },
+      deathInventory: [heirloomFixture(), secondEquippedFixture()],
+    });
+    const encoded = encodeActiveRun(run);
+    expect(encodeActiveRun(decodeActiveRun(encoded, compiledContent))).toBe(encoded);
+  });
+
+  it('rejects an empty death inventory', () => {
+    const withStanding = withRecordedHeirloom(baseRun(), heirloomFixture());
+    const standing = { ...withStanding.fallenHeroStandings[0], cause: null, deathInventory: [] };
+    const run = { ...withStanding, fallenHeroStandings: [standing] };
+    expect(() => encodeActiveRun(run)).toThrow(/deathInventory/);
+  });
+
+  it('accepts an appeased decision whose defeated flag is false', () => {
+    const run = withAppeasedDecision(baseRun());
+    expect(() => decodeActiveRun(encodeActiveRun(run), compiledContent)).not.toThrow();
+  });
+
   it('migrates a v14 save by defaulting the mode to classic', () => {
     const v14 = v14Fixture();
     const decoded = decodeActiveRun(JSON.stringify(v14));
     expect(decoded.mode).toBe('classic');
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
   });
 
   it('defaults the mode to classic for every legacy entry version', () => {
@@ -862,7 +1239,7 @@ describe('active-run save codec', () => {
     for (const item of v13.items as Record<string, unknown>[]) delete item.curse;
     const decoded = decodeActiveRun(JSON.stringify(v13));
     expect(decoded.items.every((item) => item.curse === undefined)).toBe(true);
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
   });
 
@@ -871,23 +1248,33 @@ describe('active-run save codec', () => {
   // optional `ItemInstance.curse`), so the migration must write a default in, not merely tolerate
   // absence.
   it('migrates a v13 save with a Hall standing by defaulting the recorded heirloom curse to null', () => {
-    const legacy = withRecordedHeirloom(v13Fixture(), preCurseHeirloomFixture());
+    const legacy = withRecordedHeirloom(v13Fixture(), preCurseHeirloomFixture(), { legacy: true });
     const decoded = decodeActiveRun(JSON.stringify(legacy));
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
     expect(decoded.fallenHeroStandings[0]!.heirloom.curse).toBeNull();
+    expect(decoded.fallenHeroStandings[0]!.cause).toBeNull();
+    expect(decoded.fallenHeroStandings[0]!.deathInventory).toEqual([
+      decoded.fallenHeroStandings[0]!.heirloom,
+    ]);
+    expect(decoded.fallenHeroDecisions[0]!.appeased).toBe(false);
   });
 
   // The same defaulting must survive the full legacy chain: a v12 save's `fallenHeroStandings`
   // reaches `migrateV13ToV14` only after parsing through every intermediate frozen schema, each of
   // which must accept a pre-curse heirloom (not just the v13 one).
   it('migrates a v12 save with a Hall standing through v14, defaulting item and heirloom curse', () => {
-    const legacy = withRecordedHeirloom(v12Fixture(), preCurseHeirloomFixture());
+    const legacy = withRecordedHeirloom(v12Fixture(), preCurseHeirloomFixture(), { legacy: true });
     const decoded = decodeActiveRun(JSON.stringify(legacy));
-    expect(decoded.schemaVersion).toBe(15);
+    expect(decoded.schemaVersion).toBe(16);
     expect(decoded.mode).toBe('classic');
     expect(decoded.fallenHeroStandings[0]!.heirloom.curse).toBeNull();
     expect(decoded.items.every((item) => item.curse === undefined)).toBe(true);
+    expect(decoded.fallenHeroStandings[0]!.cause).toBeNull();
+    expect(decoded.fallenHeroStandings[0]!.deathInventory).toEqual([
+      decoded.fallenHeroStandings[0]!.heirloom,
+    ]);
+    expect(decoded.fallenHeroDecisions[0]!.appeased).toBe(false);
   });
 
   it('round-trips a cursed item byte-identically', () => {
@@ -1458,6 +1845,61 @@ describe('active-run save codec', () => {
     },
   );
 
+  it('round-trips a recorded offer command', () => {
+    const state = createDemoRun();
+    const command = {
+      type: 'offer' as const,
+      commandId: 'command.guest-000001',
+      expectedRevision: 0,
+      itemId: 'item.scroll.0001',
+      targetActorId: 'actor.population.fallen-echo-2.record.b.001',
+    };
+    const result = {
+      status: 'invalid' as const,
+      commandId: command.commandId,
+      revision: 0,
+      turn: 0,
+      reason: 'offer.refused' as const,
+    };
+    const invalidEvent = {
+      type: 'action.invalid' as const,
+      eventId: command.commandId,
+      commandId: command.commandId,
+      reason: result.reason,
+    };
+    const withHistory = {
+      ...state,
+      recentCommands: [{ command, result, events: [invalidEvent], publicEvents: [] }],
+    };
+    const encoded = encodeActiveRun(withHistory);
+    expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
+    expect(decodeActiveRun(encoded)).toEqual(withHistory);
+  });
+
+  it('rejects an offer.refused reason attached to a non-offer command', () => {
+    const state = createDemoRun();
+    const command = { type: 'wait' as const, commandId: 'command.wait-offer', expectedRevision: 0 };
+    const result = {
+      status: 'invalid' as const,
+      commandId: command.commandId,
+      revision: 0,
+      turn: 0,
+      reason: 'offer.refused' as const,
+    };
+    const invalidEvent = {
+      type: 'action.invalid' as const,
+      eventId: command.commandId,
+      commandId: command.commandId,
+      reason: result.reason,
+    };
+    expect(() =>
+      encodeActiveRun({
+        ...state,
+        recentCommands: [{ command, result, events: [invalidEvent], publicEvents: [] }],
+      }),
+    ).toThrow(/offer/i);
+  });
+
   it('rejects a house.full reason attached to a non-house command', () => {
     const state = createDemoRun();
     const command = { type: 'wait' as const, commandId: 'command.wait-house', expectedRevision: 0 };
@@ -1806,6 +2248,8 @@ describe('active-run save codec', () => {
           deathDepth: 8,
           sourceContentHash: base.contentHash,
           heirloom: heirloom('hall.champion', 'item.iron-sword'),
+          cause: null,
+          deathInventory: [heirloom('hall.champion', 'item.iron-sword')],
         },
         {
           rank: 2,
@@ -1819,6 +2263,8 @@ describe('active-run save codec', () => {
           deathDepth: 5,
           sourceContentHash: base.contentHash,
           heirloom: heirloom('hall.echo', 'item.short-bow'),
+          cause: null,
+          deathInventory: [heirloom('hall.echo', 'item.short-bow')],
         },
       ],
       fallenHeroDecisions: [
@@ -1830,6 +2276,7 @@ describe('active-run save codec', () => {
           retained: true,
           encountered: false,
           defeated: false,
+          appeased: false,
         },
         {
           hallRecordId: 'hall.echo',
@@ -1839,6 +2286,7 @@ describe('active-run save codec', () => {
           retained: true,
           encountered: false,
           defeated: false,
+          appeased: false,
         },
       ],
     };
@@ -2009,6 +2457,65 @@ describe('active-run save codec', () => {
     expect(duplicate.state).toBe(loaded);
     expect(duplicate.result).toEqual(result);
     expect(duplicate.events).toEqual(publicEvents);
+  });
+
+  it('round-trips a haunt sighting retained in command history (byte-identity)', () => {
+    // The exact hole a narrower, schema-less PublicEvent shape left uncovered: `events` (the
+    // authoritative domain history) keeps the FULL `champion.encountered` domain event
+    // (populationId/rank included), while `publicEvents` (what a duplicate-command replay hands
+    // back to the client, and what persists across reload) carries the derived, player-facing
+    // `haunt.sighted` event instead -- never the raw domain shape.
+    const state = createDemoRun();
+    const command = {
+      type: 'wait' as const,
+      commandId: 'command.haunt-sighted',
+      expectedRevision: 0,
+    };
+    const result = {
+      status: 'applied' as const,
+      commandId: command.commandId,
+      revision: 1,
+      turn: 1,
+    };
+    const events = [
+      {
+        type: 'hero.waited' as const,
+        eventId: command.commandId,
+        heroId: state.hero.actorId,
+        x: 1,
+        y: 1,
+      },
+      {
+        type: 'champion.encountered' as const,
+        eventId: command.commandId,
+        populationId: 'population.champion',
+        actorId: 'actor.champion',
+        hallRecordId: 'hall.champion',
+        rank: 1 as const,
+      },
+    ];
+    const publicEvents = [
+      {
+        type: 'haunt.sighted' as const,
+        eventId: command.commandId,
+        actorId: 'actor.champion',
+        hallRecordId: 'hall.champion',
+        role: 'champion' as const,
+      },
+    ];
+    const withHistory = {
+      ...state,
+      revision: 1,
+      turn: 1,
+      recentCommands: [{ command, result, events, publicEvents }],
+    };
+    const encoded = encodeActiveRun(withHistory);
+    const decoded = decodeActiveRun(encoded);
+    // Byte-identity: encoding the decoded run must reproduce the exact same bytes -- the
+    // regression this test exists to catch is a `haunt.sighted` value that either fails to parse
+    // at all (SaveLoadError out of decode) or silently loses/reshapes a field on the round trip.
+    expect(encodeActiveRun(decoded)).toBe(encoded);
+    expect(decoded.recentCommands[0]?.publicEvents).toEqual(publicEvents);
   });
 
   it('rejects authoritative population details stored as public events', () => {
@@ -2728,7 +3235,7 @@ describe('active-run save codec', () => {
     );
   });
 
-  it.each([0, 1, 2, 3, 16])(
+  it.each([0, 1, 2, 3, 17])(
     'rejects unsupported schema version %i without partial state',
     (schemaVersion) => {
       try {

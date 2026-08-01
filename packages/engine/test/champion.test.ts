@@ -11,6 +11,7 @@ import type {
 import {
   advanceBosses,
   advanceFallenHeroEncounters,
+  createPopulationLoot,
   createDemoContentPack,
   createDemoRun,
   createFallenHeroRunDecisions,
@@ -24,11 +25,15 @@ import {
   pickupItem,
   projectGameplayState,
   retainEchoCandidates,
+  rollDie,
   validateContentBoundRun,
+  validateEchoLootGraph,
   type ActiveRun,
   type ActorState,
   type BossPopulation,
   type FallenHeroStandingSnapshot,
+  type RecordedHeirloomSnapshot,
+  type Uint32State,
 } from '../src/index.js';
 
 const monster: MonsterContentEntry = {
@@ -133,6 +138,13 @@ const template: FallenChampionTemplateContentEntry = {
     rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 },
     qualityRankBonus: 2,
   },
+  // Required since content v13: the haunt need derivation reads it, and the gameplay projection
+  // derives `needCategories` from it for every projected haunt.
+  appeasement: {
+    classFavors: { loomcaller: ['scroll', 'potion'] },
+    causelessCategories: ['light'],
+    defaultCategories: ['food', 'potion'],
+  },
 };
 
 function pack(): CompiledContentPack {
@@ -175,7 +187,21 @@ function standing(
   overrides: Partial<FallenHeroStandingSnapshot> = {},
 ): FallenHeroStandingSnapshot {
   const hallRecordId = `hall.hero-${rank}`;
-  return {
+  const heirloom = {
+    contentId: 'item.heirloom',
+    sourceItemId: `item.original-${rank}`,
+    enchantment: { enchantmentId: 'enchantment.honed', modifiers: { meleeDamageBonus: 2 } },
+    condition: 73,
+    charges: 4,
+    fuel: 9,
+    curse: null,
+    qualityRank: 2,
+    displayName: `Hero ${rank}'s Blade`,
+    glyph: ')',
+    color: '#ddeeff',
+    originatingHallRecordId: hallRecordId,
+  };
+  const resolved = {
     rank,
     hallRecordId,
     heroName: `Hero ${rank}`,
@@ -186,22 +212,14 @@ function standing(
     signatureAbilityIds: ['spell.ember'],
     deathDepth: 4,
     sourceContentHash: 'b'.repeat(64),
-    heirloom: {
-      contentId: 'item.heirloom',
-      sourceItemId: `item.original-${rank}`,
-      enchantment: { enchantmentId: 'enchantment.honed', modifiers: { meleeDamageBonus: 2 } },
-      condition: 73,
-      charges: 4,
-      fuel: 9,
-      curse: null,
-      qualityRank: 2,
-      displayName: `Hero ${rank}'s Blade`,
-      glyph: ')',
-      color: '#ddeeff',
-      originatingHallRecordId: hallRecordId,
-    },
+    heirloom,
+    cause: null,
     ...overrides,
   };
+  // The recorded heirloom is always a MEMBER of the death inventory, so an overridden heirloom has
+  // to travel into the default inventory too -- otherwise a fixture that degrades the heirloom
+  // would still drop the pristine original.
+  return { ...resolved, deathInventory: overrides.deathInventory ?? [resolved.heirloom] };
 }
 
 function initialized(
@@ -262,6 +280,104 @@ function withArena(run: ActiveRun, depth = 4, slots = 3): ActiveRun {
       },
     ],
   };
+}
+
+// Two extra pieces beside the recorded heirloom, so a champion's inventory is a real kit rather
+// than three copies of one blade. Added to the shared pack rather than replacing it: entries are
+// additive and the compiled hash is the demo pack's either way, so `initialized`'s `contentHash`
+// still agrees.
+function kitPack(): CompiledContentPack {
+  const base = pack();
+  return {
+    ...base,
+    entries: [
+      ...base.entries,
+      item('item.hero-armor', {
+        name: 'Scarred Jerkin',
+        category: 'armor',
+        glyph: '[',
+        color: '#a08050',
+        equipment: { slots: ['body'], handedness: 'one-handed', reservedSlots: [] },
+      }),
+      item('item.hero-lantern', {
+        name: 'Guttering Lantern',
+        category: 'light',
+        glyph: '(',
+        color: '#ffd9a0',
+        equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
+        light: {
+          color: [255, 217, 160],
+          radius: 6,
+          strength: 160,
+          fuelCapacity: 60,
+          fuelPerTime: 1,
+          warningThresholds: [10],
+          fuelTags: ['oil'],
+        },
+      }),
+      item('item.hero-relic', {
+        name: 'Bound Signet',
+        category: 'ring',
+        glyph: '"',
+        color: '#88ddff',
+        rarity: 'legendary',
+        equipment: { slots: ['neck'], handedness: 'one-handed', reservedSlots: [] },
+        artifact: { canon: true, signature: null, drawbackModifiers: {}, light: null },
+      }),
+      item('item.hero-ring', {
+        name: 'Worn Signet',
+        category: 'ring',
+        glyph: '=',
+        color: '#c8c8d8',
+        equipment: { slots: ['left-ring'], handedness: 'one-handed', reservedSlots: [] },
+      }),
+    ],
+  };
+}
+
+/** The first `count` pieces of a haunt's death inventory, the recorded heirloom first (it is the
+ * distinguished member, matched by `sourceItemId`). */
+function withDeathInventory(count: number, rank = 1): readonly RecordedHeirloomSnapshot[] {
+  const { heirloom } = standing(rank);
+  return [
+    heirloom,
+    {
+      ...heirloom,
+      contentId: 'item.hero-armor',
+      sourceItemId: 'item.original-1.armor',
+      enchantment: null,
+      charges: null,
+      fuel: null,
+      condition: 61,
+      displayName: "Hero 1's Jerkin",
+      glyph: '[',
+      color: '#a08050',
+    },
+    {
+      ...heirloom,
+      contentId: 'item.hero-lantern',
+      sourceItemId: 'item.original-1.lantern',
+      enchantment: null,
+      charges: null,
+      fuel: 40,
+      condition: 88,
+      displayName: "Hero 1's Lantern",
+      glyph: '(',
+      color: '#ffd9a0',
+    },
+    {
+      ...heirloom,
+      contentId: 'item.hero-ring',
+      sourceItemId: `item.original-${rank}.ring`,
+      enchantment: null,
+      charges: null,
+      fuel: null,
+      condition: 95,
+      displayName: `Hero ${rank}'s Signet`,
+      glyph: '=',
+      color: '#c8c8d8',
+    },
+  ].slice(0, count);
 }
 
 describe('fallen hero selection', () => {
@@ -897,7 +1013,7 @@ describe('fallen hero rewards and run-local lifecycle', () => {
       content: pack(),
       eventId: 'event.champion-defeat',
     });
-    const reward = first.state.items.find((entry) => entry.itemId.includes('heirloom'))!;
+    const reward = first.state.items.find((entry) => entry.itemId.startsWith('item.haunt.'))!;
     expect(reward).toMatchObject({
       contentId: 'item.heirloom',
       quantity: 1,
@@ -1192,7 +1308,7 @@ describe('fallen hero rewards and run-local lifecycle', () => {
     },
   );
 
-  it('gives an Echo ordinary table loot, never an heirloom, and suppresses only that run', () => {
+  it('gives an Echo ordinary table loot plus one guarded piece, and suppresses only that run', () => {
     const standings = [standing(1), standing(2)];
     const selected = initialized(standings);
     const forced = {
@@ -1219,11 +1335,22 @@ describe('fallen hero rewards and run-local lifecycle', () => {
       content: pack(),
       eventId: 'event.echo-defeat',
     });
-    expect(result.state.items.map((entry) => entry.contentId)).toEqual(['item.echo-loot']);
+    // The SPOILS TABLE still never produces the recorded heirloom -- that is what
+    // `validateEchoLootGraph` forbids at the content level. The heirloom on the ground here is the
+    // piece the haunt guarded and surrendered, which arrives by the death-inventory draw instead.
+    expect(
+      result.state.items
+        .filter((entry) => entry.itemId.startsWith('item.echo-loot.'))
+        .map((entry) => entry.contentId),
+    ).toEqual(['item.echo-loot']);
+    expect(
+      result.state.items.filter((entry) => entry.itemId.startsWith('item.haunt.')),
+    ).toHaveLength(1);
     expect(result.events).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'echo.defeated', hallRecordId: 'hall.hero-2', rank: 2 }),
         expect.objectContaining({ type: 'echo.loot-created' }),
+        expect.objectContaining({ type: 'echo.death-inventory-created', rank: 2 }),
       ]),
     );
     const retry = placeFallenHeroEncounters({
@@ -1353,5 +1480,420 @@ describe('fallen hero rewards and run-local lifecycle', () => {
       floors: [placed.floor],
     };
     expect(() => validateContentBoundRun(state, pack())).not.toThrow();
+  });
+});
+
+describe('champion haunt death-inventory drop', () => {
+  function championHauntKilled(deathInventory: readonly RecordedHeirloomSnapshot[]): ActiveRun {
+    const host = standing(1, {
+      deathInventory,
+      equippedItemContentIds: deathInventory.map((piece) => piece.contentId),
+    });
+    const run = withArena(initialized([host]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: kitPack() });
+    return {
+      ...run,
+      actors: [...run.actors, ...placed.actors]
+        .map((actor) => (actor.populationId === null ? actor : { ...actor, health: 0 }))
+        .sort((left, right) => left.actorId.localeCompare(right.actorId)),
+      populations: placed.populations,
+      fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor],
+    };
+  }
+
+  it('drops the entire death inventory when a champion haunt is defeated', () => {
+    const state = championHauntKilled(withDeathInventory(3));
+    const { state: after, events } = advanceFallenHeroEncounters({
+      state,
+      content: kitPack(),
+      eventId: 'e1',
+    });
+    const dropped = after.items.filter((item) => item.itemId.startsWith('item.haunt.'));
+    expect(dropped).toHaveLength(3);
+    expect(dropped.map((item) => item.contentId)).toEqual([
+      'item.heirloom',
+      'item.hero-armor',
+      'item.hero-lantern',
+    ]);
+    expect(
+      new Set(
+        dropped.map((item) =>
+          item.location.type === 'floor' ? `${item.location.x},${item.location.y}` : 'off-floor',
+        ),
+      ).size,
+    ).toBe(1);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'champion.death-inventory-created',
+        itemIds: dropped.map((item) => item.itemId),
+      }),
+    );
+  });
+
+  it('still names the recorded heirloom in champion.heirloom-created', () => {
+    const state = championHauntKilled(withDeathInventory(3));
+    const { state: after, events } = advanceFallenHeroEncounters({
+      state,
+      content: kitPack(),
+      eventId: 'e1',
+    });
+    const distinguished = after.items.find(
+      (item) => item.heirloom?.sourceItemId === 'item.original-1',
+    )!;
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'champion.heirloom-created',
+        itemId: distinguished.itemId,
+        displayName: "Hero 1's Blade",
+        fallback: false,
+      }),
+    );
+  });
+
+  it('latches the champion drop exactly once', () => {
+    const state = championHauntKilled(withDeathInventory(3));
+    const first = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' });
+    const second = advanceFallenHeroEncounters({
+      state: first.state,
+      content: kitPack(),
+      eventId: 'e2',
+    });
+    expect(second.state.items).toEqual(first.state.items);
+    expect(second.events).toEqual([]);
+  });
+
+  it('consumes no randomness for the champion drop', () => {
+    const state = championHauntKilled(withDeathInventory(3));
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' });
+    expect(after.state.rng).toEqual(state.rng);
+  });
+
+  it('degrades only the piece the current pack no longer defines', () => {
+    const inventory = withDeathInventory(3);
+    const state = championHauntKilled([
+      inventory[0]!,
+      { ...inventory[1]!, contentId: 'item.deleted-by-a-later-pack' },
+      inventory[2]!,
+    ]);
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' }).state;
+    const dropped = after.items.filter((item) => item.itemId.startsWith('item.haunt.'));
+    expect(dropped.map((item) => item.contentId)).toEqual([
+      'item.heirloom',
+      'item.fallback',
+      'item.hero-lantern',
+    ]);
+  });
+
+  it('also drops a recorded heirloom the equipped-only capture missed, and keeps it save-valid', () => {
+    // The capture is equipped-only, so a heirloom carried in the backpack at death is absent from
+    // it. It must still come back -- for an artifact, the haunt drop is its one route back into
+    // circulation -- and both validation tiers have to expect the appended piece.
+    const inventory = withDeathInventory(3);
+    const backpackHeirloom = {
+      ...inventory[0]!,
+      sourceItemId: 'item.original-1.backpack',
+      displayName: "Hero 1's Hidden Blade",
+    };
+    const host = standing(1, {
+      heirloom: backpackHeirloom,
+      deathInventory: inventory.slice(1),
+      equippedItemContentIds: inventory.map((piece) => piece.contentId),
+    });
+    const run = withArena(initialized([host]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: kitPack() });
+    const state = {
+      ...run,
+      actors: [...run.actors, ...placed.actors]
+        .map((actor) => (actor.populationId === null ? actor : { ...actor, health: 0 }))
+        .sort((left, right) => left.actorId.localeCompare(right.actorId)),
+      populations: placed.populations,
+      fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor],
+    };
+    const result = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' });
+    const dropped = result.state.items.filter((item) => item.itemId.startsWith('item.haunt.'));
+    expect(dropped).toHaveLength(3);
+    const appended = dropped.at(-1)!;
+    expect(appended.heirloom?.sourceItemId).toBe('item.original-1.backpack');
+    expect(result.events).toContainEqual(
+      expect.objectContaining({ type: 'champion.heirloom-created', itemId: appended.itemId }),
+    );
+    expect(() => validateContentBoundRun(result.state, kitPack())).not.toThrow();
+    expect(decodeActiveRun(encodeActiveRun(result.state))).toEqual(result.state);
+  });
+
+  it('keeps the whole dropped set valid through save and content-bound validation', () => {
+    const state = championHauntKilled(withDeathInventory(3));
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' }).state;
+    expect(() => validateContentBoundRun(after, kitPack())).not.toThrow();
+    const reloaded = decodeActiveRun(encodeActiveRun(after));
+    expect(reloaded.items.filter((item) => item.itemId.startsWith('item.haunt.'))).toHaveLength(3);
+  });
+});
+
+describe('echo haunt death-inventory piece', () => {
+  /** Kills a retained rank-2 echo whose record carries `deathInventory`. Rank 1 is forced out of
+   * retention so the only haunt on the floor is the echo. */
+  function echoHauntKilled(deathInventory: readonly RecordedHeirloomSnapshot[]): ActiveRun {
+    const host = standing(2, {
+      deathInventory,
+      equippedItemContentIds: deathInventory.map((piece) => piece.contentId),
+    });
+    // Rank one is CONQUERED rather than merely un-retained: a champion decision must agree with the
+    // conquered set (`content-bound-validation.ts`), so simply forcing `retained: false` would build
+    // a state the validators reject for an unrelated reason.
+    const selected = initialized([standing(1), host], ['hall.hero-1']);
+    const forced = {
+      ...selected,
+      fallenHeroDecisions: selected.fallenHeroDecisions.map((decision) =>
+        decision.rank === 2 ? { ...decision, retained: true, gateRoll: 1 } : decision,
+      ),
+    };
+    const run = withArena(forced, 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: kitPack() });
+    return {
+      ...run,
+      actors: [...run.actors, ...placed.actors]
+        .map((actor) => (actor.populationId === null ? actor : { ...actor, health: 0 }))
+        .sort((left, right) => left.actorId.localeCompare(right.actorId)),
+      populations: placed.populations,
+      fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor],
+    };
+  }
+
+  /** The `loot` state after the spoils table alone has rolled from `state` -- the reference a
+   * single-piece inventory must land on, since it takes no piece draw at all. */
+  function spoilsOnlyLootState(state: ActiveRun): Uint32State {
+    const population = state.populations.find((candidate) => candidate.model === 'echo')!;
+    const actor = state.actors.find((candidate) => candidate.actorId === population.actorId)!;
+    const floor = state.floors.find((candidate) => candidate.floorId === population.floorId)!;
+    return createPopulationLoot({
+      content: kitPack(),
+      state,
+      tableId: 'loot-table.echo',
+      itemIdPrefix: `item.echo-loot.${population.populationId}`,
+      floorId: population.floorId,
+      x: actor.x,
+      y: actor.y,
+      depth: floor.depth,
+    }).state.rng.loot;
+  }
+
+  it('drops exactly one death-inventory piece plus the spoils roll', () => {
+    const state = echoHauntKilled(withDeathInventory(4, 2));
+    const { state: after } = advanceFallenHeroEncounters({
+      state,
+      content: kitPack(),
+      eventId: 'e1',
+    });
+    expect(after.items.filter((item) => item.itemId.startsWith('item.haunt.'))).toHaveLength(1);
+    expect(after.items.some((item) => item.itemId.startsWith('item.echo-loot.'))).toBe(true);
+  });
+
+  it('picks the piece on the loot stream, before the spoils roll', () => {
+    const inventory = withDeathInventory(4, 2);
+    const state = echoHauntKilled(inventory);
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' });
+    const expected = rollDie(state.rng.loot, 4);
+    const piece = after.state.items.find((item) => item.itemId.startsWith('item.haunt.'))!;
+    expect(piece.contentId).toBe(inventory[expected.value - 1]!.contentId);
+  });
+
+  it('is deterministic for a fixed stream state', () => {
+    const state = echoHauntKilled(withDeathInventory(4, 2));
+    const first = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' });
+    const second = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' });
+    expect(first.state.items).toEqual(second.state.items);
+    expect(first.state.rng.loot).toEqual(second.state.rng.loot);
+  });
+
+  it('takes no piece draw for a single-item inventory', () => {
+    const state = echoHauntKilled(withDeathInventory(1, 2));
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' });
+    // Exactly one drawn item means only the spoils table advanced `loot`; a needless 1-sided roll
+    // would shift every later draw for no decision.
+    expect(after.state.items.filter((item) => item.itemId.startsWith('item.haunt.'))).toHaveLength(
+      1,
+    );
+    expect(after.state.rng.loot).toEqual(spoilsOnlyLootState(state));
+  });
+
+  it('may legitimately drop the recorded heirloom as its piece', () => {
+    // The heirloom is placed at exactly the index the loot stream will draw, so the assertion is
+    // about the rule (the heirloom is an ordinary member of the inventory) rather than about luck.
+    const inventory = withDeathInventory(4, 2);
+    const drawn = rollDie(echoHauntKilled(inventory).rng.loot, 4).value - 1;
+    const reordered = inventory.map((piece, index) =>
+      index === drawn ? inventory[0]! : index === 0 ? inventory[drawn]! : piece,
+    );
+    const state = echoHauntKilled(reordered);
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' });
+    expect(
+      after.state.items.some(
+        (item) => item.itemId.startsWith('item.haunt.') && item.contentId === 'item.heirloom',
+      ),
+    ).toBe(true);
+  });
+
+  it('still rejects a spoils table that can reach the recorded heirloom', () => {
+    const heirloomTable: LootTableContentEntry = {
+      ...echoLoot,
+      choices: [
+        ...echoLoot.choices,
+        {
+          contentId: 'item.heirloom',
+          lootTableId: null,
+          weight: 1,
+          minimumQuantity: 1,
+          maximumQuantity: 1,
+        },
+      ],
+    };
+    const packWithHeirloomInSpoils = {
+      ...kitPack(),
+      entries: kitPack().entries.map((entry) => (entry.id === echoLoot.id ? heirloomTable : entry)),
+    };
+    expect(() =>
+      validateEchoLootGraph({
+        content: packWithHeirloomInSpoils,
+        tableId: echoLoot.id,
+        recordedHeirloomContentId: 'item.heirloom',
+      }),
+    ).toThrow(/Echo rewards must be ordinary/);
+  });
+
+  it('latches the echo drop exactly once', () => {
+    const state = echoHauntKilled(withDeathInventory(4, 2));
+    const first = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' });
+    const second = advanceFallenHeroEncounters({
+      state: first.state,
+      content: kitPack(),
+      eventId: 'e2',
+    });
+    expect(second.state.items).toEqual(first.state.items);
+    expect(second.state.rng.loot).toEqual(first.state.rng.loot);
+    expect(second.events).toEqual([]);
+  });
+
+  it('announces the surrendered piece', () => {
+    const state = echoHauntKilled(withDeathInventory(4, 2));
+    const { state: after, events } = advanceFallenHeroEncounters({
+      state,
+      content: kitPack(),
+      eventId: 'e1',
+    });
+    const piece = after.items.find((item) => item.itemId.startsWith('item.haunt.'))!;
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'echo.death-inventory-created',
+        rank: 2,
+        itemId: piece.itemId,
+      }),
+    );
+  });
+
+  it('keeps the surrendered piece valid through save and content-bound validation', () => {
+    const state = echoHauntKilled(withDeathInventory(4, 2));
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' }).state;
+    expect(() => validateContentBoundRun(after, kitPack())).not.toThrow();
+    expect(decodeActiveRun(encodeActiveRun(after))).toEqual(after);
+  });
+});
+
+describe('haunt drops never mint a second copy of an artifact', () => {
+  /** A snapshot of the same singleton artifact as it was recorded by `rank`'s Hall record. Two
+   * records can legitimately both list it: it circulated through both heroes before it was lost. */
+  function relicSnapshot(rank: number): RecordedHeirloomSnapshot {
+    return {
+      ...standing(rank).heirloom,
+      contentId: 'item.hero-relic',
+      sourceItemId: `item.original-${rank}.relic`,
+      enchantment: null,
+      charges: null,
+      fuel: null,
+      condition: 80,
+      displayName: 'Bound Signet',
+      glyph: '"',
+      color: '#88ddff',
+    };
+  }
+
+  /** A champion (rank 1) and an echo (rank 2) on the same floor, both dead, both records naming the
+   * same artifact. The champion's population id sorts first, so it is materialized first. */
+  function bothHauntsKilled(echoRelic: boolean): ActiveRun {
+    const championStanding = standing(1, {
+      heirloom: relicSnapshot(1),
+      deathInventory: [relicSnapshot(1), withDeathInventory(2, 1)[1]!],
+      equippedItemContentIds: ['item.hero-armor', 'item.hero-relic'],
+    });
+    const echoPiece = echoRelic ? relicSnapshot(2) : withDeathInventory(2, 2)[1]!;
+    const echoStanding = standing(2, {
+      heirloom: echoPiece,
+      deathInventory: [echoPiece],
+      equippedItemContentIds: [echoPiece.contentId],
+    });
+    const selected = initialized([championStanding, echoStanding]);
+    const forced = {
+      ...selected,
+      fallenHeroDecisions: selected.fallenHeroDecisions.map((decision) =>
+        decision.rank === 2 ? { ...decision, retained: true, gateRoll: 1 } : decision,
+      ),
+    };
+    const run = withArena(forced, 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: kitPack() });
+    return {
+      ...run,
+      actors: [...run.actors, ...placed.actors]
+        .map((actor) => (actor.populationId === null ? actor : { ...actor, health: 0 }))
+        .sort((left, right) => left.actorId.localeCompare(right.actorId)),
+      populations: placed.populations,
+      fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor],
+    };
+  }
+
+  it('degrades the second haunt piece to the fallback relic and leaves exactly one instance', () => {
+    const state = bothHauntsKilled(true);
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' }).state;
+    // The champion is materialized first and hands back the real singleton.
+    expect(after.items.filter((item) => item.contentId === 'item.hero-relic')).toHaveLength(1);
+    const echo = after.populations.find((population) => population.model === 'echo')!;
+    const echoPiece = after.items.find((item) =>
+      item.itemId.startsWith(`item.haunt.${echo.populationId}.`),
+    )!;
+    // The echo held only a memory of it, so a relic still drops -- the every-piece-comes-back rule
+    // survives, it is the identity that degrades.
+    expect(echoPiece.contentId).toBe('item.fallback');
+    expect(echoPiece.heirloom?.originatingHallRecordId).toBe('hall.hero-2');
+  });
+
+  it('keeps the degraded outcome valid in both validation tiers', () => {
+    const state = bothHauntsKilled(true);
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' }).state;
+    expect(() => validateContentBoundRun(after, kitPack())).not.toThrow();
+    expect(decodeActiveRun(encodeActiveRun(after))).toEqual(after);
+  });
+
+  it('consumes no randomness for the guard', () => {
+    // Same scenario, once with the collision and once without: the guard only reads `run.items`, so
+    // the loot stream must land in exactly the same place either way.
+    const collided = advanceFallenHeroEncounters({
+      state: bothHauntsKilled(true),
+      content: kitPack(),
+      eventId: 'e1',
+    });
+    const clear = advanceFallenHeroEncounters({
+      state: bothHauntsKilled(false),
+      content: kitPack(),
+      eventId: 'e1',
+    });
+    expect(collided.state.rng.loot).toEqual(clear.state.rng.loot);
+    // Every other stream is untouched by either drop path.
+    expect({ ...collided.state.rng, loot: null }).toEqual({
+      ...bothHauntsKilled(true).rng,
+      loot: null,
+    });
   });
 });

@@ -18,9 +18,15 @@ import {
   retainEchoCandidates,
 } from './champion.js';
 import { bossUniqueDropId } from './commerce.js';
-import { createPopulationLoot, recordedHeirloomContentId } from './inventory.js';
+import {
+  hauntDropItemIdPrefix,
+  hauntDropSnapshots,
+  hauntPieceItemId,
+  materializeDeathInventory,
+} from './haunt-rewards.js';
+import type { HeirloomItemMetadata, ItemInstance } from './item-model.js';
+import { createPopulationLoot } from './inventory.js';
 import { stableJson } from './stable-json.js';
-import { boundedDisplayText } from './display-text.js';
 
 function entryMap(pack: CompiledContentPack): ReadonlyMap<string, ContentEntry> {
   return new Map(pack.entries.map((entry) => [entry.id, entry]));
@@ -35,6 +41,20 @@ function itemDefinition(
     throw new Error(`content-bound validation: item ${contentId} definition does not exist`);
   }
   return definition;
+}
+
+/** Is `actual` the item `expected` materialization would produce, ignoring where it now sits?
+ * `location` is deliberately absent: a dropped piece may since have been picked up or moved. */
+function materializedPieceMatches(actual: ItemInstance, expected: ItemInstance): boolean {
+  return (
+    actual.contentId === expected.contentId &&
+    actual.quantity === 1 &&
+    actual.condition === expected.condition &&
+    actual.charges === expected.charges &&
+    actual.fuel === expected.fuel &&
+    stableJson(actual.enchantment) === stableJson(expected.enchantment) &&
+    stableJson(actual.heirloom) === stableJson(expected.heirloom)
+  );
 }
 
 export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPack): void {
@@ -101,15 +121,25 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         );
       }
       const actor = actors.get(population.actorId);
+      // An appeased haunt has no actor at all -- the offering faded it, unlike a defeat, which
+      // leaves a corpse behind. Its population still has to carry the normalized loadout it was
+      // built with, so only the actor half of the check is conditional.
+      const appeased = run.fallenHeroDecisions.some(
+        (decision) => decision.hallRecordId === population.hallRecordId && decision.appeased,
+      );
       const normalized =
-        actor && normalizeFallenHero({ standing, template, content: pack, role: population.model });
+        actor || appeased
+          ? normalizeFallenHero({ standing, template, content: pack, role: population.model })
+          : undefined;
       if (
-        !actor ||
-        actor.contentId !== normalized?.monsterId ||
-        actor.maxHealth !== normalized.health ||
-        actor.populationPresentation?.name !== normalized.displayName ||
-        actor.populationPresentation.glyph !== normalized.glyph ||
-        actor.populationPresentation.color !== normalized.color ||
+        (!appeased &&
+          (!actor ||
+            actor.contentId !== normalized?.monsterId ||
+            actor.maxHealth !== normalized.health ||
+            actor.populationPresentation?.name !== normalized.displayName ||
+            actor.populationPresentation.glyph !== normalized.glyph ||
+            actor.populationPresentation.color !== normalized.color)) ||
+        !normalized ||
         population.equipmentContentIds.length !== normalized.equipmentContentIds.length ||
         population.equipmentContentIds.some(
           (id, index) => id !== normalized.equipmentContentIds[index],
@@ -438,7 +468,7 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
     }
   }
   const championTemplate = pack.entries.find((entry) => entry.kind === 'fallen-champion-template');
-  const expectedHeirlooms = new Map<string, Readonly<Record<string, unknown>>>();
+  const expectedHeirlooms = new Map<string, HeirloomItemMetadata>();
   if (run.fallenHeroStandings.length > 0 && !championTemplate) {
     throw new Error('content-bound validation: fallen-hero standings require a Champion template');
   }
@@ -501,55 +531,89 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           );
         }
       }
-      if (matching[0]?.model === 'champion' && matching[0].rewardCreated) {
+      // An appeased haunt keeps its population (so it is never re-placed this run) but has no
+      // actor: the offering faded it. It is never `defeated`, which is what keeps conquest,
+      // achievements, and the artifact ledger out of the appeasement path entirely.
+      if (decision.appeased && decision.defeated) {
+        throw new Error(
+          `content-bound validation: fallen-hero decision ${decision.hallRecordId} is both appeased and defeated`,
+        );
+      }
+      // An appeased haunt gave back its WHOLE recorded set, champion and echo alike -- the single
+      // drawn piece is what a haunt loses when it is put down, not what it hands over when it is
+      // bought off. So the owed set is keyed on appeasement first, and only a defeated echo falls
+      // through to the one-piece membership rule below.
+      const owed = matching[0];
+      // A haunt rewarded before the death-inventory drop existed owes no pieces at all -- the
+      // migration renamed a champion's single legacy reward into piece zero, and a legacy echo
+      // surrendered nothing. Neither owed set applies to it.
+      const preHaunt =
+        (owed?.model === 'champion' || owed?.model === 'echo') && owed.preHauntReward === true;
+      const appeasedSet = decision.appeased && owed !== undefined && !preHaunt;
+      if (
+        owed !== undefined &&
+        !preHaunt &&
+        (appeasedSet || (owed.model === 'champion' && owed.rewardCreated))
+      ) {
         const standing = run.fallenHeroStandings.find(
           (entry) => entry.hallRecordId === decision.hallRecordId,
         )!;
-        const expectedContentId = recordedHeirloomContentId({
+        // A defeated champion haunt hands back the whole recorded death inventory, so the expected
+        // reward is a SET. Re-materializing it through the very function the stepper drops with
+        // keeps the two from drifting; the cell is irrelevant here (an item may since have been
+        // picked up), so a placeholder location is passed and `location` is never compared.
+        const championPrefix = `${hauntDropItemIdPrefix(owed.populationId)}.`;
+        const expectedPieces = materializeDeathInventory({
           content: pack,
-          snapshot: standing.heirloom,
+          snapshots: hauntDropSnapshots(standing).snapshots,
           equippedItemContentIds: standing.equippedItemContentIds,
           fallbackItemId: championTemplate.fallbackItemId,
+          // The singleton guard re-derived: everything in the run EXCEPT this haunt's own pieces,
+          // which is exactly what it saw at drop time.
+          existingItems: run.items.filter((item) => !item.itemId.startsWith(championPrefix)),
+          itemIdPrefix: hauntDropItemIdPrefix(owed.populationId),
+          floorId: run.activeFloorId,
+          x: 0,
+          y: 0,
         });
-        const rewardId = `item.heirloom.${matching[0].populationId}`;
-        const reward = run.items.find((item) => item.itemId === rewardId);
-        const fallback = expectedContentId !== standing.heirloom.contentId;
-        const expectedDefinition = entries.get(expectedContentId);
-        const expectedMetadata = {
-          displayName: boundedDisplayText(
-            fallback && expectedDefinition?.kind === 'item'
-              ? expectedDefinition.name
-              : standing.heirloom.displayName,
-          ),
-          glyph:
-            fallback && expectedDefinition?.kind === 'item'
-              ? expectedDefinition.glyph
-              : standing.heirloom.glyph,
-          color:
-            fallback && expectedDefinition?.kind === 'item'
-              ? expectedDefinition.color
-              : standing.heirloom.color,
-          originatingHallRecordId: standing.hallRecordId,
-          originatingRank: 1,
-          sourceItemId: standing.heirloom.sourceItemId,
-        };
-        expectedHeirlooms.set(rewardId, expectedMetadata);
-        if (
-          !reward ||
-          reward.contentId !== expectedContentId ||
-          reward.quantity !== 1 ||
-          reward.condition !== (fallback ? 100 : standing.heirloom.condition) ||
-          reward.charges !== (fallback ? null : standing.heirloom.charges) ||
-          reward.fuel !==
-            (fallback && expectedDefinition?.kind === 'item'
-              ? (expectedDefinition.light?.fuelCapacity ?? null)
-              : standing.heirloom.fuel) ||
-          stableJson(reward.enchantment) !==
-            stableJson(fallback ? null : standing.heirloom.enchantment) ||
-          stableJson(reward.heirloom) !== stableJson(expectedMetadata)
-        ) {
-          throw new Error(`content-bound validation: Champion reward ${rewardId} is invalid`);
+        for (const piece of expectedPieces) {
+          const rewardId = piece.item.itemId;
+          const reward = run.items.find((item) => item.itemId === rewardId);
+          expectedHeirlooms.set(rewardId, piece.item.heirloom!);
+          if (!reward || !materializedPieceMatches(reward, piece.item)) {
+            throw new Error(`content-bound validation: Champion reward ${rewardId} is invalid`);
+          }
         }
+      }
+      if (!appeasedSet && !preHaunt && matching[0]?.model === 'echo' && matching[0].lootCreated) {
+        const standing = run.fallenHeroStandings.find(
+          (entry) => entry.hallRecordId === decision.hallRecordId,
+        )!;
+        // An echo surrenders exactly ONE piece of what it guarded, chosen by a `loot` draw this
+        // check cannot replay. So the rule is membership rather than identity: the item at index
+        // zero must be exactly what materializing SOME piece of the record's drop set produces.
+        const prefix = hauntDropItemIdPrefix(matching[0].populationId);
+        const rewardId = hauntPieceItemId(prefix, 0);
+        const reward = run.items.find((item) => item.itemId === rewardId);
+        const candidates = materializeDeathInventory({
+          content: pack,
+          snapshots: hauntDropSnapshots(standing).snapshots,
+          equippedItemContentIds: standing.equippedItemContentIds,
+          fallbackItemId: championTemplate.fallbackItemId,
+          existingItems: run.items.filter((item) => !item.itemId.startsWith(`${prefix}.`)),
+          itemIdPrefix: prefix,
+          floorId: run.activeFloorId,
+          x: 0,
+          y: 0,
+        });
+        const matched =
+          reward === undefined
+            ? undefined
+            : candidates.find((candidate) => materializedPieceMatches(reward, candidate.item));
+        if (!reward || !matched) {
+          throw new Error(`content-bound validation: Echo reward ${rewardId} is invalid`);
+        }
+        expectedHeirlooms.set(rewardId, matched.item.heirloom!);
       }
     }
   }

@@ -18,8 +18,8 @@ describe('content model', () => {
       generationReport: { foundationalCategories: [] },
     };
 
-    expect(pack.schemaVersion).toBe(12);
-    expect(CONTENT_SCHEMA_VERSION).toBe(12);
+    expect(pack.schemaVersion).toBe(13);
+    expect(CONTENT_SCHEMA_VERSION).toBe(13);
     expect(pack.hash).toHaveLength(64);
   });
 
@@ -57,7 +57,7 @@ describe('content model', () => {
         entries: [],
         generationReport: { foundationalCategories: [] },
       }),
-    ).toThrow(/Unsupported content schema version 6; expected 12/);
+    ).toThrow(/Unsupported content schema version 6; expected 13/);
   });
 
   it('rejects a stored schema-v1 pack before exposing entries', async () => {
@@ -76,7 +76,7 @@ describe('content model', () => {
     const { validateCompiledContentPack } = await import('../src/index.js');
     expect(() =>
       validateCompiledContentPack({
-        schemaVersion: 12,
+        schemaVersion: 13,
         hash: '0'.repeat(64),
         entries: [
           {

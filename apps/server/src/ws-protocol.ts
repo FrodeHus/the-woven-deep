@@ -90,6 +90,8 @@ function validateIntent(value: unknown): value is PlayerIntent {
         typeof value.target.x === 'number' &&
         typeof value.target.y === 'number'
       );
+    case 'offer':
+      return typeof value.itemId === 'string';
     default:
       return false;
   }

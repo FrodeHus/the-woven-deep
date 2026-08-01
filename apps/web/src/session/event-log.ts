@@ -1,4 +1,6 @@
-import type { PublicEvent } from '@woven-deep/engine';
+import type { CompiledContentPack } from '@woven-deep/content';
+import type { HauntView, PublicEvent } from '@woven-deep/engine';
+import { hauntEncounterLine, hauntFarewellLine } from './haunt-lines.js';
 
 export interface LogLine {
   readonly id: number;
@@ -8,12 +10,20 @@ export interface LogLine {
 
 export const LOG_CAPACITY = 200;
 
+/** The projection data a haunt's spoken record line reads from -- optional so every existing
+ * caller with no projection at hand (or an event stream with no haunt sightings in it) keeps
+ * working unchanged; only `haunt.sighted` consults it. */
+export interface LogContext {
+  readonly haunts: readonly HauntView[];
+  readonly pack: CompiledContentPack;
+}
+
 interface RenderedLine {
   readonly text: string;
   readonly tone: LogLine['tone'];
 }
 
-function renderEvent(event: PublicEvent): RenderedLine | null {
+function renderEvent(event: PublicEvent, context: LogContext | undefined): RenderedLine | null {
   switch (event.type) {
     case 'actor.damaged':
       return { text: `The creature takes ${event.amount} damage.`, tone: 'combat' };
@@ -94,6 +104,8 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
           return { text: 'Its light will not be hidden.', tone: 'system' };
         case 'item.cursed':
           return { text: 'It will not come free.', tone: 'system' };
+        case 'offer.refused':
+          return { text: 'The haunt does not want this.', tone: 'system' };
         case 'signature.no-charges':
           return { text: 'The relic is spent — it will wake on the next floor.', tone: 'system' };
         default:
@@ -111,6 +123,25 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
     // than falling to `default` keeps this switch's coverage of `PublicEvent` honest.
     case 'floor.entered':
       return null;
+    case 'haunt.sighted': {
+      // Silent without context: the line is record prose the engine deliberately does not carry,
+      // so a caller with no projection at hand renders nothing rather than something wrong.
+      if (!context) return null;
+      const haunt = context.haunts.find(
+        (candidate) =>
+          candidate.hallRecordId === event.hallRecordId && candidate.role === event.role,
+      );
+      return haunt ? { text: hauntEncounterLine(haunt, context.pack), tone: 'curse' } : null;
+    }
+    case 'haunt.appeased': {
+      // Silent without context, exactly like `haunt.sighted` above.
+      if (!context) return null;
+      const haunt = context.haunts.find(
+        (candidate) =>
+          candidate.hallRecordId === event.hallRecordId && candidate.role === event.role,
+      );
+      return haunt ? { text: hauntFarewellLine(haunt), tone: 'curse' } : null;
+    }
     default:
       return null;
   }
@@ -120,11 +151,12 @@ export function foldEventsIntoLog(
   log: readonly LogLine[],
   events: readonly PublicEvent[],
   nextId: number,
+  context?: LogContext,
 ): Readonly<{ log: readonly LogLine[]; nextId: number }> {
   let entries = [...log];
   let id = nextId;
   for (const event of events) {
-    const rendered = renderEvent(event);
+    const rendered = renderEvent(event, context);
     if (!rendered) continue;
     entries.push({ id, text: rendered.text, tone: rendered.tone });
     id += 1;

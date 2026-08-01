@@ -18,6 +18,20 @@ beforeAll(async () => {
 const EMPTY_SIGHTINGS: Sightings = { monsterIds: [], itemIds: [], landmarks: [] };
 
 function record(overrides: Partial<StoredHallRecord> = {}): StoredHallRecord {
+  const heirloom = {
+    contentId: 'item.iron-sword',
+    sourceItemId: null,
+    enchantment: null,
+    condition: 100,
+    charges: null,
+    fuel: null,
+    curse: null,
+    qualityRank: 1,
+    displayName: "Ada's Iron Sword",
+    glyph: ')',
+    color: '#d8d8d8',
+    originatingHallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+  };
   return {
     recordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
     heroName: 'Ada',
@@ -28,20 +42,8 @@ function record(overrides: Partial<StoredHallRecord> = {}): StoredHallRecord {
     score: { lines: [], total: 40 },
     metrics: emptyRunMetrics(),
     reputations: [],
-    heirloom: {
-      contentId: 'item.iron-sword',
-      sourceItemId: null,
-      enchantment: null,
-      condition: 100,
-      charges: null,
-      fuel: null,
-      curse: null,
-      qualityRank: 1,
-      displayName: "Ada's Iron Sword",
-      glyph: ')',
-      color: '#d8d8d8',
-      originatingHallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
-    },
+    heirloom,
+    deathInventory: [heirloom],
     build: {
       attributes: { might: 14, agility: 12, vitality: 16, wits: 10, resolve: 12 },
       equippedItemContentIds: ['item.iron-sword'],

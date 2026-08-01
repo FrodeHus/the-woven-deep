@@ -52,7 +52,7 @@ function backgroundEntry(extraItemContentId: string | null): string {
 }
 
 function contentFile(...entries: readonly string[]): string {
-  return `schemaVersion: 12\nentries: [${entries.join(', ')}]\n`;
+  return `schemaVersion: 13\nentries: [${entries.join(', ')}]\n`;
 }
 
 async function fixture(files: Record<string, string>): Promise<string> {
@@ -1703,13 +1703,13 @@ describe('compileContentDirectory', () => {
       ),
     });
     await expect(compileContentDirectory({ rootDir: root })).resolves.toMatchObject({
-      schemaVersion: 12,
+      schemaVersion: 13,
     });
   });
 
   it('validates Champion and Echo template references and weaker limits', async () => {
     const template =
-      '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 10, maximumHealth: 100, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 2, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 3, echoLootTableId: item.lantern, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}}';
+      '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 10, maximumHealth: 100, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 2, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 3, echoLootTableId: item.lantern, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}, appeasement: {classFavors: {}, causelessCategories: [], defaultCategories: [food]}}';
     const root = await fixture({
       'content.yaml': contentFile(compactMonster, compactItem, compactVault, template),
     });
@@ -1722,7 +1722,7 @@ describe('compileContentDirectory', () => {
     const loot =
       '{kind: loot-table, id: loot-table.echo, name: Echo loot, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
     const template =
-      '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 10, maximumHealth: 100, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 2, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 2, echoLootTableId: loot-table.echo, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}}';
+      '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 10, maximumHealth: 100, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 2, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 2, echoLootTableId: loot-table.echo, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}, appeasement: {classFavors: {}, causelessCategories: [], defaultCategories: [food]}}';
     const root = await fixture({
       'content.yaml': contentFile(compactMonster, compactItem, compactVault, loot, template),
     });
@@ -1739,7 +1739,7 @@ describe('compileContentDirectory', () => {
     const loot =
       '{kind: loot-table, id: loot-table.echo, name: Echo loot, tags: [], rolls: 1, choices: [{contentId: item.lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1}]}';
     const template =
-      '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 1, maximumHealth: 1, attributeMaximum: 1, damageMaximum: 1, abilityLimit: 1, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 0, echoLootTableId: loot-table.echo, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}}';
+      '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 1, maximumHealth: 1, attributeMaximum: 1, damageMaximum: 1, abilityLimit: 1, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 0, echoLootTableId: loot-table.echo, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}, appeasement: {classFavors: {}, causelessCategories: [], defaultCategories: [food]}}';
     const root = await fixture({
       'content.yaml': contentFile(weakMonster, compactItem, compactVault, loot, template),
     });
@@ -1758,7 +1758,7 @@ describe('compileContentDirectory', () => {
     const boss =
       '{kind: encounter, id: encounter.boss, name: Boss, tags: [], model: boss, minDepth: 1, maxDepth: 5, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: legendary, runAppearanceChance: 1, discoveryProtectionIncrement: 0, discoveryProtectionCap: 1, maximumInstancesPerRun: 1, placement: {minimumStairDistance: 1, minimumObjectiveDistance: 1, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional}, intentPresentation: {visible: true}, definition: {monsterId: monster.rat, phases: [], recoveryPerWorldTime: 0, recoveryCapPercent: 0, uniqueItemId: item.lantern, enhancedLootTableId: loot-table.boss, vaultTags: []}}';
     const template =
-      '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 10, maximumHealth: 100, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 2, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 1, echoLootTableId: loot-table.echo, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}}';
+      '{kind: fallen-champion-template, id: fallen-champion-template.core, name: Champion, tags: [], fallbackMonsterId: monster.rat, fallbackItemId: item.lantern, minimumHealth: 10, maximumHealth: 100, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 2, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 1, echoLootTableId: loot-table.echo, heirloomSelection: {rarityWeights: {common: 1, uncommon: 3, rare: 8, legendary: 16}, qualityRankBonus: 2}, appeasement: {classFavors: {}, causelessCategories: [], defaultCategories: [food]}}';
     const root = await fixture({
       'content.yaml': contentFile(
         compactMonster,

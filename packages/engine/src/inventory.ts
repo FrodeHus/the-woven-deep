@@ -484,6 +484,7 @@ export function createRecordedHeirloom(
     snapshot: RecordedHeirloomSnapshot;
     equippedItemContentIds: readonly OpaqueId[];
     fallbackItemId: OpaqueId;
+    unavailableContentIds?: ReadonlySet<OpaqueId>;
     itemId: OpaqueId;
     floorId: OpaqueId;
     x: number;
@@ -544,8 +545,14 @@ export function recordedHeirloomContentId(
     snapshot: RecordedHeirloomSnapshot;
     equippedItemContentIds: readonly OpaqueId[];
     fallbackItemId: OpaqueId;
+    /** Content ids this materialization must NOT resolve to because the instance already exists in
+     * the run -- a singleton cannot be handed back twice. Degrading to the fallback relic is the
+     * same answer this function already gives for a record the current pack can no longer honor. */
+    unavailableContentIds?: ReadonlySet<OpaqueId>;
   }>,
 ): OpaqueId {
+  if (input.unavailableContentIds?.has(input.snapshot.contentId) === true)
+    return input.fallbackItemId;
   const recorded = input.content.entries.find(
     (entry): entry is ItemContentEntry =>
       entry.kind === 'item' && entry.id === input.snapshot.contentId,

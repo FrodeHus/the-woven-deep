@@ -180,6 +180,9 @@ export function projectDomainEvents(
     const carriedDamageType = pendingDamageType;
     pendingDamageType = null;
     switch (event.type) {
+      // Pass-through group: events the hero caused or is unconditionally entitled to see. That
+      // includes `haunt.appeased` -- the hero's own offering, made from an adjacent cell, with
+      // nothing to gate on visibility and nothing to redact (see `HauntAppeasedEvent`).
       case 'hero.moved':
       case 'hero.waited':
       case 'action.invalid':
@@ -187,6 +190,7 @@ export function projectDomainEvents(
       case 'identification.appearance-revealed':
       case 'curse.revealed':
       case 'floor.entered':
+      case 'haunt.appeased':
         output.push(event);
         break;
       case 'attack.hit':
@@ -506,27 +510,44 @@ export function projectDomainEvents(
           if (heard) output.push(heard);
         }
         break;
+      // A haunt's first-sight line is host-rendered client prose (`hauntEncounterLine`), keyed off
+      // `hallRecordId` against the projection's `haunts` block -- so these two emit a single,
+      // distinct `haunt.sighted` public event (its `role` disambiguating champion/echo) rather than
+      // folding into the generic `population.notice` presentation string every other champion/echo
+      // lifecycle event below still uses. `populationId`/`rank` stay unpublished, same redaction
+      // posture as every other population bookkeeping id.
       case 'champion.encountered':
+      case 'echo.encountered':
+        if (actorVisible(event.actorId))
+          output.push({
+            type: 'haunt.sighted',
+            eventId: event.eventId,
+            actorId: event.actorId,
+            hallRecordId: event.hallRecordId,
+            role: event.type === 'champion.encountered' ? 'champion' : 'echo',
+          });
+        break;
       case 'champion.defeated':
       case 'champion.heirloom-created':
-      case 'echo.encountered':
+      case 'champion.death-inventory-created':
       case 'echo.defeated':
       case 'echo.loot-created':
+      case 'echo.death-inventory-created':
         if (actorVisible(event.actorId))
           output.push(
             notice(
               event,
-              event.type === 'champion.encountered'
-                ? 'champion-encountered'
-                : event.type === 'champion.defeated'
-                  ? 'champion-defeated'
-                  : event.type === 'champion.heirloom-created'
-                    ? 'champion-heirloom'
-                    : event.type === 'echo.encountered'
-                      ? 'echo-encountered'
-                      : event.type === 'echo.defeated'
-                        ? 'echo-defeated'
-                        : 'echo-loot',
+              event.type === 'champion.defeated'
+                ? 'champion-defeated'
+                : event.type === 'champion.heirloom-created'
+                  ? 'champion-heirloom'
+                  : event.type === 'champion.death-inventory-created'
+                    ? 'champion-death-inventory'
+                    : event.type === 'echo.defeated'
+                      ? 'echo-defeated'
+                      : event.type === 'echo.loot-created'
+                        ? 'echo-loot'
+                        : 'echo-death-inventory',
               event.actorId,
               event.type,
               event.type === 'champion.heirloom-created'

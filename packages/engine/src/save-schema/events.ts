@@ -151,6 +151,7 @@ export const actorTurnCompletedEvent = z.strictObject({
     'search',
     'disarm',
     'pick-lock',
+    'offer',
     'swarm-spawn',
   ]),
 });
@@ -549,6 +550,14 @@ export const championHeirloomCreatedEvent = z.strictObject({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   fallback: z.boolean(),
 });
+export const championDeathInventoryCreatedEvent = z.strictObject({
+  type: z.literal('champion.death-inventory-created'),
+  eventId: identifier,
+  populationId: identifier,
+  actorId: identifier,
+  hallRecordId: identifier,
+  itemIds: z.array(identifier).readonly(),
+});
 export const echoEncounteredEvent = z.strictObject({
   type: z.literal('echo.encountered'),
   eventId: identifier,
@@ -573,6 +582,15 @@ export const echoLootCreatedEvent = z.strictObject({
   hallRecordId: identifier,
   rank: z.number().int().min(2).max(10),
   itemIds: z.array(identifier).readonly(),
+});
+export const echoDeathInventoryCreatedEvent = z.strictObject({
+  type: z.literal('echo.death-inventory-created'),
+  eventId: identifier,
+  populationId: identifier,
+  actorId: identifier,
+  hallRecordId: identifier,
+  rank: z.number().int().min(2).max(10),
+  itemId: identifier,
 });
 export const soundHeardEvent = z.strictObject({
   type: z.literal('sound.heard'),
@@ -645,9 +663,11 @@ export const populationNoticePublicEvent = z.strictObject({
     'champion-encountered',
     'champion-defeated',
     'champion-heirloom',
+    'champion-death-inventory',
     'echo-encountered',
     'echo-defeated',
     'echo-loot',
+    'echo-death-inventory',
     'merchant-departure-warning',
     'merchant-departed',
     'merchant-provoked',
@@ -658,6 +678,22 @@ export const populationNoticePublicEvent = z.strictObject({
   actorId: identifier.nullable(),
   presentation: z.string().min(1).max(120),
   displayName: z.string().min(1).max(120).optional(),
+});
+export const hauntAppeasedEvent = z.strictObject({
+  type: z.literal('haunt.appeased'),
+  eventId: identifier,
+  actorId: identifier,
+  hallRecordId: identifier,
+  role: z.enum(['champion', 'echo']),
+  offeredItemId: identifier,
+  itemIds: z.array(identifier).readonly(),
+});
+export const hauntSightedEvent = z.strictObject({
+  type: z.literal('haunt.sighted'),
+  eventId: identifier,
+  actorId: identifier,
+  hallRecordId: identifier,
+  role: z.enum(['champion', 'echo']),
 });
 export const reputationChangedEvent = z.strictObject({
   type: z.literal('reputation.changed'),
@@ -861,9 +897,11 @@ export const eventOptions = [
   championEncounteredEvent,
   championDefeatedEvent,
   championHeirloomCreatedEvent,
+  championDeathInventoryCreatedEvent,
   echoEncounteredEvent,
   echoDefeatedEvent,
   echoLootCreatedEvent,
+  echoDeathInventoryCreatedEvent,
   soundHeardEvent,
   heroDamagedPublicEvent,
   combatObservedPublicEvent,
@@ -871,6 +909,8 @@ export const eventOptions = [
   actorDamageObservedPublicEvent,
   actorDeathObservedPublicEvent,
   populationNoticePublicEvent,
+  hauntSightedEvent,
+  hauntAppeasedEvent,
   restCompletedEvent,
 ] as const;
 export const event = z.discriminatedUnion('type', [
@@ -913,9 +953,11 @@ export const hiddenPublicEventTypes = new Set([
   'champion.encountered',
   'champion.defeated',
   'champion.heirloom-created',
+  'champion.death-inventory-created',
   'echo.encountered',
   'echo.defeated',
   'echo.loot-created',
+  'echo.death-inventory-created',
   'merchant.departure-warning',
   'merchant.departed',
   'merchant.provoked',
@@ -931,6 +973,7 @@ export const publicOnlyEventTypes = new Set([
   'actor.damage-observed',
   'actor.death-observed',
   'population.notice',
+  'haunt.sighted',
 ]);
 export const authoritativeEvent = event.refine(
   (value) => !publicOnlyEventTypes.has(value.type),
@@ -983,6 +1026,7 @@ import type {
   BossRewardCreatedEvent,
   ChampionDefeatedEvent,
   ChampionEncounteredEvent,
+  ChampionDeathInventoryCreatedEvent,
   ChampionHeirloomCreatedEvent,
   CombatObservedPublicEvent,
   ConditionAppliedEvent,
@@ -990,6 +1034,7 @@ import type {
   CurrencyCollectedEvent,
   CurseRemovedEvent,
   CurseRevealedEvent,
+  EchoDeathInventoryCreatedEvent,
   EchoDefeatedEvent,
   EchoEncounteredEvent,
   EchoLootCreatedEvent,
@@ -1001,6 +1046,8 @@ import type {
   GroupLeaderCreatedEvent,
   GroupLeaderDefeatedEvent,
   GroupOutcomeAppliedEvent,
+  HauntAppeasedEvent,
+  HauntSightedEvent,
   HeroDamagedPublicEvent,
   HeroMovedEvent,
   HeroRecalledEvent,
@@ -1229,6 +1276,12 @@ type _ChampionDefeatedDrift = Expect<
 type _ChampionHeirloomCreatedDrift = Expect<
   SchemaMatches<z.infer<typeof championHeirloomCreatedEvent>, ChampionHeirloomCreatedEvent>
 >;
+type _ChampionDeathInventoryCreatedDrift = Expect<
+  SchemaMatches<
+    z.infer<typeof championDeathInventoryCreatedEvent>,
+    ChampionDeathInventoryCreatedEvent
+  >
+>;
 type _EchoEncounteredDrift = Expect<
   SchemaMatches<z.infer<typeof echoEncounteredEvent>, EchoEncounteredEvent>
 >;
@@ -1237,6 +1290,9 @@ type _EchoDefeatedDrift = Expect<
 >;
 type _EchoLootCreatedDrift = Expect<
   SchemaMatches<z.infer<typeof echoLootCreatedEvent>, EchoLootCreatedEvent>
+>;
+type _EchoDeathInventoryCreatedDrift = Expect<
+  SchemaMatches<z.infer<typeof echoDeathInventoryCreatedEvent>, EchoDeathInventoryCreatedEvent>
 >;
 type _SoundHeardDrift = Expect<SchemaMatches<z.infer<typeof soundHeardEvent>, SoundHeardEvent>>;
 type _HeroDamagedPublicDrift = Expect<
@@ -1256,6 +1312,12 @@ type _ActorDeathObservedPublicDrift = Expect<
 >;
 type _PopulationNoticePublicDrift = Expect<
   SchemaMatches<z.infer<typeof populationNoticePublicEvent>, PopulationNoticePublicEvent>
+>;
+type _HauntSightedDrift = Expect<
+  SchemaMatches<z.infer<typeof hauntSightedEvent>, HauntSightedEvent>
+>;
+type _HauntAppeasedDrift = Expect<
+  SchemaMatches<z.infer<typeof hauntAppeasedEvent>, HauntAppeasedEvent>
 >;
 type _ReputationChangedDrift = Expect<
   SchemaMatches<z.infer<typeof reputationChangedEvent>, ReputationChangedEvent>

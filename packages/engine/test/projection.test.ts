@@ -11,8 +11,17 @@ import {
   projectGameplayState,
   refreshKnowledge,
   stableJson,
+  type ChampionPopulation,
+  type FallenHeroRunDecision,
+  type FallenHeroStandingSnapshot,
+  type RecordedHeirloomSnapshot,
 } from '../src/index.js';
-import type { MonsterContentEntry, SpellContentEntry } from '@woven-deep/content';
+import type {
+  CompiledContentPack,
+  FallenChampionTemplateContentEntry,
+  MonsterContentEntry,
+  SpellContentEntry,
+} from '@woven-deep/content';
 
 const width = 9;
 const height = 7;
@@ -1094,5 +1103,285 @@ describe('gameplay projection', () => {
     const { castableSpells, ...restOfHero } = projected.hero;
     const baseline = projectGameplayState({ state: base, content: createDemoContentPack() });
     expect(restOfHero).toEqual(baseline.hero);
+  });
+});
+
+describe('haunt projection', () => {
+  // A haunt run always comes from a pack that authored the champion template: the decisions in
+  // these fixtures cannot exist without one, and `needCategories` is derived from its
+  // `appeasement` block.
+  const template: FallenChampionTemplateContentEntry = {
+    kind: 'fallen-champion-template',
+    id: 'fallen-champion-template.core',
+    name: "The Deep's Champion",
+    tags: ['champion'],
+    fallbackMonsterId: 'monster.champion-fallback',
+    fallbackItemId: 'item.fallback',
+    minimumHealth: 30,
+    maximumHealth: 100,
+    attributeMaximum: 20,
+    damageMaximum: 24,
+    abilityLimit: 2,
+    echoAppearanceChance: 0.5,
+    maximumEchoesPerRun: 2,
+    echoHealthPercent: 65,
+    echoDamagePercent: 70,
+    echoDefensePercent: 80,
+    echoAbilityLimit: 1,
+    echoLootTableId: 'loot-table.echo-remnant',
+    heirloomSelection: {
+      rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 },
+      qualityRankBonus: 2,
+    },
+    appeasement: {
+      classFavors: { loomcaller: ['scroll', 'potion'] },
+      causelessCategories: ['light'],
+      defaultCategories: ['food', 'potion'],
+    },
+  };
+
+  const base = createDemoContentPack();
+  const pack: CompiledContentPack = { ...base, entries: [...base.entries, template] };
+
+  function heirloom(hallRecordId: string): RecordedHeirloomSnapshot {
+    return {
+      contentId: 'item.heirloom',
+      sourceItemId: null,
+      enchantment: null,
+      condition: 100,
+      charges: null,
+      fuel: null,
+      curse: null,
+      qualityRank: 0,
+      displayName: 'Heirloom',
+      glyph: '/',
+      color: '#ffffff',
+      originatingHallRecordId: hallRecordId,
+    };
+  }
+
+  function fallenStanding(
+    hallRecordId: string,
+    overrides: Partial<FallenHeroStandingSnapshot> = {},
+  ): FallenHeroStandingSnapshot {
+    return {
+      rank: 1,
+      hallRecordId,
+      heroName: 'Hero',
+      portraitGlyph: '@',
+      classTags: [],
+      attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
+      equippedItemContentIds: [],
+      signatureAbilityIds: [],
+      deathDepth: 1,
+      sourceContentHash: 'a'.repeat(64),
+      heirloom: heirloom(hallRecordId),
+      cause: null,
+      deathInventory: [heirloom(hallRecordId)],
+      ...overrides,
+    };
+  }
+
+  function fallenDecision(
+    hallRecordId: string,
+    role: 'champion' | 'echo',
+    overrides: Partial<FallenHeroRunDecision> = {},
+  ): FallenHeroRunDecision {
+    return {
+      hallRecordId,
+      rank: 1,
+      role,
+      gateRoll: null,
+      retained: true,
+      encountered: false,
+      defeated: false,
+      appeased: false,
+      ...overrides,
+    };
+  }
+
+  function championPopulation(
+    hallRecordId: string,
+    overrides: Partial<ChampionPopulation> = {},
+  ): ChampionPopulation {
+    return {
+      populationId: `population.${hallRecordId}`,
+      encounterId: 'encounter.champion',
+      floorId: 'floor.demo',
+      createdAt: 0,
+      livingMemberIds: [],
+      formerMemberIds: [],
+      model: 'champion',
+      actorId: `actor.population.fallen-champion.${hallRecordId}.001`,
+      hallRecordId,
+      rank: 1,
+      defeated: false,
+      rewardCreated: false,
+      equipmentContentIds: [],
+      abilityIds: [],
+      ...overrides,
+    };
+  }
+
+  function runWithHaunts(): ActiveRun {
+    const base = createDemoRun();
+    const championStanding = fallenStanding('hall.a-kaelen', {
+      heroName: 'Kaelen',
+      deathDepth: 7,
+      cause: { killerContentId: 'monster.bone-gnawer', depth: 7, turn: 10, worldTime: 1000 },
+    });
+    const echoStanding = fallenStanding('hall.b-mira', { heroName: 'Mira', deathDepth: 4 });
+    return {
+      ...base,
+      fallenHeroStandings: [championStanding, echoStanding],
+      fallenHeroDecisions: [
+        fallenDecision('hall.a-kaelen', 'champion', { encountered: true }),
+        fallenDecision('hall.b-mira', 'echo', { encountered: true }),
+      ],
+    };
+  }
+
+  const dormantId = 'hall.dormant-echo';
+
+  /** Retained, but never placed and never seen -- the state a hidden gate roll alone produces.
+   * Neither `encountered` nor a placed `actorId` is true, so this must stay invisible: `retained`
+   * is the outcome of a hidden roll (`decision.gateRoll`), and leaking it would tell the player a
+   * fallen hero's eligibility before the world ever surfaces it. */
+  function runWithDormantHaunt(): ActiveRun {
+    const base = createDemoRun();
+    const standing = fallenStanding(dormantId, { heroName: 'Dormant' });
+    return {
+      ...base,
+      fallenHeroStandings: [standing],
+      fallenHeroDecisions: [fallenDecision(dormantId, 'echo')],
+    };
+  }
+
+  const placedUnencounteredId = 'hall.placed-unencountered';
+
+  /** Retained AND placed on a floor (a living population member exists), but never actually SEEN
+   * by the hero -- `observeEncounters` (world-step.ts) only flips `encountered` once the
+   * population is genuinely visible (in FOV, lit), so a placed-but-dark haunt is a real reachable
+   * state, not a hypothetical. Task 9's client only ever needs an ENCOUNTERED haunt (the offer
+   * affordance requires adjacency, which flips `encountered` in the same world-step; the spoken
+   * line fires off `haunt.sighted`, never off this projection field), so the gate is tightened to
+   * `encountered` alone -- `actorId !== null` on its own must NOT admit a haunt the hero has never
+   * laid eyes on. */
+  function runWithPlacedButUnencounteredHaunt(): ActiveRun {
+    const base = createDemoRun();
+    const standing = fallenStanding(placedUnencounteredId, { heroName: 'Unseen' });
+    return {
+      ...base,
+      fallenHeroStandings: [standing],
+      fallenHeroDecisions: [fallenDecision(placedUnencounteredId, 'champion')],
+      populations: [
+        championPopulation(placedUnencounteredId, {
+          actorId: 'actor.population.fallen-champion.placed-unencountered.001',
+          livingMemberIds: ['actor.population.fallen-champion.placed-unencountered.001'],
+        }),
+      ],
+    };
+  }
+
+  const unretainedId = 'hall.unretained-echo';
+
+  function runWithUnretainedEcho(): ActiveRun {
+    const base = createDemoRun();
+    const echoStanding = fallenStanding(unretainedId, { heroName: 'Unretained' });
+    return {
+      ...base,
+      fallenHeroStandings: [echoStanding],
+      fallenHeroDecisions: [fallenDecision(unretainedId, 'echo', { retained: false })],
+    };
+  }
+
+  function runWithLegacyStanding(): ActiveRun {
+    const base = createDemoRun();
+    const legacyStanding = fallenStanding('hall.legacy', { heroName: 'Legacy', cause: null });
+    return {
+      ...base,
+      fallenHeroStandings: [legacyStanding],
+      fallenHeroDecisions: [fallenDecision('hall.legacy', 'champion', { encountered: true })],
+    };
+  }
+
+  function runWithPlacedHaunt(): ActiveRun {
+    const base = createDemoRun();
+    const hallRecordId = 'record.a';
+    const standing = fallenStanding(hallRecordId, { heroName: 'Kaelen', deathDepth: 7 });
+    return {
+      ...base,
+      fallenHeroStandings: [standing],
+      fallenHeroDecisions: [fallenDecision(hallRecordId, 'champion', { encountered: true })],
+      populations: [
+        championPopulation(hallRecordId, {
+          actorId: 'actor.population.fallen-champion.record.a.001',
+          livingMemberIds: ['actor.population.fallen-champion.record.a.001'],
+        }),
+      ],
+    };
+  }
+
+  function runWithDefeatedHaunt(): ActiveRun {
+    const placed = runWithPlacedHaunt();
+    return {
+      ...placed,
+      populations: placed.populations.map((population) =>
+        population.model === 'champion' ? { ...population, livingMemberIds: [] } : population,
+      ),
+    };
+  }
+
+  it('projects one haunt per retained fallen-hero decision', () => {
+    const projection = projectGameplayState({ state: runWithHaunts(), content: pack });
+    expect(projection.haunts.map((haunt) => haunt.role)).toEqual(['champion', 'echo']);
+    expect(projection.haunts[0]).toMatchObject({
+      heroName: 'Kaelen',
+      deathDepth: 7,
+      killerContentId: 'monster.bone-gnawer',
+      causeDepth: 7,
+      appeased: false,
+      // No class tags and a named killer: the template defaults, which is the same derivation
+      // offer validation enforces.
+      needCategories: ['food', 'potion'],
+    });
+    // Mira's record names no killer, so the causeless category joins her need.
+    expect(projection.haunts[1]!.needCategories).toEqual(['light']);
+  });
+
+  it('omits unretained decisions', () => {
+    const projection = projectGameplayState({ state: runWithUnretainedEcho(), content: pack });
+    expect(projection.haunts.some((haunt) => haunt.hallRecordId === unretainedId)).toBe(false);
+  });
+
+  it('omits a retained decision that is neither encountered nor placed -- the hidden gate roll never leaks', () => {
+    const projection = projectGameplayState({ state: runWithDormantHaunt(), content: pack });
+    expect(projection.haunts.some((haunt) => haunt.hallRecordId === dormantId)).toBe(false);
+    expect(projection.haunts).toEqual([]);
+  });
+
+  it('omits a placed-but-unencountered haunt -- a living actorId alone is not enough', () => {
+    const projection = projectGameplayState({
+      state: runWithPlacedButUnencounteredHaunt(),
+      content: pack,
+    });
+    expect(projection.haunts.some((haunt) => haunt.hallRecordId === placedUnencounteredId)).toBe(
+      false,
+    );
+    expect(projection.haunts).toEqual([]);
+  });
+
+  it('projects a null killer for a legacy cause-less standing', () => {
+    const projection = projectGameplayState({ state: runWithLegacyStanding(), content: pack });
+    expect(projection.haunts[0]).toMatchObject({ killerContentId: null, causeDepth: null });
+  });
+
+  it('projects the placed actor id, and null once the haunt is gone', () => {
+    expect(
+      projectGameplayState({ state: runWithPlacedHaunt(), content: pack }).haunts[0]!.actorId,
+    ).toBe('actor.population.fallen-champion.record.a.001');
+    expect(
+      projectGameplayState({ state: runWithDefeatedHaunt(), content: pack }).haunts[0]!.actorId,
+    ).toBeNull();
   });
 });

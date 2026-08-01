@@ -1,7 +1,11 @@
 import type { CompiledContentPack, MerchantEncounterContentEntry } from '@woven-deep/content';
-import type { ActorState } from './actor-model.js';
 import type { MerchantPopulation } from './merchant-model.js';
 import type { ActiveRun, DomainEvent, OpaqueId, PublicEvent } from './model.js';
+import {
+  scrubActorReferences,
+  scrubPopulationReferences,
+  scrubRecordedCommands,
+} from './actor-removal.js';
 import { compareCodeUnits } from './stable-json.js';
 import { activeTradeValidIgnoringDeparture, closeTradeIfInvalid } from './trade.js';
 
@@ -16,85 +20,15 @@ function merchantEncounter(
   return entry;
 }
 
-/** Drops awareness, memories, goals, and condition sources that reference the departed actor. */
-function scrubActorReferences(actor: ActorState, departedActorId: OpaqueId): ActorState {
-  const awareActorIds = actor.awareActorIds.includes(departedActorId)
-    ? actor.awareActorIds.filter((candidate) => candidate !== departedActorId)
-    : actor.awareActorIds;
-  const lastKnownTargets = actor.behaviorState.lastKnownTargets.some(
-    (memory) =>
-      memory.targetActorId === departedActorId || memory.observerActorId === departedActorId,
-  )
-    ? actor.behaviorState.lastKnownTargets.filter(
-        (memory) =>
-          memory.targetActorId !== departedActorId && memory.observerActorId !== departedActorId,
-      )
-    : actor.behaviorState.lastKnownTargets;
-  const goal =
-    actor.behaviorState.goal?.type === 'actor' &&
-    actor.behaviorState.goal.targetActorId === departedActorId
-      ? null
-      : actor.behaviorState.goal;
-  // A condition outlives its source; only the stale source reference is cleared.
-  const conditions = actor.conditions.some(
-    (condition) => condition.sourceActorId === departedActorId,
-  )
-    ? actor.conditions.map((condition) =>
-        condition.sourceActorId === departedActorId
-          ? { ...condition, sourceActorId: null }
-          : condition,
-      )
-    : actor.conditions;
-  if (
-    awareActorIds === actor.awareActorIds &&
-    lastKnownTargets === actor.behaviorState.lastKnownTargets &&
-    goal === actor.behaviorState.goal &&
-    conditions === actor.conditions
-  ) {
-    return actor;
-  }
-  return {
-    ...actor,
-    awareActorIds,
-    conditions,
-    behaviorState: { ...actor.behaviorState, goal, lastKnownTargets },
-  };
-}
-
-/**
- * Drops recorded intent events that reference the departed actor. The command records themselves
- * survive untouched for dedup and replay; only the stale `actor.intent-changed` entries (which the
- * save schema requires to reference an existing actor) are filtered from their event streams.
- */
-function scrubRecordedCommands(
-  recentCommands: ActiveRun['recentCommands'],
-  departedActorId: OpaqueId,
-): ActiveRun['recentCommands'] {
-  const stale = (event: DomainEvent | PublicEvent): boolean =>
-    event.type === 'actor.intent-changed' && event.actorId === departedActorId;
-  if (
-    !recentCommands.some((record) => record.events.some(stale) || record.publicEvents.some(stale))
-  ) {
-    return recentCommands;
-  }
-  return recentCommands.map((record) => {
-    const events = record.events.some(stale)
-      ? record.events.filter((event) => !stale(event))
-      : record.events;
-    const publicEvents = record.publicEvents.some(stale)
-      ? record.publicEvents.filter((event) => !stale(event))
-      : record.publicEvents;
-    return events === record.events && publicEvents === record.publicEvents
-      ? record
-      : { ...record, events, publicEvents };
-  });
-}
-
 /**
  * Drops in-flight `actor.intent-changed` events referencing merchants that departed within the
  * same command. Recorded saved commands are scrubbed by `advanceMerchantLifecycle` itself; this
  * covers the event arrays still being accumulated when the departure resolves, so the command
  * about to be recorded never carries a dangling actor reference.
+ *
+ * Deliberately merchant-only. A haunt fades from the hero's own action, which `resolveWorldStep`
+ * applies before the step's event arrays exist, so no intent event naming it can be in flight --
+ * its stale references live only in already-recorded commands, which `resolveOffer` scrubs.
  */
 export function scrubDepartedIntentEvents(
   input: Readonly<{
@@ -121,28 +55,6 @@ export function scrubDepartedIntentEvents(
       ...input.publicEvents.filter((event) => !stale(event)),
     );
   }
-}
-
-function scrubPopulationReferences(
-  population: ActiveRun['populations'][number],
-  departedActorId: OpaqueId,
-): ActiveRun['populations'][number] {
-  if (population.model !== 'group') return population;
-  if (
-    !population.sharedKnowledge.some(
-      (memory) =>
-        memory.targetActorId === departedActorId || memory.observerActorId === departedActorId,
-    )
-  ) {
-    return population;
-  }
-  return {
-    ...population,
-    sharedKnowledge: population.sharedKnowledge.filter(
-      (memory) =>
-        memory.targetActorId !== departedActorId && memory.observerActorId !== departedActorId,
-    ),
-  };
 }
 
 /**

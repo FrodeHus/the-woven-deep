@@ -68,6 +68,35 @@ function withLockedDoorEast(projection: GameplayProjection): GameplayProjection 
   };
 }
 
+/** A living, unappeased haunt actor placed Chebyshev-adjacent to the hero, plus the matching
+ * `HauntView` `adjacentHaunt` resolves against -- mirrors `withActorEast`/`withLockedDoorEast`
+ * above for the `offer` intent. */
+function withAdjacentHaunt(projection: GameplayProjection): GameplayProjection {
+  const { x, y } = heroPosition(projection);
+  return {
+    ...projection,
+    actors: [
+      ...projection.actors,
+      { actorId: 'actor.haunt-target', contentId: null, x: x + 1, y, health: 10, maxHealth: 10 },
+    ],
+    haunts: [
+      ...projection.haunts,
+      {
+        hallRecordId: 'hall.haunt-target',
+        role: 'echo',
+        heroName: 'Mira',
+        deathDepth: 4,
+        killerContentId: null,
+        causeDepth: null,
+        encountered: true,
+        appeased: false,
+        actorId: 'actor.haunt-target',
+        needCategories: ['scroll'],
+      },
+    ],
+  };
+}
+
 function withLockedChestSouth(projection: GameplayProjection): GameplayProjection {
   const { x, y } = heroPosition(projection);
   return {
@@ -283,6 +312,34 @@ describe('buildIntent', () => {
       projection: baseProjection,
       commandId: 'command.guest-lock-004',
       expectedRevision: 3,
+    });
+    expect(rejected.kind).toBe('rejected');
+  });
+
+  it('builds an offer command against the adjacent haunt, and rejects when none is adjacent', () => {
+    const withHaunt = withAdjacentHaunt(baseProjection);
+    const built = buildIntent({
+      intent: { type: 'offer', itemId: 'item.scroll.0001' },
+      projection: withHaunt,
+      commandId: 'command.guest-offer-001',
+      expectedRevision: 4,
+    });
+    expect(built).toEqual({
+      kind: 'command',
+      command: {
+        type: 'offer',
+        itemId: 'item.scroll.0001',
+        targetActorId: 'actor.haunt-target',
+        commandId: 'command.guest-offer-001',
+        expectedRevision: 4,
+      },
+    });
+
+    const rejected = buildIntent({
+      intent: { type: 'offer', itemId: 'item.scroll.0001' },
+      projection: baseProjection,
+      commandId: 'command.guest-offer-002',
+      expectedRevision: 4,
     });
     expect(rejected.kind).toBe('rejected');
   });

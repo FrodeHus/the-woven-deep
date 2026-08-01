@@ -138,6 +138,25 @@ function instanceSnapshot(
   };
 }
 
+/**
+ * Instance snapshots of every item the hero has EQUIPPED, in `itemId` order. Backpack contents are
+ * deliberately excluded (spec non-goal): the Deep keeps what the hero wore. Never empty in
+ * practice for a real hero, but an unequipped hero yields `[]` and the caller decides what to do.
+ */
+export function equippedInstanceSnapshots(
+  input: Readonly<{ run: ActiveRun; content: CompiledContentPack; recordId: OpaqueId }>,
+): readonly RecordedHeirloomSnapshot[] {
+  return input.run.items
+    .filter(
+      (item) =>
+        item.location.type === 'equipped' && item.location.actorId === input.run.hero.actorId,
+    )
+    .sort((left, right) => compareCodeUnits(left.itemId, right.itemId))
+    .map((instance) =>
+      instanceSnapshot(instance, itemDefinition(input.content, instance.contentId), input.recordId),
+    );
+}
+
 /** True while the item rests on the hero — equipped or in the backpack, the two places an
  * artifact can travel with a run. Wider than the ordinary heirloom filter on purpose. */
 function heldByHero(item: ItemInstance, run: ActiveRun): boolean {

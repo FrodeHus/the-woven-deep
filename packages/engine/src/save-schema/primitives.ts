@@ -89,6 +89,7 @@ export const blockReason = z.enum([
   'trade.service-unavailable',
   'trade.target-invalid',
   'run.concluded',
+  'offer.refused',
   'town.truce',
   'town.rest',
   'house.full',

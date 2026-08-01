@@ -1,6 +1,7 @@
 import type {
   CompiledContentPack,
   CompletionType,
+  ItemCategory,
   ItemContentEntry,
   MerchantEncounterContentEntry,
   MerchantServiceId,
@@ -44,6 +45,7 @@ import type { RunConclusion } from './run-conclusion.js';
 import type { RunMetrics } from './run-metrics.js';
 import { deriveHallRecordId, type AchievementGrant, type HallRecord } from './run-records-model.js';
 import type { ScoreBreakdown } from './score-run.js';
+import { fallenChampionTemplate, hauntNeed } from './haunt-need.js';
 import { compareCodeUnits } from './stable-json.js';
 import { tileDefinition } from './terrain.js';
 import {
@@ -448,6 +450,32 @@ export interface CastableSpellView {
   readonly aoe?: Readonly<{ shape: 'burst' | 'line' | 'cone'; radius: number }>;
 }
 
+/**
+ * A player-known fallen hero haunting this run: an Echo or Champion population retained from the
+ * player's OWN Hall standings (`state.fallenHeroDecisions` joined to `state.fallenHeroStandings`).
+ * Nothing here is hidden state -- every field is already visible on the Hall screen for this same
+ * hero -- so no field is perception-gated the way `actors`/`groundItems` are. Which haunts appear
+ * IS gated, though: a retained decision surfaces only once it has been encountered or placed, since
+ * `retained` alone is the outcome of a hidden gate roll (see the filter below).
+ */
+export interface HauntView {
+  readonly hallRecordId: OpaqueId;
+  readonly role: 'champion' | 'echo';
+  readonly heroName: string;
+  readonly deathDepth: number;
+  /** From the standing's own `cause`; `null` for a legacy record, which shortens the spoken line. */
+  readonly killerContentId: OpaqueId | null;
+  readonly causeDepth: number | null;
+  readonly encountered: boolean;
+  readonly appeased: boolean;
+  /** `null` until the haunt is placed on a floor, and again once it is appeased or defeated. */
+  readonly actorId: OpaqueId | null;
+  /** The item categories this haunt accepts as an offering, derived from the standing + template
+   * (Task 7). The client needs it for the offer affordance; there is no hidden state to protect --
+   * these are the player's own Hall records. */
+  readonly needCategories: readonly ItemCategory[];
+}
+
 export interface GameplayProjection {
   readonly mode: RunMode;
   readonly floor: ObservableFloorProjection;
@@ -487,6 +515,7 @@ export interface GameplayProjection {
    * only when `run.returnAnchorFloorId` is set. The client relabels the descend affordance to
    * "Return to depth N" when this is present. */
   readonly returnAnchorDepth?: number;
+  readonly haunts: readonly HauntView[];
 }
 
 /**
@@ -991,8 +1020,56 @@ export function projectGameplayState(
     input.state.returnAnchorFloorId === undefined
       ? undefined
       : input.state.floors.find((floor) => floor.floorId === input.state.returnAnchorFloorId);
+  // Looked up once for the whole list: every haunt derives its need from the same template, and
+  // the lookup is a pack scan. Skipped entirely for a run with no fallen-hero decisions -- a pack
+  // that never authored a template must still project.
+  const championTemplate =
+    input.state.fallenHeroDecisions.length === 0 ? null : fallenChampionTemplate(input.content);
+  // Player-known data by construction: these are the player's OWN Hall records, already visible in
+  // the Hall screen. Nothing hidden (gate rolls, unretained candidates) crosses this boundary.
+  const haunts: readonly HauntView[] = input.state.fallenHeroDecisions
+    .filter((decision) => decision.retained)
+    .flatMap((decision) => {
+      const standing = input.state.fallenHeroStandings.find(
+        (candidate) => candidate.hallRecordId === decision.hallRecordId,
+      );
+      if (!standing) return [];
+      const population = input.state.populations.find(
+        (candidate) =>
+          (candidate.model === 'champion' || candidate.model === 'echo') &&
+          candidate.hallRecordId === decision.hallRecordId,
+      );
+      const actorId = population?.livingMemberIds[0] ?? null;
+      // `retained` alone would leak the outcome of the hidden gate roll: a retained-but-dormant
+      // decision the world has never placed or the hero has never crossed paths with. Gating on
+      // `encountered` alone (Task 9) -- a placed-but-unseen haunt (`actorId !== null` while the
+      // hero has never actually laid eyes on it, since `observeEncounters`/world-step.ts only
+      // flips `encountered` once the population is genuinely visible) must stay invisible too: no
+      // Task-9 client consumer needs it (`adjacentHaunt`'s adjacency already implies visibility,
+      // and the spoken line fires off `haunt.sighted`, never off this field). `encountered` sticks
+      // true forever once set, so a later fade/appeasement (which clears `actorId`) never
+      // re-hides an already-known haunt.
+      if (!decision.encountered) return [];
+      return [
+        {
+          hallRecordId: decision.hallRecordId,
+          role: decision.role,
+          heroName: standing.heroName,
+          deathDepth: standing.deathDepth,
+          killerContentId: standing.cause?.killerContentId ?? null,
+          causeDepth: standing.cause?.depth ?? null,
+          encountered: decision.encountered,
+          appeased: decision.appeased,
+          actorId,
+          needCategories:
+            championTemplate === null ? [] : hauntNeed({ standing, template: championTemplate }),
+        },
+      ];
+    })
+    .sort((left, right) => compareCodeUnits(left.hallRecordId, right.hallRecordId));
   return {
     mode: input.state.mode,
+    haunts,
     ...(trade === undefined ? {} : { trade }),
     ...(anchorFloor === undefined ? {} : { returnAnchorDepth: anchorFloor.depth }),
     floor: projectFloor({

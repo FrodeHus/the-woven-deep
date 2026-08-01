@@ -114,7 +114,7 @@ describe('population encounter seeded invariants', () => {
     expect(swarm.spawnedCount).toBeLessThanOrEqual(8);
   });
 
-  it('regression: terminal rewards are singletons with no Echo heirloom', () => {
+  it('regression: terminal rewards are the surrendered sets, and no Echo spoils carry provenance', () => {
     const result = runPopulationDemo(pack);
     const champion = result.state.populations.find(
       (population) => population.model === 'champion',
@@ -122,9 +122,18 @@ describe('population encounter seeded invariants', () => {
     const echo = result.state.populations.find((population) => population.model === 'echo')!;
     expect(champion).toMatchObject({ defeated: true, rewardCreated: true });
     expect(echo).toMatchObject({ defeated: true, lootCreated: true });
-    expect(result.state.items.filter((item) => item.heirloom !== undefined)).toHaveLength(1);
+    // Each haunt hands back what it guarded: the demo's standings carry a single-piece death
+    // inventory, so the champion's whole set and the echo's one drawn piece are one item each.
+    const withProvenance = result.state.items.filter((item) => item.heirloom !== undefined);
+    expect(withProvenance).toHaveLength(2);
     expect(
-      result.state.items.filter((item) => item.itemId.includes(echo.populationId)),
+      withProvenance.filter((item) => item.itemId.startsWith(`item.haunt.${echo.populationId}.`)),
+    ).toHaveLength(1);
+    // The echo's ordinary SPOILS still never carry heirloom provenance.
+    expect(
+      result.state.items.filter((item) =>
+        item.itemId.startsWith(`item.echo-loot.${echo.populationId}.`),
+      ),
     ).not.toContainEqual(expect.objectContaining({ heirloom: expect.anything() }));
   });
 

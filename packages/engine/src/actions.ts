@@ -12,6 +12,7 @@ import { equipItem, refuelItem, toggleItemLight, unequipItem } from './equipment
 import { artifactById } from './commerce.js';
 import { closeDoor, openDoor } from './features.js';
 import { isTownFloorActive } from './town-floor.js';
+import { fallenChampionTemplate, hauntNeed } from './haunt-need.js';
 import type { ActorState } from './actor-model.js';
 import type {
   ActiveRun,
@@ -381,6 +382,75 @@ export function validatePlayerAction(
       itemId: input.command.itemId,
       quantity: input.command.quantity,
       newItemId: input.command.commandId,
+      cost: actionCostFor(rules, 'action.drop'),
+    };
+  }
+  if (input.command.type === 'offer') {
+    const command = input.command;
+    const target = input.state.actors.find(
+      (candidate) => candidate.actorId === command.targetActorId,
+    );
+    const population = input.state.populations.find(
+      (candidate) => candidate.populationId === target?.populationId,
+    );
+    const decision =
+      population?.model === 'champion' || population?.model === 'echo'
+        ? input.state.fallenHeroDecisions.find(
+            (candidate) => candidate.hallRecordId === population.hallRecordId,
+          )
+        : undefined;
+    const standing = input.state.fallenHeroStandings.find(
+      (candidate) => candidate.hallRecordId === decision?.hallRecordId,
+    );
+    // One reason for every way the target fails to be an offerable haunt: an ordinary monster, a
+    // corpse, one already appeased or put down, one the hero has never laid eyes on, or one simply
+    // out of arm's reach. Distinguishing them would leak which actors are haunts before the hero
+    // has met them -- `encountered` is part of the gate for exactly that reason: without it, a
+    // handcrafted offer to an unseen haunt answers `offer.refused` (which only a haunt can say)
+    // and a right-category one resolves outright. The client only ever offers an encountered
+    // haunt, so no legitimate play reaches this.
+    if (
+      !target ||
+      !standing ||
+      !decision ||
+      !decision.retained ||
+      !decision.encountered ||
+      decision.appeased ||
+      decision.defeated ||
+      target.health === 0 ||
+      target.floorId !== actor.floorId ||
+      Math.max(Math.abs(target.x - actor.x), Math.abs(target.y - actor.y)) !== 1
+    ) {
+      return { status: 'invalid', reason: 'target.invalid' };
+    }
+    const instance = input.state.items.find((item) => item.itemId === command.itemId);
+    if (!instance) return { status: 'invalid', reason: 'item.missing' };
+    if (instance.location.type !== 'backpack' || instance.location.actorId !== actor.actorId) {
+      return { status: 'invalid', reason: 'item.unavailable' };
+    }
+    const definition = itemEntry(input.context.content, instance.contentId);
+    if (!definition) return { status: 'invalid', reason: 'item.missing' };
+    // "The dead do not want what the dead once held." A piece another haunt surrendered is refused
+    // outright, whatever its category. This is not flavor alone: the save tier requires every owed
+    // piece to keep existing for as long as its haunt population does, so consuming one as an
+    // offering would delete it and make the run un-persistable from that command onward. The same
+    // invariant is why `merchantAcceptsItem` refuses an heirloom-provenance item across a counter.
+    if (instance.heirloom !== undefined) {
+      return { status: 'invalid', reason: 'offer.refused' };
+    }
+    const need = hauntNeed({ standing, template: fallenChampionTemplate(input.context.content) });
+    if (!need.includes(definition.category)) {
+      // A refusal is inert on purpose: the item stays in the pack and the haunt's disposition is
+      // untouched. Guessing wrong must never escalate a fight the player was trying to avoid.
+      return { status: 'invalid', reason: 'offer.refused' };
+    }
+    return {
+      type: 'offer',
+      actorId: actor.actorId,
+      targetActorId: target.actorId,
+      itemId: instance.itemId,
+      // An offering is a giving-away; it reuses the drop cost rather than adding an authored
+      // action-cost id for a second content change with no design content in it.
       cost: actionCostFor(rules, 'action.drop'),
     };
   }

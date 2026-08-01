@@ -1,4 +1,4 @@
-schemaVersion: 12
+schemaVersion: 13
 entries:
   # --- Silt vermin (depth 1-5) ---
   - kind: encounter

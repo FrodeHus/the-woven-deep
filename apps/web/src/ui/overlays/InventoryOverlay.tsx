@@ -5,7 +5,7 @@ import {
   type JSX,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import { heroOf } from '../../session/projection-view.js';
+import { adjacentHaunt, heroOf } from '../../session/projection-view.js';
 import type { CastableSpellView } from '../../session/projection-view.js';
 import { scrollAimSpell } from '../../session/scroll-targeting.js';
 import { usePack, useRecordsRepository, useSessionCtx } from '../providers.js';
@@ -108,6 +108,7 @@ export function InventoryOverlay({
   const selected = entries[selectedIndex];
   const refuelTarget =
     hero && selected ? equippedLightMatchingFuel(pack, hero, selected.item) : undefined;
+  const offerHaunt = sessionCtx ? adjacentHaunt(sessionCtx.snapshot.projection) : undefined;
   const provenance = repository
     ? provenanceLines(repository.artifactLedger(), selected?.item.contentId, repository.records())
     : [];
@@ -115,6 +116,22 @@ export function InventoryOverlay({
   function dispatchAction(action: 'equip' | 'unequip' | 'drop' | 'toggle-light'): void {
     if (!selected || !sessionCtx) return;
     sessionCtx.session.dispatch({ type: 'backpack', action, itemId: selected.item.itemId });
+  }
+
+  function dispatchOffer(): void {
+    // Mirrors `dispatchRefuel`'s convention: the guard restates the button's own render/enabled
+    // condition, so the `o` chord can never fire a dispatch the button itself would have refused
+    // to offer (an equipped row, or a category the adjacent haunt does not want) -- the o key must
+    // never reach a case the button hides or disables.
+    if (
+      !selected ||
+      !offerHaunt ||
+      selected.equipped ||
+      !offerHaunt.needCategories.includes(selected.item.category) ||
+      !sessionCtx
+    )
+      return;
+    sessionCtx.session.dispatch({ type: 'offer', itemId: selected.item.itemId });
   }
 
   /**
@@ -164,6 +181,7 @@ export function InventoryOverlay({
     d: () => dispatchAction('drop'),
     l: () => dispatchAction('toggle-light'),
     r: () => dispatchRefuel(),
+    o: () => dispatchOffer(),
   });
 
   function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
@@ -225,6 +243,7 @@ export function InventoryOverlay({
           <DetailPane
             entry={selected}
             refuelTarget={refuelTarget}
+            offerHaunt={offerHaunt}
             pack={pack}
             provenance={provenance}
             onEquip={() => dispatchAction(selected?.equipped ? 'unequip' : 'equip')}
@@ -232,12 +251,13 @@ export function InventoryOverlay({
             onDrop={() => dispatchAction('drop')}
             onToggleLight={() => dispatchAction('toggle-light')}
             onRefuel={dispatchRefuel}
+            onOffer={dispatchOffer}
           />
         )}
       />
       {entries.length === 0 && <p className="text-muted">Your pack is empty.</p>}
       <p className="mt-1 border-t border-line pt-2 font-mono text-[0.6875rem] text-subtle">
-        ↑↓ browse · e equip · u use · d drop · l light · f filter
+        ↑↓ browse · e equip · u use · d drop · l light · f filter{offerHaunt ? ' · o offer' : ''}
       </p>
     </div>
   );

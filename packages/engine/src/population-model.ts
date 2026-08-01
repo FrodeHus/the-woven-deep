@@ -2,6 +2,7 @@ import type { BaseAttributes } from './actor-model.js';
 import type { OpaqueId, Uint32State } from './model.js';
 import type { MerchantPopulation } from './merchant-model.js';
 import type { ItemCurseState } from './item-model.js';
+import type { RunConclusionCause } from './run-conclusion-model.js';
 
 export type PopulationIntent =
   'approach' | 'attack' | 'hold' | 'regroup' | 'flee' | 'protect' | 'spawn' | 'phase-change';
@@ -106,6 +107,9 @@ export interface ChampionPopulation extends PopulationBase {
   readonly rank: 1;
   readonly defeated: boolean;
   readonly rewardCreated: boolean;
+  /** Set only by `migrateV15ToV16` on a haunt rewarded before death inventories existed; such a
+   * haunt owes no drop pieces. The engine never writes it. */
+  readonly preHauntReward?: true;
   readonly equipmentContentIds: readonly OpaqueId[];
   readonly abilityIds: readonly OpaqueId[];
 }
@@ -116,6 +120,9 @@ export interface EchoPopulation extends PopulationBase {
   readonly rank: number;
   readonly defeated: boolean;
   readonly lootCreated: boolean;
+  /** Set only by `migrateV15ToV16` on a haunt rewarded before death inventories existed; such a
+   * haunt owes no drop pieces. The engine never writes it. */
+  readonly preHauntReward?: true;
   readonly equipmentContentIds: readonly OpaqueId[];
   readonly abilityIds: readonly OpaqueId[];
 }
@@ -159,6 +166,13 @@ export interface FallenHeroStandingSnapshot {
   readonly deathDepth: number;
   readonly sourceContentHash: string;
   readonly heirloom: RecordedHeirloomSnapshot;
+  /** The record's own death cause, copied so the run can speak it. `null` for a legacy record
+   * written before haunts. */
+  readonly cause: RunConclusionCause | null;
+  /** Every item the hero had EQUIPPED at death, as instance snapshots. `heirloom` remains one
+   * distinguished member of this set (matched by `sourceItemId`). Never empty: a legacy standing
+   * migrates to `[heirloom]`, and a fresh capture always contains at least the heirloom. */
+  readonly deathInventory: readonly RecordedHeirloomSnapshot[];
 }
 
 export interface FallenHeroRunDecision {
@@ -169,6 +183,9 @@ export interface FallenHeroRunDecision {
   readonly retained: boolean;
   readonly encountered: boolean;
   readonly defeated: boolean;
+  /** Set when the hero appeased this haunt with an offering. Never implies conquest: `defeated`
+   * stays `false`, no achievement is granted, and the haunt stands again next run. */
+  readonly appeased: boolean;
 }
 
 export function emptyActorBehaviorState(): ActorBehaviorState {

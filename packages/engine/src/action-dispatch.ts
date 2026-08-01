@@ -41,6 +41,7 @@ import { groupCombatModifiers } from './group-behavior.js';
 import { resolveSwarmSpawnAction } from './swarm-behavior.js';
 import { relationshipBetween, resolveOpportunityAttacks, setRelationship } from './reactions.js';
 import { provokeMerchant } from './merchant-behavior.js';
+import { resolveOffer } from './haunt.js';
 import type { MerchantPopulation } from './merchant-model.js';
 import { combat, profile } from './combat-profile.js';
 import { entryById, requireItem } from './content-index.js';
@@ -272,6 +273,13 @@ const resolveDoor: ActionResolver<Extract<GameAction, { type: 'open-door' | 'clo
 const ACTION_DISPATCH: ActionDispatchRegistry = {
   rest: () => {
     throw new Error('internal invariant: rest must be expanded into world steps');
+  },
+  // Registering this is also what keeps a validated offer off `applyAction`'s bump-attack
+  // fallback, which would turn an accepted offering into an attack on the haunt.
+  offer: ({ state, action, content, eventId, events }) => {
+    const resolved = resolveOffer({ state, content, action, eventId });
+    events.push(...resolved.events);
+    return { state: resolved.state, chargeEnergy: true };
   },
   'swarm-spawn': ({ state, actor, content, eventId, events }) => {
     const result = resolveSwarmSpawnAction({

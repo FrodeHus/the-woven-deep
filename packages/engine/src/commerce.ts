@@ -225,6 +225,9 @@ export function merchantAcceptsItem(
   }
   return (
     item.location.type === 'backpack' &&
+    // A piece a haunt surrendered never leaves the run through a counter -- and never through an
+    // offering either (see the heirloom guard in `validatePlayerAction`'s `offer` arm): the save
+    // tier requires every owed piece to keep existing for as long as its haunt population does.
     item.heirloom === undefined &&
     // An unrevealed curse is invisible to merchant and hero alike -- that invisibility is the
     // gamble the identify service exists to resolve. Once revealed, the merchant refuses it same

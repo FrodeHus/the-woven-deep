@@ -36,12 +36,12 @@ beforeAll(async () => {
 const SEED = [11, 22, 33, 44] as const;
 
 describe('createNewRun', () => {
-  it('builds a valid, deterministic schema-v15 run starting in the authored town', () => {
+  it('builds a valid, deterministic schema-v16 run starting in the authored town', () => {
     const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(15);
+    expect(first.schemaVersion).toBe(16);
     expect(first.mode).toBe('classic');
     expect(first.offeredArtifact).toBeNull();
     expect(first.artifactsUndiscovered).toEqual([]);
@@ -288,6 +288,20 @@ describe('createNewRun', () => {
 describe('createNewRun records input', () => {
   function standing(rank: number): FallenHeroStandingSnapshot {
     const hallRecordId = `hall.new-run-${rank}`;
+    const heirloom = {
+      contentId: 'item.iron-sword',
+      sourceItemId: `item.new-run-original-${rank}`,
+      enchantment: null,
+      condition: 81,
+      charges: null,
+      fuel: null,
+      curse: null,
+      qualityRank: 2,
+      displayName: `Iron Sword ${rank}`,
+      glyph: ')',
+      color: '#d8d8d8',
+      originatingHallRecordId: hallRecordId,
+    };
     return {
       rank,
       hallRecordId,
@@ -299,20 +313,9 @@ describe('createNewRun records input', () => {
       signatureAbilityIds: ['spell.ember-bolt'],
       deathDepth: 5,
       sourceContentHash: 'b'.repeat(64),
-      heirloom: {
-        contentId: 'item.iron-sword',
-        sourceItemId: `item.new-run-original-${rank}`,
-        enchantment: null,
-        condition: 81,
-        charges: null,
-        fuel: null,
-        curse: null,
-        qualityRank: 2,
-        displayName: `Iron Sword ${rank}`,
-        glyph: ')',
-        color: '#d8d8d8',
-        originatingHallRecordId: hallRecordId,
-      },
+      heirloom,
+      cause: null,
+      deathInventory: [heirloom],
     };
   }
 
@@ -392,8 +395,17 @@ describe('createNewRun records input', () => {
     // Re-pinned again for save schema v15 (`ActiveRun.mode`, run-modes feature): `schemaVersion`
     // moves 14 -> 15 and every encoded run now carries `mode: 'classic'`; no other key differs.
     // This is the expected save-schema bump, not an engine regression.
+    // Re-pinned again for save schema v16 (haunts): `schemaVersion` moves 15 -> 16. This run's
+    // `fallenHeroStandings`/`fallenHeroDecisions` are both empty (no records input), so no
+    // standing/decision content is affected -- the digest moves purely from the schema literal.
+    // This is the expected save-schema bump, not an engine regression.
+    // Re-pinned again for content schema v13 (the haunt `appeasement` block on
+    // `fallen-champion-template`): the block is inert schema -- no generation, RNG stream, or
+    // loot/merchant logic reads it yet -- so the digest moves purely because `contentHash` covers
+    // the whole compiled pack and the template entry grew a field. This is expected
+    // content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '9557170f1fb5959cef2f2c89142b94cf61132c382ded3f650f46d8c1a77c5447',
+      '4529a80dabaee02ef4948b557598bb9001bcc8c59b102b6794fc635bd6042bbf',
     );
   });
 

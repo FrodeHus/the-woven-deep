@@ -7,10 +7,11 @@ import type {
 import { emptyEquipment, type ActorState, type BaseAttributes } from './actor-model.js';
 import { preservesRequiredRoutes } from './connectivity.js';
 import {
-  createPopulationLoot,
-  createRecordedHeirloom,
-  validateEchoLootGraph,
-} from './inventory.js';
+  hauntDropItemIdPrefix,
+  hauntDropSnapshots,
+  materializeDeathInventory,
+} from './haunt-rewards.js';
+import { createPopulationLoot, validateEchoLootGraph } from './inventory.js';
 import { openPlacementCells } from './loot-placement.js';
 import type {
   ActiveRun,
@@ -29,7 +30,7 @@ import type {
 } from './population-model.js';
 import { emptyActorBehaviorState } from './population-model.js';
 import { replacePopulationList, sortedPopulations } from './population-runtime.js';
-import { isNonZeroState, nextUint32 } from './random.js';
+import { isNonZeroState, nextUint32, rollDie } from './random.js';
 import { compareCodeUnits } from './stable-json.js';
 import { boundedPrefixedDisplay, boundedSuffixedDisplay } from './display-text.js';
 
@@ -122,6 +123,7 @@ export function createFallenHeroRunDecisions(
             retained: !conquered.has(standing.hallRecordId),
             encountered: false,
             defeated: false,
+            appeased: false,
           }
         : {
             hallRecordId: standing.hallRecordId,
@@ -131,6 +133,7 @@ export function createFallenHeroRunDecisions(
             retained: retainedEchoes.has(standing.hallRecordId),
             encountered: false,
             defeated: false,
+            appeased: false,
           },
     ),
   };
@@ -569,6 +572,13 @@ export function advanceFallenHeroEncounters(
   const events: DomainEvent[] = [];
   for (const original of sortedPopulations(state.populations)) {
     if (original.model !== 'champion' && original.model !== 'echo') continue;
+    // An appeased haunt has no actor: the offering faded it and its inventory is already on the
+    // floor. Skipping it here is what keeps the `fallen hero population ... is incomplete` throw
+    // below honest for the genuinely broken cases it exists to catch.
+    const appeased = state.fallenHeroDecisions.some(
+      (decision) => decision.hallRecordId === original.hallRecordId && decision.appeased,
+    );
+    if (appeased) continue;
     const actor = state.actors.find((candidate) => candidate.actorId === original.actorId);
     const standing = state.fallenHeroStandings.find(
       (candidate) => candidate.hallRecordId === original.hallRecordId,
@@ -585,23 +595,38 @@ export function advanceFallenHeroEncounters(
       continue;
     }
     if (population.model === 'champion') {
-      const reward = createRecordedHeirloom({
+      // The haunt guarded everything it wore, so it hands back the whole recorded kit rather than
+      // the single heirloom. The set event below is additive: `champion.heirloom-created` still
+      // fires, still naming the distinguished piece.
+      const drop = hauntDropSnapshots(standing);
+      const pieces = materializeDeathInventory({
         content: input.content,
-        snapshot: standing.heirloom,
+        snapshots: drop.snapshots,
         equippedItemContentIds: standing.equippedItemContentIds,
         fallbackItemId: definition.fallbackItemId,
-        itemId: `item.heirloom.${population.populationId}`,
+        // An artifact this run already holds an instance of degrades to the fallback relic rather
+        // than being minted twice -- see `circulatingArtifactContentIds`.
+        existingItems: state.items,
+        itemIdPrefix: hauntDropItemIdPrefix(population.populationId),
         floorId: population.floorId,
         x: actor.x,
         y: actor.y,
       });
-      if (state.items.some((item) => item.itemId === reward.item.itemId)) {
-        throw new Error(`Champion heirloom ${reward.item.itemId} exists without reward state`);
+      for (const piece of pieces) {
+        if (state.items.some((item) => item.itemId === piece.item.itemId)) {
+          throw new Error(`Haunt drop ${piece.item.itemId} exists without reward state`);
+        }
+      }
+      // `hauntDropSnapshots` guarantees the recorded heirloom is a member of the set, so every
+      // existing consumer of `champion.heirloom-created` keeps working unchanged.
+      const reward = pieces[drop.heirloomIndex];
+      if (reward === undefined) {
+        throw new Error(`Champion ${population.populationId} materialized no death inventory`);
       }
       population = { ...population, rewardCreated: true };
       state = {
         ...state,
-        items: [...state.items, reward.item].sort((left, right) =>
+        items: [...state.items, ...pieces.map((piece) => piece.item)].sort((left, right) =>
           compareCodeUnits(left.itemId, right.itemId),
         ),
       };
@@ -629,6 +654,14 @@ export function advanceFallenHeroEncounters(
           color: reward.color,
           fallback: reward.fallback,
         },
+        {
+          type: 'champion.death-inventory-created',
+          eventId: input.eventId,
+          populationId: population.populationId,
+          actorId: actor.actorId,
+          hallRecordId: standing.hallRecordId,
+          itemIds: pieces.map((piece) => piece.item.itemId),
+        },
       );
     } else {
       validateEchoLootGraph({
@@ -637,6 +670,48 @@ export function advanceFallenHeroEncounters(
         recordedHeirloomContentId: standing.heirloom.contentId,
       });
       const floor = state.floors.find((candidate) => candidate.floorId === population.floorId)!;
+      // An echo guarded only a fragment of what it was, so it surrenders ONE piece of the recorded
+      // inventory, picked first, and the spoils table rolls after. Both draw the `loot` stream, so
+      // this ordering is load-bearing: swapping it silently reshuffles every later loot draw in the
+      // run. A one-item inventory takes NO draw -- a 1-sided roll decides nothing and would shift
+      // the stream for free.
+      const inventory = hauntDropSnapshots(standing).snapshots;
+      let lootState = state.rng.loot;
+      let pickIndex = 0;
+      if (inventory.length > 1) {
+        const pick = rollDie(lootState, inventory.length);
+        pickIndex = pick.value - 1;
+        lootState = pick.state;
+      }
+      const picked = inventory[pickIndex];
+      if (picked === undefined) {
+        throw new Error(`Echo ${population.populationId} has an empty death inventory`);
+      }
+      state = { ...state, rng: { ...state.rng, loot: lootState } };
+      const pieces = materializeDeathInventory({
+        content: input.content,
+        snapshots: [picked],
+        equippedItemContentIds: standing.equippedItemContentIds,
+        fallbackItemId: definition.fallbackItemId,
+        // Same singleton guard as the champion set: a haunt whose artifact is already in the run
+        // held only a memory of it, and surrenders the fallback relic instead.
+        existingItems: state.items,
+        itemIdPrefix: hauntDropItemIdPrefix(population.populationId),
+        floorId: population.floorId,
+        x: actor.x,
+        y: actor.y,
+      });
+      for (const piece of pieces) {
+        if (state.items.some((item) => item.itemId === piece.item.itemId)) {
+          throw new Error(`Haunt drop ${piece.item.itemId} exists without reward state`);
+        }
+      }
+      state = {
+        ...state,
+        items: [...state.items, ...pieces.map((piece) => piece.item)].sort((left, right) =>
+          compareCodeUnits(left.itemId, right.itemId),
+        ),
+      };
       const loot = createPopulationLoot({
         content: input.content,
         state,
@@ -647,7 +722,21 @@ export function advanceFallenHeroEncounters(
         y: actor.y,
         depth: floor.depth,
       });
-      if (loot.createdItems.some((item) => item.contentId === standing.heirloom.contentId)) {
+      // The recorded heirloom may now legitimately be on the ground -- it is the piece this haunt
+      // guarded and just surrendered. What must still never happen is the ordinary SPOILS TABLE
+      // producing it, which `validateEchoLootGraph` above already forbids at the content level, so
+      // this runtime guard now only has to police the table's own output. The exclusion below is
+      // defensive rather than load-bearing: spoils are minted under `item.echo-loot.` and pieces
+      // under `item.haunt.`, so the two id spaces cannot collide as the code stands -- it states
+      // the rule (the deliberately surrendered piece is never the violation) so a future change to
+      // either prefix cannot turn this guard against the feature.
+      if (
+        loot.createdItems.some(
+          (item) =>
+            !pieces.some((piece) => piece.item.itemId === item.itemId) &&
+            item.contentId === standing.heirloom.contentId,
+        )
+      ) {
         throw new Error('Echo ordinary loot must not create its recorded heirloom');
       }
       population = { ...population, lootCreated: true };
@@ -660,6 +749,15 @@ export function advanceFallenHeroEncounters(
           actorId: actor.actorId,
           hallRecordId: standing.hallRecordId,
           rank: standing.rank,
+        },
+        {
+          type: 'echo.death-inventory-created',
+          eventId: input.eventId,
+          populationId: population.populationId,
+          actorId: actor.actorId,
+          hallRecordId: standing.hallRecordId,
+          rank: standing.rank,
+          itemId: pieces[0]!.item.itemId,
         },
         {
           type: 'echo.loot-created',

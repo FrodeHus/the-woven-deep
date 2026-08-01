@@ -3,7 +3,6 @@ import type {
   AchievementCriteria,
   CompiledContentPack,
   EncounterContentEntry,
-  FallenChampionTemplateContentEntry,
 } from '@woven-deep/content';
 import { heroActor } from './actor-model.js';
 import type {
@@ -25,19 +24,14 @@ import {
   type LifetimeState,
 } from './run-records-model.js';
 import { scoreRun } from './score-run.js';
-import { heldArtifactIds, selectRecordHeirloom } from './heirloom-selection.js';
+import {
+  equippedInstanceSnapshots,
+  heldArtifactIds,
+  selectRecordHeirloom,
+} from './heirloom-selection.js';
 import type { ArtifactDeltas, ArtifactStint } from './artifact-ledger.js';
+import { fallenChampionTemplate } from './haunt-need.js';
 import { compareCodeUnits } from './stable-json.js';
-
-function fallenChampionTemplate(content: CompiledContentPack): FallenChampionTemplateContentEntry {
-  const template = content.entries.find(
-    (entry): entry is FallenChampionTemplateContentEntry =>
-      entry.kind === 'fallen-champion-template',
-  );
-  if (!template)
-    throw new Error('internal invariant: content pack is missing a fallen-champion-template entry');
-  return template;
-}
 
 function buildSnapshot(run: ActiveRun): FallenHeroBuildSnapshot {
   const hero = heroActor(run);
@@ -204,6 +198,13 @@ export function finalizeRun(
     metrics: run.metrics,
     reputations: run.reputations,
     heirloom: heirloom.snapshot,
+    // Equipped-only, captured at conclusion: this is what the hero's haunt will guard. Falls back
+    // to the selected heirloom (which is the template's fallback relic in this case) so the field
+    // is never empty and the champion drop always has something to materialize.
+    deathInventory: (() => {
+      const captured = equippedInstanceSnapshots({ run, content, recordId });
+      return captured.length === 0 ? [heirloom.snapshot] : captured;
+    })(),
     build: buildSnapshot(run),
     runSeed: encodeRunSeed(run.runSeed),
     contentHash: run.contentHash,

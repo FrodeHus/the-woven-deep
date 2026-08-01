@@ -25,6 +25,7 @@ export interface HallRecord {
   readonly metrics: RunMetrics; // copied snapshot
   readonly reputations: readonly FactionReputation[]; // finalized statistics
   readonly heirloom: RecordedHeirloomSnapshot;
+  readonly deathInventory: readonly RecordedHeirloomSnapshot[];
   readonly build: FallenHeroBuildSnapshot; // engine facts feeding 4B1 standings normalization
   readonly runSeed: string;
   readonly contentHash: string;

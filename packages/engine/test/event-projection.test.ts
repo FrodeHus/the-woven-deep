@@ -470,7 +470,20 @@ describe('public event projection', () => {
     ];
     const output = projectDomainEvents({ ...visible, events, heroId: visible.state.hero.actorId });
     expect(events.map(exhaustPopulationEvent)).toHaveLength(21);
-    expect(output.map((event) => event.type)).toEqual(Array(19).fill('population.notice'));
+    // `champion.encountered`/`echo.encountered` synthesize a `haunt.sighted` public event rather
+    // than redacting into a `population.notice` -- the haunt's spoken record line (Task 4,
+    // `hauntEncounterLine`) is host-rendered client prose keyed off `hallRecordId`/`role`, so the
+    // hall record id is never hidden there. All other champion/echo lifecycle events (defeated,
+    // heirloom, loot) still redact to a notice.
+    expect(output.map((event) => event.type)).toEqual([
+      ...Array(13).fill('population.notice'),
+      'haunt.sighted',
+      'population.notice',
+      'population.notice',
+      'haunt.sighted',
+      'population.notice',
+      'population.notice',
+    ]);
     const json = stableJson(output);
     for (const secret of [
       'population.secret',
@@ -483,11 +496,18 @@ describe('public event projection', () => {
       'individualRewards',
       'uniqueItemId',
       'item.roll-secret',
-      'hall.secret',
       'amount',
       'health',
     ])
       expect(json).not.toContain(secret);
+    // `hall.secret` (the `hallRecordId`) must never leak through a `population.notice` -- every
+    // OTHER champion/echo lifecycle event (defeated, heirloom-created, loot-created) still redacts
+    // it exactly as before. Only the two `haunt.sighted` events legitimately carry it: a hall
+    // record id names the player's OWN Hall record, never hidden state.
+    const noticeJson = stableJson(output.filter((event) => event.type === 'population.notice'));
+    expect(noticeJson).not.toContain('hall.secret');
+    const hauntJson = stableJson(output.filter((event) => event.type === 'haunt.sighted'));
+    expect(hauntJson).toContain('hall.secret');
     expect(json).toContain('Observed heirloom');
   });
 

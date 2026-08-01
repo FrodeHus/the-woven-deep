@@ -60,6 +60,14 @@ export interface DropCommand extends CommandEnvelope {
   readonly itemId: OpaqueId;
   readonly quantity: number;
 }
+export interface OfferCommand extends CommandEnvelope {
+  readonly type: 'offer';
+  /** The backpack item being given up. Consumed on acceptance -- it goes with the dead. */
+  readonly itemId: OpaqueId;
+  /** The haunt's actor. Adjacency is re-validated engine-side; the client resolves it by adjacency
+   * the way `trade-open` resolves its merchant. */
+  readonly targetActorId: OpaqueId;
+}
 export interface SplitStackCommand extends CommandEnvelope {
   readonly type: 'split-stack';
   readonly itemId: OpaqueId;
@@ -168,6 +176,7 @@ export type GameCommand =
   | UnequipCommand
   | PickupCommand
   | DropCommand
+  | OfferCommand
   | SplitStackCommand
   | RefuelCommand
   | ToggleLightCommand
@@ -241,6 +250,9 @@ export type InvalidActionReason =
   | 'learn.no-aptitude'
   | 'learn.already-known'
   | 'run.concluded'
+  // A haunt declining an offering outside its need. Deliberately inert: the item stays in the
+  // pack and the haunt's disposition is untouched, so guessing wrong costs nothing but a turn.
+  | 'offer.refused'
   | 'final-chamber.unavailable'
   | 'final-chamber.fragments-required'
   | 'final-chamber.boss-active';

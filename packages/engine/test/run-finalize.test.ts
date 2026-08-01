@@ -3,6 +3,7 @@ import type {
   AchievementContentEntry,
   CompiledContentPack,
   ContentEntry,
+  CurseContentEntry,
   EncounterContentEntry,
   FallenChampionTemplateContentEntry,
   ItemContentEntry,
@@ -13,11 +14,13 @@ import {
   deriveHallRecordId,
   emptyRunMetrics,
   encodeRunSeed,
+  equippedInstanceSnapshots,
   evaluateDiscoveryProtection,
   finalizeRun,
   rollDie,
   scoreRun,
   selectHeirloom,
+  selectRecordHeirloom,
   type ActiveRun,
   type EncounterRunDecision,
   type FallenHeroRunDecision,
@@ -73,6 +76,11 @@ const template: FallenChampionTemplateContentEntry = {
   heirloomSelection: {
     rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 },
     qualityRankBonus: 2,
+  },
+  appeasement: {
+    classFavors: { loomcaller: ['scroll', 'potion'] },
+    causelessCategories: ['light'],
+    defaultCategories: ['food', 'potion'],
   },
 };
 
@@ -270,6 +278,7 @@ describe('finalizeRun', () => {
     });
     const recordId = deriveHallRecordId(run.runSeed, run.contentHash);
     const heirloom = selectHeirloom({ run, content, template, recordId }).snapshot;
+    const deathInventory = equippedInstanceSnapshots({ run, content, recordId });
     const finalized = finalizeRun({ run, content, lifetime: emptyLifetime() });
     expect(finalized.record).toEqual({
       recordId,
@@ -282,6 +291,7 @@ describe('finalizeRun', () => {
       metrics: run.metrics,
       reputations: run.reputations,
       heirloom,
+      deathInventory,
       build: {
         attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
         equippedItemContentIds: ['item.crown', 'item.sword'],
@@ -325,6 +335,160 @@ describe('finalizeRun', () => {
     });
     const finalized = finalizeRun({ run, content, lifetime: emptyLifetime() });
     expect(finalized.record.build.equippedItemContentIds).toEqual(['item.dagger']);
+  });
+
+  describe('death inventory', () => {
+    const leadenWeightCurse: CurseContentEntry = {
+      kind: 'curse',
+      id: 'curse.leaden-weight',
+      name: 'Leaden Weight',
+      tags: ['curse'],
+      revealText: 'It grows heavier the longer you carry it.',
+      drawbackModifiers: { defense: -1 },
+      trigger: null,
+    };
+
+    it('captures every equipped item as an instance snapshot', () => {
+      const content = pack([
+        itemDef('item.iron-sword'),
+        itemDef('item.leather-armor', {
+          equipment: { slots: ['body'], handedness: 'one-handed', reservedSlots: [] },
+        }),
+        itemDef('item.lantern', {
+          equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
+        }),
+      ]);
+      const run = concludedRun({
+        items: [
+          equippedItem('item.hero.sword', 'item.iron-sword'),
+          {
+            ...equippedItem('item.hero.armor', 'item.leather-armor'),
+            location: { type: 'equipped', actorId: 'hero.demo', slot: 'body' },
+          },
+          {
+            ...equippedItem('item.hero.lantern', 'item.lantern'),
+            location: { type: 'equipped', actorId: 'hero.demo', slot: 'off-hand' },
+          },
+        ],
+      });
+      const { record } = finalizeRun({ run, content, lifetime: emptyLifetime() });
+      expect(record.deathInventory.map((entry) => entry.contentId).sort()).toEqual([
+        'item.iron-sword',
+        'item.lantern',
+        'item.leather-armor',
+      ]);
+    });
+
+    it('excludes backpack items', () => {
+      const content = pack([itemDef('item.healing-draught', { equipment: null })]);
+      const run = concludedRun({
+        items: [
+          {
+            ...equippedItem('item.hero.draught', 'item.healing-draught'),
+            location: { type: 'backpack', actorId: 'hero.demo' },
+          },
+        ],
+      });
+      const { record } = finalizeRun({ run, content, lifetime: emptyLifetime() });
+      expect(
+        record.deathInventory.some((entry) => entry.contentId === 'item.healing-draught'),
+      ).toBe(false);
+    });
+
+    it('preserves enchantment, curse, charges, and fuel on each captured piece', () => {
+      const content = pack([itemDef('item.iron-sword'), leadenWeightCurse]);
+      const run = concludedRun({
+        items: [
+          {
+            ...equippedItem('item.hero.sword', 'item.iron-sword'),
+            enchantment: { enchantmentId: 'enchantment.honed', modifiers: { accuracy: 1 } },
+            charges: 3,
+            fuel: 7,
+            curse: { curseId: 'curse.leaden-weight', revealed: false },
+          },
+        ],
+      });
+      const { record } = finalizeRun({ run, content, lifetime: emptyLifetime() });
+      const sword = record.deathInventory.find((entry) => entry.contentId === 'item.iron-sword')!;
+      expect(sword.enchantment).not.toBeNull();
+      expect(sword.charges).toBe(3);
+      expect(sword.fuel).toBe(7);
+      expect(sword.curse).toEqual({ curseId: 'curse.leaden-weight', revealed: true });
+      expect(sword.originatingHallRecordId).toBe(record.recordId);
+    });
+
+    it('captures an equipped artifact exactly as the heirloom snapshot would', () => {
+      const content = pack([artifactDef('item.marias-grace')]);
+      const run = concludedRun({
+        items: [equippedItem('item.hero.grace', 'item.marias-grace')],
+      });
+      const recordId = deriveHallRecordId(run.runSeed, run.contentHash);
+      const expected = equippedInstanceSnapshots({ run, content, recordId }).find(
+        (entry) => entry.contentId === 'item.marias-grace',
+      )!;
+      const { record } = finalizeRun({ run, content, lifetime: emptyLifetime() });
+      const artifact = record.deathInventory.find(
+        (entry) => entry.contentId === 'item.marias-grace',
+      )!;
+      expect(artifact).toEqual(expected);
+      expect(artifact.sourceItemId).toBe('item.hero.grace');
+    });
+
+    it('keeps the heirloom as a distinguished member of the inventory', () => {
+      const content = pack([
+        itemDef('item.sword'),
+        itemDef('item.crown', {
+          rarity: 'legendary',
+          equipment: { slots: ['head'], handedness: 'one-handed', reservedSlots: [] },
+        }),
+      ]);
+      const run = concludedRun({
+        items: [
+          equippedItem('item.hero.sword', 'item.sword'),
+          {
+            ...equippedItem('item.hero.crown', 'item.crown'),
+            location: { type: 'equipped', actorId: 'hero.demo', slot: 'head' },
+          },
+        ],
+      });
+      const { record } = finalizeRun({ run, content, lifetime: emptyLifetime() });
+      expect(
+        record.deathInventory.some((entry) => entry.sourceItemId === record.heirloom.sourceItemId),
+      ).toBe(true);
+    });
+
+    it('records the fallback relic alone when the hero died with nothing equipped', () => {
+      const content = pack();
+      const run = concludedRun({ items: [] });
+      const { record } = finalizeRun({ run, content, lifetime: emptyLifetime() });
+      expect(record.deathInventory).toEqual([record.heirloom]);
+    });
+
+    it('consumes no additional randomness to capture the inventory', () => {
+      const content = pack([
+        itemDef('item.sword'),
+        itemDef('item.crown', {
+          rarity: 'legendary',
+          equipment: { slots: ['head'], handedness: 'one-handed', reservedSlots: [] },
+        }),
+      ]);
+      const run = concludedRun({
+        items: [
+          equippedItem('item.hero.sword', 'item.sword'),
+          {
+            ...equippedItem('item.hero.crown', 'item.crown'),
+            location: { type: 'equipped', actorId: 'hero.demo', slot: 'head' },
+          },
+        ],
+      });
+      const recordId = deriveHallRecordId(run.runSeed, run.contentHash);
+      const finalized = finalizeRun({ run, content, lifetime: emptyLifetime() });
+      // One roll at most, the pre-existing heirloom selection: capture itself draws nothing.
+      expect(finalized.run.rng['run-records']).toEqual(
+        selectRecordHeirloom({ run, content, template, recordId, heldArtifactIds: [] })
+          .nextRunRecordsState,
+      );
+    });
   });
 
   describe('achievement grants', () => {

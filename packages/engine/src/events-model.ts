@@ -153,6 +153,7 @@ export interface ActorTurnCompletedEvent {
     | 'search'
     | 'disarm'
     | 'pick-lock'
+    | 'offer'
     | 'swarm-spawn';
 }
 export interface ActorMovedEvent {
@@ -515,6 +516,14 @@ export interface ChampionHeirloomCreatedEvent {
   readonly color: string;
   readonly fallback: boolean;
 }
+export interface ChampionDeathInventoryCreatedEvent {
+  readonly type: 'champion.death-inventory-created';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly hallRecordId: OpaqueId;
+  readonly itemIds: readonly OpaqueId[];
+}
 export interface EchoDefeatedEvent {
   readonly type: 'echo.defeated';
   readonly eventId: OpaqueId;
@@ -540,6 +549,16 @@ export interface EchoLootCreatedEvent {
   readonly rank: number;
   readonly itemIds: readonly OpaqueId[];
 }
+export interface EchoDeathInventoryCreatedEvent {
+  readonly type: 'echo.death-inventory-created';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly hallRecordId: OpaqueId;
+  readonly rank: number;
+  /** Singular: an echo surrenders exactly one piece of what it guarded. */
+  readonly itemId: OpaqueId;
+}
 export type PopulationDomainEvent =
   | PopulationCreatedEvent
   | PopulationEncounteredEvent
@@ -560,9 +579,11 @@ export type PopulationDomainEvent =
   | ChampionEncounteredEvent
   | ChampionDefeatedEvent
   | ChampionHeirloomCreatedEvent
+  | ChampionDeathInventoryCreatedEvent
   | EchoEncounteredEvent
   | EchoDefeatedEvent
-  | EchoLootCreatedEvent;
+  | EchoLootCreatedEvent
+  | EchoDeathInventoryCreatedEvent;
 export interface SoundHeardEvent {
   readonly type: 'sound.heard';
   readonly category: 'combat' | 'movement' | 'mechanism';
@@ -630,12 +651,17 @@ export interface PopulationNoticePublicEvent {
     | 'boss-recovery'
     | 'boss-defeated'
     | 'boss-reward'
+    // `champion-encountered`/`echo-encountered` are unreachable from `event-projection.ts` (that
+    // moment now emits `HauntSightedEvent` instead) -- kept so an already-persisted old save's
+    // stored `population.notice` history still decodes.
     | 'champion-encountered'
     | 'champion-defeated'
     | 'champion-heirloom'
+    | 'champion-death-inventory'
     | 'echo-encountered'
     | 'echo-defeated'
     | 'echo-loot'
+    | 'echo-death-inventory'
     | 'merchant-departure-warning'
     | 'merchant-departed'
     | 'merchant-provoked'
@@ -849,11 +875,59 @@ export type DomainEvent =
   | TrapStateEvent
   | LockOutcomeEvent
   | PopulationDomainEvent
+  | HauntAppeasedEvent
   | ReputationChangedEvent
   | TradeDomainEvent
   | MerchantLifecycleDomainEvent
   | RestCompletedEvent
   | RunRecordDomainEvent;
+
+/**
+ * The public-facing signal that a haunt (a champion or echo population, joined by `hallRecordId`)
+ * has been sighted: the haunt's spoken record line is host-rendered client prose
+ * (`hauntEncounterLine`) read from the `GameplayProjection.haunts` block -- widening the domain
+ * `champion.encountered`/`echo.encountered` events themselves would drag the frozen legacy event
+ * schemas into a save-schema-adjacent bump for no gain. A single new type literal, distinct from
+ * both domain events it can represent (`role` disambiguates), rather than two narrower shapes that
+ * collided with the persisted `champion.encountered`/`echo.encountered` domain strictObjects'
+ * discriminator literals (a save-schema zod discriminated union cannot carry two differently-shaped
+ * schemas under the same `type` value). Deliberately omits `populationId`/`rank`: authoritative
+ * bookkeeping the client never needs and must not see (same redaction posture as every other
+ * population lifecycle event, which folds into `PopulationNoticePublicEvent` instead of passing
+ * through raw).
+ */
+/**
+ * A haunt accepted an offering and faded. Authoritative and public alike: unlike the population
+ * lifecycle events (which redact through `population.notice`), this one passes through to the
+ * client, which resolves `hallRecordId` against the projection's `haunts` block to speak the
+ * farewell line -- the same lookup `haunt.sighted` drives. `itemIds` are the pieces now lying on
+ * the floor in plain view.
+ *
+ * Deliberately carries NO `populationId`, under the same ruling `haunt.sighted` was held to:
+ * population bookkeeping ids are not the client's to see, and an echo's spells out its RANK
+ * (`population.fallen-echo-${rank}...`). Should some future authoritative consumer need the
+ * population, the route is a separately-named public event (as `haunt.sighted` did for
+ * `champion.encountered`) rather than widening this one -- a zod discriminated union cannot carry
+ * two differently-shaped schemas under one `type`.
+ */
+export interface HauntAppeasedEvent {
+  readonly type: 'haunt.appeased';
+  readonly eventId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly hallRecordId: OpaqueId;
+  readonly role: 'champion' | 'echo';
+  /** The item given up. */
+  readonly offeredItemId: OpaqueId;
+  /** The pieces the haunt released, in materialization order. */
+  readonly itemIds: readonly OpaqueId[];
+}
+export interface HauntSightedEvent {
+  readonly type: 'haunt.sighted';
+  readonly eventId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly hallRecordId: OpaqueId;
+  readonly role: 'champion' | 'echo';
+}
 
 export type PublicEvent =
   | Exclude<
@@ -867,4 +941,5 @@ export type PublicEvent =
   | ActorMovementObservedPublicEvent
   | ActorDamageObservedPublicEvent
   | ActorDeathObservedPublicEvent
-  | PopulationNoticePublicEvent;
+  | PopulationNoticePublicEvent
+  | HauntSightedEvent;

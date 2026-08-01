@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
-import type { CompiledContentPack } from '@woven-deep/content';
+import type { CompiledContentPack, ItemCategory } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   DEFAULT_GUEST_HERO,
@@ -13,6 +13,7 @@ import {
   type ActiveRun,
   type ArtifactLedger,
   type GameplayProjection,
+  type HauntView,
   type RunRecordRepository,
 } from '@woven-deep/engine';
 import type { GuestSession, SessionSnapshot } from '../../session/guest-session.js';
@@ -59,6 +60,59 @@ function snapshotWithBackpack(
     projection: {
       ...baseProjection,
       hero: { ...baseProjection.hero, backpack: items, equipment },
+    } as unknown as GameplayProjection,
+    log: [],
+    lastEvents: [],
+    pendingDecision: null,
+    pendingFinalChamberChoice: null,
+    notice: null,
+    houseOpen: false,
+    conclusion: null,
+    sightings: { monsterIds: [], itemIds: [], landmarks: [] },
+    heroClassTags: [],
+    onboarding: { counts: {}, dismissed: [] },
+  };
+}
+
+/** A backpack snapshot with a living, unappeased haunt Chebyshev-adjacent to the hero, wanting
+ * `needCategories` -- mirrors `snapshotWithBackpack`, adding the actor `adjacentHaunt` resolves
+ * against and the matching `haunts` entry. */
+function snapshotWithHaunt(
+  items: readonly ProjectedItemLike[],
+  needCategories: readonly ItemCategory[],
+  equipment: Readonly<Record<string, ProjectedItemLike | null>> = {},
+): SessionSnapshot {
+  const hero = baseProjection.hero as unknown as { x: number; y: number };
+  const actorId = 'actor.haunt-test';
+  const haunt: HauntView = {
+    hallRecordId: 'hall.haunt-test',
+    role: 'echo',
+    heroName: 'Mira',
+    deathDepth: 1,
+    killerContentId: null,
+    causeDepth: null,
+    encountered: true,
+    appeased: false,
+    actorId,
+    needCategories,
+  };
+  return {
+    projection: {
+      ...baseProjection,
+      hero: { ...baseProjection.hero, backpack: items, equipment },
+      actors: [
+        ...baseProjection.actors,
+        {
+          actorId,
+          contentId: null,
+          x: hero.x + 1,
+          y: hero.y,
+          health: 10,
+          maxHealth: 10,
+          disposition: 'hostile',
+        },
+      ],
+      haunts: [haunt],
     } as unknown as GameplayProjection,
     log: [],
     lastEvents: [],
@@ -328,6 +382,86 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
       fuelItemId: 'item.oil-stack',
       targetItemId: 'item.lantern-1',
     });
+  });
+
+  it('offers a backpack item only beside a haunt that wants its category, and dispatches an offer intent', async () => {
+    const user = userEvent.setup();
+    const snapshot = snapshotWithHaunt(
+      [item({ itemId: 'item.scroll.1', name: 'Scroll', category: 'scroll' })],
+      ['scroll'],
+    );
+    const { session, dispatch } = stubSession(snapshot);
+    renderInventory(session);
+
+    const offerButton = screen.getByRole('button', { name: /Offer/ });
+    expect(offerButton).toBeEnabled();
+
+    await user.click(offerButton);
+    expect(dispatch).toHaveBeenCalledWith({ type: 'offer', itemId: 'item.scroll.1' });
+  });
+
+  it('disables the offer affordance for a category the adjacent haunt does not want, and states why', () => {
+    const snapshot = snapshotWithHaunt(
+      [item({ itemId: 'item.scroll.1', name: 'Scroll', category: 'scroll' })],
+      ['food'],
+    );
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    const offerButton = screen.getByRole('button', { name: /Offer/ });
+    expect(offerButton).toBeDisabled();
+    expect(offerButton).toHaveAttribute('title', 'It does not want this.');
+  });
+
+  it('never offers an equipped item, even beside a haunt that wants its category', () => {
+    const snapshot = snapshotWithHaunt([], ['weapon'], {
+      'main-hand': item({ itemId: 'item.sword', name: 'Iron sword', category: 'weapon' }),
+    });
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.queryByRole('button', { name: /Offer/ })).not.toBeInTheDocument();
+  });
+
+  it('pressing o on an equipped row dispatches nothing -- the button is deliberately hidden there', async () => {
+    const user = userEvent.setup();
+    const snapshot = snapshotWithHaunt([], ['weapon'], {
+      'main-hand': item({ itemId: 'item.sword', name: 'Iron sword', category: 'weapon' }),
+    });
+    const { session, dispatch } = stubSession(snapshot);
+    renderInventory(session);
+
+    const list = within(screen.getByRole('listbox', { name: 'Backpack items' }));
+    await user.click(list.getByRole('option', { name: /Iron sword/ }));
+    await user.keyboard('o');
+
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('pressing o on a row with an unwanted category dispatches nothing -- the button is disabled there', async () => {
+    const user = userEvent.setup();
+    const snapshot = snapshotWithHaunt(
+      [item({ itemId: 'item.scroll.1', name: 'Scroll', category: 'scroll' })],
+      ['food'],
+    );
+    const { session, dispatch } = stubSession(snapshot);
+    renderInventory(session);
+
+    const list = within(screen.getByRole('listbox', { name: 'Backpack items' }));
+    await user.click(list.getByRole('option', { name: /Scroll/ }));
+    await user.keyboard('o');
+
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('hides the offer action with no adjacent haunt', () => {
+    const snapshot = snapshotWithBackpack([
+      item({ itemId: 'item.scroll.1', name: 'Scroll', category: 'scroll' }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.queryByRole('button', { name: /Offer/ })).not.toBeInTheDocument();
   });
 
   it('shows no Refuel affordance when no equipped light matches the selected fuel', () => {

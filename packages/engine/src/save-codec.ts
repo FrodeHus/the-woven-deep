@@ -1,5 +1,7 @@
 import type { CompiledContentPack } from '@woven-deep/content';
+import { hauntDropItemIdPrefix, hauntPieceItemId } from './haunt-rewards.js';
 import { validateRequiredFloorLootTables } from './loot-placement.js';
+import { compareCodeUnits } from './stable-json.js';
 import type { ActiveRun } from './model.js';
 import { SaveLoadError } from './save-error.js';
 import {
@@ -14,6 +16,7 @@ import {
   legacyActiveRunV12Schema,
   legacyActiveRunV13Schema,
   legacyActiveRunV14Schema,
+  legacyActiveRunV15Schema,
   emptyLegacyRunMetricsV9,
   validateActiveRun,
 } from './save-schema.js';
@@ -159,21 +162,87 @@ function migrateV14ToV15(input: unknown): unknown {
   return { ...v14, schemaVersion: 15, mode: 'classic' };
 }
 
+// Haunts rewrite every stored standing: a pre-haunt record kept no death cause and no equipped-set
+// snapshot, so the standing gets `cause: null` (the spoken line degrades to the short form) and
+// `deathInventory: [heirloom]` -- the one item we actually do have, which keeps the champion drop
+// and the echo pick well-defined for legacy standings without inventing gear the hero never wore.
+// Decisions gain `appeased: false`: nothing recorded before this bump was ever offered to.
+function migrateV15ToV16(input: unknown): unknown {
+  const v15 = legacyActiveRunV15Schema.parse(input);
+  // A haunt put down BEFORE this bump owes pieces under a scheme that did not exist when it died.
+  // Two shapes, both of which the v16 rules reject untouched -- a save that decodes into either is
+  // discarded by the host as corrupt, which is the whole run gone:
+  //
+  //   - a rewarded champion dropped exactly one item, `item.heirloom.${populationId}`. Its migrated
+  //     `deathInventory` is exactly `[heirloom]`, so index zero IS that heirloom: renaming the item
+  //     to `hauntPieceItemId(prefix, 0)` turns it into a complete, correct death-inventory drop.
+  //     `originatingRank` is already the literal 1 in both schemas, so nothing is re-stamped.
+  //   - a rewarded echo dropped NO piece at all (only ordinary spoils). Nothing can be renamed, and
+  //     the migration cannot mint one -- migrations never read content, and a piece needs its item
+  //     definition. That population is marked `preHauntReward`, which excuses it from the
+  //     piece-existence rule and nothing else.
+  const renames = new Map<string, string>();
+  const populations = v15.populations.map((population) => {
+    if (population.model !== 'champion' && population.model !== 'echo') return population;
+    const rewarded =
+      population.model === 'champion' ? population.rewardCreated : population.lootCreated;
+    if (!rewarded) return population;
+    const pieceId = hauntPieceItemId(hauntDropItemIdPrefix(population.populationId), 0);
+    const legacyRewardId = `item.heirloom.${population.populationId}`;
+    if (
+      population.model === 'champion' &&
+      v15.items.some((item) => item.itemId === legacyRewardId)
+    ) {
+      renames.set(legacyRewardId, pieceId);
+      return population;
+    }
+    return { ...population, preHauntReward: true as const };
+  });
+  const items =
+    renames.size === 0
+      ? v15.items
+      : [...v15.items]
+          .map((item) => {
+            const renamed = renames.get(item.itemId);
+            return renamed === undefined ? item : { ...item, itemId: renamed };
+          })
+          // `item.haunt.` sorts before `item.heirloom.`, so a rename moves the piece within the
+          // strictly ascending item order the save schema requires.
+          .sort((left, right) => compareCodeUnits(left.itemId, right.itemId));
+  return {
+    ...v15,
+    schemaVersion: 16,
+    items,
+    populations,
+    fallenHeroStandings: v15.fallenHeroStandings.map((standing) => ({
+      ...standing,
+      cause: null,
+      deathInventory: [standing.heirloom],
+    })),
+    fallenHeroDecisions: v15.fallenHeroDecisions.map((decision) => ({
+      ...decision,
+      appeased: false,
+    })),
+  };
+}
+
 function migrateLegacy(
   input: unknown,
-  schemaVersion: 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14,
+  schemaVersion: 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15,
 ): ActiveRun {
   try {
     const migrated =
       schemaVersion === 4
-        ? migrateV14ToV15(
-            migrateV13ToV14(
-              migrateV12ToV13(
-                migrateV11ToV12(
-                  migrateV10ToV11(
-                    migrateV9ToV10(
-                      migrateV8ToV9(
-                        migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input)))),
+        ? migrateV15ToV16(
+            migrateV14ToV15(
+              migrateV13ToV14(
+                migrateV12ToV13(
+                  migrateV11ToV12(
+                    migrateV10ToV11(
+                      migrateV9ToV10(
+                        migrateV8ToV9(
+                          migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input)))),
+                        ),
                       ),
                     ),
                   ),
@@ -182,13 +251,15 @@ function migrateLegacy(
             ),
           )
         : schemaVersion === 5
-          ? migrateV14ToV15(
-              migrateV13ToV14(
-                migrateV12ToV13(
-                  migrateV11ToV12(
-                    migrateV10ToV11(
-                      migrateV9ToV10(
-                        migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input)))),
+          ? migrateV15ToV16(
+              migrateV14ToV15(
+                migrateV13ToV14(
+                  migrateV12ToV13(
+                    migrateV11ToV12(
+                      migrateV10ToV11(
+                        migrateV9ToV10(
+                          migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input)))),
+                        ),
                       ),
                     ),
                   ),
@@ -196,52 +267,66 @@ function migrateLegacy(
               ),
             )
           : schemaVersion === 6
-            ? migrateV14ToV15(
-                migrateV13ToV14(
-                  migrateV12ToV13(
-                    migrateV11ToV12(
-                      migrateV10ToV11(
-                        migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(input)))),
+            ? migrateV15ToV16(
+                migrateV14ToV15(
+                  migrateV13ToV14(
+                    migrateV12ToV13(
+                      migrateV11ToV12(
+                        migrateV10ToV11(
+                          migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(input)))),
+                        ),
                       ),
                     ),
                   ),
                 ),
               )
             : schemaVersion === 7
-              ? migrateV14ToV15(
-                  migrateV13ToV14(
-                    migrateV12ToV13(
-                      migrateV11ToV12(
-                        migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(input)))),
+              ? migrateV15ToV16(
+                  migrateV14ToV15(
+                    migrateV13ToV14(
+                      migrateV12ToV13(
+                        migrateV11ToV12(
+                          migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(input)))),
+                        ),
                       ),
                     ),
                   ),
                 )
               : schemaVersion === 8
-                ? migrateV14ToV15(
-                    migrateV13ToV14(
-                      migrateV12ToV13(
-                        migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(input)))),
+                ? migrateV15ToV16(
+                    migrateV14ToV15(
+                      migrateV13ToV14(
+                        migrateV12ToV13(
+                          migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(input)))),
+                        ),
                       ),
                     ),
                   )
                 : schemaVersion === 9
-                  ? migrateV14ToV15(
-                      migrateV13ToV14(
-                        migrateV12ToV13(migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(input)))),
+                  ? migrateV15ToV16(
+                      migrateV14ToV15(
+                        migrateV13ToV14(
+                          migrateV12ToV13(migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(input)))),
+                        ),
                       ),
                     )
                   : schemaVersion === 10
-                    ? migrateV14ToV15(
-                        migrateV13ToV14(migrateV12ToV13(migrateV11ToV12(migrateV10ToV11(input)))),
+                    ? migrateV15ToV16(
+                        migrateV14ToV15(
+                          migrateV13ToV14(migrateV12ToV13(migrateV11ToV12(migrateV10ToV11(input)))),
+                        ),
                       )
                     : schemaVersion === 11
-                      ? migrateV14ToV15(migrateV13ToV14(migrateV12ToV13(migrateV11ToV12(input))))
+                      ? migrateV15ToV16(
+                          migrateV14ToV15(migrateV13ToV14(migrateV12ToV13(migrateV11ToV12(input)))),
+                        )
                       : schemaVersion === 12
-                        ? migrateV14ToV15(migrateV13ToV14(migrateV12ToV13(input)))
+                        ? migrateV15ToV16(migrateV14ToV15(migrateV13ToV14(migrateV12ToV13(input))))
                         : schemaVersion === 13
-                          ? migrateV14ToV15(migrateV13ToV14(input))
-                          : migrateV14ToV15(input);
+                          ? migrateV15ToV16(migrateV14ToV15(migrateV13ToV14(input)))
+                          : schemaVersion === 14
+                            ? migrateV15ToV16(migrateV14ToV15(input))
+                            : migrateV15ToV16(input);
     return validateActiveRun(migrated);
   } catch (cause) {
     if (cause instanceof SaveLoadError) throw cause;
@@ -292,7 +377,8 @@ export function decodeActiveRun(json: string, content?: CompiledContentPack): Ac
     schemaVersion === 11 ||
     schemaVersion === 12 ||
     schemaVersion === 13 ||
-    schemaVersion === 14
+    schemaVersion === 14 ||
+    schemaVersion === 15
   ) {
     return migrateLegacy(input, schemaVersion);
   }
