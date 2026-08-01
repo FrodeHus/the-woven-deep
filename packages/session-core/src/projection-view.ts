@@ -32,6 +32,16 @@ export interface ItemEnchantmentView {
   readonly modifiers: Readonly<Record<string, number>>;
 }
 
+/** A cursed item's curse, projected ONLY once `curse.revealed` is true (`projectItem`,
+ * `packages/engine/src/identification.ts`) -- an unrevealed curse leaves `ItemView.curse`
+ * `undefined` entirely, so the client can never learn of it early. */
+export interface ItemCurseView {
+  readonly curseId: OpaqueId;
+  readonly name: string;
+  readonly revealText: string;
+  readonly drawbackModifiers: Readonly<Record<string, number>>;
+}
+
 /** The base shape `projectItem` (`packages/engine/src/identification.ts`) emits. An unidentified
  * item omits `contentId`/`effects`/`enchantment` entirely and carries `appearanceId` instead, so
  * everything past the always-present core is optional. */
@@ -49,6 +59,7 @@ export interface ItemView {
   readonly enchantment?: ItemEnchantmentView;
   readonly unknownProperties?: boolean;
   readonly provenance?: Readonly<{ originatingHallRecordId: OpaqueId }>;
+  readonly curse?: ItemCurseView;
 }
 
 /** A hero-owned item (`projectedOwnedItem`): the base item plus its instance condition/fuel/enabled,

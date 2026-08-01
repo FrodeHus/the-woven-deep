@@ -362,6 +362,7 @@ describe('artifact signature charges', () => {
         condition: 88,
         charges: 1,
         fuel: null,
+        curse: null,
         qualityRank: 0,
         displayName: "Warden's Ember",
         glyph: '*',

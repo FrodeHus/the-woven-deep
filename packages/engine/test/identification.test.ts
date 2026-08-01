@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { IdentificationPoolContentEntry, ItemContentEntry } from '@woven-deep/content';
+import type {
+  CurseContentEntry,
+  IdentificationPoolContentEntry,
+  ItemContentEntry,
+} from '@woven-deep/content';
 import {
   allocateIdentificationMap,
   createDemoContentPack,
@@ -363,6 +367,137 @@ describe('per-run item identification', () => {
     const run = { ...createDemoRun(), items: [item] };
     const projected = projectItem({ run, content, itemId: item.itemId });
     expect(projected).toMatchObject({ glyph: '/', color: '#c8c8d8' });
+  });
+
+  it('projects a revealed curse alongside its name, reveal text, and drawback modifiers', () => {
+    const definition: ItemContentEntry = {
+      kind: 'item',
+      id: 'item.sword.cursed',
+      name: 'Iron Sword',
+      glyph: '/',
+      color: '#c8c8d8',
+      tags: [],
+      category: 'weapon',
+      stackLimit: 1,
+      price: 10,
+      rarity: 'common',
+      minDepth: 0,
+      maxDepth: 20,
+      actionCost: 100,
+      equipment: null,
+      combat: null,
+      light: null,
+      artifact: null,
+      identification: { mode: 'known', poolId: null },
+      effects: [],
+    };
+    const curse: CurseContentEntry = {
+      kind: 'curse',
+      id: 'curse.leaden-weight',
+      name: 'Leaden Weight',
+      tags: ['curse', 'weapon'],
+      revealText: 'It settles onto you like wet earth, and does not lift.',
+      drawbackModifiers: { defense: -1, meleeAccuracy: -1 },
+      trigger: null,
+    };
+    const content = {
+      ...contentWith(definition),
+      entries: [...contentWith(definition).entries, curse],
+    };
+    const item: ItemInstance = {
+      itemId: 'item.sword.1',
+      contentId: definition.id,
+      quantity: 1,
+      condition: 100,
+      enchantment: null,
+      identified: true,
+      charges: null,
+      fuel: null,
+      enabled: null,
+      curse: { curseId: curse.id, revealed: true },
+      location: { type: 'backpack', actorId: 'hero.demo' },
+    };
+    const run = { ...createDemoRun(), items: [item] };
+    const projected = projectItem({ run, content, itemId: item.itemId });
+    expect(projected).toMatchObject({
+      curse: {
+        curseId: 'curse.leaden-weight',
+        name: 'Leaden Weight',
+        revealText: 'It settles onto you like wet earth, and does not lift.',
+        drawbackModifiers: { defense: -1, meleeAccuracy: -1 },
+      },
+    });
+  });
+
+  it('projects an unrevealed cursed item byte-identically to a clean item of the same content id', () => {
+    const definition: ItemContentEntry = {
+      kind: 'item',
+      id: 'item.sword.cursed',
+      name: 'Iron Sword',
+      glyph: '/',
+      color: '#c8c8d8',
+      tags: [],
+      category: 'weapon',
+      stackLimit: 1,
+      price: 10,
+      rarity: 'common',
+      minDepth: 0,
+      maxDepth: 20,
+      actionCost: 100,
+      equipment: null,
+      combat: null,
+      light: null,
+      artifact: null,
+      identification: { mode: 'known', poolId: null },
+      effects: [],
+    };
+    const curse: CurseContentEntry = {
+      kind: 'curse',
+      id: 'curse.leaden-weight',
+      name: 'Leaden Weight',
+      tags: ['curse', 'weapon'],
+      revealText: 'It settles onto you like wet earth, and does not lift.',
+      drawbackModifiers: { defense: -1, meleeAccuracy: -1 },
+      trigger: null,
+    };
+    const content = {
+      ...contentWith(definition),
+      entries: [...contentWith(definition).entries, curse],
+    };
+    const cleanItem: ItemInstance = {
+      itemId: 'item.sword.1',
+      contentId: definition.id,
+      quantity: 1,
+      condition: 100,
+      enchantment: null,
+      identified: true,
+      charges: null,
+      fuel: null,
+      enabled: null,
+      location: { type: 'backpack', actorId: 'hero.demo' },
+    };
+    const cursedButUnrevealed: ItemInstance = {
+      ...cleanItem,
+      itemId: 'item.sword.2',
+      curse: { curseId: curse.id, revealed: false },
+    };
+    const cleanProjected = projectItem({
+      run: { ...createDemoRun(), items: [cleanItem] },
+      content,
+      itemId: cleanItem.itemId,
+    });
+    const cursedProjected = projectItem({
+      run: { ...createDemoRun(), items: [cursedButUnrevealed] },
+      content,
+      itemId: cursedButUnrevealed.itemId,
+    });
+    // Compare with the instance-specific itemId normalized out -- the invariant under test is that
+    // an unrevealed curse contributes nothing to the projection, not that two different item
+    // instances share an id.
+    expect(stableJson({ ...cursedProjected, itemId: 'shared' })).toBe(
+      stableJson({ ...cleanProjected, itemId: 'shared' }),
+    );
+    expect(cursedProjected).not.toHaveProperty('curse');
   });
 
   it('projects an instance-identified item under its random run name until identified', () => {

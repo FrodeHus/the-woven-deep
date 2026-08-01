@@ -45,8 +45,17 @@ export function EquipmentSlots({
               item ? 'bg-raised' : 'bg-surface',
             )}
           >
-            <span className="text-[0.5625rem] uppercase tracking-[0.09em] text-subtle">
+            <span className="flex items-center gap-1 text-[0.5625rem] uppercase tracking-[0.09em] text-subtle">
               {SLOT_LABEL[slot]}
+              {/* A subtle marker for a revealed-cursed equipped item -- `item.curse` is
+               * revealed-gated by the projection itself, so this can never leak an unrevealed
+               * curse. Reuses the existing `cool` theme token (the curse log tone/DetailPane
+               * curse section), never a new color literal. */}
+              {item?.curse && (
+                <span aria-label="Cursed" title="Cursed" className="text-cool">
+                  ✦
+                </span>
+              )}
             </span>
             <span className="truncate font-mono text-fg">
               {item ? `${CATEGORY_GLYPH[item.category]} ${item.name}` : '—'}

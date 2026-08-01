@@ -600,6 +600,77 @@ describe('InventoryOverlay (structure 1: ListDetail-based drawer)', () => {
     expect(screen.getByText('-2')).toBeInTheDocument();
   });
 
+  it('shows a revealed curse name, reveal text, and drawback modifiers', () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.sword.cursed.1',
+        contentId: 'item.sword.cursed',
+        name: 'Iron Sword',
+        category: 'weapon',
+        curse: {
+          curseId: 'curse.leaden-weight',
+          name: 'Leaden Weight',
+          revealText: 'It settles onto you like wet earth, and does not lift.',
+          drawbackModifiers: { defense: -1, meleeAccuracy: -1 },
+        },
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.getByText('Curse: Leaden Weight')).toBeInTheDocument();
+    expect(
+      screen.getByText('It settles onto you like wet earth, and does not lift.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Defense')).toBeInTheDocument();
+    expect(screen.getByText('Melee accuracy')).toBeInTheDocument();
+    expect(screen.getAllByText('-1')).toHaveLength(2);
+  });
+
+  it('shows nothing curse-related for an item with no revealed curse', () => {
+    const snapshot = snapshotWithBackpack([
+      item({
+        itemId: 'item.sword.plain.1',
+        contentId: 'item.sword.cursed',
+        name: 'Iron Sword',
+        category: 'weapon',
+      }),
+    ]);
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.queryByLabelText('Curse')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Curse:/)).not.toBeInTheDocument();
+  });
+
+  it("marks a revealed-cursed equipped item's slot with the curse glyph", () => {
+    const snapshot = snapshotWithBackpack([], {
+      'main-hand': item({
+        itemId: 'item.sword.cursed.1',
+        contentId: 'item.sword.cursed',
+        name: 'Iron Sword',
+        category: 'weapon',
+        curse: {
+          curseId: 'curse.leaden-weight',
+          name: 'Leaden Weight',
+          revealText: 'It settles onto you like wet earth, and does not lift.',
+          drawbackModifiers: { defense: -1, meleeAccuracy: -1 },
+        },
+      }),
+      'off-hand': item({
+        itemId: 'item.shield.1',
+        contentId: 'item.shield',
+        name: 'Wooden Shield',
+        category: 'shield',
+      }),
+    });
+    const { session } = stubSession(snapshot);
+    renderInventory(session);
+
+    expect(screen.getByLabelText('Cursed')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Cursed')).toHaveLength(1);
+  });
+
   it("names an artifact's signature spell, its charges, and offers the cast affordance", () => {
     const snapshot = snapshotWithBackpack([
       item({

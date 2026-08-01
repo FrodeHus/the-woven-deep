@@ -204,9 +204,11 @@ h1 { color: var(--gold); font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 500; 
 .log-line--combat::before { content: "\2694  " / ""; }
 .log-line--warning::before { content: "\26A0  " / ""; }
 .log-line--system::before { content: "\2699  " / ""; }
+.log-line--curse::before { content: "\2620  " / ""; }
 .journal-log-line--warning::before { content: "\26A0  " / ""; }
 .journal-log-line--combat::before { content: "\2694  " / ""; }
 .journal-log-line--system::before { content: "\2699  " / ""; }
+.journal-log-line--curse::before { content: "\2620  " / ""; }
 
 /* Visually-hidden but screen-reader-available (the standard clip-rect pattern). Used by
    `HeroStatusAnnouncer` (panels.tsx) for its off-screen `role="status"` live region -- present in

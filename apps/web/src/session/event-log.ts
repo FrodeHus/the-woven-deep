@@ -3,7 +3,7 @@ import type { PublicEvent } from '@woven-deep/engine';
 export interface LogLine {
   readonly id: number;
   readonly text: string;
-  readonly tone: 'info' | 'combat' | 'warning' | 'system';
+  readonly tone: 'info' | 'combat' | 'warning' | 'system' | 'curse';
 }
 
 export const LOG_CAPACITY = 200;
@@ -92,6 +92,8 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
           return { text: 'Something is in the way.', tone: 'system' };
         case 'light.inextinguishable':
           return { text: 'Its light will not be hidden.', tone: 'system' };
+        case 'item.cursed':
+          return { text: 'It will not come free.', tone: 'system' };
         case 'signature.no-charges':
           return { text: 'The relic is spent — it will wake on the next floor.', tone: 'system' };
         default:
@@ -101,6 +103,14 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
       return { text: 'You learn a new spell.', tone: 'info' };
     case 'run.concluded':
       return { text: 'Your run has concluded.', tone: 'system' };
+    case 'curse.revealed':
+      return { text: event.revealText, tone: 'curse' };
+    case 'curse.removed':
+      return { text: 'The weight lifts. The thing is only iron again.', tone: 'curse' };
+    // Descent already narrates itself (the floor-transition UI) -- an explicit no-op case rather
+    // than falling to `default` keeps this switch's coverage of `PublicEvent` honest.
+    case 'floor.entered':
+      return null;
     default:
       return null;
   }
