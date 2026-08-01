@@ -33,6 +33,11 @@ export const PORTRAIT_KEY = 'woven-deep.guest-portrait';
  */
 export const COMMAND_SEQUENCE_KEY = 'woven-deep.guest-command-seq';
 
+/** Where a Wanderer run's floor-entry rewind point lives: a full `encodeActiveRun` blob written
+ * after every completed floor transition, kept OUTSIDE the run save so `ActiveRun` byte-identity
+ * is untouched. Absent for Classic runs, which never write it. */
+export const CHECKPOINT_KEY = 'woven-deep.guest-checkpoint';
+
 /** Why a persistence attempt (or the storage backend itself) could not be used. */
 export type StorageFailure = 'unavailable' | 'full';
 

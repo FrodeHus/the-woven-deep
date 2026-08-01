@@ -58,6 +58,7 @@ import {
 import type { RunSession } from './run-session.js';
 import { randomSeed } from './seed.js';
 import {
+  CHECKPOINT_KEY,
   classifyStorageFailure,
   COMMAND_SEQUENCE_KEY,
   SAVE_KEY,
@@ -166,6 +167,9 @@ export class GuestSession implements RunSession {
     this.mode = input.mode ?? 'classic';
     const booted = this.boot(input.seed, input.startFresh ?? false);
     this.run = booted.run;
+    // A checkpoint belongs to exactly one run. A fresh run (or a discarded/hash-mismatched save)
+    // must never inherit the previous run's rewind point.
+    if (booted.notice.kind !== 'restored') this.clearRiseCheckpoint();
     this.notice = booted.notice;
     this.commandSequence = booted.commandSequence;
     // Surfaced AFTER the boot notice is assigned above, so a corrupted onboarding blob's
@@ -331,7 +335,11 @@ export class GuestSession implements RunSession {
 
     if (outcome.kind === 'transition') {
       if (outcome.onboardingIntentType) this.noteOnboardingIntent(outcome.onboardingIntentType);
-      this.applyNewState(outcome.run, outcome.events);
+      // Every floor-entry path -- descend generated/stored, the Final Chamber, ascend, recall
+      // return, and the recall-cast follow-on town move -- funnels through this one branch
+      // (`dispatchIntent` returns `kind: 'transition'` for all six), so this is the single place a
+      // Wanderer checkpoint needs to ride.
+      this.applyNewState(outcome.run, outcome.events, { transition: true });
       return;
     }
 
@@ -422,7 +430,11 @@ export class GuestSession implements RunSession {
     this.applyNewState(resolution.state, resolution.events);
   }
 
-  private applyNewState(state: ActiveRun, events: readonly PublicEvent[]): void {
+  private applyNewState(
+    state: ActiveRun,
+    events: readonly PublicEvent[],
+    options?: Readonly<{ transition?: boolean }>,
+  ): void {
     this.run = state;
     const folded = foldEventsIntoLog(this.log, events, this.nextLogId);
     this.log = folded.log;
@@ -430,7 +442,33 @@ export class GuestSession implements RunSession {
     this.lastEvents = events;
     this.pendingDecision = null;
     this.persist();
+    // AFTER `persist()`, so a full-storage failure surfaces on the run save (the thing the player
+    // cannot lose) before the checkpoint (the thing they can).
+    if (options?.transition === true) this.writeRiseCheckpoint();
     this.publish();
+  }
+
+  /**
+   * Captures this run's rewind point: the full encoded state at floor entry, for a Wanderer death
+   * to rise from. Called only from `applyNewState`'s transition path, and only in Wanderer -- a
+   * Classic run must leave storage byte-for-byte as it is today.
+   *
+   * A quota failure is survivable, not fatal: the checkpoint is dropped, the player is told the
+   * Deep will not promise a return, and play continues -- that death then behaves like Classic
+   * without a Hall record (see `riseAgain`'s missing-checkpoint branch).
+   */
+  private writeRiseCheckpoint(): void {
+    if (this.run.mode !== 'wanderer') return;
+    try {
+      this.storage.set(CHECKPOINT_KEY, encodeActiveRun(this.run));
+    } catch {
+      this.clearRiseCheckpoint();
+      this.appendSystemNote('The Deep will not promise a return.');
+    }
+  }
+
+  private clearRiseCheckpoint(): void {
+    this.storage.remove?.(CHECKPOINT_KEY);
   }
 
   private appendSystemLine(text: string): void {

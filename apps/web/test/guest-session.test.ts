@@ -20,10 +20,16 @@ import {
   type Uint32State,
 } from '@woven-deep/engine';
 import { SIGHTINGS_KEY } from '../src/session/codex.js';
+import { GUEST_SESSION_STORAGE_KEYS } from '../src/session/clear-guest-session.js';
 import { GuestSession } from '../src/session/guest-session.js';
 import { ONBOARDING_KEY } from '../src/session/onboarding.js';
 import { createSessionRunRecordRepository } from '../src/session/run-records-storage.js';
-import { COMMAND_SEQUENCE_KEY, SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
+import {
+  CHECKPOINT_KEY,
+  COMMAND_SEQUENCE_KEY,
+  SAVE_KEY,
+  type SessionStorageLike,
+} from '../src/session/storage.js';
 
 let pack: CompiledContentPack;
 
@@ -74,8 +80,62 @@ function fakeStorage(): FakeStorage {
     set: (key: string, value: string) => {
       values.set(key, value);
     },
+    remove: (key: string) => {
+      values.delete(key);
+    },
     peek: (key: string = SAVE_KEY) => values.get(key) ?? null,
   };
+}
+
+/** Same in-memory `SessionStorageLike` double as `fakeStorage` -- named for the checkpoint tests
+ * below, which read arbitrary keys via `get` rather than `peek`. */
+const memoryStorage = fakeStorage;
+
+/** Wraps `memoryStorage()` so `set` throws a `QuotaExceededError` for exactly `failingKey`, while
+ * every other key (notably `SAVE_KEY`) writes through normally -- isolates a checkpoint write
+ * failure from the run save it must never affect. */
+function quotaFailingStorage(failingKey: string): FakeStorage {
+  const storage = memoryStorage();
+  return {
+    ...storage,
+    set: (key: string, value: string) => {
+      if (key === failingKey) throw new DOMException('quota', 'QuotaExceededError');
+      storage.set(key, value);
+    },
+  };
+}
+
+/** A fresh Wanderer-mode session seeded and positioned exactly like the file's other descend
+ * cases (`DESCEND_SEED`/`DEFAULT_GUEST_HERO`), so `DESCEND_PATH` + a `descend` dispatch reaches
+ * the depth-1 stair from town in every checkpoint test below. */
+function wandererSession(storage: SessionStorageLike): GuestSession {
+  return new GuestSession({
+    pack,
+    storage,
+    seed: DESCEND_SEED,
+    hero: DEFAULT_GUEST_HERO,
+    startFresh: true,
+    mode: 'wanderer',
+  });
+}
+
+/** Walks the hero from town onto the dungeon entrance via `DESCEND_PATH` and descends. */
+function walkAndDescend(session: GuestSession): void {
+  for (const direction of DESCEND_PATH) session.dispatch({ type: 'move', direction });
+  session.dispatch({ type: 'descend' });
+}
+
+/**
+ * A second, distinct floor-entry transition after an initial `walkAndDescend`: from depth-1's
+ * stair-up arrival tile (where `descendToNextFloor` lands the hero), ascending back to town lands
+ * exactly on town's own stair-down tile (`ascendToPreviousFloor`'s arrival is always the
+ * departure floor's `stairDown`) -- so the immediately following `descend` needs no further
+ * movement, and exercises the *stored* re-descent path onto the same depth-1 floor rather than
+ * the first (generated) descend, without pathfinding across a randomly generated maze.
+ */
+function descendAgain(session: GuestSession): void {
+  session.dispatch({ type: 'ascend' });
+  session.dispatch({ type: 'descend' });
 }
 
 describe('GuestSession', () => {
@@ -1226,6 +1286,97 @@ describe('GuestSession', () => {
       });
       expect(notified).toBe(1);
       expect(snapshot.lastEvents).toEqual(events);
+    });
+  });
+
+  describe('Wanderer checkpoints', () => {
+    it('writes a checkpoint after a descend transition in wanderer mode', () => {
+      const storage = memoryStorage();
+      const session = wandererSession(storage);
+      walkAndDescend(session);
+
+      const checkpoint = storage.get(CHECKPOINT_KEY);
+      expect(checkpoint).not.toBeNull();
+      expect(checkpoint).toBe(storage.get(SAVE_KEY));
+    });
+
+    it('writes a checkpoint on every transition kind', () => {
+      const storage = memoryStorage();
+      const session = wandererSession(storage);
+      walkAndDescend(session);
+      const first = storage.get(CHECKPOINT_KEY);
+
+      descendAgain(session); // second floor: stored/generated descend
+      expect(storage.get(CHECKPOINT_KEY)).not.toBe(first);
+
+      session.dispatch({ type: 'ascend' });
+      expect(storage.get(CHECKPOINT_KEY)).toBe(storage.get(SAVE_KEY));
+    });
+
+    it('does not move the checkpoint on a non-transition dispatch', () => {
+      const storage = memoryStorage();
+      const session = wandererSession(storage);
+      walkAndDescend(session);
+      const atFloorEntry = storage.get(CHECKPOINT_KEY);
+
+      session.dispatch({ type: 'wait' });
+
+      expect(storage.get(CHECKPOINT_KEY)).toBe(atFloorEntry);
+      expect(storage.get(SAVE_KEY)).not.toBe(atFloorEntry);
+    });
+
+    it('never writes a checkpoint in classic mode', () => {
+      const storage = memoryStorage();
+      const session = new GuestSession({
+        pack,
+        storage,
+        seed: DESCEND_SEED,
+        hero: DEFAULT_GUEST_HERO,
+        startFresh: true,
+      });
+      walkAndDescend(session);
+      session.dispatch({ type: 'wait' });
+
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+
+    it('clears a stale checkpoint when a fresh run starts', () => {
+      const storage = memoryStorage();
+      storage.set(CHECKPOINT_KEY, 'stale');
+
+      new GuestSession({
+        pack,
+        storage,
+        seed: DESCEND_SEED,
+        hero: DEFAULT_GUEST_HERO,
+        startFresh: true,
+        mode: 'wanderer',
+      });
+
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+
+    it('degrades gracefully when the checkpoint write hits quota', () => {
+      const storage = quotaFailingStorage(CHECKPOINT_KEY);
+      const session = wandererSession(storage);
+
+      expect(() => walkAndDescend(session)).not.toThrow();
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+      expect(session.getSnapshot().log.at(-1)?.text).toBe('The Deep will not promise a return.');
+    });
+
+    it('keeps playing after a checkpoint quota failure', () => {
+      const storage = quotaFailingStorage(CHECKPOINT_KEY);
+      const session = wandererSession(storage);
+      walkAndDescend(session);
+
+      session.dispatch({ type: 'wait' });
+
+      expect(session.getSnapshot().projection.conclusion).toBeNull();
+    });
+
+    it('lists the checkpoint key as a guest wipe target', () => {
+      expect(GUEST_SESSION_STORAGE_KEYS).toContain(CHECKPOINT_KEY);
     });
   });
 });
