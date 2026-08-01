@@ -32,6 +32,7 @@ import {
   type ActiveRun,
   type OpaqueId,
   type PublicDecision,
+  type RunMode,
   type TileId,
 } from './model.js';
 import type { RecordedHeirloomSnapshot } from './population-model.js';
@@ -448,6 +449,7 @@ export interface CastableSpellView {
 }
 
 export interface GameplayProjection {
+  readonly mode: RunMode;
   readonly floor: ObservableFloorProjection;
   readonly hero: Readonly<Record<string, unknown>> & {
     readonly castableSpells?: readonly CastableSpellView[];
@@ -514,6 +516,7 @@ export function projectRunConclusion(
     }
   }
   return {
+    mode: run.mode,
     completionType: conclusion.completionType,
     cause: conclusion.cause,
     metrics: run.metrics,
@@ -525,6 +528,7 @@ export function projectRunConclusion(
 }
 
 export interface RunConclusionProjection {
+  readonly mode: RunMode;
   readonly completionType: CompletionType;
   readonly cause: RunConclusion['cause'];
   readonly metrics: RunMetrics;
@@ -988,6 +992,7 @@ export function projectGameplayState(
       ? undefined
       : input.state.floors.find((floor) => floor.floorId === input.state.returnAnchorFloorId);
   return {
+    mode: input.state.mode,
     ...(trade === undefined ? {} : { trade }),
     ...(anchorFloor === undefined ? {} : { returnAnchorDepth: anchorFloor.depth }),
     floor: projectFloor({

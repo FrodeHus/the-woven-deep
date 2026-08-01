@@ -11,6 +11,7 @@ const pack = contentPack('a'.repeat(64), ['monster', 'item']);
 
 function projection(overrides: Partial<RunConclusionProjection> = {}): RunConclusionProjection {
   return {
+    mode: 'classic',
     completionType: 'died',
     cause: { killerContentId: 'monster.rat', depth: 3, turn: 42, worldTime: 4200 },
     metrics: {

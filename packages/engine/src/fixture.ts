@@ -309,6 +309,7 @@ export function createDemoRun(): ActiveRun {
     schemaVersion: SAVE_SCHEMA_VERSION,
     gameVersion: ENGINE_GAME_VERSION,
     contentHash: 'a'.repeat(64),
+    mode: 'classic',
     runId: 'run.demo',
     runSeed: seed,
     rng: deriveRngStreams(seed),

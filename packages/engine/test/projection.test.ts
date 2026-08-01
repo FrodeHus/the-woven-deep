@@ -561,6 +561,14 @@ describe('light-out emergency-reveal bubble (projectFloor)', () => {
 });
 
 describe('gameplay projection', () => {
+  it('exposes the run mode on the gameplay projection', () => {
+    const base = createDemoRun();
+    const run: ActiveRun = { ...base, mode: 'wanderer' };
+    expect(projectGameplayState({ state: run, content: createDemoContentPack() }).mode).toBe(
+      'wanderer',
+    );
+  });
+
   it('includes hero resources and visible actors without private scheduler or random state', () => {
     const base = createDemoRun();
     const visible = {

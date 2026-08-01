@@ -144,10 +144,19 @@ export interface HouseState {
   readonly upgradesPurchased: number;
 }
 
+export const RUN_MODES = ['classic', 'wanderer'] as const;
+/**
+ * A run's lifetime-locked rules variant. Run-scoped, NOT build-scoped: it never appears on
+ * `HeroChoices` (which describes the hero) — the wizard passes it beside the choices, like the
+ * portrait glyph. The engine's own behavior does not branch on it anywhere; the hosts read it.
+ */
+export type RunMode = (typeof RUN_MODES)[number];
+
 export interface ActiveRun {
-  readonly schemaVersion: 14;
+  readonly schemaVersion: 15;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
+  readonly mode: RunMode;
   readonly runId: OpaqueId;
   readonly runSeed: Uint32State;
   readonly rng: RngStreams;
