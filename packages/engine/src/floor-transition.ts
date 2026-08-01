@@ -2,6 +2,8 @@ import type { CompiledContentPack, VaultContentEntry } from '@woven-deep/content
 import type { DomainEvent, FloorEnteredEvent, OpaqueId, Point } from './model.js';
 import { balanceEntry } from './actions.js';
 import { artifactById } from './commerce.js';
+import { applyCurseTriggers } from './curse-triggers.js';
+import { concludeRunOnHeroDeath } from './run-conclusion.js';
 import { heroActor, heroPerception } from './actor-model.js';
 import { FINAL_CHAMBER_DEPTH, generateFinalChamberFloor } from './final-chamber.js';
 import { depthFloorId } from './floor-id.js';
@@ -172,6 +174,47 @@ function floorEnteredEvent(
 }
 
 /**
+ * Fires the `on-floor-enter` curse post-pass for one completed floor transition, then closes the
+ * hero-death boundary a lethal curse may just have opened.
+ *
+ * Floor transitions bypass `resolveCommand` entirely -- they are session-layer calls into this
+ * module, and their events never reach a `CommandResolution` -- so the reducer's own post-pass can
+ * never see a `floor.entered` event. Every entry path in this module therefore calls this helper
+ * instead, uniformly: generated descent, stored re-descent, Final Chamber arrival, ascent, and both
+ * recall directions. `floor.entered` stays a pure notification event; the resolver is handed the
+ * transition's own event rather than scanning for it.
+ *
+ * The conclusion is closed here for the same reason the reducer closes it inside the killing
+ * transition: a curse that kills the hero on arrival must never leave a dead hero in an unconcluded
+ * run. `turn` is unchanged (walking a staircase elapses no turn) and `revision` is the transition's
+ * own freshly bumped revision.
+ */
+function applyFloorEntryTriggers(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    entryEvent: FloorEnteredEvent;
+    revision: number;
+  }>,
+): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+  const triggered = applyCurseTriggers({
+    state: input.state,
+    content: input.content,
+    events: [input.entryEvent],
+    eventId: input.entryEvent.eventId,
+  });
+  if (triggered.events.length === 0) return { state: input.state, events: [] };
+  return concludeRunOnHeroDeath({
+    state: triggered.state,
+    content: input.content,
+    events: triggered.events,
+    revision: input.revision,
+    turn: input.state.turn,
+    eventId: input.entryEvent.eventId,
+  });
+}
+
+/**
  * Generates and enters the floor below the hero's current one. The hero must stand on the active
  * floor's stair-down tile; the run must not already be concluded. Mirrors `createNewRun`'s
  * floor-generation settings (same width/height/theme) so the whole run stays on one generation
@@ -212,10 +255,21 @@ export function descendToNextFloor(
     const entered = enterStoredFloor(run, { floorId, arrival });
     const restocked = applyMerchantRestocks({ state: entered, content: context.content });
     const revision = run.revision + 1;
-    const entryEvent = floorEnteredEvent({ floorId, depth: nextDepth, firstEntry: false, revision });
-    return {
+    const entryEvent = floorEnteredEvent({
+      floorId,
+      depth: nextDepth,
+      firstEntry: false,
+      revision,
+    });
+    const triggered = applyFloorEntryTriggers({
       state: { ...restocked.state, revision },
-      events: [entryEvent, ...restocked.events],
+      content: context.content,
+      entryEvent,
+      revision,
+    });
+    return {
+      state: triggered.state,
+      events: [entryEvent, ...restocked.events, ...triggered.events],
     };
   }
 
@@ -265,9 +319,15 @@ export function descendToNextFloor(
     const restocked = applyMerchantRestocks({ state: withChamber, content: context.content });
     const revision = run.revision + 1;
     const entryEvent = floorEnteredEvent({ floorId, depth: nextDepth, firstEntry: true, revision });
-    return {
+    const triggered = applyFloorEntryTriggers({
       state: { ...restocked.state, revision },
-      events: [entryEvent, ...restocked.events],
+      content: context.content,
+      entryEvent,
+      revision,
+    });
+    return {
+      state: triggered.state,
+      events: [entryEvent, ...restocked.events, ...triggered.events],
     };
   }
 
@@ -318,9 +378,15 @@ export function descendToNextFloor(
   const restocked = applyMerchantRestocks({ state: recharged, content: context.content });
   const revision = run.revision + 1;
   const entryEvent = floorEnteredEvent({ floorId, depth: nextDepth, firstEntry: true, revision });
-  return {
+  const triggered = applyFloorEntryTriggers({
     state: { ...restocked.state, revision },
-    events: [entryEvent, ...integrated.events, ...restocked.events],
+    content: context.content,
+    entryEvent,
+    revision,
+  });
+  return {
+    state: triggered.state,
+    events: [entryEvent, ...integrated.events, ...restocked.events, ...triggered.events],
   };
 }
 
@@ -391,7 +457,6 @@ export function ascendToPreviousFloor(
   run: ActiveRun,
   context: Readonly<{ content: CompiledContentPack }>,
 ): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
-  void context;
   if (run.conclusion !== null) {
     throw new Error('ascendToPreviousFloor cannot transition a concluded run');
   }
@@ -424,7 +489,13 @@ export function ascendToPreviousFloor(
     firstEntry: false,
     revision,
   });
-  return { state: { ...entered, revision }, events: [entryEvent] };
+  const triggered = applyFloorEntryTriggers({
+    state: { ...entered, revision },
+    content: context.content,
+    entryEvent,
+    revision,
+  });
+  return { state: triggered.state, events: [entryEvent, ...triggered.events] };
 }
 
 /**
@@ -440,7 +511,6 @@ export function recallToTown(
   run: ActiveRun,
   context: Readonly<{ content: CompiledContentPack }>,
 ): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
-  void context;
   const town = run.floors.find((floor) => floor.floorId === TOWN_FLOOR_ID);
   if (!town) throw new Error('internal invariant: run has no town floor');
   const arrival = town.stairDown;
@@ -453,7 +523,13 @@ export function recallToTown(
     firstEntry: false,
     revision,
   });
-  return { state: { ...entered, revision }, events: [entryEvent] };
+  const triggered = applyFloorEntryTriggers({
+    state: { ...entered, revision },
+    content: context.content,
+    entryEvent,
+    revision,
+  });
+  return { state: triggered.state, events: [entryEvent, ...triggered.events] };
 }
 
 /**
@@ -469,7 +545,6 @@ export function recallReturn(
   run: ActiveRun,
   context: Readonly<{ content: CompiledContentPack }>,
 ): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
-  void context;
   const anchorId = run.returnAnchorFloorId;
   if (anchorId === undefined) throw new Error('recallReturn requires an anchored floor');
   const anchor = run.floors.find((floor) => floor.floorId === anchorId);
@@ -486,5 +561,11 @@ export function recallReturn(
     firstEntry: false,
     revision,
   });
-  return { state: { ...rest, revision }, events: [entryEvent] };
+  const triggered = applyFloorEntryTriggers({
+    state: { ...rest, revision },
+    content: context.content,
+    entryEvent,
+    revision,
+  });
+  return { state: triggered.state, events: [entryEvent, ...triggered.events] };
 }
