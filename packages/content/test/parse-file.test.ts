@@ -1405,7 +1405,7 @@ describe('curse content kind', () => {
   }): string {
     const on = overrides.on ?? 'on-kill';
     const effectId = overrides.effectId ?? 'effect.damage';
-    const drawbackModifiers = overrides.drawbackModifiers ?? { maxHealth: -3 };
+    const drawbackModifiers = overrides.drawbackModifiers ?? { meleeAccuracy: -2 };
     const drawbackModifiersYaml = `{ ${Object.entries(drawbackModifiers)
       .map(([key, value]) => `${key}: ${value}`)
       .join(', ')} }`;
@@ -1479,7 +1479,7 @@ entries:
     expect(entry).toMatchObject({
       kind: 'curse',
       revealText: 'The blade drinks deep — and will not let go.',
-      drawbackModifiers: { maxHealth: -3 },
+      drawbackModifiers: { meleeAccuracy: -2 },
       trigger: { on: 'on-kill', chanceBps: 5000 },
     });
   });
@@ -1498,21 +1498,27 @@ entries:
   });
 
   it('rejects a trigger effect outside the curse allowlist', async () => {
-    await expect(
-      compileSource(curseSource({ effectId: 'effect.feature.mutate' })),
-    ).rejects.toThrow(/effect.feature.mutate/);
+    await expect(compileSource(curseSource({ effectId: 'effect.feature.mutate' }))).rejects.toThrow(
+      /effect.feature.mutate/,
+    );
   });
 
   it('rejects an unknown derived stat key in drawbackModifiers', async () => {
+    await expect(compileSource(curseSource({ drawbackModifiers: { luck: -1 } }))).rejects.toThrow(
+      /luck/,
+    );
+  });
+
+  it('rejects a maxHealth key in curse drawbackModifiers', async () => {
     await expect(
-      compileSource(curseSource({ drawbackModifiers: { luck: -1 } })),
-    ).rejects.toThrow(/luck/);
+      compileSource(curseSource({ drawbackModifiers: { maxHealth: -3 } })),
+    ).rejects.toThrow(/maxHealth/);
   });
 
   it('rejects a non-negative drawback value', async () => {
-    await expect(
-      compileSource(curseSource({ drawbackModifiers: { defense: 1 } })),
-    ).rejects.toThrow(/negative/);
+    await expect(compileSource(curseSource({ drawbackModifiers: { defense: 1 } }))).rejects.toThrow(
+      /negative/,
+    );
   });
 
   it('rejects a curse with neither drawbacks nor a trigger', async () => {

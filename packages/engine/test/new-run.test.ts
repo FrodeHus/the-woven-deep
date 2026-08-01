@@ -345,9 +345,11 @@ describe('createNewRun records input', () => {
     // equipment moves off `known`), which changes the default hero's starting-item identified
     // state, and again for the sixth (trigger-only) curse added to the roster, which moves
     // `contentHash` -- both are expected drift, not a behavioral regression. Re-pinned again for
-    // save schema v14 (`ItemInstance.curse`), which moves `schemaVersion` alone.
+    // save schema v14 (`ItemInstance.curse`), which moves `schemaVersion` alone, and again for
+    // re-authoring `curse.hungering-edge`'s inert `maxHealth` drawback onto `meleeAccuracy`, which
+    // was verified to move `contentHash` and nothing else in the encoded run.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '88f636a426e1c513dd5a16fdca5259db0a350f37676ce2d9d776a3894adb328e',
+      'c001857d5bd56de950f833d3051e628217ffdbe16c946a05db0de8edbb2c561a',
     );
   });
 

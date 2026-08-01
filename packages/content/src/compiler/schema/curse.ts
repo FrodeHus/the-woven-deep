@@ -28,6 +28,20 @@ export const curseEntry = z
     trigger: curseTrigger.nullable().default(null),
   })
   .superRefine((entry, context) => {
+    // `maxHealth` is a derived stat that is never written back onto the actor -- an actor's stored
+    // maxHealth is fixed at run creation and is what the health bar, the healing cap, and the
+    // below-half curse trigger all read. A curse drawback on it would therefore be silently inert,
+    // so it is rejected at compile time rather than shipped as a curse that does nothing.
+    if ('maxHealth' in entry.drawbackModifiers) {
+      context.addIssue({
+        code: 'custom',
+        path: ['drawbackModifiers', 'maxHealth'],
+        message:
+          'curse drawbackModifiers may not target maxHealth: derived maxHealth is never written ' +
+          'back to the actor, so the drawback would be inert. Use a stat that bites through ' +
+          'equipmentModifiers (for example defense, meleeAccuracy, or maxWeave).',
+      });
+    }
     if (Object.keys(entry.drawbackModifiers).length === 0 && entry.trigger === null) {
       context.addIssue({
         code: 'custom',

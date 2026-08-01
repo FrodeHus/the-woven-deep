@@ -8,12 +8,12 @@ import {
 import {
   createDemoContentPack,
   createDemoRun,
+  deriveRunActorStats,
   dropItem,
   encodeActiveRun,
   equipmentPlan,
   identifyItemCompletely,
   merchantAcceptsItem,
-  projectDomainEvents,
   resolveCommand,
   unequipItem,
   type ItemInstance,
@@ -264,5 +264,50 @@ describe('merchant refusal of a revealed cursed item', () => {
     expect(
       merchantAcceptsItem(backpackInstance({ revealed: false }), realSword, encounter, new Set()),
     ).toBe(true);
+  });
+});
+
+describe('shipped curse drawbacks bite', () => {
+  let realContent: CompiledContentPack;
+
+  beforeAll(async () => {
+    realContent = await compileContentDirectory({
+      rootDir: resolve(import.meta.dirname, '../../../content'),
+    });
+  });
+
+  /** Derived hero stats with `curse` attached to an equipped sword, and with nothing attached. */
+  function statsWithCurse(curseId: string | null) {
+    const content = {
+      ...createDemoContentPack(),
+      entries: [
+        ...createDemoContentPack().entries,
+        sword,
+        ...realContent.entries.filter((entry) => entry.kind === 'curse'),
+      ],
+    } as CompiledContentPack;
+    const base = createDemoRun();
+    const swordItem: ItemInstance = {
+      ...item(swordId, sword.id, { type: 'equipped', actorId: 'hero.demo', slot: 'main-hand' }),
+      identified: true,
+      ...(curseId === null ? {} : { curse: { curseId, revealed: true } }),
+    };
+    const hero = {
+      ...base.actors[0]!,
+      equipment: { ...base.actors[0]!.equipment, 'main-hand': swordItem.itemId },
+    };
+    const run = { ...base, actors: [hero], items: [swordItem] };
+    return deriveRunActorStats({ state: run, content, actor: hero });
+  }
+
+  it('gives curse.hungering-edge a drawback that reaches the hero', () => {
+    const hungeringEdge = realContent.entries.find(
+      (entry): entry is CurseContentEntry =>
+        entry.kind === 'curse' && entry.id === 'curse.hungering-edge',
+    )!;
+    expect(Object.keys(hungeringEdge.drawbackModifiers)).not.toContain('maxHealth');
+    expect(statsWithCurse('curse.hungering-edge').meleeAccuracy).toBe(
+      statsWithCurse(null).meleeAccuracy - 2,
+    );
   });
 });

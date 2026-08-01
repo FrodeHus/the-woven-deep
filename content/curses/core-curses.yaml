@@ -5,7 +5,7 @@ entries:
     name: Hungering Edge
     tags: [curse, weapon]
     revealText: "The blade drinks deep — and will not let go."
-    drawbackModifiers: { maxHealth: -3 }
+    drawbackModifiers: { meleeAccuracy: -2 }
     trigger:
       on: on-kill
       chanceBps: 5000
