@@ -275,7 +275,7 @@ describe('Death overlay gates conclusion navigation (App integration)', () => {
     expect(createSessionRunRecordRepository(storage).records()).toHaveLength(0);
   });
 
-  it('accepting a wanderer death finalizes it into the Hall, navigates, and retires the checkpoint', async () => {
+  it('accepting a wanderer death finalizes navigation, retires the checkpoint, but never touches the Hall', async () => {
     const user = userEvent.setup();
     const storage = wandererDeathStorage();
 
@@ -286,11 +286,12 @@ describe('Death overlay gates conclusion navigation (App integration)', () => {
     await user.click(screen.getByRole('button', { name: /accept death/i }));
 
     expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
-    expect(createSessionRunRecordRepository(storage).records()).toHaveLength(1);
+    // The Hall is Classic-only: an accepted Wanderer death never appends a record.
+    expect(createSessionRunRecordRepository(storage).records()).toHaveLength(0);
     expect(storage.peek(CHECKPOINT_KEY)).toBeNull();
   });
 
-  it('a wanderer VICTORY still finalizes and navigates immediately, with no choice offered', async () => {
+  it('a wanderer VICTORY still navigates immediately with no choice offered, but never touches the Hall', async () => {
     const user = userEvent.setup();
     const storage = wandererVictoryStorage();
 
@@ -300,7 +301,8 @@ describe('Death overlay gates conclusion navigation (App integration)', () => {
     expect(await screen.findByText(/you have broken the cycle/i)).toBeInTheDocument();
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /rise again/i })).not.toBeInTheDocument();
-    expect(createSessionRunRecordRepository(storage).records()).toHaveLength(1);
+    // The Hall is Classic-only: a Wanderer victory never appends a record either.
+    expect(createSessionRunRecordRepository(storage).records()).toHaveLength(0);
     // The run is over for good, so its rewind point is retired with it.
     expect(storage.peek(CHECKPOINT_KEY)).toBeNull();
   });

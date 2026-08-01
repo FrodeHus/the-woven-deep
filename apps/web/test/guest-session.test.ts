@@ -8,6 +8,7 @@ import {
   DEFAULT_GUEST_HERO,
   descendToNextFloor,
   emptyEquipment,
+  emptyLifetimeState,
   encodeActiveRun,
   newRunRecords,
   RECENT_COMMAND_LIMIT,
@@ -1576,6 +1577,131 @@ describe('GuestSession', () => {
       });
 
       expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+  });
+
+  describe('Wanderer finalize gating (Task 6)', () => {
+    /** Same engine-driven death as `killHero` in the "Wanderer rise again" describe above, kept
+     * local here so this describe stays self-contained. */
+    function killHero(storage: FakeStorage): GuestSession {
+      const run = decodeActiveRun(storage.peek()!, pack);
+      const hero = run.actors.find((actor) => actor.playerControlled)!;
+      const doomed: ActiveRun = {
+        ...run,
+        actors: run.actors.map((actor) =>
+          actor.actorId === hero.actorId ? { ...actor, health: 1 } : actor,
+        ),
+        survival: {
+          ...run.survival,
+          hungerReserve: 0,
+          hungerStage: 'starving',
+          nextStarvationAt: run.worldTime,
+        },
+      };
+      storage.set(SAVE_KEY, encodeActiveRun(doomed));
+      const session = new GuestSession({ pack, storage });
+      session.dispatch({ type: 'wait' });
+      return session;
+    }
+
+    const enrichment = { achievedAt: 'Run #1', portraitGlyph: '@' };
+
+    /** A wanderer run synthesized straight into a `broke-cycle` victory conclusion -- mirrors
+     * `heartRun`/`deadRun` in the "death and finalization" describe above, which likewise build
+     * the conclusion directly rather than actually playing to the Final Chamber. */
+    function wandererBrokeCycleRun(seed: Uint32State): ActiveRun {
+      const fresh = createNewRun({ pack, seed, hero: DEFAULT_GUEST_HERO, mode: 'wanderer' });
+      return {
+        ...fresh,
+        conclusion: {
+          completionType: 'broke-cycle',
+          cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
+          concludedAtRevision: fresh.revision,
+          finalized: false,
+        },
+      };
+    }
+
+    it('writes nothing to the Hall when a wanderer run ends in death', () => {
+      const storage = memoryStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      walkAndDescend(wandererSession(storage));
+      const session = killHero(storage);
+
+      const projection = session.finalizeConcludedRun(repository, enrichment);
+
+      expect(repository.records()).toEqual([]);
+      expect(repository.lifetime()).toEqual(emptyLifetimeState());
+      expect(projection.finalized).toBe(false);
+      expect(projection.score).toBeNull();
+      expect(projection.heirloom).toBeNull();
+      expect(projection.mode).toBe('wanderer');
+    });
+
+    it('writes nothing to the Hall when a wanderer run WINS', () => {
+      const storage = memoryStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      storage.set(SAVE_KEY, encodeActiveRun(wandererBrokeCycleRun(SEED)));
+      const session = new GuestSession({ pack, storage });
+
+      const projection = session.finalizeConcludedRun(repository, enrichment);
+
+      expect(repository.records()).toEqual([]);
+      expect(projection.completionType).toBe('broke-cycle');
+      expect(projection.finalized).toBe(false);
+    });
+
+    it('leaves the run-records rng stream untouched for a wanderer conclusion', () => {
+      const storage = memoryStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      walkAndDescend(wandererSession(storage));
+      const session = killHero(storage);
+      const before = storage.peek()!;
+
+      session.finalizeConcludedRun(repository, enrichment);
+
+      expect(JSON.parse(storage.peek() ?? before).rng?.['run-records']).toEqual(
+        JSON.parse(before).rng['run-records'],
+      );
+    });
+
+    it('clears the run save and the checkpoint when a wanderer run ends', () => {
+      const storage = memoryStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      walkAndDescend(wandererSession(storage));
+      const session = killHero(storage);
+
+      session.finalizeConcludedRun(repository, enrichment);
+
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+      expect(storage.get(SAVE_KEY)).toBeNull();
+    });
+
+    it('still finalizes a classic run into the Hall', () => {
+      const storage = memoryStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+      const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+      const dead: ActiveRun = {
+        ...fresh,
+        actors: fresh.actors.map((actor) =>
+          actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+        ),
+        conclusion: {
+          completionType: 'died',
+          cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
+          concludedAtRevision: fresh.revision,
+          finalized: false,
+        },
+      };
+      storage.set(SAVE_KEY, encodeActiveRun(dead));
+      const session = new GuestSession({ pack, storage });
+
+      const projection = session.finalizeConcludedRun(repository, enrichment);
+
+      expect(repository.records()).toHaveLength(1);
+      expect(projection.finalized).toBe(true);
+      expect(projection.mode).toBe('classic');
     });
   });
 });

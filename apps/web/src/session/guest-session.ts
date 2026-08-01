@@ -732,6 +732,23 @@ export class GuestSession implements RunSession {
     // resumes into rewrites the checkpoint anyway.
     this.clearRiseCheckpoint();
 
+    // The Hall is 100% Classic. A Wanderer run -- died, became-heart, broke-cycle, refused alike
+    // -- never produces a record, never enters standings/champions/echoes, never rolls an
+    // heirloom (so the `run-records` stream is never advanced), and never applies lifetime or
+    // artifact deltas. Artifacts a Wanderer found were therefore never marked `lost` in the
+    // ledger, so they stay discoverable by Classic runs: circulation stays coherent with zero new
+    // ledger logic. `finalizeRun` is not called at all, so `conclusion.finalized` stays false
+    // forever -- which is exactly what the record-null projection below reports.
+    if (this.run.mode === 'wanderer') {
+      this.storage.remove?.(SAVE_KEY);
+      const projection = projectRunConclusion({ run: this.run, record: null, achievements: [] });
+      if (projection === null) {
+        throw new Error('internal invariant: a concluded wanderer run projected to null');
+      }
+      this.publish();
+      return projection;
+    }
+
     if (conclusion.finalized) {
       const recordId = deriveHallRecordId(this.run.runSeed, this.run.contentHash);
       const record =
