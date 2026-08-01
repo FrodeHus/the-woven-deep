@@ -1,6 +1,74 @@
 import { describe, expect, it } from 'vitest';
-import type { PublicEvent } from '@woven-deep/engine';
-import { LOG_CAPACITY, foldEventsIntoLog } from '../src/session/event-log.js';
+import {
+  CONTENT_SCHEMA_VERSION,
+  type CompiledContentPack,
+  type MonsterContentEntry,
+} from '@woven-deep/content';
+import type { HauntView, PublicEvent } from '@woven-deep/engine';
+import { LOG_CAPACITY, foldEventsIntoLog, type LogContext } from '../src/session/event-log.js';
+
+const attributes = { might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2 } as const;
+const resistances = { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 0, arcane: 0 } as const;
+const dice = { count: 1, sides: 4, bonus: 0 } as const;
+
+const boneGnawer: MonsterContentEntry = {
+  kind: 'monster',
+  id: 'monster.bone-gnawer',
+  name: 'Bone-Gnawer',
+  tags: [],
+  glyph: 'b',
+  color: '#aaaaaa',
+  minDepth: 1,
+  maxDepth: 5,
+  attributes,
+  health: 4,
+  speed: 110,
+  accuracy: 1,
+  defense: 10,
+  perception: 6,
+  damage: dice,
+  armor: 0,
+  resistances,
+  disposition: 'hostile',
+  behaviorId: 'behavior.approach-and-attack',
+  behaviorParameters: {},
+  rarity: 'common',
+  threat: 1,
+  lootTableId: null,
+  dropChance: 1,
+};
+
+const pack: CompiledContentPack = {
+  schemaVersion: CONTENT_SCHEMA_VERSION,
+  hash: 'demo',
+  entries: [boneGnawer],
+  generationReport: { foundationalCategories: [] },
+};
+
+function hauntView(overrides: Partial<HauntView> = {}): HauntView {
+  return {
+    hallRecordId: 'record.a',
+    role: 'echo',
+    heroName: 'Hero',
+    deathDepth: 4,
+    killerContentId: null,
+    causeDepth: null,
+    encountered: false,
+    appeased: false,
+    actorId: null,
+    needCategories: [],
+    ...overrides,
+  };
+}
+
+function championEncountered(hallRecordId: string): PublicEvent {
+  return {
+    type: 'champion.encountered',
+    eventId: 'e1',
+    actorId: 'a1',
+    hallRecordId,
+  };
+}
 
 describe('foldEventsIntoLog', () => {
   it('renders combat, item, light, and survival events as readable lines', () => {
@@ -183,5 +251,38 @@ describe('foldEventsIntoLog', () => {
     const folded = foldEventsIntoLog([], events, 1);
     expect(folded.log).toEqual([]);
     expect(folded.nextId).toBe(1);
+  });
+
+  it('logs the spoken line on a champion encounter', () => {
+    const context: LogContext = {
+      haunts: [
+        hauntView({
+          hallRecordId: 'record.a',
+          role: 'champion',
+          heroName: 'Kaelen',
+          killerContentId: 'monster.bone-gnawer',
+          causeDepth: 7,
+        }),
+      ],
+      pack,
+    };
+    const { log } = foldEventsIntoLog([], [championEncountered('record.a')], 0, context);
+    expect(log[0]).toMatchObject({
+      text: "Kaelen, the Deep's Champion — fell to a bone-gnawer at depth 7. The Deep remembers.",
+      tone: 'curse',
+    });
+  });
+
+  it('stays silent when no context is supplied', () => {
+    const { log } = foldEventsIntoLog([], [championEncountered('record.a')], 0);
+    expect(log).toEqual([]);
+  });
+
+  it('stays silent for a haunt the context does not know', () => {
+    const { log } = foldEventsIntoLog([], [championEncountered('record.missing')], 0, {
+      haunts: [],
+      pack,
+    });
+    expect(log).toEqual([]);
   });
 });

@@ -855,6 +855,29 @@ export type DomainEvent =
   | RestCompletedEvent
   | RunRecordDomainEvent;
 
+/**
+ * The public-facing shape of `champion.encountered`/`echo.encountered`: the haunt's spoken record
+ * line is host-rendered client prose (`hauntEncounterLine`) read from the `GameplayProjection.haunts`
+ * block, joined here by `hallRecordId` -- widening the domain event itself would drag the frozen
+ * legacy event schemas into a save-schema-adjacent bump for no gain. Deliberately narrower than
+ * `ChampionEncounteredEvent`/`EchoEncounteredEvent`: `populationId` and `rank` are authoritative
+ * bookkeeping the client never needs and must not see (same redaction posture as every other
+ * population lifecycle event, which folds into `PopulationNoticePublicEvent` instead of passing
+ * through raw).
+ */
+export interface ChampionEncounteredPublicEvent {
+  readonly type: 'champion.encountered';
+  readonly eventId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly hallRecordId: OpaqueId;
+}
+export interface EchoEncounteredPublicEvent {
+  readonly type: 'echo.encountered';
+  readonly eventId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly hallRecordId: OpaqueId;
+}
+
 export type PublicEvent =
   | Exclude<
       DomainEvent,
@@ -867,4 +890,6 @@ export type PublicEvent =
   | ActorMovementObservedPublicEvent
   | ActorDamageObservedPublicEvent
   | ActorDeathObservedPublicEvent
-  | PopulationNoticePublicEvent;
+  | PopulationNoticePublicEvent
+  | ChampionEncounteredPublicEvent
+  | EchoEncounteredPublicEvent;

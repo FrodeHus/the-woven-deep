@@ -11,6 +11,10 @@ import {
   projectGameplayState,
   refreshKnowledge,
   stableJson,
+  type ChampionPopulation,
+  type FallenHeroRunDecision,
+  type FallenHeroStandingSnapshot,
+  type RecordedHeirloomSnapshot,
 } from '../src/index.js';
 import type { MonsterContentEntry, SpellContentEntry } from '@woven-deep/content';
 
@@ -1094,5 +1098,187 @@ describe('gameplay projection', () => {
     const { castableSpells, ...restOfHero } = projected.hero;
     const baseline = projectGameplayState({ state: base, content: createDemoContentPack() });
     expect(restOfHero).toEqual(baseline.hero);
+  });
+});
+
+describe('haunt projection', () => {
+  const pack = createDemoContentPack();
+
+  function heirloom(hallRecordId: string): RecordedHeirloomSnapshot {
+    return {
+      contentId: 'item.heirloom',
+      sourceItemId: null,
+      enchantment: null,
+      condition: 100,
+      charges: null,
+      fuel: null,
+      curse: null,
+      qualityRank: 0,
+      displayName: 'Heirloom',
+      glyph: '/',
+      color: '#ffffff',
+      originatingHallRecordId: hallRecordId,
+    };
+  }
+
+  function fallenStanding(
+    hallRecordId: string,
+    overrides: Partial<FallenHeroStandingSnapshot> = {},
+  ): FallenHeroStandingSnapshot {
+    return {
+      rank: 1,
+      hallRecordId,
+      heroName: 'Hero',
+      portraitGlyph: '@',
+      classTags: [],
+      attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
+      equippedItemContentIds: [],
+      signatureAbilityIds: [],
+      deathDepth: 1,
+      sourceContentHash: 'a'.repeat(64),
+      heirloom: heirloom(hallRecordId),
+      cause: null,
+      deathInventory: [heirloom(hallRecordId)],
+      ...overrides,
+    };
+  }
+
+  function fallenDecision(
+    hallRecordId: string,
+    role: 'champion' | 'echo',
+    overrides: Partial<FallenHeroRunDecision> = {},
+  ): FallenHeroRunDecision {
+    return {
+      hallRecordId,
+      rank: 1,
+      role,
+      gateRoll: null,
+      retained: true,
+      encountered: false,
+      defeated: false,
+      appeased: false,
+      ...overrides,
+    };
+  }
+
+  function championPopulation(
+    hallRecordId: string,
+    overrides: Partial<ChampionPopulation> = {},
+  ): ChampionPopulation {
+    return {
+      populationId: `population.${hallRecordId}`,
+      encounterId: 'encounter.champion',
+      floorId: 'floor.demo',
+      createdAt: 0,
+      livingMemberIds: [],
+      formerMemberIds: [],
+      model: 'champion',
+      actorId: `actor.population.fallen-champion.${hallRecordId}.001`,
+      hallRecordId,
+      rank: 1,
+      defeated: false,
+      rewardCreated: false,
+      equipmentContentIds: [],
+      abilityIds: [],
+      ...overrides,
+    };
+  }
+
+  function runWithHaunts(): ActiveRun {
+    const base = createDemoRun();
+    const championStanding = fallenStanding('hall.a-kaelen', {
+      heroName: 'Kaelen',
+      deathDepth: 7,
+      cause: { killerContentId: 'monster.bone-gnawer', depth: 7, turn: 10, worldTime: 1000 },
+    });
+    const echoStanding = fallenStanding('hall.b-mira', { heroName: 'Mira', deathDepth: 4 });
+    return {
+      ...base,
+      fallenHeroStandings: [championStanding, echoStanding],
+      fallenHeroDecisions: [
+        fallenDecision('hall.a-kaelen', 'champion'),
+        fallenDecision('hall.b-mira', 'echo'),
+      ],
+    };
+  }
+
+  const unretainedId = 'hall.unretained-echo';
+
+  function runWithUnretainedEcho(): ActiveRun {
+    const base = createDemoRun();
+    const echoStanding = fallenStanding(unretainedId, { heroName: 'Unretained' });
+    return {
+      ...base,
+      fallenHeroStandings: [echoStanding],
+      fallenHeroDecisions: [fallenDecision(unretainedId, 'echo', { retained: false })],
+    };
+  }
+
+  function runWithLegacyStanding(): ActiveRun {
+    const base = createDemoRun();
+    const legacyStanding = fallenStanding('hall.legacy', { heroName: 'Legacy', cause: null });
+    return {
+      ...base,
+      fallenHeroStandings: [legacyStanding],
+      fallenHeroDecisions: [fallenDecision('hall.legacy', 'champion')],
+    };
+  }
+
+  function runWithPlacedHaunt(): ActiveRun {
+    const base = createDemoRun();
+    const hallRecordId = 'record.a';
+    const standing = fallenStanding(hallRecordId, { heroName: 'Kaelen', deathDepth: 7 });
+    return {
+      ...base,
+      fallenHeroStandings: [standing],
+      fallenHeroDecisions: [fallenDecision(hallRecordId, 'champion')],
+      populations: [
+        championPopulation(hallRecordId, {
+          actorId: 'actor.population.fallen-champion.record.a.001',
+          livingMemberIds: ['actor.population.fallen-champion.record.a.001'],
+        }),
+      ],
+    };
+  }
+
+  function runWithDefeatedHaunt(): ActiveRun {
+    const placed = runWithPlacedHaunt();
+    return {
+      ...placed,
+      populations: placed.populations.map((population) =>
+        population.model === 'champion' ? { ...population, livingMemberIds: [] } : population,
+      ),
+    };
+  }
+
+  it('projects one haunt per retained fallen-hero decision', () => {
+    const projection = projectGameplayState({ state: runWithHaunts(), content: pack });
+    expect(projection.haunts.map((haunt) => haunt.role)).toEqual(['champion', 'echo']);
+    expect(projection.haunts[0]).toMatchObject({
+      heroName: 'Kaelen',
+      deathDepth: 7,
+      killerContentId: 'monster.bone-gnawer',
+      causeDepth: 7,
+      appeased: false,
+    });
+  });
+
+  it('omits unretained decisions', () => {
+    const projection = projectGameplayState({ state: runWithUnretainedEcho(), content: pack });
+    expect(projection.haunts.some((haunt) => haunt.hallRecordId === unretainedId)).toBe(false);
+  });
+
+  it('projects a null killer for a legacy cause-less standing', () => {
+    const projection = projectGameplayState({ state: runWithLegacyStanding(), content: pack });
+    expect(projection.haunts[0]).toMatchObject({ killerContentId: null, causeDepth: null });
+  });
+
+  it('projects the placed actor id, and null once the haunt is gone', () => {
+    expect(
+      projectGameplayState({ state: runWithPlacedHaunt(), content: pack }).haunts[0]!.actorId,
+    ).toBe('actor.population.fallen-champion.record.a.001');
+    expect(
+      projectGameplayState({ state: runWithDefeatedHaunt(), content: pack }).haunts[0]!.actorId,
+    ).toBeNull();
   });
 });

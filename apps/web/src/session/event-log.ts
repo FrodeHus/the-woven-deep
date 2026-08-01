@@ -1,4 +1,6 @@
-import type { PublicEvent } from '@woven-deep/engine';
+import type { CompiledContentPack } from '@woven-deep/content';
+import type { HauntView, PublicEvent } from '@woven-deep/engine';
+import { hauntEncounterLine } from './haunt-lines.js';
 
 export interface LogLine {
   readonly id: number;
@@ -8,12 +10,20 @@ export interface LogLine {
 
 export const LOG_CAPACITY = 200;
 
+/** The projection data a haunt's spoken record line reads from -- optional so every existing
+ * caller with no projection at hand (or an event stream with no haunt encounters in it) keeps
+ * working unchanged; only `champion.encountered`/`echo.encountered` consult it. */
+export interface LogContext {
+  readonly haunts: readonly HauntView[];
+  readonly pack: CompiledContentPack;
+}
+
 interface RenderedLine {
   readonly text: string;
   readonly tone: LogLine['tone'];
 }
 
-function renderEvent(event: PublicEvent): RenderedLine | null {
+function renderEvent(event: PublicEvent, context: LogContext | undefined): RenderedLine | null {
   switch (event.type) {
     case 'actor.damaged':
       return { text: `The creature takes ${event.amount} damage.`, tone: 'combat' };
@@ -111,6 +121,16 @@ function renderEvent(event: PublicEvent): RenderedLine | null {
     // than falling to `default` keeps this switch's coverage of `PublicEvent` honest.
     case 'floor.entered':
       return null;
+    case 'champion.encountered':
+    case 'echo.encountered': {
+      // Silent without context: the line is record prose the engine deliberately does not carry,
+      // so a caller with no projection at hand renders nothing rather than something wrong.
+      if (!context) return null;
+      const haunt = context.haunts.find(
+        (candidate) => candidate.hallRecordId === event.hallRecordId,
+      );
+      return haunt ? { text: hauntEncounterLine(haunt, context.pack), tone: 'curse' } : null;
+    }
     default:
       return null;
   }
@@ -120,11 +140,12 @@ export function foldEventsIntoLog(
   log: readonly LogLine[],
   events: readonly PublicEvent[],
   nextId: number,
+  context?: LogContext,
 ): Readonly<{ log: readonly LogLine[]; nextId: number }> {
   let entries = [...log];
   let id = nextId;
   for (const event of events) {
-    const rendered = renderEvent(event);
+    const rendered = renderEvent(event, context);
     if (!rendered) continue;
     entries.push({ id, text: rendered.text, tone: rendered.tone });
     id += 1;

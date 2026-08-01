@@ -23,7 +23,7 @@ import {
   saveSightings,
   type Sightings,
 } from './codex.js';
-import { foldEventsIntoLog, LOG_CAPACITY, type LogLine } from './event-log.js';
+import { foldEventsIntoLog, LOG_CAPACITY, type LogContext, type LogLine } from './event-log.js';
 import type { PendingFinalChamberChoice, SessionNotice, SessionSnapshot } from './guest-session.js';
 import {
   dismissHint,
@@ -461,7 +461,11 @@ export class ProfileSession implements RunSession {
   ): void {
     this.serverSnapshot = snapshot;
     if (options.foldEvents) {
-      const folded = foldEventsIntoLog(this.log, snapshot.lastEvents, this.nextLogId);
+      // Haunts read off the SERVER's own projection -- the run-authoritative source, never
+      // re-derived client-side -- exactly like every other redacted projection field this session
+      // consumes off `snapshot.projection`.
+      const context: LogContext = { haunts: snapshot.projection.haunts, pack: this.pack };
+      const folded = foldEventsIntoLog(this.log, snapshot.lastEvents, this.nextLogId, context);
       this.log = folded.log;
       this.nextLogId = folded.nextId;
       this.lastEvents = snapshot.lastEvents;

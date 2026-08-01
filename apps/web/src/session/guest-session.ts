@@ -46,7 +46,7 @@ import type {
   SessionSnapshot,
 } from './session-snapshot.js';
 import { itemById, monsterById } from './pack-queries.js';
-import { foldEventsIntoLog, LOG_CAPACITY, type LogLine } from './event-log.js';
+import { foldEventsIntoLog, LOG_CAPACITY, type LogContext, type LogLine } from './event-log.js';
 import type { PlayerIntent } from './intents.js';
 import {
   dismissHint,
@@ -310,6 +310,13 @@ export class GuestSession implements RunSession {
     return projectGameplayState({ state: this.run, content: this.pack });
   }
 
+  /** The haunt data `foldEventsIntoLog` needs to speak a `champion.encountered`/`echo.encountered`
+   * record line -- read fresh off `this.run` every fold, so it always reflects the state the fold
+   * is applied against (a just-placed haunt, a just-appeased one, etc.). */
+  private logContext(): LogContext {
+    return { haunts: this.currentProjection().haunts, pack: this.pack };
+  }
+
   dispatch(intent: PlayerIntent): void {
     this.notice = null;
     // A new intent implicitly dismisses any confirm-aggression prompt left over from a prior,
@@ -436,7 +443,7 @@ export class GuestSession implements RunSession {
     options?: Readonly<{ transition?: boolean }>,
   ): void {
     this.run = state;
-    const folded = foldEventsIntoLog(this.log, events, this.nextLogId);
+    const folded = foldEventsIntoLog(this.log, events, this.nextLogId, this.logContext());
     this.log = folded.log;
     this.nextLogId = folded.nextId;
     this.lastEvents = events;
@@ -798,7 +805,7 @@ export class GuestSession implements RunSession {
     // both members of `PublicEvent` too — but their shared static type is the broader
     // `DomainEvent`, which also covers variants `PublicEvent` excludes (e.g. `AttackMissedEvent`).
     const events = finalized.events as readonly PublicEvent[];
-    const folded = foldEventsIntoLog(this.log, events, this.nextLogId);
+    const folded = foldEventsIntoLog(this.log, events, this.nextLogId, this.logContext());
     this.log = folded.log;
     this.nextLogId = folded.nextId;
     this.persist();

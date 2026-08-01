@@ -506,27 +506,37 @@ export function projectDomainEvents(
           if (heard) output.push(heard);
         }
         break;
+      // A haunt's first-sight line is host-rendered client prose (`hauntEncounterLine`), keyed off
+      // `hallRecordId` against the projection's `haunts` block -- so these two pass through as the
+      // narrow `ChampionEncounteredPublicEvent`/`EchoEncounteredPublicEvent` shape rather than
+      // folding into the generic `population.notice` presentation string every other champion/echo
+      // lifecycle event below still uses. `populationId`/`rank` stay unpublished, same redaction
+      // posture as every other population bookkeeping id.
       case 'champion.encountered':
+      case 'echo.encountered':
+        if (actorVisible(event.actorId))
+          output.push({
+            type: event.type,
+            eventId: event.eventId,
+            actorId: event.actorId,
+            hallRecordId: event.hallRecordId,
+          });
+        break;
       case 'champion.defeated':
       case 'champion.heirloom-created':
-      case 'echo.encountered':
       case 'echo.defeated':
       case 'echo.loot-created':
         if (actorVisible(event.actorId))
           output.push(
             notice(
               event,
-              event.type === 'champion.encountered'
-                ? 'champion-encountered'
-                : event.type === 'champion.defeated'
-                  ? 'champion-defeated'
-                  : event.type === 'champion.heirloom-created'
-                    ? 'champion-heirloom'
-                    : event.type === 'echo.encountered'
-                      ? 'echo-encountered'
-                      : event.type === 'echo.defeated'
-                        ? 'echo-defeated'
-                        : 'echo-loot',
+              event.type === 'champion.defeated'
+                ? 'champion-defeated'
+                : event.type === 'champion.heirloom-created'
+                  ? 'champion-heirloom'
+                  : event.type === 'echo.defeated'
+                    ? 'echo-defeated'
+                    : 'echo-loot',
               event.actorId,
               event.type,
               event.type === 'champion.heirloom-created'

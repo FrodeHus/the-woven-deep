@@ -470,7 +470,19 @@ describe('public event projection', () => {
     ];
     const output = projectDomainEvents({ ...visible, events, heroId: visible.state.hero.actorId });
     expect(events.map(exhaustPopulationEvent)).toHaveLength(21);
-    expect(output.map((event) => event.type)).toEqual(Array(19).fill('population.notice'));
+    // `champion.encountered`/`echo.encountered` pass through raw rather than redacting into a
+    // `population.notice` -- the haunt's spoken record line (Task 4, `hauntEncounterLine`) is
+    // host-rendered client prose keyed off the event's own `hallRecordId`, so nothing hides it. All
+    // other champion/echo lifecycle events (defeated, heirloom, loot) still redact to a notice.
+    expect(output.map((event) => event.type)).toEqual([
+      ...Array(13).fill('population.notice'),
+      'champion.encountered',
+      'population.notice',
+      'population.notice',
+      'echo.encountered',
+      'population.notice',
+      'population.notice',
+    ]);
     const json = stableJson(output);
     for (const secret of [
       'population.secret',
@@ -483,11 +495,13 @@ describe('public event projection', () => {
       'individualRewards',
       'uniqueItemId',
       'item.roll-secret',
-      'hall.secret',
       'amount',
       'health',
     ])
       expect(json).not.toContain(secret);
+    // `hall.secret` DOES appear now -- it's the `hallRecordId` on the two raw pass-through events,
+    // and a hall record id is never hidden state (it names the player's OWN Hall record).
+    expect(json).toContain('hall.secret');
     expect(json).toContain('Observed heirloom');
   });
 
