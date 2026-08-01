@@ -16,6 +16,7 @@ import {
   type NewRunHero,
   type PublicDecision,
   type PublicEvent,
+  type RunMode,
   type StoredHallRecord,
   type Uint32State,
 } from '@woven-deep/engine';
@@ -150,6 +151,11 @@ export class ServerPlaySession {
   private pendingDecision: PublicDecision | null = null;
   private movesSinceCheckpoint = 0;
   private dirty = false;
+  /** The Wanderer rewind blob this session will write on its next persist -- rehydrated from the
+   * stored row on `open()`, refreshed at every floor transition, and always `null` for a Classic
+   * run. Held here rather than re-read per persist so the single-row upsert stays one statement.
+   * Distinct from `checkpoint()` below, which is the unrelated movement dirty-counter. */
+  private checkpointBlob: string | null = null;
   // Set exactly once, by `maybeFinalize()`, the run this conclusion belongs to -- carried here
   // (rather than re-derived) so `snapshot()` can project the real score/heirloom/achievements
   // without re-touching the Hall repository on every snapshot.
@@ -182,13 +188,16 @@ export class ServerPlaySession {
    * `hero` is the profile's chosen hero (defaults to the guest hero until the start-run flow lands).
    * A freshly-created run is persisted immediately so a reconnect finds it.
    */
-  open(input: Readonly<{ hero?: NewRunHero; seed: Uint32State }>): ServerRunSnapshot {
+  open(
+    input: Readonly<{ hero?: NewRunHero; seed: Uint32State; mode?: RunMode }>,
+  ): ServerRunSnapshot {
     const stored = this.repo.get(this.profileId);
     if (stored !== undefined) {
       if (stored.contentHash !== this.pack.hash) {
         throw new ContentHashMismatchError(this.pack.hash, stored.contentHash);
       }
       this.run = decodeActiveRun(stored.runBlob, this.pack);
+      this.checkpointBlob = stored.checkpointBlob;
     } else {
       const hero = input.hero ?? DEFAULT_GUEST_HERO;
       // Anti-cheat run-start guard: until profile hero-customization (chargen go-live) lands, a
@@ -214,6 +223,7 @@ export class ServerPlaySession {
         pack: this.pack,
         seed: input.seed,
         hero,
+        mode: input.mode ?? 'classic',
         // The profile's cross-run history, through the same builder the guest host uses: Hall
         // standings become this run's champion/Echo encounters, the ledger's still-unsecured
         // artifacts become its vault-artifact pool, and the lifetime's conquered champions stay
@@ -256,10 +266,13 @@ export class ServerPlaySession {
       return { kind: 'state', snapshot: this.snapshot() };
     }
     if (outcome.kind === 'transition') {
-      // A floor change is always consequential — persist immediately.
+      // A floor change is always consequential — persist immediately. In Wanderer the same write
+      // carries the run's new rewind point: `outcome.run` IS the floor-entry state, so the two
+      // blobs are identical here and diverge from the next command onward.
       this.run = outcome.run;
       this.lastEvents = outcome.events;
       this.pendingDecision = null;
+      if (this.run.mode === 'wanderer') this.checkpointBlob = encodeActiveRun(this.run);
       this.persist();
       return { kind: 'state', snapshot: this.snapshot() };
     }
@@ -430,6 +443,7 @@ export class ServerPlaySession {
       revision: this.run.revision,
       contentHash: this.pack.hash,
       updatedAt: this.clock(),
+      checkpointBlob: this.checkpointBlob,
     });
     this.movesSinceCheckpoint = 0;
     this.dirty = false;

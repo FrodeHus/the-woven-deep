@@ -319,6 +319,7 @@ describe('ActiveRunRepository', () => {
       revision: 1,
       contentHash: 'c'.repeat(64),
       updatedAt: '2026-07-17T00:00:00.000Z',
+      checkpointBlob: null,
     });
 
     expect(repository.get('p1')).toEqual({
@@ -327,6 +328,7 @@ describe('ActiveRunRepository', () => {
       revision: 1,
       contentHash: 'c'.repeat(64),
       updatedAt: '2026-07-17T00:00:00.000Z',
+      checkpointBlob: null,
     });
   });
 
@@ -337,6 +339,7 @@ describe('ActiveRunRepository', () => {
       revision: 1,
       contentHash: 'c'.repeat(64),
       updatedAt: '2026-07-17T00:00:00.000Z',
+      checkpointBlob: null,
     });
 
     const updatedBlob = JSON.stringify({ ...JSON.parse(runBlob), floor: 2 });
@@ -346,6 +349,7 @@ describe('ActiveRunRepository', () => {
       revision: 2,
       contentHash: 'd'.repeat(64),
       updatedAt: '2026-07-17T01:00:00.000Z',
+      checkpointBlob: null,
     });
 
     expect(repository.get('p1')).toEqual({
@@ -354,6 +358,7 @@ describe('ActiveRunRepository', () => {
       revision: 2,
       contentHash: 'd'.repeat(64),
       updatedAt: '2026-07-17T01:00:00.000Z',
+      checkpointBlob: null,
     });
   });
 
@@ -364,6 +369,7 @@ describe('ActiveRunRepository', () => {
       revision: 1,
       contentHash: 'c'.repeat(64),
       updatedAt: '2026-07-17T00:00:00.000Z',
+      checkpointBlob: null,
     });
 
     repository.clear('p1');
@@ -374,5 +380,52 @@ describe('ActiveRunRepository', () => {
   it('clear on a profile with no active run is a no-op', () => {
     expect(() => repository.clear('p1')).not.toThrow();
     expect(repository.get('p1')).toBeUndefined();
+  });
+
+  it('round-trips a checkpoint blob', () => {
+    repository.upsert({
+      profileId: 'p1',
+      runBlob,
+      revision: 3,
+      contentHash: 'c'.repeat(64),
+      updatedAt: '2026-07-17T00:00:00.000Z',
+      checkpointBlob: 'cp',
+    });
+
+    expect(repository.get('p1')?.checkpointBlob).toBe('cp');
+  });
+
+  it('round-trips a null checkpoint blob', () => {
+    repository.upsert({
+      profileId: 'p1',
+      runBlob,
+      revision: 3,
+      contentHash: 'c'.repeat(64),
+      updatedAt: '2026-07-17T00:00:00.000Z',
+      checkpointBlob: null,
+    });
+
+    expect(repository.get('p1')?.checkpointBlob).toBeNull();
+  });
+
+  it('overwrites a stored checkpoint with null on a classic upsert', () => {
+    repository.upsert({
+      profileId: 'p1',
+      runBlob,
+      revision: 3,
+      contentHash: 'c'.repeat(64),
+      updatedAt: '2026-07-17T00:00:00.000Z',
+      checkpointBlob: 'cp',
+    });
+    repository.upsert({
+      profileId: 'p1',
+      runBlob: 'run2',
+      revision: 4,
+      contentHash: 'c'.repeat(64),
+      updatedAt: '2026-07-17T00:00:00.000Z',
+      checkpointBlob: null,
+    });
+
+    expect(repository.get('p1')?.checkpointBlob).toBeNull();
   });
 });

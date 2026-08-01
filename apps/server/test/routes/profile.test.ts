@@ -628,6 +628,7 @@ describe('DELETE /api/profile', () => {
         revision: 1,
         contentHash: 'a'.repeat(64),
         updatedAt: new Date().toISOString(),
+        checkpointBlob: null,
       });
 
       expect(rowCount('hall_records', 'profile_id', profileId)).toBe(2);

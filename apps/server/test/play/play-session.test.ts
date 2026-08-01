@@ -105,6 +105,7 @@ function storeConcludedRun(repo: ActiveRunRepository, overrides: Partial<ActiveR
     revision: run.revision,
     contentHash: pack.hash,
     updatedAt: FIXED_CLOCK(),
+    checkpointBlob: null,
   });
 }
 
@@ -224,6 +225,7 @@ describe('ServerPlaySession', () => {
         revision: staged.revision,
         contentHash: pack.hash,
         updatedAt: FIXED_CLOCK(),
+        checkpointBlob: null,
       });
       return staged;
     }
@@ -446,6 +448,7 @@ describe('ServerPlaySession', () => {
       revision: 3,
       contentHash: 'a-different-content-hash',
       updatedAt: FIXED_CLOCK(),
+      checkpointBlob: null,
     });
     expect(() => newSession(database, { repo }).open({ seed: SEED })).toThrow(
       ContentHashMismatchError,
@@ -616,6 +619,79 @@ describe('ServerPlaySession', () => {
       expect(repo.get(PROFILE)).toBeUndefined();
       expect(snapshot.conclusion?.finalized).toBe(true);
       expect(snapshot.conclusion?.score).toEqual(hallRepo.records()[0]!.score);
+    });
+  });
+
+  describe('wanderer checkpoints (Task 7)', () => {
+    /** Teleports the hero onto the active floor's stair-down (same trick as
+     * `stageOnStairs`/`onStairDown` above), writes it straight to `active_runs`, reloads it into
+     * THIS session via a second `open()` (so the session's own `applyIntent` below dispatches
+     * against the staged position), and descends -- one real, legal floor-entry transition without
+     * walking the generated floor. */
+    function descendOnce(session: ServerPlaySession): void {
+      const stored = repo.get(PROFILE)!;
+      const run = decodeActiveRun(stored.runBlob, pack);
+      const staged = onStairDown(run);
+      repo.upsert({
+        profileId: PROFILE,
+        runBlob: encodeActiveRun(staged),
+        revision: staged.revision,
+        contentHash: pack.hash,
+        updatedAt: FIXED_CLOCK(),
+        checkpointBlob: stored.checkpointBlob,
+      });
+      session.open({ seed: SEED, mode: run.mode });
+      const outcome = session.applyIntent({
+        commandId: `command.descend-${String(staged.revision)}`,
+        expectedRevision: staged.revision,
+        intent: { type: 'descend' },
+      });
+      if (outcome.kind !== 'state') {
+        throw new Error(`expected descend to transition, got ${outcome.kind}`);
+      }
+    }
+
+    function revisionOf(session: ServerPlaySession): number {
+      return session.getSnapshot().revision;
+    }
+
+    it('writes a checkpoint on a wanderer floor transition', { timeout: 30_000 }, () => {
+      const session = newSession(database, { repo });
+      session.open({ seed: SEED, mode: 'wanderer' });
+      descendOnce(session);
+
+      const row = repo.get(PROFILE)!;
+      expect(row.checkpointBlob).toBe(row.runBlob);
+    });
+
+    it('leaves the checkpoint alone on a non-transition command', { timeout: 30_000 }, () => {
+      const session = newSession(database, { repo });
+      session.open({ seed: SEED, mode: 'wanderer' });
+      descendOnce(session);
+      const atFloorEntry = repo.get(PROFILE)!.checkpointBlob;
+
+      session.applyIntent({
+        commandId: 'c.1',
+        expectedRevision: revisionOf(session),
+        intent: { type: 'wait' },
+      });
+
+      const row = repo.get(PROFILE)!;
+      expect(row.checkpointBlob).toBe(atFloorEntry);
+      expect(row.runBlob).not.toBe(atFloorEntry);
+    });
+
+    it('never writes a checkpoint for a classic run', { timeout: 30_000 }, () => {
+      const session = newSession(database, { repo });
+      session.open({ seed: SEED });
+      descendOnce(session);
+
+      expect(repo.get(PROFILE)?.checkpointBlob).toBeNull();
+    });
+
+    it('opens a classic run by default', () => {
+      const session = newSession(database, { repo });
+      expect(session.open({ seed: SEED }).projection.mode).toBe('classic');
     });
   });
 });

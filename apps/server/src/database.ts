@@ -116,6 +116,18 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    id: 5,
+    name: 'wanderer-checkpoints',
+    up: (database) => {
+      // Nullable and additive: every existing row is a Classic run, which has no rewind point.
+      // `alter table ... add column` keeps the table STRICT and preserves the single-row-per-profile
+      // upsert unchanged.
+      database.exec(`
+        alter table active_runs add column checkpoint_blob text;
+      `);
+    },
+  },
 ];
 
 /**

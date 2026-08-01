@@ -197,7 +197,14 @@ describe('migration 3 (active-runs)', () => {
         (database.pragma('table_info(active_runs)') as Array<{ name: string }>).map(
           ({ name }) => name,
         ),
-      ).toEqual(['profile_id', 'run_blob', 'revision', 'content_hash', 'updated_at']);
+      ).toEqual([
+        'profile_id',
+        'run_blob',
+        'revision',
+        'content_hash',
+        'updated_at',
+        'checkpoint_blob',
+      ]);
     } finally {
       database.close();
     }
@@ -352,6 +359,28 @@ describe('migration 4 (hall)', () => {
       expect(
         database.prepare(`select strict from pragma_table_list where name = 'hall_state'`).get(),
       ).toEqual({ strict: 1 });
+    } finally {
+      database.close();
+    }
+  });
+});
+
+describe('migration 5 (wanderer checkpoints)', () => {
+  it('adds a nullable checkpoint_blob to an existing active_runs table', () => {
+    const database = new Database(':memory:');
+    try {
+      for (const migration of MIGRATIONS.filter((candidate) => candidate.id <= 4)) {
+        database.transaction(() => {
+          migration.up(database);
+          database.pragma(`user_version = ${migration.id}`);
+        })();
+      }
+      runMigrations(database);
+      const columns = database.pragma('table_info(active_runs)') as Array<{
+        name: string;
+        notnull: number;
+      }>;
+      expect(columns.find(({ name }) => name === 'checkpoint_blob')).toMatchObject({ notnull: 0 });
     } finally {
       database.close();
     }
