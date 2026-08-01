@@ -155,6 +155,8 @@ export function standingsFromRecords(
     deathDepth: record.cause.depth,
     sourceContentHash: record.contentHash,
     heirloom: record.heirloom,
+    cause: record.cause ?? null,
+    deathInventory: record.deathInventory ?? [record.heirloom],
   }));
 }
 

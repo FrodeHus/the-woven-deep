@@ -204,6 +204,10 @@ export function finalizeRun(
     metrics: run.metrics,
     reputations: run.reputations,
     heirloom: heirloom.snapshot,
+    // Placeholder until the haunts equipped-set capture lands: the heirloom alone, matching the
+    // same single-item default `standingsFromRecords` and the v15->v16 save migration apply to
+    // every record that predates the real capture.
+    deathInventory: [heirloom.snapshot],
     build: buildSnapshot(run),
     runSeed: encodeRunSeed(run.runSeed),
     contentHash: run.contentHash,

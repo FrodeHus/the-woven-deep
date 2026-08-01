@@ -18,6 +18,19 @@ function metrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
 }
 
 function storedRecord(overrides: Partial<StoredHallRecord> = {}): StoredHallRecord {
+  const heirloom = {
+    contentId: 'item.iron-sword',
+    sourceItemId: null,
+    enchantment: null,
+    condition: 100,
+    charges: null,
+    fuel: null,
+    qualityRank: 1,
+    displayName: "Ada's Iron Sword",
+    glyph: ')',
+    color: '#d8d8d8',
+    originatingHallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+  };
   return {
     recordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
     heroName: 'Ada',
@@ -28,19 +41,8 @@ function storedRecord(overrides: Partial<StoredHallRecord> = {}): StoredHallReco
     score: { lines: [], total: 40 },
     metrics: metrics({ deepestDepth: 3 }),
     reputations: [],
-    heirloom: {
-      contentId: 'item.iron-sword',
-      sourceItemId: null,
-      enchantment: null,
-      condition: 100,
-      charges: null,
-      fuel: null,
-      qualityRank: 1,
-      displayName: "Ada's Iron Sword",
-      glyph: ')',
-      color: '#d8d8d8',
-      originatingHallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
-    },
+    heirloom,
+    deathInventory: [heirloom],
     build: {
       attributes: { might: 14, agility: 12, vitality: 16, wits: 10, resolve: 12 },
       equippedItemContentIds: ['item.iron-sword'],
@@ -54,25 +56,27 @@ function storedRecord(overrides: Partial<StoredHallRecord> = {}): StoredHallReco
 }
 
 function secondStoredRecord(): StoredHallRecord {
+  const heirloom = {
+    contentId: 'item.iron-sword',
+    sourceItemId: null,
+    enchantment: null,
+    condition: 100,
+    charges: null,
+    fuel: null,
+    qualityRank: 1,
+    displayName: "Bryn's Iron Sword",
+    glyph: ')',
+    color: '#d8d8d8',
+    originatingHallRecordId: 'record.bbbbbbbb00000000.bbbbbbbbbbbbbbbb',
+  };
   return storedRecord({
     recordId: 'record.bbbbbbbb00000000.bbbbbbbbbbbbbbbb',
     heroName: 'Bryn',
     score: { lines: [], total: 90 },
     cause: { killerContentId: 'monster.cave-rat', depth: 5, turn: 20, worldTime: 20 },
     deepestDepth: 5,
-    heirloom: {
-      contentId: 'item.iron-sword',
-      sourceItemId: null,
-      enchantment: null,
-      condition: 100,
-      charges: null,
-      fuel: null,
-      qualityRank: 1,
-      displayName: "Bryn's Iron Sword",
-      glyph: ')',
-      color: '#d8d8d8',
-      originatingHallRecordId: 'record.bbbbbbbb00000000.bbbbbbbbbbbbbbbb',
-    },
+    heirloom,
+    deathInventory: [heirloom],
   });
 }
 
@@ -160,6 +164,50 @@ describe('standingsFromRecords', () => {
   it('a negative limit clamps to no standings rather than returning all-but-last', () => {
     const standings = standingsFromRecords([storedRecord(), secondStoredRecord()], -1);
     expect(standings).toEqual([]);
+  });
+
+  it('copies the record cause and death inventory into the standing', () => {
+    const secondEquipped = {
+      contentId: 'item.leather-cap',
+      sourceItemId: null,
+      enchantment: null,
+      condition: 80,
+      charges: null,
+      fuel: null,
+      qualityRank: 0,
+      displayName: 'Worn Leather Cap',
+      glyph: '[',
+      color: '#8a6d3b',
+      originatingHallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+    };
+    const record = storedRecord({
+      cause: { killerContentId: 'monster.bone-gnawer', depth: 7, turn: 9, worldTime: 90 },
+      deathInventory: [
+        {
+          contentId: 'item.iron-sword',
+          sourceItemId: null,
+          enchantment: null,
+          condition: 100,
+          charges: null,
+          fuel: null,
+          qualityRank: 1,
+          displayName: "Ada's Iron Sword",
+          glyph: ')',
+          color: '#d8d8d8',
+          originatingHallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+        },
+        secondEquipped,
+      ],
+    });
+    const [standing] = standingsFromRecords([record], 10);
+    expect(standing!.cause).toEqual(record.cause);
+    expect(standing!.deathInventory).toEqual(record.deathInventory);
+  });
+
+  it('falls back to the heirloom alone for a record with no death inventory', () => {
+    const legacy = { ...storedRecord(), deathInventory: undefined } as unknown as StoredHallRecord;
+    const [standing] = standingsFromRecords([legacy], 10);
+    expect(standing!.deathInventory).toEqual([legacy.heirloom]);
   });
 });
 

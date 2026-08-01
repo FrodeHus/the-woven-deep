@@ -282,6 +282,7 @@ describe('finalizeRun', () => {
       metrics: run.metrics,
       reputations: run.reputations,
       heirloom,
+      deathInventory: [heirloom],
       build: {
         attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
         equippedItemContentIds: ['item.crown', 'item.sword'],

@@ -45,8 +45,13 @@ export class SessionHallCorruptError extends Error {
  * fields, `curse` is not normalized generically, since it is required-but-nullable rather than
  * additive — every stored record's `heirloom.curse` is defaulted to `null` in
  * `migratePersistedState` below.
+ *
+ * Bumped to 4 for `HallRecord.deathInventory` (engine save schema v16, haunts): version-3-and-
+ * earlier blobs predate the equipped-set capture entirely, so every stored record's
+ * `deathInventory` is defaulted to `[heirloom]` in `migratePersistedState` below — the heirloom is
+ * the one recorded item, so it becomes the whole death inventory.
  */
-const HALL_STORE_VERSION = 3;
+const HALL_STORE_VERSION = 4;
 
 interface PersistedHallState {
   readonly version: number;
@@ -127,6 +132,14 @@ function migratePersistedState(state: ParsedHallState): PersistedHallState {
         record.heirloom !== null && typeof record.heirloom === 'object'
           ? { ...record.heirloom, curse: record.heirloom.curse ?? null }
           : record.heirloom,
+      // Version-3-and-earlier blobs predate the equipped-set capture entirely. The heirloom is the
+      // one recorded item, so it becomes the whole death inventory -- the same defaulting the
+      // engine's v15->v16 save migration applies to standings, kept in step deliberately.
+      deathInventory: Array.isArray(record.deathInventory)
+        ? record.deathInventory
+        : record.heirloom !== null && typeof record.heirloom === 'object'
+          ? [record.heirloom]
+          : [],
     })),
     lifetime: {
       ...state.lifetime,

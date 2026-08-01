@@ -501,6 +501,14 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           );
         }
       }
+      // An appeased haunt keeps its population (so it is never re-placed this run) but has no
+      // actor: the offering faded it. It is never `defeated`, which is what keeps conquest,
+      // achievements, and the artifact ledger out of the appeasement path entirely.
+      if (decision.appeased && decision.defeated) {
+        throw new Error(
+          `content-bound validation: fallen-hero decision ${decision.hallRecordId} is both appeased and defeated`,
+        );
+      }
       if (matching[0]?.model === 'champion' && matching[0].rewardCreated) {
         const standing = run.fallenHeroStandings.find(
           (entry) => entry.hallRecordId === decision.hallRecordId,

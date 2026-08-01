@@ -122,6 +122,7 @@ export function createFallenHeroRunDecisions(
             retained: !conquered.has(standing.hallRecordId),
             encountered: false,
             defeated: false,
+            appeased: false,
           }
         : {
             hallRecordId: standing.hallRecordId,
@@ -131,6 +132,7 @@ export function createFallenHeroRunDecisions(
             retained: retainedEchoes.has(standing.hallRecordId),
             encountered: false,
             defeated: false,
+            appeased: false,
           },
     ),
   };

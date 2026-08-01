@@ -182,6 +182,20 @@ function demoFloor(
 
 function standing(rank: number): FallenHeroStandingSnapshot {
   const hallRecordId = `hall.population-demo-${rank}`;
+  const heirloom = {
+    contentId: 'item.iron-sword',
+    sourceItemId: `item.population-demo-original-${rank}`,
+    enchantment: null,
+    condition: 81,
+    charges: null,
+    fuel: null,
+    curse: null,
+    qualityRank: 2,
+    displayName: `${rank === 1 ? "Ada's" : "Bryn's"} Iron Sword`,
+    glyph: ')',
+    color: '#d8d8d8',
+    originatingHallRecordId: hallRecordId,
+  };
   return {
     rank,
     hallRecordId,
@@ -193,20 +207,9 @@ function standing(rank: number): FallenHeroStandingSnapshot {
     signatureAbilityIds: ['spell.ember-bolt'],
     deathDepth: 5,
     sourceContentHash: 'b'.repeat(64),
-    heirloom: {
-      contentId: 'item.iron-sword',
-      sourceItemId: `item.population-demo-original-${rank}`,
-      enchantment: null,
-      condition: 81,
-      charges: null,
-      fuel: null,
-      curse: null,
-      qualityRank: 2,
-      displayName: `${rank === 1 ? "Ada's" : "Bryn's"} Iron Sword`,
-      glyph: ')',
-      color: '#d8d8d8',
-      originatingHallRecordId: hallRecordId,
-    },
+    heirloom,
+    cause: null,
+    deathInventory: [heirloom],
   };
 }
 

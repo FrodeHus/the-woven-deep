@@ -42,6 +42,20 @@ function metrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
 }
 
 function storedRecord(overrides: Partial<StoredHallRecord> = {}): StoredHallRecord {
+  const heirloom = {
+    contentId: 'item.iron-sword',
+    sourceItemId: null,
+    enchantment: null,
+    condition: 100,
+    charges: null,
+    fuel: null,
+    curse: null,
+    qualityRank: 1,
+    displayName: "Ada's Iron Sword",
+    glyph: ')',
+    color: '#d8d8d8',
+    originatingHallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+  };
   return {
     recordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
     heroName: 'Ada',
@@ -52,20 +66,8 @@ function storedRecord(overrides: Partial<StoredHallRecord> = {}): StoredHallReco
     score: { lines: [], total: 40 },
     metrics: metrics({ deepestDepth: 3 }),
     reputations: [],
-    heirloom: {
-      contentId: 'item.iron-sword',
-      sourceItemId: null,
-      enchantment: null,
-      condition: 100,
-      charges: null,
-      fuel: null,
-      curse: null,
-      qualityRank: 1,
-      displayName: "Ada's Iron Sword",
-      glyph: ')',
-      color: '#d8d8d8',
-      originatingHallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
-    },
+    heirloom,
+    deathInventory: [heirloom],
     build: {
       attributes: { might: 14, agility: 12, vitality: 16, wits: 10, resolve: 12 },
       equippedItemContentIds: ['item.iron-sword'],
@@ -79,26 +81,28 @@ function storedRecord(overrides: Partial<StoredHallRecord> = {}): StoredHallReco
 }
 
 function secondStoredRecord(): StoredHallRecord {
+  const heirloom = {
+    contentId: 'item.iron-sword',
+    sourceItemId: null,
+    enchantment: null,
+    condition: 100,
+    charges: null,
+    fuel: null,
+    curse: null,
+    qualityRank: 1,
+    displayName: "Bryn's Iron Sword",
+    glyph: ')',
+    color: '#d8d8d8',
+    originatingHallRecordId: 'record.bbbbbbbb00000000.bbbbbbbbbbbbbbbb',
+  };
   return storedRecord({
     recordId: 'record.bbbbbbbb00000000.bbbbbbbbbbbbbbbb',
     heroName: 'Bryn',
     score: { lines: [], total: 90 },
     cause: { killerContentId: 'monster.cave-rat', depth: 5, turn: 20, worldTime: 20 },
     deepestDepth: 5,
-    heirloom: {
-      contentId: 'item.iron-sword',
-      sourceItemId: null,
-      enchantment: null,
-      condition: 100,
-      charges: null,
-      fuel: null,
-      curse: null,
-      qualityRank: 1,
-      displayName: "Bryn's Iron Sword",
-      glyph: ')',
-      color: '#d8d8d8',
-      originatingHallRecordId: 'record.bbbbbbbb00000000.bbbbbbbbbbbbbbbb',
-    },
+    heirloom,
+    deathInventory: [heirloom],
   });
 }
 
@@ -481,7 +485,7 @@ describe('session run record repository artifact ledger', () => {
     first.applyArtifactDeltas(lostToDeltas(record.recordId, record.heroName));
 
     const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
-    expect(persisted['version']).toBe(3);
+    expect(persisted['version']).toBe(4);
     expect(persisted['appliedArtifactRecordIds']).toEqual([record.recordId]);
 
     const reopened = createSessionRunRecordRepository(storage);
@@ -550,7 +554,7 @@ describe('session run record repository artifact ledger', () => {
       enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
     });
     const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
-    expect(persisted['version']).toBe(3);
+    expect(persisted['version']).toBe(4);
     expect(persisted['artifactLedger']).toEqual([]);
     expect(persisted['appliedArtifactRecordIds']).toEqual([]);
   });
@@ -591,13 +595,62 @@ describe('session run record repository artifact ledger', () => {
       enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
     });
     const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
-    expect(persisted['version']).toBe(3);
+    expect(persisted['version']).toBe(4);
     const persistedRecords = persisted['records'] as readonly Record<string, unknown>[];
     const persistedHeirloom = persistedRecords[0]?.['heirloom'] as Record<string, unknown>;
     expect(persistedHeirloom['curse']).toBeNull();
 
     const reloaded = createSessionRunRecordRepository(storage);
     expect(reloaded.records()[0]?.heirloom.curse).toBeNull();
+  });
+
+  it('migrates a version-3 hall blob by defaulting deathInventory to the heirloom', () => {
+    // A genuine version-3 blob predates the equipped-set capture entirely: no `deathInventory` key
+    // on the record at all, not merely an empty array.
+    const legacyRecord = { ...storedRecord() } as Record<string, unknown>;
+    delete legacyRecord['deathInventory'];
+
+    const v3Blob = {
+      version: 3,
+      records: [legacyRecord],
+      heart: null,
+      lifetime: {
+        conqueredChampionRecordIds: [],
+        grantedAchievementIds: [],
+        discoveryProtection: [],
+        totals: metrics(),
+      },
+      appliedDeltaRecordIds: [],
+      artifactLedger: [],
+      appliedArtifactRecordIds: [],
+    };
+
+    const storage = fakeStorage();
+    storage.set(RECORDS_KEY, JSON.stringify(v3Blob));
+
+    const repository = createSessionRunRecordRepository(storage);
+    for (const record of repository.records()) {
+      expect(record.deathInventory).toEqual([record.heirloom]);
+    }
+
+    repository.recordHeart({
+      heroName: 'Ada',
+      classTags: ['fighter'],
+      hallRecordId: 'record.aaaaaaaa00000000.aaaaaaaaaaaaaaaa',
+      enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
+    });
+    const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
+    expect(persisted['version']).toBe(4);
+    const persistedRecords = persisted['records'] as readonly Record<string, unknown>[];
+    expect(persistedRecords[0]?.['deathInventory']).toEqual([persistedRecords[0]?.['heirloom']]);
+  });
+
+  it('writes back at version 4', () => {
+    const storage = fakeStorage();
+    const repository = createSessionRunRecordRepository(storage);
+    repository.appendRecord(storedRecord());
+    const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
+    expect(persisted['version']).toBe(4);
   });
 
   it('rejects a blob whose artifact ledger keys have the wrong shape', () => {

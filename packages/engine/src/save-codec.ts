@@ -14,6 +14,7 @@ import {
   legacyActiveRunV12Schema,
   legacyActiveRunV13Schema,
   legacyActiveRunV14Schema,
+  legacyActiveRunV15Schema,
   emptyLegacyRunMetricsV9,
   validateActiveRun,
 } from './save-schema.js';
@@ -159,21 +160,45 @@ function migrateV14ToV15(input: unknown): unknown {
   return { ...v14, schemaVersion: 15, mode: 'classic' };
 }
 
+// Haunts rewrite every stored standing: a pre-haunt record kept no death cause and no equipped-set
+// snapshot, so the standing gets `cause: null` (the spoken line degrades to the short form) and
+// `deathInventory: [heirloom]` -- the one item we actually do have, which keeps the champion drop
+// and the echo pick well-defined for legacy standings without inventing gear the hero never wore.
+// Decisions gain `appeased: false`: nothing recorded before this bump was ever offered to.
+function migrateV15ToV16(input: unknown): unknown {
+  const v15 = legacyActiveRunV15Schema.parse(input);
+  return {
+    ...v15,
+    schemaVersion: 16,
+    fallenHeroStandings: v15.fallenHeroStandings.map((standing) => ({
+      ...standing,
+      cause: null,
+      deathInventory: [standing.heirloom],
+    })),
+    fallenHeroDecisions: v15.fallenHeroDecisions.map((decision) => ({
+      ...decision,
+      appeased: false,
+    })),
+  };
+}
+
 function migrateLegacy(
   input: unknown,
-  schemaVersion: 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14,
+  schemaVersion: 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15,
 ): ActiveRun {
   try {
     const migrated =
       schemaVersion === 4
-        ? migrateV14ToV15(
-            migrateV13ToV14(
-              migrateV12ToV13(
-                migrateV11ToV12(
-                  migrateV10ToV11(
-                    migrateV9ToV10(
-                      migrateV8ToV9(
-                        migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input)))),
+        ? migrateV15ToV16(
+            migrateV14ToV15(
+              migrateV13ToV14(
+                migrateV12ToV13(
+                  migrateV11ToV12(
+                    migrateV10ToV11(
+                      migrateV9ToV10(
+                        migrateV8ToV9(
+                          migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input)))),
+                        ),
                       ),
                     ),
                   ),
@@ -182,13 +207,15 @@ function migrateLegacy(
             ),
           )
         : schemaVersion === 5
-          ? migrateV14ToV15(
-              migrateV13ToV14(
-                migrateV12ToV13(
-                  migrateV11ToV12(
-                    migrateV10ToV11(
-                      migrateV9ToV10(
-                        migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input)))),
+          ? migrateV15ToV16(
+              migrateV14ToV15(
+                migrateV13ToV14(
+                  migrateV12ToV13(
+                    migrateV11ToV12(
+                      migrateV10ToV11(
+                        migrateV9ToV10(
+                          migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input)))),
+                        ),
                       ),
                     ),
                   ),
@@ -196,52 +223,66 @@ function migrateLegacy(
               ),
             )
           : schemaVersion === 6
-            ? migrateV14ToV15(
-                migrateV13ToV14(
-                  migrateV12ToV13(
-                    migrateV11ToV12(
-                      migrateV10ToV11(
-                        migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(input)))),
+            ? migrateV15ToV16(
+                migrateV14ToV15(
+                  migrateV13ToV14(
+                    migrateV12ToV13(
+                      migrateV11ToV12(
+                        migrateV10ToV11(
+                          migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(input)))),
+                        ),
                       ),
                     ),
                   ),
                 ),
               )
             : schemaVersion === 7
-              ? migrateV14ToV15(
-                  migrateV13ToV14(
-                    migrateV12ToV13(
-                      migrateV11ToV12(
-                        migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(input)))),
+              ? migrateV15ToV16(
+                  migrateV14ToV15(
+                    migrateV13ToV14(
+                      migrateV12ToV13(
+                        migrateV11ToV12(
+                          migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(input)))),
+                        ),
                       ),
                     ),
                   ),
                 )
               : schemaVersion === 8
-                ? migrateV14ToV15(
-                    migrateV13ToV14(
-                      migrateV12ToV13(
-                        migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(input)))),
+                ? migrateV15ToV16(
+                    migrateV14ToV15(
+                      migrateV13ToV14(
+                        migrateV12ToV13(
+                          migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(input)))),
+                        ),
                       ),
                     ),
                   )
                 : schemaVersion === 9
-                  ? migrateV14ToV15(
-                      migrateV13ToV14(
-                        migrateV12ToV13(migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(input)))),
+                  ? migrateV15ToV16(
+                      migrateV14ToV15(
+                        migrateV13ToV14(
+                          migrateV12ToV13(migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(input)))),
+                        ),
                       ),
                     )
                   : schemaVersion === 10
-                    ? migrateV14ToV15(
-                        migrateV13ToV14(migrateV12ToV13(migrateV11ToV12(migrateV10ToV11(input)))),
+                    ? migrateV15ToV16(
+                        migrateV14ToV15(
+                          migrateV13ToV14(migrateV12ToV13(migrateV11ToV12(migrateV10ToV11(input)))),
+                        ),
                       )
                     : schemaVersion === 11
-                      ? migrateV14ToV15(migrateV13ToV14(migrateV12ToV13(migrateV11ToV12(input))))
+                      ? migrateV15ToV16(
+                          migrateV14ToV15(migrateV13ToV14(migrateV12ToV13(migrateV11ToV12(input)))),
+                        )
                       : schemaVersion === 12
-                        ? migrateV14ToV15(migrateV13ToV14(migrateV12ToV13(input)))
+                        ? migrateV15ToV16(migrateV14ToV15(migrateV13ToV14(migrateV12ToV13(input))))
                         : schemaVersion === 13
-                          ? migrateV14ToV15(migrateV13ToV14(input))
-                          : migrateV14ToV15(input);
+                          ? migrateV15ToV16(migrateV14ToV15(migrateV13ToV14(input)))
+                          : schemaVersion === 14
+                            ? migrateV15ToV16(migrateV14ToV15(input))
+                            : migrateV15ToV16(input);
     return validateActiveRun(migrated);
   } catch (cause) {
     if (cause instanceof SaveLoadError) throw cause;
@@ -292,7 +333,8 @@ export function decodeActiveRun(json: string, content?: CompiledContentPack): Ac
     schemaVersion === 11 ||
     schemaVersion === 12 ||
     schemaVersion === 13 ||
-    schemaVersion === 14
+    schemaVersion === 14 ||
+    schemaVersion === 15
   ) {
     return migrateLegacy(input, schemaVersion);
   }

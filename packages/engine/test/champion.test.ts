@@ -175,6 +175,20 @@ function standing(
   overrides: Partial<FallenHeroStandingSnapshot> = {},
 ): FallenHeroStandingSnapshot {
   const hallRecordId = `hall.hero-${rank}`;
+  const heirloom = {
+    contentId: 'item.heirloom',
+    sourceItemId: `item.original-${rank}`,
+    enchantment: { enchantmentId: 'enchantment.honed', modifiers: { meleeDamageBonus: 2 } },
+    condition: 73,
+    charges: 4,
+    fuel: 9,
+    curse: null,
+    qualityRank: 2,
+    displayName: `Hero ${rank}'s Blade`,
+    glyph: ')',
+    color: '#ddeeff',
+    originatingHallRecordId: hallRecordId,
+  };
   return {
     rank,
     hallRecordId,
@@ -186,20 +200,9 @@ function standing(
     signatureAbilityIds: ['spell.ember'],
     deathDepth: 4,
     sourceContentHash: 'b'.repeat(64),
-    heirloom: {
-      contentId: 'item.heirloom',
-      sourceItemId: `item.original-${rank}`,
-      enchantment: { enchantmentId: 'enchantment.honed', modifiers: { meleeDamageBonus: 2 } },
-      condition: 73,
-      charges: 4,
-      fuel: 9,
-      curse: null,
-      qualityRank: 2,
-      displayName: `Hero ${rank}'s Blade`,
-      glyph: ')',
-      color: '#ddeeff',
-      originatingHallRecordId: hallRecordId,
-    },
+    heirloom,
+    cause: null,
+    deathInventory: [heirloom],
     ...overrides,
   };
 }

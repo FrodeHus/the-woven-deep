@@ -6,6 +6,7 @@ import {
   nullableIdentifier,
   positiveQuantity,
   safeNonNegative,
+  uint32,
   uint32State,
   uint32Tuple,
 } from './primitives.js';
@@ -46,8 +47,7 @@ import {
 } from './item.js';
 import {
   encounterDecision,
-  fallenDecision,
-  fallenStanding,
+  heirloom,
   hero,
   heroV6,
   identification,
@@ -59,6 +59,7 @@ import {
 } from './population.js';
 import { runConclusionSchema, runKillsByModel, runMetrics } from './run-record.js';
 import { ENGINE_GAME_VERSION, RECENT_COMMAND_LIMIT } from '../versions.js';
+import { RUN_MODES } from '../model.js';
 
 // The pre-curse heirloom snapshot: identical to the live `heirloom` except it carries no `curse`,
 // which the cursed-item feature introduced at v14. Spelled out as a frozen literal (not derived
@@ -95,6 +96,39 @@ const legacyFallenStandingV13 = z.strictObject({
   deathDepth: z.number().int().safe().positive(),
   sourceContentHash: z.string().regex(/^[a-f0-9]{64}$/),
   heirloom: legacyHeirloomV13,
+});
+
+// The pre-haunt standing shape: identical to the live `fallenStanding` except it carries neither
+// `cause` nor `deathInventory`, which the haunts feature introduced at v16. Spelled out as a frozen
+// literal (not derived from the live `fallenStanding`) so a future schema bump can't silently
+// change what every real pre-v16 standing (v4 through v15) is validated against. Every legacy
+// active-run schema below v16 must reference this, never the live `fallenStanding` -- the live
+// schema will keep moving out from under them.
+const legacyFallenStandingPreHaunt = z.strictObject({
+  rank: z.number().int().min(1).max(10),
+  hallRecordId: identifier,
+  heroName,
+  portraitGlyph: z.string().refine((value) => [...value].length === 1),
+  classTags: z.array(z.string().min(1).max(80)).readonly(),
+  attributes,
+  equippedItemContentIds: z.array(identifier).readonly(),
+  signatureAbilityIds: z.array(identifier).readonly(),
+  deathDepth: z.number().int().safe().positive(),
+  sourceContentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  heirloom,
+});
+// The pre-haunt decision shape: identical to the live `fallenDecision` except it carries no
+// `appeased`, which the haunts feature introduced at v16. Spelled out as a frozen literal (not
+// derived from the live `fallenDecision`) for the same reason as `legacyFallenStandingPreHaunt`
+// above.
+const legacyFallenDecisionPreHaunt = z.strictObject({
+  hallRecordId: identifier,
+  rank: z.number().int().min(1).max(10),
+  role: z.enum(['champion', 'echo']),
+  gateRoll: uint32.nullable(),
+  retained: z.boolean(),
+  encountered: z.boolean(),
+  defeated: z.boolean(),
 });
 
 export const legacyPopulationCreatedEvent = z.strictObject({
@@ -404,7 +438,7 @@ export const legacyActiveRunV7Schema = z.strictObject({
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(populationV7).readonly(),
   fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
-  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: legacyRunMetricsV9,
   conclusion: runConclusionSchema.nullable(),
@@ -451,7 +485,7 @@ export const legacyActiveRunV9Schema = z.strictObject({
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
   fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
-  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: legacyRunMetricsV9,
   conclusion: runConclusionSchema.nullable(),
@@ -500,7 +534,7 @@ export const legacyActiveRunV10Schema = z.strictObject({
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
   fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
-  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: runMetrics,
   conclusion: runConclusionSchema.nullable(),
@@ -526,11 +560,67 @@ const legacyItemFieldsV13 = {
 } as const;
 const legacyItemV13 = z.strictObject({ ...legacyItemFieldsV13, location: itemLocation });
 
+// The pre-haunt save shape: identical to the current run schema except its standings/decisions are
+// pinned to the frozen pre-haunt shapes (no `cause`/`deathInventory`/`appeased`), which the haunts
+// feature introduced at v16. Spelled out as a frozen literal (not derived from the live
+// `activeRunSchema`) so a future schema bump can't silently change what a real v15 save is validated
+// against. Its other sub-schemas (item, actor, hero, floors, rng, recorded commands) are the live
+// ones because the haunts bump touches none of them.
+export const legacyActiveRunV15Schema = z.strictObject({
+  schemaVersion: z.literal(15),
+  gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  mode: z.enum(RUN_MODES),
+  runId: identifier,
+  runSeed: uint32Tuple,
+  rng: z.strictObject(legacyV12RngEntries),
+  revision: safeNonNegative,
+  turn: safeNonNegative,
+  worldTime: safeNonNegative,
+  hero,
+  reputations: z
+    .array(z.strictObject({ factionId: identifier, value: z.number().int().safe() }))
+    .readonly(),
+  activeTrade: z
+    .strictObject({
+      merchantPopulationId: identifier,
+      merchantActorId: identifier,
+      openedByCommandId: identifier,
+      openedAtRevision: safeNonNegative,
+      completedCommerce: z.boolean(),
+    })
+    .nullable(),
+  actors: z.array(actor).min(1).readonly(),
+  items: z.array(item).readonly(),
+  features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(),
+  survival,
+  identification,
+  activeFloorId: identifier,
+  activeFloorEnteredAt: safeNonNegative,
+  returnAnchorFloorId: identifier.optional(),
+  floors: z.array(floor).min(1).readonly(),
+  recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(),
+  populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(legacyFallenStandingPreHaunt).max(10).readonly(),
+  fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+  offeredArtifact: identifier.nullable(),
+  artifactsUndiscovered: z.array(identifier).readonly(),
+  metrics: runMetrics,
+  conclusion: runConclusionSchema.nullable(),
+  house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
+  restockedMilestones: z.array(positiveQuantity).readonly(),
+});
+
 // The pre-run-mode save shape: identical to the current run schema except it carries no `mode`,
-// which the run-mode feature introduced at v15. Spelled out as a frozen literal (not derived from
-// the live `activeRunSchema`) so a future schema bump can't silently change what a real v14 save is
-// validated against. Its sub-schemas (item, actor, hero, floors, standings, rng, recorded commands)
-// are the live ones because the run-mode bump touches none of them.
+// which the run-mode feature introduced at v15, and its standings/decisions are pinned to the
+// frozen pre-haunt shapes (the live `fallenStanding`/`fallenDecision` have since moved on with
+// haunts at v16). Spelled out as a frozen literal (not derived from the live `activeRunSchema`) so
+// a future schema bump can't silently change what a real v14 save is validated against. Its other
+// sub-schemas (item, actor, hero, floors, rng, recorded commands) are the live ones because neither
+// the run-mode nor the haunts bump touches them.
 export const legacyActiveRunV14Schema = z.strictObject({
   schemaVersion: z.literal(14),
   gameVersion: z.literal(ENGINE_GAME_VERSION),
@@ -567,8 +657,8 @@ export const legacyActiveRunV14Schema = z.strictObject({
   recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
-  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
-  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  fallenHeroStandings: z.array(legacyFallenStandingPreHaunt).max(10).readonly(),
+  fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   offeredArtifact: identifier.nullable(),
   artifactsUndiscovered: z.array(identifier).readonly(),
@@ -619,7 +709,7 @@ export const legacyActiveRunV13Schema = z.strictObject({
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
   fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
-  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   offeredArtifact: identifier.nullable(),
   artifactsUndiscovered: z.array(identifier).readonly(),
@@ -670,7 +760,7 @@ export const legacyActiveRunV12Schema = z.strictObject({
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
   fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
-  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: runMetrics,
   conclusion: runConclusionSchema.nullable(),
@@ -719,7 +809,7 @@ export const legacyActiveRunV11Schema = z.strictObject({
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
   fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
-  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: runMetrics,
   conclusion: runConclusionSchema.nullable(),
@@ -767,7 +857,7 @@ export const legacyActiveRunV8Schema = z.strictObject({
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
   fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
-  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: legacyRunMetricsV9,
   conclusion: runConclusionSchema.nullable(),
@@ -811,7 +901,7 @@ export const legacyActiveRunV6Schema = z.strictObject({
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(populationV7).readonly(),
   fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
-  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: legacyRunMetricsV9,
   conclusion: runConclusionSchema.nullable(),
@@ -855,7 +945,7 @@ export const legacyActiveRunV5Schema = z.strictObject({
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(populationV7).readonly(),
   fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
-  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
 });
 
@@ -885,6 +975,6 @@ export const legacyActiveRunV4Schema = z.strictObject({
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(legacyPopulation).readonly(),
   fallenHeroStandings: z.array(legacyFallenStandingV13).max(10).readonly(),
-  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
 });

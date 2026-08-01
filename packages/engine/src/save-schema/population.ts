@@ -155,6 +155,12 @@ export const heirloom = z.strictObject({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   originatingHallRecordId: identifier,
 });
+export const conclusionCause = z.strictObject({
+  killerContentId: nullableIdentifier,
+  depth: safeNonNegative,
+  turn: safeNonNegative,
+  worldTime: safeNonNegative,
+});
 export const fallenStanding = z.strictObject({
   rank: z.number().int().min(1).max(10),
   hallRecordId: identifier,
@@ -167,6 +173,8 @@ export const fallenStanding = z.strictObject({
   deathDepth: z.number().int().safe().positive(),
   sourceContentHash: z.string().regex(/^[a-f0-9]{64}$/),
   heirloom,
+  cause: conclusionCause.nullable(),
+  deathInventory: z.array(heirloom).min(1).max(12).readonly(),
 });
 export const fallenDecision = z.strictObject({
   hallRecordId: identifier,
@@ -176,6 +184,7 @@ export const fallenDecision = z.strictObject({
   retained: z.boolean(),
   encountered: z.boolean(),
   defeated: z.boolean(),
+  appeased: z.boolean(),
 });
 
 import type { RelationshipOverride } from '../actor-model.js';
@@ -188,6 +197,7 @@ import type {
   PopulationInstance,
 } from '../population-model.js';
 import type { HeroState } from '../model.js';
+import type { RunConclusionCause } from '../run-conclusion-model.js';
 import type { Expect, SchemaMatches } from './drift.js';
 type _PopulationDrift = Expect<SchemaMatches<z.infer<typeof population>, PopulationInstance>>;
 type _HeroDrift = Expect<SchemaMatches<z.infer<typeof hero>, HeroState>>;
@@ -196,6 +206,9 @@ type _EncounterDecisionDrift = Expect<
 >;
 type _FallenStandingDrift = Expect<
   SchemaMatches<z.infer<typeof fallenStanding>, FallenHeroStandingSnapshot>
+>;
+type _ConclusionCauseDrift = Expect<
+  SchemaMatches<z.infer<typeof conclusionCause>, RunConclusionCause>
 >;
 type _FallenDecisionDrift = Expect<
   SchemaMatches<z.infer<typeof fallenDecision>, FallenHeroRunDecision>
