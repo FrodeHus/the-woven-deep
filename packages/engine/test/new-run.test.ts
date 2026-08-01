@@ -361,8 +361,13 @@ describe('createNewRun records input', () => {
     // RNG stream moves. This is expected content-authoring drift from adding a merchant service (the
     // same category the curse-roster note above and `curse-generation.ts`'s "a pack edit ... is
     // expected to move every downstream roll" comment already describe), not an engine regression.
+    // Re-pinned again for the scroll of sundering (content/items/sundering-scroll.yaml, a new
+    // `known`-identification item so it never touches the identification-pool sweep) plus its
+    // low-weight `loot-table.floor-scatter-deep` and `loot-table.chest-deep` choices: verified by
+    // diffing the decoded run objects field-by-field against the prior pin -- only `contentHash`
+    // differs, nothing else. This is expected content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      'ef560991aac90b67c5f52c90f63343d3da92768808910680ed24b9c014b686f4',
+      '6f9ee3d6a8f5cc11f2cac774307b279160cf8e427347df1c3a29b18b7c9247d6',
     );
   });
 

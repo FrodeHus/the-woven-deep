@@ -164,6 +164,7 @@ export const EFFECT_IDS = [
   'effect.feature.mutate',
   'effect.spell.learn',
   'effect.recall',
+  'effect.curse.remove',
 ] as const;
 export type EffectId = (typeof EFFECT_IDS)[number];
 

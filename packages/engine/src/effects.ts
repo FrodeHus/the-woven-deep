@@ -20,6 +20,7 @@ import { applyCondition, conditionDefinition } from './conditions.js';
 import type { ItemInstance } from './item-model.js';
 import { parseEffectParameters } from './parameter-contracts.js';
 import { consumeItemQuantityFromItems } from './inventory.js';
+import { compareCodeUnits } from './stable-json.js';
 import type { SurvivalState } from './survival-model.js';
 import { restoreHunger } from './survival.js';
 import type { DungeonFeature } from './feature-model.js';
@@ -106,6 +107,7 @@ export const DIRECT_EFFECT_IDS: ReadonlySet<string> = new Set([
   'effect.force-move',
   'effect.item.consume',
   'effect.hunger.restore',
+  'effect.curse.remove',
 ]);
 
 const RUN_LEVEL_EFFECTS = new Set<EffectId>(['effect.spell.learn', 'effect.recall']);
@@ -361,6 +363,32 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
         itemId: input.sourceItemId,
         quantity,
       });
+    } else if (effect.effectId === 'effect.curse.remove') {
+      // Targets like effect.fuel.transfer does: the actor's own items, deterministically first by
+      // itemId. use-item carries no item target, so this is the codebase's item-targeting contract.
+      const cursed = items
+        .filter(
+          (item) =>
+            (item.location.type === 'backpack' || item.location.type === 'equipped') &&
+            item.location.actorId === input.targetActorId &&
+            item.curse?.revealed === true,
+        )
+        .sort((left, right) => compareCodeUnits(left.itemId, right.itemId));
+      const target = cursed[0];
+      if (target) {
+        items = items.map((item) => {
+          if (item.itemId !== target.itemId) return item;
+          const { curse: _removed, ...rest } = item;
+          return rest;
+        });
+        events.push({
+          type: 'curse.removed',
+          eventId: input.eventId,
+          itemId: target.itemId,
+          curseId: target.curse!.curseId,
+        });
+      }
+      continue;
     } else if (RUN_LEVEL_EFFECTS.has(effect.effectId)) {
       // Run-level effects (learn, recall) mutate ActiveRun, which resolveEffectSequence does not
       // own. The cast/use-item dispatch handlers apply them. No actor mutation, no RNG here.

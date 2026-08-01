@@ -286,6 +286,12 @@ export interface CurseRevealedEvent {
   readonly curseId: OpaqueId;
   readonly revealText: string;
 }
+export interface CurseRemovedEvent {
+  readonly type: 'curse.removed';
+  readonly eventId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly curseId: OpaqueId;
+}
 export interface HungerStageChangedEvent {
   readonly type: 'hunger.stage-changed';
   readonly eventId: OpaqueId;
@@ -831,6 +837,7 @@ export type DomainEvent =
   | IdentificationAppearanceRevealedEvent
   | ItemIdentifiedEvent
   | CurseRevealedEvent
+  | CurseRemovedEvent
   | HungerStageChangedEvent
   | HungerRestoredEvent
   | FuelWarningEvent

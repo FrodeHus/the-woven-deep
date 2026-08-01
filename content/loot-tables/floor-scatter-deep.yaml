@@ -14,3 +14,4 @@ entries:
       - { contentId: item.arc-lance-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.iron-key, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.etched-ring, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.sundering-scroll, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }

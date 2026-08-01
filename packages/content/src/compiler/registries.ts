@@ -87,6 +87,7 @@ export const EFFECT_PARAMETER_SCHEMAS = {
   'effect.feature.mutate': z.strictObject({ state: stableIdSchema }),
   'effect.spell.learn': z.strictObject({ spellId: stableIdSchema }),
   'effect.recall': z.strictObject({}),
+  'effect.curse.remove': z.strictObject({}),
 } as const satisfies Record<EffectId, z.ZodTypeAny>;
 
 export type { BehaviorId, EffectId } from '../model.js';

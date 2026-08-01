@@ -285,6 +285,12 @@ export const curseRevealedEvent = z.strictObject({
   curseId: identifier,
   revealText: z.string(),
 });
+export const curseRemovedEvent = z.strictObject({
+  type: z.literal('curse.removed'),
+  eventId: identifier,
+  itemId: identifier,
+  curseId: identifier,
+});
 export const hungerStageChangedEvent = z.strictObject({
   type: z.literal('hunger.stage-changed'),
   eventId: identifier,
@@ -823,6 +829,7 @@ export const eventOptions = [
   identificationAppearanceRevealedEvent,
   itemIdentifiedEvent,
   curseRevealedEvent,
+  curseRemovedEvent,
   hungerStageChangedEvent,
   hungerRestoredEvent,
   fuelWarningEvent,
@@ -981,6 +988,7 @@ import type {
   ConditionAppliedEvent,
   ConditionRemovedEvent,
   CurrencyCollectedEvent,
+  CurseRemovedEvent,
   CurseRevealedEvent,
   EchoDefeatedEvent,
   EchoEncounteredEvent,
@@ -1142,6 +1150,9 @@ type _ItemIdentifiedDrift = Expect<
 >;
 type _CurseRevealedDrift = Expect<
   SchemaMatches<z.infer<typeof curseRevealedEvent>, CurseRevealedEvent>
+>;
+type _CurseRemovedDrift = Expect<
+  SchemaMatches<z.infer<typeof curseRemovedEvent>, CurseRemovedEvent>
 >;
 type _HungerStageChangedDrift = Expect<
   SchemaMatches<z.infer<typeof hungerStageChangedEvent>, HungerStageChangedEvent>

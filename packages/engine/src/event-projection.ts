@@ -327,6 +327,7 @@ export function projectDomainEvents(
       case 'item.identified':
       case 'fuel.warning':
       case 'item.light-extinguished':
+      case 'curse.removed':
         if (itemVisible(event.itemId)) output.push(event);
         break;
       case 'hunger.stage-changed':

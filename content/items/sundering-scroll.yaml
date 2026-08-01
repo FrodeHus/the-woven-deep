@@ -1,0 +1,29 @@
+schemaVersion: 12
+entries:
+  - kind: item
+    id: item.sundering-scroll
+    name: Scroll of Sundering
+    glyph: "?"
+    color: "#8f7bd6"
+    description: Brittle vellum inked with a sigil that unwinds rather than strikes. Reading it aloud picks apart whatever curse has already made itself known.
+    lore: "It does not fight the curse. It just asks it, very precisely, to stop being attached to anything."
+    tags: [magic, utility, scroll]
+    minDepth: 8
+    maxDepth: 20
+    category: scroll
+    stackLimit: 3
+    price: 40
+    rarity: rare
+    actionCost: 100
+    equipment: null
+    combat: { accuracy: 0, defense: 0, armor: 0, damage: null, range: 6, ammunitionTag: null }
+    light: null
+    artifact: null
+    identification: { mode: known, poolId: null }
+    effects:
+      - effectId: effect.curse.remove
+        parameters: {}
+        requiresLivingTarget: false
+      - effectId: effect.item.consume
+        parameters: { quantity: 1 }
+        requiresLivingTarget: false
