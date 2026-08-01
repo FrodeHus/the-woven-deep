@@ -18,9 +18,14 @@ import {
   retainEchoCandidates,
 } from './champion.js';
 import { bossUniqueDropId } from './commerce.js';
-import { createPopulationLoot, recordedHeirloomContentId } from './inventory.js';
+import {
+  hauntDropItemIdPrefix,
+  hauntDropSnapshots,
+  materializeDeathInventory,
+} from './haunt-rewards.js';
+import type { HeirloomItemMetadata } from './item-model.js';
+import { createPopulationLoot } from './inventory.js';
 import { stableJson } from './stable-json.js';
-import { boundedDisplayText } from './display-text.js';
 
 function entryMap(pack: CompiledContentPack): ReadonlyMap<string, ContentEntry> {
   return new Map(pack.entries.map((entry) => [entry.id, entry]));
@@ -438,7 +443,7 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
     }
   }
   const championTemplate = pack.entries.find((entry) => entry.kind === 'fallen-champion-template');
-  const expectedHeirlooms = new Map<string, Readonly<Record<string, unknown>>>();
+  const expectedHeirlooms = new Map<string, HeirloomItemMetadata>();
   if (run.fallenHeroStandings.length > 0 && !championTemplate) {
     throw new Error('content-bound validation: fallen-hero standings require a Champion template');
   }
@@ -513,50 +518,36 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         const standing = run.fallenHeroStandings.find(
           (entry) => entry.hallRecordId === decision.hallRecordId,
         )!;
-        const expectedContentId = recordedHeirloomContentId({
+        // A defeated champion haunt hands back the whole recorded death inventory, so the expected
+        // reward is a SET. Re-materializing it through the very function the stepper drops with
+        // keeps the two from drifting; the cell is irrelevant here (an item may since have been
+        // picked up), so a placeholder location is passed and `location` is never compared.
+        const expectedPieces = materializeDeathInventory({
           content: pack,
-          snapshot: standing.heirloom,
+          snapshots: hauntDropSnapshots(standing).snapshots,
           equippedItemContentIds: standing.equippedItemContentIds,
           fallbackItemId: championTemplate.fallbackItemId,
+          itemIdPrefix: hauntDropItemIdPrefix(matching[0].populationId),
+          floorId: run.activeFloorId,
+          x: 0,
+          y: 0,
         });
-        const rewardId = `item.heirloom.${matching[0].populationId}`;
-        const reward = run.items.find((item) => item.itemId === rewardId);
-        const fallback = expectedContentId !== standing.heirloom.contentId;
-        const expectedDefinition = entries.get(expectedContentId);
-        const expectedMetadata = {
-          displayName: boundedDisplayText(
-            fallback && expectedDefinition?.kind === 'item'
-              ? expectedDefinition.name
-              : standing.heirloom.displayName,
-          ),
-          glyph:
-            fallback && expectedDefinition?.kind === 'item'
-              ? expectedDefinition.glyph
-              : standing.heirloom.glyph,
-          color:
-            fallback && expectedDefinition?.kind === 'item'
-              ? expectedDefinition.color
-              : standing.heirloom.color,
-          originatingHallRecordId: standing.hallRecordId,
-          originatingRank: 1,
-          sourceItemId: standing.heirloom.sourceItemId,
-        };
-        expectedHeirlooms.set(rewardId, expectedMetadata);
-        if (
-          !reward ||
-          reward.contentId !== expectedContentId ||
-          reward.quantity !== 1 ||
-          reward.condition !== (fallback ? 100 : standing.heirloom.condition) ||
-          reward.charges !== (fallback ? null : standing.heirloom.charges) ||
-          reward.fuel !==
-            (fallback && expectedDefinition?.kind === 'item'
-              ? (expectedDefinition.light?.fuelCapacity ?? null)
-              : standing.heirloom.fuel) ||
-          stableJson(reward.enchantment) !==
-            stableJson(fallback ? null : standing.heirloom.enchantment) ||
-          stableJson(reward.heirloom) !== stableJson(expectedMetadata)
-        ) {
-          throw new Error(`content-bound validation: Champion reward ${rewardId} is invalid`);
+        for (const piece of expectedPieces) {
+          const rewardId = piece.item.itemId;
+          const reward = run.items.find((item) => item.itemId === rewardId);
+          expectedHeirlooms.set(rewardId, piece.item.heirloom!);
+          if (
+            !reward ||
+            reward.contentId !== piece.item.contentId ||
+            reward.quantity !== 1 ||
+            reward.condition !== piece.item.condition ||
+            reward.charges !== piece.item.charges ||
+            reward.fuel !== piece.item.fuel ||
+            stableJson(reward.enchantment) !== stableJson(piece.item.enchantment) ||
+            stableJson(reward.heirloom) !== stableJson(piece.item.heirloom)
+          ) {
+            throw new Error(`content-bound validation: Champion reward ${rewardId} is invalid`);
+          }
         }
       }
     }

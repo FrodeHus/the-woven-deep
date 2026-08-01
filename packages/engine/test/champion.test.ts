@@ -189,7 +189,7 @@ function standing(
     color: '#ddeeff',
     originatingHallRecordId: hallRecordId,
   };
-  return {
+  const resolved = {
     rank,
     hallRecordId,
     heroName: `Hero ${rank}`,
@@ -202,9 +202,12 @@ function standing(
     sourceContentHash: 'b'.repeat(64),
     heirloom,
     cause: null,
-    deathInventory: [heirloom],
     ...overrides,
   };
+  // The recorded heirloom is always a MEMBER of the death inventory, so an overridden heirloom has
+  // to travel into the default inventory too -- otherwise a fixture that degrades the heirloom
+  // would still drop the pristine original.
+  return { ...resolved, deathInventory: overrides.deathInventory ?? [resolved.heirloom] };
 }
 
 function initialized(
@@ -900,7 +903,7 @@ describe('fallen hero rewards and run-local lifecycle', () => {
       content: pack(),
       eventId: 'event.champion-defeat',
     });
-    const reward = first.state.items.find((entry) => entry.itemId.includes('heirloom'))!;
+    const reward = first.state.items.find((entry) => entry.itemId.startsWith('item.haunt.'))!;
     expect(reward).toMatchObject({
       contentId: 'item.heirloom',
       quantity: 1,
@@ -1356,5 +1359,224 @@ describe('fallen hero rewards and run-local lifecycle', () => {
       floors: [placed.floor],
     };
     expect(() => validateContentBoundRun(state, pack())).not.toThrow();
+  });
+});
+
+describe('champion haunt death-inventory drop', () => {
+  // Two extra pieces beside the recorded heirloom, so a champion's inventory is a real kit rather
+  // than three copies of one blade. Added to the shared pack rather than replacing it: entries are
+  // additive and the compiled hash is the demo pack's either way, so `initialized`'s `contentHash`
+  // still agrees.
+  function kitPack(): CompiledContentPack {
+    const base = pack();
+    return {
+      ...base,
+      entries: [
+        ...base.entries,
+        item('item.hero-armor', {
+          name: 'Scarred Jerkin',
+          category: 'armor',
+          glyph: '[',
+          color: '#a08050',
+          equipment: { slots: ['torso'], handedness: 'one-handed', reservedSlots: [] },
+        }),
+        item('item.hero-lantern', {
+          name: 'Guttering Lantern',
+          category: 'light',
+          glyph: '(',
+          color: '#ffd9a0',
+          equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
+          light: {
+            color: [255, 217, 160],
+            radius: 6,
+            strength: 160,
+            fuelCapacity: 60,
+            fuelPerTime: 1,
+            warningThresholds: [10],
+            fuelTags: ['oil'],
+          },
+        }),
+      ],
+    };
+  }
+
+  /** The first `count` pieces of a champion's death inventory, the recorded heirloom first (it is
+   * the distinguished member, matched by `sourceItemId`). */
+  function withDeathInventory(count: number): readonly RecordedHeirloomSnapshot[] {
+    const { heirloom } = standing(1);
+    return [
+      heirloom,
+      {
+        ...heirloom,
+        contentId: 'item.hero-armor',
+        sourceItemId: 'item.original-1.armor',
+        enchantment: null,
+        charges: null,
+        fuel: null,
+        condition: 61,
+        displayName: "Hero 1's Jerkin",
+        glyph: '[',
+        color: '#a08050',
+      },
+      {
+        ...heirloom,
+        contentId: 'item.hero-lantern',
+        sourceItemId: 'item.original-1.lantern',
+        enchantment: null,
+        charges: null,
+        fuel: 40,
+        condition: 88,
+        displayName: "Hero 1's Lantern",
+        glyph: '(',
+        color: '#ffd9a0',
+      },
+    ].slice(0, count);
+  }
+
+  function championHauntKilled(deathInventory: readonly RecordedHeirloomSnapshot[]): ActiveRun {
+    const host = standing(1, {
+      deathInventory,
+      equippedItemContentIds: deathInventory.map((piece) => piece.contentId),
+    });
+    const run = withArena(initialized([host]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: kitPack() });
+    return {
+      ...run,
+      actors: [...run.actors, ...placed.actors]
+        .map((actor) => (actor.populationId === null ? actor : { ...actor, health: 0 }))
+        .sort((left, right) => left.actorId.localeCompare(right.actorId)),
+      populations: placed.populations,
+      fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor],
+    };
+  }
+
+  it('drops the entire death inventory when a champion haunt is defeated', () => {
+    const state = championHauntKilled(withDeathInventory(3));
+    const { state: after, events } = advanceFallenHeroEncounters({
+      state,
+      content: kitPack(),
+      eventId: 'e1',
+    });
+    const dropped = after.items.filter((item) => item.itemId.startsWith('item.haunt.'));
+    expect(dropped).toHaveLength(3);
+    expect(dropped.map((item) => item.contentId)).toEqual([
+      'item.heirloom',
+      'item.hero-armor',
+      'item.hero-lantern',
+    ]);
+    expect(
+      new Set(
+        dropped.map((item) =>
+          item.location.type === 'floor' ? `${item.location.x},${item.location.y}` : 'off-floor',
+        ),
+      ).size,
+    ).toBe(1);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'champion.death-inventory-created',
+        itemIds: dropped.map((item) => item.itemId),
+      }),
+    );
+  });
+
+  it('still names the recorded heirloom in champion.heirloom-created', () => {
+    const state = championHauntKilled(withDeathInventory(3));
+    const { state: after, events } = advanceFallenHeroEncounters({
+      state,
+      content: kitPack(),
+      eventId: 'e1',
+    });
+    const distinguished = after.items.find(
+      (item) => item.heirloom?.sourceItemId === 'item.original-1',
+    )!;
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'champion.heirloom-created',
+        itemId: distinguished.itemId,
+        displayName: "Hero 1's Blade",
+        fallback: false,
+      }),
+    );
+  });
+
+  it('latches the champion drop exactly once', () => {
+    const state = championHauntKilled(withDeathInventory(3));
+    const first = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' });
+    const second = advanceFallenHeroEncounters({
+      state: first.state,
+      content: kitPack(),
+      eventId: 'e2',
+    });
+    expect(second.state.items).toEqual(first.state.items);
+    expect(second.events).toEqual([]);
+  });
+
+  it('consumes no randomness for the champion drop', () => {
+    const state = championHauntKilled(withDeathInventory(3));
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' });
+    expect(after.state.rng).toEqual(state.rng);
+  });
+
+  it('degrades only the piece the current pack no longer defines', () => {
+    const inventory = withDeathInventory(3);
+    const state = championHauntKilled([
+      inventory[0]!,
+      { ...inventory[1]!, contentId: 'item.deleted-by-a-later-pack' },
+      inventory[2]!,
+    ]);
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' }).state;
+    const dropped = after.items.filter((item) => item.itemId.startsWith('item.haunt.'));
+    expect(dropped.map((item) => item.contentId)).toEqual([
+      'item.heirloom',
+      'item.fallback',
+      'item.hero-lantern',
+    ]);
+  });
+
+  it('also drops a recorded heirloom the equipped-only capture missed, and keeps it save-valid', () => {
+    // The capture is equipped-only, so a heirloom carried in the backpack at death is absent from
+    // it. It must still come back -- for an artifact, the haunt drop is its one route back into
+    // circulation -- and both validation tiers have to expect the appended piece.
+    const inventory = withDeathInventory(3);
+    const backpackHeirloom = {
+      ...inventory[0]!,
+      sourceItemId: 'item.original-1.backpack',
+      displayName: "Hero 1's Hidden Blade",
+    };
+    const host = standing(1, {
+      heirloom: backpackHeirloom,
+      deathInventory: inventory.slice(1),
+      equippedItemContentIds: inventory.map((piece) => piece.contentId),
+    });
+    const run = withArena(initialized([host]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: kitPack() });
+    const state = {
+      ...run,
+      actors: [...run.actors, ...placed.actors]
+        .map((actor) => (actor.populationId === null ? actor : { ...actor, health: 0 }))
+        .sort((left, right) => left.actorId.localeCompare(right.actorId)),
+      populations: placed.populations,
+      fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor],
+    };
+    const result = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' });
+    const dropped = result.state.items.filter((item) => item.itemId.startsWith('item.haunt.'));
+    expect(dropped).toHaveLength(3);
+    const appended = dropped.at(-1)!;
+    expect(appended.heirloom?.sourceItemId).toBe('item.original-1.backpack');
+    expect(result.events).toContainEqual(
+      expect.objectContaining({ type: 'champion.heirloom-created', itemId: appended.itemId }),
+    );
+    expect(() => validateContentBoundRun(result.state, kitPack())).not.toThrow();
+    expect(decodeActiveRun(encodeActiveRun(result.state))).toEqual(result.state);
+  });
+
+  it('keeps the whole dropped set valid through save and content-bound validation', () => {
+    const state = championHauntKilled(withDeathInventory(3));
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' }).state;
+    expect(() => validateContentBoundRun(after, kitPack())).not.toThrow();
+    const reloaded = decodeActiveRun(encodeActiveRun(after));
+    expect(reloaded.items.filter((item) => item.itemId.startsWith('item.haunt.'))).toHaveLength(3);
   });
 });

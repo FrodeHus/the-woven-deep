@@ -8,6 +8,7 @@ import {
   uint32State,
   uint32Tuple,
 } from './primitives.js';
+import { hauntDropItemIdPrefix, hauntDropSnapshots, hauntPieceItemId } from '../haunt-rewards.js';
 import { floor, type vault } from './floor.js';
 import { actor, type lastKnownTarget } from './actor.js';
 import { feature, item } from './item.js';
@@ -1203,34 +1204,45 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       fail('activeTrade.openedAtRevision', 'active trade cannot open in a future revision');
     }
   }
-  const heirloomRecordIds = new Set<string>();
+  // A defeated champion haunt drops its whole recorded death inventory, so several items now
+  // legitimately carry the SAME originating record. What stays unique is the piece: an item id
+  // names exactly one index of exactly one champion's inventory (item ids are unique and ordered,
+  // checked just above), and its provenance must match that snapshot -- so a forged second copy of
+  // a piece still has nowhere to live.
   for (const [itemIndex, itemValue] of run.items.entries()) {
     if (itemValue.heirloom === undefined) continue;
     const champion = run.populations.find(
       (population) =>
         population.model === 'champion' &&
         population.rewardCreated &&
-        `item.heirloom.${population.populationId}` === itemValue.itemId,
+        itemValue.itemId.startsWith(`${hauntDropItemIdPrefix(population.populationId)}.`),
     );
     const standing =
       champion?.model === 'champion'
         ? run.fallenHeroStandings.find((entry) => entry.hallRecordId === champion.hallRecordId)
         : undefined;
+    const piece =
+      champion === undefined || standing === undefined
+        ? undefined
+        : hauntDropSnapshots(standing).snapshots.find(
+            (_, index) =>
+              hauntPieceItemId(hauntDropItemIdPrefix(champion.populationId), index) ===
+              itemValue.itemId,
+          );
     if (
       !champion ||
       !standing ||
+      !piece ||
       itemValue.quantity !== 1 ||
       itemValue.heirloom.originatingHallRecordId !== standing.hallRecordId ||
       itemValue.heirloom.originatingRank !== standing.rank ||
-      itemValue.heirloom.sourceItemId !== standing.heirloom.sourceItemId ||
-      heirloomRecordIds.has(itemValue.heirloom.originatingHallRecordId)
+      itemValue.heirloom.sourceItemId !== piece.sourceItemId
     ) {
       fail(
         `items.${itemIndex}.heirloom`,
-        'heirloom provenance must uniquely match its reward-created Champion',
+        'heirloom provenance must match a piece of its reward-created Champion death inventory',
       );
     }
-    heirloomRecordIds.add(itemValue.heirloom.originatingHallRecordId);
   }
   for (const [populationIndex, populationValue] of run.populations.entries()) {
     if (populationValue.model === 'boss') {
@@ -1262,12 +1274,24 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       }
     }
     if (populationValue.model !== 'champion' || !populationValue.rewardCreated) continue;
-    const expected = items.get(`item.heirloom.${populationValue.populationId}`);
-    if (expected?.heirloom === undefined) {
+    const standing = run.fallenHeroStandings.find(
+      (entry) => entry.hallRecordId === populationValue.hallRecordId,
+    );
+    if (!standing) {
       fail(
         `populations.${populationIndex}.rewardCreated`,
-        'reward-created Champion requires its exact heirloom item',
+        'reward-created Champion requires its Hall standing',
       );
+    }
+    const prefix = hauntDropItemIdPrefix(populationValue.populationId);
+    for (const index of hauntDropSnapshots(standing).snapshots.keys()) {
+      const expected = items.get(hauntPieceItemId(prefix, index));
+      if (expected?.heirloom === undefined) {
+        fail(
+          `populations.${populationIndex}.rewardCreated`,
+          'reward-created Champion requires every piece of its death inventory',
+        );
+      }
     }
   }
   for (const [actorIndex, actorValue] of run.actors.entries()) {

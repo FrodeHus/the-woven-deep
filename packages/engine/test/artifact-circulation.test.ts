@@ -272,9 +272,11 @@ describe('artifact circulation across runs', () => {
       eventId: 'event.circulation.champion',
     });
 
-    // The champion drops the artifact itself, not the template's fallback relic.
+    // The champion drops its whole death inventory; the artifact among it is itself, not the
+    // template's fallback relic.
     const heirloom = conquered.state.items.find(
-      (item) => item.itemId === 'item.heirloom.population.champion',
+      (item) =>
+        item.itemId.startsWith('item.haunt.population.champion.') && item.contentId === artifactId,
     );
     expect(heirloom?.contentId).toBe(artifactId);
     // Still exactly one instance: the champion hands over the relic, it does not mint a copy.

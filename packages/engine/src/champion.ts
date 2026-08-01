@@ -7,10 +7,11 @@ import type {
 import { emptyEquipment, type ActorState, type BaseAttributes } from './actor-model.js';
 import { preservesRequiredRoutes } from './connectivity.js';
 import {
-  createPopulationLoot,
-  createRecordedHeirloom,
-  validateEchoLootGraph,
-} from './inventory.js';
+  hauntDropItemIdPrefix,
+  hauntDropSnapshots,
+  materializeDeathInventory,
+} from './haunt-rewards.js';
+import { createPopulationLoot, validateEchoLootGraph } from './inventory.js';
 import { openPlacementCells } from './loot-placement.js';
 import type {
   ActiveRun,
@@ -587,23 +588,35 @@ export function advanceFallenHeroEncounters(
       continue;
     }
     if (population.model === 'champion') {
-      const reward = createRecordedHeirloom({
+      // The haunt guarded everything it wore, so it hands back the whole recorded kit rather than
+      // the single heirloom. The set event below is additive: `champion.heirloom-created` still
+      // fires, still naming the distinguished piece.
+      const drop = hauntDropSnapshots(standing);
+      const pieces = materializeDeathInventory({
         content: input.content,
-        snapshot: standing.heirloom,
+        snapshots: drop.snapshots,
         equippedItemContentIds: standing.equippedItemContentIds,
         fallbackItemId: definition.fallbackItemId,
-        itemId: `item.heirloom.${population.populationId}`,
+        itemIdPrefix: hauntDropItemIdPrefix(population.populationId),
         floorId: population.floorId,
         x: actor.x,
         y: actor.y,
       });
-      if (state.items.some((item) => item.itemId === reward.item.itemId)) {
-        throw new Error(`Champion heirloom ${reward.item.itemId} exists without reward state`);
+      for (const piece of pieces) {
+        if (state.items.some((item) => item.itemId === piece.item.itemId)) {
+          throw new Error(`Haunt drop ${piece.item.itemId} exists without reward state`);
+        }
+      }
+      // `hauntDropSnapshots` guarantees the recorded heirloom is a member of the set, so every
+      // existing consumer of `champion.heirloom-created` keeps working unchanged.
+      const reward = pieces[drop.heirloomIndex];
+      if (reward === undefined) {
+        throw new Error(`Champion ${population.populationId} materialized no death inventory`);
       }
       population = { ...population, rewardCreated: true };
       state = {
         ...state,
-        items: [...state.items, reward.item].sort((left, right) =>
+        items: [...state.items, ...pieces.map((piece) => piece.item)].sort((left, right) =>
           compareCodeUnits(left.itemId, right.itemId),
         ),
       };
@@ -630,6 +643,14 @@ export function advanceFallenHeroEncounters(
           glyph: reward.glyph,
           color: reward.color,
           fallback: reward.fallback,
+        },
+        {
+          type: 'champion.death-inventory-created',
+          eventId: input.eventId,
+          populationId: population.populationId,
+          actorId: actor.actorId,
+          hallRecordId: standing.hallRecordId,
+          itemIds: pieces.map((piece) => piece.item.itemId),
         },
       );
     } else {

@@ -77,6 +77,7 @@ export * from './rest.js';
 export * from './event-projection.js';
 export * from './item-model.js';
 export * from './inventory.js';
+export * from './haunt-rewards.js';
 export * from './content-bound-validation.js';
 export * from './curse.js';
 export * from './curse-triggers.js';

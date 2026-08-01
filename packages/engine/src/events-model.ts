@@ -515,6 +515,14 @@ export interface ChampionHeirloomCreatedEvent {
   readonly color: string;
   readonly fallback: boolean;
 }
+export interface ChampionDeathInventoryCreatedEvent {
+  readonly type: 'champion.death-inventory-created';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly hallRecordId: OpaqueId;
+  readonly itemIds: readonly OpaqueId[];
+}
 export interface EchoDefeatedEvent {
   readonly type: 'echo.defeated';
   readonly eventId: OpaqueId;
@@ -560,6 +568,7 @@ export type PopulationDomainEvent =
   | ChampionEncounteredEvent
   | ChampionDefeatedEvent
   | ChampionHeirloomCreatedEvent
+  | ChampionDeathInventoryCreatedEvent
   | EchoEncounteredEvent
   | EchoDefeatedEvent
   | EchoLootCreatedEvent;
@@ -636,6 +645,7 @@ export interface PopulationNoticePublicEvent {
     | 'champion-encountered'
     | 'champion-defeated'
     | 'champion-heirloom'
+    | 'champion-death-inventory'
     | 'echo-encountered'
     | 'echo-defeated'
     | 'echo-loot'

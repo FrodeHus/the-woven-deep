@@ -549,6 +549,14 @@ export const championHeirloomCreatedEvent = z.strictObject({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   fallback: z.boolean(),
 });
+export const championDeathInventoryCreatedEvent = z.strictObject({
+  type: z.literal('champion.death-inventory-created'),
+  eventId: identifier,
+  populationId: identifier,
+  actorId: identifier,
+  hallRecordId: identifier,
+  itemIds: z.array(identifier).readonly(),
+});
 export const echoEncounteredEvent = z.strictObject({
   type: z.literal('echo.encountered'),
   eventId: identifier,
@@ -645,6 +653,7 @@ export const populationNoticePublicEvent = z.strictObject({
     'champion-encountered',
     'champion-defeated',
     'champion-heirloom',
+    'champion-death-inventory',
     'echo-encountered',
     'echo-defeated',
     'echo-loot',
@@ -868,6 +877,7 @@ export const eventOptions = [
   championEncounteredEvent,
   championDefeatedEvent,
   championHeirloomCreatedEvent,
+  championDeathInventoryCreatedEvent,
   echoEncounteredEvent,
   echoDefeatedEvent,
   echoLootCreatedEvent,
@@ -921,6 +931,7 @@ export const hiddenPublicEventTypes = new Set([
   'champion.encountered',
   'champion.defeated',
   'champion.heirloom-created',
+  'champion.death-inventory-created',
   'echo.encountered',
   'echo.defeated',
   'echo.loot-created',
@@ -992,6 +1003,7 @@ import type {
   BossRewardCreatedEvent,
   ChampionDefeatedEvent,
   ChampionEncounteredEvent,
+  ChampionDeathInventoryCreatedEvent,
   ChampionHeirloomCreatedEvent,
   CombatObservedPublicEvent,
   ConditionAppliedEvent,
@@ -1238,6 +1250,12 @@ type _ChampionDefeatedDrift = Expect<
 >;
 type _ChampionHeirloomCreatedDrift = Expect<
   SchemaMatches<z.infer<typeof championHeirloomCreatedEvent>, ChampionHeirloomCreatedEvent>
+>;
+type _ChampionDeathInventoryCreatedDrift = Expect<
+  SchemaMatches<
+    z.infer<typeof championDeathInventoryCreatedEvent>,
+    ChampionDeathInventoryCreatedEvent
+  >
 >;
 type _EchoEncounteredDrift = Expect<
   SchemaMatches<z.infer<typeof echoEncounteredEvent>, EchoEncounteredEvent>

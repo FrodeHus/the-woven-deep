@@ -525,6 +525,7 @@ export function projectDomainEvents(
         break;
       case 'champion.defeated':
       case 'champion.heirloom-created':
+      case 'champion.death-inventory-created':
       case 'echo.defeated':
       case 'echo.loot-created':
         if (actorVisible(event.actorId))
@@ -535,9 +536,11 @@ export function projectDomainEvents(
                 ? 'champion-defeated'
                 : event.type === 'champion.heirloom-created'
                   ? 'champion-heirloom'
-                  : event.type === 'echo.defeated'
-                    ? 'echo-defeated'
-                    : 'echo-loot',
+                  : event.type === 'champion.death-inventory-created'
+                    ? 'champion-death-inventory'
+                    : event.type === 'echo.defeated'
+                      ? 'echo-defeated'
+                      : 'echo-loot',
               event.actorId,
               event.type,
               event.type === 'champion.heirloom-created'
