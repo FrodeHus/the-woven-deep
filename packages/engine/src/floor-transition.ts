@@ -203,7 +203,7 @@ function applyFloorEntryTriggers(
     events: [input.entryEvent],
     eventId: input.entryEvent.eventId,
   });
-  if (triggered.events.length === 0) return { state: input.state, events: [] };
+  if (triggered.events.length === 0) return { state: triggered.state, events: [] };
   return concludeRunOnHeroDeath({
     state: triggered.state,
     content: input.content,

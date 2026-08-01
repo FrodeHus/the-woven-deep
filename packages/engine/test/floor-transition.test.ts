@@ -449,6 +449,15 @@ describe('on-floor-enter curse triggers', () => {
    * the resulting damage without disturbing the run's equipment wiring.
    */
   function withEquippedFloorEnterCurse(run: ActiveRun, health?: number): ActiveRun {
+    return withEquippedCurse(run, CURSE_ID, health);
+  }
+
+  /**
+   * Same wiring as `withEquippedFloorEnterCurse`, generalized to any curse ID so a caller can
+   * attach a curse whose `chanceBps` is below 100% (e.g. `curse.cold-tether` at 3000) to exercise
+   * the failed-roll path rather than the always-fires `curse.gnawing-want`.
+   */
+  function withEquippedCurse(run: ActiveRun, curseId: string, health?: number): ActiveRun {
     const hero = heroActor(run);
     const equippedItem = run.items.find(
       (item) => item.location.type === 'equipped' && item.location.actorId === hero.actorId,
@@ -459,7 +468,7 @@ describe('on-floor-enter curse triggers', () => {
       ...run,
       items: run.items.map((item) =>
         item.itemId === equippedItem.itemId
-          ? { ...item, curse: { curseId: CURSE_ID, revealed: true } }
+          ? { ...item, curse: { curseId, revealed: true } }
           : item,
       ),
       actors: run.actors.map((actor) =>
@@ -575,5 +584,22 @@ describe('on-floor-enter curse triggers', () => {
     const descended = descendToNextFloor(before, { content: pack });
     expect(heroActor(descended.state).health).toBe(heroActor(before).health);
     expect(descended.state.rng.effects).toEqual(before.rng.effects);
+  });
+
+  it('advances rng.effects across a transition even when the floor-enter roll fails', () => {
+    // curse.cold-tether rolls at chanceBps 3000 (30%): with this seed and this many floor
+    // transitions already burned by earlier tests in this file (a fresh run per `it`, so this is
+    // deterministic), the first roll on a fresh descent misses. The assertion below on
+    // `descended.events` pins that this run is in fact exercising the failed-roll branch --
+    // `applyCurseTriggers` still advances `rng.effects` on a miss (curse-triggers.ts's documented
+    // roll-spent-either-way contract), and `applyFloorEntryTriggers`'s zero-events early return
+    // must keep that advanced state rather than discarding it back to the pre-roll input.
+    const run = withEquippedCurse(createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO }), 'curse.cold-tether');
+    const before = teleportHeroTo(run, run.floors[0]!.stairDown!);
+    const descended = descendToNextFloor(before, { content: pack });
+    expect(descended.events).not.toContainEqual(
+      expect.objectContaining({ type: 'condition.applied' }),
+    );
+    expect(descended.state.rng.effects).not.toEqual(before.rng.effects);
   });
 });
