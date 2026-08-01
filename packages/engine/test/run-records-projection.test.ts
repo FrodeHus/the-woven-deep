@@ -134,9 +134,9 @@ describe('projectRunConclusion', () => {
 
   it('exposes the run mode on the conclusion projection', () => {
     const concluded = concludedRun({ mode: 'wanderer' });
-    expect(
-      projectRunConclusion({ run: concluded, record: null, achievements: [] })?.mode,
-    ).toBe('wanderer');
+    expect(projectRunConclusion({ run: concluded, record: null, achievements: [] })?.mode).toBe(
+      'wanderer',
+    );
   });
 
   it('exposes completion facts and metrics, but no score or heirloom, before finalization', () => {

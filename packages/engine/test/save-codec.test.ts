@@ -73,7 +73,9 @@ describe('active-run save codec', () => {
   };
 
   function v4Fixture(): Record<string, unknown> {
-    const current = stripModeField(stripArtifactFields(structuredClone(createDemoRun()) as any)) as any;
+    const current = stripModeField(
+      stripArtifactFields(structuredClone(createDemoRun()) as any),
+    ) as any;
     const {
       reputations: _reputations,
       activeTrade: _activeTrade,
@@ -129,7 +131,9 @@ describe('active-run save codec', () => {
   }
 
   function v5Fixture(): Record<string, unknown> {
-    const current = stripModeField(stripArtifactFields(structuredClone(createDemoRun()) as any)) as any;
+    const current = stripModeField(
+      stripArtifactFields(structuredClone(createDemoRun()) as any),
+    ) as any;
     const {
       metrics: _metrics,
       conclusion: _conclusion,
@@ -161,7 +165,9 @@ describe('active-run save codec', () => {
   }
 
   function v6Fixture(): Record<string, unknown> {
-    const current = stripModeField(stripArtifactFields(structuredClone(createDemoRun()) as any)) as any;
+    const current = stripModeField(
+      stripArtifactFields(structuredClone(createDemoRun()) as any),
+    ) as any;
     const { classTags: _classTags, statModifiers: _statModifiers, ...hero } = current.hero;
     const {
       house: _house,
@@ -187,7 +193,9 @@ describe('active-run save codec', () => {
   }
 
   function v7Fixture(): Record<string, unknown> {
-    const current = stripModeField(stripArtifactFields(structuredClone(createDemoRun()) as any)) as any;
+    const current = stripModeField(
+      stripArtifactFields(structuredClone(createDemoRun()) as any),
+    ) as any;
     const {
       house: _house,
       restockedMilestones: _restockedMilestones,
@@ -211,7 +219,9 @@ describe('active-run save codec', () => {
   }
 
   function v8Fixture(): Record<string, unknown> {
-    const current = stripModeField(stripArtifactFields(structuredClone(createDemoRun()) as any)) as any;
+    const current = stripModeField(
+      stripArtifactFields(structuredClone(createDemoRun()) as any),
+    ) as any;
     return stripLootPlacementStream(
       stripDefeatedBossMonsterIds(stripActorWeave({ ...current, schemaVersion: 8 })),
     );
@@ -235,7 +245,9 @@ describe('active-run save codec', () => {
   };
 
   function v9Fixture(): Record<string, unknown> {
-    const current = stripModeField(stripArtifactFields(structuredClone(createDemoRun()) as any)) as any;
+    const current = stripModeField(
+      stripArtifactFields(structuredClone(createDemoRun()) as any),
+    ) as any;
     return stripLootPlacementStream(stripDefeatedBossMonsterIds({ ...current, schemaVersion: 9 }));
   }
 
@@ -248,7 +260,9 @@ describe('active-run save codec', () => {
   // never legitimately be retained in recentCommands, see the "cannot be retained" invariant
   // below), so the only difference is the schemaVersion literal.
   function v10Fixture(): Record<string, unknown> {
-    const current = stripModeField(stripArtifactFields(structuredClone(createDemoRun()) as any)) as any;
+    const current = stripModeField(
+      stripArtifactFields(structuredClone(createDemoRun()) as any),
+    ) as any;
     return stripLootPlacementStream({ ...current, schemaVersion: 10 });
   }
 
@@ -260,7 +274,9 @@ describe('active-run save codec', () => {
   // v11 saves are structurally identical to the current shape apart from the loot-placement RNG
   // stream, which floor loot placement introduced at v12.
   function v11Fixture(): Record<string, unknown> {
-    const current = stripModeField(stripArtifactFields(structuredClone(createDemoRun()) as any)) as any;
+    const current = stripModeField(
+      stripArtifactFields(structuredClone(createDemoRun()) as any),
+    ) as any;
     return stripLootPlacementStream({ ...current, schemaVersion: 11 });
   }
 
@@ -272,7 +288,9 @@ describe('active-run save codec', () => {
   // v12 saves are structurally identical to the current shape apart from the two artifact run
   // fields, which the artifact offer introduced at v13.
   function v12Fixture(): Record<string, unknown> {
-    const current = stripModeField(stripArtifactFields(structuredClone(createDemoRun()) as any)) as any;
+    const current = stripModeField(
+      stripArtifactFields(structuredClone(createDemoRun()) as any),
+    ) as any;
     return { ...current, schemaVersion: 12 };
   }
 
