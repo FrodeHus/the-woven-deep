@@ -1651,18 +1651,25 @@ describe('GuestSession', () => {
       expect(projection.finalized).toBe(false);
     });
 
+    /** `finalizeConcludedRun`'s wanderer branch removes `SAVE_KEY` before returning, so the
+     * encoded save can no longer prove anything about the RNG state post-call -- reading it back
+     * would either be `null` or (worse) silently compare `before` against itself. The concluded
+     * run itself still lives in memory on the session (`GuestSession.run`, private), so this
+     * reaches through that private field directly rather than round-tripping through storage. */
+    function runRecordsRngStream(session: GuestSession): unknown {
+      return (session as unknown as { run: ActiveRun }).run.rng['run-records'];
+    }
+
     it('leaves the run-records rng stream untouched for a wanderer conclusion', () => {
       const storage = memoryStorage();
       const repository = createSessionRunRecordRepository(storage);
       walkAndDescend(wandererSession(storage));
       const session = killHero(storage);
-      const before = storage.peek()!;
+      const before = runRecordsRngStream(session);
 
       session.finalizeConcludedRun(repository, enrichment);
 
-      expect(JSON.parse(storage.peek() ?? before).rng?.['run-records']).toEqual(
-        JSON.parse(before).rng['run-records'],
-      );
+      expect(runRecordsRngStream(session)).toEqual(before);
     });
 
     it('clears the run save and the checkpoint when a wanderer run ends', () => {
