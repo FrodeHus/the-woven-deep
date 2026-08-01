@@ -456,9 +456,14 @@ export class GuestSession implements RunSession {
    * A quota failure is survivable, not fatal: the checkpoint is dropped, the player is told the
    * Deep will not promise a return, and play continues -- that death then behaves like Classic
    * without a Hall record (see `riseAgain`'s missing-checkpoint branch).
+   *
+   * A transition that CONCLUDED the run writes nothing: an `on-floor-enter` curse can kill the
+   * hero on arrival, and storing that arrival would make the rewind point a death to rise into,
+   * over and over. The previous floor's checkpoint survives instead, so the rise lands at the
+   * mouth of the floor the hero left -- the last place they were alive.
    */
   private writeRiseCheckpoint(): void {
-    if (this.run.mode !== 'wanderer') return;
+    if (this.run.mode !== 'wanderer' || this.run.conclusion !== null) return;
     try {
       this.storage.set(CHECKPOINT_KEY, encodeActiveRun(this.run));
     } catch {
@@ -484,7 +489,10 @@ export class GuestSession implements RunSession {
    * already used.
    */
   riseAgain(): boolean {
-    if (this.run.mode !== 'wanderer' || this.run.conclusion === null) return false;
+    // Only a DEATH is a Wanderer's to undo. A victory (or any other completion) is the run's real
+    // ending, and it is finalized rather than rewound -- so this exits before the log line, too.
+    if (this.run.mode !== 'wanderer' || this.run.conclusion?.completionType !== 'died')
+      return false;
     const raw = this.storage.get(CHECKPOINT_KEY);
     if (raw === null) return this.refuseRise();
     let restored: ActiveRun;
@@ -495,6 +503,9 @@ export class GuestSession implements RunSession {
       return this.refuseRise();
     }
     if (restored.contentHash !== this.pack.hash) return this.refuseRise();
+    // Defense in depth against ever storing a concluded arrival (see `writeRiseCheckpoint`): a
+    // checkpoint that is itself concluded can only rise straight back into that same ending.
+    if (restored.conclusion !== null) return this.refuseRise();
     // A checkpoint belongs to exactly ONE run. A blob left by a different run of the same content
     // pack decodes perfectly and would swap the player into a run they never played -- and a
     // later accept-death would then write ITS Hall record. The run seed is the run's identity

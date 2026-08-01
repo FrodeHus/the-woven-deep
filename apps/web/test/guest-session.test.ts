@@ -1565,6 +1565,99 @@ describe('GuestSession', () => {
       expect(storage.get(CHECKPOINT_KEY)).not.toBeNull();
     });
 
+    /**
+     * Rewrites the stored run so the NEXT floor transition kills the hero on arrival: an always-
+     * firing `on-floor-enter` curse (`curse.gnawing-want`, chanceBps 10000) on an equipped item,
+     * with the hero at 1 health. Curses made floor transitions lethal, so a transition can now
+     * conclude the run -- the case this rewind point has to survive.
+     */
+    function armLethalFloorEntry(storage: FakeStorage): void {
+      const run = decodeActiveRun(storage.peek()!, pack);
+      const hero = run.actors.find((actor) => actor.playerControlled)!;
+      const equipped = run.items.find(
+        (item) => item.location.type === 'equipped' && item.location.actorId === hero.actorId,
+      )!;
+      storage.set(
+        SAVE_KEY,
+        encodeActiveRun({
+          ...run,
+          items: run.items.map((item) =>
+            item.itemId === equipped.itemId
+              ? { ...item, curse: { curseId: 'curse.gnawing-want', revealed: true } }
+              : item,
+          ),
+          actors: run.actors.map((actor) =>
+            actor.actorId === hero.actorId ? { ...actor, health: 1 } : actor,
+          ),
+        }),
+      );
+    }
+
+    it('a transition death keeps the previous floor-entry checkpoint', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      const atDepth1Entry = storage.get(CHECKPOINT_KEY)!;
+      armLethalFloorEntry(storage);
+
+      // Ascending from depth-1's stair-up arrival tile enters town -- and the curse kills the hero
+      // on arrival, so this transition's own run is already concluded.
+      const session = new GuestSession({ pack, storage });
+      session.dispatch({ type: 'ascend' });
+      expect(session.getSnapshot().projection.conclusion?.completionType).toBe('died');
+
+      // The concluded arrival must never become the rewind point: it would rise straight back into
+      // the same death, forever.
+      expect(storage.get(CHECKPOINT_KEY)).toBe(atDepth1Entry);
+
+      expect(session.riseAgain()).toBe(true);
+      expect(session.getSnapshot().projection.conclusion).toBeNull();
+      expect(storage.get(SAVE_KEY)).toBe(atDepth1Entry);
+    });
+
+    it('refuses a checkpoint that is itself concluded', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      const session = killHero(storage);
+      // Defense in depth: whatever wrote it, a concluded blob can only rise into the same death.
+      storage.set(CHECKPOINT_KEY, storage.get(SAVE_KEY)!);
+
+      expect(session.riseAgain()).toBe(false);
+      expect(session.getSnapshot().log.at(-1)?.text).toBe(
+        'The Deep offers no way back. This death stands.',
+      );
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+
+    it('refuses to rise a non-death conclusion', () => {
+      const storage = memoryStorage();
+      const session = wandererSession(storage);
+      walkAndDescend(session);
+      const run = decodeActiveRun(storage.get(SAVE_KEY)!, pack);
+      storage.set(
+        SAVE_KEY,
+        encodeActiveRun({
+          ...run,
+          conclusion: {
+            completionType: 'broke-cycle',
+            cause: {
+              killerContentId: null,
+              depth: 1,
+              turn: run.turn,
+              worldTime: run.worldTime,
+            },
+            concludedAtRevision: run.revision,
+            finalized: false,
+          },
+        }),
+      );
+
+      const reopened = new GuestSession({ pack, storage });
+      expect(reopened.riseAgain()).toBe(false);
+      // A victory is not a death to undo: nothing is logged and the checkpoint is left alone for
+      // the finalize that follows to retire.
+      expect(storage.get(CHECKPOINT_KEY)).not.toBeNull();
+    });
+
     it('clears the checkpoint when the run ends for good', () => {
       const storage = memoryStorage();
       walkAndDescend(wandererSession(storage));

@@ -167,6 +167,11 @@ export class ProfileSession implements RunSession {
    * flips true once and never back to false, so it can't be read as a rising edge on its own; see
    * `setHouseOpen`'s doc comment for the full houseOpen design). Cleared on every reply. */
   private lastDispatchedIntentType: string | null = null;
+  /** Set while a `rise-again` is in flight, so the state push that answers it can be read as
+   * success or refusal: the server replies with the ordinary snapshot either way, and a snapshot
+   * that is STILL concluded means it found no usable checkpoint. Without this the profile's
+   * refusal would be silent, where the guest says so in the log. */
+  private riseAwaitingAnswer = false;
   private snapshot: SessionSnapshot;
   private readonly listeners = new Set<() => void>();
   private sightingsCorruptionNotified = false;
@@ -350,7 +355,8 @@ export class ProfileSession implements RunSession {
    */
   riseAgain(): boolean {
     const { conclusion, mode } = this.serverSnapshot.projection;
-    if (mode !== 'wanderer' || conclusion === null) return false;
+    if (mode !== 'wanderer' || conclusion?.completionType !== 'died') return false;
+    this.riseAwaitingAnswer = true;
     this.send({
       type: 'rise-again',
       commandId: this.nextCommandId(),
@@ -467,6 +473,14 @@ export class ProfileSession implements RunSession {
     if (this.lastDispatchedIntentType === 'house') this.houseOpen = true;
     this.lastDispatchedIntentType = null;
     this.notice = null;
+    // The answer to a `rise-again`: a snapshot that still carries the conclusion means the server
+    // had no usable checkpoint, so the death stands. Same line the guest logs for the same reason.
+    if (this.riseAwaitingAnswer) {
+      this.riseAwaitingAnswer = false;
+      if (snapshot.projection.conclusion !== null) {
+        this.appendSystemLine('The Deep offers no way back. This death stands.');
+      }
+    }
     this.syncSightings(true);
     this.snapshot = this.buildSnapshot();
     this.notify();

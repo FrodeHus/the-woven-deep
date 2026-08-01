@@ -402,6 +402,8 @@ describe('ProfileSession', () => {
     async function sessionAtDeath(mode: 'classic' | 'wanderer'): Promise<{
       session: ProfileSession;
       socket: () => FakeSocket;
+      /** The concluded snapshot the server pushed -- what it re-pushes when it refuses a rise. */
+      deadSnapshot: ServerRunSnapshot;
     }> {
       const { socket, connectPromise } = harness();
       const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO, mode });
@@ -418,9 +420,10 @@ describe('ProfileSession', () => {
           finalized: false,
         },
       };
+      const deadSnapshot = snapshotOf(dead);
       socket().emit(HELLO);
-      socket().emit({ type: 'state', snapshot: snapshotOf(dead) });
-      return { session: await connectPromise, socket };
+      socket().emit({ type: 'state', snapshot: deadSnapshot });
+      return { session: await connectPromise, socket, deadSnapshot };
     }
 
     it('sends rise-again and adopts the pushed snapshot', async () => {
@@ -441,6 +444,35 @@ describe('ProfileSession', () => {
         mode: 'wanderer',
       });
       socket().emit({ type: 'state', snapshot: snapshotOf(restored) });
+      expect(session.getSnapshot().conclusion).toBeNull();
+    });
+
+    it('says the death stands when the server refuses the rise', async () => {
+      const { session, socket, deadSnapshot } = await sessionAtDeath('wanderer');
+      const before = session.getSnapshot().log.length;
+
+      expect(session.riseAgain()).toBe(true);
+      // The server found no usable checkpoint, so it re-pushes the same concluded snapshot. Without
+      // a line here the profile's refusal is silent, unlike the guest's.
+      socket().emit({ type: 'state', snapshot: deadSnapshot });
+
+      const log = session.getSnapshot().log;
+      expect(log.length).toBe(before + 1);
+      expect(log.at(-1)?.text).toBe('The Deep offers no way back. This death stands.');
+    });
+
+    it('says nothing when the rise succeeds', async () => {
+      const { session, socket } = await sessionAtDeath('wanderer');
+      expect(session.riseAgain()).toBe(true);
+
+      socket().emit({
+        type: 'state',
+        snapshot: snapshotOf(
+          createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO, mode: 'wanderer' }),
+        ),
+      });
+
+      expect(session.getSnapshot().log).toEqual([]);
       expect(session.getSnapshot().conclusion).toBeNull();
     });
 

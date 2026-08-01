@@ -270,11 +270,22 @@ export class ServerPlaySession {
       // A floor change is always consequential — persist immediately. In Wanderer the same write
       // carries the run's new rewind point: `outcome.run` IS the floor-entry state, so the two
       // blobs are identical here and diverge from the next command onward.
+      //
+      // Unless the transition itself concluded the run: an `on-floor-enter` curse can kill the
+      // hero on arrival, and storing that arrival as the rewind point would make every rise land
+      // back in the same death. The previous floor's checkpoint is kept instead.
       this.run = outcome.run;
       this.lastEvents = outcome.events;
       this.pendingDecision = null;
-      if (this.run.mode === 'wanderer') this.checkpointBlob = encodeActiveRun(this.run);
+      if (this.run.mode === 'wanderer' && this.run.conclusion === null) {
+        this.checkpointBlob = encodeActiveRun(this.run);
+      }
       this.persist();
+      // A transition can conclude the run (the lethal-arrival case above), and a conclusion has to
+      // finalize wherever it happens -- otherwise a Classic transition death silently misses the
+      // Hall and every later command is rejected before finalize is ever reached. Mode-gated
+      // inside, so a Wanderer death still stays undecided here.
+      this.maybeFinalize();
       return { kind: 'state', snapshot: this.snapshot() };
     }
     // outcome.kind === 'command'
@@ -353,7 +364,13 @@ export class ServerPlaySession {
    * not to one death, so a second death on the same floor can rise from it again.
    */
   riseAgain(): ApplyOutcome {
-    if (this.run.mode !== 'wanderer' || this.run.conclusion === null || this.isFinalized()) {
+    // Only a DEATH is a Wanderer's to undo. A victory (or any other completion) is the run's real
+    // ending; it is cleared by the finalize gate, never rewound.
+    if (
+      this.run.mode !== 'wanderer' ||
+      this.run.conclusion?.completionType !== 'died' ||
+      this.isFinalized()
+    ) {
       return { kind: 'state', snapshot: this.snapshot() };
     }
     const stored = this.repo.get(this.profileId);
@@ -367,6 +384,9 @@ export class ServerPlaySession {
       return this.acceptDeath();
     }
     if (restored.contentHash !== this.pack.hash) return this.acceptDeath();
+    // Defense in depth against ever storing a concluded arrival (see the transition branch in
+    // `applyIntent`): a checkpoint that is itself concluded can only rise back into that ending.
+    if (restored.conclusion !== null) return this.acceptDeath();
     // A checkpoint belongs to exactly ONE run. A blob from a different run of the same pack
     // decodes perfectly and would hand this profile a run it never played (its Hall identity,
     // `deriveHallRecordId`, is derived from the run seed), so the seed is what has to match.
