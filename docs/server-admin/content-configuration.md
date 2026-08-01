@@ -136,11 +136,14 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `restockMilestones` | array of positive safe integers | Yes | Strictly increasing world-time milestones at which town merchant stock restocks. The bundled value is `[5, 10, 15, 20]`. |
 | `house` | object | Yes | Player house sizing, described below. The bundled value is `{ baseCapacity: 6, strongboxIncrement: 4 }`. |
 | `encounterDensity` | object | Yes | Dungeon encounter density, described below. The bundled value is `{ monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 }, attemptCap: 16 }`. |
+| `curses` | object | Yes | Curse generation rates described below. The bundled value is `{ chanceBps: { shallow: 1000, mid: 2000, deep: 3500 }, enchantedMultiplierBps: 20000, capBps: 5000 }`. |
 | `fragmentSpawnRollDenominator` | positive integer | Yes | Odds denominator (1-in-N) for the rare Ancient Tablet fragment spawn rolled once per floor generation. The bundled value is `40`. |
 | `generation` | object | Yes | Dungeon generation knobs described below. The bundled value is `{ doorTilePercent: 35, artifactOfferPercent: 12 }`. |
 | `floorLoot` | object | Yes | Floor-loot placement knobs described below. |
 
 `house` carries a positive safe integer `baseCapacity` (the player house's starting storage capacity) and a positive safe integer `strongboxIncrement` (additional capacity granted per purchased strongbox upgrade). `encounterDensity` budgets a floor's population in **monsters**, not in placement attempts. `monstersPerThousandWalkable` carries a positive safe integer for each of `shallow`, `mid`, and `deep` — how many monsters a floor should hold per thousand walkable (open) cells in that depth band. The bands are the same ones `floorLoot.depthBands` defines (`shallowMaxDepth`, `midMaxDepth`), so retuning those boundaries retunes spawn density with them. The floor's target is `ceil(walkableCells * monstersPerThousandWalkable[band] / 1000)`, and the generator keeps placing encounters until that many monsters exist on the floor. Because one encounter can contribute anywhere from one monster (an `individual`) to several (a `group`), the number of placements needed varies; `attemptCap` (an integer from 1 through 32) bounds how many placement attempts a floor may consume regardless, so an unlucky floor whose encounters keep failing to fit still terminates. Guaranteed milestone bosses are placed before this loop and do not count against either the target or the cap. Only the actors an encounter creates at placement time are budgeted: a `swarm` contributes its source actor, and the members it spawns later during play are not counted, so a floor seeded with swarms grows past its target as the run proceeds.
+
+`curses` governs how often generated equipment arrives cursed. `chanceBps` carries a basis-point chance (0 through 10000) for each of `shallow`, `mid`, and `deep`, using the same bands `floorLoot.depthBands` defines. `enchantedMultiplierBps` (10000 through 100000) scales that chance for an item that also rolled an enchantment — the bundled `20000` doubles it, and `10000` disables the bonus. `capBps` (0 through 10000) is the hard ceiling applied after the multiplier, so no band-plus-enchantment combination can exceed it. Every eligible item consumes exactly one chance roll from the generating call site's loot stream whether or not the roll lands, and a landed roll spends one further roll to pick the curse; ineligible items and items generated on a floor with no eligible equipment consume nothing. Setting all three `chanceBps` values to `0` turns curse generation off without removing the curse entries from the pack.
 
 ### Dungeon generation
 
@@ -737,7 +740,7 @@ entries:
     name: Hungering Edge
     tags: [curse]
     revealText: "The blade drinks deep — and will not let go."
-    drawbackModifiers: { maxHealth: -3 }
+    drawbackModifiers: { meleeAccuracy: -2 }
     trigger:
       on: on-kill
       chanceBps: 5000
@@ -1062,6 +1065,9 @@ Each effect has `effectId`, strict `parameters`, and optional `requiresLivingTar
 | `effect.feature.mutate` | stable `state` ID such as `door.open` |
 | `effect.spell.learn` | stable `spellId` |
 | `effect.recall` | none |
+| `effect.curse.remove` | none |
+
+`effect.curse.remove` targets one hero-owned item whose curse has been revealed and deletes the curse, leaving the item's enchantment, identification state, and condition untouched. It consumes no randomness. The bundled scroll of sundering (`item.scroll-of-sundering`, a shuffled-pool scroll weighted into deep loot tables) is its only authored carrier.
 
 `effect.spell.learn` and `effect.recall` are run-level effects: they are recognized by the effect sequence resolver but mutate no actor and consume no RNG there, since they act on run-scoped state (known spells, recall destination) that the cast/use-item dispatch handlers own.
 

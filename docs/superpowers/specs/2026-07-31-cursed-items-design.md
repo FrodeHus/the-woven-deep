@@ -105,3 +105,29 @@ A cursed item selected as heirloom travels **cursed and revealed** — the Hall 
 - Content: compile validation matrix; artifact drawback-key validation now enforced.
 - Engine: generation determinism + banded rates + enchanted doubling (statistical over seeds, exact per-seed pins); sticky on both unequip paths; displacement refusal; merchant sell refusal; reveal via equip/identify/trigger; each trigger's crossing semantics (esp. below-half edge: exact-half, multiple hits in one command, healing back above and crossing again); stream isolation (curse rolls from loot-placement, trigger rolls from effects — demo hashes for unrelated commands unchanged); remove-curse service + scroll end-to-end; heirloom/champion round-trip; v13→v14 migration; byte-identical save/reload replay with cursed items equipped.
 - Invariant: descent-lock-free stays green (curses cannot touch traversal by construction — no curse effect may target doors/terrain; enforce by restricting curse `effectId` to a compile-time allowlist that excludes terrain-mutating effects if any exist).
+
+## Amendments (2026-07-31, during implementation)
+
+Recorded where the implementation legitimately diverged from the text above. Each was either owner-ruled or settled in per-task review; the sections above stand as written except where these amend them.
+
+1. **Trigger wiring.** The spec describes triggers as a single evaluation point. In practice there are two, because floor transitions bypass `resolveCommand` entirely. `on-kill` and `on-hurt-below-half` ride a post-pass over the reducer's accepted-command result; `on-floor-enter` fires from engine-internal resolver calls made by all **six** floor-transition paths, not the three the Triggers section names. The once-per-curse-per-command rule is unchanged for both halves.
+
+2. **Uniform recall rule.** `recallToTown` and `recallReturn` both emit `floor.entered` and both fire `on-floor-enter`. Treating a recall as a non-entry would have made the town the one floor a curse could not follow the hero onto; the uniform rule is simpler to reason about and closes that seam.
+
+3. **Guarded shove.** A curse-driven `effect.force-move` is dropped when the destination is out of bounds, unwalkable (a closed door included), or occupied by a living actor. The `chanceBps` roll is spent either way, so the stream position does not depend on the hero's surroundings. The Content section's allowlist sentence is amended to state the guard rather than implying force-move always lands.
+
+4. **`maxHealth` forbidden as a curse `drawbackModifiers` key.** Derived `maxHealth` is never written back to the actor, so such a drawback is inert. The compiler now rejects it (curse-only — artifacts keep the full `DerivedStatName` registry). `curse.hungering-edge`, authored in the spec with `maxHealth: -3`, was re-authored to `meleeAccuracy: -2`. The example in `docs/server-admin/content-configuration.md` was corrected to match.
+
+5. **Curse anatomy roster.** The authored roster covers all three legal shapes. `curse.embermarked` was added as the trigger-only case, so drawbacks-only, trigger-only, and both are each exercised by real content rather than only by test fixtures.
+
+6. **Identification pools.** `poolId: null` is impossible for a non-`known` item — an item in `identification.mode: instance` always resolves to a pool. Four pools are authored to cover the swept categories: weapons, armor, shields, and light sources.
+
+7. **Stat-total tell.** Equipping an unidentified cursed item **does** move the hero's visible derived stats. This is the classic roguelike tell, not a projection leak: the hero sees that something is wrong without learning which curse it is or that the cause is a curse at all. No curse identity crosses the projection boundary before reveal.
+
+8. **Killed by your own curse.** A hero killed by a curse trigger concludes the run with `killerContentId: null`, recording as an environmental death. There is no actor to attribute it to, and inventing one would corrupt the Hall's killer statistics.
+
+9. **`revision` on floor transitions.** `revision` now increments on floor transitions as well as on commands. Transitions previously left it untouched, which left a stale-command replay hole (a command accepted against a pre-transition revision). Keying `floor.entered`'s `eventId` on `revision` also gives repeat entries to the same floor distinct event IDs.
+
+10. **Merchant stock is never curse-rolled.** Merchants materialize stock through their own path, which does not call `applyCurseRolls`; nothing you buy is ever cursed at the point of sale. Merchants refuse to buy **revealed** cursed items only — an unrevealed cursed item sells normally, so the gamble cuts both ways.
+
+11. **`HALL_STORE_VERSION` bumped to 3.** Stored guest Hall heirlooms gain `curse: null`, which is a stored-shape change and therefore a store-version bump.
