@@ -25,7 +25,11 @@ import {
   type LifetimeState,
 } from './run-records-model.js';
 import { scoreRun } from './score-run.js';
-import { heldArtifactIds, selectRecordHeirloom } from './heirloom-selection.js';
+import {
+  equippedInstanceSnapshots,
+  heldArtifactIds,
+  selectRecordHeirloom,
+} from './heirloom-selection.js';
 import type { ArtifactDeltas, ArtifactStint } from './artifact-ledger.js';
 import { compareCodeUnits } from './stable-json.js';
 
@@ -204,10 +208,13 @@ export function finalizeRun(
     metrics: run.metrics,
     reputations: run.reputations,
     heirloom: heirloom.snapshot,
-    // Placeholder until the haunts equipped-set capture lands: the heirloom alone, matching the
-    // same single-item default `standingsFromRecords` and the v15->v16 save migration apply to
-    // every record that predates the real capture.
-    deathInventory: [heirloom.snapshot],
+    // Equipped-only, captured at conclusion: this is what the hero's haunt will guard. Falls back
+    // to the selected heirloom (which is the template's fallback relic in this case) so the field
+    // is never empty and the champion drop always has something to materialize.
+    deathInventory: (() => {
+      const captured = equippedInstanceSnapshots({ run, content, recordId });
+      return captured.length === 0 ? [heirloom.snapshot] : captured;
+    })(),
     build: buildSnapshot(run),
     runSeed: encodeRunSeed(run.runSeed),
     contentHash: run.contentHash,
