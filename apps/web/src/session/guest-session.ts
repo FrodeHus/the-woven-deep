@@ -25,6 +25,7 @@ import {
   type PublicDecision,
   type PublicEvent,
   type RunConclusionProjection,
+  type RunMode,
   type RunRecordRepository,
   type StoredHallRecord,
   type Uint32State,
@@ -57,6 +58,7 @@ import {
 import type { RunSession } from './run-session.js';
 import { randomSeed } from './seed.js';
 import {
+  CHECKPOINT_KEY,
   classifyStorageFailure,
   COMMAND_SEQUENCE_KEY,
   SAVE_KEY,
@@ -102,6 +104,7 @@ export class GuestSession implements RunSession {
   private readonly storage: SessionStorageLike;
   private readonly hero: NewRunHero;
   private readonly records: (() => NewRunRecordsInput) | undefined;
+  private readonly mode: RunMode;
   private run: ActiveRun;
   private commandSequence: number;
   private log: readonly LogLine[] = [];
@@ -147,6 +150,11 @@ export class GuestSession implements RunSession {
        * begun after this page life's own finalize inherits that finalize's record. Omitting it
        * creates history-free runs (the pre-records behaviour). */
       records?: () => NewRunRecordsInput;
+      /** The run mode to create a fresh run with -- defaults to `'classic'`, threaded into every
+       * `createNewRun` call inside `freshRun` (including the Hall-corruption retry, so it can't
+       * silently downgrade the mode). Restored runs keep whatever mode they were created with;
+       * this only affects fresh boots. */
+      mode?: RunMode;
     }>,
   ) {
     this.pack = input.pack;
@@ -156,8 +164,12 @@ export class GuestSession implements RunSession {
     this.onboarding = onboardingLoad.state;
     this.hero = input.hero ?? DEFAULT_GUEST_HERO;
     this.records = input.records;
+    this.mode = input.mode ?? 'classic';
     const booted = this.boot(input.seed, input.startFresh ?? false);
     this.run = booted.run;
+    // A checkpoint belongs to exactly one run. A fresh run (or a discarded/hash-mismatched save)
+    // must never inherit the previous run's rewind point.
+    if (booted.notice.kind !== 'restored') this.clearRiseCheckpoint();
     this.notice = booted.notice;
     this.commandSequence = booted.commandSequence;
     // Surfaced AFTER the boot notice is assigned above, so a corrupted onboarding blob's
@@ -251,18 +263,24 @@ export class GuestSession implements RunSession {
     const runSeed = seed ?? randomSeed();
     const records = this.records?.();
     if (records === undefined) {
-      return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero });
+      return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero, mode: this.mode });
     }
     let historyFailure: unknown;
     try {
-      return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero, records });
+      return createNewRun({
+        pack: this.pack,
+        seed: runSeed,
+        hero: this.hero,
+        mode: this.mode,
+        records,
+      });
     } catch (error) {
       if (!(error instanceof SaveLoadError || error instanceof RangeError)) throw error;
       historyFailure = error;
     }
     // Anything this retry throws propagates untouched and unlogged: a creation that fails with no
     // history in play was never about the Hall, so it must surface as itself.
-    const run = createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero });
+    const run = createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero, mode: this.mode });
     console.error('Hall of Records could not seed this run; starting without it:', historyFailure);
     this.hallCorrupted = true;
     return run;
@@ -317,7 +335,11 @@ export class GuestSession implements RunSession {
 
     if (outcome.kind === 'transition') {
       if (outcome.onboardingIntentType) this.noteOnboardingIntent(outcome.onboardingIntentType);
-      this.applyNewState(outcome.run, outcome.events);
+      // Every floor-entry path -- descend generated/stored, the Final Chamber, ascend, recall
+      // return, and the recall-cast follow-on town move -- funnels through this one branch
+      // (`dispatchIntent` returns `kind: 'transition'` for all six), so this is the single place a
+      // Wanderer checkpoint needs to ride.
+      this.applyNewState(outcome.run, outcome.events, { transition: true });
       return;
     }
 
@@ -408,7 +430,11 @@ export class GuestSession implements RunSession {
     this.applyNewState(resolution.state, resolution.events);
   }
 
-  private applyNewState(state: ActiveRun, events: readonly PublicEvent[]): void {
+  private applyNewState(
+    state: ActiveRun,
+    events: readonly PublicEvent[],
+    options?: Readonly<{ transition?: boolean }>,
+  ): void {
     this.run = state;
     const folded = foldEventsIntoLog(this.log, events, this.nextLogId);
     this.log = folded.log;
@@ -416,7 +442,94 @@ export class GuestSession implements RunSession {
     this.lastEvents = events;
     this.pendingDecision = null;
     this.persist();
+    // AFTER `persist()`, so a full-storage failure surfaces on the run save (the thing the player
+    // cannot lose) before the checkpoint (the thing they can).
+    if (options?.transition === true) this.writeRiseCheckpoint();
     this.publish();
+  }
+
+  /**
+   * Captures this run's rewind point: the full encoded state at floor entry, for a Wanderer death
+   * to rise from. Called only from `applyNewState`'s transition path, and only in Wanderer -- a
+   * Classic run must leave storage byte-for-byte as it is today.
+   *
+   * A quota failure is survivable, not fatal: the checkpoint is dropped, the player is told the
+   * Deep will not promise a return, and play continues -- that death then behaves like Classic
+   * without a Hall record (see `riseAgain`'s missing-checkpoint branch).
+   *
+   * A transition that CONCLUDED the run writes nothing: an `on-floor-enter` curse can kill the
+   * hero on arrival, and storing that arrival would make the rewind point a death to rise into,
+   * over and over. The previous floor's checkpoint survives instead, so the rise lands at the
+   * mouth of the floor the hero left -- the last place they were alive.
+   */
+  private writeRiseCheckpoint(): void {
+    if (this.run.mode !== 'wanderer' || this.run.conclusion !== null) return;
+    try {
+      this.storage.set(CHECKPOINT_KEY, encodeActiveRun(this.run));
+    } catch {
+      this.clearRiseCheckpoint();
+      this.appendSystemNote('The Deep will not promise a return.');
+    }
+  }
+
+  private clearRiseCheckpoint(): void {
+    this.storage.remove?.(CHECKPOINT_KEY);
+  }
+
+  /**
+   * Rewinds a concluded Wanderer run to its floor-entry checkpoint and resumes play. The whole
+   * operation is host-side: the engine never sees a "resurrection", it simply receives a fully
+   * self-consistent earlier state whose RNG streams, revision, turn, and worldTime all rewind
+   * together (the accepted pure-rewind decision -- the floor replays byte-identically until the
+   * player diverges). `finalizeRun` is never called for this death, so the Hall, the heirloom
+   * roll, the lifetime, and the artifact ledger are all untouched.
+   *
+   * The command-sequence counter deliberately does NOT rewind: it is session state, not run
+   * state, so ids keep climbing and no post-rise command can collide with one the pre-death life
+   * already used.
+   */
+  riseAgain(): boolean {
+    // Only a DEATH is a Wanderer's to undo. A victory (or any other completion) is the run's real
+    // ending, and it is finalized rather than rewound -- so this exits before the log line, too.
+    if (this.run.mode !== 'wanderer' || this.run.conclusion?.completionType !== 'died')
+      return false;
+    const raw = this.storage.get(CHECKPOINT_KEY);
+    if (raw === null) return this.refuseRise();
+    let restored: ActiveRun;
+    try {
+      restored = decodeActiveRun(raw, this.pack);
+    } catch (error) {
+      if (!(error instanceof SaveLoadError)) throw error;
+      return this.refuseRise();
+    }
+    if (restored.contentHash !== this.pack.hash) return this.refuseRise();
+    // Defense in depth against ever storing a concluded arrival (see `writeRiseCheckpoint`): a
+    // checkpoint that is itself concluded can only rise straight back into that same ending.
+    if (restored.conclusion !== null) return this.refuseRise();
+    // A checkpoint belongs to exactly ONE run. A blob left by a different run of the same content
+    // pack decodes perfectly and would swap the player into a run they never played -- and a
+    // later accept-death would then write ITS Hall record. The run seed is the run's identity
+    // (`deriveHallRecordId` is derived from it), so it is what has to match.
+    if (restored.runSeed.some((word, index) => word !== this.run.runSeed[index])) {
+      return this.refuseRise();
+    }
+    this.run = restored;
+    this.pendingDecision = null;
+    this.lastEvents = [];
+    this.notice = null;
+    this.appendSystemLine('You rise at the floor’s mouth. The Deep did not notice.');
+    this.persist();
+    this.publish();
+    return true;
+  }
+
+  /** The shared degrade path: no usable checkpoint, so this death stands and the caller falls
+   * through to Accept-death. Never throws; the concluded run is left exactly as it was. */
+  private refuseRise(): boolean {
+    this.clearRiseCheckpoint();
+    this.appendSystemLine('The Deep offers no way back. This death stands.');
+    this.publish();
+    return false;
   }
 
   private appendSystemLine(text: string): void {
@@ -622,6 +735,29 @@ export class GuestSession implements RunSession {
     const { conclusion } = this.run;
     if (conclusion === null) {
       throw new Error('finalizeConcludedRun requires a concluded run');
+    }
+    // This run is over for good: nothing may rise from it again, on this page life or a later
+    // one. Every conclusion path funnels through here -- an accepted death, a victory, a restored
+    // already-finalized run -- so this is the single place the rewind point has to be retired. A
+    // rise never reaches this method (it discards the conclusion instead), and the transition it
+    // resumes into rewrites the checkpoint anyway.
+    this.clearRiseCheckpoint();
+
+    // The Hall is 100% Classic. A Wanderer run -- died, became-heart, broke-cycle, refused alike
+    // -- never produces a record, never enters standings/champions/echoes, never rolls an
+    // heirloom (so the `run-records` stream is never advanced), and never applies lifetime or
+    // artifact deltas. Artifacts a Wanderer found were therefore never marked `lost` in the
+    // ledger, so they stay discoverable by Classic runs: circulation stays coherent with zero new
+    // ledger logic. `finalizeRun` is not called at all, so `conclusion.finalized` stays false
+    // forever -- which is exactly what the record-null projection below reports.
+    if (this.run.mode === 'wanderer') {
+      this.storage.remove?.(SAVE_KEY);
+      const projection = projectRunConclusion({ run: this.run, record: null, achievements: [] });
+      if (projection === null) {
+        throw new Error('internal invariant: a concluded wanderer run projected to null');
+      }
+      this.publish();
+      return projection;
     }
 
     if (conclusion.finalized) {

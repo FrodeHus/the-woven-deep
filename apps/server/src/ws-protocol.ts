@@ -142,6 +142,18 @@ export function parseClientMessage(raw: unknown): ParsedClientMessage {
       },
     };
   }
+  // Both carry nothing beyond the shared `commandId`/`expectedRevision` envelope validated above,
+  // so there is no per-variant payload left to check here.
+  if (parsed.type === 'rise-again' || parsed.type === 'accept-death') {
+    return {
+      ok: true,
+      value: {
+        type: parsed.type,
+        commandId: parsed.commandId,
+        expectedRevision: parsed.expectedRevision,
+      },
+    };
+  }
   if (parsed.type === 'final-chamber-choice') {
     if (!isOneOf(parsed.choice, FINAL_CHAMBER_CHOICES)) {
       return { ok: false, reason: 'malformed final-chamber-choice' };

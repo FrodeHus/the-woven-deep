@@ -8,6 +8,7 @@ import {
   DEFAULT_GUEST_HERO,
   descendToNextFloor,
   emptyEquipment,
+  emptyLifetimeState,
   encodeActiveRun,
   newRunRecords,
   RECENT_COMMAND_LIMIT,
@@ -20,10 +21,16 @@ import {
   type Uint32State,
 } from '@woven-deep/engine';
 import { SIGHTINGS_KEY } from '../src/session/codex.js';
+import { GUEST_SESSION_STORAGE_KEYS } from '../src/session/clear-guest-session.js';
 import { GuestSession } from '../src/session/guest-session.js';
 import { ONBOARDING_KEY } from '../src/session/onboarding.js';
 import { createSessionRunRecordRepository } from '../src/session/run-records-storage.js';
-import { COMMAND_SEQUENCE_KEY, SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
+import {
+  CHECKPOINT_KEY,
+  COMMAND_SEQUENCE_KEY,
+  SAVE_KEY,
+  type SessionStorageLike,
+} from '../src/session/storage.js';
 
 let pack: CompiledContentPack;
 
@@ -74,8 +81,62 @@ function fakeStorage(): FakeStorage {
     set: (key: string, value: string) => {
       values.set(key, value);
     },
+    remove: (key: string) => {
+      values.delete(key);
+    },
     peek: (key: string = SAVE_KEY) => values.get(key) ?? null,
   };
+}
+
+/** Same in-memory `SessionStorageLike` double as `fakeStorage` -- named for the checkpoint tests
+ * below, which read arbitrary keys via `get` rather than `peek`. */
+const memoryStorage = fakeStorage;
+
+/** Wraps `memoryStorage()` so `set` throws a `QuotaExceededError` for exactly `failingKey`, while
+ * every other key (notably `SAVE_KEY`) writes through normally -- isolates a checkpoint write
+ * failure from the run save it must never affect. */
+function quotaFailingStorage(failingKey: string): FakeStorage {
+  const storage = memoryStorage();
+  return {
+    ...storage,
+    set: (key: string, value: string) => {
+      if (key === failingKey) throw new DOMException('quota', 'QuotaExceededError');
+      storage.set(key, value);
+    },
+  };
+}
+
+/** A fresh Wanderer-mode session seeded and positioned exactly like the file's other descend
+ * cases (`DESCEND_SEED`/`DEFAULT_GUEST_HERO`), so `DESCEND_PATH` + a `descend` dispatch reaches
+ * the depth-1 stair from town in every checkpoint test below. */
+function wandererSession(storage: SessionStorageLike): GuestSession {
+  return new GuestSession({
+    pack,
+    storage,
+    seed: DESCEND_SEED,
+    hero: DEFAULT_GUEST_HERO,
+    startFresh: true,
+    mode: 'wanderer',
+  });
+}
+
+/** Walks the hero from town onto the dungeon entrance via `DESCEND_PATH` and descends. */
+function walkAndDescend(session: GuestSession): void {
+  for (const direction of DESCEND_PATH) session.dispatch({ type: 'move', direction });
+  session.dispatch({ type: 'descend' });
+}
+
+/**
+ * A second, distinct floor-entry transition after an initial `walkAndDescend`: from depth-1's
+ * stair-up arrival tile (where `descendToNextFloor` lands the hero), ascending back to town lands
+ * exactly on town's own stair-down tile (`ascendToPreviousFloor`'s arrival is always the
+ * departure floor's `stairDown`) -- so the immediately following `descend` needs no further
+ * movement, and exercises the *stored* re-descent path onto the same depth-1 floor rather than
+ * the first (generated) descend, without pathfinding across a randomly generated maze.
+ */
+function descendAgain(session: GuestSession): void {
+  session.dispatch({ type: 'ascend' });
+  session.dispatch({ type: 'descend' });
 }
 
 describe('GuestSession', () => {
@@ -104,6 +165,33 @@ describe('GuestSession', () => {
     const session = new GuestSession({ pack, storage, seed: SEED });
 
     expect(session.getSnapshot().projection.hero.name).toBe(DEFAULT_GUEST_HERO.name);
+  });
+
+  it('creates a wanderer run when constructed with that mode', () => {
+    const storage = fakeStorage();
+    const session = new GuestSession({
+      pack,
+      storage,
+      seed: SEED,
+      hero: DEFAULT_GUEST_HERO,
+      startFresh: true,
+      mode: 'wanderer',
+    });
+
+    expect(session.getSnapshot().projection.mode).toBe('wanderer');
+  });
+
+  it('defaults to classic when no mode is given', () => {
+    const storage = fakeStorage();
+    const session = new GuestSession({
+      pack,
+      storage,
+      seed: SEED,
+      hero: DEFAULT_GUEST_HERO,
+      startFresh: true,
+    });
+
+    expect(session.getSnapshot().projection.mode).toBe('classic');
   });
 
   it('restores a stored run byte-for-byte', () => {
@@ -1199,6 +1287,521 @@ describe('GuestSession', () => {
       });
       expect(notified).toBe(1);
       expect(snapshot.lastEvents).toEqual(events);
+    });
+  });
+
+  describe('Wanderer checkpoints', () => {
+    it('writes a checkpoint after a descend transition in wanderer mode', () => {
+      const storage = memoryStorage();
+      const session = wandererSession(storage);
+      walkAndDescend(session);
+
+      const checkpoint = storage.get(CHECKPOINT_KEY);
+      expect(checkpoint).not.toBeNull();
+      expect(checkpoint).toBe(storage.get(SAVE_KEY));
+    });
+
+    it('writes a checkpoint on every transition kind', () => {
+      const storage = memoryStorage();
+      const session = wandererSession(storage);
+      walkAndDescend(session);
+      const first = storage.get(CHECKPOINT_KEY);
+
+      descendAgain(session); // second floor: stored/generated descend
+      expect(storage.get(CHECKPOINT_KEY)).not.toBe(first);
+
+      session.dispatch({ type: 'ascend' });
+      expect(storage.get(CHECKPOINT_KEY)).toBe(storage.get(SAVE_KEY));
+    });
+
+    it('does not move the checkpoint on a non-transition dispatch', () => {
+      const storage = memoryStorage();
+      const session = wandererSession(storage);
+      walkAndDescend(session);
+      const atFloorEntry = storage.get(CHECKPOINT_KEY);
+
+      session.dispatch({ type: 'wait' });
+
+      expect(storage.get(CHECKPOINT_KEY)).toBe(atFloorEntry);
+      expect(storage.get(SAVE_KEY)).not.toBe(atFloorEntry);
+    });
+
+    it('never writes a checkpoint in classic mode', () => {
+      const storage = memoryStorage();
+      const session = new GuestSession({
+        pack,
+        storage,
+        seed: DESCEND_SEED,
+        hero: DEFAULT_GUEST_HERO,
+        startFresh: true,
+      });
+      walkAndDescend(session);
+      session.dispatch({ type: 'wait' });
+
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+
+    it('clears a stale checkpoint when a fresh run starts', () => {
+      const storage = memoryStorage();
+      storage.set(CHECKPOINT_KEY, 'stale');
+
+      new GuestSession({
+        pack,
+        storage,
+        seed: DESCEND_SEED,
+        hero: DEFAULT_GUEST_HERO,
+        startFresh: true,
+        mode: 'wanderer',
+      });
+
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+
+    it('degrades gracefully when the checkpoint write hits quota', () => {
+      const storage = quotaFailingStorage(CHECKPOINT_KEY);
+      const session = wandererSession(storage);
+
+      expect(() => walkAndDescend(session)).not.toThrow();
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+      expect(session.getSnapshot().log.at(-1)?.text).toBe('The Deep will not promise a return.');
+    });
+
+    it('keeps playing after a checkpoint quota failure', () => {
+      const storage = quotaFailingStorage(CHECKPOINT_KEY);
+      const session = wandererSession(storage);
+      walkAndDescend(session);
+
+      session.dispatch({ type: 'wait' });
+
+      expect(session.getSnapshot().projection.conclusion).toBeNull();
+    });
+
+    it('lists the checkpoint key as a guest wipe target', () => {
+      expect(GUEST_SESSION_STORAGE_KEYS).toContain(CHECKPOINT_KEY);
+    });
+  });
+
+  describe('Wanderer rise again', () => {
+    /**
+     * Drives the run in `storage` to a real, engine-produced hero death and returns the session it
+     * died in.
+     *
+     * Killing the hero has to go through the engine (a synthesized `died` conclusion would prove
+     * nothing about the rewind), but this pack's hunger reserve is thousands of world-time units
+     * deep, so waiting one out is not a test. Instead the persisted save is rewritten into a
+     * one-hit-from-starvation shape and the session is REBOOTED over the same storage -- a plain
+     * `restored` boot, exactly like a page reload mid-run, which by contract leaves the Wanderer
+     * checkpoint (and the command-sequence counter) untouched. The single `wait` that follows is
+     * then a genuine `resolveCommand` death.
+     */
+    function killHero(storage: FakeStorage): GuestSession {
+      const run = decodeActiveRun(storage.peek()!, pack);
+      const hero = run.actors.find((actor) => actor.playerControlled)!;
+      const doomed: ActiveRun = {
+        ...run,
+        actors: run.actors.map((actor) =>
+          actor.actorId === hero.actorId ? { ...actor, health: 1 } : actor,
+        ),
+        survival: {
+          ...run.survival,
+          hungerReserve: 0,
+          hungerStage: 'starving',
+          nextStarvationAt: run.worldTime,
+        },
+      };
+      storage.set(SAVE_KEY, encodeActiveRun(doomed));
+      const session = new GuestSession({ pack, storage });
+      session.dispatch({ type: 'wait' });
+      return session;
+    }
+
+    /** The encoded save with the session-owned command ids blanked out: `recentCommands` keeps the
+     * id of every command that produced it (on the command, its result, and its events), and those
+     * ids deliberately do NOT rewind across a rise (see `GuestSession.riseAgain`) -- so identity of
+     * the ENGINE state is asserted with them normalized away, and nothing else. */
+    function engineStateWithoutCommandIds(encoded: string): string {
+      return encoded.replaceAll(/command\.guest-\d+/g, 'command.normalized');
+    }
+
+    it('rises again to the exact floor-entry state', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      const atFloorEntry = storage.get(CHECKPOINT_KEY)!;
+
+      const session = killHero(storage);
+      expect(session.getSnapshot().projection.conclusion?.completionType).toBe('died');
+
+      expect(session.riseAgain()).toBe(true);
+      expect(session.getSnapshot().projection.conclusion).toBeNull();
+      expect(storage.get(SAVE_KEY)).toBe(atFloorEntry);
+    });
+
+    it('replays byte-identically after a rise until the player diverges', () => {
+      const storage = memoryStorage();
+      const first = wandererSession(storage);
+      walkAndDescend(first);
+      first.dispatch({ type: 'wait' });
+      const afterOneWait = storage.get(SAVE_KEY)!;
+
+      const session = killHero(storage);
+      expect(session.riseAgain()).toBe(true);
+      session.dispatch({ type: 'wait' });
+
+      expect(engineStateWithoutCommandIds(storage.get(SAVE_KEY)!)).toEqual(
+        engineStateWithoutCommandIds(afterOneWait),
+      );
+    });
+
+    it('rises twice from the same floor-entry checkpoint', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      const atFloorEntry = storage.get(CHECKPOINT_KEY)!;
+
+      expect(killHero(storage).riseAgain()).toBe(true);
+      // A rise consumes nothing: the rewind point stands until the next floor entry rewrites it,
+      // so dying again on the same floor can rise again.
+      expect(storage.get(CHECKPOINT_KEY)).toBe(atFloorEntry);
+
+      const second = killHero(storage);
+      expect(second.riseAgain()).toBe(true);
+      expect(second.getSnapshot().projection.conclusion).toBeNull();
+      expect(storage.get(SAVE_KEY)).toBe(atFloorEntry);
+    });
+
+    it('refuses a checkpoint belonging to a different run', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      // Same content pack, same mode, decodes cleanly -- but a different run's seed. Swapping it
+      // in would drop the player into a run they never played, and a later accept-death would
+      // write a Hall record for it.
+      storage.set(
+        CHECKPOINT_KEY,
+        encodeActiveRun(createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO })),
+      );
+
+      const session = killHero(storage);
+
+      expect(session.riseAgain()).toBe(false);
+      expect(session.getSnapshot().projection.conclusion?.completionType).toBe('died');
+      expect(session.getSnapshot().log.at(-1)?.text).toBe(
+        'The Deep offers no way back. This death stands.',
+      );
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+
+    it('keeps advancing the command sequence across a rise, so no commandId repeats', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      const before = Number(storage.get(COMMAND_SEQUENCE_KEY));
+
+      const session = killHero(storage);
+      session.riseAgain();
+
+      expect(Number(storage.get(COMMAND_SEQUENCE_KEY))).toBeGreaterThan(before);
+    });
+
+    it('returns false and logs when no checkpoint exists', () => {
+      // Quota refused every checkpoint write, so this floor entry left no rewind point at all --
+      // the same shape as a death before any floor entry, and the one a real browser produces.
+      const storage = quotaFailingStorage(CHECKPOINT_KEY);
+      walkAndDescend(wandererSession(storage));
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+
+      const session = killHero(storage);
+
+      expect(session.riseAgain()).toBe(false);
+      expect(session.getSnapshot().log.at(-1)?.text).toBe(
+        'The Deep offers no way back. This death stands.',
+      );
+    });
+
+    it('returns false and logs when the checkpoint is corrupt', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      storage.set(CHECKPOINT_KEY, '{"schemaVersion":15,"nonsense":true}');
+
+      const session = killHero(storage);
+
+      expect(session.riseAgain()).toBe(false);
+      expect(session.getSnapshot().projection.conclusion?.completionType).toBe('died');
+      expect(session.getSnapshot().log.at(-1)?.text).toBe(
+        'The Deep offers no way back. This death stands.',
+      );
+    });
+
+    it('drops the unusable checkpoint when it refuses to rise', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      storage.set(CHECKPOINT_KEY, 'not a save');
+
+      const session = killHero(storage);
+      expect(session.riseAgain()).toBe(false);
+
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+
+    it('refuses to rise a classic run', () => {
+      const storage = memoryStorage();
+      const classic = new GuestSession({
+        pack,
+        storage,
+        seed: DESCEND_SEED,
+        hero: DEFAULT_GUEST_HERO,
+        startFresh: true,
+      });
+      walkAndDescend(classic);
+
+      const session = killHero(storage);
+
+      expect(session.riseAgain()).toBe(false);
+    });
+
+    it('refuses to rise a run that has not concluded', () => {
+      const storage = memoryStorage();
+      const session = wandererSession(storage);
+      walkAndDescend(session);
+
+      expect(session.riseAgain()).toBe(false);
+      expect(storage.get(CHECKPOINT_KEY)).not.toBeNull();
+    });
+
+    /**
+     * Rewrites the stored run so the NEXT floor transition kills the hero on arrival: an always-
+     * firing `on-floor-enter` curse (`curse.gnawing-want`, chanceBps 10000) on an equipped item,
+     * with the hero at 1 health. Curses made floor transitions lethal, so a transition can now
+     * conclude the run -- the case this rewind point has to survive.
+     */
+    function armLethalFloorEntry(storage: FakeStorage): void {
+      const run = decodeActiveRun(storage.peek()!, pack);
+      const hero = run.actors.find((actor) => actor.playerControlled)!;
+      const equipped = run.items.find(
+        (item) => item.location.type === 'equipped' && item.location.actorId === hero.actorId,
+      )!;
+      storage.set(
+        SAVE_KEY,
+        encodeActiveRun({
+          ...run,
+          items: run.items.map((item) =>
+            item.itemId === equipped.itemId
+              ? { ...item, curse: { curseId: 'curse.gnawing-want', revealed: true } }
+              : item,
+          ),
+          actors: run.actors.map((actor) =>
+            actor.actorId === hero.actorId ? { ...actor, health: 1 } : actor,
+          ),
+        }),
+      );
+    }
+
+    it('a transition death keeps the previous floor-entry checkpoint', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      const atDepth1Entry = storage.get(CHECKPOINT_KEY)!;
+      armLethalFloorEntry(storage);
+
+      // Ascending from depth-1's stair-up arrival tile enters town -- and the curse kills the hero
+      // on arrival, so this transition's own run is already concluded.
+      const session = new GuestSession({ pack, storage });
+      session.dispatch({ type: 'ascend' });
+      expect(session.getSnapshot().projection.conclusion?.completionType).toBe('died');
+
+      // The concluded arrival must never become the rewind point: it would rise straight back into
+      // the same death, forever.
+      expect(storage.get(CHECKPOINT_KEY)).toBe(atDepth1Entry);
+
+      expect(session.riseAgain()).toBe(true);
+      expect(session.getSnapshot().projection.conclusion).toBeNull();
+      expect(storage.get(SAVE_KEY)).toBe(atDepth1Entry);
+    });
+
+    it('refuses a checkpoint that is itself concluded', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      const session = killHero(storage);
+      // Defense in depth: whatever wrote it, a concluded blob can only rise into the same death.
+      storage.set(CHECKPOINT_KEY, storage.get(SAVE_KEY)!);
+
+      expect(session.riseAgain()).toBe(false);
+      expect(session.getSnapshot().log.at(-1)?.text).toBe(
+        'The Deep offers no way back. This death stands.',
+      );
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+
+    it('refuses to rise a non-death conclusion', () => {
+      const storage = memoryStorage();
+      const session = wandererSession(storage);
+      walkAndDescend(session);
+      const run = decodeActiveRun(storage.get(SAVE_KEY)!, pack);
+      storage.set(
+        SAVE_KEY,
+        encodeActiveRun({
+          ...run,
+          conclusion: {
+            completionType: 'broke-cycle',
+            cause: {
+              killerContentId: null,
+              depth: 1,
+              turn: run.turn,
+              worldTime: run.worldTime,
+            },
+            concludedAtRevision: run.revision,
+            finalized: false,
+          },
+        }),
+      );
+
+      const reopened = new GuestSession({ pack, storage });
+      expect(reopened.riseAgain()).toBe(false);
+      // A victory is not a death to undo: nothing is logged and the checkpoint is left alone for
+      // the finalize that follows to retire.
+      expect(storage.get(CHECKPOINT_KEY)).not.toBeNull();
+    });
+
+    it('clears the checkpoint when the run ends for good', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      const session = killHero(storage);
+      expect(storage.get(CHECKPOINT_KEY)).not.toBeNull();
+
+      session.finalizeConcludedRun(createSessionRunRecordRepository(storage), {
+        achievedAt: 'Run #1',
+        portraitGlyph: '@',
+      });
+
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+  });
+
+  describe('Wanderer finalize gating (Task 6)', () => {
+    /** Same engine-driven death as `killHero` in the "Wanderer rise again" describe above, kept
+     * local here so this describe stays self-contained. */
+    function killHero(storage: FakeStorage): GuestSession {
+      const run = decodeActiveRun(storage.peek()!, pack);
+      const hero = run.actors.find((actor) => actor.playerControlled)!;
+      const doomed: ActiveRun = {
+        ...run,
+        actors: run.actors.map((actor) =>
+          actor.actorId === hero.actorId ? { ...actor, health: 1 } : actor,
+        ),
+        survival: {
+          ...run.survival,
+          hungerReserve: 0,
+          hungerStage: 'starving',
+          nextStarvationAt: run.worldTime,
+        },
+      };
+      storage.set(SAVE_KEY, encodeActiveRun(doomed));
+      const session = new GuestSession({ pack, storage });
+      session.dispatch({ type: 'wait' });
+      return session;
+    }
+
+    const enrichment = { achievedAt: 'Run #1', portraitGlyph: '@' };
+
+    /** A wanderer run synthesized straight into a `broke-cycle` victory conclusion -- mirrors
+     * `heartRun`/`deadRun` in the "death and finalization" describe above, which likewise build
+     * the conclusion directly rather than actually playing to the Final Chamber. */
+    function wandererBrokeCycleRun(seed: Uint32State): ActiveRun {
+      const fresh = createNewRun({ pack, seed, hero: DEFAULT_GUEST_HERO, mode: 'wanderer' });
+      return {
+        ...fresh,
+        conclusion: {
+          completionType: 'broke-cycle',
+          cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
+          concludedAtRevision: fresh.revision,
+          finalized: false,
+        },
+      };
+    }
+
+    it('writes nothing to the Hall when a wanderer run ends in death', () => {
+      const storage = memoryStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      walkAndDescend(wandererSession(storage));
+      const session = killHero(storage);
+
+      const projection = session.finalizeConcludedRun(repository, enrichment);
+
+      expect(repository.records()).toEqual([]);
+      expect(repository.lifetime()).toEqual(emptyLifetimeState());
+      expect(projection.finalized).toBe(false);
+      expect(projection.score).toBeNull();
+      expect(projection.heirloom).toBeNull();
+      expect(projection.mode).toBe('wanderer');
+    });
+
+    it('writes nothing to the Hall when a wanderer run WINS', () => {
+      const storage = memoryStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      storage.set(SAVE_KEY, encodeActiveRun(wandererBrokeCycleRun(SEED)));
+      const session = new GuestSession({ pack, storage });
+
+      const projection = session.finalizeConcludedRun(repository, enrichment);
+
+      expect(repository.records()).toEqual([]);
+      expect(projection.completionType).toBe('broke-cycle');
+      expect(projection.finalized).toBe(false);
+    });
+
+    /** `finalizeConcludedRun`'s wanderer branch removes `SAVE_KEY` before returning, so the
+     * encoded save can no longer prove anything about the RNG state post-call -- reading it back
+     * would either be `null` or (worse) silently compare `before` against itself. The concluded
+     * run itself still lives in memory on the session (`GuestSession.run`, private), so this
+     * reaches through that private field directly rather than round-tripping through storage. */
+    function runRecordsRngStream(session: GuestSession): unknown {
+      return (session as unknown as { run: ActiveRun }).run.rng['run-records'];
+    }
+
+    it('leaves the run-records rng stream untouched for a wanderer conclusion', () => {
+      const storage = memoryStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      walkAndDescend(wandererSession(storage));
+      const session = killHero(storage);
+      const before = runRecordsRngStream(session);
+
+      session.finalizeConcludedRun(repository, enrichment);
+
+      expect(runRecordsRngStream(session)).toEqual(before);
+    });
+
+    it('clears the run save and the checkpoint when a wanderer run ends', () => {
+      const storage = memoryStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      walkAndDescend(wandererSession(storage));
+      const session = killHero(storage);
+
+      session.finalizeConcludedRun(repository, enrichment);
+
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+      expect(storage.get(SAVE_KEY)).toBeNull();
+    });
+
+    it('still finalizes a classic run into the Hall', () => {
+      const storage = memoryStorage();
+      const repository = createSessionRunRecordRepository(storage);
+      const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+      const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+      const dead: ActiveRun = {
+        ...fresh,
+        actors: fresh.actors.map((actor) =>
+          actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+        ),
+        conclusion: {
+          completionType: 'died',
+          cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
+          concludedAtRevision: fresh.revision,
+          finalized: false,
+        },
+      };
+      storage.set(SAVE_KEY, encodeActiveRun(dead));
+      const session = new GuestSession({ pack, storage });
+
+      const projection = session.finalizeConcludedRun(repository, enrichment);
+
+      expect(repository.records()).toHaveLength(1);
+      expect(projection.finalized).toBe(true);
+      expect(projection.mode).toBe('classic');
     });
   });
 });

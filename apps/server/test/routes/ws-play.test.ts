@@ -4,7 +4,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
-import type { Uint32State } from '@woven-deep/engine';
+import {
+  createNewRun,
+  encodeActiveRun,
+  DEFAULT_GUEST_HERO,
+  type ActiveRun,
+  type Uint32State,
+} from '@woven-deep/engine';
 import { buildApp } from '../../src/app.js';
 import { runMigrations } from '../../src/database.js';
 import { LoginTokenRepository } from '../../src/db/login-token-repository.js';
@@ -105,15 +111,21 @@ async function verifyAndGetCookies(
 
 describe('handleMessage (pure message routing)', () => {
   let session: ServerPlaySession;
+  /** The suite's database and active-run repository, shared with the Wanderer helper below so it
+   * can stage a concluded run + checkpoint row for the same profile. */
+  let db: Database.Database;
+  let activeRuns: ActiveRunRepository;
 
   beforeEach(() => {
     const database = freshDatabase();
+    db = database;
     new ProfileRepository(database).create({
       id: 'profile-1',
       normalizedEmail: 'profile-1@example.com',
       nowIso: FIXED_CLOCK(),
     });
     const repo = new ActiveRunRepository(database);
+    activeRuns = repo;
     const hallRepo = new ServerRunRecordRepository({ database, profileId: 'profile-1' });
     session = new ServerPlaySession({
       pack,
@@ -196,6 +208,83 @@ describe('handleMessage (pure message routing)', () => {
       }),
     );
     expect(message.type).toBe('state');
+  });
+
+  /**
+   * A Wanderer session whose run has already died, with its floor-entry checkpoint stored beside
+   * it -- the exact state the routing below is asked to act on. Built by storing the row directly
+   * (the routing tests care about message dispatch, not about how the run reached its conclusion)
+   * and rehydrating a session over it.
+   */
+  function wandererSessionThatDied(): ServerPlaySession {
+    const base = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO, mode: 'wanderer' });
+    const hero = base.actors.find((actor) => actor.playerControlled)!;
+    const dead: ActiveRun = {
+      ...base,
+      actors: base.actors.map((actor) =>
+        actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+      ),
+      conclusion: {
+        completionType: 'died',
+        cause: {
+          killerContentId: null,
+          depth: base.metrics.deepestDepth,
+          turn: base.turn,
+          worldTime: base.worldTime,
+        },
+        concludedAtRevision: base.revision,
+        finalized: false,
+      },
+    };
+    activeRuns.upsert({
+      profileId: 'profile-1',
+      runBlob: encodeActiveRun(dead),
+      revision: dead.revision,
+      contentHash: pack.hash,
+      updatedAt: FIXED_CLOCK(),
+      checkpointBlob: encodeActiveRun(base),
+    });
+    const wanderer = new ServerPlaySession({
+      pack,
+      repo: activeRuns,
+      hallRepo: new ServerRunRecordRepository({ database: db, profileId: 'profile-1' }),
+      database: db,
+      profileId: 'profile-1',
+      clock: FIXED_CLOCK,
+    });
+    wanderer.open({ seed: SEED });
+    return wanderer;
+  }
+
+  it('routes rise-again to the session', () => {
+    const wanderer = wandererSessionThatDied();
+    const [message] = handleMessage(
+      wanderer,
+      JSON.stringify({ type: 'rise-again', commandId: 'c.1', expectedRevision: 9 }),
+    );
+    expect(message).toMatchObject({ type: 'state' });
+    expect(
+      (message as { snapshot: { projection: { conclusion: unknown } } }).snapshot.projection
+        .conclusion,
+    ).toBeNull();
+  });
+
+  it('routes accept-death to the session', () => {
+    const wanderer = wandererSessionThatDied();
+    const [message] = handleMessage(
+      wanderer,
+      JSON.stringify({ type: 'accept-death', commandId: 'c.1', expectedRevision: 9 }),
+    );
+    expect(message).toMatchObject({ type: 'state' });
+    expect(activeRuns.get('profile-1')).toBeUndefined();
+  });
+
+  it('rejects a rise-again with no commandId', () => {
+    const [message] = handleMessage(
+      wandererSessionThatDied(),
+      JSON.stringify({ type: 'rise-again' }),
+    );
+    expect(message).toMatchObject({ type: 'error', code: 'malformed-message' });
   });
 
   it('errors on answer-decision when there is no pending decision', () => {

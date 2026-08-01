@@ -167,6 +167,11 @@ export class ProfileSession implements RunSession {
    * flips true once and never back to false, so it can't be read as a rising edge on its own; see
    * `setHouseOpen`'s doc comment for the full houseOpen design). Cleared on every reply. */
   private lastDispatchedIntentType: string | null = null;
+  /** Set while a `rise-again` is in flight, so the state push that answers it can be read as
+   * success or refusal: the server replies with the ordinary snapshot either way, and a snapshot
+   * that is STILL concluded means it found no usable checkpoint. Without this the profile's
+   * refusal would be silent, where the guest says so in the log. */
+  private riseAwaitingAnswer = false;
   private snapshot: SessionSnapshot;
   private readonly listeners = new Set<() => void>();
   private sightingsCorruptionNotified = false;
@@ -315,6 +320,13 @@ export class ProfileSession implements RunSession {
    * the client to finalize or persist. `_repository` and `_enrichment` are unused here; they exist
    * only for signature parity with `RunSession`/`GuestSession`, where they are load-bearing because
    * `GuestSession` finalizes into and reads back from a client-local Hall.
+   *
+   * A Wanderer DEATH is the one case where this is not purely a read: the server deliberately
+   * leaves that conclusion undecided (its run row and rewind point survive so `riseAgain` has
+   * something to restore), so the player choosing the conclusion screen over rising has to be
+   * told. `App` reaches this call only from Accept-death, so it sends `accept-death`, which clears
+   * the server's run row without any Hall write. Nothing is sent for a Classic conclusion (the
+   * server finalized it on sight) or a Wanderer victory (the server cleared it on sight).
    */
   finalizeConcludedRun(
     _repository: RunRecordRepository,
@@ -323,7 +335,34 @@ export class ProfileSession implements RunSession {
     if (this.serverSnapshot.conclusion === null) {
       throw new Error('finalizeConcludedRun requires a concluded run');
     }
+    const { mode, conclusion } = this.serverSnapshot.projection;
+    if (mode === 'wanderer' && conclusion?.completionType === 'died') {
+      this.send({
+        type: 'accept-death',
+        commandId: this.nextCommandId(),
+        expectedRevision: this.serverSnapshot.revision,
+      });
+    }
     return this.serverSnapshot.conclusion;
+  }
+
+  /**
+   * Asks the server to rewind this Wanderer run to its floor-entry checkpoint. Returns `true` when
+   * the request was SENT (the authoritative answer arrives as the ordinary `state` push, which the
+   * message handler already adopts) -- the server, not the client, decides whether a usable
+   * checkpoint exists; a corrupt or missing one comes back as the still-concluded snapshot, which
+   * `App` reads as Accept-death.
+   */
+  riseAgain(): boolean {
+    const { conclusion, mode } = this.serverSnapshot.projection;
+    if (mode !== 'wanderer' || conclusion?.completionType !== 'died') return false;
+    this.riseAwaitingAnswer = true;
+    this.send({
+      type: 'rise-again',
+      commandId: this.nextCommandId(),
+      expectedRevision: this.serverSnapshot.revision,
+    });
+    return true;
   }
 
   recordOnboardingIntent(intentType: string): void {
@@ -434,6 +473,14 @@ export class ProfileSession implements RunSession {
     if (this.lastDispatchedIntentType === 'house') this.houseOpen = true;
     this.lastDispatchedIntentType = null;
     this.notice = null;
+    // The answer to a `rise-again`: a snapshot that still carries the conclusion means the server
+    // had no usable checkpoint, so the death stands. Same line the guest logs for the same reason.
+    if (this.riseAwaitingAnswer) {
+      this.riseAwaitingAnswer = false;
+      if (snapshot.projection.conclusion !== null) {
+        this.appendSystemLine('The Deep offers no way back. This death stands.');
+      }
+    }
     this.syncSightings(true);
     this.snapshot = this.buildSnapshot();
     this.notify();

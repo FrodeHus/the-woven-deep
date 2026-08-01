@@ -54,6 +54,7 @@ function fakeSession(): RunSession & { readonly dispatched: PlayerIntent[] } {
     chooseFinalChamber: vi.fn(),
     setHouseOpen: vi.fn(),
     finalizeConcludedRun: vi.fn() as never,
+    riseAgain: vi.fn(() => false),
     recordOnboardingIntent: vi.fn(),
     dismissOnboardingHint: vi.fn(),
     revealLore: vi.fn(),

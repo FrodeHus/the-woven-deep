@@ -6,6 +6,8 @@ export interface ActiveRunRow {
   revision: number;
   contentHash: string;
   updatedAt: string;
+  /** A Wanderer run's floor-entry rewind blob, or `null` -- always `null` for a Classic run. */
+  checkpointBlob: string | null;
 }
 
 interface ActiveRunTableRow {
@@ -14,6 +16,7 @@ interface ActiveRunTableRow {
   revision: number;
   content_hash: string;
   updated_at: string;
+  checkpoint_blob: string | null;
 }
 
 function toRow(row: ActiveRunTableRow): ActiveRunRow {
@@ -23,6 +26,7 @@ function toRow(row: ActiveRunTableRow): ActiveRunRow {
     revision: row.revision,
     contentHash: row.content_hash,
     updatedAt: row.updated_at,
+    checkpointBlob: row.checkpoint_blob,
   };
 }
 
@@ -34,13 +38,14 @@ export class ActiveRunRepository {
   constructor(private readonly database: Database.Database) {
     this.getStatement = this.database.prepare('select * from active_runs where profile_id = ?');
     this.upsertStatement = this.database.prepare(`
-      insert into active_runs(profile_id, run_blob, revision, content_hash, updated_at)
-      values (?, ?, ?, ?, ?)
+      insert into active_runs(profile_id, run_blob, revision, content_hash, updated_at, checkpoint_blob)
+      values (?, ?, ?, ?, ?, ?)
       on conflict(profile_id) do update set
         run_blob = excluded.run_blob,
         revision = excluded.revision,
         content_hash = excluded.content_hash,
-        updated_at = excluded.updated_at
+        updated_at = excluded.updated_at,
+        checkpoint_blob = excluded.checkpoint_blob
     `);
     this.clearStatement = this.database.prepare('delete from active_runs where profile_id = ?');
   }
@@ -56,6 +61,7 @@ export class ActiveRunRepository {
     revision: number;
     contentHash: string;
     updatedAt: string;
+    checkpointBlob: string | null;
   }): void {
     this.upsertStatement.run(
       input.profileId,
@@ -63,6 +69,7 @@ export class ActiveRunRepository {
       input.revision,
       input.contentHash,
       input.updatedAt,
+      input.checkpointBlob,
     );
   }
 

@@ -22,6 +22,7 @@ import {
   populationCreatedEvent,
   processedResult,
   publicOnlyEventTypes,
+  recorded,
   reputationChangedEvent,
   runConcludedEvent,
   runFinalizedEvent,
@@ -46,6 +47,7 @@ import {
 import {
   encounterDecision,
   fallenDecision,
+  fallenStanding,
   hero,
   heroV6,
   identification,
@@ -523,6 +525,58 @@ const legacyItemFieldsV13 = {
   heirloom: heirloomItemMetadata.optional(),
 } as const;
 const legacyItemV13 = z.strictObject({ ...legacyItemFieldsV13, location: itemLocation });
+
+// The pre-run-mode save shape: identical to the current run schema except it carries no `mode`,
+// which the run-mode feature introduced at v15. Spelled out as a frozen literal (not derived from
+// the live `activeRunSchema`) so a future schema bump can't silently change what a real v14 save is
+// validated against. Its sub-schemas (item, actor, hero, floors, standings, rng, recorded commands)
+// are the live ones because the run-mode bump touches none of them.
+export const legacyActiveRunV14Schema = z.strictObject({
+  schemaVersion: z.literal(14),
+  gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  runId: identifier,
+  runSeed: uint32Tuple,
+  rng: z.strictObject(legacyV12RngEntries),
+  revision: safeNonNegative,
+  turn: safeNonNegative,
+  worldTime: safeNonNegative,
+  hero,
+  reputations: z
+    .array(z.strictObject({ factionId: identifier, value: z.number().int().safe() }))
+    .readonly(),
+  activeTrade: z
+    .strictObject({
+      merchantPopulationId: identifier,
+      merchantActorId: identifier,
+      openedByCommandId: identifier,
+      openedAtRevision: safeNonNegative,
+      completedCommerce: z.boolean(),
+    })
+    .nullable(),
+  actors: z.array(actor).min(1).readonly(),
+  items: z.array(item).readonly(),
+  features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(),
+  survival,
+  identification,
+  activeFloorId: identifier,
+  activeFloorEnteredAt: safeNonNegative,
+  returnAnchorFloorId: identifier.optional(),
+  floors: z.array(floor).min(1).readonly(),
+  recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(),
+  populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+  offeredArtifact: identifier.nullable(),
+  artifactsUndiscovered: z.array(identifier).readonly(),
+  metrics: runMetrics,
+  conclusion: runConclusionSchema.nullable(),
+  house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
+  restockedMilestones: z.array(positiveQuantity).readonly(),
+});
 
 // The pre-curse save shape: identical to the current run schema except items and recorded
 // heirlooms carry no `curse`, which the cursed-item feature introduced at v14. Spelled out as a

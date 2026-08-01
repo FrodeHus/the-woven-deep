@@ -36,12 +36,13 @@ beforeAll(async () => {
 const SEED = [11, 22, 33, 44] as const;
 
 describe('createNewRun', () => {
-  it('builds a valid, deterministic schema-v14 run starting in the authored town', () => {
+  it('builds a valid, deterministic schema-v15 run starting in the authored town', () => {
     const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(14);
+    expect(first.schemaVersion).toBe(15);
+    expect(first.mode).toBe('classic');
     expect(first.offeredArtifact).toBeNull();
     expect(first.artifactsUndiscovered).toEqual([]);
     expect(first.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
@@ -240,6 +241,28 @@ describe('createNewRun', () => {
     expect(() => encodeActiveRun(run)).not.toThrow();
   });
 
+  it('defaults a new run to classic mode', () => {
+    expect(createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO }).mode).toBe('classic');
+  });
+
+  it('creates a wanderer run when asked', () => {
+    expect(
+      createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO, mode: 'wanderer' }).mode,
+    ).toBe('wanderer');
+  });
+
+  it('consumes identical randomness in both modes', () => {
+    const classic = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO, mode: 'classic' });
+    const wanderer = createNewRun({
+      pack,
+      seed: SEED,
+      hero: DEFAULT_GUEST_HERO,
+      mode: 'wanderer',
+    });
+    expect(wanderer.rng).toEqual(classic.rng);
+    expect({ ...wanderer, mode: 'classic' }).toEqual(classic);
+  });
+
   describe('engine-required floor loot tables', () => {
     const MISSING = 'loot-table.chest-mid';
 
@@ -366,8 +389,11 @@ describe('createNewRun records input', () => {
     // low-weight `loot-table.floor-scatter-deep` and `loot-table.chest-deep` choices: verified by
     // diffing the decoded run objects field-by-field against the prior pin -- only `contentHash`
     // differs, nothing else. This is expected content-authoring drift, not an engine regression.
+    // Re-pinned again for save schema v15 (`ActiveRun.mode`, run-modes feature): `schemaVersion`
+    // moves 14 -> 15 and every encoded run now carries `mode: 'classic'`; no other key differs.
+    // This is the expected save-schema bump, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '6f9ee3d6a8f5cc11f2cac774307b279160cf8e427347df1c3a29b18b7c9247d6',
+      '9557170f1fb5959cef2f2c89142b94cf61132c382ded3f650f46d8c1a77c5447',
     );
   });
 

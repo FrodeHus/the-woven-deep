@@ -341,4 +341,26 @@ describe('CharacterSheetOverlay', () => {
     const { container } = renderSheet(snapshot);
     expect(container.innerHTML.toLowerCase()).not.toContain('resistance');
   });
+
+  it('shows Classic on the character sheet by default', () => {
+    const snapshot = snapshotFor(baseRun);
+    expect(snapshot.projection.mode).toBe('classic');
+    renderSheet(snapshot);
+    expect(screen.getByText('MODE')).toBeInTheDocument();
+    expect(screen.getByText('Classic')).toBeInTheDocument();
+  });
+
+  it('shows the run mode on the character sheet', () => {
+    const wandererRun = createNewRun({
+      pack,
+      seed: SEED,
+      hero: DEFAULT_GUEST_HERO,
+      mode: 'wanderer',
+    });
+    const snapshot = snapshotFor(wandererRun);
+    expect(snapshot.projection.mode).toBe('wanderer');
+    renderSheet(snapshot);
+    expect(screen.getByText('MODE')).toBeInTheDocument();
+    expect(screen.getByText('Wanderer')).toBeInTheDocument();
+  });
 });

@@ -181,6 +181,12 @@ export function CharacterSheetOverlay(): JSX.Element | null {
           <p className="font-serif text-lg text-fg-strong">{hero.name}</p>
           {className !== undefined && <p className="text-sm text-fg">{className}</p>}
           <p className="text-xs uppercase tracking-[0.08em] text-subtle">{location}</p>
+          <dl className="m-0 flex items-baseline gap-1.5 text-xs uppercase tracking-[0.08em] text-subtle">
+            <dt className="shrink-0">MODE</dt>
+            <dd className="m-0 text-fg">
+              {snapshot.projection.mode === 'wanderer' ? 'Wanderer' : 'Classic'}
+            </dd>
+          </dl>
         </div>
       </header>
 

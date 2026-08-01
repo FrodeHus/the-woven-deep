@@ -5,6 +5,7 @@ import {
   newRunRecords,
   type HeroChoices,
   type RunConclusionProjection,
+  type RunMode,
   type RunRecordRepository,
   type Uint32State,
 } from '@woven-deep/engine';
@@ -159,7 +160,11 @@ interface GameRootProps {
  * Once the snapshot's `conclusion` first becomes non-null (the hero died, or a save restored an
  * already-concluded run), this finalizes the run into the Hall exactly once — `finalizeRun`'s own
  * `finalized` flag makes a repeat call safe, but `finalizedRef` also stops this component from
- * calling it again on every subsequent render before `onConcluded` swaps the screen away. */
+ * calling it again on every subsequent render before `onConcluded` swaps the screen away.
+ *
+ * The single exception is a Wanderer DEATH (`wandererDeath` below): that conclusion may still be
+ * undone by the player, so nothing is finalized until they accept it. Every other conclusion,
+ * a Wanderer victory included, finalizes on sight exactly as described above. */
 function GameRoot({
   session,
   pack,
@@ -183,15 +188,25 @@ function GameRoot({
   const [dismissedNotice, setDismissedNotice] = useState<SessionNotice | null>(null);
   const dismissed = notice !== null && dismissedNotice === notice;
   const finalizedRef = useRef(false);
-  /** Set the instant a DEATH conclusion finalizes, holding the exact `onConcluded` arguments until
-   * the player acknowledges the `DeathOverlay` -- the run is already finalized (the Hall write
-   * above has already happened) the moment this is set; only the navigation is deferred. A
-   * non-death conclusion never touches this state -- `onConcluded` still fires immediately for
-   * those, unchanged. */
+  /** Set the instant a CLASSIC death conclusion finalizes, holding the exact `onConcluded`
+   * arguments until the player acknowledges the `DeathOverlay` -- the run is already finalized (the
+   * Hall write above has already happened) the moment this is set; only the navigation is deferred.
+   * A non-death conclusion never touches this state -- `onConcluded` still fires immediately for
+   * those, unchanged. A Wanderer death never touches it either: it has not been finalized yet, so
+   * there is no projection to hold, and its overlay is driven by `wandererDeath` instead. */
   const [pendingDeathConclusion, setPendingDeathConclusion] = useState<{
     projection: RunConclusionProjection;
     logTail: readonly LogLine[];
   } | null>(null);
+  /** A Wanderer run concluded by hero death: the one conclusion this component does not finalize
+   * on sight, because the player still gets to decide whether it stands (see the effect below). */
+  const wandererDeath = snapshot.projection.mode === 'wanderer' && concludedByDeath(snapshot);
+  /** Bumped on every Rise again click, purely to REMOUNT the overlay: its one-shot guard is
+   * per-mount, and a profile's rise is answered asynchronously by the server -- when the server
+   * finds no usable checkpoint it pushes back the same concluded snapshot, leaving this overlay on
+   * screen with a spent guard and a dead Accept death button. A guest's refusal is synchronous and
+   * never gets this far (it falls through to Accept death inside the same click). */
+  const [riseAttempts, setRiseAttempts] = useState(0);
 
   // `set-state-in-effect` is disabled for this effect alone: finalizing is an imperative, exactly-
   // once side effect (it writes the Hall record through the repository), and the death branch has to
@@ -202,6 +217,10 @@ function GameRoot({
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (conclusion === null || finalizedRef.current) return;
+    // A Wanderer death is the player's decision, not the app's: nothing is finalized, nothing is
+    // cleared, and nothing navigates until they pick Rise again or Accept death below. Every other
+    // conclusion (including a Wanderer victory) finalizes immediately, exactly as before.
+    if (wandererDeath) return;
     finalizedRef.current = true;
     const isDeath = concludedByDeath(snapshot);
     try {
@@ -231,8 +250,43 @@ function GameRoot({
         else onConcluded(fallback, logTail);
       }
     }
-  }, [conclusion, onConcluded, onFinalizeError, portraitGlyph, repository, session, snapshot]);
+  }, [
+    conclusion,
+    wandererDeath,
+    onConcluded,
+    onFinalizeError,
+    portraitGlyph,
+    repository,
+    session,
+    snapshot,
+  ]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  /**
+   * Accept-death in Wanderer: the death stands, so this is the ordinary finalize-and-navigate the
+   * effect above would have done immediately in Classic, just deferred until the player said so.
+   * A finalize failure degrades exactly as it does there (a persistent warning plus the in-memory
+   * projection) rather than stranding the player under the overlay.
+   */
+  function acceptWandererDeath(): void {
+    finalizedRef.current = true;
+    try {
+      const projection = session.finalizeConcludedRun(repository, {
+        achievedAt: `Run #${repository.records().length + 1}`,
+        portraitGlyph: portraitGlyph ?? '@',
+      });
+      onConcluded(projection, session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL));
+    } catch (thrown) {
+      const failure = classifyStorageFailure(thrown);
+      onFinalizeError(
+        failure === 'full'
+          ? 'Your browser storage is full, so this run could not be saved to the Hall of Records.'
+          : 'The Hall of Records is unavailable, so this run could not be saved.',
+      );
+      const fallback = session.getSnapshot().conclusion;
+      if (fallback) onConcluded(fallback, session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL));
+    }
+  }
 
   const dismissibleNotice = notice && !isStorageNotice(notice) ? notice : null;
   const storageNotice = notice && isStorageNotice(notice) ? notice : null;
@@ -290,11 +344,27 @@ function GameRoot({
         currentHeart={repository.currentHeart()}
         onboardingEnabled={onboardingEnabled}
       />
-      {pendingDeathConclusion && (
+      {(pendingDeathConclusion || wandererDeath) && (
         <DeathOverlay
-          onAcknowledge={() =>
-            onConcluded(pendingDeathConclusion.projection, pendingDeathConclusion.logTail)
-          }
+          key={riseAttempts}
+          {...(wandererDeath
+            ? {
+                onRise: () => {
+                  // A successful rise leaves the next snapshot unconcluded, so the effect's own
+                  // guard re-arms naturally and this overlay unmounts; `finalizedRef` was never
+                  // set on that path. A guest that cannot rise says so immediately, and the death
+                  // stands here; a profile answers over the socket, which is what `riseAttempts`
+                  // above keeps the overlay usable for.
+                  setRiseAttempts((attempts) => attempts + 1);
+                  if (session.riseAgain()) return;
+                  acceptWandererDeath();
+                },
+                onAcknowledge: acceptWandererDeath,
+              }
+            : {
+                onAcknowledge: () =>
+                  onConcluded(pendingDeathConclusion!.projection, pendingDeathConclusion!.logTail),
+              })}
         />
       )}
     </div>
@@ -726,7 +796,7 @@ export function App({
           settings={settings}
           onChangeSettings={handleSettingsChange}
           unlockedClassIds={account.unlockedClassIds}
-          onConfirm={(choices: HeroChoices, glyph: string) => {
+          onConfirm={(choices: HeroChoices, glyph: string, mode: RunMode) => {
             let hero: ReturnType<typeof heroFromChoices>;
             try {
               hero = heroFromChoices({ pack, choices });
@@ -754,6 +824,7 @@ export function App({
                 startFresh: true,
                 localStorage: localStorageInstance,
                 records: recordsFor(pack),
+                mode,
               }),
             );
             router.toPlay();

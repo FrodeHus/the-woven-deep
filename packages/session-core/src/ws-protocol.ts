@@ -58,6 +58,20 @@ export type ClientMessage =
       readonly commandId: string;
       readonly expectedRevision: number;
       readonly choice: FinalChamberChoiceCommand['choice'];
+    }
+  | {
+      /** Wanderer only: rewind the concluded run to its stored floor-entry checkpoint. The reply
+       * is the ordinary `state` push (the reconnect-push shape), which re-syncs the client's
+       * cached `revision` after the rewind lowers it. */
+      readonly type: 'rise-again';
+      readonly commandId: string;
+      readonly expectedRevision: number;
+    }
+  | {
+      /** Wanderer only: end the run without a Hall write. Replies with the concluded `state`. */
+      readonly type: 'accept-death';
+      readonly commandId: string;
+      readonly expectedRevision: number;
     };
 
 export interface HelloMessage {

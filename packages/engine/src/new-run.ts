@@ -15,7 +15,7 @@ import { allocateIdentificationMap } from './identification.js';
 import type { ItemInstance } from './item-model.js';
 import { validateRequiredFloorLootTables } from './loot-placement.js';
 import { materializeMerchant } from './merchant-stock.js';
-import type { ActiveRun, OpaqueId, Point, Uint32State } from './model.js';
+import type { ActiveRun, OpaqueId, Point, RunMode, Uint32State } from './model.js';
 import { createEncounterRunDecisions } from './population-gates.js';
 import type { FallenHeroStandingSnapshot } from './population-model.js';
 import { deriveRngStreams, isNonZeroState, rollDie } from './random.js';
@@ -219,9 +219,10 @@ export function createNewRun(
     seed: Uint32State;
     hero: NewRunHero;
     records?: NewRunRecordsInput;
+    mode?: RunMode;
   }>,
 ): ActiveRun {
-  const { pack, seed, hero, records } = input;
+  const { pack, seed, hero, records, mode } = input;
   if (!isNonZeroState(seed)) throw new RangeError('run seed must not be all zero');
   // Pack-only preflight, run once here rather than per command: a pack missing one of the
   // engine-required floor loot tables must fail at run creation, not on the first descent.
@@ -359,6 +360,7 @@ export function createNewRun(
     schemaVersion: SAVE_SCHEMA_VERSION,
     gameVersion: ENGINE_GAME_VERSION,
     contentHash: pack.hash,
+    mode: mode ?? 'classic',
     runId,
     runSeed: seed,
     rng: initializedRng,

@@ -23,7 +23,7 @@ import {
 } from './population.js';
 import { recorded } from './events.js';
 import { validateKnowledgePacking } from '../knowledge.js';
-import { tileIndex, type ActiveRun, type Direction } from '../model.js';
+import { RUN_MODES, tileIndex, type ActiveRun, type Direction } from '../model.js';
 import { SaveLoadError } from '../save-error.js';
 import { movementBlockReason, tileDefinition } from '../terrain.js';
 import {
@@ -82,6 +82,7 @@ export const activeRunSchema = z.strictObject({
   schemaVersion: z.literal(SAVE_SCHEMA_VERSION),
   gameVersion: z.literal(ENGINE_GAME_VERSION),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  mode: z.enum(RUN_MODES),
   runId: identifier,
   runSeed: uint32Tuple,
   rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),

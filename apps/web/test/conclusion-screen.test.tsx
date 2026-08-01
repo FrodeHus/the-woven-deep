@@ -11,6 +11,7 @@ const pack = contentPack('a'.repeat(64), ['monster', 'item']);
 
 function projection(overrides: Partial<RunConclusionProjection> = {}): RunConclusionProjection {
   return {
+    mode: 'classic',
     completionType: 'died',
     cause: { killerContentId: 'monster.rat', depth: 3, turn: 42, worldTime: 4200 },
     metrics: {
@@ -214,6 +215,59 @@ describe('ConclusionScreen', () => {
       expect(screen.getByText(epilogue)).toBeInTheDocument();
     },
   );
+
+  it('uses the wanderer epilogue for a wanderer death', () => {
+    render(
+      <ConclusionScreen
+        projection={projection({ mode: 'wanderer' })}
+        pack={pack}
+        logTail={logTail()}
+        onHall={vi.fn()}
+        onNewHero={vi.fn()}
+        onTitle={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('The Deep let you go. Nothing was written down.')).toBeInTheDocument();
+    expect(screen.getByText(/Wanderer/)).toBeInTheDocument();
+  });
+
+  it('keeps the classic death copy for a classic death', () => {
+    render(
+      <ConclusionScreen
+        projection={projection({ mode: 'classic' })}
+        pack={pack}
+        logTail={logTail()}
+        onHall={vi.fn()}
+        onNewHero={vi.fn()}
+        onTitle={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByText('The Deep let you go. Nothing was written down.'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Classic')).toBeInTheDocument();
+  });
+
+  it('uses the wanderer epilogue for a wanderer victory', () => {
+    render(
+      <ConclusionScreen
+        projection={projection({
+          mode: 'wanderer',
+          completionType: 'broke-cycle',
+          cause: { killerContentId: null, depth: 20, turn: 900, worldTime: 90000 },
+        })}
+        pack={pack}
+        logTail={logTail()}
+        onHall={vi.fn()}
+        onNewHero={vi.fn()}
+        onTitle={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('The Deep let you go. Nothing was written down.')).toBeInTheDocument();
+  });
 
   it('offers the three actions as keyboard-reachable buttons', async () => {
     const user = userEvent.setup();

@@ -54,6 +54,11 @@ const COMPLETION_EPILOGUE: Readonly<
     'quiet at last. The cycle that has run since before memory ends here, with you.',
 };
 
+/** Wanderer's one epilogue, used for EVERY completion type: the Hall never watched, so there is no
+ * ledger line to write and no per-completion variation to make. It replaces (never supplements)
+ * the Classic epilogue, which is entirely about what the Hall recorded. */
+const WANDERER_EPILOGUE = 'The Deep let you go. Nothing was written down.';
+
 const LOG_TONE_CLASS: Readonly<Record<LogLine['tone'], string>> = {
   info: 'text-fg',
   combat: 'text-danger-fg',
@@ -112,10 +117,17 @@ export function ConclusionScreen({
             ? `Slain by ${killer}`
             : 'Claimed by the depths'
           : 'At the Final Chamber'}{' '}
-        at depth {cause.depth}, turn {cause.turn}.
+        at depth {cause.depth}, turn {cause.turn}.{' '}
+        <span className="text-xs uppercase tracking-wide text-subtle">
+          {projection.mode === 'wanderer' ? 'Wanderer' : 'Classic'}
+        </span>
       </p>
-      {COMPLETION_EPILOGUE[completionType] && (
-        <p className="text-sm text-fg">{COMPLETION_EPILOGUE[completionType]}</p>
+      {projection.mode === 'wanderer' ? (
+        <p className="text-sm text-fg">{WANDERER_EPILOGUE}</p>
+      ) : (
+        COMPLETION_EPILOGUE[completionType] && (
+          <p className="text-sm text-fg">{COMPLETION_EPILOGUE[completionType]}</p>
+        )
       )}
 
       <section aria-label="Last moments" className="flex flex-col gap-1">

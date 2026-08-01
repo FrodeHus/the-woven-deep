@@ -85,3 +85,19 @@ unconfigured**, so it never exists in a correctly configured production deployme
   the two `LOGIN_RATE_LIMIT_*` values above.
 - **No secrets in the browser.** `PUBLIC_URL`, `COOKIE_SECRET`, and the `MAILGUN_*` values are
   server-only and never enter the web bundle.
+
+## Persistent per-profile run state
+
+Signed-in play keeps one authoritative row per profile in the `active_runs` SQLite table
+(`apps/server/src/database.ts`, migration 3), upserted by `ActiveRunRepository`: `run_blob` (the
+encoded `ActiveRun`), `revision`, `content_hash`, and `updated_at`. Migration 5 (`wanderer-checkpoints`)
+adds `checkpoint_blob`, a nullable `text` column, additive via `alter table` so every pre-existing row
+(all Classic, since Wanderer mode did not exist before it) decodes with `checkpoint_blob = null`:
+
+- `null` for every Classic run, and for a Wanderer run before its first floor-entry checkpoint.
+- Otherwise holds the full encoded `ActiveRun` string of the last completed floor-entry transition for
+  a live Wanderer run — the rewind point `rise-again` restores from.
+- Cleared together with the rest of the row on finalize and on `accept-death`. A Wanderer death leaves
+  the row and checkpoint in place, undecided, until the client sends `rise-again` or `accept-death`; a
+  Wanderer victory clears immediately. This is deliberate — a reconnect mid-undecided-death re-offers
+  the same choice from the pushed snapshot instead of resolving it either way.

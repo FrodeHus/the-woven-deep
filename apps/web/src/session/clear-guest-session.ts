@@ -3,6 +3,7 @@ import { ONBOARDING_KEY } from './onboarding.js';
 import { RECORDS_KEY } from './run-records-storage.js';
 import { SETTINGS_KEY } from './settings.js';
 import {
+  CHECKPOINT_KEY,
   COMMAND_SEQUENCE_KEY,
   PORTRAIT_KEY,
   SAVE_KEY,
@@ -11,8 +12,9 @@ import {
 
 /**
  * Every `sessionStorage` key wiped by "clear guest session": the active run save, its
- * monotonic command-id counter, the Hall of Records, the confirmed portrait glyph, and (Task 8)
- * the unlock codex's sighting cache -- session-only, exactly like the rest of this list.
+ * monotonic command-id counter, the Hall of Records, the confirmed portrait glyph, (Task 8)
+ * the unlock codex's sighting cache, and a Wanderer run's rewind checkpoint -- session-only,
+ * exactly like the rest of this list.
  */
 export const GUEST_SESSION_STORAGE_KEYS: readonly string[] = [
   SAVE_KEY,
@@ -20,6 +22,7 @@ export const GUEST_SESSION_STORAGE_KEYS: readonly string[] = [
   RECORDS_KEY,
   PORTRAIT_KEY,
   SIGHTINGS_KEY,
+  CHECKPOINT_KEY,
 ];
 
 /** The `localStorage` keys wiped alongside the above: the guest's settings and (Task 8) the
