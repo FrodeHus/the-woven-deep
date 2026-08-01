@@ -103,10 +103,10 @@ export function dispatchIntent(
 
   if (built.kind === 'ascend') {
     // Mirrors the descend branch above exactly: a session-level transition (not a reducer
-    // command), so it goes through `projectDomainEvents` on the returned events -- ascending never
-    // emits any events (see `ascendToPreviousFloor`), but routing it identically keeps the two
-    // floor-change paths symmetric. Unlike descend, ascending was never folded into onboarding
-    // mastery.
+    // command), so it goes through `projectDomainEvents` on the returned events -- ascending emits
+    // `floor.entered` (see `ascendToPreviousFloor`), routed through the same projection as every
+    // other floor-change path for consistency. Unlike descend, ascending was never folded into
+    // onboarding mastery.
     const transition = ascendToPreviousFloor(run, { content: pack });
     const events = projectDomainEvents({
       state: transition.state,
@@ -130,8 +130,8 @@ export function dispatchIntent(
   if (resolution.state.returnAnchorFloorId !== undefined && run.returnAnchorFloorId === undefined) {
     const moved = recallToTown(resolution.state, { content: pack });
     // `resolution.events` carries the cast's own public events (notably `hero.recalled`) --
-    // `recallToTown` itself emits none, but its town-move is still projected the same way the
-    // other floor-transition branches project theirs, for consistency.
+    // `recallToTown`'s own `floor.entered` is projected separately below, the same way every other
+    // floor-transition branch projects theirs, for consistency.
     const events = [
       ...resolution.events,
       ...projectDomainEvents({

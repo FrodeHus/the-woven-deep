@@ -144,17 +144,27 @@ function applySignatureRecharge(
 
 /**
  * Builds the `floor.entered` event fired on every floor transition (generated descent, stored
- * re-entry, ascent, Final Chamber arrival) -- the hook Task 8's on-floor-enter trigger post-pass
- * fires from regardless of `firstEntry`. `eventId` is derived deterministically from the floor and
- * the run's `worldTime`, matching the restock-event convention in `applyMerchantRestocks`, so no
- * randomness or external id source is needed.
+ * re-entry, ascent, Final Chamber arrival, both recall directions) -- the hook Task 8's
+ * on-floor-enter trigger post-pass fires from regardless of `firstEntry`.
+ *
+ * `eventId` is keyed on `revision`, not `worldTime`: floor transitions never advance `worldTime`
+ * (no turn elapses walking a staircase), so a `worldTime`-keyed id collides the instant the hero
+ * revisits the same floor with zero intervening turns -- e.g. descend / ascend / re-descend, which
+ * lands on the same floor twice. Every floor-transition call in this module bumps `revision` by
+ * exactly 1 as part of producing its returned state (mirroring `input.revision` below), so it is
+ * strictly monotonic across the whole call sequence and therefore collision-free even across
+ * indefinite back-and-forth traversal, unlike `worldTime`. `revision` already exists purely as an
+ * optimistic-concurrency counter for `resolveCommand`'s `expectedRevision` check; extending it to
+ * also count floor transitions is safe because every caller re-reads `run.revision` fresh before
+ * building its next command (see `GuestSession.dispatch`), so nothing hardcodes a gap of exactly 1
+ * revision per turn.
  */
 function floorEnteredEvent(
-  input: Readonly<{ floorId: OpaqueId; depth: number; firstEntry: boolean; worldTime: number }>,
+  input: Readonly<{ floorId: OpaqueId; depth: number; firstEntry: boolean; revision: number }>,
 ): FloorEnteredEvent {
   return {
     type: 'floor.entered',
-    eventId: `event.${input.floorId}.entered-${input.worldTime}`,
+    eventId: `event.${input.floorId}.entered-${input.revision}`,
     floorId: input.floorId,
     depth: input.depth,
     firstEntry: input.firstEntry,
@@ -201,13 +211,12 @@ export function descendToNextFloor(
     }
     const entered = enterStoredFloor(run, { floorId, arrival });
     const restocked = applyMerchantRestocks({ state: entered, content: context.content });
-    const entryEvent = floorEnteredEvent({
-      floorId,
-      depth: nextDepth,
-      firstEntry: false,
-      worldTime: run.worldTime,
-    });
-    return { state: restocked.state, events: [entryEvent, ...restocked.events] };
+    const revision = run.revision + 1;
+    const entryEvent = floorEnteredEvent({ floorId, depth: nextDepth, firstEntry: false, revision });
+    return {
+      state: { ...restocked.state, revision },
+      events: [entryEvent, ...restocked.events],
+    };
   }
 
   // The Final Chamber is authored, not generated (mirroring the town's own bootstrap in
@@ -254,13 +263,12 @@ export function descendToNextFloor(
       }),
     );
     const restocked = applyMerchantRestocks({ state: withChamber, content: context.content });
-    const entryEvent = floorEnteredEvent({
-      floorId,
-      depth: nextDepth,
-      firstEntry: true,
-      worldTime: run.worldTime,
-    });
-    return { state: restocked.state, events: [entryEvent, ...restocked.events] };
+    const revision = run.revision + 1;
+    const entryEvent = floorEnteredEvent({ floorId, depth: nextDepth, firstEntry: true, revision });
+    return {
+      state: { ...restocked.state, revision },
+      events: [entryEvent, ...restocked.events],
+    };
   }
 
   const allocation = allocateFloorSeed(run.rng.generation);
@@ -308,14 +316,10 @@ export function descendToNextFloor(
     content: context.content,
   });
   const restocked = applyMerchantRestocks({ state: recharged, content: context.content });
-  const entryEvent = floorEnteredEvent({
-    floorId,
-    depth: nextDepth,
-    firstEntry: true,
-    worldTime: run.worldTime,
-  });
+  const revision = run.revision + 1;
+  const entryEvent = floorEnteredEvent({ floorId, depth: nextDepth, firstEntry: true, revision });
   return {
-    state: restocked.state,
+    state: { ...restocked.state, revision },
     events: [entryEvent, ...integrated.events, ...restocked.events],
   };
 }
@@ -412,14 +416,15 @@ export function ascendToPreviousFloor(
     throw new Error(`internal invariant: floor ${targetFloorId} has no stair-down`);
   }
 
-  const state = enterStoredFloor(run, { floorId: targetFloorId, arrival });
+  const entered = enterStoredFloor(run, { floorId: targetFloorId, arrival });
+  const revision = run.revision + 1;
   const entryEvent = floorEnteredEvent({
     floorId: targetFloorId,
     depth: targetFloor.depth,
     firstEntry: false,
-    worldTime: run.worldTime,
+    revision,
   });
-  return { state, events: [entryEvent] };
+  return { state: { ...entered, revision }, events: [entryEvent] };
 }
 
 /**
@@ -427,8 +432,9 @@ export function ascendToPreviousFloor(
  * stair-down (the dungeon entrance -- the town has no stair-up). `returnAnchorFloorId` was already
  * set on `run` by the cast reducer path (see `action-dispatch.ts`'s `cast` handler) and survives
  * `enterStoredFloor`'s spread untouched, so the resulting town state still carries the anchor.
- * Consumes no randomness and emits no events -- like `ascendToPreviousFloor`, moving between
- * already-existing floors is pure bookkeeping.
+ * Consumes no randomness. Emits `floor.entered` with `firstEntry: false` -- the town is always
+ * already stored (it is the run's own starting floor), so a recall arrival is never a first entry,
+ * exactly like `ascendToPreviousFloor` and a stored re-descent.
  */
 export function recallToTown(
   run: ActiveRun,
@@ -439,8 +445,15 @@ export function recallToTown(
   if (!town) throw new Error('internal invariant: run has no town floor');
   const arrival = town.stairDown;
   if (arrival === null) throw new Error('internal invariant: town floor has no stair-down');
-  const state = enterStoredFloor(run, { floorId: town.floorId, arrival });
-  return { state, events: [] };
+  const entered = enterStoredFloor(run, { floorId: town.floorId, arrival });
+  const revision = run.revision + 1;
+  const entryEvent = floorEnteredEvent({
+    floorId: town.floorId,
+    depth: town.depth,
+    firstEntry: false,
+    revision,
+  });
+  return { state: { ...entered, revision }, events: [entryEvent] };
 }
 
 /**
@@ -448,7 +461,9 @@ export function recallToTown(
  * that floor's stair-down (falling back to its stair-up for the rare case a floor has none, e.g.
  * the Final Chamber). Clears `returnAnchorFloorId` by deleting the key entirely -- the save schema
  * types it as an optional field, and `exactOptionalPropertyTypes` forbids assigning it `undefined`
- * instead of omitting it.
+ * instead of omitting it. Emits `floor.entered` with `firstEntry: false`: the anchored floor is
+ * always already stored (recall can only anchor a floor the hero already stood on), so returning to
+ * it is never a first entry.
  */
 export function recallReturn(
   run: ActiveRun,
@@ -464,5 +479,12 @@ export function recallReturn(
     throw new Error(`internal invariant: anchor floor ${anchorId} has no stair`);
   const moved = enterStoredFloor(run, { floorId: anchorId, arrival });
   const { returnAnchorFloorId: _cleared, ...rest } = moved;
-  return { state: rest, events: [] };
+  const revision = run.revision + 1;
+  const entryEvent = floorEnteredEvent({
+    floorId: anchorId,
+    depth: anchor.depth,
+    firstEntry: false,
+    revision,
+  });
+  return { state: { ...rest, revision }, events: [entryEvent] };
 }

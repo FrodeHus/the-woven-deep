@@ -184,6 +184,18 @@ describe('ascendToPreviousFloor / stored-floor descent round-trip', () => {
     const d1FloorId = toD1.state.activeFloorId;
     const d1Snapshot = stableJson(floorById(toD1.state, d1FloorId));
 
+    // The first `floor.entered` (this call's own descend into d1) -- captured so the round trip
+    // below can assert the later re-descent into the same floor gets a *different* eventId, not a
+    // collision (descend/ascend/re-descend all happen at the same, unadvanced `worldTime`).
+    const firstDescendEvent = toD1.events.find((event) => event.type === 'floor.entered')!;
+    expect(firstDescendEvent).toMatchObject({
+      type: 'floor.entered',
+      floorId: d1FloorId,
+      depth: 1,
+      firstEntry: true,
+    });
+    expect(firstDescendEvent.eventId).toMatch(/^event\..+\.entered-\d+$/);
+
     const onD1StairUp = teleportHeroTo(
       toD1.state,
       toD1.state.floors.find((floor) => floor.floorId === d1FloorId)!.stairUp!,
@@ -192,6 +204,8 @@ describe('ascendToPreviousFloor / stored-floor descent round-trip', () => {
     expect(ascended.events).toEqual([
       expect.objectContaining({ type: 'floor.entered', depth: 0, firstEntry: false }),
     ]);
+    const ascendEvent = ascended.events[0]!;
+    expect(ascendEvent.eventId).toMatch(/^event\..+\.entered-\d+$/);
     expect(ascended.state.activeFloorId).toBe(depthFloorId(0));
     const heroInTown = heroActor(ascended.state);
     expect({ x: heroInTown.x, y: heroInTown.y }).toEqual(ascended.state.floors[0]!.stairDown);
@@ -201,6 +215,15 @@ describe('ascendToPreviousFloor / stored-floor descent round-trip', () => {
     expect(backToD1.events).toEqual([
       expect.objectContaining({ type: 'floor.entered', depth: 1, firstEntry: false }),
     ]);
+    const redescendEvent = backToD1.events[0]!;
+    expect(redescendEvent.eventId).toMatch(/^event\..+\.entered-\d+$/);
+    // The core regression this guards: descend, ascend, re-descend all happen at the same
+    // (unadvanced) worldTime, but each floor.entered must still get a distinct eventId -- in
+    // particular the re-descent into d1 must not collide with the original descent into d1, even
+    // though both target the same floorId.
+    expect(new Set([firstDescendEvent.eventId, ascendEvent.eventId, redescendEvent.eventId]).size).toBe(
+      3,
+    );
     expect(backToD1.state.activeFloorId).toBe(d1FloorId);
     const hero = heroActor(backToD1.state);
     expect({ x: hero.x, y: hero.y }).toEqual(floorById(backToD1.state, d1FloorId).stairUp);
