@@ -326,6 +326,16 @@ export class ProfileSession implements RunSession {
     return this.serverSnapshot.conclusion;
   }
 
+  /**
+   * A profile's rewind point lives on the server (it owns the run), so there is nothing this
+   * client can restore on its own: refusing here degrades a signed-in Wanderer death to
+   * Accept-death, exactly like a guest whose checkpoint is missing. Replaced by the real,
+   * server-round-tripped rise in the profile Wanderer task.
+   */
+  riseAgain(): boolean {
+    return false;
+  }
+
   recordOnboardingIntent(intentType: string): void {
     this.noteOnboardingIntent(intentType);
     this.snapshot = this.buildSnapshot();

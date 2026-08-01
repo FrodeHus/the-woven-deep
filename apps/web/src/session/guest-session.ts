@@ -471,6 +471,49 @@ export class GuestSession implements RunSession {
     this.storage.remove?.(CHECKPOINT_KEY);
   }
 
+  /**
+   * Rewinds a concluded Wanderer run to its floor-entry checkpoint and resumes play. The whole
+   * operation is host-side: the engine never sees a "resurrection", it simply receives a fully
+   * self-consistent earlier state whose RNG streams, revision, turn, and worldTime all rewind
+   * together (the accepted pure-rewind decision -- the floor replays byte-identically until the
+   * player diverges). `finalizeRun` is never called for this death, so the Hall, the heirloom
+   * roll, the lifetime, and the artifact ledger are all untouched.
+   *
+   * The command-sequence counter deliberately does NOT rewind: it is session state, not run
+   * state, so ids keep climbing and no post-rise command can collide with one the pre-death life
+   * already used.
+   */
+  riseAgain(): boolean {
+    if (this.run.mode !== 'wanderer' || this.run.conclusion === null) return false;
+    const raw = this.storage.get(CHECKPOINT_KEY);
+    if (raw === null) return this.refuseRise();
+    let restored: ActiveRun;
+    try {
+      restored = decodeActiveRun(raw, this.pack);
+    } catch (error) {
+      if (!(error instanceof SaveLoadError)) throw error;
+      return this.refuseRise();
+    }
+    if (restored.contentHash !== this.pack.hash) return this.refuseRise();
+    this.run = restored;
+    this.pendingDecision = null;
+    this.lastEvents = [];
+    this.notice = null;
+    this.appendSystemLine('You rise at the floor’s mouth. The Deep did not notice.');
+    this.persist();
+    this.publish();
+    return true;
+  }
+
+  /** The shared degrade path: no usable checkpoint, so this death stands and the caller falls
+   * through to Accept-death. Never throws; the concluded run is left exactly as it was. */
+  private refuseRise(): boolean {
+    this.clearRiseCheckpoint();
+    this.appendSystemLine('The Deep offers no way back. This death stands.');
+    this.publish();
+    return false;
+  }
+
   private appendSystemLine(text: string): void {
     let entries = [...this.log, { id: this.nextLogId, text, tone: 'system' as const }];
     this.nextLogId += 1;
@@ -675,6 +718,12 @@ export class GuestSession implements RunSession {
     if (conclusion === null) {
       throw new Error('finalizeConcludedRun requires a concluded run');
     }
+    // This run is over for good: nothing may rise from it again, on this page life or a later
+    // one. Every conclusion path funnels through here -- an accepted death, a victory, a restored
+    // already-finalized run -- so this is the single place the rewind point has to be retired. A
+    // rise never reaches this method (it discards the conclusion instead), and the transition it
+    // resumes into rewrites the checkpoint anyway.
+    this.clearRiseCheckpoint();
 
     if (conclusion.finalized) {
       const recordId = deriveHallRecordId(this.run.runSeed, this.run.contentHash);

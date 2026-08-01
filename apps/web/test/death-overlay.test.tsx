@@ -15,7 +15,7 @@ import {
 import { App } from '../src/App.js';
 import { DeathOverlay } from '../src/ui/overlays/DeathOverlay.js';
 import { createSessionRunRecordRepository } from '../src/session/run-records-storage.js';
-import { SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
+import { CHECKPOINT_KEY, SAVE_KEY, type SessionStorageLike } from '../src/session/storage.js';
 
 let pack: CompiledContentPack;
 
@@ -49,8 +49,38 @@ function fakeStorage(
     set: (key: string, value: string) => {
       values.set(key, value);
     },
+    remove: (key: string) => {
+      values.delete(key);
+    },
     peek: (key: string = SAVE_KEY) => values.get(key) ?? null,
   };
+}
+
+/** A Wanderer run already concluded by hero death, beside the floor-entry checkpoint it can rise
+ * from -- the exact storage shape a Wanderer death leaves behind. */
+function wandererDeathStorage(seed: Uint32State = SEED): ReturnType<typeof fakeStorage> {
+  const fresh: ActiveRun = createNewRun({
+    pack,
+    seed,
+    hero: DEFAULT_GUEST_HERO,
+    mode: 'wanderer',
+  });
+  const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+  const dead: ActiveRun = {
+    ...fresh,
+    actors: fresh.actors.map((actor) =>
+      actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+    ),
+    conclusion: {
+      completionType: 'died',
+      cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
+      concludedAtRevision: fresh.revision,
+      finalized: false,
+    },
+  };
+  const storage = fakeStorage(encodeActiveRun(dead));
+  storage.set(CHECKPOINT_KEY, encodeActiveRun(fresh));
+  return storage;
 }
 
 /** A run already concluded by hero death -- mirrors `app-boot.test.tsx`'s `deadRunSave` fixture. */
@@ -116,6 +146,45 @@ describe('DeathOverlay (unit)', () => {
     expect(onAcknowledge).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the single acknowledge in classic', async () => {
+    const user = userEvent.setup();
+    const onAcknowledge = vi.fn();
+    render(<DeathOverlay onAcknowledge={onAcknowledge} />);
+    expect(screen.queryByRole('button', { name: /Rise again/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('alertdialog'));
+    expect(onAcknowledge).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers rise and accept in wanderer, with rise focused', async () => {
+    const user = userEvent.setup();
+    const onRise = vi.fn();
+    const onAcknowledge = vi.fn();
+    render(<DeathOverlay onAcknowledge={onAcknowledge} onRise={onRise} />);
+    const rise = screen.getByRole('button', { name: /Rise again/ });
+    expect(rise).toHaveFocus();
+    await user.click(rise);
+    expect(onRise).toHaveBeenCalledTimes(1);
+    expect(onAcknowledge).not.toHaveBeenCalled();
+  });
+
+  it('accepts death from the second action', async () => {
+    const user = userEvent.setup();
+    const onRise = vi.fn();
+    const onAcknowledge = vi.fn();
+    render(<DeathOverlay onAcknowledge={onAcknowledge} onRise={onRise} />);
+    await user.click(screen.getByRole('button', { name: /Accept death/ }));
+    expect(onAcknowledge).toHaveBeenCalledTimes(1);
+    expect(onRise).not.toHaveBeenCalled();
+  });
+
+  it('does not dismiss on a background click when two actions are offered', async () => {
+    const user = userEvent.setup();
+    const onAcknowledge = vi.fn();
+    render(<DeathOverlay onAcknowledge={onAcknowledge} onRise={vi.fn()} />);
+    await user.click(screen.getByRole('alertdialog'));
+    expect(onAcknowledge).not.toHaveBeenCalled();
+  });
+
   it('does not double-fire when both Enter and a click land', () => {
     const onAcknowledge = vi.fn();
     render(<DeathOverlay onAcknowledge={onAcknowledge} />);
@@ -162,6 +231,39 @@ describe('Death overlay gates conclusion navigation (App integration)', () => {
     await user.keyboard('{Enter}');
 
     expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
+  });
+
+  it('a wanderer death offers the choice, finalizes nothing until it is made, and rising returns to play', async () => {
+    const user = userEvent.setup();
+    const storage = wandererDeathStorage();
+
+    render(<App fetcher={packFetcher()} storage={storage} />);
+    await user.click(await screen.findByRole('option', { name: /continue/i }));
+
+    await screen.findByRole('alertdialog', { name: /the deep takes you/i });
+    // Nothing is written to the Hall while the choice is still open.
+    expect(createSessionRunRecordRepository(storage).records()).toHaveLength(0);
+
+    await user.click(screen.getByRole('button', { name: /rise again/i }));
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.queryByText(/you have fallen/i)).not.toBeInTheDocument();
+    expect(createSessionRunRecordRepository(storage).records()).toHaveLength(0);
+  });
+
+  it('accepting a wanderer death finalizes it into the Hall, navigates, and retires the checkpoint', async () => {
+    const user = userEvent.setup();
+    const storage = wandererDeathStorage();
+
+    render(<App fetcher={packFetcher()} storage={storage} />);
+    await user.click(await screen.findByRole('option', { name: /continue/i }));
+
+    await screen.findByRole('alertdialog', { name: /the deep takes you/i });
+    await user.click(screen.getByRole('button', { name: /accept death/i }));
+
+    expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
+    expect(createSessionRunRecordRepository(storage).records()).toHaveLength(1);
+    expect(storage.peek(CHECKPOINT_KEY)).toBeNull();
   });
 
   it('a non-death conclusion (broke-cycle) renders no overlay and routes straight to the conclusion screen', async () => {

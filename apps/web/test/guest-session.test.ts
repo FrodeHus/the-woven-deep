@@ -1379,4 +1379,166 @@ describe('GuestSession', () => {
       expect(GUEST_SESSION_STORAGE_KEYS).toContain(CHECKPOINT_KEY);
     });
   });
+
+  describe('Wanderer rise again', () => {
+    /**
+     * Drives the run in `storage` to a real, engine-produced hero death and returns the session it
+     * died in.
+     *
+     * Killing the hero has to go through the engine (a synthesized `died` conclusion would prove
+     * nothing about the rewind), but this pack's hunger reserve is thousands of world-time units
+     * deep, so waiting one out is not a test. Instead the persisted save is rewritten into a
+     * one-hit-from-starvation shape and the session is REBOOTED over the same storage -- a plain
+     * `restored` boot, exactly like a page reload mid-run, which by contract leaves the Wanderer
+     * checkpoint (and the command-sequence counter) untouched. The single `wait` that follows is
+     * then a genuine `resolveCommand` death.
+     */
+    function killHero(storage: FakeStorage): GuestSession {
+      const run = decodeActiveRun(storage.peek()!, pack);
+      const hero = run.actors.find((actor) => actor.playerControlled)!;
+      const doomed: ActiveRun = {
+        ...run,
+        actors: run.actors.map((actor) =>
+          actor.actorId === hero.actorId ? { ...actor, health: 1 } : actor,
+        ),
+        survival: {
+          ...run.survival,
+          hungerReserve: 0,
+          hungerStage: 'starving',
+          nextStarvationAt: run.worldTime,
+        },
+      };
+      storage.set(SAVE_KEY, encodeActiveRun(doomed));
+      const session = new GuestSession({ pack, storage });
+      session.dispatch({ type: 'wait' });
+      return session;
+    }
+
+    /** The encoded save with the session-owned command ids blanked out: `recentCommands` keeps the
+     * id of every command that produced it (on the command, its result, and its events), and those
+     * ids deliberately do NOT rewind across a rise (see `GuestSession.riseAgain`) -- so identity of
+     * the ENGINE state is asserted with them normalized away, and nothing else. */
+    function engineStateWithoutCommandIds(encoded: string): string {
+      return encoded.replaceAll(/command\.guest-\d+/g, 'command.normalized');
+    }
+
+    it('rises again to the exact floor-entry state', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      const atFloorEntry = storage.get(CHECKPOINT_KEY)!;
+
+      const session = killHero(storage);
+      expect(session.getSnapshot().projection.conclusion?.completionType).toBe('died');
+
+      expect(session.riseAgain()).toBe(true);
+      expect(session.getSnapshot().projection.conclusion).toBeNull();
+      expect(storage.get(SAVE_KEY)).toBe(atFloorEntry);
+    });
+
+    it('replays byte-identically after a rise until the player diverges', () => {
+      const storage = memoryStorage();
+      const first = wandererSession(storage);
+      walkAndDescend(first);
+      first.dispatch({ type: 'wait' });
+      const afterOneWait = storage.get(SAVE_KEY)!;
+
+      const session = killHero(storage);
+      expect(session.riseAgain()).toBe(true);
+      session.dispatch({ type: 'wait' });
+
+      expect(engineStateWithoutCommandIds(storage.get(SAVE_KEY)!)).toEqual(
+        engineStateWithoutCommandIds(afterOneWait),
+      );
+    });
+
+    it('keeps advancing the command sequence across a rise, so no commandId repeats', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      const before = Number(storage.get(COMMAND_SEQUENCE_KEY));
+
+      const session = killHero(storage);
+      session.riseAgain();
+
+      expect(Number(storage.get(COMMAND_SEQUENCE_KEY))).toBeGreaterThan(before);
+    });
+
+    it('returns false and logs when no checkpoint exists', () => {
+      // Quota refused every checkpoint write, so this floor entry left no rewind point at all --
+      // the same shape as a death before any floor entry, and the one a real browser produces.
+      const storage = quotaFailingStorage(CHECKPOINT_KEY);
+      walkAndDescend(wandererSession(storage));
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+
+      const session = killHero(storage);
+
+      expect(session.riseAgain()).toBe(false);
+      expect(session.getSnapshot().log.at(-1)?.text).toBe(
+        'The Deep offers no way back. This death stands.',
+      );
+    });
+
+    it('returns false and logs when the checkpoint is corrupt', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      storage.set(CHECKPOINT_KEY, '{"schemaVersion":15,"nonsense":true}');
+
+      const session = killHero(storage);
+
+      expect(session.riseAgain()).toBe(false);
+      expect(session.getSnapshot().projection.conclusion?.completionType).toBe('died');
+      expect(session.getSnapshot().log.at(-1)?.text).toBe(
+        'The Deep offers no way back. This death stands.',
+      );
+    });
+
+    it('drops the unusable checkpoint when it refuses to rise', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      storage.set(CHECKPOINT_KEY, 'not a save');
+
+      const session = killHero(storage);
+      expect(session.riseAgain()).toBe(false);
+
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+
+    it('refuses to rise a classic run', () => {
+      const storage = memoryStorage();
+      const classic = new GuestSession({
+        pack,
+        storage,
+        seed: DESCEND_SEED,
+        hero: DEFAULT_GUEST_HERO,
+        startFresh: true,
+      });
+      walkAndDescend(classic);
+
+      const session = killHero(storage);
+
+      expect(session.riseAgain()).toBe(false);
+    });
+
+    it('refuses to rise a run that has not concluded', () => {
+      const storage = memoryStorage();
+      const session = wandererSession(storage);
+      walkAndDescend(session);
+
+      expect(session.riseAgain()).toBe(false);
+      expect(storage.get(CHECKPOINT_KEY)).not.toBeNull();
+    });
+
+    it('clears the checkpoint when the run ends for good', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      const session = killHero(storage);
+      expect(storage.get(CHECKPOINT_KEY)).not.toBeNull();
+
+      session.finalizeConcludedRun(createSessionRunRecordRepository(storage), {
+        achievedAt: 'Run #1',
+        portraitGlyph: '@',
+      });
+
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+  });
 });

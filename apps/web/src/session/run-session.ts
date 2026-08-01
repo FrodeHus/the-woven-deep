@@ -40,6 +40,13 @@ export interface RunSession {
    * `contentId` twice is a no-op the second time, with no duplicate log line. Both `GuestSession`
    * and `ProfileSession` implement this identically over their own held `Sightings`/log. */
   revealLore(contentId: string): void;
+  /**
+   * Rewinds a concluded Wanderer run to its floor-entry checkpoint and resumes play. Returns
+   * `false` when there is no usable checkpoint (never written, dropped by quota, or corrupt) --
+   * the caller then falls through to Accept-death. Never throws, never half-restores: the live run
+   * is replaced only after the checkpoint has decoded successfully.
+   */
+  riseAgain(): boolean;
   /** Appends a client-only system line to the same message log the engine's events fold into --
    * how auto-explore reports why it stopped, or that there is nothing left to explore. Never a
    * dispatch: no turn passes, no randomness is consumed. */

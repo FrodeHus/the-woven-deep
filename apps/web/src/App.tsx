@@ -193,6 +193,9 @@ function GameRoot({
     projection: RunConclusionProjection;
     logTail: readonly LogLine[];
   } | null>(null);
+  /** A Wanderer run concluded by hero death: the one conclusion this component does not finalize
+   * on sight, because the player still gets to decide whether it stands (see the effect below). */
+  const wandererDeath = snapshot.projection.mode === 'wanderer' && concludedByDeath(snapshot);
 
   // `set-state-in-effect` is disabled for this effect alone: finalizing is an imperative, exactly-
   // once side effect (it writes the Hall record through the repository), and the death branch has to
@@ -203,6 +206,10 @@ function GameRoot({
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (conclusion === null || finalizedRef.current) return;
+    // A Wanderer death is the player's decision, not the app's: nothing is finalized, nothing is
+    // cleared, and nothing navigates until they pick Rise again or Accept death below. Every other
+    // conclusion (including a Wanderer victory) finalizes immediately, exactly as before.
+    if (wandererDeath) return;
     finalizedRef.current = true;
     const isDeath = concludedByDeath(snapshot);
     try {
@@ -232,8 +239,43 @@ function GameRoot({
         else onConcluded(fallback, logTail);
       }
     }
-  }, [conclusion, onConcluded, onFinalizeError, portraitGlyph, repository, session, snapshot]);
+  }, [
+    conclusion,
+    wandererDeath,
+    onConcluded,
+    onFinalizeError,
+    portraitGlyph,
+    repository,
+    session,
+    snapshot,
+  ]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  /**
+   * Accept-death in Wanderer: the death stands, so this is the ordinary finalize-and-navigate the
+   * effect above would have done immediately in Classic, just deferred until the player said so.
+   * A finalize failure degrades exactly as it does there (a persistent warning plus the in-memory
+   * projection) rather than stranding the player under the overlay.
+   */
+  function acceptWandererDeath(): void {
+    finalizedRef.current = true;
+    try {
+      const projection = session.finalizeConcludedRun(repository, {
+        achievedAt: `Run #${repository.records().length + 1}`,
+        portraitGlyph: portraitGlyph ?? '@',
+      });
+      onConcluded(projection, session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL));
+    } catch (thrown) {
+      const failure = classifyStorageFailure(thrown);
+      onFinalizeError(
+        failure === 'full'
+          ? 'Your browser storage is full, so this run could not be saved to the Hall of Records.'
+          : 'The Hall of Records is unavailable, so this run could not be saved.',
+      );
+      const fallback = session.getSnapshot().conclusion;
+      if (fallback) onConcluded(fallback, session.getSnapshot().log.slice(-CONCLUSION_LOG_TAIL));
+    }
+  }
 
   const dismissibleNotice = notice && !isStorageNotice(notice) ? notice : null;
   const storageNotice = notice && isStorageNotice(notice) ? notice : null;
@@ -291,11 +333,23 @@ function GameRoot({
         currentHeart={repository.currentHeart()}
         onboardingEnabled={onboardingEnabled}
       />
-      {pendingDeathConclusion && (
+      {(pendingDeathConclusion || wandererDeath) && (
         <DeathOverlay
-          onAcknowledge={() =>
-            onConcluded(pendingDeathConclusion.projection, pendingDeathConclusion.logTail)
-          }
+          {...(wandererDeath
+            ? {
+                onRise: () => {
+                  // A successful rise leaves the next snapshot unconcluded, so the effect's own
+                  // guard re-arms naturally and this overlay unmounts; `finalizedRef` was never
+                  // set on that path. No usable checkpoint means the death stands after all.
+                  if (session.riseAgain()) return;
+                  acceptWandererDeath();
+                },
+                onAcknowledge: acceptWandererDeath,
+              }
+            : {
+                onAcknowledge: () =>
+                  onConcluded(pendingDeathConclusion!.projection, pendingDeathConclusion!.logTail),
+              })}
         />
       )}
     </div>
