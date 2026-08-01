@@ -36,12 +36,12 @@ beforeAll(async () => {
 const SEED = [11, 22, 33, 44] as const;
 
 describe('createNewRun', () => {
-  it('builds a valid, deterministic schema-v13 run starting in the authored town', () => {
+  it('builds a valid, deterministic schema-v14 run starting in the authored town', () => {
     const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(13);
+    expect(first.schemaVersion).toBe(14);
     expect(first.offeredArtifact).toBeNull();
     expect(first.artifactsUndiscovered).toEqual([]);
     expect(first.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
@@ -283,6 +283,7 @@ describe('createNewRun records input', () => {
         condition: 81,
         charges: null,
         fuel: null,
+        curse: null,
         qualityRank: 2,
         displayName: `Iron Sword ${rank}`,
         glyph: ')',
@@ -340,8 +341,33 @@ describe('createNewRun records input', () => {
     // Pinned digest: the no-records path must never drift, including its RNG streams. The encoded
     // run carries the pack hash, so every content edit moves this digest through `contentHash`
     // alone; a delta in any other field is a real behavioral drift and must not be re-pinned away.
+    // Re-pinned for the identification.mode: instance sweep (base weapon/armor/shield/ring/light
+    // equipment moves off `known`), which changes the default hero's starting-item identified
+    // state, and again for the sixth (trigger-only) curse added to the roster, which moves
+    // `contentHash` -- both are expected drift, not a behavioral regression. Re-pinned again for
+    // save schema v14 (`ItemInstance.curse`), which moves `schemaVersion` alone, and again for
+    // re-authoring `curse.hungering-edge`'s inert `maxHealth` drawback onto `meleeAccuracy`, which
+    // was verified to move `contentHash` and nothing else in the encoded run.
+    // Re-pinned again for the Town Curios Dealer's new `merchant-service.remove-curse` offer
+    // (content/encounters/town-merchants.yaml) plus the matching `neutral`/`trusted` faction
+    // `serviceIds` grant (content/npc-factions/town-merchants.yaml): `materializeMerchant` rolls
+    // one `remainingUses` die per authored service
+    // (packages/engine/src/merchant-stock.ts:120-129), so the curios dealer's now-two-entry
+    // `services` list consumes one additional `merchant-stock` roll during town materialization.
+    // That shifts the shared `merchant-stock` stream for every merchant materialized afterward
+    // (verified: the Town Spell Vendor's stock selection changes downstream), so this re-pin moves
+    // `contentHash`, `items`, `populations`, and `rng['merchant-stock']` -- confirmed by diffing the
+    // decoded run objects field-by-field against the prior pin; no other key differs, and no other
+    // RNG stream moves. This is expected content-authoring drift from adding a merchant service (the
+    // same category the curse-roster note above and `curse-generation.ts`'s "a pack edit ... is
+    // expected to move every downstream roll" comment already describe), not an engine regression.
+    // Re-pinned again for the scroll of sundering (content/items/sundering-scroll.yaml, a new
+    // `known`-identification item so it never touches the identification-pool sweep) plus its
+    // low-weight `loot-table.floor-scatter-deep` and `loot-table.chest-deep` choices: verified by
+    // diffing the decoded run objects field-by-field against the prior pin -- only `contentHash`
+    // differs, nothing else. This is expected content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '38edea00eac258b68c23b5c3e3b079a57e6b05b3884113c5b28f7cb517189cc1',
+      '6f9ee3d6a8f5cc11f2cac774307b279160cf8e427347df1c3a29b18b7c9247d6',
     );
   });
 

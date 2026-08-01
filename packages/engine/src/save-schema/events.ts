@@ -230,6 +230,13 @@ export const spellCastEvent = z.strictObject({
   actorId: identifier,
   spellId: identifier,
 });
+export const floorEnteredEvent = z.strictObject({
+  type: z.literal('floor.entered'),
+  eventId: identifier,
+  floorId: identifier,
+  depth: safeNonNegative,
+  firstEntry: z.boolean(),
+});
 export const itemEquippedEvent = z.strictObject({
   type: z.literal('item.equipped'),
   eventId: identifier,
@@ -270,6 +277,19 @@ export const itemIdentifiedEvent = z.strictObject({
   type: z.literal('item.identified'),
   eventId: identifier,
   itemId: identifier,
+});
+export const curseRevealedEvent = z.strictObject({
+  type: z.literal('curse.revealed'),
+  eventId: identifier,
+  itemId: identifier,
+  curseId: identifier,
+  revealText: z.string(),
+});
+export const curseRemovedEvent = z.strictObject({
+  type: z.literal('curse.removed'),
+  eventId: identifier,
+  itemId: identifier,
+  curseId: identifier,
 });
 export const hungerStageChangedEvent = z.strictObject({
   type: z.literal('hunger.stage-changed'),
@@ -800,6 +820,7 @@ export const eventOptions = [
   itemUsedEvent,
   spellLearnedEvent,
   heroRecalledEvent,
+  floorEnteredEvent,
   spellCastEvent,
   itemEquippedEvent,
   itemUnequippedEvent,
@@ -807,6 +828,8 @@ export const eventOptions = [
   itemRefueledEvent,
   identificationAppearanceRevealedEvent,
   itemIdentifiedEvent,
+  curseRevealedEvent,
+  curseRemovedEvent,
   hungerStageChangedEvent,
   hungerRestoredEvent,
   fuelWarningEvent,
@@ -965,11 +988,14 @@ import type {
   ConditionAppliedEvent,
   ConditionRemovedEvent,
   CurrencyCollectedEvent,
+  CurseRemovedEvent,
+  CurseRevealedEvent,
   EchoDefeatedEvent,
   EchoEncounteredEvent,
   EchoLootCreatedEvent,
   FeatureRevealedEvent,
   FeatureSearchEvent,
+  FloorEnteredEvent,
   FuelWarningEvent,
   GroupAwarenessSharedEvent,
   GroupLeaderCreatedEvent,
@@ -1098,6 +1124,9 @@ type _HeroRecalledDrift = Expect<
   SchemaMatches<z.infer<typeof heroRecalledEvent>, HeroRecalledEvent>
 >;
 type _SpellCastDrift = Expect<SchemaMatches<z.infer<typeof spellCastEvent>, SpellCastEvent>>;
+type _FloorEnteredDrift = Expect<
+  SchemaMatches<z.infer<typeof floorEnteredEvent>, FloorEnteredEvent>
+>;
 type _ItemEquippedDrift = Expect<
   SchemaMatches<z.infer<typeof itemEquippedEvent>, ItemEquippedEvent>
 >;
@@ -1118,6 +1147,12 @@ type _IdentificationAppearanceRevealedDrift = Expect<
 >;
 type _ItemIdentifiedDrift = Expect<
   SchemaMatches<z.infer<typeof itemIdentifiedEvent>, ItemIdentifiedEvent>
+>;
+type _CurseRevealedDrift = Expect<
+  SchemaMatches<z.infer<typeof curseRevealedEvent>, CurseRevealedEvent>
+>;
+type _CurseRemovedDrift = Expect<
+  SchemaMatches<z.infer<typeof curseRemovedEvent>, CurseRemovedEvent>
 >;
 type _HungerStageChangedDrift = Expect<
   SchemaMatches<z.infer<typeof hungerStageChangedEvent>, HungerStageChangedEvent>

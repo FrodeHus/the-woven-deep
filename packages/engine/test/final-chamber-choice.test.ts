@@ -109,7 +109,7 @@ describe('final-chamber-choice', () => {
     const activeFloor = run.floors.find((floor) => floor.floorId === run.activeFloorId)!;
     expect(activeFloor.depth).toBe(FINAL_CHAMBER_DEPTH);
 
-    const resolution = resolveCommand(run, choiceCommand('become-heart', 0), context());
+    const resolution = resolveCommand(run, choiceCommand('become-heart', run.revision), context());
 
     expect(resolution.result).toMatchObject({ status: 'applied' });
     expect(resolution.state.conclusion).toMatchObject({
@@ -131,7 +131,7 @@ describe('final-chamber-choice', () => {
   it('break-cycle with the full fragment set concludes the run with broke-cycle', () => {
     const run = withAllFragments(inChamberRun());
 
-    const resolution = resolveCommand(run, choiceCommand('break-cycle', 0), context());
+    const resolution = resolveCommand(run, choiceCommand('break-cycle', run.revision), context());
 
     expect(resolution.result).toMatchObject({ status: 'applied' });
     expect(resolution.state.conclusion).toMatchObject({
@@ -144,7 +144,7 @@ describe('final-chamber-choice', () => {
   it('break-cycle without the full fragment set is rejected, and the run stays unconcluded', () => {
     const run = inChamberRun();
 
-    const resolution = resolveCommand(run, choiceCommand('break-cycle', 0), context());
+    const resolution = resolveCommand(run, choiceCommand('break-cycle', run.revision), context());
 
     expect(resolution.result).toMatchObject({
       status: 'invalid',
@@ -169,7 +169,7 @@ describe('final-chamber-choice', () => {
 
   it('rejects any choice after the run has already concluded', () => {
     const run = inChamberRun();
-    const concluded = resolveCommand(run, choiceCommand('become-heart', 0), context());
+    const concluded = resolveCommand(run, choiceCommand('become-heart', run.revision), context());
     const revisionBefore = concluded.state.revision;
 
     const resolution = resolveCommand(
@@ -189,7 +189,7 @@ describe('final-chamber-choice', () => {
     const run = inChamberRun();
     const rngBefore = run.rng;
 
-    const resolution = resolveCommand(run, choiceCommand('become-heart', 0), context());
+    const resolution = resolveCommand(run, choiceCommand('become-heart', run.revision), context());
 
     expect(resolution.state.rng).toEqual(rngBefore);
   });
@@ -197,7 +197,7 @@ describe('final-chamber-choice', () => {
   it('turn-away does not conclude the run (the boss is Task 4)', () => {
     const run = inChamberRun();
 
-    const resolution = resolveCommand(run, choiceCommand('turn-away', 0), context());
+    const resolution = resolveCommand(run, choiceCommand('turn-away', run.revision), context());
 
     expect(resolution.result).toMatchObject({ status: 'applied' });
     expect(resolution.state.conclusion).toBeNull();

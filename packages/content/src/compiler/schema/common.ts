@@ -4,6 +4,7 @@ import {
   CONTENT_DESCRIPTION_MAX_LENGTH,
   CONTENT_LORE_MAX_LENGTH,
   DAMAGE_TYPES,
+  DERIVED_STAT_NAMES,
   DISPOSITIONS,
   ENCOUNTER_FORMATIONS,
   ENCOUNTER_MODELS,
@@ -119,6 +120,15 @@ export const depthRange = {
   minDepth: safePositive,
   maxDepth: safePositive,
 } as const;
+
+export const negativeDerivedStatModifiers = z.partialRecord(
+  z.enum(DERIVED_STAT_NAMES),
+  z
+    .number()
+    .int()
+    .safe()
+    .negative({ message: 'drawback modifier values must be negative safe integers' }),
+);
 
 export const rgb = z.tuple([
   z.number().int().min(0).max(255),

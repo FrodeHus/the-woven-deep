@@ -59,6 +59,7 @@ const LOG_TONE_CLASS: Readonly<Record<LogLine['tone'], string>> = {
   combat: 'text-danger-fg',
   warning: 'text-accent',
   system: 'italic text-muted',
+  curse: 'text-cool',
 };
 
 /** Resolves a killer's display name from its content ID: monsters carry a `name` field; a `null`

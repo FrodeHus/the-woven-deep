@@ -5,6 +5,7 @@ import { itemLightSources } from './equipment.js';
 import { featureTiles } from './features.js';
 import type { ActiveRun, FloorSnapshot, OpaqueId } from './model.js';
 import { refreshKnowledge, type RefreshedPerception } from './perception.js';
+import { deriveRunActorStats } from './stats.js';
 
 export interface FloorPerception extends RefreshedPerception {
   /** The actor whose viewpoint drove the field-of-view (defaults to the hero). */
@@ -52,6 +53,33 @@ export function floorPerception(
     ...(input.lightOutMemory === undefined ? {} : { lightOutMemory: input.lightOutMemory }),
   });
   return { actor, floor: effectiveFloor, ...perception };
+}
+
+/**
+ * Rebuilds the hero's knowledge of its own active floor and writes it back onto that floor.
+ * Every path that moves the hero -- an ordinary world step, a curse's forced shove -- has to run
+ * this before the state is projected, or the client renders a field of view centred on where the
+ * hero used to stand.
+ */
+export function refreshHeroKnowledge(state: ActiveRun, content: CompiledContentPack): ActiveRun {
+  const hero = heroActor(state);
+  const floor = state.floors.find((candidate) => candidate.floorId === hero.floorId);
+  if (!floor) throw new Error(`internal invariant: active floor ${hero.floorId} is missing`);
+  const derived = deriveRunActorStats({ state, content, actor: hero });
+  const knowledge = heroFloorPerception({
+    state,
+    content,
+    lightOutMemory: {
+      commitsMemory: derived.lightOutCommitsMemory > 0,
+      revealRadius: derived.lightOutRevealRadius,
+    },
+  }).knowledge;
+  return {
+    ...state,
+    floors: state.floors.map((candidate) =>
+      candidate === floor ? { ...candidate, knowledge } : candidate,
+    ),
+  };
 }
 
 /** The hero's perception of its own active floor. */

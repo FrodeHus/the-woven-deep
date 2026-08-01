@@ -26,6 +26,7 @@ describe('bundled content', () => {
       'class',
       'background',
       'trait',
+      'curse',
     ] as const;
     expect(
       Object.fromEntries(
@@ -33,14 +34,14 @@ describe('bundled content', () => {
       ),
     ).toEqual({
       monster: 46,
-      item: 52,
+      item: 53,
       spell: 14,
       trap: 2,
       'loot-table': 28,
       balance: 1,
       vault: 7,
       dialogue: 1,
-      'identification-pool': 2,
+      'identification-pool': 6,
       encounter: 45,
       'fallen-champion-template': 1,
       npc: 5,
@@ -49,6 +50,7 @@ describe('bundled content', () => {
       class: 5,
       background: 3,
       trait: 8,
+      curse: 6,
     });
     expect(
       pack.entries.filter((entry) => entry.kind === 'class' && (entry as any).playable),
@@ -200,7 +202,7 @@ describe('bundled content', () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
-    expect(pack.schemaVersion).toBe(11);
+    expect(pack.schemaVersion).toBe(12);
     const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
     expect(entries.get('achievement.defeated-the-deeps-champion')).toMatchObject({
       kind: 'achievement',

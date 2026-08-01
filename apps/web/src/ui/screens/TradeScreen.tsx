@@ -81,7 +81,6 @@ const LIST_LABEL: Readonly<Record<FocusedList, string>> = {
   sell: 'Sell',
   services: 'Services',
 };
-const PICKER_LABEL = 'Identify target';
 
 /** `MerchantServiceId` is a closed, hardcoded union (`packages/content/src/model.ts`) rather than a
  * dynamically registered content entry, so there is no pack lookup that resolves it to a display
@@ -89,6 +88,7 @@ const PICKER_LABEL = 'Identify target';
  * here instead of ever rendering the raw `merchant-service.<id>` string. */
 const SERVICE_LABEL: Readonly<Record<MerchantServiceId, string>> = {
   'merchant-service.identify': 'Identify',
+  'merchant-service.remove-curse': 'Remove curse',
   'merchant-service.strongbox': 'Strongbox',
 };
 
@@ -441,10 +441,14 @@ export function TradeScreen({
           {pickerService && (
             <div className="flex flex-col gap-2 border-t border-line pt-3">
               <p className="font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-cool">
-                ✦ Identify which?{' '}
+                ✦ {SERVICE_LABEL[pickerService.serviceId]} which?{' '}
                 <span className="normal-case text-subtle">· ↑↓ enter · esc back</span>
               </p>
-              <div role="listbox" aria-label={PICKER_LABEL} className="flex flex-wrap gap-2">
+              <div
+                role="listbox"
+                aria-label={`${SERVICE_LABEL[pickerService.serviceId]} target`}
+                className="flex flex-wrap gap-2"
+              >
                 {pickerService.targetItemIds.map((itemId, index) => {
                   const ref = ownedItemRef(snapshot, itemId);
                   const selected = index === pickerIndex;

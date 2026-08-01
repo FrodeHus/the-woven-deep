@@ -145,14 +145,44 @@ describe('merchant stock materialization', () => {
 
     expect(result.items.length).toBeGreaterThan(0);
     expect(result.items.every((item) => item.contentId === eligibleId)).toBe(true);
+    // `item.brass-lantern` moved to `identification.mode: instance` in the cursed-items
+    // identification sweep, so freshly materialized stock is no longer pre-identified.
     expect(
       result.items.every(
-        (item) => item.identified === true && item.fuel !== null && item.enabled === false,
+        (item) => item.identified === false && item.fuel !== null && item.enabled === false,
       ),
     ).toBe(true);
     expect(input.run.rng.combat).toEqual(fixture().run.rng.combat);
     expect(input.run.rng.encounters).toEqual(fixture().run.rng.encounters);
     expect(input.run.rng.loot).toEqual(fixture().run.rng.loot);
+  });
+
+  it('never attaches a curse to merchant stock, even when every eligible item is curse-category', () => {
+    // `item.brass-lantern` is category `light` -- one of the five curse-eligible categories.
+    // Restricting every other item out of the depth-eligible range forces the drawn stock down
+    // to exactly this curse-eligible item, so an unwired call site would show up here directly.
+    const depth = 3;
+    const eligibleId = 'item.brass-lantern';
+    const entries = content.entries.map((entry) =>
+      entry.kind === 'item' && entry.id !== eligibleId
+        ? ({
+            ...entry,
+            minDepth: depth + 1,
+            maxDepth: entry.maxDepth + depth + 1,
+          } as ItemContentEntry)
+        : entry,
+    );
+    const input = {
+      ...fixture(),
+      content: { ...content, entries },
+      run: { ...fixture().run, floors: fixture().run.floors.map((floor) => ({ ...floor, depth })) },
+    };
+
+    const result = materializeMerchant(input);
+
+    expect(result.items.length).toBeGreaterThan(0);
+    expect(result.items.every((item) => item.contentId === eligibleId)).toBe(true);
+    expect(result.items.every((item) => item.curse === undefined)).toBe(true);
   });
 
   it('rejects an empty depth-eligible stock graph before consuming caller state', () => {

@@ -1,5 +1,4 @@
 import type { ContentEntry, ItemContentEntry } from '../../model.js';
-import { DERIVED_STAT_NAMES } from '../../model.js';
 import type { ContentCompileIssue } from '../error.js';
 import { issue, referencedKindIssue, type LocatedContentEntry } from './shared.js';
 
@@ -53,6 +52,9 @@ function artifactItemIssues(
     );
   }
 
+  // Key validity (DERIVED_STAT_NAMES membership) and negativity are enforced by the
+  // `negativeDerivedStatModifiers` zod schema at parse time; only the cross-field
+  // "at least one drawback unless inextinguishable" rule needs a runtime check here.
   const inextinguishable = artifact.light?.inextinguishable === true;
   const drawbackKeys = Object.keys(artifact.drawbackModifiers);
   if (drawbackKeys.length === 0 && !inextinguishable) {
@@ -63,22 +65,6 @@ function artifactItemIssues(
         'artifact items require at least one drawback modifier unless light.inextinguishable is true',
       ),
     );
-  }
-  for (const [key, value] of Object.entries(artifact.drawbackModifiers)) {
-    if (!(DERIVED_STAT_NAMES as readonly string[]).includes(key)) {
-      issues.push(
-        issue(file, `${path}.drawbackModifiers.${key}`, `unknown derived-stat key ${key}`),
-      );
-    }
-    if (value >= 0) {
-      issues.push(
-        issue(
-          file,
-          `${path}.drawbackModifiers.${key}`,
-          'artifact drawback modifiers must be negative',
-        ),
-      );
-    }
   }
 
   if (artifact.signature) {

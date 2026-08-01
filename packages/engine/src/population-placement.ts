@@ -8,11 +8,14 @@ import type {
   VaultPlacementSlot,
 } from '@woven-deep/content';
 import { emptyEquipment, type ActorState } from './actor-model.js';
+import { balanceEntry } from './balance.js';
 import { preservesRequiredRoutes, protectedRouteIndexes, requiredPoints } from './connectivity.js';
+import { applyCurseRolls } from './curse-generation.js';
 import type { DungeonFeature } from './feature-model.js';
 import { heroHoldsFragment, tabletFragmentIds } from './final-chamber-fragments.js';
 import { createFloorItem, createFloorLootFromTable } from './inventory.js';
-import { depthBandFor, placeFloorLoot } from './loot-placement.js';
+import { depthBandFor } from './depth-band.js';
+import { placeFloorLoot } from './loot-placement.js';
 import type { ItemInstance } from './item-model.js';
 import { materializeMerchant } from './merchant-stock.js';
 import {
@@ -567,7 +570,14 @@ function fillItemSlots(
       );
     }
   }
-  return { items, state: currentState ?? state };
+  const band = depthBandFor(input.floor.depth, balanceEntry(input.content).floorLoot.depthBands);
+  const cursed = applyCurseRolls({
+    content: input.content,
+    items,
+    band,
+    state: currentState ?? state,
+  });
+  return { items: cursed.items, state: cursed.state };
 }
 
 /** Resolves the offered artifact's own item entry so the vault slot can check its authored

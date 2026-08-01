@@ -1,4 +1,7 @@
 import { actorById } from './actor-model.js';
+import { balanceEntry } from './balance.js';
+import { applyCurseRolls } from './curse-generation.js';
+import { depthBandFor } from './depth-band.js';
 import type { ChestFeature, DoorFeature, DungeonFeature } from './feature-model.js';
 import {
   tileIndex,
@@ -554,8 +557,10 @@ function materialiseChestLoot(
       y: chest.y,
       depth: floor.depth,
     });
-    lootState = loot.state;
-    created = loot.items;
+    const band = depthBandFor(floor.depth, balanceEntry(content).floorLoot.depthBands);
+    const cursed = applyCurseRolls({ content, items: loot.items, band, state: loot.state });
+    lootState = cursed.state;
+    created = cursed.items;
   } else if (chest.lootContentId !== null) {
     created = [
       createFloorItem({

@@ -47,6 +47,7 @@ export const NPC_BEHAVIOR_PARAMETER_SCHEMAS = {
 
 export const MERCHANT_SERVICE_IDS = [
   'merchant-service.identify',
+  'merchant-service.remove-curse',
   'merchant-service.strongbox',
 ] as const;
 export const MERCHANT_AGGRESSION_RESPONSES = ['flee', 'self-defense'] as const;
@@ -86,6 +87,7 @@ export const EFFECT_PARAMETER_SCHEMAS = {
   'effect.feature.mutate': z.strictObject({ state: stableIdSchema }),
   'effect.spell.learn': z.strictObject({ spellId: stableIdSchema }),
   'effect.recall': z.strictObject({}),
+  'effect.curse.remove': z.strictObject({}),
 } as const satisfies Record<EffectId, z.ZodTypeAny>;
 
 export type { BehaviorId, EffectId } from '../model.js';

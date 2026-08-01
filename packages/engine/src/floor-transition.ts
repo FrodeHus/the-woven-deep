@@ -1,7 +1,9 @@
 import type { CompiledContentPack, VaultContentEntry } from '@woven-deep/content';
-import type { DomainEvent, OpaqueId, Point } from './model.js';
+import type { DomainEvent, FloorEnteredEvent, OpaqueId, Point } from './model.js';
 import { balanceEntry } from './actions.js';
 import { artifactById } from './commerce.js';
+import { applyCurseTriggers } from './curse-triggers.js';
+import { concludeRunOnHeroDeath } from './run-conclusion.js';
 import { heroActor, heroPerception } from './actor-model.js';
 import { FINAL_CHAMBER_DEPTH, generateFinalChamberFloor } from './final-chamber.js';
 import { depthFloorId } from './floor-id.js';
@@ -143,6 +145,76 @@ function applySignatureRecharge(
 }
 
 /**
+ * Builds the `floor.entered` event fired on every floor transition (generated descent, stored
+ * re-entry, ascent, Final Chamber arrival, both recall directions) -- the hook Task 8's
+ * on-floor-enter trigger post-pass fires from regardless of `firstEntry`.
+ *
+ * `eventId` is keyed on `revision`, not `worldTime`: floor transitions never advance `worldTime`
+ * (no turn elapses walking a staircase), so a `worldTime`-keyed id collides the instant the hero
+ * revisits the same floor with zero intervening turns -- e.g. descend / ascend / re-descend, which
+ * lands on the same floor twice. Every floor-transition call in this module bumps `revision` by
+ * exactly 1 as part of producing its returned state (mirroring `input.revision` below), so it is
+ * strictly monotonic across the whole call sequence and therefore collision-free even across
+ * indefinite back-and-forth traversal, unlike `worldTime`. `revision` already exists purely as an
+ * optimistic-concurrency counter for `resolveCommand`'s `expectedRevision` check; extending it to
+ * also count floor transitions is safe because every caller re-reads `run.revision` fresh before
+ * building its next command (see `GuestSession.dispatch`), so nothing hardcodes a gap of exactly 1
+ * revision per turn.
+ */
+function floorEnteredEvent(
+  input: Readonly<{ floorId: OpaqueId; depth: number; firstEntry: boolean; revision: number }>,
+): FloorEnteredEvent {
+  return {
+    type: 'floor.entered',
+    eventId: `event.${input.floorId}.entered-${input.revision}`,
+    floorId: input.floorId,
+    depth: input.depth,
+    firstEntry: input.firstEntry,
+  };
+}
+
+/**
+ * Fires the `on-floor-enter` curse post-pass for one completed floor transition, then closes the
+ * hero-death boundary a lethal curse may just have opened.
+ *
+ * Floor transitions bypass `resolveCommand` entirely -- they are session-layer calls into this
+ * module, and their events never reach a `CommandResolution` -- so the reducer's own post-pass can
+ * never see a `floor.entered` event. Every entry path in this module therefore calls this helper
+ * instead, uniformly: generated descent, stored re-descent, Final Chamber arrival, ascent, and both
+ * recall directions. `floor.entered` stays a pure notification event; the resolver is handed the
+ * transition's own event rather than scanning for it.
+ *
+ * The conclusion is closed here for the same reason the reducer closes it inside the killing
+ * transition: a curse that kills the hero on arrival must never leave a dead hero in an unconcluded
+ * run. `turn` is unchanged (walking a staircase elapses no turn) and `revision` is the transition's
+ * own freshly bumped revision.
+ */
+function applyFloorEntryTriggers(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    entryEvent: FloorEnteredEvent;
+    revision: number;
+  }>,
+): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+  const triggered = applyCurseTriggers({
+    state: input.state,
+    content: input.content,
+    events: [input.entryEvent],
+    eventId: input.entryEvent.eventId,
+  });
+  if (triggered.events.length === 0) return { state: triggered.state, events: [] };
+  return concludeRunOnHeroDeath({
+    state: triggered.state,
+    content: input.content,
+    events: triggered.events,
+    revision: input.revision,
+    turn: input.state.turn,
+    eventId: input.entryEvent.eventId,
+  });
+}
+
+/**
  * Generates and enters the floor below the hero's current one. The hero must stand on the active
  * floor's stair-down tile; the run must not already be concluded. Mirrors `createNewRun`'s
  * floor-generation settings (same width/height/theme) so the whole run stays on one generation
@@ -182,7 +254,23 @@ export function descendToNextFloor(
     }
     const entered = enterStoredFloor(run, { floorId, arrival });
     const restocked = applyMerchantRestocks({ state: entered, content: context.content });
-    return { state: restocked.state, events: restocked.events };
+    const revision = run.revision + 1;
+    const entryEvent = floorEnteredEvent({
+      floorId,
+      depth: nextDepth,
+      firstEntry: false,
+      revision,
+    });
+    const triggered = applyFloorEntryTriggers({
+      state: { ...restocked.state, revision },
+      content: context.content,
+      entryEvent,
+      revision,
+    });
+    return {
+      state: triggered.state,
+      events: [entryEvent, ...restocked.events, ...triggered.events],
+    };
   }
 
   // The Final Chamber is authored, not generated (mirroring the town's own bootstrap in
@@ -229,7 +317,18 @@ export function descendToNextFloor(
       }),
     );
     const restocked = applyMerchantRestocks({ state: withChamber, content: context.content });
-    return { state: restocked.state, events: restocked.events };
+    const revision = run.revision + 1;
+    const entryEvent = floorEnteredEvent({ floorId, depth: nextDepth, firstEntry: true, revision });
+    const triggered = applyFloorEntryTriggers({
+      state: { ...restocked.state, revision },
+      content: context.content,
+      entryEvent,
+      revision,
+    });
+    return {
+      state: triggered.state,
+      events: [entryEvent, ...restocked.events, ...triggered.events],
+    };
   }
 
   const allocation = allocateFloorSeed(run.rng.generation);
@@ -277,7 +376,18 @@ export function descendToNextFloor(
     content: context.content,
   });
   const restocked = applyMerchantRestocks({ state: recharged, content: context.content });
-  return { state: restocked.state, events: [...integrated.events, ...restocked.events] };
+  const revision = run.revision + 1;
+  const entryEvent = floorEnteredEvent({ floorId, depth: nextDepth, firstEntry: true, revision });
+  const triggered = applyFloorEntryTriggers({
+    state: { ...restocked.state, revision },
+    content: context.content,
+    entryEvent,
+    revision,
+  });
+  return {
+    state: triggered.state,
+    events: [entryEvent, ...integrated.events, ...restocked.events, ...triggered.events],
+  };
 }
 
 /**
@@ -338,16 +448,15 @@ export function enterStoredFloor(
 /**
  * Ascends the hero from the active floor's stair-up tile to the floor one depth shallower (town
  * for depth 1), arriving on that floor's stair-down tile. The target floor is always already
- * stored: a floor can only be reached by descending from it in the first place. Never generates,
- * never records `floorsEntered` (only first-ever entries count, and this revisits a floor already
- * counted), and emits no events -- nothing happens to the world by moving between floors that
- * already exist.
+ * stored: a floor can only be reached by descending from it in the first place. Never generates
+ * and never records `floorsEntered` (only first-ever entries count, and this revisits a floor
+ * already counted) -- the only event emitted is `floor.entered` with `firstEntry: false`, the same
+ * hook a stored re-descent fires.
  */
 export function ascendToPreviousFloor(
   run: ActiveRun,
   context: Readonly<{ content: CompiledContentPack }>,
 ): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
-  void context;
   if (run.conclusion !== null) {
     throw new Error('ascendToPreviousFloor cannot transition a concluded run');
   }
@@ -372,8 +481,21 @@ export function ascendToPreviousFloor(
     throw new Error(`internal invariant: floor ${targetFloorId} has no stair-down`);
   }
 
-  const state = enterStoredFloor(run, { floorId: targetFloorId, arrival });
-  return { state, events: [] };
+  const entered = enterStoredFloor(run, { floorId: targetFloorId, arrival });
+  const revision = run.revision + 1;
+  const entryEvent = floorEnteredEvent({
+    floorId: targetFloorId,
+    depth: targetFloor.depth,
+    firstEntry: false,
+    revision,
+  });
+  const triggered = applyFloorEntryTriggers({
+    state: { ...entered, revision },
+    content: context.content,
+    entryEvent,
+    revision,
+  });
+  return { state: triggered.state, events: [entryEvent, ...triggered.events] };
 }
 
 /**
@@ -381,20 +503,33 @@ export function ascendToPreviousFloor(
  * stair-down (the dungeon entrance -- the town has no stair-up). `returnAnchorFloorId` was already
  * set on `run` by the cast reducer path (see `action-dispatch.ts`'s `cast` handler) and survives
  * `enterStoredFloor`'s spread untouched, so the resulting town state still carries the anchor.
- * Consumes no randomness and emits no events -- like `ascendToPreviousFloor`, moving between
- * already-existing floors is pure bookkeeping.
+ * Consumes no randomness. Emits `floor.entered` with `firstEntry: false` -- the town is always
+ * already stored (it is the run's own starting floor), so a recall arrival is never a first entry,
+ * exactly like `ascendToPreviousFloor` and a stored re-descent.
  */
 export function recallToTown(
   run: ActiveRun,
   context: Readonly<{ content: CompiledContentPack }>,
 ): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
-  void context;
   const town = run.floors.find((floor) => floor.floorId === TOWN_FLOOR_ID);
   if (!town) throw new Error('internal invariant: run has no town floor');
   const arrival = town.stairDown;
   if (arrival === null) throw new Error('internal invariant: town floor has no stair-down');
-  const state = enterStoredFloor(run, { floorId: town.floorId, arrival });
-  return { state, events: [] };
+  const entered = enterStoredFloor(run, { floorId: town.floorId, arrival });
+  const revision = run.revision + 1;
+  const entryEvent = floorEnteredEvent({
+    floorId: town.floorId,
+    depth: town.depth,
+    firstEntry: false,
+    revision,
+  });
+  const triggered = applyFloorEntryTriggers({
+    state: { ...entered, revision },
+    content: context.content,
+    entryEvent,
+    revision,
+  });
+  return { state: triggered.state, events: [entryEvent, ...triggered.events] };
 }
 
 /**
@@ -402,13 +537,14 @@ export function recallToTown(
  * that floor's stair-down (falling back to its stair-up for the rare case a floor has none, e.g.
  * the Final Chamber). Clears `returnAnchorFloorId` by deleting the key entirely -- the save schema
  * types it as an optional field, and `exactOptionalPropertyTypes` forbids assigning it `undefined`
- * instead of omitting it.
+ * instead of omitting it. Emits `floor.entered` with `firstEntry: false`: the anchored floor is
+ * always already stored (recall can only anchor a floor the hero already stood on), so returning to
+ * it is never a first entry.
  */
 export function recallReturn(
   run: ActiveRun,
   context: Readonly<{ content: CompiledContentPack }>,
 ): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
-  void context;
   const anchorId = run.returnAnchorFloorId;
   if (anchorId === undefined) throw new Error('recallReturn requires an anchored floor');
   const anchor = run.floors.find((floor) => floor.floorId === anchorId);
@@ -418,5 +554,18 @@ export function recallReturn(
     throw new Error(`internal invariant: anchor floor ${anchorId} has no stair`);
   const moved = enterStoredFloor(run, { floorId: anchorId, arrival });
   const { returnAnchorFloorId: _cleared, ...rest } = moved;
-  return { state: rest, events: [] };
+  const revision = run.revision + 1;
+  const entryEvent = floorEnteredEvent({
+    floorId: anchorId,
+    depth: anchor.depth,
+    firstEntry: false,
+    revision,
+  });
+  const triggered = applyFloorEntryTriggers({
+    state: { ...rest, revision },
+    content: context.content,
+    entryEvent,
+    revision,
+  });
+  return { state: triggered.state, events: [entryEvent, ...triggered.events] };
 }

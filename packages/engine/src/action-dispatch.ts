@@ -8,6 +8,7 @@ import { spellLearnTarget } from './caster.js';
 import { validateTarget } from './targeting.js';
 import { consumeItemQuantity, dropItem, pickupItem, splitStack } from './inventory.js';
 import { artifactById } from './commerce.js';
+import { revealItemCurse } from './curse.js';
 import {
   equipItem,
   itemLightSources,
@@ -401,7 +402,14 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       itemId: action.itemId,
       slot: action.slot,
     });
-    return { state: transition.run, chargeEnergy: true };
+    const revealed = revealItemCurse({
+      run: transition.run,
+      content,
+      itemId: action.itemId,
+      eventId,
+    });
+    events.push(...revealed.events);
+    return { state: revealed.state, chargeEnergy: true };
   },
   unequip: ({ state, action, actor, eventId, events }) => {
     const transition = unequipItem({ run: state, actorId: actor.actorId, slot: action.slot });

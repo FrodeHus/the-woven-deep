@@ -193,6 +193,7 @@ function standing(
       condition: 73,
       charges: 4,
       fuel: 9,
+      curse: null,
       qualityRank: 2,
       displayName: `Hero ${rank}'s Blade`,
       glyph: ')',

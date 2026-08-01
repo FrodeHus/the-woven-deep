@@ -1,4 +1,4 @@
-schemaVersion: 11
+schemaVersion: 12
 entries:
   - kind: encounter
     id: encounter.town-provisioner
@@ -88,6 +88,7 @@ entries:
       acceptedCategories: [potion, ring, scroll]
       services:
         - { serviceId: merchant-service.identify, basePrice: 10, minimumUses: 1, maximumUses: 2, tierIds: [neutral, trusted] }
+        - { serviceId: merchant-service.remove-curse, basePrice: 30, minimumUses: 1, maximumUses: 1, tierIds: [neutral, trusted] }
       permanent: true
       aggressionResponse: flee
       commerceReputationDelta: 25

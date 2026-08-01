@@ -3,6 +3,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   compileContentDirectory,
   type CompiledContentPack,
+  type CurseContentEntry,
+  type ItemContentEntry,
   type MonsterContentEntry,
 } from '@woven-deep/content/compiler';
 import {
@@ -591,5 +593,152 @@ describe('run conclusion', () => {
       completionType: 'died',
       cause: { killerContentId: null },
     });
+  });
+});
+
+describe('curse trigger post-pass', () => {
+  const onKillCurse: CurseContentEntry = {
+    kind: 'curse',
+    id: 'curse.reducer-edge',
+    name: 'Reducer Edge',
+    tags: ['curse'],
+    revealText: 'The blade drinks deep.',
+    drawbackModifiers: {},
+    trigger: {
+      on: 'on-kill',
+      chanceBps: 10000,
+      effect: {
+        effectId: 'effect.damage',
+        requiresLivingTarget: true,
+        parameters: { damageType: 'arcane', dice: { count: 1, sides: 3, bonus: 0 } },
+      },
+    },
+  };
+
+  const cursedBlade: ItemContentEntry = {
+    kind: 'item',
+    id: 'item.reducer-blade',
+    name: 'Reducer Blade',
+    glyph: '/',
+    color: '#ffffff',
+    tags: [],
+    category: 'weapon',
+    stackLimit: 1,
+    price: 10,
+    rarity: 'common',
+    minDepth: 0,
+    maxDepth: 20,
+    actionCost: 100,
+    equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
+    combat: null,
+    light: null,
+    artifact: null,
+    identification: { mode: 'known', poolId: null },
+    effects: [],
+  };
+
+  const BLADE_ID = 'item.reducer-blade.1';
+
+  function killScenario(input: Readonly<{ heroHealth: number; revealed: boolean }>) {
+    const base = createDemoContentPack();
+    const content: CompiledContentPack = {
+      ...base,
+      entries: [
+        ...base.entries,
+        monsterDefinition('monster.curse-target'),
+        cursedBlade,
+        onKillCurse,
+      ],
+    };
+    const demo = createDemoRun();
+    const hero: ActorState = {
+      ...demo.actors[0]!,
+      health: input.heroHealth,
+      equipment: { ...demo.actors[0]!.equipment, 'main-hand': BLADE_ID },
+    };
+    const target: ActorState = {
+      ...hero,
+      actorId: 'monster.curse-target',
+      contentId: 'monster.curse-target',
+      playerControlled: false,
+      x: hero.x + 1,
+      y: hero.y,
+      health: 1,
+      maxHealth: 1,
+      equipment: demo.actors[0]!.equipment,
+      disposition: 'hostile',
+      populationId: null,
+    };
+    const initial: ActiveRun = {
+      ...demo,
+      actors: [hero, target],
+      items: [
+        {
+          itemId: BLADE_ID,
+          contentId: cursedBlade.id,
+          quantity: 1,
+          condition: 100,
+          enchantment: null,
+          identified: false,
+          charges: null,
+          fuel: null,
+          enabled: null,
+          location: { type: 'equipped', actorId: hero.actorId, slot: 'main-hand' },
+          curse: { curseId: onKillCurse.id, revealed: input.revealed },
+        },
+      ],
+      rng: { ...demo.rng, combat: combatStateProducing(20) },
+    };
+    const command: GameCommand = {
+      type: 'attack',
+      commandId: 'command.curse-kill',
+      expectedRevision: 0,
+      targetActorId: target.actorId,
+    };
+    return { initial, content, command };
+  }
+
+  it('fires an on-kill curse in the same transition as the kill, and reveals it', () => {
+    const { initial, content, command } = killScenario({ heroHealth: 20, revealed: false });
+    const resolution = resolveCommandWithContext(initial, command, { content });
+
+    expect(resolution.result.status).toBe('applied');
+    expect(heroActor(resolution.state).health).toBeLessThan(20);
+    expect(resolution.state.items[0]!.curse).toEqual({
+      curseId: onKillCurse.id,
+      revealed: true,
+    });
+    expect(resolution.events).toContainEqual(
+      expect.objectContaining({ type: 'curse.revealed', curseId: onKillCurse.id }),
+    );
+  });
+
+  it('concludes the run when a curse trigger lands the killing blow', () => {
+    const { initial, content, command } = killScenario({ heroHealth: 1, revealed: true });
+    const resolution = resolveCommandWithContext(initial, command, { content });
+
+    expect(heroActor(resolution.state).health).toBe(0);
+    expect(resolution.state.conclusion).not.toBeNull();
+    expect(resolution.events.at(-1)).toMatchObject({
+      type: 'run.concluded',
+      completionType: 'died',
+    });
+  });
+
+  it('does not run the post-pass on a concluded run', () => {
+    const { initial, content, command } = killScenario({ heroHealth: 20, revealed: true });
+    const concluded: ActiveRun = {
+      ...initial,
+      conclusion: {
+        completionType: 'died',
+        cause: { killerContentId: null, depth: 1, turn: 0, worldTime: 0 },
+        concludedAtRevision: 0,
+        finalized: false,
+      },
+    };
+    const resolution = resolveCommandWithContext(concluded, command, { content });
+
+    expect(resolution.result).toMatchObject({ status: 'invalid', reason: 'run.concluded' });
+    expect(resolution.state.rng.effects).toEqual(concluded.rng.effects);
   });
 });

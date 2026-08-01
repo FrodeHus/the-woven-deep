@@ -1,12 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { resolve } from 'node:path';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
   createDemoContentPack,
   createDemoRun,
+  createGameplayDemoRun,
   expandLegacySeed,
+  resolveCommand,
   resolveEffectSequence,
   type ActorState,
+  type ItemInstance,
 } from '../src/index.js';
-import type { ConditionContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, ConditionContentEntry } from '@woven-deep/content';
+import { compileContentDirectory } from '@woven-deep/content/compiler';
 
 function effectContent() {
   const base = createDemoContentPack();
@@ -234,5 +239,117 @@ describe('ordered effects', () => {
       forceMoveDirection: { x: 0, y: 0 },
     };
     expect(() => resolveEffectSequence(input)).toThrow(/unit direction/i);
+  });
+});
+
+function cursedItem(
+  itemId: string,
+  overrides: Readonly<{ actorId?: string; revealed?: boolean }> = {},
+): ItemInstance {
+  const { actorId = 'hero.demo', revealed = true } = overrides;
+  return {
+    itemId,
+    contentId: 'item.dummy',
+    quantity: 1,
+    condition: 100,
+    enchantment: null,
+    identified: true,
+    charges: null,
+    fuel: null,
+    enabled: null,
+    location: { type: 'backpack', actorId },
+    curse: { curseId: 'curse.test', revealed },
+  };
+}
+
+describe('effect.curse.remove', () => {
+  it('removes the curse from the first revealed cursed item in itemId order', () => {
+    const itemA = cursedItem('item.a.0001');
+    const itemB = cursedItem('item.a.0002');
+    const result = resolveEffectSequence({
+      ...fixture([
+        { effectId: 'effect.curse.remove', parameters: {}, requiresLivingTarget: false },
+      ]),
+      items: [itemB, itemA],
+      targetActorId: 'hero.demo',
+    });
+    expect(result.items.find((item) => item.itemId === 'item.a.0001')!.curse).toBeUndefined();
+    expect(result.items.find((item) => item.itemId === 'item.a.0002')!.curse).toBeDefined();
+    expect(result.events).toContainEqual({
+      type: 'curse.removed',
+      eventId: 'command.effect',
+      itemId: 'item.a.0001',
+      curseId: 'curse.test',
+    });
+  });
+
+  it('leaves an unrevealed curse alone', () => {
+    const sword = cursedItem('item.sword.1', { revealed: false });
+    const result = resolveEffectSequence({
+      ...fixture([
+        { effectId: 'effect.curse.remove', parameters: {}, requiresLivingTarget: false },
+      ]),
+      items: [sword],
+      targetActorId: 'hero.demo',
+    });
+    expect(result.items.some((item) => item.curse !== undefined)).toBe(true);
+    expect(result.events).toEqual([]);
+  });
+
+  it('consumes no randomness whether or not it finds a target', () => {
+    const input = {
+      ...fixture([
+        { effectId: 'effect.curse.remove', parameters: {}, requiresLivingTarget: false },
+      ]),
+      items: [],
+      targetActorId: 'hero.demo',
+    };
+    const result = resolveEffectSequence(input);
+    expect(result.effectsState).toEqual(input.effectsState);
+  });
+
+  describe('the scroll of sundering', () => {
+    let pack: CompiledContentPack;
+
+    beforeAll(async () => {
+      pack = await compileContentDirectory({
+        rootDir: resolve(import.meta.dirname, '../../../content'),
+      });
+    });
+
+    function scrollInstance(actorId: string, itemId = 'item.sundering-scroll.1'): ItemInstance {
+      return {
+        itemId,
+        contentId: 'item.sundering-scroll',
+        quantity: 1,
+        condition: 100,
+        enchantment: null,
+        identified: true,
+        charges: null,
+        fuel: null,
+        enabled: null,
+        location: { type: 'backpack', actorId },
+      };
+    }
+
+    it('does not consume the scroll when there is no cursed item to sunder', () => {
+      const { run } = createGameplayDemoRun(pack);
+      const hero = run.actors.find((actor) => actor.playerControlled)!;
+      const scroll = scrollInstance(hero.actorId);
+      const withScroll = { ...run, items: [...run.items, scroll] };
+      const resolved = resolveCommand(
+        withScroll,
+        {
+          type: 'use-item',
+          commandId: 'command.sunder',
+          expectedRevision: withScroll.revision,
+          itemId: scroll.itemId,
+          target: null,
+        },
+        { content: pack },
+      );
+      expect(resolved.result).toMatchObject({ status: 'invalid', reason: 'target.invalid' });
+      expect(resolved.state.items.find((item) => item.itemId === scroll.itemId)!.quantity).toBe(1);
+    });
   });
 });

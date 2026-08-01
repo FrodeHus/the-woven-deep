@@ -284,6 +284,7 @@ const LOG_TONE_CLASS: Readonly<Record<string, string>> = {
   warning: 'text-danger-fg',
   combat: 'text-accent',
   system: 'text-muted',
+  curse: 'text-cool',
 };
 
 /** Colorblind reinforcement classes (`styles.css`'s `.journal-log-line--*::before` rules): a silent
@@ -293,6 +294,7 @@ const LOG_REINFORCEMENT_CLASS: Readonly<Record<string, string>> = {
   warning: 'journal-log-line--warning',
   combat: 'journal-log-line--combat',
   system: 'journal-log-line--system',
+  curse: 'journal-log-line--curse',
 };
 
 function JournalPane({ snapshot }: Readonly<{ snapshot: SessionSnapshot }>): JSX.Element {

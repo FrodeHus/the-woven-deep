@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type {
   CompiledContentPack,
+  CurseContentEntry,
   EncounterContentEntry,
   FallenChampionTemplateContentEntry,
   ItemContentEntry,
@@ -149,6 +150,16 @@ const template: FallenChampionTemplateContentEntry = {
   },
 };
 
+const leadenWeightCurse: CurseContentEntry = {
+  kind: 'curse',
+  id: 'curse.leaden-weight',
+  name: 'Leaden Weight',
+  tags: ['curse'],
+  revealText: 'It grows heavier the longer you carry it.',
+  drawbackModifiers: { defense: -1 },
+  trigger: null,
+};
+
 function pack(extra: readonly ItemContentEntry[] = []): CompiledContentPack {
   const base = createDemoContentPack();
   return {
@@ -159,6 +170,7 @@ function pack(extra: readonly ItemContentEntry[] = []): CompiledContentPack {
       bossLoot,
       bossEncounter,
       template,
+      leadenWeightCurse,
       itemDef('item.fallback', { rarity: 'common' }),
       ...extra,
     ],
@@ -255,6 +267,7 @@ describe('selectHeirloom', () => {
       condition: 62,
       charges: 3,
       fuel: 7,
+      curse: null,
       qualityRank: 2,
       displayName: 'Hero sword',
       glyph: '/',
@@ -414,6 +427,7 @@ describe('selectHeirloom', () => {
       condition: 100,
       charges: null,
       fuel: null,
+      curse: null,
       qualityRank: 0,
       displayName: 'Name of item.fallback',
       glyph: ')',
@@ -442,6 +456,28 @@ describe('selectHeirloom', () => {
       conclusion: null,
     };
     expect(() => selectHeirloom({ run, content, template, recordId })).toThrow(/conclud/i);
+  });
+
+  it('carries the curse into the heirloom snapshot, revealed', () => {
+    const content = pack([itemDef('item.sword')]);
+    const deadHeroRun = deadRun([
+      equippedItem('item.hero.sword', 'item.sword', 'main-hand', {
+        curse: { curseId: 'curse.leaden-weight', revealed: true },
+      }),
+    ]);
+    const result = selectHeirloom({ run: deadHeroRun, content, template, recordId });
+    expect(result.snapshot.curse).toEqual({ curseId: 'curse.leaden-weight', revealed: true });
+  });
+
+  it('reveals an unrevealed curse when the item becomes an heirloom', () => {
+    const content = pack([itemDef('item.sword')]);
+    const deadHeroRun = deadRun([
+      equippedItem('item.hero.sword', 'item.sword', 'main-hand', {
+        curse: { curseId: 'curse.leaden-weight', revealed: false },
+      }),
+    ]);
+    const result = selectHeirloom({ run: deadHeroRun, content, template, recordId });
+    expect(result.snapshot.curse).toEqual({ curseId: 'curse.leaden-weight', revealed: true });
   });
 });
 
@@ -502,6 +538,7 @@ describe('selectRecordHeirloom', () => {
       condition: 71,
       charges: null,
       fuel: 12,
+      curse: null,
       qualityRank: 1,
       displayName: 'Name of item.marias-grace',
       glyph: ')',

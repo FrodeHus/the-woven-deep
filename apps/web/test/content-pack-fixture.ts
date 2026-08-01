@@ -86,6 +86,11 @@ const entries: readonly ContentEntry[] = [
       monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 },
       attemptCap: 16,
     },
+    curses: {
+      chanceBps: { shallow: 1000, mid: 2000, deep: 3500 },
+      enchantedMultiplierBps: 20000,
+      capBps: 5000,
+    },
     fragmentSpawnRollDenominator: 40,
     generation: { doorTilePercent: 35, artifactOfferPercent: 12 },
     floorLoot: {

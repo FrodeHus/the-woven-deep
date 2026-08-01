@@ -1,4 +1,4 @@
-schemaVersion: 11
+schemaVersion: 12
 entries:
   - kind: item
     id: item.cloth-wrap
@@ -18,5 +18,5 @@ entries:
     combat: { accuracy: 0, defense: 0, armor: 0, damage: null, range: 0, ammunitionTag: null }
     light: null
     artifact: null
-    identification: { mode: known, poolId: null }
+    identification: { mode: instance, poolId: identification-pool.armor }
     effects: []

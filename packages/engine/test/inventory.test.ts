@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type {
   CompiledContentPack,
+  CurseContentEntry,
   ItemContentEntry,
   LootTableContentEntry,
 } from '@woven-deep/content';
@@ -16,6 +17,7 @@ import {
   inventorySlotCount,
   mergeStacks,
   pickupItem,
+  recordedHeirloomContentId,
   resolveCommand,
   splitStack,
   validateContentBoundRun,
@@ -690,6 +692,7 @@ describe('createRecordedHeirloom artifact recovery', () => {
       condition: 71,
       charges: null,
       fuel: null,
+      curse: null,
       qualityRank: 0,
       displayName: "Maria's Grace",
       glyph: '(',
@@ -698,6 +701,16 @@ describe('createRecordedHeirloom artifact recovery', () => {
       ...overrides,
     };
   }
+
+  const leadenWeightCurse: CurseContentEntry = {
+    kind: 'curse',
+    id: 'curse.leaden-weight',
+    name: 'Leaden Weight',
+    tags: ['curse'],
+    revealText: 'It grows heavier the longer you carry it.',
+    drawbackModifiers: { defense: -1 },
+    trigger: null,
+  };
 
   function artifactPack(): CompiledContentPack {
     return content(
@@ -833,5 +846,51 @@ describe('createRecordedHeirloom artifact recovery', () => {
     });
     expect(created.fallback).toBe(true);
     expect(created.item.contentId).toBe('item.champion-fallback-relic');
+  });
+
+  it('materializes a recovered heirloom still cursed and revealed', () => {
+    const packWithCurse: CompiledContentPack = {
+      ...artifactPack(),
+      entries: [...artifactPack().entries, leadenWeightCurse],
+    };
+    const created = createRecordedHeirloom({
+      content: packWithCurse,
+      snapshot: snapshot({ curse: { curseId: 'curse.leaden-weight', revealed: true } }),
+      equippedItemContentIds: ['item.marias-grace'],
+      fallbackItemId: 'item.champion-fallback-relic',
+      itemId: 'item.recovered.0001',
+      floorId: 'floor.1',
+      x: 3,
+      y: 4,
+    });
+    expect(created.item.curse).toEqual({ curseId: 'curse.leaden-weight', revealed: true });
+  });
+
+  it('degrades to the fallback relic when the recorded curse no longer exists in the pack', () => {
+    const resolved = recordedHeirloomContentId({
+      content: artifactPack(),
+      snapshot: snapshot({ curse: { curseId: 'curse.deleted', revealed: true } }),
+      equippedItemContentIds: ['item.marias-grace'],
+      fallbackItemId: 'item.champion-fallback-relic',
+    });
+    expect(resolved).toBe('item.champion-fallback-relic');
+  });
+
+  it('drops the curse when the snapshot degrades to the fallback relic', () => {
+    const created = createRecordedHeirloom({
+      content: artifactPack(),
+      snapshot: snapshot({
+        contentId: 'item.removed-artifact',
+        curse: { curseId: 'curse.leaden-weight', revealed: true },
+      }),
+      equippedItemContentIds: ['item.removed-artifact'],
+      fallbackItemId: 'item.champion-fallback-relic',
+      itemId: 'item.recovered.0001',
+      floorId: 'floor.1',
+      x: 3,
+      y: 4,
+    });
+    expect(created.fallback).toBe(true);
+    expect(created.item.curse).toBeUndefined();
   });
 });

@@ -1,0 +1,30 @@
+schemaVersion: 12
+entries:
+  - kind: identification-pool
+    id: identification-pool.shields
+    name: Shield unidentified names
+    tags: [identification, shield]
+    category: shield
+    verbs:
+      - Banded
+      - Battered
+      - Dented
+      - Notched
+      - Scored
+      - Splintered
+      - Warped
+      - Weathered
+    nouns:
+      - board
+      - buckler
+      - bulwark
+      - plank
+      - rim
+      - round
+      - ward
+      - wood
+    visuals:
+      - { id: visual.iron-rimmed, glyph: "]", color: "#8a8a86" }
+      - { id: visual.oakwood, glyph: "]", color: "#ad8455" }
+      - { id: visual.painted-hide, glyph: "]", color: "#9f7655" }
+      - { id: visual.scarred-bronze, glyph: "]", color: "#a67b4f" }

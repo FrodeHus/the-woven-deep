@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
+import type { CompiledContentPack, CurseContentEntry, ItemContentEntry } from '@woven-deep/content';
 import {
   createDemoContentPack,
   createDemoRun,
@@ -41,7 +41,7 @@ function definition(id: string, overrides: Partial<ItemContentEntry>): ItemConte
   };
 }
 
-function pack(...entries: ItemContentEntry[]): CompiledContentPack {
+function pack(...entries: (ItemContentEntry | CurseContentEntry)[]): CompiledContentPack {
   const base = createDemoContentPack();
   return { ...base, entries: [...base.entries, ...entries] };
 }
@@ -258,6 +258,79 @@ describe('equipment planning and item lights', () => {
       actorId: 'hero.demo',
     });
     expect(nonArtifactSources).toEqual([]);
+  });
+
+  const leadenWeight: CurseContentEntry = {
+    kind: 'curse',
+    id: 'curse.leaden-weight',
+    name: 'Leaden Weight',
+    tags: ['curse', 'armor'],
+    revealText: 'It settles onto you like wet earth, and does not lift.',
+    drawbackModifiers: { defense: -1, meleeAccuracy: -1 },
+    trigger: null,
+  };
+
+  function cursedSwordRun(curseState: { revealed: boolean; identified: boolean }) {
+    const sword = definition('item.sword.cursed', {
+      equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
+      combat: { accuracy: 0, defense: 8, armor: 0, damage: null, range: 1, ammunitionTag: null },
+    });
+    const base = createDemoRun();
+    const swordItem: ItemInstance = {
+      ...item('item.sword.cursed.1', sword.id, {
+        type: 'equipped',
+        actorId: 'hero.demo',
+        slot: 'main-hand',
+      }),
+      identified: curseState.identified,
+      curse: { curseId: 'curse.leaden-weight', revealed: curseState.revealed },
+    };
+    const hero = {
+      ...base.actors[0]!,
+      equipment: { ...base.actors[0]!.equipment, 'main-hand': swordItem.itemId },
+    };
+    return {
+      run: { ...base, actors: [hero], items: [swordItem] },
+      content: pack(sword, leadenWeight),
+    };
+  }
+
+  function plainSwordRun() {
+    const sword = definition('item.sword.plain', {
+      equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
+      combat: { accuracy: 0, defense: 8, armor: 0, damage: null, range: 1, ammunitionTag: null },
+    });
+    const base = createDemoRun();
+    const swordItem: ItemInstance = item('item.sword.plain.1', sword.id, {
+      type: 'equipped',
+      actorId: 'hero.demo',
+      slot: 'main-hand',
+    });
+    const hero = {
+      ...base.actors[0]!,
+      equipment: { ...base.actors[0]!.equipment, 'main-hand': swordItem.itemId },
+    };
+    return { run: { ...base, actors: [hero], items: [swordItem] }, content: pack(sword) };
+  }
+
+  it('applies curse drawbacks on the enchantment side, never in publicModifiers', () => {
+    const { run, content } = cursedSwordRun({ revealed: true, identified: false });
+    const [source] = equipmentModifiers({ run, content, actorId: 'hero.demo' });
+    expect(source!.modifiers).toMatchObject({ defense: 7, meleeAccuracy: -1 });
+    expect(source!.publicModifiers.meleeAccuracy).toBeUndefined();
+    expect(source!.publicModifiers.defense).toBe(8);
+  });
+
+  it('exposes curse drawbacks in publicModifiers once the item is identified', () => {
+    const { run, content } = cursedSwordRun({ revealed: true, identified: true });
+    const [source] = equipmentModifiers({ run, content, actorId: 'hero.demo' });
+    expect(source!.publicModifiers).toEqual(source!.modifiers);
+  });
+
+  it('leaves an uncursed item unchanged', () => {
+    const { run, content } = plainSwordRun();
+    const [source] = equipmentModifiers({ run, content, actorId: 'hero.demo' });
+    expect(source!.modifiers).toEqual(source!.publicModifiers);
   });
 
   it('emits light only from enabled equipped or floor-placed fueled items', () => {

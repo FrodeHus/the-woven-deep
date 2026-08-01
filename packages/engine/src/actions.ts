@@ -632,6 +632,20 @@ export function validatePlayerAction(
         target: command.target,
       });
     }
+    // effect.curse.remove targets the actor's own revealed cursed items (see effects.ts), never
+    // resolveEffectSequence's actor target -- so a rejection here must not fall through to the
+    // generic try/catch below, which would only ever silently no-op rather than reject.
+    if (
+      definition.effects.some((effect) => effect.effectId === 'effect.curse.remove') &&
+      !input.state.items.some(
+        (item) =>
+          (item.location.type === 'backpack' || item.location.type === 'equipped') &&
+          item.location.actorId === actor.actorId &&
+          item.curse?.revealed === true,
+      )
+    ) {
+      return { status: 'invalid', reason: 'target.invalid' };
+    }
     let targetActor = actor;
     if (command.target !== null) {
       const candidate = input.state.actors.find(

@@ -3,6 +3,7 @@ import type {
   IdentificationPoolContentEntry,
   ItemContentEntry,
 } from '@woven-deep/content';
+import { revealItemCurse } from './curse.js';
 import type { IdentificationState } from './item-model.js';
 import type { ActiveRun, DomainEvent, OpaqueId, RngStreams } from './model.js';
 import { rollDie } from './random.js';
@@ -164,7 +165,16 @@ export function identifyItemCompletely(
     itemId: input.itemId,
     eventId: input.eventId,
   });
-  return { state: identified.state, events: [...appearance.events, ...identified.events] };
+  const revealed = revealItemCurse({
+    run: identified.state,
+    content: input.content,
+    itemId: input.itemId,
+    eventId: input.eventId,
+  });
+  return {
+    state: revealed.state,
+    events: [...appearance.events, ...identified.events, ...revealed.events],
+  };
 }
 
 export function projectItem(
@@ -214,6 +224,23 @@ export function projectItem(
   if (item.enchantment && item.identified) projected.enchantment = item.enchantment;
   else if (item.enchantment || (entry.identification.mode === 'instance' && !item.identified)) {
     projected.unknownProperties = true;
+  }
+  // Revealed-gated: an unrevealed curse (`item.curse.revealed === false`) never reaches this
+  // branch's projection -- only a hero who has felt a curse bite (equip, or a fired trigger) gets
+  // to see what it is, per the design's "curses are discovered, not read" rule.
+  if (item.curse?.revealed) {
+    const curseEntry = input.content.entries.find(
+      (candidate) => candidate.kind === 'curse' && candidate.id === item.curse!.curseId,
+    );
+    if (!curseEntry || curseEntry.kind !== 'curse') {
+      throw new Error(`internal invariant: curse definition ${item.curse.curseId} does not exist`);
+    }
+    projected.curse = {
+      curseId: curseEntry.id,
+      name: curseEntry.name,
+      revealText: curseEntry.revealText,
+      drawbackModifiers: curseEntry.drawbackModifiers,
+    };
   }
   return projected;
 }

@@ -225,6 +225,13 @@ export interface HeroRecalledEvent {
   readonly actorId: OpaqueId;
   readonly anchorFloorId: OpaqueId;
 }
+export interface FloorEnteredEvent {
+  readonly type: 'floor.entered';
+  readonly eventId: OpaqueId;
+  readonly floorId: OpaqueId;
+  readonly depth: number;
+  readonly firstEntry: boolean;
+}
 export interface SpellCastEvent {
   readonly type: 'spell.cast';
   readonly eventId: OpaqueId;
@@ -271,6 +278,19 @@ export interface ItemIdentifiedEvent {
   readonly type: 'item.identified';
   readonly eventId: OpaqueId;
   readonly itemId: OpaqueId;
+}
+export interface CurseRevealedEvent {
+  readonly type: 'curse.revealed';
+  readonly eventId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly curseId: OpaqueId;
+  readonly revealText: string;
+}
+export interface CurseRemovedEvent {
+  readonly type: 'curse.removed';
+  readonly eventId: OpaqueId;
+  readonly itemId: OpaqueId;
+  readonly curseId: OpaqueId;
 }
 export interface HungerStageChangedEvent {
   readonly type: 'hunger.stage-changed';
@@ -808,6 +828,7 @@ export type DomainEvent =
   | ItemUsedEvent
   | SpellLearnedEvent
   | HeroRecalledEvent
+  | FloorEnteredEvent
   | SpellCastEvent
   | ItemEquippedEvent
   | ItemUnequippedEvent
@@ -815,6 +836,8 @@ export type DomainEvent =
   | ItemRefueledEvent
   | IdentificationAppearanceRevealedEvent
   | ItemIdentifiedEvent
+  | CurseRevealedEvent
+  | CurseRemovedEvent
   | HungerStageChangedEvent
   | HungerRestoredEvent
   | FuelWarningEvent

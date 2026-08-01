@@ -8,6 +8,7 @@ const TONE_CLASS: Record<LogLine['tone'], string> = {
   combat: 'text-danger',
   warning: 'text-warn',
   system: 'text-muted',
+  curse: 'text-cool',
 };
 
 /** Colorblind reinforcement classes (`styles.css`'s `.log-line--*::before` rules): a silent leading
@@ -17,6 +18,7 @@ const REINFORCEMENT_CLASS: Partial<Record<LogLine['tone'], string>> = {
   combat: 'log-line--combat',
   warning: 'log-line--warning',
   system: 'log-line--system',
+  curse: 'log-line--curse',
 };
 
 /** The floating log shows only the most recent handful of lines -- older history lives in the

@@ -1,4 +1,4 @@
-schemaVersion: 11
+schemaVersion: 12
 entries:
   - kind: item
     id: item.pitch-torch
@@ -26,5 +26,5 @@ entries:
       warningThresholds: [200, 80]
       fuelTags: []
     artifact: null
-    identification: { mode: known, poolId: null }
+    identification: { mode: instance, poolId: identification-pool.light-sources }
     effects: []

@@ -4,6 +4,7 @@ import { achievementEntry } from './schema/achievement.js';
 import { balanceEntry } from './schema/balance.js';
 import { backgroundEntry, classEntry, traitEntry } from './schema/character.js';
 import { conditionEntry } from './schema/condition.js';
+import { curseEntry } from './schema/curse.js';
 import { dialogueEntry } from './schema/dialogue.js';
 import { encounterEntry } from './schema/encounter.js';
 import { fallenChampionTemplateEntry } from './schema/champion.js';
@@ -52,6 +53,7 @@ export const contentSourceEntrySchema = z.discriminatedUnion('kind', [
   classEntry,
   backgroundEntry,
   traitEntry,
+  curseEntry,
 ]);
 
 export const contentEntrySchema = contentSourceEntrySchema.transform((entry) => {

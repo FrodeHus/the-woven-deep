@@ -200,6 +200,7 @@ function standing(rank: number): FallenHeroStandingSnapshot {
       condition: 81,
       charges: null,
       fuel: null,
+      curse: null,
       qualityRank: 2,
       displayName: `${rank === 1 ? "Ada's" : "Bryn's"} Iron Sword`,
       glyph: ')',

@@ -118,6 +118,32 @@ describe('recall', () => {
     expect(inTown.recentCommands).toHaveLength(0);
   });
 
+  it('emits floor.entered with firstEntry: false on recallToTown (town is always already stored)', () => {
+    const { run, recallPack } = runOnDungeonFloorWithTown();
+    const cast = resolveCommand(
+      run,
+      {
+        type: 'cast',
+        commandId: 'command.recall',
+        expectedRevision: run.revision,
+        spellId: RECALL_SPELL_ID,
+        target: null,
+      },
+      { content: recallPack },
+    );
+
+    const moved = recallToTown(cast.state, { content: recallPack });
+    expect(moved.events).toEqual([
+      expect.objectContaining({
+        type: 'floor.entered',
+        floorId: TOWN_FLOOR_ID,
+        depth: 0,
+        firstEntry: false,
+      }),
+    ]);
+    expect(moved.events[0]!.eventId).toMatch(/^event\..+\.entered-\d+$/);
+  });
+
   it('returns to the anchored floor via recallReturn, clearing the anchor', () => {
     const { run, recallPack } = runOnDungeonFloorWithTown();
     const dungeonFloorId = run.activeFloorId;
@@ -137,6 +163,35 @@ describe('recall', () => {
     const back = recallReturn(inTown, { content: recallPack }).state;
     expect(back.activeFloorId).toBe(dungeonFloorId);
     expect(back.returnAnchorFloorId).toBeUndefined();
+  });
+
+  it('emits floor.entered with firstEntry: false on recallReturn (the anchored floor is always already stored)', () => {
+    const { run, recallPack } = runOnDungeonFloorWithTown();
+    const dungeonFloorId = run.activeFloorId;
+    const dungeonFloor = run.floors.find((floor) => floor.floorId === dungeonFloorId)!;
+    const cast = resolveCommand(
+      run,
+      {
+        type: 'cast',
+        commandId: 'command.recall',
+        expectedRevision: run.revision,
+        spellId: RECALL_SPELL_ID,
+        target: null,
+      },
+      { content: recallPack },
+    );
+    const inTown = recallToTown(cast.state, { content: recallPack }).state;
+
+    const back = recallReturn(inTown, { content: recallPack });
+    expect(back.events).toEqual([
+      expect.objectContaining({
+        type: 'floor.entered',
+        floorId: dungeonFloorId,
+        depth: dungeonFloor.depth,
+        firstEntry: false,
+      }),
+    ]);
+    expect(back.events[0]!.eventId).toMatch(/^event\..+\.entered-\d+$/);
   });
 
   it('rejects a recall cast while already in town with recall.already-town', () => {

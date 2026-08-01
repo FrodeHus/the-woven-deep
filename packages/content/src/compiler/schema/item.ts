@@ -8,6 +8,7 @@ import {
   itemCategories,
   itemHandedness,
   itemRarities,
+  negativeDerivedStatModifiers,
   presented,
   rgb,
   safeInteger,
@@ -61,7 +62,7 @@ const artifactLight = z.strictObject({
 const itemArtifact = z.strictObject({
   canon: z.literal(true),
   signature: artifactSignature.nullable(),
-  drawbackModifiers: z.record(z.string(), safeInteger),
+  drawbackModifiers: negativeDerivedStatModifiers,
   light: artifactLight.nullable(),
 });
 

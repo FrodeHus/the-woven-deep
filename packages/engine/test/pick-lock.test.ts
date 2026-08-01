@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
+import type {
+  BalanceContentEntry,
+  CompiledContentPack,
+  CurseContentEntry,
+  ItemContentEntry,
+  LootTableContentEntry,
+} from '@woven-deep/content';
 import {
   createDemoContentPack,
   createDemoRun,
@@ -364,5 +370,90 @@ describe('pickLock', () => {
       context: { content: content() },
     });
     expect(validation).toMatchObject({ type: 'pick-lock', featureId: door.featureId });
+  });
+});
+
+const chestWeaponDrop = itemDefinition('item.chest-weapon', {
+  category: 'weapon',
+  equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
+  combat: {
+    accuracy: 0,
+    defense: 0,
+    armor: 0,
+    damage: { count: 1, sides: 4, bonus: 0 },
+    range: 1,
+    ammunitionTag: null,
+  },
+});
+
+const chestWeaponLootTable: LootTableContentEntry = {
+  kind: 'loot-table',
+  id: 'loot-table.chest-weapon',
+  name: 'Chest weapon drop',
+  tags: [],
+  rolls: 1,
+  choices: [
+    {
+      contentId: chestWeaponDrop.id,
+      lootTableId: null,
+      weight: 1,
+      minimumQuantity: 1,
+      maximumQuantity: 1,
+    },
+  ],
+};
+
+const chestCurse: CurseContentEntry = {
+  kind: 'curse',
+  id: 'curse.chest-weapon-test',
+  name: 'Test Chest Curse',
+  tags: ['curse', 'weapon'],
+  revealText: 'It was waiting in the dark for a hand to close around.',
+  drawbackModifiers: { meleeAccuracy: -1 },
+  trigger: null,
+};
+
+/** Every band's `chanceBps` forced to 10000 and `capBps` raised to 10000 (uncapped) so a curse
+ * always resolves once rolled -- the demo pack's authored `capBps` (5000) would otherwise clamp a
+ * forced 10000 chance back down to a 50/50. */
+function forceCurseChance(pack: CompiledContentPack): CompiledContentPack {
+  return {
+    ...pack,
+    entries: pack.entries.map((entry) => {
+      if (entry.kind !== 'balance') return entry;
+      const balance = entry as BalanceContentEntry;
+      return {
+        ...balance,
+        curses: {
+          ...balance.curses,
+          chanceBps: { shallow: 10000, mid: 10000, deep: 10000 },
+          capBps: 10000,
+        },
+      };
+    }),
+  };
+}
+
+describe('pickLock chest curses', () => {
+  it('rolls a curse onto a table-drawn chest item, threading run.rng.loot', () => {
+    const base = createDemoRun();
+    const hero = heroAt(base, 2, 1);
+    const chest = lockedChest({ lootTableId: chestWeaponLootTable.id, lootContentId: null }, 2);
+    const cursedContent = forceCurseChance({
+      ...content(),
+      entries: [...content().entries, chestWeaponLootTable, chestWeaponDrop, chestCurse],
+    });
+    const run: ActiveRun = { ...base, actors: [hero], features: [chest], items: [lockpickItem()] };
+    const result = pickLock({
+      run,
+      content: cursedContent,
+      actorId: hero.actorId,
+      featureId: chest.featureId,
+      eventId: 'event.pick',
+    });
+    const dropped = result.run.items.find((item) => item.contentId === chestWeaponDrop.id);
+    expect(dropped?.curse).toEqual({ curseId: chestCurse.id, revealed: false });
+    expect(result.run.rng.loot).not.toEqual(base.rng.loot);
+    expect(roundTrips(result.run)).toBe(true);
   });
 });

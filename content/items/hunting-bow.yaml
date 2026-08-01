@@ -1,4 +1,4 @@
-schemaVersion: 11
+schemaVersion: 12
 entries:
   - kind: item
     id: item.hunting-bow
@@ -25,5 +25,5 @@ entries:
       ammunitionTag: arrow
     light: null
     artifact: null
-    identification: { mode: known, poolId: null }
+    identification: { mode: instance, poolId: identification-pool.weapons }
     effects: []

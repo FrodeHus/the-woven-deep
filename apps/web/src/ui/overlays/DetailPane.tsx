@@ -1,6 +1,8 @@
 import type { JSX, ReactNode } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
+import type { DerivedStatName } from '@woven-deep/engine';
 import { effectLabel } from '../labels.js';
+import { DERIVED_STAT_LABELS } from '../derived-stats-display.js';
 import { itemById } from '../../session/pack-queries.js';
 import { itemKnownFacts } from '../../session/item-facts.js';
 import {
@@ -190,6 +192,26 @@ export function DetailPane({
             label={signature.name}
             value={`${item.charges ?? 0} / ${signature.maximumCharges}`}
           />
+        </section>
+      )}
+
+      {/* Curse: revealed-gated by the projection itself (`item.curse` is `undefined` until the
+       * curse has bitten), so this pane never needs its own identified/unidentified branching --
+       * absence of the field IS "nothing to show here" for both an unrevealed curse and an
+       * ordinary item alike. The `cool` tone matches the log line's `curse` tone. */}
+      {item.curse && (
+        <section aria-label="Curse" className="flex flex-col gap-1 border border-cool p-2">
+          <h4 className="text-[10px] uppercase tracking-[0.14em] text-cool">
+            Curse: {item.curse.name}
+          </h4>
+          <p className="text-sm italic text-cool">{item.curse.revealText}</p>
+          {Object.entries(item.curse.drawbackModifiers).map(([stat, amount]) => (
+            <FactRow
+              key={stat}
+              label={DERIVED_STAT_LABELS[stat as DerivedStatName] ?? stat}
+              value={<span className="text-cool">{`${amount >= 0 ? '+' : ''}${amount}`}</span>}
+            />
+          ))}
         </section>
       )}
 

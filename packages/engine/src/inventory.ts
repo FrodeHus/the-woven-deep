@@ -12,6 +12,9 @@ import {
   type LootTableContentEntry,
 } from '@woven-deep/content';
 import { actorById } from './actor-model.js';
+import { balanceEntry } from './balance.js';
+import { applyCurseRolls } from './curse-generation.js';
+import { depthBandFor } from './depth-band.js';
 import type { ItemInstance } from './item-model.js';
 import type { ActiveRun, OpaqueId, Uint32State } from './model.js';
 import type { RecordedHeirloomSnapshot } from './population-model.js';
@@ -434,7 +437,18 @@ export function createPopulationLoot(
     y: input.y,
     depth: input.depth,
   });
-  const createdItems: readonly ItemInstance[] = unique ? [unique, ...loot.items] : [...loot.items];
+  // Curses roll only over the table-drawn loot, never `unique` -- a guaranteed unique drop is boss
+  // canon and must not vary run to run.
+  const band = depthBandFor(input.depth, balanceEntry(input.content).floorLoot.depthBands);
+  const cursed = applyCurseRolls({
+    content: input.content,
+    items: loot.items,
+    band,
+    state: loot.state,
+  });
+  const createdItems: readonly ItemInstance[] = unique
+    ? [unique, ...cursed.items]
+    : [...cursed.items];
   if (!input.dryRun) {
     for (const item of createdItems) {
       if (input.state.items.some((existing) => existing.itemId === item.itemId)) {
@@ -447,7 +461,7 @@ export function createPopulationLoot(
   }
   const receipt: PopulationLootReceipt = {
     lootStateBefore,
-    lootStateAfter: loot.state,
+    lootStateAfter: cursed.state,
     items: createdItems
       .map((item) => ({ itemId: item.itemId, contentId: item.contentId, quantity: item.quantity }))
       .sort((left, right) => compareCodeUnits(left.itemId, right.itemId)),
@@ -459,7 +473,7 @@ export function createPopulationLoot(
         items: [...input.state.items, ...createdItems].sort((left, right) =>
           compareCodeUnits(left.itemId, right.itemId),
         ),
-        rng: { ...input.state.rng, loot: loot.state },
+        rng: { ...input.state.rng, loot: cursed.state },
       };
   return { state, createdItems, unique, receipt };
 }
@@ -502,6 +516,9 @@ export function createRecordedHeirloom(
     charges: fallback ? null : input.snapshot.charges,
     fuel: fallback || fuelless ? (definition.light?.fuelCapacity ?? null) : input.snapshot.fuel,
     enabled: definition.light === null ? null : false,
+    // A degraded fallback relic resolved a different item than the record named, so the recorded
+    // curse belongs to nothing here -- exactly the reasoning the charges branch above already uses.
+    ...(fallback || input.snapshot.curse === null ? {} : { curse: input.snapshot.curse }),
     location: { type: 'floor', floorId: input.floorId, x: input.x, y: input.y },
     heirloom: {
       displayName,
@@ -547,6 +564,11 @@ export function recordedHeirloomContentId(
   const modifiersCompatible = Object.keys(input.snapshot.enchantment?.modifiers ?? {}).every(
     (name) => (DERIVED_STAT_NAMES as readonly string[]).includes(name),
   );
+  const curseCompatible =
+    input.snapshot.curse === null ||
+    input.content.entries.some(
+      (entry) => entry.kind === 'curse' && entry.id === input.snapshot.curse!.curseId,
+    );
   // An artifact travels in the backpack as readily as in a slot, so it is absent from the record's
   // equipped list as often as not. Requiring membership would silently degrade every recovered
   // backpack artifact to the fallback relic; the remaining compatibility checks still apply.
@@ -557,7 +579,8 @@ export function recordedHeirloomContentId(
     recorded?.heirloomEligible === true &&
     recorded.equipment !== null &&
     fuelCompatible &&
-    modifiersCompatible
+    modifiersCompatible &&
+    curseCompatible
     ? input.snapshot.contentId
     : input.fallbackItemId;
 }

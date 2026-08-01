@@ -43,4 +43,66 @@ describe('foldEventsIntoLog', () => {
     );
     expect(log).toMatchObject([{ text: 'You gather 12 gold.', tone: 'info' }]);
   });
+
+  it('logs the authored reveal text when a curse reveals', () => {
+    const { log } = foldEventsIntoLog(
+      [],
+      [
+        {
+          type: 'curse.revealed',
+          eventId: 'e1',
+          itemId: 'item.a.0001',
+          curseId: 'curse.leaden-weight',
+          revealText: 'It settles onto you like wet earth, and does not lift.',
+        },
+      ],
+      0,
+    );
+    expect(log).toMatchObject([
+      { text: 'It settles onto you like wet earth, and does not lift.', tone: 'curse' },
+    ]);
+  });
+
+  it('logs a curse removal', () => {
+    const { log } = foldEventsIntoLog(
+      [],
+      [
+        {
+          type: 'curse.removed',
+          eventId: 'e1',
+          itemId: 'item.a.0001',
+          curseId: 'curse.leaden-weight',
+        },
+      ],
+      0,
+    );
+    expect(log).toMatchObject([
+      { text: 'The weight lifts. The thing is only iron again.', tone: 'curse' },
+    ]);
+  });
+
+  it('logs the refusal when a cursed item will not come free', () => {
+    const { log } = foldEventsIntoLog(
+      [],
+      [
+        {
+          type: 'action.invalid',
+          eventId: 'e1',
+          commandId: 'command.unequip',
+          reason: 'item.cursed',
+        },
+      ],
+      0,
+    );
+    expect(log).toMatchObject([{ text: 'It will not come free.', tone: 'system' }]);
+  });
+
+  it('logs nothing for a floor entry', () => {
+    const { log } = foldEventsIntoLog(
+      [],
+      [{ type: 'floor.entered', eventId: 'e1', floorId: 'floor.2', depth: 2, firstEntry: true }],
+      0,
+    );
+    expect(log).toEqual([]);
+  });
 });

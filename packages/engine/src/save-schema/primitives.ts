@@ -44,6 +44,7 @@ export const equipmentSlot = z.enum([
 export const positiveQuantity = z.number().int().safe().positive();
 export const merchantServiceId = z.enum([
   'merchant-service.identify',
+  'merchant-service.remove-curse',
   'merchant-service.strongbox',
 ]);
 export const blockReason = z.enum([
@@ -63,6 +64,7 @@ export const blockReason = z.enum([
   'item.quantity',
   'item.incompatible',
   'item.id-conflict',
+  'item.cursed',
   'light.inextinguishable',
   'signature.no-charges',
   'target.not_visible',

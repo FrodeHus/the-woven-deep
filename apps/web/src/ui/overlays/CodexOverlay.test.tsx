@@ -40,6 +40,7 @@ function record(overrides: Partial<StoredHallRecord> = {}): StoredHallRecord {
       condition: 100,
       charges: null,
       fuel: null,
+      curse: null,
       qualityRank: 1,
       displayName: "Ada's Iron Sword",
       glyph: ')',

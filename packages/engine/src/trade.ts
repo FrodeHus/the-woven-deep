@@ -2,6 +2,7 @@ import type {
   CompiledContentPack,
   ItemContentEntry,
   MerchantEncounterContentEntry,
+  MerchantServiceId,
   NpcFactionContentEntry,
 } from '@woven-deep/content';
 import { heroActor, type ActorState } from './actor-model.js';
@@ -354,6 +355,45 @@ function planSell(
   };
 }
 
+/**
+ * Item ids the given service can legally act on for this hero, sorted by `compareCodeUnits`.
+ * `merchant-service.identify` targets hero-owned items with something left to identify (an
+ * unidentified instance, or an unrevealed shuffled appearance); `merchant-service.remove-curse`
+ * targets hero-owned items whose curse exists and has been revealed -- an unrevealed curse stays
+ * invisible to this list the same way it stays invisible to the merchant's sell offer;
+ * `merchant-service.strongbox` takes no target and always returns an empty list.
+ */
+export function serviceTargetItemIds(
+  input: Readonly<{ state: ActiveRun; content: CompiledContentPack; serviceId: MerchantServiceId }>,
+): readonly OpaqueId[] {
+  const { state, content, serviceId } = input;
+  if (serviceId === 'merchant-service.strongbox') return [];
+  const hero = heroActor(state);
+  const heroOwned = state.items.filter(
+    (item) =>
+      (item.location.type === 'backpack' || item.location.type === 'equipped') &&
+      item.location.actorId === hero.actorId,
+  );
+  if (serviceId === 'merchant-service.remove-curse') {
+    return heroOwned
+      .filter((item) => item.curse !== undefined && item.curse.revealed)
+      .map((item) => item.itemId)
+      .sort(compareCodeUnits);
+  }
+  return heroOwned
+    .filter((item) => {
+      const definition = itemDefinition(content, item.contentId);
+      const appearanceId = state.identification.appearanceByContentId[item.contentId];
+      const appearanceUnknown =
+        definition.identification.mode === 'shuffled' &&
+        appearanceId !== undefined &&
+        !state.identification.knownAppearanceIds.includes(appearanceId);
+      return !item.identified || appearanceUnknown;
+    })
+    .map((item) => item.itemId)
+    .sort(compareCodeUnits);
+}
+
 interface ServicePlan {
   readonly service: MerchantServiceState;
   readonly price: number;
@@ -366,10 +406,10 @@ type ServicePlanResult =
 /**
  * Preflight-and-plan for a merchant service. Tier gating requires BOTH directions: the hero's
  * current faction tier must allow the service, and the merchant's saved offer must list that
- * tier -- shared by every service. The two services then diverge:
- * - `merchant-service.identify` requires a `targetItemId` naming a hero-owned item (backpack or
- *   equipped) that still has something to identify (an unidentified instance, or an unrevealed
- *   shuffled appearance).
+ * tier -- shared by every service. The services then diverge:
+ * - `merchant-service.identify` and `merchant-service.remove-curse` both require a `targetItemId`
+ *   naming a hero-owned item that appears in `serviceTargetItemIds` for that service -- identify
+ *   for an item with something left to identify, remove-curse for an item whose curse is revealed.
  * - `merchant-service.strongbox` is a single, run-wide house-capacity upgrade: it requires no
  *   target (`targetItemId` must be `null`) and is rejected once `house.upgradesPurchased` has
  *   already reached 1, even if the offer's own remaining-uses count would otherwise still allow
@@ -411,20 +451,9 @@ function planService(
     if (state.hero.currency < price) return { ok: false, reason: 'trade.insufficient-funds' };
     return { ok: true, plan: { service, price, currency: state.hero.currency - price } };
   }
-  const target = state.items.find((candidate) => candidate.itemId === command.targetItemId);
-  const hero = heroActor(state);
-  const heroOwned =
-    target !== undefined &&
-    (target.location.type === 'backpack' || target.location.type === 'equipped') &&
-    target.location.actorId === hero.actorId;
-  if (!target || !heroOwned) return { ok: false, reason: 'trade.target-invalid' };
-  const definition = itemDefinition(content, target.contentId);
-  const appearanceId = state.identification.appearanceByContentId[target.contentId];
-  const appearanceUnknown =
-    definition.identification.mode === 'shuffled' &&
-    appearanceId !== undefined &&
-    !state.identification.knownAppearanceIds.includes(appearanceId);
-  if (target.identified && !appearanceUnknown) return { ok: false, reason: 'trade.target-invalid' };
+  if (command.targetItemId === null) return { ok: false, reason: 'trade.target-invalid' };
+  const targets = serviceTargetItemIds({ state, content, serviceId: command.serviceId });
+  if (!targets.includes(command.targetItemId)) return { ok: false, reason: 'trade.target-invalid' };
   let price: number;
   try {
     price = quoteMerchantService({
@@ -688,6 +717,34 @@ export function resolveTradeCommand(
             merchantPopulationId: trade.merchantPopulationId,
             serviceId: command.serviceId,
             targetItemId: null,
+            price: plan.plan.price,
+            currency: plan.plan.currency,
+            remainingUses,
+          },
+        ],
+      };
+    }
+    if (command.serviceId === 'merchant-service.remove-curse') {
+      const targetItemId = command.targetItemId!;
+      const nextState: ActiveRun = {
+        ...charged,
+        items: charged.items.map((item) => {
+          if (item.itemId !== targetItemId) return item;
+          // Removal deletes the curse and nothing else: enchantment, identification, condition,
+          // charges, fuel, and location all survive. An equipped item simply stops being welded.
+          const { curse: _removed, ...rest } = item;
+          return rest;
+        }),
+      };
+      return {
+        state: nextState,
+        events: [
+          {
+            type: 'trade.service-purchased',
+            eventId: command.commandId,
+            merchantPopulationId: trade.merchantPopulationId,
+            serviceId: command.serviceId,
+            targetItemId,
             price: plan.plan.price,
             currency: plan.plan.currency,
             remainingUses,

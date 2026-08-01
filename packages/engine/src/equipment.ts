@@ -1,12 +1,17 @@
 import type { CompiledContentPack, DerivedStatName, ItemContentEntry } from '@woven-deep/content';
 import { actorById, type EquipmentSlot } from './actor-model.js';
 import type { DerivedStatModifier } from './attributes.js';
+import { itemIsWelded } from './curse.js';
 import type { ItemInstance } from './item-model.js';
 import type { LightSource } from './light-model.js';
 import type { ActiveRun, OpaqueId } from './model.js';
 import { consumeItemQuantity, inventorySlotCount } from './inventory.js';
 
-const SLOT_ORDER: readonly EquipmentSlot[] = [
+/**
+ * The canonical slot iteration order. Every equipped-item walk that must be deterministic (stat
+ * modifiers, curse trigger rolls) uses it, so a replay visits equipment in the same sequence.
+ */
+export const EQUIPMENT_SLOT_ORDER: readonly EquipmentSlot[] = [
   'main-hand',
   'off-hand',
   'body',
@@ -32,10 +37,13 @@ export type EquipmentPlan =
       unequip: readonly OpaqueId[];
       reservedSlots: readonly EquipmentSlot[];
     }>
-  | Readonly<{ ok: false; reason: 'item.missing' | 'item.unavailable' | 'inventory.full' }>;
+  | Readonly<{
+      ok: false;
+      reason: 'item.missing' | 'item.unavailable' | 'inventory.full' | 'item.cursed';
+    }>;
 
 function orderedSlots(slots: ReadonlySet<EquipmentSlot>): readonly EquipmentSlot[] {
-  return SLOT_ORDER.filter((slot) => slots.has(slot));
+  return EQUIPMENT_SLOT_ORDER.filter((slot) => slots.has(slot));
 }
 
 export function equipmentPlan(
@@ -72,7 +80,10 @@ export function equipmentPlan(
       item.location.slot,
       ...(existing?.reservedSlots ?? []),
     ]);
-    if ([...occupied].some((slot) => existingOccupied.has(slot))) displaced.push(item.itemId);
+    if ([...occupied].some((slot) => existingOccupied.has(slot))) {
+      if (itemIsWelded(item)) return { ok: false, reason: 'item.cursed' };
+      displaced.push(item.itemId);
+    }
   }
   displaced.sort();
   const slots = inventorySlotCount({ run: input.run, actorId: actor.actorId });
@@ -90,7 +101,10 @@ export function equipmentPlan(
 
 export type EquipmentTransition =
   | Readonly<{ ok: true; run: ActiveRun }>
-  | Readonly<{ ok: false; reason: 'item.missing' | 'item.unavailable' | 'inventory.full' }>;
+  | Readonly<{
+      ok: false;
+      reason: 'item.missing' | 'item.unavailable' | 'inventory.full' | 'item.cursed';
+    }>;
 
 export function equipItem(
   input: Readonly<{
@@ -143,6 +157,8 @@ export function unequipItem(
   if (!actor) return { ok: false, reason: 'item.missing' };
   const itemId = actor.equipment[input.slot];
   if (!itemId) return { ok: false, reason: 'item.unavailable' };
+  const instance = input.run.items.find((item) => item.itemId === itemId);
+  if (instance && itemIsWelded(instance)) return { ok: false, reason: 'item.cursed' };
   const slots = inventorySlotCount({ run: input.run, actorId: actor.actorId });
   if (slots.used >= slots.capacity) return { ok: false, reason: 'inventory.full' };
   const equipment = { ...actor.equipment, [input.slot]: null };
@@ -178,7 +194,7 @@ export function equipmentModifiers(
   const actor = actorById(input.run, input.actorId);
   if (!actor) throw new Error(`internal invariant: actor ${input.actorId} does not exist`);
   const sources: EquipmentModifierSource[] = [];
-  for (const slot of SLOT_ORDER) {
+  for (const slot of EQUIPMENT_SLOT_ORDER) {
     const itemId = actor.equipment[slot];
     if (!itemId || sources.some((source) => source.itemId === itemId)) continue;
     const item = input.run.items.find((candidate) => candidate.itemId === itemId);
@@ -201,6 +217,22 @@ export function equipmentModifiers(
     const modifiers = { ...base } as Record<string, number>;
     for (const [name, amount] of Object.entries(item.enchantment?.modifiers ?? {})) {
       modifiers[name] = (modifiers[name] ?? 0) + amount;
+    }
+    // Curse drawbacks ride the enchantment-side path, never `base`. `publicModifiers` falls back to
+    // `base` for an unidentified item, so folding a curse into `base` would leak the drawback on the
+    // character sheet before the hero has any way to know the item is cursed. Artifact drawbacks can
+    // safely fold into `base` above only because artifacts are always identification mode `known`.
+    const curseId = item.curse?.curseId;
+    if (curseId !== undefined) {
+      const curse = input.content.entries.find(
+        (entry) => entry.kind === 'curse' && entry.id === curseId,
+      );
+      if (!curse || curse.kind !== 'curse') {
+        throw new Error(`internal invariant: curse definition ${curseId} does not exist`);
+      }
+      for (const [name, amount] of Object.entries(curse.drawbackModifiers)) {
+        modifiers[name] = (modifiers[name] ?? 0) + amount;
+      }
     }
     sources.push({ itemId, modifiers, publicModifiers: item.identified ? modifiers : base });
   }

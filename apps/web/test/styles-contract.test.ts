@@ -378,7 +378,7 @@ describe('landing page reduced-motion stylesheet contract', () => {
 
 describe('colorblind reinforcement stylesheet contract (Task 9)', () => {
   it('gives each colored log tone a non-color leading glyph via a silent ::before', () => {
-    for (const tone of ['combat', 'warning', 'system']) {
+    for (const tone of ['combat', 'warning', 'system', 'curse']) {
       const rule = new RegExp(`\\.log-line--${tone}::before\\s*\\{([^}]*)\\}`).exec(css);
       expect(rule, `expected a ::before glyph for .log-line--${tone}`).toBeTruthy();
       // CSS alt-text syntax `content: "..." / ""` keeps the glyph out of the accessibility tree.
@@ -387,7 +387,7 @@ describe('colorblind reinforcement stylesheet contract (Task 9)', () => {
   });
 
   it('gives each colored journal log tone the same silent reinforcement glyph', () => {
-    for (const tone of ['combat', 'warning', 'system']) {
+    for (const tone of ['combat', 'warning', 'system', 'curse']) {
       const rule = new RegExp(`\\.journal-log-line--${tone}::before\\s*\\{([^}]*)\\}`).exec(css);
       expect(rule, `expected a ::before glyph for .journal-log-line--${tone}`).toBeTruthy();
       expect(rule![1]).toMatch(/content\s*:\s*"[^"]+"\s*\/\s*""/);

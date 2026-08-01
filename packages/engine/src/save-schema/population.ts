@@ -14,6 +14,7 @@ import {
 } from './primitives.js';
 import { lastKnownTarget } from './actor.js';
 import { merchantPopulation, merchantPopulationV7 } from './merchant.js';
+import { itemCurse } from './item.js';
 
 export const relationship = z.strictObject({
   leftActorId: identifier,
@@ -147,6 +148,7 @@ export const heirloom = z.strictObject({
   condition: safeNonNegative,
   charges: safeNonNegative.nullable(),
   fuel: safeNonNegative.nullable(),
+  curse: itemCurse.nullable(),
   qualityRank: safeNonNegative,
   displayName: heroName,
   glyph: z.string().refine((value) => [...value].length === 1, 'must be one Unicode glyph'),

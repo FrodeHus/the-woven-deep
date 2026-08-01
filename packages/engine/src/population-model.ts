@@ -1,6 +1,7 @@
 import type { BaseAttributes } from './actor-model.js';
 import type { OpaqueId, Uint32State } from './model.js';
 import type { MerchantPopulation } from './merchant-model.js';
+import type { ItemCurseState } from './item-model.js';
 
 export type PopulationIntent =
   'approach' | 'attack' | 'hold' | 'regroup' | 'flee' | 'protect' | 'spawn' | 'phase-change';
@@ -138,6 +139,7 @@ export interface RecordedHeirloomSnapshot {
   readonly condition: number;
   readonly charges: number | null;
   readonly fuel: number | null;
+  readonly curse: ItemCurseState | null;
   readonly qualityRank: number;
   readonly displayName: string;
   readonly glyph: string;
